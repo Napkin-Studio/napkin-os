@@ -1,0 +1,815 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "Napkin deck (ADR 0016)",
+ "type": "object",
+ "required": [
+  "meta",
+  "slides",
+  "order"
+ ],
+ "properties": {
+  "meta": {
+   "type": "object",
+   "required": [
+    "client",
+    "project",
+    "kind"
+   ],
+   "properties": {
+    "client": {
+     "type": "string"
+    },
+    "project": {
+     "type": "string"
+    },
+    "agency": {
+     "type": "string"
+    },
+    "kind": {
+     "enum": [
+      "pitch",
+      "credentials",
+      "agency",
+      "investor"
+     ]
+    },
+    "built_at": {
+     "type": "string"
+    },
+    "research_doc_id": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "coverage": {
+     "type": "object"
+    },
+    "stages": {
+     "type": "object"
+    },
+    "audience": {
+     "enum": [
+      "review",
+      "client"
+     ],
+     "$comment": "who the render is for (spec.AUDIENCES)"
+    },
+    "red_team": {
+     "type": "object",
+     "$comment": "the red team's objections (stage red_team), at most spec.RED_TEAM_MAX, for Gate 1 and Gate 3; each says whether code applied its one change",
+     "properties": {
+      "objections": {
+       "type": "array",
+       "maxItems": 6,
+       "items": {
+        "type": "object",
+        "required": [
+         "id",
+         "kind",
+         "objection",
+         "slide",
+         "change",
+         "applied"
+        ],
+        "properties": {
+         "kind": {
+          "enum": [
+           "ask_unanswered",
+           "objective_unclear",
+           "claim_unsupported",
+           "risk_unaddressed",
+           "price_unclear"
+          ]
+         },
+         "change": {
+          "type": "object",
+          "properties": {
+           "type": {
+            "enum": [
+             "wording",
+             "order",
+             "placeholder",
+             "ask"
+            ]
+           }
+          }
+         },
+         "applied": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    },
+    "narrowing": {
+     "type": "array",
+     "$comment": "stage e's headline narrowing: each rewrite, applied or rejected, with its reason",
+     "items": {
+      "type": "object",
+      "required": [
+       "from",
+       "to",
+       "applied"
+      ]
+     }
+    },
+    "built_from": {
+     "type": "object",
+     "required": [
+      "tier",
+      "documents",
+      "brief",
+      "research"
+     ],
+     "$comment": "what the deck was built from (ADR 0028); optional so decks built before it stay valid",
+     "properties": {
+      "tier": {
+       "enum": [
+        "prompt",
+        "prompt+documents",
+        "research",
+        "brief",
+        "brief+research"
+       ]
+      },
+      "documents": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "brief": {
+       "type": "boolean"
+      },
+      "research": {
+       "type": "boolean"
+      },
+      "type": {
+       "type": "string",
+       "$comment": "the deck type's profile id (profiles/<id>.yaml)"
+      },
+      "profile": {
+       "type": "object",
+       "$comment": "how the type was chosen: id, label, source (flag, answer, skipped, default) and note",
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "label": {
+         "type": "string"
+        },
+        "source": {
+         "enum": [
+          "flag",
+          "answer",
+          "skipped",
+          "default"
+         ]
+        },
+        "note": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    },
+    "profile": {
+     "type": "object",
+     "required": [
+      "id"
+     ],
+     "$comment": "the deck type (profiles/<id>.yaml): id, label, and for a deck whose type was asked, how it was chosen (flag, answer, skipped) and why; optional so decks built before types stay valid",
+     "properties": {
+      "id": {
+       "type": "string"
+      },
+      "label": {
+       "type": "string"
+      },
+      "source": {
+       "enum": [
+        "flag",
+        "answer",
+        "skipped",
+        "default"
+       ]
+      },
+      "note": {
+       "type": "string"
+      }
+     }
+    },
+    "length": {
+     "type": "object",
+     "required": [
+      "max_slides"
+     ],
+     "$comment": "the presented length a deck is held to: the profile's, a limit the inputs state (prompt, answers, brief, documents), or a sketch's (source)",
+     "properties": {
+      "max_slides": {
+       "type": "integer"
+      },
+      "min_slides": {
+       "type": "integer"
+      },
+      "minutes": {
+       "type": "integer"
+      },
+      "source": {
+       "type": "string"
+      }
+     }
+    },
+    "sketch": {
+     "type": "object",
+     "$comment": "a deck built from a prompt alone (or a prompt and very little document text): at most spec.SKETCH_MAX_SLIDES presented, and its cover carries the fixed label",
+     "required": [
+      "label"
+     ],
+     "properties": {
+      "label": {
+       "type": "string"
+      },
+      "tier": {
+       "type": "string"
+      },
+      "max_slides": {
+       "type": "integer"
+      },
+      "why": {
+       "type": "string"
+      }
+     }
+    },
+    "weights": {
+     "type": "object",
+     "$comment": "the criterion weights the deck is judged on: the buyer's (source brief) or our default split, labelled 'default, not validated' (default_assumption)",
+     "properties": {
+      "source": {
+       "enum": [
+        "brief",
+        "default_assumption"
+       ]
+      },
+      "label": {
+       "type": "string"
+      },
+      "weights": {
+       "type": "object"
+      }
+     }
+    },
+    "insight": {
+     "type": "object",
+     "$comment": "stage b's insight choice (assemble._insight): chosen candidate id, the writer's choice, who chose, why, whether the judge ran and passed one, needs_human when every candidate failed",
+     "properties": {
+      "chosen": {
+       "type": "string"
+      },
+      "writer_choice": {
+       "type": "string"
+      },
+      "chosen_by": {
+       "type": "string"
+      },
+      "why": {
+       "type": "string"
+      },
+      "judged": {
+       "type": "boolean"
+      },
+      "judge_pass": {
+       "type": [
+        "boolean",
+        "null"
+       ]
+      },
+      "needs_human": {
+       "type": "boolean"
+      }
+     }
+    },
+    "insight_candidates": {
+     "type": "array",
+     "$comment": "the three insight candidates stage b wrote, for Gate 1 (the person picks, edits or retries): id, observation, tension, implication, not_in_brief, from, swap_test, confidence, refs, plus chosen and the judge's verdict (pass, failed tests, reason, paraphrase)",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "observation",
+       "tension",
+       "implication"
+      ],
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "observation": {
+        "type": "string"
+       },
+       "tension": {
+        "type": "string"
+       },
+       "implication": {
+        "type": "string"
+       },
+       "refs": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "chosen": {
+        "type": "boolean"
+       },
+       "judge": {
+        "type": "object",
+        "properties": {
+         "pass": {
+          "type": "boolean"
+         },
+         "failed": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "reason": {
+          "type": "string"
+         },
+         "paraphrase": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "chain": {
+     "type": "object",
+     "$comment": "stage d's written chain: quoted phrases of the insight, the proposition, the idea and its proof (validate.chain_links finds each on its slide), and a because per link",
+     "properties": {
+      "insight_phrase": {
+       "type": "string"
+      },
+      "strategy_phrase": {
+       "type": "string"
+      },
+      "idea_phrase": {
+       "type": "string"
+      },
+      "proof_phrase": {
+       "type": "string"
+      },
+      "because": {
+       "type": "object"
+      }
+     }
+    },
+    "confirm": {
+     "type": "array",
+     "$comment": "what a person should confirm: every proposal, every figure resting only on their own statement or a low-confidence pin, every slide still needing a person (intake.confirm_list); verified is their decision {by, at} or null",
+     "items": {
+      "type": "object",
+      "required": [
+       "ref",
+       "kind",
+       "text",
+       "why"
+      ],
+      "properties": {
+       "ref": {
+        "type": "string"
+       },
+       "kind": {
+        "enum": [
+         "proposal",
+         "figure",
+         "slide"
+        ]
+       },
+       "text": {
+        "type": "string"
+       },
+       "why": {
+        "type": "string"
+       },
+       "slide": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "verified": {
+        "type": [
+         "object",
+         "null"
+        ],
+        "properties": {
+         "by": {
+          "type": "string"
+         },
+         "at": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "confirm_summary": {
+     "type": "object",
+     "$comment": "counts for the export status line: total, verified, supplied, sourced (verified + supplied), open, needs_person (intake.confirm_summary)",
+     "properties": {
+      "total": {
+       "type": "integer"
+      },
+      "verified": {
+       "type": "integer"
+      },
+      "supplied": {
+       "type": "integer"
+      },
+      "sourced": {
+       "type": "integer"
+      },
+      "open": {
+       "type": "integer"
+      },
+      "needs_person": {
+       "type": "integer"
+      }
+     }
+    }
+   }
+  },
+  "requirements": {
+   "type": "object",
+   "additionalProperties": {
+    "$ref": "#/definitions/requirement"
+   },
+   "$comment": "keyed by requirement id; every one must be answered by a slide (validate: requirement_map)"
+  },
+  "territories": {
+   "type": "object"
+  },
+  "order": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "pattern": "^s[0-9]{2,3}$"
+   }
+  },
+  "slides": {
+   "type": "object",
+   "additionalProperties": {
+    "$ref": "#/definitions/slide"
+   },
+   "$comment": "keyed by slide id so each slide is a dotted data path (slides.s07): a client-review part (os-layer.md §7.5.1) and an /edit target"
+  },
+  "scoring": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "criterion",
+     "weight",
+     "ref"
+    ],
+    "properties": {
+     "criterion": {
+      "type": "string"
+     },
+     "weight": {
+      "type": "string"
+     },
+     "ref": {
+      "type": "string"
+     },
+     "parts": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "required": [
+        "text"
+       ],
+       "properties": {
+        "text": {
+         "type": "string"
+        },
+        "ref": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   },
+   "$comment": "award criteria and their scored parts; each concept must be answered by a slide (validate: criteria_map)"
+  }
+ },
+ "definitions": {
+  "requirement": {
+   "type": "object",
+   "required": [
+    "id",
+    "kind",
+    "text",
+    "ref"
+   ],
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "kind": {
+     "enum": [
+      "objective",
+      "audience",
+      "scope",
+      "message",
+      "tone",
+      "mandatory",
+      "selection",
+      "commercial",
+      "team",
+      "timing",
+      "rule"
+     ]
+    },
+    "text": {
+     "type": "string"
+    },
+    "ref": {
+     "type": "string"
+    }
+   }
+  },
+  "ref": {
+   "type": "string",
+   "pattern": "^(f_|fi_|doc:|brief:|req:|calc:|prompt:|answer:)"
+  },
+  "claim": {
+   "type": "object",
+   "required": [
+    "text",
+    "refs"
+   ],
+   "properties": {
+    "text": {
+     "type": "string"
+    },
+    "refs": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/ref"
+     }
+    },
+    "basis": {
+     "enum": [
+      "sourced",
+      "creative",
+      "opinion",
+      "proposal"
+     ]
+    }
+   },
+   "$comment": "refs empty => basis must be creative, opinion or proposal"
+  },
+  "block": {
+   "type": "object",
+   "required": [
+    "kind"
+   ],
+   "properties": {
+    "kind": {
+     "enum": [
+      "text",
+      "small",
+      "statement",
+      "quote",
+      "callout",
+      "card",
+      "bullets",
+      "table",
+      "kv",
+      "fromto",
+      "steps",
+      "chart",
+      "sketch",
+      "copy"
+     ]
+    },
+    "text": {
+     "type": "string"
+    },
+    "refs": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/ref"
+     }
+    },
+    "basis": {
+     "enum": [
+      "sourced",
+      "creative",
+      "opinion",
+      "proposal",
+      "meta"
+     ]
+    },
+    "human": {
+     "type": "boolean"
+    },
+    "internal": {
+     "type": "boolean",
+     "$comment": "an agency note: labelled in review, dropped for a client"
+    },
+    "chart": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string"
+      },
+      "title": {
+       "type": "string"
+      },
+      "series": {
+       "type": "array"
+      },
+      "hero": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 2,
+       "$comment": "series labels shown as big numbers"
+      }
+     }
+    }
+   }
+  },
+  "slide": {
+   "type": "object",
+   "required": [
+    "type",
+    "section",
+    "title",
+    "blocks",
+    "claims",
+    "visual",
+    "status",
+    "requirements"
+   ],
+   "properties": {
+    "type": {
+     "enum": [
+      "title",
+      "objective",
+      "brief_restated",
+      "scoring",
+      "criterion_answer",
+      "real_question",
+      "chart",
+      "insight",
+      "audience",
+      "proposition",
+      "territory",
+      "territory_choice",
+      "idea",
+      "execution",
+      "channel_roles",
+      "innovation",
+      "guardrails",
+      "process",
+      "measurement",
+      "measurement_plan",
+      "timeline",
+      "investment",
+      "team",
+      "credentials",
+      "next_step",
+      "appendix",
+      "problem",
+      "why_now",
+      "solution",
+      "product",
+      "market",
+      "business_model",
+      "traction",
+      "what_we_know",
+      "competition",
+      "gtm",
+      "financials",
+      "upside",
+      "founders",
+      "ask",
+      "risks",
+      "close",
+      "conflicts",
+      "questions",
+      "requirement_trace",
+      "appendix_sources"
+     ]
+    },
+    "section": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string",
+     "$comment": "a full-sentence takeaway"
+    },
+    "label": {
+     "type": "string",
+     "maxLength": 80,
+     "$comment": "the client-review chip"
+    },
+    "blocks": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/block"
+     }
+    },
+    "claims": {
+     "type": "array",
+     "items": {
+      "$ref": "#/definitions/claim"
+     }
+    },
+    "visual": {
+     "type": "object",
+     "properties": {
+      "kind": {
+       "enum": [
+        "layout",
+        "chart",
+        "image_prompt",
+        "layout_hint"
+       ]
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "status": {
+       "type": "string"
+      }
+     }
+    },
+    "criterion": {
+     "type": "string",
+     "$comment": "a criterion_answer slide: the buyer's scored criterion it answers"
+    },
+    "budget": {
+     "type": "integer",
+     "$comment": "a criterion_answer slide: its word budget, set from the criterion's weight (spec.ANSWER_WORDS_TOTAL)"
+    },
+    "notes": {
+     "type": "string"
+    },
+    "footnotes": {
+     "type": "array",
+     "items": {
+      "type": "integer"
+     }
+    },
+    "status": {
+     "enum": [
+      "from_source",
+      "drafted",
+      "needs_human"
+     ]
+    },
+    "requirements": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "supplied": {
+     "type": "object",
+     "required": [
+      "basis",
+      "by",
+      "refs"
+     ],
+     "$comment": "a human-only slide (team, credentials, investment, next_step) filled by the person's own input: basis 'supplied by <person>' or 'document'; refs are answer:<qid> or doc:<key>#...",
+     "properties": {
+      "basis": {
+       "type": "string"
+      },
+      "by": {
+       "type": "string"
+      },
+      "refs": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

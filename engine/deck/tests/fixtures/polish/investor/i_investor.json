@@ -1,0 +1,99 @@
+{
+ "stage": "i_investor",
+ "produced_by": "recorded stand-in (invented)",
+ "cover": {
+  "title": "Fenwick Labs",
+  "subtitle": "Irrigation planning for small farms",
+  "line": "Raising a seed round.",
+  "refs": [
+   "prompt:1"
+  ]
+ },
+ "sections": [
+  {
+   "type": "objective",
+   "title": "We raise 1500000 euro to take the pilot to paying farms",
+   "stats": [
+    {
+     "value": "1500000 euro",
+     "label": "seed round",
+     "refs": [
+      "prompt:1"
+     ]
+    }
+   ],
+   "points": [
+    {
+     "text": "Build the irrigation planning tool",
+     "refs": [
+      "prompt:1"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "problem",
+   "title": "Small farms lose water to guesswork",
+   "statement": "Farms lose water to guesswork.",
+   "points": [
+    {
+     "text": "Farms lose water to guesswork",
+     "refs": [
+      "prompt:2"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "why_now",
+   "title": "Water rules now make guesswork costly",
+   "points": [
+    {
+     "text": "The inputs state no change in the world: to confirm with the founders",
+     "basis": "proposal"
+    }
+   ]
+  },
+  {
+   "type": "traction",
+   "title": "Twelve farms are in the pilot",
+   "stats": [
+    {
+     "value": "12",
+     "label": "farms in the pilot",
+     "refs": [
+      "prompt:3"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "what_we_know",
+   "title": "Pilot farms plan by the week, not the season",
+   "points": [
+    {
+     "text": "12 farms in a pilot told us what they plan by",
+     "refs": [
+      "prompt:3"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "ask",
+   "title": "We are raising a seed round of 1500000 euro",
+   "statement": "A seed round of 1500000 euro.",
+   "points": [
+    {
+     "text": "Build the irrigation planning tool",
+     "refs": [
+      "prompt:1"
+     ]
+    }
+   ]
+  }
+ ],
+ "open_questions": [
+  "Which change in the world makes this possible now?"
+ ]
+}

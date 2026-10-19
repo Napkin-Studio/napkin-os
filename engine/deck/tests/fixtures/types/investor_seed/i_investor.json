@@ -1,0 +1,56 @@
+{
+ "stage": "i_investor",
+ "produced_by": "recorded stand-in (invented)",
+ "cover": {
+  "title": "Fenwick Labs",
+  "subtitle": "Irrigation planning for small farms",
+  "line": "Raising a seed round.",
+  "refs": [
+   "prompt:1"
+  ]
+ },
+ "sections": [
+  {
+   "type": "problem",
+   "title": "Small farms lose water to guesswork",
+   "statement": "Farms lose water to guesswork.",
+   "points": [
+    {
+     "text": "Farms lose water to guesswork",
+     "refs": [
+      "prompt:2"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "traction",
+   "title": "Twelve farms are in the pilot",
+   "stats": [
+    {
+     "value": "12",
+     "label": "farms in the pilot",
+     "refs": [
+      "prompt:3"
+     ]
+    }
+   ]
+  },
+  {
+   "type": "ask",
+   "title": "We are raising a seed round of 1500000 euro",
+   "statement": "A seed round of 1500000 euro.",
+   "points": [
+    {
+     "text": "Build the irrigation planning tool",
+     "refs": [
+      "prompt:1"
+     ]
+    }
+   ]
+  }
+ ],
+ "open_questions": [
+  "Who are the first paying customers?"
+ ]
+}

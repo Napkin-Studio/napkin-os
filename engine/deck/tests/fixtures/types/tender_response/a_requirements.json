@@ -1,0 +1,83 @@
+{
+ "stage": "a_requirements",
+ "produced_by": "recorded stand-in (invented)",
+ "requirements": [
+  {
+   "id": "r_01",
+   "kind": "objective",
+   "text": "Raise household recycling by 8% in 12 months",
+   "ref": "prompt:4"
+  },
+  {
+   "id": "r_02",
+   "kind": "audience",
+   "text": "Reach adults aged 25 to 54 in the county",
+   "ref": "prompt:5"
+  },
+  {
+   "id": "r_03",
+   "kind": "rule",
+   "text": "Avoid the phrase 'zero waste' in all material",
+   "ref": "prompt:6"
+  },
+  {
+   "id": "r_04",
+   "kind": "team",
+   "text": "Show the people who would do the work",
+   "ref": "prompt:2"
+  },
+  {
+   "id": "r_05",
+   "kind": "scope",
+   "text": "Measurement and reporting for the campaign",
+   "ref": "prompt:2"
+  }
+ ],
+ "scoring": [
+  {
+   "criterion": "Team and personnel",
+   "weight": "30%",
+   "min": "3",
+   "page_limit": "4 pages",
+   "ref": "prompt:2",
+   "parts": [
+    {
+     "text": "team and personnel"
+    }
+   ]
+  },
+  {
+   "criterion": "Insight and campaign strategy",
+   "weight": "40%",
+   "min": "3",
+   "page_limit": "6 pages",
+   "ref": "prompt:2",
+   "parts": [
+    {
+     "text": "insight"
+    },
+    {
+     "text": "campaign strategy"
+    }
+   ]
+  },
+  {
+   "criterion": "Measurement and reporting",
+   "weight": "30%",
+   "min": "3",
+   "page_limit": "4 pages",
+   "ref": "prompt:2",
+   "parts": [
+    {
+     "text": "measurement and reporting"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "ref": "prompt:3",
+   "text": "Presentations are limited to 20 slides."
+  }
+ ]
+}

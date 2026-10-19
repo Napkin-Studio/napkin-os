@@ -1,0 +1,44 @@
+{
+ "stage": "d_criterion",
+ "criterion": "Insight and campaign strategy",
+ "produced_by": "recorded stand-in (invented)",
+ "title": "Households recycle when the next bin day is easy to remember",
+ "points": [
+  {
+   "text": "We will give every household one reminder a week, tied to its own bin day.",
+   "refs": [
+    "prompt:4"
+   ]
+  },
+  {
+   "text": "The strategy rests on making the habit easy, not on telling people why.",
+   "refs": [
+    "prompt:4"
+   ]
+  },
+  {
+   "text": "We reach adults aged 25 to 54 in the county through the channels they already use.",
+   "refs": [
+    "prompt:5"
+   ]
+  },
+  {
+   "text": "Each message is tested against the 8% objective before it runs.",
+   "refs": [
+    "prompt:4"
+   ]
+  },
+  {
+   "text": "Evidence for the reminder comes from the council's own collection data.",
+   "refs": [
+    "prompt:2"
+   ]
+  },
+  {
+   "text": "The benefit to the council is a measurable change in recycling by month twelve.",
+   "refs": [
+    "prompt:4"
+   ]
+  }
+ ]
+}

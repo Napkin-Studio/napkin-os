@@ -1,0 +1,54 @@
+# Category safety pack: suicide prevention and emotional-support services.
+# Deck content comes only from the three inputs (prompt, research CLAN, brief): legal_lines and
+# required_on_deck are no longer put on slides; banned phrases, watch words and imagery are checks only.
+# Applied when the brief or research names suicide / self-harm (see validate.py pack_applies).
+# Each rule cites where it comes from. Rules marked `verify: true` were taken from secondary
+# summaries in this session and must be checked against the primary text before this pack is
+# trusted in production (docs/deck-maker/edge-cases.md DK-012).
+id: suicide_prevention
+when_any: ["suicide", "suicidal", "self-harm", "self harm"]
+sources:
+  samaritans_media: {title: "Samaritans, Media Guidelines for Reporting Suicide", uri: "https://www.samaritans.org/about-samaritans/media-guidelines/", verify: true}
+  research_codes: {title: "Research CLAN category codes (fi_53NBUSBE5CSF, f_QMVNC7NCKHKK)", uri: "clan:research", verify: false}
+  samaritans_2026: {title: "Samaritans, Media Guidelines 2026 (no method or location, including in images; avoid alarmist, normalising framing)", uri: "https://media.samaritans.org/documents/Media_Guidelines_2026_DIGITAL.pdf", verify: true}
+  cfl: {title: "Government of Ireland, Connecting for Life 2026-2035 (language: avoid 'epidemic', 'hotspot')", uri: "https://assets.gov.ie/", verify: true}
+  mindframe: {title: "Mindframe, Images matter (use images that model hope or support)", uri: "https://mindframe.org.au/", verify: true}
+banned_phrases:          # error if any appears on a slide or in its notes (case-insensitive)
+  - {text: "commit suicide", source: samaritans_media}
+  - {text: "committed suicide", source: samaritans_media}
+  - {text: "suicide victim", source: samaritans_media}
+  - {text: "successful attempt", source: samaritans_media}
+  - {text: "failed attempt", source: samaritans_media}
+  - {text: "unsuccessful attempt", source: samaritans_media}
+  - {text: "cry for help", source: samaritans_media}
+  - {text: "suicide epidemic", source: samaritans_media}
+  - {text: "spate of suicides", source: samaritans_media}
+  - {text: "painless", source: samaritans_media}
+watch_words:             # warning: needs a person's read in context (method, location, instant pickup)
+  - {text: "bridge", why: "location", source: samaritans_media}
+  - {text: "cliff", why: "location", source: samaritans_media}
+  - {text: "railway", why: "location", source: samaritans_media}
+  - {text: "overdose", why: "method", source: samaritans_media}
+  - {text: "instantly", why: "never imply instant pickup", source: samaritans_media}
+  - {text: "straight away", why: "never imply instant pickup", source: samaritans_media}
+  - {text: "kintsugi", why: "repair metaphors re-draw the bar (research codes)", source: research_codes}
+  - {text: "hotspot", why: "location", source: cfl}
+  - {text: "epidemic", why: "alarmist framing can normalise", source: samaritans_2026}
+  - {text: "head in hands", why: "distress imagery; show hope and help-seeking instead", source: mindframe}
+banned_imagery:          # error if an image prompt names one: method or location, in pictures too
+  - {text: "bridge", source: samaritans_2026}
+  - {text: "cliff", source: samaritans_2026}
+  - {text: "railway", source: samaritans_2026}
+  - {text: "rail track", source: samaritans_2026}
+  - {text: "train track", source: samaritans_2026}
+  - {text: "noose", source: samaritans_2026}
+  - {text: "ligature", source: samaritans_2026}
+  - {text: "rope", source: samaritans_2026}
+  - {text: "pills", source: samaritans_2026}
+  - {text: "tablets", source: samaritans_2026}
+  - {text: "blade", source: samaritans_2026}
+  - {text: "razor", source: samaritans_2026}
+required_on_deck:        # a guardrails slide must carry these points
+  - "No method, no location, ever"
+  - "Signposting (the helpline) on every execution"
+  - "Every line to the helpline operator's media advisory team before production"

@@ -1,0 +1,95 @@
+{
+ "stage": "b_storyline",
+ "produced_by": "recorded stand-in (invented)",
+ "reframe": {
+  "title": "The real question is how to make the tap feel personal",
+  "line": "People value water but never link it to their own tap.",
+  "claims": [
+   {
+    "text": "People value water in the abstract",
+    "refs": [
+     "brief:insight"
+    ],
+    "basis": "sourced"
+   }
+  ]
+ },
+ "insight": {
+  "chosen_candidate_id": "a",
+  "why": "It is the only one that names the tap.",
+  "title": "People care about water but never see the tap they use",
+  "evidence": [
+   {
+    "text": "The brief names the gap between caring and connecting.",
+    "refs": [
+     "brief:insight"
+    ]
+   }
+  ]
+ },
+ "audience": {
+  "title": "Households who never think about the tap",
+  "primary": "Adults 25 to 54 in the Lumen Water region.",
+  "refs": [
+   "brief:audience"
+  ]
+ },
+ "proposition": {
+  "rtbs": [
+   {
+    "text": "Lumen Water has served the region for 40 years",
+    "refs": [
+     "brief:reasons_to_believe"
+    ]
+   }
+  ]
+ },
+ "from_to": {
+  "from": "Water is a bill",
+  "to": "Water is something I look after",
+  "refs": [
+   "brief:objectives.attitudinal"
+  ]
+ },
+ "insight_candidates": [
+  {
+   "id": "a",
+   "observation": "People say they care about water, yet turn the tap on without a thought.",
+   "refs": [
+    "brief:insight"
+   ],
+   "tension": "But the care lives in the abstract and the tap they use is invisible to them.",
+   "implication": "So make the tap the place where the care shows up.",
+   "not_in_brief": "The care and the habit never meet at the tap.",
+   "from": "the brief's insight sentence",
+   "swap_test": "A phone company could not say this: it is about a tap.",
+   "confidence": "medium: one brief line"
+  },
+  {
+   "id": "b",
+   "observation": "People notice water only when the bill lands.",
+   "refs": [
+    "brief:background"
+   ],
+   "tension": "But a bill makes water a cost, while nobody feels it as a thing they look after.",
+   "implication": "So give people a moment of looking after water before the bill.",
+   "not_in_brief": "The bill is the only touchpoint.",
+   "from": "the brief background",
+   "swap_test": "Any utility could say this.",
+   "confidence": "low"
+  },
+  {
+   "id": "c",
+   "observation": "The category promises clean water and delivers a bill.",
+   "refs": [
+    "brief:background"
+   ],
+   "tension": "Yet nobody believes a utility is on their side.",
+   "implication": "So show the utility as a neighbour.",
+   "not_in_brief": "Distrust.",
+   "from": "the brief background",
+   "swap_test": "Any utility could say this.",
+   "confidence": "low"
+  }
+ ]
+}

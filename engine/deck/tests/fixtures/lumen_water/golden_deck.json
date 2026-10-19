@@ -1,0 +1,993 @@
+{
+ "meta": {
+  "client": "Lumen Water",
+  "project": "National awareness campaign",
+  "agency": "[Agency]",
+  "kind": "agency",
+  "format": "pitch",
+  "stages": {
+   "a": "recorded stand-in (invented)",
+   "b": "recorded stand-in (invented)",
+   "c": "recorded stand-in (invented)",
+   "d": "recorded stand-in (invented)"
+  },
+  "research_doc_id": null,
+  "coverage": {
+   "brief_fields": 11,
+   "brief_fields_filled": 10,
+   "how_to_win_points": 1,
+   "open_questions": 1,
+   "capture_fields": 1
+  }
+ },
+ "requirements": {
+  "r_01": {
+   "id": "r_01",
+   "kind": "objective",
+   "text": "Cut household use by 5% in 12 months",
+   "ref": "brief:objectives"
+  },
+  "r_02": {
+   "id": "r_02",
+   "kind": "audience",
+   "text": "Reach households aged 25 to 54",
+   "ref": "brief:audience"
+  },
+  "r_03": {
+   "id": "r_03",
+   "kind": "mandatory",
+   "text": "Show the Lumen Water logo on every execution",
+   "ref": "brief:mandatories"
+  }
+ },
+ "scoring": [],
+ "messages": [],
+ "territories": {
+  "stage": "c",
+  "produced_by": "recorded stand-in (invented)",
+  "territories": [
+   {
+    "id": "t1",
+    "name": "The Tap Tells",
+    "thought": "Let the tap speak",
+    "why": "It makes use personal",
+    "mood": "Warm",
+    "risks": "Twee",
+    "sketch": "A tap whispers a household memory"
+   }
+  ],
+  "ranking": {
+   "order": [
+    "t1"
+   ],
+   "reasons": {
+    "t1": "Closest to the insight"
+   },
+   "by": "recorded"
+  },
+  "chosen": "t1",
+  "chosen_by": "recorded"
+ },
+ "slides": {
+  "s01": {
+   "type": "title",
+   "section": "Opening",
+   "title": "Lumen Water: National awareness campaign",
+   "label": "Lumen Water: National awareness campaign",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "A response from [Agency]"
+    },
+    {
+     "kind": "text",
+     "text": "Proposed (not given by the client): presented by the account lead and planner [presenter and date]. To confirm: who presents, and the date.",
+     "human": true
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "title"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s02": {
+   "type": "objective",
+   "section": "Objective",
+   "title": "What has to change, by how much and by when",
+   "label": "What has to change, by how much and by when",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Cut household use by 5% in 12 months",
+       "refs": [
+        "brief:objectives",
+        "req:r_01"
+       ]
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "objective"
+   },
+   "notes": "Evidence:\n[brief:objectives] brief field (missing): attitudinal: People see water as worth looking after behavioural: Cut household use by 5% in 12 months\n[req:r_01]",
+   "status": "from_source",
+   "requirements": [
+    "r_01"
+   ],
+   "footnotes": [
+    1,
+    2
+   ]
+  },
+  "s03": {
+   "type": "real_question",
+   "section": "The real question",
+   "title": "The real question is how to make the tap feel personal",
+   "label": "The real question is how to make the tap feel personal",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "People value water but never link it to their own tap."
+    }
+   ],
+   "claims": [
+    {
+     "text": "People value water in the abstract",
+     "refs": [
+      "brief:insight"
+     ],
+     "basis": "sourced"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "real_question"
+   },
+   "notes": "Evidence:\n[brief:insight] brief field (agent): People care about water in the abstract but never connect it to the tap they use.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s04": {
+   "type": "insight",
+   "section": "Insight",
+   "title": "Water is loved and ignored in the same breath",
+   "label": "Water is loved and ignored in the same breath",
+   "blocks": [
+    {
+     "kind": "quote",
+     "text": "I care about water, I just never think about it.",
+     "basis": "creative"
+    },
+    {
+     "kind": "text",
+     "text": "People care about water in the abstract but never connect it to the tap they use.",
+     "refs": [
+      "brief:insight"
+     ]
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "The brief names the gap between caring and connecting.",
+       "refs": [
+        "brief:insight"
+       ]
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "The brief names the gap between caring and connecting.",
+     "refs": [
+      "brief:insight"
+     ]
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "insight"
+   },
+   "notes": "Evidence:\n[brief:insight] brief field (agent): People care about water in the abstract but never connect it to the tap they use.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s05": {
+   "type": "audience",
+   "section": "Insight",
+   "title": "Households who never think about the tap",
+   "label": "Households who never think about the tap",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Adults 25 to 54 in the Lumen Water region.",
+     "refs": [
+      "brief:audience"
+     ]
+    },
+    {
+     "kind": "text",
+     "text": ""
+    },
+    {
+     "kind": "text",
+     "text": ""
+    },
+    {
+     "kind": "small",
+     "text": ""
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "audience"
+   },
+   "notes": "Evidence:\n[brief:audience] brief field (missing): Households in the utility's region, adults 25 to 54.",
+   "status": "drafted",
+   "requirements": [
+    "r_02"
+   ],
+   "footnotes": [
+    1
+   ]
+  },
+  "s06": {
+   "type": "proposition",
+   "section": "Proposition",
+   "title": "Every drop has a story.",
+   "label": "Every drop has a story.",
+   "blocks": [
+    {
+     "kind": "fromto",
+     "from": "Water is a bill",
+     "to": "Water is something I look after",
+     "refs": [
+      "brief:objectives.attitudinal"
+     ]
+    },
+    {
+     "kind": "bullets",
+     "title": "Why they will believe it",
+     "items": [
+      {
+       "text": "Lumen Water has served the region for 40 years",
+       "refs": [
+        "brief:reasons_to_believe"
+       ]
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Lumen Water has served the region for 40 years",
+     "refs": [
+      "brief:reasons_to_believe"
+     ]
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "proposition"
+   },
+   "notes": "Evidence:\n[brief:reasons_to_believe] brief field (missing): Lumen Water has served the region for 40 years\n[brief:objectives.attitudinal] brief field (missing): People see water as worth looking after",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s07": {
+   "type": "competition",
+   "section": "Competition",
+   "title": "What else you could choose, and why you would choose us",
+   "label": "What else you could choose, and why you would choose us",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): the options the client could pick instead of us, and the plan to win against each [the alternatives]. To confirm: which alternatives the client is weighing.",
+       "human": true
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "competition"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s08": {
+   "type": "idea",
+   "section": "The idea",
+   "title": "Every drop has a story.",
+   "label": "Every drop has a story.",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Each household sees its own water story."
+    },
+    {
+     "kind": "text",
+     "text": "It links the tap to the person."
+    }
+   ],
+   "claims": [
+    {
+     "text": "Each household sees its own water story.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "idea"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s09": {
+   "type": "execution",
+   "section": "The work",
+   "title": "Outdoor",
+   "label": "Execution outdoor",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Role: Make the line famous"
+    },
+    {
+     "kind": "copy",
+     "lines": [
+      "Every drop has a story."
+     ],
+     "answer": "Poster",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "Every drop has a story.",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "A tap at dawn"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s10": {
+   "type": "channel_roles",
+   "section": "How it runs",
+   "title": "Each channel has one job",
+   "label": "Each channel has one job",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "Channel",
+       "Its one job"
+      ],
+      [
+       "Outdoor",
+       "Fame"
+      ],
+      [
+       "Radio",
+       "Reach"
+      ]
+     ],
+     "refs": [
+      "brief:objectives",
+      "brief:audience"
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "channel_roles"
+   },
+   "notes": "Scope check: the tender lists paid social, search, programmatic, broadcast radio and video, outdoor and print.\n\nEvidence:\n[brief:objectives] brief field (missing): attitudinal: People see water as worth looking after behavioural: Cut household use by 5% in 12 months\n[brief:audience] brief field (missing): Households in the utility's region, adults 25 to 54.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s11": {
+   "type": "guardrails",
+   "section": "How it runs",
+   "title": "What the work must never do",
+   "label": "What the work must never do",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "title": "What the work must always carry, and never do",
+     "items": [
+      {
+       "text": "Show the Lumen Water logo on every execution",
+       "refs": [
+        "brief:mandatories",
+        "req:r_03"
+       ],
+       "basis": "sourced"
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "guardrails"
+   },
+   "notes": "Evidence:\n[brief:mandatories] brief field (missing): Show the Lumen Water logo on every execution\n[req:r_03]",
+   "status": "from_source",
+   "requirements": [
+    "r_03"
+   ],
+   "footnotes": [
+    1,
+    2
+   ]
+  },
+  "s12": {
+   "type": "measurement",
+   "section": "Measurement",
+   "title": "How we will know it worked",
+   "label": "How we will know it worked",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "What we measure",
+       "Baseline",
+       "How"
+      ],
+      [
+       "Household use",
+       "None in the brief: set before launch",
+       "Utility meter data"
+      ]
+     ],
+     "refs": [
+      "brief:objectives.behavioural",
+      "brief:objectives"
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Household use baseline None in the brief: set before launch",
+     "refs": [
+      "brief:objectives.behavioural"
+     ],
+     "basis": "sourced"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "measurement"
+   },
+   "notes": "Evidence:\n[brief:objectives.behavioural] brief field (missing): Cut household use by 5% in 12 months\n[brief:objectives] brief field (missing): attitudinal: People see water as worth looking after behavioural: Cut household use by 5% in 12 months",
+   "status": "drafted",
+   "requirements": [
+    "r_01"
+   ],
+   "footnotes": [
+    1
+   ]
+  },
+  "s13": {
+   "type": "timeline",
+   "section": "Timeline and investment",
+   "title": "From appointment to evaluation",
+   "label": "From appointment to evaluation",
+   "blocks": [
+    {
+     "kind": "steps",
+     "items": [
+      [
+       "Plan",
+       "Month 1"
+      ]
+     ],
+     "refs": []
+    }
+   ],
+   "claims": [
+    {
+     "text": "Month 1",
+     "refs": [],
+     "basis": "proposal"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "timeline"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s14": {
+   "type": "risks",
+   "section": "Risks",
+   "title": "What could go wrong, and what we would do about it",
+   "label": "What could go wrong, and what we would do about it",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): the named risks to this plan and what we would do about each [risks and mitigations]. To confirm: the risks the client already sees, and who would own each.",
+       "human": true
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "risks"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s15": {
+   "type": "team",
+   "section": "Team and work",
+   "title": "The team you would work with, and work like this we have done",
+   "label": "The team you would work with, and work like this we have done",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): a named person [project lead]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [strategic planner]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [creative lead]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [digital lead]. To confirm: name and one-page CV.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a named person [media planning and buying lead]. To confirm: name and one-page CV.",
+       "human": true
+      }
+     ]
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): a comparable integrated campaign with outcomes [case study 1]. To confirm: which campaign, its results and a referee.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a second comparable integrated campaign [case study 2]. To confirm: which campaign, its results and a referee.",
+       "human": true
+      }
+     ],
+     "title": "Work like this we have done before"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "team"
+   },
+   "notes": "Evidence:",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s16": {
+   "type": "investment",
+   "section": "Timeline and investment",
+   "title": "Investment, and what we would like to agree today",
+   "label": "Investment, and what we would like to agree today",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Budget given: EUR 120,000 gross",
+     "refs": [
+      "brief:budget_scope"
+     ]
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Proposed (not given by the client): a working split of fees, production and media [option A]. To confirm: the split, from the agency's rate card.",
+       "human": true
+      },
+      {
+       "text": "Proposed (not given by the client): a media-weighted version [option B]. To confirm: whether the client wants a lean or a heavier option.",
+       "human": true
+      }
+     ]
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Agree 'Every drop has a story' as the campaign platform",
+       "basis": "proposal"
+      },
+      {
+       "text": "Proposed (not given by the client): a date for the decision [decision date]. To confirm: the date the client will decide.",
+       "human": true
+      }
+     ],
+     "title": "What we would like to agree today"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "investment"
+   },
+   "notes": "Evidence:\n[brief:budget_scope] brief field (missing): EUR 120,000 gross",
+   "status": "needs_human",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s17": {
+   "type": "appendix",
+   "section": "Appendix",
+   "title": "Appendix",
+   "label": "Appendix",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Backup for questions: everything this presentation rests on."
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "appendix"
+   },
+   "notes": "Evidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s18": {
+   "type": "brief_restated",
+   "section": "Your brief",
+   "title": "What you asked us to do, in your words",
+   "label": "What you asked us to do, in your words",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Cut household use by 5% in 12 months",
+       "refs": [
+        "brief:objectives",
+        "req:r_01"
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "callout",
+     "text": "Success: Water is something I look after",
+     "refs": [
+      "brief:objectives.attitudinal"
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "brief_restated"
+   },
+   "notes": "Evidence:\n[brief:objectives] brief field (missing): attitudinal: People see water as worth looking after behavioural: Cut household use by 5% in 12 months\n[req:r_01]\n[brief:objectives.attitudinal] brief field (missing): People see water as worth looking after",
+   "status": "from_source",
+   "requirements": [
+    "r_01"
+   ],
+   "footnotes": [
+    1,
+    2
+   ]
+  },
+  "s19": {
+   "type": "territory",
+   "section": "Territories",
+   "title": "Territory: The Tap Tells",
+   "label": "Territory The Tap Tells",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Let the tap speak",
+     "basis": "creative"
+    },
+    {
+     "kind": "kv",
+     "items": [
+      [
+       "Why it fits",
+       "It makes use personal"
+      ],
+      [
+       "Mood",
+       "Warm"
+      ],
+      [
+       "Risks",
+       "Twee"
+      ]
+     ],
+     "basis": "creative"
+    },
+    {
+     "kind": "sketch",
+     "text": "A tap whispers a household memory",
+     "basis": "creative"
+    }
+   ],
+   "claims": [
+    {
+     "text": "Let the tap speak",
+     "refs": [],
+     "basis": "creative"
+    }
+   ],
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "Mood frame for 'The Tap Tells': Warm",
+    "status": "illustrative, not final"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s20": {
+   "type": "territory_choice",
+   "section": "Territories",
+   "title": "We recommend 'The Tap Tells'",
+   "label": "We recommend 'The Tap Tells'",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "Territory",
+       "Why (or why not)"
+      ],
+      [
+       "The Tap Tells",
+       "Closest to the insight"
+      ]
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "Chosen by: recorded. Ranked by: recorded.",
+     "basis": "meta",
+     "internal": true
+    }
+   ],
+   "claims": [
+    {
+     "text": "Recommendation",
+     "refs": [],
+     "basis": "opinion"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "territory_choice"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s21": {
+   "type": "process",
+   "section": "How it runs",
+   "title": "How we would run it with you",
+   "label": "How we would run it with you",
+   "blocks": [
+    {
+     "kind": "steps",
+     "items": [
+      [
+       "Week 1",
+       "Kick off"
+      ]
+     ],
+     "basis": "proposal"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "process"
+   },
+   "notes": "Evidence:",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s22": {
+   "type": "questions",
+   "section": "Appendix",
+   "title": "Questions we would settle in the first fortnight",
+   "label": "Questions we would settle in the first fortnight",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Is there a launch date?",
+       "basis": "meta"
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "questions"
+   },
+   "notes": "1 open questions from the brief; 0 more in the brief itself.\n\nEvidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s23": {
+   "type": "requirement_trace",
+   "section": "Appendix",
+   "title": "Every requirement, and where this deck answers it",
+   "label": "Every requirement, and where this deck answers it",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "Requirement",
+       "Slides"
+      ],
+      [
+       "Cut household use by 5% in 12 months",
+       "2, 12, 18"
+      ],
+      [
+       "Reach households aged 25 to 54",
+       "5"
+      ],
+      [
+       "Show the Lumen Water logo on every execution",
+       "11"
+      ]
+     ],
+     "small": true,
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "requirement_trace"
+   },
+   "notes": "Evidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s24": {
+   "type": "appendix_sources",
+   "section": "Appendix",
+   "title": "Sources",
+   "label": "Sources",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "#",
+       "Source"
+      ],
+      [
+       "[1]",
+       "Brief maker brief (engine run), with each field's provenance"
+      ],
+      [
+       "[2]",
+       "Requirement list read from the client's tender documents"
+      ]
+     ],
+     "small": true,
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "appendix_sources"
+   },
+   "notes": "",
+   "status": "from_source",
+   "requirements": []
+  }
+ },
+ "order": [
+  "s01",
+  "s02",
+  "s03",
+  "s04",
+  "s05",
+  "s06",
+  "s07",
+  "s08",
+  "s09",
+  "s10",
+  "s11",
+  "s12",
+  "s13",
+  "s14",
+  "s15",
+  "s16",
+  "s17",
+  "s18",
+  "s19",
+  "s20",
+  "s21",
+  "s22",
+  "s23",
+  "s24"
+ ]
+}

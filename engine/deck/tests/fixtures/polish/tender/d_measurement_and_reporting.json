@@ -1,0 +1,20 @@
+{
+ "stage": "d_criterion",
+ "criterion": "Measurement and reporting",
+ "produced_by": "recorded stand-in (invented)",
+ "title": "We report recycling against the 8% objective every month",
+ "points": [
+  {
+   "text": "Monthly reporting reads recycling tonnage against the 8% objective.",
+   "refs": [
+    "prompt:4"
+   ]
+  },
+  {
+   "text": "Results are shared with the council in a plain one-page report.",
+   "refs": [
+    "prompt:2"
+   ]
+  }
+ ]
+}
