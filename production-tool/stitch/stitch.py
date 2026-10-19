@@ -1,8 +1,8 @@
 """Stitch Lambda: the selected clips → one MP4 with the Napkin end card.
 
 Invoked asynchronously by the relay with
-  {"jobId", "clips": [{"key": "out/sha256:…", "trimS": 4.5?, "inS": 0.5?, "outS": 4?,
-                       "transition": {"kind": "cut"|"dissolve"|"dip", "s": 0.5?}?}, …],
+  {"jobId", "clips": [{"key": "out/sha256:…", "trimS": 4.5?, "inS": 0.5?, "outS": 4?, "fit": "trim"|"speed"?,
+                       "transition": {"kind": "cut"|"continue"|"dissolve"|"dip", "s": 0.5?}?}, …],
    "outKey": "ads/<jobId>.mp4", "resultKey": "ads/<jobId>.json"}
 It writes outKey, then resultKey = {"ok": true, "sha256", "bytes", "w", "h",
 "durationS", "endCard", "seams"?} or {"ok": false, "error", "endCard"}, with "code":
@@ -21,8 +21,16 @@ the join into it from the clip before: a cut (absent), a dissolve, or a dip thro
 black, over s seconds (TRANSITION_S when absent). The overlap comes from the
 outgoing clip's out-handle (its frames after its slot: clips are billed longer than
 shots), held on its last frame when it has none, so the ad is still the sum of the
-slots plus the card. A request of videos with no inS, outS or transition builds
-exactly the command it always did. With two clips or more, "seams" scores each join
+slots plus the card. A request of videos with no inS, outS, fit or transition builds
+exactly the command it always did.
+
+Joined shots (features/connected-video.clan, phases A and B): `fit` "speed" retimes the
+clip's whole window (inS to outS, else to its end) into its slot with setpts, so a clip
+made to land on the next shot's frame keeps that frame instead of losing its tail to
+trimS; at most MAX_SPEED faster or slower, else it is trimmed as before and the log says
+why. A "continue" transition is a cut where the clip before landed on this clip's first
+frame: the outgoing window ends one frame early, so the shared frame shows once. Several
+clips may be windows of one take (the same key, other inS/outS): it is fetched once. With two clips or more, "seams" scores each join
 for Jude (seam_scores): scores only, relative to the clips' own neighbouring frames.
 
 The end card (features/ad-end-card.clan): "Roll Up Reveals Crew". The studio mark
@@ -51,6 +59,7 @@ CARD_S = 2.5  # web: production-tool/web/src/jobs/clips.ts END_CARD_S
 STILL_S = 5.0  # a still with no trimS (the mock's PNG clips) is held this long
 TRANSITION_S = 0.5  # a dissolve's or dip's length when the request names none
 MAX_TRANSITION_S = 2.0
+MAX_SPEED = 1.33  # fit "speed": the most a window is sped up (or slowed down) to fill its slot
 XFADE = {"dissolve": "fade", "dip": "fadeblack"}  # ffmpeg xfade's name for each transition
 SEAM_PAD = 4  # neighbouring frame pairs each side of a seam: each clip's own baseline
 
@@ -295,7 +304,7 @@ def joins(clips: list[dict], fps: int = FPS) -> list[tuple[str, float]]:
     out = [("cut", 0.0)]
     for prev, cur in zip(clips, clips[1:]):
         t = cur.get("transition") or {}
-        kind = t.get("kind", "cut")
+        kind = t.get("kind", "cut")  # continue is a cut here: its shared frame is dropped in fit_windows
         a, b = slot_s(prev), slot_s(cur)
         if kind not in XFADE or a is None or b is None:
             out.append(("cut", 0.0))
@@ -304,6 +313,36 @@ def joins(clips: list[dict], fps: int = FPS) -> list[tuple[str, float]]:
         frames = round(s * fps)
         out.append((kind, frames / fps) if frames > 0 else ("cut", 0.0))
     return out
+
+
+def fit_windows(clips: list[dict], probes: list[dict], job_id: str | None = None, fps: int = FPS) -> None:
+    """Joined shots' windows, in place (features/connected-video.clan): a clip before a "continue" join
+    ends one frame early (its last frame is the next clip's first), and a fit "speed" clip gets the factor
+    (window / slot) its whole window plays at, within MAX_SPEED either way; past it, or with no slot to
+    fill, it is trimmed as before and stitch_fit_fallback is logged. A clip whose slot came from outS keeps
+    that slot as its trimS. Clips with neither are left exactly as they came."""
+    for i, (c, p) in enumerate(zip(clips, probes)):
+        shared = i + 1 < len(clips) and (clips[i + 1].get("transition") or {}).get("kind") == "continue"
+        speed = c.pop("fit", None) == "speed"
+        if c.get("still") or not (shared or speed):
+            continue
+        slot = slot_s(c)
+        ins = float(c.get("inS") or 0)
+        end = float(c["outS"]) if c.get("outS") is not None else p["durationS"]
+        if shared:
+            end -= 1 / fps
+        if slot is not None and not c.get("trimS"):
+            c["trimS"] = slot
+        c["outS"] = round(end, 6)
+        window = end - ins
+        if not speed:
+            continue
+        factor = window / slot if slot and window > 0 else None
+        if factor is None or not 1 / MAX_SPEED - 1e-6 <= factor <= MAX_SPEED + 1e-6:
+            print(json.dumps({"kind": "stitch_fit_fallback", "jobId": job_id, "clip": i, "windowS": round(window, 3),
+                              "slotS": slot, "why": "no slot" if factor is None else f"speed {factor:.2f} past {MAX_SPEED}"}))
+            continue
+        c["speed"], c["window"] = factor, window
 
 
 def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version: str, assets: dict,
@@ -330,7 +369,10 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
             ins = float(c.get("inS") or 0)
             if ins > 0:
                 cmd += ["-ss", _secs(ins)]
-            if slot is not None:
+            if c.get("speed"):  # the whole window, retimed into the slot below
+                cmd += ["-t", _secs(c["window"])]
+                holds.append(slot + hs)
+            elif slot is not None:
                 avail = float(c["outS"]) - ins if c.get("outS") is not None else None
                 # A clip that ends (outS) before its slot does is held from there, handle and all; otherwise
                 # it reads on past its slot into its out-handle.
@@ -353,8 +395,9 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
             f",tpad=stop_mode=clone:stop_duration={_secs(holds[i])},trim=duration={_secs(holds[i])},setpts=PTS-STARTPTS")
         if js[i][0] != "cut" or (i + 1 < n and js[i + 1][0] != "cut"):
             hold += f",fps={fps}"  # xfade needs a constant frame rate and one time base; tpad leaves neither
+        retime = f"setpts=(PTS-STARTPTS)/{c['speed']:.6f}," if c.get("speed") else ""
         parts.append(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                     f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps},format=yuv420p{hold}[v{i}]")
+                     f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,{retime}fps={fps},format=yuv420p{hold}[v{i}]")
     # Clips joined by transitions form one piece (xfade, the offset counted from the piece's start);
     # pieces and the card are concatenated, so with only cuts this is the one concat it always was.
     labels = []
@@ -465,21 +508,28 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
     try:
         with tempfile.TemporaryDirectory() as tmp:
             clips, probes = [], []
+            fetched: dict[str, tuple[str, str | None, dict]] = {}  # windows of one take: fetched once
             for i, c in enumerate(event["clips"]):
-                dest = os.path.join(tmp, f"clip{i}.mp4")
-                get(c["key"], dest)
-                ext = still_ext(dest)
-                if ext:  # ffmpeg loops a picture only when it reads it as one
-                    named = os.path.join(tmp, f"clip{i}{ext}")
-                    os.rename(dest, named)
-                    dest = named
-                try:  # every clip first, so a broken one is named, not ffmpeg's text
-                    probes.append(probe(ffprobe, dest))
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError) as e:
-                    print(json.dumps({"kind": "stitch_probe", "jobId": event.get("jobId"), "clip": i, "error": str(e)[:500]}))
-                    raise BadClip(i) from e
+                if c["key"] in fetched:
+                    dest, ext, meta = fetched[c["key"]]
+                else:
+                    dest = os.path.join(tmp, f"clip{i}.mp4")
+                    get(c["key"], dest)
+                    ext = still_ext(dest)
+                    if ext:  # ffmpeg loops a picture only when it reads it as one
+                        named = os.path.join(tmp, f"clip{i}{ext}")
+                        os.rename(dest, named)
+                        dest = named
+                    try:  # every clip first, so a broken one is named, not ffmpeg's text
+                        meta = probe(ffprobe, dest)
+                    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError) as e:
+                        print(json.dumps({"kind": "stitch_probe", "jobId": event.get("jobId"), "clip": i, "error": str(e)[:500]}))
+                        raise BadClip(i) from e
+                    fetched[c["key"]] = (dest, ext, meta)
+                probes.append(meta)
                 clips.append({"path": dest, **({"trimS": c["trimS"]} if c.get("trimS") else {}), **({"still": True} if ext else {}),
-                              **{k: c[k] for k in ("inS", "outS", "transition") if c.get(k) is not None}})
+                              **{k: c[k] for k in ("inS", "outS", "transition", "fit") if c.get(k) is not None}})
+            fit_windows(clips, probes, event.get("jobId"))
             size = target_size(probes[0]["w"], probes[0]["h"])
             out = os.path.join(tmp, "ad.mp4")
             cmd = build_command(ffmpeg, clips, size, version, load_assets(version), out)

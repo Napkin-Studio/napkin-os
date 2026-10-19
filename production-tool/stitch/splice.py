@@ -32,6 +32,13 @@ The relay invokes stitch.py's handler with `mode` set (an event with no mode is 
          and its crossfade, relative to the parent's over the same frames (1.0 is as smooth as the
          parent), ok at or above seamMin.
 
+  take_cuts {jobId, mode: "take_cuts", key, cuts: [planned_s, ...], searchS, threshold?, resultKey}
+         -> {ok, takeS, fps, cuts: [{planned_s, found_s}]}
+         Where a take of several shots really cut (features/connected-video.clan): ffmpeg's scene score of
+         every frame (against the frame before), and for each planned cut the frame with the highest score
+         at or above threshold (0.10) within searchS either side of it; found_s is that frame's time (the
+         first frame of the new shot), or null when no frame qualifies (the relay then uses planned_s).
+
 Stitch never builds a key: the relay names every input and output. ffmpeg and ffprobe come from the
 layer (build-layer.sh); everything here is subprocess calls, so the tests run on real ffmpeg.
 """
@@ -181,6 +188,58 @@ def _cut_picture(event: dict, src: str, *, put, ffmpeg: str, ffprobe: str, tmp: 
         put(s["key"], still, "image/png")
         result["stills"].append({"sha256": sha, "bytes": n})
     return result
+
+
+# ── take_cuts ───────────────────────────────────────────────────────────────
+
+CUT_THRESHOLD = 0.10
+
+
+def scene_scores(ffmpeg: str, path: str) -> list[tuple[float, float]]:
+    """(time, scene score) of every frame after the first, from ffmpeg's select filter (the score is the
+    frame's change from the one before, 0-1)."""
+    r = _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-i", path, "-map", "0:v:0",
+              "-vf", "select='gte(scene,0)',metadata=print:file=-", "-f", "null", "-"])
+    out, t = [], None
+    for line in r.stdout.splitlines():
+        m = re.search(r"pts_time:([0-9.]+)", line)
+        if m:
+            t = float(m.group(1))
+            continue
+        m = re.search(r"lavfi\.scene_score=([0-9.]+)", line)
+        if m and t is not None:
+            out.append((t, float(m.group(1))))
+            t = None
+    return out
+
+
+def find_cuts(scores: list[tuple[float, float]], planned: list[float], search_s: float,
+              threshold: float = CUT_THRESHOLD) -> list[float | None]:
+    """For each planned cut, the time of the strongest scene change within search_s of it at or above
+    threshold, else None. A change is used once: the nearer planned cut keeps it."""
+    found: list[float | None] = []
+    used: set[float] = set()
+    for p in planned:
+        near = [(score, -abs(t - p), t) for t, score in scores
+                if abs(t - p) <= search_s + 1e-6 and score >= threshold and t not in used]
+        if not near:
+            found.append(None)
+            continue
+        t = max(near)[2]
+        used.add(t)
+        found.append(round(t, 3))
+    return found
+
+
+def take_cuts(event: dict, *, get, put, ffmpeg: str, ffprobe: str, tmp: str) -> dict:
+    src = os.path.join(tmp, "take.mp4")
+    get(event["key"], src)
+    p = probe(ffprobe, src)
+    planned = [float(x) for x in event.get("cuts") or []]
+    scores = scene_scores(ffmpeg, src)
+    found = find_cuts(scores, planned, float(event.get("searchS", 1.0)), float(event.get("threshold", CUT_THRESHOLD)))
+    return {"ok": True, "takeS": round(p["frames"] / p["fps"], 3), "fps": round(p["fps"], 3),
+            "cuts": [{"planned_s": pl, "found_s": f} for pl, f in zip(planned, found)]}
 
 
 # ── splice ──────────────────────────────────────────────────────────────────
@@ -401,11 +460,12 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
     mode = event["mode"]
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            step = {"cut": cut, "splice": splice}[mode]
+            step = {"cut": cut, "splice": splice, "take_cuts": take_cuts}[mode]
             result = step(event, get=get, put=put, ffmpeg=ffmpeg, ffprobe=ffprobe, tmp=tmp)
     except Exception as e:  # the relay retries a failed splice once, and fails a cut with a refund
         print(json.dumps({"kind": f"stitch_{mode}_failed", "jobId": event.get("jobId"), "error": str(e)[:1500]}))
-        word = "get the take ready for the fix" if mode == "cut" else "splice the fix back into the take"
+        word = {"cut": "get the take ready for the fix", "take_cuts": "find the take's cuts"}.get(
+            mode, "splice the fix back into the take")
         result = {"ok": False, "error": f"Could not {word}."}
     put_json(event["resultKey"], result)
     print(json.dumps({"kind": f"stitch_{mode}", "jobId": event.get("jobId"), **result}))
