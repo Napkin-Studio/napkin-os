@@ -233,7 +233,8 @@ export async function remakeAsFinal(deps: Pick<FrameDeps, 'doc' | 'ui' | 'runner
 
 /** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length, from its edl
  *  item's in point (in_s; absent or 0: the clip's start, sent as nothing) up to its out point (out_s). An end
- *  card shot's clip is marked endCard (the stitch adds its own card instead); one with no clip is left out.
+ *  card shot's clip plays like any other (it is the person's own closing screen; the stitch's studio card follows
+ *  it, owner 2026-10-19); one with no clip is left out.
  *  (features/connected-video.clan: the walk stays in shot order for now, because edl ranks follow the order
  *  clips landed in, not the storyboard's; see the record's open question.)
  *  Connected video: a take's window (segments[0]) is its in and out point; an end-framed clip is retimed whole
@@ -268,7 +269,6 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoI
       ...(outS !== undefined && outS > (inS ?? 0) ? { outS } : {}),
       ...(transition ? { transition } : {}),
       ...(endFramed(d, t) ? { fit: 'speed' as const } : {}),
-      ...(s.kind === 'end_card' ? { endCard: true } : {}),
     })
     parents.push(t.job_id)
     before = t

@@ -38,6 +38,15 @@ describe('stitchInput', () => {
     expect(parents).toHaveLength(3)
   })
 
+  it("plays the person's own end card shot like any other clip (it was dropped for the studio card, 2026-10-19)", async () => {
+    const { shots, deps } = made()
+    shots[2].kind = 'end_card'
+    const { input } = await stitchInput(deps)
+    expect(input.clips).toHaveLength(3)
+    expect(input.clips!.some((c) => 'endCard' in c)).toBe(false)
+    expect(input.clips![2]).toMatchObject({ asset: { sha256: SHA('c') }, trimS: 4 })
+  })
+
   it('sends each edl item\'s in and out points as inS and outS', async () => {
     const { d, shots, deps } = made()
     Object.assign(itemOf(d, shots[0]), { in_s: 1.5, out_s: 4 })
