@@ -453,10 +453,18 @@ test('reviews a reconsider job never started wait for the next one', () => {
   assert.deepEqual(RECON.queue.map(e => (e as { decision: string }).decision), ['d_1'])
   f.reviewed('/verdict', { polarity: 'good' }, res('d_2'))
   assert.deepEqual(runs[1].input.events.map(e => e.decision), ['d_1', 'd_2'])
-  // A job that ran and failed is not sent again; what waited is.
+  // A job that ran and failed, or whose change was refused because a review
+  // landed meanwhile, goes once more with what waited.
   f.reviewed('/verdict', { polarity: 'bad' }, res('d_3'))
-  finish(runs[1], { jobId: 'job_2', error: 'failed' })
-  assert.deepEqual(runs[2].input.events.map(e => e.decision), ['d_3'])
+  finish(runs[1], { jobId: 'job_2', error: 'finding fi_01A changed since the job read it; rerun' })
+  assert.deepEqual(runs[2].input.events.map(e => e.decision), ['d_1', 'd_2', 'd_3'])
+  assert.ok(runs[2].input.events.every(e => !('tries' in e)), 'the count stays in the view')
+  // Never a third time: a job that keeps failing does not loop.
+  finish(runs[2], { jobId: 'job_3', error: 'failed' })
+  assert.deepEqual(runs[3].input.events.map(e => e.decision), ['d_3'])
+  finish(runs[3], { jobId: 'job_4', error: 'failed' })
+  assert.equal(runs.length, 4)
+  assert.equal(RECON.queue.length, 0)
 })
 
 test('a locked report starts no reconsider job', () => {

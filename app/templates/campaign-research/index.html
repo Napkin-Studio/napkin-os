@@ -1019,11 +1019,17 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(RECON.job||!RECON.queue.length) return;
     if(!(window.clan&&window.clan.apiProxy)||reportLocked()) return;
     var events=RECON.queue; RECON.queue=[];
-    var job=runTask('reconsider', {events:events}, function(j){
+    var sent=events.map(function(e){ var o={}; for(var k in e) if(k!=='tries') o[k]=e[k]; return o; });
+    var job=runTask('reconsider', {events:sent}, function(j){
       RECON.job=null;
       // Never started: these wait for the next run, with what came since.
       var unsent=j.error&&!j.jobId;
       if(unsent) RECON.queue=events.concat(RECON.queue);
+      // Ran but failed, or its change was refused (a review landed while it
+      // ran): these go once more with what came since, never twice, so a job
+      // that keeps failing does not loop.
+      else if(j.error) RECON.queue=events.filter(function(e){ return !e.tries; })
+        .map(function(e){ var o={}; for(var k in e) o[k]=e[k]; o.tries=1; return o; }).concat(RECON.queue);
       keepRecon();
       if(!unsent) reconsider();
     });
