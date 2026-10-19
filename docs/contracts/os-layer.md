@@ -364,7 +364,10 @@ app:
    written unchanged. A member the target does not register is registered with
    the source's `files[]` role. The child verifies or rejects **its copies** of
    the findings and corrects its copies of the pins; the parent's members
-   never change (§7, §8.1).
+   never change (§7, §8.1). A document pin (`kept_in_document`, Contract 3
+   §4) carries by id like any pin, with its sources, so a claim citing it in
+   the parent still resolves in the child; it stays a document pin there and
+   is never written to the layers by the hop.
 4. **The chain is carried whole.** Every source decision, field for field,
    below the spin-off marker and above the target template's own; `pinned`
    is set on each when `pin_source_decisions` holds (the default). Nothing is

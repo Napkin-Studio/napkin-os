@@ -643,3 +643,130 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   assert.match(BM, /<div class="walker" id="walker" role="status" aria-live="polite"><\/div>/)
   assert.match(BM, /@media \(prefers-reduced-motion: reduce\)\{\.walker \.wk-who,\.walker \.wk-fig\{animation:none\}\}/)
 })
+
+// ── Brief Maker: what a part rests on (brief-fact-provenance) ─────────────
+
+// The Lidl brief: Dara worked out that the offer was over in 10 days from two
+// facts research found outside the measure list, kept in this brief only.
+function provData(extra: Record<string, unknown> = {}) {
+  return {
+    projection: {
+      pins: {
+        f_A: { layer: 'category', entity: 'brand/lidl-connect', key: 'offer.start', value: '2026-10-05', sources: ['src_rte'],
+          quotes: { src_rte: 'Lidl Connect will be available from 5 October' }, pin_reason: 'kept in this brief only' },
+        f_B: { layer: 'category', entity: 'brand/lidl-connect', key: 'offer.end', value: '2026-10-15', sources: ['src_tj'],
+          quotes: { src_tj: 'has closed its new €8.99 for life offer from today onwards' }, pin_reason: 'kept in this brief only' },
+        f_L: { layer: 'brand', entity: 'brand/lidl', key: 'stores', value: 160, version: 4, sources: ['src_l'],
+          quotes: { src_l: 'Lidl runs 160 stores in Ireland' }, pin_reason: 'research' },
+      },
+      sources: {
+        src_rte: { id: 'src_rte', uri: 'https://www.rte.ie/lidl', publisher: 'RTÉ', title: 'Lidl to launch mobile', published_at: '2026-09-28' },
+        src_tj: { id: 'src_tj', uri: 'https://www.thejournal.ie/lidl', publisher: 'TheJournal', title: 'Lidl closes offer', published_at: '2026-10-15' },
+        src_l: { id: 'src_l', uri: 'https://lidl.ie', publisher: 'Lidl', title: 'About us' },
+      },
+    },
+    materials: { mat_p: { kind: 'prompt', name: 'prompt', text: 'A brief for Lidl Connect: win back switchers.' } },
+    capture: { items: {} },
+    ...extra,
+  }
+}
+function provEnv(data: Record<string, unknown>, decisions: unknown[] = []) {
+  const get = (p: string) => p.split('.').reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), data)
+  const passage = () => null
+  const captureItem = (id: string) => ((data.capture as { items: Record<string, unknown> }).items || {})[id] || null
+  const short = (s: unknown, n = 48) => { const t = String(s || ''); return t.length > n ? `${t.slice(0, n)}…` : t }
+  const citationOf = (p: { citation?: string }) => p.citation || ''
+  const citeLabel = (id: string) => id
+  type F = {
+    sourcesHtml(ids: string[], claims?: unknown[]): string
+    claimDecision(d: unknown): { id: string; claims?: unknown[] } | null
+    citesOf(ds: unknown[]): string[]
+    keptPin(pn: unknown): boolean
+  }
+  return lift<F>(BM, ['srcLine', 'keptPin', 'wrongPin', 'sourcesHtml', 'citesOf', 'claimDecision'], {
+    get, arr, esc, short, passage, captureItem, citationOf, citeLabel,
+    hasReasoning: (d: { reasoning?: { decided?: string } }) => !!(d && d.reasoning && d.reasoning.decided),
+    CHAIN: { state: 'ok', decisions },
+  })
+}
+const count = (h: string, s: string) => h.split(s).length - 1
+const derived = { text: 'The €8.99 for-life offer was over in 10 days', kind: 'derived', cites: ['f_A', 'f_B'],
+  working: '15 Oct 2026 - 5 Oct 2026 = 10 days', check: 'recomputed', by: 'match' }
+
+test('Sources shows a worked-out claim with its working and the facts it came from', () => {
+  const f = provEnv(provData())
+  const h = f.sourcesHtml(['f_A', 'f_B', 'mat_p'], [derived])
+  assert.match(h, /<blockquote>The €8\.99 for-life offer was over in 10 days<\/blockquote>/)
+  assert.match(h, /Worked out: 15 Oct 2026 - 5 Oct 2026 = 10 days/)
+  assert.match(h, /Worked out from 2 facts/)
+  // both inputs quoted, each linked to where it was read, each once
+  assert.equal(count(h, 'Lidl Connect will be available from 5 October'), 1)
+  assert.equal(count(h, 'has closed its new €8.99 for life offer from today onwards'), 1)
+  assert.match(h, /RTÉ, Lidl to launch mobile · 2026 · <a href="https:\/\/www\.rte\.ie\/lidl"/)
+  assert.match(h, /href="https:\/\/www\.thejournal\.ie\/lidl"/)
+  assert.equal(count(h, 'kept in this brief only'), 2, 'both facts are document pins')
+  // the inputs sit inside the worked-out row, before the prompt's words
+  assert.ok(h.indexOf('Worked out from 2 facts') < h.indexOf('Lidl Connect will be available'))
+  assert.match(h, /<blockquote>A brief for Lidl Connect: win back switchers\.<\/blockquote><cite>Your request, as typed<\/cite>/)
+  // a layer copy is not labelled as kept in the brief
+  const l = f.sourcesHtml(['f_L'])
+  assert.match(l, /Lidl runs 160 stores in Ireland/)
+  assert.doesNotMatch(l, /kept in this brief only/)
+  assert.ok(f.keptPin({ kept_in_document: { why: 'outside the measure list' }, version: undefined }))
+  assert.ok(!f.keptPin({ pin_reason: 'corrected by Aoife' }), 'a person’s correction is not a kept pin')
+  // a recomputed working that does not hold is said
+  assert.match(f.sourcesHtml([], [{ ...derived, check: 'false' }]), /the working does not add up, check it/)
+  assert.match(f.sourcesHtml([], [{ ...derived, check: 'stated' }]), /not recomputed/)
+})
+
+test('a claim nothing supports shows as to confirm, and is not hidden', () => {
+  const f = provEnv(provData())
+  const h = f.sourcesHtml([], [{ text: 'Lidl has 340 stores in Ireland', kind: 'to_confirm', cites: [], by: 'net' }])
+  assert.match(h, /<li class="confirm"><blockquote>Lidl has 340 stores in Ireland<\/blockquote><cite>To confirm/)
+  assert.match(h, /^<div class="srcs"><span class="rl">Sources<\/span>/)
+})
+
+test('a claim resting on a fact marked wrong is flagged', () => {
+  const excluded = provEnv(provData({ selection: { excluded: [{ fact_id: 'f_B' }] } }))
+  assert.match(excluded.sourcesHtml(['f_A', 'f_B'], [derived]), /Rests on a fact marked wrong/)
+  const d = provData()
+  ;(d.projection.pins.f_A as Record<string, unknown>).replaced_by = { fact_id: 'f_C', decision: 'd_c' }
+  assert.match(provEnv(d).sourcesHtml(['f_A'], [{ text: 'It opened on 5 October', kind: 'fact', cites: ['f_A'] }]), /Rests on a fact marked wrong/)
+  assert.doesNotMatch(provEnv(provData()).sourcesHtml(['f_A', 'f_B'], [derived]), /marked wrong/)
+})
+
+test('an accepted proposal keeps the claims it was proposed with', () => {
+  const prop = { id: 'd_prop1', kind: 'edit', action: 'propose', cites: ['f_A', 'f_B'], claims: [derived] }
+  const acc = { id: 'd_acc', kind: 'edit', actor: 'human', rationale: 'Accepted d_prop1: Dara’s proposal for background.' }
+  const f = provEnv(provData(), [prop, acc])
+  assert.equal(f.claimDecision(acc)?.id, 'd_prop1')
+  assert.equal(f.claimDecision(prop)?.id, 'd_prop1')
+  assert.equal(f.claimDecision({ id: 'd_x', rationale: 'Edited by hand.' }), null)
+  assert.deepEqual(f.citesOf([acc, f.claimDecision(acc)]), ['f_A', 'f_B'])
+  // a claim's cites count even when the decision's own list missed them
+  assert.deepEqual(f.citesOf([{ cites: ['mat_p'], claims: [derived] }]), ['mat_p', 'f_A', 'f_B'])
+  // whyHtml renders the claims of the decision that carries them
+  assert.match(fn(BM, 'whyHtml'), /var cd=claimDecision\(d\);\s*h\+=sourcesHtml\(citesOf\(\[d, cd, v&&v\.d\]\), cd\?cd\.claims:\[\]\);/)
+})
+
+test('the drawer quotes the words the planner typed', () => {
+  type W = { writerBlock(ref: string): string }
+  const mats: Record<string, unknown> = {
+    mat_p: { kind: 'prompt', name: 'prompt', text: 'A brief for Lidl Connect: win back switchers.' },
+    mat_f: { kind: 'client_brief', name: 'Lidl brief.pdf' },
+  }
+  const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
+  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'writerBlock'], {
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
+    writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
+    materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
+    MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
+    STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '', confidential: () => false, LOCK: '', fmt: () => '',
+    dayMonth: () => '', whoDid: () => '',
+  })
+  const h = w.writerBlock('background')
+  assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">A brief for Lidl Connect: win back switchers\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
+  // the attachment is still named, not quoted, and the prompt is not listed twice
+  assert.match(h, /<h3>From your material<\/h3>.*Lidl brief\.pdf/)
+  assert.equal(count(h, 'data-open="mat_p"'), 0)
+})
