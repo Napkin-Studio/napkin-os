@@ -372,23 +372,30 @@ test('a locked report is the version agreed to: never out of date, Refresh not o
 
 // A review changes only the document; the crew then brings what rests on it
 // in step with one reconsider job at a time, holding reviews made meanwhile.
-const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'reconsider']
-type Job = { task: string; input: { events: { kind: string; id: string; decision: string; replaced_by?: string }[] }; then: ((j: Job) => void) | null; error?: string; jobId?: string }
+const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'walk', 'reconsider']
+type Job = { task: string; input: { events: { kind: string; id: string; decision: string; replaced_by?: string }[] }; then: ((j: Job) => void) | null; error?: string; jobId?: string; quiet?: boolean }
 function reconEnv(locked = false) {
   const runs: Job[] = []
   const kept: (string | null)[] = []
   const RECON = { queue: [] as unknown[], job: null as Job | null }
+  const classes = new Set<string>()
+  const walker = { innerHTML: '', classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } } }
   const env = {
-    RECON, arr,
+    RECON, arr, walker,
+    $: (id: string) => (id === 'walker' ? walker : null),
+    CREW_OK: true,
+    agentFigure: (k: string, o: { walking?: boolean }) => `<svg data-agent="${k}"${o.walking ? ' data-walking="true"' : ''}></svg>`,
+    calm: () => false,
+    setTimeout: () => 0, clearTimeout: () => {},
     pathOf: (a: string) => (a.includes('#') ? a.slice(a.indexOf('#') + 1) : a),
     store: (_k: string, v: string | null) => { kept.push(v) },
     docId: () => 'doc1',
     reportLocked: () => locked,
     window: { clan: { apiProxy: () => Promise.resolve() } },
-    runTask: (task: string, input: Job['input'], then: Job['then']) => { const j = { task, input, then }; runs.push(j); return j },
+    runTask: (task: string, input: Job['input'], then: Job['then'], quiet?: boolean) => { const j = { task, input, then, quiet }; runs.push(j); return j },
   }
   type F = { reviewed(route: string, body: unknown, res: unknown): void; reviewEvent(route: string, body: unknown, res: unknown): unknown }
-  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON }
+  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON, walker }
 }
 /** The job is over: the view tells whoever started it, once. */
 const finish = (j: Job, how: Partial<Job> = { jobId: 'job_1' }) => { Object.assign(j, how); const t = j.then; j.then = null; t?.(j) }
@@ -465,6 +472,23 @@ test('reviews a reconsider job never started wait for the next one', () => {
   finish(runs[3], { jobId: 'job_4', error: 'failed' })
   assert.equal(runs.length, 4)
   assert.equal(RECON.queue.length, 0)
+})
+
+test('a review leaves the page where it is, and Sam walks the bottom edge while the crew works', () => {
+  const { f, runs, walker } = reconEnv()
+  const on = () => walker.classList.contains('on')
+  assert.ok(!on())
+  f.reviewed('/verdict', { polarity: 'good' }, { ok: true, decision: 'd_1', targets: ['doc1#facts[f_01A]'] })
+  assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
+  assert.ok(on(), 'Sam shows while the job runs')
+  assert.match(walker.innerHTML, /data-agent="synthesis" data-walking="true"/)
+  assert.match(walker.innerHTML, /Sam is bringing the report in step with your review/)
+  finish(runs[0])
+  assert.ok(!on(), 'and leaves when nothing is pending')
+  // A job a person starts still brings the jobs panel into view.
+  assert.match(fn(RT, 'runTask'), /if\(!quiet&&el&&el\.scrollIntoView\) el\.scrollIntoView/)
+  assert.match(RT, /<div class="walker" id="walker" role="status" aria-live="polite"><\/div>/)
+  assert.match(RT, /@media \(prefers-reduced-motion: reduce\)\{\.walker \.wk-who,\.walker \.wk-fig\{animation:none\}\}/)
 })
 
 test('a locked report starts no reconsider job', () => {

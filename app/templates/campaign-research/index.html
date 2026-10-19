@@ -764,6 +764,18 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   a{text-decoration:none}
   @page{margin:16mm}
 }
+/* While the crew brings the document in step with a review, Sam walks the
+   bottom edge of the window (features/review-busy-agent.clan). It never takes
+   a click; with reduced motion Sam stands still. */
+.walker{position:fixed;left:0;right:0;bottom:var(--clan-bottom,0px);height:72px;pointer-events:none;z-index:80;overflow:hidden;opacity:0;transition:opacity .3s var(--ease)}
+.walker.on{opacity:1}
+.walker .wk-who{position:absolute;bottom:0;left:0;display:flex;align-items:flex-end;gap:8px;animation:wk-pace 16s linear infinite}
+.walker .wk-fig{display:block;width:44px;animation:wk-turn 16s steps(1,end) infinite}
+.walker .wk-fig .agent-figure{width:44px;height:auto;display:block}
+.walker .wk-say{margin-bottom:26px;background:var(--ink);color:var(--paper);font-size:12px;padding:5px 11px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadow-lg)}
+@keyframes wk-pace{0%{transform:translateX(16px)}50%{transform:translateX(calc(100vw - 100% - 16px))}100%{transform:translateX(16px)}}
+@keyframes wk-turn{0%{transform:none}50%{transform:scaleX(-1)}}
+@media (prefers-reduced-motion: reduce){.walker .wk-who,.walker .wk-fig{animation:none}}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -799,6 +811,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   <section class="start" id="start" aria-label="How this campaign started: your request, its progress and your answers" hidden></section>
   <div id="gates"></div>
   <div id="jobs" aria-live="polite"></div>
+  <div class="walker" id="walker" role="status" aria-live="polite"></div>
 
   <details class="records" id="records">
   <summary><span class="rt">Everything recorded</span><span class="rs">The ask, every pinned fact, the findings and what research drew on. Who decided what, and why, is in Decisions.</span></summary>
@@ -1014,7 +1027,20 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var ev=reviewEvent(route, body, res); if(!ev) return;
     RECON.queue.push(ev); keepRecon(); reconsider();
   }
-  function keepRecon(){ store('clan.research.reconsider.'+docId(), RECON.queue.length?JSON.stringify(RECON.queue):null); }
+  function keepRecon(){ store('clan.research.reconsider.'+docId(), RECON.queue.length?JSON.stringify(RECON.queue):null); walk(); }
+  // While a reconsider job runs, Sam walks the bottom edge of the window, so
+  // the person sees the crew at work without the page moving.
+  function walk(){
+    var w=$('walker'); if(!w) return;
+    var on=!!RECON.job, was=w.classList.contains('on');
+    if(on&&!was){
+      clearTimeout(walk._t);
+      w.innerHTML='<div class="wk-who"><span class="wk-fig">'+(CREW_OK?agentFigure('synthesis', {state:'working', walking:!calm(), decorative:true}):'')+'</span>'
+        +'<span class="wk-say">Sam is bringing the report in step with your review…</span></div>';
+    }
+    w.classList.toggle('on', on);
+    if(!on&&was){ clearTimeout(walk._t); walk._t=setTimeout(function(){ if(!w.classList.contains('on')) w.innerHTML=''; }, 400); }
+  }
   function reconsider(){
     if(RECON.job||!RECON.queue.length) return;
     if(!(window.clan&&window.clan.apiProxy)||reportLocked()) return;
@@ -1032,7 +1058,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
         .map(function(e){ var o={}; for(var k in e) o[k]=e[k]; o.tries=1; return o; }).concat(RECON.queue);
       keepRecon();
       if(!unsent) reconsider();
-    });
+    }, true);
     // Still running (a job over before it was handed back is not).
     if(job.then) RECON.job=job;
     keepRecon();
@@ -2019,13 +2045,15 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     }, delay);
   }
   // Start a middleware task and follow it; `then(job)` once it is over.
-  function runTask(task, input, then){
+  // `quiet`: a job the view starts on its own (reconsider after a review)
+  // leaves the page where the person is; the walker shows it instead.
+  function runTask(task, input, then, quiet){
     var j={task:task, state:'sending', then:then};
     if(!(window.clan&&window.clan.apiProxy)){ toast('Research runs through the host’s api-proxy.'); failed(j, 'No api-proxy.'); return j; }
     // The client's documents are research sources: the host adds their text.
     if(task==='research_lens'&&!input.attachments&&attachments().length) input=Object.assign({}, input, {attachments:attachments()});
     JOBS.unshift(j); renderJobs();
-    var el=$('jobs'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'});
+    var el=$('jobs'); if(!quiet&&el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'});
     window.clan.apiProxy('middleware', {task:task, input:input}).then(function(res){
       var err=mwError(res);
       if(err){ failed(j, err); return; }
