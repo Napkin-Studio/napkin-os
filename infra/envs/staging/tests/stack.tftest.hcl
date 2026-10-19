@@ -62,8 +62,12 @@ run "plans_with_two_agencies" {
     error_message = "staging is the dogfood build (features/dogfood-telemetry.clan)"
   }
   assert {
-    condition     = lookup(module.services.middleware_environment, "NAPKIN_RUNLOG_DIR", "") == "/runlog" && !contains(keys(module.services.middleware_environment), "NAPKIN_RUNLOG_BODIES")
-    error_message = "staging keeps the middleware's run log, sizes only (features/dogfood-log-quality.clan)"
+    condition     = lookup(module.services.middleware_environment, "NAPKIN_RUNLOG_DIR", "") == "/runlog"
+    error_message = "staging keeps the middleware's run log (features/dogfood-log-quality.clan)"
+  }
+  assert {
+    condition     = lookup(module.services.middleware_environment, "NAPKIN_RUNLOG_BODIES", "") == "1"
+    error_message = "staging's run log holds what the models and searches saw (features/brief-fact-provenance.clan)"
   }
   assert {
     condition     = length(module.services.middleware_mounts) == 1 && module.services.middleware_mounts[0].sourceVolume == "runlog" && module.services.middleware_mounts[0].containerPath == "/runlog"

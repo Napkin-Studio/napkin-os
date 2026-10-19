@@ -457,7 +457,7 @@ locals {
     NAPKIN_PORT         = tostring(local.mw_port)
     NAPKIN_MODEL_API    = "bedrock"
     NAPKIN_MODEL_REGION = var.region
-  }, var.middleware_runlog ? { NAPKIN_RUNLOG_DIR = local.runlog_dir } : {}, var.middleware_env)
+  }, var.middleware_runlog ? { NAPKIN_RUNLOG_DIR = local.runlog_dir } : {}, var.middleware_runlog_bodies ? { NAPKIN_RUNLOG_BODIES = "1" } : {}, var.middleware_env)
   middleware_mounts = var.middleware_runlog ? [{ sourceVolume = "runlog", containerPath = local.runlog_dir }] : []
 }
 
