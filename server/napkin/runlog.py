@@ -37,7 +37,10 @@ from pathlib import Path
 
 # USD per million tokens (input, output). Estimates: check them against the current price list.
 PRICES = {"claude-opus-4-1": (15.0, 75.0), "claude-opus-4-0": (15.0, 75.0), "claude-opus-4-2": (15.0, 75.0),
-          "claude-opus": (5.0, 25.0), "claude-sonnet": (3.0, 15.0), "claude-haiku": (1.0, 5.0)}
+          "claude-opus": (5.0, 25.0), "claude-sonnet-5": (2.0, 10.0), "claude-sonnet": (3.0, 15.0),
+          "claude-haiku": (1.0, 5.0)}
+# Prompt-cache input, as a multiple of the model's input price: a read, and a 5-minute write.
+CACHE_READ, CACHE_WRITE = 0.1, 1.25
 
 _cfg = {"dir": None, "bodies": False}
 
@@ -52,13 +55,16 @@ def configure(directory: str | None, bodies: bool = False, prices: str | None = 
             print("napkin.runlog: NAPKIN_PRICES is not a JSON object of [in, out]; ignored", file=sys.stderr)
 
 
-def price(model: str | None, tin: int, tout: int) -> float | None:
+def price(model: str | None, tin: int, tout: int, cache_read: int = 0, cache_write: int = 0) -> float | None:
+    """`tin` counts every input token; `cache_read` and `cache_write` are the part of it the
+    prompt cache served or stored, priced at their own multiples of the input price."""
     m = _model_name(model)
     best = max((k for k in PRICES if m.startswith(k)), key=len, default=None)
     if best is None:
         return None
     pi, po = PRICES[best]
-    return round(tin / 1e6 * pi + tout / 1e6 * po, 6)
+    fresh = max(0, tin - cache_read - cache_write)
+    return round((fresh + cache_read * CACHE_READ + cache_write * CACHE_WRITE) / 1e6 * pi + tout / 1e6 * po, 6)
 
 
 def _model_name(model: str | None) -> str:
@@ -158,8 +164,8 @@ class RunLog:
 
     # -- what happened ----------------------------------------------------------------
     def model(self, *, purpose, model, secs, tin, tout, attempts, ok, error=None, payload=None, reply=None,
-              payload_chars=None, reply_chars=None):
-        cost = price(model, tin, tout)
+              payload_chars=None, reply_chars=None, cache_read=0, cache_write=0):
+        cost = price(model, tin, tout, cache_read, cache_write)
         with self._lock:
             t = self._tot()
             t["model_calls"] += 1
@@ -170,7 +176,8 @@ class RunLog:
             t["model_s"] += secs
             t["errors"] += 0 if ok else 1
         self._write("model", stage=self.stage_name, purpose=purpose, model=model, secs=round(secs, 2),
-                    attempts=attempts, in_tokens=tin, out_tokens=tout, cost=cost, cost_src="est" if cost is not None
+                    attempts=attempts, in_tokens=tin, out_tokens=tout, cache_read=cache_read or None,
+                    cache_write=cache_write or None, cost=cost, cost_src="est" if cost is not None
                     else None, ok=ok, error=error, payload_chars=payload_chars, reply_chars=reply_chars,
                     payload=payload if _cfg["bodies"] else None, reply=reply if _cfg["bodies"] else None)
 

@@ -1,9 +1,12 @@
 {
-  "comment": "NAPKIN_MODEL_ROUTES (docs/contracts/peripherals.md §1.9). Edit and save: the next call uses it. Choices measured 2026-10-04 on 32 real seed requests: Opus 4.6 found the most verified facts (143 vs 131 for Opus 5.5 high, 106 low); every model passed every dossier cell.",
-  "default": {"model": "opus-4.6", "schema": "auto"},
-  "vision": {"model": "opus-4.6"},
+  "comment": "NAPKIN_MODEL_ROUTES (docs/contracts/peripherals.md §1.9). Edit and save: the next call uses it. Sonnet 5.5 by default (features/sonnet-default-caching.clan, 2026-10-13): $2/$10 per MTok against Opus 4.6's $5/$25, and its 512-token cache minimum lets the system prompt cache, where Opus 4.6's 4096 caches none. Effort low is the nearest to Opus 4.6, which runs without thinking; the brief writers think at medium. The schema goes in the prompt: Bedrock does not enforce it for the 5.5 models. Fact extraction stays on Opus 4.6, with no effort and the schema enforced: replaying 8 recorded extract_facts calls on Bedrock (2026-10-13), Opus 4.6 kept 97 facts for $0.50, Opus 5.5 medium 68 for $0.52, Opus 5.5 low 47 for $0.35, Sonnet 5.5 low 25 for $0.09, at the same 90-95% kept rate.",
+  "default": {"model": "sonnet-5.5", "effort": "low", "schema": "prompt"},
+  "vision": {"model": "sonnet-5.5"},
   "purposes": {
-    "extract_category_facts": {"model": "opus-4.6"},
-    "write_dossier_cell": {"model": "opus-4.6"}
+    "plan_brief": {"effort": "medium"},
+    "draft_brief_whole": {"effort": "medium"},
+    "extract_facts": {"model": "opus-4.6", "effort": null, "schema": "auto"},
+    "extract_category_facts": {"model": "opus-4.6", "effort": null, "schema": "auto"},
+    "write_dossier_cell": {"model": "sonnet-5.5"}
   }
 }

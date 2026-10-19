@@ -90,6 +90,8 @@ class ModelCap:
                 self._usage.calls += mine.calls
                 self._usage.input_tokens += mine.input_tokens
                 self._usage.output_tokens += mine.output_tokens
+                self._usage.cache_read += mine.cache_read
+                self._usage.cache_write += mine.cache_write
                 for m, u in mine.by_model.items():
                     t = self._usage.by_model.setdefault(m, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
                     for k in t:
@@ -99,7 +101,8 @@ class ModelCap:
                 body = runlog.bodies()
                 pj = json.dumps(payload, ensure_ascii=False, default=str)
                 log_.model(purpose=purpose, model=next(iter(mine.by_model), None) or self._port.model, secs=time.monotonic() - t0,
-                           tin=mine.input_tokens, tout=mine.output_tokens, attempts=mine.calls, ok=err is None,
+                           tin=mine.input_tokens, tout=mine.output_tokens, cache_read=mine.cache_read,
+                           cache_write=mine.cache_write, attempts=mine.calls, ok=err is None,
                            error=err, payload_chars=len(pj) + len(system or ""),
                            reply_chars=len(json.dumps(out, ensure_ascii=False)) if out is not None else None,
                            payload={"system": system, "payload": payload} if body else None, reply=out if body else None)

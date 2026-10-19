@@ -38,3 +38,12 @@ def test_a_run_log_it_cannot_write_does_not_stop_the_job(tmp_path):
         log.end("done", "ok", {}, [])
     finally:
         runlog.configure(None)
+
+
+def test_sonnet_5_5_on_bedrock_is_priced_with_its_cache_reads_and_writes():
+    m = "bedrock/global.anthropic.claude-sonnet-5-5"
+    assert runlog.price(m, 1_000_000, 1_000_000) == 12.0              # $2 in, $10 out
+    # of a million input tokens, 600k read from the cache (0.1x) and 100k written to it (1.25x)
+    assert runlog.price(m, 1_000_000, 0, cache_read=600_000, cache_write=100_000) == round(
+        0.3 * 2 + 0.6 * 2 * 0.1 + 0.1 * 2 * 1.25, 6)
+    assert runlog.price("bedrock/eu.anthropic.claude-sonnet-4-6", 1_000_000, 0) == 3.0   # older Sonnets unchanged
