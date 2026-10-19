@@ -137,7 +137,11 @@ class ResearchCap:
                                      sources=len((out or {}).get("sources") or []) if out is not None else None,
                                      urls=[x.get("url") for x in (out or {}).get("sources") or []][:12] or None,
                                      cost=tr.get("cost_usd"), cached=tr.get("cached"), error=err,
-                                     queries=tr.get("queries") or None)
+                                     queries=tr.get("queries") or None,
+                                     results=[{"url": x.get("url"), "title": x.get("title"),
+                                               "published_at": x.get("published_at"),
+                                               "text": "\n".join(str(e) for e in x.get("excerpts") or [])}
+                                              for x in (out or {}).get("sources") or []] if out is not None else None)
                 emit("research", lens=lens, market=market, secs=round(time.monotonic() - t0, 2),
                      sources=len((out or {}).get("sources") or []), queries=len(tr.get("queries") or []),
                      error=err.split(":", 1)[0] if err else None,

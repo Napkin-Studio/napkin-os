@@ -351,7 +351,7 @@ class WebResearch:
             backend = "nova-grounding"
         retrieved = today()
         usage = Usage()
-        sources, drops = self._select(q, lens, market, cands, max_sources, retrieved, usage)
+        sources, drops = self._select(q, lens, market, cands, max_sources, retrieved, usage, attribution or {})
         trace = {"backend": backend, "queries": [q],
                  "model": next(iter(usage.by_model), None),
                  "cost_usd": round(credits * TAVILY_CREDIT_USD, 4) if backend == "tavily" else None,
@@ -471,7 +471,7 @@ class WebResearch:
 
     # ------------------------------------------------------------ choosing and checking
 
-    def _select(self, q, lens, market, cands, max_sources, retrieved, usage) -> tuple[list[dict], dict]:
+    def _select(self, q, lens, market, cands, max_sources, retrieved, usage, attribution=None) -> tuple[list[dict], dict]:
         drops = {"not_chosen": 0, "quote_not_on_page": 0, "trimmed_to_page": 0, "no_quotes": 0}
         if not cands:
             return [], drops
@@ -489,8 +489,13 @@ class WebResearch:
         payload = {"question": q, "lens": lens, "looking_for": LENSES.get(lens, ""), "market": market,
                    "today": retrieved, "at_most": max_sources, "candidates": shown}
         try:
+            # the job the search is for, in the log line and the headers, as every model call names it
+            a = attribution or {}
             out = self.model_port.call("research_select", SELECT_SYSTEM, payload, SELECT_SCHEMA, usage=usage,
-                                       attribution="research")
+                                       attribution=f"{a.get('handler') or 'research'} job={a.get('job') or '-'} "
+                                                   f"org={a.get('org')} brand={a.get('brand')}",
+                                       headers={"X-Napkin-Handler": str(a.get("handler") or "-"),
+                                                "X-Napkin-Job": str(a.get("job") or "-")})
         except ModelError as e:
             raise ResearchError(f"choosing sources failed ({e.kind})") from None
         sources, seen = [], set()
