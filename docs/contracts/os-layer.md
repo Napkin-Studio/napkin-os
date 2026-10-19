@@ -513,6 +513,70 @@ a document keeps the record of its hop on every later write, or the first
 edit would erase it and `GET /upstream` and backrefs (§7.4) would have
 nothing to compare or address.
 
+### 5.7 Attach: a source carried into a document that already exists
+
+*Added 2026-10-19 (feature `brand-clan`; the first source is the Brand Clan,
+`docs/contracts/brand-clan.md`).* A spin-off makes a new document from an old
+one. Attach keeps the document and brings a source in beside its own work,
+with the carry of §5.2. Nothing in it names the Brand Clan: the target app
+names what it takes.
+
+```yaml
+app:
+  attach:
+    accepts: [ie.napkin.brand]    # source app ids; empty attaches nothing
+    lift: { brand.name.value: client }   # source dotted key -> this document's key
+    harvest: [ { from: single_minded_proposition, to: strategy.proposition.value } ]
+```
+
+1. **One source per app.** A document holds one attached source of each app
+   id. Attaching the same source again is an **update**; attaching another of
+   the same app is a **replace**.
+2. **What travels** is §5.2's, with these differences: the source's data is
+   frozen at `data.upstream.<source document_id>` (less `projection` and
+   `upstream`, whose keys are hoisted beside it); `pinned-facts`, `findings`
+   and `sources` are merged by id, the document's own first; assets are copied
+   and the document's own win a collision (an **update** lets the source's
+   newer files win); the source's chain is carried **whole and as it wrote it,
+   never force-pinned**.
+3. **Chain order.** The document's own decisions keep their place at the top.
+   New entries lead: the seeds, then one pinned `attach "<title>"` entry. The
+   source's decisions follow the document's own, after a pinned boundary entry
+   `carried from "<title>"`. Because the carried entries are not the leading
+   ones, a change names its new decisions by id (`Change.decisions` is the
+   id-diff), never as "the first N".
+4. **Seeds** land only in a field that is empty, or that still holds exactly
+   what the previous copy seeded. A person's edit is never overwritten, and
+   the reply lists what it kept. One `seed` decision each, as §5.4.
+5. **The record.** `lineage.attached[]` holds one entry per attached source:
+   `{app_id, version, at, document_id, data_sha256, facts_sha256?,
+   sources_sha256?, last_decision?}`: `version` is the source's `kit.version`
+   when it has one, and the rest is `Carried` (§5.3). A spin-off carries its
+   source's `attached` records beside the hoisted upstream, so a brand attached
+   to a brief reaches the production with the same record.
+6. **Detach** removes the frozen copy, the record, the carried merge report
+   and every seed that still holds the seeded value. Merged pins, sources and
+   assets stay: they are the document's own copies.
+7. **Refused:** a locked document or an update that changes nothing (`409`),
+   a context that is not a person or a source from another workspace (`403`),
+   a source whose app the target does not accept (`422`), a missing source
+   (`404`), attach of what is attached or update of what is not (`409`).
+
+```rust
+// clan-sdk
+pub struct AttachSpec { pub accepts: Vec<String>, pub lift: BTreeMap<String, String>, pub harvest: Vec<HarvestRule> }
+pub struct HarvestRule { pub from: String, pub to: String }
+pub struct Attached { pub app_id: String, pub version: Option<u64>, pub at: String, #[serde(flatten)] pub carried: Carried }
+// AppInfo gains `attach: Option<AttachSpec>`; Lineage gains `attached: Vec<Attached>`.
+pub fn attach(target: &ClanFile, source: &ClanFile) -> Result<AttachOutcome>;   // bytes, record, verb, seeded, kept
+pub fn detach(target: &ClanFile, app_id: &str) -> Result<DetachOutcome>;
+```
+
+Routes (§8): `GET /attach-targets`, `POST /attach {document_id}`,
+`POST /attach/update {document_id}`, `POST /attach/detach {app_id}`;
+`GET /upstream` gains `attached[]`. Harvest (`GET /harvest`, `POST /harvest`)
+is specified in `brand-clan.md` §6 and is not built yet.
+
 ---
 
 ## 6. Parallel work (N4)
@@ -1134,7 +1198,7 @@ freely, never redefine.
   decision. The actor always comes from `Ctx`.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
   `/verify`, `/approve`, `/history`, `/timeline`, `/open`, `/stale`,
-  `/upstream` (§8.1), and `/client-review`, `/client-review/confirm` and
+  `/upstream` (§8.1), the attach routes (§5.7), and `/client-review`, `/client-review/confirm` and
   `/client-review/reopen` (§8.2).
 - Landed (2026-09-28), each a person's decision — a process is refused `403` —
   recording one decision as the person in `Ctx` with what it changes, in one

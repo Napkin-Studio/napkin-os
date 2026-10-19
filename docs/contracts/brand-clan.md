@@ -208,14 +208,18 @@ brand replaces the first (recorded, Update semantics, §4.4).
 
 ### 4.2 What travels
 
-Exactly os-layer §5.2, applied to an existing document: data frozen at
+Exactly `os-layer.md` §5.7 (built, with tests): data frozen at
 `data.upstream.<brand document_id>` (less its `projection` and `upstream`),
-`pinned-facts` and `sources` merged by id, assets copied (the target's own
-win a path collision), the chain carried whole below an **attach marker**.
-`pin_source_decisions` defaults to **false** for an attach (a kit's chain
-grows for years; the kit keeps it whole, the project keeps it compressed),
-unlike a spin-off. Lifts copy with one `seed` decision each (§5.4 shape,
-`agent: napkin-attach`, `actor: process:attach`).
+`pinned-facts` and `sources` merged by id (the document's own first), assets
+copied (the target's own win a path collision), and the kit's chain carried
+**whole and as the kit wrote it, never force-pinned** (owner, 2026-10-19).
+The document's own decisions keep their place at the top; the seeds and one
+`attach` entry lead; the kit's decisions follow the document's own behind a
+pinned `carried from "<brand>"` boundary. Lifts copy with one `seed` decision
+each (`agent: napkin-attach`, `actor: process:attach`). A lift copies the raw
+value at its source key, so a lift source is a leaf that holds exactly the
+value the target wants (`brand.name.value`, `voice.tone_words.value`,
+`voice.mandatories.value`).
 
 ### 4.3 What the hop records
 
@@ -225,6 +229,7 @@ lineage:
     - document_id: <brand document_id>
       app_id: ie.napkin.brand
       version: 5                         # kit.version at attach
+      at: <datetime>
       data_sha256: sha256:…
       facts_sha256: sha256:…
       sources_sha256: sha256:…
@@ -232,7 +237,9 @@ lineage:
       at: <datetime>
 ```
 
-`carried` keeps naming the spin-off's direct parent only. `GET /upstream`
+`carried` keeps naming the spin-off's direct parent only. A spin-off carries
+its source's `attached[]` records with the hoisted upstream, so a brand
+attached to a brief reaches the production with the same record. `GET /upstream`
 reports both: what changed in the parent, and what changed in each attached
 document, by comparing these hashes with the source's current entries.
 
