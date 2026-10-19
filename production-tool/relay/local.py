@@ -63,6 +63,9 @@ def default_config() -> dict:
     # on, and on the mock's own model (features/clip-moment-edit.clan).
     cfg["flags"]["clipPatch"] = True
     cfg.setdefault("clipPatch", {}).pop("model", None)
+    # Connected video runs here too (features/connected-video.clan): the mock makes takes with visible cuts
+    # and lands on a last frame, and the real stitch finds the cuts and cuts a window's stills.
+    cfg["flags"]["connectedVideo"] = True
     return cfg
 
 

@@ -47,6 +47,7 @@ import identity
 import library
 import names
 import writer as writers
+import connected
 import cutdowns
 import projects
 import time_rules
@@ -915,12 +916,13 @@ class Relay:
             if op == "clip":
                 video = sheet.get("video") or {}
                 goes = video.get("firstFrameWithRefs") if inp.get("image") else video.get("refsWithoutFrame")
-                settings["refs"] = bool(inp.get("image")) + (min(refs, sheet["refs"]["max"]) if goes else 0)
+                settings["refs"] = connected.frames_sent(inp) + (min(refs, sheet["refs"]["max"]) if goes else 0)
             else:
                 settings["refs"] = min(refs, max(0, sheet["refs"]["max"] - 1))  # the clip itself is a ref too
         if sized and sized.get("tier"):  # the quality's size (features/clip-quality.clan): its tier's price
             settings["resolution"] = sized["tier"]
-        seconds = (inp.get("shot") or {}).get("duration_s")
+        # A take is the run's shots together, a take's window its width (features/connected-video.clan).
+        seconds = (connected.clip_seconds(inp) if op == "clip" else None) or (inp.get("shot") or {}).get("duration_s")
         if seconds:
             if op == "clip":
                 settings["durationS"] = fit_duration(seconds, spec)
@@ -968,6 +970,29 @@ class Relay:
         if not image and not inp.get("refs") and not words:
             raise ApiError("invalid_input", "This shot has no frame and no words yet. Write the shot, or draw its frame first.")
 
+    def _check_connected(self, cfg: dict, req: dict, pick: dict | None, allow: dict) -> None:
+        """A clip's mode, last frame, timed cuts or take window (features/connected-video.clan): behind
+        flags.connectedVideo, and only what the model it runs on can make (connected.problems: a last frame
+        needs video.lastFrame, a take video.take.ok within its length and shots). Refused here, before quota
+        or spend, as the person's request (400)."""
+        if not cfg["flags"].get("connectedVideo"):  # absent means off (config.schema)
+            raise ApiError("flag_off", "Joined shots are switched off for now.")
+        inp = req["input"]
+        last = inp.get("lastFrame")
+        if connected.is_picture(last) and not str(last.get("mime", "")).startswith("image/"):
+            raise ApiError("invalid_input", "A clip lands on a picture, and this last frame is not one.")
+        for still in connected.stills_needed(inp):  # cut by stitch from our own copy of the take
+            if self.blobs.key_for_url(still["asset"]["url"]) is None:
+                raise ApiError("invalid_input", "The take to cut a frame from is not one of ours; upload it first.")
+        chain = self._chain(cfg, "clip", pick, allow, inp)
+        if not chain:
+            return  # create_job says no provider can do it
+        model = self._run_model(chain[0], "clip", pick, inp, allow, req.get("quality"))
+        sheet = effective_sheet(self.registry.sheet(chain[0]), "clip", model)
+        why = connected.problems(inp, sheet, sheet["ops"]["clip"])
+        if why:
+            raise ApiError("invalid_input", why)
+
     def create_job(self, who: dict, req: dict) -> dict:
         existing = self.store.get_job(req["jobId"])
         if existing:
@@ -996,6 +1021,8 @@ class Relay:
         policy = self._policy(tenant)
         self._check_allowed(cfg, req, policy["allow"])
         self._check_frame(req)
+        if op == "clip" and connected.asks_connected(req["input"]):
+            self._check_connected(cfg, req, pick, policy["allow"])
         try:  # a misspelt @name is the person's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
@@ -1243,6 +1270,8 @@ class Relay:
             return self._run_stitch(job, cfg)
         if op == "clip_patch" and not job.get("_stage"):
             return self._run_cut(job, cfg)
+        if op == "clip" and not job.get("_stage") and connected.stills_needed(job["_req"]["input"]):
+            return self._run_stills(job, cfg)
         if job.get("_notBefore", 0) > self.clock():  # its provider asked us to wait (a 429's Retry-After)
             return self._with_poll(job)
         cls = self._slot_class(op)
@@ -1398,6 +1427,8 @@ class Relay:
                               else self._delivery_provider_job(job, pjob))
             except ApiError as e:
                 return self._fail(job, e.code, e.message, paid=False, refund=True, director=block)
+        if job["op"] == "clip" and job.get("_frames"):  # a take's stills the clip starts and lands on
+            made += list(job["_frames"].values())
         sized = self._sized(job, provider, model, pjob)
         set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
         try:
@@ -1539,6 +1570,8 @@ class Relay:
                 cut = job.get("_cut") or {}
                 raw = {**raw, "video": cut.get("video") or raw.get("video"),
                        **({"still": raw.get("still") or cut["still"]} if raw.get("still") or cut.get("still") else {})}
+            if req["op"] == "clip" and job.get("_frames"):  # the stills cut from a take: the clip's first and last frames
+                raw = connected.with_stills(raw, job["_frames"])
             # Extra views over this provider's ref limits are left out, not refused (names.fit_refs).
             inp, dropped = names.fit_refs(req["op"], raw, sheet)
             if dropped:
@@ -2300,6 +2333,87 @@ class Relay:
             log.exception("stitch splice invoke failed")  # no result comes: the splice clock retries it
         return self._with_poll(saved)
 
+    # ── Connected video (features/connected-video.clan): a take's stills before, its cuts after ──
+    def _run_stills(self, job: dict, cfg: dict) -> dict:
+        """Before a redo window's clip (or one landing on a take's frame): stitch cuts the lossless stills at
+        the window's ends from our copy of the take (splice.py cut). No provider slot is held; nothing is paid
+        if it fails."""
+        if self.stitch is None:
+            return self._fail(job, "provider_unavailable", "Cutting the take's frames is not available here.",
+                              paid=False, refund=True)
+        need = connected.stills_needed(job["_req"]["input"])
+        scratch = self._scratch(job)
+        event = {"jobId": job["jobId"], "mode": "cut", "key": self.blobs.key_for_url(need[0]["asset"]["url"]),
+                 "stills": [{"atS": s["atS"], "key": f"{scratch}/{s['role']}.png"} for s in need],
+                 "resultKey": f"{scratch}/stills.json"}
+        saved = self._save(job, state="submitted", _stage="stills", _stageAt=self.clock(), _queue="r")
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception as e:
+            log.exception("stitch stills invoke failed")
+            return self._fail(saved, "provider_unavailable", f"Cutting the take's frames could not start ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        return self._with_poll(saved)
+
+    def _run_take_cuts(self, job: dict, outputs: list[dict], cost_usd: float | None) -> dict:
+        """A take has landed: stitch finds where it cut (splice.py take_cuts: the strongest scene change near
+        each cut the prompt planned). The provider's slot is free now; the bill is kept for the landing. A take
+        stitch cannot read (the mock's still, no stitch here) lands with every found_s null."""
+        inp = job["_req"]["input"]
+        sheet = effective_sheet(self.registry.sheet(job["provider"]), "clip", job.get("model"))
+        _, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
+        kind = "mock" if job["provider"] == "mock" else "generated"
+        key = self.blobs.key_for_url(outputs[0]["url"])
+        if self.stitch is None or key is None or not str(outputs[0].get("mime", "")).startswith("video/"):
+            return self._finish(job, "completed", outputs=outputs, kind=kind, confirmed=cost_usd,
+                                cuts=connected.merge_cuts(starts, None))
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        event = {"jobId": job["jobId"], "mode": "take_cuts", "key": key, "cuts": starts[1:],
+                 "searchS": connected.search_s((sheet.get("video") or {}).get("take")),
+                 "threshold": connected.CUT_THRESHOLD, "resultKey": f"{self._scratch(job)}/cuts.json"}
+        saved = self._save(job, state="submitted", _stage="take_cuts", _stageAt=self.clock(), _landed=outputs,
+                           _starts=starts, _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception:
+            log.exception("stitch take_cuts invoke failed")  # no result comes: the clock lands the take without
+        return self._with_poll(saved)
+
+    def _advance_connected(self, job: dict, cfg: dict, now: float) -> dict:
+        scratch = self._scratch(job)
+        if job["_stage"] == "stills":
+            result = self.blobs.get_json(f"{scratch}/stills.json")
+            if result is None:
+                if now - job["_stageAt"] > CUT_TIMEOUT_S:
+                    return self._fail(job, "timeout", "Cutting the take's frames took too long. Try again.",
+                                      retryable=True, paid=False, refund=True)
+                return self._with_poll(job)
+            if not result.get("ok"):
+                return self._fail(job, "provider_failed", result.get("error", "The take's frames could not be cut.")[:300],
+                                  retryable=True, paid=False, refund=True)
+            need = connected.stills_needed(job["_req"]["input"])
+            frames = {s["role"]: {"sha256": got["sha256"], "url": self.blobs.public_url(f"{scratch}/{s['role']}.png"),
+                                  "mime": "image/png"} for s, got in zip(need, result.get("stills") or [])}
+            saved = self._save(job, state="queued", _stage="provider", _stageAt=now, _queue="q", _queuedAt=now,
+                               _frames=frames)
+            return self._dispatch(saved, cfg) if saved else self._reload(job)
+        result = self.blobs.get_json(f"{scratch}/cuts.json")
+        if result is None and now - job["_stageAt"] <= CUT_TIMEOUT_S:
+            return self._with_poll(job)
+        found = None
+        if result and result.get("ok"):
+            found = [c.get("found_s") for c in result.get("cuts") or []]
+        else:  # the take stands: its cuts are the planned ones
+            log.warning("job %s: take_cuts %s", job["jobId"], (result or {}).get("error") or f"no result in {CUT_TIMEOUT_S} s")
+        kind = "mock" if job.get("provider") == "mock" else "generated"
+        return self._finish(job, "completed", outputs=job["_landed"], kind=kind, confirmed=job.get("_confirmed"),
+                            cuts=connected.merge_cuts(job["_starts"], found))
+
     def _patch_question(self, job: dict, q: dict) -> dict:
         """Dex judged the note to be about the whole shot: the ask is always the same two buttons and words
         (ui-behaviour 3.13), whatever the model wrote; no price on either (owner, 2026-10-13)."""
@@ -2367,6 +2481,8 @@ class Relay:
             return self._advance_stitch(job, cfg, now)
         if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
             return self._advance_patch(job, cfg, now)
+        if job["op"] == "clip" and job.get("_stage") in ("stills", "take_cuts"):
+            return self._advance_connected(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
             # Past its time, but the provider may have finished it while nobody polled (the local relay
             # was down: features/relay-durable-jobs.clan). Ask once: a finished task lands, paid for.
@@ -2466,6 +2582,8 @@ class Relay:
             return self._land_resize(claimed, outputs[0], st.cost_usd)
         if job["op"] == "upscale" and (job["_req"].get("input") or {}).get("delivery"):
             return self._land_delivery(claimed, outputs[0], st.cost_usd)
+        if job["op"] == "clip" and connected.mode_of(job["_req"]["input"]) in connected.TAKE_MODES:
+            return self._run_take_cuts(claimed, outputs, st.cost_usd)  # where the take cut, before it lands
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(claimed, "completed", outputs=outputs, kind=kind, confirmed=st.cost_usd)
 
@@ -2531,6 +2649,10 @@ class Relay:
             return self._finish(job, "cancelled", paid=False, refund=True)  # only our own cut ran: nothing to pay
         if state == "submitted" and job["op"] == "clip_patch" and job.get("_stage") == "splice":
             return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the model's work is done and billed
+        if state == "submitted" and job["op"] == "clip" and job.get("_stage") == "stills":
+            return self._finish(job, "cancelled", paid=False, refund=True)  # only our own cut ran: nothing to pay
+        if state == "submitted" and job["op"] == "clip" and job.get("_stage") == "take_cuts":
+            return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the take is made and billed
         if state in ("submitted", "uncertain"):
             if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back
                 return self._finish(job, "cancelled", paid=False, refund=True)

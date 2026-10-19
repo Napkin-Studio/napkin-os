@@ -189,9 +189,14 @@ class PassthroughDirector:
             _clip_frame_only(job, op, sheet)
         if op in _VIDEO_OPS:
             job["audio"] = False
+            spec = ((sheet or {}).get("ops") or {}).get(op) or {}
             if shot:
-                spec = ((sheet or {}).get("ops") or {}).get(op) or {}
                 job["durationS"] = fit_duration(shot["duration_s"], spec) if op == "clip" else shot["duration_s"]
+            if op == "clip" and sheet:
+                # A take, a landing frame or a window of a take (features/connected-video.clan): the mode
+                # sets the frames, refs, length and the timed prompt; a clip with none is as it was.
+                import connected
+                connected.shape(job, inp, sheet, spec, passthrough=True)
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}

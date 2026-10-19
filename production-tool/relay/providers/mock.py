@@ -9,6 +9,11 @@ is on PATH (features/connected-video.clan: a take with motion and a last frame, 
 be tried locally); without ffmpeg (the relay Lambda), the stamped still (image/png) with the
 requested duration attached.
 
+Connected video (features/connected-video.clan): a take (a prompt timed "Shot k [a-b s]") comes back as
+an MP4 of its whole length with a visibly different picture per shot ("SHOT k", its colours turned),
+cutting at the prompt's times, so the relay's take_cuts finds the cuts; a clip with a last frame dissolves
+into that frame over its last 0.2 s and ends exactly on it.
+
 A region_edit paints its area (the mask, ours: white = change; else the region box) with bold
 stripes, magenta and yellow, fully opaque: a result lost on its way to the saved picture is plain
 to see in a screenshot or a pixel test (fix/editor-apply-keeps-edits, 2026-10-16).
@@ -38,6 +43,8 @@ from .types import (
 
 DRIFT_S = 1.0  # the mock clip's length when it is encoded
 DRIFT_FPS = 24
+LAND_S = 0.2  # a clip with a last frame dissolves into it over this, ending on it
+TIMED = re.compile(r"^Shot (\d+) \[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?) s\]", re.M)  # connected.TIMED
 _WHICH = object()  # MockProvider's ffmpeg default: whatever is on PATH
 
 # The alternates in capabilities/mock.json, so local dev can exercise the regenerate menu.
@@ -70,21 +77,66 @@ def stamp(png_or_jpeg: Optional[bytes], label: str, size: Optional[tuple[int, in
     return out.getvalue(), w, h
 
 
-def drift_mp4(png: bytes, ffmpeg: str) -> tuple[bytes, int, int]:
+def _drift(w: int, h: int, seconds: float) -> str:
+    return (f"scale=trunc(iw*1.08/2)*2:trunc(ih*1.08/2)*2,"
+            f"crop={w}:{h}:x='(in_w-out_w)*t/{seconds:g}':y='(in_h-out_h)/2',format=yuv420p")
+
+
+def drift_mp4(png: bytes, ffmpeg: str, last: Optional[bytes] = None) -> tuple[bytes, int, int]:
     """A DRIFT_S MP4 of the picture drifting sideways (8 % across), so a mock take has motion and a last
-    frame unlike its first. Even sides, as H.264 wants."""
+    frame unlike its first. With `last` (a clip landing on a given frame), its last LAND_S dissolve into
+    that picture (scaled to the clip) and its final frame is it. Even sides, as H.264 wants."""
     w0, h0 = Image.open(io.BytesIO(png)).size
     w, h = max(2, w0 // 2 * 2), max(2, h0 // 2 * 2)
+    n = round(DRIFT_S * DRIFT_FPS)
     with tempfile.TemporaryDirectory() as tmp:
-        src, out = os.path.join(tmp, "in.png"), os.path.join(tmp, "out.mp4")
+        src, end, out = os.path.join(tmp, "in.png"), os.path.join(tmp, "last.png"), os.path.join(tmp, "out.mp4")
         with open(src, "wb") as f:
             f.write(png)
-        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-loop", "1", "-framerate", str(DRIFT_FPS),
-                        "-i", src, "-frames:v", str(round(DRIFT_S * DRIFT_FPS)),
-                        "-vf", f"scale=trunc(iw*1.08/2)*2:trunc(ih*1.08/2)*2,"
-                               f"crop={w}:{h}:x='(in_w-out_w)*t/{DRIFT_S:g}':y='(in_h-out_h)/2',format=yuv420p",
-                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-movflags", "+faststart", out],
+        args = ["-loop", "1", "-framerate", str(DRIFT_FPS), "-t", f"{DRIFT_S:g}", "-i", src]
+        graph = f"[0:v]{_drift(w, h, DRIFT_S)},setsar=1[v]"
+        if last:
+            with open(end, "wb") as f:
+                f.write(last)
+            args += ["-loop", "1", "-framerate", str(DRIFT_FPS), "-t", f"{LAND_S + 2 / DRIFT_FPS:g}", "-i", end]
+            graph = (f"[0:v]{_drift(w, h, DRIFT_S)},setsar=1[a];"
+                     f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,format=yuv420p[b];"
+                     f"[a][b]xfade=transition=fade:duration={LAND_S:g}:offset={DRIFT_S - LAND_S - 2 / DRIFT_FPS:.6f}[v]")
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args, "-filter_complex", graph, "-map", "[v]",
+                        "-frames:v", str(n), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
                        check=True, capture_output=True, timeout=60)
+        with open(out, "rb") as f:
+            return f.read(), w, h
+
+
+def take_mp4(png: bytes, starts: list[float], seconds: float, ffmpeg: str) -> tuple[bytes, int, int]:
+    """A mock take (features/connected-video.clan): `seconds` long, cutting at `starts` (each shot's start),
+    each shot the picture stamped "SHOT k", in negative or another light, its colours turned and drifting, so
+    every cut is a plain scene change for take_cuts."""
+    w0, h0 = Image.open(io.BytesIO(png)).size
+    w, h = max(2, w0 // 2 * 2), max(2, h0 // 2 * 2)
+    ends = [*starts[1:], seconds]
+    frames = [round(b * DRIFT_FPS) - round(a * DRIFT_FPS) for a, b in zip(starts, ends)]
+    with tempfile.TemporaryDirectory() as tmp:
+        args, parts = [], []
+        for k, n in enumerate(frames):
+            shot, _, _ = stamp(png, f"MOCK SHOT {k + 1}")
+            src = os.path.join(tmp, f"shot{k}.png")
+            with open(src, "wb") as f:
+                f.write(shot)
+            length = max(1, n) / DRIFT_FPS
+            args += ["-loop", "1", "-framerate", str(DRIFT_FPS), "-t", f"{length:.6f}", "-i", src]
+            # Every other shot upside down in negative, the rest darker in turn: a cut changes the picture's light and
+            # layout, which ffmpeg's scene score reads (turning the colours alone did not reach 0.10 on a plain frame).
+            look = "negate,vflip," if k % 2 else ("eq=brightness=-0.25," if k % 4 == 2 else "")
+            parts.append(f"[{k}:v]{look}hue=h={round(360 * k / len(frames))},{_drift(w, h, length)},"
+                         f"setsar=1,trim=end_frame={max(1, n)}[s{k}]")
+        graph = ";".join(parts) + ";" + "".join(f"[s{k}]" for k in range(len(frames))) + f"concat=n={len(frames)}:v=1:a=0[v]"
+        out = os.path.join(tmp, "out.mp4")
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *args, "-filter_complex", graph, "-map", "[v]",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart", out], check=True, capture_output=True, timeout=120)
         with open(out, "rb") as f:
             return f.read(), w, h
 
@@ -233,6 +285,7 @@ class MockProvider:
         sha = self._source_sha(job)
         self._jobs[request_id] = {"job": job, "at": self._clock(), "cancelled": False,
                                   "source": self._assets(sha).url if sha else None,
+                                  "last": self._assets(job.last_frame).url if job.last_frame else None,
                                   "mask": self._assets(job.mask).url if job.op == "region_edit" and job.mask else None}
         self._keep(request_id)
         return request_id
@@ -307,9 +360,15 @@ class MockProvider:
             data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", size)
             if job.op in VIDEO_OPS and self._ffmpeg:
                 try:
-                    mp4, w2, h2 = drift_mp4(data, self._ffmpeg)
+                    timed = [float(a) for _, a, _ in TIMED.findall(job.prompt or "")]
+                    if len(timed) > 1 and job.duration_s:  # a take: its whole length, cut where the prompt says
+                        mp4, w2, h2 = take_mp4(data, timed, float(job.duration_s), self._ffmpeg)
+                        seconds = float(job.duration_s)
+                    else:
+                        mp4, w2, h2 = drift_mp4(data, self._ffmpeg, self._last(entry, (w, h)))
+                        seconds = DRIFT_S
                     outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="video/mp4", w=w2, h=h2,
-                                                  duration_s=DRIFT_S, data=mp4))
+                                                  duration_s=seconds, data=mp4))
                     continue
                 except (subprocess.SubprocessError, OSError):  # an ffmpeg that cannot: the still, as before
                     pass
@@ -317,6 +376,13 @@ class MockProvider:
                                           duration_s=job.duration_s if job.op in VIDEO_OPS else None,
                                           data=data))
         return Status("done", queue_position=0, outputs=outputs, kind="mock", cost_usd=0.0)
+
+    def _last(self, entry: dict, size: tuple[int, int]) -> Optional[bytes]:
+        """The stamped last frame a clip lands on, or None (none given, or it cannot be read: no landing)."""
+        try:
+            return stamp(self._fetch(entry["last"]), "MOCK", size)[0] if entry.get("last") else None
+        except Exception:  # noqa: BLE001  the clip is still made, from its first frame alone
+            return None
 
     def cancel(self, request_id: str) -> None:
         if request_id in self._jobs or self._recall(request_id):
