@@ -9,7 +9,7 @@ import copy
 import soften
 from conftest import envelope
 from director import new_id
-from providers.base import Moderated
+from providers.base import Moderated, Status
 from test_connected_takes import FRAME, SHOTS, harness, land, shot, stitch_result
 
 TEXT = "INPUT_PREPROCESSING.SAFETY.TEXT"
@@ -105,3 +105,36 @@ def test_what_counts_as_a_text_refusal():
     assert not soften.text_refusal("INPUT_PREPROCESSING.SAFETY.IMAGE", "Text and image")
     assert soften.text_refusal(None, "Text prompt did not pass moderation")
     assert not soften.text_refusal(None, "Image did not pass moderation")
+
+
+def refuse_on_status(h, rid):
+    """Runway took the task, then its text check refused it on the next status (2026-10-19, live)."""
+    h.providers["runway"].states[rid] = Status(state="moderated", error_message="Text prompt did not pass moderation",
+                                               provider_code=TEXT)
+    h.clock.tick(6)
+
+
+def test_a_text_refusal_on_status_is_sent_once_more_plainer():
+    h = harness()
+    fake = h.providers["runway"]
+    job = post_take(h)
+    assert job["state"] == "submitted" and not job.get("softened")
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "submitted" and job["softened"] is True and len(fake.submits) == 2
+    first, second = fake.submits
+    assert "blade flashes" in first["prompt"] and "kitchen knife moves quickly" in second["prompt"]
+    assert {k: v for k, v in first.items() if k != "prompt"} == {k: v for k, v in second.items() if k != "prompt"}
+    assert job["director"]["rationale"].startswith(soften.NOTE)
+
+
+def test_a_second_text_refusal_on_status_fails_as_twice_refused():
+    h = harness()
+    job = post_take(h)
+    refuse_on_status(h, "runway-1")
+    job = h.poll(h.token, job["jobId"])
+    refuse_on_status(h, "runway-2")
+    job = h.poll(h.token, job["jobId"])
+    assert job["state"] == "failed" and job["error"]["code"] == "moderated"
+    assert job["error"]["message"] == f"Runway refused the words twice ({TEXT})."
+    assert len(h.providers["runway"].submits) == 2

@@ -1506,6 +1506,34 @@ class Relay:
             return self._reload(job)
         return self._with_poll(saved)
 
+    def _resend_plainer(self, job: dict, adapter, sheet: dict, st, now: float, min_poll: float) -> dict | None:
+        """A clip whose words the provider refused after taking the task: sent again once with plainer words, the
+        same provider job otherwise. None when it was already softened or cannot go again (the caller fails it)."""
+        block = job.get("director") or {}
+        pjob = (block.get("output") or {}).get("providerJob")
+        if job.get("softened"):
+            return self._fail(job, "moderated", f"{soften.TWICE} ({st.provider_code or 'moderated'}).",
+                              provider_code=st.provider_code, paid=False)
+        if not pjob or not pjob.get("prompt"):
+            return None
+        refused = pjob["prompt"]
+        pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
+        log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": st.provider_code, "at": "status"}))
+        made = list((job.get("_frames") or {}).values()) if job.get("_frames") else []
+        set_job_context("clip", asset_refs(job["_req"]["input"]) + made)
+        try:
+            request_id = adapter.submit(pjob)
+        except Moderated as e:
+            return self._fail(job, "moderated", f"{soften.TWICE} ({e.provider_code or 'moderated'}).",
+                              provider_code=e.provider_code, paid=False, director=self._softened_block(block, pjob),
+                              softened=True, _softenedFrom=refused)
+        except Exception:
+            log.exception("plainer resend of %s raised", job["jobId"])
+            return None
+        saved = self._save(job, state="submitted", requestId=str(request_id), director=self._softened_block(block, pjob),
+                           _submittedAt=now, _nextCheckAt=now + min_poll, softened=True, _softenedFrom=refused)
+        return self._with_poll(saved or job)
+
     def _plainer(self, job: dict, sheet: dict, pjob: dict) -> str:
         """A refused clip's words made plainer (soften.py): Dex rewrites them, keeping every beat and a take's
         timing lines; a rewrite that loses the take's timing, or the passthrough, uses soften's word map. The word
@@ -2609,6 +2637,12 @@ class Relay:
                                _ran=bool(job.get("_ran")) or st.state == "running")
             return self._with_poll(saved or job)
         if st.state == "moderated":
+            if job["op"] == "clip" and soften.text_refusal(st.provider_code, st.error_message):
+                # Runway takes the task, then its text check refuses it on the next status (2026-10-19): the same
+                # as a refusal at submit, so once more, plainer; a second refusal fails as twice refused.
+                again = self._resend_plainer(job, adapter, sheet, st, now, min_poll)
+                if again is not None:
+                    return again
             return self._fail(job, "moderated", st.error_message or "The provider refused this content.",
                               provider_code=st.provider_code)
         if st.state == "cancelled":
