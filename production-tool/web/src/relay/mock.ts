@@ -531,6 +531,11 @@ export class MockRelay implements Relay {
       if (sized.level && sized.tier && !sized.keepsSize) job.quality = { level: sized.level, size: sizeLabel(sized.tier)! }
     }
     if (item.done?.outputs) job.outputs = item.done.outputs
+    // A take's cuts (features/connected-video.clan): the mock cuts at the prompt's times, so each is found
+    // there (the relay's take_cuts finds a real one within the model's accuracy).
+    if (item.done?.state === 'completed' && req.op === 'clip' && (req.input.mode === 'take' || req.input.mode === 'take_refs')) {
+      job.cuts = mockCuts(req.input)
+    }
     if (item.done?.shots) job.shots = item.done.shots
     if (item.done?.writes) job.writes = item.done.writes
     if (item.done?.error) job.error = item.done.error
@@ -549,3 +554,9 @@ export class MockRelay implements Relay {
   }
 }
 
+/** Where the mock take cuts: at each shot's start after the first (the request's cuts, else the shots' lengths). */
+export function mockCuts(input: JobRequest['input']): { planned_s: number; found_s: number | null }[] {
+  let at = 0
+  const starts = input.cuts?.map((c) => c.atS) ?? (input.shots ?? []).map((s) => { const a = at; at += s.duration_s; return a })
+  return starts.slice(1).map((s) => ({ planned_s: s, found_s: s }))
+}

@@ -8,13 +8,15 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { ClipQuality, ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
+import type { ClipQuality, ModelChoice, Region, Review, SeamKind, Shot, Strength, Take, VideoJoin } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
-import { changeFeel, editQuality, makeClip as submitClip, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
+import { changeFeel, editQuality, makeClip as submitClip, makeTake, redoInTake, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
+import { makeClips, modelEntry, canLand, type PlanModel, type RunPlan } from '../jobs/runs'
+import { inTake, joinBefore, joinChoices, joinLabel, JOIN_NAMES, landingShot, runBusy, runJobFor, runProgress, sameTake, setJoin, setVideoJoin, takeBands, takeRunOf, videoJoin, videoModel, videoPlan } from '../jobs/runView'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
-import { adStatus, takeStale } from '../jobs/stale'
+import { adStatus, endFrameDrift, takeStale } from '../jobs/stale'
 import { adBehindLabel, behindLabel } from '../ui/behind'
 import { rectToRegion } from '../lib/region'
 import { fmtTime, useBlobUrl, useSending } from '../ui/hooks'
@@ -86,7 +88,12 @@ export function Video() {
   const [error, setError] = useState<string | null>(null)
   const shot = shots.find((s) => s.id === shotId) ?? shots[0]
   const take = shot ? currentTake(doc, shot.id, video?.id) : undefined
-  const clipJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id)
+  // Connected video (features/connected-video.clan): null when the flag is off, and everything is as before.
+  const join = videoJoin(doc, video?.id, config)
+  const vModel = join ? videoModel(doc, video?.id, config, lastWorkedModel(doc, 'clip', config)) : null
+  const plan = join === 'film' && vModel ? videoPlan(doc, video?.id, vModel) : undefined
+  // A shot being made in a take has its run's job.
+  const clipJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id) ?? (join ? runJobFor(doc, ui, id) : undefined)
   // An "uncertain" job is waiting on the participant (Stop waiting / Try again on its card), not on
   // the relay: it locks nothing (features/video-stage-findings.clan).
   const anyRunning = shots.some((s) => isMoving(doc, clipJob(s.id)))
@@ -137,17 +144,29 @@ export function Video() {
   const makeAll = (ids: string[], modelChoice?: ModelChoice, quality?: ClipQuality) => sendAll(async () => {
     setError(null)
     setTray(false)
-    const failed: string[] = []
-    for (const [i, s] of shots.entries()) {
-      if (!ids.includes(s.id) || takesOf(doc, s.id).length || isRunning(doc, clipJob(s.id))) continue
-      try {
-        await makeClip(s, { modelChoice: modelChoice ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)), ...(quality ? { quality } : {}) })
-      } catch (e) {
-        failed.push(`Shot ${i + 1}: ${e instanceof Error ? e.message : 'that did not work.'}`)
-      }
+    try {
+      // As one film (features/connected-video.clan), the shots are planned into runs that join; otherwise
+      // (and with the flag off) each one is made alone, as before.
+      const failed = await makeClips(deps, {
+        videoId: video?.id, shots, ids, config, join, fromWords, ...(quality ? { quality } : {}),
+        modelChoice: modelChoice ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)),
+        skip: (id) => !!takesOf(doc, id).length || isRunning(doc, clipJob(id)),
+      })
+      if (failed.length) setError(failed.join(' '))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
     }
-    if (failed.length) setError(failed.join(' '))
   })
+
+  // The One take bands (features/connected-video.clan): where each shot sits in one, and whether gap i is inside one.
+  const bands = join === 'film' ? takeBands(doc, video?.id, plan) : []
+  const bandOf = (id: string): Banded | undefined => {
+    const b = bands.find((x) => x.shotIds.includes(id))
+    if (!b) return undefined
+    const k = b.shotIds.indexOf(id)
+    return { at: k === 0 ? 'first' : k === b.shotIds.length - 1 ? 'last' : 'mid', planned: b.planned, label: k === 0 ? (b.planned ? 'One take, planned' : 'One take') : undefined }
+  }
+  const bandAt = (i: number) => bands.some((b) => b.shotIds.includes(shots[i].id) && b.shotIds.includes(shots[i - 1].id))
 
   const render = () => sendRender(async () => {
     setError(null)
@@ -172,7 +191,8 @@ export function Video() {
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
       title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
       meta={<><span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>
-        {video && <QualityDefault videoId={video.id} />}</>}
+        {video && <QualityDefault videoId={video.id} />}
+        {video && join && <JoinDefault videoId={video.id} join={join} />}</>}
       view={{ label: 'View', value: view, onPick: (v) => setView(v as typeof view), options: [{ id: 'picture', label: 'Picture' }, { id: 'sound', label: 'Sound' }] }}
       more={() => <CopyLinkLater />}
       right={<>
@@ -232,14 +252,16 @@ export function Video() {
                 <button className={`btn sm ${mode === 'all' ? 'on' : ''}`} disabled={!allTaken} onClick={() => setMode('all')}
                   title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>▶ All shots</button>
               </div>
+              {join && <RunProgress videoId={video?.id} />}
               <div className="ve-track"><span className="ve-lane"><b>Shots</b><span>main track</span></span>
                 <div className={`strip ${editable ? 'editable' : ''}`}>
                   {shots.map((s, i) => (
                     <Fragment key={s.id}>
                       {editable && i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} />}
+                      {join === 'film' && video && i > 0 && <GapChip videoId={video.id} prev={shots[i - 1]} shot={s} n={i} model={vModel} plan={plan} band={bandAt(i)} />}
                       <ShotCard shot={s} index={i} videoId={video?.id} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
                         onSelect={() => { setShotId(s.id); setMode('shot') }}
-                        onMake={(opts) => makeClip(s, opts)} />
+                        onMake={(opts) => makeClip(s, opts)} band={join === 'film' ? bandOf(s.id) : undefined} plan={plan} />
                     </Fragment>
                   ))}
                   {editable && sb && <AddShot storyboardId={sb.id} count={shots.length} onMade={(id) => { setShotId(id); setMode('shot') }} />}
@@ -294,9 +316,13 @@ function MakeClipBox({ index, quality: start, onMake }: { index: number; quality
   )
 }
 
-function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
+/** A shot's place in a One take band on the timeline. */
+interface Banded { at: 'first' | 'mid' | 'last'; planned: boolean; label?: string }
+
+function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, band, plan }: {
   shot: Shot; index: number; videoId?: string; selected: boolean; jobId?: string; onSelect: () => void
   onMake: (opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality }) => Promise<unknown>
+  band?: Banded; plan?: RunPlan
 }) {
   const makeRef = useRef<HTMLButtonElement>(null)
   const [making, setMaking] = useState(false)
@@ -312,6 +338,8 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
   const selMade = madeWith(doc, ui, sel?.job_id)
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
   const stale = shotsBeingFixed(doc, ctxReader(doc, ui)).has(shot.id) ? undefined : takeStale(doc, shot.id)
+  // Quiet, never "out of date": the frame this clip lands on has changed since (features/connected-video.clan).
+  const endDrift = endFrameDrift(doc, shot.id, videoId)
   // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
   const update = useUpdate()
   const [error, setError] = useState<string | null>(null)
@@ -330,17 +358,18 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
     await deleteFrom(docStore, (d) => removeTake(d, sel.id)) // Undo in the top bar puts it back
   }
   return (
-    <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => {
+    <div className={`shotcard ${selected ? 'sel' : ''} ${band ? `inband ${band.at} ${band.planned ? 'planned' : ''}` : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => {
       if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
         e.preventDefault() // Space would scroll the page
         onSelect()
       }
     }}>
+      {band && <span className="ve-band" aria-hidden="true">{band.label && <span>{band.label}</span>}</span>}
       <div className="thumb">
         {thumb ? <img src={thumb} alt="" /> : shot.action ? <span className="ve-thumbwords">{shot.action}</span> : null}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobSlot jobId={jobId} compact /></div>}
       </div>
-      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} />}
+      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} videoId={videoId} plan={plan} />}
       <div className="meta">
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         <div className="row wrap" style={{ gap: 4 }}>
@@ -378,6 +407,7 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
             </SplitButton>
           </div>
         )}
+        {endDrift && <div className="ve-drift" title="The frame this clip ends on was changed. Remake it to land on the new one.">Ends on an older frame of shot {endDrift.shot}</div>}
         {error && <div role="alert" className="framecard-error" style={{ padding: 0 }}>{error}</div>}
       </div>
     </div>
@@ -385,8 +415,9 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
 }
 
 /** A shot card's ⋯ menu: a new take (on the model that made this one, or another), and delete. */
-function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
+function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId, plan }: {
   shot: Shot; take: Take; n: number; only: boolean; busy: boolean; onDelete: () => void; onError: (message: string | null) => void
+  videoId?: string; plan?: RunPlan
 }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
@@ -407,7 +438,40 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
     void send(async () => {
       onError(null)
       try {
-        await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice), quality: take.quality ?? shotQuality(doc, shot.id) })
+        // In a film, a clip that lands on the next frame lands on it again (the same first and last frames).
+        const end = plan ? landingShot(plan, shot.id) : undefined
+        await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice), quality: take.quality ?? shotQuality(doc, shot.id), ...(end ? { endShotId: end } : {}) })
+      } catch (e) {
+        onError(e instanceof Error ? e.message : 'That did not work.')
+      }
+    })
+  }
+  // One take (features/connected-video.clan): remake this shot's window alone, or the whole run.
+  const deps = { relay, doc: docStore, ui: uiStore, runner }
+  const windowed = !!plan && inTake(doc, shot.id, videoId)
+  const run = windowed ? takeRunOf(doc, shot.id, videoId) : undefined
+  const redo = () => {
+    close()
+    void send(async () => {
+      onError(null)
+      try {
+        const shots = shotsOf(doc, shot.storyboard_id)
+        const next = shots[shots.findIndex((s) => s.id === shot.id) + 1]
+        const withLast = !!next && joinBefore(doc, videoId, next.id)?.kind === 'continue'
+        const m = redoModel(take)
+        await redoInTake(deps, shot.id, { videoId, withLast, quality: take.quality ?? shotQuality(doc, shot.id), ...(m ? { modelChoice: choiceToSend('clip', config, m) } : {}) })
+      } catch (e) {
+        onError(e instanceof Error ? e.message : 'That did not work.')
+      }
+    })
+  }
+  const remakeRun = () => {
+    close()
+    void send(async () => {
+      onError(null)
+      try {
+        if (!run || !videoId) throw new Error('That run is gone.')
+        await makeTake(deps, videoId, run.id, { modelChoice: choiceToSend('clip', config, { provider: take.provider as ModelChoice['provider'], model: take.model }), quality: take.quality ?? shotQuality(doc, shot.id) })
       } catch (e) {
         onError(e instanceof Error ? e.message : 'That did not work.')
       }
@@ -426,6 +490,9 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
         ) : (
           <>
             <div className="fhead">Shot {shotNumber(doc, shot.id)} · clip v{n}</div>
+            {windowed && <MenuItem icon="▶" disabled={busy || sending} hint="the shots around it stay" onSelect={redo}>{sending ? 'Sending…' : 'Remake just this shot'}</MenuItem>}
+            {windowed && run && <MenuItem icon="⟳" disabled={busy || sending || runBusy(doc, run)} onSelect={remakeRun}>Make the whole run again</MenuItem>}
+            {windowed && <div className="fsep" />}
             <MenuItem icon="▶" disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : 'New take'}</MenuItem>
             {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
             {take.quality === 'draft' && (
@@ -466,6 +533,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
   const cur = mode === 'all' ? playlist[idx] : take && shot ? { shot, take } : undefined
   // Not in this browser (another device, cleared storage): the relay's copy (2026-10-09).
   const url = useBlobUrl(cur?.take.asset) ?? remoteUrl(doc, cur?.take.asset)
+  const window_ = cur?.take.segments?.[0]
   // The relay's mock makes a still for a clip, not a video: it shows as the picture it is.
   const still = !!(cur && doc.assets[cur.take.asset]?.mime.startsWith('image/'))
   const stillS = cur ? cur.take.duration_s ?? cur.shot.duration_s : 0
@@ -654,9 +722,16 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
                 if (pendingSeek.current !== null) {
                   e.currentTarget.currentTime = pendingSeek.current
                   pendingSeek.current = null
+                } else if (window_) e.currentTarget.currentTime = window_.in_s // a window of one take starts at its cut
+              }}
+              onTimeUpdate={(e) => {
+                setT(e.currentTarget.currentTime)
+                // A window of one take ends at the next cut (features/connected-video.clan).
+                if (window_ && e.currentTarget.currentTime >= window_.out_s) {
+                  if (mode === 'all') setIdx((i) => (i + 1 < playlist.length ? i + 1 : 0))
+                  else e.currentTarget.pause()
                 }
               }}
-              onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
               onPlay={(e) => { setFocusPin(null); unstick(e.currentTarget) }}
               onWaiting={(e) => unstick(e.currentTarget)}
               onEnded={() => mode === 'all' && setIdx((i) => (i + 1 < playlist.length ? i + 1 : 0))}
@@ -914,4 +989,67 @@ function QualityDefault({ videoId }: { videoId: string }) {
       </select>
     </label>
   )
+}
+
+/** How shots join (features/connected-video.clan), beside the quality in the editor's bar: As one film (Make
+ *  clips plans runs that join) or Shot by shot (each clip alone, as before). */
+function JoinDefault({ videoId, join }: { videoId: string; join: VideoJoin }) {
+  const { doc: docStore } = useServices()
+  return (
+    <label className="qdefault" title="As one film: shots that carry on are made together or land on the next frame. Shot by shot: each clip on its own.">
+      How shots join
+      <select aria-label="How shots join" value={join} onChange={(e) => void setVideoJoin(docStore, videoId, e.target.value as VideoJoin)}>
+        {(['film', 'shots'] as const).map((j) => <option key={j} value={j}>{JOIN_NAMES[j]}</option>)}
+      </select>
+    </label>
+  )
+}
+
+/** Each run being made now: "Making shots 2-5 together". */
+function RunProgress({ videoId }: { videoId?: string }) {
+  const doc = useDoc()
+  const ui = useUi()
+  const lines = runProgress(doc, ui, videoId)
+  if (!lines.length) return null
+  return <div className="ve-runs" role="status">{lines.map((l) => <span key={l} className="pt-pill">{l}</span>)}</div>
+}
+
+const JOIN_GLYPH: Record<string, string> = { 'One take': '∿', 'Lands on the next frame': '⇥', Cut: '│', Dissolve: '◐', Dip: '◑' }
+
+/** The chip between two shots: the join in words on a tap, and the joins this model allows. A change is a
+ *  person's join (seam by human) and a History entry. */
+function GapChip({ videoId, prev, shot, n, model, plan, band }: { videoId: string; prev: Shot; shot: Shot; n: number; model: PlanModel | null; plan?: RunPlan; band: boolean }) {
+  const { doc: docStore } = useServices()
+  const doc = useDoc()
+  const ref = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const seam = joinBefore(doc, videoId, shot.id)
+  const kind: SeamKind = seam?.kind ?? 'cut'
+  const label = joinLabel(kind, { inTake: sameTake(doc, videoId, prev.id, shot.id, plan) && kind !== 'cut' && kind !== 'dissolve' && kind !== 'dip', model })
+  const choices = joinChoices(model)
+  return (
+    <span className={`ve-gap ${band ? 'inband' : ''}`}>
+      <button ref={ref} type="button" className={`ve-gapchip ${seam?.by === 'human' ? 'human' : ''}`} aria-haspopup="menu" aria-expanded={open}
+        aria-label={`Join between shots ${n} and ${n + 1}: ${label}`} title={label} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
+        <span aria-hidden="true">{JOIN_GLYPH[label] ?? '│'}</span>
+      </button>
+      <Float anchor={ref} open={open} onClose={() => setOpen(false)} label={`Join between shots ${n} and ${n + 1}`}>
+        <div className="fhead">{label}</div>
+        <div className="ve-gapwhy faint">{seam?.by === 'human' ? 'You chose this join.' : 'Dex chose this from the shots.'}</div>
+        {choices.map((c) => (
+          <MenuItem key={c.kind} icon={c.kind === kind ? '✓' : JOIN_GLYPH[c.label] ?? ''} hint={c.hint}
+            onSelect={() => { setOpen(false); if (c.kind !== kind || seam?.by !== 'human') void setJoin(docStore, videoId, shot.id, c.kind, c.label) }}>{c.label}</MenuItem>
+        ))}
+      </Float>
+    </span>
+  )
+}
+
+/** Remake just this shot runs on the take's model when it lands on frames closely (wan3), else on Veo 3.1
+ *  Fast, retimed (design 4.6). */
+function redoModel(take: Take): ModelChoice | undefined {
+  const own = modelEntry(take.provider as ModelChoice['provider'], take.model)
+  if (own && canLand(own)) return { provider: own.provider, model: own.model }
+  const veo = modelEntry(take.provider as ModelChoice['provider'], 'veo3.1_fast')
+  return veo ? { provider: veo.provider, model: veo.model } : own ? { provider: own.provider, model: own.model } : undefined
 }

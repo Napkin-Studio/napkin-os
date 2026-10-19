@@ -10,7 +10,22 @@
 export type ContractVersion = '3'
 
 /** The join into a stitch clip (relay-api clips[].transition): a dissolve or dip overlaps s seconds. */
-export interface StitchTransition { kind: 'cut' | 'dissolve' | 'dip'; s?: number }
+/** stitch: how a clip fills its shot, cut to it from its in point (trim, the default) or retimed whole (speed:
+ *  an end-framed clip keeps its landing frame). */
+export type StitchFit = 'trim' | 'speed'
+/** A still: a picture, or the frame of a clip at atS (relay-api KeyframeRef). */
+export type KeyframeRef = AssetRef | { asset: AssetRef; atS: number }
+/** relay-api clip input.window for mode redo_window (Remake just this shot). */
+export interface RedoWindow { source: AssetRef; inS: number; outS: number; withLast: boolean }
+/** A planned cut in a take: shot k starts at atS (the first at 0), with its line of the prompt. */
+export interface TakeCutPlan { atS: number; text: string }
+/** Where a take's cut landed: the planned time, and the found one (null: none found near it). */
+export interface TakeCut { planned_s: number; found_s: number | null }
+/** relay-api clip mode (features/connected-video.clan). */
+export type ClipJobMode = 'take' | 'take_refs' | 'frames' | 'alone' | 'redo_window'
+/** continue: the clip before landed on this clip's first frame; stitch ends its window one frame early so the
+ *  shared frame shows once (features/connected-video.clan). */
+export interface StitchTransition { kind: 'cut' | 'continue' | 'dissolve' | 'dip'; s?: number }
 export const CONTRACT_VERSION: ContractVersion = '3'
 /** `sha256:<64 hex>` */
 export type Sha256 = string
@@ -352,6 +367,19 @@ export interface ModelSheet {
   pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
 }
 
+/** capabilities.schema video.lastFrameFidelity: tight (0.97 or more), loose (never planned as frames), untested. */
+export type LastFrameFidelity = 'tight' | 'loose' | 'untested'
+/** capabilities.schema video.take (features/connected-video.clan). maxS…field are there when ok is true. */
+export interface VideoTake {
+  ok: boolean
+  maxS?: number
+  maxShots?: number
+  /** A take may also end on a given last frame (false until paid test P1). */
+  withLast?: boolean
+  cutAccuracyS?: number | null
+  field?: 'prompt' | 'multiPrompt'
+}
+
 export interface CapabilitySheet {
   contractVersion: ContractVersion
   provider: Provider
@@ -371,7 +399,10 @@ export interface CapabilitySheet {
   video: {
     firstFrameWithRefs: boolean
     lastFrame: boolean
-    multiShot: boolean
+    /** How closely a clip lands on its last frame (features/connected-video.clan): absent where lastFrame is false. */
+    lastFrameFidelity?: LastFrameFidelity
+    /** One take of several shots in one generation; absent: the model makes no takes. */
+    take?: VideoTake
     regionEdit: 'none' | 'temporal_keyframe' | 'mask'
     feelEdit: 'none' | 'prompt' | 'strength'
     audioDefault: boolean
@@ -400,6 +431,8 @@ export interface Flags {
   dogfood?: boolean
   /** Fix this moment, op clip_patch (features/clip-moment-edit.clan). Optional; absent means off. */
   clipPatch?: boolean
+  /** Shots made as runs that join (features/connected-video.clan). Optional; absent means off. */
+  connectedVideo?: boolean
   /** Our own canvas engine for new projects (features/canvas-engine.clan). Optional; absent means off. */
   ownCanvas?: boolean
 }
@@ -589,7 +622,12 @@ export interface Frame extends EntityBase {
   edits?: FrameEdit[]
   cropped_to?: { from: Aspect; to: Aspect }
 }
-export interface TakeSegment { source_take: Id; in_s: number; out_s: number; job_id?: Id }
+/** A take's window of a shared asset (One take): where its cuts came from, the prompt's times, the take_cuts
+ *  stage's detection, or a person's drag (features/connected-video.clan). source_take: the run's first take,
+ *  whose window starts on the pinned frame. */
+export interface TakeSegment { source_take: Id; in_s: number; out_s: number; job_id?: Id; by?: 'prompt' | 'detected' | 'human' }
+/** Where a take ends: on the next shot's storyboard frame (frame_id, the version it was sent), or nowhere given. */
+export interface TakeEnd { kind: 'next_storyboard' | 'none'; frame_id?: Id }
 export interface Take extends EntityBase {
   shot_id: Id
   version: number
@@ -605,8 +643,28 @@ export interface Take extends EntityBase {
   quality?: ClipQuality
   size?: string
   segments: TakeSegment[]
+  end?: TakeEnd
 }
-export interface EdlItem { rank: Rank; kind: 'shot' | 'bridge'; shot_id?: Id; pick?: Pick; in_s?: number; out_s?: number }
+export interface EdlItem { rank: Rank; kind: 'shot' | 'bridge'; shot_id?: Id; pick?: Pick; in_s?: number; out_s?: number; seam?: Seam }
+/** How a shot joins the one before it (features/connected-video.clan): continue (same setup, action carries on),
+ *  cut (new angle or place), match (new angle, same moment), dissolve or dip (asked for). by: Dex, or a person. */
+export type SeamKind = 'cut' | 'continue' | 'match' | 'dissolve' | 'dip'
+export interface Seam { kind: SeamKind; s?: number; by: 'crew' | 'human' }
+/** How a video's shots join: as one film (runs), or shot by shot (each alone, as before). */
+export type VideoJoin = 'film' | 'shots'
+/** How a run is made: one take (pinned on its first frame, or from references), one clip per shot landing on
+ *  the next frame on continue joins, or each shot alone. (Carry, phase C, is not in the contract yet.) */
+export type RunMode = 'take' | 'take_refs' | 'frames' | 'alone'
+/** A run of shots made together (video.runs[id]). */
+export interface VideoRun {
+  shot_ids: Id[]
+  mode: RunMode
+  model: string
+  state: 'planned' | 'running' | 'done' | 'failed'
+  /** The take's one clip job (take, take_refs). */
+  job_id?: Id
+  planned_by: 'crew' | 'human'
+}
 export interface Video extends EntityBase {
   title: string
   ratio: Ratio
@@ -615,6 +673,9 @@ export interface Video extends EntityBase {
   quality?: ClipQuality
   pick?: Pick
   edl: Record<Id, EdlItem>
+  /** features/connected-video.clan: absent means film when flags.connectedVideo is on. */
+  join?: VideoJoin
+  runs?: Record<Id, VideoRun>
 }
 export interface Render extends EntityBase { video_id: Id; version: number; parent_id?: Id; asset: Sha256; job_id: Id }
 export interface Review extends EntityBase {
@@ -949,7 +1010,16 @@ export interface JobInput {
   context?: JobContext[]
   /** stitch: the takes in cut order. inS/outS: the edl item's in and out points; transition: the join into this
    *  clip (features/connected-video.clan; absent: a cut). */
-  clips?: { asset: AssetRef; trimS?: number; inS?: number; outS?: number; transition?: StitchTransition; endCard?: boolean }[]
+  clips?: { asset: AssetRef; trimS?: number; inS?: number; outS?: number; transition?: StitchTransition; endCard?: boolean; fit?: StitchFit }[]
+  /** clip: the frame the clip ends on (features/connected-video.clan; a model without lastFrame gets 400). */
+  lastFrame?: KeyframeRef
+  /** clip, a take: where each shot after the first starts and what happens in it. */
+  cuts?: TakeCutPlan[]
+  /** clip: how it is made (absent: alone, as before). */
+  mode?: ClipJobMode
+  /** clip_patch: the note's window. clip with mode redo_window: one shot's window of a take (source, the take's
+   *  video) made again, landing on its out still when withLast (the next join is a continue). */
+  window?: NoteWindow | RedoWindow
   /** write: what Skye drafts or rewrites (features/script-editor.clan). */
   write?: WriteInput
   /** Change: the new answer to the parent job's question. */
@@ -1096,6 +1166,8 @@ export interface Job {
   cost: Cost
   /** clip_patch only: what was patched and how (relay-api Job.patch). */
   patch?: JobPatch
+  /** clip, a take: where its cuts landed (features/connected-video.clan). */
+  cuts?: TakeCut[]
   /** resize only: how the size was made. */
   resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
   /** cutdown step plan only. */

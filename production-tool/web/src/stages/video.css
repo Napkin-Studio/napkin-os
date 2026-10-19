@@ -70,3 +70,24 @@
 .ve-len .input { width: 64px; }
 .ve-own { display: inline-flex; align-items: center; gap: 6px; }
 .ve-thumbwords { position: absolute; inset: 0; padding: 6px 30px 6px 7px; font-size: 10.5px; line-height: 1.3; color: var(--ink2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+
+/* Shots that join (features/connected-video.clan): the One take band along the tops of a run's cards and
+   the gaps between them, a chip in each gap (a tap says the join and offers the joins the model allows),
+   and each run's progress. Colours are tokens, so dark mode follows. */
+.ve-runs { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.ve-timeline .shotcard.inband { padding-top: 0; }
+.ve-band { position: absolute; top: 0; left: -2px; right: -2px; height: 16px; z-index: 2; background: var(--tool); color: #fff; font-size: 10.5px; font-weight: 600; line-height: 16px; padding-left: 8px; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.shotcard.inband.planned .ve-band { background: repeating-linear-gradient(90deg, var(--tool-soft) 0 8px, transparent 8px 12px); color: var(--tool-ink); }
+.ve-timeline .shotcard.inband .thumb { margin-top: 16px; }
+.ve-gap { position: relative; flex: 0 0 28px; display: flex; align-items: center; justify-content: center; align-self: stretch; }
+.ve-gap.inband::before { content: ''; position: absolute; top: 2px; left: -4px; right: -4px; height: 16px; background: var(--tool); }
+/* A tick where the take cuts. */
+.ve-gap.inband::after { content: ''; position: absolute; top: 2px; left: 50%; width: 2px; height: 16px; margin-left: -1px; background: var(--card); }
+.ve-gapchip { min-width: 28px; height: 44px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; color: var(--ink2); font-size: 14px; }
+.ve-gapchip > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line); }
+.ve-gapchip.human > span { border-color: var(--tool); color: var(--tool-ink); }
+.ve-gapchip:hover > span, .ve-gapchip[aria-expanded='true'] > span { border-color: var(--tool); }
+.ve-gapchip:focus-visible { outline: none; }
+.ve-gapchip:focus-visible > span { outline: 2px solid var(--tool); outline-offset: 2px; }
+.ve-gapwhy { padding: 0 12px 6px; font-size: 11.5px; }
+.ve-drift { font-size: 11px; color: var(--ink2); }

@@ -19,6 +19,7 @@ import { waitsOnScriptAsk } from '../../jobs/scriptVideo'
 import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
+import { shotsWords } from '../../jobs/runs'
 
 /** @names in blue (mock Main). */
 const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
@@ -170,6 +171,9 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
   const url = useBlobUrl(poster)
   const adUrl = useBlobUrl(render?.asset)
   const clipRunning = shots.map((s, i) => ({ i, on: isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === s.id)) })).find((x) => x.on)
+  // One take of several shots (features/connected-video.clan): "shots 2-5".
+  const take = Object.values(video?.runs ?? {}).find((r) => r.job_id && isRunning(doc, r.job_id))
+  const takeRunning = take ? shotsWords(doc, take.shot_ids) : undefined
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   // The main video is named after its storyboard (mock Main); another after its own title.
   const title = sb && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
@@ -193,7 +197,8 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
           </span>
         </div>
       } />
-      {clipRunning && <AtWork agent="wren" warm line={`Fin is filming clip ${clipRunning.i + 1}`} />}
+      {takeRunning ? <AtWork agent="wren" warm line={`Fin is filming ${takeRunning} as one take`} />
+        : clipRunning && <AtWork agent="wren" warm line={`Fin is filming clip ${clipRunning.i + 1}`} />}
     </Card>
   )
 }
