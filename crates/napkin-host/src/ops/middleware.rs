@@ -7,8 +7,9 @@
 //!
 //! The middleware never writes a document and neither does the app that asked
 //! it. It answers with a `change` — a merge patch over `shared/data.yaml`,
-//! entries to append to the facts, findings and sources members, and the decisions
-//! that justify them — and the host applies that as ONE [`Change`] through the
+//! entries to append to the facts, findings and sources members, the few
+//! fields of existing findings it may update (`findings_update`), and the
+//! decisions that justify them — and the host applies that as ONE [`Change`] through the
 //! single write funnel, as the actor `process:middleware`. What the app gets
 //! back is informational: the envelope, with `change` replaced by whether it
 //! landed and at which version.
@@ -196,6 +197,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
     };
     let facts_append = entries(change, "facts_append")?;
     let findings_append = entries(change, "findings_append")?;
+    let findings_update = entries(change, "findings_update")?;
     let sources_append = entries(change, "sources_append")?;
     let decisions = entries(change, "decisions")?;
     let rule = ReasoningRule::of(clan)?;
@@ -209,6 +211,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
     if data_patch.is_none()
         && facts_append.is_empty()
         && findings_append.is_empty()
+        && findings_update.is_empty()
         && sources_append.is_empty()
         && decisions.is_empty()
     {
@@ -263,6 +266,14 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
     let mut findings = members::list_of(&findings_doc, FINDINGS)?;
     let new_findings = append(&mut findings, &findings_append, FINDINGS)?;
     check_findings(&new_findings, &facts)?;
+    let mut decided = known.clone();
+    decided.extend(
+        decisions
+            .iter()
+            .filter_map(|d| d.get("id").and_then(Value::as_str))
+            .map(String::from),
+    );
+    let updated = update_findings(&mut findings, &findings_update, read, &facts, &decided)?;
     let sources_doc = members::read_doc(clan, SOURCES)?;
     let mut sources = members::list_of(&sources_doc, SOURCES)?;
     let new_sources = append_sources(&mut sources, &sources_append)?;
@@ -283,6 +294,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
     json_merge(&mut data, &split.patch);
     if new_facts.is_empty()
         && new_findings.is_empty()
+        && updated.is_empty()
         && new_sources.is_empty()
         && recorded.is_empty()
         && contests.is_empty()
@@ -339,6 +351,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
         "handler": ctx.handler,
         "facts_appended": new_facts.len(),
         "findings_appended": new_findings.len(),
+        "findings_updated": updated.len(),
         "sources_appended": new_sources.len(),
         "decisions_appended": recorded.len() + contests.len(),
     });
@@ -1064,6 +1077,199 @@ fn check_findings(new: &[Value], facts: &[serde_yaml::Value]) -> HostResult<()> 
                     FACTS.path
                 )));
             }
+        }
+    }
+    Ok(())
+}
+
+/// What a `findings_update` entry may change. Everything else about a finding
+/// — its statement, id, verification and rejection — is fixed once written.
+const UPDATABLE: &[&str] = &["confidence", "cites", "status", "superseded_by", "recheck"];
+
+/// The read-set key that says what the job read of finding `id`.
+fn finding_read_key(id: &str) -> String {
+    format!("findings.{id}")
+}
+
+/// Apply the change's `findings_update` to `findings` (after its appends, so a
+/// finding may be superseded by one appended in the same change), and return
+/// the ids it changed.
+///
+/// Each entry is `{id, confidence?, cites?, status?: "superseded",
+/// superseded_by?: {finding, decision}, recheck?: {decision, note}}`. Only
+/// those fields change; a finding superseded names the finding that replaces
+/// it and the decision that says so, and a `recheck` (a verified finding the
+/// crew checked again after a correction, still holding) goes only on a
+/// finding that is verified. A finding a person rejected takes a new
+/// confidence and nothing else, and so does one already superseded.
+///
+/// An entry the finding already matches is skipped (a second delivery of the
+/// same change). Any other is judged against what the job read (N2): the
+/// read-set must hold the finding under `findings.<id>`, and the document
+/// must still hold exactly that. A finding someone changed since — a person
+/// verified or rejected it while the job ran — refuses the change; the job is
+/// run again on what is there now.
+fn update_findings(
+    findings: &mut [serde_yaml::Value],
+    updates: &[Value],
+    read: Option<&serde_json::Map<String, Value>>,
+    facts: &[serde_yaml::Value],
+    decided: &std::collections::BTreeSet<String>,
+) -> HostResult<Vec<String>> {
+    let mut changed = Vec::new();
+    for u in updates {
+        let id = u
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| HostError::bad_request("an entry of findings_update has no id"))?;
+        if let Some(k) = u
+            .as_object()
+            .into_iter()
+            .flat_map(|o| o.keys())
+            .find(|k| *k != "id" && !UPDATABLE.contains(&k.as_str()))
+        {
+            return Err(HostError::bad_request(format!(
+                "findings_update may not change `{k}` of {id}; only {}",
+                UPDATABLE.join(", ")
+            )));
+        }
+        // Only a person verifies or rejects a finding (D1); the crew may only
+        // say one is superseded.
+        if u.get("status").is_some_and(|s| s != "superseded") {
+            return Err(HostError::bad_request(format!(
+                "findings_update may only set the status of {id} to superseded; only a human verifies or rejects a finding"
+            )));
+        }
+        let i = findings
+            .iter()
+            .position(|e| members::entry_id(e) == Some(id))
+            .ok_or_else(|| {
+                HostError::bad_request(format!(
+                    "findings_update names {id}, which is not in {}",
+                    FINDINGS.path
+                ))
+            })?;
+        let current = serde_json::to_value(&findings[i])
+            .map_err(|e| HostError::internal(format!("{id}: {e}")))?;
+        let mut next = current.clone();
+        for k in UPDATABLE {
+            if let Some(v) = u.get(*k) {
+                next[*k] = v.clone();
+            }
+        }
+        check_update(id, &next, findings, facts, decided)?;
+        if next == current {
+            continue;
+        }
+
+        let key = finding_read_key(id);
+        match read.and_then(|r| r.get(&key)) {
+            None => return Err(HostError::bad_request(format!(
+                "findings_update changes {id}, but `read` does not say what the job read of {key}"
+            ))),
+            Some(was) if *was != current => {
+                return Err(HostError::conflict(format!(
+                    "finding {id} changed since the job read it; rerun"
+                )))
+            }
+            Some(_) => {}
+        }
+        let status = current.get("status").and_then(Value::as_str).unwrap_or("");
+        if matches!(status, "rejected" | "superseded")
+            && u.as_object()
+                .is_some_and(|o| o.keys().any(|k| k != "id" && k != "confidence"))
+        {
+            return Err(HostError::conflict(format!(
+                "finding {id} is {status}: only its confidence may be updated"
+            )));
+        }
+        if u.get("recheck").is_some() && status != "verified" {
+            return Err(HostError::bad_request(format!(
+                "finding {id} is {status}: only a verified finding is re-checked"
+            )));
+        }
+        findings[i] = serde_yaml::to_value(&next)
+            .map_err(|e| HostError::bad_request(format!("{id} is not representable: {e}")))?;
+        changed.push(id.to_string());
+    }
+    Ok(changed)
+}
+
+/// The shape a finding is left in by an update: a known confidence, cites
+/// that are all pins here, `superseded_by` exactly when it is superseded —
+/// by another finding here, under a decision the chain or this change holds —
+/// and a `recheck` under such a decision, on a finding that is verified.
+fn check_update(
+    id: &str,
+    f: &Value,
+    findings: &[serde_yaml::Value],
+    facts: &[serde_yaml::Value],
+    decided: &std::collections::BTreeSet<String>,
+) -> HostResult<()> {
+    let bad = |what: String| {
+        Err(HostError::bad_request(format!(
+            "findings_update for {id}: {what}"
+        )))
+    };
+    let decision = |v: &Value| {
+        v.get("decision")
+            .and_then(Value::as_str)
+            .is_some_and(|d| decided.contains(d))
+    };
+    let exactly = |v: &Value, keys: &[&str]| {
+        v.as_object()
+            .is_some_and(|o| o.len() == keys.len() && keys.iter().all(|k| o.contains_key(*k)))
+    };
+    if !matches!(
+        f.get("confidence").and_then(Value::as_str),
+        Some("high" | "medium" | "low")
+    ) {
+        return bad("confidence is high, medium or low".into());
+    }
+    let cites: Vec<&str> = f
+        .get("cites")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let n = f.get("cites").and_then(Value::as_array).map_or(0, Vec::len);
+    if cites.is_empty() || cites.len() != n {
+        return bad("cites is a list of pin ids".into());
+    }
+    if let Some(c) = cites
+        .iter()
+        .find(|c| !facts.iter().any(|e| members::entry_id(e) == Some(**c)))
+    {
+        return bad(format!("it cites {c}, which is not in {}", FACTS.path));
+    }
+    let status = f.get("status").and_then(Value::as_str).unwrap_or("");
+    match (status, f.get("superseded_by")) {
+        ("superseded", Some(by)) => {
+            let to = by.get("finding").and_then(Value::as_str);
+            if !exactly(by, &["finding", "decision"])
+                || to == Some(id)
+                || !to.is_some_and(|to| findings.iter().any(|e| members::entry_id(e) == Some(to)))
+                || !decision(by)
+            {
+                return bad(
+                    "superseded_by names another finding here and a decision in the chain or this change"
+                        .into(),
+                );
+            }
+        }
+        ("superseded", None) => return bad("a superseded finding names its superseded_by".into()),
+        (_, Some(_)) => return bad("superseded_by goes only with status superseded".into()),
+        (_, None) => {}
+    }
+    if !matches!(status, "proposed" | "verified" | "rejected" | "superseded") {
+        return bad(format!("status {status:?} is not one an update may leave"));
+    }
+    if let Some(r) = f.get("recheck") {
+        let note = r.get("note").and_then(Value::as_str).unwrap_or("");
+        if !exactly(r, &["decision", "note"]) || note.trim().is_empty() || !decision(r) {
+            return bad(
+                "recheck is {decision, note}, under a decision in the chain or this change".into(),
+            );
         }
     }
     Ok(())
