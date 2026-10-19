@@ -30,7 +30,7 @@ name the stand-in, its port, or branch on which implementation answered.
 ```json
 {
   "request_kind": "middleware",
-  "payload": { "task": "extract_ask | research_lens | synthesise_findings | start_campaign | answer_question | compose_report | draft_brief | regenerate_field | job_status",
+  "payload": { "task": "extract_ask | research_lens | synthesise_findings | start_campaign | answer_question | compose_report | draft_brief | regenerate_field | fix_parts | job_status",
                "input": { "...": "task-specific, below" } },
   "clan": { "id": "<document_id>", "revision": "<manifest id>",
             "version": "<doc version the host holds>",
@@ -104,7 +104,10 @@ name the stand-in, its port, or branch on which implementation answered.
   (`name@major`). When the document carries no pipeline, the middleware's
   declared built-in map is used (`extract_ask@1`, `research_lens@1`,
   `synthesise_findings@1`, `start_campaign@1`, `answer_question@1`,
-  `compose_report@1`, `draft_brief@1`, `regenerate_field@1`). A person's
+  `compose_report@1`, `draft_brief@1`, `regenerate_field@1`, `fix_parts@1`).
+  A Brief Maker document whose pipeline predates `fix_parts` runs it through
+  the built-in handler until it declares it, as `ask_research` and
+  `reconsider`. A person's
   review calls no middleware task; the view follows each review with
   `reconsider@2` (Contract 3 §6.4).
   Any other task the pipeline does not declare, an
@@ -133,6 +136,7 @@ name the stand-in, its port, or branch on which implementation answered.
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
 | `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }] }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
+| `fix_parts` | `{ "verdict": "<decision id>", "guidance"?: "..." }` | Brief Maker (§10.15). Long. `verdict` a bad verdict still standing on the brief |
 | `job_status` | `{ "job_id": "..." }` | Free: never charged to quota (§9) |
 
 Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
@@ -754,7 +758,7 @@ over the cap with its own `429` (the middleware never sees the request).
 `job_status` polls are free: a job is polled for minutes, and a poll spends
 nothing upstream.
 
-## 10. Brief Maker — `draft_brief`, `regenerate_field`
+## 10. Brief Maker — `draft_brief`, `regenerate_field`, `fix_parts`
 
 Brief Maker moves off `engine/agent-server/` (a bare-JSON backend whose output
 the view wrote itself) onto the middleware. The engine's semantics port; its
@@ -959,7 +963,9 @@ the old context panel; the middleware no longer returns a `context`.
   or its `action` names no sibling `T.<x>` other than `K` (the view's own
   rule). A field that holds a value no decision wrote is human-held.
 - **An unanswered bad verdict** by a person on the field (Contract 3 §2.2)
-  makes it human-held too: it is not silently re-drafted.
+  makes it human-held too: it is not silently re-drafted. `fix_parts` is the
+  exception: a person's bad verdict on a part it fixes is part of the problem
+  they asked the crew to fix, so it does not hold that part (§10.15).
 
 The middleware **proposes** instead of writing a human-held field: the value
 goes in `result.proposals` (§10.6) and the change carries an `edit` decision
@@ -1162,10 +1168,11 @@ field whose decisions are all in the chain.
 
 ### 10.11 Errors and concurrency
 
-- `draft_brief` while a `draft_brief` or `regenerate_field` job on the same
-  document is `queued` or `running` → `409 job_state`. `regenerate_field` while
-  a `draft_brief`, or a `regenerate_field` for the same field, is → `409
-  job_state`. `regenerate_field` jobs for different fields may run together.
+- `draft_brief` or `fix_parts` while any `draft_brief`, `fix_parts` or
+  `regenerate_field` job on the same document is `queued` or `running` →
+  `409 job_state`. `regenerate_field` while a `draft_brief` or `fix_parts`,
+  or a `regenerate_field` for the same field, is → `409 job_state`.
+  `regenerate_field` jobs for different fields may run together.
 - A model failure in `extract` is a gap (§10.9), not the job's end. The
   captured fields are `failed`, and the drafters draft from what the document
   holds. A scorecard that cannot be made leaves the capture standing and the
@@ -1350,6 +1357,41 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    limit (60 minutes) covers the engine's 900 s plus the fallback capture.
 
 ---
+
+### 10.15 `fix_parts`
+
+*Added 2026-10-19* (owner: when Jude leaves a problem on a brief, the planner
+asks the crew to fix it: Sam finds what it lacks, Dara rewrites the parts
+together, Jude checks them).
+
+`{ verdict, guidance? }` — fix the problem a bad verdict names.
+
+- `verdict` is the id of a bad verdict in `clan.decision_chain`, not
+  superseded, that targets one or more of the eighteen keys of §10.4 not
+  written since (a later `edit` or `resolve`, not a proposal). Any other id,
+  a verdict every part of which is answered, a locked brief, or a verdict whose
+  parts are all locked is `400 invalid_input`.
+- **The problem** is the verdict's own words (its reasoning's `decided` and
+  points), then those of every person's bad verdict still standing on the
+  same parts. The job's parts are the verdict's open parts.
+- Stages `context` — Sam: one plan call (`plan_fix`) with the brief as it
+  stands, the parts, the problem and every fact and finding the brief holds,
+  giving each part an instruction and the research the fix lacks; that
+  research runs as `draft_brief`'s (§10.13): already-held needs skipped (jev),
+  at most two runs, each pin and source in the change, its raw facts written
+  to the layers as every research run's are — then `draft` — Dara rewrites
+  the parts together in one call (`fix_brief_parts`) from the problem, the
+  instructions and the facts, never one a person excluded — then `judge` —
+  `draft_brief`'s Judge on the parts only (the whole-brief review, or with
+  jev the check loop), whose one rewrite reaches only those parts.
+  `progress`: `{done, total: 3}`.
+- It writes only the parts (an `edit`, action `draft`, each) and the review;
+  a part a person wrote last is proposed (§10.5). `open_questions`, when not
+  a part, only gains what Jude says only the client can answer. A part's later
+  edit answers the verdict (Contract 4, the lock list). After a rewrite with
+  jev, Jude's argument note is placed as a new bad verdict only while jev
+  still reads the argument as broken.
+- `result.summary`: how many parts were fixed, proposed, and the new facts.
 
 ## 11. Client review — no middleware task
 

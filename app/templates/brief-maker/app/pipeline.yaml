@@ -37,6 +37,21 @@ tasks:
     job: long
     stages: [draft, judge]
     reads: as draft_brief's draft stage, for the one field
+  fix_parts:
+    handler: fix_parts@1
+    job: long
+    stages: [context, draft, judge]
+    reads:
+      - "a bad verdict still standing on the brief (input.verdict): the parts it names, its words, and the
+        words of people's bad verdicts on the same parts"
+      - "the context stage (Sam): the brief as it stands, every fact it holds, and the research the fix
+        lacks, as draft_brief's (capped at two runs), pinned with its sources"
+      - "the draft stage (Dara): the named parts together, from the problem and Sam's instructions"
+      - "the judge stage (Jude): draft_brief's check, on the named parts only"
+    never:
+      - writes a part the verdict does not name (the open questions only gain the client's new ones)
+      - writes a part a person wrote last (it proposes), or uses a fact a person marked wrong
+      - writes upstream or projection (host-written, read-only)
 
 fields:                      # app key -> how it is filled; the handler reads this map
   project_name:              { class: captured }
