@@ -122,7 +122,7 @@ def lidl_model(seen, *, dara_cites=True, tie=None, jude_partly=False, bg_basis="
 def name_both(p, seen):
     a, b = seen["ids"]
     n = next(s["n"] for s in p["sentences"] if s["part"] == "background")
-    return {"ties": [{"part": "background", "n": n, "cites": [a, b], "calc": {"op": "days_between", "inputs": [a, b]}}]}
+    return {"ties": [{"part": "background", "n": n, "states": True, "cites": [a, b], "calc": {"op": "days_between", "inputs": [a, b]}}]}
 
 
 def lidl_server(tmp_path, model, **kw):
@@ -616,6 +616,82 @@ def test_fact_claim_number_not_in_cite():
     assert c["kind"] == "fact" and c["check"] == "false" and c["cites"] == [FB["id"]]
     assert [v["verdict"] for v in prov.code_verdicts({"background": got})] == ["partly"]
     assert got["certainty"][0] == "low" and got["value"] == "Lidl Connect charged €9.99 for life."
+
+
+GOOSED_Q = ("Lidl Connect | €107.88 | €107.88 | €215.76 | Budget seekers who know Eir is strong 48 | €155.88 | "
+            "€155.88 | €311.76 | No thinking and coverage Clear Mobile | €155.88 | €155.88 | €311.76")
+FG = pin("f_GGGGGGGG", "category/telco.mvnos", "positioning.year_one_cost",
+         "Year 1 costs: Lidl €107.88, 48 €155.88, Clear Mobile €155.88", GOOSED_Q, "src_rte00001", "2026-10-06")
+FP = pin("f_PPPPPPPP", ENTITY, "positioning.new_price", "New sign-ups pay €12.99 a month",
+         "Any customers signing up from today onwards will be charged €12.99 per month", "src_tj000001", "2026-10-15")
+
+
+def test_a_monthly_price_over_a_year_is_worked_out():
+    """The staging draft (2026-10-20): 12.99 x 12 = 155.88 is Dara's conclusion, though the comparison
+    fact states €155.88 (about 48 and Clear Mobile); it was filed as a plain fact."""
+    ctx, _ = ctx_for([FP, FG])
+    sent = "At €12.99 a month, the first year comes to the same €155.88 as 48 and Clear Mobile."
+    got = prov.clean_parts({"background": part(sent, cites=[FP["id"], FG["id"]])}, ctx, stage="draft")["background"]
+    c = got["claims"][0]
+    assert c["kind"] == "derived" and c["check"] == "recomputed"
+    assert c["working"] == "€12.99 × 12 = €155.88" and c["calc"]["op"] == "product"
+    assert c["calc"]["inputs"] == [FP["id"]] and set(c["cites"]) == {FP["id"], FG["id"]}
+    # no period named: a figure a fact states is that fact's
+    g2 = prov.clean_parts({"background": part("48 and Clear Mobile cost €155.88 in year one.", cites=[FG["id"]])},
+                          ctx, stage="draft")["background"]
+    assert g2["claims"][0]["kind"] == "fact" and g2["claims"][0]["cites"] == [FG["id"]]
+    # nobody states the yearly figure: still worked out, from the monthly price
+    g3 = prov.clean_parts({"background": part("Lidl Connect costs €155.88 a year at €12.99 a month.",
+                                              cites=[FP["id"]])}, ctx, stage="draft")["background"]
+    assert g3["claims"][0]["kind"] == "derived" and g3["claims"][0]["check"] == "recomputed"
+
+
+def test_a_sentence_without_a_figure_ties_only_to_a_fact_that_says_it():
+    """The staging draft: a sentence naming Lidl took the part's Lidl fact (the offer's closure) as its
+    source, whatever it said."""
+    ctx, _ = ctx_for([FB, FG])
+    v = ["Lidl Connect suits people who know Eir is strong.", "Lidl Connect logo and Lidl brand colours."]
+    got = prov.clean_parts({"mandatories": part(v, cites=[FB["id"], FG["id"]])}, ctx, stage="draft")["mandatories"]
+    by = {c["text"]: c for c in got["claims"]}
+    assert by[v[0]]["kind"] == "fact" and by[v[0]]["cites"] == [FG["id"]], "the comparison's words say it"
+    assert by[v[1]]["kind"] == "to_confirm" and by[v[1]]["cites"] == [], "the closure fact says nothing of logos"
+    # the tie call naming the closure fact for it changes nothing; told it states nothing, it is no claim
+    named = StubModel(lambda p: {"ties": [{"part": "mandatories", "n": 0, "states": True, "cites": [FB["id"]],
+                                           "calc": None}]})
+    ctx2, _ = ctx_for([FB, FG], model=named)
+    g2 = prov.clean_parts({"mandatories": part(v[1:], cites=[FB["id"]])}, ctx2, stage="draft")["mandatories"]
+    assert g2["claims"][0]["kind"] == "to_confirm" and g2["claims"][0]["cites"] == []
+    told = StubModel(lambda p: {"ties": [{"part": "mandatories", "n": 0, "states": False, "cites": [], "calc": None}]})
+    ctx3, _ = ctx_for([FB, FG], model=told)
+    g3 = prov.clean_parts({"mandatories": part(v[1:], cites=[FB["id"]])}, ctx3, stage="draft")["mandatories"]
+    assert g3["claims"] == [] and g3["value"] == v[1:]
+    # a paraphrase the tie call names, in the fact's own words, stands
+    para = StubModel(lambda p: {"ties": [{"part": "background", "n": 0, "states": True, "cites": [FB["id"]],
+                                          "calc": None}]})
+    ctx4, _ = ctx_for([FB, FG], model=para)
+    g4 = prov.clean_parts({"background": part("Lidl Connect closed its offer to new customers.")}, ctx4,
+                          stage="draft")["background"]
+    assert g4["claims"][0]["kind"] == "fact" and g4["claims"][0]["cites"] == [FB["id"]]
+
+
+def test_the_writers_to_confirm_line_stays_to_confirm():
+    ctx, _ = ctx_for([FB, FG])
+    v = ["Over the first year it costs the same as 48", "To confirm: you can buy and switch in Lidl stores",
+         "To confirm: €12.99 includes 100GB"]
+    got = prov.clean_parts({"reasons_to_believe": part(v, cites=[FB["id"], FG["id"]])}, ctx,
+                           stage="draft")["reasons_to_believe"]
+    tbc = [c for c in got["claims"] if c["text"].startswith("To confirm")]
+    assert len(tbc) == 2 and all(c["kind"] == "to_confirm" and c["cites"] == [] and c["by"] == "writer"
+                                 for c in tbc)
+
+
+def test_a_brand_named_in_digits_is_not_a_figure():
+    ctx, _ = ctx_for([FP, FG])
+    # the plan's competitors name the operator 48
+    ctx2 = prov.Ctx(ctx.ev, ctx.client, {}, "Lidl Connect", ["48", "Clear Mobile"], StubModel(), Rec())
+    sent = "Switch to Lidl Connect at €12.99 instead of falling back to 48."
+    got = prov.clean_parts({"background": part(sent, cites=[FP["id"]])}, ctx2, stage="draft")["background"]
+    assert got["claims"][0]["kind"] == "fact" and got["claims"][0]["cites"] == [FP["id"]]
 
 
 def test_client_guard_unit_mapping_and_assumption_items():

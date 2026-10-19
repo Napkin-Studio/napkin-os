@@ -1152,13 +1152,18 @@ claims:
     working: "15 Oct 2026 - 5 Oct 2026 = 10 days"   # derived only: how it was worked out
     calc: { op: days_between, inputs: [...] }       # derived only, when one was parsed
     check: recomputed        # derived and fact: recomputed | stated | false
-    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code)
+    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code) | writer (Dara's own "To confirm:" line)
     suggest: [f_C]           # to_confirm only: ids that may support it, never cited
 ```
 
 - **`fact`**: the claim's figures are in a cited pin's quote (or a finding's
   pins, or a passage). `check: false` when a figure is not (a stated €9.99
-  against a pin saying €8.99).
+  against a pin saying €8.99). A sentence with no figure is a fact only when
+  the pin's own words say it (its content words, the brands left out, found
+  in the pin); naming the same brand is not enough (*2026-10-20*). A brand
+  named in digits (48) is a name, not a figure. A sentence `tie_claims`
+  marks `states: false` (an instruction, a proposal, a title) and that has no
+  figure is no claim.
 - **`derived`**: the claim is worked out from its inputs, which may mix
   `f_` and `cap_`. `working` shows how. The cleaner recomputes each `calc`
   (`days_between`, `difference`, `sum`, `ratio`, `percent_change`,
@@ -1167,11 +1172,15 @@ claims:
   source dated the page itself. `recomputed`: the working holds. `stated`:
   no calc could be parsed, or a date could not be anchored. `false`: it
   recomputes to something else; the value is kept and `attention` says
-  "Check the working".
+  "Check the working". A figure worked out from the sentence's own
+  figure over a period it names ("€12.99 a month … the first year comes to
+  €155.88": `product`, 12.99 × 12) is `derived`, even when some pin happens
+  to state the same figure; that pin is cited beside the working.
 - **`client`**: the claim is in a capture item's quote, citing its `cap_`
   and `mat_`. Certainty comes from the capture (`capture_certainty`), never
   a fixed `high`.
-- **`to_confirm`**: nothing the document holds supports it. The value is
+- **`to_confirm`**: nothing the document holds supports it, or Dara wrote
+  the line as "To confirm: …" (`by: writer`), whatever a pin near it says. The value is
   unchanged; `attention` reads "To confirm: <claim>", certainty is `low`,
   and `cites` is empty. A coincidental match (a pin pair whose sum is right
   but whose entities the sentence does not name, or that the part did not

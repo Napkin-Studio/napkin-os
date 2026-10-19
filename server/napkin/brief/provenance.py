@@ -57,6 +57,15 @@ EXTRA_MAP = {
     "desired_response.do": ("objective:behavioural", "success_metrics"),
 }
 _GENERIC = {"the", "and", "group", "ireland", "irish", "mobile", "limited", "brand", "company", "store", "stores"}
+# A line the writer herself marks as unconfirmed stays to confirm, whatever a fact near it says.
+_TBC = re.compile(r"^\W*(?:to confirm|to be confirmed|tbc)\b", re.I)
+# Words that carry no content, left out when a sentence without a figure is matched to a fact's words.
+_STOP = set("""about above after again against also among and any are around because been before being below
+between both but can could did does doing down during each even ever every few for from further had has have
+having her here hers him his how into its itself just less like made make many more most much must new not now
+off once one only other our ours out over own per same she should since some still such than that the their
+them then there these they this those through too under until upon very was were what when where which while
+who whom why will with within without would yet you your yours already people""".split())
 
 
 # =============================================================================================
@@ -306,6 +315,27 @@ def _entity_name(entity: str) -> tuple[str, str]:
     return kind, re.sub(r"[-_.]+", " ", leaf).strip()
 
 
+def _toks(text: str) -> set:
+    return {w for w in re.findall(r"[a-z][a-z']+", (text or "").lower().replace("’", "'"))
+            if len(w) >= 3 and w not in _STOP}
+
+
+def _says(text: str, inps, brands, loose=False) -> bool:
+    """A sentence without a figure, said by the inputs' own words: its content words (the brands it names
+    left out) found in them, at least two and half of them; `loose` (inputs the tie call named): at least
+    two, or the one there is."""
+    names = {w for n in brands.names for w in _toks(n)}
+    want = _toks(text) - names
+    if not want:
+        return False
+    hay = set().union(*(_toks(i.all_text()) for i in inps)) if inps else set()
+
+    def hit(w):
+        return w in hay or (len(w) >= 5 and any(len(h) >= 5 and h[:5] == w[:5] for h in hay))
+    n = sum(1 for w in want if hit(w))
+    return n >= min(2, len(want)) if loose else (n >= 2 and n * 2 >= len(want))
+
+
 def _states_entity(text: str, inp) -> bool:
     """The sentence names the input pin's entity outright."""
     kind, name = _entity_name(inp.entity)
@@ -390,8 +420,37 @@ def _date_pairs(inps):
     return out
 
 
-def _derive_span(span, inps, ops=("difference", "sum", "percent_change", "ratio")):
-    """A working that gives the span from the inputs: {op, inputs, working, trusted}, or None."""
+_MONTHLY = re.compile(r"\b(?:a|per|each|every) month\b|\bmonthly\b|/\s?mo(?:nth)?\b", re.I)
+_WEEKLY = re.compile(r"\b(?:a|per|each|every) week\b|\bweekly\b", re.I)
+_YEAR = re.compile(r"\byears?\b|\bannual(?:ly)?\b|\byearly\b|\b12 months\b", re.I)
+
+
+def periods(text: str) -> tuple:
+    """The multipliers a sentence's own words set: a monthly price over a year is 12 of them."""
+    if not _YEAR.search(text or ""):
+        return ()
+    return tuple(k for rx, k in ((_MONTHLY, 12), (_WEEKLY, 52)) if rx.search(text))
+
+
+def _in_sentence(span, sp, inps, ks):
+    """A figure the sentence works out from another figure it states, over a period it names ("€12.99 a
+    month, the first year comes to €155.88": 12.99 x 12): {op, inputs, working, trusted}, or None."""
+    if span.kind not in ("number", "price") or not ks:
+        return None
+    for a in sp:
+        if a is span or a.kind not in ("number", "price") or a.value is None:
+            continue
+        sup = [i for i in inps if _direct(a, i)]
+        for k in ks:
+            if sup and derive.number_supported(span, [a.value * a.scale * k]):
+                return {"op": "product", "inputs": [sup[0].id], "working": f"{a.text} × {k} = {span.text}",
+                        "trusted": True}
+    return None
+
+
+def _derive_span(span, inps, ops=("difference", "sum", "percent_change", "ratio"), ks=()):
+    """A working that gives the span from the inputs: {op, inputs, working, trusted}, or None. `ks`: the
+    periods the sentence names, each a multiplier of one input's figure."""
     if span.kind == "duration":
         for ia, da, ib, db, trusted in _date_pairs(inps):
             if derive.compute("days_between", [da, db]) == span.value:
@@ -403,6 +462,10 @@ def _derive_span(span, inps, ops=("difference", "sum", "percent_change", "ratio"
     if span.kind not in ("number", "price"):
         return None
     flat = [(inp.id, x) for inp in inps for x in dict.fromkeys(inp.numbers) if not (1900 <= x <= 2100 and x == int(x))]
+    for (ia, a), k in itertools.product(flat[:60], ks):
+        if derive.number_supported(span, [a * k]):
+            return {"op": "product", "inputs": [ia], "working": f"{derive.fmt_num(a)} × {k} = "
+                    f"{derive.fmt_num(round(a * k, 4))}", "trusted": True}
     for (ia, a), (ib, b) in itertools.permutations(flat[:60], 2):
         for op in ops:
             r = derive.compute(op, [a, b])
@@ -423,15 +486,23 @@ def tie(text: str, sp: list, inps: list, *, derive_ok=True) -> dict | None:
     if not sp:
         return None
     cites, derived = [], None
+    ks = periods(text)
     for s in sp:
         sup = [i for i in inps if _direct(s, i)]
+        # worked out from the sentence's own figure: a conclusion, even when some fact happens to state
+        # the same figure (about something else); that fact is cited beside the working
+        w = _in_sentence(s, sp, inps, ks) if derive_ok and derived is None else None
+        if w:
+            derived = {**w, "span": s.text}
+            cites += w["inputs"] + [i.id for i in sup[:1]]
+            continue
         if sup:
             pick = next((i for i in sup if i.id in cites), sup[0])
             cites.append(pick.id)
             continue
         if not derive_ok or derived is not None:
             return None
-        d = _derive_span(s, inps)
+        d = _derive_span(s, inps, ks=ks)
         if d is None:
             return None
         derived = {**d, "span": s.text}
@@ -446,7 +517,7 @@ def tie(text: str, sp: list, inps: list, *, derive_ok=True) -> dict | None:
     return {"kind": kind, "cites": cites}
 
 
-def _recompute(op, ids, span, IN: Inputs) -> tuple[str, str | None]:
+def _recompute(op, ids, span, IN: Inputs, ks=()) -> tuple[str, str | None]:
     """A named calc, recomputed: ("recomputed" | "false" | "stated", working)."""
     inps = [IN.get(i) for i in ids]
     if not op or op not in derive.OPS or any(i is None for i in inps):
@@ -470,7 +541,8 @@ def _recompute(op, ids, span, IN: Inputs) -> tuple[str, str | None]:
             best = best or ((("stated" if not trusted else "false"), w))
         return best
     if span.kind in ("number", "price"):
-        d = _derive_span(span, inps, ops=(op,) if op in ("difference", "sum", "ratio", "percent_change") else ())
+        d = _derive_span(span, inps, ops=(op,) if op in ("difference", "sum", "ratio", "percent_change", "product")
+                         else (), ks=ks if op == "product" else ())
         if d:
             return "recomputed", d["working"]
         nums = [x for i in inps for x in i.numbers]
@@ -487,16 +559,21 @@ was read from and its source), the findings (fi_...) and the client's own words 
 
 For each sentence, name in `cites` the ids it rests on. When it states something no single fact states but
 that follows from several (the days between two dates, a difference, a total, a ratio, a change in
-percent), give the calc: its op and, in order, the ids of its inputs. Name only ids given to you, and name
-nothing for a sentence nothing given supports. Never rewrite a sentence."""
+percent, a monthly figure over a year), give the calc: its op and, in order, the ids of its inputs. Name
+only ids given to you. Name a fact only when it says what the sentence says: a fact about the same brand
+that does not say it supports nothing, and you name nothing for a sentence nothing given supports.
+Set `states` to false for a sentence that asserts nothing that could be true or false about the world (an
+instruction, a requirement, a proposal, a name or title); name nothing for it, unless it uses a figure, a
+price or a date: then name the facts that figure comes from. Never rewrite a sentence."""
 
 
 def tie_schema(keys) -> dict:
     s = {"type": "string"}
     return {"type": "object", "additionalProperties": False, "required": ["ties"], "properties": {"ties": {
         "type": "array", "items": {"type": "object", "additionalProperties": False,
-                                   "required": ["part", "n", "cites", "calc"], "properties": {
+                                   "required": ["part", "n", "states", "cites", "calc"], "properties": {
                                        "part": {"type": "string", "enum": list(keys)}, "n": {"type": "integer"},
+                                       "states": {"type": "boolean"},
                                        "cites": {"type": "array", "items": s},
                                        "calc": {"anyOf": [{"type": "null"}, {
                                            "type": "object", "additionalProperties": False,
@@ -591,19 +668,25 @@ def clean_parts(out: dict, ctx: Ctx, *, stage: str, keys=None, prior: dict | Non
         claims = []
         if k != "open_questions":
             for t in sentences(v):
-                sp = derive.spans(t)
+                # a brand named in digits (the operator 48) is a name, not a figure
+                sp = [x for x in derive.spans(t) if not (x.kind == "number" and x.text in brands.names)]
                 ents = brands.named_in(t)
-                if sp or (ents and said in ("research", "client")):
-                    claims.append({"text": t, "_spans": sp, "_ents": ents})
+                if sp or (ents and said in ("research", "client")) or _TBC.match(t):
+                    claims.append({"text": t, "_spans": sp, "_ents": ents, "_tbc": bool(_TBC.match(t))})
         own = [IN.get(c) for c in cites if c not in ctx.lib]
         own = [i for i in own if i is not None]
         if said == "client":
             own += [IN.get(c) for c in list(IN.client.items) + ([named] if named else []) if c not in cites]
             own = [i for i in own if i is not None]
         for c in claims:
+            if c["_tbc"]:
+                c.update(kind="to_confirm", cites=[], by="writer", suggest=_suggest(c, IN, brands, []))
+                continue
             got = tie(c["text"], c["_spans"], own) if c["_spans"] else None
             if got is None and not c["_spans"]:
-                agree = [i.id for i in own if i.kind == "pin" and _states_entity(c["text"], i)][:3]
+                # no figure: tied only to a fact whose own words say what the sentence says, never to one
+                # that merely names the same brand
+                agree = [i.id for i in own if i.kind in ("pin", "finding") and _says(c["text"], [i], brands)][:3]
                 if agree:
                     got = {"kind": "fact", "cites": agree}
             if got:
@@ -656,7 +739,7 @@ def clean_parts(out: dict, ctx: Ctx, *, stage: str, keys=None, prior: dict | Non
                 rest = [x for x in c["_spans"] if not any(_direct(x, i) for i in inps)]
                 order = [i for i in calc.get("inputs") or [] if i in ids]
                 if len(rest) == 1 and order:
-                    check, w = _recompute(calc["op"], order, rest[0], IN)
+                    check, w = _recompute(calc["op"], order, rest[0], IN, periods(c["text"]))
                     done = {"kind": "derived", "cites": [i.id for i in inps], "check": check,
                             "calc": {"op": calc["op"], "inputs": order, "result": rest[0].text},
                             **({"working": w} if w else {})}
@@ -665,8 +748,11 @@ def clean_parts(out: dict, ctx: Ctx, *, stage: str, keys=None, prior: dict | Non
                 rest = [x for x in c["_spans"] if not any(_direct(x, i) for i in inps)]
                 if len(rest) == 1 and rest[0].kind in ("duration", "number", "price"):
                     done = {"kind": "derived", "cites": [i.id for i in inps], "check": "stated"}
-        elif agree:
+        elif agree and _says(c["text"], inps, brands, loose=True):
             done = {"kind": "fact", "cites": [i.id for i in inps]}
+        elif t and t.get("states") is False and not c["_spans"] and not ids:
+            c["_drop"] = True  # an instruction or a proposal, not a claim about the world
+            continue
         if done is None and any(x.kind in ("number", "price") and not any(_direct(x, i) for i in inps)
                                 for x in c["_spans"]):
             # what the call named (or the part cites) is about what the sentence names, but a figure is not
@@ -682,7 +768,7 @@ def clean_parts(out: dict, ctx: Ctx, *, stage: str, keys=None, prior: dict | Non
                      suggest=_suggest(c, IN, brands, ids))
     # -- basis, the client guard, and the record ------------------------------------------------------
     for k, p in res.items():
-        claims = p["claims"]
+        claims = [c for c in p["claims"] if not c.get("_drop")]
         kinds = {c["kind"] for c in claims}
         tied = [x for c in claims if c["kind"] != "to_confirm" for x in c["cites"]]
         valid = [c for c in p["cites"] if c in IN.pins or c in IN.findings]
