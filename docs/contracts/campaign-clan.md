@@ -41,7 +41,10 @@ No property in any of them has a `default`.
 `shared/data.yaml` also holds two supporting blocks that are not regions:
 
 - `materials` — the index of supplied material (the prompt and each attachment),
-  keyed by material id. Spans cite it. Bytes live as assets, by hash.
+  keyed by material id. Spans cite it. Bytes live as assets, by hash. A
+  material of kind `prompt` may also hold its `text`, the typed words
+  verbatim (at most 4000 characters, `client-confidential`), so a brief's
+  Sources can quote it (*added 2026-10-19*, middleware-api.md §10.4).
 - `projection` — the host's read-only scalar copy of the facts, findings and
   sources members, for view bindings (§5): pins (each with its `quotes`),
   findings, and `sources` by id.
@@ -59,7 +62,8 @@ source gave, and the source's record is frozen beside it: the document says
 where every figure came from without asking the layers.
 
 The document **owns no facts** (D1). Every figure it relies on is a pin into
-the brand or category layer. Nothing in `campaign.*` holds a fact's value.
+the brand or category layer, or a document pin that names the layer it would
+belong to (§4). Nothing in `campaign.*` holds a fact's value.
 
 ---
 
@@ -279,6 +283,7 @@ facts:
     stale: { detected_at, current_version, current_fact_id, current_value? }
     review: { verdict, by: human:<id>, at, decision }   # a person's check (§6.4)
     replaced_by: { fact_id, decision }                  # a person's correction (§6.4)
+    kept_in_document: { why, measure_proposed }         # a document pin (below)
 ```
 
 Every key of the source example is required except `supersedes` (null on a
@@ -291,7 +296,24 @@ pin time, `active` or `contested`, frozen with the value. `sources` holds source
 ids, a `human:<id>` verification, or — for `method: synthesis` — the fact ids
 the synthesis rests on.
 
-**Identity** is `entity + key + market`. Two markets are two facts.
+**Document pins** (*added 2026-10-19*, brief-fact-provenance). A fact
+research found outside the measure list may be kept in a brief so the brief
+can cite it, without being written to the layers (owner: no orphan facts, and
+the layers take only what the measure list asks for). It carries
+`kept_in_document: {why, measure_proposed}` and no `origin` or `version`
+(the schema refuses `origin` beside it), names the `layer` it would belong
+to, and otherwise is a pin like any other: `sources` with their `quotes`,
+derived `confidence`, `licence`, `as_of`, `retrieved_at`, `decision`. Its id
+is `f_` + a seeded base32 of the document, entity, key, market, value and
+`as_of`, so a rerun names the same pin and cannot collide with a layer row's
+id. The view labels it "kept in this brief only". **Harvest never files a
+`kept_in_document` pin into the layers**; it may only resubmit it as a
+measure proposal. A later layer row for the same identity does not replace
+it (a document never takes new content under an id it holds); the run notes
+it.
+
+**Identity** is `entity + key + market`. Two markets are two facts, and one
+identity holds one pin, whichever kind.
 
 **Origin URI.** `fact://<layer>/<entity path>/<key>@<version>`. The entity path
 is the entity ref with its type segment dropped when the type equals the layer,
@@ -394,7 +416,9 @@ The view labels every finding **derived by the agent**. The brief may use a
 writes **only this document**: nothing a person reviews reaches the layers
 until the client accepts the work, when a separate harvest offers the
 document's verified facts and findings to the layers, crediting their
-reviewers (owner, 2026-10-19). Research's own reads still go to the layers
+reviewers (owner, 2026-10-19). Harvest takes a finding only if every pin it
+cites has an `origin`: one resting on a document pin (§4) stays in the
+document. Research's own reads still go to the layers
 as they are found (D1).
 
 ### 6.3 Rejection
