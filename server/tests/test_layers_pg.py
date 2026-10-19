@@ -357,8 +357,8 @@ def test_a_confidential_source_backs_a_brand_fact_never_a_category_one(layers):
 
 
 def test_a_person_attests_the_value(layers, pg):
-    """verify_finding / correct_fact: a reviewer-verified source with no quote;
-    the evidence is the value the person confirmed."""
+    """A reviewer-verified source with no quote: the evidence is the value the
+    person confirmed."""
     who = layers.add_source({"uri": "human:pg-carol", "tier": "reviewer-verified", "domain": "human:pg-carol",
                              "licence": "open", "title": "verified in the document"})
     row = layers.append({"layer": "brand", "entity": X, "key": "synthesis.f_pg1", "market": None,
@@ -592,30 +592,6 @@ def test_a_measure_is_proposed_without_a_fact(store, pg):
                                       "'positioning.x_model_range'") == []
     # no quoted evidence, nothing to propose
     assert L.propose_measure(fact(0.4, key="market.x_unquoted", sources=[s])) is False
-
-
-def test_a_verified_finding_the_category_layer_refuses_is_kept_in_the_brand_layer(store, pg):
-    """A finding is not a measure: the category layer refuses synthesis.* (unknown_measure), so
-    verify_finding writes it to the agency's own brand layer and still answers with a pin."""
-    import threading
-    from types import SimpleNamespace
-    from napkin.capabilities import Capabilities
-    from napkin.handlers import verify_finding
-    caps = Capabilities(handler="verify_finding@1.0", scope={"org": A, "brand": X}, model_port=None,
-                        research_port=None, layer_store=store, research_semaphore=threading.Semaphore(1))
-    pin = {"id": "f_pgcited01", "entity": "category/automotive.hybrid", "key": "market.value_growth_yoy",
-           "market": "IE", "value": 0.2, "unit": "proportion", "as_of": "2025-12-31", "licence": "open",
-           "layer": "category", "sources": []}
-    fi = {"id": "fi_pg00001", "status": "proposed", "statement": "Hybrids grow fastest in Ireland.",
-          "cites": [pin["id"]], "confidence": "medium"}
-    req = SimpleNamespace(doc="11111111-2222-4333-8444-555555555555", base="3",
-                          clan={"facts": [pin], "findings": [fi]}, handler="verify_finding@1.0",
-                          inp={"finding": fi["id"], "by": "human:pg-erin", "decision_id": "d_01PGVERIFY01"})
-    result, change, _ = verify_finding.run(req, caps)
-    assert change is None and result["pin"]["layer"] == "brand" and "brand layer" in result["summary"]
-    row = caps.layers.resolve(result["pin"]["origin"])
-    assert row and row["value"] == fi["statement"]
-    assert owner_rows(pg, "category", "SELECT 1 FROM layers.facts WHERE key LIKE 'synthesis.%%'") == []
 
 
 def test_the_values_of_a_many_measure_are_rows_of_one_key_read_back_apart(store, pg):

@@ -16,7 +16,6 @@ def test_find_client_parts_is_no_task_and_no_handler():
     assert "find_client_parts" not in registry.TASKS
     assert "find_client_parts" not in registry.REGISTRY
     assert "find_client_parts" not in registry.BUILTIN_PIPELINE
-    assert "find_client_parts" not in registry.REVIEW_TASKS
     with pytest.raises(Exception):
         registry.lookup("find_client_parts@1", "find_client_parts")
 

@@ -33,9 +33,10 @@ class Aliases:
     def short(self, ids) -> list[str]:
         return [self.to_short.get(i, i) for i in ids]
 
-    def encode(self, obj):
-        """The payload with every id that is a whole string replaced by its alias."""
-        return _walk(obj, self.to_short, html=False)
+    def encode(self, obj, html: bool = False):
+        """The payload with every id that is a whole string replaced by its alias (and, with `html`, the tokens of
+        ref/refs attributes in HTML: a page part given to be written again)."""
+        return _walk(obj, self.to_short, html=html)
 
     def decode(self, obj):
         """The reply with every alias put back: whole strings, and the tokens of ref/refs attributes in HTML."""

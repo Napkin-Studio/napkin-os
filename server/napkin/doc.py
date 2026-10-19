@@ -124,6 +124,19 @@ def ctx_sources(clan: dict) -> dict:
     return {x["id"]: x for x in (s or []) if isinstance(x, dict) and isinstance(x.get("id"), str)}
 
 
+def out_of_use(clan: dict) -> set:
+    """Pins nothing may cite from here on: one a person marked wrong (selection.excluded, or a `rejected`
+    review on the pin), and one a correction or a resolved contest replaced (`replaced_by`: its replacement is
+    cited instead)."""
+    sel = ctx_data(clan).get("selection") or {}
+    out = {e.get("fact_id") for e in sel.get("excluded") or [] if isinstance(e, dict)}
+    for f in ctx_facts(clan):
+        if isinstance(f.get("replaced_by"), dict) or (f.get("review") or {}).get("verdict") == "rejected":
+            out.add(f.get("id"))
+    out.discard(None)
+    return out
+
+
 def ctx_data(clan: dict) -> dict:
     d = clan.get("data")
     return d if isinstance(d, dict) else {}

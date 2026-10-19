@@ -256,32 +256,26 @@ def _clip(s: str, n: int = ATTENTION_MAX) -> str:
 
 
 class Resolver:
-    """What a fact id the engine cites is in this document: a pin in `clan.facts`, or
-    the finding whose `verification.fact_id` it is (clan-extract.md §11.4)."""
+    """What an id the engine cites is in this document: a pin in `clan.facts`, or a
+    finding of the research by its own id (clan-extract.md §11.4). A verified finding
+    is the research document's, never a layer fact: the upstream printer gives it to
+    the engine under its finding id."""
 
     def __init__(self, clan: dict):
         self.pins = {f["id"]: f for f in ctx_facts(clan) if isinstance(f.get("id"), str)}
-        self.by_fact = {}
-        for fi in ctx_findings(clan):
-            v = fi.get("verification") if isinstance(fi.get("verification"), dict) else {}
-            if isinstance(v.get("fact_id"), str) and isinstance(fi.get("id"), str) and fi.get("status") != "rejected":
-                self.by_fact.setdefault(v["fact_id"], fi["id"])
+        self.findings = {fi["id"]: fi for fi in ctx_findings(clan)
+                         if isinstance(fi.get("id"), str) and fi.get("status") != "rejected"}
 
     def cites(self, fid: str) -> list:
-        """The ids a decision cites for fact `fid`: the pin, or the finding (with the fact
-        id when a pin holds it too); [] when the document holds neither."""
-        out = []
-        if fid in self.pins:
-            out.append(fid)
-        if fid in self.by_fact:
-            out.append(self.by_fact[fid])
-        return out
+        """The ids a decision cites for `fid`: the pin or the finding; [] when the
+        document holds neither."""
+        return [fid] if fid in self.pins or fid in self.findings else []
 
     def address(self, fid: str) -> str | None:
         if fid in self.pins:
             return f"facts[{fid}]"
-        if fid in self.by_fact:
-            return f"findings[{self.by_fact[fid]}]"
+        if fid in self.findings:
+            return f"findings[{fid}]"
         return None
 
 
@@ -442,7 +436,8 @@ class EngineBriefJob(BriefJob):
                 ver = f" v{r['version']}" if r.get("version") not in (None, "") else ""
                 where = f" ({r['scope']} research)" if r.get("scope") else ""
                 item = f", item {r['item']}" if isinstance(r.get("item"), int) else ""
-                pts.append(rsn.point(f"Rests on the verified research fact {r['id']}{ver}{where}{item}", got))
+                what = "finding" if r["id"] in res.findings else "fact"
+                pts.append(rsn.point(f"Rests on the verified research {what} {r['id']}{ver}{where}{item}", got))
             cites = list(dict.fromkeys(cites))
             kept_draft = k in to_review
             if kept_draft:

@@ -80,13 +80,21 @@ def test_handlers_reach_nothing_outside_the_capability_object(path):
             raise AssertionError((path, node.lineno))
 
 
-def test_review_tasks_resolve_for_a_document_whose_pipeline_predates_them():
+def test_later_tasks_resolve_for_a_document_whose_pipeline_predates_them():
     from napkin import registry
     clan = {"pipeline": {"tasks": {"extract_ask": {"handler": "extract_ask@1"}}}}
-    for task in ("verify_finding", "correct_fact"):
+    for task in sorted(registry.LATER_TASKS):
         mod, handler = registry.resolve(task, clan)
         assert mod.TASK == task
     import pytest
     from napkin.util import TaskError
     with pytest.raises(TaskError):
         registry.resolve("research_lens", clan)
+
+
+def test_review_writes_no_middleware_task():
+    """A person's review is the host's alone (review-in-document): verify and correct
+    ask nothing of the middleware."""
+    from napkin import registry
+    for task in ("verify_finding", "correct_fact"):
+        assert task not in registry.TASKS and task not in registry.REGISTRY

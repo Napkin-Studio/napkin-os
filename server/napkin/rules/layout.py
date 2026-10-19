@@ -198,6 +198,16 @@ def check(html: str, pins: dict, findings: dict, contests: dict, gaps: dict, nam
     return _render(tree.root), dropped, counts
 
 
+def split(html: str) -> list[str]:
+    """The page's top-level elements (and any text between them), each as written: joined, they are the page
+    byte for byte. A page that does not split back into itself (not written by `check`) is one part."""
+    tree = _Tree()
+    tree.feed(str(html or ""))
+    tree.close()
+    out = [_render(k) for k in tree.root.kids]
+    return out if "".join(out) == html else [html]
+
+
 def gaps_of(known) -> set:
     return getattr(known, "gaps", set())
 
