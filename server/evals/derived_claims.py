@@ -16,7 +16,9 @@ drafts' derived claims below the baseline's lowest run by more than the noise bl
 Each input is a JSON file: {"payload": <draft_brief_whole's payload>, "pins": [full pins], "sources":
 [source records], "capture_items": {cap_id: item}, "brand": "...", "competitors": [...]}.
 
-    cd server && uv run python -m evals.derived_claims <inputs dir> [--budget 15]
+    cd server && uv run python -m evals.derived_claims <inputs dir> [--budget 15] [--out <dir>]
+
+`--out` keeps every draft with its claims (one JSON file per input and arm), to read the ties by eye.
 
 Run it locally only: never against the owner's live relay (ports 8091, 8788)."""
 from __future__ import annotations
@@ -69,11 +71,20 @@ def derived(parts) -> int:
                if c["kind"] == "derived" and c.get("check") in ("recomputed", "stated"))
 
 
-def one(rec, model, system, rewrite=False) -> tuple[int, int | None]:
+def keep(out_dir, name, parts):
+    if out_dir:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / f"{name}.json").write_text(json.dumps(
+            {k: {"value": v["value"], "basis": v["basis"], "claims": v["claims"]} for k, v in parts.items()},
+            indent=1, ensure_ascii=False))
+
+
+def one(rec, model, system, rewrite=False, out_dir=None, name="") -> tuple[int, int | None]:
     keys = list(rec["payload"]["parts"])
     out = model.structured("draft_brief_whole", system, rec["payload"], planned.draft_schema(keys), max_tokens=16000)
     ctx = _ctx(rec, model)
     parts = prov.clean_parts(out, ctx, stage="draft")
+    keep(out_dir, name, parts)
     if not rewrite:
         return derived(parts), None
     todo = [k for k, v in parts.items() if any(c["kind"] == "derived" for c in v.get("claims") or [])]
@@ -85,6 +96,7 @@ def one(rec, model, system, rewrite=False) -> tuple[int, int | None]:
     got = model.structured("rewrite_brief_parts", planned.DRAFT_SYSTEM + planned.REWRITE_NOTE, pay,
                            planned.draft_schema(todo), max_tokens=8000)
     after = {**parts, **prov.clean_parts(got, ctx, stage="revise", prior={k: parts[k]["claims"] for k in todo})}
+    keep(out_dir, name + ".rewrite", after)
     return derived(parts), derived(after)
 
 
@@ -92,6 +104,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("inputs", type=Path)
     ap.add_argument("--budget", type=float, default=15.0)
+    ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     s = Settings.from_env()
     if any(p in str(getattr(s, "model_base_url", "") or "") for p in (":8091", ":8788")) or \
@@ -99,11 +112,14 @@ def main(argv=None) -> int:
         sys.exit("refused: never run this against the owner's live relay (8091/8788)")
     port = ModelPort(build_wire(s), s.model, s.model_timeout)
     model = Budget(port, a.budget)
-    recs = [json.loads(p.read_text()) for p in sorted(a.inputs.glob("*.json"))]
+    paths = sorted(a.inputs.glob("*.json"))
+    recs = [json.loads(p.read_text()) for p in paths]
     if not recs:
         sys.exit(f"no inputs in {a.inputs}")
-    base = [[one(r, model, OLD_DRAFT_SYSTEM)[0] for r in recs] for _ in range(2)]
-    new = [one(r, model, planned.DRAFT_SYSTEM, rewrite=True) for r in recs]
+    base = [[one(r, model, OLD_DRAFT_SYSTEM, out_dir=a.out, name=f"{p.stem}.baseline{n}")[0]
+             for r, p in zip(recs, paths)] for n in (1, 2)]
+    new = [one(r, model, planned.DRAFT_SYSTEM, rewrite=True, out_dir=a.out, name=f"{p.stem}.new")
+           for r, p in zip(recs, paths)]
     b1, b2 = sum(base[0]), sum(base[1])
     noise = abs(b1 - b2)
     before, after = sum(x for x, _ in new), sum(y for _, y in new)
