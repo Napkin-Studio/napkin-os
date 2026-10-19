@@ -1,0 +1,66 @@
+{
+  "op": "frame",
+  "provider": "runway",
+  "input": {
+    "shot": {
+      "id": "shot_01K6XB00000000000000000001",
+      "order": 1,
+      "duration_s": 5,
+      "composition": "wide",
+      "action": "Rain starts to fall on a busy city street at dusk; our hero looks up.",
+      "camera_move": "track",
+      "status": "planned",
+      "refs": [
+        "hero_front",
+        "hero_side"
+      ]
+    },
+    "ratio": "9:16",
+    "script": "It starts to rain on a busy city street. Our hero opens a bright yellow umbrella and grins. She splashes through a puddle.",
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000010VW",
+        "name": "hero_front",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "url": "https://hack.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "mime": "image/png"
+        }
+      },
+      {
+        "id": "ref_01K6XA6Z0000000000000012VW",
+        "name": "hero_side",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "url": "https://hack.napkin.ie/in/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "mime": "image/png"
+        }
+      }
+    ]
+  },
+  "reply": {
+    "op": "frame",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3.1_flash",
+      "prompt": "A wide shot of a busy city street at dusk as rain starts to fall, wet pavement reflecting shop lights; the character from @hero_front, identical in design, proportions, colours and clothes, stands on the pavement looking up at the rain. Flat 2D illustration matching the character's style, the whole street visible.",
+      "refs": [
+        {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "name": "hero_front",
+          "role": "character"
+        }
+      ],
+      "ratio": "9:16",
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "Shot 1 establishes the rainy street from the action and script; front view for identity.",
+    "confidence": 0.85
+  },
+  "recorded": "Written to the director.v3 rules (not a live reply), 2026-10-07"
+}

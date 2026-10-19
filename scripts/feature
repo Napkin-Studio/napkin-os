@@ -125,7 +125,9 @@ case "$cmd" in
     f="$(file_of "${1:-}")"; to="${2:-}"
     [[ -n "$to" ]] || die "usage: feature status <slug> <status>"
     from="$(data_of "$f" | jq -r .status)"
-    tmp="$(mktemp --suffix=.clan)"; trap 'rm -f "$tmp"' EXIT
+    # Portable: BSD/macOS mktemp has no --suffix, and the clan CLI wants a .clan name.
+    tmp="$(mktemp "${TMPDIR:-/tmp}/feature.XXXXXX")" && mv "$tmp" "$tmp.clan" && tmp="$tmp.clan"
+    trap 'rm -f "$tmp"' EXIT
     cp "$f" "$tmp"
     q clan patch-data "$tmp" "{\"status\":\"$to\"}" --agent "$agent" --action "status $from → $to" \
       --rationale "${3:-status change}" 

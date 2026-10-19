@@ -1,0 +1,18 @@
+{
+  "op": "generate",
+  "providerJob": {
+    "provider": "runway",
+    "model": "gemini_image3.1_flash",
+    "prompt": "Full-body front view of the character drawn in @in_1, flat 2D illustration, plain background. Eyes shaped like @maya_eyes. Colour palette of @in_2.",
+    "refs": [
+      { "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "in_1", "role": "character" },
+      { "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "name": "maya_eyes", "role": "object" },
+      { "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "name": "in_2", "role": "object" }
+    ],
+    "ratio": "1080:1350",
+    "outputs": 1
+  },
+  "needsUser": null,
+  "rationale": "The drawing as the character ref; the eyes and the palette as object refs, named by their wire tags.",
+  "confidence": 0.8
+}

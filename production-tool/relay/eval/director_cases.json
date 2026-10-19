@@ -1,0 +1,100 @@
+{
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words.",
+  "assets": {
+    "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
+    "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
+    "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5"
+  },
+  "cards": {
+    "handyman_front": "Full-body figure in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, standing front-on with feet together. Wears a short-sleeved royal-blue polo shirt with a small round white emblem on the chest. Carries a grey mop and bucket. Photoreal, plain light background.",
+    "handyman_back": "Armoured figure in black lacquered samurai-style armour and dark helmet with gold crescent horns, seen from behind, full length, on a cream background. Beige hakama with a red floral pattern; dark tabi-style footwear. Carries a mop over the shoulder."
+  },
+  "cases": [
+    {
+      "id": "view_runway_side",
+      "why": "Runway has no angle control: the view must be said in words, without restating cards",
+      "op": "view",
+      "provider": "runway",
+      "input": {
+        "view": "side",
+        "ratio": "4:5",
+        "image": "A2",
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A9",
+            "name": "handyman_back",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A9",
+            "card": "handyman_back"
+          }
+        ]
+      },
+      "image_card": "handyman_front",
+      "must": [
+        [
+          "side",
+          "profile"
+        ]
+      ],
+      "forbid": [
+        "lacquered",
+        "crescent",
+        "hakama",
+        "mop",
+        "duster",
+        "spray"
+      ],
+      "budget": 300
+    },
+    {
+      "id": "clip_runway_push",
+      "why": "Runway takes the first frame alone: the character is named in words, briefly",
+      "op": "clip",
+      "provider": "runway",
+      "input": {
+        "ratio": "9:16",
+        "image": "A6",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000001",
+          "order": 1,
+          "duration_s": 2,
+          "composition": "wide",
+          "camera_move": "push_in",
+          "action": "Wide view of a busy family house, @handyman walks in carrying his toolbox, ready for a long day of odd jobs.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          }
+        ]
+      },
+      "must": [
+        [
+          "walks",
+          "walking"
+        ],
+        [
+          "push",
+          "moves in",
+          "dolly"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "bucket",
+        "duster",
+        "lacquered"
+      ],
+      "budget": 500
+    }
+  ]
+}

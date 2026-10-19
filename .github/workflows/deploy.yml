@@ -16,6 +16,13 @@ name: Deploy
 on:
   push:
     branches: [ main ]
+    # The Production Tool has its own stack and workflow
+    # (deploy-production-tool.yml); merging it must not redeploy staging.
+    paths-ignore:
+      - 'production-tool/**'
+      - 'infra/envs/hackathon/**'
+      - 'docs/production-tool/**'
+      - '.github/workflows/deploy-production-tool.yml'
   workflow_dispatch:
     inputs:
       environment:

@@ -1,0 +1,42 @@
+{
+  "op": "clip_edit",
+  "provider": "runway",
+  "input": {
+    "text": "make the umbrella red",
+    "chips": [],
+    "video": {
+      "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "url": "https://hack.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "mime": "image/png"
+    },
+    "region": {
+      "x": 0.4,
+      "y": 0.2,
+      "w": 0.2,
+      "h": 0.2
+    },
+    "atS": 2.5
+  },
+  "extraHashes": [
+    "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  ],
+  "reply": {
+    "op": "clip_edit",
+    "providerJob": {
+      "provider": "runway",
+      "model": "aleph2",
+      "prompt": "The umbrella is red, everything else as in the clip.",
+      "refs": [],
+      "keyframe": {
+        "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "atS": 2.5,
+        "startS": 2,
+        "endS": 4
+      },
+      "audio": false
+    },
+    "needsUser": null,
+    "rationale": "Runway edits by keyframe: the relay's edited frame at 2.5 s, over seconds 2 to 4.",
+    "confidence": 0.7
+  }
+}

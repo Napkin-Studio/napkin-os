@@ -1,0 +1,485 @@
+// Jobs: submit to the relay, write the document entry at submit (state
+// queued), poll no faster than nextPollS, fetch outputs into the blob store,
+// then hand the result to whoever asked for it. Pending jobs resume after a
+// reload because the document and the job purposes are both snapshotted.
+
+import type {
+  AgentBlock, ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
+} from '../contracts/types'
+import { TERMINAL_STATES } from '../contracts/types'
+import { systemUpdate, type DocumentStore } from '../doc/store'
+import type { JobCtx, JobPurpose } from '../doc/ui'
+import type { UiStore } from '../projects/uiStore'
+import { idbLocation, putBlobAs } from '../lib/blobs'
+import { newId } from '../lib/ulid'
+import { asContractError, RelayError, type Relay } from '../relay'
+import { jobState, record } from '../dogfood/recorder'
+
+export interface LiveInfo {
+  state: JobState
+  queuePosition?: number
+  /** A line for the card while it is still trying something (a result that would not download). */
+  note?: string
+}
+
+/** Times a job whose POST /jobs answer was lost is sent again when the relay says it never got it. */
+export const LOST_RESENDS = 4
+/** Waits (s) between tries to download a finished job's outputs; after the last, every FETCH_AGAIN_S. */
+export const FETCH_BACKOFF_S = [2, 5, 15, 30]
+export const FETCH_AGAIN_S = 60
+
+/** POST /jobs never answered, or answered with no verdict (a network error, a gateway 502/504, the
+ *  relay's own 500): the relay may have taken the job. A refusal (quota, spend stop, invalid input)
+ *  names its code and is final. */
+function answerLost(e: unknown): boolean {
+  if (!(e instanceof RelayError)) return false
+  if (e.status === 0) return e.error.code === 'provider_unavailable'
+  return e.status >= 500 && e.error.code === 'internal'
+}
+
+const sleep = (s: number) => new Promise<void>((r) => setTimeout(r, s * 1000))
+
+export type CompletionHandler = (job: Job, ctx: JobCtx) => void
+export type Purpose = JobPurpose['for']
+
+function collectHashes(v: unknown, out: Set<string>) {
+  if (typeof v === 'string') {
+    if (/^sha256:[0-9a-f]{64}$/.test(v)) out.add(v)
+  } else if (Array.isArray(v)) v.forEach((x) => collectHashes(x, out))
+  else if (v && typeof v === 'object') Object.values(v).forEach((x) => collectHashes(x, out))
+}
+
+export function isActive(state: JobState): boolean {
+  return !TERMINAL_STATES.includes(state)
+}
+
+export class JobRunner {
+  private readonly live = new Map<string, LiveInfo>()
+  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly handlers = new Map<Purpose, CompletionHandler>()
+  private readonly waiting = new Map<Purpose, { job: Job; ctx: JobCtx }[]>()
+  private readonly listeners = new Set<() => void>()
+  private version = 0
+  private readonly relay: Relay
+  private readonly doc: DocumentStore
+  private readonly ui: UiStore
+  /** Set by stop(): the project was closed. Its jobs carry on at the relay and land when it is opened again. */
+  private stopped = false
+  /** Jobs sent again after a lost answer, by how many times (LOST_RESENDS). */
+  private readonly resent = new Map<string, number>()
+  /** Jobs whose outputs are being downloaded: nothing else may land them (a cancel landed one twice). */
+  private readonly completing = new Set<string>()
+  /** The stage the user is on, for log entries. */
+  stage: () => StageName = () => 'character'
+
+  constructor(relay: Relay, doc: DocumentStore, ui: UiStore) {
+    this.relay = relay
+    this.doc = doc
+    this.ui = ui
+  }
+
+  // ── observation (for the job chip and pending nodes) ──
+
+  subscribe = (fn: () => void) => {
+    this.listeners.add(fn)
+    return () => this.listeners.delete(fn)
+  }
+  getVersion = () => this.version
+  private emit() {
+    this.version++
+    for (const fn of this.listeners) fn()
+  }
+  liveInfo(jobId: string): LiveInfo | undefined {
+    return this.live.get(jobId)
+  }
+
+  /** Register what happens when a job for `purpose` completes. Flushes results that arrived first. */
+  onComplete(purpose: Purpose, handler: CompletionHandler): () => void {
+    this.handlers.set(purpose, handler)
+    const queued = this.waiting.get(purpose)
+    if (queued) {
+      this.waiting.delete(purpose)
+      for (const { job, ctx } of queued) handler(job, ctx)
+    }
+    return () => {
+      if (this.handlers.get(purpose) === handler) this.handlers.delete(purpose)
+    }
+  }
+
+  /** The project is closing (features/project-home.clan): stop asking about its jobs and start no more.
+   *  Whatever is still being made stays in its document as queued, running or fetching, so resume()
+   *  picks it up the next time the project is opened, in that project and no other. */
+  stop() {
+    this.stopped = true
+    for (const t of this.timers.values()) clearTimeout(t)
+    this.timers.clear()
+    this.listeners.clear()
+  }
+
+  // ── submit / retry / cancel ──
+
+  /** `modelChoice`: the model picked in the regenerate menu (features/model-choice.clan). */
+  async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job'), modelChoice?: ModelChoice): Promise<string> {
+    if (this.stopped) throw new Error('the project was closed')
+    const request: JobRequest = { contractVersion: '2', jobId, op, parentIds, input, ...(modelChoice ? { modelChoice } : {}) }
+    const hashes = new Set<string>()
+    collectHashes(input, hashes)
+    const now = new Date().toISOString()
+    const entry: DocJob = {
+      id: jobId,
+      op,
+      state: 'queued',
+      parent_ids: parentIds,
+      input_hashes: [...hashes],
+      created_at: now,
+    }
+    if (input.text) entry.text = input.text
+    if (input.chips?.length) entry.chips = input.chips
+    if (input.region) entry.region = input.region as Region
+    this.ui.update((u) => {
+      u.jobCtx[jobId] = { ...purpose, request }
+    })
+    systemUpdate(this.doc, (d) => {
+      d.jobs.push(entry)
+    }, `submit ${op}`)
+    this.live.set(jobId, { state: 'queued' })
+    this.emit()
+    // The beta's record: what was asked, once; then only the job's state changes (never a poll).
+    record('job-submit', op, {
+      jobId, for: purpose.for, pick: modelChoice ? `${modelChoice.provider}:${modelChoice.model}` : undefined,
+      parents: parentIds.length, inputs: [...hashes], text: input.text, chips: input.chips, region: input.region,
+    })
+    jobState(jobId, 'queued', { op })
+    await this.send(request)
+    return jobId
+  }
+
+  private async send(request: JobRequest) {
+    try {
+      const job = await this.relay.createJob(request)
+      if (this.stopped) return
+      this.apply(job)
+    } catch (e) {
+      const err = asContractError(e)
+      // Too many of this person's jobs are running (relay inFlightPerParticipant). The relay did not
+      // record this one, so wait for a free slot and send the same request again (idempotent jobId).
+      if (err.code === 'queue_full' && err.retryable) {
+        if (this.live.get(request.jobId)?.state === 'cancelled') return
+        this.live.set(request.jobId, { state: 'queued' })
+        this.emit()
+        const t = setTimeout(() => { this.timers.delete(request.jobId); void this.send(request) }, Math.max(1, err.retryAfterS ?? 4) * 1000)
+        this.timers.set(request.jobId, t)
+        return
+      }
+      // The answer was lost, not refused (features/video-stage-findings.clan): the relay may be making
+      // it already, so failing it here let Retry pay twice. Stay queued and ask; a 404 sends the same
+      // request again (poll), and the same jobId never pays twice.
+      if (answerLost(e) && this.live.get(request.jobId)?.state !== 'cancelled') {
+        this.live.set(request.jobId, { state: 'queued' })
+        this.emit()
+        this.schedule(request.jobId, 3)
+        return
+      }
+      this.fail(request.jobId, err)
+    }
+  }
+
+  /** Re-run a failed job as a new job (same input, new id: the old id would return the same failure).
+   *  `modelChoice`: run it on another model this time (null: the routed default); left out, the same pick. */
+  async retry(jobId: string, modelChoice?: ModelChoice | null): Promise<string | null> {
+    const ctx = this.ui.get().jobCtx[jobId]
+    if (!ctx) return null
+    const { request, dismissed: _d, retriedAs: _r, ...purpose } = ctx
+    const newJobId = newId('job')
+    this.ui.update((u) => {
+      const c = u.jobCtx[jobId]
+      if (c) {
+        c.dismissed = true
+        c.retriedAs = newJobId
+      }
+    })
+    const pick = modelChoice === undefined ? request.modelChoice : modelChoice ?? undefined
+    record('job-action', modelChoice === undefined ? 'retry' : 'other-model', {
+      jobId, newJobId, pick: pick ? `${pick.provider}:${pick.model}` : undefined,
+    })
+    await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId, pick)
+    return newJobId
+  }
+
+  async cancel(jobId: string) {
+    record('job-action', 'cancel', { jobId })
+    // Its result is already downloading: it lands as it is (a cancel then landed it twice, 2026-10-09).
+    if (this.completing.has(jobId)) return
+    this.stopPolling(jobId)
+    try {
+      const job = await this.relay.cancelJob(jobId)
+      this.apply(job)
+    } catch (e) {
+      this.patchDocJob(jobId, { state: 'cancelled', error: asContractError(e) })
+      this.live.set(jobId, { state: 'cancelled' })
+      this.emit()
+    }
+  }
+
+  dismiss(jobId: string) {
+    record('job-action', 'dismiss', { jobId })
+    this.ui.update((u) => {
+      const c = u.jobCtx[jobId]
+      if (c) c.dismissed = true
+    })
+  }
+
+  async report(jobId: string | undefined, message: string, extra: Partial<LogEntry> = {}) {
+    const entry: LogEntry = {
+      level: 'report',
+      message: message.slice(0, 2000),
+      stage: this.stage(),
+      browser: navigator.userAgent.slice(0, 300),
+      ...extra,
+    }
+    if (jobId) entry.jobId = jobId
+    record('job-action', 'report', { jobId, message: entry.message })
+    try {
+      await this.relay.log(entry)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Pick up every job that was still moving when the page was last open. */
+  resume() {
+    for (const j of this.doc.get().jobs) {
+      if (isActive(j.state)) {
+        this.live.set(j.id, { state: j.state })
+        if (j.state !== 'uncertain') this.schedule(j.id, 0.2) // the relay never moves an uncertain job
+      }
+    }
+    this.emit()
+  }
+
+  // ── polling ──
+
+  private schedule(jobId: string, seconds: number) {
+    this.stopPolling(jobId)
+    if (this.stopped) return
+    this.timers.set(jobId, setTimeout(() => void this.poll(jobId), Math.max(0.2, seconds) * 1000))
+  }
+
+  private stopPolling(jobId: string) {
+    const t = this.timers.get(jobId)
+    if (t) clearTimeout(t)
+    this.timers.delete(jobId)
+  }
+
+  /** Ask about every job still moving now, without waiting for its timer (tests drive the mock relay with this). */
+  async pollNow() {
+    // Only jobs waiting on a poll timer: a job being fetched into the blob store has none and must not complete twice.
+    await Promise.all([...this.timers.keys()].map((id) => {
+      this.stopPolling(id)
+      return this.poll(id)
+    }))
+  }
+
+  private async poll(jobId: string) {
+    this.timers.delete(jobId)
+    if (this.stopped) return
+    try {
+      const job = await this.relay.getJob(jobId)
+      if (this.stopped) return
+      this.apply(job)
+    } catch (e) {
+      const err = asContractError(e)
+      // The relay never recorded this job: it was refused as queue_full and waits to be sent
+      // again, and a reload (resume) polled it first (2026-10-08, Make views on a 2-job limit).
+      // Send the request we hold again; the same jobId never pays twice.
+      const request = this.ui.get().jobCtx[jobId]?.request
+      if (e instanceof RelayError && e.status === 404 && request && this.live.get(jobId)?.state === 'queued') {
+        // A lost answer whose request never got there either: bounded, for a relay that always errors.
+        const n = (this.resent.get(jobId) ?? 0) + 1
+        this.resent.set(jobId, n)
+        if (n <= LOST_RESENDS) return void this.send(request)
+        return this.fail(jobId, { code: 'provider_unavailable', message: 'The server did not take this job. Try again.', retryable: true })
+      }
+      if (e instanceof RelayError && e.status === 404) {
+        // The relay had it and no longer does (a local relay restarted): "No such job." with no Retry
+        // left it stuck (2026-10-09). Making it again is a new job.
+        return this.fail(jobId, { code: 'internal', message: 'The server lost track of this job. Retry makes it again.', retryable: true })
+      }
+      if (err.code === 'invalid_input') this.fail(jobId, err)
+      else if (err.code === 'unauthorised') this.schedule(jobId, 10) // signed out: resume once signed in again
+      else this.schedule(jobId, 5) // network blip: keep trying, the ledger has the job
+    }
+  }
+
+  private fail(jobId: string, error: ContractError) {
+    jobState(jobId, 'failed', { code: error.code, message: error.message, ms: this.ageMs(jobId) })
+    this.stopPolling(jobId)
+    this.patchDocJob(jobId, { state: 'failed', error })
+    this.live.set(jobId, { state: 'failed' })
+    this.emit()
+  }
+
+  /** How long since the job was asked for, for the record. */
+  private ageMs(jobId: string): number | undefined {
+    const at = this.doc.get().jobs.find((x) => x.id === jobId)?.created_at
+    return at ? Date.now() - Date.parse(at) : undefined
+  }
+
+  private patchDocJob(jobId: string, patch: Partial<DocJob>) {
+    systemUpdate(this.doc, (d) => {
+      const j = d.jobs.find((x) => x.id === jobId)
+      // Only a real change moves updated_at: a poll that learns nothing writes nothing.
+      const changed = j && Object.entries(patch).some(([k, v]) => JSON.stringify((j as unknown as Record<string, unknown>)[k]) !== JSON.stringify(v))
+      if (j && changed) Object.assign(j, patch, { updated_at: new Date().toISOString() })
+    })
+  }
+
+  /** Keep where the relay meant to run the job, when it made it elsewhere (Runway, the floor, after its
+   *  pick could not), beside the job's purpose: the card says "Made on Runway: Mock could not". */
+  private noteFallback(job: Job) {
+    const ctx = this.ui.get().jobCtx[job.jobId]
+    if (!ctx || !job.fallbackFrom) return
+    if (ctx.fallbackFrom?.provider === job.fallbackFrom.provider && ctx.fallbackReason === job.fallbackReason) return
+    this.ui.update((u) => {
+      const c = u.jobCtx[job.jobId]
+      if (!c) return
+      c.fallbackFrom = { provider: job.fallbackFrom!.provider, model: job.fallbackFrom!.model }
+      if (job.fallbackReason) c.fallbackReason = job.fallbackReason
+    })
+  }
+
+  private apply(job: Job) {
+    if (this.completing.has(job.jobId)) return // its outputs are downloading: that lands it
+    normalisePromptVersion(job)
+    const done = job.state === 'completed'
+    const prev = this.doc.get().jobs.find((x) => x.id === job.jobId)
+    if (prev && !isActive(prev.state) && prev.state === job.state) return
+    this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition })
+    jobState(job.jobId, done ? 'fetching' : job.state, {
+      op: job.op, provider: job.provider, model: job.model, fallbackFrom: job.fallbackFrom?.provider,
+      code: job.error?.code, message: job.error?.message, ms: this.ageMs(job.jobId),
+    })
+    const patch: Partial<DocJob> = { state: done ? 'fetching' : job.state, cost: job.cost }
+    if (job.provider) patch.provider = job.provider
+    if (job.model) patch.model = job.model
+    if (job.requestId) patch.remote_id = job.requestId
+    if (job.director) {
+      patch.agent = agentForDocument(job.director)
+      const cards = job.director.cards
+      if (cards?.length && !this.ui.get().jobCtx[job.jobId]?.cards) {
+        this.ui.update((u) => { const c = u.jobCtx[job.jobId]; if (c) c.cards = cards })
+      }
+    }
+    if (job.error) patch.error = job.error
+    this.patchDocJob(job.jobId, patch)
+    this.noteFallback(job)
+    this.emit()
+    if (done) void this.complete(job)
+    // Uncertain is final at the relay (it never sends it again): asking every 2 s for ever changed
+    // nothing (2026-10-09). The card waits for the participant: Stop waiting, or Try again.
+    else if (isActive(job.state) && job.state !== 'uncertain') this.schedule(job.jobId, job.nextPollS ?? 2)
+  }
+
+  /** Download a finished job's outputs into the blob store. A blip does not fail the job (Retry then paid
+   *  for a new clip, 2026-10-09): it is tried again after FETCH_BACKOFF_S, then the job stays "fetching" and
+   *  is asked about every FETCH_AGAIN_S, which downloads it again; a reload does the same (resume). */
+  private async download(job: Job): Promise<DocAsset[] | null> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const assets: DocAsset[] = []
+        for (const o of job.outputs ?? []) {
+          const blob = await this.relay.fetchOutput(o)
+          await putBlobAs(o.sha256, blob)
+          const a: DocAsset = {
+            sha256: o.sha256,
+            kind: o.mime.startsWith('video/') ? 'video' : 'image',
+            mime: o.mime,
+            origin: job.kind === 'mock' ? 'mock' : 'generated',
+            job_id: job.jobId,
+            locations: outputLocations(o.sha256, o.url),
+          }
+          if (o.bytes) a.bytes = o.bytes
+          if (o.w) a.w = o.w
+          if (o.h) a.h = o.h
+          if (o.durationS) a.duration_s = o.durationS
+          assets.push(a)
+        }
+        return assets
+      } catch {
+        if (this.stopped) return null
+        if (attempt >= FETCH_BACKOFF_S.length) {
+          this.live.set(job.jobId, { state: 'fetching', note: 'Could not download it yet; trying again.' })
+          this.emit()
+          return null
+        }
+        await sleep(FETCH_BACKOFF_S[attempt])
+        if (this.stopped) return null
+      }
+    }
+  }
+
+  private async complete(job: Job) {
+    if (this.completing.has(job.jobId)) return
+    this.completing.add(job.jobId)
+    let assets: DocAsset[] | null
+    try {
+      assets = await this.download(job)
+    } finally {
+      this.completing.delete(job.jobId)
+    }
+    if (!assets) {
+      if (!this.stopped) this.schedule(job.jobId, FETCH_AGAIN_S) // still "fetching": the next poll downloads it again
+      return
+    }
+    try {
+      // Closed while its outputs came in: the bytes are kept (shared blobs), the job stays "fetching"
+      // in its own document and lands when that project is opened again.
+      if (this.stopped) return
+      systemUpdate(this.doc, (d) => {
+        for (const a of assets) if (!d.assets.some((x) => x.sha256 === a.sha256)) d.assets.push(a)
+        const j = d.jobs.find((x) => x.id === job.jobId)
+        if (j) {
+          j.state = 'completed'
+          j.outputs = (job.outputs ?? []).map((o) => o.sha256)
+          j.updated_at = new Date().toISOString()
+        }
+      }, `complete ${job.op}`)
+      this.live.set(job.jobId, { state: 'completed' })
+      jobState(job.jobId, 'completed', { op: job.op, provider: job.provider, model: job.model, outputs: assets.map((a) => a.sha256), ms: this.ageMs(job.jobId) })
+      this.emit()
+      const ctx = this.ui.get().jobCtx[job.jobId]
+      if (!ctx) return
+      const handler = this.handlers.get(ctx.for)
+      if (handler) handler(job, ctx)
+      else this.waiting.set(ctx.for, [...(this.waiting.get(ctx.for) ?? []), { job, ctx }])
+    } catch (e) {
+      this.fail(job.jobId, asContractError(e))
+    }
+  }
+}
+
+/** Where an output's bytes can be found. The document only takes idb://, s3:// and https:// locations,
+ *  so a local dev relay's http://localhost URL is left out (the bytes are in this browser anyway). */
+export function outputLocations(sha256: string, url: string): string[] {
+  return /^https:\/\//.test(url) ? [idbLocation(sha256), url] : [idbLocation(sha256)]
+}
+
+/** Prompt files renamed without changing their content. A .clan made before the promptVersion
+ *  pattern was loosened refuses dotted names, and a job directed under the old name would be
+ *  refused on every save (2026-10-07: "director.v2.1" looped as "1 queued"). Same prompt, new name. */
+const PROMPT_RENAMES: Record<string, string> = { 'director.v2.1': 'director.v3' }
+
+/** The director block as the document keeps it: without `cards`. A .clan keeps the contract it was
+ *  made with, and one made before character cards refuses the field on every save (the trap above);
+ *  the cards go to the director's History entry instead (jobCtx, then doc/clan.ts). */
+export function agentForDocument(block: AgentBlock): AgentBlock {
+  if (!('cards' in block)) return block
+  const { cards: _cards, ...rest } = block
+  return rest
+}
+
+export function normalisePromptVersion(job: Job): void {
+  const v = job.director?.promptVersion
+  if (job.director && v && PROMPT_RENAMES[v]) job.director = { ...job.director, promptVersion: PROMPT_RENAMES[v] }
+}

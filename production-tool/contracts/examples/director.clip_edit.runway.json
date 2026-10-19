@@ -1,0 +1,16 @@
+{
+  "op": "clip_edit",
+  "providerJob": {
+    "provider": "runway",
+    "model": "aleph2",
+    "op": "clip_edit",
+    "prompt": "Make the umbrella red where it appears; keep everything else identical.",
+    "refs": [],
+    "video": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "keyframes": [ { "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "atS": 2.1, "startS": 1, "endS": 4 } ],
+    "seed": 42
+  },
+  "needsUser": null,
+  "rationale": "Region note at 2.1 s: the edited frame guides aleph2 inside 1-4 s.",
+  "confidence": 0.6
+}

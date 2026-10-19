@@ -1,0 +1,5 @@
+.local-data/
+build/
+*.zip
+.venv/
+prune-report-*.json

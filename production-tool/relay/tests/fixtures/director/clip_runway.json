@@ -1,0 +1,54 @@
+{
+  "op": "clip",
+  "provider": "runway",
+  "input": {
+    "text": "slow and calm",
+    "chips": [],
+    "image": {
+      "sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "url": "https://hack.napkin.ie/in/sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "mime": "image/png"
+    },
+    "shot": {
+      "id": "shot_01K6XB000000000000000000A1",
+      "order": 1,
+      "duration_s": 5,
+      "composition": "wide",
+      "action": "The hero walks into a rainy street, umbrella closed.",
+      "camera_move": "track",
+      "refs": [
+        "hero_front"
+      ]
+    },
+    "ratio": "9:16",
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000010VW",
+        "name": "hero_front",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "url": "https://hack.napkin.ie/in/sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "mime": "image/png"
+        }
+      }
+    ]
+  },
+  "reply": {
+    "op": "clip",
+    "providerJob": {
+      "provider": "runway",
+      "model": "veo3.1_fast",
+      "prompt": "The hero from the frame walks into a rainy street with the umbrella closed. The camera tracks alongside, slow and calm.",
+      "refs": [],
+      "firstFrame": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "ratio": "1080:1920",
+      "durationS": 6,
+      "audio": false
+    },
+    "needsUser": null,
+    "rationale": "Runway cannot mix a first frame with refs, so the frame goes alone; 6 s is the nearest allowed length at or above 5.",
+    "confidence": 0.8
+  }
+}

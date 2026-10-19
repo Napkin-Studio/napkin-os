@@ -52,6 +52,10 @@ def main():
     ap.add_argument("--no-record", action="store_true",
                     help="do not record this run (by default every model call is saved in full under recordings/, "
                          "the web answers under research_cache/, and the document at each stage under checkpoints/)")
+    ap.add_argument("--bedrock", metavar="ROUTES",
+                    help="call the model on Bedrock (eu-west-1, the AWS credential chain) with this NAPKIN_MODEL_ROUTES "
+                         "file, and research in process as staging does (Tavily when NAPKIN_TAVILY_API_KEY is set, else "
+                         "Nova grounding); retrieval and layers stay on the mock. Every call bills AWS")
     ap.add_argument("--replay-research", metavar="DIR",
                     help="answer research from an earlier run's research_cache/ (misses run live and are recorded); "
                          "the web then does not change between runs")
@@ -76,6 +80,12 @@ def main():
                   NAPKIN_MODEL_API_KEY="dummy", NAPKIN_RESEARCH_URL=f"http://127.0.0.1:{mport}",
                   NAPKIN_RETRIEVAL_URL=f"http://127.0.0.1:{mport}", NAPKIN_LAYERS_URL=f"http://127.0.0.1:{mport}",
                   NAPKIN_PORT=str(wport), NAPKIN_METRICS_FILE=str(out / "middleware.jsonl"))
+    if a.bedrock:
+        mw_env.update(NAPKIN_MODEL_API="bedrock", NAPKIN_MODEL_REGION=os.environ.get("NAPKIN_MODEL_REGION", "eu-west-1"),
+                      NAPKIN_MODEL_ROUTES=str(Path(a.bedrock).resolve()))
+        for k in ("NAPKIN_MODEL_BASE_URL", "NAPKIN_MODEL_API_KEY", "NAPKIN_RESEARCH_URL"):
+            mw_env.pop(k)
+        mw_env.setdefault("NAPKIN_RESEARCH_WEB", "tavily" if os.environ.get("NAPKIN_TAVILY_API_KEY") else "nova")
     if not a.no_record:
         mw_env["NAPKIN_RECORD_DIR"] = str(out / "recordings")
     mw = subprocess.Popen([sys.executable, "-m", "napkin.app"], cwd=REPO / "server", env=mw_env,

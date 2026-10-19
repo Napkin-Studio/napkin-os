@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production Tool</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #666; --bg: #fafaf7; --line: #ddd; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #eee; --muted: #999; --bg: #161616; --line: #333; } }
+  body { margin: 0; padding: 24px 16px; font: 15px/1.5 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+  td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="who">Production Tool</h1>
+  <p class="muted" id="stage"></p>
+  <table><tbody id="counts"></tbody></table>
+  <p class="muted">The work itself lives in the Production Tool. This page is the document's summary: the data and its decision chain travel with this file.</p>
+</main>
+<script>
+  (function () {
+    var d = (window.__CLAN__ && window.__CLAN__.data) || {};
+    var p = d.participant || {};
+    if (p.handle) document.getElementById('who').textContent = 'Production Tool · ' + p.handle;
+    var s = d.stage || {};
+    document.getElementById('stage').textContent = s.current ? 'Stage: ' + s.current + (s.next_action ? ' — ' + s.next_action : '') : '';
+    var rows = [
+      ['Character views', Object.keys((d.character && d.character.views) || {}).length],
+      ['Shots', (d.shots || []).length],
+      ['Frames', (d.frames || []).length],
+      ['Takes', (d.takes || []).length],
+      ['Jobs', (d.jobs || []).length],
+      ['Reviews', (d.reviews || []).length],
+      ['Assets', (d.assets || []).length]
+    ];
+    var body = document.getElementById('counts');
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      var a = document.createElement('th'); a.textContent = r[0];
+      var b = document.createElement('td'); b.textContent = String(r[1]);
+      tr.appendChild(a); tr.appendChild(b); body.appendChild(tr);
+    });
+  })();
+</script>
+</body>
+</html>

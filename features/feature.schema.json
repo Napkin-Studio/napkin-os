@@ -69,7 +69,7 @@
           "type": "array",
           "description": "Repo areas the change reaches.",
           "items": {
-            "enum": ["clan-sdk", "clan-cli", "napkin-host", "napkin-web", "napkin-wasm", "app-shell", "app-tauri", "app-templates", "engine", "server", "mock-backend", "mock-middleware", "mock-agent", "layers-service", "infra", "ci", "spec", "docs"]
+            "enum": ["clan-sdk", "clan-cli", "napkin-host", "napkin-web", "napkin-wasm", "app-shell", "app-tauri", "app-templates", "engine", "server", "mock-backend", "mock-middleware", "mock-agent", "layers-service", "infra", "ci", "spec", "docs", "production-tool"]
           }
         },
         "contracts": {

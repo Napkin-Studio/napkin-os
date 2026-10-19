@@ -234,8 +234,9 @@ gets a model in a region.
 - **Routing:** `global.` profiles route anywhere at list price; `eu.` keeps
   inference in the EU at a 10% premium. The owner accepted global (2026-09-30).
 - **Not on Bedrock**, and not used by the port anyway: server tools (web
-  search, web fetch), the Models API, top-level automatic `cache_control`,
-  server-side `fallbacks`. Research does not run through this port (§2).
+  search, web fetch), the Models API, top-level automatic `cache_control` (the
+  legacy integration for Opus 4.6 and earlier refuses it), server-side
+  `fallbacks`. The prompt cache is used through an explicit breakpoint (§1.10). Research does not run through this port (§2).
 - The SDK's Bedrock clients drop their HTTP client in `with_options()`, so the
   wire sets retries at construction and passes the timeout per call.
 
@@ -375,14 +376,21 @@ when it changes, and the next call uses it.
 
 ```json
 {
-  "default":  {"model": "opus-4.6", "schema": "auto"},
-  "vision":   {"model": "opus-4.6"},
+  "default":  {"model": "sonnet-5.5", "effort": "low", "schema": "prompt"},
+  "vision":   {"model": "sonnet-5.5"},
   "purposes": {
-    "write_dossier_cell": {"model": "opus-5.5", "effort": "low"},
+    "plan_brief":         {"effort": "medium"},
+    "write_dossier_cell": {"model": "opus-4.6", "schema": "auto"},
     "synthesise":         {"effort": "high", "max_tokens": 12000}
   }
 }
 ```
+
+The middleware ships `server/model-routes.example.json`, which the image copies
+and staging reads. It runs Sonnet 5.5 at low effort, with the brief writers at
+medium, and keeps `extract_facts` and `extract_category_facts` on Opus 4.6:
+replayed on Bedrock, Opus 4.6 kept about four times the facts Sonnet 5.5 did,
+at the lowest cost per kept fact (2026-10-13, `features/sonnet-default-caching.clan`).
 
 | Field | Values | |
 |---|---|---|
@@ -408,6 +416,28 @@ when it changes, and the next call uses it.
   model. `uv run python -m napkin.model_routes` prints the routes in force, and
   `scripts/model_smoke.py <purpose>` makes one call the way that purpose would.
 - The seed runner (`napkin.seed.run`) reads the same setting.
+
+### 1.10 The prompt cache
+
+On the Anthropic wire (direct and Bedrock), every call sends its system prompt
+as one text block marked `cache_control: {"type": "ephemeral"}` (5 minutes). In
+prompt mode that block holds the schema too. The block is the same for every
+call of a purpose, so calls within 5 minutes of each other read it from the
+cache at 0.1x the input price, and the first call writes it at 1.25x. The
+payload, which differs on every call, comes after the breakpoint and is never
+cached.
+
+- **Below the model's minimum the marker is ignored, not refused.** The minimum
+  is 512 tokens on the 5.5 models and 4096 on Opus 4.6, so no system prompt
+  here caches on Opus 4.6.
+- **Nothing volatile goes in a system prompt** (a date, an id, a count): any
+  change of byte stops every hit for that purpose.
+- **Counted, never estimated:** `input_tokens` still counts every input token
+  (§1.7). The model event's `breakdown`, `Usage.cache_read` and
+  `Usage.cache_write`, and the run log's `cache_read` and `cache_write` say how
+  many of them the cache served or stored. The run log prices those at their
+  own rates.
+- The OpenAI wire sends no marker.
 
 ### 1.8 Embeddings are not the model port's
 

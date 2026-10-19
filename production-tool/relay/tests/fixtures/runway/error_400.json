@@ -1,0 +1,2 @@
+{"error": "Validation of body failed", "docUrl": "https://docs.dev.runwayml.com/api",
+ "issues": [{"code": "too_big", "path": ["promptText"], "message": "String must contain at most 5500 character(s)"}]}
