@@ -21,7 +21,8 @@ use crate::event::HostEvent;
 #[cfg(feature = "native")]
 use crate::export::write_temp_html;
 use crate::library::{
-    create_instance, scan_apps, scan_recent, spinoff_document_as, spinoff_targets, Backref,
+    attach_change, attach_targets, create_instance, detach_change, scan_apps, scan_recent,
+    spinoff_document_as, spinoff_targets, AttachMode, Backref,
 };
 #[cfg(feature = "native")]
 use crate::proxy::api_proxy;
@@ -552,6 +553,37 @@ pub fn dispatch(
                 // is given a map, 403 when the source is another tenant's.
                 Err(e) => e.into(),
             }
+        }
+
+        // Attach (Contract 6 §4): carry another document in beside this one's
+        // own work. A person's write like the review routes, so it is refused
+        // on a locked document and for a process.
+        "/attach-targets" => {
+            match session.read(|d| Ok(attach_targets(&**session.store(), ctx, d))) {
+                Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+                Err(e) => e.into(),
+            }
+        }
+        "/attach" | "/attach/update" => {
+            let id = req.body_json().get("document_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            if id.is_empty() {
+                return HostResponse::error(400, "missing document_id");
+            }
+            let mode = if path == "/attach" { AttachMode::Attach } else { AttachMode::Update };
+            review(session, ctx, |c, d| {
+                let (change, reply) = attach_change(&**session.store(), c, d, &id, mode)?;
+                Ok(crate::ops::Outcome::changed(reply, change))
+            })
+        }
+        "/attach/detach" => {
+            let app = req.body_json().get("app_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            if app.is_empty() {
+                return HostResponse::error(400, "missing app_id");
+            }
+            review(session, ctx, |c, d| {
+                let (change, reply) = detach_change(c, d, &app)?;
+                Ok(crate::ops::Outcome::changed(reply, change))
+            })
         }
 
         // The host owns the file dialog; ask the shell to run it.

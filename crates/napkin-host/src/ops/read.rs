@@ -621,8 +621,9 @@ pub fn upstream_index(clan: &ClanFile, upstream: &Value) -> Value {
 pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>) -> Value {
     let clan = doc.clan();
     let here = clan.document_id();
+    let attached = attached_status(clan.manifest().attached(), &parent);
     let Some(carried) = clan.manifest().carried() else {
-        return json!({ "document_id": here, "carried": null, "upstream": [] });
+        return json!({ "document_id": here, "carried": null, "upstream": [], "attached": attached });
     };
     let data = data_json(doc);
     let mut ids: Vec<String> = data
@@ -660,7 +661,58 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
             entry
         })
         .collect();
-    json!({ "document_id": here, "carried": carried, "upstream": upstream })
+    json!({ "document_id": here, "carried": carried, "upstream": upstream, "attached": attached })
+}
+
+/// One entry per document attached to this one (Contract 6 §4.3, `GET
+/// /upstream`): the record, and whether the source is `current` or `changed`
+/// since it was taken, by the same hashes a spin-off compares. `unknown` when
+/// the store does not hold it for the caller. `version_now` is the source's
+/// `kit.version` now, so a chip can say "v6 in the Brand Clan".
+fn attached_status(
+    attached: &[clan_sdk::Attached],
+    parent: &impl Fn(&str) -> Option<Document>,
+) -> Vec<Value> {
+    attached
+        .iter()
+        .map(|a| {
+            let id = &a.carried.document_id;
+            let Some(p) = parent(id) else {
+                return json!({
+                    "document_id": id, "app_id": a.app_id, "version": a.version,
+                    "at": a.at, "in_store": false, "status": "unknown",
+                });
+            };
+            let pc = p.clan();
+            let now = |path: &str| pc.read_entry(path).ok().map(|b| sha256_prefixed(&b));
+            let differs = |was: Option<&String>, path: &str| was.cloned() != now(path);
+            let changed = json!({
+                "data": differs(Some(&a.carried.data_sha256), "shared/data.yaml"),
+                "facts": differs(a.carried.facts_sha256.as_ref(), FACTS.path),
+                "sources": differs(a.carried.sources_sha256.as_ref(), SOURCES.path),
+            });
+            let is_changed = changed.as_object().unwrap().values().any(|v| v == true);
+            let version_now = pc
+                .read_entry("shared/data.yaml")
+                .ok()
+                .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+                .and_then(|d| d.get("kit")?.get("version")?.as_u64());
+            let chain = chain_of(pc);
+            let decisions_since = a.carried.last_decision.as_deref().and_then(|last| {
+                chain
+                    .decisions
+                    .iter()
+                    .position(|d| d.id.as_deref() == Some(last))
+            });
+            json!({
+                "document_id": id, "app_id": a.app_id, "version": a.version,
+                "version_now": version_now, "at": a.at, "in_store": true,
+                "title": pc.manifest().title, "path": p.id().to_string(),
+                "status": if is_changed { "changed" } else { "current" },
+                "changed": changed, "decisions_since": decisions_since,
+            })
+        })
+        .collect()
 }
 
 /// The direct parent `p` now, against what `doc` carried from it.

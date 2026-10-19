@@ -550,7 +550,7 @@ fn spinoff_from(
 /// without waiting for a write. Any other spin-off is returned as it came.
 fn with_projection(bytes: Vec<u8>) -> HostResult<Vec<u8>> {
     let clan = ClanFile::from_bytes(bytes)?;
-    if clan.manifest().carried().is_none() {
+    if clan.manifest().carried().is_none() && clan.manifest().attached().is_empty() {
         return Ok(clan.raw_bytes().to_vec());
     }
     let member = |m: members::Member| -> HostResult<(Vec<serde_yaml::Value>, Vec<u8>)> {
@@ -864,6 +864,316 @@ fn with_decision(doc: &Document, d: Decision) -> HostResult<Change> {
 /// holds them for `ctx`. A read: nothing is written.
 pub fn upstream_status(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value {
     crate::ops::read::upstream_status(doc, |id| find_upstream(store, ctx, doc, id))
+}
+
+// ── Attach (Contract 6 §4) ──────────────────────────────────────────────────
+//
+// A document takes another one in beside its own work: the Brand Clan in a
+// brief, in a research, in a production. The SDK's `attach` does the carry;
+// this is what the host adds: who may, which documents are on offer, the
+// attribution, and the projection the host owns.
+
+/// A document the open one could attach, offered by `GET /attach-targets`.
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachTarget {
+    pub app_id: String,
+    pub app_name: String,
+    pub document_id: String,
+    pub title: String,
+    /// The source's `kit.version`, when it declares one.
+    pub version: Option<u64>,
+    /// Where the shell opens it.
+    pub path: String,
+    pub updated_at: String,
+    /// This is the one the open document has attached now.
+    pub attached: bool,
+}
+
+fn kit_version(clan: &ClanFile) -> Option<u64> {
+    let data: serde_yaml::Value = serde_yaml::from_slice(&clan.read_entry(DATA).ok()?).ok()?;
+    data.get("kit")?.get("version")?.as_u64()
+}
+
+/// The documents of this tenant that the open document's app lets be
+/// attached (`app.attach.accepts`), by title. Empty when the app declares
+/// none. A fork branch, a template and another tenant's document are never
+/// offered.
+pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<AttachTarget> {
+    let accepts = doc
+        .clan()
+        .manifest()
+        .app
+        .as_ref()
+        .and_then(|a| a.attach.as_ref())
+        .map(|s| s.accepts.clone())
+        .unwrap_or_default();
+    if accepts.is_empty() {
+        return Vec::new();
+    }
+    let attached: Vec<String> = doc
+        .clan()
+        .manifest()
+        .attached()
+        .iter()
+        .map(|a| a.carried.document_id.clone())
+        .collect();
+    let mut out: Vec<AttachTarget> = store
+        .documents()
+        .into_iter()
+        .filter(|id| id != doc.id())
+        .filter_map(|id| {
+            let d = Document::load(store.parts(), id).ok()?;
+            let m = d.clan().manifest();
+            let app = m.app.as_ref()?;
+            if m.fork.is_some()
+                || m.document_type.as_deref() == Some("template")
+                || !accepts.contains(&app.app_id)
+                || foreign(ctx, d.clan())
+            {
+                return None;
+            }
+            let document_id = m.document_id().to_string();
+            Some(AttachTarget {
+                app_id: app.app_id.clone(),
+                app_name: app.name.clone(),
+                attached: attached.contains(&document_id),
+                document_id,
+                title: m.title.clone(),
+                version: kit_version(d.clan()),
+                path: d.id().to_string(),
+                updated_at: m.updated_at.clone(),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out
+}
+
+/// Which of the three the caller means. `/attach` never silently updates and
+/// `/attach/update` never silently attaches: each says `409` when the
+/// document is not in the state the verb is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachMode {
+    Attach,
+    Update,
+}
+
+fn locked_error(clan: &ClanFile) -> Option<HostError> {
+    crate::ops::review::lock_of(&chain_of(clan), clan.document_id()).map(|d| {
+        HostError::conflict(format!(
+            "the document was locked by {} at {}; changes make a new version",
+            d.actor.as_deref().unwrap_or(&d.agent),
+            d.timestamp
+        ))
+    })
+}
+
+/// A person's decision, as the chain says: the attach's own entries carry the
+/// actor and the org the shell resolved, as every attributed write does, and
+/// the seeds keep the process that made them.
+fn attribute_attach(bytes: Vec<u8>, before: &ClanFile, ctx: &Ctx) -> HostResult<Vec<u8>> {
+    let clan = ClanFile::from_bytes(bytes)?;
+    let old: std::collections::BTreeSet<String> = chain_of(before)
+        .decisions
+        .into_iter()
+        .filter_map(|d| d.id)
+        .collect();
+    let mut chain = chain_of(&clan);
+    let who = attributed(ctx, "", "edit");
+    for d in &mut chain.decisions {
+        let is_new = d.id.as_ref().is_some_and(|id| !old.contains(id));
+        let is_ours = d.agent == clan_sdk::ATTACH_AGENT && d.action != "seed";
+        if is_new && is_ours {
+            d.kind = who.kind.clone();
+            d.actor = who.actor.clone();
+            d.handler = who.handler.clone();
+            d.backend = who.backend.clone();
+            d.scope = who.scope.clone();
+        } else if is_new && d.agent == clan_sdk::ATTACH_AGENT {
+            // A seed: the process made it, for the person; the org is theirs.
+            d.scope = who.scope.clone();
+        }
+    }
+    let mut b = ClanBuilder::new(clan.manifest().clone());
+    for (path, entry) in clan.read_all_entries()? {
+        if path != clan_sdk::MANIFEST_PATH && path != CHAIN {
+            b.add_entry(path, entry);
+        }
+    }
+    b.add_entry(CHAIN, chain.to_yaml()?);
+    Ok(b.build()?)
+}
+
+/// The decisions `after` holds that `before` did not, by id, newest first.
+/// An attach carries the source's decisions behind the document's own, so the
+/// leading entries are not the new ones.
+fn new_decisions(before: &ClanFile, after: &ClanFile) -> Vec<Decision> {
+    let old: std::collections::BTreeSet<String> = chain_of(before)
+        .decisions
+        .into_iter()
+        .filter_map(|d| d.id)
+        .collect();
+    chain_of(after)
+        .decisions
+        .into_iter()
+        .filter(|d| d.id.as_ref().is_some_and(|id| !old.contains(id)))
+        .collect()
+}
+
+fn find_source(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+    document_id: &str,
+) -> HostResult<Document> {
+    for id in store.documents() {
+        if &id == doc.id() {
+            continue;
+        }
+        let Ok(d) = Document::load(store.parts(), id) else {
+            continue;
+        };
+        let m = d.clan().manifest();
+        if m.document_id() != document_id
+            || m.fork.is_some()
+            || m.document_type.as_deref() == Some("template")
+        {
+            continue;
+        }
+        if foreign(ctx, d.clan()) {
+            return Err(HostError::new(
+                403,
+                format!(
+                    "\"{}\" belongs to another workspace; an attachment stays in the workspace it starts in",
+                    m.title
+                ),
+            ));
+        }
+        return Ok(d);
+    }
+    Err(HostError::not_found(format!(
+        "no document {document_id} in this workspace to attach"
+    )))
+}
+
+/// The change that attaches (or updates, or replaces) `source_document_id` on
+/// `doc`, and the reply that says what it did. Refused: a context that is not
+/// a person (`403`), a locked document (`409`), another workspace's source
+/// (`403`), a source the document's app does not accept (`422`), and the verb
+/// not matching the state (`409`: attach of what is attached, update of what
+/// is not attached or has not moved).
+pub fn attach_change(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+    source_document_id: &str,
+    mode: AttachMode,
+) -> HostResult<(Change, Value)> {
+    if !ctx.actor.is_human() {
+        return Err(HostError::new(
+            403,
+            format!(
+                "only a person can attach a document; {} is not one",
+                ctx.actor
+            ),
+        ));
+    }
+    if let Some(e) = locked_error(doc.clan()) {
+        return Err(e);
+    }
+    let source = find_source(store, ctx, doc, source_document_id)?;
+    let held = doc
+        .clan()
+        .manifest()
+        .attached()
+        .iter()
+        .find(|a| a.carried.document_id == source_document_id);
+    match (mode, held) {
+        (AttachMode::Attach, Some(_)) => {
+            return Err(HostError::conflict(
+                "that document is already attached; use update to take its newer version",
+            ))
+        }
+        (AttachMode::Update, None) => {
+            return Err(HostError::conflict(
+                "that document is not attached; attach it first",
+            ))
+        }
+        (AttachMode::Update, Some(a)) => {
+            let now = |p: &str| {
+                source
+                    .clan()
+                    .read_entry(p)
+                    .ok()
+                    .map(|b| clan_sdk::hash::sha256_prefixed(&b))
+            };
+            let same = now(DATA).as_deref() == Some(a.carried.data_sha256.as_str())
+                && now(FACTS.path) == a.carried.facts_sha256
+                && now(SOURCES.path) == a.carried.sources_sha256;
+            if same {
+                return Err(HostError::conflict(
+                    "nothing has changed in it since it was attached",
+                ));
+            }
+        }
+        _ => {}
+    }
+    let out = clan_sdk::attach(doc.clan(), source.clan())?;
+    let bytes = with_projection(out.bytes)?;
+    let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
+    let after = ClanFile::from_bytes(bytes.clone())?;
+    let mut change = doc.change(bytes)?;
+    change.decisions = new_decisions(doc.clan(), &after);
+    let decision = chain_of(&after)
+        .decisions
+        .iter()
+        .find(|d| d.agent == clan_sdk::ATTACH_AGENT && d.action != "seed")
+        .and_then(|d| d.id.clone());
+    change.events.push(crate::event::HostEvent::DataChanged(
+        serde_json::json!({ "ok": true, "source": "attach", "decision": decision }),
+    ));
+    let verb = match out.verb {
+        clan_sdk::AttachVerb::Attached => "attached",
+        clan_sdk::AttachVerb::Updated => "updated",
+        clan_sdk::AttachVerb::Replaced => "replaced",
+    };
+    let reply = serde_json::json!({
+        "ok": true, "verb": verb, "decision": decision,
+        "attached": out.record, "seeded": out.seeded, "kept": out.kept,
+        "carried_decisions": out.carried_decisions,
+    });
+    Ok((change, reply))
+}
+
+/// The change that detaches the document of `app_id` from `doc`.
+pub fn detach_change(ctx: &Ctx, doc: &Document, app_id: &str) -> HostResult<(Change, Value)> {
+    if !ctx.actor.is_human() {
+        return Err(HostError::new(
+            403,
+            format!(
+                "only a person can detach a document; {} is not one",
+                ctx.actor
+            ),
+        ));
+    }
+    if let Some(e) = locked_error(doc.clan()) {
+        return Err(e);
+    }
+    let out =
+        clan_sdk::detach(doc.clan(), app_id).map_err(|e| HostError::conflict(e.to_string()))?;
+    let bytes = with_projection(out.bytes)?;
+    let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
+    let after = ClanFile::from_bytes(bytes.clone())?;
+    let mut change = doc.change(bytes)?;
+    change.decisions = new_decisions(doc.clan(), &after);
+    let decision = change.decisions.first().and_then(|d| d.id.clone());
+    change.events.push(crate::event::HostEvent::DataChanged(
+        serde_json::json!({ "ok": true, "source": "detach", "decision": decision }),
+    ));
+    let reply = serde_json::json!({
+        "ok": true, "decision": decision, "detached": out.record, "unseeded": out.unseeded,
+    });
+    Ok((change, reply))
 }
 
 // ── The home page, as a CLAN file ───────────────────────────────────────────
