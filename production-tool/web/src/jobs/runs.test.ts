@@ -301,6 +301,26 @@ describe('end frames', () => {
     expect(input.clips!.map((c) => [c.fit, c.transition, c.inS])).toEqual([['speed', undefined, undefined], [undefined, { kind: 'continue' }, undefined]])
   })
 
+  it('a landing clip is used up to the frame where it reached its last frame (landS), retimed into its slot', async () => {
+    const a = film([3.2, 4])
+    const d = structuredClone(a.store.get())
+    const next = d.shots[a.shots[1].id].pick!.current
+    // veo3.1_fast live (2026-10-19): 97 frames, the given last frame reached at frame 89, overshot after it.
+    const landing = { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'veo3.1_fast', kind: 'generated',
+      outputs: [{ sha256: SHA('a'), durationS: 4.042 }], landS: 3.708, landScore: 0.954 }
+    const t = applyTake(d, landing as unknown as Job, { shotId: a.shots[0].id, endFrameId: next })!
+    expect(t.end).toEqual({ kind: 'next_storyboard', frame_id: next, at_s: 3.708, score: 0.954 })
+    applyTake(d, { jobId: 'job_2', op: 'clip', provider: 'runway', model: 'veo3.1_fast', kind: 'generated', outputs: [{ sha256: SHA('b'), durationS: 4 }] } as unknown as Job, { shotId: a.shots[1].id })
+    const { input } = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
+    // outS is the landing frame's end (landS plus one 24 fps frame): it is the last frame shown, nothing after it.
+    expect(input.clips![0]).toMatchObject({ trimS: 3.2, outS: 3.75, fit: 'speed' })
+    expect(input.clips![1].outS).toBeUndefined()
+    // A person's out point on the cut still wins.
+    Object.values(d.videos[a.videoId].edl).find((x) => x.shot_id === a.shots[0].id)!.out_s = 3.5
+    const again = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
+    expect(again.input.clips![0].outS).toBe(3.5)
+  })
+
   it('a changed landing frame is a quiet note on the clip before it, not a mark, and nothing cascades', () => {
     const a = film([4, 4])
     const d = structuredClone(a.store.get())

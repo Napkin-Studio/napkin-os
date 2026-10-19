@@ -129,6 +129,11 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
     // It ends on the next shot's frame (features/connected-video.clan): stitch retimes it whole.
     ...(ctx.endFrameId ? { end: { kind: 'next_storyboard' as const, frame_id: ctx.endFrameId } } : {}),
   }
+  // Where it really reached its last frame (the relay's landS): models get there early and carry on past it, so
+  // the take is used up to that frame. A take's window of its own take (Remake just this shot) lands the same way.
+  if (job.landS !== undefined) {
+    take.end = { ...(take.end ?? { kind: 'none' as const }), at_s: job.landS, ...(job.landScore !== undefined ? { score: job.landScore } : {}) }
+  }
   // Its level and size (features/clip-quality.clan): what the relay ran, or for an edit that keeps the clip's
   // size, its source take's.
   const parent = ctx.parentTakeId ? d.takes[ctx.parentTakeId] : undefined

@@ -536,6 +536,11 @@ export class MockRelay implements Relay {
     if (item.done?.state === 'completed' && req.op === 'clip' && (req.input.mode === 'take' || req.input.mode === 'take_refs')) {
       job.cuts = mockCuts(req.input)
     }
+    // A clip made to end on a frame lands on it (the relay's land stage): the mock's last frame, one before its end.
+    const landed = job.outputs?.[0]?.durationS
+    if (item.done?.state === 'completed' && req.op === 'clip' && (req.input.lastFrame || (req.input.window && 'withLast' in req.input.window && req.input.window.withLast)) && landed) {
+      job.landS = Math.round((landed - 1 / 24) * 1000) / 1000
+    }
     if (item.done?.shots) job.shots = item.done.shots
     if (item.done?.writes) job.writes = item.done.writes
     if (item.done?.error) job.error = item.done.error

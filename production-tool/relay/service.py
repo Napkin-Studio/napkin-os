@@ -2384,8 +2384,57 @@ class Relay:
             log.exception("stitch take_cuts invoke failed")  # no result comes: the clock lands the take without
         return self._with_poll(saved)
 
+    def _land_target(self, job: dict) -> dict | None:
+        """The picture a clip was made to end on: its lastFrame, or the still cut for it (a redo window's end)."""
+        last = (job.get("_frames") or {}).get("last") or job["_req"]["input"].get("lastFrame")
+        return last if connected.is_picture(last) else None
+
+    def _landed_at_end(self, job: dict, outputs: list[dict]) -> dict:
+        """Where a clip lands when stitch cannot look: the mock's ends on its last frame (one frame before its end);
+        any other says nothing, and the web keeps the clip's real end."""
+        seconds = outputs[0].get("durationS")
+        if job.get("provider") != "mock" or not seconds:
+            return {}
+        return {"landS": round(max(0.0, float(seconds) - 1 / connected.FRAME_RATE), 3)}
+
+    def _run_land(self, job: dict, outputs: list[dict], cost_usd: float | None) -> dict:
+        """A clip made to end on a given frame has landed: stitch finds the frame of its last second that best
+        matches that frame (splice.py land). Models reach it a few frames early and carry on past it (veo3.1_fast,
+        2026-10-19), so the web ends the clip there (landS) instead of at its real end. The provider's slot is
+        free now; the bill is kept for the landing. Never fails the clip: without a result it lands as made."""
+        kind = "mock" if job["provider"] == "mock" else "generated"
+        key = self.blobs.key_for_url(outputs[0]["url"])
+        target = self.blobs.key_for_url(self._land_target(job)["url"])
+        if self.stitch is None or key is None or target is None or not str(outputs[0].get("mime", "")).startswith("video/"):
+            return self._finish(job, "completed", outputs=outputs, kind=kind, confirmed=cost_usd,
+                                **self._landed_at_end(job, outputs))
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        event = {"jobId": job["jobId"], "mode": "land", "key": key, "targetKey": target,
+                 "searchS": connected.LAND_SEARCH_S, "resultKey": f"{self._scratch(job)}/land.json"}
+        saved = self._save(job, state="submitted", _stage="land", _stageAt=self.clock(), _landed=outputs,
+                           _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception:
+            log.exception("stitch land invoke failed")  # no result comes: the clock lands the clip as made
+        return self._with_poll(saved)
+
     def _advance_connected(self, job: dict, cfg: dict, now: float) -> dict:
         scratch = self._scratch(job)
+        if job["_stage"] == "land":
+            result = self.blobs.get_json(f"{scratch}/land.json")
+            if result is None and now - job["_stageAt"] <= CUT_TIMEOUT_S:
+                return self._with_poll(job)
+            if result and result.get("ok"):
+                found = {"landS": result["landS"], "landScore": result["landScore"]}
+            else:  # the clip stands as made: the web uses its real end
+                log.warning("job %s: land %s", job["jobId"], (result or {}).get("error") or f"no result in {CUT_TIMEOUT_S} s")
+                found = self._landed_at_end(job, job["_landed"])
+            kind = "mock" if job.get("provider") == "mock" else "generated"
+            return self._finish(job, "completed", outputs=job["_landed"], kind=kind, confirmed=job.get("_confirmed"), **found)
         if job["_stage"] == "stills":
             result = self.blobs.get_json(f"{scratch}/stills.json")
             if result is None:
@@ -2481,7 +2530,7 @@ class Relay:
             return self._advance_stitch(job, cfg, now)
         if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
             return self._advance_patch(job, cfg, now)
-        if job["op"] == "clip" and job.get("_stage") in ("stills", "take_cuts"):
+        if job["op"] == "clip" and job.get("_stage") in ("stills", "take_cuts", "land"):
             return self._advance_connected(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
             # Past its time, but the provider may have finished it while nobody polled (the local relay
@@ -2584,6 +2633,8 @@ class Relay:
             return self._land_delivery(claimed, outputs[0], st.cost_usd)
         if job["op"] == "clip" and connected.mode_of(job["_req"]["input"]) in connected.TAKE_MODES:
             return self._run_take_cuts(claimed, outputs, st.cost_usd)  # where the take cut, before it lands
+        if job["op"] == "clip" and self._land_target(job):
+            return self._run_land(claimed, outputs, st.cost_usd)  # where it reached its last frame, before it lands
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(claimed, "completed", outputs=outputs, kind=kind, confirmed=st.cost_usd)
 
@@ -2651,7 +2702,7 @@ class Relay:
             return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the model's work is done and billed
         if state == "submitted" and job["op"] == "clip" and job.get("_stage") == "stills":
             return self._finish(job, "cancelled", paid=False, refund=True)  # only our own cut ran: nothing to pay
-        if state == "submitted" and job["op"] == "clip" and job.get("_stage") == "take_cuts":
+        if state == "submitted" and job["op"] == "clip" and job.get("_stage") in ("take_cuts", "land"):
             return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the take is made and billed
         if state in ("submitted", "uncertain"):
             if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back

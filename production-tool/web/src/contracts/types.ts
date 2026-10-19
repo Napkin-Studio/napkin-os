@@ -627,7 +627,14 @@ export interface Frame extends EntityBase {
  *  whose window starts on the pinned frame. */
 export interface TakeSegment { source_take: Id; in_s: number; out_s: number; job_id?: Id; by?: 'prompt' | 'detected' | 'human' }
 /** Where a take ends: on the next shot's storyboard frame (frame_id, the version it was sent), or nowhere given. */
-export interface TakeEnd { kind: 'next_storyboard' | 'none'; frame_id?: Id }
+export interface TakeEnd {
+  kind: 'next_storyboard' | 'none'
+  frame_id?: Id
+  /** Where the take reached that frame (the job's landS): it is used up to that frame, retimed into its slot. */
+  at_s?: number
+  /** That frame's SSIM against the one given (the job's landScore). */
+  score?: number
+}
 export interface Take extends EntityBase {
   shot_id: Id
   version: number
@@ -1168,6 +1175,10 @@ export interface Job {
   patch?: JobPatch
   /** clip, a take: where its cuts landed (features/connected-video.clan). */
   cuts?: TakeCut[]
+  /** clip made to end on a given frame: the time of its frame that best matches that frame (the relay's land
+   *  stage; the model reaches it early and carries on past it), and that frame's SSIM. */
+  landS?: number
+  landScore?: number
   /** resize only: how the size was made. */
   resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
   /** cutdown step plan only. */

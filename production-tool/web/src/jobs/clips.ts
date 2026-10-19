@@ -254,7 +254,10 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoI
     const item = video ? edlItemFor(d, s.id, video.id) : undefined
     const seg = t.segments?.[0]
     const inS = seg ? seg.in_s : item?.in_s
-    const outS = seg ? seg.out_s : item?.out_s
+    // A landed take ends on its landing frame, the frame at end.at_s included (the relay's landS), unless its
+    // window or the cut's out point says otherwise.
+    const landed = t.end?.at_s !== undefined ? Math.round((t.end.at_s + FRAME_S) * 1000) / 1000 : undefined
+    const outS = seg ? seg.out_s : (item?.out_s ?? landed)
     const transition = joinInto(item?.seam, !!before && endFramed(d, before))
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
     // trimmed to its shot: the ad is the sum of the shots plus the end card (END_CARD_S).
@@ -292,6 +295,8 @@ export async function renderAd(deps: FrameDeps, opts: { followRun?: string; vide
 
 /** The end card the stitch adds after the clips: the 2.5 s roll-up card (stitch.py CARD_S). */
 export const END_CARD_S = 2.5
+/** One frame of the stitch's 24 fps: a landed take is used up to and including its landing frame (end.at_s). */
+const FRAME_S = 1 / 24
 
 /** How long the rendered ad is: the shots' lengths plus the end card. */
 export function adLengthS(shots: Pick<Shot, 'duration_s'>[]): number {

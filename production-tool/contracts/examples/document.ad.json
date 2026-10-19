@@ -1020,7 +1020,9 @@
       "segments": [],
       "end": {
         "kind": "next_storyboard",
-        "frame_id": "frame_01K7A00000000000000000001X"
+        "frame_id": "frame_01K7A00000000000000000001X",
+        "at_s": 3.708,
+        "score": 0.954
       }
     },
     "take_01K7A000000000000000000025": {

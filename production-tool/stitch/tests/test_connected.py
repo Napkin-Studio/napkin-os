@@ -173,3 +173,64 @@ def test_the_shared_frame_shows_once_and_the_ad_keeps_its_length(tmp_path):
     assert frames_of(store["ads/x.mp4"], tmp_path) == round((2 + stitch.CARD_S) * FPS)
     assert reds(store["ads/x.mp4"], tmp_path) == [24]  # once, as b's first frame
     assert res["seams"][0]["kind"] == "cut" and res["seams"][0]["at_s"] == 1.0
+
+
+# ── land: where a clip made to end on a frame really reached it ──────────────
+
+def run_land(tmp_path: Path, key: str, target: str, **more) -> dict:
+    store: dict = {}
+    res = stitch.run({"jobId": "j", "mode": "land", "key": key, "targetKey": target, "resultKey": "land.json", **more},
+                     get=lambda k, dest: shutil.copy(tmp_path / k, dest), put=lambda *a: None,
+                     put_json=lambda k, d: store.__setitem__(k, d), ffmpeg="ffmpeg", ffprobe="ffprobe")
+    assert store["land.json"] == res
+    return res
+
+
+@needs_ffmpeg
+def test_land_finds_the_frame_that_matches_the_last_frame_before_the_clip_overshoots(tmp_path):
+    # Like veo3.1_fast live (2026-10-19): 97 frames at 24 fps, the given last frame reached at 3.7 s (frame 89),
+    # then the picture carries on moving past it to the end.
+    ff("-f", "lavfi", "-i", f"testsrc2=s=640x360:r={FPS}", "-frames:v", "97", "-c:v", "libx264", "-preset", "veryfast",
+       "-crf", "12", "-pix_fmt", "yuv420p", str(tmp_path / "clip.mp4"))
+    ff("-i", str(tmp_path / "clip.mp4"), "-vf", "select=eq(n\\,89)", "-frames:v", "1", str(tmp_path / "target.png"))
+    res = run_land(tmp_path, "clip.mp4", "target.png", searchS=1.0)
+    assert res["ok"], res
+    assert abs(res["landS"] - 3.7) <= 1 / FPS + 1e-6, res
+    assert res["landScore"] > 0.9 and res["takeS"] == pytest.approx(97 / FPS, abs=1e-3)
+
+
+@needs_ffmpeg
+def test_land_returns_its_best_frame_however_low_and_searches_at_most_a_second(tmp_path):
+    ff("-f", "lavfi", "-i", f"testsrc2=s=640x360:r={FPS}", "-frames:v", "97", "-c:v", "libx264", "-preset", "veryfast",
+       "-pix_fmt", "yuv420p", str(tmp_path / "clip.mp4"))
+    ff("-f", "lavfi", "-i", "color=c=red:s=320x180", "-frames:v", "1", str(tmp_path / "red.png"))
+    res = run_land(tmp_path, "clip.mp4", "red.png", searchS=5)
+    assert res["ok"] and res["landScore"] < 0.85  # nothing like it: still returned, the web decides
+    assert res["landS"] >= (97 - FPS) / FPS - 1e-6  # within the clip's last second, never earlier
+
+
+def test_an_out_point_before_the_end_is_the_window_fit_speed_retimes():
+    # The relay's landS 3.708 (frame 89 of a 4.04 s clip): the web sends outS = landS + a frame, so the landing
+    # frame is the window's last and nothing the model made after it shows.
+    clips = [{"path": "/t/a.mp4", "trimS": 3.2, "outS": 3.75, "fit": "speed"}]
+    stitch.fit_windows(clips, [{"durationS": 97 / 24}])
+    assert clips[0]["speed"] == pytest.approx(3.75 / 3.2)
+    cmd = cmd_for(clips)
+    a = cmd.index("/t/a.mp4")
+    assert cmd[a - 3:a - 1] == ["-t", "3.75"]
+
+
+@needs_ffmpeg
+def test_fit_speed_with_an_out_point_ends_the_slot_on_the_landing_frame(tmp_path):
+    # Blue, the landing frame (red) at frame 89, then the overshoot (green) to frame 96.
+    solid(tmp_path / "landing.mp4", [("blue", 89), ("red", 1), ("green", 7)])
+    solid(tmp_path / "next.mp4", [("blue", 48)])
+    res, store = render(tmp_path, [{"key": "landing.mp4", "trimS": 3.2, "outS": 90 / FPS, "fit": "speed"},
+                                   {"key": "next.mp4", "trimS": 2}])
+    assert res["ok"], res
+    assert frames_of(store["ads/x.mp4"], tmp_path) == round((5.2 + stitch.CARD_S) * FPS)
+    assert reds(store["ads/x.mp4"], tmp_path) == [round(3.2 * FPS) - 1]  # the slot ends on the landing frame
+    f = tmp_path / "g.mp4"
+    f.write_bytes(store["ads/x.mp4"])
+    greens = [i for i, (r, g, b) in enumerate(stitch._colour_means("ffmpeg", str(f))) if g > 100 and r < 80 and b < 80]
+    assert all(i >= round(5.2 * FPS) for i in greens)  # no overshoot frame in the ad (the card may have green)

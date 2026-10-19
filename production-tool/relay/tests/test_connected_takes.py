@@ -251,7 +251,51 @@ def test_a_window_is_cut_into_stills_then_made_from_its_first_and_last():
     assert (pj["firstFrame"], pj["lastFrame"], pj["durationS"], pj["model"]) == (first, last, 3, "wan3")
     assert pj["prompt"].startswith("He grips the axe.") and pj["prompt"].endswith(connected.LANDING)
     job = land(h, job)
-    assert job["state"] == "completed" and "cuts" not in job
+    assert job["state"] == "submitted" and h.stitched[-1]["mode"] == "land"
+    assert h.stitched[-1]["targetKey"] == f"{scratch}/last.png"  # the window's own end still
+    job = stitch_result(h, job, "land.json", {"ok": True, "takeS": 3.042, "fps": 24, "landS": 2.708, "landScore": 0.97})
+    assert job["state"] == "completed" and "cuts" not in job and (job["landS"], job["landScore"]) == (2.708, 0.97)
+
+
+# ── land: where a clip really reached its last frame ───────────────────────
+def test_a_landing_clip_goes_to_the_land_stage_and_lands_with_where_it_reached_the_frame():
+    h = harness()
+    job = post(h, {"image": FRAME, "lastFrame": NEXT, "ratio": "16:9", "shot": SHOTS[1]}, pick={"provider": "runway", "model": "veo3.1_fast"})
+    job = land(h, job)
+    assert job["state"] == "submitted" and "landS" not in job
+    event = h.stitched[-1]
+    assert event == {"jobId": job["jobId"], "mode": "land", "key": event["key"], "targetKey": f"in/{NEXT['sha256']}",
+                     "searchS": 1.0, "resultKey": f"ads/scratch/{job['jobId']}/land.json"}
+    assert event["key"].startswith("out/sha256:")
+    assert h.store.counters("slots#runway#video").get("n") == 0  # the provider's slot is free while it looks
+    job = stitch_result(h, job, "land.json", {"ok": True, "takeS": 4.042, "fps": 24, "landS": 3.708, "landScore": 0.954})
+    assert job["state"] == "completed" and (job["landS"], job["landScore"]) == (3.708, 0.954)
+    assert job["cost"]["confirmed"] == 0.9
+
+
+def test_a_low_landing_score_is_still_returned_and_a_failed_look_lands_as_made():
+    h = harness()
+    job = land(h, post(h, {"image": FRAME, "lastFrame": NEXT, "ratio": "16:9", "shot": SHOTS[1]}))
+    job = stitch_result(h, job, "land.json", {"ok": True, "takeS": 4, "fps": 24, "landS": 3.0, "landScore": 0.41})
+    assert (job["state"], job["landS"], job["landScore"]) == ("completed", 3.0, 0.41)
+    h2 = harness()
+    job = land(h2, post(h2, {"image": FRAME, "lastFrame": NEXT, "ratio": "16:9", "shot": SHOTS[1]}))
+    job = stitch_result(h2, job, "land.json", {"ok": False, "error": "Could not find where the clip lands."})
+    assert job["state"] == "completed" and "landS" not in job and "landScore" not in job
+
+
+def test_a_clip_with_no_last_frame_has_no_land_stage():
+    h = harness()
+    job = land(h, post(h, {"image": FRAME, "ratio": "16:9", "shot": SHOTS[1]}, pick=None))
+    assert job["state"] == "completed" and "landS" not in job and h.stitched == []
+
+
+def test_the_mock_lands_one_frame_before_its_end_when_stitch_cannot_look():
+    h = Harness(config(), providers=("mock", "runway"))
+    h.relay.stitch = None
+    job = {"provider": "mock", "jobId": "job_x"}
+    assert h.relay._landed_at_end(job, [{"durationS": 1.0}]) == {"landS": 0.958}
+    assert h.relay._landed_at_end({**job, "provider": "runway"}, [{"durationS": 4.0}]) == {}
 
 
 def test_a_window_without_the_last_frame_starts_on_its_first_still_only():
