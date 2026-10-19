@@ -285,7 +285,160 @@
                   "window",
                   "atS",
                   "text"
+                ],
+                "properties": {
+                  "window": {
+                    "required": [
+                      "from_s",
+                      "to_s"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "not": {
+                  "const": "clip"
+                }
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "mode"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "lastFrame"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "cuts"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "clip"
+              },
+              "input": {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "take",
+                      "take_refs"
+                    ]
+                  }
+                },
+                "required": [
+                  "mode"
                 ]
+              }
+            },
+            "required": [
+              "op",
+              "input"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "required": [
+                  "shots"
+                ],
+                "properties": {
+                  "shots": {
+                    "minItems": 2,
+                    "maxItems": 12
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "input": {
+                "not": {
+                  "required": [
+                    "cuts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "clip"
+              },
+              "input": {
+                "properties": {
+                  "mode": {
+                    "const": "redo_window"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              }
+            },
+            "required": [
+              "op",
+              "input"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "required": [
+                  "window",
+                  "shot"
+                ],
+                "properties": {
+                  "window": {
+                    "required": [
+                      "source"
+                    ]
+                  }
+                },
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "image"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "lastFrame"
+                      ]
+                    }
+                  ]
+                }
               }
             }
           }
@@ -644,11 +797,12 @@
               },
               "transition": {
                 "type": "object",
-                "description": "The join into this clip from the one before (features/connected-video.clan). Absent: a cut. A dissolve or dip overlaps the clips by s seconds, taken from the outgoing clip's out-handle, so the ad keeps its length. Ignored on the first clip.",
+                "description": "The join into this clip from the one before (features/connected-video.clan). Absent: a cut. A dissolve or dip overlaps the clips by s seconds, taken from the outgoing clip's out-handle, so the ad keeps its length. continue: a cut where the outgoing clip lands on this clip's first frame (a frames or landing join), so the outgoing clip's window ends one frame early and the shared frame shows once (s is ignored). Ignored on the first clip.",
                 "properties": {
                   "kind": {
                     "enum": [
                       "cut",
+                      "continue",
                       "dissolve",
                       "dip"
                     ]
@@ -663,6 +817,13 @@
                   "kind"
                 ],
                 "additionalProperties": false
+              },
+              "fit": {
+                "enum": [
+                  "trim",
+                  "speed"
+                ],
+                "description": "How the clip fills its slot (features/connected-video.clan). trim (absent): cut from inS to the slot's length, held on its last frame when shorter. speed: the whole window (inS to outS, else to the clip's end) retimed to the slot, so an end-framed clip keeps its landing frame; at most 1.33 times faster or slower, else stitch trims it and logs why."
               },
               "endCard": {
                 "type": "boolean"
@@ -689,7 +850,7 @@
           "items": {
             "$ref": "#/$defs/JobShot"
           },
-          "description": "shot_list when re-planning: the storyboard's shots as they are, so planning is a merge keyed by shot id."
+          "description": "shot_list when re-planning: the storyboard's shots as they are, so planning is a merge keyed by shot id. clip with mode take or take_refs: the run's shots in order, whose duration_s add up to the take's length (features/connected-video.clan)."
         },
         "ratio": {
           "$ref": "common.schema.json#/$defs/ratio"
@@ -737,23 +898,93 @@
           }
         },
         "window": {
-          "type": "object",
-          "description": "clip_patch: the note's window in whole seconds of TAKE time (clan-store noteToTakeWindow maps a shot-time note onto the take): only these seconds are regenerated, the rest of the take is kept. At least 2 s wide.",
-          "properties": {
-            "from_s": {
-              "type": "integer",
-              "minimum": 0
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "clip_patch: the note's window in whole seconds of TAKE time (clan-store noteToTakeWindow maps a shot-time note onto the take): only these seconds are regenerated, the rest of the take is kept. At least 2 s wide.",
+              "properties": {
+                "from_s": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_s": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "from_s",
+                "to_s"
+              ],
+              "additionalProperties": false
             },
-            "to_s": {
-              "type": "integer",
-              "minimum": 1
+            {
+              "type": "object",
+              "description": "clip with mode redo_window (Remake just this shot, features/connected-video.clan): one shot's window of a take (source, the take's video) made again as a first+last clip. The relay cuts the stills at inS and, with withLast, at outS (stitch's cut), and the new clip starts on the first and lands on the last; withLast false (the next join is not a continue) makes it from the first still only. Its length is outS - inS, fitted to the model.",
+              "properties": {
+                "source": {
+                  "$ref": "common.schema.json#/$defs/assetRef"
+                },
+                "inS": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "outS": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "withLast": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "source",
+                "inS",
+                "outS",
+                "withLast"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "from_s",
-            "to_s"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "take",
+            "take_refs",
+            "frames",
+            "alone",
+            "redo_window"
           ],
-          "additionalProperties": false
+          "description": "clip (features/connected-video.clan, behind flags.connectedVideo): how the clip joins the film, as the web's run planner chose. take: one generation over the run's shots (input.shots, 2 to the model's video.take.maxShots, together at most take.maxS), pinned on the first shot's frame (input.image), no refs, a timed 'Shot k [a-b s]' prompt; the job's cuts say where the model cut. take_refs: the same with no frame, the storyboard frames and named pictures as references in beat order, up to refs.max. frames: one shot from its own frame, landing on input.lastFrame when given. alone: today's clip, no last frame. redo_window: one shot's window of a take made again (input.window). Absent: alone, or frames when lastFrame is given."
+        },
+        "lastFrame": {
+          "$ref": "#/$defs/KeyframeRef",
+          "description": "clip (features/connected-video.clan, behind flags.connectedVideo): the frame the clip lands on (Runway promptImage position last): the next shot's storyboard frame on a continue join. Refused (400) on a model whose sheet has no video.lastFrame, on a take unless video.take.withLast, and with mode alone or take_refs."
+        },
+        "cuts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "description": "clip with mode take or take_refs (features/connected-video.clan): the take's shots as its prompt times them, one per input.shots item in order. atS: where the shot starts in the take (the first 0, then strictly later, before the take's end); text: its line after 'Shot k [a-b s]'. Absent: the relay times them from the shots' duration_s (the take's whole-second slack goes to the heads of the shots after the first) and uses each shot's action.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "atS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 600
+              }
+            },
+            "required": [
+              "atS",
+              "text"
+            ],
+            "additionalProperties": false
+          }
         },
         "still": {
           "$ref": "common.schema.json#/$defs/assetRef",
@@ -1363,6 +1594,32 @@
             "previewPx"
           ],
           "additionalProperties": false
+        },
+        "cuts": {
+          "type": "array",
+          "maxItems": 11,
+          "description": "clip with mode take or take_refs (features/connected-video.clan): where the take cuts from one shot to the next, one per shot after the first. planned_s: the start the prompt gave the shot, in take time. found_s: the strongest scene change within video.take.cutAccuracyS (at most 1 s) of it at ffmpeg's scene threshold 0.10 (the relay's take_cuts stage), or null when none was found (or the take could not be read): use planned_s then.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "planned_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "found_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "planned_s",
+              "found_s"
+            ],
+            "additionalProperties": false
+          }
         },
         "patch": {
           "type": "object",
@@ -2071,6 +2328,31 @@
       },
       "required": ["target", "base_hash", "lines", "note"],
       "additionalProperties": false
+    },
+    "KeyframeRef": {
+      "description": "A frame a clip starts or lands on (features/connected-video.clan): a picture (an assetRef: a storyboard frame), or the frame at atS seconds of a video (asset: a take), which the relay cuts as a lossless still before the clip is made.",
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/assetRef"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "asset": {
+              "$ref": "common.schema.json#/$defs/assetRef"
+            },
+            "atS": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "asset",
+            "atS"
+          ],
+          "additionalProperties": false
+        }
+      ]
     },
     "JobShot": {
       "type": "object",

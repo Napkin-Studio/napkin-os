@@ -84,7 +84,8 @@
   "video": {
     "firstFrameWithRefs": true,
     "lastFrame": true,
-    "multiShot": true,
+    "lastFrameFidelity": "tight",
+    "take": {"ok": true, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": 0.05, "field": "prompt"},
     "regionEdit": "mask",
     "feelEdit": "strength",
     "audioDefault": false,

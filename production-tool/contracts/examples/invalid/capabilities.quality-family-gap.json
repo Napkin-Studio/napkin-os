@@ -155,7 +155,6 @@
   "video": {
     "firstFrameWithRefs": true,
     "lastFrame": true,
-    "multiShot": true,
     "regionEdit": "mask",
     "feelEdit": "strength",
     "audioDefault": false,

@@ -1,0 +1,52 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7G00000000000000000FR01",
+  "op": "clip",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_frames0001",
+  "purpose": "shot 2, landing on shot 3's frame",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [],
+  "input": {
+    "image": {
+      "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url": "https://cdn.napkin.test/out/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mime": "image/png"
+    },
+    "lastFrame": {
+      "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "url": "https://cdn.napkin.test/out/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mime": "image/png"
+    },
+    "ratio": "16:9",
+    "mode": "frames",
+    "shot": {
+      "id": "shot_01K7B00000000000000000SH02",
+      "kind": "shot",
+      "duration_s": 4,
+      "camera": {
+        "size": "close",
+        "movement": "static"
+      },
+      "action": "He grips the axe and lifts it.",
+      "refs": []
+    },
+    "cuts": [
+      {
+        "atS": 0,
+        "text": "Wide: he looks out over the sea."
+      },
+      {
+        "atS": 3,
+        "text": "Close: his hand grips the axe."
+      },
+      {
+        "atS": 6,
+        "text": "He turns and walks inland."
+      }
+    ]
+  }
+}
