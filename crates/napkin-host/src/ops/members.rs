@@ -321,13 +321,6 @@ pub fn projection(
                 entry.insert(k.into(), v.clone());
             }
         }
-        if let Some(fid) = f
-            .get("verification")
-            .and_then(|v| v.get("fact_id"))
-            .filter(|v| !v.is_null())
-        {
-            entry.insert("fact_id".into(), fid.clone());
-        }
         found.insert(id.to_string(), Value::Object(entry));
     }
 

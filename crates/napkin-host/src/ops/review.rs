@@ -12,11 +12,14 @@
 //! and whatever the decision changes in the document — a finding's status, a
 //! contest's choice, a pin — in the same generation.
 //!
-//! What stays out: the knowledge layer. Verifying a finding writes it to the
-//! layer as a synthesis fact, which only the middleware can do; the route
-//! asks the middleware first ([`verify_request`]) and hands what it wrote to
-//! [`verify_finding`], which pins it. A classify mark is recorded here; taking
-//! it to the layer's licence (C4) is the middleware's, and not built yet.
+//! What stays out: the knowledge layers. A review changes only the document
+//! (owner's rule, 2026-10-19): verifying a finding, marking a fact right or
+//! wrong and correcting a fact are recorded here, with who and when, and the
+//! layers learn from them only once the client has accepted the work. What
+//! rests on a reviewed item is brought in step afterwards by the middleware's
+//! `reconsider` job, which the app starts. A classify mark is recorded here;
+//! taking it to the layer's licence (C4) is the middleware's, and not built
+//! yet.
 //!
 //! Only a person decides these. A process acting for one uses the middleware.
 
@@ -49,7 +52,7 @@ pub const SET_ASIDE: &str = "set_aside";
 
 /// `POST /verdict`: a field is good or bad. On a finding, bad is its
 /// rejection (Contract 3 §6.3); good is not accepted there — a finding is
-/// verified with `/verify`, which writes it to the layer.
+/// verified with `/verify`. On a pin, it is also the pin's `review`.
 #[derive(Debug, Clone)]
 pub struct Verdict {
     pub target: String,
@@ -538,7 +541,7 @@ pub fn verdict(ctx: &Ctx, doc: &Document, input: Verdict) -> HostResult<Outcome>
     if let Some(id) = keyed(&aim.path, "findings") {
         if input.polarity == "good" {
             return Err(HostError::bad_request(
-                "a finding is not marked good: verify it, so it is written to the layer as reviewed",
+                "a finding is not marked good: verify it, so it is recorded as checked",
             ));
         }
         // Rejection (Contract 3 §6.3): the finding stays, struck, with why.
@@ -597,6 +600,22 @@ pub fn verdict(ctx: &Ctx, doc: &Document, input: Verdict) -> HostResult<Outcome>
     );
     d.polarity = Some(input.polarity.clone());
     d.reason_code = input.reason_code;
+    // On a pin, the mark is the pin's review too: who said it is right or
+    // wrong, and when. Taking a wrong one out of what the document stands on
+    // is the reconsider job's, with everything that rests on it.
+    if let Some(id) = keyed(&aim.path, "facts") {
+        let i = m
+            .facts
+            .iter()
+            .position(|e| members::entry_id(e) == Some(id))
+            .ok_or_else(|| HostError::not_found(format!("fact {id} is not in this document")))?;
+        let mut f = to_json(&m.facts[i]);
+        f["review"] = serde_json::json!({
+            "verdict": if input.polarity == "good" { "verified" } else { "rejected" },
+            "by": who, "at": now, "decision": d.id,
+        });
+        m.facts[i] = to_yaml(&f)?;
+    }
     commit(doc, data, m, d, "a verdict", &now)
 }
 
@@ -832,35 +851,10 @@ pub fn resolve(ctx: &Ctx, doc: &Document, input: Resolve) -> HostResult<Outcome>
     )
 }
 
-/// What the middleware is asked before a finding is verified: the finding,
-/// who verifies it, and the id the decision will carry, so the layer fact and
-/// the document's decision name the same one. Refuses anything the host would
-/// refuse afterwards, so the layer is not written for nothing.
-pub fn verify_request(ctx: &Ctx, doc: &Document, finding: &str) -> HostResult<Value> {
-    let who = person(ctx, "verify a finding")?;
-    not_locked(doc)?;
-    let findings = members::read_list(doc.clan(), FINDINGS)?;
-    let f = to_json(&findings[finding_index(&findings, finding)?]);
-    still_proposed(&f, finding)?;
-    Ok(serde_json::json!({
-        "task": "verify_finding",
-        "input": { "finding": finding, "by": who, "decision_id": new_decision_id() },
-    }))
-}
-
-/// Verify a finding, given the synthesis fact the middleware wrote to the
-/// layer for it (`pin`, as the facts member holds pins): the finding becomes
-/// `verified` with its `verification`, the fact is pinned, and one `verify`
-/// decision — the id the layer was given — records it.
-pub fn verify_finding(
-    ctx: &Ctx,
-    doc: &Document,
-    finding: &str,
-    rationale: &str,
-    decision_id: &str,
-    pin: &Value,
-    source: Option<&str>,
-) -> HostResult<Outcome> {
+/// Verify a finding (Contract 3 §6.2): a person says it is right. The finding
+/// becomes `verified`, its `verification` naming the decision, who and when,
+/// and one `verify` decision records it. Nothing is written to the layers.
+pub fn verify(ctx: &Ctx, doc: &Document, finding: &str, rationale: &str) -> HostResult<Outcome> {
     let who = person(ctx, "verify a finding")?;
     not_locked(doc)?;
     let clan = doc.clan();
@@ -870,49 +864,6 @@ pub fn verify_finding(
     let i = finding_index(&m.findings, finding)?;
     let mut f = to_json(&m.findings[i]);
     still_proposed(&f, finding)?;
-
-    let fact_id = pin
-        .get("id")
-        .and_then(Value::as_str)
-        .filter(|s| s.starts_with("f_"))
-        .ok_or_else(|| HostError::new(502, "the middleware's synthesis fact has no f_ id"))?
-        .to_string();
-    if pin.get("method").and_then(Value::as_str) != Some("synthesis") {
-        return Err(HostError::new(
-            502,
-            "the middleware's fact is not a synthesis",
-        ));
-    }
-    if pin.get("decision").and_then(Value::as_str) != Some(decision_id) {
-        return Err(HostError::new(
-            502,
-            "the middleware's fact names another decision than the verification",
-        ));
-    }
-    if m.facts
-        .iter()
-        .any(|e| members::entry_id(e) == Some(fact_id.as_str()))
-    {
-        return Err(HostError::conflict(format!("{fact_id} is already pinned")));
-    }
-    m.facts.push(to_yaml(pin)?);
-    // The person is the pin's source: the document carries that record too,
-    // so the pin's evidence reads "verified by <you>", not a missing source.
-    if let Some(src) = source.filter(|s| s.starts_with("src_")) {
-        if !m.sources.iter().any(|e| members::entry_id(e) == Some(src)) {
-            m.sources.push(to_yaml(&serde_json::json!({
-                "id": src, "uri": who, "title": "Verified in this document",
-                "publisher": who.trim_start_matches("human:"), "tier": "reviewer-verified",
-                "retrieved_at": now.get(..10).unwrap_or_default(),
-                "licence": pin.get("licence").cloned().unwrap_or_else(|| "open".into()),
-            }))?);
-        }
-    }
-
-    f["status"] = "verified".into();
-    f["verification"] = serde_json::json!({
-        "decision": decision_id, "by": who, "at": now, "fact_id": fact_id,
-    });
     let cites: Vec<String> = f
         .get("cites")
         .and_then(Value::as_array)
@@ -920,17 +871,12 @@ pub fn verify_finding(
         .flatten()
         .filter_map(|c| c.as_str().map(String::from))
         .collect();
-    m.findings[i] = to_yaml(&f)?;
-
-    let mut d = decided(
+    let d = decided(
         ctx,
         &who,
         "verify",
         "verify_finding",
-        vec![
-            address(&doc_id, &format!("findings[{finding}]")),
-            address(&doc_id, &format!("facts[{fact_id}]")),
-        ],
+        vec![address(&doc_id, &format!("findings[{finding}]"))],
         cites,
         if rationale.is_empty() {
             "Verified by a person.".to_string()
@@ -939,7 +885,9 @@ pub fn verify_finding(
         },
         &now,
     );
-    d.id = Some(decision_id.to_string());
+    f["status"] = "verified".into();
+    f["verification"] = serde_json::json!({ "decision": d.id, "by": who, "at": now });
+    m.findings[i] = to_yaml(&f)?;
     commit(doc, data_of(clan)?, m, d, "a finding verified", &now)
 }
 
@@ -965,7 +913,7 @@ pub fn acknowledge(ctx: &Ctx, doc: &Document, input: &(String, String)) -> HostR
         .ok_or_else(|| HostError::not_found(format!("decision {id} is not in this document")))?;
     if d.kind.as_deref() == Some("finding") {
         return Err(HostError::bad_request(
-            "a finding is not accepted here: verify it, so it is written to the layer as reviewed",
+            "a finding is not accepted here: verify it, so it is recorded as checked",
         ));
     }
     let clan = doc.clan();
@@ -1503,8 +1451,7 @@ pub fn edit_text(ctx: &Ctx, doc: &Document, input: TextEdit) -> HostResult<Outco
     commit(doc, data_of(clan)?, m, d, "a person's wording", &now)
 }
 
-/// `POST /correct`: `{fact, value, source_uri?, rationale}` — asked of the
-/// middleware first, as `/verify` is.
+/// `POST /correct`: `{fact, value, source_uri?, rationale}`.
 pub fn parse_correct(raw: &str) -> HostResult<(String, Value, String, String)> {
     let v = body(raw)?;
     let value = v
@@ -1522,68 +1469,30 @@ pub fn parse_correct(raw: &str) -> HostResult<(String, Value, String, String)> {
     ))
 }
 
-/// What the middleware is asked before a fact is corrected: the fact, the
-/// value, where it comes from, who says so, and the decision id to record.
-pub fn correct_request(
+/// Correct a fact: a person gives the right value. It becomes a new pin of
+/// this document — same entity, key and market, the person's value, true as
+/// of today, the person its source — and the old pin stays, marked
+/// `replaced_by`, so every decision citing it still resolves. One pinned
+/// `edit` decision records it, with the person's note. The new pin is in no
+/// layer: it has no `origin`, and reaches the layers only through the harvest
+/// of work the client accepted.
+pub fn correct(
     ctx: &Ctx,
     doc: &Document,
     input: &(String, Value, String, String),
-) -> HostResult<Value> {
-    let (fact, value, source_uri, rationale) = input;
-    let who = person(ctx, "correct a fact")?;
-    not_locked(doc)?;
-    let facts = members::read_list(doc.clan(), FACTS)?;
-    let f = facts
-        .iter()
-        .map(to_json)
-        .find(|f| f.get("id").and_then(Value::as_str) == Some(fact.as_str()))
-        .ok_or_else(|| HostError::not_found(format!("fact {fact} is not in this document")))?;
-    if f.get("replaced_by").is_some() {
-        return Err(HostError::conflict(format!(
-            "fact {fact} has already been replaced"
-        )));
-    }
-    Ok(serde_json::json!({
-        "task": "correct_fact",
-        "input": { "fact": fact, "value": value, "source_uri": source_uri, "note": rationale,
-                   "by": who, "decision_id": new_decision_id() },
-    }))
-}
-
-/// Correct a fact, given the row the middleware wrote to the layer for it
-/// (`pin`) and the person's source record: the pin is added, the old one is
-/// kept and marked `replaced_by`, and one pinned `edit` decision records it.
-pub fn correct_fact(
-    ctx: &Ctx,
-    doc: &Document,
-    fact: &str,
-    rationale: &str,
-    decision_id: &str,
-    pin: &Value,
-    source: Option<&Value>,
 ) -> HostResult<Outcome> {
+    let (fact, raw, source_uri, note) = input;
     let who = person(ctx, "correct a fact")?;
     not_locked(doc)?;
     let clan = doc.clan();
     let doc_id = clan.document_id().to_string();
     let now = now();
+    let today = now.get(..10).unwrap_or_default().to_string();
     let mut m = Members::of(clan)?;
-    let new_id = pin
-        .get("id")
-        .and_then(Value::as_str)
-        .filter(|s| s.starts_with("f_"))
-        .ok_or_else(|| HostError::new(502, "the middleware's corrected fact has no f_ id"))?
-        .to_string();
-    if pin.get("decision").and_then(Value::as_str) != Some(decision_id) {
-        return Err(HostError::new(
-            502,
-            "the middleware's fact names another decision than the correction",
-        ));
-    }
     let i = m
         .facts
         .iter()
-        .position(|e| members::entry_id(e) == Some(fact))
+        .position(|e| members::entry_id(e) == Some(fact.as_str()))
         .ok_or_else(|| HostError::not_found(format!("fact {fact} is not in this document")))?;
     let mut old = to_json(&m.facts[i]);
     if old.get("replaced_by").is_some() {
@@ -1591,25 +1500,33 @@ pub fn correct_fact(
             "fact {fact} has already been replaced"
         )));
     }
-    old["replaced_by"] = serde_json::json!({ "fact_id": new_id, "decision": decision_id });
-    m.facts[i] = to_yaml(&old)?;
+    let value = corrected_value(raw, old.get("value"), str_field(&old, "unit"))?;
+    if old.get("value") == Some(&value) {
+        return Err(HostError::conflict(
+            "that is the value the fact already holds",
+        ));
+    }
+    let licence = old.get("licence").cloned().unwrap_or_else(|| "open".into());
+
+    // The person as a source: one record per person and licence, so every
+    // correction they make under it cites the same one.
+    let src = reviewer_source_id(&who, licence.as_str().unwrap_or("open"));
     if !m
-        .facts
+        .sources
         .iter()
-        .any(|e| members::entry_id(e) == Some(new_id.as_str()))
+        .any(|e| members::entry_id(e) == Some(src.as_str()))
     {
-        m.facts.push(to_yaml(pin)?);
+        m.sources.push(to_yaml(&serde_json::json!({
+            "id": src, "uri": who, "title": "Corrected in this document",
+            "publisher": who.trim_start_matches("human:"), "tier": "reviewer-verified",
+            "retrieved_at": today, "licence": licence,
+        }))?);
     }
-    if let Some(src) = source.filter(|s| {
-        s.get("id")
-            .and_then(Value::as_str)
-            .is_some_and(|i| i.starts_with("src_"))
-    }) {
-        let sid = src["id"].as_str().unwrap_or_default();
-        if !m.sources.iter().any(|e| members::entry_id(e) == Some(sid)) {
-            m.sources.push(to_yaml(src)?);
-        }
-    }
+
+    let new_id = format!(
+        "f_{}",
+        new_decision_id().trim_start_matches(clan_sdk::decision::DECISION_ID_PREFIX)
+    );
     let mut d = decided(
         ctx,
         &who,
@@ -1620,12 +1537,135 @@ pub fn correct_fact(
             address(&doc_id, &format!("facts[{new_id}]")),
         ],
         vec![fact.to_string(), new_id.clone()],
-        rationale.to_string(),
+        note.to_string(),
         &now,
     );
-    d.id = Some(decision_id.to_string());
     d.pinned = true;
+    if !source_uri.is_empty() {
+        d.extra.insert(
+            "source_uri".into(),
+            serde_yaml::Value::String(source_uri.to_string()),
+        );
+    }
+    let d_id = d.id.clone().unwrap_or_default();
+
+    let mut pin = serde_json::json!({
+        "id": new_id, "entity": old.get("entity"), "key": old.get("key"),
+        "value": value, "unit": old.get("unit"),
+        "as_of": today, "retrieved_at": today,
+        "sources": [src], "quotes": { src.as_str(): note },
+        "confidence": "high", "licence": licence, "status": "active", "method": "report",
+        "decision": d_id, "pinned_at": now, "pin_reason": format!("corrected by {who}"),
+        "review": { "verdict": "verified", "by": who, "at": now, "decision": d_id },
+    });
+    for k in ["market", "layer"] {
+        if let Some(v) = old.get(k).filter(|v| !v.is_null()) {
+            pin[k] = v.clone();
+        }
+    }
+    old["replaced_by"] = serde_json::json!({ "fact_id": new_id, "decision": d_id });
+    m.facts[i] = to_yaml(&old)?;
+    m.facts.push(to_yaml(&pin)?);
     commit(doc, data_of(clan)?, m, d, "a fact corrected", &now)
+}
+
+fn str_field<'v>(v: &'v Value, key: &str) -> &'v str {
+    v.get(key).and_then(Value::as_str).unwrap_or_default()
+}
+
+/// The id of the source record that is `who` under `licence`: the same for
+/// every correction they make under it, in every document.
+fn reviewer_source_id(who: &str, licence: &str) -> String {
+    let h = clan_sdk::hash::sha256_prefixed(format!("{who}\n{licence}").as_bytes());
+    let hex = h.rsplit(':').next().unwrap_or(&h);
+    format!("src_{}", &hex[..20.min(hex.len())])
+}
+
+/// The person's entry, in the old pin's terms: a yes-or-no fact takes yes or
+/// no, a text fact keeps the text, and a number is read in the pin's unit —
+/// "23%" of a proportion is 0.23, "€4.2m" is 4200000.
+fn corrected_value(raw: &Value, old: Option<&Value>, unit: &str) -> HostResult<Value> {
+    let typed = match raw {
+        Value::String(s) => s.trim().to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        _ => {
+            return Err(HostError::bad_request(
+                "`value` is a number, a word or yes or no",
+            ))
+        }
+    };
+    if typed.is_empty() {
+        return Err(HostError::bad_request("the corrected value is empty"));
+    }
+    match old {
+        Some(Value::Bool(_)) => match typed.to_lowercase().as_str() {
+            "yes" | "true" | "1" => Ok(Value::Bool(true)),
+            "no" | "false" | "0" => Ok(Value::Bool(false)),
+            _ => Err(HostError::bad_request("this fact is yes or no")),
+        },
+        Some(Value::String(_)) => Ok(Value::String(typed)),
+        _ => {
+            let (mut n, pct) = number_in(&typed)
+                .ok_or_else(|| HostError::bad_request(format!("“{typed}” is not a number")))?;
+            if unit == "proportion" {
+                if pct || n > 1.0 {
+                    n /= 100.0;
+                }
+                if !(0.0..=1.0).contains(&n) {
+                    return Err(HostError::bad_request("a share is between 0% and 100%"));
+                }
+            }
+            if n.fract() == 0.0 && matches!(unit, "count" | "units") {
+                return Ok(Value::from(n as i64));
+            }
+            serde_json::Number::from_f64(n)
+                .map(Value::Number)
+                .ok_or_else(|| HostError::bad_request(format!("“{typed}” is not a number")))
+        }
+    }
+}
+
+/// A number as a person writes one: a currency sign or word around it, commas
+/// in it, and a scale after it (`%`, `per cent`, `k`, `m`, `bn`, …). Says
+/// whether it was a percentage.
+fn number_in(s: &str) -> Option<(f64, bool)> {
+    let s = s.to_lowercase().replace(',', "");
+    let start = s.find(|c: char| c.is_ascii_digit() || c == '-' || c == '.')?;
+    let rest = &s[start..];
+    let end = rest
+        .char_indices()
+        .find(|&(i, c)| !(c.is_ascii_digit() || c == '.' || (c == '-' && i == 0)))
+        .map_or(rest.len(), |(i, _)| i);
+    let n: f64 = rest[..end].parse().ok()?;
+    let tail = rest[end..].trim_start();
+    const SCALES: &[(&str, f64)] = &[
+        ("per cent", 1.0),
+        ("percent", 1.0),
+        ("%", 1.0),
+        ("thousand", 1e3),
+        ("million", 1e6),
+        ("billion", 1e9),
+        ("mn", 1e6),
+        ("bn", 1e9),
+        ("k", 1e3),
+        ("m", 1e6),
+        ("b", 1e9),
+    ];
+    let (scale, pct, after) = SCALES
+        .iter()
+        .find_map(|(w, x)| {
+            let after = tail.strip_prefix(w)?;
+            // A scale is a word of its own: "5 metres" is not five million.
+            let whole = *w == "%" || !after.starts_with(|c: char| c.is_alphabetic());
+            whole.then(|| (*x, w.contains('%') || w.contains("cent"), after))
+        })
+        .unwrap_or((1.0, false, tail));
+    // What is left is a unit or a currency, never another number.
+    if after.chars().any(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some((n * scale, pct))
 }
 
 /// Lock: accept the document as it stands (D7). Refused while anything on the
@@ -1715,5 +1755,47 @@ fn clip(s: &str, n: usize) -> String {
         format!("{}…", s.chars().take(n - 1).collect::<String>())
     } else {
         s.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_corrected_value_is_read_in_the_pins_terms() {
+        let num = json!(0.2);
+        let read = |raw: Value, unit: &str| corrected_value(&raw, Some(&num), unit);
+        assert_eq!(read(json!("31%"), "proportion").unwrap(), json!(0.31));
+        assert_eq!(read(json!("31"), "proportion").unwrap(), json!(0.31));
+        assert_eq!(read(json!(0.4), "proportion").unwrap(), json!(0.4));
+        assert_eq!(
+            read(json!("48 per cent"), "proportion").unwrap(),
+            json!(0.48)
+        );
+        assert_eq!(read(json!("€4.2m"), "eur").unwrap(), json!(4_200_000.0));
+        assert_eq!(read(json!("1,200"), "count").unwrap(), json!(1200));
+        assert_eq!(read(json!("2.5 bn"), "eur").unwrap(), json!(2.5e9));
+        assert_eq!(read(json!("5 metres"), "m").unwrap(), json!(5.0));
+        assert_eq!(read(json!("140%"), "proportion").unwrap_err().status, 400);
+        assert_eq!(read(json!("lots"), "eur").unwrap_err().status, 400);
+        assert_eq!(read(json!("3 to 4"), "eur").unwrap_err().status, 400);
+        let word = json!("cider");
+        assert_eq!(
+            corrected_value(&json!(" perry "), Some(&word), "text").unwrap(),
+            json!("perry")
+        );
+        let yes = json!(true);
+        assert_eq!(
+            corrected_value(&json!("No"), Some(&yes), "boolean").unwrap(),
+            json!(false)
+        );
+        assert_eq!(
+            corrected_value(&json!("maybe"), Some(&yes), "boolean")
+                .unwrap_err()
+                .status,
+            400
+        );
     }
 }
