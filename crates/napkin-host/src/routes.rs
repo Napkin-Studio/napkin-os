@@ -226,27 +226,6 @@ pub async fn dispatch_async(
     req: HostRequest,
 ) -> HostResponse {
     #[cfg(feature = "native")]
-    if req.path == "/correct" {
-        return match crate::proxy::correct(ctx, session, cfg, &req.body_str()).await {
-            Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
-            Err(e) => e.into(),
-        };
-    }
-    #[cfg(feature = "native")]
-    if req.path == "/verify" {
-        return match crate::proxy::verify(ctx, session, cfg, &req.body_str()).await {
-            Ok((mut v, events)) => {
-                // Parsed already by the verify itself, so it holds.
-                let finding = crate::ops::review::parse_verify(&req.body_str())
-                    .map(|(f, _)| f)
-                    .unwrap_or_default();
-                with_backrefs(session, ctx, &mut v, &Backref::Verified { finding });
-                HostResponse::json(200, &v).with_events(events)
-            }
-            Err(e) => e.into(),
-        };
-    }
-    #[cfg(feature = "native")]
     if req.path == "/api-proxy" {
         return match api_proxy(ctx, session, cfg, &req.body_str()).await {
             Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
@@ -392,22 +371,35 @@ pub fn dispatch(
             crate::ops::review::verdict(c, d, crate::ops::review::Verdict::parse(&req.body_str())?)
         }),
         "/classify" => review(session, ctx, |c, d| {
-            crate::ops::review::classify(c, d, crate::ops::review::Classify::parse(&req.body_str())?)
+            crate::ops::review::classify(
+                c,
+                d,
+                crate::ops::review::Classify::parse(&req.body_str())?,
+            )
         }),
         "/resolve" => {
             let body = req.body_str();
             review_then(
                 session,
                 ctx,
-                |c, d| crate::ops::review::resolve(c, d, crate::ops::review::Resolve::parse(&body)?),
+                |c, d| {
+                    crate::ops::review::resolve(c, d, crate::ops::review::Resolve::parse(&body)?)
+                },
                 |reply| {
-                    let here = reply.pointer("/clan/id").and_then(Value::as_str).unwrap_or("");
+                    let here = reply
+                        .pointer("/clan/id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
                     match carried_contest(reply, here) {
                         Some((upstream, contest)) => {
                             let chosen = crate::ops::review::Resolve::parse(&body)
                                 .map(|r| r.chosen)
                                 .unwrap_or_default();
-                            let backref = Backref::Resolved { upstream, contest, chosen };
+                            let backref = Backref::Resolved {
+                                upstream,
+                                contest,
+                                chosen,
+                            };
                             with_backrefs(session, ctx, reply, &backref);
                         }
                         None => reply["backrefs"] = serde_json::json!([]),
@@ -416,46 +408,81 @@ pub fn dispatch(
             )
         }
         "/edit-text" => review(session, ctx, |c, d| {
-            crate::ops::review::edit_text(c, d, crate::ops::review::parse_edit_text_full(&req.body_str())?)
+            crate::ops::review::edit_text(
+                c,
+                d,
+                crate::ops::review::parse_edit_text_full(&req.body_str())?,
+            )
         }),
         "/edit" => review(session, ctx, |c, d| {
             crate::ops::review::edit(c, d, crate::ops::review::parse_edit(&req.body_str())?)
         }),
-        #[cfg(feature = "native")]
-        "/correct" => HostResponse::error(500, "/correct must be dispatched asynchronously"),
-        #[cfg(not(feature = "native"))]
-        "/correct" => HostResponse::error(
-            503,
-            "Correcting a fact needs the middleware, to write it to the agency's knowledge; this build has none.",
-        ),
+        "/correct" => review(session, ctx, |c, d| {
+            crate::ops::review::correct(c, d, &crate::ops::review::parse_correct(&req.body_str())?)
+        }),
         "/acknowledge" => review(session, ctx, |c, d| {
-            crate::ops::review::acknowledge(c, d, &crate::ops::review::parse_acknowledge(&req.body_str())?)
+            crate::ops::review::acknowledge(
+                c,
+                d,
+                &crate::ops::review::parse_acknowledge(&req.body_str())?,
+            )
         }),
         "/approve" => review_then(
             session,
             ctx,
-            |c, d| crate::ops::review::approve(c, d, &crate::ops::review::parse_approve(&req.body_str())?),
+            |c, d| {
+                crate::ops::review::approve(
+                    c,
+                    d,
+                    &crate::ops::review::parse_approve(&req.body_str())?,
+                )
+            },
             |reply| with_backrefs(session, ctx, reply, &Backref::Used),
         ),
-        #[cfg(feature = "native")]
-        "/verify" => HostResponse::error(500, "/verify must be dispatched asynchronously"),
-        #[cfg(not(feature = "native"))]
-        "/verify" => HostResponse::error(
-            503,
-            "Verifying needs the middleware, to write the finding to the agency's knowledge; this build has none.",
-        ),
+        // Host-only, in every build: a verification is recorded in the
+        // document, and the layers learn of it only from accepted work.
+        "/verify" => {
+            let body = req.body_str();
+            review_then(
+                session,
+                ctx,
+                |c, d| {
+                    let (finding, rationale) = crate::ops::review::parse_verify(&body)?;
+                    crate::ops::review::verify(c, d, &finding, &rationale)
+                },
+                |reply| {
+                    // Parsed already by the verify itself, so it holds.
+                    let finding = crate::ops::review::parse_verify(&body)
+                        .map(|(f, _)| f)
+                        .unwrap_or_default();
+                    with_backrefs(session, ctx, reply, &Backref::Verified { finding });
+                },
+            )
+        }
 
         // A client's answer to the locked document (Contract 4 §8.2). Which
         // parts the words were about is the host's own word match — no
         // middleware, so every build answers it the same way.
         "/client-review" => review(session, ctx, |c, d| {
-            crate::ops::client_review::record(c, d, crate::ops::client_review::ClientReview::parse(&req.body_str())?)
+            crate::ops::client_review::record(
+                c,
+                d,
+                crate::ops::client_review::ClientReview::parse(&req.body_str())?,
+            )
         }),
         "/client-review/confirm" => review(session, ctx, |c, d| {
-            crate::ops::client_review::confirm(c, d, crate::ops::client_review::parse_confirm(&req.body_str())?)
+            crate::ops::client_review::confirm(
+                c,
+                d,
+                crate::ops::client_review::parse_confirm(&req.body_str())?,
+            )
         }),
         "/client-review/reopen" => review(session, ctx, |c, d| {
-            crate::ops::client_review::reopen(c, d, &crate::ops::client_review::parse_reopen(&req.body_str())?)
+            crate::ops::client_review::reopen(
+                c,
+                d,
+                &crate::ops::client_review::parse_reopen(&req.body_str())?,
+            )
         }),
 
         // What changed upstream since this document was spun off — a read,
@@ -467,7 +494,9 @@ pub fn dispatch(
 
         // The decision view the shell's OS layer renders: every decision,
         // newest first, with what needs a person — derived here, not by the app.
-        "/decisions" => match session.read(|d| crate::ops::decisions::decisions_for(d, Some(ctx.actor.as_str()))) {
+        "/decisions" => match session
+            .read(|d| crate::ops::decisions::decisions_for(d, Some(ctx.actor.as_str())))
+        {
             Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
             Err(e) => e.into(),
         },
@@ -679,7 +708,11 @@ pub fn dispatch(
             // stored under that spelling, one uploaded since under the name itself: try both
             let found = session.serve_asset(rel).or_else(|e| {
                 let plain = uri_decode(rel);
-                if plain != rel { session.serve_asset(&plain) } else { Err(e) }
+                if plain != rel {
+                    session.serve_asset(&plain)
+                } else {
+                    Err(e)
+                }
             });
             match found {
                 Ok((ct, bytes)) => {

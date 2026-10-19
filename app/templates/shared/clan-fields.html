@@ -668,10 +668,12 @@ var ClanFields=(function(){
   // ── rendering ───────────────────────────────────────────────────────
   // What cannot be shown says so in plain words; the record's ids stay out of it.
   function missing(why){ return '<span class="clf-missing" title="'+esc(why)+'">'+esc(why.charAt(0).toLowerCase()+why.slice(1))+'</span>'; }
+  // A verified finding the crew checked again after a review, quietly.
+  function recheckWords(r){ return /correction/.test(r&&r.note||'')?'Re-checked after a correction: it still holds.':'Re-checked after a review: it still holds.'; }
   function tagFor(st){
     return st==='check'?'<span class="tag">please check</span>':st==='verified'?'<span class="tag">'+TICK+'checked</span>'
       :st==='rejected'?'<span class="tag">marked wrong</span>':st==='contest'?'<span class="tag">sources disagree</span>'
-      :st==='replaced'?'<span class="tag">replaced</span>':'';
+      :st==='replaced'||st==='superseded'?'<span class="tag">replaced</span>':'';
   }
   function renderField(el){
     var ref=el.getAttribute('ref')||'', as=el.getAttribute('as')||'inline', k=kindOf(ref), st=stateOf(ref);
@@ -1009,7 +1011,7 @@ var ClanFields=(function(){
     var pp=pins()[ref], ps=pp&&srcOf(pp), byPerson=ps&&ps.rec&&ps.rec.tier==='reviewer-verified';
     if(byPerson&&st==='sourced') st='by-person';
     if(st==='contest'&&carriedAt(ref).length) st='contest-carried';  // nothing here to pick: only to set aside
-    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the crew · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>'}[st]||'';
+    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the crew · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>',superseded:'<span class="clf-pill">Replaced after a review</span>'}[st]||'';
     if(confidential(ref)) h+='<span class="clf-pill conf">'+LOCK+'Private</span>';
     var p=pins()[ref]; if(p&&p.confidence&&p.confidence!=='high') h+='<span class="clf-pill warn">'+esc(SURE[p.confidence]?SURE[p.confidence].replace(/^./,function(c){ return c.toUpperCase(); }):p.confidence)+'</span>';
     if(p&&p.stale) h+='<span class="clf-pill warn">Out of date: a newer number is saved</span>';
@@ -1058,13 +1060,13 @@ var ClanFields=(function(){
       +'<label><span>Where is it from? <span class="opt">A link. Leave it empty if you just know it.</span></span><input type="url" name="src" placeholder="https://"></label>'
       +'<label><span>Why is the old one wrong? <span class="req">needed</span></span><textarea name="why"></textarea></label>'
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Save the right value</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
-      +'<p class="clf-muted">Your value goes into the agency’s shared memory, with you as its source. The old one stays on record, marked as replaced.</p></form>';
+      +'<p class="clf-muted">Your value is recorded in this document, with you as its source, and shared with the agency once the client accepts the work. The old one stays on record, marked as replaced.</p></form>';
   }
   function badForm(target){
     return '<form class="clf-form" data-clf-form="bad" data-target="'+esc(target)+'"><label><span>What is wrong with it? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big danger">Mark it wrong</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div></form>';
   }
-  var STATUS_WORD={proposed:'please check',verified:'checked',rejected:'marked wrong'};
+  var STATUS_WORD={proposed:'please check',verified:'checked',rejected:'marked wrong',superseded:'replaced after a review'};
   function gone(){ return '<p class="clf-muted">This is no longer in the document.</p>'; }
   // What the document is called: the tray's noun, else the page's own
   // (<html data-clan-noun="brief">), else a report.
@@ -1221,9 +1223,12 @@ var ClanFields=(function(){
         b+='<div class="clf-sec"><h3>The facts it rests on</h3><div class="clf-rows">'+cs.map(function(c){ var p=pins()[c];
           return '<button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(p?label(p):'A fact')+'<small>'+esc(p?srcShort(p):'no longer in the document')+'</small></span><b>'+(confidential(c)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
         if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the crew’s own.</p>';
+        var nf=f.status==='superseded'&&f.superseded_by&&f.superseded_by.finding;
+        if(nf) b+='<div class="clf-sec"><h3>Replaced after a review</h3><div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(nf)+'"><span>'+esc((findings()[nf]||{}).statement||'The finding that replaces it')+'<small>worked out again from what the review left</small></span><b></b></button></div></div>';
+        if(f.status==='verified'&&f.recheck) b+='<p class="clf-muted" title="'+esc(f.recheck.note||'')+'">'+recheckWords(f.recheck)+'</p>';
         if(!L&&f.status==='proposed') b+='<form class="clf-form" data-clf-form="finding" data-clf-anchor><b>Is this right?</b><label><span>Anything to add? <span class="opt">Needed if it is wrong</span></span><textarea name="why"></textarea></label><div class="clf-err" hidden></div>'
           +'<div class="clf-answers"><button type="submit" class="clf-btn big primary" value="verify">Yes, this is right</button><button type="submit" class="clf-btn big danger" value="reject">No, this is wrong</button></div>'+privBlock()
-          +'<p class="clf-muted">Yes saves it to the agency’s shared memory as checked by you. No keeps it on record, crossed out, and flags anything that rests on it.</p></form>';
+          +'<p class="clf-muted">Yes records it in this document as checked by you, and it is shared with the agency once the client accepts the work. No keeps it on record, crossed out, and flags anything that rests on it.</p></form>';
         b+=history('findings['+ref+']');
       }
     } else if(k==='contest'){
@@ -1314,6 +1319,8 @@ var ClanFields=(function(){
     return post(route,body).then(function(res){
       Array.prototype.forEach.call(btns,function(x){ x.disabled=false; });
       var err=errorOf(res); if(err&&!(res&&res.ok)){ showError(form,err); return; }
+      // The app may bring what rests on a review in step (the Research Tool's reconsider).
+      if(res&&res.ok) window.dispatchEvent(new CustomEvent('clan:reviewed',{detail:{route:route,body:body,reply:res}}));
       return loadView().then(function(){ refresh(); if(STACK.length) draw(); toast(done); });
     },function(){ showError(form,OFFLINE); Array.prototype.forEach.call(btns,function(x){ x.disabled=false; }); });
   }
@@ -1355,7 +1362,7 @@ var ClanFields=(function(){
       var v=e.submitter&&e.submitter.value;
       if(v==='reject'){ if(!why){ showError(form,'Say what is wrong, so the agent can fix it.'); return; }
         act('/verdict',{target:'findings['+ref+']',polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.'); }
-      else act('/verify',{finding:ref,rationale:why},form,'Thanks. Saved to the agency\u2019s shared memory.');
+      else act('/verify',{finding:ref,rationale:why},form,'Thanks. Recorded as checked by you.');
     } else if(kind==='resolve'){ if(!fd.get('pick')){ showError(form,'Pick one first.'); return; } if(!why){ showError(form,'Say why you picked this one.'); return; }
       act('/resolve',{contest:ref,chosen:fd.get('pick'),rationale:why},form,'Saved. The report uses your pick.'); }
     else if(kind==='correct'){ if(!String(fd.get('value')||'').trim()){ showError(form,'Write the right value.'); return; } if(!why){ showError(form,'Say why the old one is wrong.'); return; }
@@ -1388,7 +1395,47 @@ var ClanFields=(function(){
     return node;
   }
   function layout(html){ var t=document.createElement('template'); t.innerHTML=String(html||''); return clean(t.content); }
-  function mount(el,html){ el.textContent=''; el.appendChild(layout(html)); stampTexts(el,'report:'+hash(String(html||''))); refresh(); }
+  // Each top-level part is mounted and its wording keyed on its own, so a
+  // rewrite of one part leaves the wording a person gave another in place.
+  function mount(el,html){
+    el.textContent='';
+    layoutParts(html).forEach(function(part){ var f=layout(part); stampTexts(f,'report:'+hash(part)); el.appendChild(f); });
+    refresh();
+  }
+  // The page's top-level parts as the middleware splits them (server
+  // rules/layout.py `split`): each top-level element, and any text between
+  // them, exactly as written, so that joined they are the page. A page not in
+  // the form the layout check writes (lowercase tags of the vocabulary,
+  // attributes as name="value", text with only &amp; &lt; &gt; escapes,
+  // every element closed in order) is one part, as there. (\x22 and \x27 are
+  // the quotes, so no quote in a pattern reads as a string to a source scan.)
+  function layoutParts(html){
+    var SPLIT_ATTR=/ ([a-z-]+)(?:=\x22([^\x22<>]+)\x22)?/g;
+    var s=String(html||''), out=[], at=0, open=[], last=0, m, re=/<(\/?)([a-z][a-z0-9-]*)((?: [a-z-]+(?:=\x22[^\x22<>]+\x22)?)*)>|<|>/g;
+    function textOk(t){ return !/&(?!(?:amp|lt|gt);)/.test(t); }
+    function attrsOk(a){
+      var x; SPLIT_ATTR.lastIndex=0;
+      while((x=SPLIT_ATTR.exec(a))){
+        if(!ATTRS[x[1]]) return false;
+        if(x[2]!=null&&!/^(?:[^&\x27]|&(?:amp|lt|gt|quot|#x27);)*$/.test(x[2])) return false;
+        if(x[1]==='class'&&(x[2]==null||x[2].split(' ').some(function(c){ return !/^cl-[a-z0-9-]+$|^compact$/.test(c); }))) return false;
+      }
+      return true;
+    }
+    while((m=re.exec(s))){
+      if(!m[2]||!textOk(s.slice(last,m.index))) return [s];
+      var tag=m[2], end=!!m[1];
+      if(!TAGS[tag.toUpperCase()]||tag==='clan-tray'||(end&&m[3])||!attrsOk(m[3])) return [s];
+      if(!open.length&&m.index>at){ out.push(s.slice(at,m.index)); at=m.index; }
+      if(end){ if(open.pop()!==tag) return [s]; }
+      else if(tag!=='br'&&tag!=='hr') open.push(tag);
+      last=re.lastIndex;
+      if(!open.length){ out.push(s.slice(at,last)); at=last; }
+    }
+    if(open.length||!textOk(s.slice(last))) return [s];
+    if(at<s.length) out.push(s.slice(at));
+    return out.length?out:[s];
+  }
 
   // ── wording a person may rewrite ──────────────────────────────────
   // Any element marked data-clan-text="<key>" shows the person's wording for

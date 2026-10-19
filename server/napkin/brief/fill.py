@@ -71,7 +71,8 @@ def research_view(clan: dict, data: dict) -> dict:
              "market": f.get("market"), "as_of": f.get("as_of"), "entity": f.get("entity")}
             for f in ctx_facts(clan) if isinstance(f.get("id"), str)][:60]
     findings = [{"id": x["id"], "statement": x.get("statement"), "status": x.get("status")}
-                for x in ctx_findings(clan) if isinstance(x.get("id"), str) and x.get("status") != "rejected"][:30]
+                for x in ctx_findings(clan)
+                if isinstance(x.get("id"), str) and x.get("status") not in ("rejected", "superseded")][:30]
     up = []
     for u in (data.get("upstream") or {}).values():
         if not isinstance(u, dict):

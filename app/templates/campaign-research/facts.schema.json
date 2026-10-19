@@ -26,8 +26,6 @@
           "confidence",
           "licence",
           "status",
-          "version",
-          "origin",
           "decision",
           "pinned_at",
           "pin_reason"
@@ -116,7 +114,7 @@
           "origin": {
             "type": "string",
             "pattern": "^fact://(brand|category)/[a-z0-9._/-]+/[a-z0-9_]+(\\.[a-z0-9_]+)*@[0-9]+$",
-            "description": "fact://<layer>/<entity path>/<key>@<version>. The entity path drops the entity's type segment when it equals the layer (brand/bulmers in the brand layer -> fact://brand/bulmers/...)."
+            "description": "fact://<layer>/<entity path>/<key>@<version>. The entity path drops the entity's type segment when it equals the layer (brand/bulmers in the brand layer -> fact://brand/bulmers/...). Absent on a pin a person gave in this document."
           },
           "decision": {
             "type": "string",
@@ -205,7 +203,7 @@
               "fact_id",
               "decision"
             ],
-            "description": "Set when a person resolved a contest over this pin's identity for another value: the pin stays, so every decision citing it still resolves.",
+            "description": "Set when a person resolved a contest over this pin's identity for another value, or corrected it: the pin stays, so every decision citing it still resolves.",
             "properties": {
               "fact_id": {
                 "type": "string",
@@ -216,8 +214,56 @@
                 "pattern": "^d_[0-9A-Z]{6,}$"
               }
             }
+          },
+          "review": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "verdict",
+              "by",
+              "at",
+              "decision"
+            ],
+            "description": "A person's review of this pin, recorded in this document only: verified when they marked it right or gave the value themselves, rejected when they marked it wrong. Taking a rejected pin out of what the document stands on is selection.excluded's.",
+            "properties": {
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "rejected"
+                ]
+              },
+              "by": {
+                "type": "string",
+                "pattern": "^human:.+$"
+              },
+              "at": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+              },
+              "decision": {
+                "type": "string",
+                "pattern": "^d_[0-9A-Z]{6,}$",
+                "description": "Id of a decision in agent/decision-chain.yaml."
+              }
+            }
           }
-        }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "origin",
+              "version"
+            ],
+            "description": "A frozen copy of a knowledge-layer row."
+          },
+          {
+            "required": [
+              "review"
+            ],
+            "description": "A value a person gave in this document (a correction): in no layer yet, so no origin or version; its review says who."
+          }
+        ]
       }
     }
   }

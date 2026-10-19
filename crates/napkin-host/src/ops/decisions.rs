@@ -15,7 +15,8 @@
 //!   `contest` decision nothing has resolved, or a merge conflict;
 //! - a finding still `proposed` (D1: findings need a person to verify them);
 //! - anything else that blocks the lock (D7): a field citing a rejected
-//!   finding, a bad verdict nobody has answered, an unmerged agent branch.
+//!   finding or one a review superseded, a bad verdict nobody has answered,
+//!   an unmerged agent branch.
 //!
 //! The first two are cleared once a person has since decided about the
 //! decision itself or about every one of its targets, or it has been
@@ -1238,31 +1239,50 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
         }
     }
 
-    // 4. Fields that cite a rejected finding: through an envelope's
-    //    `finding_ids`, or — a bare value, like a brief's — through the
-    //    decision that wrote it as it stands.
+    // 4. Fields that cite a rejected finding, or one a review superseded
+    //    (it should move to the finding that replaces it): through an
+    //    envelope's `finding_ids`, or — a bare value, like a brief's —
+    //    through the decision that wrote it as it stands. A superseded
+    //    finding blocks nothing itself: it is neither proposed nor rejected.
     let rejected: BTreeMap<&str, &Value> = ctx
         .findings
         .iter()
-        .filter(|(_, f)| str_of(f, "status") == Some("rejected"))
+        .filter(|(_, f)| matches!(str_of(f, "status"), Some("rejected" | "superseded")))
         .map(|(id, f)| (id.as_str(), f))
         .collect();
+    // Who took the finding out of use, and what the flag asks of a field
+    // citing it.
+    let out_of_use = |id: &str| -> (Option<String>, String) {
+        let f = rejected[id];
+        let by = |key: &str| {
+            f.get(key)
+                .and_then(|r| r.get("decision")?.as_str())
+                .filter(|d| ctx.index_of(d).is_some())
+                .map(String::from)
+        };
+        match f.pointer("/superseded_by/finding").and_then(Value::as_str) {
+            Some(to) if str_of(f, "status") == Some("superseded") => (
+                by("superseded_by"),
+                format!("finding {id}, which a review superseded with {to}"),
+            ),
+            _ => (
+                by("rejection"),
+                format!("finding {id}, which a reviewer rejected"),
+            ),
+        }
+    };
     if !rejected.is_empty() {
         let mut flagged: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
         citing_findings(ctx.data, &mut Vec::new(), &rejected, &mut flagged);
         written_citing_findings(ctx, &rejected, &mut flagged);
         for (path, ids) in flagged {
             for id in ids {
-                let by = rejected[id]
-                    .get("rejection")
-                    .and_then(|r| r.get("decision")?.as_str())
-                    .filter(|d| ctx.index_of(d).is_some())
-                    .map(String::from);
+                let (by, which) = out_of_use(id);
                 let address = ctx.address(&path);
                 out.push(blocker(
                     "flagged_field",
                     format!(
-                        "{} cites finding {id}, which a reviewer rejected. Revise it to stop citing the finding before lock.",
+                        "{} cites {which}. Revise it to stop citing the finding before lock.",
                         ctx.target(&address).label
                     ),
                     by,
@@ -1283,17 +1303,13 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
                     if set_aside(ctx, &address, Some(id)) {
                         continue;
                     }
-                    let by = rejected[id]
-                        .get("rejection")
-                        .and_then(|r| r.get("decision")?.as_str())
-                        .filter(|d| ctx.index_of(d).is_some())
-                        .map(String::from);
+                    let (by, which) = out_of_use(id);
                     out.push(Attention {
                         finding: Some(id.to_string()),
                         ..carried(
                             "flagged_field",
                             format!(
-                                "{} cites finding {id}, which a reviewer rejected. It was carried from upstream and cannot be revised here; set it aside with a reason, or it blocks the lock.",
+                                "{} cites {which}. It was carried from upstream and cannot be revised here; set it aside with a reason, or it blocks the lock.",
                                 ctx.target(&address).label
                             ),
                             by,

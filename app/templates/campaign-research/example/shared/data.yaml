@@ -380,7 +380,7 @@ report:
   based_on:
     version: "sha256:3b9d0c41e7a25f86d1c07e4a9b3f5d28c6e1a70b94d2f38e5c61a0b7d9e4f213"
     facts_sha256: "sha256:196b20d0dedb57d122f41578b8ec7c83d3a272b28a0c07caf8c47168348cc0de"
-    findings_sha256: "sha256:a8296f5e089ebbf7889e48c04320c4cc7c211ec288f21c16bb20ff49b1372eea"
+    findings_sha256: "sha256:56584aee45440ab02bcc9176add2aa5a7968b748d39f94a4c210714ed5fc37b2"
   headline:
     text: "Lúnasa 0.0 lands in Ireland with permission and in GB as a stranger, and Ireland is where no/low is growing faster."
     cites: [fi_01JA0F2B, fi_01JA0F3C]
@@ -479,7 +479,7 @@ report:
 projection:
   built_from:
     facts_sha256: sha256:196b20d0dedb57d122f41578b8ec7c83d3a272b28a0c07caf8c47168348cc0de
-    findings_sha256: sha256:a8296f5e089ebbf7889e48c04320c4cc7c211ec288f21c16bb20ff49b1372eea
+    findings_sha256: sha256:56584aee45440ab02bcc9176add2aa5a7968b748d39f94a4c210714ed5fc37b2
     built_at: '2026-09-23T08:02:01Z'
   pins:
     f_01JA0B1C2D:
@@ -705,7 +705,6 @@ projection:
       - f_01JA0B6D6G
       - f_01JA0B6D7H
       - f_01JA0B3R5S
-      fact_id: f_01JA0C9V4X
     fi_01JA0F2B:
       statement: 'Lúnasa arrives in Ireland with permission and in GB as a stranger: the IE launch can lean on the parent brand, the GB launch has to introduce it.'
       status: proposed

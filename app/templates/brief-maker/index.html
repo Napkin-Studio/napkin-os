@@ -963,7 +963,7 @@
           +(web?' · <a href="'+esc(src.uri)+'" target="_blank" rel="noopener noreferrer">Open it ↗</a>':'')+'</cite></li>';
       }
       if(/^fi_/.test(id)&&F[id]){ var fi=F[id], n=arr(fi.cites).length;
-        return '<li><blockquote>'+esc(short(fi.statement||'',320))+'</blockquote><cite>Worked out from '+n+' fact'+(n===1?'':'s')+' in the research'+(fi.status==='verified'?' · checked by a person':'')+'</cite></li>'; }
+        return '<li><blockquote>'+esc(short(fi.statement||'',320))+'</blockquote><cite>Worked out from '+n+' fact'+(n===1?'':'s')+' in the research'+(fi.status==='verified'?' · checked by a person':fi.status==='superseded'?' · replaced after a review':'')+'</cite></li>'; }
       if(p) return '<li><blockquote>'+esc(short(p.text,320))+'</blockquote><cite>'+esc(citationOf(p))+'</cite></li>';
       if(c&&(c.quote||c.value)) return '<li><blockquote>'+esc(short(c.quote||c.value,320))+'</blockquote><cite>The client'+(c.material_id?' · '+esc(citeLabel(c.material_id)):'')+(c.status==='assumption'?' · an assumption':'')+'</cite></li>';
       return '';

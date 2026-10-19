@@ -210,6 +210,30 @@ test('a carried item nothing here can settle is set aside, with a reason', () =>
   assert.match(fn(CLF, 'draw'), /c\.status==='open'&&\(ca\.length\|\|sa\)/)
 })
 
+// ── the shared fields snippet: report wording keyed per part ───────────────
+
+// The same page and hashes are pinned in server/tests/test_reconsider.py: the
+// middleware splits the report page into these parts and hashes each as here,
+// to know which part holds a person's wording.
+test('report wording is keyed per top-level part, as the middleware splits and hashes it', () => {
+  const env = {
+    TAGS: new Function(`${obj(CLF, 'TAGS')} return TAGS;`)(),
+    ATTRS: new Function(`${obj(CLF, 'ATTRS')} return ATTRS;`)(),
+  }
+  const f = lift<{ layoutParts(h: string): string[]; hash(s: string): string }>(CLF, ['layoutParts', 'hash'], env)
+  const page = '<header class="cl-hero"><h1>Frozen grows</h1><p class="cl-dek">Value &amp; volume, “both”</p></header>\n'
+    + '<section class="cl-band"><h2>Media</h2><p>Spend leans on one channel.<br>'
+    + '<clan-cite refs="f_01JA0B3P4Q"></clan-cite></p></section>'
+  const parts = f.layoutParts(page)
+  assert.equal(parts.join(''), page)
+  assert.deepEqual(parts.map(f.hash), ['kcamkm', '3t0v', 'v4mvo'])
+  assert.equal(parts[1], '\n')
+  for (const odd of ['<P>Upper</P><p>x</p>', '<p>a</p><p>b', '<p>a &copy;</p><p>b</p>', "<p title='x'>a</p><p>b</p>",
+    '<p class="big">a</p><p>b</p>', '<p>a</p><!-- c --><p>b</p>', '<p>a<br/></p><p>b</p>'])
+    assert.deepEqual(f.layoutParts(odd), [odd], odd)
+  assert.equal(f.hash('abc'), '3772q3')
+})
+
 // ── the Research Tool ──────────────────────────────────────────────────────
 
 const RT = page('campaign-research/index.html')
@@ -344,6 +368,110 @@ test('a locked report is the version agreed to: never out of date, Refresh not o
   // And what came since is said only of a stale report, which a locked one never is.
   assert.match(fn(RT, 'renderReport'), /stale\.length\?'<span style="color:var\(--create-ink\)">'\+esc\(staleText\(stale\)\)/)
   assert.match(fn(RT, 'doRefreshReport'), /if\(reportLocked\(\)\)\{ toast\(/)
+})
+
+// A review changes only the document; the crew then brings what rests on it
+// in step with one reconsider job at a time, holding reviews made meanwhile.
+const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'reconsider']
+type Job = { task: string; input: { events: { kind: string; id: string; decision: string; replaced_by?: string }[] }; then: ((j: Job) => void) | null; error?: string; jobId?: string }
+function reconEnv(locked = false) {
+  const runs: Job[] = []
+  const kept: (string | null)[] = []
+  const RECON = { queue: [] as unknown[], job: null as Job | null }
+  const env = {
+    RECON, arr,
+    pathOf: (a: string) => (a.includes('#') ? a.slice(a.indexOf('#') + 1) : a),
+    store: (_k: string, v: string | null) => { kept.push(v) },
+    docId: () => 'doc1',
+    reportLocked: () => locked,
+    window: { clan: { apiProxy: () => Promise.resolve() } },
+    runTask: (task: string, input: Job['input'], then: Job['then']) => { const j = { task, input, then }; runs.push(j); return j },
+  }
+  type F = { reviewed(route: string, body: unknown, res: unknown): void; reviewEvent(route: string, body: unknown, res: unknown): unknown }
+  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON }
+}
+/** The job is over: the view tells whoever started it, once. */
+const finish = (j: Job, how: Partial<Job> = { jobId: 'job_1' }) => { Object.assign(j, how); const t = j.then; j.then = null; t?.(j) }
+
+test('each review the host accepted is one reconsider event', () => {
+  const { f } = reconEnv()
+  const reply = (decision: string, ...targets: string[]) => ({ ok: true, decision, targets })
+  assert.deepEqual(f.reviewEvent('/verify', { finding: 'fi_01A' }, reply('d_1', 'doc1#findings[fi_01A]')),
+    { kind: 'finding_verified', id: 'fi_01A', decision: 'd_1' })
+  assert.deepEqual(f.reviewEvent('/verdict', { target: 'findings[fi_01A]', polarity: 'bad' }, reply('d_2', 'doc1#findings[fi_01A]')),
+    { kind: 'finding_rejected', id: 'fi_01A', decision: 'd_2' })
+  assert.deepEqual(f.reviewEvent('/verdict', { target: 'facts[f_01B]', polarity: 'good' }, reply('d_3', 'doc1#facts[f_01B]')),
+    { kind: 'fact_verified', id: 'f_01B', decision: 'd_3' })
+  assert.deepEqual(f.reviewEvent('/verdict', { target: 'doc1#facts[f_01B]', polarity: 'bad' }, reply('d_4', 'doc1#facts[f_01B]')),
+    { kind: 'fact_rejected', id: 'f_01B', decision: 'd_4' })
+  assert.deepEqual(f.reviewEvent('/correct', { fact: 'f_01B', value: '31%' }, reply('d_5', 'doc1#facts[f_01B]', 'doc1#facts[f_01NEW]')),
+    { kind: 'fact_corrected', id: 'f_01B', decision: 'd_5', replaced_by: 'f_01NEW' })
+  // Not a review of a fact or a finding: nothing to reconsider.
+  assert.equal(f.reviewEvent('/verdict', { target: 'campaign.objective', polarity: 'bad' }, reply('d_6', 'doc1#campaign.objective')), null)
+  assert.equal(f.reviewEvent('/resolve', { contest: 'ct_a' }, reply('d_7', 'doc1#selection.contested[ct_a]')), null)
+  assert.equal(f.reviewEvent('/verify', { finding: 'fi_01A' }, { ok: false }), null)
+  // Every place a review is given reaches it: the OS's drawer, and the view's own.
+  assert.match(fn(CLF, 'act'), /if\(res&&res\.ok\) window\.dispatchEvent\(new CustomEvent\('clan:reviewed',\{detail:\{route:route,body:body,reply:res\}\}\)\)/)
+  assert.match(RT, /addEventListener\('clan:reviewed', function\(e\)\{ var d=e\.detail\|\|\{\}; reviewed\(d\.route, d\.body, d\.reply\); \}\)/)
+  assert.match(fn(RT, 'hostDecide'), /if\(res&&res\.ok\) reviewed\(route, body, res\)/)
+  assert.doesNotMatch(RT, /reconsider_fact/)
+})
+
+test('a review made while a reconsider job runs is held and sent with the next run', () => {
+  const { f, runs, kept, RECON } = reconEnv()
+  const res = (d: string, t: string) => ({ ok: true, decision: d, targets: [`doc1#${t}`] })
+  f.reviewed('/verdict', { polarity: 'bad' }, res('d_1', 'facts[f_01A]'))
+  assert.equal(runs.length, 1)
+  assert.equal(runs[0].task, 'reconsider')
+  assert.deepEqual(runs[0].input.events.map(e => e.decision), ['d_1'])
+
+  // Two more while it runs: no second job, both held.
+  f.reviewed('/verify', { finding: 'fi_01B' }, res('d_2', 'findings[fi_01B]'))
+  f.reviewed('/verdict', { polarity: 'good' }, res('d_3', 'facts[f_01C]'))
+  assert.equal(runs.length, 1, 'one job per document at a time')
+  assert.deepEqual(RECON.queue.map(e => (e as { decision: string }).decision), ['d_2', 'd_3'])
+  assert.ok(kept.at(-1)?.includes('d_3'), 'the held reviews outlive a reload')
+
+  // It finishes: the next run takes both, together.
+  finish(runs[0])
+  assert.equal(runs.length, 2)
+  assert.deepEqual(runs[1].input.events.map(e => e.kind), ['finding_verified', 'fact_verified'])
+  assert.equal(RECON.queue.length, 0)
+  finish(runs[1])
+  assert.equal(runs.length, 2, 'nothing left to send')
+  assert.equal(RECON.job, null)
+  assert.equal(kept.at(-1), null)
+})
+
+test('reviews a reconsider job never started wait for the next one', () => {
+  const { f, runs, RECON } = reconEnv()
+  const res = (d: string) => ({ ok: true, decision: d, targets: ['doc1#facts[f_01A]'] })
+  f.reviewed('/verdict', { polarity: 'bad' }, res('d_1'))
+  // The middleware could not be reached: no job id.
+  finish(runs[0], { error: 'unreachable' })
+  assert.equal(runs.length, 1, 'not retried at once')
+  assert.deepEqual(RECON.queue.map(e => (e as { decision: string }).decision), ['d_1'])
+  f.reviewed('/verdict', { polarity: 'good' }, res('d_2'))
+  assert.deepEqual(runs[1].input.events.map(e => e.decision), ['d_1', 'd_2'])
+  // A job that ran and failed, or whose change was refused because a review
+  // landed meanwhile, goes once more with what waited.
+  f.reviewed('/verdict', { polarity: 'bad' }, res('d_3'))
+  finish(runs[1], { jobId: 'job_2', error: 'finding fi_01A changed since the job read it; rerun' })
+  assert.deepEqual(runs[2].input.events.map(e => e.decision), ['d_1', 'd_2', 'd_3'])
+  assert.ok(runs[2].input.events.every(e => !('tries' in e)), 'the count stays in the view')
+  // Never a third time: a job that keeps failing does not loop.
+  finish(runs[2], { jobId: 'job_3', error: 'failed' })
+  assert.deepEqual(runs[3].input.events.map(e => e.decision), ['d_3'])
+  finish(runs[3], { jobId: 'job_4', error: 'failed' })
+  assert.equal(runs.length, 4)
+  assert.equal(RECON.queue.length, 0)
+})
+
+test('a locked report starts no reconsider job', () => {
+  const { f, runs, RECON } = reconEnv(true)
+  f.reviewed('/verify', { finding: 'fi_01A' }, { ok: true, decision: 'd_1', targets: ['doc1#findings[fi_01A]'] })
+  assert.equal(runs.length, 0)
+  assert.equal(RECON.queue.length, 1)
 })
 
 test('the Research Tool’s parts declare their aliases', () => {

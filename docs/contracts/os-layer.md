@@ -669,7 +669,7 @@ fields.
 ### 7.3 At lock
 
 - The reviewer is shown the findings list. Confirming verifies them (`verify`
-  per finding, each written to the layer). Rejecting a finding marks it
+  per finding, recorded in this document). Rejecting a finding marks it
   rejected and flags every field that cites it — a new unresolved item, so the
   lock waits until those fields are revised.
 - One `approve` decision records the exact version and content hash. The seal
@@ -1155,10 +1155,11 @@ freely, never redefine.
   - `/resolve {contest, chosen, rationale}` — the contest resolved; a chosen
     value not yet pinned is pinned from the copy the research froze beside it,
     and a pin of the same identity it replaces is kept, marked `replaced_by`.
-  - `/verify {finding, rationale?}` — the host asks the middleware's
-    `verify_finding` to write the finding to the layer (a `human:<id>` source,
-    a synthesis fact under the decision id the host chose), then pins it and
-    records the verification. No middleware, no verification.
+  - `/verify {finding, rationale?}` — the host sets the finding `verified`
+    with `verification {decision, by, at}` and records one `verify`
+    decision. It writes only this document: what a person reviews reaches
+    the layers only through the client-accepted harvest (Contract 3 §6.2).
+    No middleware call.
   - `/edit {path, value, gate?, rationale?}` — a person's edit (the shell's
     Edit mode). One pinned `edit` decision; a campaign field's envelope
     becomes `origin: stated`, `by` the person. Members and the projection are
@@ -1167,11 +1168,14 @@ freely, never redefine.
     text, kept in `shared/edits.yaml` (role `edits`) and handed to the view as
     `window.__CLAN__.edits`. One pinned `edit` decision on `text[<key>]`.
   - `/correct {fact, value, source_uri?, rationale}` — a person corrects a
-    fact. The middleware's `correct_fact` writes the value to the layer with
-    the person (or their link) as source; the host pins it, keeps the old pin
-    marked `replaced_by`, and records a pinned `edit`. Like `/verify` and
-    `verify_finding`, it resolves for any document, whatever pipeline it was
-    made with.
+    fact, in this document only. The host makes a new pin (`method: report`,
+    `confidence: high`, `review` verified, no `origin` or `version`: no layer
+    holds it) whose source is the person's `human:<id>` record — one per
+    person per licence — keeps the old pin marked `replaced_by`, and records a
+    pinned `edit`, action `correct_fact` (a link the person gave rides on it
+    as `source_uri`). No middleware call; it resolves for any document,
+    whatever pipeline it was made with. A `/verdict` on a pin also writes
+    `review {verdict, by, at, decision}` on it (Contract 3 §6.4).
   - `/acknowledge {decision, rationale?}` — "Looks right": a good verdict
     that cites the decision, which clears what its agent flagged or was unsure
     of (§4) without touching what it wrote. Refused on a finding (verify it).
