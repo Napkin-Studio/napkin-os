@@ -96,14 +96,18 @@ class Usage:
         self.input_tokens = 0
         self.output_tokens = 0
         self.calls = 0
+        self.cache_read = 0         # of input_tokens: read from the prompt cache, and written to it
+        self.cache_write = 0
         self.by_model = {}          # model id -> {calls, input_tokens, output_tokens}
         self._lock = threading.Lock()
 
-    def add(self, input_tokens: int, output_tokens: int, model: str | None = None):
+    def add(self, input_tokens: int, output_tokens: int, model: str | None = None, breakdown: dict | None = None):
         with self._lock:
             self.calls += 1
             self.input_tokens += int(input_tokens or 0)
             self.output_tokens += int(output_tokens or 0)
+            self.cache_read += int((breakdown or {}).get("cache_read") or 0)
+            self.cache_write += int((breakdown or {}).get("cache_write") or 0)
             if model:
                 m = self.by_model.setdefault(model, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
                 m["calls"] += 1
@@ -182,7 +186,12 @@ class AnthropicWire:
         config = {} if prompt else {"format": {"type": "json_schema", "schema": schema}}
         if effort:
             config["effort"] = effort
-        kwargs = dict(model=model, max_tokens=max_tokens, system=schema_in_prompt(system, schema) if prompt else system,
+        # The system prompt (with the schema, in prompt mode) is the part every call of a purpose
+        # repeats, so it is cached: 0.1x input price on a read within 5 minutes, 1.25x on the write.
+        # Below the model's minimum (512 tokens on the 5.5 models) the marker is ignored, never refused.
+        system = schema_in_prompt(system, schema) if prompt else system
+        kwargs = dict(model=model, max_tokens=max_tokens,
+                      system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                       messages=[{"role": t["role"], "content": self._content(t)} for t in turns])
         if config:
             kwargs["output_config"] = config
@@ -470,7 +479,7 @@ class ModelPort:
                 log.warning("model %s: the response carried no usage; counted as zero [%s]", purpose, attribution)
                 usage.add(0, 0, model)
             else:
-                usage.add(*reply.usage, model)
+                usage.add(*reply.usage, model, breakdown=reply.breakdown)
             log.info("model %s wire=%s model=%s effort=%s schema=%s attempt=%d stop=%s %.1fs [%s]", purpose,
                      self.wire.api, model, effort or "-", mode, attempt, reply.stop, time.monotonic() - t0,
                      attribution)
