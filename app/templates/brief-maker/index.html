@@ -370,6 +370,10 @@
   .srcs blockquote{margin:0;font-family:var(--serif);font-size:14px;line-height:1.5;color:var(--text);border-left:2px solid var(--rule);padding-left:10px}
   .srcs cite a{color:inherit;text-decoration:underline;text-underline-offset:2px}
   .srcs cite{display:block;font-style:normal;font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--faint);margin-top:3px;padding-left:12px}
+  .srcs .from{margin:6px 0 0 12px}
+  .srcs .from ul{margin-top:4px}
+  .srcs .confirm blockquote{border-left-style:dashed}
+  .srcs cite.wrong,.srcs cite b{color:var(--create-ink)}
   .notes:empty{display:none}
   .notes{display:grid;gap:8px;margin-top:10px;max-width:72ch}
   .note-v,.note-p{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45}
@@ -924,7 +928,7 @@
     id=String(id||'');
     if(/^psg_/.test(id)){ var p=passage(id); return p?citationOf(p):id; }
     if(/^cap_/.test(id)) return captureItem(id)?'client’s words':id;
-    if(/^mat_/.test(id)){ var m=(get('materials')||{})[id]; return m&&m.name?m.name:id; }
+    if(/^mat_/.test(id)){ var m=(get('materials')||{})[id]; return m&&m.kind==='prompt'?'your request':m&&m.name?m.name:id; }
     if(id.indexOf('#')!==-1) return id.slice(id.indexOf('#')+1);
     if(/^d_/.test(id)){ var d=CHAIN.decisions.filter(function(x){ return x.id===id; })[0]; if(d) return whoName(d)+' · '+(d.action||d.kind||'decision'); }
     return id;
@@ -945,13 +949,34 @@
       +(r.would_change_if?'<p><span class="rl">Would change if</span>'+esc(r.would_change_if)+'</p>':'')
       +'</div>';
   }
-  // Every id the decisions cite, in order, once.
+  // Every id the decisions cite, their claims' included, in order, once.
   function citesOf(ds){
     var out=[];
     ds.forEach(function(d){ if(!d) return;
       arr(d.cites).concat(hasReasoning(d)?[].concat.apply([],arr(d.reasoning.because).map(function(b){ return arr(b.cites); })):[])
+        .concat([].concat.apply([],arr(d.claims).map(function(c){ return arr(c&&c.cites); })))
         .forEach(function(c){ if(out.indexOf(c)===-1) out.push(c); }); });
     return out;
+  }
+  // The decision whose claims say what a part rests on (middleware-api
+  // §10.7): its own, or, when a person accepted a proposal, the proposal's
+  // ("Accepted d_…: …", §10.5), since accepting writes no cites.
+  function claimDecision(d){
+    if(!d) return null;
+    if(arr(d.claims).length) return d;
+    var m=/^Accepted (d_[A-Za-z0-9_-]+)/.exec(String(d.rationale||''));
+    return m?CHAIN.decisions.filter(function(x){ return x.id===m[1]; })[0]||null:null;
+  }
+  // A pin research found outside the measure list, kept in this brief only
+  // and never written to the layers (Contract 3 §4). The projection carries
+  // no origin; a layer copy carries its version, a person's correction says so.
+  function keptPin(pn){
+    return !!pn&&(!!pn.kept_in_document||(pn.version==null&&!/^corrected/.test(String(pn.pin_reason||''))));
+  }
+  // A pin a person marked wrong: excluded from the brief, or replaced.
+  function wrongPin(id){
+    var pn=((get('projection')||{}).pins||{})[id];
+    return !!(pn&&pn.replaced_by)||arr((get('selection')||{}).excluded).some(function(e){ return e&&e.fact_id===id; });
   }
   // Where a research fact was read: its source record, in words.
   function srcLine(s){
@@ -961,23 +986,47 @@
     var y=/^\d{4}/.exec(s.published_at||'');
     return [s.publisher||s.domain, s.title].filter(Boolean).join(', ')+(y?' · '+y[0]:'');
   }
-  // The passages, client words, research facts and points a field rests on, quoted.
-  function sourcesHtml(ids){
-    var pr=get('projection')||{}, P=pr.pins||{}, F=pr.findings||{}, S=pr.sources||{};
-    var h=ids.map(function(id){
-      var p=/^psg_/.test(id)?passage(id):null, c=/^cap_/.test(id)?captureItem(id):null;
+  // The passages, client words, research facts and points a field rests on,
+  // quoted. With the part's claims (§10.7): each worked-out one first, with
+  // its working and the facts it was worked out from, then what is still to
+  // confirm, then every other source once.
+  function sourcesHtml(ids, claims){
+    var pr=get('projection')||{}, P=pr.pins||{}, F=pr.findings||{}, S=pr.sources||{}, M=get('materials')||{};
+    var viaCap={}; ids.forEach(function(id){ var c=/^cap_/.test(id)?captureItem(id):null; if(c&&c.material_id) viaCap[c.material_id]=1; });
+    function one(id){
+      var p=/^psg_/.test(id)?passage(id):null, c=/^cap_/.test(id)?captureItem(id):null, m=/^mat_/.test(id)?M[id]:null;
       if(/^f_/.test(id)&&P[id]){
         var pn=P[id], sid=arr(pn.sources).filter(function(x){ return S[x]; })[0]||arr(pn.sources)[0], src=S[sid], q=(pn.quotes||{})[sid];
         var web=src&&/^https?:\/\//.test(src.uri||'');
         return '<li><blockquote>'+esc(short(q||String(pn.value),320))+'</blockquote><cite>'+esc(srcLine(src))
-          +(web?' · <a href="'+esc(src.uri)+'" target="_blank" rel="noopener noreferrer">Open it ↗</a>':'')+'</cite></li>';
+          +(web?' · <a href="'+esc(src.uri)+'" target="_blank" rel="noopener noreferrer">Open it ↗</a>':'')
+          +(keptPin(pn)?' · kept in this brief only':'')+(wrongPin(id)?' · <b>marked wrong</b>':'')+'</cite></li>';
       }
       if(/^fi_/.test(id)&&F[id]){ var fi=F[id], n=arr(fi.cites).length;
         return '<li><blockquote>'+esc(short(fi.statement||'',320))+'</blockquote><cite>Worked out from '+n+' fact'+(n===1?'':'s')+' in the research'+(fi.status==='verified'?' · checked by a person':fi.status==='superseded'?' · replaced after a review':'')+'</cite></li>'; }
       if(p) return '<li><blockquote>'+esc(short(p.text,320))+'</blockquote><cite>'+esc(citationOf(p))+'</cite></li>';
       if(c&&(c.quote||c.value)) return '<li><blockquote>'+esc(short(c.quote||c.value,320))+'</blockquote><cite>The client'+(c.material_id?' · '+esc(citeLabel(c.material_id)):'')+(c.status==='assumption'?' · an assumption':'')+'</cite></li>';
+      if(m&&m.kind==='prompt'&&m.text&&!viaCap[id]) return '<li><blockquote>'+esc(short(m.text,480))+'</blockquote><cite>Your request, as typed</cite></li>';
       return '';
-    }).join('');
+    }
+    var shown={}, h='';
+    arr(claims).forEach(function(cl){
+      if(!cl||!cl.text) return;
+      var cs=arr(cl.cites), wrong=cs.some(wrongPin)?'<cite class="wrong"><b>Rests on a fact marked wrong.</b> Check it before you rely on it.</cite>':'';
+      if(cl.kind==='derived'){
+        var facts=cs.every(function(x){ return /^f_|^fi_/.test(x); });
+        h+='<li class="worked"><blockquote>'+esc(cl.text)+'</blockquote>'
+          +(cl.working?'<cite>Worked out: '+esc(cl.working)+(cl.check==='false'||cl.check===false?' · <b>the working does not add up, check it</b>':cl.check==='stated'?' · not recomputed':'')+'</cite>':'')
+          +wrong
+          +'<div class="from"><span class="rl">Worked out from '+cs.length+' '+(facts?'fact':'source')+(cs.length===1?'':'s')+'</span><ul>'+cs.map(one).join('')+'</ul></div></li>';
+        cs.forEach(function(x){ shown[x]=1; });
+      } else if(cl.kind==='to_confirm'){
+        h+='<li class="confirm"><blockquote>'+esc(cl.text)+'</blockquote><cite>To confirm · nothing in this brief supports it yet</cite></li>';
+      } else if(wrong){
+        h+='<li><blockquote>'+esc(cl.text)+'</blockquote>'+wrong+'</li>';
+      }
+    });
+    h+=ids.filter(function(id){ return !shown[id]; }).map(one).join('');
     return h?'<div class="srcs"><span class="rl">Sources</span><ul>'+h+'</ul></div>':'';
   }
   function verdictHtml(v){
@@ -1003,7 +1052,8 @@
       if(look) h+='<div class="flag">'+fig(agentKeyOf(d),{state:'needs-you',decorative:true})+'<div><b>Look at this:</b> '+esc(look)+'</div></div>';
     }
     if(v) h+=verdictHtml(v);
-    h+=sourcesHtml(citesOf([d, v&&v.d]));
+    var cd=claimDecision(d);
+    h+=sourcesHtml(citesOf([d, cd, v&&v.d]), cd?cd.claims:[]);
     if(ds.length>1) h+='<details class="earlier"><summary>'+(ds.length-1)+' earlier '+(ds.length===2?'decision':'decisions')+' on this field</summary><ol>'
       +ds.slice(1,8).map(function(e){ return '<li><b>'+esc(whoName(e))+'</b> · '+esc(e.action||'')+' · '+esc(fmtDate(e.timestamp))+(e.rationale?' — '+esc(short(e.rationale,90)):'')+'</li>'; }).join('')+'</ol></details>';
     return h;
