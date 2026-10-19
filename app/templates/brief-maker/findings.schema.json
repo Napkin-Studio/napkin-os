@@ -54,7 +54,8 @@
             "enum": [
               "proposed",
               "verified",
-              "rejected"
+              "rejected",
+              "superseded"
             ]
           },
           "derived_by": {
@@ -156,6 +157,47 @@
                 "minLength": 1
               }
             }
+          },
+          "superseded_by": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "finding",
+              "decision"
+            ],
+            "properties": {
+              "finding": {
+                "type": "string",
+                "pattern": "^fi_[0-9A-Z]{6,}$",
+                "description": "The finding that replaces it."
+              },
+              "decision": {
+                "type": "string",
+                "pattern": "^d_[0-9A-Z]{6,}$",
+                "description": "Id of a decision in agent/decision-chain.yaml."
+              }
+            },
+            "description": "A review took away what it stood on, and this finding, worked out again, replaces it. Recorded by the crew (process:middleware); the finding is kept, struck."
+          },
+          "recheck": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "decision",
+              "note"
+            ],
+            "properties": {
+              "decision": {
+                "type": "string",
+                "pattern": "^d_[0-9A-Z]{6,}$",
+                "description": "Id of a decision in agent/decision-chain.yaml."
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "description": "A verified finding the crew checked again after a review changed what it cites, and that still holds: it stays verified."
           }
         },
         "allOf": [
@@ -218,6 +260,51 @@
                       "rejection"
                     ]
                   }
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "superseded"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "superseded_by"
+              ],
+              "not": {
+                "required": [
+                  "rejection"
+                ]
+              }
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "superseded_by"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "proposed",
+                    "rejected"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "recheck"
                 ]
               }
             }
