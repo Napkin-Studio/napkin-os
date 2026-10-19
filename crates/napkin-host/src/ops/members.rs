@@ -252,6 +252,11 @@ pub fn register(manifest: &mut Manifest, m: Member) {
 /// `current_value`), so the view can offer the current one without a second
 /// read.
 ///
+/// A finding carries its statement, status, confidence and cites, and, when
+/// it has them, `superseded_by` (the finding that replaces it) and `recheck`
+/// (a verified one checked again after a correction), for the view to link
+/// and say.
+///
 /// Only keys the entry actually has are copied — a pin missing its `layer` is
 /// left without one for the schema to reject, never given an invented value.
 ///
@@ -316,17 +321,17 @@ pub fn projection(
         let Some(id) = entry_id(f) else { continue };
         let f = serde_json::to_value(f).unwrap_or(Value::Null);
         let mut entry = Map::new();
-        for k in ["statement", "status", "confidence", "cites"] {
+        for k in [
+            "statement",
+            "status",
+            "confidence",
+            "cites",
+            "superseded_by",
+            "recheck",
+        ] {
             if let Some(v) = f.get(k).filter(|v| !v.is_null()) {
                 entry.insert(k.into(), v.clone());
             }
-        }
-        if let Some(fid) = f
-            .get("verification")
-            .and_then(|v| v.get("fact_id"))
-            .filter(|v| !v.is_null())
-        {
-            entry.insert("fact_id".into(), fid.clone());
         }
         found.insert(id.to_string(), Value::Object(entry));
     }

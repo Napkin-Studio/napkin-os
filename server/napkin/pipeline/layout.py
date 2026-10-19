@@ -72,14 +72,14 @@ def label(p) -> str:
     return k[:1].upper() + k[1:] + (f" · {p['market']}" if p.get("market") else "")
 
 
-def complete(html: str, report: dict, pins: dict, contests: dict, gaps: dict) -> str:
-    """The agent decides how the page shows things, never whether: add, in a plain list before the sources, every
-    fact, finding and contested value of the report that the page does not reference, under its section. Gaps are
-    code's: every gap the page does not already show goes in its own closing section, so the model does not spend
-    output writing one element per gap (61 on the IBM job)."""
+def missing(html: str, report: dict, pins: dict, contests: dict, gaps: dict) -> str:
+    """The agent decides how the page shows things, never whether: a plain list of every fact, finding and
+    contested value of the report that the page does not reference, under its section. Gaps are code's: every gap
+    the page does not already show goes in its own closing section, so the model does not spend output writing
+    one element per gap (61 on the IBM job). "" when the page shows everything."""
     e = lambda x: escape(str(x or ""), quote=True)
     shown = set(re.findall(r"\b(?:f|fi|ct|gap)_[0-9A-Za-z_]+", html))
-    parts, missing = [], []
+    parts, missing_gaps = [], []
     for sec in report["sections"]:
         rows, more = [], []
         for b in sec["blocks"]:
@@ -90,7 +90,7 @@ def complete(html: str, report: dict, pins: dict, contests: dict, gaps: dict) ->
             elif b["kind"] == "contest" and b["contest_id"] in contests and b["contest_id"] not in shown:
                 more.append(f'<p>Sources disagree: <clan-field ref="{e(b["contest_id"])}"></clan-field></p>')
             elif b["kind"] == "gap" and b["gap_id"] in gaps and b["gap_id"] not in shown:
-                missing.append((sec["title"], b["gap_id"]))
+                missing_gaps.append((sec["title"], b["gap_id"]))
         if rows:
             more.insert(0, '<table class="cl-table"><tbody>' + "".join(
                 f'<tr><td>{e(label(pins[i]))}</td><td><clan-field ref="{e(i)}" as="cell"></clan-field></td></tr>'
@@ -98,12 +98,18 @@ def complete(html: str, report: dict, pins: dict, contests: dict, gaps: dict) ->
         if more:
             parts.append(f'<h3>{e(sec["title"])}</h3>' + "".join(more))
     block = ('<section class="cl-block"><h2>Also in the research</h2>' + "".join(parts) + "</section>") if parts else ""
-    if missing:
+    if missing_gaps:
         groups: dict[str, list[str]] = {}
-        for title, gid in missing:
+        for title, gid in missing_gaps:
             groups.setdefault(title, []).append(f'<clan-gap ref="{e(gid)}"></clan-gap>')
         block += ('<section class="cl-block"><h2>What the research could not find</h2>'
                   + "".join(f'<h3>{e(t)}</h3>' + "".join(g) for t, g in groups.items()) + "</section>")
+    return block
+
+
+def complete(html: str, report: dict, pins: dict, contests: dict, gaps: dict) -> str:
+    """The page with what it leaves off (`missing`) added before the sources."""
+    block = missing(html, report, pins, contests, gaps)
     if not block:
         return html
     for marker in ('<footer', "<clan-sources"):
@@ -134,6 +140,34 @@ def finish(html: str | None, report: dict, pins: dict, findings: dict, contests:
         dropped.append("no page from the model")
     out, more, _ = rule.check(built(report, pins, contests, gaps), pins, findings, contests, gaps, names, paths)
     return out, "built", dropped + more
+
+
+def splice(old: list[str], redo: list[int], written, report: dict, pins: dict, findings: dict, contests: dict,
+           gaps: dict, names=(), paths=frozenset()) -> tuple[str, list[str]]:
+    """Part of the page written again (a review changed what it rests on) -> (page html, what the rule dropped).
+
+    `old` is the page in parts (`rule.split`); each part in `redo` is replaced by what the agent wrote for it
+    (`written`: [{part, html}]), after the rule. A part the agent did not write, or whose rewrite the rule left
+    empty, is the old part after the rule: what it referenced and no longer may is dropped. Every other part is
+    kept byte for byte. What the record holds and the page no longer shows is added before the sources."""
+    by = {w["part"]: w["html"] for w in written or [] if isinstance(w, dict) and w.get("part") in redo
+          and isinstance(w.get("html"), str)}
+    out, dropped = list(old), []
+    for i in redo:
+        html, d, _ = rule.check(by.get(i, ""), pins, findings, contests, gaps, names, paths)
+        if not html.strip():
+            html, d2, _ = rule.check(old[i], pins, findings, contests, gaps, names, paths)
+            d += [f"part {i}: " + ("not written by the agent" if i not in by else "the rule left nothing of the "
+                                   "agent's; the old part kept, checked")] + d2
+        out[i] = html
+        dropped += d
+    block = missing("".join(out), report, pins, contests, gaps)
+    if block:
+        block, more, _ = rule.check(block, pins, findings, contests, gaps, names, paths)
+        dropped += more
+        at = next((i for i, p in enumerate(out) if p.startswith("<footer") or "<clan-sources" in p), len(out))
+        out.insert(at, block)
+    return "".join(out), dropped
 
 
 def built(report: dict, pins: dict, contests: dict, gaps: dict) -> str:

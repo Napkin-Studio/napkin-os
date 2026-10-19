@@ -14,7 +14,7 @@ import logging
 import re
 
 from ..doc import (CONF, GATES, ISO_3166, LENSES, ctx_data, ctx_decisions, ctx_facts, ctx_findings, decision,
-                   field_env, field_value, human_owned, lens_of_key)
+                   field_env, field_value, human_owned, lens_of_key, out_of_use)
 from ..rules.cite import clean_claim
 from ..rules.confidence import finding_confidence
 from ..rules.figures import NUM
@@ -57,8 +57,7 @@ def schema(pin_ids: list[str]) -> dict:
 
 
 def usable_pins(clan: dict) -> list[dict]:
-    data = ctx_data(clan)
-    excluded = {e.get("fact_id") for e in ((data.get("selection") or {}).get("excluded") or [])}
+    excluded = out_of_use(clan)
     return [f for f in ctx_facts(clan) if re.fullmatch(r"f_[0-9A-Z]{6,}", str(f.get("id", "")))
             and f.get("id") not in excluded and f.get("confidence") in CONF]
 
@@ -83,7 +82,7 @@ def run_synthesis(doc, base, clan, inp, handler, caps, seed=None, with_audience=
     # one least of all: same cites, same id, and the pin of a rejection is
     # frozen, so the host would refuse the whole change.
     existing = {tuple(sorted(x.get("cites") or [])) for x in ctx_findings(clan)
-                if x.get("status") in ("proposed", "verified", "rejected")}
+                if x.get("status") in ("proposed", "verified", "rejected", "superseded")}
     rejected = [{"statement": x.get("statement"), "reason": (x.get("rejection") or {}).get("reason")}
                 for x in ctx_findings(clan) if x.get("status") == "rejected"]
     brand = field_value(data, "brand") or {}
@@ -144,7 +143,7 @@ def run_synthesis(doc, base, clan, inp, handler, caps, seed=None, with_audience=
     had = field_value(data, "audience")
     may_write = not had or (redo_audience and (field_env(data, "audience") or {}).get("origin") == "proposed")
     if aud and not human_owned(data, ctx_decisions(clan), doc, "audience") and may_write:
-        live = {x["id"] for x in ctx_findings(clan) if x.get("status") != "rejected"}
+        live = {x["id"] for x in ctx_findings(clan) if x.get("status") not in ("rejected", "superseded")}
         value = _audience(aud, by_id, names, [f["id"] for f in findings if f.get("lens") == "consumer_culture"]
                           + ([x["id"] for x in ctx_findings(clan) if x["id"] in live and x.get("lens") == "consumer_culture"]
                              if redo_audience else []))

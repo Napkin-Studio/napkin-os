@@ -278,7 +278,8 @@ class PlannedBriefJob(BriefJob):
                           "source": {k: s.get(k) for k in ("publisher", "title", "uri", "published_at") if s.get(k)}
                           or None})
         findings = [{"id": x["id"], "statement": x.get("statement"), "status": x.get("status")}
-                    for x in ctx_findings(self.clan) if isinstance(x.get("id"), str) and x.get("status") != "rejected"]
+                    for x in ctx_findings(self.clan)
+                    if isinstance(x.get("id"), str) and x.get("status") not in ("rejected", "superseded")]
         return {"facts": facts, "findings": findings[:60], "research": view["research"]}
 
     def _already_held(self, asks):

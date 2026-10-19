@@ -145,7 +145,7 @@ def check(html: str, pins: dict, findings: dict, contests: dict, gaps: dict, nam
     tree.feed(str(html or ""))
     tree.close()
     dropped = [f"<{t}> is not in the vocabulary" for t in sorted(tree.dropped_tags)]
-    live_findings = {k: v for k, v in findings.items() if v.get("status") != "rejected"}
+    live_findings = {k: v for k, v in findings.items() if v.get("status") not in ("rejected", "superseded")}
 
     paths = set(paths)
 
@@ -196,6 +196,16 @@ def check(html: str, pins: dict, findings: dict, contests: dict, gaps: dict, nam
 
     walk(tree.root)
     return _render(tree.root), dropped, counts
+
+
+def split(html: str) -> list[str]:
+    """The page's top-level elements (and any text between them), each as written: joined, they are the page
+    byte for byte. A page that does not split back into itself (not written by `check`) is one part."""
+    tree = _Tree()
+    tree.feed(str(html or ""))
+    tree.close()
+    out = [_render(k) for k in tree.root.kids]
+    return out if "".join(out) == html else [html]
 
 
 def gaps_of(known) -> set:

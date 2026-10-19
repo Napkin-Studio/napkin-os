@@ -253,6 +253,8 @@ table.facts .by{font-size:11.5px;color:var(--ink3)}
 .card.s-proposed{border-style:dashed;border-color:var(--ink3)}
 .card.s-rejected{background:var(--soft)}
 .card.s-rejected .stmt{text-decoration:line-through;text-decoration-color:var(--create);text-decoration-thickness:1.5px;color:var(--ink2)}
+.card.s-superseded{background:var(--soft)}
+.card.s-superseded .stmt{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--ink2)}
 .card .stmt{font-size:16px;line-height:1.45;margin:8px 0 10px;font-weight:500;letter-spacing:-.01em}
 .derived{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
 .derived svg{width:13px;height:13px}
@@ -721,7 +723,7 @@ a.pin-card.stale{background:var(--amber-soft)}
 a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 .blk-card{border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px;display:grid;gap:6px;background:var(--paper)}
 .blk-card.proposed{border-style:dashed;border-color:var(--ink3)}
-.blk-card.rejected .st{text-decoration:line-through;color:var(--ink2)}
+.blk-card.rejected .st,.blk-card.superseded .st{text-decoration:line-through;color:var(--ink2)}
 .blk-card.gap{background:var(--soft)}
 .blk-card .st{font-size:14.5px;font-weight:500;line-height:1.45}
 .blk-card .h{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -973,7 +975,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function findingChip(id){
     var f=fnds()[id];
     var st=f?f.status:'unknown';
-    var cls=st==='verified'?'ok':st==='rejected'?'alert':'dash';
+    var cls=st==='verified'?'ok':st==='rejected'?'alert':st==='superseded'?'':'dash';
     return '<a class="pill '+cls+'" href="#finding-'+esc(id)+'" title="'+esc(f?f.statement:'Not in the projection')+'">'+(st==='rejected'?'<span class="d"></span>':'')+esc(id)+' · '+esc(st)+'</a>';
   }
 
@@ -986,31 +988,54 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
       .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
       .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-      .then(function(){ render(); reconsiderWrong(); });
+      .then(function(){ render(); reconsider(); });
   }
-  // ── a fact marked wrong: take it out, and rework what rested on it ──────
-  // The OS's drawer records the person's "No, this is wrong" on a fact. The
-  // crew then takes the fact out and checks every finding, answer and the
-  // report that rested on it without it, working out again whatever no longer
-  // stands (reconsider_fact). Once for each verdict.
-  var WRONG={started:{}};
-  try{ WRONG.started=JSON.parse(stored('clan.research.wrong.'+docId())||'{}')||{}; }catch(e){}
-  function reconsiderWrong(){
+  // ── a review: bring what rests on it in step ───────────────────────────
+  // A person's review (a fact marked right or wrong, a finding verified or
+  // rejected, a fact corrected) changes only the document. The crew then
+  // works out again whatever rests on what was reviewed: confidence, the
+  // findings, the answers and the report sections that cite it (reconsider).
+  // One job per document at a time: reviews made while one runs wait, and go
+  // together in the next.
+  var RECON={queue:[], job:null};
+  try{ RECON.queue=arr(JSON.parse(stored('clan.research.reconsider.'+docId())||'[]')); }catch(e){}
+  // What the host's reply to a review says was reviewed, as a reconsider event.
+  function reviewEvent(route, body, res){
+    var d=res&&res.decision; if(!d||!body) return null;
+    var t=arr(res.targets).map(pathOf);
+    if(route==='/verify') return {kind:'finding_verified', id:body.finding, decision:d};
+    if(route==='/correct'){ var to=/^facts\[(f_[0-9A-Z]+)\]$/.exec(t[1]||''); return to?{kind:'fact_corrected', id:body.fact, decision:d, replaced_by:to[1]}:null; }
+    if(route!=='/verdict') return null;
+    var m=/^(facts|findings)\[((?:f|fi)_[0-9A-Z]+)\]$/.exec(t[0]||''); if(!m) return null;
+    if(m[1]==='findings') return body.polarity==='bad'?{kind:'finding_rejected', id:m[2], decision:d}:null;
+    return {kind:body.polarity==='good'?'fact_verified':'fact_rejected', id:m[2], decision:d};
+  }
+  function reviewed(route, body, res){
+    var ev=reviewEvent(route, body, res); if(!ev) return;
+    RECON.queue.push(ev); keepRecon(); reconsider();
+  }
+  function keepRecon(){ store('clan.research.reconsider.'+docId(), RECON.queue.length?JSON.stringify(RECON.queue):null); }
+  function reconsider(){
+    if(RECON.job||!RECON.queue.length) return;
     if(!(window.clan&&window.clan.apiProxy)||reportLocked()) return;
-    var all=decs();
-    all.forEach(function(d, i){
-      if(d.kind!=='verdict'||d.polarity!=='bad'||WRONG.started[d.id]) return;
-      var t=arr(d.targets).map(pathOf).filter(function(x){ return /^facts\[f_[0-9A-Z]+\]$/.test(x); })[0]; if(!t) return;
-      var fid=t.slice(6,-1);
-      // already done for this verdict: a newer reconsider_fact names the fact
-      var done=all.slice(0,i).some(function(x){ return x.action==='reconsider_fact'&&arr(x.targets).some(function(a){ return pathOf(a)==='facts['+fid+']'; }); });
-      // once per fact: not when it is already taken out, nor while a rework of it runs
-      var busy=JOBS.some(function(j){ return j.task==='reconsider_fact'&&j.fact===fid&&/^(sending|queued|running)$/.test(j.state||'')&&!j.error; });
-      if(done||busy||excludedIds()[fid]||!pins()[fid]) return;
-      WRONG.started[d.id]=1; store('clan.research.wrong.'+docId(), JSON.stringify(WRONG.started));
-      runTask('reconsider_fact', {fact_id:fid, why:String(d.rationale||'A person marked it wrong.'), verdict_id:d.id});
-      toast('Marked wrong. '+given('judge')+' is checking what rested on it.');
+    var events=RECON.queue; RECON.queue=[];
+    var sent=events.map(function(e){ var o={}; for(var k in e) if(k!=='tries') o[k]=e[k]; return o; });
+    var job=runTask('reconsider', {events:sent}, function(j){
+      RECON.job=null;
+      // Never started: these wait for the next run, with what came since.
+      var unsent=j.error&&!j.jobId;
+      if(unsent) RECON.queue=events.concat(RECON.queue);
+      // Ran but failed, or its change was refused (a review landed while it
+      // ran): these go once more with what came since, never twice, so a job
+      // that keeps failing does not loop.
+      else if(j.error) RECON.queue=events.filter(function(e){ return !e.tries; })
+        .map(function(e){ var o={}; for(var k in e) o[k]=e[k]; o.tries=1; return o; }).concat(RECON.queue);
+      keepRecon();
+      if(!unsent) reconsider();
     });
+    // Still running (a job over before it was handed back is not).
+    if(job.then) RECON.job=job;
+    keepRecon();
   }
   function excludedIds(){ var o={}; arr(sel().excluded).forEach(function(e){ if(e&&e.fact_id) o[e.fact_id]=e; }); return o; }
   function decs(){ return CHAIN.decisions; }
@@ -1066,7 +1091,11 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     }
     return ids.filter(function(x,i,a){ return a.indexOf(x)===i; });
   }
-  function rejectedCited(env){ return citedFindings(env).filter(function(id){ var f=fnds()[id]; return f&&f.status==='rejected'; }); }
+  // Findings a field cites that are out of use: rejected by a person, or
+  // superseded by one a review worked out again (the field moves to that).
+  function rejectedCited(env){ return citedFindings(env).filter(function(id){ var f=fnds()[id]; return f&&(f.status==='rejected'||f.status==='superseded'); }); }
+  function replacedBy(id){ var f=fnds()[id]; return f&&f.status==='superseded'&&f.superseded_by?f.superseded_by.finding:null; }
+  function outWhy(id){ var to=replacedBy(id); return to?'which a review replaced with <a href="#finding-'+esc(to)+'">'+esc(to)+'</a>':'which a person rejected'; }
   function missingFor(g){ var c=camp(); return FIELDS.filter(function(f){ return f.gate===g && !isObj(c[f.k]); }); }
   function gateReached(g){
     var order=['created','research','brief']; var idx=order.indexOf(g);
@@ -1088,7 +1117,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     Object.keys(fnds()).forEach(function(id){ if(fnds()[id].status==='proposed') b.push({k:'Unverified finding', html:'<a href="#finding-'+esc(id)+'">'+esc(id)+'</a> — '+esc(fnds()[id].statement)}); });
     FIELDS.forEach(function(f){
       var env=c[f.k]; if(!isObj(env)) return;
-      rejectedCited(env).forEach(function(id){ b.push({k:'Flagged field', html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> cites rejected finding '+esc(id)+' — revise it'}); });
+      rejectedCited(env).forEach(function(id){ b.push({k:'Flagged field', html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> cites finding '+esc(id)+', '+outWhy(id)+' — revise it'}); });
       verdictState('campaign.'+f.k).unanswered.forEach(function(v){ b.push({k:'Bad verdict', html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> — “'+esc(v.rationale||'')+'” ('+esc(human(v.actor||v.agent))+'), unanswered'}); });
     });
     ['created','research','brief'].forEach(function(g){ missingFor(g).forEach(function(f){ b.push({k:'Missing · '+g, html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> is not filled'}); }); });
@@ -1284,7 +1313,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var wide=(f.type==='audience'||f.type==='prose'||f.type==='items'||f.type==='asksrc');
     var h='<article class="field o-'+esc(env.origin)+(flagged.length?' flagged':'')+(wide?' wide':'')+'" id="field-'+f.k+'" data-address="'+esc(A)+'"'+partAttrs(f)+'>'
       +'<div class="fh"><span class="lab">'+esc(f.label)+'</span>'+originBadge(env.origin, env)+gatePill(f.gate)+'<span class="sp"></span><span class="path">'+esc(p)+'</span></div>';
-    if(flagged.length) h+='<div class="flag" style="margin-bottom:10px"><div><b>Flagged.</b> Cites '+flagged.map(function(id){ return '<a href="#finding-'+esc(id)+'">'+esc(id)+'</a>'; }).join(', ')+', which a person rejected. Revise the field to stop citing it before lock.</div></div>';
+    if(flagged.length) h+='<div class="flag" style="margin-bottom:10px"><div><b>Flagged.</b> Cites '+flagged.map(function(id){ return '<a href="#finding-'+esc(id)+'">'+esc(id)+'</a>, '+outWhy(id); }).join('; ')+'. Revise the field to stop citing it before lock.</div></div>';
     h+=(OS_EDITABLE[f.type]&&f.k!=='id'?osField(f):renderValue(f, env));
     h+='<div class="prov">'+provenance(env, f)+fieldMarks(p)+'</div>';
     var canConfirm=(env.origin==='extracted'||env.origin==='proposed');
@@ -1376,11 +1405,11 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   }
   function renderFindings(){
     var F=fnds(), ids=Object.keys(F);
-    var counts={proposed:0,verified:0,rejected:0}; ids.forEach(function(id){ counts[F[id].status]=(counts[F[id].status]||0)+1; });
-    $('findings-count').textContent=ids.length?(counts.verified+' verified · '+counts.proposed+' proposed · '+counts.rejected+' rejected'):'';
+    var counts={proposed:0,verified:0,rejected:0,superseded:0}; ids.forEach(function(id){ counts[F[id].status]=(counts[F[id].status]||0)+1; });
+    $('findings-count').textContent=ids.length?(counts.verified+' verified · '+counts.proposed+' proposed · '+counts.rejected+' rejected'+(counts.superseded?' · '+counts.superseded+' replaced':'')):'';
     $('nav-findings').textContent=ids.length||'';
     if(!ids.length){ $('findings-body').innerHTML='<div class="empty-state"><b>No findings yet.</b> '+esc(given('synthesis'))+' works them out from the pins once the research is in.</div>'; return; }
-    var order={proposed:0,rejected:1,verified:2};
+    var order={proposed:0,rejected:1,verified:2,superseded:3};
     ids.sort(function(a,b){ return (order[F[a].status]-order[F[b].status])||a.localeCompare(b); });
     $('findings-body').innerHTML='<div class="cards">'+ids.map(function(id){
       var f=F[id], A=addr('findings['+id+']');
@@ -1389,19 +1418,21 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       var ver=ds.filter(function(d){ return d.kind==='verify'; })[0];
       var syn=ds.filter(function(d){ return d.kind==='finding'; })[0];
       var citing=fieldsCiting(id);
-      var st=f.status;
+      var st=f.status, out=st==='rejected'||st==='superseded';
       var h='<article class="card s-'+esc(st)+'" id="finding-'+esc(id)+'" data-address="'+esc(A)+'">'
         +'<div class="fh"><span class="derived">'+ICON.agent+'Worked out by '+esc(given('synthesis'))+'</span>'
-        +(st==='verified'?'<span class="pill ok"><span class="d"></span>verified</span>':st==='rejected'?'<span class="pill alert"><span class="d"></span>rejected</span>':'<span class="pill dash">proposed · not yet verified</span>')
+        +(st==='verified'?'<span class="pill ok"><span class="d"></span>verified</span>':st==='rejected'?'<span class="pill alert"><span class="d"></span>rejected</span>':st==='superseded'?'<span class="pill">replaced after a review</span>':'<span class="pill dash">proposed · not yet verified</span>')
         +'<span class="sp" style="flex:1"></span><span class="path">'+esc(id)+'</span></div>'
         +'<div class="stmt">'+esc(f.statement)+'</div>'
         +'<dl class="kv">'
         +'<dt>Rests on</dt><dd>'+pinChips(f.cites)+'</dd>'
         +'<dt>Confidence</dt><dd><span class="pill" title="The lowest among the cited pins, one lower for a single or stale citation">'+esc(f.confidence)+'</span> <span class="muted" style="font-size:12px">derived from the pins, never asked of the model</span></dd>'
         +(syn?'<dt>Derived</dt><dd class="muted" style="font-size:12.5px">'+esc(syn.handler||syn.agent)+(syn.backend?' · '+esc(syn.backend):'')+' · '+esc(fmtDate(syn.timestamp))+'</dd>':'')
-        +(st==='verified'?'<dt>Verified</dt><dd>'+(ver?'by <b>'+esc(human(ver.actor||ver.agent))+'</b> · '+esc(fmtDate(ver.timestamp))+(ver.rationale?' — “'+esc(ver.rationale)+'”':''):'')+(f.fact_id?'<div style="margin-top:4px">Written to the layer and pinned as '+pinChip(f.fact_id)+'</div>':'')+'</dd>':'')
+        +(st==='verified'?'<dt>Verified</dt><dd>'+(ver?'by <b>'+esc(human(ver.actor||ver.agent))+'</b> · '+esc(fmtDate(ver.timestamp))+(ver.rationale?' — “'+esc(ver.rationale)+'”':''):'')+'</dd>':'')
+        +(st==='verified'&&f.recheck?'<dt>Re-checked</dt><dd class="muted" style="font-size:12.5px" title="'+esc(f.recheck.note||'')+'">'+(/correction/.test(f.recheck.note||'')?'after a correction':'after a review')+'; it still holds</dd>':'')
+        +(replacedBy(id)?'<dt>Replaced by</dt><dd><a class="pill" href="#finding-'+esc(replacedBy(id))+'">'+esc(replacedBy(id))+'</a> <span class="muted" style="font-size:12px">worked out again after a review took away what this rested on</span></dd>':'')
         +(st==='rejected'?'<dt>Rejected</dt><dd>'+(rej?'by <b>'+esc(human(rej.actor||rej.agent))+'</b> · '+esc(fmtDate(rej.timestamp))+' — “'+esc(rej.rationale||'')+'”':'<span class="muted">reason is in shared/findings.yaml; no verdict found in the chain</span>')+'</dd>':'')
-        +(citing.length?'<dt>'+(st==='rejected'?'Flags':'Used by')+'</dt><dd>'+citing.map(function(x){ return '<a class="pill'+(st==='rejected'?' alert':'')+'" href="#field-'+x.k+'">'+(st==='rejected'?'<span class="d"></span>':'')+esc(x.label)+'</a>'; }).join(' ')+(st==='rejected'?' <span style="font-size:12px;color:var(--create-ink)">revise to stop citing it</span>':st==='proposed'?' <span class="muted" style="font-size:12px">a brief may use it only visibly labelled</span>':'')+'</dd>':'')
+        +(citing.length?'<dt>'+(out?'Flags':'Used by')+'</dt><dd>'+citing.map(function(x){ return '<a class="pill'+(out?' alert':'')+'" href="#field-'+x.k+'">'+(out?'<span class="d"></span>':'')+esc(x.label)+'</a>'; }).join(' ')+(st==='rejected'?' <span style="font-size:12px;color:var(--create-ink)">revise to stop citing it</span>':st==='superseded'?' <span style="font-size:12px;color:var(--create-ink)">move it to the finding that replaces this one</span>':st==='proposed'?' <span class="muted" style="font-size:12px">a brief may use it only visibly labelled</span>':'')+'</dd>':'')
         +'</dl>';
       h+='<div class="ctl no-print" role="group" aria-label="Review '+esc(id)+'">'
         +(st==='proposed'?'<button type="button" class="btn sm live" data-act="verify" data-address="'+esc(A)+'">Verify or reject…</button>':'')
@@ -1813,6 +1844,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       .then(function(res){
         if(res&&res.clan&&res.clan.data){ window.__CLAN__.data=res.clan.data; window.dispatchEvent(new CustomEvent('clan:dataupdated',{detail:{source:'review'}})); }
         loadChain(); if(window.ClanFields) ClanFields.reload();
+        if(res&&res.ok) reviewed(route, body, res);
         return res;
       });
   }
@@ -1876,7 +1908,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(b.length){
       h+='<p style="margin:0">'+b.length+' item'+(b.length===1?'':'s')+' must be resolved first. Locking is file-wide: a locked campaign is brief-ready.</p><ul class="blockers">'+b.map(function(x){ return '<li><span class="k">'+esc(x.k)+'</span><span>'+x.html+'</span></li>'; }).join('')+'</ul>';
     } else {
-      h+='<p style="margin:0">Nothing blocks the lock. Confirming verifies each finding below and writes it to the layer.</p>'
+      h+='<p style="margin:0">Nothing blocks the lock. Confirming accepts the findings below as they stand.</p>'
         +'<ul class="blockers">'+Object.keys(F).map(function(id){ return '<li class="info"><span class="k">'+esc(F[id].status)+'</span><span>'+esc(F[id].statement)+'</span></li>'; }).join('')+'</ul>';
     }
     h+='<ul class="blockers"><li class="info"><span class="k">Branches</span><span>Unmerged agent branches are checked by the host at lock.</span></li>'
@@ -1941,7 +1973,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       research_lens:['The researchers', 'We now have '+s(np,'fact')+' pinned.'],
       synthesise_findings:[given('synthesis'), 'I’ve found '+s(nf,'point')+' in all. '+(open?open+' '+(open===1?'waits':'wait')+' for you to check.':'None waits for you.')],
       extract_ask:[given('extract'), 'I’ve read the ask. '+Object.keys(camp()).length+' of its '+FIELDS.length+' parts are filled.'],
-      reconsider_fact:[given('judge'), 'I took the fact out. '+String(j.summary||'')]
+      reconsider:[given('judge'), 'I went through what rested on your review. '+String(j.summary||'')]
     }[j.task];
     return line&&line[0]?'<b>'+esc(line[0])+':</b> '+esc(line[1]):'';
   }
@@ -1970,31 +2002,38 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     // The host wrote the change; the bridge / shell refreshes __CLAN__.data and
     // fires clan:dataupdated. Re-read the chain and re-render either way.
     if(j.applied){ loadChain(); render(); }
+    ended(j);
   }
+  // A job is over, done or failed: whoever started it is told, once.
+  function ended(j){ var f=j.then; j.then=null; if(f) f(j); }
+  function failed(j, err){ j.error=err; renderJobs(); ended(j); }
   function poll(j, delay){
     setTimeout(function(){
       window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.jobId}}).then(function(res){
         var err=mwError(res);
-        if(err){ j.error=err; renderJobs(); return; }
+        if(err){ failed(j, err); return; }
         res=mwBody(res); jobFrom(j, res); renderJobs();
         if(res.job && (res.job.state==='queued'||res.job.state==='running')) poll(j, Math.min(delay*1.5, 10000));
         else afterApplied(j);
-      }).catch(function(e){ j.error='The middleware could not be reached: '+(e&&e.message||e); renderJobs(); });
+      }).catch(function(e){ failed(j, 'The middleware could not be reached: '+(e&&e.message||e)); });
     }, delay);
   }
-  function runTask(task, input){
-    if(!(window.clan&&window.clan.apiProxy)){ toast('Research runs through the host’s api-proxy.'); return; }
+  // Start a middleware task and follow it; `then(job)` once it is over.
+  function runTask(task, input, then){
+    var j={task:task, state:'sending', then:then};
+    if(!(window.clan&&window.clan.apiProxy)){ toast('Research runs through the host’s api-proxy.'); failed(j, 'No api-proxy.'); return j; }
     // The client's documents are research sources: the host adds their text.
     if(task==='research_lens'&&!input.attachments&&attachments().length) input=Object.assign({}, input, {attachments:attachments()});
-    var j={task:task, state:'sending', fact:input&&input.fact_id}; JOBS.unshift(j); renderJobs();
+    JOBS.unshift(j); renderJobs();
     var el=$('jobs'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'});
     window.clan.apiProxy('middleware', {task:task, input:input}).then(function(res){
       var err=mwError(res);
-      if(err){ j.error=err; renderJobs(); return; }
+      if(err){ failed(j, err); return; }
       res=mwBody(res); jobFrom(j, res); renderJobs();
       if(res.job && (res.job.state==='queued'||res.job.state==='running') && j.jobId) poll(j, 1200);
       else afterApplied(j);
-    }).catch(function(e){ j.error='The middleware could not be reached: '+(e&&e.message||e); renderJobs(); });
+    }).catch(function(e){ failed(j, 'The middleware could not be reached: '+(e&&e.message||e)); });
+    return j;
   }
   function cancelTask(j){
     if(!j||!j.jobId||j.cancelling) return;
@@ -2848,9 +2887,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(!f) return '<div class="blk-card"><span class="pill dash">'+esc(id)+' · not in the projection</span></div>';
     var st=f.status;
     return '<div class="blk-card '+esc(st)+'" data-anchor="'+esc(id)+'"><div class="h">'
-      +(st==='verified'?'<span class="pill ok"><span class="d"></span>verified by a person</span>':'<span class="derived">'+ICON.agent+'Worked out by '+esc(given('synthesis'))+'</span>'+(st==='rejected'?'<span class="pill alert"><span class="d"></span>rejected</span>':'<span class="pill dash">not yet verified</span>'))
+      +(st==='verified'?'<span class="pill ok"><span class="d"></span>verified by a person</span>':'<span class="derived">'+ICON.agent+'Worked out by '+esc(given('synthesis'))+'</span>'+(st==='rejected'?'<span class="pill alert"><span class="d"></span>rejected</span>':st==='superseded'?'<span class="pill">replaced after a review</span>':'<span class="pill dash">not yet verified</span>'))
       +'<span class="sp"></span><a class="path" href="#finding-'+esc(id)+'">'+esc(id)+'</a></div>'
-      +'<div class="st">'+esc(f.statement)+'</div>'+pinChips(f.cites)+'</div>';
+      +'<div class="st">'+esc(f.statement)+'</div>'+pinChips(f.cites)
+      +(replacedBy(id)?'<a class="muted" style="font-size:13px" href="#finding-'+esc(replacedBy(id))+'">Replaced by '+esc(replacedBy(id))+' →</a>':'')+'</div>';
   }
   function gapBlock(gid){
     var g=arr(sel().gaps).filter(function(x){ return x.id===gid; })[0];
@@ -3114,6 +3154,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       if(!c.open){
         var by=decidedBy('findings['+c.ref+']', f.status==='rejected'?['verdict']:['verify']);
         var st=String(f.statement||''), q=shown||!st?'':': “'+(st.length>60?st.slice(0,58).replace(/\s+\S*$/,'')+'…':st)+'”';
+        if(f.status==='superseded') return '<span class="rc-ok out" id="'+id+'" tabindex="-1">'+esc('Replaced after a review'+q)+'</span>';
         return f.status==='rejected'
           ?'<span class="rc-ok out" id="'+id+'" tabindex="-1">'+esc((by?(by==='You'?'You took this out':by+' took this out'):'Taken out')+q)+'</span>'
           :'<span class="rc-ok" id="'+id+'" tabindex="-1">✓ '+esc((by?(by==='You'?'You agreed':by+' agreed'):'Agreed')+q)+'</span>';
@@ -3688,9 +3729,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   window.addEventListener('clan:dataupdated', render);
   // The OS's fields have read what needs a person again (clan://decisions).
   window.addEventListener('clan:viewloaded', renderChecks);
-  // A verdict given in the OS's drawer is in the chain: read it again (a fact
-  // marked wrong is reconsidered from it).
+  // A verdict given in the OS's drawer is in the chain: read it again.
   window.addEventListener('clan:viewloaded', function(){ loadChain(); });
+  // A review given in the OS's drawer: what rests on it is reconsidered.
+  window.addEventListener('clan:reviewed', function(e){ var d=e.detail||{}; reviewed(d.route, d.body, d.reply); });
   // The lock is read with the host's view: the report's bar follows it.
   var REPORT_LOCK=null;
   window.addEventListener('clan:viewloaded', function(){ var l=reportLocked(); if(l!==REPORT_LOCK){ REPORT_LOCK=l; renderReport(); } });

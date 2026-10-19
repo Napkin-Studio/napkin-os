@@ -137,6 +137,24 @@ fn finding(f: &Fixture) -> Value {
     yaml(f, "shared/findings.yaml")["findings"][0].clone()
 }
 
+/// `member` as the Research Tool's schema for it has it, or why not.
+fn conforms(member: &Value, schema: &str) {
+    let path = format!(
+        "{}/../../app/templates/campaign-research/{schema}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let out = clan_sdk::AgentOutput {
+        mode: "data-update".into(),
+        structured: member.clone(),
+        design: None,
+        human: None,
+        decision: None,
+    };
+    if let Err(e) = out.validate_schema(&std::fs::read_to_string(path).unwrap()) {
+        panic!("{schema}: {e}");
+    }
+}
+
 fn verdict(target: &str, polarity: &str, rationale: &str) -> Verdict {
     Verdict::parse(
         &json!({ "target": target, "polarity": polarity, "rationale": rationale }).to_string(),
@@ -228,7 +246,8 @@ fn a_finding_is_verified_not_marked_good_and_a_bad_mark_needs_a_reason() {
         Verdict::parse(&json!({ "target": "facts[f_01JA0B3P4Q]", "polarity": "bad" }).to_string())
             .unwrap_err();
     assert_eq!(e.status, 400);
-    // A good mark on a pin is recorded, with nothing else changed.
+    // A good mark on a pin is recorded, and is the pin's review: nothing
+    // else of it changes.
     let before = yaml(&f, "shared/facts.yaml");
     run(&f, |c, d| {
         review::verdict(c, d, verdict("facts[f_01JA0B3P4Q]", "good", ""))
@@ -237,7 +256,14 @@ fn a_finding_is_verified_not_marked_good_and_a_bad_mark_needs_a_reason() {
     let d = &chain(&f).decisions[0];
     assert_eq!(d.polarity.as_deref(), Some("good"));
     assert_eq!(d.targets, vec![format!("{}#facts[f_01JA0B3P4Q]", f.doc)]);
-    assert_eq!(yaml(&f, "shared/facts.yaml"), before);
+    let mut after = yaml(&f, "shared/facts.yaml");
+    let review = after["facts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("review")
+        .unwrap();
+    assert_eq!(review["decision"], d.id.as_deref().unwrap());
+    assert_eq!(after, before);
     // Something the document does not hold is not a target.
     assert_eq!(
         run(&f, |c, d| review::verdict(
@@ -348,86 +374,107 @@ fn keeping_the_pinned_value_pins_nothing_new() {
     assert_eq!(run(&f, |c, d| review::resolve(c, d, wrong)), Err(404));
 }
 
-fn synthesis_pin(decision: &str) -> Value {
-    let mut p = pin("f_01JB5YN7HS", 0.0, "category");
-    p["key"] = json!("synthesis.fi_01ja0f2b");
-    p["value"] = json!("Frozen is growing fast from a small share");
-    p["unit"] = json!("text");
-    p["method"] = json!("synthesis");
-    p["sources"] = json!(["src_human01", "f_01JA0B3P4Q", "f_01JA0B3P5R"]);
-    p["decision"] = json!(decision);
-    p
-}
-
 #[test]
-fn verifying_pins_what_the_layer_wrote_under_the_same_decision() {
+fn verifying_records_who_checked_it_in_the_document_only() {
     let f = fixture();
-    let ask = f
-        .session
-        .read(|d| review::verify_request(f.session.ctx(), d, "fi_01JA0F2B"))
-        .unwrap();
-    assert_eq!(ask["task"], "verify_finding");
-    assert_eq!(ask["input"]["by"], f.session.ctx().actor.as_str());
-    let did = ask["input"]["decision_id"].as_str().unwrap().to_string();
-
-    // A pin the middleware wrote under some other decision is not this one.
-    let stray = synthesis_pin("d_01JBOTHER01");
-    assert_eq!(
-        run(&f, |c, d| review::verify_finding(
-            c,
-            d,
-            "fi_01JA0F2B",
+    let facts_before = yaml(&f, "shared/facts.yaml");
+    // No middleware is configured: verifying needs none.
+    let r = handle(
+        &f.session,
+        &NoConfig,
+        HostRequest::new(
+            "/verify",
             "",
-            &did,
-            &stray,
-            None
-        )),
-        Err(502)
+            json!({ "finding": "fi_01JA0F2B", "rationale": "Checked both tables" })
+                .to_string()
+                .into_bytes(),
+        ),
     );
+    assert_eq!(r.status, 200, "{}", String::from_utf8_lossy(&r.body));
+    let reply: Value = serde_json::from_slice(&r.body).unwrap();
+    assert_eq!(reply["backrefs"], json!([]), "no parent to tell");
+    let did = reply["decision"].as_str().unwrap().to_string();
 
-    let p = synthesis_pin(&did);
-    run(&f, |c, d| {
-        review::verify_finding(
-            c,
-            d,
-            "fi_01JA0F2B",
-            "Checked both tables",
-            &did,
-            &p,
-            Some("src_human01"),
-        )
-    })
-    .unwrap();
-    let srcs = yaml(&f, "shared/sources.yaml")["sources"].clone();
-    let me = srcs
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|x| x["id"] == "src_human01")
-        .expect("the reviewer is a source");
-    assert_eq!(me["tier"], "reviewer-verified");
-    assert_eq!(me["uri"], f.session.ctx().actor.as_str());
     let fi = finding(&f);
     assert_eq!(fi["status"], "verified");
-    assert_eq!(fi["verification"]["fact_id"], "f_01JB5YN7HS");
-    assert_eq!(fi["verification"]["decision"], did);
+    assert_eq!(
+        fi["verification"],
+        json!({ "decision": did, "by": f.session.ctx().actor.as_str(),
+                "at": fi["verification"]["at"] }),
+        "the decision, who and when; nothing else"
+    );
+    conforms(&yaml(&f, "shared/findings.yaml"), "findings.schema.json");
+    assert!(fi["verification"]["at"]
+        .as_str()
+        .is_some_and(|t| t.ends_with('Z')));
     let d = &chain(&f).decisions[0];
     assert_eq!(d.id.as_deref(), Some(did.as_str()));
     assert_eq!(d.kind.as_deref(), Some("verify"));
+    assert_eq!(d.action, "verify_finding");
     assert_eq!(d.rationale, "Checked both tables");
-    assert!(yaml(&f, "shared/facts.yaml")["facts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|x| x["id"] == "f_01JB5YN7HS"));
-    // A verified finding is not asked about again.
+    assert_eq!(d.cites, vec!["f_01JA0B3P4Q", "f_01JA0B3P5R"]);
     assert_eq!(
-        f.session
-            .read(|d| review::verify_request(f.session.ctx(), d, "fi_01JA0F2B"))
-            .unwrap_err()
-            .status,
-        409
+        yaml(&f, "shared/facts.yaml"),
+        facts_before,
+        "nothing is pinned for it"
     );
+    // A verified finding is not verified again.
+    assert_eq!(
+        run(&f, |c, d| review::verify(c, d, "fi_01JA0F2B", "")),
+        Err(409)
+    );
+    assert_eq!(
+        run(&f, |c, d| review::verify(c, d, "fi_nope00", "")),
+        Err(404)
+    );
+}
+
+#[test]
+fn a_mark_on_a_fact_is_its_review() {
+    let f = fixture();
+    let good = run(&f, |c, d| {
+        review::verdict(c, d, verdict("facts[f_01JA0B3P4Q]", "good", ""))
+    })
+    .unwrap();
+    let bad = run(&f, |c, d| {
+        review::verdict(
+            c,
+            d,
+            verdict(
+                "facts[f_01JA0B3P5R]",
+                "bad",
+                "The panel is volume, not value",
+            ),
+        )
+    })
+    .unwrap();
+    let facts = yaml(&f, "shared/facts.yaml")["facts"].clone();
+    let by = |id: &str| {
+        facts
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|x| x["id"] == id)
+            .cloned()
+            .unwrap()
+    };
+    let me = f.session.ctx().actor.as_str();
+    let right = by("f_01JA0B3P4Q")["review"].clone();
+    assert_eq!(right["verdict"], "verified");
+    assert_eq!(right["by"], me);
+    assert_eq!(right["decision"], good["decision"]);
+    let wrong = by("f_01JA0B3P5R")["review"].clone();
+    assert_eq!(wrong["verdict"], "rejected");
+    assert_eq!(wrong["decision"], bad["decision"]);
+    assert_eq!(by("f_01JA0B3P5R")["value"], 0.44, "the value is untouched");
+    conforms(&yaml(&f, "shared/facts.yaml"), "facts.schema.json");
+    // Taking it out is the reconsider job's, not the verdict's.
+    assert!(yaml(&f, "shared/data.yaml")
+        .pointer("/selection/excluded")
+        .is_none());
+    let d = &chain(&f).decisions[0];
+    assert_eq!(d.action, "mark_bad");
+    assert_eq!(d.id.as_deref(), bad["decision"].as_str());
 }
 
 #[test]
@@ -663,25 +710,24 @@ fn a_person_edits_a_campaign_field_and_it_is_theirs() {
 #[test]
 fn a_corrected_fact_replaces_the_old_pin_which_stays_on_record() {
     let f = fixture();
-    let input = review::parse_correct(
-        &json!({ "fact": "f_01JA0B3P4Q", "value": "31%", "rationale": "The 2026 panel" })
-            .to_string(),
-    )
-    .unwrap();
-    let ask = f
-        .session
-        .read(|d| review::correct_request(f.session.ctx(), d, &input))
-        .unwrap();
-    assert_eq!(ask["task"], "correct_fact");
-    let did = ask["input"]["decision_id"].as_str().unwrap().to_string();
-    let mut p = pin("f_01JB0CORR01", 0.31, "category");
-    p["decision"] = json!(did);
-    p["sources"] = json!(["src_person01"]);
-    let src = json!({ "id": "src_person01", "uri": f.session.ctx().actor.as_str(), "tier": "reviewer-verified" });
-    run(&f, |c, d| {
-        review::correct_fact(c, d, "f_01JA0B3P4Q", "The 2026 panel", &did, &p, Some(&src))
-    })
-    .unwrap();
+    let sources_before = on_disk(&f)
+        .read_entry("shared/sources.yaml")
+        .map(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).unwrap())
+        .map(|y| serde_json::to_value(y).unwrap()["sources"].clone())
+        .unwrap_or(Value::Null);
+    // No middleware is configured: correcting needs none.
+    let post = |body: Value| {
+        handle(
+            &f.session,
+            &NoConfig,
+            HostRequest::new("/correct", "", body.to_string().into_bytes()),
+        )
+    };
+    let r = post(json!({ "fact": "f_01JA0B3P4Q", "value": "31%", "rationale": "The 2026 panel" }));
+    assert_eq!(r.status, 200, "{}", String::from_utf8_lossy(&r.body));
+    let reply: Value = serde_json::from_slice(&r.body).unwrap();
+    let did = reply["decision"].as_str().unwrap().to_string();
+
     let facts = yaml(&f, "shared/facts.yaml")["facts"].clone();
     let by = |id: &str| {
         facts
@@ -690,33 +736,81 @@ fn a_corrected_fact_replaces_the_old_pin_which_stays_on_record() {
             .iter()
             .find(|x| x["id"] == id)
             .cloned()
-            .unwrap()
     };
-    assert_eq!(
-        by("f_01JA0B3P4Q")["replaced_by"]["fact_id"],
-        "f_01JB0CORR01"
-    );
-    assert_eq!(
-        by("f_01JA0B3P4Q")["value"],
-        0.23,
-        "the old value stays on record"
-    );
-    assert_eq!(by("f_01JB0CORR01")["value"], 0.31);
-    assert!(yaml(&f, "shared/sources.yaml")["sources"]
+    let old = by("f_01JA0B3P4Q").unwrap();
+    assert_eq!(old["value"], 0.23, "the old value stays on record");
+    let new_id = old["replaced_by"]["fact_id"].as_str().unwrap().to_string();
+    assert_eq!(old["replaced_by"]["decision"], did);
+    assert!(new_id.starts_with("f_01") && new_id.len() == 28, "{new_id}");
+    let me = f.session.ctx().actor.as_str();
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+    let pin = by(&new_id).unwrap();
+    assert_eq!(pin["value"], 0.31, "a share, read in the pin's unit");
+    for k in ["entity", "key", "market", "unit", "layer", "licence"] {
+        assert_eq!(pin[k], old[k], "{k} is the old pin's");
+    }
+    assert_eq!(pin["method"], "report");
+    assert_eq!(pin["confidence"], "high");
+    assert_eq!(pin["status"], "active");
+    assert_eq!(pin["as_of"], today.as_str());
+    assert_eq!(pin["retrieved_at"], today.as_str());
+    assert_eq!(pin["decision"], did);
+    assert!(pin.get("origin").is_none(), "it is in no layer");
+    assert_eq!(pin["review"]["verdict"], "verified");
+    assert_eq!(pin["review"]["by"], me);
+    assert_eq!(pin["review"]["decision"], did);
+    let src = pin["sources"][0].as_str().unwrap().to_string();
+    assert_eq!(pin["quotes"][&src], "The 2026 panel");
+
+    conforms(&yaml(&f, "shared/facts.yaml"), "facts.schema.json");
+
+    let sources = yaml(&f, "shared/sources.yaml")["sources"].clone();
+    let rec = sources
         .as_array()
         .unwrap()
         .iter()
-        .any(|s| s["id"] == "src_person01"));
-    let d = &chain(&f).decisions[0];
-    assert_eq!(d.action, "correct_fact");
-    assert!(d.pinned);
-    // A replaced fact is not corrected again.
+        .find(|s| s["id"] == src.as_str())
+        .unwrap()
+        .clone();
+    assert!(src.starts_with("src_"));
+    assert_eq!(rec["uri"], me);
+    assert_eq!(rec["tier"], "reviewer-verified");
+    assert_eq!(rec["licence"], old["licence"]);
     assert_eq!(
-        f.session
-            .read(|d| review::correct_request(f.session.ctx(), d, &input))
-            .unwrap_err()
-            .status,
-        409
+        sources.as_array().unwrap().len(),
+        sources_before.as_array().map_or(0, Vec::len) + 1
+    );
+
+    let d = &chain(&f).decisions[0];
+    assert_eq!(d.id.as_deref(), Some(did.as_str()));
+    assert_eq!(d.kind.as_deref(), Some("edit"));
+    assert_eq!(d.action, "correct_fact");
+    assert_eq!(d.rationale, "The 2026 panel", "the note is kept");
+    assert_eq!(d.cites, vec!["f_01JA0B3P4Q".to_string(), new_id.clone()]);
+    assert!(d.pinned);
+
+    // A replaced fact is not corrected again; the same value is no correction.
+    let again = post(json!({ "fact": "f_01JA0B3P4Q", "value": "30%", "rationale": "x" }));
+    assert_eq!(again.status, 409);
+    let same = post(json!({ "fact": "f_01JA0B3P5R", "value": 0.44, "rationale": "x" }));
+    assert_eq!(same.status, 409);
+    let nonsense = post(json!({ "fact": "f_01JA0B3P5R", "value": "lots", "rationale": "x" }));
+    assert_eq!(nonsense.status, 400);
+
+    // A second correction by the same person cites the same source record.
+    let r = post(json!({ "fact": "f_01JA0B3P5R", "value": "48 per cent", "rationale": "Kantar" }));
+    assert_eq!(r.status, 200, "{}", String::from_utf8_lossy(&r.body));
+    let facts = yaml(&f, "shared/facts.yaml")["facts"].clone();
+    let newer = facts.as_array().unwrap().last().unwrap().clone();
+    assert_eq!(newer["value"], 0.48);
+    assert_eq!(newer["sources"], json!([src]));
+    assert_eq!(
+        yaml(&f, "shared/sources.yaml")["sources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        sources.as_array().unwrap().len()
     );
 }
 
@@ -1612,4 +1706,270 @@ fn a_carried_contest_with_no_value_to_take_can_be_set_aside() {
         Err(409),
         "only once"
     );
+}
+
+// ── what reconsider writes back: findings updated in place ─────────────────
+
+/// What `reconsider@2` answers with, computed for the document as it is now:
+/// `append` and `update` for the findings, having read `read` of it. Its own
+/// decision is `d_01JA0D09REC`; a finding appended is proposed under
+/// `d_01JA0D0ASYN`.
+fn reconsider_reply(f: &Fixture, append: Value, update: Value, read: Value) -> Value {
+    let clan = f.session.clan_context_for_agent();
+    let doc = &f.doc;
+    let mut decisions = vec![json!({
+        "id": "d_01JA0D09REC", "kind": "edit", "agent": "reconsider@2", "action": "reconsider",
+        "rationale": "Brought in step with a review.",
+        "targets": [format!("{doc}#findings[fi_01JA0F2B]")], "cites": ["fi_01JA0F2B"] })];
+    if append.as_array().is_some_and(|a| !a.is_empty()) {
+        decisions.push(json!({
+            "id": "d_01JA0D0ASYN", "kind": "finding", "agent": "reconsider@2",
+            "action": "synthesise_finding", "rationale": "worked out again",
+            "targets": [format!("{doc}#findings[fi_01JA0F3C]")], "cites": ["f_01JA0B3P5R"],
+            "reasoning": reasoning("Worked it out again.", &["f_01JA0B3P5R"]) }));
+    }
+    json!({
+        "api": "napkin.middleware/1", "task": "reconsider", "handler": "reconsider@2",
+        "job": { "id": "job_2", "state": "done" }, "result": {},
+        "change": { "doc": doc, "base_version": clan["version"], "read": read,
+                    "findings_append": append, "findings_update": update, "decisions": decisions },
+        "trace": {}
+    })
+}
+
+fn settle(f: &Fixture, reply: Value) -> Value {
+    let env =
+        json!({ "ok": true, "status": 200, "endpoint": "http://m", "data": reply, "error": null });
+    f.session.settle_middleware(f.session.ctx(), env).0["data"]["change"].clone()
+}
+
+/// The finding reconsider works the old one out again as.
+fn replacement() -> Value {
+    json!([{ "id": "fi_01JA0F3C", "statement": "Frozen is growing in value", "cites": ["f_01JA0B3P5R"],
+             "method": "synthesis", "status": "proposed", "derived_by": "reconsider@2",
+             "confidence": "medium", "derived_at": "2026-09-24T10:00:01Z", "decision": "d_01JA0D0ASYN" }])
+}
+
+fn read_of(f: &Fixture) -> Value {
+    json!({ "findings.fi_01JA0F2B": finding(f) })
+}
+
+#[test]
+fn reconsider_updates_a_finding_in_place_and_supersedes_one_that_fell() {
+    let f = fixture();
+    run(&f, |c, d| review::verify(c, d, "fi_01JA0F2B", "Checked")).unwrap();
+    let verified = finding(&f);
+
+    // A correction left it standing on one pin: it stays verified, its cites
+    // and confidence follow, and it says it was checked again.
+    let recheck = json!({ "decision": "d_01JA0D09REC",
+                          "note": "re-checked against the correction d_01JA0D08COR; still holds" });
+    let out = settle(
+        &f,
+        reconsider_reply(
+            &f,
+            json!([]),
+            json!([{ "id": "fi_01JA0F2B", "confidence": "low", "cites": ["f_01JA0B3P4Q"],
+                     "recheck": recheck }]),
+            read_of(&f),
+        ),
+    );
+    assert_eq!(out["applied"], true, "{out}");
+    let fi = finding(&f);
+    assert_eq!(fi["status"], "verified");
+    assert_eq!(fi["verification"], verified["verification"], "untouched");
+    assert_eq!(fi["statement"], verified["statement"]);
+    assert_eq!(fi["cites"], json!(["f_01JA0B3P4Q"]));
+    assert_eq!(fi["confidence"], "low");
+    assert_eq!(fi["recheck"], recheck);
+    assert_eq!(
+        yaml(&f, "shared/findings.yaml")["findings"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    conforms(&yaml(&f, "shared/findings.yaml"), "findings.schema.json");
+    let p = &yaml(&f, "shared/data.yaml")["projection"]["findings"]["fi_01JA0F2B"];
+    assert_eq!(p["recheck"], recheck);
+    assert_eq!(p["confidence"], "low");
+    assert_eq!(
+        chain(&f).decisions[0].actor.as_deref(),
+        Some("process:middleware")
+    );
+
+    // Later it falls: its replacement is proposed, and it is superseded by it.
+    let by = json!({ "finding": "fi_01JA0F3C", "decision": "d_01JA0D09REC" });
+    let update = json!([{ "id": "fi_01JA0F2B", "status": "superseded", "superseded_by": by }]);
+    let reply = reconsider_reply(&f, replacement(), update.clone(), read_of(&f));
+    let out = settle(&f, reply.clone());
+    assert_eq!(out["applied"], true, "{out}");
+    let all = yaml(&f, "shared/findings.yaml");
+    conforms(&all, "findings.schema.json");
+    let fi = &all["findings"][0];
+    assert_eq!(fi["status"], "superseded");
+    assert_eq!(fi["superseded_by"], by);
+    assert_eq!(
+        fi["verification"], verified["verification"],
+        "kept on record"
+    );
+    assert_eq!(all["findings"][1]["id"], "fi_01JA0F3C");
+    let p = &yaml(&f, "shared/data.yaml")["projection"]["findings"];
+    assert_eq!(p["fi_01JA0F2B"]["status"], "superseded");
+    assert_eq!(p["fi_01JA0F2B"]["superseded_by"], by);
+
+    // The same change again is nothing new.
+    assert_eq!(settle(&f, reply)["reason"], "already applied");
+
+    // A superseded finding blocks nothing; its replacement waits for a person.
+    let b = blockers(&f);
+    let at = |id: &str| Some(format!("{}#findings[{id}]", f.doc));
+    assert!(!b.iter().any(|(_, a)| *a == at("fi_01JA0F2B")), "{b:?}");
+    assert!(
+        b.contains(&("unverified_finding".into(), at("fi_01JA0F3C"))),
+        "{b:?}"
+    );
+}
+
+#[test]
+fn a_findings_update_changes_only_what_it_may() {
+    let f = fixture();
+    let refused = |update: Value, read: Value| -> String {
+        let before = std::fs::read(f.id.as_str()).unwrap();
+        let out = settle(&f, reconsider_reply(&f, replacement(), update, read));
+        assert_eq!(out["applied"], false, "{out}");
+        assert_eq!(
+            std::fs::read(f.id.as_str()).unwrap(),
+            before,
+            "nothing written"
+        );
+        out["reason"].as_str().unwrap().to_string()
+    };
+    let by = json!({ "finding": "fi_01JA0F3C", "decision": "d_01JA0D09REC" });
+    let one = |extra: Value| {
+        let mut u = json!({ "id": "fi_01JA0F2B" });
+        u.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        json!([u])
+    };
+
+    for (update, says) in [
+        (
+            one(json!({ "statement": "Something else" })),
+            "may not change `statement`",
+        ),
+        (
+            one(json!({ "verification": { "decision": "d_01JA0D09REC" } })),
+            "may not change `verification`",
+        ),
+        (one(json!({ "status": "verified" })), "only set the status"),
+        (
+            one(json!({ "status": "superseded" })),
+            "names its superseded_by",
+        ),
+        (
+            one(json!({ "superseded_by": by })),
+            "only with status superseded",
+        ),
+        (
+            one(json!({ "status": "superseded",
+                     "superseded_by": { "finding": "fi_01JA0F2B", "decision": "d_01JA0D09REC" } })),
+            "names another finding",
+        ),
+        (
+            one(json!({ "status": "superseded",
+                     "superseded_by": { "finding": "fi_01JA0F3C", "decision": "d_01JA0DNOWHERE" } })),
+            "names another finding",
+        ),
+        (
+            one(json!({ "confidence": "certain" })),
+            "high, medium or low",
+        ),
+        (
+            one(json!({ "cites": ["f_NOTPINNED1"] })),
+            "f_NOTPINNED1, which is not in",
+        ),
+        (
+            one(json!({ "recheck": { "decision": "d_01JA0D09REC", "note": "still holds" } })),
+            "only a verified finding",
+        ),
+        (
+            json!([{ "id": "fi_NOTHERE01", "confidence": "low" }]),
+            "not in shared/findings.yaml",
+        ),
+    ] {
+        let reason = refused(update, read_of(&f));
+        assert!(reason.contains(says), "{says}: {reason}");
+    }
+
+    // N2: the change says what it read of each finding it updates, and the
+    // document still holds that.
+    let update = one(json!({ "confidence": "low" }));
+    assert!(refused(update.clone(), json!({})).contains("does not say what the job read"));
+    let mut stale = finding(&f);
+    stale["confidence"] = json!("high");
+    assert!(
+        refused(update.clone(), json!({ "findings.fi_01JA0F2B": stale }))
+            .contains("fi_01JA0F2B changed since the job read it")
+    );
+
+    // A finding a person rejected takes a new confidence, and nothing else.
+    run(&f, |c, d| {
+        review::verdict(
+            c,
+            d,
+            verdict("findings[fi_01JA0F2B]", "bad", "Value, not volume"),
+        )
+    })
+    .unwrap();
+    let supersede = one(json!({ "status": "superseded", "superseded_by": by }));
+    assert!(refused(supersede, read_of(&f)).contains("is rejected: only its confidence"));
+    let out = settle(&f, reconsider_reply(&f, json!([]), update, read_of(&f)));
+    assert_eq!(out["applied"], true, "{out}");
+    assert_eq!(finding(&f)["confidence"], "low");
+    assert_eq!(finding(&f)["status"], "rejected");
+    conforms(&yaml(&f, "shared/findings.yaml"), "findings.schema.json");
+}
+
+#[test]
+fn a_field_citing_a_superseded_finding_is_flagged_until_it_moves() {
+    let f = fixture();
+    let cite = |ids: &[&str]| {
+        let patch = json!({ "campaign": { "objective": {
+            "value": "win midweek", "origin": "stated", "gate": "brief", "by": "human:local",
+            "decision": "d_01JA0D09HUM", "finding_ids": ids } } });
+        f.session
+            .patch_data(&json!({ "patch": patch, "agent": "human" }).to_string())
+            .unwrap();
+    };
+    cite(&["fi_01JA0F2B"]);
+    let by = json!({ "finding": "fi_01JA0F3C", "decision": "d_01JA0D09REC" });
+    let out = settle(
+        &f,
+        reconsider_reply(
+            &f,
+            replacement(),
+            json!([{ "id": "fi_01JA0F2B", "status": "superseded", "superseded_by": by }]),
+            read_of(&f),
+        ),
+    );
+    assert_eq!(out["applied"], true, "{out}");
+    let field = Some(format!("{}#campaign.objective", f.doc));
+    let flags = || {
+        f.session
+            .read(napkin_host::ops::decisions::decisions)
+            .unwrap()
+            .attention
+            .into_iter()
+            .filter(|a| a.blocks_lock && a.code == "flagged_field" && a.address == field)
+            .map(|a| a.text)
+            .collect::<Vec<_>>()
+    };
+    let t = flags();
+    assert_eq!(t.len(), 1, "{t:?}");
+    assert!(t[0].contains("superseded with fi_01JA0F3C"), "{}", t[0]);
+    // Moved to the replacement: no longer flagged.
+    cite(&["fi_01JA0F3C"]);
+    assert!(flags().is_empty());
 }
