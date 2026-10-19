@@ -111,7 +111,7 @@ parts (`patch.schema.json`).
 - **Leaves.** A path is a leaf when it names one top-level field of the entity,
   or one part of a composite: `camera/<part>`, `pick/current`,
   `pick/alternates`, `edl/<item>`, `edl/<item>/<field>`,
-  `edl/<item>/pick/<current|alternates>`. Any other object is set whole
+  `edl/<item>/pick/<current|alternates>` (an item's `seam` is set whole). Any other object is set whole
   (`region`, `window`, `font`, `rule`, `format`, `ignored`, …). `id`, `v`,
   `field_v` and the entity itself are never paths: `not_leaf`.
 - **Arrays are leaves.** An array (`refs`, `alternates`, `answers`, `inputs`,
