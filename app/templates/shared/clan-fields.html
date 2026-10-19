@@ -1058,7 +1058,7 @@ var ClanFields=(function(){
       +'<label><span>Where is it from? <span class="opt">A link. Leave it empty if you just know it.</span></span><input type="url" name="src" placeholder="https://"></label>'
       +'<label><span>Why is the old one wrong? <span class="req">needed</span></span><textarea name="why"></textarea></label>'
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Save the right value</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
-      +'<p class="clf-muted">Your value goes into the agency’s shared memory, with you as its source. The old one stays on record, marked as replaced.</p></form>';
+      +'<p class="clf-muted">Your value is recorded in this document, with you as its source, and shared with the agency once the client accepts the work. The old one stays on record, marked as replaced.</p></form>';
   }
   function badForm(target){
     return '<form class="clf-form" data-clf-form="bad" data-target="'+esc(target)+'"><label><span>What is wrong with it? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
@@ -1223,7 +1223,7 @@ var ClanFields=(function(){
         if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the crew’s own.</p>';
         if(!L&&f.status==='proposed') b+='<form class="clf-form" data-clf-form="finding" data-clf-anchor><b>Is this right?</b><label><span>Anything to add? <span class="opt">Needed if it is wrong</span></span><textarea name="why"></textarea></label><div class="clf-err" hidden></div>'
           +'<div class="clf-answers"><button type="submit" class="clf-btn big primary" value="verify">Yes, this is right</button><button type="submit" class="clf-btn big danger" value="reject">No, this is wrong</button></div>'+privBlock()
-          +'<p class="clf-muted">Yes saves it to the agency’s shared memory as checked by you. No keeps it on record, crossed out, and flags anything that rests on it.</p></form>';
+          +'<p class="clf-muted">Yes records it in this document as checked by you, and it is shared with the agency once the client accepts the work. No keeps it on record, crossed out, and flags anything that rests on it.</p></form>';
         b+=history('findings['+ref+']');
       }
     } else if(k==='contest'){
@@ -1314,6 +1314,8 @@ var ClanFields=(function(){
     return post(route,body).then(function(res){
       Array.prototype.forEach.call(btns,function(x){ x.disabled=false; });
       var err=errorOf(res); if(err&&!(res&&res.ok)){ showError(form,err); return; }
+      // The app may bring what rests on a review in step (the Research Tool's reconsider).
+      if(res&&res.ok) window.dispatchEvent(new CustomEvent('clan:reviewed',{detail:{route:route,body:body,reply:res}}));
       return loadView().then(function(){ refresh(); if(STACK.length) draw(); toast(done); });
     },function(){ showError(form,OFFLINE); Array.prototype.forEach.call(btns,function(x){ x.disabled=false; }); });
   }
@@ -1355,7 +1357,7 @@ var ClanFields=(function(){
       var v=e.submitter&&e.submitter.value;
       if(v==='reject'){ if(!why){ showError(form,'Say what is wrong, so the agent can fix it.'); return; }
         act('/verdict',{target:'findings['+ref+']',polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.'); }
-      else act('/verify',{finding:ref,rationale:why},form,'Thanks. Saved to the agency\u2019s shared memory.');
+      else act('/verify',{finding:ref,rationale:why},form,'Thanks. Recorded as checked by you.');
     } else if(kind==='resolve'){ if(!fd.get('pick')){ showError(form,'Pick one first.'); return; } if(!why){ showError(form,'Say why you picked this one.'); return; }
       act('/resolve',{contest:ref,chosen:fd.get('pick'),rationale:why},form,'Saved. The report uses your pick.'); }
     else if(kind==='correct'){ if(!String(fd.get('value')||'').trim()){ showError(form,'Write the right value.'); return; } if(!why){ showError(form,'Say why the old one is wrong.'); return; }

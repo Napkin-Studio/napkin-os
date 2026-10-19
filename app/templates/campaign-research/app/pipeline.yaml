@@ -106,36 +106,24 @@ tasks:
       - shows jev's scores on the page; they are in the decisions' reasoning
     decision: check_answer (jev's verdict, search or not), the search's research decisions, then ask_research (the answer)
 
-  reconsider_fact:
-    handler: reconsider_fact@1
-    job: long                      # asked by the view once a person marks a fact wrong (a bad verdict on facts[...])
-    input: "{ fact_id, why, verdict_id? }"
+  # ---- after a person's review (Contract 3 §6, Contract 4 §4) ----
+  # A review — /verify, /verdict on a fact or a finding, /correct — is the
+  # host's alone and changes only the document; nothing is written to the
+  # layers. The view then asks this, with every review made since the last run.
+  reconsider:
+    handler: reconsider@2
+    job: long                      # one per document at a time; reviews made while it runs go in the next
+    input: "{ events: [{ kind, id, decision, replaced_by? }] }"   # kind: fact_verified | fact_rejected | fact_corrected | finding_verified | finding_rejected
     order:
-      - the fact goes to selection.excluded with the person's reason; nothing cites it from here on
-      - every finding citing it is checked without it (nothing else left = it falls; otherwise jev says whether what remains still supports it)
-      - ONE structured-output call reworks the fallen findings from what remains (cite-checked, proposed for a person); each answer citing it is answered again; the report is recomposed without it
+      - a rejected fact goes to selection.excluded with the person's reason; a corrected one is read as its replacement
+      - the confidence of each finding citing a reviewed fact is worked out again
+      - every finding resting on a rejected or corrected fact is checked again, and reworked when it falls (proposed for a person)
+      - each answer citing a changed item is answered again; only the report sections that cite one are recomposed
     never:
-      - rejects a finding (a person's); the host flags a verified finding on an excluded fact until a person settles it
-    decision: reconsider_fact (what stood, what was reworked), then the reworked findings, the answers and the report
-
-  # ---- a person's review (Contract 3 §6.2, Contract 4 §4) ----
-  verify_finding:
-    handler: verify_finding@1
-    job: short                     # asked by the host's /verify, never by the view
-    input: "{ finding, by: human:<id>, decision_id }"
-    reads: the finding and the pins it cites
-    writes: >
-      the knowledge layer only — a human:<id> source at tier reviewer-verified, and the finding
-      as a fact, method synthesis, under the host's decision id. The host pins it and records
-      the verification; the reply's change is null.
-
-  correct_fact:
-    handler: correct_fact@1
-    job: short                     # asked by the host's /correct, never by the view
-    input: "{ fact, value, source_uri?, note, by: human:<id>, decision_id }"
-    writes: >
-      the knowledge layer only — the person as a source (or the link they gave), and a new
-      row for the same fact with their value; the host pins it and keeps the old pin, replaced.
+      - rejects or verifies a finding (a person's); the host flags a verified finding on an excluded fact until a person settles it
+      - writes the knowledge layers (they learn from work the client accepted)
+      - rewrites a section holding a person's own wording (shared/edits.yaml); it is flagged instead
+    decision: reconsider (what stood, what was reworked), then the reworked findings, the answers and the sections
 
 # R1 (Contract 4 §3): which middleware decisions must carry reasoning. The host
 # requires it on every pin, contest, finding and verdict, and every proposal,
