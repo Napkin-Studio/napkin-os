@@ -1,6 +1,10 @@
 # Contract 6 — the Brand Clan: one brand kit per brand, carried into every document
 
-Status: **draft**, for the owner's approval (feature `brand-clan`). Owner: Shrey.
+Status: **approved** by the owner on 2026-10-19 (feature `brand-clan`). Owner: Shrey.
+The thing is called the **Brand Clan** everywhere it is named: the chip, the
+shelf item, the Bring in card and the document. The canvas board that
+projects it keeps the UI spec's node name, Brand board, with the header
+"Brand Clan · <brand>".
 Reads with: `docs/contracts/os-layer.md` (addresses, decisions, spin-off §5,
 client review §7.5), `campaign-clan.md` (the field envelope, pins, roster),
 `peripherals.md` §4 (the layers port), `production-tool/contracts` (v3, the
@@ -304,12 +308,17 @@ the mock layers (`mock-backend`).
 
 ## 6. Harvest: the approved document comes back
 
-Trigger: a `client_review` with `answer: accepted` (os-layer §7.5, §8.2) on
-a document with `lineage.attached[]` naming a brand. The review saves as
+Trigger: a `client_review` with `answer: accepted` **or
+`accepted_with_changes`** (os-layer §7.5, §8.2; owner, 2026-10-19) on a
+document with `lineage.attached[]` naming a brand. The review saves as
 today; the shell's client-review band then offers **"Add to Lumen Water's
-brand kit"**. Nothing happens until a person opens it and confirms.
+Brand Clan"**. Nothing happens until a person opens it and confirms. On
+`accepted_with_changes`, a candidate that comes from a part the client
+marked for change is listed with "the client asked for a change here" and
+is unticked by default; the exemplar's `version` is the reviewed one.
 
-`GET /harvest` (host) computes the candidates, no model:
+`GET /harvest` (host) computes the candidates, no model (`409` unless the
+newest `client_review` is `accepted` or `accepted_with_changes`):
 
 1. **The document itself** as `work.<id>`: `document_id`, `app_id`, title,
    kind by app, `version` = the review's `seen.version`, the review's
@@ -326,7 +335,7 @@ The person ticks. `POST /harvest {items}` writes, in one change on the
 **brand** document: the items (`origin: confirmed`, `by`, `cites` the
 approved document's addresses and the review decision), a `publish` (§7),
 and on the **approved** document a `backref used` (os-layer §7.4: "Used in
-Lumen Water brand kit v6"). Harvest needs the brand's lease and refuses on
+Lumen Water Brand Clan v6"). Harvest needs the brand's lease and refuses on
 a locked kit (`409`). A rejected review offers nothing (owner, 2026-10-19).
 
 ---
@@ -357,14 +366,14 @@ needs no change to `lineage.attached` (`data_sha256` names the revision).
 
 ---
 
-## 9. Open points for the owner
+## 9. Decided by the owner, 2026-10-19
 
-1. Carry the kit's chain into each project whole and unpinned (D6, as
-   above), or data and members only? Recommended: whole, unpinned.
-2. Harvest from `accepted_with_changes` once the change is made and the
-   document re-locked and accepted? Recommended: only `accepted`.
-3. Brief theme from the brand: proposal (recommended) or applied at attach?
-4. Words: "Brand" on the chip, "Brand kit" for the document, "Brand board"
-   on the canvas (as the UI spec).
-5. Contract v3: rename `project.client_id` to `project.brand {document_id,
-   version}` before v3 is built (additive now, breaking later).
+1. The kit's chain is carried into each project **whole and unpinned** (D6).
+2. Harvest is offered on `accepted` **and** `accepted_with_changes` (§6).
+3. The brief's theme from the brand is a **proposal**, never applied at
+   attach.
+4. The name is **Brand Clan** wherever the kit is named; the canvas node
+   stays the Brand board.
+5. Contract v3 renames `project.client_id` to `project.brand {document_id,
+   version}` **now**, before v3 is built (recorded in
+   `features/contract-v3.clan`).
