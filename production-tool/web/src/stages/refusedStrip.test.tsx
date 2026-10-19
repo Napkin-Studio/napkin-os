@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // A take Runway refused as one video (features/connected-video.clan, the samurai ad, 2026-10-19): the strip says
-// "Runway refused this as one video" and offers Make as separate clips and Edit the words.
+// "Runway refused this as one video" and offers Try again as one video (reworded once by the relay),
+// Make as separate clips and Edit the words.
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -40,7 +41,7 @@ function refused() {
 }
 
 describe('a strip Runway refused as one video', () => {
-  it('says so and offers Make as separate clips and Edit the words', () => {
+  it('says so and offers Try again as one video, Make as separate clips and Edit the words', () => {
     const { d, shots, videoId } = refused()
     const units = videoUnits(d, { jobs: {} }, videoId, videoPlan(d, videoId, modelEntry('runway', 'wan3')!))
     const doc = new SnapshotDocumentStore(d, null, 0)
@@ -63,12 +64,14 @@ describe('a strip Runway refused as one video', () => {
     expect(strip.classList.contains('refused')).toBe(true)
     expect(strip.textContent).toContain('Runway refused this as one video')
     const buttons = [...strip.querySelectorAll('header button')].map((b) => b.textContent)
-    expect(buttons).toEqual(['Make as separate clips', 'Edit the words'])  // no Make as one video again
+    expect(buttons).toEqual(['Try again as one video', 'Make as separate clips', 'Edit the words'])
     const click = (label: string) => act(() => { [...strip.querySelectorAll('button')].find((b) => b.textContent === label)!.click() })
     click('Make as separate clips')
     expect(separately).toHaveBeenCalledWith(shots.map((s) => s.id))
     click('Edit the words')
     expect(edit).toHaveBeenCalledWith(shots[0].id)
     expect(make).not.toHaveBeenCalled()
+    click('Try again as one video')
+    expect(make).toHaveBeenCalledWith(shots.map((s) => s.id))
   })
 })

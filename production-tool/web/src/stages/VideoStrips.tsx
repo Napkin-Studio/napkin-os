@@ -55,7 +55,8 @@ export function StripTrack({ videoId, shots, units, card, insert, onMakeStrip, o
                 {u.state === 'refused' && <span className="ve-refused" role="status">Runway refused this as one video</span>}
                 <span className="pt-grow" />
                 {u.state === 'refused' && <>
-                  <button type="button" className="btn sm primary" aria-haspopup="dialog" onClick={() => onMakeSeparately(u.shotIds)}>Make as separate clips</button>
+                  <button type="button" className="btn sm primary" aria-haspopup="dialog" onClick={() => onMakeStrip(u.shotIds)} title="Dex rewords anything Runway refuses, once, and tries again">Try again as one video</button>
+                  <button type="button" className="btn sm" aria-haspopup="dialog" onClick={() => onMakeSeparately(u.shotIds)}>Make as separate clips</button>
                   <button type="button" className="btn sm" onClick={() => onEditWords(u.shotIds[0])}>Edit the words</button>
                 </>}
                 {u.state !== 'made' && u.state !== 'refused' && <span className="faint ve-stripmodel" title={r.switched ? `${r.switched}, so ${r.model.label} makes this one.` : undefined}>{r.model.label} · {waitWords(r.model, u.lengthS)}</span>}
