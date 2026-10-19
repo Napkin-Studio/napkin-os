@@ -15,8 +15,7 @@ from pathlib import Path
 
 from .capabilities import CAPABILITY_VERSION
 from .handlers import (answer_question, ask_research, compose_report, draft_brief, extract_ask, reconsider_fact,
-                       regenerate_field, research_lens, start_campaign, synthesise_findings, verify_finding,
-                       correct_fact)
+                       regenerate_field, research_lens, start_campaign, synthesise_findings)
 from .util import bad
 
 REGISTRY = {
@@ -28,8 +27,6 @@ REGISTRY = {
     "compose_report": {1: compose_report},
     "draft_brief": {1: draft_brief},
     "regenerate_field": {1: regenerate_field},
-    "verify_finding": {1: verify_finding},
-    "correct_fact": {1: correct_fact},
     "ask_research": {1: ask_research},
     "reconsider_fact": {1: reconsider_fact},
 }
@@ -39,8 +36,6 @@ BUILTIN_PIPELINE = {
     "synthesise_findings": "synthesise_findings@1", "start_campaign": "start_campaign@1",
     "answer_question": "answer_question@1", "compose_report": "compose_report@1",
     "draft_brief": "draft_brief@1", "regenerate_field": "regenerate_field@1",
-    "verify_finding": "verify_finding@1",
-    "correct_fact": "correct_fact@1",
     "ask_research": "ask_research@1",
     "reconsider_fact": "reconsider_fact@1",
 }
@@ -69,12 +64,6 @@ def lookup(declared: str, task: str):
     return mod, f"{mod.NAME}@{mod.VERSION}"
 
 
-# A person's review, asked by the host rather than the app (Contract 4 §8):
-# every document may be verified and corrected, whatever pipeline it was made
-# with. A pipeline that declares one of these still decides its handler.
-# (Client review asks nothing of the middleware since 2026-09-30: the host
-# matches the client's words to the parts itself, middleware-api.md §11.)
-REVIEW_TASKS = {"verify_finding", "correct_fact"}
 # Tasks added after documents were made: a document whose pipeline predates
 # one may still use it, through the built-in handler, until it declares it.
 LATER_TASKS = {"ask_research", "reconsider_fact"}
@@ -83,7 +72,7 @@ LATER_TASKS = {"ask_research", "reconsider_fact"}
 def resolve(task: str, clan: dict):
     """The document's pipeline decides; no pipeline -> the built-in map."""
     pipeline = clan.get("pipeline")
-    if pipeline and task in REVIEW_TASKS | LATER_TASKS and isinstance(pipeline, dict) \
+    if pipeline and task in LATER_TASKS and isinstance(pipeline, dict) \
             and task not in (pipeline.get("tasks") or {}):
         return lookup(BUILTIN_PIPELINE[task], task)
     if pipeline:
