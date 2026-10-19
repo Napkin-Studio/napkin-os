@@ -129,9 +129,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // Something the host wrote changed the chain: read it again here, and have
   // the app's fields read it again too.
   const { reload } = decisions
-  const changed = useCallback(() => {
+  const changed = useCallback((clan?: unknown) => {
     reload()
-    refreshApp()
+    refreshApp(clan)
   }, [reload])
 
   const save = useCallback(async () => {

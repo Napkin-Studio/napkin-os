@@ -203,6 +203,8 @@ export const STRUCTURED_EDIT_BRIDGE = `
     // The shell changed the document outside the app (a client's answer, a
     // suggestion settled): the app reads it again as after its own write.
     if (m && m.type === 'clan:dataupdated') {
+      // The shell's write came back with the document as it now stands.
+      if (m.data && typeof m.data === 'object') { window.__CLAN__ = window.__CLAN__ || {}; window.__CLAN__.data = m.data; }
       window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: { source: 'shell' } }));
     }
     // The shell is about to compose an export from this document's markup,

@@ -27,6 +27,8 @@ export class NapkinHost {
      * table the desktop reaches through a custom URI scheme and the server
      * reaches over HTTP. `/api-proxy` is the one route that does not arrive
      * here: the page holds the credentials and answers it before we are asked.
+     * `/client-review` is answered here as everywhere: which parts the
+     * client's words were about is the host's own word match, no middleware.
      */
     handle(path: string, query: string, body: Uint8Array): any;
     humanHtml(): string;

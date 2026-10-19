@@ -55,7 +55,7 @@ interface Props {
    * (`app.attach.accepts`). `locked` makes it read-only; `onChanged` is called
    * after the host wrote to the document.
    */
-  brandClan?: { accepts: readonly string[]; locked: boolean; onChanged: () => void }
+  brandClan?: { accepts: readonly string[]; locked: boolean; onChanged: (clan?: unknown) => void }
   loading: boolean
   validation?: string
   /**

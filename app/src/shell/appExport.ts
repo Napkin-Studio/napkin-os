@@ -68,8 +68,17 @@ export function openInApp(ref: string, path?: string) {
  * a suggestion settled — so its fields read `/decisions` again. The bridge
  * in the frame turns this into the app's own `clan:dataupdated`.
  */
-export function refreshApp() {
-  frame?.postMessage({ type: 'clan:dataupdated', source: 'shell' }, '*')
+export function refreshApp(clan?: unknown) {
+  // When the write's reply carried the document as it now stands, the frame
+  // takes its data from it: an app reads `window.__CLAN__.data`, which would
+  // otherwise stay as it was when the frame loaded.
+  const data = (clan as { data?: unknown } | null | undefined)?.data
+  frame?.postMessage(
+    data && typeof data === 'object'
+      ? { type: 'clan:dataupdated', source: 'shell', data }
+      : { type: 'clan:dataupdated', source: 'shell' },
+    '*',
+  )
 }
 
 // ── steps the app can run again ──────────────────────────────────────────────

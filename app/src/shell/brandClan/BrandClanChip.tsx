@@ -28,7 +28,7 @@ interface Props {
   /** The document is locked: read-only. */
   locked: boolean
   /** The host wrote something to the document: read it again, and tell the app. */
-  onChanged: () => void
+  onChanged: (clan?: unknown) => void
 }
 
 export default function BrandClanChip({ docPath, accepts, locked, onChanged }: Props) {
@@ -62,13 +62,13 @@ export default function BrandClanChip({ docPath, accepts, locked, onChanged }: P
   }, [open])
 
   /** After the host wrote: read what is attached and the list again, and have the app read the document. */
-  const wrote = useCallback(() => { reload(); loadTargets(); onChanged() }, [reload, loadTargets, onChanged])
+  const wrote = useCallback((clan?: unknown) => { reload(); loadTargets(); onChanged(clan) }, [reload, loadTargets, onChanged])
 
   const run = useCallback(async (key: string, work: () => Promise<AttachReply | { ok: boolean }>, brand: string, say_?: (r: AttachReply) => string) => {
     setBusy(key); setError(null)
     try {
       const r = await work()
-      wrote()
+      wrote((r as { clan?: unknown }).clan)
       setConfirmDetach(false); setNaming({ step: 'none' }); setQuery('')
       if (say_) say({ title: say_(r as AttachReply) })
       else say({ title: `${brand} is detached.` })
@@ -119,7 +119,7 @@ export default function BrandClanChip({ docPath, accepts, locked, onChanged }: P
     setBusy('naming'); setError(null); setNaming({ step: 'making', name })
     try {
       const r = await makeBrandClan(host, from)
-      wrote()
+      wrote((r as { clan?: unknown }).clan)
       setQuery(''); setNaming({ step: 'none' })
       say({ title: doneWords(r.verb, name, r.kept) })
       setOpen(false)
