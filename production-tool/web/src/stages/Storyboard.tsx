@@ -59,6 +59,9 @@ import { videoOfStoryboard } from '../model/selectors'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
+/** With no named picture, frame 1 comes from the words and every frame after follows it (anchorFrame). */
+const NO_PICTURES = 'No pictures yet, so frame 1 is drawn from the words and every frame after follows it. Name a picture on the canvas, like @samurai, to set how someone looks.'
+
 export function Storyboard() {
   const { doc: docStore, ui: uiStore, runner, relay, clan, project } = useServices()
   const router = useRouter()
@@ -169,9 +172,9 @@ export function Storyboard() {
   const primary = !shots.length
     ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
     : noFrames
-      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || !hasRefs} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : 'Name a picture on the canvas first, like @maya_front'}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
+      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
-        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0 || !hasRefs} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
+        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
         : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Video editor">Make clips</button>
 
   return (
@@ -444,7 +447,8 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         {!current && !drawing && (
           <div className="sb-noframe">
             {prevDrawn
-              ? <><span>No frame yet</span><button className="btn xs" onClick={onDraw} disabled={!refsList(doc).length || !!frameJob}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button></>
+              ? <><span>No frame yet</span><button className="btn xs" onClick={onDraw} disabled={!!frameJob}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
+                {index === 0 && !refsList(doc).length && <span className="sb-nopics">{NO_PICTURES}</span>}</>
               : <span>Draw shot {index} first</span>}
           </div>
         )}
