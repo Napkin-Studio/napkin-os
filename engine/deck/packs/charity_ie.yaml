@@ -1,0 +1,12 @@
+# Legal-lines pack: charities advertising in the Republic of Ireland.
+# Deck content comes only from the three inputs (prompt, research CLAN, brief): legal_lines and
+# required_on_deck are no longer put on slides; banned phrases, watch words and imagery are checks only.
+id: charity_ie
+when_any: ["charity", "charities", "charities_ngos"]
+sources:
+  research_reg: {title: "Research CLAN: f_EEGO7XUXKIQ5 (regulation.mandatory_copy), fi_UXJLTXKKEVPB", uri: "clan:research", verify: false}
+  law_society: {title: "Law Society Gazette, 'Charities urged to review use of registered numbers', April 2026", uri: "https://www.lawsociety.ie/gazette/top-stories/2026/april/charities-urged-to-review-use-of-registered-numbers/", verify: true}
+  asai: {title: "ASAI Code of Standards for Advertising and Marketing Communications in Ireland", uri: "https://www.asai.ie/asaicode/", verify: true}
+legal_lines:             # each must appear on the guardrails slide (match on `key`)
+  - {key: "registered charity", text: "Registered charity statement with the official register name and RCN (not the CHY number) on every ad", source: research_reg}
+  - {key: "ASAI", text: "ASAI Code of Standards applies to every paid unit", source: asai}

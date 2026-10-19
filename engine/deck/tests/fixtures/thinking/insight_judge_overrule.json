@@ -1,0 +1,77 @@
+{
+ "stage": "insight_judge",
+ "produced_by": "recorded stand-in (invented)",
+ "verdicts": [
+  {
+   "id": "a",
+   "tests": {
+    "generic": {
+     "answer": "yes",
+     "reason": "quote"
+    },
+    "human_tension": {
+     "answer": "yes",
+     "reason": "quote"
+    },
+    "specific": {
+     "answer": "yes",
+     "reason": "quote"
+    },
+    "follows": {
+     "answer": "yes",
+     "reason": "quote"
+    }
+   },
+   "paraphrase": "Care and habit differ."
+  },
+  {
+   "id": "b",
+   "tests": {
+    "generic": {
+     "answer": "no",
+     "reason": "quote"
+    },
+    "human_tension": {
+     "answer": "yes",
+     "reason": "quote"
+    },
+    "specific": {
+     "answer": "yes",
+     "reason": "quote"
+    },
+    "follows": {
+     "answer": "yes",
+     "reason": "quote"
+    }
+   },
+   "paraphrase": "Water is a bill, never something looked after."
+  },
+  {
+   "id": "c",
+   "tests": {
+    "generic": {
+     "answer": "yes",
+     "reason": "quote"
+    },
+    "human_tension": {
+     "answer": "no",
+     "reason": "quote"
+    },
+    "specific": {
+     "answer": "no",
+     "reason": "quote"
+    },
+    "follows": {
+     "answer": "yes",
+     "reason": "quote"
+    }
+   },
+   "paraphrase": "Utilities are not trusted."
+  }
+ ],
+ "order": [
+  "b",
+  "a",
+  "c"
+ ]
+}

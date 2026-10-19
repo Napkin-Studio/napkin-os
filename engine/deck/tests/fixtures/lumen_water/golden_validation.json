@@ -1,0 +1,44 @@
+[
+ {
+  "check": "internal_leak",
+  "level": "warn",
+  "slide": "s01",
+  "message": "the agency name placeholder on screen: '[Agency]' in \"A response from [Agency]\"",
+  "slide_no": 1
+ },
+ {
+  "check": "empty_slot",
+  "level": "warn",
+  "slide": "s05",
+  "message": "empty text block (dropped at render)",
+  "slide_no": 5
+ },
+ {
+  "check": "empty_slot",
+  "level": "warn",
+  "slide": "s05",
+  "message": "empty text block (dropped at render)",
+  "slide_no": 5
+ },
+ {
+  "check": "empty_slot",
+  "level": "warn",
+  "slide": "s05",
+  "message": "empty small block (dropped at render)",
+  "slide_no": 5
+ },
+ {
+  "check": "objective_quant",
+  "level": "warn",
+  "slide": null,
+  "message": "the first three presented slides do not give the objective as a number and a from/to, versus or by-date (say what moves, from what, to what, by when)",
+  "slide_no": null
+ },
+ {
+  "check": "action_title",
+  "level": "warn",
+  "slide": "s13",
+  "message": "title \"From appointment to evaluation\" is a label: write the takeaway as a full sentence",
+  "slide_no": 13
+ }
+]

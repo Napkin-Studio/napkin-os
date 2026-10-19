@@ -1,0 +1,119 @@
+{
+ "stage": "d",
+ "produced_by": "recorded stand-in (invented)",
+ "campaign_line": "Every drop has a story.",
+ "idea": "Each household sees its own water story.",
+ "how_it_answers": "It links the tap to the person.",
+ "executions": [
+  {
+   "channel": "outdoor",
+   "role": "Make the line famous",
+   "copy": [
+    "Every drop has a story."
+   ],
+   "answer": "Poster",
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "A tap at dawn"
+   }
+  }
+ ],
+ "channel_roles": [
+  {
+   "channel": "Outdoor",
+   "role": "Fame"
+  },
+  {
+   "channel": "Radio",
+   "role": "Reach"
+  }
+ ],
+ "measurement": [
+  {
+   "kpi": "Household use",
+   "baseline": null,
+   "how": "Utility meter data",
+   "refs": [
+    "brief:objectives.behavioural"
+   ]
+  }
+ ],
+ "process": [
+  {
+   "step": "Week 1",
+   "text": "Kick off"
+  }
+ ],
+ "timeline": [
+  {
+   "phase": "Plan",
+   "when": "Month 1",
+   "refs": [],
+   "basis": "proposal"
+  }
+ ],
+ "messages": [],
+ "risks": [
+  {
+   "risk": "Households read the saving ask as a bill warning",
+   "mitigation": "Open every piece with the story, never the tariff",
+   "refs": [
+    "brief:tone_world_assets"
+   ],
+   "basis": "proposal"
+  },
+  {
+   "risk": "The campaign budget is small for a regional spread",
+   "mitigation": "Concentrate on three channels and rest the rest on the utility's own bill and website",
+   "refs": [
+    "brief:budget_scope"
+   ]
+  },
+  {
+   "risk": "The meter data may lag the campaign",
+   "mitigation": "Agree a lag with the utility before launch and read the result against it",
+   "basis": "proposal"
+  }
+ ],
+ "competition": {
+  "title": "Doing nothing is the real alternative, and the story is how we beat it",
+  "alternatives": [
+   {
+    "name": "Keep the current bill inserts",
+    "why_chosen": "Customers rarely think about water until a bill arrives",
+    "how_we_win": "A story people meet before the bill does",
+    "refs": [
+     "brief:background"
+    ]
+   },
+   {
+    "name": "An invented rival with no ref",
+    "why_chosen": "Cheaper",
+    "how_we_win": "Better",
+    "refs": []
+   }
+  ],
+  "plan": "Win on the story people carry home."
+ },
+ "measurement_plan": [
+  {
+   "kpi": "Household use",
+   "baseline": null,
+   "target": "5% lower in 12 months",
+   "lag": "Two billing cycles",
+   "confounders": "Weather and a tariff change, read against matched households",
+   "refs": [
+    "brief:objectives.behavioural"
+   ]
+  },
+  {
+   "kpi": "Attitude to water",
+   "baseline": null,
+   "target": "To agree",
+   "lag": "One survey wave",
+   "confounders": "Other utility messages in the same months",
+   "basis": "proposal"
+  }
+ ],
+ "measurement_plan_title": "Each measure has a baseline to set, a target and a lag we allow for"
+}

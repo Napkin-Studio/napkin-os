@@ -1,0 +1,86 @@
+# Deck type: tender response (a public buyer scores the answer against published criteria).
+# Source: GUIDE.md 2 (gate before score: GAO B-418318, Brent, Wiltshire: a requirement unmapped or a rule or limit
+# broken loses the bid before quality is read; scope fidelity, WFA/EACA 14; criteria must relate to the subject of
+# the contract) and 3.2 (build rule: one section per scored criterion, in the buyer's order, space proportional to
+# weight, a visible response map; take weights from the user's ITT, never assume), NAPKIN-EDGE.md 3
+# (weight-aware allocation, response_map, scope). Builds with the agency assembler (kind agency).
+# The response map (scoring) comes second, then the sections in the buyer's order (buyer_order re-sorts those
+# slots by the scored criterion each answers, assemble._criteria_rank). Routes not chosen stay behind the divider
+# unless the requirements ask for them (assemble.routes_asked). Stage d also writes one answer per scored criterion (prompts/tender_answer.md,
+# a word budget from its weight, assemble.criterion_budgets): each is a criterion_answer slide placed after the objective, in the buyer's order.
+id: tender_response
+label: "Tender response"
+one_line: "A public or large buyer scores your answer against published criteria; compliance first."
+kind: agency
+arrange: spine
+spine: [title, scoring, objective, criterion_answer, brief_restated, real_question, chart, insight, audience, proposition, idea, execution,
+        channel_roles, innovation, guardrails, measurement, process, timeline, team, credentials, investment, next_step]
+appendix: [brief_restated, territory, territory_choice, questions]
+buyer_order: [brief_restated, real_question, chart, insight, audience, proposition, idea, execution, channel_roles,
+              innovation, guardrails, measurement, process, timeline, team, credentials, investment]
+stages: [a0, a, b, c, d, fit, e]
+length:
+  max_slides: 18
+  minutes: 30
+  respect_stated_limit: true   # a slide or page limit the buyer states for the presentation replaces max_slides
+rubric_weights:
+  basis: "default, not validated"
+  source: "rubric.json 2026-10-16, adjusted per GUIDE.md 2 and 3.2; the buyer's own weights replace this when the ITT states them"
+  weights: {compliance_gate: 22, problem_objective: 12, insight: 10, idea_chain: 8, evidence_trace: 14,
+            headline_fit_limits: 8, team_proof: 14, commercials_ask: 6, presentability: 6}
+  adjustments:
+    - {criterion: compliance_gate, from: 12, to: 22, why: "A failed gate loses the bid before any score: GAO upheld ignoring pages past the limit; Brent and Wiltshire exclude on a fail (GUIDE 2)."}
+    - {criterion: team_proof, from: 10, to: 14, why: "Brent weighted team and project management 23% above design concept 15% (GUIDE 3.1)."}
+    - {criterion: insight, from: 14, to: 10, why: "Buyers score what the criteria ask; a brilliant insight no criterion asks for earns nothing (GUIDE 2, award criteria relate to the contract)."}
+    - {criterion: idea_chain, from: 14, to: 8, why: "Scope fidelity: if only strategy was asked, creative ideas should be refused (WFA/EACA 14, GUIDE 2)."}
+    - {criterion: presentability, from: 10, to: 6, why: "Written response boxes are what is scored; craft earns less than mapping (GUIDE 3.2, scoring slide note)."}
+strict:
+  requirement_map: error
+  rule_broken: error
+  criteria_map: error
+  pitch_length: error
+  message_carried: error
+  numbers_uncited: error
+prompt_guidance:
+  a0:
+    - "Ask for the buyer's scoring criteria, their weights, the page, slide or word limits and the lots when the documents do not state them. Never assume a weight."
+  a:
+    - "Read every requirement, scored criterion, minimum score, weight, page or slide limit and rule, and keep the buyer's own order."
+    - "Record a weight or a limit only when a document states it. Record social value as its own criterion when the buyer scores it."
+  b:
+    - "Answer each scored criterion in the buyer's order and spend the words on the heavier ones. No claim without a ref."
+    - "Do not write generic company history: award criteria relate to the subject of the contract, so a line that answers no criterion earns nothing."
+    - "Do not add work the buyer did not ask for."
+  c:
+    - "Offer more than one route only when the requirements ask for them."
+  d:
+    - "Do only the work the requirements ask for. Write one recommended idea unless the requirements ask for more, and no finished creative if only strategy was asked."
+    - "In a sensitive category, add a note of what we will not claim and name the rule only if an input states it."
+  e:
+    - "Keep each criterion's key words in the slide that answers it, so the response map still points at it."
+  fit:
+    - "Be strict: a scored criterion answered by a headline its evidence does not support loses marks."
+questions:
+  - id: q_criteria
+    text: "Does the buyer publish scoring criteria and weights? Paste them or say where they are."
+    options: []
+    allow_text: true
+    address: brief.mandatories
+  - id: q_limits
+    text: "What page, slide or word limits apply, and how long is the presentation slot?"
+    options: []
+    allow_text: true
+    address: brief.mandatories
+  - id: q_scope
+    text: "Did the buyer ask for creative work, or only strategy and evaluation?"
+    options:
+      - {id: opt_creative, label: Creative work too, value: creative}
+      - {id: opt_strategy, label: Strategy and evaluation only, value: strategy}
+    allow_text: true
+    address: brief.mandatories
+  - id: q_price
+    text: "How is price scored, and is there a social value criterion?"
+    options: []
+    allow_text: true
+    address: brief.budget_scope
+sources: [GUIDE.md 2, GUIDE.md 3.2, rubric.json compliance_gate, NAPKIN-EDGE.md 3]
