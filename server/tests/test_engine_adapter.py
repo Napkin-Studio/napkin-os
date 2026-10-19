@@ -29,7 +29,7 @@ from test_brief import BRIEF_SCHEMA, DOC, Host, retrieval, run
 ENGINE_URL = "http://engine.test"
 PIN = "f_01JXF001"
 FI = "fi_01JXF0A1"
-FI_FACT = "f_01JXFV99"  # the fact a verified finding became; the document holds the finding
+FI_FACT = "f_01JXFV99"  # the layer fact an older document's verified finding became (verification.fact_id)
 SRC = "src_01JXS01"
 ATT_TEXT = "Harbour Tonic brief.\nThe client wants midweek volume up.\n"
 ATT_SHA = hashlib.sha256(ATT_TEXT.encode()).hexdigest()
@@ -61,7 +61,7 @@ REPLY = {
     "context": "**Brief quality:** clear.",
     "fact_refs": {"reasons_to_believe": [{"item": 0, "id": PIN, "version": 2, "scope": "brand",
                                           "source_ids": [SRC]}],
-                  "insight": [{"item": None, "id": FI_FACT, "version": 1, "scope": "research", "source_ids": []}],
+                  "insight": [{"item": None, "id": FI, "version": 1, "scope": "research", "source_ids": []}],
                   "desired_response": [{"item": "think", "id": PIN, "version": 2, "scope": "brand",
                                         "source_ids": [SRC]}]},
     "fact_conflicts": [{"id": PIN, "version": 2, "line": "[F:f_01JXF001 v2] brand market.share: 12 pct", "p": 0.93}],
@@ -112,13 +112,14 @@ def eserver(tmp_path):
     s.stop()
 
 
-def research_host(**kw):
+def research_host(verification=None, **kw):
     """A brief spun off from research: a pin, a verified finding and the upstream payload."""
     h = Host(**kw)
     h.facts = [{"id": PIN, "entity": "brand", "key": "market.share", "value": 12, "layer": "brand",
                 "origin": "fact://brand/brand/market.share@2", "sources": [SRC]}]
     h.findings = [{"id": FI, "status": "verified", "statement": "Weeknights matter.", "cites": [PIN],
-                   "verification": {"decision": "d_01JXV0001", "by": "human:1", "at": "2026-09-01", "fact_id": FI_FACT}}]
+                   "verification": verification or {"decision": "d_01JXV0001", "by": "human:1",
+                                                    "at": "2026-09-01T00:00:00Z"}}]
     base = h.clan
 
     def clan():
@@ -264,6 +265,31 @@ def test_a_held_field_the_engine_echoes_is_not_proposed(eserver, stub):
     check_engine_change(host)
 
 
+@pytest.mark.parametrize("verification", [
+    {"decision": "d_01JXV0001", "by": "human:1", "at": "2026-09-01T00:00:00Z"},
+    # an older research document: its verified finding still names the layer fact it became
+    {"decision": "d_01JXV0001", "by": "human:1", "at": "2026-09-01T00:00:00Z", "fact_id": FI_FACT}])
+def test_the_brief_cites_a_verified_finding_by_its_id(eserver, stub, verification):
+    stub(Engine())
+    host = research_host(verification=verification)
+    run(eserver, host, inp=inp())
+    ins = next(x for x in host.chain if x["action"] == "draft" and x["targets"] == [f"{DOC}#insight"])
+    assert FI in ins["cites"] and [c for c in ins["cites"] if not c.startswith("mat_")] == [FI]
+    assert FI_FACT not in json.dumps(ins)
+    assert any(p.get("cites") == [FI] and "finding" in p["point"] for p in ins["reasoning"]["because"])
+    check_engine_change(host)
+
+
+def test_the_resolver_finds_a_finding_by_id_and_never_through_a_layer_fact():
+    old = {"facts": [{"id": PIN}], "findings": [
+        {"id": FI, "status": "verified", "verification": {"fact_id": FI_FACT}},
+        {"id": "fi_01JXREJ01", "status": "rejected"}]}
+    res = engine.Resolver(old)
+    assert res.cites(FI) == [FI] and res.address(FI) == f"findings[{FI}]"
+    assert res.cites(PIN) == [PIN] and res.address(PIN) == f"facts[{PIN}]"
+    assert res.cites(FI_FACT) == [] and res.address(FI_FACT) is None
+    assert res.cites("fi_01JXREJ01") == []
+
 def test_the_reply_lands_as_the_middlewares_change(eserver, stub):
     stub(Engine())
     host = research_host()
@@ -300,9 +326,9 @@ def test_the_reply_lands_as_the_middlewares_change(eserver, stub):
     rtb = next(x for x in by_target["reasons_to_believe"] if x["action"] == "draft")
     assert PIN in rtb["cites"] and rtb["fact_refs"][0]["item"] == 0
     assert any(PIN in (p.get("cites") or []) for p in rtb["reasoning"]["because"])
-    # a finding's fact resolves to the finding, so the drawer opens it
+    # a verified finding is cited by its own id, so the drawer opens it
     ins = next(x for x in by_target["insight"] if x["action"] == "draft")
-    assert FI in ins["cites"] and FI_FACT not in ins["cites"]
+    assert FI in ins["cites"]
     # a desired-response ref lands on its leaf only
     think = next(x for x in by_target["desired_response.think"] if x["action"] == "draft")
     feel = next(x for x in by_target["desired_response.feel"] if x["action"] == "draft")
