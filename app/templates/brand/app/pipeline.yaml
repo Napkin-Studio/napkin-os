@@ -1,0 +1,25 @@
+# Brand Clan pipeline contract.
+# Travels verbatim into every instance (CLAN instantiation copies all members).
+# A Brand Clan synthesises nothing and makes no model call, so this is a
+# declaration of that: it names no task and no handler. The kit is written by
+# people in its view, by an upload of a brand book read into `extracted` items
+# (docs/contracts/brand-clan.md 3.3), by a seed from the roster and the brand
+# layer (section 5), and by a harvest a person confirms (section 6). The host
+# applies each of those as one change on the OS layer; none of them is a
+# pipeline task. Contract: docs/contracts/brand-clan.md.
+pipeline: napkin-brand
+version: 1
+request_kind: none             # the app calls no middleware
+contract: brand-clan/1         # docs/contracts/brand-clan.md
+
+tasks: {}
+
+never:
+  - fetches the public web (owner, 2026-10-19: roster and brand layer only)
+  - calls a model
+  - writes a figure: a number is a pin in shared/facts.yaml from the brand layer, never a value in the kit
+  - writes upstream or projection (host-written, read-only)
+
+merge_policies:
+  materials: append
+  "*": ask

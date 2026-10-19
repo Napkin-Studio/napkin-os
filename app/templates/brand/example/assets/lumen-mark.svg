@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" role="img" aria-label="Lumen mark (example)">
+  <path fill="#0E5FA8" d="M60 8C60 8 24 52 24 78a36 36 0 0 0 72 0C96 52 60 8 60 8z"/>
+  <path fill="#F7FAFC" d="M46 82a14 14 0 0 0 14 14v-6a8 8 0 0 1-8-8z"/>
+  <text x="60" y="128" text-anchor="middle" font-family="sans-serif" font-size="16" font-weight="700" fill="#0B1F2E">Lumen</text>
+</svg>

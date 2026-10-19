@@ -27,14 +27,25 @@
 //! all of it (`spin_off_the_example`). The example is
 //! `app/public/apps/campaign-research.example.clan` unless a path is given,
 //! and is built with `make_campaign_research` when it is not there yet.
+//!
+//! A brief can also take a Brand Clan. The app declares `app.attach`
+//! (Contract 6 §4): `ie.napkin.brand` is accepted, its name, tone words and
+//! mandatories seed `client`, `tone_and_world` and `mandatories`, and the
+//! brief offers its proposition, tone and mandatories back. The self-check
+//! attaches the Brand Clan's example (Lumen Water) to a fresh brief and
+//! asserts the seeds, the frozen copy, the record and the schema
+//! (`attach_the_brand`). The example is `app/public/apps/brand.example.clan`,
+//! built with `make_brand` when it is not there yet.
 
 use clan_sdk::hash::sha256_prefixed;
 use clan_sdk::{
-    create, instantiate, make_template, pack_html, patch_context, patch_requirements, spinoff,
-    validate, AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, DecisionChain, FileEntry,
-    InstantiateOptions, MakeTemplateOptions, SpinoffOptions, SpinoffSpec,
+    attach, create, instantiate, make_template, pack_html, patch_context, patch_requirements,
+    spinoff, validate, AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions,
+    DecisionChain, FileEntry, HarvestRule, InstantiateOptions, MakeTemplateOptions, SpinoffOptions,
+    SpinoffSpec,
 };
 use serde_yaml::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -45,6 +56,8 @@ mod app_ui;
 const APP_ID: &str = "ie.napkin.brief-maker";
 /// The one app a brief is spun off from, whole.
 const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+/// The one app a brief attaches: the brand kit.
+const BRAND_APP_ID: &str = "ie.napkin.brand";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const SCHEMA_PATH: &str = "agent/output-schema.json";
 const FACTS_PATH: &str = "shared/facts.yaml";
@@ -180,6 +193,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("app/public/apps/campaign-research.example.clan"));
+    let brand = args
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("app/public/apps/brand.example.clan"));
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
     // The agent figures and the OS's fields are inlined at build (one
@@ -241,13 +258,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.6: a brief can start from research, carried whole.
             // 0.7: its card on the OS home (app.home).
             // 0.8: how the brief looks is one rolling entry (x-clan-appearance).
-            version: "0.9.4".into(),
+            // 0.10: a brief can take a Brand Clan (app.attach): it seeds the client, tone and mandatories.
+            version: "0.10.0".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some(SCHEMA_PATH.into()),
             prompt_templates: vec![],
             data_seed: None,
-            attach: None,
+            // The Brand Clan is attached, not spun off: frozen at
+            // upstream.<brand id>, its pins merged. Lifts copy a raw value,
+            // so each source is a plain leaf the brand's schema holds for it.
+            attach: Some(AttachSpec {
+                accepts: vec![BRAND_APP_ID.into()],
+                lift: BTreeMap::from([
+                    ("brand.name.value".to_string(), "client".to_string()),
+                    (
+                        "voice.tone_words.value".to_string(),
+                        "tone_and_world".to_string(),
+                    ),
+                    (
+                        "voice.mandatories.value".to_string(),
+                        "mandatories".to_string(),
+                    ),
+                ]),
+                // What an accepted brief offers back to the kit, a person confirming.
+                harvest: vec![
+                    HarvestRule {
+                        from: "single_minded_proposition".into(),
+                        to: "strategy.proposition.value".into(),
+                    },
+                    HarvestRule {
+                        from: "tone_and_world".into(),
+                        to: "voice.tone_words.value".into(),
+                    },
+                    HarvestRule {
+                        from: "mandatories".into(),
+                        to: "voice.mandatories.value".into(),
+                    },
+                ],
+            }),
             spinoff: Some(SpinoffSpec {
                 accepts: vec![RESEARCH_APP_ID.into()],
                 // Carried whole under upstream.<research id>, so no map; and
@@ -315,12 +364,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 8. Self-check: the Research Tool's example, spun off into a brief.
     spin_off_the_example(&template, &research)?;
 
+    // 9. Self-check: the Brand Clan's example, attached to a fresh brief.
+    attach_the_brand(&template, &brand)?;
+
     fs::write(&output, &template_bytes)?;
     println!(
         "wrote {output} ({} bytes) — context, requirements, pipeline and the facts/findings \
-         members verified in an instance; {} spun off whole",
+         members verified in an instance; {} spun off whole; {} attached",
         template_bytes.len(),
-        research.display()
+        research.display(),
+        brand.display()
     );
     println!("install: copy into the Napkin Studio app library as {APP_ID}/app.clan");
     Ok(())
@@ -516,5 +569,138 @@ fn spin_off_the_example(
         "the spun-off data against the brief schema: {problems:#?}"
     );
     require_valid("spun-off brief", &brief);
+    Ok(())
+}
+
+/// The Brand Clan's example, built beside its template app by `make_brand`
+/// when it is not there yet.
+fn brand_example(path: &Path) -> Result<ClanFile, Box<dyn std::error::Error>> {
+    if !path.exists() {
+        let out = path.parent().unwrap_or(Path::new("."));
+        fs::create_dir_all(out)?;
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+        let status = Command::new(cargo)
+            .args([
+                "run",
+                "-q",
+                "-p",
+                "clan-sdk",
+                "--example",
+                "make_brand",
+                "--",
+            ])
+            .arg(out.join("brand.app.clan"))
+            .arg(path)
+            .current_dir(repo_root())
+            .status()?;
+        if !status.success() {
+            return Err(format!("make_brand failed ({status})").into());
+        }
+    }
+    Ok(ClanFile::from_bytes(fs::read(path)?)?)
+}
+
+/// Attach the Brand Clan's example to a fresh brief and assert the carry
+/// (Contract 6 §4.2-§4.3): the three seeds landed in the brief's own fields,
+/// the kit is frozen read-only at `upstream.<brand id>`, `lineage.attached`
+/// records the hop, the roster pins merged, and the brief schema and the file
+/// accept the result.
+fn attach_the_brand(
+    template: &ClanFile,
+    brand_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let brand = brand_example(brand_path)?;
+    let brand_doc = brand.manifest().document_id().to_string();
+    let fresh = ClanFile::from_bytes(instantiate(
+        template,
+        InstantiateOptions {
+            title: "Lumen Water summer launch — brief".into(),
+            ..Default::default()
+        },
+    )?)?;
+    let out = attach(&fresh, &brand)?;
+    let brief = ClanFile::from_bytes(out.bytes)?;
+    let data = yaml(&brief, DATA_PATH)?;
+    let kit = yaml(&brand, DATA_PATH)?;
+
+    // The seeds: the kit's plain leaves, in the brief's own fields.
+    assert_eq!(data["client"], kit["brand"]["name"]["value"]);
+    assert_eq!(data["tone_and_world"], kit["voice"]["tone_words"]["value"]);
+    assert_eq!(data["mandatories"], kit["voice"]["mandatories"]["value"]);
+    assert_eq!(
+        data["client"].as_str(),
+        Some("Lumen Water"),
+        "the client was not seeded from brand.name.value"
+    );
+    for to in ["client", "tone_and_world", "mandatories"] {
+        assert!(
+            out.seeded.iter().any(|s| s == to),
+            "{to} was not recorded as seeded: {:?}",
+            out.seeded
+        );
+    }
+    assert!(out.kept.is_empty(), "nothing was there to keep");
+
+    // The frozen copy: the kit's data less its projection and upstream, and
+    // nothing of the kit at the brief's root.
+    let mut frozen = kit.clone();
+    if let Some(m) = frozen.as_mapping_mut() {
+        m.remove("projection");
+        m.remove("upstream");
+    }
+    assert_eq!(
+        data["upstream"][brand_doc.as_str()],
+        frozen,
+        "upstream.{brand_doc} is not the kit's data, frozen"
+    );
+    assert!(
+        data.get("brand").is_none() && data.get("visual").is_none(),
+        "the kit reached the brief's root"
+    );
+
+    // The hop.
+    let records = brief.manifest().attached();
+    assert_eq!(records.len(), 1, "one attached record");
+    let record = &records[0];
+    assert_eq!(record.app_id, BRAND_APP_ID);
+    assert_eq!(record.version, Some(5), "the kit's version at attach");
+    assert_eq!(record.carried.document_id, brand_doc);
+    assert_eq!(
+        record.carried.data_sha256,
+        sha256_prefixed(&brand.read_entry(DATA_PATH)?)
+    );
+    assert_eq!(
+        record.carried.facts_sha256.as_deref(),
+        Some(sha256_prefixed(&brand.read_entry(FACTS_PATH)?).as_str())
+    );
+
+    // The roster pins and their sources merged into the brief's own members.
+    assert_eq!(
+        brief.read_entry(FACTS_PATH)?,
+        brand.read_entry(FACTS_PATH)?,
+        "the kit's pins did not merge into the brief"
+    );
+    assert_eq!(
+        brief.read_entry(SOURCES_PATH)?,
+        brand.read_entry(SOURCES_PATH)?,
+        "the kit's sources did not merge into the brief"
+    );
+    assert_eq!(role_of(&brief, SOURCES_PATH), Some("sources"));
+
+    // The brief's own contracts and context, not the kit's.
+    for path in [PIPELINE_PATH, SCHEMA_PATH] {
+        assert_eq!(
+            brief.read_entry(path)?,
+            template.read_entry(path)?,
+            "{path} is not the brief's own"
+        );
+    }
+
+    let problems = schema_problems(&brief, SCHEMA_PATH, &data)?;
+    assert!(
+        problems.is_empty(),
+        "the attached data against the brief schema: {problems:#?}"
+    );
+    require_valid("brief with a brand", &brief);
     Ok(())
 }

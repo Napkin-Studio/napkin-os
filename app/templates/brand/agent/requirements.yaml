@@ -1,0 +1,7 @@
+# Capability requirements (CLAN spec 22) for the Brand Clan application.
+# This file travels verbatim into every instance. The app does no inference of
+# its own and fetches nothing: a kit is read, typed into and published without
+# any tool, so it requires none. A brand book dropped on it is read by the OS
+# layer's extraction (docs/contracts/brand-clan.md 3.3), not by this app.
+requires:
+  tools: []

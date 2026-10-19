@@ -1,0 +1,293 @@
+# EXAMPLE - fabricated for testing. Lumen Water is an invented brand.
+# The Brand Clan's data (docs/contracts/brand-clan.md section 3). The packer adds
+# `projection` (built from the members) and the brand book's hash under
+# `materials`; nothing here is a figure: those are pins in shared/facts.yaml.
+brand:
+  ref: brand/lumen-water
+  name:
+    value: Lumen Water
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+  client_org:
+    value: org/lumen-beverages
+    origin: proposed
+    fact_ids: [f_01JB0B1C2D]
+    decision: d_01JB0D01SEED
+  categories:
+    value: [drinks.water]
+    origin: proposed
+    fact_ids: [f_01JB0B1C3E]
+    decision: d_01JB0D01SEED
+  markets:
+    value: [IE, GB]
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+
+kit:
+  version: 5
+  published:
+    by: human:u_aoife
+    at: "2026-10-12T10:14:00Z"
+    revision: sha256:3f1c9a7e5b2d84606a1e0c9b7d4f2a85e1b6c3d09f7a4e2b8c5d1a0f6e3b9c72
+  changelog:
+    v1:
+      version: 1
+      at: "2026-09-02T09:50:00Z"
+      by: human:u_aoife
+      summary: Seeded from the roster and the brand book excerpt.
+    v4:
+      version: 4
+      at: "2026-09-30T16:02:00Z"
+      by: human:u_aoife
+      summary: Added the colour rules and the approver.
+    v5:
+      version: 5
+      at: "2026-10-12T10:14:00Z"
+      by: human:u_aoife
+      summary: Took in the summer launch brief and its proposition.
+
+strategy:
+  positioning:
+    value: The water that tastes of where it comes from.
+    origin: extracted
+    source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.6, quote: "the water that tastes of where it comes from: clear, cold and unhurried" }
+    decision: d_01JB0D02EXTR
+  proposition:
+    value: Lumen is the clear choice, every day.
+    origin: confirmed
+    by: human:u_aoife
+    confirmed_from: stated
+    decision: d_01JB0D05HARV
+
+voice:
+  tone_words:
+    value: [clear, bright, unhurried, warm]
+    origin: extracted
+    source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.9, quote: "We sound clear, bright, unhurried and warm." }
+    decision: d_01JB0D02EXTR
+  mandatories:
+    value:
+      - End every film on the Lumen mark.
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+  principles:
+    clear:
+      name: Say it plainly
+      text: One idea at a time, in the words a person would use.
+      do: [Use short sentences., Say it once.]
+      dont: [Stack adjectives.]
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.9, quote: "Say it plainly. Say it once." }
+      decision: d_01JB0D02EXTR
+  tagline:
+    text: Clear by nature
+    since: "2024-03-01"
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+  vocabulary:
+    preferred:
+      water:
+        use: water
+        not: hydration
+        origin: extracted
+        source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.9, quote: "We say \"water\", never \"hydration\"." }
+        decision: d_01JB0D02EXTR
+  languages:
+    value: [en-IE, en-GB]
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+
+visual:
+  logos:
+    lumen-primary:
+      name: Lumen mark
+      kind: primary
+      variants:
+        full-light:
+          asset: assets/lumen-mark.svg
+          colour: full
+          on: light
+      clear_space:
+        text: Keep clear the height of the droplet on every side.
+        ratio: 1
+      min_size: { px: 24, mm: 8 }
+      misuse: [Do not stretch the mark.]
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.14, quote: "Keep clear around it the height of the droplet, on every side. Never stretch it." }
+      decision: d_01JB0D02EXTR
+  colours:
+    lumen-blue:
+      name: Lumen blue
+      hex: "#0E5FA8"
+      role: primary
+      usage: Carries the brand; the mark, headlines and key shapes.
+      pairs_with: [spring-white]
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.15, quote: "Lumen blue #0E5FA8 carries the brand." }
+      decision: d_01JB0D02EXTR
+    spring-white:
+      name: Spring white
+      hex: "#F7FAFC"
+      role: background
+      usage: The ground.
+      pairs_with: [lumen-blue, ink]
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.15, quote: "Spring white #F7FAFC is the ground." }
+      decision: d_01JB0D02EXTR
+    stone:
+      name: Stone
+      hex: "#5B6770"
+      role: neutral
+      usage: Support.
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.15, quote: "Stone #5B6770 for support." }
+      decision: d_01JB0D02EXTR
+    ink:
+      name: Ink
+      hex: "#0B1F2E"
+      role: text
+      pairs_with: [spring-white]
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.15, quote: "Ink #0B1F2E for text." }
+      decision: d_01JB0D02EXTR
+    sun:
+      name: Sun
+      hex: "#F2B134"
+      role: accent
+      usage: A spark, never a ground.
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.15, quote: "Sun #F2B134 as a spark, never a ground." }
+      decision: d_01JB0D02EXTR
+  typography:
+    lumen-display:
+      family: Lumen Display
+      role: heading
+      weights: [700]
+      fallbacks: [Helvetica Neue, Arial]
+      file: assets/lumen-display.woff2
+      licence: { holder: Lumen Beverages, kind: web, note: Supplied by the client for web and app use. }
+      provider: custom
+      origin: stated
+      by: human:u_aoife
+      decision: d_01JB0D03TYPD
+    dm-sans:
+      family: DM Sans
+      role: body
+      weights: [400, 500]
+      fallbacks: [Arial, sans-serif]
+      licence: { holder: Google Fonts, kind: web }
+      provider: google
+      origin: extracted
+      source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.18, quote: "Body copy is set in DM Sans." }
+      decision: d_01JB0D02EXTR
+  imagery:
+    style:
+      value: Daylight, water in motion, people outdoors.
+      origin: stated
+      by: human:u_aoife
+      decision: d_01JB0D03TYPD
+  devices:
+    droplet:
+      name: The droplet
+      text: A single drop used as a full stop.
+      asset: assets/lumen-mark.svg
+      origin: stated
+      by: human:u_aoife
+      decision: d_01JB0D03TYPD
+  layout:
+    grid:
+      value: 12 columns on an 8 px baseline.
+      origin: stated
+      by: human:u_aoife
+      decision: d_01JB0D03TYPD
+
+sound:
+  music:
+    direction: Acoustic and light, no vocals.
+    do: [Leave room for the voice.]
+    dont: [Use a track with a chorus.]
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+
+rules:
+  keep-clear-space:
+    kind: must
+    area: logo
+    text: Keep the droplet's height clear around the mark.
+    severity: warn
+    checkable: false
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+  no-red:
+    kind: dont
+    area: colour
+    text: Never use red; blue and white carry the brand.
+    severity: warn
+    checkable: true
+    origin: extracted
+    source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.15, quote: "Never use red." }
+    decision: d_01JB0D02EXTR
+  say-water:
+    kind: dont
+    area: voice
+    text: Say "water", never "hydration".
+    severity: warn
+    checkable: true
+    cites: voice.vocabulary.preferred.water
+    origin: extracted
+    source: { material_id: mat_5b0a1e7c3d9f2a64, locator: p.9, quote: "We say \"water\", never \"hydration\"." }
+    decision: d_01JB0D02EXTR
+
+formats:
+  packs:
+    value: [social-core, tv-uk]
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+  channels:
+    tv:
+      durations: [10, 20, 30]
+      end_card: The Lumen mark on spring white, for three seconds.
+      origin: stated
+      by: human:u_aoife
+      decision: d_01JB0D03TYPD
+
+people:
+  aoife:
+    name: Aoife Brennan
+    role: approver
+    origin: stated
+    by: human:u_aoife
+    decision: d_01JB0D03TYPD
+
+work:
+  summer-launch-brief:
+    document_id: 3e8f1b6a-2c4d-4f7a-9b15-6d0a8c2e7f41
+    app_id: ie.napkin.brief-maker
+    title: Lumen Water summer launch, brief
+    kind: brief
+    version: sha256:9d2c4b71e08f3a56c1d7e9b04a2f8c6d3b5e1a7098c4d2f6e0b3a915c7d8e4f1
+    client_review: d_01JB0C0RVW1
+    accepted_at: "2026-10-09T15:30:00Z"
+    summary: The summer launch brief, accepted by the client.
+    origin: confirmed
+    by: human:u_aoife
+    confirmed_from: proposed
+    decision: d_01JB0D05HARV
+
+materials:
+  mat_5b0a1e7c3d9f2a64:
+    kind: other
+    name: Lumen Water brand book (excerpt)
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+    media_type: text/plain
+    asset: assets/brand-book-excerpt.txt
+    received_at: "2026-09-02T09:10:00Z"
+    licence: client-confidential

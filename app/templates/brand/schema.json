@@ -1,0 +1,3679 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Brand Clan",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^brand/[a-z0-9][a-z0-9._-]*$",
+          "description": "The brand layer entity; the key everywhere. Plain: it is the identity of the kit, not a claim."
+        },
+        "name": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "Plain lift source: briefs lift brand.name.value into their client field."
+        },
+        "client_org": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^org/[a-z0-9][a-z0-9._-]*$"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+              },
+              "uniqueItems": true
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "markets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/market"
+              },
+              "uniqueItems": true
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "parent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^brand/[a-z0-9][a-z0-9._-]*$"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "products": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "description": {
+                "$ref": "#/definitions/text"
+              },
+              "asset": {
+                "$ref": "#/definitions/asset"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "sites": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "handles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/text"
+              },
+              "propertyNames": {
+                "$ref": "#/definitions/id_key"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ref",
+        "name"
+      ],
+      "description": "Identity: who this is."
+    },
+    "kit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bumped by publish. Host-written."
+        },
+        "published": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "at": {
+              "$ref": "#/definitions/datetime"
+            },
+            "revision": {
+              "$ref": "#/definitions/sha256_prefixed"
+            }
+          },
+          "required": [
+            "by",
+            "at"
+          ]
+        },
+        "changelog": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^v[1-9][0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "at": {
+                "$ref": "#/definitions/datetime"
+              },
+              "by": {
+                "$ref": "#/definitions/actor"
+              },
+              "summary": {
+                "$ref": "#/definitions/text"
+              }
+            },
+            "required": [
+              "version",
+              "at",
+              "by",
+              "summary"
+            ]
+          },
+          "description": "One entry per publish, keyed by \"v<version>\" (a map, so an entry has an address)."
+        }
+      },
+      "description": "The kit's own state, not brand knowledge: host-written, no provenance envelope."
+    },
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "positioning": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "proposition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "Harvest target: an approved brief offers its single-minded proposition here."
+        },
+        "personality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text_list"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "Traits."
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text_list"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "audience": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "A summary."
+        },
+        "proof_points": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text_list"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        }
+      },
+      "description": "What the brand stands for. Seeded from approved briefs."
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tone_words": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text_list"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "Plain lift source: briefs lift voice.tone_words.value into tone_and_world."
+        },
+        "mandatories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "$ref": "#/definitions/text_list"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "Plain lift source: briefs lift voice.mandatories.value into mandatories."
+        },
+        "principles": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name",
+              "text"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "text": {
+                "$ref": "#/definitions/text"
+              },
+              "do": {
+                "$ref": "#/definitions/text_list"
+              },
+              "dont": {
+                "$ref": "#/definitions/text_list"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "tagline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "text"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "text": {
+              "$ref": "#/definitions/text"
+            },
+            "since": {
+              "$ref": "#/definitions/date"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "vocabulary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "preferred": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id_key"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "origin",
+                  "use",
+                  "not"
+                ],
+                "properties": {
+                  "origin": {
+                    "$ref": "#/definitions/origin"
+                  },
+                  "source": {
+                    "$ref": "#/definitions/span"
+                  },
+                  "fact_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "#/definitions/fact_id"
+                    }
+                  },
+                  "by": {
+                    "$ref": "#/definitions/human"
+                  },
+                  "confirmed_from": {
+                    "type": "string",
+                    "enum": [
+                      "extracted",
+                      "proposed",
+                      "stated"
+                    ]
+                  },
+                  "decision": {
+                    "$ref": "#/definitions/decision_id"
+                  },
+                  "use": {
+                    "$ref": "#/definitions/text"
+                  },
+                  "not": {
+                    "$ref": "#/definitions/text"
+                  }
+                },
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/origin_rules"
+                  }
+                ]
+              },
+              "description": "Keyed by id, never positional."
+            },
+            "banned": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text_list"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            }
+          }
+        },
+        "pronunciation": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "respell"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "respell": {
+                "$ref": "#/definitions/text"
+              },
+              "ipa": {
+                "$ref": "#/definitions/text"
+              },
+              "audio": {
+                "$ref": "#/definitions/asset"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          },
+          "description": "Keyed by the term, as an id key."
+        },
+        "claims": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "text",
+              "substantiation"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "text": {
+                "$ref": "#/definitions/text"
+              },
+              "substantiation": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "markets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/market"
+                }
+              },
+              "expires": {
+                "$ref": "#/definitions/date"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "legal_lines": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "text",
+              "mandatory"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "text": {
+                "$ref": "#/definitions/text"
+              },
+              "markets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/market"
+                }
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/id_key"
+                },
+                "uniqueItems": true
+              },
+              "mandatory": {
+                "type": "boolean"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "languages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        }
+      },
+      "description": "Verbal identity."
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logos": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name",
+              "kind"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "primary",
+                  "secondary",
+                  "mark",
+                  "wordmark",
+                  "lockup"
+                ]
+              },
+              "variants": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/definitions/id_key"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "asset": {
+                      "$ref": "#/definitions/asset"
+                    },
+                    "colour": {
+                      "type": "string",
+                      "enum": [
+                        "full",
+                        "mono",
+                        "reverse"
+                      ]
+                    },
+                    "on": {
+                      "type": "string",
+                      "enum": [
+                        "light",
+                        "dark",
+                        "any"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset",
+                    "colour",
+                    "on"
+                  ]
+                }
+              },
+              "clear_space": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "$ref": "#/definitions/text"
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              },
+              "min_size": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "px": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "mm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                }
+              },
+              "misuse": {
+                "$ref": "#/definitions/text_list"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "colours": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name",
+              "hex",
+              "role"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "hex": {
+                "type": "string",
+                "pattern": "^#[0-9A-Fa-f]{6}$"
+              },
+              "rgb": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              },
+              "cmyk": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              },
+              "pantone": {
+                "$ref": "#/definitions/text"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "primary",
+                  "secondary",
+                  "accent",
+                  "neutral",
+                  "background",
+                  "text"
+                ]
+              },
+              "usage": {
+                "$ref": "#/definitions/text"
+              },
+              "pairs_with": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/id_key"
+                },
+                "uniqueItems": true
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "typography": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "family",
+              "role"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "family": {
+                "$ref": "#/definitions/text"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "heading",
+                  "body",
+                  "display",
+                  "caption",
+                  "mono"
+                ]
+              },
+              "weights": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                }
+              },
+              "fallbacks": {
+                "$ref": "#/definitions/text_list"
+              },
+              "file": {
+                "$ref": "#/definitions/asset",
+                "description": "Arrives only by upload, with its licence. Never taken from a PDF. Absent means no file."
+              },
+              "licence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "holder": {
+                    "$ref": "#/definitions/text"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "desktop",
+                      "web",
+                      "app",
+                      "broadcast"
+                    ]
+                  },
+                  "note": {
+                    "$ref": "#/definitions/text"
+                  }
+                },
+                "required": [
+                  "holder",
+                  "kind"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "google",
+                  "adobe",
+                  "custom"
+                ],
+                "description": "Where the font comes from. Named provider, not source, because source is the envelope key for an extracted span."
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "imagery": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "style": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "principles": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id_key"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "origin",
+                  "name",
+                  "text"
+                ],
+                "properties": {
+                  "origin": {
+                    "$ref": "#/definitions/origin"
+                  },
+                  "source": {
+                    "$ref": "#/definitions/span"
+                  },
+                  "fact_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "#/definitions/fact_id"
+                    }
+                  },
+                  "by": {
+                    "$ref": "#/definitions/human"
+                  },
+                  "confirmed_from": {
+                    "type": "string",
+                    "enum": [
+                      "extracted",
+                      "proposed",
+                      "stated"
+                    ]
+                  },
+                  "decision": {
+                    "$ref": "#/definitions/decision_id"
+                  },
+                  "name": {
+                    "$ref": "#/definitions/text"
+                  },
+                  "text": {
+                    "$ref": "#/definitions/text"
+                  },
+                  "examples": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/asset"
+                    }
+                  },
+                  "do": {
+                    "$ref": "#/definitions/text_list"
+                  },
+                  "dont": {
+                    "$ref": "#/definitions/text_list"
+                  }
+                },
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/origin_rules"
+                  }
+                ]
+              }
+            },
+            "photography": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "light": {
+                  "$ref": "#/definitions/text"
+                },
+                "grade": {
+                  "$ref": "#/definitions/text"
+                },
+                "subjects": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "illustration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "style"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "style": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "iconography": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "style"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "style": {
+                  "$ref": "#/definitions/text"
+                },
+                "set": {
+                  "$ref": "#/definitions/asset"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            }
+          }
+        },
+        "devices": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name",
+              "text"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "text": {
+                "$ref": "#/definitions/text"
+              },
+              "asset": {
+                "$ref": "#/definitions/asset"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "grid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "margins": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "logo_placement": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "safe_areas": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id_key"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "origin",
+                  "value"
+                ],
+                "properties": {
+                  "origin": {
+                    "$ref": "#/definitions/origin"
+                  },
+                  "source": {
+                    "$ref": "#/definitions/span"
+                  },
+                  "fact_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "#/definitions/fact_id"
+                    }
+                  },
+                  "by": {
+                    "$ref": "#/definitions/human"
+                  },
+                  "confirmed_from": {
+                    "type": "string",
+                    "enum": [
+                      "extracted",
+                      "proposed",
+                      "stated"
+                    ]
+                  },
+                  "decision": {
+                    "$ref": "#/definitions/decision_id"
+                  },
+                  "value": {
+                    "$ref": "#/definitions/text"
+                  }
+                },
+                "allOf": [
+                  {
+                    "$ref": "#/definitions/origin_rules"
+                  }
+                ]
+              },
+              "description": "Keyed by channel id."
+            }
+          }
+        },
+        "motion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "principles": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "logo_animation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/asset"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "durations": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            },
+            "easing": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "origin",
+                "value"
+              ],
+              "properties": {
+                "origin": {
+                  "$ref": "#/definitions/origin"
+                },
+                "source": {
+                  "$ref": "#/definitions/span"
+                },
+                "fact_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/definitions/fact_id"
+                  }
+                },
+                "by": {
+                  "$ref": "#/definitions/human"
+                },
+                "confirmed_from": {
+                  "type": "string",
+                  "enum": [
+                    "extracted",
+                    "proposed",
+                    "stated"
+                  ]
+                },
+                "decision": {
+                  "$ref": "#/definitions/decision_id"
+                },
+                "value": {
+                  "$ref": "#/definitions/text"
+                }
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/origin_rules"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "description": "Design language."
+    },
+    "sound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sonic_logo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "asset",
+            "duration_s"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "asset": {
+              "$ref": "#/definitions/asset"
+            },
+            "duration_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "music": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "direction"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "direction": {
+              "$ref": "#/definitions/text"
+            },
+            "tracks": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/definitions/id_key"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "title": {
+                    "$ref": "#/definitions/text"
+                  },
+                  "licence": {
+                    "$ref": "#/definitions/text"
+                  }
+                },
+                "required": [
+                  "title",
+                  "licence"
+                ]
+              }
+            },
+            "do": {
+              "$ref": "#/definitions/text_list"
+            },
+            "dont": {
+              "$ref": "#/definitions/text_list"
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ]
+        },
+        "voices": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name",
+              "consent",
+              "used_for"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "text": {
+                "$ref": "#/definitions/text"
+              },
+              "provider_ref": {
+                "$ref": "#/definitions/text"
+              },
+              "consent": {
+                "type": "string",
+                "enum": [
+                  "on_file",
+                  "none"
+                ]
+              },
+              "used_for": {
+                "type": "string",
+                "enum": [
+                  "vo",
+                  "character",
+                  "all"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/id_key"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "kind",
+          "area",
+          "text",
+          "severity"
+        ],
+        "properties": {
+          "origin": {
+            "$ref": "#/definitions/origin"
+          },
+          "source": {
+            "$ref": "#/definitions/span"
+          },
+          "fact_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/definitions/fact_id"
+            }
+          },
+          "by": {
+            "$ref": "#/definitions/human"
+          },
+          "confirmed_from": {
+            "type": "string",
+            "enum": [
+              "extracted",
+              "proposed",
+              "stated"
+            ]
+          },
+          "decision": {
+            "$ref": "#/definitions/decision_id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "do",
+              "dont",
+              "must"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "logo",
+              "colour",
+              "type",
+              "imagery",
+              "voice",
+              "legal",
+              "layout",
+              "sound"
+            ]
+          },
+          "text": {
+            "$ref": "#/definitions/text"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warn"
+            ],
+            "description": "The one value. Brand rules never block (owner, 2026-10-13)."
+          },
+          "checkable": {
+            "type": "boolean"
+          },
+          "cites": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The item this rule came from, an address inside the kit."
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/definitions/origin_rules"
+          }
+        ]
+      },
+      "description": "The flat do/dont list agents read; one line each."
+    },
+    "formats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin",
+            "value"
+          ],
+          "properties": {
+            "origin": {
+              "$ref": "#/definitions/origin"
+            },
+            "source": {
+              "$ref": "#/definitions/span"
+            },
+            "fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/definitions/fact_id"
+              }
+            },
+            "by": {
+              "$ref": "#/definitions/human"
+            },
+            "confirmed_from": {
+              "type": "string",
+              "enum": [
+                "extracted",
+                "proposed",
+                "stated"
+              ]
+            },
+            "decision": {
+              "$ref": "#/definitions/decision_id"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/id_key"
+              },
+              "uniqueItems": true
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/origin_rules"
+            }
+          ],
+          "description": "Pack ids from production-tool/contracts/format-packs.json."
+        },
+        "custom": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin",
+              "name",
+              "width",
+              "height",
+              "unit"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "name": {
+                "$ref": "#/definitions/text"
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "px",
+                  "mm",
+                  "cm",
+                  "in"
+                ]
+              },
+              "bleed": {
+                "type": "number",
+                "minimum": 0
+              },
+              "safe_area": {
+                "$ref": "#/definitions/text"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          }
+        },
+        "channels": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/definitions/id_key"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "origin"
+            ],
+            "properties": {
+              "origin": {
+                "$ref": "#/definitions/origin"
+              },
+              "source": {
+                "$ref": "#/definitions/span"
+              },
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "by": {
+                "$ref": "#/definitions/human"
+              },
+              "confirmed_from": {
+                "type": "string",
+                "enum": [
+                  "extracted",
+                  "proposed",
+                  "stated"
+                ]
+              },
+              "decision": {
+                "$ref": "#/definitions/decision_id"
+              },
+              "durations": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "end_card": {
+                "$ref": "#/definitions/text"
+              },
+              "note": {
+                "$ref": "#/definitions/text"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/definitions/origin_rules"
+              }
+            ]
+          },
+          "description": "Keyed by channel id (tv, social, ooh, print)."
+        }
+      },
+      "description": "Channel specs for this client."
+    },
+    "people": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/id_key"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "name",
+          "role"
+        ],
+        "properties": {
+          "origin": {
+            "$ref": "#/definitions/origin"
+          },
+          "source": {
+            "$ref": "#/definitions/span"
+          },
+          "fact_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/definitions/fact_id"
+            }
+          },
+          "by": {
+            "$ref": "#/definitions/human"
+          },
+          "confirmed_from": {
+            "type": "string",
+            "enum": [
+              "extracted",
+              "proposed",
+              "stated"
+            ]
+          },
+          "decision": {
+            "$ref": "#/definitions/decision_id"
+          },
+          "name": {
+            "$ref": "#/definitions/text"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "approver",
+              "guardian",
+              "agency_lead",
+              "other"
+            ]
+          },
+          "email": {
+            "$ref": "#/definitions/text"
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/definitions/origin_rules"
+          }
+        ]
+      }
+    },
+    "work": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/id_key"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "document_id",
+          "app_id",
+          "title",
+          "kind",
+          "version",
+          "client_review",
+          "accepted_at"
+        ],
+        "properties": {
+          "origin": {
+            "$ref": "#/definitions/origin"
+          },
+          "source": {
+            "$ref": "#/definitions/span"
+          },
+          "fact_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/definitions/fact_id"
+            }
+          },
+          "by": {
+            "$ref": "#/definitions/human"
+          },
+          "confirmed_from": {
+            "type": "string",
+            "enum": [
+              "extracted",
+              "proposed",
+              "stated"
+            ]
+          },
+          "decision": {
+            "$ref": "#/definitions/decision_id"
+          },
+          "document_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "app_id": {
+            "$ref": "#/definitions/text"
+          },
+          "title": {
+            "$ref": "#/definitions/text"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "research",
+              "ad",
+              "key_visual",
+              "other"
+            ]
+          },
+          "version": {
+            "$ref": "#/definitions/sha256_prefixed"
+          },
+          "client_review": {
+            "$ref": "#/definitions/decision_id"
+          },
+          "accepted_at": {
+            "$ref": "#/definitions/datetime"
+          },
+          "summary": {
+            "$ref": "#/definitions/text"
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/sha256_prefixed"
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/definitions/origin_rules"
+          }
+        ]
+      },
+      "description": "Approved exemplars, harvested from client-accepted documents."
+    },
+    "materials": {
+      "$ref": "#/definitions/materials",
+      "$comment": "written by the host as material is supplied (the brand book, decks)"
+    },
+    "projection": {
+      "$ref": "#/definitions/projection",
+      "$comment": "written only by the host, from shared/facts.yaml and shared/sources.yaml"
+    },
+    "upstream": {
+      "$ref": "#/definitions/upstream",
+      "$comment": "written only by the host; kept for the schemas sake"
+    }
+  },
+  "definitions": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "datetime": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^mat_[0-9a-f]{16}$"
+    },
+    "licence": {
+      "type": "string",
+      "enum": [
+        "open",
+        "licensed-internal",
+        "client-confidential"
+      ]
+    },
+    "fact_id": {
+      "type": "string",
+      "pattern": "^f_[0-9A-Z]{6,}$",
+      "description": "Opaque fact id. Survives spin-off. Never a path."
+    },
+    "sha256_prefixed": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "datetime_utc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "uuid_v4": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "market": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "ISO 3166-1 alpha-2 (the UK is GB)."
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "materials": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/material_id"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "name",
+          "sha256",
+          "received_at",
+          "licence"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prompt",
+              "client_brief",
+              "email",
+              "deck",
+              "image",
+              "other"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "sha256": {
+            "$ref": "#/definitions/sha256"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "asset": {
+            "type": "string"
+          },
+          "received_at": {
+            "$ref": "#/definitions/datetime"
+          },
+          "licence": {
+            "$ref": "#/definitions/licence"
+          },
+          "unread": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "transcribed": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "model",
+              "backend"
+            ],
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "backend": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "description": "HOST-WRITTEN, READ-ONLY (decision D2). A scalar projection of shared/facts.yaml and shared/sources.yaml (a Brand Clan has no findings member; the findings keys are tolerated, never required) so view bindings resolve against shared/data.yaml alone. Rebuilt by the host after every change to either member; no agent or human patch may write it; the members are the authority. If built_from does not match the members' hashes the view says so instead of rendering the projection as current.",
+      "additionalProperties": false,
+      "required": [
+        "built_from",
+        "pins"
+      ],
+      "properties": {
+        "built_from": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "facts_sha256",
+            "built_at"
+          ],
+          "properties": {
+            "facts_sha256": {
+              "$ref": "#/definitions/sha256_prefixed"
+            },
+            "findings_sha256": {
+              "$ref": "#/definitions/sha256_prefixed"
+            },
+            "built_at": {
+              "$ref": "#/definitions/datetime_utc"
+            },
+            "sources_sha256": {
+              "$ref": "#/definitions/sha256_prefixed"
+            }
+          }
+        },
+        "pins": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^f_[0-9A-Z]{6,}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layer",
+              "entity",
+              "key",
+              "value",
+              "unit",
+              "as_of",
+              "confidence",
+              "licence",
+              "stale"
+            ],
+            "properties": {
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "brand",
+                  "category"
+                ]
+              },
+              "entity": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "market": {
+                "$ref": "#/definitions/market"
+              },
+              "value": {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              "unit": {
+                "type": "string"
+              },
+              "as_of": {
+                "$ref": "#/definitions/date"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "licence": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "licensed-internal",
+                  "client-confidential"
+                ]
+              },
+              "method": {
+                "type": "string"
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "current_version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "retrieved_at": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "sources": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^(src_[0-9a-z]{4,}|human:.+|f_[0-9A-Z]{6,})$",
+                  "description": "Source ids, a human:<id> verification, or — for method: synthesis — the fact ids it rests on"
+                }
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "contested"
+                ],
+                "description": "The layer row's status when pinned. Frozen with the value."
+              },
+              "pin_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "current_value": {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ],
+                "description": "For a stale pin only: the value of the current layer version, offered, never swapped in."
+              },
+              "quotes": {
+                "type": "object",
+                "description": "The verbatim passage each cited source gave for this value, by source id. Frozen with the pin.",
+                "propertyNames": {
+                  "pattern": "^src_[0-9a-z]{4,}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "replaced_by": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fact_id",
+                  "decision"
+                ],
+                "description": "Set when a person resolved a contest over this pin's identity for another value: the pin stays, so every decision citing it still resolves.",
+                "properties": {
+                  "fact_id": {
+                    "type": "string",
+                    "pattern": "^f_[0-9A-Z]{6,}$"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "pattern": "^d_[0-9A-Z]{6,}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "findings": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^fi_[0-9A-Z]{6,}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "status",
+              "confidence",
+              "cites"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "proposed",
+                  "verified",
+                  "rejected"
+                ]
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "cites": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/fact_id"
+                }
+              },
+              "fact_id": {
+                "$ref": "#/definitions/fact_id"
+              }
+            }
+          }
+        },
+        "sources": {
+          "type": "object",
+          "description": "Every source a pin cites, by id: what it is and where to read it. A frozen copy of shared/sources.yaml.",
+          "propertyNames": {
+            "pattern": "^src_[0-9a-z]{4,}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "uri"
+            ],
+            "properties": {
+              "uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string"
+              },
+              "publisher": {
+                "type": "string"
+              },
+              "published_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "retrieved_at": {
+                "type": "string"
+              },
+              "tier": {
+                "type": "string"
+              },
+              "domain": {
+                "type": "string"
+              },
+              "licence": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "licensed-internal",
+                  "client-confidential"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "upstream": {
+      "type": "object",
+      "description": "HOST-WRITTEN, READ-ONLY (docs/contracts/os-layer.md section 5.2). Kept for the schema's sake: a Brand Clan attaches nothing today.",
+      "propertyNames": {
+        "$ref": "#/definitions/uuid_v4"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "projection"
+              ]
+            },
+            {
+              "required": [
+                "upstream"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "actor": {
+      "type": "string",
+      "pattern": "^(human:.+|process:.+|[a-z0-9_.-]+/[0-9A-Za-z.]+)$",
+      "description": "An actor as the OS layer writes it: human:<user-id>, process:<job-id> or <producer>/<version>."
+    },
+    "human": {
+      "type": "string",
+      "pattern": "^human:.+$",
+      "description": "A person: human:<user-id>."
+    },
+    "decision_id": {
+      "type": "string",
+      "pattern": "^d_[0-9A-Z]{6,}$",
+      "description": "Id of a decision in agent/decision-chain.yaml."
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "extracted",
+        "proposed",
+        "stated",
+        "confirmed"
+      ],
+      "description": "extracted: read from supplied material (a brand book page), carries source. proposed: derived from roster or layer pins, carries fact_ids. stated: a person typed it, carries by. confirmed: a person accepted it, carries by."
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "material_id",
+        "locator"
+      ],
+      "description": "Where in the supplied material an extracted value was read.",
+      "properties": {
+        "material_id": {
+          "$ref": "#/definitions/material_id"
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable position: 'p.14', 'p.9 fig. 2'."
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "origin_rules": {
+      "description": "What each origin must carry (campaign-clan.md 2.1, 2.2). Applied to every item and every envelope.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "extracted"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "required": [
+              "source"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "proposed"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "required": [
+              "fact_ids"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "stated"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "required": [
+              "by"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "confirmed"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "required": [
+              "by"
+            ]
+          }
+        }
+      ]
+    },
+    "asset": {
+      "type": "string",
+      "pattern": "^assets/[^/].*$",
+      "description": "An asset of this document, as the host serves it: assets/<name> is human/assets/<name> in the archive."
+    },
+    "id_key": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "An entity key: lowercase, digits, - and _. Maps are keyed by it, never positional."
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/text"
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# EXAMPLE - fabricated for testing. Every brand, figure and source below is invented.
+# The source record frozen beside each pin (campaign-clan.md section 2).
+sources:
+  - id: src_r0st
+    uri: roster://lumen-water
+    title: Agency roster, Lumen Water row
+    publisher: Agency roster
+    retrieved_at: "2026-09-02"
+    tier: roster
+    domain: roster
+    licence: client-confidential

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en" data-clan-noun="brand clan">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brand Clan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* Brand Clan, in the Napkin Studio OS design language (tokens as the
+     brief's and the shell's app/src/index.css): warm paper on a warm desk, the
+     header a manila folder cover, every item a card cut from the same stock.
+     The OS top bar carries the product; this app carries its own identity only. */
+  :root{
+    color-scheme:light;
+    --desk:#EFE7D8; --paper:#FBF7EE; --card:#FCF9F2; --soft:#F1EADC; --soft-2:#EAE1CF;
+    --line:#D9CDB6; --line-soft:#E6DCCA;
+    --ink:#221D15; --ink2:#4A4236; --ink3:#6B6153;
+    --create:#C9462A; --create-2:#A9371F; --create-soft:#F5E1D5; --create-ink:#9E321A;
+    --plan:#221D15; --plan-eye:#FCF9F2;
+    --green:#5E8A35; --green-soft:#E4EBD2; --green-ink:#3D5A1E;
+    --amber-soft:#F4E7C6; --amber-ink:#704C00;
+    --blue-soft:#DDE8F3; --blue-ink:#1F4E7A;
+    --folder:#E7D5AC; --folder-2:#DCC48F; --folder-edge:#C4AA75; --folder-ink:#2E2416;
+    --lift:0 1px 1px rgba(70,50,20,.10),0 2px 4px -1px rgba(70,50,20,.10),0 14px 26px -16px rgba(70,50,20,.38);
+    --ease:cubic-bezier(.2,.8,.2,1);
+    --ui:"Geist","Helvetica Neue",Arial,system-ui,sans-serif;
+    --serif:'Iowan Old Style','Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;
+    --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .42  0 0 0 0 .33  0 0 0 0 .2  0 0 0 .085 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    --bg:var(--desk); --surface:var(--card); --border:var(--line); --text:var(--ink); --muted:var(--ink2); --accent:var(--create);
+    --amber:var(--amber-ink); --green-ink:#3D5A1E;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      color-scheme:dark;
+      --desk:#1B1814; --paper:#2A251F; --card:#2E2922; --soft:#26221C; --soft-2:#332D25;
+      --line:#4A4137; --line-soft:#3B342B;
+      --ink:#EEE6D6; --ink2:#CDBFA9; --ink3:#A39681;
+      --create:#E0704C; --create-2:#C65A37; --create-soft:#3B2419; --create-ink:#F2A584;
+      --plan:#EEE6D6; --plan-eye:#2A251F;
+      --green:#8DB35E; --green-soft:#28301D; --green-ink:#B8D58F; --amber-soft:#382D16; --amber-ink:#EAC67A;
+      --blue-soft:#1F2E3D; --blue-ink:#9CC3EC;
+      --folder:#4B3F2D; --folder-2:#3F3425; --folder-edge:#2C241A; --folder-ink:#F1E7D2;
+      --lift:0 1px 1px rgba(0,0,0,.35),0 2px 4px -1px rgba(0,0,0,.35),0 16px 28px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-color-scheme="dark"]{
+    color-scheme:dark;
+    --desk:#1B1814; --paper:#2A251F; --card:#2E2922; --soft:#26221C; --soft-2:#332D25;
+    --line:#4A4137; --line-soft:#3B342B;
+    --ink:#EEE6D6; --ink2:#CDBFA9; --ink3:#A39681;
+    --create:#E0704C; --create-2:#C65A37; --create-soft:#3B2419; --create-ink:#F2A584;
+    --plan:#EEE6D6; --plan-eye:#2A251F;
+    --green:#8DB35E; --green-soft:#28301D; --green-ink:#B8D58F; --amber-soft:#382D16; --amber-ink:#EAC67A;
+    --blue-soft:#1F2E3D; --blue-ink:#9CC3EC;
+    --folder:#4B3F2D; --folder-2:#3F3425; --folder-edge:#2C241A; --folder-ink:#F1E7D2;
+    --lift:0 1px 1px rgba(0,0,0,.35),0 2px 4px -1px rgba(0,0,0,.35),0 16px 28px -16px rgba(0,0,0,.7);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  /* What the OS's glass chrome covers (clan:insets): the page starts below the
+     bar, ends above the footer and keeps clear of the rail. */
+  body{padding:var(--clan-top,0px) var(--clan-right,0px) var(--clan-bottom,0px) 0}
+  html{scroll-padding-top:calc(var(--clan-top,0px) + 12px)}
+  body{background-color:var(--bg);background-image:var(--grain);background-attachment:fixed;color:var(--text);font-family:var(--ui);font-size:14.5px;-webkit-font-smoothing:antialiased;line-height:1.5;min-height:100%}
+  button,input,select,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  [hidden]{display:none!important}
+  .app{max-width:1000px;margin:0 auto;padding:30px 28px 90px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* the folder: the header */
+  .band{position:relative;color:var(--folder-ink);border-radius:4px 14px 6px 6px;padding:20px 24px 18px;
+    background:var(--grain),linear-gradient(172deg,var(--folder) 0%,var(--folder-2) 100%);
+    border:1px solid var(--folder-edge);box-shadow:inset 0 1px 0 rgba(255,250,236,.45),0 20px 34px -22px rgba(70,50,20,.5);
+    --ink:var(--folder-ink); --plan:var(--folder-ink); --plan-eye:var(--folder)}
+  .band::before{content:"";position:absolute;left:22px;top:-13px;width:min(190px,40%);height:14px;border-radius:9px 9px 0 0;background:var(--folder);border:1px solid var(--folder-edge);border-bottom:0}
+  .bandrow{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .bandrow .agent-figure{width:34px;height:46px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.75}
+  h1{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .chip{font-family:var(--mono);font-size:11.5px;border:1px solid currentColor;border-radius:999px;padding:1px 10px;white-space:nowrap}
+  .chip.solid{background:var(--folder-ink);color:var(--folder);border-color:var(--folder-ink)}
+  .log{margin-top:12px;font-size:13px}
+  .log summary{cursor:pointer;font-weight:600}
+  .log ol{list-style:none;margin-top:8px;display:grid;gap:6px}
+  .log li{display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
+  .log li b{font-family:var(--mono);font-weight:500}
+  .log .when{grid-column:2;font-size:12px;opacity:.75}
+
+  nav.toc{display:flex;gap:6px 14px;flex-wrap:wrap;margin:22px 2px 6px;font-size:13px}
+  nav.toc a{color:var(--ink2);text-decoration:none;border-bottom:1px solid var(--line)}
+  nav.toc a:hover{color:var(--ink);border-color:var(--ink)}
+
+  section.sec{margin-top:30px}
+  section.sec>h2{font-size:12px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);font-weight:500;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+  section.sec>h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  .empty{color:var(--ink3);font-style:italic}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--lift);min-width:0}
+  .card h3{font-size:15px;font-weight:650;line-height:1.3}
+  .card .sub{font-family:var(--mono);font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+  .rows{display:grid;gap:10px}
+  .row{display:grid;grid-template-columns:150px 1fr;gap:4px 16px;align-items:start;padding:8px 0;border-top:1px solid var(--line-soft)}
+  .rows>.row:first-child{border-top:0}
+  .row>.k{font-size:12.5px;color:var(--ink2);padding-top:2px}
+  .row>.v{min-width:0}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+  .v .t{white-space:pre-wrap;overflow-wrap:anywhere}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tag{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:12.5px}
+  .kv{font-size:13px;color:var(--ink2)}
+  .kv b{color:var(--ink);font-weight:600}
+  ul.dd{list-style:none;display:grid;gap:2px;font-size:13px;margin-top:4px}
+  ul.dd li::before{content:"+ ";color:var(--green-ink);font-family:var(--mono)}
+  ul.dd.dont li::before{content:"\2212  ";color:var(--create-ink)}
+
+  /* provenance: one line under each item. Each origin looks different (D3). */
+  .prov{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;margin-top:5px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;color:var(--ink3)}
+  .prov .o{border-radius:999px;padding:0 7px;text-transform:uppercase;letter-spacing:.05em;font-size:9.5px;line-height:15px;border:1px solid transparent;white-space:nowrap}
+  .o.extracted{background:var(--blue-soft);color:var(--blue-ink)}
+  .o.proposed{background:transparent;color:var(--amber-ink);border:1px dashed var(--amber-ink)}
+  .o.stated{background:var(--soft-2);color:var(--ink)}
+  .o.confirmed{background:var(--green-soft);color:var(--green-ink)}
+  .o.none{background:var(--create-soft);color:var(--create-ink)}
+  .prov .q{font-family:var(--serif);font-style:italic;font-size:12px;letter-spacing:0;color:var(--ink2);flex-basis:100%}
+
+  .ebtn{all:unset;cursor:pointer;font-family:var(--mono);font-size:10.5px;color:var(--ink3);border-bottom:1px dotted var(--ink3);margin-left:4px}
+  .ebtn:hover,.ebtn:focus-visible{color:var(--ink)}
+  .editor{display:grid;gap:8px;margin:2px 0}
+  .editor textarea{width:100%;min-height:64px;resize:vertical;background:var(--paper);border:1.5px solid var(--ink2);border-radius:8px;padding:6px 8px}
+  .editor .hint{font-size:12px;color:var(--ink3)}
+  .btns{display:flex;gap:8px}
+  .btn{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:3px 12px;cursor:pointer}
+  .btn.go{background:var(--ink);color:var(--card);border-color:var(--ink)}
+
+  /* colours */
+  .sw{height:58px;border-radius:7px;border:1px solid rgba(0,0,0,.18);margin-bottom:8px}
+  .hex{font-family:var(--mono);font-size:12px}
+  /* logos */
+  .logo-variant{display:inline-grid;gap:4px;justify-items:center;margin:6px 10px 0 0;font-size:11px;color:var(--ink3)}
+  .logo-variant .pad{width:120px;height:96px;border:1px solid var(--line);border-radius:7px;display:grid;place-items:center;overflow:hidden}
+  .logo-variant .pad.light{background:#fff}.logo-variant .pad.dark{background:#16181D}.logo-variant .pad.any{background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/14px 14px}
+  .logo-variant img{max-width:100%;max-height:100%}
+  .nofile{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;border-radius:999px;padding:0 8px;background:var(--amber-soft);color:var(--amber-ink)}
+  .hasfile{font-family:var(--mono);font-size:11px}
+  .specimen{font-size:24px;line-height:1.2;margin:4px 0 6px;overflow-wrap:anywhere}
+  /* rules */
+  .rule{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;padding:8px 0;border-top:1px solid var(--line-soft);align-items:baseline}
+  .rules-area>.rule:first-of-type{border-top:0}
+  .kind{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;border-radius:5px;padding:0 7px;line-height:18px;text-align:center;min-width:48px}
+  .kind.do{background:var(--green-soft);color:var(--green-ink)}.kind.dont{background:var(--create-soft);color:var(--create-ink)}.kind.must{background:var(--ink);color:var(--card)}
+  .rule .prov{grid-column:2;margin-top:0}
+  .areahead{font-size:13px;font-weight:650;margin:14px 0 2px;text-transform:capitalize}
+  .areahead:first-child{margin-top:0}
+  .warn{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--amber-ink);margin-left:6px}
+  .toast{position:fixed;left:50%;bottom:calc(var(--clan-bottom,0px) + 24px);transform:translateX(-50%);background:var(--ink);color:var(--card);padding:7px 14px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s var(--ease);z-index:50}
+  .toast.on{opacity:1}
+  .foot{margin-top:46px;font-size:12px;color:var(--ink3);text-align:center}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
+</style>
+<!-- @napkin:agent-figures -->
+<!-- @napkin:clan-fields -->
+</head>
+<body>
+<div class="app">
+  <header class="band" id="band"></header>
+  <nav class="toc" id="toc" aria-label="Sections"></nav>
+  <main id="main"></main>
+  <footer class="foot">No facts live here: every figure is a pin from the brand layer.</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  var clanScheme = navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
+
+  // ---------- the data, the way every Napkin app reads it ----------
+  function data(){ return (window.__CLAN__ && window.__CLAN__.data) || {}; }
+  function get(p){ return p.split('.').reduce(function(o,k){ return (o==null)?undefined:o[k]; }, data()); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function arr(v){ return Array.isArray(v)?v:[]; }
+  function keys(o){ return o&&typeof o==='object'&&!Array.isArray(o)?Object.keys(o):[]; }
+  function $(id){ return document.getElementById(id); }
+  function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){ t.classList.remove('on'); },2400); }
+  function fig(key,o){ return typeof agentFigure==='function'?agentFigure(key,o):''; }
+  function assetUrl(a){ return clanScheme+'/'+String(a).replace(/^\/+/,''); }
+  function assetName(a){ return String(a).replace(/^assets\//,''); }
+
+  // ---------- provenance: one line per item, from origin / source / fact_ids / by ----------
+  function who(by){ return String(by||'').replace(/^human:/,'')||'someone'; }
+  function matName(id){
+    var m=(get('materials')||{})[id]; var n=m&&m.name;
+    return n?String(n).replace(/\.[a-z0-9]{2,4}$/i,''):'the supplied material';
+  }
+  function pinOf(fid){ var p=get('projection.pins'); return p&&p[fid]; }
+  function fromPins(ids){
+    var pins=arr(ids).map(pinOf).filter(Boolean);
+    if(pins.length&&pins.every(function(p){ return /^roster\./.test(p.key||''); })) return 'from the roster';
+    if(pins.length) return 'from the brand layer: '+pins.map(function(p){ return p.key; }).join(', ');
+    return 'from '+arr(ids).join(', ');
+  }
+  // Returns the provenance line's HTML for an envelope or an item.
+  function prov(o){
+    if(!o||typeof o!=='object') return '';
+    var org=o.origin, line, q='';
+    if(org==='extracted'){
+      var s=o.source||{};
+      line='from '+esc(matName(s.material_id))+(s.locator?', '+esc(s.locator):'');
+      if(s.quote) q='<span class="q">\u201c'+esc(s.quote)+'\u201d</span>';
+    }
+    else if(org==='proposed') line=esc(fromPins(o.fact_ids));
+    else if(org==='stated') line='typed by '+esc(who(o.by));
+    else if(org==='confirmed') line='confirmed by '+esc(who(o.by));
+    else { org='none'; line='no provenance recorded'; }
+    return '<div class="prov"><span class="o '+org+'">'+(org==='none'?'unknown':esc(org))+'</span><span>'+line+'</span>'+q+'</div>';
+  }
+
+  // ---------- editing: text through the bridge, recorded as a person's word ----------
+  // A person's edit makes the item `stated`, by them. The source or pins it
+  // had stay: they say where the first words came from.
+  function me(){
+    if(window.clan&&window.clan.me) return window.clan.me();
+    return Promise.resolve(null);
+  }
+  function edBtn(path,key,list,label){
+    return ' <button class="ebtn" type="button" data-edit="'+esc(path)+'" data-key="'+esc(key)+'"'+(list?' data-list="1"':'')+' aria-label="Edit '+esc(label||path)+'">edit</button>';
+  }
+  document.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('[data-edit]'); if(!b) return;
+    if(!window.clan){ toast('Open this inside the studio to edit.'); return; }
+    openEditor(b);
+  });
+  function openEditor(btn){
+    var path=btn.getAttribute('data-edit'), key=btn.getAttribute('data-key'), list=btn.hasAttribute('data-list');
+    var host=btn.closest('.v')||btn.parentNode; if(host.querySelector('.editor')) return;
+    var obj=get(path); if(!obj||typeof obj!=='object') return;
+    var cur=obj[key]; var text=list?arr(cur).join('\n'):(cur==null?'':String(cur));
+    var box=document.createElement('div'); box.className='editor';
+    box.innerHTML='<textarea aria-label="Edit"></textarea><div class="hint">'+(list?'One per line. ':'')+'Saving makes this yours: typed by you.</div>'+
+      '<div class="btns"><button class="btn go" type="button" data-s>Save</button><button class="btn" type="button" data-c>Cancel</button></div>';
+    var ta=box.querySelector('textarea'); ta.value=text;
+    host.insertBefore(box,host.firstChild); ta.focus();
+    box.querySelector('[data-c]').addEventListener('click',function(){ box.remove(); });
+    box.querySelector('[data-s]').addEventListener('click',function(){
+      var raw=ta.value, val=list?raw.split('\n').map(function(s){ return s.trim(); }).filter(Boolean):raw.trim();
+      if(list?!val.length:!val){ toast('Nothing typed. Cancel to keep it as it is.'); return; }
+      me().then(function(m){
+        if(!m||!m.actor||!/^human:/.test(m.actor)){ toast('Sign in to edit.'); return; }
+        var next=JSON.parse(JSON.stringify(obj)); next[key]=val; next.origin='stated'; next.by=m.actor; delete next.confirmed_from;
+        return window.clan.patchData(path,next,{actor:'human',pinned:true,action:'edit '+path,rationale:'Typed in the Brand Clan view.'}).then(function(res){
+          if(res&&res.ok===false){ toast((res.error||'The change was refused.')+''); return; }
+          box.remove(); render(); toast('Saved.');
+        });
+      }).catch(function(){ toast('Could not save.'); });
+    });
+  }
+
+  // ---------- small renderers ----------
+  function tags(list){ return list&&list.length?'<div class="tags">'+list.map(function(t){ return '<span class="tag">'+esc(t)+'</span>'; }).join('')+'</div>':''; }
+  // A scalar or list envelope as a labelled row, with its provenance and an edit.
+  function envRow(label,path,o){
+    o=o||{};
+    var e=get(path); var isList=o.list;
+    if(!e||e.value==null||(Array.isArray(e.value)&&!e.value.length)){
+      if(o.hideEmpty) return '';
+      return '<div class="row"><div class="k">'+esc(label)+'</div><div class="v"><span class="empty">Not filled.</span></div></div>';
+    }
+    var body=isList?tags(arr(e.value)):'<span class="t">'+esc(e.value)+'</span>';
+    var editable=o.edit!==false;
+    return '<div class="row"><div class="k">'+esc(label)+'</div><div class="v">'+body+(editable?edBtn(path,'value',isList,label):'')+prov(e)+'</div></div>';
+  }
+  // A text key of an item (the item carries the envelope keys itself).
+  function itemText(label,path,key,o){
+    var it=get(path); if(!it||it[key]==null||it[key]==='') return '';
+    var list=Array.isArray(it[key]);
+    return '<div class="kv"><b>'+esc(label)+':</b> '+(list?esc(it[key].join(', ')):'<span class="t">'+esc(it[key])+'</span>')+(o&&o.edit&&!list?edBtn(path,key,false,label):'')+'</div>';
+  }
+  function dd(list,cls){ return list&&list.length?'<ul class="dd '+(cls||'')+'">'+list.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul>':''; }
+  function section(id,title,inner){
+    return '<section class="sec" id="s-'+id+'"><h2>'+esc(title)+'</h2>'+inner+'</section>';
+  }
+  function none(msg){ return '<p class="empty">'+esc(msg||'Nothing here yet.')+'</p>'; }
+  function cards(map,fn){
+    var ks=keys(map); if(!ks.length) return '';
+    return '<div class="grid">'+ks.map(function(k){ return fn(k,map[k]); }).join('')+'</div>';
+  }
+
+  // ---------- the sections ----------
+  function sIdentity(){
+    var rows='<div class="row"><div class="k">Brand</div><div class="v"><span class="t">'+esc(get('brand.ref')||'')+'</span></div></div>';
+    rows+=envRow('Name','brand.name');
+    rows+=envRow('Client','brand.client_org',{edit:false,hideEmpty:true});
+    rows+=envRow('Categories','brand.categories',{list:true,edit:false,hideEmpty:true});
+    rows+=envRow('Markets','brand.markets',{list:true,edit:false,hideEmpty:true});
+    rows+=envRow('Parent brand','brand.parent',{hideEmpty:true,edit:false});
+    rows+=envRow('Sites','brand.sites',{list:true,hideEmpty:true,edit:false});
+    var h=get('brand.handles');
+    if(h&&h.value) rows+='<div class="row"><div class="k">Handles</div><div class="v">'+tags(keys(h.value).map(function(k){ return k+': '+h.value[k]; }))+prov(h)+'</div></div>';
+    var prods=cards(get('brand.products'),function(id,p){
+      return '<div class="card"><h3>'+esc(p.name)+'</h3>'+(p.description?'<div class="kv">'+esc(p.description)+'</div>':'')+prov(p)+'</div>';
+    });
+    var pins=get('projection.pins'), pk=keys(pins);
+    var pinList=pk.length?'<div class="rows" style="margin-top:14px"><div class="areahead">Pinned from the brand layer</div>'+pk.map(function(id){
+      var p=pins[id];
+      return '<div class="row"><div class="k">'+esc(p.key)+'</div><div class="v"><span class="t">'+esc(p.value)+(p.unit&&p.unit!=='code'&&p.unit!=='text'?' '+esc(p.unit):'')+'</span>'+
+        '<div class="prov"><span class="o proposed">pin</span><span>'+esc(id)+' \u00b7 as of '+esc(p.as_of||'')+(p.stale?' \u00b7 stale':'')+'</span></div></div></div>';
+    }).join('')+'</div>':'';
+    return section('identity','Identity','<div class="rows">'+rows+'</div>'+(prods?'<div class="areahead" style="margin-top:14px">Products</div>'+prods:'')+pinList);
+  }
+  function sStrategy(){
+    var s=get('strategy')||{};
+    if(!keys(s).length) return section('strategy','Strategy',none());
+    var rows='';
+    [['Purpose','purpose'],['Positioning','positioning'],['Proposition','proposition'],['Audience','audience']].forEach(function(r){ rows+=envRow(r[0],'strategy.'+r[1],{hideEmpty:true}); });
+    [['Personality','personality'],['Values','values'],['Proof points','proof_points']].forEach(function(r){ rows+=envRow(r[0],'strategy.'+r[1],{list:true,hideEmpty:true}); });
+    return section('strategy','Strategy','<div class="rows">'+rows+'</div>');
+  }
+  function sVoice(){
+    var v=get('voice')||{}; if(!keys(v).length) return section('voice','Voice',none());
+    var rows=envRow('Tone words','voice.tone_words',{list:true,hideEmpty:true})+envRow('Mandatories','voice.mandatories',{list:true,hideEmpty:true})+envRow('Languages','voice.languages',{list:true,hideEmpty:true,edit:false});
+    if(v.tagline) rows+='<div class="row"><div class="k">Tagline</div><div class="v"><span class="t">'+esc(v.tagline.text)+'</span>'+edBtn('voice.tagline','text',false,'tagline')+(v.tagline.since?'<span class="kv"> since '+esc(v.tagline.since)+'</span>':'')+prov(v.tagline)+'</div></div>';
+    var out='<div class="rows">'+rows+'</div>';
+    var pr=cards(v.principles,function(id,p){
+      return '<div class="card"><h3>'+esc(p.name)+'</h3><div class="t">'+esc(p.text)+edBtn('voice.principles.'+id,'text',false,p.name)+'</div>'+dd(p.do)+dd(p.dont,'dont')+prov(p)+'</div>';
+    });
+    if(pr) out+='<div class="areahead" style="margin-top:14px">Principles</div>'+pr;
+    var voc=v.vocabulary||{}, pref=cards(voc.preferred,function(id,p){
+      return '<div class="card"><h3>Say \u201c'+esc(p.use)+'\u201d</h3><div class="kv">not \u201c'+esc(p.not)+'\u201d</div>'+prov(p)+'</div>';
+    });
+    if(pref) out+='<div class="areahead" style="margin-top:14px">Vocabulary</div>'+pref;
+    if(voc.banned&&voc.banned.value) out+='<div class="rows">'+envRow('Banned words','voice.vocabulary.banned',{list:true})+'</div>';
+    var pron=cards(v.pronunciation,function(id,p){
+      return '<div class="card"><h3>'+esc(id)+'</h3><div class="kv"><b>Say:</b> '+esc(p.respell)+(p.ipa?' \u00b7 '+esc(p.ipa):'')+'</div>'+prov(p)+'</div>';
+    });
+    if(pron) out+='<div class="areahead" style="margin-top:14px">Pronunciation</div>'+pron;
+    var cl=cards(v.claims,function(id,c){
+      return '<div class="card"><h3>'+esc(c.text)+'</h3><div class="kv">Backed by '+esc(arr(c.substantiation).join(', '))+(c.expires?' \u00b7 expires '+esc(c.expires):'')+'</div>'+prov(c)+'</div>';
+    });
+    if(cl) out+='<div class="areahead" style="margin-top:14px">Claims</div>'+cl;
+    var ll=cards(v.legal_lines,function(id,c){
+      return '<div class="card"><h3>'+esc(c.text)+'</h3><div class="kv">'+(c.mandatory?'<b>Mandatory</b>':'Optional')+(arr(c.markets).length?' \u00b7 '+esc(c.markets.join(', ')):'')+'</div>'+prov(c)+'</div>';
+    });
+    if(ll) out+='<div class="areahead" style="margin-top:14px">Legal lines</div>'+ll;
+    return section('voice','Voice',out);
+  }
+  function sVisual(){
+    var v=get('visual')||{}; var out='';
+    // logos, with their assets
+    var logos=cards(v.logos,function(id,l){
+      var vs=keys(l.variants).map(function(k){
+        var x=l.variants[k];
+        return '<div class="logo-variant"><div class="pad '+esc(x.on)+'"><img src="'+esc(assetUrl(x.asset))+'" alt="'+esc(l.name+', '+k)+'" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'nofile\',textContent:\'file missing\'}))" /></div><span>'+esc(k)+' \u00b7 '+esc(x.colour)+'</span><span class="hasfile">'+esc(assetName(x.asset))+'</span></div>';
+      }).join('');
+      var cs=l.clear_space?'<div class="kv"><b>Clear space:</b> '+esc(l.clear_space.text)+'</div>':'';
+      var ms=l.min_size?'<div class="kv"><b>Minimum size:</b> '+esc([l.min_size.px?l.min_size.px+' px':'',l.min_size.mm?l.min_size.mm+' mm':''].filter(Boolean).join(' / '))+'</div>':'';
+      return '<div class="card"><div class="sub">'+esc(l.kind)+'</div><h3>'+esc(l.name)+'</h3>'+(vs||'<div class="empty">No variants.</div>')+cs+ms+(arr(l.misuse).length?'<div class="kv"><b>Do not:</b></div>'+dd(l.misuse,'dont'):'')+prov(l)+'</div>';
+    });
+    out+='<div class="areahead">Logos</div>'+(logos||none());
+    // colours
+    var cols=cards(v.colours,function(id,c){
+      return '<div class="card"><div class="sw" style="background:'+esc(/^#[0-9a-f]{6}$/i.test(c.hex)?c.hex:'transparent')+'"></div><h3>'+esc(c.name)+'</h3><div class="kv"><span class="hex">'+esc(c.hex)+'</span> \u00b7 '+esc(c.role)+(c.pantone?' \u00b7 '+esc(c.pantone):'')+'</div>'+(c.usage?'<div class="kv">'+esc(c.usage)+'</div>':'')+(arr(c.pairs_with).length?'<div class="kv">Pairs with '+esc(c.pairs_with.join(', '))+'</div>':'')+prov(c)+'</div>';
+    });
+    out+='<div class="areahead" style="margin-top:16px">Colours</div>'+(cols||none());
+    // typography: a font is never taken from a PDF, so no file says so
+    var ty=cards(v.typography,function(id,t){
+      var file=t.file?'<span class="hasfile">file: '+esc(assetName(t.file))+'</span>':'<span class="nofile">no file</span>';
+      var lic=t.licence?'<div class="kv"><b>Licence:</b> '+esc(t.licence.holder)+' \u00b7 '+esc(t.licence.kind)+(t.licence.note?' \u00b7 '+esc(t.licence.note):'')+'</div>':'<div class="kv"><b>Licence:</b> <span class="empty">not recorded</span></div>';
+      var fam="'"+String(t.family).replace(/['"\\<>]/g,'')+"',"+arr(t.fallbacks).map(function(f){ return "'"+String(f).replace(/['"\\<>]/g,'')+"'"; }).concat(['sans-serif']).join(',');
+      return '<div class="card"><div class="sub">'+esc(t.role)+(t.provider?' \u00b7 '+esc(t.provider):'')+'</div><h3>'+esc(t.family)+'</h3><div class="specimen" style="font-family:'+esc(fam)+'">Clear by nature</div><div class="kv">'+file+(arr(t.weights).length?' \u00b7 weights '+esc(t.weights.join(', ')):'')+'</div>'+lic+prov(t)+'</div>';
+    });
+    out+='<div class="areahead" style="margin-top:16px">Typography</div>'+(ty||none());
+    // imagery
+    var im=v.imagery||{}, imr=envRow('Style','visual.imagery.style',{hideEmpty:true});
+    ['photography','illustration','iconography'].forEach(function(k){
+      var x=im[k]; if(!x) return;
+      var bits=keys(x).filter(function(f){ return ['origin','source','fact_ids','by','decision','confirmed_from'].indexOf(f)<0; }).map(function(f){ return '<b>'+esc(f)+':</b> '+esc(x[f]); }).join(' \u00b7 ');
+      imr+='<div class="row"><div class="k">'+esc(k.charAt(0).toUpperCase()+k.slice(1))+'</div><div class="v"><span class="t">'+bits+'</span>'+prov(x)+'</div></div>';
+    });
+    var imp=cards(im.principles,function(id,p){
+      return '<div class="card"><h3>'+esc(p.name)+'</h3><div class="t">'+esc(p.text)+edBtn('visual.imagery.principles.'+id,'text',false,p.name)+'</div>'+dd(p.do)+dd(p.dont,'dont')+prov(p)+'</div>';
+    });
+    out+='<div class="areahead" style="margin-top:16px">Imagery</div>'+(imr||imp?'<div class="rows">'+imr+'</div>'+(imp?'<div style="margin-top:10px">'+imp+'</div>':''):none('No imagery principles yet.'));
+    // devices
+    var dv=cards(v.devices,function(id,d){
+      return '<div class="card">'+(d.asset?'<div class="logo-variant"><div class="pad any"><img src="'+esc(assetUrl(d.asset))+'" alt="'+esc(d.name)+'" /></div></div>':'')+'<h3>'+esc(d.name)+'</h3><div class="t">'+esc(d.text)+edBtn('visual.devices.'+id,'text',false,d.name)+'</div>'+prov(d)+'</div>';
+    });
+    out+='<div class="areahead" style="margin-top:16px">Graphic devices</div>'+(dv||none());
+    // layout and motion
+    var ly=v.layout||{}, lr=envRow('Grid','visual.layout.grid',{hideEmpty:true})+envRow('Margins','visual.layout.margins',{hideEmpty:true})+envRow('Logo placement','visual.layout.logo_placement',{hideEmpty:true});
+    keys(ly.safe_areas).forEach(function(k){ lr+=envRow('Safe area, '+k,'visual.layout.safe_areas.'+k); });
+    out+='<div class="areahead" style="margin-top:16px">Layout</div>'+(lr?'<div class="rows">'+lr+'</div>':none());
+    var mo=envRow('Principles','visual.motion.principles',{hideEmpty:true})+envRow('Durations','visual.motion.durations',{hideEmpty:true})+envRow('Easing','visual.motion.easing',{hideEmpty:true});
+    if(mo) out+='<div class="areahead" style="margin-top:16px">Motion</div><div class="rows">'+mo+'</div>';
+    return section('visual','Visual',out);
+  }
+  function sSound(){
+    var s=get('sound')||{}; var out='';
+    if(s.sonic_logo) out+='<div class="rows"><div class="row"><div class="k">Sonic logo</div><div class="v"><span class="t">'+esc(assetName(s.sonic_logo.asset))+' \u00b7 '+esc(s.sonic_logo.duration_s)+' s</span>'+prov(s.sonic_logo)+'</div></div></div>';
+    if(s.music) out+='<div class="card" style="margin-top:10px"><div class="sub">Music</div><h3 class="t">'+esc(s.music.direction)+edBtn('sound.music','direction',false,'music direction')+'</h3>'+dd(s.music.do)+dd(s.music.dont,'dont')+prov(s.music)+'</div>';
+    var vo=cards(s.voices,function(id,x){
+      return '<div class="card"><div class="sub">voice \u00b7 '+esc(x.used_for)+'</div><h3>'+esc(x.name)+'</h3>'+(x.text?'<div class="t">'+esc(x.text)+'</div>':'')+'<div class="kv"><b>Consent:</b> '+(x.consent==='on_file'?'on file':'none')+'</div>'+prov(x)+'</div>';
+    });
+    if(vo) out+='<div class="areahead" style="margin-top:14px">Voices</div>'+vo;
+    return section('sound','Sound',out||none());
+  }
+  var AREAS=['logo','colour','type','imagery','voice','legal','layout','sound'];
+  var KINDS={do:'Do',dont:'Don\u2019t',must:'Must'};
+  function sRules(){
+    var r=get('rules'), ks=keys(r); if(!ks.length) return section('rules','Rules',none('No rules yet.'));
+    var out='';
+    AREAS.forEach(function(a){
+      var mine=ks.filter(function(k){ return r[k].area===a; }); if(!mine.length) return;
+      out+='<div class="rules-area"><div class="areahead">'+esc(a)+'</div>'+mine.map(function(k){
+        var x=r[k];
+        return '<div class="rule"><span class="kind '+esc(x.kind)+'">'+esc(KINDS[x.kind]||x.kind)+'</span><div><span class="t">'+esc(x.text)+'</span>'+edBtn('rules.'+k,'text',false,'rule')+'<span class="warn">warns, never blocks</span></div>'+prov(x)+'</div>';
+      }).join('')+'</div>';
+    });
+    return section('rules','Rules','<div class="card">'+out+'</div>');
+  }
+  function sFormats(){
+    var f=get('formats')||{}; var out='';
+    var rows=envRow('Format packs','formats.packs',{list:true,hideEmpty:true,edit:false});
+    if(rows) out+='<div class="rows">'+rows+'</div>';
+    var cu=cards(f.custom,function(id,c){
+      return '<div class="card"><h3>'+esc(c.name)+'</h3><div class="kv">'+esc(c.width)+' \u00d7 '+esc(c.height)+' '+esc(c.unit)+(c.bleed!=null?' \u00b7 bleed '+esc(c.bleed):'')+'</div>'+(c.safe_area?'<div class="kv">Safe area: '+esc(c.safe_area)+'</div>':'')+prov(c)+'</div>';
+    });
+    if(cu) out+='<div class="areahead" style="margin-top:14px">Custom sizes</div>'+cu;
+    var ch=cards(f.channels,function(id,c){
+      return '<div class="card"><div class="sub">channel</div><h3>'+esc(id)+'</h3>'+(arr(c.durations).length?'<div class="kv"><b>Durations:</b> '+esc(c.durations.join(', '))+' s</div>':'')+(c.end_card?'<div class="kv"><b>End card:</b> '+esc(c.end_card)+'</div>':'')+(c.note?'<div class="kv">'+esc(c.note)+'</div>':'')+prov(c)+'</div>';
+    });
+    if(ch) out+='<div class="areahead" style="margin-top:14px">Channels</div>'+ch;
+    return section('formats','Formats',out||none());
+  }
+  function sPeople(){
+    var p=cards(get('people'),function(id,x){
+      return '<div class="card"><div class="sub">'+esc(String(x.role).replace('_',' '))+'</div><h3>'+esc(x.name)+'</h3>'+(x.email?'<div class="kv">'+esc(x.email)+'</div>':'')+prov(x)+'</div>';
+    });
+    return section('people','People',p||none());
+  }
+  function sWork(){
+    var w=cards(get('work'),function(id,x){
+      return '<div class="card"><div class="sub">'+esc(x.kind)+' \u00b7 accepted '+esc(String(x.accepted_at||'').slice(0,10))+'</div><h3>'+esc(x.title)+'</h3>'+(x.summary?'<div class="kv">'+esc(x.summary)+'</div>':'')+'<div class="kv"><span class="hex">'+esc(String(x.version||'').slice(0,17))+'\u2026</span> \u00b7 review '+esc(x.client_review)+'</div>'+prov(x)+'</div>';
+    });
+    return section('work','Approved work',w||none('Nothing approved yet. Work lands here when a client accepts it and a person confirms.'));
+  }
+
+  // ---------- the header ----------
+  function renderBand(){
+    var name=get('brand.name.value')||get('brand.ref')||'Untitled brand';
+    var v=get('kit.version'), log=get('kit.changelog'), lk=keys(log);
+    lk.sort(function(a,b){ return (log[b].version||0)-(log[a].version||0); });
+    var chips=(v?'<span class="chip solid">v'+esc(v)+'</span><span class="chip">kit version '+esc(v)+'</span>':'<span class="chip">not published</span>');
+    var pub=get('kit.published');
+    if(pub&&pub.at) chips+='<span class="chip">published '+esc(String(pub.at).slice(0,10))+' by '+esc(who(pub.by))+'</span>';
+    var logHtml=lk.length?'<details class="log"><summary>Changelog ('+lk.length+')</summary><ol>'+lk.map(function(k){
+      var e=log[k]; return '<li><b>v'+esc(e.version)+'</b><span>'+esc(e.summary)+'</span><span class="when">'+esc(String(e.at||'').slice(0,10))+' \u00b7 '+esc(who(e.by))+'</span></li>';
+    }).join('')+'</ol></details>':'';
+    $('band').innerHTML='<div class="bandrow">'+fig('extract',{decorative:true})+'<div><div class="eyebrow">Brand Clan</div><h1>Brand Clan \u00b7 '+esc(name)+'</h1></div></div><div class="chips">'+chips+'</div>'+logHtml;
+  }
+
+  var SECTIONS=[['identity','Identity',sIdentity],['strategy','Strategy',sStrategy],['voice','Voice',sVoice],['visual','Visual',sVisual],['sound','Sound',sSound],['rules','Rules',sRules],['formats','Formats',sFormats],['people','People',sPeople],['work','Approved work',sWork]];
+  function render(){
+    // Keep open editors: a write elsewhere must not eat what someone is typing.
+    if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.editor')) return;
+    renderBand();
+    $('toc').innerHTML=SECTIONS.map(function(s){ return '<a href="#s-'+s[0]+'">'+esc(s[1])+'</a>'; }).join('');
+    $('main').innerHTML=SECTIONS.map(function(s){ try{ return s[2](); }catch(e){ return section(s[0],s[1],'<p class="empty">This section could not be drawn from the data.</p>'); } }).join('');
+  }
+
+  // ---------- boot ----------
+  render();
+  window.addEventListener('clan:dataupdated', render);
+  window.addEventListener('clan:viewloaded', render);
+  window.addEventListener('napkin:ready', render);
+  // The OS's chrome lies over the page as glass: it says what it covers.
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:insets') return;
+    var r=document.documentElement.style;
+    ['top','right','bottom'].forEach(function(k){ var v=+m[k]; r.setProperty('--clan-'+k,(v>=0&&v<600?v:0)+'px'); });
+  });
+  function askGlass(){
+    var c=getComputedStyle(document.documentElement).getPropertyValue('--desk').trim();
+    try{ window.parent.postMessage({type:'clan:chrome',mode:'glass',tint:/^#[0-9a-f]{6}$/i.test(c)?c:null},'*'); }catch(e){}
+  }
+  askGlass();
+  window.addEventListener('clan:colorscheme', function(){ setTimeout(askGlass,0); });
+</script>
+</body>
+</html>

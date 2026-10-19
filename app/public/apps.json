@@ -12,6 +12,12 @@
       "name": "Research Tool",
       "version": "0.1.0",
       "url": "apps/campaign-research.app.clan"
+    },
+    {
+      "app_id": "ie.napkin.brand",
+      "name": "Brand Clan",
+      "version": "0.1.0",
+      "url": "apps/brand.app.clan"
     }
   ]
 }

@@ -16,6 +16,7 @@
 const UNTITLED: Readonly<Record<string, string>> = {
   'ie.napkin.campaign-research': 'Untitled research',
   'ie.napkin.brief-maker': 'Untitled brief',
+  'ie.napkin.brand': 'Untitled Brand Clan',
 }
 
 /**
@@ -25,6 +26,7 @@ const UNTITLED: Readonly<Record<string, string>> = {
 const TOOL_NAMES: Readonly<Record<string, string>> = {
   'ie.napkin.campaign-research': 'Research Tool',
   'ie.napkin.brief-maker': 'Brief Maker',
+  'ie.napkin.brand': 'Brand Clan',
 }
 
 /**

@@ -1,0 +1,42 @@
+# EXAMPLE - fabricated for testing. Every brand, figure and source below is invented.
+# Pins into the brand layer, from the roster. The kit holds no figure's value:
+# an item that rests on one cites it in fact_ids.
+facts:
+  - id: f_01JB0B1C2D
+    entity: brand/lumen-water
+    key: roster.client_org
+    value: org/lumen-beverages
+    unit: code
+    as_of: 2026-08-01
+    retrieved_at: 2026-09-02
+    sources: [src_r0st]
+    confidence: high
+    licence: client-confidential
+    status: active
+    version: 1
+    supersedes: null
+    origin: fact://brand/lumen-water/roster.client_org@1
+    decision: d_01JB0D01SEED
+    pinned_at: 2026-09-02T09:00:04Z
+    pin_reason: "Roster row: the client that holds the brand, proposed for brand.client_org"
+    layer: brand
+    method: report
+  - id: f_01JB0B1C3E
+    entity: brand/lumen-water
+    key: roster.categories.primary
+    value: drinks.water
+    unit: code
+    as_of: 2026-08-01
+    retrieved_at: 2026-09-02
+    sources: [src_r0st]
+    confidence: high
+    licence: client-confidential
+    status: active
+    version: 1
+    supersedes: null
+    origin: fact://brand/lumen-water/roster.categories.primary@1
+    decision: d_01JB0D01SEED
+    pinned_at: 2026-09-02T09:00:04Z
+    pin_reason: "Roster row: primary category, proposed for brand.categories"
+    layer: brand
+    method: report

@@ -23,20 +23,29 @@
 //!    example's addresses already use, and its facts, findings and chain packed
 //!    byte for byte — `projection.built_from` holds the hashes of the first two,
 //!    and an SDK read-modify-write of the chain drops the Contract 4 §3 fields.
+//! 5. The app declares `app.attach` (Contract 6 §4): it accepts the Brand Clan
+//!    (`ie.napkin.brand`), whose kit freezes under `upstream.<brand id>` and
+//!    whose roster pins merge into the research's pins. The self-check
+//!    attaches the Brand Clan's example (`app/public/apps/brand.example.clan`
+//!    unless a third path is given, built with `make_brand` when absent) to a
+//!    fresh research document.
 
 use clan_sdk::hash::sha256_prefixed;
 use clan_sdk::{
-    create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions,
+    attach, create, instantiate, make_template, pack_html, patch_context, patch_requirements,
+    validate, AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[path = "shared/app_ui.rs"]
 mod app_ui;
 
 const APP_ID: &str = "ie.napkin.campaign-research";
+/// The one app a research document attaches: the brand kit.
+const BRAND_APP_ID: &str = "ie.napkin.brand";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const FACTS_PATH: &str = "shared/facts.yaml";
 const FINDINGS_PATH: &str = "shared/findings.yaml";
@@ -145,6 +154,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let example_output = args
         .next()
         .unwrap_or_else(|| "campaign-research.example.clan".to_string());
+    let brand = args.next().map(PathBuf::from).unwrap_or_else(|| {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/public/apps/brand.example.clan")
+    });
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
     // The agent figures and the OS's fields are inlined at build (one
@@ -204,14 +216,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             app_id: APP_ID.into(),
             // 0.2: the Plan-zone identity; figures from the shared snippet.
             // 0.4: its card on the OS home (app.home).
-            version: "0.4.16".into(),
+            // 0.5: it lets a Brand Clan be attached (app.attach).
+            version: "0.5.0".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
-            attach: None,
+            // The kit freezes under upstream.<brand id> and its roster pins
+            // merge into this document's pins. No lift: the campaign's
+            // fields are envelopes, and a plain-copy lift cannot build one.
+            attach: Some(AttachSpec {
+                accepts: vec![BRAND_APP_ID.into()],
+                lift: Default::default(),
+                harvest: vec![],
+            }),
             // The card on the OS home, in the app's own words.
             home: Some(AppHome {
                 colour: Some("#0F9488".into()),
@@ -267,6 +287,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 8. The example instance, under the id its addresses use.
     let example_bytes = build_example(&template, &dir.join("example"))?;
+
+    // 9. Self-check: the Brand Clan's example, attached to a fresh research.
+    attach_the_brand(&template, &brand)?;
 
     fs::write(&output, &template_bytes)?;
     fs::write(&example_output, &example_bytes)?;
@@ -368,4 +391,87 @@ fn build_example(
     );
     require_valid("example", &clan);
     Ok(bytes)
+}
+
+/// The Brand Clan's example, built beside its template app by `make_brand`
+/// when it is not there yet.
+fn brand_example(path: &Path) -> Result<ClanFile, Box<dyn std::error::Error>> {
+    if !path.exists() {
+        let out = path.parent().unwrap_or(Path::new("."));
+        fs::create_dir_all(out)?;
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+        let status = Command::new(cargo)
+            .args([
+                "run",
+                "-q",
+                "-p",
+                "clan-sdk",
+                "--example",
+                "make_brand",
+                "--",
+            ])
+            .arg(out.join("brand.app.clan"))
+            .arg(path)
+            .status()?;
+        if !status.success() {
+            return Err(format!("make_brand failed ({status})").into());
+        }
+    }
+    Ok(ClanFile::from_bytes(fs::read(path)?)?)
+}
+
+/// Attach the Brand Clan's example to a fresh research document: the kit is
+/// frozen at `upstream.<brand id>`, the record is in `lineage.attached`, the
+/// roster pins merged, nothing of the kit reached the root, and the file
+/// validates against the research schema.
+fn attach_the_brand(
+    template: &ClanFile,
+    brand_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let brand = brand_example(brand_path)?;
+    let brand_doc = brand.manifest().document_id().to_string();
+    let fresh = ClanFile::from_bytes(instantiate(
+        template,
+        InstantiateOptions {
+            title: "smoke-research".into(),
+            ..Default::default()
+        },
+    )?)?;
+    let out = attach(&fresh, &brand)?;
+    assert!(out.seeded.is_empty(), "research lifts nothing from a kit");
+    let research = ClanFile::from_bytes(out.bytes)?;
+
+    let data: serde_yaml::Value = serde_yaml::from_slice(&research.read_entry(DATA_PATH)?)?;
+    let mut frozen: serde_yaml::Value = serde_yaml::from_slice(&brand.read_entry(DATA_PATH)?)?;
+    if let Some(m) = frozen.as_mapping_mut() {
+        m.remove("projection");
+        m.remove("upstream");
+    }
+    assert_eq!(
+        data["upstream"][brand_doc.as_str()],
+        frozen,
+        "upstream.{brand_doc} is not the kit's data, frozen"
+    );
+    assert!(
+        data.get("brand").is_none() && data.get("campaign").is_none(),
+        "the kit reached the research's root"
+    );
+    let records = research.manifest().attached();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].app_id, BRAND_APP_ID);
+    assert_eq!(records[0].carried.document_id, brand_doc);
+    assert_eq!(records[0].version, Some(5));
+    assert_eq!(
+        research.read_entry(FACTS_PATH)?,
+        brand.read_entry(FACTS_PATH)?,
+        "the kit's roster pins did not merge into the research's pins"
+    );
+    assert_eq!(role_of(&research, FACTS_PATH), Some("pinned-facts"));
+    assert_eq!(
+        research.read_entry("shared/sources.yaml")?,
+        brand.read_entry("shared/sources.yaml")?,
+        "the kit's sources did not merge"
+    );
+    require_valid("research with a brand", &research);
+    Ok(())
 }

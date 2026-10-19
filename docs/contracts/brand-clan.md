@@ -168,6 +168,21 @@ projection: …                           # host-written from the members (os-la
 upstream:   …                           # host-written; a kit attaches nothing today, kept for the schema's sake
 ```
 
+**As built (`app/templates/brand/schema.json`).** The sketch above is read as
+follows. Three leaves are **plain lift sources**, because an attach lift copies
+the raw value found at its source key and the sketch's `brand.name` and
+`voice` have no leaf that holds exactly what a brief's field wants:
+`brand.name` `{value: string}`, `voice.tone_words` `{value: [string]}` and
+`voice.mandatories` `{value: [string]}`, each an envelope. A brief lifts from
+`brand.name.value`, `voice.tone_words.value` and `voice.mandatories.value`.
+Other points the sketch left open: `typography[].source` is `provider`
+(`google|adobe|custom`), since `source` is the envelope key of an `extracted`
+item; `kit.changelog` is a map keyed `v<version>`, `vocabulary.preferred` and
+`music.tracks` are maps keyed by id (maps, never positional arrays of
+objects); assets are written `assets/<name>`, as the host serves them; the
+`kit` block is the kit's own host-written state and carries no envelope; and
+a Brand Clan has no findings member, so `projection.findings` is optional.
+
 `rules` is the one table every agent reads (Dex writes them into prompts,
 Jude flags breaks, Make all sizes keeps safe areas, Skye keeps vocabulary).
 The structured sections above are where people edit; a rule may cite the

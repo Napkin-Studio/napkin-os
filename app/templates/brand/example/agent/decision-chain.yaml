@@ -1,0 +1,65 @@
+# EXAMPLE - fabricated for testing.
+# Newest first. Addresses: <doc-id>#<entity-keyed path>; doc id b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15.
+decisions:
+  - id: d_01JB0D06PUBL
+    kind: edit
+    agent: human
+    actor: human:u_aoife
+    action: publish
+    targets: ["b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#kit"]
+    fields_changed: [kit]
+    rationale: "Published v5: the Lumen Water summer launch brief was accepted, and its proposition is now the brand's."
+    timestamp: "2026-10-12T10:14:00Z"
+  - id: d_01JB0D05HARV
+    kind: edit
+    agent: human
+    actor: human:u_aoife
+    action: harvest
+    targets:
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#strategy.proposition"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#work.summer-launch-brief"
+    cites: [d_01JB0C0RVW1]
+    fields_changed: [strategy.proposition, work]
+    rationale: "Harvested from the accepted brief: its single-minded proposition, and the brief itself as an approved exemplar."
+    timestamp: "2026-10-12T10:12:00Z"
+  - id: d_01JB0D03TYPD
+    kind: edit
+    agent: human
+    actor: human:u_aoife
+    action: edit
+    targets:
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#brand.name"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#voice.mandatories"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#rules.keep-clear-space"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#people.aoife"
+    fields_changed: [brand.name, voice.mandatories, rules, people]
+    rationale: "Typed in by the brand lead: the name, one mandatory, the clear-space rule and the approver."
+    timestamp: "2026-09-02T09:40:00Z"
+  - id: d_01JB0D02EXTR
+    kind: edit
+    agent: ellis/1.0
+    actor: process:job-2210
+    action: read_brand_book
+    targets:
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#visual.logos.lumen-primary"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#visual.colours"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#visual.typography"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#voice.principles.clear"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#voice.tone_words"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#rules"
+    fields_changed: [visual, voice, rules]
+    rationale: "Read the brand book excerpt: logo, five colours, two typefaces (no font file: none comes from a PDF), the tone and the do and don't lines. Each item cites its page."
+    timestamp: "2026-09-02T09:20:00Z"
+  - id: d_01JB0D01SEED
+    kind: pin
+    agent: napkin-seed/0.1
+    actor: process:seed-1180
+    action: seed
+    targets:
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#facts[f_01JB0B1C2D]"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#facts[f_01JB0B1C3E]"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#brand.client_org"
+      - "b4a1c7e2-6d3f-4a58-8c1e-9f2d7a0b3c15#brand.categories"
+    cites: [f_01JB0B1C2D, f_01JB0B1C3E]
+    rationale: "Seeded from the roster row for brand/lumen-water. Nothing was read from the public web."
+    timestamp: "2026-09-02T09:00:04Z"
