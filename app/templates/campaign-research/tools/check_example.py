@@ -325,8 +325,8 @@ if rpt:
         for c in line.get("cites", []):
             if c not in pin_ids and c not in finding_by_id:
                 errors.append(f"report {where}: cite {c} is neither a pin nor a finding")
-            elif c in finding_by_id and finding_by_id[c]["status"] == "rejected":
-                errors.append(f"report {where}: cites rejected finding {c}")
+            elif c in finding_by_id and finding_by_id[c]["status"] in ("rejected", "superseded"):
+                errors.append(f"report {where}: cites {finding_by_id[c]['status']} finding {c}")
         figures_ok(line["text"], line.get("cites", []), where)
 
     claim(rpt["headline"], "headline")
@@ -347,8 +347,8 @@ if rpt:
                         errors.append(f"report {w}: pins block names unpinned fact {f}")
             elif k == "finding":
                 f = finding_by_id.get(b["finding_id"])
-                if f is None or f["status"] == "rejected":
-                    errors.append(f"report {w}: finding {b['finding_id']} is unknown or rejected")
+                if f is None or f["status"] in ("rejected", "superseded"):
+                    errors.append(f"report {w}: finding {b['finding_id']} is unknown, rejected or superseded")
             elif k == "gap" and b["gap_id"] not in gap_ids:
                 errors.append(f"report {w}: unknown gap {b['gap_id']}")
             elif k == "contest" and b["contest_id"] not in contest_ids:

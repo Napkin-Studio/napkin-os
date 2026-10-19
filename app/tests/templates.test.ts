@@ -210,6 +210,30 @@ test('a carried item nothing here can settle is set aside, with a reason', () =>
   assert.match(fn(CLF, 'draw'), /c\.status==='open'&&\(ca\.length\|\|sa\)/)
 })
 
+// ── the shared fields snippet: report wording keyed per part ───────────────
+
+// The same page and hashes are pinned in server/tests/test_reconsider.py: the
+// middleware splits the report page into these parts and hashes each as here,
+// to know which part holds a person's wording.
+test('report wording is keyed per top-level part, as the middleware splits and hashes it', () => {
+  const env = {
+    TAGS: new Function(`${obj(CLF, 'TAGS')} return TAGS;`)(),
+    ATTRS: new Function(`${obj(CLF, 'ATTRS')} return ATTRS;`)(),
+  }
+  const f = lift<{ layoutParts(h: string): string[]; hash(s: string): string }>(CLF, ['layoutParts', 'hash'], env)
+  const page = '<header class="cl-hero"><h1>Frozen grows</h1><p class="cl-dek">Value &amp; volume, “both”</p></header>\n'
+    + '<section class="cl-band"><h2>Media</h2><p>Spend leans on one channel.<br>'
+    + '<clan-cite refs="f_01JA0B3P4Q"></clan-cite></p></section>'
+  const parts = f.layoutParts(page)
+  assert.equal(parts.join(''), page)
+  assert.deepEqual(parts.map(f.hash), ['kcamkm', '3t0v', 'v4mvo'])
+  assert.equal(parts[1], '\n')
+  for (const odd of ['<P>Upper</P><p>x</p>', '<p>a</p><p>b', '<p>a &copy;</p><p>b</p>', "<p title='x'>a</p><p>b</p>",
+    '<p class="big">a</p><p>b</p>', '<p>a</p><!-- c --><p>b</p>', '<p>a<br/></p><p>b</p>'])
+    assert.deepEqual(f.layoutParts(odd), [odd], odd)
+  assert.equal(f.hash('abc'), '3772q3')
+})
+
 // ── the Research Tool ──────────────────────────────────────────────────────
 
 const RT = page('campaign-research/index.html')
