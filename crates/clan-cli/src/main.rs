@@ -136,6 +136,33 @@ enum Commands {
         #[arg(long)]
         map: Option<String>,
     },
+    /// Attach a source document to an existing one, carried in beside its own
+    /// work: the source frozen under `data.upstream.<id>`, its pins and assets
+    /// merged, its decisions carried, the hop recorded in `lineage.attached`.
+    /// Attaching the same source again updates it; another of the same app
+    /// replaces it. The document's app must declare `app.attach`.
+    Attach {
+        /// The document to attach to.
+        file: PathBuf,
+        /// The source .clan (for example a Brand Clan).
+        #[arg(long = "source", value_name = "PATH")]
+        source: PathBuf,
+        /// Write here instead of over `file`.
+        #[arg(long, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
+    /// Detach the attached source of an app: its frozen copy, record and
+    /// unedited seeds go; merged pins and assets stay.
+    Detach {
+        /// The document to detach from.
+        file: PathBuf,
+        /// The `app_id` of the source to let go.
+        #[arg(long = "app", value_name = "APP_ID")]
+        app: String,
+        /// Write here instead of over `file`.
+        #[arg(long, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
     /// Manage template apps (Napkin Studio OS): scaffold, inspect, and list.
     App {
         #[command(subcommand)]
@@ -471,6 +498,14 @@ enum AppCommands {
         /// A `source.key=target.key` move applied after the graft. Repeatable.
         #[arg(long = "spinoff-lift", value_name = "FROM=TO")]
         spinoff_lift: Vec<String>,
+        /// Source app_id a document of this app lets be attached (Contract 6,
+        /// `clan attach`). Repeatable.
+        #[arg(long = "attach-accepts", value_name = "APP_ID")]
+        attach_accepts: Vec<String>,
+        /// A `source.key=target.key` seed, copied from an attached source into
+        /// an empty field. Repeatable.
+        #[arg(long = "attach-lift", value_name = "FROM=TO")]
+        attach_lift: Vec<String>,
     },
     /// Sign an app's code with a publisher private key, producing a trusted
     /// .clan the viewer will grant scoped host access.
@@ -626,6 +661,12 @@ fn main() -> Result<()> {
             title,
             map,
         } => cmd_spinoff(from, app, output, title, map, &hints),
+        Commands::Attach {
+            file,
+            source,
+            output,
+        } => cmd_attach(file, source, output, &hints),
+        Commands::Detach { file, app, output } => cmd_detach(file, app, output, &hints),
         Commands::App { command } => cmd_app(command, &hints),
         Commands::Keygen { key_id } => cmd_keygen(key_id),
         Commands::Merge {
@@ -1093,6 +1134,56 @@ fn cmd_spinoff(
     Ok(())
 }
 
+fn cmd_attach(
+    file: PathBuf,
+    source: PathBuf,
+    output: Option<PathBuf>,
+    hints: &Hints,
+) -> Result<()> {
+    let target = open(&file)?;
+    let source = open(&source)?;
+    let out = clan_sdk::attach(&target, &source).context("failed to attach")?;
+    let dest = output.unwrap_or(file);
+    std::fs::write(&dest, &out.bytes)
+        .with_context(|| format!("could not write {}", dest.display()))?;
+    let verb = match out.verb {
+        clan_sdk::AttachVerb::Attached => "attached",
+        clan_sdk::AttachVerb::Updated => "updated",
+        clan_sdk::AttachVerb::Replaced => "replaced",
+    };
+    eprintln!(
+        "{verb} {} into {}  seeded {}  kept {}  carried {} decision(s)",
+        out.record.carried.document_id,
+        dest.display(),
+        out.seeded.len(),
+        out.kept.len(),
+        out.carried_decisions
+    );
+    let clan = ClanFile::from_bytes(out.bytes)?;
+    let mut lines = vec![format!("clan read agent {}", dest.display())];
+    lines.extend(file_state_hints(&clan, &dest, None));
+    hints.emit(&lines);
+    Ok(())
+}
+
+fn cmd_detach(file: PathBuf, app: String, output: Option<PathBuf>, hints: &Hints) -> Result<()> {
+    let target = open(&file)?;
+    let out = clan_sdk::detach(&target, &app).context("failed to detach")?;
+    let dest = output.unwrap_or(file);
+    std::fs::write(&dest, &out.bytes)
+        .with_context(|| format!("could not write {}", dest.display()))?;
+    eprintln!(
+        "detached {app} from {}  removed {} seed(s)",
+        dest.display(),
+        out.unseeded.len()
+    );
+    let clan = ClanFile::from_bytes(out.bytes)?;
+    let mut lines = vec![format!("clan read agent {}", dest.display())];
+    lines.extend(file_state_hints(&clan, &dest, None));
+    hints.emit(&lines);
+    Ok(())
+}
+
 fn cmd_app(command: AppCommands, hints: &Hints) -> Result<()> {
     match command {
         AppCommands::Init {
@@ -1106,6 +1197,8 @@ fn cmd_app(command: AppCommands, hints: &Hints) -> Result<()> {
             spinoff_accepts,
             spinoff_map,
             spinoff_lift,
+            attach_accepts,
+            attach_lift,
         } => {
             // Source the file to promote: an existing authored .clan, or a
             // freshly scaffolded blank document.
@@ -1130,6 +1223,14 @@ fn cmd_app(command: AppCommands, hints: &Hints) -> Result<()> {
                 })?;
                 lift.insert(from.trim().to_string(), to.trim().to_string());
             }
+            let mut attach_seeds = std::collections::BTreeMap::new();
+            for rule in &attach_lift {
+                let (from, to) = rule.split_once('=').ok_or_else(|| {
+                    anyhow::anyhow!("--attach-lift expects FROM=TO, got {rule:?}")
+                })?;
+                attach_seeds.insert(from.trim().to_string(), to.trim().to_string());
+            }
+            let declares_attach = !attach_accepts.is_empty() || !attach_seeds.is_empty();
             let declares_spinoff =
                 !spinoff_accepts.is_empty() || spinoff_map.is_some() || !lift.is_empty();
             let app = AppInfo {
@@ -1150,6 +1251,12 @@ fn cmd_app(command: AppCommands, hints: &Hints) -> Result<()> {
                     ..Default::default()
                 }),
             };
+            let mut app = app;
+            app.attach = declares_attach.then(|| clan_sdk::AttachSpec {
+                accepts: attach_accepts,
+                lift: attach_seeds,
+                harvest: Vec::new(),
+            });
             let bytes = make_template(&source, app, MakeTemplateOptions::default())
                 .context("failed to make template")?;
             std::fs::write(&output, &bytes)

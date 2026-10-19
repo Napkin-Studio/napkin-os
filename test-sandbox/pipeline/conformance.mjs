@@ -233,6 +233,58 @@ r = clan(['create', '--title', 'AgentOnly', '--brief', 'b', '--no-render', '--ou
   record('T22', 'export-static keys complete', e.json && need.length === 0, e.err || `missing=${need} have=${keys}`)
 }
 
+// ---------- T25 attach: a source carried into an existing document (Contract 6) ----------
+// A brief-like app that accepts a brand app, and a brand document. Attach
+// freezes the brand under data.upstream, seeds an empty field, carries its
+// decisions and records the hop; a second attach updates, detach lets go;
+// an app that does not accept the source refuses.
+{
+  const ok = []
+  const step = (name, pass, detail) => { ok.push([name, !!pass, detail]) }
+  const c = a => clan(a)
+  const BRAND = 'ie.napkin.brand', BRIEF = 'ie.napkin.attach-brief'
+  let x = c(['app', 'init', '--name', 'Brand Clan', '--app-id', BRAND, '--output', 'brand.tpl.clan'])
+  step('brand template', x.code === 0, x.out)
+  x = c(['new', 'brand.tpl.clan', '--output', 'brand.clan', '--title', 'Lumen Water'])
+  step('brand document', x.code === 0, x.out)
+  x = c(['patch-data', 'brand.clan', '{"brand":{"name":"Lumen Water"},"kit":{"version":3}}', ...ATTR])
+  step('brand data', x.code === 0, x.out)
+  x = c(['app', 'init', '--name', 'Brief', '--app-id', BRIEF, '--attach-accepts', BRAND,
+    '--attach-lift', 'brand.name=client', '--output', 'brief.tpl.clan'])
+  step('brief template', x.code === 0, x.out)
+  x = c(['new', 'brief.tpl.clan', '--output', 'brief.clan'])
+  step('brief document', x.code === 0, x.out)
+
+  x = c(['attach', 'brief.clan', '--source', 'brand.clan'])
+  step('attach', x.code === 0 && /attached/.test(x.out) && /seeded 1/.test(x.out), x.out)
+  let d = c(['read', 'data', 'brief.clan'])
+  step('data: seed and frozen copy', /client:\s*Lumen Water/.test(d.out) && /upstream:/.test(d.out) && /version:\s*3/.test(d.out), d.out.slice(0, 300))
+  let ch = c(['read', 'chain', 'brief.clan'])
+  step('chain: attach entry', /attach "Lumen Water"/.test(ch.out), ch.out.slice(0, 300))
+  let v = c(['validate', 'brief.clan'])
+  step('valid after attach', v.code === 0, v.out)
+
+  x = c(['patch-data', 'brand.clan', '{"brand":{"name":"Lumen Water Co"},"kit":{"version":4}}', ...ATTR])
+  x = c(['attach', 'brief.clan', '--source', 'brand.clan'])
+  d = c(['read', 'data', 'brief.clan'])
+  step('update re-seeds an unedited seed', x.code === 0 && /updated/.test(x.out) && /client:\s*Lumen Water Co/.test(d.out) && /version:\s*4/.test(d.out), x.out + d.out.slice(0, 300))
+
+  x = c(['detach', 'brief.clan', '--app', BRAND])
+  d = c(['read', 'data', 'brief.clan'])
+  step('detach removes copy and seed', x.code === 0 && !/upstream:/.test(d.out) && !/client:/.test(d.out), x.out + d.out.slice(0, 300))
+  x = c(['detach', 'brief.clan', '--app', BRAND])
+  step('detach again is refused', x.code !== 0, x.out)
+
+  x = c(['app', 'init', '--name', 'Closed', '--app-id', 'ie.napkin.closed', '--attach-accepts', 'ie.napkin.nothing', '--output', 'closed.tpl.clan'])
+  x = c(['new', 'closed.tpl.clan', '--output', 'closed.clan'])
+  x = c(['attach', 'closed.clan', '--source', 'brand.clan'])
+  step('an app that does not accept the source refuses', x.code !== 0 && /attaches/.test(x.out), x.out)
+
+  const bad = ok.filter(([, p]) => !p)
+  record('T25', 'attach, update, detach and the refusal (Contract 6)', bad.length === 0,
+    bad.map(([n, , det]) => `${n}: ${String(det).slice(0, 120)}`).join(' | '))
+}
+
 // ---------- write results ----------
 const hardFails = results.filter(x => !x.pass && !x.expect_red).length
 const summary = {
