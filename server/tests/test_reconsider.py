@@ -349,6 +349,20 @@ def test_the_page_hash_is_the_views():
     assert held_parts({"report:zzz:b1": "<p>x</p>"}, ["<p>a</p>"]) == ({}, False)
 
 
+# The same page and hashes are pinned in app/tests/templates.test.ts: the view keys a person's wording per part
+# (`report:<hash of the part>:b<n>`), and must split and hash exactly as this does.
+PAGE = ('<header class="cl-hero"><h1>Frozen grows</h1><p class="cl-dek">Value &amp; volume, “both”</p></header>\n'
+        '<section class="cl-band"><h2>Media</h2><p>Spend leans on one channel.<br>'
+        '<clan-cite refs="f_01JA0B3P4Q"></clan-cite></p></section>')
+
+
+def test_the_page_parts_are_the_views():
+    parts = rule.split(PAGE)
+    assert len(parts) == 3 and parts[1] == "\n"
+    assert [page_hash(p) for p in parts] == ["kcamkm", "3t0v", "v4mvo"]
+    assert rule.split("<P>Upper</P><p>x</p>") == ["<P>Upper</P><p>x</p>"]  # not as the check writes it: one part
+
+
 def test_events_are_checked(store):
     clan, media, *_ = document(store)
     for events in ([], [{"kind": "fact_wrong", "id": media, "decision": "d_REVIEW0001"}],
