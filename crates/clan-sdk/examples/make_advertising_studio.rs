@@ -94,6 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
+            attach: None,
             spinoff: Some(SpinoffSpec {
                 accepts: vec!["ie.napkin.brief".into(), "ie.napkin.brief-maker".into()],
                 map: Some("brief".into()),
@@ -206,6 +207,7 @@ fn brief_maker_stub() -> Result<ClanFile, Box<dyn std::error::Error>> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )?;

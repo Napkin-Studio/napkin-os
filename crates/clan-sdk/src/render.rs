@@ -61,6 +61,7 @@ pub fn render(clan: &ClanFile) -> Result<Vec<u8>> {
         parents: Vec::new(),
         merge: false,
         carried: manifest.carried().cloned(),
+        attached: manifest.attached().to_vec(),
     });
     new_manifest.view = Some(ViewState {
         present: true,

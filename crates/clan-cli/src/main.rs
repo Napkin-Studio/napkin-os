@@ -1142,6 +1142,7 @@ fn cmd_app(command: AppCommands, hints: &Hints) -> Result<()> {
                 schema: Some("agent/output-schema.json".into()),
                 prompt_templates: vec![],
                 data_seed: None,
+                attach: None,
                 spinoff: declares_spinoff.then(|| SpinoffSpec {
                     accepts: spinoff_accepts,
                     map: spinoff_map,

@@ -130,6 +130,7 @@ fn template(app_id: &str) -> Vec<u8> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: Some(clan_sdk::SpinoffSpec::default()),
+            attach: None,
         },
         clan_sdk::MakeTemplateOptions::default(),
     )

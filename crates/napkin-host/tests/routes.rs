@@ -321,6 +321,7 @@ fn spinoff_offers_a_target_then_branches_into_it() {
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
+            attach: None,
             spinoff: Some(clan_sdk::SpinoffSpec {
                 map: Some("brief".into()),
                 ..Default::default()
@@ -503,6 +504,7 @@ mod upstream {
                 prompt_templates: vec![],
                 data_seed: None,
                 spinoff,
+                attach: None,
             },
             clan_sdk::MakeTemplateOptions::default(),
         )

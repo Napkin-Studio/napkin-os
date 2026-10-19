@@ -927,6 +927,7 @@ pub fn home_change(store: &dyn DocStore) -> HostResult<(DocId, Option<Change>)> 
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )?;
@@ -1023,6 +1024,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         }
     }
 

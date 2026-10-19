@@ -939,6 +939,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         }
     }
 

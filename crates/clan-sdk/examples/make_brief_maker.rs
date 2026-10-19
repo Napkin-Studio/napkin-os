@@ -247,6 +247,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             schema: Some(SCHEMA_PATH.into()),
             prompt_templates: vec![],
             data_seed: None,
+            attach: None,
             spinoff: Some(SpinoffSpec {
                 accepts: vec![RESEARCH_APP_ID.into()],
                 // Carried whole under upstream.<research id>, so no map; and

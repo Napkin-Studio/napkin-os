@@ -211,6 +211,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
             // The card on the OS home, in the app's own words.
             home: Some(AppHome {
                 colour: Some("#0F9488".into()),

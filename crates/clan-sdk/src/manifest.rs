@@ -123,6 +123,10 @@ pub struct AppInfo {
     /// knows its own schema — a caller should not have to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spinoff: Option<SpinoffSpec>,
+    /// What this app lets be attached to a document of it, and what it seeds
+    /// and offers back (Contract 6, Brand Clan). Absent, nothing attaches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach: Option<AttachSpec>,
     /// How the app presents itself on the OS home (Napkin Studio OS
     /// extension). Absent, the home shows the app's name and "Start".
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -218,6 +222,38 @@ impl Default for SpinoffSpec {
     }
 }
 
+/// Declares what a document of this app lets be attached to it: another
+/// document carried in whole, frozen under `data.upstream.<id>`, beside the
+/// document's own work (Contract 6 §4; `os-layer.md` §5.7).
+///
+/// It is the spin-off carry applied to an existing document. The first use is
+/// the Brand Clan, but nothing here names it: `accepts` names app ids.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct AttachSpec {
+    /// Source `app_id`s this app lets be attached. Empty attaches nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<String>,
+    /// `source dotted key -> this document's dotted key`: seeds, copied from
+    /// the frozen source. A seed lands only where the field is still empty,
+    /// and an update re-seeds only a field that still holds the value the
+    /// previous copy seeded, so a person's edit is never overwritten.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lift: BTreeMap<String, String>,
+    /// What an approved document offers back to the attached source: this
+    /// document's `from` field, to the source's `to` field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub harvest: Vec<HarvestRule>,
+}
+
+/// One field an approved document offers back to its attached source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HarvestRule {
+    /// Dotted key in this document's data.
+    pub from: String,
+    /// Dotted key in the attached source's data.
+    pub to: String,
+}
+
 fn default_entry() -> String {
     "human/index.html".to_string()
 }
@@ -245,6 +281,26 @@ pub struct Lineage {
     /// Absent on every other file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<Carried>,
+    /// The documents attached to this one (Contract 6 §4.3), one record per
+    /// source, so a host can tell later whether a source has moved on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attached: Vec<Attached>,
+}
+
+/// One attached document: what [`Carried`] records for a spin-off parent, plus
+/// which app it is and the version it was at.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attached {
+    /// The source's `app_id`. A document holds one attached source per app.
+    pub app_id: String,
+    /// The source's `kit.version` when it declares one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<u64>,
+    /// When it was attached or last updated, RFC 3339.
+    pub at: String,
+    /// The source's `document_id` and the hashes taken, as for a spin-off.
+    #[serde(flatten)]
+    pub carried: Carried,
 }
 
 /// The state of the direct parent an upstream spin-off was taken from
@@ -384,6 +440,11 @@ impl Manifest {
     /// keeps it: it describes the document, not the last write.
     pub fn carried(&self) -> Option<&Carried> {
         self.lineage.as_ref().and_then(|l| l.carried.as_ref())
+    }
+
+    /// The documents attached to this one (Contract 6 §4.3).
+    pub fn attached(&self) -> &[Attached] {
+        self.lineage.as_ref().map_or(&[], |l| l.attached.as_slice())
     }
 
     /// Turn this (cloned) manifest into the next revision of the same

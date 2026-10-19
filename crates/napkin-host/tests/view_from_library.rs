@@ -157,6 +157,7 @@ fn template_with(
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )
@@ -500,6 +501,7 @@ fn spun_off_brief(version: &str) -> (Arc<MemStore>, DocId, DocId) {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )

@@ -28,21 +28,21 @@ use crate::hash::sha256_prefixed;
 use crate::manifest::{AppInfo, Carried, FileEntry, Lineage, Manifest, ParentRef, ViewState};
 use crate::merge::MERGE_REPORT_PATH;
 
-const DATA_PATH: &str = "shared/data.yaml";
+pub(crate) const DATA_PATH: &str = "shared/data.yaml";
 const APP_MANIFEST_PATH: &str = "app/manifest.yaml";
-const CHAIN_PATH: &str = "agent/decision-chain.yaml";
-const ASSET_PREFIX: &str = "human/assets/";
+pub(crate) const CHAIN_PATH: &str = "agent/decision-chain.yaml";
+pub(crate) const ASSET_PREFIX: &str = "human/assets/";
 const BRANCH_PREFIX: &str = "agents/";
-const UPSTREAM_PREFIX: &str = "upstream/";
+pub(crate) const UPSTREAM_PREFIX: &str = "upstream/";
 
 /// The data key an upstream spin-off freezes its sources under (Contract 4
 /// §5.2), and the host-owned key it leaves behind.
-const UPSTREAM_KEY: &str = "upstream";
-const PROJECTION_KEY: &str = "projection";
+pub(crate) const UPSTREAM_KEY: &str = "upstream";
+pub(crate) const PROJECTION_KEY: &str = "projection";
 
 /// The list members an upstream spin-off merges by id: role, the path a file
 /// that does not register it keeps it at, and the key its list sits under.
-const MEMBERS: [(&str, &str, &str); 3] = [
+pub(crate) const MEMBERS: [(&str, &str, &str); 3] = [
     ("pinned-facts", "shared/facts.yaml", "facts"),
     ("findings", "shared/findings.yaml", "findings"),
     ("sources", "shared/sources.yaml", "sources"),
@@ -150,6 +150,7 @@ pub fn instantiate(template: &ClanFile, opts: InstantiateOptions) -> Result<Vec<
         parents: Vec::new(),
         merge: false,
         carried: None,
+        attached: Vec::new(),
     });
     manifest.view = Some(ViewState {
         present: true,
@@ -399,6 +400,8 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
             if let Some(v) = get_dotted(&src_data, from).filter(|v| !v.is_null()) {
                 set_dotted(&mut data, to, v.clone());
                 seeds.push(seed_decision(
+                    SPINOFF_AGENT,
+                    "process:spinoff",
                     &id,
                     &src_doc,
                     &src_manifest.title,
@@ -535,6 +538,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
         // Not a `clan merge` product — two origins, one of them an app.
         merge: false,
         carried: None,
+        attached: Vec::new(),
     });
     manifest.view = Some(ViewState {
         present: true,
@@ -562,7 +566,12 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
             &src_doc,
             src_data_bytes.as_deref().unwrap_or_default(),
             last_decision,
+            false,
         )?);
+        // What the source had attached rides along with its hoisted upstream,
+        // so the new document can tell later whether any of it moved on
+        // (Contract 6 §4.3).
+        lineage.attached = src_manifest.attached().to_vec();
     } else {
         // Mood boards, logos, reference stills — the material the decisions
         // were made about travels with them. The template's own assets win a
@@ -590,7 +599,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
 /// `entries` holds the target's own entries on the way in; the target keeps
 /// every path it already has except a member, which it shares with the source
 /// by merging.
-fn carry_upstream(
+pub(crate) fn carry_upstream(
     files: &mut Vec<FileEntry>,
     entries: &mut Vec<(String, Vec<u8>)>,
     source: &ClanFile,
@@ -598,6 +607,7 @@ fn carry_upstream(
     src_doc: &str,
     src_data_bytes: &[u8],
     last_decision: Option<String>,
+    source_wins: bool,
 ) -> Result<Carried> {
     let src_manifest = source.manifest();
     let mut carried = Carried {
@@ -643,7 +653,7 @@ fn carry_upstream(
     // at the root, so it goes beside the frozen copy.
     if let Some((_, bytes)) = src_entries.iter().find(|(p, _)| p == MERGE_REPORT_PATH) {
         let path = format!("{UPSTREAM_PREFIX}{src_doc}/{MERGE_REPORT_PATH}");
-        entries.push((path.clone(), bytes.clone()));
+        put_entry(entries, &path, bytes, true);
         let id = format!("upstream-merge-report-{src_doc}");
         register_carried(
             files,
@@ -659,19 +669,49 @@ fn carry_upstream(
         let carries = path.starts_with(BRANCH_PREFIX)
             || path.starts_with(UPSTREAM_PREFIX)
             || path.starts_with(ASSET_PREFIX);
-        if !carries || entries.iter().any(|(p, _)| p == path) {
+        if !carries {
             continue;
         }
-        entries.push((path.clone(), bytes.clone()));
+        if !put_entry(entries, path, bytes, source_wins) {
+            continue;
+        }
         register_carried(files, src_manifest, path, None);
     }
     Ok(carried)
 }
 
+/// Put `bytes` at `path` in `entries`. A path already there is replaced when
+/// `overwrite` is set and kept otherwise. Returns whether the entry is new,
+/// so the caller registers a new path once.
+fn put_entry(
+    entries: &mut Vec<(String, Vec<u8>)>,
+    path: &str,
+    bytes: &[u8],
+    overwrite: bool,
+) -> bool {
+    match entries.iter().position(|(p, _)| p == path) {
+        Some(i) => {
+            if overwrite {
+                entries[i].1 = bytes.to_vec();
+            }
+            false
+        }
+        None => {
+            entries.push((path.to_string(), bytes.to_vec()));
+            true
+        }
+    }
+}
+
 /// Merge the source's copy of a list member into the target's: the target's
 /// entries first, then the source's in order, skipping an id the target
 /// already holds. A target with no entries takes the source's bytes unchanged.
-fn merge_member(own: Option<&[u8]>, src: &[u8], key: &str, path: &str) -> Result<Vec<u8>> {
+pub(crate) fn merge_member(
+    own: Option<&[u8]>,
+    src: &[u8],
+    key: &str,
+    path: &str,
+) -> Result<Vec<u8>> {
     let parse = |bytes: &[u8], whose: &str| -> Result<Mapping> {
         if bytes.iter().all(u8::is_ascii_whitespace) {
             return Ok(Mapping::new());
@@ -714,7 +754,7 @@ fn merge_member(own: Option<&[u8]>, src: &[u8], key: &str, path: &str) -> Result
 /// source's own registration, or `fallback` when the source had none. The
 /// target's registration of the path wins; a source id the target already
 /// uses for another path gets the source's document id appended.
-fn register_carried(
+pub(crate) fn register_carried(
     files: &mut Vec<FileEntry>,
     src: &Manifest,
     path: &str,
@@ -734,7 +774,7 @@ fn register_carried(
 }
 
 /// A YAML member's registry entry; `ClanBuilder::build` fills in its hash.
-fn yaml_entry(id: &str, path: &str, role: &str) -> FileEntry {
+pub(crate) fn yaml_entry(id: &str, path: &str, role: &str) -> FileEntry {
     FileEntry {
         id: id.to_string(),
         path: path.to_string(),
@@ -748,7 +788,9 @@ fn yaml_entry(id: &str, path: &str, role: &str) -> FileEntry {
 /// The edit decision that records one lift of an upstream spin-off (Contract
 /// 4 §5.4): the seeded field, the upstream address it was copied from, and why
 /// there was nothing else to do.
-fn seed_decision(
+pub(crate) fn seed_decision(
+    agent: &str,
+    actor: &str,
     doc: &str,
     src_doc: &str,
     src_title: &str,
@@ -761,7 +803,7 @@ fn seed_decision(
     let cite = format!("{src_doc}#{from}");
     Decision {
         kind: Some("edit".into()),
-        actor: Some("process:spinoff".into()),
+        actor: Some(actor.into()),
         targets: vec![format!("{doc}#{to}")],
         cites: vec![cite.clone()],
         fields_changed: vec![to.split('.').next().unwrap_or(to).to_string()],
@@ -787,12 +829,12 @@ fn seed_decision(
             ),
             ..Default::default()
         }),
-        ..Decision::new(SPINOFF_AGENT, "seed", decided, now)
+        ..Decision::new(agent, "seed", decided, now)
     }
 }
 
 /// Descend a dotted path, creating mappings as needed, and set a value.
-fn set_dotted(root: &mut Value, path: &str, value: Value) {
+pub(crate) fn set_dotted(root: &mut Value, path: &str, value: Value) {
     let keys: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
     let Some((last, parents)) = keys.split_last() else {
         *root = value;
@@ -819,7 +861,7 @@ fn set_dotted(root: &mut Value, path: &str, value: Value) {
 }
 
 /// The value at a dotted path, if it is there.
-fn get_dotted<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
+pub(crate) fn get_dotted<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
     let keys: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
     if keys.is_empty() {
         return None;
@@ -830,7 +872,7 @@ fn get_dotted<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
 }
 
 /// Remove and return the value at a dotted path, if it is there.
-fn take_dotted(root: &mut Value, path: &str) -> Option<Value> {
+pub(crate) fn take_dotted(root: &mut Value, path: &str) -> Option<Value> {
     let keys: Vec<&str> = path.split('.').filter(|s| !s.is_empty()).collect();
     let (last, parents) = keys.split_last()?;
     let mut cur = root;
@@ -872,6 +914,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         };
         let tpl = make_template(&clan, app, MakeTemplateOptions::default()).unwrap();
         ClanFile::from_bytes(tpl).unwrap()
@@ -959,6 +1002,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         };
         let tpl = ClanFile::from_bytes(
             make_template(&clan, app, MakeTemplateOptions::default()).unwrap(),
@@ -1018,6 +1062,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         });
         let mut chain = DecisionChain::default();
         chain.decisions.push(Decision::new(
@@ -1063,6 +1108,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: spec,
+            attach: None,
         };
         let bytes = make_template(&source, app, MakeTemplateOptions::default()).unwrap();
         ClanFile::from_bytes(bytes).unwrap()
