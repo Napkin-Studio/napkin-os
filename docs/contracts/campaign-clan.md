@@ -362,7 +362,7 @@ findings:
     statement: "Lúnasa arrives in Ireland with permission and in GB as a stranger: …"
     cites: [f_01JA0B2K7M, f_01JA0B2K8N]   # pins it rests on; each must be in facts.yaml
     method: synthesis
-    status: proposed                      # proposed | verified | rejected
+    status: proposed                      # proposed | verified | rejected | superseded
     derived_by: synthesise_findings@1.0   # handler@version
     confidence: medium                    # derived, never asserted
     derived_at: 2026-09-21T12:10:00Z
@@ -371,6 +371,8 @@ findings:
     markets: [IE, GB]                     # optional
     verification: { decision, by: human:<id>, at }            # iff verified
     rejection:    { decision, by: human:<id>, at, reason }    # iff rejected
+    superseded_by: { finding, decision }                      # iff superseded (§6.4)
+    recheck:      { decision, note }                          # a verified finding a review re-checked
 ```
 
 ### 6.1 Confidence is derived, not asserted
@@ -422,6 +424,15 @@ resting on a rejected or corrected pin and rewrites those that no longer hold,
 re-answers the asks citing a changed item, and recomposes only the report
 sections (§17) that cite a changed item directly or through a finding. A
 section a person edited is never recomposed; it is flagged instead.
+
+The job changes findings in place (`findings_update`, middleware-api.md): a
+new `confidence`; `cites` moved off a rejected or corrected pin when the
+finding still holds — a `verified` one stays verified and gets `recheck`
+naming the review (owner, 2026-10-19); and a finding that no longer holds is
+`superseded`, `superseded_by` the rewritten finding the job appends as
+`proposed`. A superseded finding is out of use: nothing cites it, it does not
+block the lock, and a field still citing it is flagged to move to its
+replacement.
 
 ---
 
