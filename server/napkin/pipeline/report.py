@@ -19,7 +19,8 @@ import logging
 import re
 
 from ..doc import (CAMPAIGN_FIELDS, LENS_TITLES, LENSES, ctx_data, ctx_facts, ctx_findings, lens_of_key,
-                   market_list)
+                   market_list, out_of_use)
+from ..rules import layout as rule
 from ..rules.cite import clean_claim
 from ..util import bad, canon_sha, iso
 from .. import reasoning as rsn
@@ -44,6 +45,16 @@ claims, each with its cites; these are the sentences you stand behind. And the p
 The grounds are for the report as a whole: the pins and findings (by id) that support the headline and
 summary, and the other headlines the input would allow and what in it rules each out.""" + rsn.GUIDE
 
+PART_RULES = """
+
+This time you write again only part of a report that already exists: a person reviewed the research (marked a
+fact wrong, corrected one, rejected a finding) and what rests on it has changed; `changed` says what. Everything
+you are not asked to write stays as it is, word for word, so keep its voice. Write claims only for the lenses in
+`rewrite.sections` (their claims as they stand are in `now`: keep the wording of whatever still holds), the
+headline only when `rewrite.headline` is true, the summary only when `rewrite.summary` is true, and for each part
+of the page in `rewrite.page` its HTML again: the same place and role on the page, to the same rules, resting
+only on the ids you are given. Other lenses are given only so a page part that spans them reads right."""
+
 FIELD_LABELS = {"brand": "Brand", "client_org": "Client", "categories": "Categories", "markets": "Markets",
                 "competitor_set": "Comparators", "audience": "The researched audience", "in_market": "In market",
                 "constraints": "Constraints", "campaign_type": "Campaign type"}
@@ -63,13 +74,42 @@ def schema(cite_ids: list[str], lenses: list[str]) -> dict:
                  "grounds": rsn.MODEL_SCHEMA})
 
 
-def compose(doc, clan, handler, caps):
-    """-> (report, cites, hits, reasoning). 400 when there is nothing to cite."""
+def part_schema(cite_ids: list[str], lenses: list[str], page: list[int], headline: bool, summary: bool) -> dict:
+    """What the model writes when only part of the report is written again (`compose(part=...)`)."""
+    claim = _obj({"text": {"type": "string"}, "cites": {"type": "array", "items": {"type": "string",
+                                                                                   "enum": cite_ids}}})
+    props = {}
+    if headline:
+        props["headline"] = claim
+    if summary:
+        props["summary"] = {"type": "array", "items": claim}
+    if lenses:
+        props["sections"] = {"type": "array", "items": _obj({"lens": {"type": "string", "enum": lenses},
+                                                             "claims": {"type": "array", "items": claim}})}
+    if page:
+        props["page"] = {"type": "array", "items": _obj({"part": {"type": "integer", "enum": page},
+                                                         "html": {"type": "string"}})}
+    props["grounds"] = rsn.MODEL_SCHEMA
+    return _obj(props)
+
+
+def _ids(html: str) -> set:
+    return set(re.findall(r"\b(?:f|fi|ct|gap)_[0-9A-Za-z_]+", html or ""))
+
+
+def compose(doc, clan, handler, caps, part=None):
+    """-> (report, cites, hits, reasoning). 400 when there is nothing to cite.
+
+    With `part` = {old, sections, headline, summary, page, why}, only part of the report `old` is written again:
+    the record sections whose ids are in `sections`, the headline and the summary when true, and the parts of
+    the page (`rule.split(old.layout)`) whose indices are in `page`; `why` says what changed, for the model.
+    Everything else is kept byte for byte, and what is written passes the same checks as a whole report. No model
+    call when there is nothing to write."""
     data = ctx_data(clan)
     camp = data.get("campaign") or {}
     sel = data.get("selection") or {}
-    # a fact a person marked wrong (excluded) is never cited
-    excluded = {e.get("fact_id") for e in (sel.get("excluded") or []) if isinstance(e, dict)}
+    # a fact a person marked wrong (excluded), or one a correction or a resolved contest replaced, is never cited
+    excluded = out_of_use(clan)
     pins = [f for f in ctx_facts(clan) if re.fullmatch(r"f_[0-9A-Z]{6,}", str(f.get("id", "")))
             and f.get("id") not in excluded]
     pin_by = {f["id"]: f for f in pins}
@@ -121,7 +161,22 @@ def compose(doc, clan, handler, caps):
                     and not set(f.get("cites") or []) & excluded}
     contested = {c["id"]: c for c in sel.get("contested") or [] if c.get("id")}
     gap_by = {g["id"]: g for g in sel.get("gaps") or [] if g.get("id")}
-    if lenses_with:
+    old = part["old"] if part else None
+    if part:
+        redo = set(part.get("sections") or ())
+        want_head, want_sum = bool(part.get("headline")), bool(part.get("summary"))
+        pages = rule.split(old["layout"]) if isinstance(old.get("layout"), str) else []
+        redo_page = sorted({i for i in part.get("page") or () if isinstance(i, int) and 0 <= i < len(pages)})
+        write_lenses = [l for l in lenses_with if "s_" + l in redo]
+        # a page part may span lenses: those it references are given too, to read, not to write claims for
+        near = {lens_of_key(pin_by[i]["key"]) for j in redo_page for i in _ids(pages[j]) if i in pin_by} | \
+            {fi_by[i].get("lens") for j in redo_page for i in _ids(pages[j]) if i in fi_by}
+        # the headline and summary speak for the whole report: they are written from all of it
+        given = lenses_with if want_head or want_sum else [l for l in lenses_with if l in write_lenses or l in near]
+        asked = bool(write_lenses or redo_page or want_head or want_sum)
+    else:
+        given, asked = lenses_with, bool(lenses_with)
+    if asked:
         pin_row = lambda p: {"id": p["id"], "label": layout.label(p), "entity": p["entity"], "key": p["key"],
                              "value": p["value"], "unit": p.get("unit"), "market": p.get("market"),
                              "as_of": p.get("as_of"), "has_quote": bool(p.get("quotes")),
@@ -137,19 +192,34 @@ def compose(doc, clan, handler, caps):
                                                  for c in by_lens[l]["contests"] if c.get("status") == "open"],
                                "gaps": [{"id": g["id"], "wanted": g.get("wanted") or g.get("key"),
                                          "searched": g.get("searched")} for g in by_lens[l]["gaps"]]}
-                              for l in lenses_with]}
+                              for l in given]}
         if roster:
             payload["identity_pins"] = [pin_row(p) for p in roster]
-        if person_wording:
+        if part:
+            payload["changed"] = list(part.get("why") or [])
+            payload["rewrite"] = {"sections": write_lenses, "headline": want_head, "summary": want_sum,
+                                  "page": [{"part": i, "html": pages[i]} for i in redo_page]}
+            payload["now"] = {"headline": (old.get("headline") or {}).get("text"),
+                              "summary": [x.get("text") for x in old.get("summary") or []],
+                              "claims": {l: [b.get("text") for sec in old.get("sections") or [] if sec.get("lens") == l
+                                             for b in sec.get("blocks") or [] if b.get("kind") == "claim"]
+                                         for l in write_lenses}}
+        elif person_wording:
             payload["person_wording"] = person_wording
         try:
             # Low effort: replayed on the IBM run it cost ~22% less than the default and wrote as many claims
             # and as much prose, because the page rules ask for the depth outright (three to four claims per
             # section, a paragraph of three to five sentences per lens).
             al = Aliases(sorted(pin_by) + sorted(fi_by) + sorted(contested) + sorted(gap_by))
-            raw = al.decode(caps.model.structured("report", SYSTEM, al.encode(payload),
-                                                  schema(al.short(sorted(pin_by) + sorted(fi_by)), lenses_with),
-                                                  max_tokens=32000, effort="low"))
+            if part:
+                raw = al.decode(caps.model.structured(
+                    "report_part", SYSTEM + PART_RULES, al.encode(payload, html=True),
+                    part_schema(al.short(sorted(pin_by) + sorted(fi_by)), write_lenses, redo_page, want_head, want_sum),
+                    max_tokens=16000, effort="low"))
+            else:
+                raw = al.decode(caps.model.structured("report", SYSTEM, al.encode(payload),
+                                                      schema(al.short(sorted(pin_by) + sorted(fi_by)), lenses_with),
+                                                      max_tokens=32000, effort="low"))
         except Exception as e:  # the structure still composes; the prose falls back to lines built here
             log.warning("report prose unavailable: %s", e)
             dropped.append(f"model: {e}")
@@ -163,6 +233,8 @@ def compose(doc, clan, handler, caps):
             c, why = clean_claim(s.get("text"), s.get("cites"), pin_by, fi_by, names)
             written["summary"].append(c) if c else dropped.append(f"summary: {why}")
         for sec in raw.get("sections") or []:
+            if part and sec.get("lens") not in write_lenses:
+                continue
             for s in sec.get("claims") or []:
                 c, why = clean_claim(s.get("text"), s.get("cites"), pin_by, fi_by, names)
                 if c:
@@ -173,13 +245,12 @@ def compose(doc, clan, handler, caps):
     def fcites(fi):
         return [fi["id"]] + [c for c in fi.get("cites") or [] if c in pin_by]
 
-    sections, used = [], set()
+    sections = []
     if roster:
         ids = [f["id"] for f in roster]
         sections.append({"id": "s_identity", "title": "Brand and category", "blocks": [
             {"kind": "claim", "text": f"The categories and the client come from {brand}'s roster row in the brand "
                                       f"layer.", "cites": ids}, {"kind": "pins", "fact_ids": ids}]})
-        used |= set(ids)
     for l in LENSES:
         g = by_lens[l]
         if not any(g.values()):
@@ -204,12 +275,20 @@ def compose(doc, clan, handler, caps):
         if len(mk) == 1 and not any(not p.get("market") for p in g["pins"]):
             sec["market"] = mk.pop()
         sections.append(sec)
-        for b in blocks:
+    if part:
+        # only the sections asked for are new; every other one is the old report's, as it was
+        new = {x["id"]: x for x in sections}
+        sections = [new[x["id"]] if x["id"] in redo else x for x in old.get("sections") or []
+                    if x["id"] not in redo or x["id"] in new]
+        sections += [x for x in new.values() if x["id"] in redo and x not in sections]
+    used = set()
+    for sec in sections:
+        for b in sec["blocks"]:
             used |= set(b.get("cites", [])) | set(b.get("fact_ids", []))
             if b["kind"] == "finding":
                 used.add(b["finding_id"])
 
-    summary = written["summary"][:4]
+    summary = written["summary"][:4] if not part or want_sum else old["summary"]
     if not summary:
         summary = [{"text": fi["statement"], "cites": fcites(fi)} for l in LENSES for fi in by_lens[l]["findings"][:1]][:4]
     if not summary:
@@ -221,20 +300,31 @@ def compose(doc, clan, handler, caps):
         summary = [{"text": f"Only {brand}'s roster row is pinned so far; nothing has been researched yet.",
                     "cites": [f["id"] for f in roster] or [pins[0]["id"]]}]
     open_ct = [c for c in sel.get("contested") or [] if c.get("status") == "open"]
-    headline = written["headline"] or {
+    headline = written["headline"] or (old["headline"] if part and not want_head else None) or {
         "text": f"{brand}{' in ' + market_list(markets) if markets else ''}: what the research found"
                 + (", with values still contested" if open_ct else "") + ".",
         "cites": [findings[0]["id"]] if findings else [pins[0]["id"]]}
 
     report = {"built_at": iso(), "handler": handler, "based_on": based_on(clan),
               "headline": headline, "summary": summary, "sections": sections,
-              "confirm": confirm_list(doc, camp), "not_researched": not_researched(sel, markets)}
-    # How it looks: the page the same call wrote, checked in code (Contract 5), or one built from the record.
-    report["layout"], report["layout_by"], ldropped = layout.finish(
-        raw.get("html") if isinstance(raw, dict) else None, report, pin_by, all_findings, contested, gap_by, names,
-        {f"campaign.{k}" for k in ask})
+              "confirm": old.get("confirm", []) if part else confirm_list(doc, camp),
+              "not_researched": old.get("not_researched", []) if part else not_researched(sel, markets)}
+    if part:
+        if pages:  # the parts of the page not asked for stay byte for byte
+            report["layout"], ldropped = layout.splice(
+                pages, redo_page, raw.get("page") if isinstance(raw, dict) else None, report, pin_by, all_findings,
+                contested, gap_by, names, {f"campaign.{k}" for k in ask})
+            report["layout_by"] = old.get("layout_by") or "agent"
+        else:
+            ldropped = []
+    else:
+        # How it looks: the page the same call wrote, checked in code (Contract 5), or one built from the record.
+        report["layout"], report["layout_by"], ldropped = layout.finish(
+            raw.get("html") if isinstance(raw, dict) else None, report, pin_by, all_findings, contested, gap_by, names,
+            {f"campaign.{k}" for k in ask})
     if ldropped:
-        log.info("report layout (%s): dropped %d: %s", report["layout_by"], len(ldropped), json.dumps(ldropped)[:600])
+        log.info("report layout (%s): dropped %d: %s", report.get("layout_by"), len(ldropped),
+                 json.dumps(ldropped)[:600])
     cites = list(dict.fromkeys(list(headline["cites"]) + [c for s in summary for c in s["cites"]] + sorted(used)))
     hits = [{"id": c, "scope": pin_by[c].get("layer", ""), "source": pin_by[c].get("origin", "")}
             for c in cites if c in pin_by]

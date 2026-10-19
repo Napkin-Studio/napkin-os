@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 
 from ..doc import LENS_TITLES, LENSES, build_materials, ctx_data, ctx_facts, ctx_findings, decision, field_value, \
-    lens_of_key, read_of
+    lens_of_key, out_of_use, read_of
 from ..jev import JevError, noul
 from ..rules.cite import clean_claim
 from ..util import bad, iso, uid, ulid_like
@@ -81,7 +81,7 @@ class Asker:
     def evidence(self, lens, extra=()):
         pins = [f for f in list(ctx_facts(self.clan)) + list(extra)
                 if str(f.get("id", "")).startswith("f_") and f.get("status") != "superseded"]
-        excluded = {e.get("fact_id") for e in (self.data.get("selection") or {}).get("excluded") or []}
+        excluded = out_of_use(self.clan)
         pins = [p for p in pins if p["id"] not in excluded]
         if lens:
             mine = [p for p in pins if lens_of_key(p.get("key")) == lens]
@@ -89,7 +89,8 @@ class Asker:
         pins = list({p["id"]: p for p in pins}.values())[:MAX_PINS]
         ids = {p["id"] for p in pins}
         fis = [f for f in ctx_findings(self.clan) if f.get("status") in ("proposed", "verified")
-               and str(f.get("id", "")).startswith("fi_") and set(f.get("cites") or []) & ids]
+               and str(f.get("id", "")).startswith("fi_") and set(f.get("cites") or []) & ids
+               and not set(f.get("cites") or []) & excluded]
         return {p["id"]: p for p in pins}, {f["id"]: f for f in fis}
 
     def names(self):

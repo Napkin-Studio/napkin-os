@@ -14,7 +14,7 @@ import logging
 import re
 
 from ..doc import (CONF, GATES, ISO_3166, LENSES, ctx_data, ctx_decisions, ctx_facts, ctx_findings, decision,
-                   field_env, field_value, human_owned, lens_of_key)
+                   field_env, field_value, human_owned, lens_of_key, out_of_use)
 from ..rules.cite import clean_claim
 from ..rules.confidence import finding_confidence
 from ..rules.figures import NUM
@@ -57,8 +57,7 @@ def schema(pin_ids: list[str]) -> dict:
 
 
 def usable_pins(clan: dict) -> list[dict]:
-    data = ctx_data(clan)
-    excluded = {e.get("fact_id") for e in ((data.get("selection") or {}).get("excluded") or [])}
+    excluded = out_of_use(clan)
     return [f for f in ctx_facts(clan) if re.fullmatch(r"f_[0-9A-Z]{6,}", str(f.get("id", "")))
             and f.get("id") not in excluded and f.get("confidence") in CONF]
 

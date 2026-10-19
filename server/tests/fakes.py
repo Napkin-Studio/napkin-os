@@ -190,6 +190,31 @@ class FakeModel:
         return {"findings": out, "audience": None}
 
     @staticmethod
+    def r_report_part(p):
+        """Part of a report written again: claims for the lenses asked for (one with a made-up figure the cite rule
+        must drop), the headline and summary when asked, and each page part asked for."""
+        rw, lenses = p["rewrite"], {l["lens"]: l for l in p["lenses"]}
+        ids = lambda l: [x["id"] for x in lenses[l]["findings"]] + [x["id"] for x in lenses[l]["pins"]]
+        first = next((i for l in lenses for i in ids(l)), None)
+        out = {"grounds": reasoning([("The review changed what these parts rest on", [first] if first else [])],
+                                    only="the rest of the report stands")}
+        if rw.get("sections"):
+            out["sections"] = [{"lens": l, "claims": [{"text": f"{lenses[l]['title']} reads again after the review.",
+                                                       "cites": ids(l)[:2]},
+                                                      {"text": "A made-up figure of 42 appears here.", "cites": ids(l)[:1]}]}
+                               for l in rw["sections"]]
+        if rw.get("headline"):
+            out["headline"] = {"text": f"{p['brand']}: the research, as reviewed.", "cites": [first]}
+        if rw.get("summary"):
+            out["summary"] = [{"text": "Read the sections again.", "cites": [first]}]
+        if rw.get("page"):
+            refs = " ".join(i for l in rw.get("sections") or list(lenses) for i in ids(l)[:2])
+            out["page"] = [{"part": x["part"], "html": f"<section class='cl-block'><h2>Again</h2><p>Rewritten after the "
+                                                      f"review. <clan-cite refs='{refs}'></clan-cite></p></section>"}
+                           for x in rw["page"]]
+        return out
+
+    @staticmethod
     def r_report(p):
         secs, first = [], None
         for l in p["lenses"]:
