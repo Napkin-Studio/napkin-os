@@ -1,0 +1,218 @@
+{
+ "version": "2026-10-16",
+ "note": "Weights are our own default split, not a published standard (IPA/ISBA and TrinityP3 give none). Use the buyer's ITT weights when stated. Scores are 1, 3 or 5. Report the weakest criterion and any 1 separately from the weighted total.",
+ "principles": [
+  "Gate before score: compliance (requirements, limits, rules) is pass/fail and reported before quality. Source: GAO B-418318; Brent ITT.",
+  "Use the buyer's criteria, order and weights when stated; label our default split as an assumption. Source: IPA/ISBA 2019; Enterprise Ireland notice.",
+  "Diagnosis outweighs decoration: Cannes Creative Strategy 30% challenge, 30% insight, 20% idea, 20% outcome; Effie about 70% on context, insight and idea.",
+  "Banded 1/3/5 anchors with evidence at the top band and a written rationale (a slide number and short quote) before every score. Source: TrinityP3; Brent; Wang et al.",
+  "Never average away a failure: flag the weakest criterion and any score of 1 (Brent excludes a 0, or under 3 on two or more).",
+  "Scoring run controls: both orderings with flips as ties, length-adjusted scores, three or more judges from different model families, code checks for what code can check, human review of disagreements."
+ ],
+ "criteria": [
+  {
+   "id": "compliance_gate",
+   "name": "Requirement, criteria and format compliance (gate)",
+   "weight_percent": 12,
+   "what_good_looks_like": "Every client requirement and scored criterion has a home slide, in the buyer's order, with space tilted to the heavier criteria. No stated rule broken, all mandatory items inside page and word limits, nothing unrequested. In sensitive categories (alcohol, gambling, health, finance) each line is checked against the relevant code and a 'what we will not claim' note names the rule.",
+   "what_bad_looks_like": "A requirement or scored concept with no slide, required content beyond the limit, finished creative when only strategy was asked, generic content tied to no criterion, a claim a code would not permit.",
+   "anchors": {
+    "one": "Any requirement unmapped, any rule broken, required content past a limit, or a banned category claim. Gate fails.",
+    "three": "All requirements mapped and no rule broken, but order or space ignores the weights, or some out-of-scope content, or no category compliance note.",
+    "five": "100 percent of requirements and criteria mapped in the buyer's order, space proportional to weight, response map shown, all limits met, no unrequested work, category rules checked with the rule named."
+   },
+   "check": "both",
+   "code_check_idea": "requirement_map, criteria_map, rule_broken, message_carried, pitch_length, banned_phrase, imagery must be 0. New: compare each criterion's share of presented words with its weight share and flag under half. Judge only scope fidelity, with the brief as reference.",
+   "sources": [
+    "https://www.gao.gov/assets/b-418318.pdf",
+    "https://democracy.brent.gov.uk/documents/s63020/Appendix%202%20-%20Invitation%20to%20Tender%20ITT%20evaluation%20criteria%20and%20scoring%20matrix.pdf",
+    "https://cms.wiltshire.gov.uk/documents/s135412/Appendix%201%20-%20Tender%20Evaluation%20Procedure%20with%20Worked%20Example.pdf",
+    "https://archive.soz.si/sites/default/files/wfa_eaca_pitch_guidelines.pdf",
+    "https://assets.publishing.service.gov.uk/media/690cb65edad669f061d46b5a/Guidance_-_Assessing_Competitive_Tenders_FINAL_pdf_links_.docx.pdf",
+    "https://asa.org.uk/rulings/the-innovative-brewing-company-ltd-g24-1267427-the-innovative-brewing-company-ltd.html"
+   ]
+  },
+  {
+   "id": "problem_objective",
+   "name": "Client problem and measurable objective",
+   "weight_percent": 12,
+   "what_good_looks_like": "Within the first three slides: the client's situation with category context (jargon defined), a quantified objective with baseline, target and timeframe, and what is hard about it. Assumptions stated where the brief is vague. Not retrofitted to the idea.",
+   "what_bad_looks_like": "Opens with the agency or product, restates the brief, sets a vague goal such as raise awareness, or an objective that mirrors the idea.",
+   "anchors": {
+    "one": "No stated objective or only awareness with no number; opens on credentials or product; context is the brief restated.",
+    "three": "Situation and goal stated but no baseline or target, or context assumes category knowledge.",
+    "five": "Client-specific context with cited evidence, objective with baseline, target and date, a challenge the brief did not name, explicit assumptions, nothing retrofitted."
+   },
+   "check": "both",
+   "code_check_idea": "Objective/real_question slide in the first 3 presented slides containing a number and a from/to, vs or by-date pattern; first presented slide is not credentials or product; count of you/client vs we/agency framing in the opening; refs present. Judge: genuine context, not retrofitted.",
+   "sources": [
+    "https://www.effie.org/wp-content/uploads/2025/04/2025_Effective-Entry-Guide.pdf",
+    "https://www.canneslions.com/awards/lions/creative-strategy/what-you-need-to-know",
+    "https://www.campaigncanada.ca/article/five-factors-making-or-breaking-an-agency-pitch/4p6dbn0gryk3k4b1bkw1zash40",
+    "https://www.mediapost.com/publications/article/328560/media-agency-pitch-process-lacks-clarity-on-client.html",
+    "https://techcrunch.com/2019/04/12/data-tells-us-that-investors-love-a-good-story"
+   ]
+  },
+  {
+   "id": "insight",
+   "name": "Insight: a human truth with tension, not a statistic",
+   "weight_percent": 14,
+   "what_good_looks_like": "A distinct insight that says what the data point means, ties to human behaviour, is unique to this client, states how it was reached, and raises a challenge beyond the written brief. A second judge can paraphrase it in one sentence.",
+   "what_bad_looks_like": "A restated statistic, a category convention, a fact any competitor could cite, no method.",
+   "anchors": {
+    "one": "A restated fact or category convention, interchangeable with any brand.",
+    "three": "A real behavioural observation linked to the client but method or source missing, or not clearly unique.",
+    "five": "A human truth with explicit tension, specific to the client, method and cited source stated, raises a new challenge, paraphrasable in one sentence."
+   },
+   "check": "judge",
+   "code_check_idea": "Code confirms an insight slide exists, carries a ref to a finding or pin, and is within its 70-word budget. Quality is a judge call with a slide quote before the score.",
+   "sources": [
+    "https://www.effie.org/wp-content/uploads/2025/04/2025_Effective-Entry-Guide.pdf",
+    "https://www.canneslions.com/awards/lions/creative-strategy/what-you-need-to-know",
+    "https://www.campaigncanada.ca/article/five-factors-making-or-breaking-an-agency-pitch/4p6dbn0gryk3k4b1bkw1zash40"
+   ]
+  },
+  {
+   "id": "idea_chain",
+   "name": "One idea, a plan justified against alternatives, an unbroken chain",
+   "weight_percent": 14,
+   "what_good_looks_like": "One crisp idea in one sentence of 60 words or fewer, visibly following from insight and strategy, shown in a realistic client context. The plan justifies channels against alternatives, shows phasing, and creative examples support the logic rather than replace it. Challenge, insight, strategy, idea, proof form a chain with no gap.",
+   "what_bad_looks_like": "Several competing ideas, an idea that is a channel list, an idea that does not trace to the insight, creative shown in place of logic.",
+   "anchors": {
+    "one": "No stated idea, or three or more competing ideas, or the idea is a channel or tactic list.",
+    "three": "One idea linked to the insight by implication; plan gives little reason against alternatives; one link asserted rather than shown.",
+    "five": "One idea in a single sentence with an explicit insight-strategy-idea link on the page, shown in a realistic mockup, channel choices justified against alternatives, phasing shown, a judge can name the idea after one read."
+   },
+   "check": "both",
+   "code_check_idea": "Exactly one recommended idea slide in presented slides unless the brief asked for more; idea refs point to the insight slide; idea within word budget; at least one execution with a context mockup; insight, idea, plan slide types in order. Judge: each chain link cited by slide and quote.",
+   "sources": [
+    "https://www.effie.org/wp-content/uploads/2025/04/2025_Effective-Entry-Guide.pdf",
+    "https://ipa.co.uk/knowledge/ipa-blog/six-steps-to-the-effectiveness-awards-entry-finish-line/",
+    "https://www.canneslions.com/awards/lions/creative-strategy/what-you-need-to-know",
+    "https://www.thedrum.com/news/2025/04/24/the-great-pitch-theater-debate-should-agencies-go-big-or-keep-it-simple"
+   ]
+  },
+  {
+   "id": "evidence_trace",
+   "name": "Number and claim traceability",
+   "weight_percent": 14,
+   "what_good_looks_like": "Every displayed number resolves to a brief field, client document figure, research pin, reviewed finding or explicit calc. No rejected finding or bad pin cited. Unverified findings flagged as agent-derived. Quotes labelled illustrative unless sourced.",
+   "what_bad_looks_like": "A figure in none of the inputs, a rejected finding cited, many numbers on slides with no ref, a low-confidence number shown as fact.",
+   "anchors": {
+    "one": "Any number in none of the inputs, any rejected or bad-pin citation, or more than 25 percent of displayed numbers lack a ref.",
+    "three": "No invented numbers or rejected citations, but 10 to 25 percent of numbers lack a ref on their own slide, or unverified findings not flagged.",
+    "five": "Zero invented numbers, zero rejected citations, at least 95 percent of numbers carry a resolving ref, every unverified finding flagged."
+   },
+   "check": "code",
+   "code_check_idea": "From deck.json: numbers_trace, rejected_used, unknown_ref, bare_claim, quote_source errors must be 0 (any error scores 1); numbers_uncited / numbers displayed: at most 5 percent for a 5, at most 25 percent for a 3; unverified_fig warnings.",
+   "sources": [
+    "https://arxiv.org/html/2306.05685v4",
+    "https://democracy.brent.gov.uk/documents/s63020/Appendix%202%20-%20Invitation%20to%20Tender%20ITT%20evaluation%20criteria%20and%20scoring%20matrix.pdf",
+    "https://www.effie.org/wp-content/uploads/2025/04/2025_Effective-Entry-Guide.pdf"
+   ]
+  },
+  {
+   "id": "headline_fit_limits",
+   "name": "Headlines proven by their slide, and claims shown with their limits",
+   "weight_percent": 8,
+   "what_good_looks_like": "Each presented headline is a full-sentence claim its own slide supports. The deck names risks, assumptions, what else could explain a result, and a measurement plan with KPIs and baselines; it does not rest on one headline ROI number.",
+   "what_bad_looks_like": "Headlines that assert more than the body proves, certainty claimed, one hero ROI figure, withheld metrics with no explanation, no risks.",
+   "anchors": {
+    "one": "Under 40 percent of headlines supported, or any 'not supported' left in, or no risks or assumptions and outcomes presented as certain.",
+    "three": "40 to 79 percent supported, none 'not supported'; a risks slide exists but is generic or targets lack a baseline.",
+    "five": "At least 80 percent supported with quoted slide evidence in both judge orderings, a specific confounders and assumptions section, each target with a baseline and how it will be measured."
+   },
+   "check": "both",
+   "code_check_idea": "Share of claim_fit verdicts supported; stale verdicts; each verdict has a slide id and a quote that appears in the slide text; verdict identical when order reversed else tie; presence of a measurement slide with a KPI and a risks/assumptions slide.",
+   "sources": [
+    "https://www.effie.org/wp-content/uploads/2025/04/2025_Effective-Entry-Guide.pdf",
+    "https://www.canneslions.com/awards/lions/creative-effectiveness/what-you-need-to-know",
+    "https://ipa.co.uk/knowledge/ipa-blog/6-ipa-effectiveness-awards-myths/",
+    "https://ipa.co.uk/knowledge/ipa-blog/why-an-ipa-effectiveness-awards-submission-is-not-just-any-award-submission/",
+    "https://arxiv.org/abs/2305.17926"
+   ]
+  },
+  {
+   "id": "team_proof",
+   "name": "Team, delivery and honest proof",
+   "weight_percent": 10,
+   "what_good_looks_like": "The named day-to-day team with roles and relevant results, a specific how-we-work process, governance and a continuity plan. Team, credentials and quotes the client did not supply stay as labelled placeholders until a person fills them; none invented. Nothing agency-only on a client render.",
+   "what_bad_looks_like": "Senior-only team, no working team, a fabricated CV or case study, an unlabelled placeholder, internal strings on a client slide.",
+   "anchors": {
+    "one": "No named delivery team, or any invented CV or case study, or an unlabelled placeholder or agency-only text in the client render.",
+    "three": "All human-only slides labelled or filled; named team with roles but no relevant results, or generic process.",
+    "five": "Named day-to-day team with roles and specific results, clear process, governance and continuity plan, no placeholders left in the final render, every placeholder before that carries a specific To confirm action."
+   },
+   "check": "both",
+   "code_check_idea": "Slides in HUMAN_ONLY_TYPES: placeholder label present, 'To confirm:' present, count of unfilled (readiness, not penalty before handoff); internal_leak and quote_source errors 0; named people with roles; process and continuity items exist. Judge: is this the real working team.",
+   "sources": [
+    "https://democracy.brent.gov.uk/documents/s63020/Appendix%202%20-%20Invitation%20to%20Tender%20ITT%20evaluation%20criteria%20and%20scoring%20matrix.pdf",
+    "https://www.campaigncanada.ca/article/five-factors-making-or-breaking-an-agency-pitch/4p6dbn0gryk3k4b1bkw1zash40",
+    "https://aargroup.co.uk/?p=3449",
+    "https://archive.soz.si/sites/default/files/wfa_eaca_pitch_guidelines.pdf",
+    "https://www.gao.gov/assets/b-418318.pdf"
+   ]
+  },
+  {
+   "id": "commercials_ask",
+   "name": "Investment, options and the ask",
+   "weight_percent": 6,
+   "what_good_looks_like": "An investment section sized to the stated budget, simple and auditable, two or three options differing in scope with one recommended, value framed as outcome for cost, a separate social-value section where required, and an explicit closing ask with a next step.",
+   "what_bad_looks_like": "Missing or vague price, no budget fit, more than three priced options with no recommendation, social value as a footnote, no ask.",
+   "anchors": {
+    "one": "No investment information, or no explicit ask, or a required social-value or cost criterion unanswered.",
+    "three": "A single price or an ask is present but the price is not tied to the stated budget, or options without a recommendation or differing only in price.",
+    "five": "Investment tied to the stated budget with breakdown, two or three scope-differentiated options with one recommended, value framed by outcome, required social value scored separately, a specific ask and next step."
+   },
+   "check": "both",
+   "code_check_idea": "Investment slide present (figure or labelled placeholder, a placeholder scores incomplete not invented); total vs brief budget field; count of priced options (flag more than 3 without a recommended flag); social-value slide when the brief has the criterion; close slide holds an ask.",
+   "sources": [
+    "https://assets.publishing.service.gov.uk/media/64901fcc5f7bb700127fac5e/Sourcing_Playbook_Final.pdf",
+    "https://archive.davidairey.com/dealing-with-designers/pricing-creativity-blair-enns/",
+    "https://pubmed.ncbi.nlm.nih.gov/11138768/",
+    "https://www.ycombinator.com/blog/how-to-pitch-your-company/",
+    "https://www.campaigncanada.ca/article/five-factors-making-or-breaking-an-agency-pitch/4p6dbn0gryk3k4b1bkw1zash40"
+   ]
+  },
+  {
+   "id": "presentability",
+   "name": "Order, skim test, craft and a memorable close",
+   "weight_percent": 10,
+   "what_good_looks_like": "Answer-first order; full-sentence headlines that tell the whole story when read alone; at most 4 bullets and 2 lines per bullet; word budgets met; presented spine fits the slot with the rest in an appendix; no table of contents; the differentiator appears in the first three slides and is repeated in the last three with the ask.",
+   "what_bad_looks_like": "Topic-label titles, credentials first, dense bullets, text that repeats the speaker notes, a deck that overruns the slot, a close that fades into Q&A or an appendix.",
+   "anchors": {
+    "one": "Any word_budget error (over 125 percent), most titles are labels, presented count well over the slot, or no ask in the closing slides.",
+    "three": "Order broadly right, most titles are claims, a few word-budget warnings, ask present but the differentiator is not repeated at the close.",
+    "five": "Headlines alone give the argument in order, all non-label titles are sentences, no word_budget errors and at most one warning, no list over 4 items, fits the slot with an appendix split, differentiator in slides 1-3 and repeated in the last 3 with the ask."
+   },
+   "check": "both",
+   "code_check_idea": "word_budget, action_title, repeated_line, pitch_length; max list length; body-to-notes overlap; table-of-contents slide; ask in the last two presented slides; differentiator n-gram in first 3 and last 3. Skim test: a judge reads only the titles and says what the pitch is. The 18-slide and 2-minute defaults are unsourced agency rules of thumb.",
+   "sources": [
+    "https://www.ijee.ie/articles/Vol29-6/23_ijee2791ns.pdf",
+    "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2012.00230/full",
+    "https://memory.psych.missouri.edu/assets/doc/articles/2001/cowan-bbs-2001.pdf",
+    "https://www.dropbox.com/resources/docsend-pitch-deck-research",
+    "https://archive.soz.si/sites/default/files/wfa_eaca_pitch_guidelines.pdf",
+    "https://pubmed.ncbi.nlm.nih.gov/8857625/"
+   ]
+  }
+ ],
+ "tender_override": {
+  "rule": "When the deck is a tender response and the buyer's invitation states a weight for every scored criterion, the buyer's weights, order and criteria replace our default split and weights_source is 'brief'. Where the buyer names criteria that are not this rubric's nine ids, the buyer's list is recorded beside the run and the nine-criterion total keeps the profile's split, labelled 'default, not validated'. The compliance gate is pass/fail and is reported before any quality score.",
+  "weights_source_values": [
+   "brief",
+   "default_assumption"
+  ],
+  "default_label": "default, not validated"
+ },
+ "scale": {
+  "min": 1,
+  "max": 5,
+  "anchored_at": [
+   1,
+   3,
+   5
+  ],
+  "note": "Anchors are written for 1, 3 and 5; a judge may give 2 or 4 between them and must quote the slide number and a short passage before the score."
+ }
+}

@@ -1,0 +1,480 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck Maker run",
+  "description": "One deck run. `deck` is engine/deck/deck.schema.json's deck.json as the engine writes it; the rest is what the screens need around it.",
+  "type": "object",
+  "properties": {
+    "inputs": {
+      "type": "object",
+      "description": "What a deck is built from (ADR 0023, amended by 0028): the person's prompt text, documents they attach, and the brief and research read from data.upstream. The brief and research are derived, never stored here.",
+      "properties": {
+        "prompt": {
+          "type": "object",
+          "properties": {
+            "client": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "agency": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string",
+              "description": "The open prompt, of any length. Its n-th sentence is cited as prompt:<n>."
+            }
+          }
+        },
+        "kind": {
+          "enum": [
+            "agency",
+            "investor"
+          ]
+        },
+        "format": {
+          "enum": [
+            "pitch",
+            "full"
+          ]
+        },
+        "library": {
+          "type": "object",
+          "description": "Optional team-library brand kit and pictures. Off until the ADR 0023 amendment is approved.",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "documents": {
+          "type": "array",
+          "description": "The files the person attached (display list).",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "pages": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "draft",
+            "building",
+            "gate",
+            "done",
+            "failed"
+          ]
+        },
+        "stage": {
+          "type": "string"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sub": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "done",
+                  "now",
+                  "next",
+                  "failed"
+                ]
+              }
+            }
+          }
+        },
+        "gate": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The open gate. Nothing past it runs until a person approves.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "n": {
+              "type": "integer"
+            },
+            "of": {
+              "type": "integer"
+            },
+            "dex": {
+              "type": "string"
+            },
+            "beats": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "n": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "src": {
+                    "type": "string"
+                  },
+                  "basis": {
+                    "enum": [
+                      "brief",
+                      "research",
+                      "proposal",
+                      "placeholder"
+                    ]
+                  }
+                }
+              }
+            },
+            "more_beats": {
+              "type": "integer"
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "approvals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "deck": {
+      "type": "object",
+      "description": "deck.json: meta, order, slides keyed by id, requirements. Plus appendix_count.",
+      "properties": {
+        "meta": {
+          "type": "object",
+          "properties": {
+            "built_from": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "agency_pitch",
+                    "tender_response",
+                    "investor_seed",
+                    "credentials"
+                  ],
+                  "description": "The deck type the deck was built for."
+                }
+              }
+            },
+            "confirm": {
+              "type": "array",
+              "description": "What a person should confirm: every proposal, every figure only their own statement or a low-confidence pin supports, every slide still needing a person (engine intake.confirm_list).",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "proposal",
+                      "figure",
+                      "slide"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "why": {
+                    "type": "string"
+                  },
+                  "slide": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "verified": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            },
+            "confirm_summary": {
+              "type": "object",
+              "description": "total, verified, supplied, sourced, open, needs_person (engine intake.confirm_summary)."
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "description": "ref -> { kind, text }: what each cited ref says, for the Evidence tab.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "errors": {
+          "type": "integer"
+        },
+        "to_supply": {
+          "type": "integer"
+        },
+        "findings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "properties": {
+        "seconds": {
+          "type": "number"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        }
+      }
+    },
+    "upstream": {
+      "type": "object",
+      "description": "Frozen sources keyed by source document id (a brief, a research). Written by the host's spin-off; read-only for the app.",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "intake": {
+      "type": "object",
+      "description": "The a0 intake as the runner writes it, plus the person's answers (written by the app).",
+      "properties": {
+        "gaps": {
+          "type": "object",
+          "properties": {
+            "brief_fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "why": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "slide_types": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "why": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "questions": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
+              "allow_text": {
+                "type": "boolean"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {},
+                    "origin": {
+                      "enum": [
+                        "proposed",
+                        "asked",
+                        "default"
+                      ],
+                      "description": "Where the option came from. The inferred deck type is 'proposed'."
+                    },
+                    "source": {
+                      "description": "The words in the person's own material the option rests on: a quote string, or { quote }.",
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "quote": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "kind": {
+                "enum": [
+                  "ask",
+                  "supply"
+                ],
+                "description": "'supply' is a card for something only the person knows (team, credentials, budget split, options, decision date). Free text, one item per line, skippable. Its answer fills the slide named by `fills`."
+              },
+              "fills": {
+                "type": "string",
+                "description": "A supply card: the human-only slide type its answer fills."
+              },
+              "skippable": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "answers": {
+          "type": "object",
+          "description": "qid -> the person's answer or skip.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "option_id": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              },
+              "skipped": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "verified": {
+          "type": "object",
+          "description": "confirm ref -> the person's verify decision, written by the app (a human write). Only verified or supplied items count as sourced.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "research_request": {
+      "type": "object",
+      "description": "A request to strengthen with research. Recorded only: launching needs the server feature.",
+      "properties": {
+        "status": {
+          "enum": [
+            "asked"
+          ]
+        },
+        "at": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

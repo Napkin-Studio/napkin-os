@@ -1,0 +1,53 @@
+{
+ "stage": "b_storyline",
+ "produced_by": "recorded stand-in (invented)",
+ "reframe": {
+  "title": "The real question is how to make recycling the easy choice at home",
+  "line": "Households say they recycle but do not do it every week.",
+  "claims": [
+   {
+    "text": "Households say they recycle",
+    "refs": [
+     "prompt:1"
+    ],
+    "basis": "sourced"
+   }
+  ]
+ },
+ "insight": {
+  "title": "People recycle when it is easy and skip it when it is not",
+  "human_truth": "I mean to, then the bin day comes round.",
+  "evidence": [
+   {
+    "text": "The council wants recycling raised.",
+    "refs": [
+     "prompt:4"
+    ]
+   }
+  ]
+ },
+ "audience": {
+  "title": "Adults who mean well and run out of time",
+  "primary": "Adults aged 25 to 54 in the county.",
+  "refs": [
+   "prompt:5"
+  ]
+ },
+ "proposition": {
+  "rtbs": [
+   {
+    "text": "The council sets the target in its own words",
+    "refs": [
+     "prompt:4"
+    ]
+   }
+  ]
+ },
+ "from_to": {
+  "from": "Recycling is a chore",
+  "to": "Recycling is a habit",
+  "refs": [
+   "prompt:4"
+  ]
+ }
+}

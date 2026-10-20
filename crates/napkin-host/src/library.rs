@@ -1285,6 +1285,42 @@ mod tests {
     }
 
     #[test]
+    fn spinoff_targets_lists_a_deck_for_brief_and_research_sources() {
+        let store = MemStore::default();
+        install_template_app(
+            &store,
+            "Deck Maker",
+            "ie.napkin.deck-maker",
+            Some(SpinoffSpec {
+                accepts: vec![
+                    "ie.napkin.brief-maker".into(),
+                    "ie.napkin.campaign-research".into(),
+                ],
+                upstream: true,
+                ..Default::default()
+            }),
+        );
+        for source in ["ie.napkin.brief-maker", "ie.napkin.campaign-research"] {
+            let ids: Vec<String> = spinoff_targets(&store, Some(source))
+                .into_iter()
+                .map(|t| t.app_id)
+                .collect();
+            assert!(
+                ids.contains(&"ie.napkin.deck-maker".to_string()),
+                "{source}: {ids:?}"
+            );
+        }
+        let ids: Vec<String> = spinoff_targets(&store, Some("ie.napkin.film"))
+            .into_iter()
+            .map(|t| t.app_id)
+            .collect();
+        assert!(
+            !ids.contains(&"ie.napkin.deck-maker".to_string()),
+            "{ids:?}"
+        );
+    }
+
+    #[test]
     fn spinoff_targets_surfaces_the_declared_graft() {
         let store = MemStore::default();
         install_template_app(

@@ -1,0 +1,53 @@
+{
+ "stage": "b_storyline",
+ "produced_by": "recorded stand-in (invented)",
+ "reframe": {
+  "title": "The real question is how to make the tap feel personal",
+  "line": "People value water but never link it to their own tap.",
+  "claims": [
+   {
+    "text": "People value water in the abstract",
+    "refs": [
+     "prompt:1"
+    ],
+    "basis": "sourced"
+   }
+  ]
+ },
+ "insight": {
+  "title": "Water is loved and ignored in the same breath",
+  "human_truth": "I care about water, I just never think about it.",
+  "evidence": [
+   {
+    "text": "The brief names the gap between caring and connecting.",
+    "refs": [
+     "prompt:1"
+    ]
+   }
+  ]
+ },
+ "audience": {
+  "title": "Households who never think about the tap",
+  "primary": "Adults 25 to 54 in the Lumen Water region.",
+  "refs": [
+   "prompt:3"
+  ]
+ },
+ "proposition": {
+  "rtbs": [
+   {
+    "text": "Lumen Water wants households to use less water",
+    "refs": [
+     "prompt:1"
+    ]
+   }
+  ]
+ },
+ "from_to": {
+  "from": "Water is a bill",
+  "to": "Water is something I look after",
+  "refs": [
+   "prompt:2"
+  ]
+ }
+}

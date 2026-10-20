@@ -1,0 +1,289 @@
+{
+ "meta": {
+  "client": "Fixture Client",
+  "project": "Fixture Project",
+  "agency": "[Agency]",
+  "kind": "investor",
+  "format": "pitch",
+  "stages": {
+   "i": "recorded stand-in (invented)"
+  },
+  "length": {
+   "max_slides": 10,
+   "minutes": 20,
+   "source": "a sketch: built from a short prompt alone"
+  },
+  "sketch": {
+   "label": "SKETCH · built from a short prompt: to check and extend before use",
+   "tier": "prompt",
+   "max_slides": 10,
+   "why": "built from a prompt, or a prompt and a little document text, alone: a sketch to check and extend"
+  },
+  "research_doc_id": null,
+  "coverage": {
+   "brief_fields": 11,
+   "brief_fields_filled": 0,
+   "how_to_win_points": 0,
+   "open_questions": 0,
+   "brief_source": "none"
+  }
+ },
+ "requirements": {},
+ "scoring": [],
+ "messages": [],
+ "territories": {},
+ "slides": {
+  "s01": {
+   "type": "title",
+   "section": "Opening",
+   "title": "Fenwick Labs",
+   "label": "Fenwick Labs",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Irrigation planning for small farms",
+     "refs": [
+      "prompt:1"
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "Raising a seed round.",
+     "refs": [
+      "prompt:1"
+     ]
+    },
+    {
+     "kind": "small",
+     "text": "SKETCH · built from a short prompt: to check and extend before use",
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "title"
+   },
+   "notes": "Evidence:\n[prompt:1] prompt: Fenwick Labs is raising a seed round of 1500000 euro to build tools that help small farms plan irrigation.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s02": {
+   "type": "problem",
+   "section": "The problem",
+   "title": "Small farms lose water to guesswork",
+   "label": "Small farms lose water to guesswork",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "Farms lose water to guesswork.",
+     "basis": null
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Farms lose water to guesswork",
+       "refs": [
+        "prompt:2"
+       ],
+       "basis": "sourced"
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Farms lose water to guesswork",
+     "refs": [
+      "prompt:2"
+     ],
+     "basis": "sourced"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "problem"
+   },
+   "notes": "Evidence:\n[prompt:2] prompt: Farms lose water to guesswork.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s03": {
+   "type": "traction",
+   "section": "Traction",
+   "title": "Twelve farms are in the pilot",
+   "label": "Twelve farms are in the pilot",
+   "blocks": [
+    {
+     "kind": "stats",
+     "items": [
+      {
+       "value": "12",
+       "label": "farms in the pilot",
+       "refs": [
+        "prompt:3"
+       ]
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "12 farms in the pilot",
+     "refs": [
+      "prompt:3"
+     ],
+     "basis": "sourced"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "traction"
+   },
+   "notes": "Evidence:\n[prompt:3] prompt: We have 12 farms in a pilot.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s04": {
+   "type": "ask",
+   "section": "The ask",
+   "title": "We are raising a seed round of 1500000 euro",
+   "label": "We are raising a seed round of 1500000 euro",
+   "blocks": [
+    {
+     "kind": "statement",
+     "text": "A seed round of 1500000 euro.",
+     "basis": null
+    },
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Build the irrigation planning tool",
+       "refs": [
+        "prompt:1"
+       ],
+       "basis": "sourced"
+      }
+     ]
+    }
+   ],
+   "claims": [
+    {
+     "text": "Build the irrigation planning tool",
+     "refs": [
+      "prompt:1"
+     ],
+     "basis": "sourced"
+    }
+   ],
+   "visual": {
+    "kind": "layout",
+    "hint": "ask"
+   },
+   "notes": "Evidence:\n[prompt:1] prompt: Fenwick Labs is raising a seed round of 1500000 euro to build tools that help small farms plan irrigation.",
+   "status": "drafted",
+   "requirements": [],
+   "footnotes": [
+    1
+   ]
+  },
+  "s05": {
+   "type": "appendix",
+   "section": "Appendix",
+   "title": "Appendix",
+   "label": "Appendix",
+   "blocks": [
+    {
+     "kind": "text",
+     "text": "Backup for questions: everything this presentation rests on."
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "appendix"
+   },
+   "notes": "Evidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s06": {
+   "type": "questions",
+   "section": "Appendix",
+   "title": "Questions only the founders can answer",
+   "label": "Questions only the founders can answer",
+   "blocks": [
+    {
+     "kind": "bullets",
+     "items": [
+      {
+       "text": "Who are the first paying customers?",
+       "basis": "meta"
+      }
+     ]
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "questions"
+   },
+   "notes": "Evidence:",
+   "status": "from_source",
+   "requirements": [],
+   "footnotes": []
+  },
+  "s07": {
+   "type": "appendix_sources",
+   "section": "Appendix",
+   "title": "Sources",
+   "label": "Sources",
+   "blocks": [
+    {
+     "kind": "table",
+     "rows": [
+      [
+       "#",
+       "Source"
+      ],
+      [
+       "[1]",
+       "The person's prompt"
+      ]
+     ],
+     "small": true,
+     "basis": "meta"
+    }
+   ],
+   "claims": [],
+   "visual": {
+    "kind": "layout",
+    "hint": "appendix_sources"
+   },
+   "notes": "",
+   "status": "from_source",
+   "requirements": []
+  }
+ },
+ "order": [
+  "s01",
+  "s02",
+  "s03",
+  "s04",
+  "s05",
+  "s06",
+  "s07"
+ ]
+}

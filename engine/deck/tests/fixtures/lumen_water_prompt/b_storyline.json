@@ -1,0 +1,39 @@
+{
+ "stage": "b_storyline",
+ "produced_by": "recorded stand-in (invented)",
+ "reframe": {
+  "title": "The real question is how to make the tap feel personal",
+  "line": "Households use water without thinking about it.",
+  "claims": [
+   {
+    "text": "Households need a reason to use less",
+    "refs": [
+     "prompt:1"
+    ],
+    "basis": "sourced"
+   }
+  ]
+ },
+ "insight": {
+  "title": "People care about water yet never think of their own tap",
+  "human_truth": "I care about water, I just never think about it.",
+  "evidence": []
+ },
+ "audience": {
+  "title": "Adults who never think about the tap",
+  "primary": "Adults aged 25 to 54 in the region.",
+  "refs": [
+   "prompt:3"
+  ]
+ },
+ "proposition": {
+  "rtbs": []
+ },
+ "from_to": {
+  "from": "Water is a bill",
+  "to": "Water is something I look after",
+  "refs": [
+   "prompt:1"
+  ]
+ }
+}

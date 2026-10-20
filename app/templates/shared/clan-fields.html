@@ -1107,6 +1107,10 @@ var ClanFields=(function(){
     if(caps.length) h+='<div class="clf-sec"><h3>What your material says</h3>'+caps.map(function(c){ var ci=captures()[c], m=materials()[ci.material_id];
       return ci.quote?'<blockquote class="clf-q said">'+esc(ci.quote)+'</blockquote><p class="clf-by">'+esc(matName(m))+(ci.status==='assumption'?' · assumed, not said':'')+'</p>'
         :'<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(textOf(ci.value))+'<small>'+(ci.status==='assumption'?'assumed, not said':'from your material')+'</small></span><b></b></button></div>'; }).join('')+'</div>';
+    // The prompt's own words, when the document keeps them (middleware-api §10.4), quoted; any other material by its name.
+    var typed=mats.filter(function(m){ var mt=materials()[m]; return mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text; });
+    mats=mats.filter(function(m){ return typed.indexOf(m)===-1; });
+    if(typed.length) h+='<div class="clf-sec"><h3>What you asked for</h3>'+typed.map(function(m){ return '<blockquote class="clf-q said">'+esc(clip(materials()[m].text,600))+'</blockquote><p class="clf-by">'+esc(matName(materials()[m]))+'</p>'; }).join('')+'</div>';
     if(mats.length) h+='<div class="clf-sec"><h3>From your material</h3><div class="clf-rows">'+mats.map(function(m){ var mt=materials()[m]; return '<button type="button" class="clf-row" data-open="'+esc(m)+'"><span>'+esc(mt.name||'A file')+'<small>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</small></span><b></b></button>'; }).join('')+'</div></div>';
     if(psgs.length) h+='<div class="clf-sec"><h3>What the library says</h3><div class="clf-rows">'+psgs.map(function(p){ var pg=passages()[p];
       return '<button type="button" class="clf-row" data-open="'+esc(p)+'"><span>'+esc(pg.citation||'A passage')+(pg.text?'<small>“'+esc(clip(pg.text,180))+'”</small>':'')+'</span><b></b></button>'; }).join('')+'</div></div>';

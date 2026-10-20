@@ -190,9 +190,14 @@ class Material:
     def readable(self) -> bool:
         return isinstance(self.text, str) and bool(self.text.strip())
 
-    def entry(self, received_at: str) -> dict:
+    def entry(self, received_at: str, with_text: bool = False) -> dict:
+        """The material's record. `with_text`: the prompt's own words are kept (at most 4000 characters, as
+        client-confidential as the rest), so Sources can quote what was asked; only when the document's
+        schema takes them (provenance.doc_allows)."""
         e = {"kind": self.kind, "name": self.name, "sha256": self.sha, "received_at": received_at,
              "licence": "client-confidential"}
+        if with_text and self.kind == "prompt" and self.readable:
+            e["text"] = self.text[:4000]
         if self.media_type:
             e["media_type"] = self.media_type
         if self.asset:

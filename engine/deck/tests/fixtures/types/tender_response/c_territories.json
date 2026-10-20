@@ -1,0 +1,26 @@
+{
+ "stage": "c",
+ "produced_by": "recorded stand-in (invented)",
+ "territories": [
+  {
+   "id": "t1",
+   "name": "Bin Day Ready",
+   "thought": "Make bin day easy",
+   "why": "It removes the effort",
+   "mood": "Practical",
+   "risks": "Dull",
+   "sketch": "A calendar on the fridge"
+  }
+ ],
+ "ranking": {
+  "order": [
+   "t1"
+  ],
+  "reasons": {
+   "t1": "Closest to the insight"
+  },
+  "by": "recorded"
+ },
+ "chosen": "t1",
+ "chosen_by": "recorded"
+}

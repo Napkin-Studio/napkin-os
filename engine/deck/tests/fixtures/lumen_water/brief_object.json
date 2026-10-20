@@ -1,0 +1,73 @@
+{
+ "loop2_golden": {
+  "fields": {
+   "background": {
+    "value": "Lumen Water is a regional water utility. Customers rarely think about water until a bill arrives.",
+    "source": "brief"
+   },
+   "objectives": {
+    "value": {
+     "attitudinal": "People see water as worth looking after",
+     "behavioural": "Cut household use by 5% in 12 months"
+    }
+   },
+   "audience": {
+    "value": "Households in the utility's region, adults 25 to 54."
+   },
+   "competitor_context": {
+    "value": null
+   },
+   "insight": {
+    "value": "People care about water in the abstract but never connect it to the tap they use."
+   },
+   "smp": {
+    "value": "Every drop has a story."
+   },
+   "reasons_to_believe": {
+    "value": [
+     "Lumen Water has served the region for 40 years"
+    ]
+   },
+   "desired_response": {
+    "value": "Make a small change at home this month."
+   },
+   "tone_world_assets": {
+    "value": "Warm, plain and local."
+   },
+   "budget_scope": {
+    "value": "EUR 120,000 gross"
+   },
+   "mandatories": {
+    "value": [
+     "Show the Lumen Water logo on every execution"
+    ]
+   }
+  },
+  "provenance": {
+   "insight": {
+    "kind": "generated",
+    "mark": "agent"
+   }
+  }
+ },
+ "loop1_capture": {
+  "how_to_win": {
+   "stated_evaluation_criteria": [
+    {
+     "point": "Clarity of idea"
+    }
+   ]
+  },
+  "fields": {
+   "a": 1
+  }
+ },
+ "loop2_brief": {
+  "open_questions": [
+   {
+    "question": "Is there a launch date?",
+    "why_it_matters": "timing"
+   }
+  ]
+ }
+}

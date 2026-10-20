@@ -1,0 +1,22 @@
+{
+ "stage": "d",
+ "produced_by": "recorded stand-in (invented)",
+ "campaign_line": "Every drop has a story.",
+ "idea": "Each household sees its own water story.",
+ "how_it_answers": "It links the tap to the person.",
+ "executions": [],
+ "channel_roles": [],
+ "measurement": [
+  {
+   "kpi": "Household use down 5%",
+   "baseline": null,
+   "how": "Utility meter data",
+   "refs": [
+    "prompt:2"
+   ]
+  }
+ ],
+ "process": [],
+ "timeline": [],
+ "messages": []
+}

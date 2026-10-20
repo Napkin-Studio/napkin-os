@@ -1,0 +1,59 @@
+# Deck type: investor deck (seed and pre-seed): a company raises money.
+# Source: GUIDE.md 3.3 (Sequoia order: purpose, problem, solution, why now, market, competition, business model,
+# team, financials, vision; DocSend: lead with purpose, keep product light, include competition, financials and
+# an ask, end with what you want; skim in about three minutes), NAPKIN-EDGE.md gap 10 (the order is an
+# assumption, kind experimental). `arrange: legacy` and empty guidance keep today's investor build unchanged.
+# The order of the sections is the stage i story's (assemble.build_investor), so the spine lists the types it may use, in the order
+# the prompt asks for (DECK-CRAFT-PLAN item 11): the round's objective (the milestones the money buys) at slide 2 with the ask known
+# early, why_now required, what_we_know right after traction, and the scariest number disclosed before slide 8.
+id: investor_seed
+label: "Investor deck"
+one_line: "A company raises a seed round: problem, why now, traction, market and the ask."
+kind: investor
+arrange: legacy
+spine: [title, objective, problem, why_now, solution, product, market, business_model, traction, what_we_know, competition, gtm,
+        financials, upside, founders, ask, risks, close, conflicts, questions]
+appendix: [conflicts, questions]
+stages: [a0, i, fit, e]
+length:
+  max_slides: 18
+  minutes: 20
+  respect_stated_limit: true   # a limit the inputs state for the presentation replaces max_slides (assemble.stated_limit)
+rubric_weights:
+  basis: "default, not validated"
+  source: "rubric.json 2026-10-16, adjusted per GUIDE.md 3.3 (our judgement, not a published split)"
+  weights: {compliance_gate: 6, problem_objective: 14, insight: 8, idea_chain: 14, evidence_trace: 14,
+            headline_fit_limits: 8, team_proof: 14, commercials_ask: 10, presentability: 12}
+  adjustments:
+    - {criterion: compliance_gate, from: 12, to: 6, why: "An investor sets no scored criteria; only the brief's own mandatories apply (GUIDE 3.3)."}
+    - {criterion: problem_objective, from: 12, to: 14, why: "Investors spend about 22 seconds on the purpose slide of successful decks: lead with purpose and problem (DocSend via TechCrunch 2019)."}
+    - {criterion: insight, from: 14, to: 8, why: "Why now and the problem carry the diagnosis here, not a human-truth insight (Sequoia: 'a clear why now')."}
+    - {criterion: team_proof, from: 10, to: 14, why: "Team and traction are what a seed investor backs; failed decks dwell on product (DocSend 2019)."}
+    - {criterion: commercials_ask, from: 6, to: 10, why: "Missing financials or ask lose: none of the unsuccessful 2022 decks had financials; only two-thirds of 2020 pre-seed decks had an ask (DocSend via TechCrunch)."}
+    - {criterion: presentability, from: 10, to: 12, why: "The deck is read in about three minutes and abandoned at 2m13s when failing: it must work as a skim (DocSend 2022)."}
+strict: {}
+prompt_guidance:
+  i:
+    - "The second slide is the round's objective: how much is being raised and the milestones the money buys, so the ask is known early; the ask slide near the end gives the use of funds."
+    - "why_now is required: one stated change in the world, cited. If the inputs state none, say so and ask; never invent one."
+    - "Put what_we_know (the non-obvious truth learned from customers, with a verbatim quote or a figure) right after traction."
+    - "Disclose the scariest number (burn, churn, concentration, a failed test) on a slide before the eighth, in the inputs' own words, with what you are doing about it."
+  fit:
+    - "Be strict with why_now and what_we_know: a change in the world or a lesson from customers stated without a cited figure or quote is not supported."
+questions:
+  - id: q_raise
+    text: "How much are you raising, and what will it pay for?"
+    options: []
+    allow_text: true
+    address: brief.budget_scope
+  - id: q_traction
+    text: "What is the one traction figure you can stand behind?"
+    options: []
+    allow_text: true
+    address: brief.reasons_to_believe
+  - id: q_alternative
+    text: "What do your customers use today instead of you?"
+    options: []
+    allow_text: true
+    address: brief.competitor_context
+sources: [GUIDE.md 3.3, NAPKIN-EDGE.md gap 10, rubric.json]

@@ -442,7 +442,9 @@ class BriefJob:
         patch, decisions, written, abstained = {}, [], [], []
         new = [m for m in self.mats if not m.known]
         if new:
-            patch["materials"] = {m.id: m.entry(t) for m in new}
+            from .provenance import doc_allows
+            keep = doc_allows(self.clan, "prompt_text")
+            patch["materials"] = {m.id: m.entry(t, with_text=keep) for m in new}
         patch["capture"] = {"built_at": t, "handler": self.handler, "items": cap["items"], "gaps": cap["gaps"],
                             "how_to_win": cap["how_to_win"], "ledger": cap["ledger"]}
         if score is not None:

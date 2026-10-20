@@ -1,13 +1,16 @@
 """draft_brief through Sai's engine, then the check loop (checkloop.py): the engine writes the
 brief; jev flags the parts that need rewriting; Jude says why; Dara rewrites them and fills
-what the engine left empty. The owner's flow, 2026-10-01."""
+what the engine left empty. The owner's flow, 2026-10-01.
+
+Dara's rewrites read the same evidence as the planned flow's (provenance.evidence) and pass through
+the same cleaner (provenance.clean_parts); the engine's own draft is not cleaned."""
 from __future__ import annotations
 
 from .. import reasoning as rsn
 from ..util import iso
 from . import capture as cap_stage
 from . import checkloop
-from . import fill as fill_stage
+from . import provenance as prov
 from .engine import EngineBriefJob
 from .fields import KEYS, LABELS, filled, get, put
 from .planned import DIMS, _short
@@ -20,30 +23,34 @@ class EngineCheckedBriefJob(EngineBriefJob):
         values = self._values()
         open_keys = [k for k in KEYS if k not in self.locked]
         said = "\n\n".join(m["text"] for m in cap_stage.material_payload(self.mats))[:12000]
-        view = fill_stage.research_view(self.clan, self.data0)
+        ev = prov.evidence(self.clan, self.data0)
+        client = prov.client_words(self.W, getattr(self, "capture", None), self.mats)
+        ctx = prov.Ctx(ev, client, {}, None, (), self.caps.model, self.caps.runlog)
         written = [k for k in open_keys if filled(values.get(k))]
         self.set_state(written, "judging", "judge")
-        res = checkloop.run(self, values, said, open_keys, {"facts": view["facts"], "findings": view["findings"]}, [])
+        res = checkloop.run(self, values, said, open_keys, ev, [],
+                            clean=lambda out, ks: prov.clean_parts(
+                                out, ctx, stage="engine_checked", keys=ks,
+                                prior=prov.prior_claims(self.chain, self.doc, ks)))
         patch, decisions = {}, []
         mat_ids = [m.id for m in self.mats if m.readable]
         for k, v in res["rewritten"].items():
             prior = self.writer.get(k)
+            note = rsn.point("Jude named it for a rewrite of the engine's draft", [prior]) if prior else \
+                rsn.point("The brief engine left it empty")
+            pts, cert, attn = prov.because(v, client, writer_note=note)
             cites = list(v["cites"]) + ([prior] if prior else [])
-            pts = [rsn.point(v["why"], cites or mat_ids)]
-            if prior is None:
-                pts.append(rsn.point("The brief engine left it empty", mat_ids))
             r = rsn.make(f"Rewrote the {LABELS.get(k, k)} on Jude's note." if prior else f"Wrote the {LABELS.get(k, k)}.",
-                         pts, rsn.certainty("medium" if v["basis"] in ("research", "library") else "low",
-                                            "rests on what it cites" if v["basis"] in ("research", "library")
-                                            else "a planner's proposal, to confirm with the client"),
-                         "the client says otherwise, or a person edits it", only_option="Jude named it for a rewrite")
+                         pts, cert, "the client says otherwise, or a person edits it",
+                         only_option="Jude named it for a rewrite", attention=attn)
+            claims = {"claims": v["claims"]} if v.get("claims") else {}
             if self.held.get(k):
                 d = self.dec(("propose", k, "check"), "edit", "propose", [k], cites, r, "drafter",
-                             proposed_value=v["value"], basis=v["basis"])
+                             proposed_value=v["value"], basis=v["basis"], **claims)
                 self.proposals.append({"field": k, "value": v["value"], "decision": d["id"]})
                 self.set_state([k], "proposed", "judge")
             else:
-                d = self.dec(("rework", k), "edit", "regenerate", [k], cites, r, "drafter", basis=v["basis"])
+                d = self.dec(("rework", k), "edit", "regenerate", [k], cites, r, "drafter", basis=v["basis"], **claims)
                 put(patch, k, v["value"])
                 self.set_state([k], "done", "judge")
             self.writer[k] = d["id"]
@@ -57,6 +64,10 @@ class EngineCheckedBriefJob(EngineBriefJob):
                           [{"check": "needs_rewrite", "method": "auto", "status": "pass" if read["p"].get(k, 0) < 0.5
                             else "review", "note": f"jev: {round(read['p'][k], 2)} that it needs rewriting"}]
                           if k in read["p"] else []} for k in KEYS}
+            for c in prov.code_verdicts(res["rewritten"]):  # code's claim verdicts: for a person, never a rewrite
+                fields[c["part"]]["checks"].append({"check": "claim_supported", "method": "auto",
+                                                    "status": "pass" if c["verdict"] == "supported" else "review",
+                                                    "note": _short(f"{c['claim']}: {c['note']}", 300)})
             summary = (f"jev flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)} part(s); Jude sent "
                        f"{len(res['todo'])} to Dara, who rewrote {len(res['rewritten'])}.") if res["before"] else "Checked."
             patch["review"] = {

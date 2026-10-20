@@ -1,0 +1,56 @@
+{
+ "stage": "d",
+ "produced_by": "recorded stand-in (invented)",
+ "campaign_line": "Ready for bin day.",
+ "idea": "Every household gets a simple weekly reminder.",
+ "how_it_answers": "It makes the habit easy.",
+ "executions": [
+  {
+   "channel": "outdoor",
+   "role": "Make the line famous",
+   "copy": [
+    "Ready for bin day."
+   ],
+   "answer": "Poster",
+   "visual": {
+    "kind": "image_prompt",
+    "prompt": "A bin by a front door"
+   }
+  }
+ ],
+ "channel_roles": [
+  {
+   "channel": "Outdoor",
+   "role": "Fame"
+  },
+  {
+   "channel": "Radio",
+   "role": "Reach"
+  }
+ ],
+ "measurement": [
+  {
+   "kpi": "Household recycling rate",
+   "baseline": null,
+   "how": "Council collection data",
+   "refs": [
+    "prompt:4"
+   ]
+  }
+ ],
+ "process": [
+  {
+   "step": "Week 1",
+   "text": "Kick off"
+  }
+ ],
+ "timeline": [
+  {
+   "phase": "Plan",
+   "when": "Month 1",
+   "refs": [],
+   "basis": "proposal"
+  }
+ ],
+ "messages": []
+}

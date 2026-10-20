@@ -8,7 +8,9 @@ need rewriting, Jude says why, Dara rewrites those parts.
      probability is logged and every time Jude disagrees with a flag is logged too.
   2. Jude (a model call) on the flagged and the empty parts only: does it really need work, why,
      and one instruction for Dara. Something only the client can supply is not rewritten.
-  3. Dara rewrites those parts in one call, the whole brief in view.
+  3. Dara rewrites those parts in one call, the whole brief in view, with each part's claims as they
+     stand; the caller's `clean` (provenance.clean_parts) says what each rewritten part rests on.
+     The loop holds no cleaning of its own, and no claim's kind or verdict puts a part in `todo`.
   4. jev again on what changed, for the log: did the rewrite help?
 
 jev not configured or not answering: the loop says so in the log and the brief stands as written.
@@ -17,7 +19,7 @@ from __future__ import annotations
 
 from ..jev import JevError, choice, noul
 from .fields import KEYS, LABELS, filled
-from .planned import DIMS, DRAFT_SYSTEM, WHAT, _short, draft_schema
+from .planned import DIMS, DRAFT_SYSTEM, REWRITE_NOTE, WHAT, _short, draft_schema
 
 FLAG_AT = 0.5
 
@@ -50,8 +52,10 @@ If the checker doubted that objective -> insight -> proposition -> proof holds, 
 which parts to change; otherwise chain.issue is null.
 For each BetterBriefs dimension the checker reads as missing, say in `dimensions` which parts would supply it
 and give one instruction (e.g. evaluation criteria: add to the desired response how the work will be judged);
-when only the client can supply it, put it in `questions` instead and leave its parts empty. Plain British
-English."""
+when only the client can supply it, put it in `questions` instead and leave its parts empty.
+`claims` says what each part rests on. A claim of kind "derived" shows its working: it is supported by its
+inputs, and a claim "to_confirm" is already marked for the client. Never ask for a rewrite only because a
+claim is worked out or marked to confirm. Plain British English."""
 
 
 def _obj(props):
@@ -103,9 +107,12 @@ def jev_read(job, values: dict, said: str, parts: list, what: str) -> dict | Non
     return {"p": p, "chain": got["chain"], "dims": dims, "score": score}
 
 
-def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: list, plan=None) -> dict:
+def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: list, plan=None, *, clean,
+        claims=None) -> dict:
     """The loop over the brief as it stands. Returns {"before", "after", "jude", "rewritten", "todo"}:
-    rewritten = {key: {value, basis, cites, builds_on_client, why}} from Dara, `why` being Jude's."""
+    rewritten = `clean(Dara's answer, the parts)` (provenance.clean_parts), `why` being Jude's. `claims`:
+    each part's claims as they stand, for Jude and the rewrite."""
+    claims = claims or {}
     rl = job.caps.runlog
     written = [k for k in open_keys if filled(values.get(k)) and k != "open_questions"]
     empty = [k for k in open_keys if not filled(values.get(k)) and k != "open_questions"]
@@ -124,7 +131,9 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
                "flagged": {k: round(before["p"][k], 3) for k in flagged} if before else {},
                "empty": empty, "chain_holds": round(before["chain"], 3) if before else None,
                "missing_dimensions": {d: DIM_Q[d] for d in missing},
-               "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or []}
+               "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
+               "claims": {k: [{x: c[x] for x in ("text", "kind", "cites", "working") if x in c} for c in cs]
+                          for k, cs in claims.items() if cs}}
     jude = job.caps.model.structured("explain_flags", JUDE_SYSTEM, payload, jude_schema(ask),
                                      max_tokens=6000)
     out["jude"] = jude
@@ -149,28 +158,15 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
     if not todo:
         return out
     pay = {"client_said": said[:8000], "plan": plan, "brief": {k: values.get(k) for k in KEYS if filled(values.get(k))},
-           "rewrite": todo, "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
-           "library": library, "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in todo}}
-    got = job.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + "\n\nRewrite ONLY the parts in `rewrite`, "
-                                    "following each instruction, keeping the rest of the brief in mind.", pay,
+           "rewrite": todo, "prior_claims": {k: claims.get(k) or [] for k in todo},
+           "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
+           "research_upstream": evidence.get("research") or [], "library": library,
+           "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in todo}}
+    got = job.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, pay,
                                     draft_schema(list(todo)), max_tokens=8000)
-    ids = {f["id"] for f in evidence.get("facts") or []} | {x["id"] for x in evidence.get("findings") or []} | \
-        {x["id"] for x in library}
-    from .fields import clean
-    for k, r in (got or {}).items():
-        if k not in todo or not isinstance(r, dict):
-            continue
-        v = clean(k, r.get("value"))
-        if v is None:
-            continue
-        cites = [c for c in dict.fromkeys(r.get("cites") or []) if c in ids]
-        basis = r.get("basis") if r.get("basis") in ("client", "research", "library", "assumption") else "assumption"
-        if basis in ("research", "library") and not cites:
-            basis = "assumption"
+    for k, v in clean(got, list(todo)).items():
         why = ((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue") or ""
-        out["rewritten"][k] = {"value": v, "basis": basis, "cites": cites, "builds_on_client": bool(r.get("builds_on_client")),
-                               "why": _short(f"Rewritten on Jude's note: {why}", 300), "revised": True,
-                               "downgraded": False}
+        out["rewritten"][k] = {**v, "why": _short(f"Rewritten on Jude's note: {why}", 300), "revised": True}
     after_vals = {**values, **{k: v["value"] for k, v in out["rewritten"].items()}}
     out["after"] = jev_read(job, after_vals, said, [k for k in open_keys if filled(after_vals.get(k))
                                                      and k != "open_questions"], "jev_after")

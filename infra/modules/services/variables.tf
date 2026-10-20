@@ -80,7 +80,13 @@ variable "web_dogfood" {
 }
 
 variable "middleware_runlog" {
-  description = "Keep the middleware's per-job run log (sizes, costs; no bodies) on web's EFS under /data/_runlog, where napkin-web serves and purges it (NAPKIN_RUNLOG_DIR; features/dogfood-log-quality.clan). Dogfood environments only."
+  description = "Keep the middleware's per-job run log (sizes and costs; bodies only with middleware_runlog_bodies) on web's EFS under /data/_runlog, where napkin-web serves and purges it (NAPKIN_RUNLOG_DIR; features/dogfood-log-quality.clan). Dogfood environments only."
+  type        = bool
+  default     = false
+}
+
+variable "middleware_runlog_bodies" {
+  description = "Also log what each model call and search sent and got back in the run log (NAPKIN_RUNLOG_BODIES=1; middleware-api.md §10.16, features/brief-fact-provenance.clan). Needs middleware_runlog. Staging only, never production: the bodies hold client material."
   type        = bool
   default     = false
 }

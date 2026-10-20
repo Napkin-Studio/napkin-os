@@ -1,0 +1,41 @@
+# Deck type: agency pitch (a marketer briefs an agency; strategy, one idea, plan, proof, price, ask).
+# Source: GUIDE.md 3.1 and 4.1 (answer first: situation and objective, insight, one idea, plan, proof, team,
+# investment, ask), rubric.json (default split unchanged). The spine is today's agency assembly (assemble.build),
+# so `arrange: legacy` keeps the existing arrangement and a deck builds exactly as before types existed.
+# prompt_guidance is empty on purpose: a recorded or live run of the original agency deck must not change;
+# add lines here (they are appended to that stage's prompt) to tune it. Length: spec.PITCH_MAX, 18 presented,
+# is a Napkin default, not sourced (GUIDE 4.2).
+id: agency_pitch
+label: "Agency pitch"
+one_line: "An agency answers a client's brief with strategy, one idea, a plan and a price; the default."
+kind: agency
+arrange: legacy
+spine: [title, objective, brief_restated, scoring, real_question, chart, insight, audience, proposition, competition, territory,
+        territory_choice, idea, execution, channel_roles, innovation, guardrails, measurement, measurement_plan, process, timeline,
+        risks, investment, team, credentials, next_step, questions]
+appendix: [brief_restated, scoring, territory, territory_choice, process, questions, conflicts]
+stages: [a0, a, b, c, d, fit, e]
+length:
+  max_slides: 18
+  minutes: 30
+  respect_stated_limit: true   # a limit the inputs state for the presentation replaces max_slides (assemble.stated_limit)
+rubric_weights:
+  basis: "default, not validated"
+  source: "rubric.json 2026-10-16 (our own split; IPA/ISBA and TrinityP3 give none)"
+  weights: {compliance_gate: 12, problem_objective: 12, insight: 14, idea_chain: 14, evidence_trace: 14,
+            headline_fit_limits: 8, team_proof: 10, commercials_ask: 6, presentability: 10}
+  adjustments: []
+strict: {}
+prompt_guidance: {}
+questions:
+  - id: q_objective_number
+    text: "What number should move, from what baseline, by when?"
+    options: []
+    allow_text: true
+    address: brief.objectives
+  - id: q_budget
+    text: "Is there a budget or a scope the work must fit?"
+    options: []
+    allow_text: true
+    address: brief.budget_scope
+sources: [GUIDE.md 3.1, GUIDE.md 4.1, rubric.json, NAPKIN-EDGE.md 3]

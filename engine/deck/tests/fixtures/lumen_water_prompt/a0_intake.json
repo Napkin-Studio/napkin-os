@@ -1,0 +1,74 @@
+{
+ "stage": "a0_intake",
+ "produced_by": "recorded stand-in (invented)",
+ "fields": {
+  "background": {
+   "value": "Lumen Water wants households to use less water.",
+   "kind": "prompt",
+   "refs": [
+    "prompt:1"
+   ]
+  },
+  "objectives": {
+   "value": {
+    "behavioural": "Cut household use by 5% in 12 months"
+   },
+   "kind": "prompt",
+   "refs": [
+    "prompt:2"
+   ]
+  },
+  "audience": {
+   "value": "Adults aged 25 to 54 in the region.",
+   "kind": "prompt",
+   "refs": [
+    "prompt:3"
+   ]
+  },
+  "insight": {
+   "value": "People care about water but do not link it to the tap they use.",
+   "kind": "proposal",
+   "refs": []
+  }
+ },
+ "abstained": [
+  "competitor_context",
+  "smp",
+  "reasons_to_believe",
+  "desired_response",
+  "tone_world_assets",
+  "budget_scope",
+  "mandatories"
+ ],
+ "gaps": {
+  "brief_fields": [],
+  "slide_types": []
+ },
+ "questions": [
+  {
+   "id": "q_budget",
+   "text": "Is there a budget for the work?",
+   "options": [
+    {
+     "id": "o_small",
+     "label": "Under 100,000",
+     "value": "under 100,000"
+    },
+    {
+     "id": "o_large",
+     "label": "Over 100,000",
+     "value": "over 100,000"
+    }
+   ],
+   "allow_text": true,
+   "address": "brief.budget_scope"
+  },
+  {
+   "id": "q_tone",
+   "text": "How should it sound?",
+   "options": [],
+   "allow_text": true,
+   "address": "brief.tone_world_assets"
+  }
+ ]
+}
