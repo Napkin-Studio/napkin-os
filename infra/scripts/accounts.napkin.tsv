@@ -9,10 +9,11 @@ developer@napkin	Sai
 mock@napkin	Mock tester
 hello@napkin	Hello tester
 # Outside testers (owner, 2026-10-20). The agency is the email domain without
-# its ending; people on a generic mail provider (gmail, outlook) get a studio
-# named for their practice instead.
+# its ending (chloe@chloehanratty.com -> chloe@chloehanratty). People on a generic
+# mail provider (gmail, outlook) get <surname>-studio (shane@kelly-studio); if
+# two share a surname, use <first>-<surname>-studio.
 chloe@chloehanratty	Chloe Hanratty
-shane@kelly-strategy	Shane Kelly
-dael@wood-strategy	Dael Wood
+shane@kelly-studio	Shane Kelly
+dael@wood-studio	Dael Wood
 marcus@six	Marcus Culloty
 # Not confirmed yet: kris@boysandgirls	Kris Clarkin
