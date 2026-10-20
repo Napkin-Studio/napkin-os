@@ -66,6 +66,8 @@ def default_config() -> dict:
     # Connected video runs here too (features/connected-video.clan): the mock makes takes with visible cuts
     # and lands on a last frame, and the real stitch finds the cuts and cuts a window's stills.
     cfg["flags"]["connectedVideo"] = True
+    # Make and Edit (features/make-and-edit.clan): the two rooms over one Bin.
+    cfg["flags"]["makeAndEdit"] = True
     return cfg
 
 

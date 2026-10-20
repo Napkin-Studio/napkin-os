@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           build=$(mktemp -d)
-          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py splice.py cutdown.py endcard/*/*.png)
+          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py splice.py cutdown.py timeline.py endcard/*/*.png)
           layers=$(aws lambda get-function-configuration --function-name "$STITCH_FN" --query 'length(Layers || `[]`)' --output text)
           if [ "$layers" = "0" ] || [ "${{ inputs.rebuild_ffmpeg_layer }}" = "true" ]; then
             # The pinned ffmpeg (licences/binaries.toml): upstream first, then our mirror.
