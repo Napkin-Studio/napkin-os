@@ -33,7 +33,8 @@ function project(): ProductionDocument {
   frame('frame_3', 'shot_2', 2, '1')
   frame('frame_2', 'shot_2', 1, '9')
   const take = (id: string, shot: string, version: number, c: string, kind: 'generated' | 'mock' = 'generated') =>
-    put(d.takes, { id, shot_id: shot, version, asset: SHA(c), job_id: `job_${id}`, crew: 'wren', kind, model: 'm', provider: 'runway', duration_s: 3, segments: [] })
+    put(d.generations, { id, kind: 'clip', shot_ids: [shot], asset: SHA(c), duration_s: 3, state: 'ready', job_id: `job_${id}`, crew: 'wren', provider: 'runway', inputs: { model: 'm' },
+      ...(kind === 'mock' ? { mock: true as const } : {}), created_at: `2026-10-13T10:0${version}:00Z`, by: 'human:p_maya01' })
   take('take_1', 'shot_9', 1, '2')
   take('take_2', 'shot_2', 1, '3')
   take('take_3', 'shot_2', 2, '4', 'mock')

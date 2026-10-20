@@ -10,7 +10,7 @@ import { effectiveConfig } from '../capabilities'
 import { SHEETS } from '../contracts/load'
 import type { CustomData, DocJob, ProductionDocument, Review } from '../contracts/types'
 import { JobRunner } from '../jobs/runner'
-import { beatsOf, edlItemFor, framesOf, mainScript, scenesOf, shotNumber, shotsOf } from '../model/selectors'
+import { beatsOf, cutItemFor, framesOf, mainScript, scenesOf, shotNumber, shotsOf } from '../model/selectors'
 import { rankBetween } from '../../../clan-store/src'
 import type { ModelStore } from '../model/store'
 import { addFrame, addShots, addTake, content, id, job, MAYA, modelStore, SHA, T } from '../test/model'
@@ -44,7 +44,7 @@ function fixture(d: ProductionDocument) {
   const t2 = addTake(d, s1, SHA('2'), cj[1], { pick: true, parent: t1 })
   const t3 = addTake(d, s2, SHA('3'), cj[2], { pick: true })
   const note: Review = {
-    id: id('rev'), v: 1, field_v: {}, target: { kind: 'take', id: t2.id }, shot_id: s1.id, at_s: 1.2, window: { from_s: 0, to_s: 2 }, by: `human:${MAYA.id}`, state: 'open', text: 'brighter please', created_at: T,
+    id: id('rev'), v: 1, field_v: {}, target: { kind: 'generation', id: t2.id }, shot_id: s1.id, at_s: 1.2, window: { from_s: 0, to_s: 2 }, by: `human:${MAYA.id}`, state: 'open', text: 'brighter please', created_at: T,
   }
   d.reviews[note.id] = note
   return { gFront, gFront2, ref, s1, s2, s3, f1, f2, f3, t1, t2, t3, note }
@@ -182,9 +182,9 @@ describe('delete and undo, in the .clan', () => {
     expect(shotNumber(after, s2.id)).toBe(1)
     expect(Object.values(after.frames).every((f) => f.shot_id !== s1.id)).toBe(true)
     expect(Object.keys(after.frames)).toHaveLength(1)
-    expect(Object.values(after.takes).map((t) => t.shot_id)).toEqual([s2.id])
+    expect(Object.values(after.generations).map((t) => t.shot_ids)).toEqual([[s2.id]])
     expect(after.reviews[note.id]).toBeUndefined()
-    expect(edlItemFor(after, s1.id)).toBeUndefined()
+    expect(cutItemFor(after, s1.id)).toBeUndefined()
     expect(content(after.jobs as never)).toEqual((before as ProductionDocument).jobs)
     expect(validate(after), JSON.stringify(validate.errors)).toBe(true)
     const e = await entries(s)
@@ -195,18 +195,18 @@ describe('delete and undo, in the .clan', () => {
     expect(content(s.get())).toEqual(before)
   })
 
-  it('a clip version: its notes go, the cut falls back to its parent clip; the last one may go too', async () => {
+  it('a take: its notes go, its clip in the cut falls back to its parent take; the last one may go too', async () => {
     const { s, s1, t1, t2, t3, note } = await seeded(fixture)
     const before = content(s.get())
     await deleteFrom(s, (doc) => removeTake(doc, t2.id))
     await s.flush()
-    expect(Object.keys(s.get().takes)).toEqual([t1.id, t3.id])
-    expect(edlItemFor(s.get(), s1.id)!.pick).toEqual({ current: t1.id, alternates: [] })
+    expect(Object.keys(s.get().generations)).toEqual([t1.id, t3.id])
+    expect(cutItemFor(s.get(), s1.id)!.source?.generation_id).toBe(t1.id)
     expect(s.get().reviews[note.id]).toBeUndefined()
     await deleteFrom(s, (doc) => removeTake(doc, t1.id)) // the last clip may go too
     await s.flush()
-    expect(Object.keys(s.get().takes)).toEqual([t3.id])
-    expect(edlItemFor(s.get(), s1.id)!.pick).toBeUndefined()
+    expect(Object.keys(s.get().generations)).toEqual([t3.id])
+    expect(cutItemFor(s.get(), s1.id)).toBeUndefined() // nothing left to play: its clip goes
     expect((await entries(s)).map((x) => x.action)).toEqual([`delete clip ${t2.id} (shot 1, v2)`, `delete clip ${t1.id} (shot 1, v1)`])
     await s.undo()
     await s.undo()

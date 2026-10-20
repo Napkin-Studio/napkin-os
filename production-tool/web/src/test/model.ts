@@ -6,7 +6,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { ClanDocumentStore, newUlidId, rankBetween, ranksBetween, type Persistence, type Person, type SerializedUndo } from '../../../clan-store/src'
-import type { DocAsset, DocJob, EdlItem, Frame, ProductionDocument, Shot, Take } from '../contracts/types'
+import type { DocAsset, DocJob, Frame, Generation, ProductionDocument, Shot } from '../contracts/types'
+import { pickInCut } from '../doc/cutWrites'
 import { mainScript, mainStoryboard, mainVideo, scenesOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 
@@ -71,27 +72,18 @@ export function addFrame(d: ProductionDocument, shot: Shot, sha: string, opts: {
   return f
 }
 
-export function addTake(d: ProductionDocument, shot: Shot, sha: string, j: DocJob, opts: { pick?: boolean; parent?: Take } = {}): Take {
-  const version = Object.values(d.takes).filter((t) => t.shot_id === shot.id).length + 1
-  const t = base('take', {
-    shot_id: shot.id, version, asset: sha, job_id: j.id, crew: 'wren', kind: 'mock', model: 'mock', provider: 'mock', duration_s: shot.duration_s, segments: [],
-    ...(opts.parent ? { parent_id: opts.parent.id } : {}),
-  }) as Take
-  d.takes[t.id] = t
+/** A ready take (a generation) of one shot, made by job `j`; with `pick` it is the shot's clip in the main
+ *  video's cut (its V1 clip, as the Video editor puts it there). */
+export function addTake(d: ProductionDocument, shot: Shot, sha: string, j: DocJob, opts: { pick?: boolean; parent?: Generation } = {}): Generation {
+  const g = base('gen', {
+    kind: opts.parent ? 'change' : 'clip', ...(opts.parent ? { parent_id: opts.parent.id } : {}),
+    inputs: { model: 'mock', length_s: shot.duration_s }, shot_ids: [shot.id], asset: sha, duration_s: shot.duration_s, state: 'ready',
+    job_id: j.id, provider: 'mock', crew: 'wren', mock: true, created_at: j.created_at ?? T, by: `human:${MAYA.id}`,
+  }) as Generation
+  d.generations[g.id] = g
   d.assets[sha] ??= asset(sha, 'video', { duration_s: shot.duration_s })
-  if (opts.pick) {
-    const v = mainVideo(d)!
-    let entry = Object.entries(v.edl).find(([, x]) => x.shot_id === shot.id)
-    if (!entry) {
-      const last = Object.values(v.edl).map((x) => x.rank).sort().at(-1) ?? null
-      const item: EdlItem = { rank: ranksBetween(last, null, 1)[0], kind: 'shot', shot_id: shot.id }
-      entry = [id('edl'), item]
-      v.edl[entry[0]] = item
-    }
-    const item = entry[1]
-    item.pick = { current: t.id, alternates: [...(item.pick ? [item.pick.current] : []), ...(item.pick?.alternates ?? [])] }
-  }
-  return t
+  if (opts.pick) pickInCut(d, mainVideo(d)!.id, shot.id, g.id)
+  return g
 }
 
 /** Plain JSON, for comparing documents. */

@@ -14,7 +14,7 @@ import type { FollowItem } from '../doc/ui'
 import { selectedTake, shotQuality } from '../jobs/clips'
 import { beginFollow, cancelFollow, followState, makeAwaited, planWords, restAsTheyAre } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
-import { frameStale, takeStale } from '../jobs/stale'
+import { frameStale } from '../jobs/stale'
 import { ctxReader, jobCtx } from '../jobs/runner'
 import { shotFrameAsset, shotNumber, shotsOf } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
@@ -85,8 +85,7 @@ function Plan({ onMinimise }: { onMinimise: () => void }) {
       return { key: `f:${s.id}`, what: `Frame ${shotNumber(doc, s.id)}`, why: mark ? behindLabel(doc, mark) : selectedFrame(doc, s.id) ? 'Carries the look forward' : 'Not made yet' }
     }),
     ...shots.filter((s) => plan.clips.includes(s.id)).map((s) => {
-      const mark = takeStale(doc, s.id)
-      return { key: `c:${s.id}`, what: `Clip ${shotNumber(doc, s.id)}`, why: mark ? behindLabel(doc, mark) : plan.frames.includes(s.id) ? 'Follows its new frame' : selectedTake(doc, s.id) ? 'Carries forward' : 'Not made yet' }
+      return { key: `c:${s.id}`, what: `Clip ${shotNumber(doc, s.id)}`, why: plan.frames.includes(s.id) ? 'Follows its new frame' : selectedTake(doc, s.id) ? 'Carries forward' : 'Not made yet' }
     }),
     ...(plan.ad ? [{ key: 'ad', what: 'The ad', why: 'Follows the new clips' }] : []),
   ]
@@ -144,7 +143,8 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
   const options = modelChoicesFor(item.kind, config)
   const sent = run.models?.[item.kind]
   const choice = pick ?? (sent && options.find((o) => keyOf(o) === keyOf(sent))) ?? options[0]
-  const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : takeStale(doc, shot.id)
+  // Takes are never out of date (features/make-and-edit.clan): only a frame has a mark.
+  const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : undefined
   const job = jobId ? doc.jobs[jobId] : undefined
   const making = !!job && !['completed', 'failed', 'cancelled'].includes(job.state)
   const why = making ? (mark ? 'Updating…' : 'Making it…') : mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'

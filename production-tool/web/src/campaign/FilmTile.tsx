@@ -121,7 +121,7 @@ function ShotCrop({ size, set, shots, onSave, onClose }: {
   const W = 300
   const k = W / take.w
   const H = Math.round(take.h * k)
-  const r = w?.take_id ? set.reframes?.[reframeKey(w.take_id, size.delivery)] : undefined
+  const r = w?.generation_id ? set.reframes?.[reframeKey(w.generation_id, size.delivery)] : undefined
   const pick = (id: Id) => {
     setShotId(id)
     const ww = size.edl?.find((x) => x.shot_id === id)

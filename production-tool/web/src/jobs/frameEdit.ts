@@ -28,7 +28,7 @@ import { assetRef } from './assets'
 import { croppedTo, landingWhy } from './handlers'
 import { ownAspect, type FrameDeps } from './frames'
 import { jobShot, refsFor } from './select'
-import { editShot, refreshClipStale } from './stale'
+import { editShot } from './stale'
 
 // ── the words (ui-behaviour 3.11) ──────────────────────────────────────────────────────────────
 
@@ -225,9 +225,10 @@ export function applyFrameEdit(d: ProductionDocument, jobId: string, shotId: str
     shot.pick = { current: frame.id, ...(alternates?.length ? { alternates } : {}) }
     if (shot.status === 'locked') shot.status = 'needs_review'
   }
-  refreshClipStale(d, shotId)
+  // Its clip in the cut was made from another frame: said, never marked (features/make-and-edit.clan).
   const take = currentTake(d, shotId)
-  const clipStale = !!take && Object.values(d.stale).some((m) => m.target.kind === 'take' && m.target.id === take.id)
+  const picked = frame ?? currentFrame(d, shotId)
+  const clipStale = !!take && !!picked && !(take.job_id && d.jobs[take.job_id]?.input_hashes?.includes(picked.asset))
   return { ...(frame ? { frameId: frame.id } : {}), fields, clipStale }
 }
 

@@ -13,7 +13,7 @@
 import { crewFor } from '../../../clan-store/src'
 import type {
   AgentBlock, AnswerConflict, Ask, AskAnswer, ClipQuality, ContractError, CrewId, DocAsset, DocJob, Job, JobAnswer, JobInput, JobInputRow, JobRequest, JobState,
-  LinkEndpoint, LogEntry, Mime, ModelChoice, Op, ProductionDocument, Region,
+  LinkEndpoint, LogEntry, Mime, ModelChoice, Op, ProductionDocument, Region, RemakeWith,
 } from '../contracts/types'
 import { CONTRACT_VERSION, TERMINAL_STATES } from '../contracts/types'
 import { systemUpdate, type DocumentStore } from '../doc/store'
@@ -68,6 +68,8 @@ export interface SubmitExtras {
   /** clip, clip_edit (features/clip-quality.clan): the size to make, and Remake as Final's draft job. */
   quality?: ClipQuality
   promoteFrom?: string
+  /** Change this… (features/make-and-edit.clan): a new take of a parent with one thing changed. */
+  remakeWith?: RemakeWith
 }
 
 /** A person's answer to a job's question. */
@@ -215,6 +217,7 @@ export class JobRunner {
       ...(modelChoice ? { modelChoice } : {}),
       ...(extras.quality && (op === 'clip' || op === 'clip_edit') ? { quality: extras.quality } : {}),
       ...(extras.promoteFrom && (op === 'clip' || op === 'clip_edit') ? { promoteFrom: extras.promoteFrom } : {}),
+      ...(extras.remakeWith && (op === 'clip' || op === 'clip_patch' || op === 'clip_edit') ? { remakeWith: extras.remakeWith } : {}),
     }
     const hashes = new Set<string>()
     collectHashes(input, hashes)

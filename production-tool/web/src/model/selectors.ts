@@ -8,8 +8,8 @@
 // links, never by position.
 
 import type {
-  Beat, DocAsset, DocJob, EdlItem, Frame, Id, KeyEntry, NamedRef, ProductionDocument, Render, Review, Scene, Script, Shot,
-  StaleMark, Storyboard, Take, Video,
+  Beat, DocAsset, DocJob, Frame, Generation, GenerationSegment, Id, KeyEntry, NamedRef, ProductionDocument, Render, Review, Scene, Script, Shot,
+  StaleMark, Storyboard, TimelineItem, Video,
 } from '../contracts/types'
 
 type Doc = ProductionDocument
@@ -204,26 +204,45 @@ export function shotFrameAsset(d: Doc, shot: Shot | Id | undefined): string | un
   return currentFrame(d, shot)?.asset
 }
 
-/** A shot's takes, oldest first. */
-export function takesOf(d: Doc, shotId: Id): Take[] {
-  return values(d.takes).filter((t) => t.shot_id === shotId).sort((a, b) => a.version - b.version || byId(a, b))
+/** When a generation was made, for ordering: its created_at, then its id (ULIDs sort by time). */
+const byMade = (a: Generation, b: Generation) => a.created_at.localeCompare(b.created_at) || byId(a, b)
+
+/** A shot's takes: the ready generations that show it, oldest first (features/make-and-edit.clan). */
+export function takesOf(d: Doc, shotId: Id): Generation[] {
+  return values(d.generations).filter((g) => g.state === 'ready' && g.shot_ids.includes(shotId)).sort(byMade)
 }
 
-/** The cut's items in rank order (the main video's by default). */
-export function edlOf(d: Doc, videoId = mainVideo(d)?.id): (EdlItem & { id: Id })[] {
+/** A take's number among a shot's takes ("v2"), 1-based; 0 when it does not show the shot. */
+export function takeNumber(d: Doc, genId: Id | undefined, shotId: Id): number {
+  return genId ? takesOf(d, shotId).findIndex((g) => g.id === genId) + 1 : 0
+}
+
+/** Where a shot is in a generation made with other shots (a box made together); undefined for a lone shot. */
+export function shotSegment(g: Pick<Generation, 'segments'> | undefined, shotId: Id | undefined): GenerationSegment | undefined {
+  return shotId ? g?.segments?.find((s) => s.shot_id === shotId) : undefined
+}
+
+/** The model a generation was made on (its inputs' summary), '' when not known. */
+export const genModel = (g: Pick<Generation, 'inputs'> | undefined) => g?.inputs?.model ?? ''
+
+export type CutItem = TimelineItem & { id: Id }
+
+/** A video's V1 clips (the main video's by default), in start order. */
+export function cutOf(d: Doc, videoId = mainVideo(d)?.id): CutItem[] {
   const v = videoId ? d.videos[videoId] : undefined
-  return Object.entries(v?.edl ?? {}).map(([id, item]) => ({ ...item, id })).sort(byRank)
+  return Object.entries(v?.timeline ?? {}).filter(([, i]) => i.track === 'V1' && i.source)
+    .map(([id, item]) => ({ ...item, id })).sort((a, b) => (a.start_s ?? 0) - (b.start_s ?? 0) || (a.id < b.id ? -1 : 1))
 }
 
-/** The cut's item for a shot, if the shot is in it. */
-export function edlItemFor(d: Doc, shotId: Id, videoId = mainVideo(d)?.id): (EdlItem & { id: Id }) | undefined {
-  return edlOf(d, videoId).find((i) => i.kind === 'shot' && i.shot_id === shotId)
+/** The V1 clip that stands for a shot in a video's cut, if the shot is in it. */
+export function cutItemFor(d: Doc, shotId: Id, videoId = mainVideo(d)?.id): CutItem | undefined {
+  return cutOf(d, videoId).find((i) => i.follows?.shot_id === shotId)
 }
 
-/** The take in the cut for a shot now (its item's pick), if any. */
-export function currentTake(d: Doc, shotId: Id, videoId = mainVideo(d)?.id): Take | undefined {
-  const item = edlItemFor(d, shotId, videoId)
-  return item?.pick ? d.takes[item.pick.current] : undefined
+/** The take in the cut for a shot now: the generation its V1 clip plays, if any. */
+export function currentTake(d: Doc, shotId: Id, videoId = mainVideo(d)?.id): Generation | undefined {
+  const id = cutItemFor(d, shotId, videoId)?.source?.generation_id
+  return id ? d.generations[id] : undefined
 }
 
 /** A video's ad renders, oldest first, and the one picked. */

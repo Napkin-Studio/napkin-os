@@ -297,7 +297,7 @@ export function newEntity(doc: ProductionDocument, kind: CardKind): { kind: Card
   const base = { id: newId(kind), v: 1, field_v: {}, title }
   if (kind === 'script') return { kind, entity: { ...base, target_s } }
   if (kind === 'storyboard') return { kind, entity: { ...base, ratio, target_s } }
-  return { kind, entity: { ...base, ratio, target_s, edl: {} } }
+  return { kind, entity: { ...base, ratio, target_s, timeline: {} } }
 }
 
 type Box = { x: number; y: number; w: number; h: number }

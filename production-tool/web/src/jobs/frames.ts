@@ -20,7 +20,6 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
-import { refreshClipStale } from './stale'
 
 export type { FrameHow } from '../model/purpose'
 
@@ -29,6 +28,9 @@ export interface FrameDeps {
   doc: DocumentStore
   ui: UiStore
   runner: JobRunner
+  /** The Video editor is the two rooms (flags.makeAndEdit): a new take lands beside the others and never
+   *  touches the cut. Absent or false: the Video editor, which picks each new take in the cut. */
+  rooms?: () => boolean
 }
 
 /** The frame in a shot now (its pick). */
@@ -160,6 +162,5 @@ export function selectFrame(store: DocumentStore, shotId: string, frameId: strin
     if (!s || !d.frames[frameId] || s.pick?.current === frameId) return
     const alternates = s.pick?.alternates?.filter((a) => a !== frameId)
     s.pick = { current: frameId, ...(alternates?.length ? { alternates } : {}) }
-    refreshClipStale(d, shotId)
   }, 'select frame')
 }

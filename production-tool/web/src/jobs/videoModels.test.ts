@@ -14,7 +14,7 @@ vi.mock('./assets', () => ({ assetRef: async (_relay: unknown, sha: string) => (
 
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
 const SHOT = 'shot_01K7A000000000000000000015'
-const TAKE = 'take_01K7A000000000000000000024'
+const TAKE = 'gen_01K7A000000000000000000024'
 const KEY = 'key_01M5BABY000000000000000000'
 const sha = (c: string) => `sha256:${c.repeat(64)}`
 const live = CONFIGS.live
@@ -84,13 +84,13 @@ describe('the requests', () => {
     const d = baby()
     const { submit, deps: dd } = deps(d)
     const pick: ModelChoice = { provider: 'runway', model: 'klingO3_standard' }
-    await changeFeel(dd, SHOT, d.takes[TAKE], 'put @hat_front on her head', {}, pick)
+    await changeFeel(dd, SHOT, d.generations[TAKE], 'put @hat_front on her head', {}, pick)
     const [op, input, parents, purpose, , choice] = submit.mock.calls[0] as unknown as [string, JobInput, string[], unknown, unknown, ModelChoice]
     expect(op).toBe('clip_edit')
-    expect(input.video?.sha256).toBe(d.takes[TAKE].asset)
+    expect(input.video?.sha256).toBe(d.generations[TAKE].asset)
     expect(input.refs?.map((r) => r.name)).toEqual(['hat_front'])
     expect(input.feel).toEqual({})
-    expect(parents).toEqual([d.takes[TAKE].job_id])
+    expect(parents).toEqual([d.generations[TAKE].job_id])
     expect(purpose).toEqual({ for: 'clip', shotId: SHOT, parentTakeId: TAKE })
     expect(choice).toEqual(pick)
   })
@@ -98,7 +98,7 @@ describe('the requests', () => {
   it('Change the feel with no names sends no pictures and, on the default, no pick', async () => {
     const d = baby()
     const { submit, deps: dd } = deps(d)
-    await changeFeel(dd, SHOT, d.takes[TAKE], 'make it dusk', { strength: 'flex' })
+    await changeFeel(dd, SHOT, d.generations[TAKE], 'make it dusk', { strength: 'flex' })
     const [, input, , , , choice] = submit.mock.calls[0] as unknown as [string, JobInput, unknown, unknown, unknown, ModelChoice | undefined]
     expect(input.refs).toBeUndefined()
     expect(input.feel).toEqual({ strength: 'flex' })

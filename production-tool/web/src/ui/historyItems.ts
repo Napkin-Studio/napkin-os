@@ -5,7 +5,7 @@
 import type { Cost, ProductionDocument } from '../contracts/types'
 import { entityOf, kindOf as kindOfDecision, type Kind } from '../model/lineage'
 import { CAST } from './agents/cast'
-import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takesOf } from '../model/selectors'
+import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takeNumber, takesOf } from '../model/selectors'
 
 export interface ChainLike {
   id?: string
@@ -148,9 +148,10 @@ export function entityWords(doc: ProductionDocument, map: string, id: string): s
       const f = doc.frames[id]
       return f ? `frame v${f.version}${f.shot_id ? ` of shot ${shotNumber(doc, f.shot_id)}` : ''}` : 'a frame'
     }
-    case 'takes': {
-      const t = doc.takes[id]
-      return t ? `clip v${t.version} of shot ${shotNumber(doc, t.shot_id)}` : 'a clip'
+    case 'generations': {
+      const g = doc.generations[id]
+      const shot = g?.shot_ids[0]
+      return g && shot ? `clip v${takeNumber(doc, g.id, shot)} of shot ${shotNumber(doc, shot)}` : 'a clip'
     }
     case 'refs': {
       const r = doc.refs[id]
@@ -166,10 +167,10 @@ const PATH = /(?:[^#\s]+#)?([a-z_]+)\[([^\]\s]+)\]((?:\.[a-z_]+|\[[^\]\s]+\])*)/
 /** Words a person reads, from an action or an address that names entities by id (spec §10: no raw paths). */
 export function plainWords(text: string, doc: ProductionDocument): string {
   const out = text.replace(PATH, (_m, map: string, id: string, rest: string) => {
-    if (map === 'videos' && rest.startsWith('.edl[')) {
-      const item = /^\.edl\[([^\]]+)\]/.exec(rest)?.[1]
-      const shot = item ? doc.videos[id]?.edl[item]?.shot_id : undefined
-      const field = rest.replace(/^\.edl\[[^\]]+\]\.?/, '')
+    if (map === 'videos' && rest.startsWith('.timeline[')) {
+      const item = /^\.timeline\[([^\]]+)\]/.exec(rest)?.[1]
+      const shot = item ? doc.videos[id]?.timeline[item]?.follows?.shot_id : undefined
+      const field = rest.replace(/^\.timeline\[[^\]]+\]\.?/, '')
       return `${shot ? `the cut's clip for shot ${shotNumber(doc, shot)}` : 'the cut'}${field ? `: ${fieldWords(field)}` : ''}`
     }
     const field = rest.replace(/^\./, '')

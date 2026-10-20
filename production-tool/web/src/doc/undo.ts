@@ -9,7 +9,7 @@ import type { DocumentStore, UndoResult } from './types'
 
 /** Plain words for a step, for the button ("Undo: delete clip v4"). */
 export function stepWords(label: string): string {
-  return label.replace(/ (frame|take|shot|ref|rev|job)_[0-9A-Z]{26}/g, '')
+  return label.replace(/ (frame|gen|shot|ref|rev|job|item)_[0-9A-Z]{26}/g, '')
 }
 
 /** What undo and redo would take back now. */

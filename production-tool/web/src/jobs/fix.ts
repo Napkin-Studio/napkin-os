@@ -125,7 +125,7 @@ export async function remakeFixClip(deps: FrameDeps, frameJobId: string, modelCh
 /** Step 3's clip: from the shot's picked (fixed) frame, for these notes, as a new take of theirs. */
 function fixClip(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice, quality?: ClipQuality): Promise<string> {
   const d = deps.doc.get()
-  const parentTake = (notes[0].target.kind === 'take' ? d.takes[notes[0].target.id] : undefined) ?? selectedTake(d, shotId)
+  const parentTake = (notes[0].target.kind === 'generation' ? d.generations[notes[0].target.id] : undefined) ?? selectedTake(d, shotId)
   const boxed = notes.find((r) => r.region) ?? notes[0]
   return makeClip(deps, shotId, {
     text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice, ...(quality ? { quality } : {}),

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CONFIGS } from '../contracts/load'
 import type { Config, Job, JobInput, ProductionDocument, Shot } from '../contracts/types'
 import { SnapshotDocumentStore } from '../doc/store'
-import { mainVideo, shotsOf, takesOf } from '../model/selectors'
+import { cutItemFor, mainVideo, shotsOf, takesOf } from '../model/selectors'
 import { purposeOf, purposeInputs } from '../model/purpose'
 import { MAYA, addRef, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addFrame, addShots, addTake, job, plain } from '../test/model'
@@ -15,8 +15,8 @@ import { SOFTENED_NOTE, applyRunTake, applyTake, softenedWhy } from './handlers'
 import type { PlanShot } from './joins'
 import { joinKind } from './joins'
 import { billedS, makeClips, makeRuns, modelEntry, planRuns, segmentRun, takeModelFor, takeTiming, takeWindows, type PlanModel } from './runs'
-import { frameMarks, joinHere, joinSelection, selectionBlock, separateAll, separateSelection, splitHere, videoJoin, videoPlan, videoShots, videoUnits } from './runView'
-import { END_FRAME_CHANGED, endFrameDrift, refreshClipStale } from './stale'
+import { frameMarks, joinBefore, joinHere, joinSelection, selectionBlock, separateAll, separateSelection, splitHere, videoJoin, videoPlan, videoShots, videoUnits } from './runView'
+import { END_FRAME_CHANGED, endFrameDrift } from './stale'
 import { mockCuts } from '../relay/mock'
 import { speedFor, stitchTimeline } from '../relay/mockRender'
 
@@ -218,8 +218,8 @@ describe('Make clips', () => {
     expect(a.submits[1].input).toMatchObject({ mode: 'take' })
     expect(a.submits[1].modelChoice).toEqual(wan3)
     expect(a.submits).toHaveLength(2)
-    // The crew's joins are on the cut's items.
-    const seams = shotsOf(a.store.get()).map((s) => Object.values(a.store.get().videos[a.videoId].edl).find((x) => x.shot_id === s.id)?.seam?.kind)
+    // The crew's joins are worked out from the shots, never stored (only a person's boxes are).
+    const seams = shotsOf(a.store.get()).map((s) => joinBefore(a.store.get(), a.videoId, s.id)?.kind)
     expect(seams).toEqual([undefined, 'continue', 'cut'])
   })
 
@@ -235,27 +235,31 @@ describe('Make clips', () => {
 })
 
 describe('a take landing', () => {
-  it('writes each shot a window of the one file, from the cuts the relay found', async () => {
+  it('lands one generation of the box, a window per shot from the cuts the relay found', async () => {
     const a = film([3, 3, 4])
     await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, busy: skipNone })
     const d = structuredClone(a.store.get())
     const runId = Object.keys(d.videos[a.videoId].runs!)[0]
     const j = { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'wan3', kind: 'generated', outputs: [{ sha256: SHA('v'), durationS: 10 }], cuts: [{ planned_s: 3, found_s: 3.05 }, { planned_s: 6, found_s: null }] } as unknown as Job
-    const made = applyRunTake(d, j, { videoId: a.videoId, runId })
-    expect(made.map((t) => t.segments[0])).toEqual([
-      { source_take: made[0].id, in_s: 0, out_s: 3.05, job_id: 'job_1', by: 'detected' },
-      { source_take: made[0].id, in_s: 3.05, out_s: 6, job_id: 'job_1', by: 'detected' },
-      { source_take: made[0].id, in_s: 6, out_s: 10, job_id: 'job_1', by: 'prompt' },
+    const made = applyRunTake(d, j, { videoId: a.videoId, runId })!
+    expect(made).toMatchObject({ kind: 'together', box_id: runId, shot_ids: a.shots.map((s) => s.id), asset: SHA('v'), duration_s: 10, state: 'ready', job_id: 'job_1' })
+    expect(made.segments).toEqual([
+      { shot_id: a.shots[0].id, in_s: 0, out_s: 3.05, by: 'detected' },
+      { shot_id: a.shots[1].id, in_s: 3.05, out_s: 6, by: 'detected' },
+      { shot_id: a.shots[2].id, in_s: 6, out_s: 10, by: 'prompt' },
     ])
-    expect(made.every((t) => t.asset === SHA('v'))).toBe(true)
     expect(d.videos[a.videoId].runs![runId].state).toBe('done')
-    expect(applyRunTake(d, j, { videoId: a.videoId, runId })).toEqual([]) // landing twice does nothing
-    // The guide windows are never "out of date" for their frames; the pinned first one still is checked.
-    for (const s of a.shots) refreshClipStale(d, s.id)
-    expect(Object.values(d.stale).map((m) => m.target.id)).toEqual([])
+    expect(applyRunTake(d, j, { videoId: a.videoId, runId })).toBeUndefined() // landing twice does nothing
+    // Nothing marks a take out of date.
+    expect(Object.values(d.stale)).toEqual([])
+    // The Video editor puts each shot's window in the cut, its shot's length long (a short one holds its last frame).
+    expect(a.shots.map((s) => cutItemFor(d, s.id, a.videoId)?.source)).toEqual([
+      { generation_id: made.id, in_s: 0, out_s: 3 }, { generation_id: made.id, in_s: 3.05, out_s: 6 }, { generation_id: made.id, in_s: 6, out_s: 10 },
+    ])
+    expect(cutItemFor(d, a.shots[1].id, a.videoId)?.hold_s).toBe(0.05)
     // The stitch reads the windows.
     const { input } = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
-    expect(input.clips!.map((c) => [c.inS, c.outS, c.trimS, c.fit])).toEqual([[undefined, 3.05, 3, undefined], [3.05, 6, 3, undefined], [6, 10, 4, undefined]])
+    expect(input.clips!.map((c) => [c.inS, c.outS, c.trimS, c.fit])).toEqual([[undefined, 3, 3, undefined], [3.05, 6, 3, undefined], [6, 10, 4, undefined]])
     // Bands and marks: one take over the three shots, its first frame pinned and the others guides.
     expect(videoUnits(d, { jobs: {} }, a.videoId, videoPlan(d, a.videoId, WAN3)).map((u) => (u.kind === 'strip' ? `${u.state}:${u.shotIds.length}` : 'shot'))).toEqual(['made:3'])
     expect(Object.values(frameMarks(d, a.videoId, undefined))).toEqual(['pin', 'guide', 'guide'])
@@ -295,10 +299,8 @@ describe('end frames', () => {
     const t = applyTake(d, { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'veo3.1_fast', kind: 'generated', outputs: [{ sha256: SHA('a'), durationS: 4 }] } as unknown as Job, { shotId: a.shots[0].id, endFrameId: next })!
     expect(t.end).toEqual({ kind: 'next_storyboard', frame_id: next })
     applyTake(d, { jobId: 'job_2', op: 'clip', provider: 'runway', model: 'veo3.1_fast', kind: 'generated', outputs: [{ sha256: SHA('b'), durationS: 4 }] } as unknown as Job, { shotId: a.shots[1].id })
-    const item = Object.values(d.videos[a.videoId].edl).find((x) => x.shot_id === a.shots[1].id)!
-    item.seam = { kind: 'continue', by: 'crew' }
     const { input } = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
-    expect(input.clips!.map((c) => [c.fit, c.transition, c.inS])).toEqual([['speed', undefined, undefined], [undefined, { kind: 'continue' }, undefined]])
+    expect(input.clips!.map((c) => [c.fit, c.transition, c.inS])).toEqual([['speed', undefined, undefined], [undefined, undefined, undefined]])
   })
 
   it('a landing clip is used up to the frame where it reached its last frame (landS), retimed into its slot', async () => {
@@ -314,9 +316,9 @@ describe('end frames', () => {
     const { input } = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
     // outS is the landing frame's end (landS plus one 24 fps frame): it is the last frame shown, nothing after it.
     expect(input.clips![0]).toMatchObject({ trimS: 3.2, outS: 3.75, fit: 'speed' })
-    expect(input.clips![1].outS).toBeUndefined()
+    expect(input.clips![1].outS).toBe(4)
     // A person's out point on the cut still wins.
-    Object.values(d.videos[a.videoId].edl).find((x) => x.shot_id === a.shots[0].id)!.out_s = 3.5
+    d.videos[a.videoId].timeline[cutItemFor(d, a.shots[0].id, a.videoId)!.id].source!.out_s = 3.5
     const again = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
     expect(again.input.clips![0].outS).toBe(3.5)
   })
@@ -398,7 +400,7 @@ describe('strips', () => {
     a.store.change = ((fn, why) => { if (why && !why.quiet) chain.push(why.action); return change(fn, why) }) as typeof a.store.change
     await splitHere(a.store, a.videoId, a.shots[1].id)
     expect(unitsOf(a)).toEqual(['shot:1', 'new:23'])
-    expect(Object.values(a.store.get().videos[a.videoId].edl).find((x) => x.shot_id === a.shots[1].id)?.seam).toEqual({ kind: 'cut', by: 'human' })
+    expect(joinBefore(a.store.get(), a.videoId, a.shots[1].id)).toEqual({ kind: 'cut', by: 'human' })
     await joinHere(a.store, a.videoId, a.shots[1].id)
     expect(unitsOf(a)).toEqual(['new:123'])
     expect(chain).toEqual(['split the video between shot 1 and shot 2', 'join shot 1 and shot 2 into one video'])
@@ -478,7 +480,8 @@ describe('the live case (2026-10-19): one shot made alone, then every gap set to
     expect(t.input.shots).toHaveLength(5)
     expect(t.input.cuts!.map((c) => c.atS)).toEqual([0, 2, 4, 6, 8])
     expect(t.modelChoice).toEqual(omni)
-    expect(Object.values(a.store.get().videos[a.videoId].runs!)[0].shot_ids).toEqual(a.shots.slice(0, 5).map((s) => s.id))
+    // The run made (beside the person's boxes, which are runs they planned).
+    expect(Object.values(a.store.get().videos[a.videoId].runs!).find((r) => !!r.job_id)!.shot_ids).toEqual(a.shots.slice(0, 5).map((s) => s.id))
   })
 
   it('Make all does the same: the end card already has its clip', async () => {
@@ -500,7 +503,7 @@ describe('the live case (2026-10-19): one shot made alone, then every gap set to
     const a = await replay()
     await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: omni, busy: skipNone })
     const d = structuredClone(a.store.get())
-    const runId = Object.keys(d.videos[a.videoId].runs!)[0]
+    const runId = Object.entries(d.videos[a.videoId].runs!).find(([, r]) => !!r.job_id)![0]
     applyRunTake(d, { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'gemini_omni_flash_1.1', kind: 'generated', outputs: [{ sha256: SHA('v'), durationS: 10 }] } as unknown as Job, { videoId: a.videoId, runId })
     expect(takesOf(d, a.shots[0].id)).toHaveLength(2)
     expect(videoUnits(d, { jobs: {} }, a.videoId, videoPlan(d, a.videoId, OMNI))[0]).toMatchObject({ kind: 'strip', state: 'made' })

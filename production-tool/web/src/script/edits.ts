@@ -5,9 +5,9 @@
 import {
   EMPTY_PROSE, hydrate, landPlan, moveShot as storeMoveShot, newUlidId, rankBetween, type Patch, type PMNode, type Prose, type ShotPlace,
 } from '../../../clan-store/src'
-import type { BeatKind, ProductionDocument, Scene, StaleMark } from '../contracts/types'
+import type { BeatKind, ProductionDocument, Scene } from '../contracts/types'
 import { proseFromText } from '../model/diff'
-import { currentTake, scenesOf, shotNumber } from '../model/selectors'
+import { scenesOf } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { checkSizes, droppedLine, sceneFlat, type FountainScript } from './fountain'
 import { keepBeatsInside } from './moments'
@@ -152,28 +152,11 @@ export async function addBeat(store: ModelStore, shotId: string, kind: BeatKind,
   return id
 }
 
-/** The clips the move puts next to other clips: they get a 'to check' mark in the same step. */
-export function orderMarks(d: Doc, shotId: string, neighbours: (string | null | undefined)[], now = new Date().toISOString()): StaleMark[] {
-  const n = shotNumber(d, shotId)
-  const out: StaleMark[] = []
-  for (const id of [shotId, ...neighbours]) {
-    if (!id) continue
-    const take = currentTake(d, id)
-    if (!take) continue
-    const had = Object.values(d.stale).some((m) => m.target.kind === 'take' && m.target.id === take.id && m.caused_by.kind === 'shot' && m.caused_by.id === shotId)
-    if (had) continue
-    out.push({ id: newUlidId('stale'), v: 1, field_v: {}, target: { kind: 'take', id: take.id }, caused_by: { kind: 'shot', id: shotId }, reason: `Shot ${n || ''}'s order changed`.replace('Shot \'s', 'A shot\'s'), marked_at: now })
-  }
-  return out
-}
-
-/** Drag a shot (outline or table): one rank write, plus its scene when it crosses scenes, and the clips' marks: one step. */
+/** Drag a shot (outline or table): one rank write, plus its scene when it crosses scenes: one step. Its takes are
+ *  never marked (features/make-and-edit.clan). */
 export async function moveShotTo(store: ModelStore, shotId: string, place: ShotPlace) {
   await store.flush()
-  const d = docOf(store)
-  const marks = orderMarks(d, shotId, [place.beforeId, place.afterId])
-  const extra: Patch[] = marks.map((m) => ({ op: 'create', entity: 'stale', id: m.id, value: m, base_version: 0 }))
-  const r = await storeMoveShot(store.bus, shotId, place, { extra })
+  const r = await storeMoveShot(store.bus, shotId, place)
   if (!r.applied) throw new Error(r.refused.map((x) => x.message).join('; ') || 'That shot could not move.')
   await store.flush()
   return r

@@ -5,18 +5,19 @@
 //
 //   fixRoute   which fix a note gets: Fix this moment for a note with a window on a take in the cut,
 //              ahead of "fix it in the shot" (a boxed note, jobs/fix.ts), else remaking the whole clip
-//   landPatch  a finished clip_patch as the shot's new take: one landing by Edie (landUpdate), the note
-//              left open (Fix again makes the next version; Resolve closes it)
+//   landPatch  a finished clip_patch as a new take beside its parent (clan-store applyPatchGeneration):
+//              one landing by Edie (landUpdate), never put in the cut, the note left open (Fix again makes
+//              the next version; Resolve closes it)
 //
 // The video-editor mounts these (its Fix this moment panel); today's Video stage is unchanged.
 // No price is shown anywhere (owner decision 2026-10-13).
 
-import { applyPatchTake, noteToTakeWindow, type PatchDoc, type PatchJob } from '../../../clan-store/src'
+import { applyPatchGeneration, noteToTakeWindow, type PatchDoc, type PatchJob } from '../../../clan-store/src'
 import type { Controls } from '../capabilities'
-import type { Job, NoteWindow, ProductionDocument, Review, Take } from '../contracts/types'
+import type { Generation, Job, NoteWindow, ProductionDocument, Review } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { currentTake, edlItemFor, mainVideo, shotName, takesOf, videoOfShot } from '../model/selectors'
+import { currentTake, cutItemFor, shotName, takesOf } from '../model/selectors'
 import { landingWhy } from './landing'
 
 export type FixRoute =
@@ -28,8 +29,8 @@ export type FixRoute =
   | { route: 'remake'; shotId?: string; why: string }
 
 /** The take a note is on: its own take (a note from the take player), else the shot's take in the cut. */
-function noteTake(d: ProductionDocument, note: Review): Take | undefined {
-  if (note.target.kind === 'take') return d.takes[note.target.id]
+function noteTake(d: ProductionDocument, note: Review): Generation | undefined {
+  if (note.target.kind === 'generation') return d.generations[note.target.id]
   return note.shot_id ? currentTake(d, note.shot_id) : undefined
 }
 
@@ -40,10 +41,11 @@ function noteTake(d: ProductionDocument, note: Review): Take | undefined {
  */
 export function fixRoute(d: ProductionDocument, note: Review, controls: Pick<Controls, 'fixMoment' | 'fixInShot'>): FixRoute {
   const take = noteTake(d, note)
-  const shotId = take?.shot_id ?? note.shot_id
-  if (controls.fixMoment && take && note.window && note.at_s != null) {
-    const tw = noteToTakeWindow(note, take, edlItemFor(d, take.shot_id))
-    if (tw?.inCut) return { route: 'patch', shotId: take.shot_id, takeId: take.id, window: tw.window, atS: tw.atS }
+  const shotId = note.shot_id ?? take?.shot_ids[0]
+  if (controls.fixMoment && take && shotId && note.window && note.at_s != null) {
+    const item = cutItemFor(d, shotId)?.source
+    const tw = noteToTakeWindow(note, { duration_s: take.duration_s ?? 0 }, item ? { in_s: item.in_s, out_s: item.out_s } : null)
+    if (tw?.inCut) return { route: 'patch', shotId, takeId: take.id, window: tw.window, atS: tw.atS }
   }
   if (controls.fixInShot && note.region && shotId) return { route: 'in_shot', shotId }
   const why = !controls.fixMoment ? 'Fix this moment is off'
@@ -55,12 +57,13 @@ export function fixRoute(d: ProductionDocument, note: Review, controls: Pick<Con
 
 /** Edie's landing of a finished clip_patch: "edit take v3 for shot 4", one decision, never an undo step.
  *  Landing the same job twice changes nothing. */
-export function landPatch(store: DocumentStore, job: Job, ctx: { shotId: string; parentTakeId: string; videoId?: string }): Promise<ProductionDocument> {
+export function landPatch(store: DocumentStore, job: Job, ctx: { shotId: string; parentTakeId: string; note?: string }): Promise<ProductionDocument> {
   const d = store.get()
-  if (!job.outputs?.length || !job.patch || Object.values(d.takes).some((t) => t.job_id === job.jobId)) return Promise.resolve(d)
-  const version = Math.max(0, ...takesOf(d, ctx.shotId).map((t) => t.version)) + 1
-  const what = `take v${version} for ${shotName(d, ctx.shotId)}`
+  if (!job.outputs?.length || !job.patch || Object.values(d.generations).some((g) => g.job_id === job.jobId)) return Promise.resolve(d)
+  const what = `take v${takesOf(d, ctx.shotId).length + 1} for ${shotName(d, ctx.shotId)}`
+  const by = d.jobs[job.jobId]?.started_by ?? d.project.created_by
+  const now = d.jobs[job.jobId]?.created_at ?? new Date().toISOString()
   return landUpdate(store, (x) => {
-    applyPatchTake(x as unknown as PatchDoc, job as unknown as PatchJob, { ...ctx, videoId: ctx.videoId ?? videoOfShot(x, ctx.shotId)?.id ?? mainVideo(x)?.id })
+    applyPatchGeneration(x as unknown as PatchDoc, job as unknown as PatchJob, { parentId: ctx.parentTakeId, by, now, ...(ctx.note ? { note: ctx.note } : {}) })
   }, landingWhy(store, job.jobId, what))
 }

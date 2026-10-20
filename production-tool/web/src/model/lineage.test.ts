@@ -118,13 +118,12 @@ describe('the decision tree from /chain (spec 3.20)', () => {
     await bus.apply({ patches: [{ op: 'set', entity: 'shots', id: shot, path: 'pick/alternates', value: [v2], base_version: doc().shots[shot].v }],
       why: { action: 'keep_both frames v3 and v2 in shot 3', pinned: true } })
 
-    // 10. Restore v2: a new pick decision, citing v2, marking what v3 fed as out of date, in one batch.
-    const take = id('take')
+    // 10. Restore v2: a new pick decision, citing v2, marking the frame after it as to check, in one batch.
     const stale = id('stale')
     const restore = await bus.apply({ patches: [
       { op: 'set', entity: 'shots', id: shot, path: 'pick/current', value: v2, base_version: doc().shots[shot].v },
       { op: 'set', entity: 'shots', id: shot, path: 'pick/alternates', value: [v3], base_version: doc().shots[shot].v },
-      { op: 'create', entity: 'stale', id: stale, base_version: 0, value: { target: { kind: 'take', id: take }, caused_by: { kind: 'frame', id: v2 }, reason: 'frame 3 restored to v2' } },
+      { op: 'create', entity: 'stale', id: stale, base_version: 0, value: { target: { kind: 'frame', id: v3 }, caused_by: { kind: 'frame', id: v2 }, reason: 'frame 3 restored to v2' } },
     ], why: { action: 'restore frames v2 in shot 3', cites: [`${docId}#frames[${v2}]`] } })
     expect(restore.applied).toBe(true)
 

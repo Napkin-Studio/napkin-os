@@ -24,7 +24,7 @@ import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { proseFromText } from '../model/diff'
 import { ModelStore } from '../model/store'
-import { beatsOf, currentFrame, currentTake, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
+import { beatsOf, currentFrame, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
 import type { Relay } from '../relay'
 import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
@@ -145,20 +145,16 @@ function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot, why
   }
 }
 
-/** What in a shot's frame and clip a re-plan changes: framing or words → its frame; move or length → its clip. */
+/** What in a shot's frame a re-plan changes: framing or words → its frame (a move or a length changes only its next
+ *  take: takes are never marked, features/make-and-edit.clan). */
 function replanMarks(d: ProductionDocument, was: Shot, p: PlannedShot, wordsChange: boolean, now: string): StaleMark[] {
   const cam = (c: Camera, k: keyof Camera) => JSON.stringify(c[k] ?? null)
   const framing = (['size', 'angle', 'lens_mm', 'macro'] as const).some((k) => cam(was.camera, k) !== cam(p.camera, k))
-  const move = (['movement', 'movement_speed'] as const).some((k) => cam(was.camera, k) !== cam(p.camera, k)) || was.duration_s !== p.duration_s
   const out: StaleMark[] = []
-  const marked = (kind: 'frame' | 'take', id: string) => staleList(d).some((m) => m.target.kind === kind && m.target.id === id && m.caused_by.kind === 'shot' && m.caused_by.id === was.id)
+  const marked = (kind: 'frame', id: string) => staleList(d).some((m) => m.target.kind === kind && m.target.id === id && m.caused_by.kind === 'shot' && m.caused_by.id === was.id)
   const frame = currentFrame(d, was)
   if (frame && (framing || wordsChange) && !marked('frame', frame.id)) {
     out.push({ id: newUlidId('stale'), v: 1, field_v: {}, target: { kind: 'frame', id: frame.id }, caused_by: { kind: 'shot', id: was.id }, reason: SCRIPT_CHANGED, marked_at: now })
-  }
-  const take = currentTake(d, was.id)
-  if (take && move && !marked('take', take.id)) {
-    out.push({ id: newUlidId('stale'), v: 1, field_v: {}, target: { kind: 'take', id: take.id }, caused_by: { kind: 'shot', id: was.id }, reason: SCRIPT_CHANGED, marked_at: now })
   }
   return out
 }

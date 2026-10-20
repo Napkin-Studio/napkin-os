@@ -34,7 +34,7 @@ describe('Apply as new version', () => {
     expect(d.frames[w.v1]).toMatchObject({ version: 1, asset: SHA('a') })
     expect(currentFrame(d, w.shot)?.id).toBe(made!.id)
     expect(d.assets[SHA('e')]).toMatchObject({ origin: 'edited', w: 1344, h: 768 })
-    expect(staleList(d).some((m) => m.target.kind === 'take' && m.caused_by.kind === 'frame')).toBe(true)
+    expect(staleList(d).some((m) => m.target.kind === 'generation')).toBe(false) // takes are never marked
   })
   it('is one undo step', async () => {
     const w = await world()

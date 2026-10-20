@@ -13,6 +13,7 @@
 
 import type { ChainEntry } from '../../../clan-store/src'
 import type { ProductionDocument } from '../contracts/types'
+import { takeNumber } from './selectors'
 
 export type Kind = 'decision' | 'check' | 'ask' | 'pick'
 
@@ -85,9 +86,9 @@ function upstreamOf(doc: ProductionDocument, docId: string, entity: string): str
       const f = doc.frames[id]
       return f ? [...at('frames', f.parent_id), ...at('shots', f.shot_id), ...at('sketches', f.sketch_id)] : []
     }
-    case 'takes': {
-      const t = doc.takes[id]
-      return t ? [...at('takes', t.parent_id), ...at('shots', t.shot_id)] : []
+    case 'generations': {
+      const g = doc.generations[id]
+      return g ? [...at('generations', g.parent_id), ...g.shot_ids.flatMap((s) => at('shots', s))] : []
     }
     case 'renders': {
       const r = doc.renders[id]
@@ -161,8 +162,10 @@ export function lineage(chain: ChainEntry[], doc: ProductionDocument, docId: str
     const kind = kindOf(verb, entities)
     const versionOf = entities.map((ent) => {
       const m = ENTITY.exec(ent)
-      const rec = m && (m[2] === 'frames' ? doc.frames[m[3]] : m[2] === 'takes' ? doc.takes[m[3]] : m[2] === 'renders' ? doc.renders[m[3]] : undefined)
-      return rec && verb !== 'pick' && verb !== 'keep_both' && verb !== 'restore' ? `v${rec.version}` : undefined
+      const g = m && m[2] === 'generations' ? doc.generations[m[3]] : undefined
+      const rec = m && (m[2] === 'frames' ? doc.frames[m[3]] : m[2] === 'renders' ? doc.renders[m[3]] : undefined)
+      const version = rec?.version ?? (g?.shot_ids[0] ? takeNumber(doc, g.id, g.shot_ids[0]) : undefined)
+      return version && verb !== 'pick' && verb !== 'keep_both' && verb !== 'restore' ? `v${version}` : undefined
     }).find(Boolean)
     const node: TreeNode = {
       id: e.id,

@@ -14,7 +14,7 @@ import { useDoc, useServices } from '../app/context'
 import type { Id, Shot } from '../contracts/types'
 import { canJoin, joinBlock } from '../jobs/runs'
 import { elapsed, joinHere, joinSelection, rowMakeWords, rowTitle, selectionBlock, separateSelection, splitHere, videoShots, waitWords, type Row } from '../jobs/runView'
-import { currentTake } from '../model/selectors'
+import { currentTake, shotSegment } from '../model/selectors'
 
 /** The timeline: one track of every shot, joined shots boxed as one video. */
 export function VideoRows({ videoId, shots, rows, card, insert, selected, onSelectRow, onMake, onMakeAgain, onMakeSeparately }: {
@@ -91,7 +91,7 @@ export function VideoRows({ videoId, shots, rows, card, insert, selected, onSele
             )
           }
           // Made as one take: each shot's window of the one file, for the beat ruler under the cards.
-          const windows = row.state === 'made' ? row.shotIds.map((id) => currentTake(doc, id, videoId)?.segments[0]) : []
+          const windows = row.state === 'made' ? row.shotIds.map((id) => shotSegment(currentTake(doc, id, videoId), id)) : []
           return (
             <Fragment key={row.shotIds.join()}>
               {gap}

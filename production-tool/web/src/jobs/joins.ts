@@ -1,11 +1,13 @@
 // How each shot joins the one before it (features/connected-video.clan, design 4.1). Dex sets the join
 // quietly from the shot list: a new scene is a cut; the same camera setup carries on (continue); a new
 // angle on the same moment is a match; any other new angle is a cut. Dissolve and dip are only ever asked
-// for. A person's join (seam.by "human", set on the gap chip) always wins. Pure reads of the document,
-// shared by the run planner (jobs/runs.ts), the clip requests (jobs/clips.ts) and the editors.
+// for. A person's join always wins: it is kept as the person's boxes (video.runs planned_by human, the
+// newest first; features/make-and-edit.clan): inside a box the shots carry on, and a box starts on a cut.
+// Pure reads of the document, shared by the run planner (jobs/runs.ts), the clip requests (jobs/clips.ts)
+// and the editors.
 
 import type { Camera, Id, ProductionDocument, Seam, SeamKind, Shot } from '../contracts/types'
-import { beatsOf, edlItemFor, jobsList } from '../model/selectors'
+import { beatsOf, jobsList, mainVideo, shotsOf } from '../model/selectors'
 import { purposeOf } from '../model/purpose'
 
 /** What the planner reads of a shot. */
@@ -33,9 +35,25 @@ export interface PlanShot {
   human?: Seam
 }
 
-/** The join into a shot as stored on its edl item in the video (absent: none stored). */
+/** The person's boxes of a video, newest first (runs a person planned). */
+export function humanBoxes(d: ProductionDocument, videoId?: Id): Id[][] {
+  const v = (videoId && d.videos[videoId]) || mainVideo(d)
+  return Object.entries(v?.runs ?? {}).filter(([, r]) => r.planned_by === 'human').sort(([a], [b]) => (a < b ? 1 : -1)).map(([, r]) => r.shot_ids)
+}
+
+/** The join into a shot a person chose, from their boxes (absent: none): the newest box with the shot in it
+ *  says carry on (inside) or cut (its first shot); a box that ends on the shot before says cut. */
 export function storedSeam(d: ProductionDocument, shotId: Id, videoId?: Id): Seam | undefined {
-  return edlItemFor(d, shotId, videoId)?.seam
+  const shot = d.shots[shotId]
+  if (!shot) return undefined
+  const order = shotsOf(d, shot.storyboard_id)
+  const prev = order[order.findIndex((s) => s.id === shotId) - 1]?.id
+  for (const box of humanBoxes(d, videoId)) {
+    const i = box.indexOf(shotId)
+    if (i > 0) return { kind: 'continue', by: 'human' }
+    if (i === 0 || (prev && box.at(-1) === prev)) return { kind: 'cut', by: 'human' }
+  }
+  return undefined
 }
 
 const ROLES = (d: ProductionDocument, shot: Shot) => (shot.refs ?? []).map((id) => d.refs[id]?.role).filter(Boolean)

@@ -139,7 +139,7 @@ const TYPED_DOC: ProductionDocument = {
     [`shot_${U('H1')}`]: { id: `shot_${U('H1')}`, v: 2, field_v: { 'camera/size': 2 }, storyboard_id: `storyboard_${U('S1')}`, rank: 'a0', kind: 'shot', duration_s: 3,
       camera: { size: 'close', lens_mm: 85 }, status: 'planned', action: 'She smiles.', refs: [], last_writer: 'dex' },
   },
-  beats: {}, frames: {}, videos: {}, takes: {}, renders: {}, reviews: {}, links: {}, keys: {}, refs: {}, documents: {}, format_sets: {}, sizes: {},
+  beats: {}, frames: {}, videos: {}, generations: {}, renders: {}, reviews: {}, links: {}, keys: {}, refs: {}, documents: {}, format_sets: {}, sizes: {},
   checks: {}, asks: { [question.id]: { id: question.id, v: 1, field_v: {}, question, node: { kind: 'storyboard', id: `storyboard_${U('S1')}` }, crew: 'dex', state: 'open', answers: [] } },
   suggestions: {}, spin_ins: {}, jobs: {}, stale: {}, exports: {},
 }

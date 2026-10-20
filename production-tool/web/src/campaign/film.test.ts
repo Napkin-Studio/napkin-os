@@ -116,7 +116,7 @@ describe('a 15 s at 9:16', () => {
   it('the render request: windows, crops, a reframed shot\'s own clip filled from its middle, type timed, no words for a model', async () => {
     const { d, size, set, ms, deps } = sized()
     const key = reframeKey(ms[4].takeId!, size.delivery)
-    set.reframes = { [key]: { take_id: ms[4].takeId!, shot_id: ms[4].shotId, aspect: { w: 1080, h: 1920 }, method: 'outpaint', job_id: 'job_01K7C00000000000000000JB01' } }
+    set.reframes = { [key]: { generation_id: ms[4].takeId!, shot_id: ms[4].shotId, aspect: { w: 1080, h: 1920 }, method: 'outpaint', job_id: 'job_01K7C00000000000000000JB01' } }
     expect(reframesOf(set, size)).toEqual([{ key, done: false }])
     const out = SHA('z')
     d.assets[out] = { sha256: out, kind: 'video', mime: 'video/mp4', origin: 'mock', locations: [`${CDN}/${out}`] } as never

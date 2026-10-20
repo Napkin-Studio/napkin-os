@@ -29,7 +29,7 @@ function doc(): ProductionDocument {
     delivery: { width: 1080, height: 1080 }, method: 'crop' as const, media: 'image' as const, asset: SHA('f'),
   })
   d.sizes[size.id] = size
-  const note = e('rev', { target: { kind: 'take' as const, id: t.id }, still: SHA('g'), by: `human:${MAYA.id}`, state: 'open' as const, created_at: T })
+  const note = e('rev', { target: { kind: 'generation' as const, id: t.id }, still: SHA('g'), by: `human:${MAYA.id}`, state: 'open' as const, created_at: T })
   d.reviews[note.id] = note
   const exp = e('exp', { kind: 'ad_mp4' as const, asset: SHA('h'), created_at: T })
   d.exports[exp.id] = exp

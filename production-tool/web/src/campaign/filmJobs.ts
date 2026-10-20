@@ -189,7 +189,7 @@ export async function makeFilmSizes(deps: CampaignDeps, req: FilmRequest, by: Pe
     const s = req.shots.find((x) => x.shotId === c.shotId)
     if (s?.takeId && c.subject && !takes[s.takeId]) takes[s.takeId] = [{ ...c.subject }]
   }
-  if (Object.keys(takes).length) set.protect = { takes: Object.fromEntries(Object.entries(takes).map(([k, v]) => [k, v.map((b) => ({ role: 'subject' as const, ...b }))])) }
+  if (Object.keys(takes).length) set.protect = { generations: Object.fromEntries(Object.entries(takes).map(([k, v]) => [k, v.map((b) => ({ role: 'subject' as const, ...b }))])) }
   const ranks = ranksBetween(null, null, rows.length)
   const sizes: Size[] = []
   const reframes: NonNullable<FormatSet['reframes']> = {}
@@ -210,10 +210,10 @@ export async function makeFilmSizes(deps: CampaignDeps, req: FilmRequest, by: Pe
     sizes.push(size)
     for (const w of edl) {
       const how = req.methods[r.shapeId]?.[w.shot_id]
-      if (!w.take_id || !how || how === 'crop' || sameShape(req.master, shape)) continue
-      const key = reframeKey(w.take_id, size.delivery)
+      if (!w.generation_id || !how || how === 'crop' || sameShape(req.master, shape)) continue
+      const key = reframeKey(w.generation_id, size.delivery)
       if (!reframes[key]) {
-        reframes[key] = { take_id: w.take_id, shot_id: w.shot_id, aspect: { ...shape }, method: how, job_id: newUlidId('job'),
+        reframes[key] = { generation_id: w.generation_id, shot_id: w.shot_id, aspect: { ...shape }, method: how, job_id: newUlidId('job'),
           ...(how === 'remake' && req.remake ? { model: req.remake.model } : how === 'outpaint' ? { model: 'aleph2' } : {}) }
       }
     }
@@ -248,8 +248,8 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
   const d = deps.doc.get()
   const clips: CutdownClip[] = []
   for (const w of size.edl ?? []) {
-    const take = w.take_id ? d.takes[w.take_id] : undefined
-    const r = w.take_id ? set.reframes?.[reframeKey(w.take_id, size.delivery)] : undefined
+    const take = w.generation_id ? d.generations[w.generation_id] : undefined
+    const r = w.generation_id ? set.reframes?.[reframeKey(w.generation_id, size.delivery)] : undefined
     if (r?.asset) {
       const len = w.out_s - w.in_s
       // An outpaint keeps the take's timing; a remake is a new clip, from its start.
@@ -257,7 +257,7 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
       clips.push({ asset: await assetRef(deps.relay, r.asset, d), inS: ins, outS: outs, ...(r.size ? { takeSize: { ...r.size } } : {}) })
       continue
     }
-    if (!take) continue
+    if (!take?.asset) continue
     clips.push({
       asset: await assetRef(deps.relay, take.asset, d), inS: w.in_s, outS: w.out_s,
       ...(w.take_size ? { takeSize: { ...w.take_size } } : {}),
@@ -316,9 +316,9 @@ export async function sendReframe(deps: FilmDeps, setId: string, key: string, re
   const set = d.format_sets[setId]
   const r = set?.reframes?.[key]
   if (!set || !r) return null
-  const take = d.takes[r.take_id]
+  const take = d.generations[r.generation_id]
   const shot = d.shots[r.shot_id]
-  if (!take || !shot) return null
+  if (!take?.asset || !shot) return null
   const takeAsset = d.assets[take.asset]
   const takeSize = takeAsset?.w && takeAsset?.h ? { w: takeAsset.w, h: takeAsset.h } : undefined
   const seconds = Math.max(2, Math.min(30, takeAsset?.duration_s ?? take.duration_s ?? shot.duration_s))
@@ -335,17 +335,17 @@ export async function sendReframe(deps: FilmDeps, setId: string, key: string, re
       cutdown: { step: 'outpaint', lengthS: seconds, targetRatio: alephRatio(r.aspect),
         clips: [{ asset: await assetRef(deps.relay, take.asset, d), inS: 0, outS: seconds, ...(takeSize ? { takeSize } : {}), outpaint: true }] },
     }
-    await deps.runner.submit('cutdown', input, [take.job_id], { for: 'reframe', setId, key }, jobId)
+    await deps.runner.submit('cutdown', input, [take.job_id ?? ''].filter(Boolean), { for: 'reframe', setId, key }, jobId)
     return jobId
   }
   // Remake for vertical: the frame cropped round where the shot's crop sits at this shape.
   const any = Object.values(d.sizes).find((s) => s.set_id === setId && sameShape(shapeOf(s), r.aspect))
-  const w = any?.edl?.find((x) => x.take_id === r.take_id)
+  const w = any?.edl?.find((x) => x.generation_id === r.generation_id)
   const frame = shot.pick?.current ? d.frames[shot.pick.current] : undefined
   // Its frame, else (a clip made straight from the script has none) a still from the middle of its window.
   let picture = frame ? await getBlob(frame.asset) : undefined
   if (!picture) {
-    const clip = await getBlob(take.asset)
+    const clip = await getBlob(take.asset!)
     const mid = w ? (w.in_s + w.out_s) / 2 : seconds / 2
     picture = clip ? (await takeStills(clip, [mid], 1920))[0] : undefined
   }
@@ -353,7 +353,7 @@ export async function sendReframe(deps: FilmDeps, setId: string, key: string, re
   const refs = await refsFor(deps.relay, d, shot)
   const ratio = (['9:16', '1:1', '4:5', '16:9'] as const).find((x) => { const [a, b] = x.split(':').map(Number); return sameShape(r.aspect, { w: a, h: b }, 0.02) }) ?? '9:16'
   const input: JobInput = { shot: jobShot(d, shot), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ratio }
-  await deps.runner.submit('clip', input, [take.job_id], { for: 'reframe', setId, key }, jobId, remake)
+  await deps.runner.submit('clip', input, [take.job_id ?? ''].filter(Boolean), { for: 'reframe', setId, key }, jobId, remake)
   return jobId
 }
 
@@ -375,7 +375,7 @@ export async function landReframe(deps: FilmDeps, job: Job, ctx: Extract<JobCtx,
   const after = deps.doc.get()
   const set = after.format_sets[ctx.setId]
   for (const s of sizesOf(after, ctx.setId)) {
-    if (s.locked || s.media !== 'video' || !s.edl?.some((w) => w.take_id === r.take_id) || !sameShape(shapeOf(s), r.aspect)) continue
+    if (s.locked || s.media !== 'video' || !s.edl?.some((w) => w.generation_id === r.generation_id) || !sameShape(shapeOf(s), r.aspect)) continue
     if (reframesOf(set, s).every((x) => x.done)) void sendCutdown(deps, ctx.setId, s.id).catch((e) => console.warn('the cutdown was not sent', e))
   }
 }
@@ -400,7 +400,7 @@ export async function setBeat(deps: FilmDeps, sizeId: string, shotId: Id, keep: 
     const old = size.edl?.find((w) => w.shot_id === s.shotId)
     if (old?.crop_keys?.length) crops.push({ shotId: s.shotId, aspect: shape, keys: old.crop_keys, cuts: false })
     else if (old?.crop) crops.push({ shotId: s.shotId, aspect: shape, keys: [{ at: 0, box: old.crop }], cuts: false })
-    else crops.push({ shotId: s.shotId, aspect: shape, ...cropKeys(s.takeSize, shape, (set.protect?.takes?.[s.takeId] ?? []).map(({ x, y, w, h }) => ({ x, y, w, h }))) })
+    else crops.push({ shotId: s.shotId, aspect: shape, ...cropKeys(s.takeSize, shape, (set.protect?.generations?.[s.takeId] ?? []).map(({ x, y, w, h }) => ({ x, y, w, h }))) })
   }
   const { edl } = edlFor(shots, beats, size.length_s, shape, crops, size.edl)
   await updateDoc(deps.doc, (x) => {
@@ -456,9 +456,9 @@ export async function remakeShots(deps: FilmDeps, sizeId: string, shotIds: Id[],
     if (!st) return
     st.reframes = st.reframes ?? {}
     for (const w of size.edl ?? []) {
-      if (!w.take_id || !shotIds.includes(w.shot_id)) continue
-      const key = reframeKey(w.take_id, size.delivery)
-      st.reframes[key] = { take_id: w.take_id, shot_id: w.shot_id, aspect: { ...shape }, method: 'remake', job_id: newUlidId('job'), model: model.model }
+      if (!w.generation_id || !shotIds.includes(w.shot_id)) continue
+      const key = reframeKey(w.generation_id, size.delivery)
+      st.reframes[key] = { generation_id: w.generation_id, shot_id: w.shot_id, aspect: { ...shape }, method: 'remake', job_id: newUlidId('job'), model: model.model }
       keys.push(key)
     }
     for (const s of Object.values(x.sizes)) if (s.set_id === size.set_id && sameShape(shapeOf(s), shape) && !s.locked && s.edl?.some((w) => shotIds.includes(w.shot_id))) s.status = 'making'

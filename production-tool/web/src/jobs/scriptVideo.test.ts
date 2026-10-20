@@ -64,7 +64,7 @@ async function videoFrom(store: ModelStore, scriptId: string): Promise<string> {
   const v = id('video')
   const l = id('link')
   await systemUpdate(store, (d) => {
-    d.videos[v] = { id: v, v: 1, field_v: {}, title: 'Video 2', ratio: '16:9', target_s: 15, edl: {} }
+    d.videos[v] = { id: v, v: 1, field_v: {}, title: 'Video 2', ratio: '16:9', target_s: 15, timeline: {} }
     d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'script', id: scriptId }, to: { kind: 'video', id: v }, role: 'drives' }
   }, 'make video')
   await store.flush()

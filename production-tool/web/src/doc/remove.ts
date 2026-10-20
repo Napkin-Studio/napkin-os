@@ -1,7 +1,7 @@
 // Deleting things from the document (contract 3: id-keyed maps).
 //
 // A delete is only a change of data: entities leave their maps, what points at
-// them is cleared or moved on (a shot's frame pick, the cut's take pick, links,
+// them is cleared or moved on (a shot's frame pick, the cut's clips of a take, links,
 // notes, out-of-date marks), and the chain gets one decision ("delete frame
 // frame_… (shot 2, v1)"). A person's delete is one undo step of LocalUndo's
 // (the deleting write itself, through updateDoc): Undo in the top bar puts it
@@ -11,16 +11,16 @@
 // picture and clip until Clean up (doc/gc.ts).
 
 import { newUlidId } from '../../../clan-store/src'
-import type { MapName, ProductionDocument, StaleMark, Target } from '../contracts/types'
-import { refreshClipStale } from '../jobs/stale'
-import { framesOf, refsList, shotName, takesOf } from '../model/selectors'
+import type { Generation, MapName, ProductionDocument, StaleMark, Target } from '../contracts/types'
+import { framesOf, refsList, shotName, takeNumber, takesOf } from '../model/selectors'
+import { repackByShots, shotSlot } from './cutWrites'
 import { describeRemoval } from './describe'
 import { systemUpdate, updateDoc } from './store'
 import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | NodeRemovalKind
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'generation' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | NodeRemovalKind
 /** The document's nodes on the canvas (features/canvas-edit-tools.clan). */
 export type NodeRemovalKind = 'script' | 'storyboard' | 'video'
 
@@ -90,21 +90,46 @@ export function removeShot(d: Doc, shotId: string): Removal {
 /** Everything removeShot takes, into `r`; the shot's frame and clip ids. */
 function takeShotOut(d: Doc, r: Removal, shotId: string): { frames: string[]; takes: string[] } {
   const frameIds = new Set(framesOf(d, shotId).map((f) => f.id))
-  const takeIds = new Set(takesOf(d, shotId).map((t) => t.id))
+  // Its own takes go; a take of a box made with other shots stays, without this shot.
+  const shared = Object.values(d.generations).filter((g) => g.shot_ids.includes(shotId) && g.shot_ids.length > 1)
+  const takeIds = new Set(Object.values(d.generations).filter((g) => g.shot_ids.length === 1 && g.shot_ids[0] === shotId).map((g) => g.id))
   const beatIds = new Set(Object.values(d.beats).filter((b) => b.shot_id === shotId).map((b) => b.id))
   takeOut(d, r, 'shots', shotId)
   for (const id of frameIds) takeOut(d, r, 'frames', id)
-  for (const id of takeIds) takeOut(d, r, 'takes', id)
+  for (const id of takeIds) takeGenerationOut(d, r, id)
+  for (const g of shared) {
+    modify(r, 'generations', g, (x) => {
+      x.shot_ids = x.shot_ids.filter((id) => id !== shotId)
+      if (x.segments) x.segments = x.segments.filter((seg) => seg.shot_id !== shotId)
+    })
+  }
   for (const id of beatIds) takeOut(d, r, 'beats', id)
   for (const v of Object.values(d.videos)) {
-    const items = Object.entries(v.edl).filter(([, item]) => item.shot_id === shotId)
-    if (items.length) modify(r, 'videos', v, (x) => { for (const [itemId] of items) delete x.edl[itemId] })
+    const items = Object.entries(v.timeline).filter(([, item]) => item.follows?.shot_id === shotId || (!!item.source?.generation_id && takeIds.has(item.source.generation_id)))
+    if (items.length) modify(r, 'videos', v, (x) => { for (const [itemId] of items) delete x.timeline[itemId] })
   }
   takeOutAbout(d, r, 'shot', new Set([shotId]))
   takeOutAbout(d, r, 'frame', frameIds)
-  takeOutAbout(d, r, 'take', takeIds)
+  takeOutAbout(d, r, 'generation', takeIds)
   takeOutAbout(d, r, 'beat', beatIds)
   return { frames: [...frameIds], takes: [...takeIds] }
+}
+
+/** A generation out of its map; what was made from it now comes from its parent (a change of nothing left is
+ *  a first take). */
+function takeGenerationOut(d: Doc, r: Removal, genId: string) {
+  const gone = d.generations[genId]
+  takeOut(d, r, 'generations', genId)
+  for (const x of Object.values(d.generations)) {
+    if (x.parent_id !== genId) continue
+    modify(r, 'generations', x, (y) => {
+      if (gone?.parent_id && d.generations[gone.parent_id]) y.parent_id = gone.parent_id
+      else {
+        delete y.parent_id
+        if (y.kind === 'change' || y.kind === 'patch' || y.kind === 'feel' || y.kind === 'extend') y.kind = 'clip'
+      }
+    })
+  }
 }
 
 const BEAT_WORD: Record<string, string> = { moment: 'moment', line: 'line', vo: 'voice-over line', music: 'music cue', sound: 'sound', camera: 'camera beat' }
@@ -158,7 +183,7 @@ export function sceneDeleteText(n: number, c: { shots: string[]; frames: number;
 }
 
 /** Versions made from `goneId` now come from its parent. */
-function reparent(d: Doc, r: Removal, map: 'frames' | 'takes', goneId: string, parent: string | undefined) {
+function reparent(d: Doc, r: Removal, map: 'frames', goneId: string, parent: string | undefined) {
   for (const x of Object.values(mapOf(d, map)) as unknown as { id: string; parent_id?: string }[]) {
     if (x.parent_id === goneId) modify(r, map, x, (y) => { if (parent) y.parent_id = parent; else delete y.parent_id })
   }
@@ -188,41 +213,40 @@ export function removeFrame(d: Doc, frameId: string): Removal {
     })
   }
   takeOutAbout(d, r, 'frame', new Set([frameId]))
-  if (wasCurrent && shot) refreshClipStale(d, shot.id)
   r.ids = [frame.shot_id, frameId, frame.job_id].filter((x): x is string => !!x)
   return r
 }
 
-/** One clip version, with the notes on it. If it was the shot's take in the cut, the cut moves to the clip it
- *  came from (or the newest left); the last one may go too: the cut's item then has no pick. */
-export function removeTake(d: Doc, takeId: string): Removal {
-  const take = d.takes[takeId]
-  if (!take) throw new Error('That clip is already gone.')
-  const r = blank('take', takeId, `clip ${takeId} (${shotName(d, take.shot_id)}, v${take.version})`)
-  takeOut(d, r, 'takes', takeId)
-  reparent(d, r, 'takes', takeId, take.parent_id)
-  let wasCurrent = false
+/** One take (a generation), with the notes on it. A clip in a cut that played it moves to the take it came from
+ *  (or the newest take of its shot left), keeping its place, fades and transition; with none left the clip goes. */
+export function removeTake(d: Doc, genId: string): Removal {
+  const g = d.generations[genId]
+  if (!g) throw new Error('That clip is already gone.')
+  const first = g.shot_ids[0]
+  const r = blank('generation', genId, `clip ${genId} (${first ? `${shotName(d, first)}, v${takeNumber(d, genId, first)}` : 'not in a box'})`)
+  takeGenerationOut(d, r, genId)
   for (const v of Object.values(d.videos)) {
-    for (const [itemId, item] of Object.entries(v.edl)) {
-      if (!item.pick || (item.pick.current !== takeId && !item.pick.alternates?.includes(takeId))) continue
-      const current = item.pick.current === takeId
-      wasCurrent ||= current
-      modify(r, 'videos', v, (x) => {
-        const it = x.edl[itemId]
-        const alternates = (it.pick!.alternates ?? []).filter((t) => t !== takeId)
-        if (!current) {
-          it.pick = { ...it.pick!, alternates }
-          return
-        }
-        const next = (take.parent_id && d.takes[take.parent_id]) || (it.shot_id ? takesOf(d, it.shot_id).at(-1) : undefined)
-        if (next) it.pick = { current: next.id, alternates: alternates.filter((t) => t !== next.id) }
-        else delete it.pick
-      })
-    }
+    const items = Object.entries(v.timeline).filter(([, it]) => it.source?.generation_id === genId)
+    if (!items.length) continue
+    modify(r, 'videos', v, (x) => {
+      for (const [itemId, it] of items) {
+        const shotId = it.follows?.shot_id
+        const next: Generation | undefined = (g.parent_id && d.generations[g.parent_id]) || (shotId ? takesOf(d, shotId).filter((t) => t.id !== genId).at(-1) : undefined)
+        const shot = shotId ? d.shots[shotId] : undefined
+        if (!next || !shotId || !shot) { delete x.timeline[itemId]; continue }
+        const slot = shotSlot(next, shotId, shot.duration_s)
+        const item = x.timeline[itemId]
+        item.source = { generation_id: next.id, in_s: slot.in_s, out_s: slot.out_s }
+        if (slot.hold_s) item.hold_s = slot.hold_s
+        else delete item.hold_s
+        if (slot.speed) item.speed = slot.speed
+        else delete item.speed
+      }
+      repackByShots(d, x.id)
+    })
   }
-  takeOutAbout(d, r, 'take', new Set([takeId]))
-  if (wasCurrent) refreshClipStale(d, take.shot_id)
-  r.ids = [take.shot_id, takeId, take.job_id]
+  takeOutAbout(d, r, 'generation', new Set([genId]))
+  r.ids = [...g.shot_ids, genId, ...(g.job_id ? [g.job_id] : [])]
   return r
 }
 
@@ -237,7 +261,7 @@ export function removeNote(d: Doc, reviewId: string): Removal {
   const note = d.reviews[reviewId]
   if (!note) throw new Error('That note is already gone.')
   const shotId = note.shot_id
-    ?? (note.target.kind === 'take' ? d.takes[note.target.id]?.shot_id : note.target.kind === 'frame' ? d.frames[note.target.id]?.shot_id : undefined)
+    ?? (note.target.kind === 'generation' ? d.generations[note.target.id]?.shot_ids[0] : note.target.kind === 'frame' ? d.frames[note.target.id]?.shot_id : undefined)
   const where = shotId && d.shots[shotId] ? ` (${shotName(d, shotId)})` : ''
   const r = blank('note', reviewId, `note at ${fmtTime(note.at_s ?? 0)}${where}`)
   takeOut(d, r, 'reviews', reviewId)
@@ -339,7 +363,7 @@ export function removeNode(d: Doc, kind: NodeRemovalKind, nodeId: string): Remov
     for (const sh of shots) {
       const sub = removeShot(d, sh)
       frames += sub.removed.filter((m) => m.map === 'frames').length
-      clips += sub.removed.filter((m) => m.map === 'takes').length
+      clips += sub.removed.filter((m) => m.map === 'generations').length
       absorb(r, sub)
       ids.push(...sub.ids)
     }
@@ -377,7 +401,7 @@ export function usersOf(d: Doc, asset: string): Target[] {
   const used = (jobId: string | undefined) => !!jobId && !!d.jobs[jobId]?.input_hashes?.includes(asset)
   return [
     ...Object.values(d.frames).filter((f) => used(f.job_id)).map((f) => ({ kind: 'frame' as const, id: f.id })),
-    ...Object.values(d.takes).filter((t) => used(t.job_id)).map((t) => ({ kind: 'take' as const, id: t.id })),
+    ...Object.values(d.generations).filter((g) => used(g.job_id)).map((g) => ({ kind: 'generation' as const, id: g.id })),
   ]
 }
 

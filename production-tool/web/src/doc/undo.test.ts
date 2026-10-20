@@ -1,7 +1,7 @@
 import { MAX_STEPS } from '../../../clan-store/src'
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../contracts/types'
-import { edlItemFor } from '../model/selectors'
+import { cutItemFor } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { addFrame, addShots, addTake, content, id, job, MAYA, modelStore, SHA, T } from '../test/model'
 import { deleteFrom, removeNote, removeShot, removeTake } from './remove'
@@ -22,7 +22,7 @@ function fixture(d: ProductionDocument) {
   const t2 = addTake(d, s1, SHA('2'), jobs[1], { pick: true, parent: t1 })
   const t3 = addTake(d, s1, SHA('3'), jobs[2], { pick: true, parent: t2 })
   addTake(d, s2, SHA('4'), jobs[3], { pick: true })
-  const note = { id: id('rev'), v: 1, field_v: {}, target: { kind: 'take' as const, id: t3.id }, shot_id: s1.id, by: `human:${MAYA.id}`, state: 'open' as const, text: 'keep it a guinea pig', created_at: T }
+  const note = { id: id('rev'), v: 1, field_v: {}, target: { kind: 'generation' as const, id: t3.id }, shot_id: s1.id, by: `human:${MAYA.id}`, state: 'open' as const, text: 'keep it a guinea pig', created_at: T }
   d.reviews[note.id] = note
   return { s1, s2, f1, f2, t1, t2, t3, note }
 }
@@ -45,14 +45,14 @@ describe('undo and redo on the document', () => {
     const before = content(store.get())
     await deleteFrom(store, (d) => removeTake(d, t3.id))
     await store.flush()
-    expect(store.get().takes[t3.id]).toBeUndefined()
+    expect(store.get().generations[t3.id]).toBeUndefined()
     expect(store.get().reviews[note.id]).toBeUndefined()
     expect(stepWords(undoLabels(store).undo!)).toBe('delete clip (shot 1, v3)')
     expect(await undo(store)).toMatchObject({ done: true })
     expect(content(store.get())).toEqual(before)
-    expect(edlItemFor(store.get(), s1.id)!.pick!.current).toBe(t3.id)
+    expect(cutItemFor(store.get(), s1.id)!.source?.generation_id).toBe(t3.id)
     expect(await redo(store)).toMatchObject({ done: true })
-    expect(store.get().takes[t3.id]).toBeUndefined()
+    expect(store.get().generations[t3.id]).toBeUndefined()
   })
 
   it('bookkeeping and the crew\'s landings are not steps, and undo leaves them alone', async () => {
@@ -64,7 +64,7 @@ describe('undo and redo on the document', () => {
     await store.flush()
     expect(steps(store).undo).toHaveLength(1)
     await undo(store)
-    expect(store.get().takes[t3.id]).toBeDefined()
+    expect(store.get().generations[t3.id]).toBeDefined()
     expect(store.get().frames[landed]).toBeDefined()
     expect(store.get().assets[SHA('d')]).toBeDefined()
   })
@@ -134,7 +134,7 @@ describe('undo and redo on the document', () => {
   })
 
   it('says a step in plain words', () => {
-    expect(stepWords('delete clip take_01M4EP36MVQNQEHE0NP83FD7RN (shot 3, v4)')).toBe('delete clip (shot 3, v4)')
+    expect(stepWords('delete clip gen_01M4EP36MVQNQEHE0NP83FD7RN (shot 3, v4)')).toBe('delete clip (shot 3, v4)')
     expect(stepWords('pick take v2 for shot 3')).toBe('pick take v2 for shot 3')
   })
 })
