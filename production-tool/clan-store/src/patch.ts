@@ -1,25 +1,26 @@
-// Fix this moment (features/clip-moment-edit.clan, review item 8): the pure arithmetic of a clip_patch,
-// shared by the relay's Python twin (relay/time_rules.py) and pinned by contracts/examples/patches.json.
+// Fix this moment (features/clip-moment-edit.clan, review item 8), on generations (features/make-and-edit.clan):
+// the pure arithmetic of a clip_patch, shared by the relay's Python twin (relay/time_rules.py) and pinned
+// by contracts/examples/patches.json.
 //
-//   noteToTakeWindow  a note's window (take time for a note on a take, shot time otherwise) on the take
-//   patchPlan         what is cut from the take, and the keyframe the model gets
-//   spliceSegments    the patched take's segments: where each stretch of its frames came from
-//   patchedRanges     the "patched 0:02-0:04" marks a take carries
-//   applyPatchTake    a finished clip_patch job as the shot's new take (one landing; the web's landPatch)
+//   noteToTakeWindow       a note's window (its generation's time for a note on a generation, shot time
+//                          otherwise) on the generation
+//   momentWindow           a marked stretch (Change → A moment) snapped to whole seconds, at least 2 s
+//   patchPlan              what is cut from the generation, and the keyframe the model gets
+//   patchedStretches       a patched generation's `patched`: where each stretch was made again
+//   patchedRanges          the "patched 0:02-0:04" marks a generation carries
+//   applyPatchGeneration   a finished clip_patch job as a new generation beside its parent (never swapped
+//                          into the cut: the Edit room offers it as New take ready)
 //
 // The video-editor and server-job-landing call these; they never redo the arithmetic.
 
-import { rankBetween } from './rank'
 import { newUlidId } from './store'
 import { MIN_WINDOW_S, type NoteWindow } from './time'
 
 const EPS = 1e-9
 /** A keyframe sits this far inside the end of its range (end exclusive). */
 export const KEYFRAME_EPS_S = 0.05
-/** A take keeps at most this many segments (document.schema take.segments maxItems). */
-export const MAX_SEGMENTS = 16
-/** A pick keeps at most this many alternates (document.schema pick.alternates maxItems). */
-export const MAX_ALTERNATES = 8
+/** A generation keeps at most this many patched stretches (document.schema generation.patched maxItems). */
+export const MAX_PATCHED = 16
 
 const r3 = (x: number) => Math.round(x * 1000) / 1000
 
@@ -39,9 +40,9 @@ export interface TakeWindow {
 }
 
 /**
- * A note's window on its take. A note on a take (target.kind 'take', written from the take player) is in
- * take time and passes through unchanged; any other note (the video editor's timeline: shot time) moves
- * by the cut item's in_s, widened to whole seconds. Either way the window is fitted inside the take,
+ * A note's window on its generation. A note on a generation (target.kind 'generation', written from the
+ * take player) is in the generation's own time and passes through unchanged; any other note (the
+ * timeline: shot time) moves by the clip's source in_s, widened to whole seconds. Either way the window is fitted inside the take,
  * at least 2 s, shifting inward rather than shrinking. null when the note has no moment or window, or
  * the take is too short to hold 2 whole seconds.
  */
@@ -50,7 +51,7 @@ export function noteToTakeWindow(note: NoteLike, take: { duration_s: number }, i
   const end = Math.floor(take.duration_s + EPS)
   if (end < MIN_WINDOW_S) return null
   const inS = item?.in_s ?? 0
-  const shotTime = note.target.kind !== 'take'
+  const shotTime = note.target.kind !== 'generation'
   let lo = shotTime ? Math.floor(note.window.from_s + inS + EPS) : note.window.from_s
   let hi = shotTime ? Math.ceil(note.window.to_s + inS - EPS) : note.window.to_s
   const width = Math.min(Math.max(MIN_WINDOW_S, hi - lo), end)
@@ -59,6 +60,21 @@ export function noteToTakeWindow(note: NoteLike, take: { duration_s: number }, i
   const at = r3(Math.min(Math.max(note.at_s + (shotTime ? inS : 0), lo), hi))
   const cutEnd = item?.out_s ?? take.duration_s
   return { window: { from_s: lo, to_s: hi }, atS: at, inCut: lo < cutEnd - EPS && hi > inS + EPS }
+}
+
+/**
+ * A marked stretch of a generation (Change → A moment, in its own time) as the window a clip_patch makes
+ * again: whole seconds around inS..outS, at least 2 s, inside the generation, shifting inward rather than
+ * shrinking; atS is the middle of the mark. null when the generation is too short to hold 2 whole
+ * seconds. The relay snaps the same way (time_rules.moment_window) and returns what it snapped.
+ */
+export function momentWindow(inS: number, outS: number, takeS: number): TakeWindow | null {
+  const lo = Math.min(inS, outS)
+  const hi = Math.max(inS, outS)
+  return noteToTakeWindow(
+    { target: { kind: 'generation' }, at_s: r3((lo + hi) / 2), window: { from_s: Math.floor(lo + EPS), to_s: Math.ceil(hi - EPS) } },
+    { duration_s: takeS },
+  )
 }
 
 export type KeyframeKind = 'none' | 'still' | 'edited'
@@ -121,71 +137,54 @@ export function patchPlan(p: { window: NoteWindow; atS: number; takeS: number; c
   return plan
 }
 
-export interface Segment { source_take: string; in_s: number; out_s: number; job_id?: string }
-
-const sameSource = (x: Segment, y: Segment) => x.source_take === y.source_take && x.job_id === y.job_id
-
-function merged(pieces: Segment[]): Segment[] {
-  const out: Segment[] = []
-  for (const s of pieces) {
-    if (s.out_s - s.in_s <= EPS) continue
-    const last = out.at(-1)
-    if (last && sameSource(last, s) && Math.abs(last.out_s - s.in_s) <= EPS) last.out_s = s.out_s
-    else out.push({ ...s })
-  }
-  return out
-}
+/** One stretch of a generation made again by a clip_patch (document.schema generation.patched). */
+export interface Patched { in_s: number; out_s: number; job_id: string; generation_id?: string }
 
 /**
- * The segments of a take patched over `window`: the parent's pieces before it, {self, window, job}, the
- * parent's pieces after it (in this take's time, which is the parent's), adjacent pieces from one source
- * merged. An unpatched parent is one piece of itself. Past 16 pieces the oldest patched piece (the
- * smallest job id: ULIDs sort by time) folds with its neighbours into one piece of this take with no
- * job, so the list always fits the document.
+ * The patched stretches of a generation patched over `window` by `jobId`, making `genId`: the parent's
+ * stretches cut back where the window covers them, then the window itself, in time order. Past 16 the
+ * oldest stretches (the smallest job id: ULIDs sort by time) go, so the list always fits the document.
  */
-export function spliceSegments(parent: { id: string; duration_s: number; segments?: Segment[] }, takeId: string, window: NoteWindow, jobId: string): Segment[] {
-  const own = parent.segments?.length ? parent.segments : [{ source_take: parent.id, in_s: 0, out_s: parent.duration_s }]
+export function patchedStretches(parent: { patched?: Patched[] }, genId: string, window: NoteWindow, jobId: string): Patched[] {
   const a = window.from_s
   const b = window.to_s
-  const before = own.filter((s) => s.in_s < a - EPS).map((s) => ({ ...s, out_s: Math.min(s.out_s, a) }))
-  const after = own.filter((s) => s.out_s > b + EPS).map((s) => ({ ...s, in_s: Math.max(s.in_s, b) }))
-  let out = merged([...before, { source_take: takeId, in_s: a, out_s: b, job_id: jobId }, ...after])
-  while (out.length > MAX_SEGMENTS) {
-    const old = out
-      .map((s, i) => ({ s, i }))
-      .filter(({ s }) => s.job_id && s.job_id !== jobId)
-      .sort((x, y) => (x.s.job_id! < y.s.job_id! ? -1 : x.s.job_id! > y.s.job_id! ? 1 : x.i - y.i))[0]
-    if (!old) break
-    const i = old.i
-    const lo = i > 0 && out[i - 1].job_id !== jobId ? i - 1 : i
-    const hi = i < out.length - 1 && out[i + 1].job_id !== jobId ? i + 1 : i
-    const piece: Segment = { source_take: takeId, in_s: out[lo].in_s, out_s: out[hi].out_s }
-    out = merged([...out.slice(0, lo), piece, ...out.slice(hi + 1)])
+  const kept: Patched[] = []
+  for (const s of parent.patched ?? []) {
+    if (s.out_s <= a + EPS || s.in_s >= b - EPS) kept.push({ ...s })
+    else {
+      if (s.in_s < a - EPS) kept.push({ ...s, out_s: a })
+      if (s.out_s > b + EPS) kept.push({ ...s, in_s: b })
+    }
+  }
+  let out = [...kept, { in_s: a, out_s: b, job_id: jobId, generation_id: genId }].sort((x, y) => x.in_s - y.in_s)
+  while (out.length > MAX_PATCHED) {
+    const oldest = out.filter((s) => s.job_id !== jobId).map((s) => s.job_id).sort()[0]
+    if (!oldest) break
+    const i = out.findIndex((s) => s.job_id === oldest)
+    out = [...out.slice(0, i), ...out.slice(i + 1)]
   }
   return out
 }
 
 const mss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
-/** A take's patched stretches, each with its timeline label ("patched 0:02-0:04"), in order. */
-export function patchedRanges(take: { segments?: Segment[] }): { from_s: number; to_s: number; job_id: string; label: string }[] {
-  return (take.segments ?? [])
-    .filter((s): s is Segment & { job_id: string } => !!s.job_id)
-    .map((s) => ({ from_s: s.in_s, to_s: s.out_s, job_id: s.job_id, label: `patched ${mss(s.in_s)}-${mss(s.out_s)}` }))
+/** A generation's patched stretches, each with its timeline label ("patched 0:02-0:04"), in order. */
+export function patchedRanges(g: { patched?: Patched[] }): { from_s: number; to_s: number; job_id: string; label: string }[] {
+  return (g.patched ?? []).map((s) => ({ from_s: s.in_s, to_s: s.out_s, job_id: s.job_id, label: `patched ${mss(s.in_s)}-${mss(s.out_s)}` }))
 }
 
 // ── landing ─────────────────────────────────────────────────────────────────
 
-export interface PatchTake {
-  id: string; v: number; field_v: Record<string, number>; shot_id: string; version: number; parent_id?: string
-  asset: string; job_id: string; crew: string; kind: 'generated' | 'mock'; model: string; provider: string
-  duration_s: number; segments: Segment[]
+/** The parts of a generation a patch landing reads and writes (document.schema.json#/$defs/generation). */
+export interface PatchGeneration {
+  id: string; v: number; field_v: Record<string, number>; kind: string; parent_id?: string
+  delta?: { field: string; shot_id?: string; from?: unknown; to: unknown }[]; label?: string
+  inputs?: Record<string, unknown>; box_id?: string; shot_ids: string[]
+  segments?: { shot_id: string; in_s: number; out_s: number; by?: string }[]; patched?: Patched[]
+  asset?: string; duration_s?: number; state: 'making' | 'ready' | 'failed'; job_id?: string; provider?: string; crew?: string
+  mock?: true; created_at: string; by: string
 }
-interface Pick { current: string; alternates?: string[] }
-export interface PatchDoc {
-  takes: Record<string, PatchTake>
-  videos: Record<string, { edl: Record<string, { rank: string; kind: 'shot' | 'bridge'; shot_id?: string; pick?: Pick }> }>
-}
+export interface PatchDoc { generations: Record<string, PatchGeneration> }
 export interface PatchJob {
   jobId: string
   kind?: 'generated' | 'mock'
@@ -193,43 +192,41 @@ export interface PatchJob {
   provider?: string
   outputs?: { sha256: string; durationS?: number }[]
   patch?: { window: NoteWindow; model: string }
+  remake?: { parentId?: string; delta: { field: string; shotId?: string; from?: unknown; to: unknown }[] }
 }
 
 /**
- * A finished clip_patch as the shot's new take: version n+1, parent the patched take, Edie's, the window's
- * model, with spliceSegments' segments. It becomes the cut's pick for the shot and the parent moves into
- * the alternates (Use's rule, never applyTake's pick = {current}). The note stays open: Fix again makes the
- * next version, and Resolve closes it. Landing the same job twice changes nothing (undefined).
+ * A finished clip_patch as a new generation (kind patch) beside its parent: Edie's, the window's model, the
+ * parent's length, shots, segments and box (a patch never changes length), with patchedStretches'
+ * stretches and the moment as its delta. It is NOT put into the cut: the Edit room offers it on the
+ * parent's clips (New take ready). The note stays open: Fix again makes the next, Resolve closes it.
+ * Landing the same job twice changes nothing (undefined).
  */
-export function applyPatchTake(d: PatchDoc, job: PatchJob, ctx: { shotId: string; parentTakeId: string; videoId?: string; newId?: (prefix: string) => string }): PatchTake | undefined {
+export function applyPatchGeneration(
+  d: PatchDoc, job: PatchJob,
+  ctx: { parentId: string; by: string; now: string; note?: string; newId?: (prefix: string) => string },
+): PatchGeneration | undefined {
   const out = job.outputs?.[0]
-  const parent = d.takes[ctx.parentTakeId]
+  const parent = d.generations[ctx.parentId]
   if (!out || !parent || !job.patch) return undefined
-  if (Object.values(d.takes).some((t) => t.job_id === job.jobId)) return undefined
-  const id = (ctx.newId ?? newUlidId)('take')
-  const version = Math.max(0, ...Object.values(d.takes).filter((t) => t.shot_id === ctx.shotId).map((t) => t.version)) + 1
-  const take: PatchTake = {
-    id, v: 1, field_v: {}, shot_id: ctx.shotId, version, parent_id: parent.id,
-    asset: out.sha256, job_id: job.jobId, crew: 'edie',
-    kind: job.kind === 'mock' ? 'mock' : 'generated',
-    model: job.patch.model, provider: job.provider ?? 'mock',
-    duration_s: parent.duration_s,
-    segments: spliceSegments(parent, id, job.patch.window, job.jobId),
+  if (Object.values(d.generations).some((g) => g.job_id === job.jobId)) return undefined
+  const id = (ctx.newId ?? newUlidId)('gen')
+  const w = job.patch.window
+  const moment = job.remake?.delta.find((x) => x.field === 'moment')
+  const g: PatchGeneration = {
+    id, v: 1, field_v: {}, kind: 'patch', parent_id: parent.id,
+    delta: [{ field: 'moment', to: moment?.to ?? { window: w, ...(ctx.note ? { note: ctx.note } : {}) } }],
+    label: `${ctx.note ? `${ctx.note.slice(0, 80)} ` : 'Fixed '}${mss(w.from_s)}-${mss(w.to_s)}`,
+    inputs: { model: job.patch.model, ...(parent.duration_s !== undefined ? { length_s: parent.duration_s } : {}) },
+    ...(parent.box_id ? { box_id: parent.box_id } : {}),
+    shot_ids: [...parent.shot_ids],
+    ...(parent.segments?.length ? { segments: parent.segments.map((x) => ({ ...x })) } : {}),
+    patched: patchedStretches(parent, id, w, job.jobId),
+    asset: out.sha256, duration_s: parent.duration_s ?? out.durationS ?? 0,
+    state: 'ready', job_id: job.jobId, provider: job.provider ?? 'mock', crew: 'edie',
+    ...(job.kind === 'mock' ? { mock: true as const } : {}),
+    created_at: ctx.now, by: ctx.by,
   }
-  d.takes[id] = take
-  const video = ctx.videoId ? d.videos[ctx.videoId] : undefined
-  if (video) {
-    const entry = Object.entries(video.edl).find(([, i]) => i.kind === 'shot' && i.shot_id === ctx.shotId)
-    if (entry) {
-      const was = entry[1].pick
-      const alternates = [...(was?.alternates ?? []), ...(was ? [was.current] : [])]
-        .filter((x, i, all) => x !== id && all.indexOf(x) === i)
-        .slice(-MAX_ALTERNATES)
-      video.edl[entry[0]].pick = { current: id, ...(alternates.length ? { alternates } : {}) }
-    } else {
-      const last = Object.values(video.edl).map((i) => i.rank).sort().at(-1) ?? null
-      video.edl[(ctx.newId ?? newUlidId)('edl')] = { rank: rankBetween(last, null), kind: 'shot', shot_id: ctx.shotId, pick: { current: id, alternates: [parent.id] } }
-    }
-  }
-  return take
+  d.generations[id] = g
+  return g
 }

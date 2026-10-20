@@ -38,7 +38,7 @@
       "id": "board_01K7C00000000000000000CB01",
       "v": 1,
       "field_v": {},
-      "title": "Campaign \u00b7 First Light",
+      "title": "Campaign · First Light",
       "purpose": "formats",
       "rank": "a0"
     }
@@ -75,10 +75,10 @@
       "title": "Video",
       "ratio": "16:9",
       "target_s": 15,
-      "edl": {}
+      "timeline": {}
     }
   },
-  "takes": {},
+  "generations": {},
   "renders": {},
   "reviews": {},
   "links": {
@@ -282,7 +282,7 @@
       "edl": [
         {
           "shot_id": "shot_01K7C00000000000000000CH01",
-          "take_id": "take_01K7C00000000000000000CT01",
+          "generation_id": "gen_01K7C00000000000000000CT01",
           "in_s": 0.5,
           "out_s": 4
         },

@@ -193,6 +193,33 @@
           "$ref": "common.schema.json#/$defs/id",
           "description": "clip and clip_edit: Remake as Final (features/clip-quality.clan). The id of a finished job of this project whose take is remade at `quality`: the relay runs that job's own input on the model it ran on (the family member for the level), reusing Dex's directed request, so the words, pictures and length are the draft's; this request's input and modelChoice are ignored. A Seedance 2.5 draft under 7 days old is made final by Runway itself (draftTaskId). Added 2026-10-15 (additive)."
         },
+        "remakeWith": {
+          "type": "object",
+          "description": "clip, clip_patch and clip_edit: a new take from a parent with one thing changed (Change this…, features/make-and-edit.clan). parentJobId is the parent generation's job: the relay rebuilds that job's held request (the full request it keeps server-side, with the clip request a patch or feel came from), applies only the delta and runs it as this job. camera.movement and words remake the parent's clip whole (op clip: the same frames, references, length and model, and its seed where the model repeats one); moment remakes a stretch (op clip_patch on the parent's footage, snapped to whole seconds of at least 2 s: the snapped window is on Job.patch.window and Job.remake.window); feel restyles it whole (op clip_edit). This request's input is ignored (send {}); modelChoice and quality, when given, pick the model and level, else the parent's. Job.remake records the parent and the delta with each `from` filled from the held request. Refused with promoteFrom. Added 2026-10-20 (additive).",
+          "properties": {
+            "parentJobId": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "parentId": {
+              "type": "string",
+              "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
+              "description": "The parent generation's id, echoed on Job.remake so the landing writes parent_id."
+            },
+            "delta": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/RemakeDelta"
+              }
+            }
+          },
+          "required": [
+            "parentJobId",
+            "delta"
+          ],
+          "additionalProperties": false
+        },
         "projectId": {
           "$ref": "common.schema.json#/$defs/id",
           "description": "The document's project.id: jobs are the project's, whoever started them."
@@ -224,6 +251,57 @@
       ],
       "additionalProperties": false,
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "input": {
+                "required": [
+                  "timeline"
+                ]
+              }
+            },
+            "required": [
+              "input"
+            ]
+          },
+          "then": {
+            "properties": {
+              "op": {
+                "const": "stitch"
+              },
+              "input": {
+                "not": {
+                  "required": [
+                    "clips"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "remakeWith"
+            ]
+          },
+          "then": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "clip",
+                  "clip_patch",
+                  "clip_edit"
+                ]
+              }
+            },
+            "not": {
+              "required": [
+                "promoteFrom"
+              ]
+            }
+          }
+        },
         {
           "if": {
             "properties": {
@@ -275,7 +353,12 @@
             },
             "required": [
               "op"
-            ]
+            ],
+            "not": {
+              "required": [
+                "remakeWith"
+              ]
+            }
           },
           "then": {
             "properties": {
@@ -774,7 +857,7 @@
         },
         "clips": {
           "type": "array",
-          "description": "stitch: the picked takes in cut order. An end-card shot's clip carries endCard: the relay leaves it out, because stitch draws the end card itself (its payload is unchanged).",
+          "description": "stitch (the old request, kept as it was): clips in cut order. An end-card shot's clip carries endCard: the relay leaves it out, because stitch draws the end card itself (its payload is unchanged). A timeline render sends input.timeline instead.",
           "items": {
             "type": "object",
             "properties": {
@@ -836,6 +919,10 @@
           },
           "minItems": 1,
           "maxItems": 100
+        },
+        "timeline": {
+          "$ref": "#/$defs/TimelinePlan",
+          "description": "stitch in timeline mode: the compiled plan of a video's timeline (features/make-and-edit.clan). Sent instead of clips."
         },
         "write": {
           "$ref": "#/$defs/WriteInput"
@@ -1766,6 +1853,74 @@
             "op"
           ],
           "additionalProperties": false
+        },
+        "remake": {
+          "type": "object",
+          "description": "A remake (JobRequest.remakeWith, features/make-and-edit.clan): its parent and what changed, each from filled from the parent's held request. window and atS: a moment's stretch as snapped (whole seconds of the parent's time, at least 2 s). The landing writes the generation's parent_id and delta from it. No price is here: costs stay in cost, shown only in History.",
+          "properties": {
+            "parentJobId": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "parentId": {
+              "type": "string",
+              "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "delta": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "enum": [
+                      "camera.movement",
+                      "words",
+                      "moment",
+                      "feel"
+                    ]
+                  },
+                  "shotId": {
+                    "$ref": "common.schema.json#/$defs/id"
+                  },
+                  "from": {},
+                  "to": {}
+                },
+                "required": [
+                  "field",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "window": {
+              "type": "object",
+              "properties": {
+                "from_s": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_s": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "from_s",
+                "to_s"
+              ],
+              "additionalProperties": false
+            },
+            "atS": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "parentJobId",
+            "delta"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -2368,6 +2523,335 @@
           "additionalProperties": false
         }
       ]
+    },
+    "RemakeDelta": {
+      "type": "object",
+      "description": "One change a remake makes to its parent's held request (features/make-and-edit.clan). camera.movement: to is a cameraMovement, for shotId (the shot of a box made together; a single clip's own shot when absent). words: to is the shot's new words (its action, and its line in a timed take prompt). moment: to is {inS, outS, note, region?, still?} in the parent's own time; the relay snaps inS..outS to whole seconds of at least 2 s inside the parent (time_rules.moment_window) and makes that stretch again. feel: to is {words?, strength?}, the whole clip restyled. A moment or a feel is the only change in its request; camera.movement and words may go together.",
+      "properties": {
+        "field": {
+          "enum": [
+            "camera.movement",
+            "words",
+            "moment",
+            "feel"
+          ]
+        },
+        "shotId": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "to": {}
+      },
+      "required": [
+        "field",
+        "to"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "const": "camera.movement"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to": {
+                "$ref": "common.schema.json#/$defs/cameraMovement"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "const": "words"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "const": "moment"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to": {
+                "type": "object",
+                "properties": {
+                  "inS": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "outS": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "region": {
+                    "$ref": "common.schema.json#/$defs/region"
+                  },
+                  "still": {
+                    "$ref": "common.schema.json#/$defs/assetRef"
+                  }
+                },
+                "required": [
+                  "inS",
+                  "outS",
+                  "note"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "field": {
+                "const": "feel"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to": {
+                "type": "object",
+                "properties": {
+                  "words": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "strength": {
+                    "enum": [
+                      "adhere",
+                      "flex",
+                      "reimagine"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TimelinePlan": {
+      "type": "object",
+      "description": "stitch in timeline mode (features/make-and-edit.clan): a video's timeline as one compiled plan (clan-store compileTimeline, the same plan the Edit room's preview plays). clips: V1 in start order, each the window inS..outS of its footage at speed, then its last frame held holdS, placed at startS in ad time (a gap before it is black); fades from and to black; transitionIn the join from the clip before (the overlap comes from that clip's footage after its outS, its last frame held when it has none, so every clip keeps its place). texts: words in a style from fromS to toS, drawn by the relay into transparent PNGs (relay/typeset.py) and laid over the film, with alpha fades. endCard: the person's card, drawn by the relay, s seconds after the last clip (its own transitionIn), then the studio's roll-up card as always. lengthS: the film before the roll-up (the last clip's end plus the end card); stitch renders exactly that. Free and internal, like every stitch. Added 2026-10-20 (additive).",
+      "properties": {
+        "clips": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 300,
+          "items": {
+            "type": "object",
+            "properties": {
+              "asset": {
+                "$ref": "common.schema.json#/$defs/assetRef"
+              },
+              "startS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 600
+              },
+              "inS": {
+                "type": "number",
+                "minimum": 0
+              },
+              "outS": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "speed": {
+                "type": "number",
+                "minimum": 0.75,
+                "maximum": 1.33
+              },
+              "holdS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "fadeInS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "fadeOutS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "transitionIn": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "cut",
+                      "dissolve",
+                      "dip_black",
+                      "dip_white"
+                    ]
+                  },
+                  "s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 2
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "asset",
+              "startS",
+              "inS",
+              "outS"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "texts": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "properties": {
+              "words": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "style": {
+                "enum": [
+                  "caption",
+                  "title",
+                  "super"
+                ]
+              },
+              "fromS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 600
+              },
+              "toS": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 600
+              },
+              "fadeInS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "fadeOutS": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "words",
+              "style",
+              "fromS",
+              "toS"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "endCard": {
+          "type": "object",
+          "properties": {
+            "headline": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "line": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "cta": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "bg": {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            },
+            "logo": {
+              "$ref": "common.schema.json#/$defs/assetRef"
+            },
+            "s": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 10
+            },
+            "transitionIn": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "cut",
+                    "dissolve",
+                    "dip_black",
+                    "dip_white"
+                  ]
+                },
+                "s": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "line",
+            "bg",
+            "s"
+          ],
+          "additionalProperties": false
+        },
+        "lengthS": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "clips",
+        "lengthS"
+      ],
+      "additionalProperties": false
     },
     "JobShot": {
       "type": "object",

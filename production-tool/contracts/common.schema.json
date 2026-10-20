@@ -13,7 +13,7 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$",
-      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, take_, render_, rev_, link_, board_, sketch_, doc_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, edl_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
+      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, gen_, render_, rev_, link_, board_, sketch_, doc_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, item_, run_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
     },
     "sceneId": {
       "type": "string",

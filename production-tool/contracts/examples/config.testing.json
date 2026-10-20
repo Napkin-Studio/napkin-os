@@ -10,7 +10,7 @@
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },
   "spend": { "capUsd": 200, "warnUsd": 150 },
-  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": false, "moreOptions": false, "clipPatch": false, "connectedVideo": false },
+  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": false, "moreOptions": false, "clipPatch": false, "connectedVideo": false, "makeAndEdit": false },
   "banner": "",
   "clipPatch": { "model": "aleph2", "send": "range", "contextS": 0, "crossfadeS": 0.25, "seamMin": 0.85 }
 }

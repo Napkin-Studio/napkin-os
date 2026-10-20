@@ -110,8 +110,10 @@ parts (`patch.schema.json`).
 
 - **Leaves.** A path is a leaf when it names one top-level field of the entity,
   or one part of a composite: `camera/<part>`, `pick/current`,
-  `pick/alternates`, `edl/<item>`, `edl/<item>/<field>`,
-  `edl/<item>/pick/<current|alternates>` (an item's `seam` is set whole). Any other object is set whole
+  `pick/alternates`, a video's `timeline/<item>`, `timeline/<item>/<field>`,
+  `timeline/<item>/source/<generation_id|asset|in_s|out_s>` and
+  `timeline/<item>/follows/<box_id|shot_id>` (an item's `transition_in` is set whole; features/make-and-edit.clan).
+  A video's `end_card` and each top-level field of a generation are set whole. Any other object is set whole
   (`region`, `window`, `font`, `rule`, `format`, `ignored`, …). `id`, `v`,
   `field_v` and the entity itself are never paths: `not_leaf`.
 - **Arrays are leaves.** An array (`refs`, `alternates`, `answers`, `inputs`,
@@ -160,14 +162,14 @@ Every non-quiet batch is one decision-chain entry, through napkin-host's
   batch: one undo step. History is never rewritten.
 - **Pinning after the fact** is `pin_decision` (or `unpin_decision`): a new
   entry citing the decision, never an edit of the old one.
-- A job's landing (a frame, a take, the shot list) is one batch: one undo step
+- A job's landing (a frame, a generation, the shot list) is one batch: one undo step
   and one decision, agent the crew member, citing the job.
 
 ## 9 Addresses
 
 `<doc-id>#<map>[<id>]` names an entity and `<doc-id>#<map>[<id>].<field>` one
 of its fields (docs/contracts/os-layer.md §3); nested parts follow with `.`
-and `[key]`: `#shots[shot_X].camera.size`, `#videos[video_Y].edl[edl_Z].pick`.
+and `[key]`: `#shots[shot_X].camera.size`, `#videos[video_Y].timeline[item_Z].source.in_s`.
 Keys never hold `.`, `[`, `]` or `#`, which is why map keys are ids and format
 ids (which hold dots) are only ever values. napkin-host checks every target and
 cite with `normalise_target`; a malformed one is a 400.

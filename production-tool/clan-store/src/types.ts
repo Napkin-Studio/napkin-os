@@ -11,7 +11,7 @@ export interface Entity {
   [field: string]: unknown
 }
 
-export const MAP_NAMES = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'takes', 'renders', 'reviews',
+export const MAP_NAMES = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
   'links', 'keys', 'refs', 'documents', 'texts', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports'] as const
 export type MapName = (typeof MAP_NAMES)[number]
 

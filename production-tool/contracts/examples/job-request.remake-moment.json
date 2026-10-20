@@ -1,0 +1,36 @@
+{
+  "contractVersion": "3",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [
+    "job_01K7B00000000000000000CQ01"
+  ],
+  "input": {},
+  "jobId": "job_01K7B00000000000000000RM03",
+  "op": "clip_patch",
+  "nonce": "n_remake03a",
+  "purpose": "shirt red at 0:06",
+  "remakeWith": {
+    "parentJobId": "job_01K7B00000000000000000CQ01",
+    "parentId": "gen_01K7B00000000000000000GN01",
+    "delta": [
+      {
+        "field": "moment",
+        "to": {
+          "inS": 0.8,
+          "outS": 1.2,
+          "note": "his shirt is deep red",
+          "region": {
+            "x": 0.35,
+            "y": 0.3,
+            "w": 0.3,
+            "h": 0.4
+          }
+        }
+      }
+    ]
+  }
+}

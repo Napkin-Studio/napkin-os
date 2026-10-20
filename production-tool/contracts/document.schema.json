@@ -146,15 +146,15 @@
       },
       "maxProperties": 32
     },
-    "takes": {
+    "generations": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+        "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/take"
+        "$ref": "#/$defs/generation"
       },
-      "maxProperties": 1200
+      "maxProperties": 2000
     },
     "renders": {
       "type": "object",
@@ -343,7 +343,7 @@
     "beats",
     "frames",
     "videos",
-    "takes",
+    "generations",
     "renders",
     "reviews",
     "links",
@@ -490,7 +490,7 @@
           "enum": [
             "ref",
             "frame",
-            "take",
+            "generation",
             "render",
             "video",
             "shot",
@@ -527,7 +527,7 @@
     },
     "window": {
       "type": "object",
-      "description": "A note's time window in whole seconds (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json). The time basis follows the note's target: take time for a note on a take (target.kind take, written from the take player), shot time otherwise; clan-store noteToTakeWindow maps either onto the take (features/clip-moment-edit.clan).",
+      "description": "A note's time window in whole seconds (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json). The time basis follows the note's target: take time for a note on a generation (target.kind generation, written from the take player), shot time otherwise; clan-store noteToTakeWindow maps either onto the generation (features/clip-moment-edit.clan).",
       "properties": {
         "from_s": {
           "type": "integer",
@@ -1259,13 +1259,13 @@
         }
       ]
     },
-    "take": {
+    "generation": {
       "type": "object",
-      "description": "A clip version of a shot. A spliced take lists its segments. Never deleted to make room.",
+      "description": "One generation (a take): everything Make produced, uploaded or rendered, each once (features/make-and-edit.clan). A regeneration is a new generation beside its parent, never an overwrite: parent_id and delta say what changed. A box made together is one generation whose segments say where each shot is in it. The full request stays on the relay with its job (held server-side); the document keeps its summary (inputs). Never deleted to make room. No price is kept here: costs are in History (jobs).",
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+          "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
         },
         "v": {
           "$ref": "#/$defs/v"
@@ -1273,65 +1273,211 @@
         "field_v": {
           "$ref": "#/$defs/field_v"
         },
-        "shot_id": {
-          "type": "string",
-          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
-        },
-        "version": {
-          "type": "integer",
-          "minimum": 1
+        "kind": {
+          "enum": [
+            "clip",
+            "together",
+            "change",
+            "patch",
+            "feel",
+            "combine",
+            "extend",
+            "upload",
+            "render"
+          ],
+          "description": "clip: one shot made (op clip). together: a box of shots made as one video (clip mode take or take_refs). change: a new take from a parent with its delta (camera, words), made whole again. patch: a parent with a moment made again (clip_patch), same length. feel: a parent restyled whole (clip_edit). combine: clips and pictures made into one (P4). extend: a parent made longer (P3). upload: footage a person brought. render: an ad render (P2: renders stay in renders until the Bin moves them)."
         },
         "parent_id": {
           "type": "string",
-          "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+          "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The generation it was made from (change, patch, feel, extend)."
         },
-        "asset": {
-          "$ref": "common.schema.json#/$defs/sha256"
+        "delta": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/generationDelta"
+          },
+          "description": "What changed from the parent, the parent's request otherwise kept. Empty or absent on a first take."
         },
-        "job_id": {
+        "label": {
           "type": "string",
-          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+          "maxLength": 120,
+          "description": "The one-line change label a take shows ('Camera: handheld (shot 3)', 'Shirt red 0:00-0:02'). Absent: the web derives it from kind and delta ('First take')."
         },
-        "crew": {
-          "$ref": "common.schema.json#/$defs/crewId"
+        "inputs": {
+          "type": "object",
+          "description": "A summary of what the request carried, for the Keeps line and lineage; the request itself is on the relay (Job._req). Fields absent when unknown (a migrated take keeps only its model, quality, size and length).",
+          "properties": {
+            "frames": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "start",
+                      "end",
+                      "still"
+                    ]
+                  },
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/sha256"
+                  },
+                  "shot_id": {
+                    "type": "string",
+                    "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+                  }
+                },
+                "required": [
+                  "role",
+                  "asset"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "refs": {
+              "type": "array",
+              "maxItems": 14,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "common.schema.json#/$defs/refName"
+                  },
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/sha256"
+                  },
+                  "role": {
+                    "$ref": "common.schema.json#/$defs/refRole"
+                  }
+                },
+                "required": [
+                  "asset"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "words": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "camera": {
+              "type": "object",
+              "description": "Each shot's camera as sent, by shot id.",
+              "propertyNames": {
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "additionalProperties": {
+                "$ref": "common.schema.json#/$defs/camera"
+              },
+              "maxProperties": 100
+            },
+            "model": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "quality": {
+              "$ref": "common.schema.json#/$defs/clipQuality"
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(p|K)$"
+            },
+            "length_s": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600
+            },
+            "sources": {
+              "type": "array",
+              "maxItems": 8,
+              "description": "combine: the clips used, each with its window.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "generation_id": {
+                    "type": "string",
+                    "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/sha256"
+                  },
+                  "in_s": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "out_s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "asset"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
         },
-        "kind": {
-          "enum": [
-            "generated",
-            "mock"
-          ],
-          "description": "A mock take is labelled everywhere and never counts as final."
-        },
-        "model": {
+        "box_id": {
           "type": "string",
-          "maxLength": 120
+          "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The box (video.runs) it was made for: one box, one generation at a time. Absent: not in a box."
         },
-        "provider": {
-          "$ref": "common.schema.json#/$defs/madeBy"
-        },
-        "duration_s": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 60
-        },
-        "quality": {
-          "$ref": "common.schema.json#/$defs/clipQuality",
-          "description": "The level the take was made at (features/clip-quality.clan), so a draft and a final are never confused: the relay's Job.quality, or for an edit that keeps the clip's size, its source take's. Absent on takes from before quality existed."
-        },
-        "size": {
-          "type": "string",
-          "pattern": "^[0-9]+(p|K)$",
-          "description": "The size it was asked at, as its card says it (\"360p\", \"1080p\", \"2K\")."
+        "shot_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "description": "The shots it shows, in order. Empty: footage not tied to a shot (combine, upload)."
         },
         "segments": {
           "type": "array",
+          "maxItems": 100,
+          "description": "Where each shot is in it (a box made together): in_s and out_s in its own time. by: prompt (the planned cut times), detected (the relay's take_cuts), human (a person moved it). Absent or empty: one shot, the whole of it.",
           "items": {
             "type": "object",
             "properties": {
-              "source_take": {
+              "shot_id": {
                 "type": "string",
-                "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
               },
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "by": {
+                "enum": [
+                  "prompt",
+                  "detected",
+                  "human"
+                ]
+              }
+            },
+            "required": [
+              "shot_id",
+              "in_s",
+              "out_s"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "patched": {
+          "type": "array",
+          "maxItems": 16,
+          "description": "The stretches made again by Fix this moment (a patch and the patches before it), in its own time: in_s, out_s, the clip_patch job and the generation that job made.",
+          "items": {
+            "type": "object",
+            "properties": {
               "in_s": {
                 "type": "number",
                 "minimum": 0
@@ -1344,27 +1490,52 @@
                 "type": "string",
                 "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
               },
-              "by": {
-                "enum": [
-                  "prompt",
-                  "detected",
-                  "human"
-                ],
-                "description": "Who set the window's ends (features/connected-video.clan): prompt (the take prompt's planned cut times), detected (the relay's take_cuts found the cut), human (a person moved it). Absent: a spliced take's segments, as before."
+              "generation_id": {
+                "type": "string",
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
               }
             },
             "required": [
-              "source_take",
               "in_s",
-              "out_s"
+              "out_s",
+              "job_id"
             ],
             "additionalProperties": false
-          },
-          "maxItems": 16
+          }
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "state": {
+          "enum": [
+            "making",
+            "ready",
+            "failed"
+          ],
+          "description": "making: its job runs (the Bin shows a placeholder). ready: asset is there. failed: nothing was made (kept so the stack shows what was tried)."
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "mock": {
+          "const": true,
+          "description": "A mock take: labelled everywhere, never final."
         },
         "end": {
           "type": "object",
-          "description": "The frame the take was made to land on (features/connected-video.clan): next_storyboard, the next shot's storyboard frame (frame_id), sent as the clip's last frame on a continue join; none, no last frame. An end-framed take is retimed whole into its slot (stitch fit speed), never cut from its head. Absent: none.",
+          "description": "The frame the generation was made to land on (features/connected-video.clan): next_storyboard, the next shot's storyboard frame (frame_id), sent as the clip's last frame on a continue join; none, no last frame. An end-framed take is retimed whole into its slot (stitch fit speed), never cut from its head. Absent: none.",
           "properties": {
             "kind": {
               "enum": [
@@ -1379,7 +1550,7 @@
             "at_s": {
               "type": "number",
               "minimum": 0,
-              "description": "Where in the take it reached that frame (the job's landS): the clip is used up to and including the frame at at_s, retimed into its slot, and what the model made after it is left out."
+              "description": "Where in it it reached that frame (the job's landS): the clip is used up to and including the frame at at_s, retimed into its slot, and what the model made after it is left out."
             },
             "score": {
               "type": "number",
@@ -1392,28 +1563,73 @@
             "kind"
           ],
           "additionalProperties": false
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/personRef",
+          "description": "Who asked for it."
         }
       },
       "required": [
         "id",
         "v",
         "field_v",
-        "shot_id",
-        "version",
-        "asset",
-        "job_id",
-        "crew",
         "kind",
-        "model",
-        "provider",
-        "duration_s",
-        "segments"
+        "shot_ids",
+        "state",
+        "created_at",
+        "by"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ready"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "asset",
+              "duration_s"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "change",
+                  "patch",
+                  "feel",
+                  "extend"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "parent_id"
+            ]
+          }
+        }
       ],
       "additionalProperties": false
     },
     "video": {
       "type": "object",
-      "description": "A video (the cut): its items in rank order, each with its picked take, and its ad renders.",
+      "description": "A video: its timeline (the cut, the Edit room), its boxes (runs, the Make room) and its ad renders (features/make-and-edit.clan).",
       "properties": {
         "id": {
           "type": "string",
@@ -1445,78 +1661,19 @@
         "pick": {
           "$ref": "#/$defs/pick"
         },
-        "edl": {
+        "timeline": {
           "type": "object",
+          "description": "The cut (the Edit room): items keyed by id, each a clip on V1 or V2 or a text. Written item by item (timeline/<item>, timeline/<item>/<field>; contracts/collab.md §7). It replaced edl (features/make-and-edit.clan): clips point at generations, never at shots.",
           "propertyNames": {
-            "pattern": "^edl_[0-9A-HJKMNP-TV-Z]{26}$"
+            "pattern": "^item_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "additionalProperties": {
-            "type": "object",
-            "description": "One item of the cut: a shot's clip or a bridge.",
-            "properties": {
-              "rank": {
-                "$ref": "common.schema.json#/$defs/rank"
-              },
-              "kind": {
-                "enum": [
-                  "shot",
-                  "bridge"
-                ]
-              },
-              "shot_id": {
-                "type": "string",
-                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
-              },
-              "pick": {
-                "$ref": "#/$defs/pick"
-              },
-              "in_s": {
-                "type": "number",
-                "minimum": 0
-              },
-              "out_s": {
-                "type": "number",
-                "minimum": 0
-              },
-              "seam": {
-                "type": "object",
-                "description": "The join into this item from the one before (features/connected-video.clan). kind: continue (same setup, the action carries on: the clip before may land on this one's frame), cut (a new angle or place), match (a new angle on the same moment; a plain cut for now), dissolve or dip (asked-for transitions, over s seconds). by: crew (Dex set it quietly from scene and camera) or human (a person changed it on the gap chip). Absent: a cut set by nobody. Ignored on the first item.",
-                "properties": {
-                  "kind": {
-                    "enum": [
-                      "continue",
-                      "cut",
-                      "match",
-                      "dissolve",
-                      "dip"
-                    ]
-                  },
-                  "s": {
-                    "type": "number",
-                    "exclusiveMinimum": 0,
-                    "maximum": 2
-                  },
-                  "by": {
-                    "enum": [
-                      "crew",
-                      "human"
-                    ]
-                  }
-                },
-                "required": [
-                  "kind",
-                  "by"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "rank",
-              "kind"
-            ],
-            "additionalProperties": false
+            "$ref": "#/$defs/timelineItem"
           },
-          "maxProperties": 100
+          "maxProperties": 300
+        },
+        "end_card": {
+          "$ref": "#/$defs/endCard"
         },
         "join": {
           "enum": [
@@ -1527,7 +1684,7 @@
         },
         "runs": {
           "type": "object",
-          "description": "The runs Make clips planned (features/connected-video.clan): the shots made together and how. shot_ids: the run's shots in order. mode: take (one generation of them all), take_refs (one generation from references, no frame), frames (a clip per shot, landing on the next frame on continue joins) or alone. model: the clip model it runs on. state: planned, running, done or failed. job_id: the take's job (take and take_refs). planned_by: crew (Dex's plan) or human (a person's join change re-planned it).",
+          "description": "The boxes (runs) the planner made: one box is one generation at a time (its generations name it as box_id) (features/connected-video.clan): the shots made together and how. shot_ids: the run's shots in order. mode: take (one generation of them all), take_refs (one generation from references, no frame), frames (a clip per shot, landing on the next frame on continue joins) or alone. model: the clip model it runs on. state: planned, running, done or failed. job_id: the take's job (take and take_refs). planned_by: crew (Dex's plan) or human (a person's join change re-planned it).",
           "propertyNames": {
             "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
           },
@@ -1592,7 +1749,7 @@
         "field_v",
         "title",
         "ratio",
-        "edl"
+        "timeline"
       ],
       "additionalProperties": false
     },
@@ -1643,7 +1800,7 @@
     },
     "review": {
       "type": "object",
-      "description": "A note on a frame, take, render, ref or video; with a region it is a box, with at_s it has a window. Its words live in reviews/<id>.",
+      "description": "A note on a frame, generation, render, ref or video; with a region it is a box, with at_s it has a window. Its words live in reviews/<id>.",
       "properties": {
         "id": {
           "type": "string",
@@ -1661,7 +1818,7 @@
             "kind": {
               "enum": [
                 "frame",
-                "take",
+                "generation",
                 "render",
                 "ref",
                 "video"
@@ -2164,7 +2321,7 @@
         },
         "protect": {
           "type": "object",
-          "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. takes: a film's, per take (keyed by take id), in the take's pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.",
+          "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. generations: a film's, per generation (keyed by its id), in its pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.",
           "properties": {
             "boxes": {
               "type": "array",
@@ -2173,10 +2330,10 @@
                 "$ref": "common.schema.json#/$defs/protectBox"
               }
             },
-            "takes": {
+            "generations": {
               "type": "object",
               "propertyNames": {
-                "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "additionalProperties": {
                 "type": "array",
@@ -2218,17 +2375,17 @@
         },
         "reframes": {
           "type": "object",
-          "description": "A film's shots made again for a shape (phase 6), keyed <take id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the take (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).",
+          "description": "A film's shots made again for a shape (phase 6), keyed <generation id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the generation (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).",
           "propertyNames": {
-            "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$"
+            "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$"
           },
           "maxProperties": 200,
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "take_id": {
+              "generation_id": {
                 "type": "string",
-                "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "shot_id": {
                 "type": "string",
@@ -2261,7 +2418,7 @@
               }
             },
             "required": [
-              "take_id",
+              "generation_id",
               "shot_id",
               "aspect",
               "method",
@@ -2413,15 +2570,16 @@
         "edl": {
           "type": "array",
           "maxItems": 100,
-          "description": "A cutdown's edit: windows of the same takes in cut order (connected-video's in/out shape), each with its crop for a re-aspect.",
+          "description": "A cutdown's edit: windows of the master's V1 clips in cut order (each a generation's in/out), each with its crop for a re-aspect (features/make-and-edit.clan: size.edl reads V1).",
           "items": {
             "type": "object",
             "properties": {
               "shot_id": {
                 "$ref": "common.schema.json#/$defs/id"
               },
-              "take_id": {
-                "$ref": "common.schema.json#/$defs/id"
+              "generation_id": {
+                "type": "string",
+                "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "in_s": {
                 "type": "number",
@@ -2438,7 +2596,7 @@
                 "type": "array",
                 "minItems": 2,
                 "maxItems": 3,
-                "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the take's pixels. Wins over crop. Added 2026-10-16 (additive).",
+                "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the generation's pixels. Wins over crop. Added 2026-10-16 (additive).",
                 "items": {
                   "type": "object",
                   "properties": {
@@ -2467,7 +2625,7 @@
               },
               "take_size": {
                 "$ref": "common.schema.json#/$defs/aspect",
-                "description": "The take's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)."
+                "description": "The generation's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)."
               },
               "end_card": {
                 "type": "boolean"
@@ -3031,7 +3189,7 @@
                   "document",
                   "brand",
                   "frame",
-                  "take",
+                  "generation",
                   "render",
                   "board",
                   "group"
@@ -3242,6 +3400,348 @@
         "kind",
         "asset",
         "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "transitionIn": {
+      "type": "object",
+      "description": "The join into this clip from the one before on its track (features/make-and-edit.clan): cut, dissolve, or a dip through black or white, over s seconds. The overlap comes from the outgoing clip's out-handle (its footage after source.out_s; its last frame is held when it has none), so the clips keep their places and the film its length. Absent: a cut.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "cut",
+            "dissolve",
+            "dip_black",
+            "dip_white"
+          ]
+        },
+        "s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "generationDelta": {
+      "type": "object",
+      "description": "One thing a generation changed from its parent's request (features/make-and-edit.clan): the field, what it was and what it became, and the shot of the box it applies to. The relay fills `from` from the parent's held request (Job.remake.delta), so it is what was really sent.",
+      "properties": {
+        "field": {
+          "enum": [
+            "camera.size",
+            "camera.angle",
+            "camera.movement",
+            "camera.movement_speed",
+            "camera.lens_mm",
+            "words",
+            "refs",
+            "start_frame",
+            "end_frame",
+            "moment",
+            "feel",
+            "length",
+            "model",
+            "quality",
+            "sources"
+          ]
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "from": {
+          "description": "The parent's value (absent: it had none)."
+        },
+        "to": {
+          "description": "The new value. moment: {in_s, out_s, window: {from_s, to_s}, note, region?} in the parent's time; feel: {words?, strength?}."
+        }
+      },
+      "required": [
+        "field",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "timelineItem": {
+      "type": "object",
+      "description": "One clip or text on the timeline (features/make-and-edit.clan). V1 is the main track and magnetic: its clips abut in start_s order (a gap is black) and never overlap; V2 plays over V1 (P3); text lies over both. A clip shows source.in_s to source.out_s of a generation (or an asset) at speed, then holds its last frame for hold_s: it lasts (out_s - in_s) / speed + hold_s. follows names the slot it stands for, so a new take of that box or shot swaps into the same place keeping start, trims, fades and transition. A text item shows words in its style from from_s to to_s (ad time).",
+      "properties": {
+        "track": {
+          "enum": [
+            "V1",
+            "V2",
+            "text"
+          ]
+        },
+        "start_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "generation_id": {
+              "type": "string",
+              "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "asset": {
+              "$ref": "common.schema.json#/$defs/sha256",
+              "description": "Footage that is not a generation (rare: a render placed back on the timeline)."
+            },
+            "in_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "out_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "in_s",
+            "out_s"
+          ],
+          "oneOf": [
+            {
+              "required": [
+                "generation_id"
+              ]
+            },
+            {
+              "required": [
+                "asset"
+              ]
+            }
+          ],
+          "additionalProperties": false
+        },
+        "follows": {
+          "type": "object",
+          "properties": {
+            "box_id": {
+              "type": "string",
+              "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "shot_id": {
+              "type": "string",
+              "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "fade_in_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "From black (a clip) or from clear (text)."
+        },
+        "fade_out_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "transition_in": {
+          "$ref": "#/$defs/transitionIn"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0.75,
+          "maximum": 1.33,
+          "description": "How fast the source plays (Fit the speed). Absent: 1."
+        },
+        "hold_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "description": "Its last frame held this long after out_s (Hold the last frame). Absent: none."
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "V2 only. Absent: 1."
+        },
+        "words": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "style": {
+          "enum": [
+            "caption",
+            "title",
+            "super"
+          ],
+          "description": "caption: bottom band; title: centred; super: lower third."
+        },
+        "from_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "to_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "track"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "track": {
+                "const": "text"
+              }
+            },
+            "required": [
+              "track"
+            ]
+          },
+          "then": {
+            "required": [
+              "words",
+              "style",
+              "from_s",
+              "to_s"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "start_s"
+                  ]
+                },
+                {
+                  "required": [
+                    "source"
+                  ]
+                },
+                {
+                  "required": [
+                    "follows"
+                  ]
+                },
+                {
+                  "required": [
+                    "transition_in"
+                  ]
+                },
+                {
+                  "required": [
+                    "speed"
+                  ]
+                },
+                {
+                  "required": [
+                    "hold_s"
+                  ]
+                },
+                {
+                  "required": [
+                    "opacity"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "start_s",
+              "source"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "words"
+                  ]
+                },
+                {
+                  "required": [
+                    "style"
+                  ]
+                },
+                {
+                  "required": [
+                    "from_s"
+                  ]
+                },
+                {
+                  "required": [
+                    "to_s"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "track": {
+                "const": "V1"
+              }
+            },
+            "required": [
+              "track"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "opacity"
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "endCard": {
+      "type": "object",
+      "description": "The person's own end card (features/make-and-edit.clan): drawn by the relay (no model) as the locked last piece of V1, s seconds after the last clip, then the studio's roll-up card. headline and line are its words, cta a short call to action, bg its colour, logo_asset the Brand board's logo. Absent: no card of the person's; the roll-up still ends the ad.",
+      "properties": {
+        "headline": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "line": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "cta": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "bg": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "logo_asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "s": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 10
+        },
+        "transition_in": {
+          "$ref": "#/$defs/transitionIn"
+        }
+      },
+      "required": [
+        "line",
+        "bg",
+        "s"
       ],
       "additionalProperties": false
     }

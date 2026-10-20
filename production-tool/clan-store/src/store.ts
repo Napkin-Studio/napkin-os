@@ -14,7 +14,8 @@ import { parse as parseYaml } from 'yaml'
 import { APP_SCHEMA } from './app-template.gen'
 import { APP_ID, asBytes, freshHost, HostRefused, route, type NapkinHost, type RawResponse, type WasmSource } from './host'
 import { integrity } from './integrity'
-import { mergePatch } from './merge-patch'
+import { diffMergePatch, mergePatch } from './merge-patch'
+import { migrateToGenerations, needsGenerations } from './migrate'
 import { indexedDbPersistence, type Persistence } from './persist'
 import { MAP_NAMES, type Doc, type DocumentStore, type Person, type Why } from './types'
 import { assertValid, InvalidDocument } from './validate'
@@ -111,6 +112,12 @@ export class UnsupportedContract extends Error {
   }
 }
 
+/** Who records the move to generations, and its decision (features/make-and-edit.clan). */
+export const MIGRATION_AGENT = 'clan-store'
+export const MIGRATION_ACTION = 'move takes and the edl to generations and the timeline'
+/** The schema a document holds for the one write that moves it: any object (the data is checked by ajv first). */
+const MOVING_SCHEMA = { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object' }
+
 /** The data key named in a record's no-op `append_keys`: never in the patch, so
  * nothing is appended; it only lets a decision with no data change through the
  * host's no-op guard. */
@@ -172,7 +179,7 @@ export function newProjectData(args: { person: Person; title: string; newId: (p:
   } as unknown as Doc
   doc.scripts[script] = e(script, { title: 'Script', target_s })
   doc.storyboards[storyboard] = e(storyboard, { title: 'Storyboard', ratio, target_s })
-  doc.videos[video] = e(video, { title: 'Video', ratio, target_s, edl: {} })
+  doc.videos[video] = e(video, { title: 'Video', ratio, target_s, timeline: {} })
   doc.links[drives] = e(drives, { from: { kind: 'script', id: script }, to: { kind: 'storyboard', id: storyboard }, role: 'drives' })
   doc.links[renders] = e(renders, { from: { kind: 'storyboard', id: storyboard }, to: { kind: 'video', id: video }, role: 'renders' })
   return doc
@@ -514,11 +521,37 @@ export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
       h.free()
       throw new UnsupportedContract(found)
     }
+    // Make and Edit (features/make-and-edit.clan): a document with takes and an edl moves once to
+    // generations and a timeline, in this host, before anything else reads it. Its own schema forbids
+    // the new shape and the app's forbids the old, so the one write goes through a schema that holds
+    // both (any object; ajv and the integrity rules check the result first), then to the app's. Any
+    // refusal leaves the saved bytes as they were: nothing is saved until the move has succeeded.
+    let moved = false
+    if (needsGenerations(data)) {
+      try {
+        const next = migrateToGenerations(data)
+        assertValid(next, 'the document moved to generations')
+        assertIntegrity(data, next, 'the document moved to generations')
+        route(h, '/patch-schema', MOVING_SCHEMA)
+        route(h, '/patch-data', {
+          patch: diffMergePatch(data, next),
+          agent: MIGRATION_AGENT,
+          action: MIGRATION_ACTION,
+          rationale: 'Every take became a generation (the takes of a box made together, one), and each video\'s edl its timeline (features/make-and-edit.clan).',
+        })
+        route(h, '/patch-schema', APP_SCHEMA)
+        data = readData(h)
+        moved = true
+      } catch (e) {
+        h.free()
+        throw e
+      }
+    }
     // A document keeps the schema it was made with; one made under an older
     // contract-3 schema moves to the app's when it opens (loosening only).
-    let upgraded = false
+    let upgraded = moved
     try {
-      upgraded = !!route<{ changed?: boolean }>(h, '/patch-schema', APP_SCHEMA)?.changed
+      upgraded = !!route<{ changed?: boolean }>(h, '/patch-schema', APP_SCHEMA)?.changed || moved
     } catch (e) {
       console.warn('kept the document\'s own schema: it did not move to the app\'s', e)
     }

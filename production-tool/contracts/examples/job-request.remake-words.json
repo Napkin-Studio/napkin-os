@@ -1,0 +1,32 @@
+{
+  "contractVersion": "3",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [
+    "job_01K7B00000000000000000CQ01"
+  ],
+  "input": {},
+  "jobId": "job_01K7B00000000000000000RM02",
+  "op": "clip",
+  "nonce": "n_remake02a",
+  "purpose": "new take of shot 4: swifter fold",
+  "remakeWith": {
+    "parentJobId": "job_01K7B00000000000000000CQ01",
+    "parentId": "gen_01K7B00000000000000000GN01",
+    "delta": [
+      {
+        "field": "words",
+        "shotId": "shot_01K7B00000000000000000SH04",
+        "to": "He folds the shirt in one swift move."
+      }
+    ]
+  },
+  "modelChoice": {
+    "provider": "runway",
+    "model": "seedance2_5"
+  },
+  "quality": "standard"
+}
