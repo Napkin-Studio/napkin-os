@@ -321,8 +321,13 @@ def _given_words(prompt: str, payload: dict) -> int:
     at = prompt.find(text) if text else -1
     if at >= 0:
         covered.update(range(at, at + len(text)))
-    for field in ("action", "direction", "direction_condensed"):
-        _quoted_spans(prompt, shot.get(field) or "", covered)
+    # A take's shots and timed lines (features/connected-video.clan) are given words like the one shot's.
+    shots = [shot, *(s for s in payload.get("shots") or [] if isinstance(s, dict))]
+    for s in shots:
+        for field in ("action", "direction", "direction_condensed"):
+            _quoted_spans(prompt, s.get(field) or "", covered)
+    for cut in payload.get("cuts") or []:
+        _quoted_spans(prompt, cut.get("text") or "", covered)
     return len(covered) + (len(text) if text and at < 0 else 0)
 
 
@@ -608,6 +613,14 @@ class Director:
             raise DirectorError(f"the job names artifacts that are not in the input: {sorted(stray)[0]}")
         _clip_frame_only(job, op, sheet)
         _hold_refs(asked, job, payload, output, sheet)
+        if op == "clip":
+            # A take, a landing frame or a take's window (features/connected-video.clan): the frames, refs and
+            # length are the mode's, whatever was written; a take prompt that does not time the plan is refused.
+            import connected
+            try:
+                connected.shape(job, payload, sheet, sheet["ops"][op], passthrough=False)
+            except ValueError as e:
+                raise DirectorError(str(e)) from e
         names = [r["name"] for r in job["refs"]]
         if len(set(names)) != len(names) or not all(TAG.match(n) for n in names):
             raise DirectorError(f"ref names must be unique canonical tags: {names}")

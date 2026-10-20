@@ -7,6 +7,9 @@ describe('leafProblem', () => {
   it('a video\'s edl is set by item; a size\'s edl and beats are set whole', () => {
     expect(leafProblem('videos', 'edl')).toMatch(/has parts/)
     expect(leafProblem('videos', 'edl/edl_01K7C00000000000000000ED01/in_s')).toBeNull()
+    // An item's join (features/connected-video.clan): ✂ and 🔗 write it whole; it was refused before (2026-10-19).
+    expect(leafProblem('videos', 'edl/edl_01K7C00000000000000000ED01/seam')).toBeNull()
+    expect(leafProblem('videos', 'edl/edl_01K7C00000000000000000ED01/seam/kind')).toMatch(/has rank/)
     expect(leafProblem('sizes', 'edl')).toBeNull()
     expect(leafProblem('sizes', 'beats')).toBeNull()
     expect(leafProblem('sizes', 'edl/0/crop')).toMatch(/set whole/)

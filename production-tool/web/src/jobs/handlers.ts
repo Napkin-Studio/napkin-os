@@ -13,17 +13,20 @@ import { crewFor, newUlidId, rankBetween } from '../../../clan-store/src'
 import type { Aspect, CrewId, DirectorCard, Frame, Job, Output, ProductionDocument, Render, Take } from '../contracts/types'
 import { aspectOfRatio, exactRatio, reducedAspect } from '../canvas/core/sketch'
 import { landUpdate } from '../doc/store'
-import type { DocumentStore } from '../doc/types'
+import type { DocumentStore, WriteWhy } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { edlItemFor, edlOf, framesOf, mainVideo, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
+import { modelLabel } from '../capabilities'
 import { landingWhy } from './landing'
 import { refreshClipStale } from './stale'
+import { takeTiming, takeWindows } from './takeTiming'
 
 export { applyShotList, landShotList } from './plan'
 export { landingWhy } from './landing'
 
 type FrameCtx = Pick<Extract<JobCtx, { for: 'frame' }>, 'shotId' | 'parentFrameId'>
-type ClipCtx = Pick<Extract<JobCtx, { for: 'clip' }>, 'shotId' | 'parentTakeId' | 'reviewIds'>
+type ClipCtx = Pick<Extract<JobCtx, { for: 'clip' }>, 'shotId' | 'parentTakeId' | 'reviewIds' | 'endFrameId'>
+type RunCtx = Pick<Extract<JobCtx, { for: 'run' }>, 'videoId' | 'runId'>
 
 /** The cards the director was given, for the rationale: the relay's block, else what this browser kept. */
 const cardsOf = (job: Job, ctx?: { cards?: DirectorCard[] }) => job.director?.cards ?? ctx?.cards
@@ -123,6 +126,13 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
     provider: job.provider ?? 'mock',
     duration_s: out.durationS ?? shot.duration_s,
     segments: [],
+    // It ends on the next shot's frame (features/connected-video.clan): stitch retimes it whole.
+    ...(ctx.endFrameId ? { end: { kind: 'next_storyboard' as const, frame_id: ctx.endFrameId } } : {}),
+  }
+  // Where it really reached its last frame (the relay's landS): models get there early and carry on past it, so
+  // the take is used up to that frame. A take's window of its own take (Remake just this shot) lands the same way.
+  if (job.landS !== undefined) {
+    take.end = { ...(take.end ?? { kind: 'none' as const }), at_s: job.landS, ...(job.landScore !== undefined ? { score: job.landScore } : {}) }
   }
   // Its level and size (features/clip-quality.clan): what the relay ran, or for an edit that keeps the clip's
   // size, its source take's.
@@ -133,11 +143,10 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
   d.takes[take.id] = take
   const video = videoOfShot(d, shot.id)
   if (video) {
-    const item = edlItemFor(d, shot.id, video.id)
-    if (item) video.edl[item.id].pick = { current: take.id }
-    else {
-      const last = edlOf(d, video.id).at(-1)
-      video.edl[newUlidId('edl')] = { rank: rankBetween(last?.rank ?? null, null), kind: 'shot', shot_id: shot.id, pick: { current: take.id } }
+    pickInCut(d, video.id, shot.id, take.id)
+    // The last clip of a run of single clips finishes it.
+    for (const r of Object.values(video.runs ?? {})) {
+      if (r.state === 'running' && !r.job_id && r.shot_ids.includes(shot.id) && r.shot_ids.every((id) => takesOf(d, id).length)) r.state = 'done'
     }
   }
   // A clip made from a frame that has since changed lands out of date; one from the frame picked now lifts the mark.
@@ -149,6 +158,57 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
     r.resolved_by_job = job.jobId
   }
   return take
+}
+
+/** Pick `takeId` in the video's cut for its shot (its edl item is made, after the others, when it has none). */
+function pickInCut(d: ProductionDocument, videoId: string, shotId: string, takeId: string) {
+  const video = d.videos[videoId]
+  const item = edlItemFor(d, shotId, videoId)
+  if (item) video.edl[item.id].pick = { current: takeId }
+  else {
+    const last = edlOf(d, videoId).at(-1)
+    video.edl[newUlidId('edl')] = { rank: rankBetween(last?.rank ?? null, null), kind: 'shot', shot_id: shotId, pick: { current: takeId } }
+  }
+}
+
+/** A take of a run (features/connected-video.clan) as one take per shot, each a window of the same file
+ *  (segments[0]: from the job's cuts, found else planned), picked in the cut. Shots deleted while it ran
+ *  are skipped. Landing twice does nothing. */
+export function applyRunTake(d: ProductionDocument, job: Job, ctx: RunCtx): Take[] {
+  const out = job.outputs?.[0]
+  const video = d.videos[ctx.videoId]
+  const run = video?.runs?.[ctx.runId]
+  if (!out || !run) return []
+  if (Object.values(d.takes).some((t) => t.job_id === job.jobId)) return []
+  const durations = run.shot_ids.map((id) => d.shots[id]?.duration_s ?? 0)
+  const { totalS, starts } = takeTiming(durations)
+  const windows = takeWindows(durations, starts, job.cuts, out.durationS ?? totalS)
+  const made: Take[] = []
+  for (const [i, shotId] of run.shot_ids.entries()) {
+    if (!d.shots[shotId]) continue
+    const id = newUlidId('take')
+    const take: Take = {
+      id, v: 1, field_v: {},
+      shot_id: shotId,
+      version: nextVersion(takesOf(d, shotId)),
+      asset: out.sha256,
+      job_id: job.jobId,
+      crew: crewOf(d, job),
+      kind: job.kind === 'mock' ? 'mock' : 'generated',
+      model: job.model ?? 'mock',
+      provider: job.provider ?? 'mock',
+      duration_s: out.durationS ?? totalS,
+      segments: [{ source_take: made[0]?.id ?? id, in_s: windows[i].in_s, out_s: windows[i].out_s, job_id: job.jobId, by: windows[i].by }],
+      ...(job.quality?.level ? { quality: job.quality.level } : {}),
+      ...(job.quality?.size ? { size: job.quality.size } : {}),
+    }
+    d.takes[id] = take
+    pickInCut(d, video.id, shotId, id)
+    refreshClipStale(d, shotId)
+    made.push(take)
+  }
+  run.state = 'done'
+  return made
 }
 
 /** A stitch job's result as its video's new render (ctx.videoId, else the main video), picked now.
@@ -175,6 +235,14 @@ export function applyStitch(d: ProductionDocument, job: Job, ctx?: { videoId?: s
 
 // ── landings ────────────────────────────────────────────────────────────────
 
+/** Dex's History line when Runway refused a clip's first words and the relay sent them plainer
+ *  (features/connected-video.clan): said once, before the rest of the job's account. */
+export const SOFTENED_NOTE = 'Runway refused the first wording; I made it plainer.'
+export function softenedWhy(job: Pick<Job, 'softened'>, why: WriteWhy): WriteWhy {
+  if (!job.softened || why.rationale?.includes(SOFTENED_NOTE)) return why
+  return { ...why, rationale: `${SOFTENED_NOTE} ${why.rationale ?? ''}`.trim() }
+}
+
 /** Fin's (or, for a region edit, Rhea's) frame: "render frame v2 for shot 3". */
 export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'frame' }>) {
   const d = store.get()
@@ -186,7 +254,16 @@ export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, {
 export function landTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>) {
   const d = store.get()
   const what = `take v${nextVersion(takesOf(d, ctx.shotId))} for ${shotName(d, ctx.shotId)}`
-  return landUpdate(store, (x) => { applyTake(x, job, ctx) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
+  return landUpdate(store, (x) => { applyTake(x, job, ctx) }, softenedWhy(job, landingWhy(store, job.jobId, what, cardsOf(job, ctx))))
+}
+
+/** Wren's take of a run: "render one take of shots 2-5 on WAN 3", citing the job (its credits show in History). */
+export function landRunTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'run' }>) {
+  const d = store.get()
+  const run = d.videos[ctx.videoId]?.runs?.[ctx.runId]
+  const n = run ? run.shot_ids.map((id) => shotName(d, id)) : []
+  const what = `one take of ${n.length ? `${n[0]} to ${n.at(-1)}` : 'a run'}${job.model ? ` on ${modelLabel(job.provider, job.model) ?? job.model}` : ''}`
+  return landUpdate(store, (x) => { applyRunTake(x, job, ctx) }, softenedWhy(job, landingWhy(store, job.jobId, what, cardsOf(job, ctx))))
 }
 
 /** Edie's ad, picked as the video's render: "edit the ad v2". */

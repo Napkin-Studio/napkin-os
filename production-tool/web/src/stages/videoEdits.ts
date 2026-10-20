@@ -38,8 +38,10 @@ export function addTakeNote(d: Doc, note: { takeId: string; shotId: string; shot
     target: { kind: 'take', id: note.takeId },
     ...(video ? { video_id: video.id } : {}),
     shot_id: note.shotId,
-    at_s: note.atS,
-    ...(window ? { window } : {}),
+    // A moment needs its window (the schema ties at_s to it); a shot too short to hold one (under 2 s) gets a
+    // note on the whole shot, which a box still fixes from the shot's frame (2026-10-19: every note on a 1.5 s
+    // shot was refused and undone).
+    ...(window ? { at_s: note.atS, window } : {}),
     ...(note.region ? { region: note.region } : {}),
     by: note.by,
     state: 'open',

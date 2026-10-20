@@ -189,9 +189,18 @@ class PassthroughDirector:
             _clip_frame_only(job, op, sheet)
         if op in _VIDEO_OPS:
             job["audio"] = False
+            spec = ((sheet or {}).get("ops") or {}).get(op) or {}
             if shot:
-                spec = ((sheet or {}).get("ops") or {}).get(op) or {}
                 job["durationS"] = fit_duration(shot["duration_s"], spec) if op == "clip" else shot["duration_s"]
+            if op == "clip" and sheet:
+                # A take, a landing frame or a window of a take (features/connected-video.clan): the mode
+                # sets the frames, refs, length and the timed prompt; a clip with none is as it was.
+                import connected
+                connected.shape(job, inp, sheet, spec, passthrough=True)
+        if op == "clip" and inp.get("refused"):
+            # The provider's text check refused these words (soften.py): the same words, plainer, every beat kept.
+            import soften
+            job["prompt"] = soften.plain_words(inp["refused"])
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}

@@ -38,6 +38,10 @@ export function refreshClipStale(d: ProductionDocument, shotId: string, now = ne
   const frame = currentFrame(d, shotId)
   const take = currentTake(d, shotId)
   if (!frame || !take) return
+  // A window inside a take (features/connected-video.clan) was guided by its frame, not made from it: a
+  // missed guide is a quiet note, never "out of date". Only the run's first, pinned, window is checked.
+  const seg = take.segments?.[0]
+  if (seg && seg.source_take !== take.id) return
   const job = d.jobs[take.job_id]
   // No inputs on record (an older job): nothing to compare, so no mark.
   if (!job?.input_hashes || job.input_hashes.includes(frame.asset)) return
@@ -129,6 +133,28 @@ export function frameDrift(d: ProductionDocument, shotId: string): number | unde
   const first = currentFrame(d, shots[0])
   if (first && !job.input_hashes.includes(first.asset)) return 1
   return undefined
+}
+
+/** The stale reason when the frame a clip lands on was changed (features/connected-video.clan). */
+export const END_FRAME_CHANGED = 'end_frame_changed'
+
+/**
+ * Continuity only, never "out of date" (the one-to-one rule): shot `shotId`'s clip in the cut ends on the next
+ * shot's storyboard frame, and that frame has changed since (a new version picked, or the shots moved).
+ * The number of the shot it lands on, with the reason end_frame_changed; nothing is marked and nothing
+ * cascades. Remaking the clip (it lands on the frame picked now) lifts it.
+ */
+export function endFrameDrift(d: ProductionDocument, shotId: string, videoId?: string): { reason: typeof END_FRAME_CHANGED; shot: number } | undefined {
+  const take = currentTake(d, shotId, videoId)
+  if (take?.end?.kind !== 'next_storyboard' || !take.end.frame_id) return undefined
+  const shot = d.shots[shotId]
+  const shots = shot ? shotsOf(d, shot.storyboard_id) : []
+  const next = shots[shots.findIndex((s) => s.id === shotId) + 1]
+  const landedOn = d.frames[take.end.frame_id]
+  if (next && currentFrame(d, next)?.id === take.end.frame_id) return undefined
+  // The shot it landed on: the next one now, or (moved away) the one whose frame it was.
+  const n = next ? shotNumber(d, next.id) : landedOn?.shot_id ? shotNumber(d, landedOn.shot_id) : 0
+  return { reason: END_FRAME_CHANGED, shot: n }
 }
 
 /** The picked frame of a shot is marked out of date. */

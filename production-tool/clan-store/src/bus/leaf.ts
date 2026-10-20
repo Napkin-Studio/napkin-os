@@ -11,7 +11,7 @@ export const TEXT_OWNED: Partial<Record<EntityName, readonly string[]>> = {
 
 const CAMERA_PARTS = ['size', 'angle', 'movement', 'movement_speed', 'lens_mm', 'macro']
 const PICK_PARTS = ['current', 'alternates']
-const EDL_ITEM_FIELDS = ['rank', 'kind', 'shot_id', 'in_s', 'out_s']
+const EDL_ITEM_FIELDS = ['rank', 'kind', 'shot_id', 'in_s', 'out_s', 'seam']  // seam: the join into the item, set whole (connected-video)
 const NEVER = ['id', 'v', 'field_v']
 const ID_RE = /^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$/
 

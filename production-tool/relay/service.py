@@ -47,7 +47,9 @@ import identity
 import library
 import names
 import writer as writers
+import connected
 import cutdowns
+import soften
 import projects
 import time_rules
 from blobs import checksum_header
@@ -915,12 +917,13 @@ class Relay:
             if op == "clip":
                 video = sheet.get("video") or {}
                 goes = video.get("firstFrameWithRefs") if inp.get("image") else video.get("refsWithoutFrame")
-                settings["refs"] = bool(inp.get("image")) + (min(refs, sheet["refs"]["max"]) if goes else 0)
+                settings["refs"] = connected.frames_sent(inp) + (min(refs, sheet["refs"]["max"]) if goes else 0)
             else:
                 settings["refs"] = min(refs, max(0, sheet["refs"]["max"] - 1))  # the clip itself is a ref too
         if sized and sized.get("tier"):  # the quality's size (features/clip-quality.clan): its tier's price
             settings["resolution"] = sized["tier"]
-        seconds = (inp.get("shot") or {}).get("duration_s")
+        # A take is the run's shots together, a take's window its width (features/connected-video.clan).
+        seconds = (connected.clip_seconds(inp) if op == "clip" else None) or (inp.get("shot") or {}).get("duration_s")
         if seconds:
             if op == "clip":
                 settings["durationS"] = fit_duration(seconds, spec)
@@ -968,6 +971,29 @@ class Relay:
         if not image and not inp.get("refs") and not words:
             raise ApiError("invalid_input", "This shot has no frame and no words yet. Write the shot, or draw its frame first.")
 
+    def _check_connected(self, cfg: dict, req: dict, pick: dict | None, allow: dict) -> None:
+        """A clip's mode, last frame, timed cuts or take window (features/connected-video.clan): behind
+        flags.connectedVideo, and only what the model it runs on can make (connected.problems: a last frame
+        needs video.lastFrame, a take video.take.ok within its length and shots). Refused here, before quota
+        or spend, as the person's request (400)."""
+        if not cfg["flags"].get("connectedVideo"):  # absent means off (config.schema)
+            raise ApiError("flag_off", "Joined shots are switched off for now.")
+        inp = req["input"]
+        last = inp.get("lastFrame")
+        if connected.is_picture(last) and not str(last.get("mime", "")).startswith("image/"):
+            raise ApiError("invalid_input", "A clip lands on a picture, and this last frame is not one.")
+        for still in connected.stills_needed(inp):  # cut by stitch from our own copy of the take
+            if self.blobs.key_for_url(still["asset"]["url"]) is None:
+                raise ApiError("invalid_input", "The take to cut a frame from is not one of ours; upload it first.")
+        chain = self._chain(cfg, "clip", pick, allow, inp)
+        if not chain:
+            return  # create_job says no provider can do it
+        model = self._run_model(chain[0], "clip", pick, inp, allow, req.get("quality"))
+        sheet = effective_sheet(self.registry.sheet(chain[0]), "clip", model)
+        why = connected.problems(inp, sheet, sheet["ops"]["clip"])
+        if why:
+            raise ApiError("invalid_input", why)
+
     def create_job(self, who: dict, req: dict) -> dict:
         existing = self.store.get_job(req["jobId"])
         if existing:
@@ -996,6 +1022,8 @@ class Relay:
         policy = self._policy(tenant)
         self._check_allowed(cfg, req, policy["allow"])
         self._check_frame(req)
+        if op == "clip" and connected.asks_connected(req["input"]):
+            self._check_connected(cfg, req, pick, policy["allow"])
         try:  # a misspelt @name is the person's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
@@ -1243,6 +1271,8 @@ class Relay:
             return self._run_stitch(job, cfg)
         if op == "clip_patch" and not job.get("_stage"):
             return self._run_cut(job, cfg)
+        if op == "clip" and not job.get("_stage") and connected.stills_needed(job["_req"]["input"]):
+            return self._run_stills(job, cfg)
         if job.get("_notBefore", 0) > self.clock():  # its provider asked us to wait (a 429's Retry-After)
             return self._with_poll(job)
         cls = self._slot_class(op)
@@ -1398,66 +1428,136 @@ class Relay:
                               else self._delivery_provider_job(job, pjob))
             except ApiError as e:
                 return self._fail(job, e.code, e.message, paid=False, refund=True, director=block)
+        if job["op"] == "clip" and job.get("_frames"):  # a take's stills the clip starts and lands on
+            made += list(job["_frames"].values())
         sized = self._sized(job, provider, model, pjob)
         set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
-        try:
-            request_id = self._adapter(job, provider).submit(pjob)
-        except Moderated as e:
-            return self._fail(job, "moderated", e.message, provider_code=e.provider_code, paid=False,
-                              director=block)
-        except ProviderError as e:
-            if e.accepted:
-                return self._fall_back(job, cfg, "uncertain", "The provider may have this job; it will not be sent again.",
-                                       provider_code=e.provider_code, director=block, may_charge=True)
-            if job["op"] == "clip_patch" and e.provider_code in ("401", "403"):
-                # Aleph 2 not on our key (an entitlement refusal): nothing was made, so nothing is kept. Choosing
-                # another model is config clipPatch.model, before a job runs (owner, 2026-10-13).
-                return self._fail(job, "provider_failed", PATCH_UNAVAILABLE, provider_code=e.provider_code,
-                                  paid=False, refund=True, director=block)
-            if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
-                # A sheet refusal is about the request; an outage or a full queue is about the provider.
-                sheet = isinstance(e, CapabilityMissing) or e.code == "capability_missing"
-                sheet_only = job.get("_sheetOnly", True) and sheet
-                tried = job["_tried"] + [provider]
-                rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
-                retry_after = getattr(e, "retry_after_s", None)
-                if provider == FLOOR and not rest and not sheet and e.retryable and retry_after is not None:
-                    # Runway, the last of the chain, asked us to wait (a 429 with Retry-After; its adapter reads
-                    # the header only there): wait in the queue and send it there again then. It failed at once
-                    # before (2026-10-09); the queue timeout still bounds the wait. An outage still fails at once.
-                    wait = max(1, int(retry_after))
+        softened_from = None  # the words the provider's text check refused, when the job was sent again plainer
+        while True:
+            try:
+                request_id = self._adapter(job, provider).submit(pjob)
+                break
+            except Moderated as e:
+                if job["op"] == "clip" and not softened_from and soften.text_refusal(e.provider_code, e.message):
+                    # The words were refused (Runway's text check), before any task: once more, plainer, the same job.
+                    softened_from = pjob["prompt"]
+                    pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
+                    log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": e.provider_code}))
+                    continue
+                if softened_from:
+                    return self._fail(job, "moderated", f"{soften.TWICE} ({e.provider_code or 'moderated'}).",
+                                      provider_code=e.provider_code, paid=False, director=self._softened_block(block, pjob),
+                                      softened=True, _softenedFrom=softened_from)
+                return self._fail(job, "moderated", e.message, provider_code=e.provider_code, paid=False,
+                                  director=block)
+            except ProviderError as e:
+                if e.accepted:
+                    return self._fall_back(job, cfg, "uncertain", "The provider may have this job; it will not be sent again.",
+                                           provider_code=e.provider_code, director=block, may_charge=True)
+                if job["op"] == "clip_patch" and e.provider_code in ("401", "403"):
+                    # Aleph 2 not on our key (an entitlement refusal): nothing was made, so nothing is kept. Choosing
+                    # another model is config clipPatch.model, before a job runs (owner, 2026-10-13).
+                    return self._fail(job, "provider_failed", PATCH_UNAVAILABLE, provider_code=e.provider_code,
+                                      paid=False, refund=True, director=block)
+                if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
+                    # A sheet refusal is about the request; an outage or a full queue is about the provider.
+                    sheet = isinstance(e, CapabilityMissing) or e.code == "capability_missing"
+                    sheet_only = job.get("_sheetOnly", True) and sheet
+                    tried = job["_tried"] + [provider]
+                    rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
+                    retry_after = getattr(e, "retry_after_s", None)
+                    if provider == FLOOR and not rest and not sheet and e.retryable and retry_after is not None:
+                        # Runway, the last of the chain, asked us to wait (a 429 with Retry-After; its adapter reads
+                        # the header only there): wait in the queue and send it there again then. It failed at once
+                        # before (2026-10-09); the queue timeout still bounds the wait. An outage still fails at once.
+                        wait = max(1, int(retry_after))
+                        back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
+                                          _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
+                        self.store.incr(slot, "n", -1)
+                        if back is None:
+                            return self._reload(job)
+                        return self._with_poll(back)
+                    # Why the job left this provider, for the next one. The floor is the last: no "Runway could not
+                    # make it" in front of "Runway cannot do this step either" (it said Runway twice, 2026-10-09).
+                    reason = job.get("fallbackReason") or (could_not(provider, e.message) if rest else None)
                     back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                      _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
+                                      _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
+                                      _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason)
                     self.store.incr(slot, "n", -1)
                     if back is None:
-                        return self._reload(job)
-                    return self._with_poll(back)
-                # Why the job left this provider, for the next one. The floor is the last: no "Runway could not
-                # make it" in front of "Runway cannot do this step either" (it said Runway twice, 2026-10-09).
-                reason = job.get("fallbackReason") or (could_not(provider, e.message) if rest else None)
-                back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                  _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
-                                  _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason)
-                self.store.incr(slot, "n", -1)
-                if back is None:
-                    log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
-                return None
-            return self._fall_back(job, cfg, e.code, e.message, retryable=e.retryable, provider_code=e.provider_code,
-                                   paid=False, refund=True, director=block)
-        except Exception as e:  # timeout, reset: it may have been accepted
-            log.exception("submit to %s raised", provider)
-            return self._fall_back(job, cfg, "uncertain",
-                                   f"The provider may have this job; it will not be sent again ({type(e).__name__}).",
-                                   director=block, may_charge=True)
+                        log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
+                    return None
+                return self._fall_back(job, cfg, e.code, e.message, retryable=e.retryable, provider_code=e.provider_code,
+                                       paid=False, refund=True, director=block)
+            except Exception as e:  # timeout, reset: it may have been accepted
+                log.exception("submit to %s raised", provider)
+                return self._fall_back(job, cfg, "uncertain",
+                                       f"The provider may have this job; it will not be sent again ({type(e).__name__}).",
+                                       director=block, may_charge=True)
         now = self.clock()
         min_poll = (sheet.get("results") or {}).get("minPollS", 1)
-        saved = self._save(job, state="submitted", requestId=str(request_id), director=block,
-                           _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized)
+        plainer = {"softened": True, "_softenedFrom": softened_from} if softened_from else {}
+        saved = self._save(job, state="submitted", requestId=str(request_id),
+                           director=self._softened_block(block, pjob) if softened_from else block,
+                           _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized, **plainer)
         if saved is None:
             log.error("job %s: provider %s accepted request %s but the ledger write lost a race",
                       job["jobId"], provider, request_id)
             return self._reload(job)
         return self._with_poll(saved)
+
+    def _resend_plainer(self, job: dict, adapter, sheet: dict, st, now: float, min_poll: float) -> dict | None:
+        """A clip whose words the provider refused after taking the task: sent again once with plainer words, the
+        same provider job otherwise. None when it was already softened or cannot go again (the caller fails it)."""
+        block = job.get("director") or {}
+        pjob = (block.get("output") or {}).get("providerJob")
+        if job.get("softened"):
+            return self._fail(job, "moderated", f"{soften.TWICE} ({st.provider_code or 'moderated'}).",
+                              provider_code=st.provider_code, paid=False)
+        if not pjob or not pjob.get("prompt"):
+            return None
+        refused = pjob["prompt"]
+        pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
+        log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": st.provider_code, "at": "status"}))
+        made = list((job.get("_frames") or {}).values()) if job.get("_frames") else []
+        set_job_context("clip", asset_refs(job["_req"]["input"]) + made)
+        try:
+            request_id = adapter.submit(pjob)
+        except Moderated as e:
+            return self._fail(job, "moderated", f"{soften.TWICE} ({e.provider_code or 'moderated'}).",
+                              provider_code=e.provider_code, paid=False, director=self._softened_block(block, pjob),
+                              softened=True, _softenedFrom=refused)
+        except Exception:
+            log.exception("plainer resend of %s raised", job["jobId"])
+            return None
+        saved = self._save(job, state="submitted", requestId=str(request_id), director=self._softened_block(block, pjob),
+                           _submittedAt=now, _nextCheckAt=now + min_poll, softened=True, _softenedFrom=refused)
+        return self._with_poll(saved or job)
+
+    def _plainer(self, job: dict, sheet: dict, pjob: dict) -> str:
+        """A refused clip's words made plainer (soften.py): Dex rewrites them, keeping every beat and a take's
+        timing lines; a rewrite that loses the take's timing, or the passthrough, uses soften's word map. The word
+        map then goes over whatever was written, so no weapon wording is ever sent twice."""
+        refused = pjob["prompt"]
+        try:
+            out, _ = self._direct(job, sheet, refused=refused)
+            words = ((out.get("providerJob") or {}).get("prompt") or "").strip() or refused
+        except ApiError:
+            words = refused
+        inp = job["_req"]["input"]
+        if connected.mode_of(inp) in connected.TAKE_MODES:
+            _, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
+            if connected.timing_problem(words, starts, pjob.get("durationS") or 0):
+                words = refused
+        return soften.plain_words(words)
+
+    @staticmethod
+    def _softened_block(block: dict, pjob: dict) -> dict:
+        """The director block with the words that were sent, and why they changed (the History's reason)."""
+        output = dict(block.get("output") or {})
+        if output.get("providerJob"):
+            output["providerJob"] = {**output["providerJob"], "prompt": pjob["prompt"]}
+        return {**block, "output": output, "rationale": f"{soften.NOTE} {block.get('rationale', '')}".strip()[:300]}
 
     def _sized(self, job: dict, provider: str, model: str, pjob: dict) -> dict | None:
         """The clip's quality on the provider job (features/clip-quality.clan): the level and its size for the
@@ -1521,7 +1621,8 @@ class Relay:
             pool.shutdown(wait=False)
         return [{"media_type": media_type, "data": b64}], None
 
-    def _direct(self, job: dict, sheet: dict | None) -> tuple[dict, dict]:
+    def _direct(self, job: dict, sheet: dict | None, refused: str | None = None) -> tuple[dict, dict]:
+        """`refused`: words the provider's text check refused; the director makes them plainer (soften.py)."""
         start = self.clock()
         # An agency that turned Claude off gets the passthrough director and no cards (features/tenant-limits.clan);
         # a frame_edit Dex cannot look at gets the passthrough too (features/frame-change-edit.clan).
@@ -1539,6 +1640,8 @@ class Relay:
                 cut = job.get("_cut") or {}
                 raw = {**raw, "video": cut.get("video") or raw.get("video"),
                        **({"still": raw.get("still") or cut["still"]} if raw.get("still") or cut.get("still") else {})}
+            if req["op"] == "clip" and job.get("_frames"):  # the stills cut from a take: the clip's first and last frames
+                raw = connected.with_stills(raw, job["_frames"])
             # Extra views over this provider's ref limits are left out, not refused (names.fit_refs).
             inp, dropped = names.fit_refs(req["op"], raw, sheet)
             if dropped:
@@ -1546,6 +1649,8 @@ class Relay:
             inp, kinds = self._with_cards(job, inp) if claude else (inp, {})
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
             wired = names.to_wire(req["op"], inp)
+            if refused:
+                wired = {**wired, "refused": refused}
             if wired.get("answer"):  # what was asked, and what the person chose, in words the director reads
                 q = self._asked(job) or {}
                 a = wired["answer"]
@@ -2300,6 +2405,136 @@ class Relay:
             log.exception("stitch splice invoke failed")  # no result comes: the splice clock retries it
         return self._with_poll(saved)
 
+    # ── Connected video (features/connected-video.clan): a take's stills before, its cuts after ──
+    def _run_stills(self, job: dict, cfg: dict) -> dict:
+        """Before a redo window's clip (or one landing on a take's frame): stitch cuts the lossless stills at
+        the window's ends from our copy of the take (splice.py cut). No provider slot is held; nothing is paid
+        if it fails."""
+        if self.stitch is None:
+            return self._fail(job, "provider_unavailable", "Cutting the take's frames is not available here.",
+                              paid=False, refund=True)
+        need = connected.stills_needed(job["_req"]["input"])
+        scratch = self._scratch(job)
+        event = {"jobId": job["jobId"], "mode": "cut", "key": self.blobs.key_for_url(need[0]["asset"]["url"]),
+                 "stills": [{"atS": s["atS"], "key": f"{scratch}/{s['role']}.png"} for s in need],
+                 "resultKey": f"{scratch}/stills.json"}
+        saved = self._save(job, state="submitted", _stage="stills", _stageAt=self.clock(), _queue="r")
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception as e:
+            log.exception("stitch stills invoke failed")
+            return self._fail(saved, "provider_unavailable", f"Cutting the take's frames could not start ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        return self._with_poll(saved)
+
+    def _run_take_cuts(self, job: dict, outputs: list[dict], cost_usd: float | None) -> dict:
+        """A take has landed: stitch finds where it cut (splice.py take_cuts: the strongest scene change near
+        each cut the prompt planned). The provider's slot is free now; the bill is kept for the landing. A take
+        stitch cannot read (the mock's still, no stitch here) lands with every found_s null."""
+        inp = job["_req"]["input"]
+        sheet = effective_sheet(self.registry.sheet(job["provider"]), "clip", job.get("model"))
+        _, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
+        kind = "mock" if job["provider"] == "mock" else "generated"
+        key = self.blobs.key_for_url(outputs[0]["url"])
+        if self.stitch is None or key is None or not str(outputs[0].get("mime", "")).startswith("video/"):
+            return self._finish(job, "completed", outputs=outputs, kind=kind, confirmed=cost_usd,
+                                cuts=connected.merge_cuts(starts, None))
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        event = {"jobId": job["jobId"], "mode": "take_cuts", "key": key, "cuts": starts[1:],
+                 "searchS": connected.search_s((sheet.get("video") or {}).get("take")),
+                 "threshold": connected.CUT_THRESHOLD, "resultKey": f"{self._scratch(job)}/cuts.json"}
+        saved = self._save(job, state="submitted", _stage="take_cuts", _stageAt=self.clock(), _landed=outputs,
+                           _starts=starts, _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception:
+            log.exception("stitch take_cuts invoke failed")  # no result comes: the clock lands the take without
+        return self._with_poll(saved)
+
+    def _land_target(self, job: dict) -> dict | None:
+        """The picture a clip was made to end on: its lastFrame, or the still cut for it (a redo window's end)."""
+        last = (job.get("_frames") or {}).get("last") or job["_req"]["input"].get("lastFrame")
+        return last if connected.is_picture(last) else None
+
+    def _landed_at_end(self, job: dict, outputs: list[dict]) -> dict:
+        """Where a clip lands when stitch cannot look: the mock's ends on its last frame (one frame before its end);
+        any other says nothing, and the web keeps the clip's real end."""
+        seconds = outputs[0].get("durationS")
+        if job.get("provider") != "mock" or not seconds:
+            return {}
+        return {"landS": round(max(0.0, float(seconds) - 1 / connected.FRAME_RATE), 3)}
+
+    def _run_land(self, job: dict, outputs: list[dict], cost_usd: float | None) -> dict:
+        """A clip made to end on a given frame has landed: stitch finds the frame of its last second that best
+        matches that frame (splice.py land). Models reach it a few frames early and carry on past it (veo3.1_fast,
+        2026-10-19), so the web ends the clip there (landS) instead of at its real end. The provider's slot is
+        free now; the bill is kept for the landing. Never fails the clip: without a result it lands as made."""
+        kind = "mock" if job["provider"] == "mock" else "generated"
+        key = self.blobs.key_for_url(outputs[0]["url"])
+        target = self.blobs.key_for_url(self._land_target(job)["url"])
+        if self.stitch is None or key is None or target is None or not str(outputs[0].get("mime", "")).startswith("video/"):
+            return self._finish(job, "completed", outputs=outputs, kind=kind, confirmed=cost_usd,
+                                **self._landed_at_end(job, outputs))
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        event = {"jobId": job["jobId"], "mode": "land", "key": key, "targetKey": target,
+                 "searchS": connected.LAND_SEARCH_S, "resultKey": f"{self._scratch(job)}/land.json"}
+        saved = self._save(job, state="submitted", _stage="land", _stageAt=self.clock(), _landed=outputs,
+                           _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception:
+            log.exception("stitch land invoke failed")  # no result comes: the clock lands the clip as made
+        return self._with_poll(saved)
+
+    def _advance_connected(self, job: dict, cfg: dict, now: float) -> dict:
+        scratch = self._scratch(job)
+        if job["_stage"] == "land":
+            result = self.blobs.get_json(f"{scratch}/land.json")
+            if result is None and now - job["_stageAt"] <= CUT_TIMEOUT_S:
+                return self._with_poll(job)
+            if result and result.get("ok"):
+                found = {"landS": result["landS"], "landScore": result["landScore"]}
+            else:  # the clip stands as made: the web uses its real end
+                log.warning("job %s: land %s", job["jobId"], (result or {}).get("error") or f"no result in {CUT_TIMEOUT_S} s")
+                found = self._landed_at_end(job, job["_landed"])
+            kind = "mock" if job.get("provider") == "mock" else "generated"
+            return self._finish(job, "completed", outputs=job["_landed"], kind=kind, confirmed=job.get("_confirmed"), **found)
+        if job["_stage"] == "stills":
+            result = self.blobs.get_json(f"{scratch}/stills.json")
+            if result is None:
+                if now - job["_stageAt"] > CUT_TIMEOUT_S:
+                    return self._fail(job, "timeout", "Cutting the take's frames took too long. Try again.",
+                                      retryable=True, paid=False, refund=True)
+                return self._with_poll(job)
+            if not result.get("ok"):
+                return self._fail(job, "provider_failed", result.get("error", "The take's frames could not be cut.")[:300],
+                                  retryable=True, paid=False, refund=True)
+            need = connected.stills_needed(job["_req"]["input"])
+            frames = {s["role"]: {"sha256": got["sha256"], "url": self.blobs.public_url(f"{scratch}/{s['role']}.png"),
+                                  "mime": "image/png"} for s, got in zip(need, result.get("stills") or [])}
+            saved = self._save(job, state="queued", _stage="provider", _stageAt=now, _queue="q", _queuedAt=now,
+                               _frames=frames)
+            return self._dispatch(saved, cfg) if saved else self._reload(job)
+        result = self.blobs.get_json(f"{scratch}/cuts.json")
+        if result is None and now - job["_stageAt"] <= CUT_TIMEOUT_S:
+            return self._with_poll(job)
+        found = None
+        if result and result.get("ok"):
+            found = [c.get("found_s") for c in result.get("cuts") or []]
+        else:  # the take stands: its cuts are the planned ones
+            log.warning("job %s: take_cuts %s", job["jobId"], (result or {}).get("error") or f"no result in {CUT_TIMEOUT_S} s")
+        kind = "mock" if job.get("provider") == "mock" else "generated"
+        return self._finish(job, "completed", outputs=job["_landed"], kind=kind, confirmed=job.get("_confirmed"),
+                            cuts=connected.merge_cuts(job["_starts"], found))
+
     def _patch_question(self, job: dict, q: dict) -> dict:
         """Dex judged the note to be about the whole shot: the ask is always the same two buttons and words
         (ui-behaviour 3.13), whatever the model wrote; no price on either (owner, 2026-10-13)."""
@@ -2367,6 +2602,8 @@ class Relay:
             return self._advance_stitch(job, cfg, now)
         if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
             return self._advance_patch(job, cfg, now)
+        if job["op"] == "clip" and job.get("_stage") in ("stills", "take_cuts", "land"):
+            return self._advance_connected(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
             # Past its time, but the provider may have finished it while nobody polled (the local relay
             # was down: features/relay-durable-jobs.clan). Ask once: a finished task lands, paid for.
@@ -2400,6 +2637,12 @@ class Relay:
                                _ran=bool(job.get("_ran")) or st.state == "running")
             return self._with_poll(saved or job)
         if st.state == "moderated":
+            if job["op"] == "clip" and soften.text_refusal(st.provider_code, st.error_message):
+                # Runway takes the task, then its text check refuses it on the next status (2026-10-19): the same
+                # as a refusal at submit, so once more, plainer; a second refusal fails as twice refused.
+                again = self._resend_plainer(job, adapter, sheet, st, now, min_poll)
+                if again is not None:
+                    return again
             return self._fail(job, "moderated", st.error_message or "The provider refused this content.",
                               provider_code=st.provider_code)
         if st.state == "cancelled":
@@ -2466,6 +2709,10 @@ class Relay:
             return self._land_resize(claimed, outputs[0], st.cost_usd)
         if job["op"] == "upscale" and (job["_req"].get("input") or {}).get("delivery"):
             return self._land_delivery(claimed, outputs[0], st.cost_usd)
+        if job["op"] == "clip" and connected.mode_of(job["_req"]["input"]) in connected.TAKE_MODES:
+            return self._run_take_cuts(claimed, outputs, st.cost_usd)  # where the take cut, before it lands
+        if job["op"] == "clip" and self._land_target(job):
+            return self._run_land(claimed, outputs, st.cost_usd)  # where it reached its last frame, before it lands
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(claimed, "completed", outputs=outputs, kind=kind, confirmed=st.cost_usd)
 
@@ -2531,6 +2778,10 @@ class Relay:
             return self._finish(job, "cancelled", paid=False, refund=True)  # only our own cut ran: nothing to pay
         if state == "submitted" and job["op"] == "clip_patch" and job.get("_stage") == "splice":
             return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the model's work is done and billed
+        if state == "submitted" and job["op"] == "clip" and job.get("_stage") == "stills":
+            return self._finish(job, "cancelled", paid=False, refund=True)  # only our own cut ran: nothing to pay
+        if state == "submitted" and job["op"] == "clip" and job.get("_stage") in ("take_cuts", "land"):
+            return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the take is made and billed
         if state in ("submitted", "uncertain"):
             if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back
                 return self._finish(job, "cancelled", paid=False, refund=True)

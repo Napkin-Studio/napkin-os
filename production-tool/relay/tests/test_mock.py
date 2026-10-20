@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import json
 import shutil
@@ -249,3 +250,45 @@ def test_ffmpeg_none_or_failing_falls_back_to_the_still(clock):
         clock.t += 3
         out = m.status(rid).outputs[0]
         assert out.mime == "image/png" and out.duration_s == 4, ffmpeg
+
+
+# ── takes and landing frames (features/connected-video.clan, phases A and B) ──
+
+def _means(mp4: bytes, tmp_path) -> list[tuple[float, float, float]]:
+    """Each frame's mean red, green and blue."""
+    f = tmp_path / "clip.mp4"
+    f.write_bytes(mp4)
+    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(f), "-vf", "scale=8:8,format=rgb24", "-f", "rawvideo", "-"],
+                       capture_output=True, check=True)
+    n = 8 * 8 * 3
+    return [tuple(sum(r.stdout[i + k:i + n:3]) / 64 for k in range(3)) for i in range(0, len(r.stdout), n)]
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="needs ffmpeg")
+def test_a_take_is_its_whole_length_and_cuts_where_its_prompt_says(clock, tmp_path):
+    m = MockProvider(lambda sha: AssetRef(sha, "https://cdn.test/x.png", "image/png"), lambda url: _png((200, 60, 40), (640, 360)),
+                     clock=clock)
+    prompt = "A fox.\nShot 1 [0-2 s] It sits.\nShot 2 [2-3.5 s] It turns.\nShot 3 [3.5-5 s] It runs."
+    rid = m.submit(dataclasses.replace(job("clip", first_frame=SHA, duration_s=5), prompt=prompt))
+    clock.t = 3
+    out = m.status(rid).outputs[0]
+    assert out.mime == "video/mp4" and out.duration_s == 5
+    means = _means(out.data, tmp_path)
+    assert len(means) == 120  # 5 s at 24 fps
+    jump = [sum(abs(a - b) for a, b in zip(means[i], means[i - 1])) for i in range(1, len(means))]
+    big = sorted(range(1, len(means)), key=lambda i: -jump[i - 1])[:2]
+    assert sorted(big) == [48, 84]  # the first frames of shots 2 and 3: 2 s and 3.5 s at 24 fps
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="needs ffmpeg")
+def test_a_clip_with_a_last_frame_ends_on_it(clock, tmp_path):
+    pictures = {"https://cdn.test/first.png": _png((200, 40, 40), (640, 360)), "https://cdn.test/last.png": _png((40, 200, 40), (640, 360))}
+    last = "sha256:" + "b" * 64
+    m = MockProvider(lambda sha: AssetRef(sha, "https://cdn.test/" + ("last" if sha == last else "first") + ".png", "image/png"),
+                     lambda url: pictures[url], clock=clock)
+    rid = m.submit(job("clip", first_frame=SHA, last_frame=last, duration_s=4))
+    clock.t = 3
+    means = _means(m.status(rid).outputs[0].data, tmp_path)
+    assert len(means) == 24
+    assert means[0][0] > 150 and means[0][1] < 90  # starts on the first (red)
+    assert means[-1][1] > 150 and means[-1][0] < 90  # ends on the last (green)

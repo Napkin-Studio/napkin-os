@@ -3,6 +3,7 @@
 # /production) in front of the local relay, plus the one local model backend in --live mode.
 #
 #   scripts/run-production-local [start] [--live] [--build]
+#   scripts/run-production-local refresh   rebuild the web and serve it, relay untouched
 #                                         build what is missing, then start web + relay
 #   scripts/run-production-local status   what runs, on which ports, in which mode
 #   scripts/run-production-local stop [--force]
@@ -21,7 +22,8 @@
 # the roster name printed at start (default dev@napkin).
 #
 # Settings (environment): PRODUCTION_WEB_PORT (8091), PRODUCTION_RELAY_PORT (8788),
-# PRODUCTION_SPEND_CAP (50), PRODUCTION_SIGN_IN (dev@napkin), PRODUCTION_STATE (state dir,
+# PRODUCTION_SPEND_CAP (50), PRODUCTION_FLAGS (--live: config flags to turn on, comma-separated,
+# e.g. connectedVideo), PRODUCTION_SIGN_IN (dev@napkin), PRODUCTION_STATE (state dir,
 # default ${XDG_STATE_HOME:-~/.local/state}/napkin-production). Projects, sign-ins, secrets,
 # logs and pids live in the state dir, outside the repo.
 #
@@ -85,11 +87,13 @@ build() { # build only what is missing or wrong; --build forces the Production T
 
 live_config() { # the relay's config for --live: real routing, the spend stop
   local cap="${PRODUCTION_SPEND_CAP:-50}"
-  python3 - "$root/production-tool/contracts/examples/config.testing.json" "$state/live-config.json" "$cap" <<'EOF'
+  python3 - "$root/production-tool/contracts/examples/config.testing.json" "$state/live-config.json" "$cap" "${PRODUCTION_FLAGS:-}" <<'EOF'
 import json, sys
-src, out, cap = sys.argv[1], sys.argv[2], float(sys.argv[3])
+src, out, cap, flags = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
 c = json.load(open(src))
 c["spend"] = {"capUsd": cap, "warnUsd": round(cap * 0.8, 2)}
+for f in filter(None, flags.split(",")):
+    c["flags"][f.strip()] = True
 c.setdefault("routing", {}).setdefault("upscale", ["runway"])
 json.dump(c, open(out, "w"), indent=2)
 EOF
@@ -149,6 +153,7 @@ start() {
   fi
 
   # cd, then exec: no shell is left behind waiting on the server (and holding the caller's stdout)
+  publish_web
   (cd "$root/production-tool/relay" || exit 1; exec env -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET -u ANTHROPIC_API_KEY \
       -u NAPKIN_MODEL_API -u NAPKIN_MODEL_BASE_URL -u ANTHROPIC_BASE_URL -u AWS_PROFILE "${relay_env[@]}" \
       "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
@@ -159,7 +164,7 @@ start() {
       NAPKIN_SESSION_SECRET="$(secret session)" \
       NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$relay_port" \
       NAPKIN_PRODUCTION_RELAY_SECRET="$token" \
-      NAPKIN_PRODUCTION_STATIC="$dist" NAPKIN_WEB_STATIC="$root/app/dist" \
+      NAPKIN_PRODUCTION_STATIC="$state/production-dist" NAPKIN_WEB_STATIC="$root/app/dist" \
       NAPKIN_WEB_DATA="$state/webdata" NAPKIN_WEB_ADDR="127.0.0.1:$web_port" \
       "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
       "$root/target/debug/napkin-web" >>"$state/web.log" 2>&1 </dev/null) &
@@ -204,11 +209,23 @@ status() {
   return 0
 }
 
+publish_web() { # the running stack serves its own copy: scripts/check.sh rebuilds web/dist with base '/'
+  rm -rf "$state/production-dist.new" && cp -r "$dist" "$state/production-dist.new" \
+    && rm -rf "$state/production-dist" && mv "$state/production-dist.new" "$state/production-dist"
+}
+
+refresh() { # rebuild the Production Tool's web and serve it, without restarting the relay
+  build 1
+  publish_web
+  say "web refreshed; reload the page"
+}
+
 cmd="${1:-start}"; [[ "$cmd" == --* ]] && cmd=start || shift || true
 case "$cmd" in
   start) start "$@" ;;
   stop) stop "$@" ;;
   status) status ;;
+  refresh) refresh ;;
   logs) tail -n 40 -f "$state/web.log" "$state/relay.log" ;;
-  *) die "unknown command $cmd (start, status, stop, logs)" ;;
+  *) die "unknown command $cmd (start, status, stop, refresh, logs)" ;;
 esac

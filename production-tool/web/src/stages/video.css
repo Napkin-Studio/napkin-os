@@ -2,6 +2,8 @@
    shot's notes, Fix this moment and its takes in a frosted panel on the right, on the dot grid. */
 .ve-body { padding: 16px; }
 .ve-body .video-layout { grid-template-columns: minmax(0, 1fr) 350px; gap: 18px; }
+/* Below 1180 px the notes go under the player (styles.css says so too; this rule outranked it). */
+@media (max-width: 1180px) { .ve-body .video-layout { grid-template-columns: minmax(0, 1fr); } }
 .ve-error { color: var(--danger); font-weight: 600; margin-bottom: 10px; }
 .ve-body .player { height: min(52vh, 420px); border-radius: 6px; background: #14161B; box-shadow: var(--shadow-soft); }
 .ve-body .timeline { height: 30px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); margin: 12px 0; }
@@ -70,3 +72,64 @@
 .ve-len .input { width: 64px; }
 .ve-own { display: inline-flex; align-items: center; gap: 6px; }
 .ve-thumbwords { position: absolute; inset: 0; padding: 6px 30px 6px 7px; font-size: 10.5px; line-height: 1.3; color: var(--ink2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+
+/* One track (features/connected-video.clan, the owner's choice 2026-10-20): every shot in order on one
+   horizontal track that scrolls, never wraps. Shots made as one video sit in ONE box (a 1.5px accent
+   border, a slight tint and a header bar with its one Make); separate shots are plain cards with a small
+   Make under them. Between separate neighbours, Join (44px) or a muted dot. Colours are tokens, so dark
+   mode follows. */
+.ve-track1wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ve-rowsum { font-size: 13px; padding: 0 2px; }
+.ve-track1 { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0; overflow-x: auto; overflow-y: hidden; padding: 4px 2px 12px; min-width: 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.ve-track1::-webkit-scrollbar { height: 10px; }
+.ve-track1::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+.ve-track1 .shotcard { flex: 0 0 168px; }
+.ve-timeline .ve-track1 .shotcard { flex-basis: 168px; }
+.ve-timeline .ve-track1 .shotcard .thumb { height: 88px; }
+.ve-timeline .shotcard.picked { outline: 2px solid var(--action); outline-offset: -2px; }
+.ve-solo { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding-top: 45px; }
+/* In the solo column the card's flex-basis would set its height: its width instead. */
+.ve-timeline .ve-track1 .ve-solo .shotcard { flex: 0 0 auto; width: 168px; }
+/* The version chips sit in the card's row here (a later rule floats them for the canvas). */
+.ve-track1 .vchip { position: static; transform: none; box-shadow: none; }
+.ve-solofoot { display: flex; justify-content: flex-start; min-height: 28px; }
+.ve-box { flex: 0 0 auto; display: flex; flex-direction: column; border: 1.5px solid var(--tool); border-radius: 10px; background: var(--tool-soft); overflow: hidden; }
+.ve-box.sel { box-shadow: 0 0 0 2px var(--tool); }
+.ve-box.refused { border-color: var(--warn); }
+.ve-boxhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 34px; padding: 3px 8px; background: color-mix(in srgb, var(--tool) 14%, var(--card)); border-bottom: 1px solid color-mix(in srgb, var(--tool) 35%, transparent); }
+.ve-boxtitle { border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; white-space: nowrap; }
+.ve-boxtitle:hover { color: var(--tool-ink); text-decoration: underline; }
+.ve-boxmodel { font-size: 11.5px; white-space: nowrap; }
+.ve-boxcards { display: flex; flex-wrap: nowrap; align-items: stretch; padding: 8px; }
+.ve-ruler { display: flex; gap: 20px; margin: 0 8px 8px; border-top: 2px solid var(--tool); }
+.ve-ruler span { flex: 0 0 168px; padding-top: 2px; border-left: 2px solid var(--tool); padding-left: 4px; font-size: 10.5px; color: var(--ink2); font-family: var(--f-mono); }
+.ve-rowprogress { height: 3px; margin: 0 8px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--tool), transparent) var(--tool-soft); background-size: 40% 100%; background-repeat: no-repeat; animation: ve-progress 1.6s linear infinite; }
+@keyframes ve-progress { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@media (prefers-reduced-motion: reduce) { .ve-rowprogress { animation: none; background: var(--tool); } }
+/* Cut here: a clear vertical divider; its pill shows on hover or focus, and always on touch. */
+.ve-cuthere { position: relative; flex: 0 0 20px; min-height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.ve-cuthere::before { content: ''; position: absolute; top: 4px; bottom: 4px; left: 50%; width: 2px; margin-left: -1px; background: color-mix(in srgb, var(--tool) 35%, var(--line)); border-radius: 1px; }
+.ve-cuthere:hover::before, .ve-cuthere:focus-visible::before { background: var(--tool); }
+.ve-cutpill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3; display: none; align-items: center; min-height: 44px; padding: 0 12px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--tool); color: var(--tool-ink); font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-soft); }
+.ve-cuthere:hover .ve-cutpill, .ve-cuthere:focus-visible .ve-cutpill { display: inline-flex; }
+.ve-cuthere:focus-visible { outline: none; }
+@media (hover: none) {
+  .ve-cuthere { flex-basis: 44px; }
+  .ve-cutpill { display: inline-flex; padding: 0 6px; writing-mode: vertical-rl; min-height: 0; min-width: 32px; height: 88px; justify-content: center; }
+}
+/* Between separate neighbours: Join (44px tall), or a muted dot whose title says why not. */
+.ve-joingap { flex: 0 0 auto; align-self: flex-start; margin: 45px 4px 0; height: 88px; min-height: 44px; padding: 0 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; color: var(--ink2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.ve-joingap:hover, .ve-joingap:focus-visible { border-color: var(--tool); color: var(--tool-ink); background: var(--tool-soft); }
+.ve-nogap { flex: 0 0 20px; align-self: flex-start; margin-top: 45px; height: 88px; display: grid; place-items: center; color: var(--ink3); font-size: 16px; cursor: help; }
+.ve-refusal { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 8px 8px; padding: 6px 8px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 12px; font-weight: 600; }
+.ve-solo .ve-refusal { margin: 0; max-width: 168px; }
+.ve-rownote { font-size: 11.5px; margin: 0 8px 8px; }
+.ve-makeall { display: inline-flex; }
+.ve-selbar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 8px 12px; border-radius: var(--r-panel); background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-soft); font-size: 13px; }
+.ve-selbar .btn { min-height: 36px; }
+.ve-selwhy { flex-basis: 100%; font-size: 12px; color: var(--ink2); }
+.timeline .ve-beat { position: absolute; top: 0; bottom: 0; padding: 0; border: 0; border-left: 2px solid var(--tool); background: transparent; cursor: pointer; font-size: 10.5px; color: var(--ink2); text-align: left; }
+.timeline .ve-beat span { padding-left: 4px; }
+.timeline .ve-beat.cur { background: var(--tool-soft); color: var(--tool-ink); }
+.timeline .ve-beat:first-of-type { border-left-color: transparent; }
+.ve-drift { font-size: 11px; color: var(--ink2); }

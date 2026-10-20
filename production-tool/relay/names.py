@@ -168,22 +168,31 @@ def to_wire(op: str, payload: dict) -> dict:
             by_name[r["name"]] = r["tag"]
     if out.get("text"):
         out["text"] = _rewrite(out["text"], by_name)
-    shot = out.get("shot")
-    if shot:
-        for field in SHOT_WORDS:
-            if shot.get(field):
-                shot[field] = _rewrite(shot[field], by_name)
-        for beat in shot.get("beats") or []:
-            if beat.get("text"):
-                beat["text"] = _rewrite(beat["text"], by_name)
-        tags: list[str] = []
-        for n in shot.get("refs") or []:
-            if "_" in n:
-                if n not in by_name:
-                    raise UnknownName(f"The shot names @{n}, but no image has that name.")
-                found = [by_name[n]]
-            else:  # a whole character: its front first, then its other pictures in this job
-                found = [_front_tag(n, by_name)] + [t for m, t in by_name.items() if m.split("_", 1)[0] == n and m != f"{n}_front"]
-            tags += [t for t in found if t not in tags]
-        shot["refs"] = tags
+    # A take's shots and their timed lines (features/connected-video.clan) name pictures as one shot does.
+    for shot in [out["shot"]] if out.get("shot") else []:
+        _shot_to_wire(shot, by_name)
+    if op == "clip":
+        for shot in out.get("shots") or []:
+            _shot_to_wire(shot, by_name)
+        for cut in out.get("cuts") or []:
+            cut["text"] = _rewrite(cut["text"], by_name)
     return out
+
+
+def _shot_to_wire(shot: dict, by_name: dict[str, str]) -> None:
+    for field in SHOT_WORDS:
+        if shot.get(field):
+            shot[field] = _rewrite(shot[field], by_name)
+    for beat in shot.get("beats") or []:
+        if beat.get("text"):
+            beat["text"] = _rewrite(beat["text"], by_name)
+    tags: list[str] = []
+    for n in shot.get("refs") or []:
+        if "_" in n:
+            if n not in by_name:
+                raise UnknownName(f"The shot names @{n}, but no image has that name.")
+            found = [by_name[n]]
+        else:  # a whole character: its front first, then its other pictures in this job
+            found = [_front_tag(n, by_name)] + [t for m, t in by_name.items() if m.split("_", 1)[0] == n and m != f"{n}_front"]
+        tags += [t for t in found if t not in tags]
+    shot["refs"] = tags

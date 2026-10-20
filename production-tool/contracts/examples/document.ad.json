@@ -954,17 +954,30 @@
         "edl_01K7A00000000000000000002A": {
           "rank": "a2",
           "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000016"
+          "shot_id": "shot_01K7A000000000000000000016",
+          "seam": {
+            "kind": "cut",
+            "by": "crew"
+          }
         },
         "edl_01K7A00000000000000000002B": {
           "rank": "a3",
           "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000017"
+          "shot_id": "shot_01K7A000000000000000000017",
+          "seam": {
+            "kind": "continue",
+            "by": "crew"
+          }
         },
         "edl_01K7A00000000000000000002C": {
           "rank": "a4",
           "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000018"
+          "shot_id": "shot_01K7A000000000000000000018",
+          "seam": {
+            "kind": "dissolve",
+            "s": 0.5,
+            "by": "human"
+          }
         }
       },
       "pick": {
@@ -972,6 +985,19 @@
         "alternates": [
           "render_01K7A00000000000000000002D"
         ]
+      },
+      "join": "film",
+      "runs": {
+        "run_01K7A00000000000000000002F": {
+          "shot_ids": [
+            "shot_01K7A000000000000000000017",
+            "shot_01K7A000000000000000000018"
+          ],
+          "mode": "frames",
+          "model": "veo3.1_fast",
+          "state": "done",
+          "planned_by": "crew"
+        }
       }
     }
   },
@@ -991,7 +1017,13 @@
       "duration_s": 5,
       "quality": "draft",
       "size": "720p",
-      "segments": []
+      "segments": [],
+      "end": {
+        "kind": "next_storyboard",
+        "frame_id": "frame_01K7A00000000000000000001X",
+        "at_s": 3.708,
+        "score": 0.954
+      }
     },
     "take_01K7A000000000000000000025": {
       "id": "take_01K7A000000000000000000025",
@@ -1039,7 +1071,10 @@
       "model": "mock",
       "provider": "mock",
       "duration_s": 2,
-      "segments": []
+      "segments": [],
+      "end": {
+        "kind": "none"
+      }
     }
   },
   "renders": {

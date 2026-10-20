@@ -353,8 +353,69 @@
         "lastFrame": {
           "type": "boolean"
         },
-        "multiShot": {
-          "type": "boolean"
+        "lastFrameFidelity": {
+          "enum": [
+            "tight",
+            "loose",
+            "untested"
+          ],
+          "description": "How closely a clip lands on its last frame (features/connected-video.clan, phase 0 T3/T8): tight scored 0.97 or more (veo3.1_fast, wan3), loose did not (h3_max: never planned as frames), untested has no measurement yet. Absent where lastFrame is false. Added 2026-10-19."
+        },
+        "take": {
+          "type": "object",
+          "description": "One take of several shots in one generation (features/connected-video.clan, the take mode; replaces multiShot). ok: the planner may make takes on this model. maxS and maxShots: the longest take and the most shots in it (15 s and 6 until a longer test). withLast: a take may also end on a given last frame (false until paid test P1). cutAccuracyS: how far from the prompt's times the model cuts (take_cuts searches this far either side, at most 1 s); null when unmeasured. field: where the timed shots go, the prompt (Wan's 'Shot k [a-b s]' lines) or providerSettings.multiPrompt (Kling). Absent: the model makes no takes.",
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "maxS": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 30
+            },
+            "maxShots": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 12
+            },
+            "withLast": {
+              "type": "boolean"
+            },
+            "cutAccuracyS": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "field": {
+              "enum": [
+                "prompt",
+                "multiPrompt"
+              ]
+            }
+          },
+          "required": [
+            "ok"
+          ],
+          "if": {
+            "properties": {
+              "ok": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "maxS",
+              "maxShots",
+              "withLast",
+              "cutAccuracyS",
+              "field"
+            ]
+          },
+          "additionalProperties": false
         },
         "regionEdit": {
           "enum": [
@@ -376,7 +437,7 @@
         },
         "audioControl": {
           "type": "boolean",
-          "description": "The clip model has an audio switch we can turn off. false: it always or never makes sound; the director adds 'no music, no dialogue'. Added 2026-10-06 (additive)."
+          "description": "The clip model has an audio switch we can turn off. false: it always or never makes sound; the director adds 'no music, no dialogue'. Added 2026-10-06 (additive). It is also the native-audio switch connected-video reads (features/connected-video.clan): a take on a model without it keeps its own continuous sound."
         },
         "refsWithoutFrame": {
           "type": "boolean",
@@ -386,7 +447,6 @@
       "required": [
         "firstFrameWithRefs",
         "lastFrame",
-        "multiShot",
         "regionEdit",
         "feelEdit",
         "audioDefault"

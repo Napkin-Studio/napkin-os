@@ -1,7 +1,7 @@
 // The mock's pictures and clips, drawn on a canvas in the browser. Every
 // output carries a big "MOCK" stamp so it can never pass for a real result.
 
-import type { Aspect, JobRequest, Ratio, View } from '../contracts/types'
+import type { Aspect, JobRequest, KeyframeRef, Ratio, StitchTransition, View } from '../contracts/types'
 import { aspectOfRatio, centreCrop, sameShape } from '../canvas/core/sketch'
 import { runwaySize } from '../lib/runwaySizes'
 import { END_CARD_S } from '../jobs/clips'
@@ -347,7 +347,28 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
       return out
     }
   }
+  // Remake just this shot (features/connected-video.clan): the take's window played again, retinted.
+  const win = inp.window && 'source' in inp.window ? inp.window : undefined
+  if (inp.mode === 'redo_window' && win) {
+    const blob = await input(win.source.sha256)
+    if (blob && blob.type.startsWith('video/')) {
+      const v = await loadVideo(blob)
+      v.currentTime = win.inS
+      await v.play().catch(() => undefined)
+      const out = await record(w, h, Math.min(CLIP_MAX_S, Math.max(0.5, win.outS - win.inS)), (ctx, t) => {
+        ctx.filter = 'hue-rotate(200deg)'
+        contain(ctx, v, 0, 0, w, h)
+        ctx.filter = 'none'
+        timecode(ctx, w, h, t, win.withLast ? 'remade · lands on the next' : 'remade shot')
+      })
+      v.pause()
+      URL.revokeObjectURL(v.src)
+      return out
+    }
+  }
+  if ((inp.mode === 'take' || inp.mode === 'take_refs') && inp.shots?.length) return renderTake(req, input)
   const img = (await bitmap(input, inp.image?.sha256)) ?? (await bitmap(input, inp.refs?.[0]?.asset.sha256))
+  const end = await keyframe(input, inp.lastFrame)
   const move = inp.shot?.camera.movement ?? 'push_in'
   return record(w, h, seconds, (ctx, t) => {
     const p = t / seconds
@@ -368,7 +389,67 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
     ctx.translate(-w / 2, -h / 2)
     if (img) contain(ctx, img, 0, 0, w, h, { scale: 1.02 })
     ctx.restore()
-    timecode(ctx, w, h, t, `shot · ${move}`)
+    // A clip with a last frame lands on it: its last half second dissolves into the next shot's frame.
+    const landing = end ? Math.max(0, Math.min(1, (t - (seconds - LAND_S)) / LAND_S)) : 0
+    if (end && landing > 0) {
+      ctx.globalAlpha = landing
+      contain(ctx, end, 0, 0, w, h, { scale: 1.02 })
+      ctx.globalAlpha = 1
+    }
+    timecode(ctx, w, h, t, end ? `shot · ${move} · lands on the next frame` : `shot · ${move}`)
+  })
+}
+
+/** How long a mock clip takes to land on its last frame. */
+const LAND_S = 0.5
+/** The longest mock take (a real take is at most the sheet's take.maxS). */
+const TAKE_MAX_S = 15
+
+/** A keyframe as a picture: a still, or (a frame of a take) nothing in the mock. */
+async function keyframe(input: Input, k: KeyframeRef | undefined): Promise<ImageBitmap | null> {
+  return k && 'sha256' in k ? bitmap(input, k.sha256) : null
+}
+
+/** One take of several shots (mode take or take_refs): one clip, a visibly different picture per shot,
+ *  cutting at the prompt's times (input.cuts), "SHOT k" stamped. A take starts on its first frame; a take
+ *  from pictures shows each shot's frame from the references, in order. */
+async function renderTake(req: JobRequest, input: Input): Promise<RenderedOutput> {
+  const inp = req.input
+  const { w, h } = sizeFor(inp.ratio ?? '9:16', 640)
+  const shots = inp.shots ?? []
+  const sum = shots.reduce((a, s) => a + s.duration_s, 0)
+  const total = Math.min(TAKE_MAX_S, Math.ceil(sum - 1e-6))
+  let at = 0
+  const starts = inp.cuts?.map((c) => c.atS) ?? shots.map((s) => { const a = at; at += s.duration_s; return a })
+  const pics = inp.mode === 'take_refs'
+    ? await Promise.all((inp.refs ?? []).slice(0, shots.length).map((r) => bitmap(input, r.asset.sha256)))
+    : [await bitmap(input, inp.image?.sha256)]
+  return record(w, h, total, (ctx, t) => {
+    let k = 0
+    while (k + 1 < starts.length && t >= starts[k + 1]) k++
+    const p = (t - starts[k]) / Math.max(0.5, (starts[k + 1] ?? total) - starts[k])
+    ctx.fillStyle = '#0F1114'
+    ctx.fillRect(0, 0, w, h)
+    const img = pics[k] ?? pics[0]
+    ctx.save()
+    ctx.filter = inp.mode === 'take' && k > 0 ? `hue-rotate(${k * 55}deg)` : 'none'
+    const zoom = k % 2 ? 1.25 - 0.15 * p : 1 + 0.15 * p
+    ctx.translate(w / 2, h / 2)
+    ctx.scale(zoom, zoom)
+    ctx.translate(-w / 2, -h / 2)
+    if (img) contain(ctx, img, 0, 0, w, h, { scale: 1.02 })
+    ctx.restore()
+    ctx.filter = 'none'
+    ctx.save()
+    ctx.fillStyle = 'rgba(20,22,27,0.75)'
+    ctx.fillRect(12, 12, 132, 30)
+    ctx.fillStyle = '#fff'
+    ctx.font = '700 16px Geist, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(`SHOT ${k + 1}`, 22, 27)
+    ctx.restore()
+    timecode(ctx, w, h, t, 'one take')
   })
 }
 
@@ -414,10 +495,13 @@ export interface StitchSlot { start: number; dur: number; kind: 'cut' | 'dissolv
 /** Like stitch.py's joins(): the slots one after another (a transition overlaps the outgoing clip's
  *  out-handle, so it never changes the length); a transition is at most the incoming slot and 2 s long,
  *  0.5 s when the request names none, and the first clip always starts on a cut. */
-export function stitchTimeline(clips: { dur: number; transition?: { kind: 'cut' | 'dissolve' | 'dip'; s?: number } }[]): StitchSlot[] {
+export function stitchTimeline(clips: { dur: number; transition?: StitchTransition }[]): StitchSlot[] {
   let start = 0
   return clips.map((c, i) => {
-    const kind = i > 0 && c.transition && c.transition.kind !== 'cut' ? c.transition.kind : 'cut'
+    // A continue is a cut where the clip before landed on this one's first frame (the real stitch drops the
+    // shared frame; at the mock's frame rate the slot stays as it is).
+    const t = c.transition
+    const kind = i > 0 && t && t.kind !== 'cut' && t.kind !== 'continue' ? t.kind : 'cut'
     const s = kind === 'cut' ? 0 : Math.min(c.transition?.s ?? 0.5, c.dur, 2)
     const slot: StitchSlot = { start, dur: c.dur, kind: s > 0 ? kind : 'cut', s }
     start += c.dur
@@ -434,9 +518,15 @@ export function stitchAt(slots: StitchSlot[], t: number): { idx: number; prev?: 
   return x.kind !== 'cut' && t - x.start < x.s ? { idx, prev: idx - 1, p: (t - x.start) / x.s } : { idx }
 }
 
+/** Stitch's fit speed: the window over its slot, within 1/1.33 to 1.33 (else the stitch trims: played as is). */
+export function speedFor(windowS: number, slotS: number): number {
+  const r = windowS / slotS
+  return r >= 1 / 1.33 - 1e-6 && r <= 1.33 + 1e-6 ? r : 1
+}
+
 async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const { w, h } = sizeFor(req.input.ratio ?? '9:16', 640)
-  const clips: { v: HTMLVideoElement; dur: number; inS: number; outS?: number; transition?: { kind: 'cut' | 'dissolve' | 'dip'; s?: number } }[] = []
+  const clips: { v: HTMLVideoElement; dur: number; inS: number; outS?: number; transition?: StitchTransition }[] = []
   for (const c of req.input.clips ?? []) {
     const blob = await input(c.asset.sha256)
     if (!blob) continue
@@ -446,6 +536,8 @@ async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutp
     // Like the real stitch (stitch.py): each clip starts at its in point and fills its shot's length (trimS),
     // held on its last frame (or its out point's) when it runs out.
     const dur = c.trimS ?? (c.outS !== undefined && c.outS > inS ? c.outS - inS : Math.max(0.1, full - inS))
+    // fit speed (an end-framed clip): the whole window retimed to the slot, so it still lands on its frame.
+    if (c.fit === 'speed') v.playbackRate = speedFor((c.outS !== undefined && c.outS > inS ? c.outS : full) - inS, dur)
     clips.push({ v, dur, inS, ...(c.outS !== undefined ? { outS: c.outS } : {}), ...(c.transition ? { transition: c.transition } : {}) })
   }
   const slots = stitchTimeline(clips)

@@ -1,0 +1,72 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7G00000000000000000TK01",
+  "op": "clip",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_take000001",
+  "purpose": "shots 1-3 as one take",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [],
+  "input": {
+    "text": "A Viking on a cliff at dawn, cold blue light, 35 mm.",
+    "image": {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://cdn.napkin.test/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png"
+    },
+    "ratio": "16:9",
+    "mode": "take",
+    "shots": [
+      {
+        "id": "shot_01K7B00000000000000000SH01",
+        "kind": "shot",
+        "duration_s": 3,
+        "camera": {
+          "size": "wide",
+          "movement": "static"
+        },
+        "action": "He looks out over the sea.",
+        "refs": []
+      },
+      {
+        "id": "shot_01K7B00000000000000000SH02",
+        "kind": "shot",
+        "duration_s": 3,
+        "camera": {
+          "size": "close",
+          "movement": "static"
+        },
+        "action": "He grips the axe.",
+        "refs": []
+      },
+      {
+        "id": "shot_01K7B00000000000000000SH03",
+        "kind": "shot",
+        "duration_s": 2.5,
+        "camera": {
+          "size": "medium",
+          "movement": "static"
+        },
+        "action": "He turns and walks inland.",
+        "refs": []
+      }
+    ],
+    "cuts": [
+      {
+        "atS": 0,
+        "text": "Wide: he looks out over the sea."
+      },
+      {
+        "atS": 3,
+        "text": "Close: his hand grips the axe."
+      },
+      {
+        "atS": 6,
+        "text": "He turns and walks inland."
+      }
+    ]
+  }
+}

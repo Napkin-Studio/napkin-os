@@ -26,7 +26,11 @@ export type JobPurpose =
    *  again (Regenerate or a region edit), update (Update what follows). fixReviewIds: a "Fix it in the
    *  shot" edit; when it lands, a clip is made from it for these notes (jobs/fix.ts). */
   | { for: 'frame'; shotId: Id; parentFrameId?: Id; how?: FrameHow; fixReviewIds?: Id[] }
-  | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[] }
+  /** endFrameId: the next shot's frame the clip ends on (features/connected-video.clan, a continue join).
+   *  endsOnTake: Remake just this shot, landing on its window's out still (the take it remakes). */
+  | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[]; endFrameId?: Id; endsOnTake?: Id }
+  /** One take of a run of shots (features/connected-video.clan): it lands as a take, a window of it, per shot. */
+  | { for: 'run'; videoId: Id; runId: Id }
   /** videoId: the video it renders (absent: the main one). */
   | { for: 'stitch'; videoId?: Id }
   /** A Generate on a sketch area (features/frame-aspect.clan): it lands as a frame made from the sketch. */
@@ -53,12 +57,16 @@ export type JobPurpose =
 
 export type Purpose = JobPurpose['for']
 
+/** The input row of the frame a clip ends on (a frame, or a take whose window's out still it lands on). */
+export const LAST_FRAME = 'last frame'
+
 const HOWS: readonly string[] = ['first', 'next', 'rest', 'chain', 'again', 'update']
 
 /** The words a purpose is kept as. */
 export function purposeWords(p: JobPurpose): string {
   if (p.for === 'size') return `size ${p.sizeId}`
   if (p.for === 'reframe') return `reframe ${p.key}`
+  if (p.for === 'run') return `run ${p.runId}`
   return p.for === 'frame' && p.how ? `frame ${p.how}` : p.for
 }
 
@@ -83,6 +91,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
     case 'reframe':
       return { kind: 'format_set', id: p.setId }
     case 'film_plan':
+    case 'run':
       return { kind: 'video', id: p.videoId }
     default:
       // A Generate on today's canvas runs for the selection; its result is the canvas node named by the job's id.
@@ -95,6 +104,8 @@ export function purposeInputs(p: JobPurpose): JobInputRow[] {
   const rows: JobInputRow[] = []
   if ((p.for === 'frame' || p.for === 'frame_edit' || p.for === 'image_edit') && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
   if (p.for === 'clip' && p.parentTakeId) rows.push({ kind: 'take', ref: p.parentTakeId, used_as: 'new version of', included: true })
+  if (p.for === 'clip' && p.endFrameId) rows.push({ kind: 'frame', ref: p.endFrameId, used_as: LAST_FRAME, included: true })
+  if (p.for === 'clip' && p.endsOnTake) rows.push({ kind: 'take', ref: p.endsOnTake, used_as: LAST_FRAME, included: true })
   for (const r of (p.for === 'frame' ? p.fixReviewIds : p.for === 'clip' ? p.reviewIds : undefined) ?? []) {
     rows.push({ kind: 'note', ref: r, used_as: 'note to fix', included: true })
   }
@@ -121,6 +132,8 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
       return j.node?.kind === 'format_set' && how ? { for: 'reframe', setId: j.node.id, key: how } : null
     case 'film_plan':
       return j.node?.kind === 'video' ? { for: 'film_plan', videoId: j.node.id } : null
+    case 'run':
+      return j.node?.kind === 'video' && how ? { for: 'run', videoId: j.node.id, runId: how } : null
     case 'frame': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'frame', shotId: j.node.id }
@@ -148,6 +161,10 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
       const pt = parent('take')
       if (pt) p.parentTakeId = pt
       if (notes.length) p.reviewIds = notes
+      const end = (j.inputs ?? []).find((r) => r.kind === 'frame' && r.used_as === LAST_FRAME)?.ref
+      if (end) p.endFrameId = end
+      const onTake = (j.inputs ?? []).find((r) => r.kind === 'take' && r.used_as === LAST_FRAME)?.ref
+      if (onTake) p.endsOnTake = onTake
       return p
     }
     default:

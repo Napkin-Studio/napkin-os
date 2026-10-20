@@ -1343,6 +1343,14 @@
               "job_id": {
                 "type": "string",
                 "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "by": {
+                "enum": [
+                  "prompt",
+                  "detected",
+                  "human"
+                ],
+                "description": "Who set the window's ends (features/connected-video.clan): prompt (the take prompt's planned cut times), detected (the relay's take_cuts found the cut), human (a person moved it). Absent: a spliced take's segments, as before."
               }
             },
             "required": [
@@ -1353,6 +1361,37 @@
             "additionalProperties": false
           },
           "maxItems": 16
+        },
+        "end": {
+          "type": "object",
+          "description": "The frame the take was made to land on (features/connected-video.clan): next_storyboard, the next shot's storyboard frame (frame_id), sent as the clip's last frame on a continue join; none, no last frame. An end-framed take is retimed whole into its slot (stitch fit speed), never cut from its head. Absent: none.",
+          "properties": {
+            "kind": {
+              "enum": [
+                "next_storyboard",
+                "none"
+              ]
+            },
+            "frame_id": {
+              "type": "string",
+              "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "at_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Where in the take it reached that frame (the job's landS): the clip is used up to and including the frame at at_s, retimed into its slot, and what the model made after it is left out."
+            },
+            "score": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1,
+              "description": "How closely that frame matches the one given (the job's landScore, SSIM)."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1438,11 +1477,109 @@
               "out_s": {
                 "type": "number",
                 "minimum": 0
+              },
+              "seam": {
+                "type": "object",
+                "description": "The join into this item from the one before (features/connected-video.clan). kind: continue (same setup, the action carries on: the clip before may land on this one's frame), cut (a new angle or place), match (a new angle on the same moment; a plain cut for now), dissolve or dip (asked-for transitions, over s seconds). by: crew (Dex set it quietly from scene and camera) or human (a person changed it on the gap chip). Absent: a cut set by nobody. Ignored on the first item.",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "continue",
+                      "cut",
+                      "match",
+                      "dissolve",
+                      "dip"
+                    ]
+                  },
+                  "s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 2
+                  },
+                  "by": {
+                    "enum": [
+                      "crew",
+                      "human"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "by"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "rank",
               "kind"
+            ],
+            "additionalProperties": false
+          },
+          "maxProperties": 100
+        },
+        "join": {
+          "enum": [
+            "film",
+            "shots"
+          ],
+          "description": "How shots join (features/connected-video.clan, behind flags.connectedVideo): film (As one film: Make clips plans runs of takes and landing frames) or shots (Shot by shot: each clip alone, as before). Absent: film where the flag is on."
+        },
+        "runs": {
+          "type": "object",
+          "description": "The runs Make clips planned (features/connected-video.clan): the shots made together and how. shot_ids: the run's shots in order. mode: take (one generation of them all), take_refs (one generation from references, no frame), frames (a clip per shot, landing on the next frame on continue joins) or alone. model: the clip model it runs on. state: planned, running, done or failed. job_id: the take's job (take and take_refs). planned_by: crew (Dex's plan) or human (a person's join change re-planned it).",
+          "propertyNames": {
+            "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "shot_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+                }
+              },
+              "mode": {
+                "enum": [
+                  "take",
+                  "take_refs",
+                  "frames",
+                  "alone"
+                ]
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "state": {
+                "enum": [
+                  "planned",
+                  "running",
+                  "done",
+                  "failed"
+                ]
+              },
+              "job_id": {
+                "type": "string",
+                "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "planned_by": {
+                "enum": [
+                  "crew",
+                  "human"
+                ]
+              }
+            },
+            "required": [
+              "shot_ids",
+              "mode",
+              "model",
+              "state",
+              "planned_by"
             ],
             "additionalProperties": false
           },

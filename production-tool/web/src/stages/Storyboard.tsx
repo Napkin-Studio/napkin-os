@@ -52,15 +52,22 @@ import './storyboard.css'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import { moveOnStoryboard, useShotSort } from './shotDrag'
 import { ShotSort } from './ShotSort'
+import { lastWorkedModel } from '../jobs/follow'
+import { frameMarks, joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
+import { canJoin } from '../jobs/runs'
+import { videoOfStoryboard } from '../model/selectors'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
+
+/** With no named picture, frame 1 comes from the words and every frame after follows it (anchorFrame). */
+const NO_PICTURES = 'No pictures yet, so frame 1 is drawn from the words and every frame after follows it. Name a picture on the canvas, like @samurai, to set how someone looks.'
 
 export function Storyboard() {
   const { doc: docStore, ui: uiStore, runner, relay, clan, project } = useServices()
   const router = useRouter()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   const [confirmShot, setConfirmShot] = useState<string | null>(null)
@@ -78,6 +85,29 @@ export function Storyboard() {
   const words = script ? scriptText(doc, script.id) : ''
   const hasRefs = refsList(doc).length > 0
   const check = checkDurations(shots, targetS)
+  // Connected video (features/connected-video.clan): the pin or "guide" on each frame, and the join a gap can
+  // take, as the video this storyboard renders would make them. Nothing when the flag is off.
+  const linked = videoOfStoryboard(doc, sb?.id)
+  const film = videoJoin(doc, linked?.id, config) === 'film'
+  const vModel = film ? videoModel(doc, linked?.id, config, lastWorkedModel(doc, 'clip', config)) : null
+  const vPlan = vModel ? videoPlan(doc, linked?.id, vModel) : undefined
+  const marks = vPlan ? frameMarks(doc, linked?.id, vPlan) : {}
+  // The same strips as the Video timeline, as a light bracket under the cards that will be one video.
+  const units = vPlan && linked ? videoUnits(doc, ui, linked.id, vPlan) : []
+  const facts = vPlan && linked ? videoShots(doc, linked.id) : []
+  const stripPlace = (i: number): StripPlace | undefined => {
+    const u = units.find((x) => x.kind === 'strip' && x.shotIds.includes(shots[i]?.id))
+    if (!u || u.kind !== 'strip') return undefined
+    const k = u.shotIds.indexOf(shots[i].id)
+    return k === 0 ? 'first' : k === u.shotIds.length - 1 ? 'last' : 'mid'
+  }
+  // The handle before card i: ✂ inside a strip, 🔗 where two neighbours may be one video.
+  const handleAt = (i: number): 'split' | 'join' | undefined => {
+    if (!vPlan || i <= 0) return undefined
+    const here = stripPlace(i)
+    if (here === 'mid' || here === 'last') return 'split'
+    return facts[i - 1] && facts[i] && canJoin(facts[i - 1], facts[i]) ? 'join' : undefined
+  }
   const mainSb = mainStoryboard(doc)?.id
   const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list' && (c.storyboardId ?? mainSb) === sb?.id)
   const planning = isRunning(doc, planJob)
@@ -159,9 +189,9 @@ export function Storyboard() {
   const primary = !shots.length
     ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
     : noFrames
-      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || !hasRefs} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : 'Name a picture on the canvas first, like @maya_front'}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
+      ? <button className="btn primary" disabled={!check.ok || anyFrameRunning} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : NO_PICTURES}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
-        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0 || !hasRefs} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
+        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
         : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Video editor">Make clips</button>
 
   return (
@@ -219,7 +249,8 @@ export function Storyboard() {
                 setConfirmShot(null)
                 if (yes) void removeNow(s.id) // Undo puts it back
               }}
-              ask={shotAsks.get(s.id)} onAsk={(a, option) => void answerAsk(a, s.id, option)} />
+              ask={shotAsks.get(s.id)} onAsk={(a, option) => void answerAsk(a, s.id, option)}
+              mark={marks[s.id]} film={film && linked ? { videoId: linked.id, strip: stripPlace(i), handle: handleAt(i) } : undefined} />
           ))}
           {shots.length > 0 && (
             <button className="sb-addtile" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
@@ -306,11 +337,13 @@ function frameChangeOf(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, shotI
   return undefined
 }
 
-function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript, onDelete, confirming, onConfirm, ask, onAsk }: {
+function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript, onDelete, confirming, onConfirm, ask, onAsk, mark, film }: {
   shot: Shot; index: number; prev?: Shot; store: ModelStore | null; mentions?: ReturnType<typeof scriptMentionHooks>
   onOpen: () => void; onDraw: () => void; onScript: () => void; onDelete: () => void
   confirming: boolean; onConfirm: (yes: boolean) => void
   ask?: Ask; onAsk: (a: Ask, option: 'keep' | 'remove') => void
+  /** Connected video: the frame's pin or guide, and the video whose joins the gap sets. */
+  mark?: FrameMark; film?: { videoId: string; strip?: StripPlace; handle?: 'split' | 'join' }
 }) {
   const doc = useDoc()
   const ui = useUi()
@@ -341,6 +374,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const menuRef = useRef<HTMLButtonElement>(null)
   const [gap, setGap] = useState(false)
   const gapRef = useRef<HTMLButtonElement>(null)
+  const [keepVideo, setKeepVideo] = useState(false)
   const project = useProjectName()
   const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
   const attempt = async (fn: () => Promise<unknown>) => {
@@ -369,7 +403,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
     )
   }
   return (
-    <article ref={setNodeRef} className={`sb-card ${showChange || changing ? 'on' : ''} ${lifted ? 'slot' : ''} ${line ? `drop-${line}` : ''} ${dragging ? 'sorting' : ''}`}
+    <article ref={setNodeRef} className={`sb-card ${showChange || changing ? 'on' : ''} ${lifted ? 'slot' : ''} ${line ? `drop-${line}` : ''} ${dragging ? 'sorting' : ''} ${film?.strip ? `instrip ${film.strip}` : ''}`}
       data-shot-card={shot.id} aria-label={`Shot ${index + 1}`} tabIndex={0}
       onKeyDown={(e) => {
         // Delete or Backspace on the focused card (not in its fields) deletes the shot.
@@ -379,6 +413,14 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         }
       }}>
       {line && <span className={`sb-dropline ${line}`} aria-hidden="true"><span>Shot {moving} moves here</span></span>}
+      {film?.strip && <span className="sb-bracket" aria-hidden="true">{film.strip === 'first' && <span>One video</span>}</span>}
+      {film?.handle && (
+        <button type="button" className={`sb-joinh ${film.handle}`} aria-label={film.handle === 'split' ? `Split here, between shot ${index} and shot ${index + 1}` : `Join shot ${index} and shot ${index + 1} into one video`}
+          title={film.handle === 'split' ? 'Split here' : 'Join into one video'}
+          onClick={() => void attempt(() => (film.handle === 'split' ? splitHere : joinHere)(docStore, film.videoId, shot.id))}>
+          <span aria-hidden="true">{film.handle === 'split' ? '✂' : '🔗'}</span>
+        </button>
+      )}
       {index > 0 && (
         <>
           <button ref={gapRef} type="button" className="sb-gap" aria-label={`Insert between ${index} and ${index + 1}`} aria-haspopup="menu" aria-expanded={gap} onClick={() => setGap(!gap)}>+</button>
@@ -419,11 +461,13 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         {!current && !drawing && (
           <div className="sb-noframe">
             {prevDrawn
-              ? <><span>No frame yet</span><button className="btn xs" onClick={onDraw} disabled={!refsList(doc).length || !!frameJob}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button></>
+              ? <><span>No frame yet</span><button className="btn xs" onClick={onDraw} disabled={!!frameJob}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
+                {index === 0 && !refsList(doc).length && <span className="sb-nopics">{NO_PICTURES}</span>}</>
               : <span>Draw shot {index} first</span>}
           </div>
         )}
         {current && <span className="sb-vtag">v{idx + 1}</span>}
+        {current && mark && <FrameMarkTag mark={mark} />}
         {badge && <span className="sb-badgewrap">{badge}</span>}
         {current && !drawing && <button type="button" className="sb-openie" onClick={onOpen}><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>Open in image editor</button>}
         {current?.cropped_to && asset?.w && asset?.h && <span className="sb-crop">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
@@ -433,6 +477,15 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         {store ? <ShotEditor store={store} shotId={shot.id} name={`Shot ${index + 1}`} compact mentions={mentions} keys={{ remove: (how) => (how === 'command' ? (onDelete(), true) : false) }} /> : <div className="script-excerpt">{shot.action ?? ''}</div>}
       </div>
       <OldWords shot={shot} index={index} />
+      {film && !keepVideo && missedGuide(doc, shot.id) && (
+        <div className="sb-guidenote" role="group" aria-label={`Shot ${index + 1}: the video and this frame`}>
+          <span>The video went its own way here.</span>
+          <span className="spacer" />
+          <button className="btn xs" onClick={() => setKeepVideo(true)}>Keep the video</button>
+          <button className="btn xs ghost" onClick={() => void attempt(() => splitHere(docStore, film.videoId, shot.id))}>Make it match</button>
+          <button className="btn xs ghost" disabled title="Not in this version yet">Use the video's frame</button>
+        </div>
+      )}
       {ask && (
         <div className="shotask" role="group" aria-label={`Shot ${index + 1}: keep or remove`}>
           <AgentFigure agent="dex" size={22} state="needs-you" decorative />
@@ -517,6 +570,17 @@ function OldWords({ shot, index }: { shot: Shot; index: number }) {
   )
 }
 
+/** The frame's role in a connected video: a pin (the video must hit it) or "guide" (inside one take). */
+function FrameMarkTag({ mark }: { mark: FrameMark }) {
+  return mark === 'pin'
+    ? (
+      <span className="sb-mark pin" title="The video hits this frame exactly">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0.8a3 3 0 0 1 3 3c0 2.2-3 5.4-3 5.4S2 6 2 3.8a3 3 0 0 1 3-3Z" fill="currentColor" /></svg>
+        <span className="pt-sr">Pinned: the video hits this frame</span>
+      </span>
+    )
+    : <span className="sb-mark guide" title="Inside one take: the video follows this frame as a guide">guide</span>
+}
 
-
-
+/** Where a card sits in the bracket of shots that will be one video. */
+type StripPlace = 'first' | 'mid' | 'last'

@@ -7,7 +7,7 @@ import { continueFix, resumeFixes } from './fix'
 import { continueFollow } from './follow'
 import { landFrameEditIn } from './frameEdit'
 import { continueDrawing, type FrameDeps } from './frames'
-import { landFrame, landRender, landTake } from './handlers'
+import { landFrame, landRender, landRunTake, landTake } from './handlers'
 import { landShotList } from './plan'
 import { purposeOf } from '../model/purpose'
 import type { DocumentStore } from '../doc/types'
@@ -37,6 +37,11 @@ export function wireJobs(deps: FrameDeps) {
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return
     void landTake(doc, job, ctx).then(() => continueFollow(deps)).catch(warn('update what follows'))
+  })
+  // One take of a run: a window of it per shot (features/connected-video.clan).
+  runner.onComplete('run', (job, ctx) => {
+    if (ctx.for !== 'run') return
+    void landRunTake(doc, job, ctx).then(() => continueFollow(deps)).catch(warn('the take'))
   })
   // The Image editor's actions land nowhere: the editor shows each result as a layer until Apply.
   runner.onComplete('image_edit', () => {})
