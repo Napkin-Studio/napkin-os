@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../contracts/types'
 import { loadJson } from '../test/schemas'
 import {
-  beatsOf, currentFrame, currentRender, currentTake, edlItemFor, edlOf, framesOf, jobsList, keyNamed, mainScript, mainStoryboard, mainVideo,
+  beatsOf, currentFrame, currentRender, currentTake, cutItemFor, cutOf, shotSegment, framesOf, jobsList, keyNamed, mainScript, mainStoryboard, mainVideo,
   openAsks, refName, refNamed, refsList, rendersOf, reviewsList, reviewsOn, scenesOf, scriptText, shotFrameAsset, shotName, shotNumber, shotsOf,
   shotSubjects, storyboardReady, storyboardSeconds, takesOf, unplannedText,
 } from './selectors'
@@ -42,12 +42,13 @@ describe('selectors over the example ad', () => {
     expect(currentFrame(d, S3)).toBeUndefined()
   })
 
-  it('the take in the cut is the edl item\'s pick; the cut is in rank order', () => {
-    expect(takesOf(d, S1).map((t) => t.version)).toEqual([1, 2])
-    expect(edlOf(d).map((i) => i.kind)).toEqual(['shot', 'bridge', 'shot', 'shot', 'shot'])
-    expect(edlItemFor(d, S1)!.id).toBe('edl_01K7A000000000000000000028')
-    expect(currentTake(d, S1)!.id).toBe('take_01K7A000000000000000000025')
-    expect(currentTake(d, S2)).toBeUndefined() // in the cut, no take picked yet
+  it('the take in the cut is the one its V1 clip plays; the cut is in start order', () => {
+    expect(takesOf(d, S1).map((t) => t.id)).toEqual(['gen_01K7A000000000000000000024', 'gen_01K7A000000000000000000025'])
+    expect(cutOf(d).slice(0, 3).map((i) => i.id)).toEqual(['item_01K7A000000000000000000028', 'item_01K7A000000000000000000029', 'item_01K7A00000000000000000004C'])
+    expect(cutItemFor(d, S1)!.id).toBe('item_01K7A000000000000000000028')
+    expect(currentTake(d, S1)!.id).toBe('gen_01K7A000000000000000000025')
+    expect(currentTake(d, S2)).toBeUndefined() // its clip stands for no shot
+    expect(shotSegment(d.generations['gen_01K7A00000000000000000004A'], S4)).toBeDefined()
   })
 
   it('the ad is the video\'s picked render', () => {
@@ -77,7 +78,7 @@ describe('selectors over the example ad', () => {
   it('beats by time, notes by when they were made, asks that are open, jobs oldest first', () => {
     expect(beatsOf(d, S1).map((b) => b.at_s)).toEqual([0, 0, 2, 3])
     expect(reviewsList(d).map((r) => r.created_at)).toEqual(['2026-10-13T10:12:00Z', '2026-10-13T10:20:00Z', '2026-10-13T10:25:00Z'])
-    expect(reviewsOn(d, 'take', 'take_01K7A000000000000000000024').map((r) => r.id)).toEqual(['rev_01K7A00000000000000000002F'])
+    expect(reviewsOn(d, 'generation', 'gen_01K7A000000000000000000024').map((r) => r.id)).toEqual(['rev_01K7A00000000000000000002F'])
     expect(openAsks(d).map((a) => a.id)).toEqual(['q_01K7A00000000000000000003G'])
     const jobs = jobsList(d)
     expect(jobs).toHaveLength(15)

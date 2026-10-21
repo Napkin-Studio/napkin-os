@@ -13,14 +13,14 @@ const d = {
     s2: { id: 's2', storyboard_id: 'sb', rank: 'b' },
   },
   frames: { f2: { id: 'f2', shot_id: 's2' } },
-  takes: { t3: { id: 't3', shot_id: 's3' } },
+  generations: { t3: { id: 't3', shot_ids: ['s3'] } },
   refs: { r1: { id: 'r1', key: 'maya', variant: 'front' } },
 } as unknown as ProductionDocument
 
 describe('what an out-of-date item is behind', () => {
   it('names the frame, clip, reference or shot that changed', () => {
     expect(behindLabel(d, { caused_by: { kind: 'frame', id: 'f2' } })).toBe('Behind frame 2')
-    expect(behindLabel(d, { caused_by: { kind: 'take', id: 't3' } })).toBe('Behind clip 3')
+    expect(behindLabel(d, { caused_by: { kind: 'generation', id: 't3' } })).toBe('Behind clip 3')
     expect(behindLabel(d, { caused_by: { kind: 'ref', id: 'r1' } })).toBe('Behind @maya_front')
     expect(behindLabel(d, { caused_by: { kind: 'shot', id: 's1' } })).toBe('Behind shot 1')
   })

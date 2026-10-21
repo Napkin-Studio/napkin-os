@@ -19,7 +19,8 @@ import { SnapshotDocumentStore, SnapshotStore, systemUpdate } from '../doc/store
 import { initialUi, type UiState } from '../doc/ui'
 import { modelEntry } from '../jobs/runs'
 import { joinHere, rowMakeWords, rowTitle, splitHere, videoPlan, videoRows } from '../jobs/runView'
-import { edlItemFor, mainVideo } from '../model/selectors'
+import { mainVideo } from '../model/selectors'
+import { joinBefore } from '../jobs/runView'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addFrame, addShots, addTake, job, modelStore } from '../test/model'
 import { Video } from './Video'
@@ -219,12 +220,12 @@ describe('the real CLAN store', () => {
     await splitHere(s, videoId, ids[1])
     await s.flush()
     expect(s.trouble).toBeFalsy()
-    expect(edlItemFor(s.get(), ids[1], videoId)?.seam).toEqual({ kind: 'cut', by: 'human' })
+    expect(joinBefore(s.get(), videoId, ids[1])).toEqual({ kind: 'cut', by: 'human' })
     expect(titles(s.get(), videoId)).toEqual(['Shot 1 · 2 s', 'One video · shots 2–3 · 4 s'])
     await joinHere(s, videoId, ids[1])
     await s.flush()
     expect(s.trouble).toBeFalsy()
-    expect(edlItemFor(s.get(), ids[1], videoId)?.seam).toEqual({ kind: 'continue', by: 'human' })
+    expect(joinBefore(s.get(), videoId, ids[1])).toEqual({ kind: 'continue', by: 'human' })
     expect(titles(s.get(), videoId)).toEqual(['One video · shots 1–3 · 6 s'])
   })
 })

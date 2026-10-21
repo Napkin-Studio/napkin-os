@@ -13,7 +13,7 @@
 import { crewFor } from '../../../clan-store/src'
 import type {
   AgentBlock, AnswerConflict, Ask, AskAnswer, ClipQuality, ContractError, CrewId, DocAsset, DocJob, Job, JobAnswer, JobInput, JobInputRow, JobRequest, JobState,
-  LinkEndpoint, LogEntry, Mime, ModelChoice, Op, ProductionDocument, Region,
+  LinkEndpoint, LogEntry, Mime, ModelChoice, Op, ProductionDocument, Region, RemakeWith,
 } from '../contracts/types'
 import { CONTRACT_VERSION, TERMINAL_STATES } from '../contracts/types'
 import { systemUpdate, type DocumentStore } from '../doc/store'
@@ -23,6 +23,9 @@ import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { withLinkedText } from './linkedText'
+import { checkFronts } from '../lib/names'
+import { deadRefs, lifeOf, liveGet, liveInput } from '../model/live'
+import { plainJobError } from './errorWords'
 import { jobsList } from '../model/selectors'
 import type { UiStore } from '../projects/uiStore'
 import { asContractError, RelayError, type Relay } from '../relay'
@@ -68,6 +71,8 @@ export interface SubmitExtras {
   /** clip, clip_edit (features/clip-quality.clan): the size to make, and Remake as Final's draft job. */
   quality?: ClipQuality
   promoteFrom?: string
+  /** Change this… (features/make-and-edit.clan): a new take of a parent with one thing changed. */
+  remakeWith?: RemakeWith
 }
 
 /** A person's answer to a job's question. */
@@ -201,8 +206,13 @@ export class JobRunner {
     op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job'), modelChoice?: ModelChoice, extras: SubmitExtras = {},
   ): Promise<string> {
     if (this.stopped) throw new Error('the project was closed')
+    // The last guard before a request leaves (model/live.ts): a reference whose picture was deleted on the
+    // canvas is never sent, and a plan whose words name a bare @key with no front is never sent at all.
+    const stored = this.doc.get()
+    const d = liveGet(this.doc)
+    if (op === 'shot_list') checkFronts(d, stored, `${input.script ?? ''}\n${input.text ?? ''}`)
+    input = liveInput(input, deadRefs(stored, lifeOf(this.doc).get()))
     if (this.unstarted.delete(jobId)) this.emit()
-    const d = this.doc.get()
     const node = extras.node ?? purposeNode(d, purpose, jobId)
     // The texts linked into the node are its input words (features/canvas-text.clan).
     const linked = withLinkedText(d, op, node, input)
@@ -215,6 +225,7 @@ export class JobRunner {
       ...(modelChoice ? { modelChoice } : {}),
       ...(extras.quality && (op === 'clip' || op === 'clip_edit') ? { quality: extras.quality } : {}),
       ...(extras.promoteFrom && (op === 'clip' || op === 'clip_edit') ? { promoteFrom: extras.promoteFrom } : {}),
+      ...(extras.remakeWith && (op === 'clip' || op === 'clip_patch' || op === 'clip_edit') ? { remakeWith: extras.remakeWith } : {}),
     }
     const hashes = new Set<string>()
     collectHashes(input, hashes)
@@ -597,7 +608,8 @@ export class JobRunner {
     }
   }
 
-  private fail(jobId: string, error: ContractError) {
+  private fail(jobId: string, errorIn: ContractError) {
+    const error = plainJobError(errorIn, this.doc.get().jobs[jobId]?.op)
     jobState(jobId, 'failed', { code: error.code, message: error.message, ms: this.ageMs(jobId) })
     this.stopPolling(jobId)
     this.patchDocJob(jobId, { state: 'failed', error })
@@ -658,7 +670,7 @@ export class JobRunner {
         this.ui.update((u) => { const c = u.jobs[job.jobId]; if (c) c.cards = cards })
       }
     }
-    if (job.error) patch.error = job.error
+    if (job.error) patch.error = plainJobError(job.error, job.op)
     this.patchDocJob(job.jobId, patch)
     this.noteAsk(job)
     this.noteFallback(job)

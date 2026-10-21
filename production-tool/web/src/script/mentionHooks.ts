@@ -6,6 +6,7 @@ import type { ProductionDocument } from '../contracts/types'
 import type { ModelStore } from '../model/store'
 import { isLinked, linkForMention, linkWords, mentionSource, type MentionItem } from '../text/mention/source'
 import type { MentionHooks } from './mentions'
+import { liveGet } from '../model/live'
 
 type Doc = ProductionDocument
 
@@ -31,12 +32,12 @@ export function scriptMentionHooks(store: ModelStore, scriptId: string | undefin
   const scope = scriptId ? { kind: 'script' as const, id: scriptId } : undefined
   const node = scope ?? { kind: 'script' as const, id: '' }
   return {
-    source: () => mentionSource(store.get(), node).map((i) => (scope ? i : { ...i, linked: true })),
-    resolve: (id) => resolveMention(store.get(), id, scope),
-    names: () => mentionSource(store.get(), node).filter((i) => !scope || i.linked).map((i) => i.name),
+    source: () => mentionSource(liveGet(store), node).map((i) => (scope ? i : { ...i, linked: true })),
+    resolve: (id) => resolveMention(liveGet(store), id, scope),
+    names: () => mentionSource(liveGet(store), node).filter((i) => !scope || i.linked).map((i) => i.name),
     picked: (item) => {
       if (!scope || item.linked) return
-      const d = store.get()
+      const d = liveGet(store)
       const link = linkForMention(d, item, scope, () => newUlidId('link'))
       if (!link) return
       const words = linkWords(d, link)

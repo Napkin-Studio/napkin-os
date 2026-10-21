@@ -28,7 +28,8 @@ import { assetRef } from './assets'
 import { croppedTo, landingWhy } from './handlers'
 import { ownAspect, type FrameDeps } from './frames'
 import { jobShot, refsFor } from './select'
-import { editShot, refreshClipStale } from './stale'
+import { editShot } from './stale'
+import { liveGet } from '../model/live'
 
 // ── the words (ui-behaviour 3.11) ──────────────────────────────────────────────────────────────
 
@@ -149,7 +150,7 @@ export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDoc
 /** Send Change this frame (or a Redo of `redoOf`, the earlier frame_edit job, with the reworded text). */
 export async function changeFrame(deps: FrameDeps, shotId: string, text: string,
   opts: { region?: Region; mask?: string; redoOf?: string } = {}): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const input = await frameEditInput(deps.relay, d, shotId, text, opts)
   const frame = currentFrame(d, shotId)
   const purpose: JobPurpose = { for: 'frame_edit', shotId, ...(frame ? { parentFrameId: frame.id } : {}) }
@@ -225,9 +226,10 @@ export function applyFrameEdit(d: ProductionDocument, jobId: string, shotId: str
     shot.pick = { current: frame.id, ...(alternates?.length ? { alternates } : {}) }
     if (shot.status === 'locked') shot.status = 'needs_review'
   }
-  refreshClipStale(d, shotId)
+  // Its clip in the cut was made from another frame: said, never marked (features/make-and-edit.clan).
   const take = currentTake(d, shotId)
-  const clipStale = !!take && Object.values(d.stale).some((m) => m.target.kind === 'take' && m.target.id === take.id)
+  const picked = frame ?? currentFrame(d, shotId)
+  const clipStale = !!take && !!picked && !(take.job_id && d.jobs[take.job_id]?.input_hashes?.includes(picked.asset))
   return { ...(frame ? { frameId: frame.id } : {}), fields, clipStale }
 }
 

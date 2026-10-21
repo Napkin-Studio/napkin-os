@@ -3,11 +3,11 @@
 // is its video's cut item for it (its edl pick: the video its storyboard renders,
 // selectors videoOfShot); the ad is a render of a video (contract 3).
 
-import type { ClipQuality, Id, JobInput, JobInputRef, ModelChoice, ProductionDocument, Shot, StitchTransition, Take } from '../contracts/types'
+import type { ClipQuality, Generation, Id, JobInput, JobInputRef, ModelChoice, ProductionDocument, Shot, StitchTransition } from '../contracts/types'
 import { DEFAULT_QUALITY, resolveQuality } from '../capabilities'
 import { systemUpdate } from '../doc/store'
 import type { JobPurpose } from '../model/purpose'
-import { currentTake, edlItemFor, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
+import { currentTake, cutItemFor, mainVideo, shotSegment, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
 import { clipText } from '../lib/guard'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
@@ -16,11 +16,14 @@ import { jobShot, mentionedPictures, namedInput, refsFor } from './select'
 import { shotFromWords } from './clipMode'
 import { LAST_FRAME } from '../model/purpose'
 import { takeTiming } from './takeTiming'
+import { liveGet } from '../model/live'
+import { checkFronts } from '../lib/names'
+import { startPicture } from './startFrame'
 
 export { jobShot }
 
 /** The take in the cut for a shot now (its edl item's pick, in `videoId`, else its own video). */
-export function selectedTake(d: ProductionDocument, shotId: string, videoId?: string): Take | undefined {
+export function selectedTake(d: ProductionDocument, shotId: string, videoId?: string): Generation | undefined {
   return currentTake(d, shotId, videoId ?? videoOfShot(d, shotId)?.id ?? mainVideo(d)?.id)
 }
 
@@ -75,16 +78,20 @@ export function traySummary(sources: ClipSource[]): string {
 export async function makeClip(
   deps: FrameDeps,
   shotId: string,
-  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean; quality?: ClipQuality; endShotId?: Id } = {},
+  extra: { text?: string; reviewIds?: string[]; parentTake?: Generation; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean; quality?: ClipQuality; endShotId?: Id } = {},
 ): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const shot = d.shots[shotId]
   if (!shot) throw new Error('That shot is gone.')
+  // A bare @key in the words it sends needs a live front (lib/names.ts), checked before anything is sent.
+  checkFronts(d, deps.doc.get(), `${shot.action ?? ''}\n${shot.direction ?? ''}\n${extra.text ?? ''}`)
   const frame = selectedFrame(d, shot.id)
+  // No storyboard frame: a Bin picture linked in as its start frame (the Make room's well) starts it.
+  const start = frame ? undefined : startPicture(d, shot.id)
   const fromWords = extra.fromWords ?? shotFromWords(d, shot.id, extra.videoId)
-  const source = clipSource(d, shot.id, fromWords)
+  const source = start ? 'frame' : clipSource(d, shot.id, fromWords)
   if (!source) throw new Error(fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
-  const image = frame ? await assetRef(deps.relay, frame.asset) : undefined
+  const image = frame ? await assetRef(deps.relay, frame.asset) : start ? await assetRef(deps.relay, start.sha) : undefined
   const text = extra.text?.trim()
   const refs = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
   const ratio = ratioOf(d, videoOfShot(d, shot.id, extra.videoId)?.id, shot.storyboard_id)
@@ -120,7 +127,7 @@ export async function makeTake(
   runId: Id,
   opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number; texts?: Record<Id, string> } = {},
 ): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const run = d.videos[videoId]?.runs?.[runId]
   if (!run) throw new Error('That run is gone.')
   const shots = run.shot_ids.map((id) => d.shots[id]).filter((s): s is Shot => !!s)
@@ -166,25 +173,25 @@ export async function redoInTake(
   shotId: Id,
   opts: { videoId?: Id; withLast: boolean; modelChoice?: ModelChoice; quality?: ClipQuality },
 ): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const shot = d.shots[shotId]
   const take = shot ? selectedTake(d, shotId, opts.videoId) : undefined
-  const seg = take?.segments[0]
-  if (!shot || !take || !seg) throw new Error('This shot is not part of one take.')
+  const seg = shotSegment(take, shotId)
+  if (!shot || !take?.asset || !take.job_id || !seg) throw new Error('This shot is not part of one take.')
   const source = await assetRef(deps.relay, take.asset, d)
   const ratio = ratioOf(d, videoOfShot(d, shotId, opts.videoId)?.id, shot.storyboard_id)
   const input: JobInput = {
     shot: jobShot(d, shot), mode: 'redo_window', window: { source, inS: seg.in_s, outS: seg.out_s, withLast: opts.withLast }, ...(ratio ? { ratio } : {}),
   }
   const purpose: JobPurpose = { for: 'clip', shotId, parentTakeId: take.id, ...(opts.withLast ? { endsOnTake: take.id } : {}) }
-  return deps.runner.submit('clip', input, [take.job_id], purpose, undefined, opts.modelChoice, { quality: opts.quality ?? take.quality ?? shotQuality(d, shotId, opts.videoId) })
+  return deps.runner.submit('clip', input, [take.job_id], purpose, undefined, opts.modelChoice, { quality: opts.quality ?? take.inputs?.quality ?? shotQuality(d, shotId, opts.videoId) })
 }
 
 /** A take ends on a given frame (the next storyboard frame, or its window's out still): stitch retimes it
  *  whole (fit speed) and never cuts it from its head. */
-export function endFramed(d: Pick<ProductionDocument, 'jobs'>, t: Take): boolean {
+export function endFramed(d: Pick<ProductionDocument, 'jobs'>, t: Generation): boolean {
   if (t.end?.kind === 'next_storyboard') return true
-  return !!d.jobs[t.job_id]?.inputs?.some((r) => r.used_as === LAST_FRAME && r.kind === 'take')
+  return !!t.job_id && !!d.jobs[t.job_id]?.inputs?.some((r) => r.used_as === LAST_FRAME && r.kind === 'generation')
 }
 
 /**
@@ -195,13 +202,14 @@ export function endFramed(d: Pick<ProductionDocument, 'jobs'>, t: Take): boolean
 export async function changeFeel(
   deps: Pick<FrameDeps, 'relay' | 'doc' | 'runner'>,
   shotId: string,
-  take: Take,
+  take: Generation,
   text: string,
   feel: JobInput['feel'],
   modelChoice?: ModelChoice,
   quality?: ClipQuality,
 ): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
+  if (!take.asset || !take.job_id) throw new Error('This take is not ready yet.')
   const video = await assetRef(deps.relay, take.asset, d)
   const pictures = mentionedPictures(d, text).filter((r) => r.asset).slice(0, 14)
   const refs = await Promise.all(pictures.map((r) => namedInput(deps.relay, d, r)))
@@ -214,20 +222,21 @@ export async function changeFeel(
 
 /** An edit's level on the model shown (`shown`, the menu's pick or its first): the asked one, except on a
  *  model that keeps the clip's own size, where it is the clip's, so the relay prices it at the source's size. */
-export function editQuality(take: Pick<Take, 'quality'>, shown: ModelChoice | undefined, asked: ClipQuality): ClipQuality {
+export function editQuality(take: Pick<Generation, 'inputs'>, shown: ModelChoice | undefined, asked: ClipQuality): ClipQuality {
   if (!shown) return asked
   const sized = resolveQuality('clip_edit', shown.provider, shown.model, asked)
-  return sized.keepsSize || !sized.level ? (take.quality ?? DEFAULT_QUALITY) : asked
+  return sized.keepsSize || !sized.level ? (take.inputs?.quality ?? DEFAULT_QUALITY) : asked
 }
 
 /** Remake as Final (features/clip-quality.clan): the draft take made again at Final with its own words,
  *  pictures and length, on the same model (its family's Final member). The relay reuses the draft's
  *  request; a Seedance 2.5 draft is made final by Runway itself. It lands as a new take of the draft. */
-export async function remakeAsFinal(deps: Pick<FrameDeps, 'doc' | 'ui' | 'runner'>, take: Take): Promise<string> {
-  const d = deps.doc.get()
+export async function remakeAsFinal(deps: Pick<FrameDeps, 'doc' | 'ui' | 'runner'>, take: Generation): Promise<string> {
+  const d = liveGet(deps.doc)
+  if (!take.job_id || !take.shot_ids[0]) throw new Error('This take cannot be made again.')
   const op = d.jobs[take.job_id]?.op === 'clip_edit' ? 'clip_edit' : 'clip'
   const held = deps.ui.get().jobs[take.job_id]?.request
-  return deps.runner.submit(op, held?.input ?? {}, [take.job_id], { for: 'clip', shotId: take.shot_id, parentTakeId: take.id }, undefined,
+  return deps.runner.submit(op, held?.input ?? {}, [take.job_id], { for: 'clip', shotId: take.shot_ids[0], parentTakeId: take.id }, undefined,
     held?.modelChoice, { quality: 'final', promoteFrom: take.job_id })
 }
 
@@ -242,24 +251,25 @@ export async function remakeAsFinal(deps: Pick<FrameDeps, 'doc' | 'ui' | 'runner
  *  continue after an end-framed clip, which shows the shared frame once). A document with none of these
  *  gives exactly the request it always did. */
 export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoId?: string): Promise<{ input: JobInput; parents: string[] }> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const video = (videoId && d.videos[videoId]) || mainVideo(d)
   const clips: NonNullable<JobInput['clips']> = []
   const parents: string[] = []
   const sb = storyboardOfVideo(d, video?.id)
-  let before: Take | undefined
   for (const [i, s] of (sb ? shotsOf(d, sb.id) : []).entries()) {
     const t = selectedTake(d, s.id, video?.id)
-    if (!t && s.kind === 'end_card') continue
-    if (!t) throw new Error(`Shot ${i + 1} has no clip yet.`)
-    const item = video ? edlItemFor(d, s.id, video.id) : undefined
-    const seg = t.segments?.[0]
-    const inS = seg ? seg.in_s : item?.in_s
+    if ((!t || !t.asset) && s.kind === 'end_card') continue
+    if (!t?.asset || !t.job_id) throw new Error(`Shot ${i + 1} has no clip yet.`)
+    // Its clip in the cut says its window (features/make-and-edit.clan); a clip of a box made together starts
+    // at its cut.
+    const item = video ? cutItemFor(d, s.id, video.id) : undefined
+    const seg = shotSegment(t, s.id)
+    const inS = item?.source?.in_s ?? seg?.in_s
     // A landed take ends on its landing frame, the frame at end.at_s included (the relay's landS), unless its
     // window or the cut's out point says otherwise.
     const landed = t.end?.at_s !== undefined ? Math.round((t.end.at_s + FRAME_S) * 1000) / 1000 : undefined
-    const outS = seg ? seg.out_s : (item?.out_s ?? landed)
-    const transition = joinInto(item?.seam, !!before && endFramed(d, before))
+    const outS = item?.source?.out_s ?? seg?.out_s ?? landed
+    const transition = joinInto(item?.transition_in)
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
     // trimmed to its shot: the ad is the sum of the shots plus the end card (END_CARD_S).
     clips.push({
@@ -271,24 +281,22 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoI
       ...(endFramed(d, t) ? { fit: 'speed' as const } : {}),
     })
     parents.push(t.job_id)
-    before = t
   }
   const ratio = ratioOf(d, video?.id)
   return { input: { clips, ...(ratio ? { ratio } : {}) }, parents }
 }
 
-/** The stitch's join into a clip from its seam: a dissolve or dip as asked; a continue after a clip that
- *  landed on this one's first frame (the shared frame shows once); nothing for a cut or match. */
-function joinInto(seam: { kind: string; s?: number } | undefined, landed: boolean): StitchTransition | undefined {
-  if (!seam) return undefined
-  if (seam.kind === 'dissolve' || seam.kind === 'dip') return { kind: seam.kind, ...(seam.s ? { s: seam.s } : {}) }
-  return seam.kind === 'continue' && landed ? { kind: 'continue' } : undefined
+/** The stitch's join into a clip from its clip's transition: a dissolve or a dip as asked; nothing for a cut. */
+function joinInto(t: { kind: string; s?: number } | undefined): StitchTransition | undefined {
+  if (!t || t.kind === 'cut') return undefined
+  const kind = t.kind === 'dissolve' ? 'dissolve' : 'dip'
+  return { kind, ...(t.s ? { s: t.s } : {}) }
 }
 
 /** Render the ad of a video (absent: the main one) from the clips in its cut. */
 export async function renderAd(deps: FrameDeps, opts: { followRun?: string; videoId?: string } = {}): Promise<string> {
   const { input, parents } = await stitchInput(deps, opts.videoId)
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const other = opts.videoId && d.videos[opts.videoId] && opts.videoId !== mainVideo(d)?.id
   return deps.runner.submit('stitch', input, parents, other ? { for: 'stitch', videoId: opts.videoId } : { for: 'stitch' }, undefined, undefined, opts.followRun ? { local: { followRun: opts.followRun } } : {})
 }

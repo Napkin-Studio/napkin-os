@@ -80,6 +80,7 @@ import { ResizePanel } from '../campaign/ResizePanel'
 import { resizableIn, resizePictures } from '../campaign/resizeSelection'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
+import { FrontButtons, FrontChooser } from './FrontsNeeded'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -753,7 +754,8 @@ export function Character({ initial, active, onPictureEditor }: {
               canvas.fit(frame ? [frame] : [el], { zoomFactor: 0.85, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
             }} />
         )}
-        {placeError && <div className="place-error" role="alert">{placeError} <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
+        <FrontChooser />
+        {placeError && <div className="place-error" role="alert">{placeError}<FrontButtons text={placeError} /> <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
         {showHint && <StartCard onScript={() => open('script')} onPictures={() => chrome?.setTool('image')} />}
         {panels.assets
           ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}

@@ -175,10 +175,10 @@ describe('the UI on the CLAN store', () => {
       addTake(d, shot, SHA('1'), j, { pick: true })
     }, 'sync')
     await s.flush()
-    await updateDoc(s, (d) => { for (const v of Object.values(d.videos)) v.edl = {} }, 'set')
+    await updateDoc(s, (d) => { for (const v of Object.values(d.videos)) for (const k of Object.keys(v.timeline)) delete v.timeline[k] }, 'set')
     await s.flush()
     expect(s.trouble).toBeNull()
-    expect(mainVideo(s.get())!.edl).toEqual({})
+    expect(mainVideo(s.get())!.timeline).toEqual({})
   })
 
   it('the bytes are a .clan the CLI reads', async () => {

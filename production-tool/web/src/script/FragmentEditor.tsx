@@ -14,6 +14,7 @@ import { editorExtensions, HookRelay, refNames, type KeyHooks } from './extensio
 import { trackTyping } from './typing'
 import { redrawMentions, type MentionHooks } from './mentions'
 import './fragment.css'
+import { liveGet } from '../model/live'
 
 export interface FragmentEditorProps {
   store: ModelStore
@@ -48,7 +49,7 @@ export function FragmentEditor({ store, kind, id, label, className, compact, pla
     extensions: editorExtensions({
       kind,
       fragment: store.text.fragment(kind, id),
-      refs: () => refNames(store.get()),
+      refs: () => refNames(liveGet(store)),
       compact,
       placeholder,
       notice: (m) => relay.notice(m),

@@ -15,8 +15,8 @@ export function behindLabel(d: ProductionDocument, mark: Pick<StaleMark, 'caused
       const n = order(d.frames[id]?.shot_id)
       return n ? `Behind frame ${n}` : 'Behind a frame'
     }
-    case 'take': {
-      const n = order(d.takes[id]?.shot_id)
+    case 'generation': {
+      const n = order(d.generations[id]?.shot_ids[0])
       return n ? `Behind clip ${n}` : 'Behind a clip'
     }
     case 'ref': {

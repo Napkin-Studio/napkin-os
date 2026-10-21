@@ -1,0 +1,253 @@
+{
+ "description": "The Edit room's time arithmetic (features/make-and-edit.clan). adTimeToSource: the clip seen at an ad time and the moment of its footage (V2 over V1; at a cut, the incoming clip; source_s = in_s + (adS - start_s) * speed, out_s while the last frame is held; null over a gap or past the end). momentWindow: a marked stretch of a generation snapped to whole seconds of at least 2 s inside it (what a moment remake makes again; atS is the middle of the mark). clan-store/src/timeline.ts and patch.ts (vitest) and relay/time_rules.py (pytest) pass every case.",
+ "adTimeToSource": {
+  "timeline": {
+   "item_01K7B00000000000000000TM01": {
+    "track": "V1",
+    "start_s": 0,
+    "source": {
+     "generation_id": "gen_01K7B00000000000000000GN01",
+     "in_s": 0,
+     "out_s": 2
+    },
+    "follows": {
+     "box_id": "run_01K7B00000000000000000RN01",
+     "shot_id": "shot_01K7B00000000000000000SH01"
+    }
+   },
+   "item_01K7B00000000000000000TM02": {
+    "track": "V1",
+    "start_s": 2,
+    "source": {
+     "generation_id": "gen_01K7B00000000000000000GN01",
+     "in_s": 2.2,
+     "out_s": 3.5
+    },
+    "follows": {
+     "box_id": "run_01K7B00000000000000000RN01",
+     "shot_id": "shot_01K7B00000000000000000SH02"
+    }
+   },
+   "item_01K7B00000000000000000TM03": {
+    "track": "V1",
+    "start_s": 3.3,
+    "source": {
+     "generation_id": "gen_01K7B00000000000000000GN02",
+     "in_s": 1,
+     "out_s": 2.2
+    },
+    "speed": 1.2,
+    "hold_s": 0.5,
+    "follows": {
+     "shot_id": "shot_01K7B00000000000000000SH03"
+    }
+   },
+   "item_01K7B00000000000000000TM04": {
+    "track": "V1",
+    "start_s": 5,
+    "source": {
+     "generation_id": "gen_01K7B00000000000000000GN02",
+     "in_s": 2.5,
+     "out_s": 4.5
+    }
+   },
+   "item_01K7B00000000000000000TM05": {
+    "track": "V2",
+    "start_s": 6,
+    "source": {
+     "asset": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "in_s": 0,
+     "out_s": 1
+    },
+    "opacity": 0.8
+   },
+   "item_01K7B00000000000000000TM06": {
+    "track": "text",
+    "words": "Clean like a samurai.",
+    "style": "super",
+    "from_s": 6,
+    "to_s": 7
+   }
+  },
+  "cases": [
+   {
+    "why": "the first clip's first frame",
+    "adS": 0,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM01",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN01",
+     "source_s": 0,
+     "held": false,
+     "shot_id": "shot_01K7B00000000000000000SH01",
+     "box_id": "run_01K7B00000000000000000RN01"
+    }
+   },
+   {
+    "why": "inside the first clip",
+    "adS": 1.25,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM01",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN01",
+     "source_s": 1.25,
+     "held": false,
+     "shot_id": "shot_01K7B00000000000000000SH01",
+     "box_id": "run_01K7B00000000000000000RN01"
+    }
+   },
+   {
+    "why": "at a cut: the incoming clip, at its in point",
+    "adS": 2,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM02",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN01",
+     "source_s": 2.2,
+     "held": false,
+     "shot_id": "shot_01K7B00000000000000000SH02",
+     "box_id": "run_01K7B00000000000000000RN01"
+    }
+   },
+   {
+    "why": "inside a trimmed clip",
+    "adS": 2.5,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM02",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN01",
+     "source_s": 2.7,
+     "held": false,
+     "shot_id": "shot_01K7B00000000000000000SH02",
+     "box_id": "run_01K7B00000000000000000RN01"
+    }
+   },
+   {
+    "why": "a retimed clip plays its footage faster",
+    "adS": 3.8,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM03",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN02",
+     "source_s": 1.6,
+     "held": false,
+     "shot_id": "shot_01K7B00000000000000000SH03"
+    }
+   },
+   {
+    "why": "its held last frame is its out point",
+    "adS": 4.6,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM03",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN02",
+     "source_s": 2.2,
+     "held": true,
+     "shot_id": "shot_01K7B00000000000000000SH03"
+    }
+   },
+   {
+    "why": "over a gap: black",
+    "adS": 4.9,
+    "want": null
+   },
+   {
+    "why": "V2 over V1",
+    "adS": 6.5,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM05",
+     "track": "V2",
+     "asset": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "source_s": 0.5,
+     "held": false
+    }
+   },
+   {
+    "why": "V1 before V2 starts",
+    "adS": 5.5,
+    "want": {
+     "item_id": "item_01K7B00000000000000000TM04",
+     "track": "V1",
+     "generation_id": "gen_01K7B00000000000000000GN02",
+     "source_s": 3,
+     "held": false
+    }
+   },
+   {
+    "why": "past the end",
+    "adS": 7.5,
+    "want": null
+   },
+   {
+    "why": "before the start",
+    "adS": -0.5,
+    "want": null
+   }
+  ]
+ },
+ "momentWindow": [
+  {
+   "why": "a mark inside one second widens to 2 s around it",
+   "inS": 0.8,
+   "outS": 1.2,
+   "takeS": 3.5,
+   "want": {
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "atS": 1,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a mark on whole seconds stays",
+   "inS": 2,
+   "outS": 5,
+   "takeS": 8,
+   "want": {
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "atS": 3.5,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a mark near the end shifts inward",
+   "inS": 6.6,
+   "outS": 6.9,
+   "takeS": 7.2,
+   "want": {
+    "window": {
+     "from_s": 5,
+     "to_s": 7
+    },
+    "atS": 6.75,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a mark marked backwards is the same mark",
+   "inS": 4.4,
+   "outS": 3.1,
+   "takeS": 9,
+   "want": {
+    "window": {
+     "from_s": 3,
+     "to_s": 5
+    },
+    "atS": 3.75,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a generation under 2 whole seconds has no window",
+   "inS": 0.2,
+   "outS": 0.6,
+   "takeS": 1.5,
+   "want": null
+  }
+ ]
+}

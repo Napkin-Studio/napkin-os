@@ -7,7 +7,7 @@ import { continueFix, resumeFixes } from './fix'
 import { continueFollow } from './follow'
 import { landFrameEditIn } from './frameEdit'
 import { continueDrawing, type FrameDeps } from './frames'
-import { landFrame, landRender, landRunTake, landTake } from './handlers'
+import { landFrame, landRemake, landRender, landRunTake, landTake } from './handlers'
 import { landShotList } from './plan'
 import { purposeOf } from '../model/purpose'
 import type { DocumentStore } from '../doc/types'
@@ -34,14 +34,21 @@ export function wireJobs(deps: FrameDeps) {
     if (ctx.for !== 'frame_edit') return
     void landFrameEditIn(doc, job, ctx).catch(warn('change this frame'))
   })
+  // A new take: in the Video editor it is picked in the cut; in the rooms it lands beside the others only.
+  const inCut = () => ({ inCut: !deps.rooms?.() })
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return
-    void landTake(doc, job, ctx).then(() => continueFollow(deps)).catch(warn('update what follows'))
+    void landTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('update what follows'))
   })
-  // One take of a run: a window of it per shot (features/connected-video.clan).
+  // One take of a run: one generation of the box, a window of it per shot (features/connected-video.clan).
   runner.onComplete('run', (job, ctx) => {
     if (ctx.for !== 'run') return
-    void landRunTake(doc, job, ctx).then(() => continueFollow(deps)).catch(warn('the take'))
+    void landRunTake(doc, job, ctx, inCut()).then(() => continueFollow(deps)).catch(warn('the take'))
+  })
+  // Change this…: a new take beside its parent, never in the cut (features/make-and-edit.clan).
+  runner.onComplete('remake', (job, ctx) => {
+    if (ctx.for !== 'remake') return
+    void landRemake(doc, job, ctx).catch(warn('the new take'))
   })
   // The Image editor's actions land nowhere: the editor shows each result as a layer until Apply.
   runner.onComplete('image_edit', () => {})
@@ -65,10 +72,10 @@ export function wireJobs(deps: FrameDeps) {
  * first. Each lands now, as it would have. A clip whose landing was ever recorded (the take was
  * deleted since) is left alone. How many landed.
  */
-export async function landMissedClips(doc: DocumentStore): Promise<number> {
+export async function landMissedClips(doc: DocumentStore, opts: { inCut: boolean } = { inCut: true }): Promise<number> {
   const d = doc.get()
   const missed = Object.values(d.jobs).filter((j) => j.op === 'clip' && j.state === 'completed' && j.outputs?.length
-    && !Object.values(d.takes).some((t) => t.job_id === j.id))
+    && !Object.values(d.generations).some((g) => g.job_id === j.id))
   const chainOf = (doc as { chain?: () => Promise<{ action: string; cites?: string[] }[]> }).chain
   if (!missed.length || !chainOf) return 0
   const chain = await chainOf.call(doc)
@@ -81,15 +88,15 @@ export async function landMissedClips(doc: DocumentStore): Promise<number> {
       jobId: j.id, op: 'clip', crew: j.crew, provider: j.provider, model: j.model, kind: j.provider === 'mock' ? 'mock' : 'generated',
       outputs: (j.outputs ?? []).map((sha256) => ({ sha256 })),
     } as unknown as Job
-    await landTake(doc, job, ctx)
-    if (Object.values(doc.get().takes).some((t) => t.job_id === j.id)) n++
+    await landTake(doc, job, ctx, opts)
+    if (Object.values(doc.get().generations).some((g) => g.job_id === j.id)) n++
   }
   return n
 }
 
 /** At boot, after runner.resume(): pick up every chain that was under way. */
 export async function resumeChains(deps: FrameDeps) {
-  await landMissedClips(deps.doc).catch(warn('land the finished clips'))
+  await landMissedClips(deps.doc, { inCut: !deps.rooms?.() }).catch(warn('land the finished clips'))
   await continueDrawing(deps).catch(warn('draw the rest'))
   await resumeFixes(deps).catch(warn('fix it in the shot'))
   await continueFollow(deps).catch(warn('update what follows'))

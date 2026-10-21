@@ -52,6 +52,7 @@ import cutdowns
 import soften
 import projects
 import time_rules
+import timeline_layers
 from blobs import checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
@@ -142,6 +143,9 @@ BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edi
 NO_DIRECTOR_OPS = {"upscale", "resize", "cutdown"}
 # Ops with Draft, Standard and Final (features/clip-quality.clan); Remake as Final promotes a draft within this.
 QUALITY_OPS = ("clip", "clip_edit")
+# Change this… (features/make-and-edit.clan): the op each change runs as, and the jobs a take can be changed from.
+REMAKE_OP = {"camera.movement": "clip", "words": "clip", "moment": "clip_patch", "feel": "clip_edit"}
+REMAKE_PARENTS = ("clip", "clip_edit", "clip_patch")
 DRAFT_KEEP_S = 7 * 24 * 3600  # Runway keeps a Seedance 2.5 draft promotable for 7 days (openapi: draftTaskId)
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 # Ops whose models the capability sheets list for the Make all sizes method table (features/campaign-formats.clan)
@@ -1006,6 +1010,10 @@ class Relay:
             raise ApiError("invalid_input", "A write job says what to write (input.write).")
         if req.get("promoteFrom"):  # Remake as Final: the draft's own request, at the asked level
             req = self._promotion(who, req)
+        remade = None
+        if req.get("remakeWith"):  # Change this… (features/make-and-edit.clan): the parent's held request, one thing changed
+            req, remade = self._remake(who, req)
+            op = req["op"]
         free = free_resize(req)
         if op == "resize" and not free:
             import formats
@@ -1079,6 +1087,10 @@ class Relay:
         }
         if free:
             job["_free"] = True
+        if remade:  # what it was made from and what changed (public), and the clip request held for the next change
+            job.update(remake=remade["record"], _clip=remade["clip"])
+            if remade["seed"] is not None:
+                job["_keepSeed"] = remade["seed"]
         if pick:  # where the job meant to run, for fallbackFrom
             job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
         if patch:  # the model is chosen before the job runs, and shown on it from the start
@@ -1105,6 +1117,114 @@ class Relay:
             raise ApiError("invalid_input", "That take is not finished, so it cannot be remade yet.")
         old = draft.get("_req") or {}
         return {**req, "input": old.get("input") or {}, "modelChoice": {"provider": draft["provider"], "model": draft["model"]}}
+
+    @staticmethod
+    def _held_clip(job: dict) -> dict | None:
+        """The clip request behind a finished job, held server-side: a clip's own (its full request, with the
+        provider and model it ran on), or, for a patch or a feel made by a remake, the clip request it was made
+        from. None when the relay holds none (a patch or feel made before remakes)."""
+        if job.get("op") == "clip" and job.get("_req"):
+            return {"req": job["_req"], "ran": {"provider": job.get("provider"), "model": job.get("model")},
+                    "seed": ((job.get("director") or {}).get("output") or {}).get("providerJob", {}).get("seed")}
+        return job.get("_clip")
+
+    @staticmethod
+    def _remake_shot(inp: dict, shot_id: str | None) -> tuple[dict, int | None]:
+        """The shot of the held clip request a change names, and its place in a box made together."""
+        shots = inp.get("shots") or []
+        if shots:
+            if shot_id is None and len(shots) > 1:
+                raise ApiError("invalid_input", "This take shows several shots: say which shot changes (shotId).")
+            for i, sh in enumerate(shots):
+                if shot_id is None or sh.get("id") == shot_id:
+                    return sh, i
+            raise ApiError("invalid_input", "That shot is not in this take.")
+        shot = inp.get("shot")
+        if not shot or (shot_id is not None and shot.get("id") != shot_id):
+            raise ApiError("invalid_input", "That shot is not in this take.")
+        return shot, None
+
+    def _remake(self, who: dict, req: dict) -> tuple[dict, dict]:
+        """Change this… (features/make-and-edit.clan): a new take from a parent with only the delta changed.
+        The request becomes the parent's held clip request with the camera movement or the words changed (op
+        clip: the same frames, references, length and model, and its seed, which _submit keeps), a clip_patch
+        of the parent's footage over the moment snapped to whole seconds of at least 2 s, or a clip_edit of it
+        for the feel. Returns the rebuilt request and {record: Job.remake, clip: the clip request held for a
+        later change, seed}. Refused before any quota or spend."""
+        rw = req["remakeWith"]
+        parent = self.store.get_job(rw["parentJobId"])
+        if (not parent or parent.get("tenantId") != who["tenant"]["id"] or parent.get("projectId") != req["projectId"]
+                or parent.get("op") not in REMAKE_PARENTS):
+            raise ApiError("invalid_input", "That take cannot be changed here: it is not a clip of this project.")
+        if parent.get("state") != "completed" or not parent.get("outputs"):
+            raise ApiError("invalid_input", "That take is not finished, so it cannot be changed yet.")
+        delta = rw["delta"]
+        fields = [d["field"] for d in delta]
+        if len({(d["field"], d.get("shotId")) for d in delta}) != len(delta):
+            raise ApiError("invalid_input", "Each change is named once.")
+        ops = {REMAKE_OP[f] for f in fields}
+        if len(ops) > 1 or (ops & {"clip_patch", "clip_edit"} and len(delta) > 1):
+            raise ApiError("invalid_input", "A moment or the whole feel changes on its own; the camera and the words can go together.")
+        op = ops.pop()
+        if req["op"] != op:
+            raise ApiError("invalid_input", f"This change is made as {op}; send op {op}.")
+        held = self._held_clip(parent)
+        out = parent["outputs"][0]
+        footage = {"sha256": out["sha256"], "url": out["url"], "mime": out.get("mime") if str(out.get("mime", "")).startswith("video/") else "video/mp4"}
+        record: dict = {"parentJobId": parent["jobId"], **({"parentId": rw["parentId"]} if rw.get("parentId") else {})}
+        new = {k: v for k, v in req.items() if k != "input"}
+        if op == "clip":
+            if not held:
+                raise ApiError("invalid_input", "This take was not made from a request the relay keeps, so it cannot be remade with one change. Make a new take instead.")
+            inp = json.loads(json.dumps(held["req"].get("input") or {}))
+            filled = []
+            for d in delta:
+                shot, i = self._remake_shot(inp, d.get("shotId"))
+                if d["field"] == "camera.movement":
+                    camera = shot.setdefault("camera", {"size": "medium"})
+                    was = camera.get("movement")
+                    camera["movement"] = d["to"]
+                else:  # words: the shot's action, and its line in a timed take prompt
+                    was = shot.get("action")
+                    shot["action"] = d["to"]
+                    if i is not None and i < len(inp.get("cuts") or []):
+                        inp["cuts"][i]["text"] = d["to"]
+                filled.append({**d, **({"from": was} if was is not None else {})})
+            record["delta"] = filled
+            new["input"] = inp
+            new["modelChoice"] = req.get("modelChoice") or held["req"].get("modelChoice") or held["ran"]
+            level = req.get("quality") or held["req"].get("quality")
+            if level:
+                new["quality"] = level
+            ran = held["ran"]
+            seed = held.get("seed") if new["modelChoice"].get("model") == ran.get("model") else None
+            return new, {"record": record, "clip": held, "seed": seed}
+        held_in = (held or {}).get("req", {}).get("input") or {}
+        to = delta[0]["to"]
+        if op == "clip_patch":
+            take_s = out.get("durationS")
+            if not take_s:
+                raise ApiError("invalid_input", "This take's length is not known, so a moment cannot be placed on it. Remake the whole clip instead.")
+            snapped = time_rules.moment_window(float(to["inS"]), float(to["outS"]), float(take_s))
+            if not snapped:
+                raise ApiError("invalid_input", "This take is shorter than 2 s, so a moment of it cannot be made again. Remake the whole clip instead.")
+            inp = {"video": footage, "window": snapped["window"], "atS": snapped["atS"], "text": to["note"]}
+            for k in ("region", "still"):
+                if to.get(k):
+                    inp[k] = to[k]
+            shot = held_in.get("shot") or (held_in.get("shots") or [None])[0]
+            if shot:  # its length is the take's, so the send is planned on the whole of it
+                inp["shot"] = {**shot, "duration_s": min(30.0, float(take_s))}
+            record.update(delta=[{**delta[0]}], window=snapped["window"], atS=snapped["atS"])
+        else:  # clip_edit: the whole feel
+            inp = {"video": footage, "feel": {"strength": to.get("strength") or "flex"}}
+            if (to.get("words") or "").strip():
+                inp["text"] = to["words"].strip()
+            if held_in.get("ratio"):
+                inp["ratio"] = held_in["ratio"]
+            record["delta"] = [{**delta[0]}]
+        new["input"] = inp
+        return new, {"record": record, "clip": held, "seed": None}
 
     def _promote_job(self, job: dict, provider: str, model: str) -> tuple[dict, dict] | None:
         """The draft's directed provider job at this job's level, on `model`, and its director block; with
@@ -1416,6 +1536,8 @@ class Relay:
                                     paid=False, refund=True)
             job = self._reserve_as(job, provider, run_as)
         pjob = directed["providerJob"]
+        if job.get("_keepSeed") is not None and job["op"] == "clip" and pjob.get("model") == model:
+            pjob = {**pjob, "seed": job["_keepSeed"]}  # a remake keeps its parent's seed on the same model
         made = []  # the relay's own artifacts the provider reads (a clip_patch's cut and still)
         if job["op"] == "clip_patch":
             try:
@@ -2547,6 +2669,8 @@ class Relay:
     def _run_stitch(self, job: dict, cfg: dict) -> dict:
         if self.stitch is None:
             return self._fail(job, "provider_unavailable", "Stitching is not available here.", paid=False, refund=True)
+        if job["_req"]["input"].get("timeline"):  # the ad from the Edit room's timeline (features/make-and-edit.clan)
+            return self._run_timeline(job)
         clips = []
         for c in job["_req"]["input"].get("clips") or []:
             if c.get("endCard"):  # contract 3's end-card shot: stitch draws the end card itself
@@ -2569,6 +2693,54 @@ class Relay:
             self.stitch({"jobId": job["jobId"], "clips": clips, "outKey": f"ads/{job['jobId']}.mp4", "resultKey": f"ads/{job['jobId']}.json"})
         except Exception as e:
             log.exception("stitch invoke failed")
+            return self._fail(saved, "provider_unavailable", f"Stitching could not start ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        return self._with_poll(saved)
+
+    def _run_timeline(self, job: dict) -> dict:
+        """Render ad from a timeline (features/make-and-edit.clan): the compiled plan as it came (clan-store
+        compileTimeline), each clip's footage by its key, each text and the person's end card drawn here into
+        PNGs at the film's shape (timeline_layers.py, typeset.py: no model sees the words or the logo), and
+        stitch's timeline mode renders it, then the roll-up. Free and internal, like every stitch."""
+        inp = job["_req"]["input"]
+        plan = inp["timeline"]
+        why = timeline_layers.plan_problem(plan)
+        if why:
+            return self._fail(job, "invalid_input", why, paid=False, refund=True)
+        clips = []
+        for c in plan["clips"]:
+            key = self.blobs.key_for_url(c["asset"]["url"])
+            if not key:
+                return self._fail(job, "invalid_input", "A clip is not one of ours; upload it first.", paid=False, refund=True)
+            clips.append({"key": key, **{k: c[k] for k in ("startS", "inS", "outS", "speed", "holdS", "fadeInS", "fadeOutS", "transitionIn")
+                                         if c.get(k) is not None}})
+        size = timeline_layers.film_size(inp.get("ratio"))
+        texts, card = [], None
+        try:
+            for i, t in enumerate(plan.get("texts") or []):
+                key = f"ads/{job['jobId']}/text{i}.png"
+                self.blobs.put(key, timeline_layers.text_png(t, size), "image/png")
+                texts.append({"key": key, **{k: t[k] for k in ("fromS", "toS", "fadeInS", "fadeOutS") if t.get(k) is not None}})
+            if plan.get("endCard"):
+                key = f"ads/{job['jobId']}/endcard.png"
+                self.blobs.put(key, timeline_layers.end_card_png(plan["endCard"], size, self.blobs.fetch), "image/png")
+                card = {"key": key, "s": plan["endCard"]["s"],
+                        **({"transitionIn": plan["endCard"]["transitionIn"]} if plan["endCard"].get("transitionIn") else {})}
+        except Exception as e:
+            log.exception("timeline layers of %s failed", job["jobId"])
+            return self._fail(job, "internal", f"Edie could not draw this film's words ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        now = self.clock()
+        saved = self._save(job, state="submitted", model="ffmpeg", requestId=job["jobId"], _queue="r",
+                           _submittedAt=now, _nextCheckAt=now + 3)
+        if saved is None:
+            return self._reload(job)
+        event = {"jobId": job["jobId"], "mode": "timeline", "clips": clips, "texts": texts, **({"endCard": card} if card else {}),
+                 "lengthS": plan["lengthS"], "outKey": f"ads/{job['jobId']}.mp4", "resultKey": f"ads/{job['jobId']}.json"}
+        try:
+            self.stitch(event)
+        except Exception as e:
+            log.exception("timeline stitch invoke failed")
             return self._fail(saved, "provider_unavailable", f"Stitching could not start ({type(e).__name__}).",
                               retryable=True, paid=False, refund=True)
         return self._with_poll(saved)

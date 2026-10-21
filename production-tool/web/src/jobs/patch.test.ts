@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Job, ProductionDocument, Review } from '../contracts/types'
 import { controlsFor } from '../capabilities'
 import { CONFIGS } from '../contracts/load'
-import { currentTake, edlItemFor, takesOf } from '../model/selectors'
+import { currentTake, cutItemFor, takesOf } from '../model/selectors'
 import { snapshotDoc } from '../test/jobFixtures'
 import { addShots, addTake, job, SHA } from '../test/model'
 import { fixRoute, landPatch } from './patch'
@@ -21,7 +21,7 @@ function setup() {
 }
 
 function note(d: ProductionDocument, extra: Partial<Review>): Review {
-  return { id: 'review_1', v: 1, field_v: {}, target: { kind: 'take', id: Object.keys(d.takes)[0] }, by: 'human:p_maya',
+  return { id: 'review_1', v: 1, field_v: {}, target: { kind: 'generation', id: Object.keys(d.generations)[0] }, by: 'human:p_maya',
            state: 'open', created_at: '2026-10-14T10:00:00Z', text: 'her eyes should open here', ...extra } as Review
 }
 
@@ -46,7 +46,7 @@ describe('fixRoute', () => {
   it('moves a shot-time note by the cut item in_s and widens it to whole seconds', () => {
     const { store, shot, take } = setup()
     const d = structuredClone(store.get())
-    d.videos[Object.keys(d.videos)[0]].edl[edlItemFor(d, shot.id)!.id].in_s = 1
+    d.videos[Object.keys(d.videos)[0]].timeline[cutItemFor(d, shot.id)!.id].source!.in_s = 1
     const n = note(d, { target: { kind: 'video', id: Object.keys(d.videos)[0] }, shot_id: shot.id, at_s: 1.5, window: { from_s: 1.2, to_s: 2.6 } })
     expect(fixRoute(d, n, ON)).toEqual({ route: 'patch', shotId: shot.id, takeId: take.id, window: { from_s: 2, to_s: 4 }, atS: 2.5 })
   })
@@ -70,7 +70,7 @@ describe('fixRoute', () => {
   it('a window wholly past what the cut plays of the take is not fixed in the moment', () => {
     const { store, shot } = setup()
     const d = structuredClone(store.get())
-    d.videos[Object.keys(d.videos)[0]].edl[edlItemFor(d, shot.id)!.id].out_s = 3
+    d.videos[Object.keys(d.videos)[0]].timeline[cutItemFor(d, shot.id)!.id].source!.out_s = 3
     expect(fixRoute(d, note(d, { at_s: 4.5, window: { from_s: 4, to_s: 6 } }), ON))
       .toEqual({ route: 'remake', shotId: shot.id, why: 'the moment is outside what the cut plays' })
   })
@@ -84,7 +84,7 @@ describe('fixRoute', () => {
 })
 
 describe('landPatch', () => {
-  it('lands the patched take as the pick in one landing by Edie, the parent kept and the note left open', async () => {
+  it('lands the patched take beside its parent in one landing by Edie, the cut and the note left as they are', async () => {
     const { store, shot, take } = setup()
     const d = structuredClone(store.get())
     d.reviews.review_1 = note(d, { at_s: 3.2, window: { from_s: 2, to_s: 4 } })
@@ -97,10 +97,10 @@ describe('landPatch', () => {
     const why = change.mock.calls[0][1]
     expect(why).toMatchObject({ action: expect.stringMatching(/^edit take v2 for /), agent: 'edie', undo: false })
     const after = store.get()
-    const landed = currentTake(after, shot.id)!
-    expect(landed).toMatchObject({ version: 2, parent_id: take.id, asset: SHA('b'), crew: 'edie', model: 'aleph2', duration_s: take.duration_s })
-    expect(landed.segments.map((s) => [s.source_take, s.in_s, s.out_s])).toEqual([[take.id, 0, 2], [landed.id, 2, 4], [take.id, 4, 6]])
-    expect(edlItemFor(after, shot.id)!.pick).toEqual({ current: landed.id, alternates: [take.id] })
+    const landed = takesOf(after, shot.id).find((g) => g.id !== take.id)!
+    expect(landed).toMatchObject({ kind: 'patch', parent_id: take.id, asset: SHA('b'), crew: 'edie', duration_s: take.duration_s, inputs: { model: 'aleph2' } })
+    expect(landed.patched).toContainEqual(expect.objectContaining({ in_s: 2, out_s: 4, job_id: patchJob().jobId }))
+    expect(currentTake(after, shot.id)!.id).toBe(take.id) // a new take never touches the cut
     expect(after.reviews.review_1.state).toBe('open')
 
     await landPatch(store, patchJob(), { shotId: shot.id, parentTakeId: take.id })  // the same job again

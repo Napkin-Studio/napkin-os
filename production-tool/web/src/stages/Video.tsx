@@ -8,17 +8,17 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { ClipQuality, ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
+import type { ClipQuality, Generation, ModelChoice, Region, Review, Shot, Strength } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
 import { changeFeel, editQuality, makeClip as submitClip, redoInTake, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
 import { isOneTake, isTakeRun, makeClips, makeRuns, modelEntry, canLand, planRunOf } from '../jobs/runs'
 import { inTake, joinBefore, runJobFor, separateAll, separateSelection, shotRange, videoJoin, videoModel, videoPlan, videoRows, type Row } from '../jobs/runView'
 import { SelectionBar, VideoRows } from './VideoStrips'
-import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
+import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
-import { adStatus, endFrameDrift, takeStale } from '../jobs/stale'
-import { adBehindLabel, behindLabel } from '../ui/behind'
+import { adStatus, endFrameDrift } from '../jobs/stale'
+import { adBehindLabel } from '../ui/behind'
 import { rectToRegion } from '../lib/region'
 import { fmtTime, useBlobUrl, useSending } from '../ui/hooks'
 import { clipText } from '../lib/guard'
@@ -27,9 +27,7 @@ import { updateDoc } from '../doc/store'
 import { deleteFrom, removeNote, removeTake } from '../doc/remove'
 import { ModelItems, ModelPick } from '../ui/ModelPick'
 import { Float, MenuItem } from '../ui/Float'
-import { useUpdate } from '../ui/useUpdate'
 import { SplitButton } from '../ui/SplitButton'
-import type { FollowScope } from '../jobs/follow'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { madeWith, startingChoice } from '../ui/modelChoice'
@@ -42,7 +40,7 @@ import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
-import { currentRender, currentTake, isImplicit, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
+import { currentRender, currentTake, genModel, isImplicit, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotSegment, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
@@ -418,30 +416,16 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, pic
   const sel = currentTake(doc, shot.id, videoId)
   const thumb = useBlobUrl(shotFrameAsset(doc, shot))
   const showMock = useShowMock()
-  const open = reviewsList(doc).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && r.state !== 'resolved').length
+  const open = reviewsList(doc).filter((r) => r.target.kind === 'generation' && takes.some((t) => t.id === r.target.id) && r.state !== 'resolved').length
   const selIdx = sel ? takes.findIndex((t) => t.id === sel.id) : -1
   const ui = useUi()
   const selMade = madeWith(doc, ui, sel?.job_id)
-  // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
-  const stale = shotsBeingFixed(doc, ctxReader(doc, ui)).has(shot.id) ? undefined : takeStale(doc, shot.id)
   // Quiet, never "out of date": the frame this clip lands on has changed since (features/connected-video.clan).
   const endDrift = endFrameDrift(doc, shot.id, videoId)
   // In a film, a shot of a take run is made with its run: "Make shots 1–5 as one take".
   const film = useFilm(videoId)
   const runLabel = film?.label(shot.id)
-  // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
-  const update = useUpdate()
   const [error, setError] = useState<string | null>(null)
-  const afterScope = { kind: 'after', item: { kind: 'clip', shotId: shot.id } } as const
-  const after = update.size(afterScope)
-  const start = async (scope: FollowScope) => {
-    setError(null)
-    try {
-      await update.start(scope)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not work.')
-    }
-  }
   const remove = async () => {
     if (!sel) return
     await deleteFrom(docStore, (d) => removeTake(d, sel.id)) // Undo in the top bar puts it back
@@ -463,7 +447,7 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, pic
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         <div className="row wrap" style={{ gap: 4 }}>
           {takes.map((t, i) => (
-            <button key={t.id} className={`vchip ${t.id === sel?.id ? 'on' : ''}`} title={[t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : '', qualityLabel(t.quality, t.size)].filter(Boolean).join(' · ')}
+            <button key={t.id} className={`vchip ${t.id === sel?.id ? 'on' : ''}`} title={[t.mock ? 'Mock clip' : genModel(t) ? `${modelLabel(t.provider, genModel(t))} (${t.provider})` : '', qualityLabel(t.inputs?.quality, t.inputs?.size)].filter(Boolean).join(' · ')}
               onClick={(e) => {
                 e.stopPropagation()
                 void updateDoc(docStore, (d) => pickTake(d, shot.id, t.id, videoId), 'pick take')
@@ -473,27 +457,13 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, pic
           <Float anchor={makeRef} open={making} onClose={() => setMaking(false)} role="dialog" label={`Make the clip for shot ${index + 1}`} className="clipbox">
             {making && <MakeClipBox index={index} quality={shotQuality(doc, shot.id, videoId)} title={runLabel} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
           </Float>
-          {sel?.quality && <TakeQuality take={sel} />}
-          {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
+          {sel?.inputs?.quality && <TakeQuality take={sel} />}
+          {showMock && sel?.mock && <span className="mockbadge">MOCK</span>}
           {selMade.fallback && <span className="madeon" title={`${selMade.fallback}. ${ui.jobs[sel?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
         </div>
-        {(stale || open > 0) && (
+        {open > 0 && (
           <div className="badges">
-            {stale && <span className={`behind ${isRunning(doc, jobId) ? 'updating' : ''}`} title={stale.reason}>{isRunning(doc, jobId) ? 'Updating…' : behindLabel(doc, stale)}</span>}
-            {open > 0 && <span className="notechip" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
-          </div>
-        )}
-        {stale && !isRunning(doc, jobId) && (
-          <div className="row" style={{ gap: 4 }}>
-            <SplitButton kind="dark" size="xs" menuLabel={`More ways to remake clip ${index + 1}`} disabled={update.running}
-              title={`Remake clip ${index + 1} only, from its frame and shot as they are now`}
-              onClick={() => void start({ kind: 'one', item: { kind: 'clip', shotId: shot.id } })}
-              items={after > 1 ? [{
-                label: `Remake this and the clips after (${after})`, icon: '⇥',
-                onSelect: () => void start(afterScope),
-              }] : []}>
-              Remake
-            </SplitButton>
+            <span className="notechip" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>
           </div>
         )}
         {endDrift && <div className="ve-drift" title="The frame this clip ends on was changed. Remake it to land on the new one.">Ends on an older frame of shot {endDrift.shot}</div>}
@@ -505,7 +475,7 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, pic
 
 /** A shot card's ⋯ menu: a new take (on the model that made this one, or another), and delete. */
 function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId }: {
-  shot: Shot; take: Take; n: number; only: boolean; busy: boolean; onDelete: () => void; onError: (message: string | null) => void
+  shot: Shot; take: Generation; n: number; only: boolean; busy: boolean; onDelete: () => void; onError: (message: string | null) => void
   videoId?: string
 }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
@@ -530,7 +500,7 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId }: {
     void send(async () => {
       onError(null)
       try {
-        const quality = take.quality ?? shotQuality(doc, shot.id)
+        const quality = take.inputs?.quality ?? shotQuality(doc, shot.id)
         if (film) await film.make(shot.id, { modelChoice: choiceToSend('clip', config, choice), quality, again: true })
         else await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice), quality })
       } catch (e) {
@@ -550,7 +520,7 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId }: {
         const next = shots[shots.findIndex((s) => s.id === shot.id) + 1]
         const withLast = !!next && joinBefore(doc, videoId, next.id)?.kind === 'continue'
         const m = redoModel(take)
-        await redoInTake(deps, shot.id, { videoId, withLast, quality: take.quality ?? shotQuality(doc, shot.id), ...(m ? { modelChoice: choiceToSend('clip', config, m) } : {}) })
+        await redoInTake(deps, shot.id, { videoId, withLast, quality: take.inputs?.quality ?? shotQuality(doc, shot.id), ...(m ? { modelChoice: choiceToSend('clip', config, m) } : {}) })
       } catch (e) {
         onError(e instanceof Error ? e.message : 'That did not work.')
       }
@@ -572,7 +542,7 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId }: {
             {windowed && <MenuItem icon="▶" disabled={busy || sending} hint="the rest stays" onSelect={redo}>{sending ? 'Sending…' : 'Redo just this part'}</MenuItem>}
             <MenuItem icon={runWords ? '⟳' : '▶'} disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : runWords ?? 'New take'}</MenuItem>
             {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>{runWords ? 'Make it on another model' : 'New take on another model'}</MenuItem>}
-            {take.quality === 'draft' && (
+            {take.inputs?.quality === 'draft' && (
               <MenuItem icon="★" disabled={busy || sending} hint={finalHint(doc, take)} onSelect={() => { close(); void send(async () => {
                 onError(null)
                 try {
@@ -598,25 +568,25 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId }: {
 
 /** `shots`: the video's shots in order; `videoId`: the video whose cut plays (another video's cut played
  *  the main video's takes, 2026-10-15). */
-function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; shots: Shot[]; videoId?: string; onPickShot: (id: string) => void; strip?: React.ReactNode; children?: React.ReactNode }) {
+function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Generation; shots: Shot[]; videoId?: string; onPickShot: (id: string) => void; strip?: React.ReactNode; children?: React.ReactNode }) {
   const { doc: docStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
   const { config, controls } = useConfig()
   const video = useRef<HTMLVideoElement>(null)
   const stageBox = useRef<HTMLDivElement>(null)
-  const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: currentTake(doc, s.id, videoId) })).filter((x) => x.take) as { shot: Shot; take: Take }[], [shots, doc, videoId])
+  const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: currentTake(doc, s.id, videoId) })).filter((x) => x.take?.asset) as { shot: Shot; take: Generation & { asset: string } }[], [shots, doc, videoId])
   const [idx, setIdx] = useState(0)
   const cur = mode === 'all' ? playlist[idx] : take && shot ? { shot, take } : undefined
   // Not in this browser (another device, cleared storage): the relay's copy (2026-10-09).
   const url = useBlobUrl(cur?.take.asset) ?? remoteUrl(doc, cur?.take.asset)
-  const window_ = cur?.take.segments?.[0]
+  const window_ = shotSegment(cur?.take, cur?.shot.id)
   // One video (features/connected-video.clan): its shots' windows of the one file. In shot view the player
   // spans them all, with a tick at each beat; picking a shot seeks to its window.
-  const beats = !cur?.take.segments?.[0] ? [] : shots
-    .map((s) => ({ shotId: s.id, take: currentTake(doc, s.id, videoId) }))
-    .filter((x) => x.take?.job_id === cur.take.job_id && x.take.segments[0])
-    .map((x) => ({ shotId: x.shotId, in: x.take!.segments[0].in_s, out: x.take!.segments[0].out_s }))
+  const beats = !window_ || !cur ? [] : shots
+    .map((s) => ({ shotId: s.id, seg: shotSegment(currentTake(doc, s.id, videoId), s.id), take: currentTake(doc, s.id, videoId) }))
+    .filter((x) => x.take?.job_id === cur.take.job_id && x.seg)
+    .map((x) => ({ shotId: x.shotId, in: x.seg!.in_s, out: x.seg!.out_s }))
   const spans = mode === 'shot' && beats.length > 1
   const autoPick = useRef(false)
   const windowIn = window_?.in_s
@@ -626,7 +596,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
     video.current.currentTime = windowIn
   }, [spans, windowIn])
   // The relay's mock makes a still for a clip, not a video: it shows as the picture it is.
-  const still = !!(cur && doc.assets[cur.take.asset]?.mime.startsWith('image/'))
+  const still = !!(cur?.take.asset && doc.assets[cur.take.asset]?.mime.startsWith('image/'))
   const stillS = cur ? cur.take.duration_s ?? cur.shot.duration_s : 0
   useEffect(() => {
     if (!still || mode !== 'all' || !stillS) return
@@ -660,7 +630,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
     setError(null)
   }
 
-  const reviews = reviewsList(doc).filter((r) => r.target.kind === 'take' && cur && takesOf(doc, cur.shot.id).some((x) => x.id === r.target.id))
+  const reviews = reviewsList(doc).filter((r) => r.target.kind === 'generation' && cur && takesOf(doc, cur.shot.id).some((x) => x.id === r.target.id))
     .sort((a, b) => (a.at_s ?? 0) - (b.at_s ?? 0))
   const openNotes = reviews.filter((r) => r.state !== 'resolved' && r.target.id === cur?.take.id)
   const fixJob = cur ? jobAt(doc, ui, (c) => (c.for === 'clip' || (c.for === 'frame' && !!c.fixReviewIds?.length)) && c.shotId === cur.shot.id) : undefined
@@ -720,7 +690,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
     const take = cur.take
     // A shot made inside one video plays its window of the whole take: its moment is from the window's start
     // and its length is the window's (the player's clock runs over the whole take).
-    const seg = take.segments?.[0]
+    const seg = shotSegment(take, cur.shot.id)
     const raw = video.current?.currentTime ?? t
     const atS = Math.round(Math.max(0, seg ? raw - seg.in_s : raw) * 100) / 100
     const by = `human:${personOf(ui.me).id}`
@@ -751,8 +721,8 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
       } else if (fixesInShot) {
         await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice), quality)
       } else if (one?.region && controls.videoRegionEdit) {
-        const v = await assetRef(relay, cur.take.asset, docStore.get())
-        await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.text ?? '' }, [cur.take.job_id], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
+        const v = await assetRef(relay, cur.take.asset ?? '', docStore.get())
+        await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.text ?? '' }, [cur.take.job_id ?? ''].filter(Boolean), { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
       } else {
         const text = clipText(openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.text ?? ''}`).join('\n'), 1000)
         await submitClip(deps, cur.shot.id, { text, reviewIds: ids, parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice), quality })
@@ -763,11 +733,12 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
   })
 
   const jump = (r: Review) => {
-    const target = r.target.kind === 'take' ? doc.takes[r.target.id] : undefined
-    if (target && cur && target.id !== cur.take.id) {
-      void updateDoc(docStore, (d) => pickTake(d, target.shot_id, target.id, videoId), 'pick take')
+    const target = r.target.kind === 'generation' ? doc.generations[r.target.id] : undefined
+    const targetShot = r.shot_id ?? target?.shot_ids[0]
+    if (target && targetShot && cur && target.id !== cur.take.id) {
+      void updateDoc(docStore, (d) => pickTake(d, targetShot, target.id, videoId), 'pick take')
     }
-    if (target && mode === 'all') onPickShot(target.shot_id)
+    if (target && targetShot && mode === 'all') onPickShot(targetShot)
     pendingSeek.current = r.at_s ?? 0
     if (video.current) {
       video.current.pause()
@@ -895,14 +866,10 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
           <div className="row">
             <h2>Notes</h2>
             <span className="faint" style={{ fontSize: 12 }}>Shot {shotNumber(doc, cur.shot.id)} · v{takesOf(doc, cur.shot.id).findIndex((x) => x.id === cur.take.id) + 1}</span>
-            {cur.take.quality && <TakeQuality take={cur.take} />}
+            {cur.take.inputs?.quality && <TakeQuality take={cur.take} />}
             <Thumbs key={cur.take.id} compact target={{
-              kind: 'clip', id: cur.take.id, jobId: cur.take.job_id, shot: shotNumber(doc, cur.shot.id), provider: cur.take.provider, model: cur.take.model,
+              kind: 'clip', id: cur.take.id, jobId: cur.take.job_id ?? '', shot: shotNumber(doc, cur.shot.id), provider: cur.take.provider ?? 'mock', model: genModel(cur.take),
             }} />
-            {(() => {
-              const st = shotsBeingFixed(doc, ctxReader(doc, ui)).has(cur.shot.id) ? undefined : takeStale(doc, cur.shot.id)
-              return st && st.target.id === cur.take.id ? <span className="behind" title={st.reason}>{behindLabel(doc, st)}</span> : null
-            })()}
           </div>
           <div className="composer">
           <textarea className="composer-input" rows={2} aria-label="Note at this moment" placeholder="Leave a note at this moment…" maxLength={1000} value={note}
@@ -975,7 +942,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
               <QualityPick op="clip" choice={choice} value={quality} onChange={setQPick} />
             </>}
             <span className="spacer" />
-            {cur.take.quality === 'draft' && (
+            {cur.take.inputs?.quality === 'draft' && (
               <button className="btn sm" disabled={fixing || sending} onClick={() => void toFinal()} title={finalHint(doc, cur.take)}>Remake as Final</button>
             )}
             {/* In a film the row's one Make makes it again: no second make action here. */}
@@ -990,7 +957,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
   )
 }
 
-function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
+function FeelBox({ shot, take }: { shot: Shot; take: Generation }) {
   const { runner, relay, doc: docStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -1075,17 +1042,18 @@ function ellisLine(n: number, boxed: number, inShot: boolean, frameFixed: boolea
 
 /** A take's level and size on its card (features/clip-quality.clan): "Draft 360p", "Final 1080p", so a draft
  *  and a final are never confused. */
-function TakeQuality({ take }: { take: Take }) {
-  return <span className={`qchip ${take.quality ?? ''}`} title={take.quality === 'draft' ? 'A draft: Remake as Final makes it at full size' : undefined}>{qualityLabel(take.quality, take.size)}</span>
+function TakeQuality({ take }: { take: Generation }) {
+  const q = take.inputs?.quality
+  return <span className={`qchip ${q ?? ''}`} title={q === 'draft' ? 'A draft: Remake as Final makes it at full size' : undefined}>{qualityLabel(q, take.inputs?.size)}</span>
 }
 
 /** What Remake as Final will do with this draft: Runway makes a Seedance 2.5 draft final itself within
  *  7 days; any other is made again at Final with its own words, pictures and length. */
-function finalHint(doc: ReturnType<typeof useDoc>, take: Take): string {
-  const job = doc.jobs[take.job_id]
+function finalHint(doc: ReturnType<typeof useDoc>, take: Generation): string {
+  const job = take.job_id ? doc.jobs[take.job_id] : undefined
   const fresh = job?.created_at ? Date.now() - Date.parse(job.created_at) < 7 * 24 * 3600 * 1000 : false
-  if (take.provider === 'runway' && SHEETS.runway?.models[take.model]?.draftPromote && fresh) return 'Runway makes this draft at 1080p, without making it again'
-  return `Makes it again at Final on ${modelLabel(take.provider, take.model)}: the same words, pictures and length`
+  if (take.provider === 'runway' && SHEETS.runway?.models[genModel(take)]?.draftPromote && fresh) return 'Runway makes this draft at 1080p, without making it again'
+  return `Makes it again at Final on ${modelLabel(take.provider, genModel(take))}: the same words, pictures and length`
 }
 
 /** The video's default quality for its clips (features/clip-quality.clan), in the editor's bar. A send can
@@ -1109,8 +1077,8 @@ function QualityDefault({ videoId }: { videoId: string }) {
 
 /** Remake just this shot runs on the take's model when it lands on frames closely (wan3), else on Veo 3.1
  *  Fast, retimed (design 4.6). */
-function redoModel(take: Take): ModelChoice | undefined {
-  const own = modelEntry(take.provider as ModelChoice['provider'], take.model)
+function redoModel(take: Generation): ModelChoice | undefined {
+  const own = modelEntry(take.provider as ModelChoice['provider'], genModel(take))
   if (own && canLand(own)) return { provider: own.provider, model: own.model }
   const veo = modelEntry(take.provider as ModelChoice['provider'], 'veo3.1_fast')
   return veo ? { provider: veo.provider, model: veo.model } : own ? { provider: own.provider, model: own.model } : undefined

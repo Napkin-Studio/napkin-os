@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { systemUpdate, updateDoc } from '../doc/store'
-import { currentTake, edlOf, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
+import { currentTake, cutOf, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
 import { ownShotList } from '../jobs/prompt'
 import { addShot, moveShot } from './storyboardEdits'
 import { addShots, addTake, id, job, MAYA, modelStore, SHA } from '../test/model'
@@ -18,7 +18,7 @@ async function twoVideos() {
   const l = id('link')
   await systemUpdate(store, (d) => {
     d.storyboards[sb] = { id: sb, v: 1, field_v: {}, title: 'Storyboard 2', ratio: '9:16', target_s: 15 }
-    d.videos[v2] = { id: v2, v: 1, field_v: {}, title: 'Video 2', ratio: '9:16', target_s: 15, edl: {} }
+    d.videos[v2] = { id: v2, v: 1, field_v: {}, title: 'Video 2', ratio: '9:16', target_s: 15, timeline: {} }
     d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'storyboard', id: sb }, to: { kind: 'video', id: v2 }, role: 'renders' }
   }, 'second video')
   let shotId = ''
@@ -40,7 +40,7 @@ describe('a second video\'s cut and notes', () => {
     const { store, v2, shotId, takeId } = await twoVideos()
     await updateDoc(store, (d) => pickTake(d, shotId, takeId), 'pick take')
     expect(currentTake(store.get(), shotId, v2)?.id).toBe(takeId)
-    expect(edlOf(store.get(), mainVideo(store.get())!.id)).toEqual([])
+    expect(cutOf(store.get(), mainVideo(store.get())!.id)).toEqual([])
   })
 
   it('a note on its clip is on that video', async () => {

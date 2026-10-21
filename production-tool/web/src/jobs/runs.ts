@@ -18,8 +18,7 @@ import { choiceToSend, modelChoicesFor, modelLabel, resolveQuality, type Sheets 
 import { SHEETS } from '../contracts/load'
 import type { CapabilitySheet, ClipQuality, Config, Id, ModelChoice, ProductionDocument, Provider, RunMode, Seam, SeamKind, Shot, VideoJoin, VideoRun } from '../contracts/types'
 import { landUpdate, systemUpdate } from '../doc/store'
-import { currentTake, edlItemFor, edlOf, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
-import { rankBetween } from '../../../clan-store/src'
+import { currentTake, shotSegment, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { makeClip, makeTake, videoQuality } from './clips'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
@@ -43,6 +42,8 @@ export interface PlanModel {
   minS?: number
   maxS?: number
   refsMax: number
+  /** Makes a clip from words alone, with no first frame (the sheet's textEndpoint). */
+  words?: boolean
 }
 
 export interface PlannedRun {
@@ -87,6 +88,7 @@ export function modelEntry(provider: Provider, model: string, sheets: Sheets = S
     ...('minS' in e && e.minS !== undefined ? { minS: e.minS } : {}),
     ...('maxS' in e && e.maxS !== undefined ? { maxS: e.maxS } : {}),
     refsMax: (('refs' in e && e.refs) || sheet.refs).max,
+    ...('textEndpoint' in e && e.textEndpoint ? { words: true } : {}),
   }
 }
 
@@ -290,7 +292,7 @@ export function isTakeRun(r: PlannedRun | undefined): boolean {
 export function isOneTake(d: ProductionDocument, videoId: Id | undefined, shotIds: Id[]): boolean {
   const takes = shotIds.map((id) => currentTake(d, id, videoId))
   const jobId = takes[0]?.job_id
-  if (!jobId || !takes.every((t) => t?.segments[0] && t.job_id === jobId)) return false
+  if (!jobId || !takes.every((t, i) => !!shotSegment(t, shotIds[i]) && t?.job_id === jobId)) return false
   const sb = storyboardOfVideo(d, videoId)
   const all = sb ? shotsOf(d, sb.id).filter((s) => currentTake(d, s.id, videoId)?.job_id === jobId).map((s) => s.id) : []
   return all.length === shotIds.length
@@ -361,21 +363,6 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
     if (ids.length) work.push({ run: r, shotIds: ids })
   }
   const ids = work.map(() => newUlidId('run'))
-  // Dex's joins on the cut's items (made now, in shot order, for shots with no clip yet); a person's stay.
-  await systemUpdate(deps.doc, (x) => {
-    const v = x.videos[opts.videoId]
-    if (!v) return
-    for (const s of shots) {
-      const seam = plan.joins[s.id]
-      if (!seam || seam.by === 'human') continue
-      const item = edlItemFor(x, s.id, v.id)
-      if (item) v.edl[item.id].seam = seam
-      else {
-        const last = edlOf(x, v.id).at(-1)
-        v.edl[newUlidId('edl')] = { rank: rankBetween(last?.rank ?? null, null), kind: 'shot', shot_id: s.id, seam }
-      }
-    }
-  }, 'sync')
   // One entry per run: Dex's plan of it, the model and how (the credits are on each job's landing).
   for (const [i, { run: r, shotIds }] of work.entries()) {
     const lands = shotIds.filter((id) => r.lands[id]).length

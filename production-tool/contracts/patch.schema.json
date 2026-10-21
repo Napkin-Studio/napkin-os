@@ -5,14 +5,14 @@
   "description": "Field-level writes to the document (contracts/collab.md). A patch names one entity by its map and id, and one leaf inside it. Patches are stateless JSON, so the same batch runs through clan-store's LocalPatchBus today and the sync service later. A batch is atomic: every patch applies or none does, and it is one decision in the chain and one undo step.",
   "$defs": {
     "entity": {
-      "enum": ["project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "takes", "renders", "reviews", "links", "keys", "refs", "documents", "texts", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"],
+      "enum": ["project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "generations", "renders", "reviews", "links", "keys", "refs", "documents", "texts", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"],
       "description": "A map of document.schema.json (project: the root object, its id is project.id). upstream is never patched."
     },
     "path": {
       "type": "string",
       "pattern": "^[a-z_][a-z0-9_]*(/[A-Za-z0-9_:]+)*$",
       "maxLength": 128,
-      "description": "A leaf inside the entity, '/' between parts: duration_s, camera/size, pick/current, edl/edl_X, edl/edl_X/pick/current. Never v, field_v or id. The leaf rules are in collab.md."
+      "description": "A leaf inside the entity, '/' between parts: duration_s, camera/size, timeline/item_X, timeline/item_X/source/in_s. Never v, field_v or id. The leaf rules are in collab.md."
     },
     "Patch": {
       "type": "object",

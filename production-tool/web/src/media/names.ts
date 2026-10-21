@@ -65,7 +65,7 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
   const shots = shotsOf(doc)
   const ads = rendersOf(doc)
   const elsewhere = new Set<Sha256>([
-    ...Object.values(doc.frames).map((f) => f.asset), ...Object.values(doc.takes).map((t) => t.asset),
+    ...Object.values(doc.frames).map((f) => f.asset), ...Object.values(doc.generations).map((g) => g.asset).filter((a): a is Sha256 => !!a),
     ...Object.values(doc.renders).map((r) => r.asset), ...Object.values(doc.exports).map((e) => e.asset),
   ])
 
@@ -91,8 +91,9 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
     }
   })
   shots.forEach((s, i) => {
-    for (const t of takesOf(doc, s.id)) {
-      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(`shot${i + 1}-clip-v${t.version}`, t.asset), folder: 'clips', which: t.id })
+    for (const [k, t] of takesOf(doc, s.id).entries()) {
+      if (!t.asset) continue
+      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(`shot${i + 1}-clip-v${k + 1}`, t.asset), folder: 'clips', which: t.id })
     }
   })
   for (const r of ads) {

@@ -120,8 +120,8 @@ export interface FormatCheck { result: 'pass' | 'flag'; note: string; ignored?: 
 /** A crop at a point through a window (0: its in, 1: its out): a slow pan moves between them. */
 export interface CropKey { at: number; box: PxBox }
 export interface SizeEdlWindow {
-  shot_id: Id; take_id?: Id; in_s: number; out_s: number; crop?: PxBox; end_card?: boolean
-  /** A slow pan (phase 6), in the take's pixels; wins over crop. */
+  shot_id: Id; generation_id?: Id; in_s: number; out_s: number; crop?: PxBox; end_card?: boolean
+  /** A slow pan (phase 6), in the generation's pixels; wins over crop. */
   crop_keys?: CropKey[]
   crop_by?: 'rule' | 'person'
   /** The take's pixels, which crop and crop_keys are in. */
@@ -130,7 +130,7 @@ export interface SizeEdlWindow {
 /** A cutdown's beat (Dex's plan, phase 5): a shot of the master kept or dropped, with his reason. */
 export interface SizeBeat { shot_id: Id; keep: boolean; why?: string; by?: 'dex' | 'person' }
 /** A film's shot made again for a shape (phase 6): Aleph 2's new edges, or Remake for vertical. */
-export interface Reframe { take_id: Id; shot_id: Id; aspect: Aspect; method: 'outpaint' | 'remake'; job_id: Id; model?: string; asset?: Sha256; size?: Aspect }
+export interface Reframe { generation_id: Id; shot_id: Id; aspect: Aspect; method: 'outpaint' | 'remake'; job_id: Id; model?: string; asset?: Sha256; size?: Aspect }
 /** relay-api TypeLayer: one type layer laid out for one size; the relay or stitch draws it. */
 export interface TypeLayer {
   kind: TypeLayerKind
@@ -435,6 +435,8 @@ export interface Flags {
   connectedVideo?: boolean
   /** Our own canvas engine for new projects (features/canvas-engine.clan). Optional; absent means off. */
   ownCanvas?: boolean
+  /** The Video editor as two rooms, Make and Edit, over one Bin (features/make-and-edit.clan). Optional; absent means off. */
+  makeAndEdit?: boolean
 }
 
 /** Fix this moment's settings (config.schema clipPatch); every key optional. */
@@ -524,7 +526,7 @@ export interface Prose { type: 'doc'; content?: Record<string, unknown>[] }
 export interface TextProblem { field: string; length: number; limit: number; message: string }
 export interface Pick { current: Id; alternates?: Id[] }
 export interface LibraryCopy { shelf: string; key: Key; ver: number; by: PersonRef; at: string }
-export type TargetKind = 'ref' | 'frame' | 'take' | 'render' | 'video' | 'shot' | 'scene' | 'beat' | 'script' | 'storyboard' | 'size' | 'format_set' | 'sketch' | 'document' | 'board' | 'key'
+export type TargetKind = 'ref' | 'frame' | 'generation' | 'render' | 'video' | 'shot' | 'scene' | 'beat' | 'script' | 'storyboard' | 'size' | 'format_set' | 'sketch' | 'document' | 'board' | 'key'
 export interface Target { kind: TargetKind; id: Id }
 export interface NoteWindow { from_s: number; to_s: number }
 
@@ -622,10 +624,6 @@ export interface Frame extends EntityBase {
   edits?: FrameEdit[]
   cropped_to?: { from: Aspect; to: Aspect }
 }
-/** A take's window of a shared asset (One take): where its cuts came from, the prompt's times, the take_cuts
- *  stage's detection, or a person's drag (features/connected-video.clan). source_take: the run's first take,
- *  whose window starts on the pinned frame. */
-export interface TakeSegment { source_take: Id; in_s: number; out_s: number; job_id?: Id; by?: 'prompt' | 'detected' | 'human' }
 /** Where a take ends: on the next shot's storyboard frame (frame_id, the version it was sent), or nowhere given. */
 export interface TakeEnd {
   kind: 'next_storyboard' | 'none'
@@ -635,24 +633,69 @@ export interface TakeEnd {
   /** That frame's SSIM against the one given (the job's landScore). */
   score?: number
 }
-export interface Take extends EntityBase {
-  shot_id: Id
-  version: number
-  parent_id?: Id
-  asset: Sha256
-  job_id: Id
-  crew: CrewId
-  kind: 'generated' | 'mock'
-  model: string
-  provider: MadeBy
-  duration_s: number
-  /** The level it was made at and its size ("Draft 360p"; features/clip-quality.clan). */
+/** document generation.kind (features/make-and-edit.clan). */
+export type GenerationKind = 'clip' | 'together' | 'change' | 'patch' | 'feel' | 'combine' | 'extend' | 'upload' | 'render'
+export type GenerationDeltaField = 'camera.size' | 'camera.angle' | 'camera.movement' | 'camera.movement_speed' | 'camera.lens_mm' | 'words' | 'refs'
+  | 'start_frame' | 'end_frame' | 'moment' | 'feel' | 'length' | 'model' | 'quality' | 'sources'
+/** One thing a generation changed from its parent (document generationDelta). */
+export interface GenerationDelta { field: GenerationDeltaField; shot_id?: Id; from?: unknown; to: unknown }
+/** Where a shot is in a generation (a box made together). */
+export interface GenerationSegment { shot_id: Id; in_s: number; out_s: number; by?: 'prompt' | 'detected' | 'human' }
+export interface GenerationInputs {
+  frames?: { role: 'start' | 'end' | 'still'; asset: Sha256; shot_id?: Id }[]
+  refs?: { name?: RefName; asset: Sha256; role?: RefRole }[]
+  words?: string
+  camera?: Record<Id, Camera>
+  model?: string
   quality?: ClipQuality
   size?: string
-  segments: TakeSegment[]
-  end?: TakeEnd
+  length_s?: number
+  sources?: { generation_id?: Id; asset: Sha256; in_s?: number; out_s?: number }[]
 }
-export interface EdlItem { rank: Rank; kind: 'shot' | 'bridge'; shot_id?: Id; pick?: Pick; in_s?: number; out_s?: number; seam?: Seam }
+/** One generation, a take (document generation): everything Make produced, uploaded or rendered, each once. */
+export interface Generation extends EntityBase {
+  kind: GenerationKind
+  parent_id?: Id
+  delta?: GenerationDelta[]
+  label?: string
+  inputs?: GenerationInputs
+  box_id?: Id
+  shot_ids: Id[]
+  segments?: GenerationSegment[]
+  patched?: { in_s: number; out_s: number; job_id: Id; generation_id?: Id }[]
+  asset?: Sha256
+  duration_s?: number
+  state: 'making' | 'ready' | 'failed'
+  job_id?: Id
+  provider?: MadeBy
+  crew?: CrewId
+  mock?: true
+  end?: TakeEnd
+  created_at: string
+  by: PersonRef
+}
+/** The join into a timeline clip (document transitionIn): its overlap comes from the outgoing clip's footage
+ *  after its out point. Absent: a cut. */
+export interface TransitionIn { kind: 'cut' | 'dissolve' | 'dip_black' | 'dip_white'; s?: number }
+/** One clip or text on a video's timeline (document timelineItem). */
+export interface TimelineItem {
+  track: 'V1' | 'V2' | 'text'
+  start_s?: number
+  source?: { generation_id?: Id; asset?: Sha256; in_s: number; out_s: number }
+  follows?: { box_id?: Id; shot_id?: Id }
+  fade_in_s?: number
+  fade_out_s?: number
+  transition_in?: TransitionIn
+  speed?: number
+  hold_s?: number
+  opacity?: number
+  words?: string
+  style?: 'caption' | 'title' | 'super'
+  from_s?: number
+  to_s?: number
+}
+/** The person's own end card (document endCard), drawn by the relay as the locked last piece of V1. */
+export interface EndCard { headline?: string; line: string; cta?: string; bg: string; logo_asset?: Sha256; s: number; transition_in?: TransitionIn }
 /** How a shot joins the one before it (features/connected-video.clan): continue (same setup, action carries on),
  *  cut (new angle or place), match (new angle, same moment), dissolve or dip (asked for). by: Dex, or a person. */
 export type SeamKind = 'cut' | 'continue' | 'match' | 'dissolve' | 'dip'
@@ -679,14 +722,16 @@ export interface Video extends EntityBase {
   /** The project's default quality for this video's clips (absent: standard). */
   quality?: ClipQuality
   pick?: Pick
-  edl: Record<Id, EdlItem>
+  /** The cut (features/make-and-edit.clan): items keyed by id ({} when empty). It replaced edl. */
+  timeline: Record<Id, TimelineItem>
+  end_card?: EndCard
   /** features/connected-video.clan: absent means film when flags.connectedVideo is on. */
   join?: VideoJoin
   runs?: Record<Id, VideoRun>
 }
 export interface Render extends EntityBase { video_id: Id; version: number; parent_id?: Id; asset: Sha256; job_id: Id }
 export interface Review extends EntityBase {
-  target: { kind: 'frame' | 'take' | 'render' | 'ref' | 'video'; id: Id }
+  target: { kind: 'frame' | 'generation' | 'render' | 'ref' | 'video'; id: Id }
   video_id?: Id
   render_id?: Id
   shot_id?: Id
@@ -742,9 +787,9 @@ export interface FormatSet extends EntityBase {
   master: { kind: 'frame' | 'ref' | 'render' | 'video' | 'picture'; id: string; asset?: Sha256; w?: number; h?: number }
   pack: { pack_id: string; pack_version: string; client_id?: string }
   plan?: { kind: 'pack' | 'plan'; id: string; lengths_s?: number[] }
-  protect?: { boxes?: ProtectBox[]; takes?: Record<Id, ProtectBox[]>; keep_middle?: boolean }
+  protect?: { boxes?: ProtectBox[]; generations?: Record<Id, ProtectBox[]>; keep_middle?: boolean }
   copy?: { line?: string; legal?: string; supers?: string[] }
-  /** A film's shots made again for a shape, keyed `<take id>@<w>x<h>`. */
+  /** A film's shots made again for a shape, keyed `<generation id>@<w>x<h>`. */
   reframes?: Record<string, Reframe>
 }
 export interface Size extends EntityBase {
@@ -822,7 +867,7 @@ export interface SpinIn extends EntityBase {
   decided_by?: PersonRef
 }
 export interface JobInputRow {
-  kind: 'ref' | 'sketch' | 'text' | 'note' | 'ink' | 'document' | 'brand' | 'frame' | 'take' | 'render' | 'board' | 'group'
+  kind: 'ref' | 'sketch' | 'text' | 'note' | 'ink' | 'document' | 'brand' | 'frame' | 'generation' | 'render' | 'board' | 'group'
   ref?: Id
   link_id?: Id
   used_as: string
@@ -874,7 +919,7 @@ export interface EntityMaps {
   beats: Record<Id, Beat>
   frames: Record<Id, Frame>
   videos: Record<Id, Video>
-  takes: Record<Id, Take>
+  generations: Record<Id, Generation>
   renders: Record<Id, Render>
   reviews: Record<Id, Review>
   links: Record<Id, Link>
@@ -894,7 +939,7 @@ export interface EntityMaps {
   exports: Record<Id, ExportEntry>
 }
 export type MapName = keyof EntityMaps
-export const MAP_NAMES: readonly MapName[] = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'takes', 'renders', 'reviews',
+export const MAP_NAMES: readonly MapName[] = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
   'links', 'keys', 'refs', 'documents', 'texts', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 
 export interface ProductionDocument extends EntityMaps {
@@ -1039,6 +1084,8 @@ export interface JobInput {
   resize?: ResizeInput
   /** cutdown: a length or shape of the film from the same takes (phases 5 and 6). */
   cutdown?: CutdownInput
+  /** stitch in timeline mode: the video's timeline as one compiled plan (never with clips). */
+  timeline?: TimelinePlan
 }
 
 export interface ResizeInput {
@@ -1122,6 +1169,23 @@ export interface JobRequest {
   /** clip, clip_edit: the size to make (absent: standard); promoteFrom: Remake as Final of that job's take. */
   quality?: ClipQuality
   promoteFrom?: Id
+  /** clip, clip_patch, clip_edit: a new take from a parent with one thing changed (Change this…, features/make-and-edit.clan). input is {}. */
+  remakeWith?: RemakeWith
+}
+
+/** relay-api RemakeDelta: one change to the parent's held request. */
+export type RemakeDelta =
+  | { field: 'camera.movement'; shotId?: Id; to: CameraMovement }
+  | { field: 'words'; shotId?: Id; to: string }
+  | { field: 'moment'; to: { inS: number; outS: number; note: string; region?: Region; still?: AssetRef } }
+  | { field: 'feel'; to: { words?: string; strength?: Strength } }
+export interface RemakeWith { parentJobId: Id; parentId?: Id; delta: RemakeDelta[] }
+/** relay-api TimelinePlan: stitch in timeline mode (Render ad). */
+export interface TimelinePlan {
+  clips: { asset: AssetRef; startS: number; inS: number; outS: number; speed?: number; holdS?: number; fadeInS?: number; fadeOutS?: number; transitionIn?: TransitionIn }[]
+  texts?: { words: string; style: 'caption' | 'title' | 'super'; fromS: number; toS: number; fadeInS?: number; fadeOutS?: number }[]
+  endCard?: { headline?: string; line: string; cta?: string; bg: string; logo?: AssetRef; s: number; transitionIn?: TransitionIn }
+  lengthS: number
 }
 
 export interface ModelChoice {
@@ -1185,6 +1249,8 @@ export interface Job {
   resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
   /** cutdown step plan only. */
   cutdownPlan?: CutdownPlan
+  /** A remake (JobRequest.remakeWith): its parent and what changed, `from` filled from the parent's held request. */
+  remake?: { parentJobId: Id; parentId?: Id; delta: { field: RemakeDelta['field']; shotId?: Id; from?: unknown; to: unknown }[]; window?: { from_s: number; to_s: number }; atS?: number }
   /** A clip_patch answered "Remake the whole clip": the client makes this op through the send tray. */
   handoff?: { op: 'clip' }
   createdAt: string

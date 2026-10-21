@@ -53,18 +53,21 @@ function leafSets(entity: string, id: string, a: Obj, b: Obj, base: number, out:
       for (const p of new Set([...Object.keys(x), ...Object.keys(y)])) if (!same(x[p], y[p])) set(`${f}/${p}`, y[p])
       continue
     }
-    if (f === 'edl' && entity === 'videos' && isObj(a[f]) && isObj(b[f])) {
-      const x = a[f] as Record<string, Obj>
-      const y = b[f] as Record<string, Obj>
+    if (f === 'timeline' && entity === 'videos') {
+      // The cut, item by item (contracts/collab.md §7): an item added or taken away whole; else field by field,
+      // its source and follows part by part (a trim writes source/in_s, a swap source/generation_id).
+      const x = (isObj(a[f]) ? a[f] : {}) as Record<string, Obj>
+      const y = (isObj(b[f]) ? b[f] : {}) as Record<string, Obj>
       for (const item of new Set([...Object.keys(x), ...Object.keys(y)])) {
         if (same(x[item], y[item])) continue
-        if (!x[item] || !y[item]) { set(`edl/${item}`, y[item]); continue }
+        if (!x[item] || !y[item]) { set(`timeline/${item}`, y[item]); continue }
         for (const g of new Set([...Object.keys(x[item]), ...Object.keys(y[item])])) {
           if (same(x[item][g], y[item][g])) continue
-          if (g === 'pick' && isObj(x[item][g]) && isObj(y[item][g])) {
-            for (const p of ['current', 'alternates']) if (!same((x[item][g] as Obj)[p], (y[item][g] as Obj)[p])) set(`edl/${item}/pick/${p}`, (y[item][g] as Obj)[p])
-          } else if (g === 'pick') set(`edl/${item}`, y[item]) // a pick added or taken away: the item whole
-          else set(`edl/${item}/${g}`, y[item][g])
+          if ((g === 'source' || g === 'follows') && isObj(x[item][g]) && isObj(y[item][g])) {
+            const xs = x[item][g] as Obj
+            const ys = y[item][g] as Obj
+            for (const p of new Set([...Object.keys(xs), ...Object.keys(ys)])) if (!same(xs[p], ys[p])) set(`timeline/${item}/${g}/${p}`, ys[p])
+          } else set(`timeline/${item}/${g}`, y[item][g])
         }
       }
       continue

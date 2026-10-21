@@ -22,6 +22,12 @@ Implements `production-tool/contracts/relay-api.schema.json`, contract 3
   person answer a question that offers no choice: a nudge with one option ("Draft it") is answered
   for them and she drafts (skye.v3); a real choice or a missing fact still waits in `needs_input`.
 - Stitch: a clip with `endCard` is left out of the stitch payload (stitch draws its own card).
+- Change this… (`remakeWith`, features/make-and-edit.clan): the parent job's held request (its full `_req`;
+  a patch's or feel's clip request is kept on it as `_clip`) is rebuilt with only the delta changed:
+  camera.movement and words as a clip (the parent's model and seed), a moment as a clip_patch snapped by
+  `time_rules.moment_window`, the feel as a clip_edit. `Job.remake` records the parent and the delta.
+- Render ad from a timeline (`input.timeline`): `timeline_layers.py` checks the plan and draws each text
+  and the person's end card into PNGs (typeset.py); stitch's timeline mode (`stitch/timeline.py`) renders it.
 - The library is shelved: `GET /library/{shelf}`, `GET|POST /library/{shelf}/{key}[/{ver}]`, at
   `tenants/<tenantId>/library/<shelf>/…`; kinds key, brand_kit and format_pack.
 - The director runs `prompts/director.v6.md`; its role lines are written from common.schema.json's

@@ -42,10 +42,10 @@
       "title": "Video",
       "ratio": "16:9",
       "target_s": 15,
-      "edl": {}
+      "timeline": {}
     }
   },
-  "takes": {},
+  "generations": {},
   "renders": {},
   "reviews": {},
   "links": {

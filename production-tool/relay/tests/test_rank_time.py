@@ -64,3 +64,17 @@ def test_patch_plan(case):
     got = time_rules.patch_plan(i["window"], i["atS"], i["takeS"], i.get("contextS", 0), i.get("edited", False),
                                 i.get("send", "range"), i.get("maxInputS", time_rules.MAX_INPUT_S))
     assert got == case["want"]
+
+
+# Make and Edit (features/make-and-edit.clan): the twins of clan-store/src/timeline.ts and patch.ts.
+TIMELINE = json.loads((contracts_dir() / "examples" / "timeline.json").read_text())
+
+
+@pytest.mark.parametrize("case", TIMELINE["adTimeToSource"]["cases"], ids=lambda c: c["why"])
+def test_ad_time_to_source(case):
+    assert time_rules.ad_time_to_source(TIMELINE["adTimeToSource"]["timeline"], case["adS"]) == case["want"]
+
+
+@pytest.mark.parametrize("case", TIMELINE["momentWindow"], ids=lambda c: c["why"])
+def test_moment_window(case):
+    assert time_rules.moment_window(case["inS"], case["outS"], case["takeS"]) == case["want"]

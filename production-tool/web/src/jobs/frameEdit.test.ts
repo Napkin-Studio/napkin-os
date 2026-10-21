@@ -123,7 +123,7 @@ describe('landFrameEdit', () => {
 })
 
 describe('applyFrameEdit', () => {
-  it('a camera change: fields, then the new frame picked with no mark, then the clip out of date', async () => {
+  it('a camera change: fields, then the new frame picked with no mark; the clip is said to be behind it, never marked', async () => {
     const w = await world({ reading: 'camera', runAs: 'frame', camera: { angle: 'overhead', size: 'wide' } })
     let applied
     await updateDoc(w.s, (d) => { applied = applyFrameEdit(d, w.fe.id, w.shot.id) }, 'apply')
@@ -133,17 +133,17 @@ describe('applyFrameEdit', () => {
     expect(d.shots[w.shot.id].camera).toEqual({ ...CAMERA, angle: 'overhead', size: 'wide' })
     expect(currentFrame(d, w.shot.id)?.id).toBe(p.id)
     expect(marksOn(d, 'frame', p.id)).toEqual([])
-    expect(marksOn(d, 'take', w.take).length).toBeGreaterThan(0)
+    expect(marksOn(d, 'generation', w.take)).toEqual([]) // takes are never marked (features/make-and-edit.clan)
   })
 
-  it('movement only: the fields, the take out of date, no frame changes', async () => {
+  it('movement only: the fields change for the next take; nothing is marked, no frame changes', async () => {
     const w = await world({ reading: 'camera', runAs: 'none', camera: { movement: 'push_in', movement_speed: 'slow' } }, { picture: false })
     await updateDoc(w.s, (d) => { applyFrameEdit(d, w.fe.id, w.shot.id) }, 'apply')
     const d = w.s.get()
     expect(d.shots[w.shot.id].camera).toMatchObject({ movement: 'push_in', movement_speed: 'slow', size: 'close' })
     expect(currentFrame(d, w.shot.id)?.id).toBe(w.v1)
     expect(marksOn(d, 'frame', w.v1)).toEqual([])
-    expect(marksOn(d, 'take', w.take).map((m) => m.reason)).toEqual(['Shot 1\'s camera move changed'])
+    expect(marksOn(d, 'generation', w.take)).toEqual([])
   })
 
   it('both: the camera fields and the new frame, as one change', async () => {

@@ -93,6 +93,8 @@ export interface ProjectUi {
   undo?: SerializedUndo
   /** The Script editor's choices, per script: its view, and which storyboard's shots it shows. */
   script?: Record<string, ScriptUi>
+  /** "Choose Kapi's front" is open on the canvas for this key (stages/FrontsNeeded.tsx). */
+  chooseFront?: string
 }
 
 /** One person's choices in one script (features/script-editor.clan). */

@@ -85,4 +85,26 @@ describe('canvas-nodes on the own engine', () => {
     const back = reconcileLinks(a.elements(), doc, seen)
     expect(back.relink.map((l) => [l.id, l.role])).toEqual([[written[0].id, 'drives']])
   })
+
+  it('a chip’s × erases the arrow, and the document’s undo of it draws a new one, never unlinking it again', async () => {
+    const doc = { ...(await project()), links: {} } as ProductionDocument
+    const a = new OwnAdapter()
+    a.transact((all) => [...all, ...seedNodes(a, doc)], { undoable: false })
+    const by = (k: string) => a.elements().find((e) => cardOf(e)?.kind === k)!
+    const written: Link[] = []
+    await linkNodes(a, doc, by('script'), by('video'), async (l) => { written.push(l) })
+    const id = written[0].id
+    const withLink = { ...doc, links: { [id]: written[0] } } as ProductionDocument
+    const seen = linkMemory()
+    reconcileLinks(a.elements(), withLink, seen)
+    // The × takes the entry out of the document: the arrow goes (a system write).
+    const gone = reconcileLinks(a.elements(), doc, seen)
+    expect(gone.erase).toHaveLength(1)
+    a.transact((els) => els.map((e) => (gone.erase.includes(e.id) ? a.patch(e, { isDeleted: true }) : e)), { undoable: false })
+    expect(reconcileLinks(a.elements(), doc, seen)).toMatchObject({ unlink: [], erase: [] })
+    // Undo puts the entry back: a new arrow is drawn, and nothing unlinks it.
+    const back = reconcileLinks(a.elements(), withLink, seen)
+    expect(back.unlink).toEqual([])
+    expect(back.draw.map((x) => x.link.id)).toEqual([id])
+  })
 })

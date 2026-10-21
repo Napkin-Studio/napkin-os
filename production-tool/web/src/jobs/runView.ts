@@ -1,15 +1,15 @@
 // What the editors show of runs (features/connected-video.clan; the owner's "Strips + select", 2026-10-19):
 // the shots that will be one video sit together as a strip, the others as their own cards. A person splits
 // a strip (✂), joins neighbours (🔗) or selects shots and makes them one video or separate; each writes the
-// joins (seam cut or continue, by human) and one History entry. Also each run's progress and the pin or
+// person's boxes (video.runs planned_by human: inside a box the shots carry on) and one History entry. Also each run's progress and the pin or
 // "guide" on each storyboard frame. No mode name and no price is ever shown.
 
-import { newUlidId, rankBetween } from '../../../clan-store/src'
+import { newUlidId } from '../../../clan-store/src'
 import type { Config, Id, ModelChoice, ProductionDocument, RunMode, Seam, SeamKind, VideoJoin } from '../contracts/types'
 import type { UiState } from '../doc/ui'
 import { updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { currentTake, edlItemFor, edlOf, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
+import { currentTake, shotNumber, shotSegment, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { videoQuality } from './clips'
 import { selectedFrame } from './frames'
 import { joinKind, planShot, type PlanShot } from './joins'
@@ -49,20 +49,29 @@ export function joinBefore(d: ProductionDocument, videoId: Id | undefined, shotI
   return joinKind(fact(shots[i - 1].id), fact(shotId))
 }
 
-/** Write a person's join into each shot of `joins` (the shot's cut item is made when it has none yet). */
-function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamKind][]) {
+/** Write a person's join into each shot of `joins`, as their boxes: the shots are grouped by every join as it
+ *  will be (theirs, else as it is now), and each group a changed join touches becomes one of their boxes (an
+ *  earlier box of theirs over those shots that was never made goes). */
+export function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamKind][]) {
   const v = x.videos[videoId]
   if (!v) return
-  for (const [shotId, kind] of joins) {
-    if (!x.shots[shotId]) continue
-    const seam: Seam = { kind, by: 'human' }
-    const item = edlItemFor(x, shotId, videoId)
-    if (item) v.edl[item.id].seam = seam
-    else {
-      const last = edlOf(x, videoId).at(-1)
-      v.edl[newUlidId('edl')] = { rank: rankBetween(last?.rank ?? null, null), kind: 'shot', shot_id: shotId, seam }
-    }
+  const shots = videoShots(x, videoId)
+  const want = new Map(joins.filter(([id]) => x.shots[id]))
+  const at = new Map(shots.map((s, i) => [s.id, i]))
+  const groups: Id[][] = []
+  for (const [i, s] of shots.entries()) {
+    const kind = i === 0 ? 'cut' : want.get(s.id) ?? joinKind(shots[i - 1], s).kind
+    if (!groups.length || kind !== 'continue') groups.push([s.id])
+    else groups.at(-1)!.push(s.id)
   }
+  const touched = new Set([...want.keys()].flatMap((id) => [id, shots[(at.get(id) ?? 0) - 1]?.id].filter((s): s is Id => !!s)))
+  const write = groups.filter((g) => g.some((id) => touched.has(id)))
+  const inWrite = new Set(write.flat())
+  v.runs ??= {}
+  for (const [id, r] of Object.entries(v.runs)) {
+    if (r.planned_by === 'human' && r.state === 'planned' && !r.job_id && r.shot_ids.some((s) => inWrite.has(s))) delete v.runs[id]
+  }
+  for (const g of write) v.runs[newUlidId('run')] = { shot_ids: g, mode: g.length > 1 ? 'take' : 'alone', model: '', state: 'planned', planned_by: 'human' }
 }
 
 /** ✂ Split here: the video before `shotId` ends there (a cut, by a person; one History entry, one undo step). */
@@ -250,7 +259,7 @@ export function runJobFor(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, shot
 
 /** A shot's clip in the cut is a window of a take (Remake just this shot applies). */
 export function inTake(d: ProductionDocument, shotId: Id, videoId?: Id): boolean {
-  return !!currentTake(d, shotId, videoId)?.segments[0]
+  return !!shotSegment(currentTake(d, shotId, videoId), shotId)
 }
 
 export type FrameMark = 'pin' | 'guide'
@@ -262,9 +271,11 @@ export function frameMarks(d: ProductionDocument, videoId: Id | undefined, plan:
   const out: Record<Id, FrameMark> = {}
   for (const s of sb ? shotsOf(d, sb.id) : []) {
     if (!selectedFrame(d, s.id)) continue
-    const seg = currentTake(d, s.id, videoId)?.segments[0]
+    const take = currentTake(d, s.id, videoId)
+    const seg = shotSegment(take, s.id)
     if (seg) {
-      out[s.id] = seg.source_take === currentTake(d, s.id, videoId)!.id ? 'pin' : 'guide'
+      // The box's first shot pins the take on its frame; the others guide it.
+      out[s.id] = take!.segments![0].shot_id === s.id ? 'pin' : 'guide'
       continue
     }
     const run = plan?.runs.find((r) => r.shotIds.includes(s.id))

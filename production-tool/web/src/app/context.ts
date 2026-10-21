@@ -10,6 +10,7 @@ import type { ModelStore } from '../model/store'
 import type { Shell } from '../projects/shell'
 import type { ServerCopy } from '../projects/serverCopy'
 import type { Route, Router } from './route'
+import { lifeOf, liveGet } from '../model/live'
 
 /** The open project (features/project-home.clan). */
 export interface ProjectHandle {
@@ -55,7 +56,26 @@ export function useServices(): Services {
   return s
 }
 
+/**
+ * The document as the canvas has it alive (model/live.ts): a reference whose picture was deleted on
+ * the canvas is left out, with its links, until Undo brings the picture back. What every view reads.
+ */
 export function useDoc(): ProductionDocument {
+  const { doc } = useServices()
+  const subscribe = useMemo(() => {
+    const life = lifeOf(doc)
+    const onDoc = subscribeDoc(doc)
+    return (fn: () => void) => {
+      const a = onDoc(fn)
+      const b = life.subscribe(fn)
+      return () => { a(); b() }
+    }
+  }, [doc])
+  return useSyncExternalStore(subscribe, () => liveGet(doc))
+}
+
+/** The document as it is stored, dead references included: for the canvas's own sync with it. */
+export function useStoredDoc(): ProductionDocument {
   const { doc } = useServices()
   const subscribe = useMemo(() => subscribeDoc(doc), [doc])
   return useSyncExternalStore(subscribe, () => doc.get())

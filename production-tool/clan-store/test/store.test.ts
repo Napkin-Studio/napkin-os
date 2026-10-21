@@ -281,7 +281,7 @@ describe('ClanDocumentStore (contract 3) against the real napkin-wasm', () => {
     await s.patch(wipe, { action: 'delete the defaults' })
     await s.patch({ project: rest.project, assets: rest.assets, documents: rest.documents, boards: rest.boards, keys: rest.keys, refs: rest.refs }, { action: 'bring in the brand and refs' })
     await s.patch({ scripts: rest.scripts, scenes: rest.scenes, storyboards: rest.storyboards, jobs: rest.jobs }, { action: 'plan the scenes' })
-    await s.patch({ shots: rest.shots, beats: rest.beats, frames: rest.frames, sketches: rest.sketches, takes: rest.takes }, { action: 'plan the shots' })
+    await s.patch({ shots: rest.shots, beats: rest.beats, frames: rest.frames, sketches: rest.sketches, generations: rest.generations }, { action: 'plan the shots' })
     await s.patch({ videos: rest.videos, renders: rest.renders, reviews: rest.reviews, format_sets: rest.format_sets, sizes: rest.sizes }, { action: 'cut and size' })
     await s.patch({ links: rest.links, checks: rest.checks, asks: rest.asks, suggestions: rest.suggestions, spin_ins: rest.spin_ins, stale: rest.stale, exports: rest.exports }, { action: 'link and check' })
     const again = store()

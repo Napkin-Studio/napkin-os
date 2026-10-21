@@ -38,8 +38,8 @@ export function describeAsset(doc: ProductionDocument, a: Pick<DocAsset, 'sha256
   for (const s of Object.values(doc.shots)) {
     const frame = framesOf(doc, s.id).find((f) => f.asset === a.sha256)
     if (frame) return `frame v${frame.version} of ${shotName(doc, s.id)}`
-    const take = takesOf(doc, s.id).find((t) => t.asset === a.sha256)
-    if (take) return `clip v${take.version} of ${shotName(doc, s.id)}`
+    const k = takesOf(doc, s.id).findIndex((t) => t.asset === a.sha256)
+    if (k >= 0) return `clip v${k + 1} of ${shotName(doc, s.id)}`
   }
   const render = Object.values(doc.renders).find((r) => r.asset === a.sha256)
   if (render) return `the rendered ad (v${render.version})`

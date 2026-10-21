@@ -23,7 +23,7 @@ import { updateDoc } from '../doc/store'
 import { deleteFrom, removeShot, shotDeleteText, shotNeedsConfirm } from '../doc/remove'
 import { InlineConfirm } from '../ui/Undo'
 import { oldWordsLine } from '../ui/behind'
-import { editShot, frameStale, takeStale } from '../jobs/stale'
+import { clipBehind, editShot, frameStale } from '../jobs/stale'
 import { useUpdate } from '../ui/useUpdate'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer, whoIsWorking, workOf } from '../ui/agents/cast'
@@ -56,6 +56,7 @@ import { lastWorkedModel } from '../jobs/follow'
 import { frameMarks, joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
+import { FrontButtons } from './FrontsNeeded'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -184,7 +185,6 @@ export function Storyboard() {
 
   const total = storyboardSeconds(doc, sb?.id)
   const over = Math.round((total - targetS) * 10) / 10
-  const staleClips = shots.filter((s) => !!takeStale(doc, s.id)).length
   const working = trayGroups(jobsList(doc), (id) => jobCtx(doc, ui, id), (id) => runner.liveInfo(id)).working
   const primary = !shots.length
     ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
@@ -209,12 +209,11 @@ export function Storyboard() {
         {shots.length > 0 && <span className={`pt-pill ${check.ok ? 'ok' : 'warn'}`} title={check.ok ? undefined : check.reason}>{check.ok ? 'Lengths fit the ad' : over > 0 ? `${over.toFixed(1)} s over` : `${(-over).toFixed(1)} s short`}</span>}
         {working.slice(0, 2).map((r) => <CrewLine key={r.job.id} row={r} />)}
         <span className="pt-grow" />
-        {staleClips > 0 && <span className="pt-pill warn">{staleClips} {staleClips === 1 ? 'clip' : 'clips'} out of date</span>}
         {shots.length > 0 && <button className="btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
       </div>
       <ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} />
       <div className="panel sb-body pt-grid">
-        {error && <div role="alert" className="sb-error">{error}</div>}
+        {error && <div role="alert" className="sb-error">{error}<FrontButtons text={error} /></div>}
         {deleted && (
           <div role="status" className="sb-deleted">
             <span>{deleted}</span>
@@ -362,7 +361,6 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const clipJob = jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id)
   const clipping = isRunning(doc, clipJob)
   const clipper = clipping && clipJob && doc.jobs[clipJob] ? whoIsWorking(doc.jobs[clipJob], doc.jobs[clipJob].state).agent : 'wren'
-  const clipStale = take ? !!takeStale(doc, shot.id) : false
   const prevDrawn = !prev || !!currentFrame(doc, prev)
   const change = frameChangeOf(doc, ui, shot.id)
   const changeRunning = change ? isRunning(doc, change.job.id) : false
@@ -393,7 +391,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const changed = change && !changeRunning ? cameraDiff(shot.camera, frameEditOf(change.job)?.camera) : undefined
   const changedFields = new Set(changed?.rows.map((r) => r.field) ?? [])
   const badge = clipping ? <span className="sb-badge warm"><AgentFigure agent={clipper} state="working" size={20} decorative />Rendering clip</span>
-    : take ? (clipStale ? <span className="sb-badge warn">Clip out of date · frame changed</span> : <span className="sb-badge ok">Clip ready</span>)
+    : take ? (clipBehind(doc, shot.id) ? <span className="sb-badge warn">Clip out of date · frame changed</span> : <span className="sb-badge ok">Clip ready</span>)
     : null
   if (confirming) {
     return (
@@ -547,8 +545,7 @@ function OldWords({ shot, index }: { shot: Shot; index: number }) {
   const making = (kind: 'frame' | 'clip') => isRunning(doc, jobAt(doc, ui, (c) => c.for === kind && c.shotId === shot.id))
   const own = (m: ReturnType<typeof frameStale>) => (m?.caused_by.kind === 'shot' && m.caused_by.id === shot.id ? m : undefined)
   const frame = making('frame') ? undefined : own(frameStale(doc, shot.id))
-  const clip = making('clip') ? undefined : own(takeStale(doc, shot.id))
-  if (!frame && !clip) return null
+  if (!frame) return null
   const go = async (kind: 'frame' | 'clip') => {
     setError(null)
     try {
@@ -561,9 +558,6 @@ function OldWords({ shot, index }: { shot: Shot; index: number }) {
     <div className="oldwords">
       {frame && (
         <span>{oldWordsLine('frame', index + 1, frame)} · <button className="linkbtn" disabled={update.running} onClick={() => void go('frame')}>Redraw frame {index + 1}</button></span>
-      )}
-      {clip && (
-        <span>{oldWordsLine('take', index + 1, clip)} · <button className="linkbtn" disabled={update.running} onClick={() => void go('clip')}>Remake clip {index + 1}</button></span>
       )}
       {error && <span role="alert" className="framecard-error">{error}</span>}
     </div>

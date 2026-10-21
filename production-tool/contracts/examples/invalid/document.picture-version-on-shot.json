@@ -929,42 +929,27 @@
       "title": "First Light",
       "ratio": "16:9",
       "target_s": 15,
-      "edl": {
-        "edl_01K7A000000000000000000028": {
-          "rank": "a0",
-          "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000015",
-          "pick": {
-            "current": "take_01K7A000000000000000000025",
-            "alternates": [
-              "take_01K7A000000000000000000024"
-            ]
+      "timeline": {
+        "item_01K7A000000000000000000028": {
+          "track": "V1",
+          "start_s": 0,
+          "source": {
+            "generation_id": "gen_01K7A000000000000000000025",
+            "in_s": 0,
+            "out_s": 5
           },
-          "in_s": 0,
-          "out_s": 5
-        },
-        "edl_01K7A000000000000000000029": {
-          "rank": "a1",
-          "kind": "bridge",
-          "pick": {
-            "current": "take_01K7A000000000000000000026",
-            "alternates": []
+          "follows": {
+            "shot_id": "shot_01K7A000000000000000000015"
           }
         },
-        "edl_01K7A00000000000000000002A": {
-          "rank": "a2",
-          "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000016"
-        },
-        "edl_01K7A00000000000000000002B": {
-          "rank": "a3",
-          "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000017"
-        },
-        "edl_01K7A00000000000000000002C": {
-          "rank": "a4",
-          "kind": "shot",
-          "shot_id": "shot_01K7A000000000000000000018"
+        "item_01K7A000000000000000000029": {
+          "track": "V1",
+          "start_s": 5,
+          "source": {
+            "generation_id": "gen_01K7A000000000000000000026",
+            "in_s": 0,
+            "out_s": 2
+          }
         }
       },
       "pick": {
@@ -975,69 +960,79 @@
       }
     }
   },
-  "takes": {
-    "take_01K7A000000000000000000024": {
-      "id": "take_01K7A000000000000000000024",
+  "generations": {
+    "gen_01K7A000000000000000000024": {
+      "id": "gen_01K7A000000000000000000024",
       "v": 1,
       "field_v": {},
-      "shot_id": "shot_01K7A000000000000000000015",
-      "version": 1,
+      "kind": "clip",
+      "inputs": {
+        "model": "veo3.1_fast",
+        "length_s": 5
+      },
+      "shot_ids": [
+        "shot_01K7A000000000000000000015"
+      ],
       "asset": "sha256:ea5153261dca1d9b08a657c2991e8a944da7998e76439585270c4e6149355e56",
-      "job_id": "job_01K7A00000000000000000001K",
-      "crew": "wren",
-      "kind": "generated",
-      "model": "veo3.1_fast",
-      "provider": "runway",
       "duration_s": 5,
-      "segments": []
+      "state": "ready",
+      "job_id": "job_01K7A00000000000000000001K",
+      "provider": "runway",
+      "crew": "wren",
+      "created_at": "2026-10-13T10:03:00Z",
+      "by": "human:p_shrey01"
     },
-    "take_01K7A000000000000000000025": {
-      "id": "take_01K7A000000000000000000025",
+    "gen_01K7A000000000000000000025": {
+      "id": "gen_01K7A000000000000000000025",
       "v": 1,
       "field_v": {},
-      "shot_id": "shot_01K7A000000000000000000015",
-      "version": 2,
-      "parent_id": "take_01K7A000000000000000000024",
-      "asset": "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99",
-      "job_id": "job_01K7A00000000000000000001M",
-      "crew": "edie",
-      "kind": "generated",
-      "model": "aleph2",
-      "provider": "runway",
-      "duration_s": 5,
-      "segments": [
+      "kind": "patch",
+      "parent_id": "gen_01K7A000000000000000000024",
+      "inputs": {
+        "model": "aleph2",
+        "length_s": 5
+      },
+      "shot_ids": [
+        "shot_01K7A000000000000000000015"
+      ],
+      "patched": [
         {
-          "source_take": "take_01K7A000000000000000000024",
-          "in_s": 0,
-          "out_s": 2
-        },
-        {
-          "source_take": "take_01K7A000000000000000000024",
           "in_s": 2,
           "out_s": 4,
-          "job_id": "job_01K7A00000000000000000001M"
-        },
-        {
-          "source_take": "take_01K7A000000000000000000024",
-          "in_s": 4,
-          "out_s": 5
+          "job_id": "job_01K7A00000000000000000001M",
+          "generation_id": "gen_01K7A000000000000000000024"
         }
-      ]
+      ],
+      "asset": "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99",
+      "duration_s": 5,
+      "state": "ready",
+      "job_id": "job_01K7A00000000000000000001M",
+      "provider": "runway",
+      "crew": "edie",
+      "created_at": "2026-10-13T10:03:00Z",
+      "by": "human:p_maya001"
     },
-    "take_01K7A000000000000000000026": {
-      "id": "take_01K7A000000000000000000026",
+    "gen_01K7A000000000000000000026": {
+      "id": "gen_01K7A000000000000000000026",
       "v": 1,
       "field_v": {},
-      "shot_id": "shot_01K7A000000000000000000016",
-      "version": 1,
+      "kind": "clip",
+      "inputs": {
+        "model": "mock",
+        "length_s": 2
+      },
+      "shot_ids": [
+        "shot_01K7A000000000000000000016"
+      ],
       "asset": "sha256:5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7",
-      "job_id": "job_01K7A00000000000000000001K",
-      "crew": "wren",
-      "kind": "mock",
-      "model": "mock",
-      "provider": "mock",
       "duration_s": 2,
-      "segments": []
+      "state": "ready",
+      "job_id": "job_01K7A00000000000000000001K",
+      "provider": "mock",
+      "crew": "wren",
+      "mock": true,
+      "created_at": "2026-10-13T10:03:00Z",
+      "by": "human:p_shrey01"
     }
   },
   "renders": {
@@ -1067,8 +1062,8 @@
       "v": 1,
       "field_v": {},
       "target": {
-        "kind": "take",
-        "id": "take_01K7A000000000000000000024"
+        "kind": "generation",
+        "id": "gen_01K7A000000000000000000024"
       },
       "video_id": "video_01K7A000000000000000000027",
       "shot_id": "shot_01K7A000000000000000000015",
@@ -2368,23 +2363,7 @@
       }
     }
   },
-  "stale": {
-    "stale_01K7A00000000000000000003H": {
-      "id": "stale_01K7A00000000000000000003H",
-      "v": 1,
-      "field_v": {},
-      "target": {
-        "kind": "take",
-        "id": "take_01K7A000000000000000000026"
-      },
-      "caused_by": {
-        "kind": "frame",
-        "id": "frame_01K7A00000000000000000001Z"
-      },
-      "reason": "frame 2 changed",
-      "marked_at": "2026-10-13T10:30:00Z"
-    }
-  },
+  "stale": {},
   "exports": {
     "exp_01K7A00000000000000000003J": {
       "id": "exp_01K7A00000000000000000003J",

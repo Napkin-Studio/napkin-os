@@ -23,6 +23,7 @@ import { fmtElapsed, useElapsed } from './hooks'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown, feedback } from '../dogfood/recorder'
 import { failedActions } from './jobActions'
+import { plainJobError } from '../jobs/errorWords'
 
 const STATE_LABEL: Record<string, string> = {
   queued: 'In the queue',
@@ -75,7 +76,10 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
   }
 
   if (state === 'failed' || state === 'cancelled') {
-    const err = job.error
+    // The relay's internal words ("The director failed (DirectorError).") said plainly (jobs/errorWords.ts).
+    const stored = job.error
+    const err = stored ? plainJobError(stored, job.op) : undefined
+    const plain = err !== stored
     const cancelled = state === 'cancelled'
     const retryable = cancelled || (err?.retryable ?? true)
     const target = { kind: 'error' as const, id: err?.code ?? state, jobId, op: job.op, provider: job.provider, model: job.model }
@@ -92,7 +96,7 @@ export function JobNode({ jobId, compact: small = false, row = false, onRetried 
         {!compact && <AgentFigure agent={who.agent} state={who.state} size={46} decorative />}
         <div className="msg" title={compact ? err?.message : undefined}>{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
         {!compact && !cancelled && offer.note && <div className="faint" style={{ fontSize: 12, maxWidth: 260 }}>{offer.note}</div>}
-        {!compact && err?.code && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
+        {!compact && err?.code && !plain && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
         {/* One floating bar of what to do next: Retry, another model, Report, Clear. */}
         <div className="optbar" role="group" aria-label="What to do with this job">
           {retryable && (

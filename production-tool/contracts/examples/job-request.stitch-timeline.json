@@ -1,0 +1,97 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000ST01",
+  "op": "stitch",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_render01a",
+  "purpose": "render the ad from the timeline",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [],
+  "input": {
+    "timeline": {
+      "clips": [
+        {
+          "asset": {
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "url": "https://hack.napkin.ie/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mime": "video/mp4"
+          },
+          "startS": 0,
+          "inS": 0,
+          "outS": 2,
+          "fadeInS": 0.3
+        },
+        {
+          "asset": {
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "url": "https://hack.napkin.ie/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mime": "video/mp4"
+          },
+          "startS": 2,
+          "inS": 2.2,
+          "outS": 3.5
+        },
+        {
+          "asset": {
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "url": "https://hack.napkin.ie/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mime": "video/mp4"
+          },
+          "startS": 3.3,
+          "inS": 3.75,
+          "outS": 5.25
+        },
+        {
+          "asset": {
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "url": "https://hack.napkin.ie/out/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "mime": "video/mp4"
+          },
+          "startS": 4.8,
+          "inS": 0,
+          "outS": 1.4,
+          "holdS": 0.1,
+          "fadeOutS": 0.3
+        },
+        {
+          "asset": {
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "url": "https://hack.napkin.ie/out/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "mime": "video/mp4"
+          },
+          "startS": 6.3,
+          "inS": 1.5,
+          "outS": 3.5,
+          "transitionIn": {
+            "kind": "dissolve",
+            "s": 0.5
+          }
+        }
+      ],
+      "texts": [
+        {
+          "words": "Clean like a samurai.",
+          "style": "super",
+          "fromS": 7,
+          "toS": 8.3,
+          "fadeInS": 0.2,
+          "fadeOutS": 0.2
+        }
+      ],
+      "endCard": {
+        "headline": "SuperSamurai",
+        "line": "Clean in one sweep",
+        "bg": "#0F1114",
+        "s": 1.5,
+        "transitionIn": {
+          "kind": "dissolve",
+          "s": 0.5
+        }
+      },
+      "lengthS": 9.8
+    }
+  }
+}

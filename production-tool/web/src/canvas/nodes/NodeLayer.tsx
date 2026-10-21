@@ -12,7 +12,7 @@
 // picture in the Image editor (dblclick.ts).
 
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { RouterContext, useDoc, useServices } from '../../app/context'
+import { RouterContext, useDoc, useServices, useStoredDoc } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
 import type { ActiveToolSpec, CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
@@ -33,6 +33,8 @@ import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGro
 import { setStacked } from './stack'
 import { pictureToOpen } from './dblclick'
 import './nodes.css'
+import { keyViews } from '../../lib/names'
+import { liveGet } from '../../model/live'
 
 type Local = { x: number; y: number }
 const WORD: Record<CardKind, string> = { script: 'script', storyboard: 'storyboard', video: 'video' }
@@ -49,7 +51,10 @@ const motion = () => !(typeof matchMedia !== 'undefined' && matchMedia('(prefers
 export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: number }) {
   // The engine's host (this layer's parent): where double-clicks land and what positions are local to.
   const root = useRef<HTMLDivElement>(null)
-  const doc = useDoc()
+  // The stored document, dead references too: this layer keeps the canvas and the document in step.
+  const doc = useStoredDoc()
+  // What the layer draws reads the document as the canvas has it alive (model/live.ts).
+  const live = useDoc()
   const services = useServices()
   const router = useContext(RouterContext)
   const mode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode())
@@ -394,6 +399,19 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       const el = elementOfEnd(canvas.elements(), services.doc.get(), node as LinkEndpoint)
       if (el) linkInto(el)
     },
+    fitTo: (end) => {
+      const els = canvas.elements()
+      const doc = services.doc.get()
+      const e = end as LinkEndpoint
+      // A key: all its views on the canvas; anything else: its element.
+      const k = e.kind === 'key' ? doc.keys?.[e.id] : undefined
+      const found = k
+        ? keyViews(liveGet(services.doc), k.key).views.map((r) => elementOfEnd(els, doc, { kind: 'ref', id: r.id })).filter((x): x is CanvasElement => !!x)
+        : [elementOfEnd(els, doc, e)].filter((x): x is CanvasElement => !!x)
+      if (!found.length) return false
+      canvas.fit(found, { zoomFactor: 0.6, animate: motion() })
+      return true
+    },
   }), [canvas, services, linkInto])
 
   // L turns the Link tool on and off; Esc stops a link drag, the Link tool and the picker.
@@ -521,15 +539,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   // under a box drawn over them), the one under the pointer with its reason.
   // The fixed end: the source being linked from, or the node being linked into ("+ Link input").
   const source = drag?.from ?? into?.el ?? null
-  const ends = source ? els.filter((e) => e.id !== source.id && endOf(e, doc)) : []
-  const checks = new Map(ends.map((n) => [n.id, into && !drag ? linkCheck(els, doc, n, into.el) : linkCheck(els, doc, source!, n, { single: drag?.single })] as const))
+  const ends = source ? els.filter((e) => e.id !== source.id && endOf(e, live)) : []
+  const checks = new Map(ends.map((n) => [n.id, into && !drag ? linkCheck(els, live, n, into.el) : linkCheck(els, live, source!, n, { single: drag?.single })] as const))
   const pointerAt = drag?.at ?? into?.at ?? null
   const hover = pointerAt ? endAt(pointerAt) : undefined
   // A selected picture or sketch area gets a port too (single selection).
   const lone = view.selectedIds.length === 1 ? els.find((e) => e.id === view.selectedIds[0] && !cardOf(e)) : undefined
-  const lonePort = lone && mode !== 'link' && endOf(lone, doc) ? lone : undefined
+  const lonePort = lone && mode !== 'link' && endOf(lone, live) ? lone : undefined
   // The key groups, labelled; one selected whole gets a port at its right edge (it links the key).
-  const groups = keyGroupsOn(els, doc)
+  const groups = keyGroupsOn(els, live)
   const groupSel = mode !== 'link' ? selectedKeyGroup() : null
   const hoverCheck = hover ? checks.get(hover.id) : undefined
   const linking = mode === 'link'

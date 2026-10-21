@@ -67,6 +67,25 @@ export function makesLoop(links: Iterable<{ from: Endpoint; to: Endpoint }>, fro
   return false
 }
 
+/** The parts of a timeline item the rules read (document.schema.json#/$defs/timelineItem). */
+export interface TimelineItemLike {
+  track: 'V1' | 'V2' | 'text'
+  start_s?: number
+  source?: { generation_id?: string; asset?: string; in_s: number; out_s: number }
+  speed?: number
+  hold_s?: number
+  from_s?: number
+  to_s?: number
+}
+
+/** How long a clip lasts on its track: (out_s - in_s) / speed + hold_s. A text: to_s - from_s. */
+export function itemLength(item: TimelineItemLike): number {
+  if (item.track === 'text') return Math.max(0, (item.to_s ?? 0) - (item.from_s ?? 0))
+  const s = item.source
+  if (!s) return 0
+  return Math.max(0, s.out_s - s.in_s) / (item.speed ?? 1) + (item.hold_s ?? 0)
+}
+
 const entities = (doc: Doc, map: string): [string, Entity][] => Object.entries((doc as unknown as Record<string, Record<string, Entity>>)[map] ?? {})
 const get = (doc: Doc, map: string, id: unknown): Entity | undefined =>
   typeof id === 'string' ? (doc as unknown as Record<string, Record<string, Entity>>)[map]?.[id] : undefined
@@ -86,9 +105,33 @@ export function integrity(doc: Doc): string[] {
     }
   }
   for (const [k, a] of Object.entries(doc.assets ?? {})) if (a.sha256 !== k) say(`assets[${k}]: its sha256 is not its key`)
+  // Generations and timelines (features/make-and-edit.clan).
+  for (const [id, g] of entities(doc, 'generations')) {
+    if (g.parent_id !== undefined && !get(doc, 'generations', g.parent_id)) say(`generations[${id}]: its parent ${String(g.parent_id)} is not in the document`)
+    if (g.parent_id === id) say(`generations[${id}] is its own parent`)
+    for (const s of (g.segments ?? []) as { shot_id: string; in_s: number; out_s: number }[]) {
+      if (s.out_s <= s.in_s) say(`generations[${id}]: the segment of ${s.shot_id} ends before it starts`)
+    }
+  }
   for (const [, v] of entities(doc, 'videos')) {
-    for (const [ik, item] of Object.entries((v.edl ?? {}) as Record<string, { rank: string }>)) {
-      if (!isValidRank(item.rank)) say(`videos[${v.id}].edl[${ik}].rank ${JSON.stringify(item.rank)} is not an order key`)
+    const v1: { id: string; start: number; end: number }[] = []
+    for (const [ik, item] of Object.entries((v.timeline ?? {}) as Record<string, TimelineItemLike>)) {
+      const at = `videos[${v.id}].timeline[${ik}]`
+      if (item.track === 'text') {
+        if ((item.to_s ?? 0) <= (item.from_s ?? 0)) say(`${at}: the text ends before it starts`)
+        continue
+      }
+      const src = item.source
+      if (!src) continue
+      if (src.out_s <= src.in_s) say(`${at}: its source ends before it starts`)
+      const g = src.generation_id !== undefined ? get(doc, 'generations', src.generation_id) : undefined
+      if (src.generation_id !== undefined && !g) say(`${at}: its generation ${src.generation_id} is not in the document`)
+      if (g && typeof g.duration_s === 'number' && src.out_s > (g.duration_s as number) + 1e-3) say(`${at}: its source runs to ${src.out_s} s, past the ${g.duration_s} s it has`)
+      if (item.track === 'V1') v1.push({ id: ik, start: item.start_s ?? 0, end: (item.start_s ?? 0) + itemLength(item) })
+    }
+    v1.sort((a, b) => a.start - b.start)
+    for (let i = 1; i < v1.length; i++) {
+      if (v1[i].start < v1[i - 1].end - 1e-3) say(`videos[${v.id}].timeline: ${v1[i].id} starts at ${v1[i].start} s, inside ${v1[i - 1].id} (V1 never overlaps)`)
     }
   }
 
@@ -148,7 +191,7 @@ export function integrity(doc: Doc): string[] {
     }
   }
 
-  // Shots in their storyboards; frames, takes and picks that exist.
+  // Shots in their storyboards; frames and picks that exist.
   for (const [id, s] of entities(doc, 'shots')) {
     if (!get(doc, 'storyboards', s.storyboard_id)) say(`shots[${id}]: its storyboard is not in the document`)
     if (s.scene_id !== undefined && !get(doc, 'scenes', s.scene_id)) say(`shots[${id}]: its scene is not in the document`)

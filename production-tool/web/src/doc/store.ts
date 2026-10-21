@@ -2,7 +2,7 @@
 // engine cannot load (contract 3). The real store is model/store.ts
 // (ModelStore): napkin-wasm behind clan-store's buses.
 
-import { newProjectData, type Person } from '../../../clan-store/src'
+import { migrateToGenerations, needsGenerations, newProjectData, type Person } from '../../../clan-store/src'
 import type { ProductionDocument } from '../contracts/types'
 import { idbGet, idbPut } from '../lib/idb'
 import { newId } from '../lib/ulid'
@@ -117,7 +117,8 @@ export class SnapshotStore<T> {
  */
 export class SnapshotDocumentStore extends SnapshotStore<ProductionDocument> implements DocumentStore {
   async load(): Promise<Doc | null> {
-    return (await this.restore()) && this.get().contract_version === '3' ? this.get() : null
+    // A snapshot from before generations moves once, as the CLAN store moves a .clan (features/make-and-edit.clan).
+    return (await this.restore((v) => (needsGenerations(v) ? migrateToGenerations(v) : v))) && this.get().contract_version === '3' ? this.get() : null
   }
 
   async create(person: Person, title?: string): Promise<Doc> {

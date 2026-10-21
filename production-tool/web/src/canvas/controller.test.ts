@@ -556,3 +556,49 @@ describe('a canvas picture shows its current version (edit-canvas-pictures)', ()
     expect(await t.ctrl.syncPictureVersions()).toBe(0)
   })
 })
+
+describe('a picture deleted on the canvas stops counting, and its undo brings it back (owner, 2026-10-21)', () => {
+  it('its reference leaves the storyboard’s scope and what a frame sends, with nothing written; undelete restores both', async () => {
+    const { modelStore, MAYA, addShots, id } = await import('../test/model')
+    const { liveGet } = await import('../model/live')
+    const { scopeOf } = await import('../model/scope')
+    const { shotRefSet } = await import('../jobs/select')
+    const s = modelStore()
+    await s.create(MAYA, 'Kapi')
+    let shotId = ''
+    await systemUpdate(s, (d) => {
+      const k = id('key')
+      d.keys[k] = { id: k, v: 1, field_v: {}, key: 'home', role: 'location' }
+      for (const [variant, node, c] of [['front', 'node_front', 'a'], ['side', 'node_side', 'b']] as const) {
+        const r = id('ref')
+        d.refs[r] = { id: r, v: 1, field_v: {}, key: 'home', variant, role: 'location', asset: SHA(c), node }
+        d.assets[SHA(c)] = { sha256: SHA(c), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: [] }
+      }
+      const sb = mainStoryboard(d)!
+      d.links[id('link')] = { id: id('link'), v: 1, field_v: {}, from: { kind: 'key', id: k }, to: { kind: 'storyboard', id: sb.id }, role: 'location' }
+      const [shot] = addShots(d, 1)
+      shot.action = 'Dusk at @home.'
+      shotId = shot.id
+    }, 'sync')
+    await s.flush()
+    const canvas = new FakeCanvas()
+    const pic = (elId: string, node: string, c: string) => ({ id: elId, type: 'image', x: 0, y: 0, width: 300, height: 300, isDeleted: false, frameId: null, customData: { kind: 'pic', id: node, asset: SHA(c) } }) as unknown as El
+    canvas.els = [pic('elF', 'node_front', 'a'), pic('elS', 'node_side', 'b')]
+    const services = { doc: s, runner: { submit: vi.fn(), cancel: vi.fn() }, relay: {}, project: { canvasKey: 'k' }, ui: { get: () => ({ me: { participantId: 'p_1' } }) } } as unknown as Services
+    const ctrl = new CanvasController(canvas, services)
+    const sb = mainStoryboard(s.get())!.id
+    const inScope = () => scopeOf(liveGet(s), sb).filter((it) => it.kind === 'ref').map((it) => it.name)
+    const sends = () => shotRefSet(liveGet(s), liveGet(s).shots[shotId]).map((x) => `${x.ref.key}_${x.ref.variant}`)
+    expect(inScope()).toEqual(['home_front', 'home_side'])
+    expect(sends()).toEqual(['home_front', 'home_side'])
+    const refsBefore = structuredClone(s.get().refs)
+    const gone = ctrl.deleteElements(['elS'])!
+    expect(inScope()).toEqual(['home_front'])
+    expect(sends()).toEqual(['home_front'])
+    expect(s.get().refs).toEqual(refsBefore) // derived from the canvas: the document keeps the row for undo
+    ctrl.undelete(gone.ids)
+    expect(inScope()).toEqual(['home_front', 'home_side'])
+    expect(sends()).toEqual(['home_front', 'home_side'])
+    await s.close()
+  })
+})

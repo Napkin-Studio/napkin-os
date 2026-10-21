@@ -5,7 +5,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useDoc, useServices, useShell, useUi } from '../app/context'
-import type { Shot, Take } from '../contracts/types'
+import type { Shot, Generation } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { personOf } from '../projects/session'
 import { currentFrame, currentRender, currentTake, openAsks, reviewsList, shotsOf } from '../model/selectors'
@@ -33,7 +33,7 @@ export function PhoneReview() {
   const video = useRef<HTMLVideoElement>(null)
   const [t, setT] = useState(0)
   const [note, setNote] = useState('')
-  const items = useMemo(() => shots.reduce<{ shot: Shot; take?: Take; start: number; dur: number }[]>((all, shot) => {
+  const items = useMemo(() => shots.reduce<{ shot: Shot; take?: Generation; start: number; dur: number }[]>((all, shot) => {
     const take = currentTake(doc, shot.id)
     const prev = all.at(-1)
     return [...all, { shot, take, start: prev ? prev.start + prev.dur : 0, dur: take?.duration_s || shot.duration_s }]
@@ -42,12 +42,12 @@ export function PhoneReview() {
   const at = items.find((i) => t >= i.start && t < i.start + i.dur) ?? items.at(-1)
   const local = at ? t - at.start : 0
   const win = at ? windowOf(local, at.dur) : undefined
-  const notes = reviewsList(doc).filter((r) => r.target.kind === 'take')
+  const notes = reviewsList(doc).filter((r) => r.target.kind === 'generation')
   const where = (takeId: string) => items.find((i) => i.take?.id === takeId)
   const asks = openAsks(doc).length
   const leave = () => {
     if (!at?.take || !note.trim()) return
-    const take: Take = at.take
+    const take: Generation = at.take
     const by = `human:${personOf(ui.me).id}`
     void updateDoc(docStore, (d) => { addTakeNote(d, { takeId: take.id, shotId: at.shot.id, shotS: at.dur, atS: Math.round(local * 100) / 100, text: note.trim().slice(0, 1000), by }) }, 'comment')
     setNote('')

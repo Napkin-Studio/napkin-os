@@ -112,7 +112,8 @@ export function shotRefSet(doc: ProductionDocument, shot: Shot, text = '', decli
     for (const r of found) add(r, 'words')
   }
   for (const r of mentionedPictures(doc, text)) add(r, 'words')
-  const linked = scopeOf(doc, shot.id).filter((it) => it.via === 'link' || (it.via === 'board' && it.through))
+  // A picture linked in as the shot's frame or layout is its start, not a reference.
+  const linked = scopeOf(doc, shot.id).filter((it) => (it.via === 'link' || (it.via === 'board' && it.through)) && it.role !== 'frame' && it.role !== 'layout')
   for (const r of scopePictures(doc, linked)) add(r, 'linked')
   if (shot.storyboard_id && doc.storyboards[shot.storyboard_id]) {
     const scope = scopeOf(doc, shot.storyboard_id).filter((it) => it.via !== 'mention')
@@ -133,7 +134,10 @@ export async function refsFor(relay: Relay, doc: ProductionDocument, shot: Shot,
 /** Every named picture, for the shot list: the director picks the names each shot shows. */
 export async function allNamed(relay: Relay, doc: ProductionDocument): Promise<JobInputRef[]> {
   const out: JobInputRef[] = []
-  for (const r of refsList(doc).filter((x) => x.asset).slice(0, 14)) out.push(await namedInput(relay, doc, r))
+  // Fronts first: a bare @key in the plan needs its front among the 14 (the relay's director checks).
+  const named = refsList(doc).filter((x) => x.asset)
+  const ordered = [...named.filter((x) => x.variant === 'front'), ...named.filter((x) => x.variant !== 'front')]
+  for (const r of ordered.slice(0, 14)) out.push(await namedInput(relay, doc, r))
   return out
 }
 

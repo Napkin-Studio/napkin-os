@@ -1,7 +1,7 @@
 export type { Doc, DocAsset, DocumentStore, Entity, MapName, Person, Project, Why } from './types'
 export { MAP_NAMES } from './types'
 export {
-  ClanDocumentStore, CONTRACT, UnsupportedContract, assertIntegrity, newProjectData, newUlidId,
+  ClanDocumentStore, CONTRACT, UnsupportedContract, assertIntegrity, newProjectData, newUlidId, MIGRATION_AGENT, MIGRATION_ACTION,
   type BeforeBytes, type ChainEntry, type ClanStoreApi, type ClanStoreOptions, type MirrorPost, type MirrorReason,
 } from './store'
 export { indexedDbPersistence, memoryPersistence, type Persistence, type Saved } from './persist'
@@ -23,11 +23,17 @@ export { entityAddress, leafAddress, leafProblem, readPath, TEXT_OWNED } from '.
 export { checkpoint, hydrate, proseOf, proseHash, proseFromLines, fragmentName, shapeProblem, flatText, flatLength, unknownNames, MAX_PROSE_BYTES, EMPTY_PROSE, LIMITS, type CheckpointResult, type Prose, type PMNode, type RefNames } from './text/checkpoint'
 export { TEXT_EXTENSIONS, FRAGMENT_BLOCKS, textSchema, type FragmentKind } from './text/extensions'
 export { landPlan, keepSuggestion, keepMine, markStale, moveShot, StaleSuggestion, type PlanLanding, type PlannedEntity, type ShotPlace } from './text/moves'
-export { integrity, canLink, linkRuleFor, makesLoop, LINK_RULE, ENDPOINT_MAP } from './integrity'
+export { integrity, canLink, linkRuleFor, makesLoop, itemLength, LINK_RULE, ENDPOINT_MAP, type TimelineItemLike } from './integrity'
 export { rankBetween, ranksBetween, isValidRank, validateRank, byRank, RankError } from './rank'
 export { noteWindow, windowProblem, MIN_WINDOW_S, type NoteWindow } from './time'
-// Fix this moment (features/clip-moment-edit.clan)
+// Fix this moment (features/clip-moment-edit.clan), on generations
 export {
-  noteToTakeWindow, patchPlan, spliceSegments, patchedRanges, applyPatchTake, KEYFRAME_EPS_S, MAX_SEGMENTS, MAX_ALTERNATES, MAX_INPUT_S,
-  type TakeWindow, type PatchPlan, type PatchSend, type KeyframeKind, type Segment, type PatchTake, type PatchDoc, type PatchJob, type NoteLike, type CutItemLike,
+  noteToTakeWindow, momentWindow, patchPlan, patchedStretches, patchedRanges, applyPatchGeneration, KEYFRAME_EPS_S, MAX_PATCHED, MAX_INPUT_S,
+  type TakeWindow, type PatchPlan, type PatchSend, type KeyframeKind, type Patched, type PatchGeneration, type PatchDoc, type PatchJob, type NoteLike, type CutItemLike,
 } from './patch'
+// Make and Edit (features/make-and-edit.clan): the one move, and the timeline's arithmetic
+export { migrateToGenerations, needsGenerations, generationIds } from './migrate'
+export {
+  adTimeToSource, compileTimeline, TRANSITION_S,
+  type SourceMoment, type TimelineItem, type TimelineVideo, type EndCard, type PlanClip, type PlanText, type PlanEndCard, type CompiledTimeline,
+} from './timeline'

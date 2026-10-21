@@ -34,7 +34,7 @@ function project(): ProductionDocument {
   d.refs.ref_1 = { ...e, id: 'ref_1', key: 'maya', variant: 'front', role: 'character', asset: SHA('a') }
   d.shots.shot_1 = { ...e, id: 'shot_1', storyboard_id: mainStoryboard(d)!.id, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'wide' }, status: 'locked' }
   d.frames.frame_1 = { ...e, id: 'frame_1', shot_id: 'shot_1', version: 1, kind: 'generated', asset: SHA('b'), job_id: 'job_1', crew: 'wren' }
-  d.takes.take_1 = { ...e, id: 'take_1', shot_id: 'shot_1', version: 1, asset: SHA('d'), job_id: 'job_2', crew: 'wren', kind: 'generated', model: 'm', provider: 'runway', duration_s: 3, segments: [] }
+  d.generations.gen_1 = { ...e, id: 'gen_1', kind: 'clip', shot_ids: ['shot_1'], asset: SHA('d'), duration_s: 3, state: 'ready', job_id: 'job_2', crew: 'wren', provider: 'runway', inputs: { model: 'm' }, created_at: '2026-10-13T10:00:00Z', by: 'human:p_maya01' }
   d.renders.render_1 = { ...e, id: 'render_1', video_id: mainVideo(d)!.id, version: 1, asset: SHA('e'), job_id: 'job_3' }
   return d
 }

@@ -173,11 +173,13 @@ export function describeWrite(action: string, before: ProductionDocument, after:
     }
     case 'pick take': {
       for (const v of Object.values(after.videos)) {
-        for (const [itemId, item] of Object.entries(v.edl)) {
-          const was = before.videos[v.id]?.edl[itemId]?.pick?.current
-          if (item.pick && item.pick.current !== was && item.shot_id) {
-            const n = takesOf(after, item.shot_id).findIndex((t) => t.id === item.pick!.current) + 1
-            return { action: `pick take v${n} for ${shotName(after, item.shot_id)}`, rationale: tail(item.shot_id, item.pick.current) }
+        for (const [itemId, item] of Object.entries(v.timeline)) {
+          const now = item.source?.generation_id
+          const was = before.videos[v.id]?.timeline?.[itemId]?.source?.generation_id
+          const shotId = item.follows?.shot_id
+          if (now && now !== was && shotId) {
+            const n = takesOf(after, shotId).findIndex((t) => t.id === now) + 1
+            return { action: `pick take v${n} for ${shotName(after, shotId)}`, rationale: tail(shotId, now) }
           }
         }
       }

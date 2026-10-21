@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { SnapshotStore, updateDoc } from '../doc/store'
 import { initialUi, type UiState } from '../doc/ui'
-import { edlItemFor, jobsList, scenesOf, shotsOf } from '../model/selectors'
+import { cutItemFor, jobsList, scenesOf, shotsOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import { addScene, MAYA } from '../test/jobFixtures'
@@ -122,12 +122,12 @@ describe('the crew\'s landings on the CLAN store', () => {
     await vi.waitFor(() => expect(selectedFrame(s.store.get(), s.shotId(0))).toBeDefined(), { timeout: 4000, interval: 10 })
     const clipJob = await makeClip(s.deps, s.shotId(0))
     await s.land()
-    await vi.waitFor(() => expect(edlItemFor(s.store.get(), s.shotId(0))?.pick).toBeDefined(), { timeout: 4000, interval: 10 })
+    await vi.waitFor(() => expect(cutItemFor(s.store.get(), s.shotId(0))?.source).toBeDefined(), { timeout: 4000, interval: 10 })
     await s.store.flush()
     const d = s.store.get()
-    const item = edlItemFor(d, s.shotId(0))!
-    const take = d.takes[item.pick!.current]
-    expect(take).toMatchObject({ shot_id: s.shotId(0), job_id: clipJob, crew: 'wren', version: 1 })
+    const item = cutItemFor(d, s.shotId(0))!
+    const take = d.generations[item.source!.generation_id!]
+    expect(take).toMatchObject({ kind: 'clip', shot_ids: [s.shotId(0)], job_id: clipJob, crew: 'wren', state: 'ready' })
     const entries = await s.landed((a) => a.startsWith('render take'))
     expect(entries).toEqual([expect.objectContaining({ agent: 'wren', action: 'render take v1 for shot 1', cites: [`${s.store.documentId()}#jobs[${clipJob}]`] })])
     const frames = await s.landed((a) => a.startsWith('render frame'))

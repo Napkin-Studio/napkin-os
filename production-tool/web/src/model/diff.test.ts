@@ -81,21 +81,20 @@ describe('changeOf', () => {
     expect(gone.map((p) => [p.path, p.op === 'set' ? p.value : undefined])).toEqual(expect.arrayContaining([['pick/current', null]]))
   })
 
-  it('the cut: a pick is set by its parts; an item added or taken away is set whole', () => {
-    const { d, s1, t1, t2 } = base()
+  it('the cut: a clip is set by its parts; a clip added or taken away is set whole', () => {
+    const { d, s1, t2 } = base()
     const v = mainVideo(d)!
-    const [itemId] = Object.keys(v.edl)
-    const pick = changeOf(d, after(d, (x) => { x.videos[v.id].edl[itemId].pick = { current: t2.id, alternates: [t1.id] } })).patches
-    expect(pick.map((p) => [p.entity, p.path, p.op === 'set' ? p.value : undefined])).toEqual([
-      ['videos', `edl/${itemId}/pick/current`, t2.id], ['videos', `edl/${itemId}/pick/alternates`, [t1.id]],
-    ])
-    const moved = changeOf(d, after(d, (x) => { x.videos[v.id].edl[itemId].rank = 'a5' })).patches
-    expect(moved.map((p) => p.path)).toEqual([`edl/${itemId}/rank`])
-    const newId = id('edl')
-    const added = changeOf(d, after(d, (x) => { x.videos[v.id].edl[newId] = { rank: 'a9', kind: 'shot', shot_id: s1.id } })).patches
-    expect(added.map((p) => [p.path, p.op === 'set' ? p.value : undefined])).toEqual([[`edl/${newId}`, { rank: 'a9', kind: 'shot', shot_id: s1.id }]])
-    const removed = changeOf(d, after(d, (x) => { delete x.videos[v.id].edl[itemId] })).patches
-    expect(removed.map((p) => [p.path, p.op === 'set' ? p.value : undefined])).toEqual([[`edl/${itemId}`, null]])
+    const [itemId] = Object.keys(v.timeline)
+    const swap = changeOf(d, after(d, (x) => { x.videos[v.id].timeline[itemId].source!.generation_id = t2.id })).patches
+    expect(swap.map((p) => [p.entity, p.path, p.op === 'set' ? p.value : undefined])).toEqual([['videos', `timeline/${itemId}/source/generation_id`, t2.id]])
+    const moved = changeOf(d, after(d, (x) => { x.videos[v.id].timeline[itemId].start_s = 2 })).patches
+    expect(moved.map((p) => p.path)).toEqual([`timeline/${itemId}/start_s`])
+    const newId = id('item')
+    const clip = { track: 'V1' as const, start_s: 9, source: { generation_id: t2.id, in_s: 0, out_s: 1 }, follows: { shot_id: s1.id } }
+    const added = changeOf(d, after(d, (x) => { x.videos[v.id].timeline[newId] = clip })).patches
+    expect(added.map((p) => [p.path, p.op === 'set' ? p.value : undefined])).toEqual([[`timeline/${newId}`, clip]])
+    const removed = changeOf(d, after(d, (x) => { delete x.videos[v.id].timeline[itemId] })).patches
+    expect(removed.map((p) => [p.path, p.op === 'set' ? p.value : undefined])).toEqual([[`timeline/${itemId}`, null]])
   })
 
   it('words a panel changes go to the text bus, never a patch; @names become mentions', () => {
@@ -116,7 +115,7 @@ describe('changeOf', () => {
     const { d, t1 } = base()
     const revId = id('rev')
     const { patches, text } = changeOf(d, after(d, (x) => {
-      x.reviews[revId] = { id: revId, v: 1, field_v: {}, target: { kind: 'take', id: t1.id }, by: `human:${MAYA.id}`, state: 'open', text: 'Brighter.', created_at: '2026-10-13T10:00:00Z' }
+      x.reviews[revId] = { id: revId, v: 1, field_v: {}, target: { kind: 'generation', id: t1.id }, by: `human:${MAYA.id}`, state: 'open', text: 'Brighter.', created_at: '2026-10-13T10:00:00Z' }
     }))
     expect(patches).toHaveLength(1)
     expect(patches[0]).toMatchObject({ op: 'create', entity: 'reviews', id: revId })

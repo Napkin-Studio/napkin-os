@@ -62,6 +62,7 @@ import { setScriptTarget } from './length'
 import { canvasActions } from '../canvas/chrome/actions'
 import { planFromScript, planShotsBlocked } from '../jobs/scriptVideo'
 import { nextStep, videoOfScript as nextVideo, type NextAction } from './nextStep'
+import { FrontButtons } from '../stages/FrontsNeeded'
 
 type Doc = ProductionDocument
 type Focus = { key: string; editor: Editor | null } | null
@@ -467,6 +468,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       {(notice || error) && (
         <div className={`se-line ${error ? 'bad' : ''}`} role={error ? 'alert' : 'status'}>
           {error ?? notice?.text}
+          <FrontButtons text={error} />
           {!error && notice?.undo && <button className="btn xs" onClick={() => { setNotice(null); void store.undo() }}>Undo</button>}
           <button className="btn xs ghost" onClick={() => { setError(null); setNotice(null) }}>OK</button>
         </div>

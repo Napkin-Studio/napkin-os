@@ -39,7 +39,7 @@ import { shotFromWords } from './clipMode'
 import { shotsBeingFixed } from './fix'
 import { drawFrame, selectedFrame, type FrameDeps } from './frames'
 import { isActive, jobCtx } from './runner'
-import { adStatus, frameDrift, frameStale, takeStale } from './stale'
+import { adStatus, clipBehind, frameDrift, frameStale } from './stale'
 
 export interface FollowPlan {
   /** Shot ids whose frame will be drawn again (or for the first time), in order. */
@@ -90,12 +90,13 @@ export function planFor(d: ProductionDocument, scope: FollowScope, fixing: Reado
   const shots = shotsOf(d)
   const ids = (list: typeof shots) => list.map((s) => s.id)
   const hasFrames = Object.values(d.frames).some((f) => shots.some((s) => s.id === f.shot_id))
-  const hasTakes = Object.values(d.takes).some((t) => shots.some((s) => s.id === t.shot_id))
+  const hasTakes = Object.values(d.generations).some((g) => g.state === 'ready' && shots.some((s) => g.shot_ids.includes(s.id)))
   const ad = adStatus(d)
   const from = (shotId: string | undefined) => Math.max(0, shots.findIndex((s) => s.id === shotId))
   switch (scope.kind) {
     case 'direct': {
-      const clips = ids(shots.filter((s) => !fixing.has(s.id) && !!takeStale(d, s.id)))
+      // Takes are never marked out of date (features/make-and-edit.clan); a clip made from an older frame is offered.
+      const clips = ids(shots.filter((s) => !fixing.has(s.id) && !!clipBehind(d, s.id)))
       return { frames: ids(shots.filter((s) => !drawing.has(s.id) && !!frameStale(d, s.id))), clips, ad: !!ad.ad && (clips.length > 0 || ad.stale) }
     }
     case 'missing':
@@ -110,7 +111,7 @@ export function planFor(d: ProductionDocument, scope: FollowScope, fixing: Reado
       // date or drawn from an older frame.
       const first = scope.from ? from(scope.from) : shots.findIndex((s) => !drawing.has(s.id) && (!!frameStale(d, s.id) || frameDrift(d, s.id) !== undefined))
       const frames = first >= 0 ? ids(shots.slice(first).filter((s) => !drawing.has(s.id))) : []
-      const clips = hasTakes ? ids(shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id)))) : []
+      const clips = hasTakes ? ids(shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!clipBehind(d, s.id) || !selectedTake(d, s.id)))) : []
       return { frames, clips, ad: !!ad.ad && (clips.length > 0 || ad.stale) }
     }
     case 'one':
@@ -278,7 +279,7 @@ async function send(deps: FrameDeps, run: FollowRun, item: FollowItem, words?: s
     return drawFrame(deps, i, 'update', { followRun: run.id, ...(parent ? { parent } : {}), ...(text ? { text } : {}), ...(modelChoice ? { modelChoice } : {}) })
   }
   const parentTake = selectedTake(d, item.shotId)
-  const made = parentTake ? d.jobs[parentTake.job_id] : undefined
+  const made = parentTake?.job_id ? d.jobs[parentTake.job_id] : undefined
   const text = words ?? (made?.op === 'clip' ? made.text : undefined)
   return makeClip(deps, item.shotId, {
     ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), followRun: run.id, ...(modelChoice ? { modelChoice } : {}),
@@ -295,7 +296,10 @@ async function replaceLanded(deps: FrameDeps, run: FollowRun) {
     const c = ctxOf(deps, j.id)
     const old = c?.for === 'frame' ? c.parentFrameId : c?.for === 'clip' ? c.parentTakeId : undefined
     if (!old || run.replaced?.includes(old)) continue
-    const landed = c?.for === 'frame' ? Object.values(d.frames).some((f) => f.job_id === j.id) : Object.values(d.takes).some((t) => t.job_id === j.id)
+    // A take a run replaced stays: a generation is never deleted to make room, and its new take names it as
+    // its parent (features/make-and-edit.clan). Only frames are taken out.
+    if (c?.for !== 'frame') continue
+    const landed = Object.values(d.frames).some((f) => f.job_id === j.id)
     if (!landed) continue
     gone.push(old)
   }
@@ -304,8 +308,8 @@ async function replaceLanded(deps: FrameDeps, run: FollowRun) {
   await updateDoc(deps.doc, (x) => { for (const id of gone) dropReplaced(x, id) }, `delete ${gone.length === 1 ? 'the version' : `${gone.length} versions`} its update replaced`)
 }
 
-/** A frame or take version a run replaced, taken out: only when it is not the one picked now, and with
- *  the stale marks on it and its place among the alternates. */
+/** A frame version a run replaced, taken out: only when it is not the one picked now, and with the stale
+ *  marks on it and its place among the alternates. */
 function dropReplaced(d: ProductionDocument, id: string) {
   const frame = d.frames[id]
   if (frame) {
@@ -313,14 +317,6 @@ function dropReplaced(d: ProductionDocument, id: string) {
     if (shot?.pick?.current === id) return
     if (shot?.pick?.alternates?.includes(id)) shot.pick = { ...shot.pick, alternates: shot.pick.alternates.filter((a) => a !== id) }
     delete d.frames[id]
-  } else if (d.takes[id]) {
-    for (const v of Object.values(d.videos)) {
-      for (const item of Object.values(v.edl)) {
-        if (item.pick?.current === id) return
-        if (item.pick?.alternates?.includes(id)) item.pick = { ...item.pick, alternates: item.pick.alternates.filter((a) => a !== id) }
-      }
-    }
-    delete d.takes[id]
   } else return
   for (const m of Object.values(d.stale)) if (m.target.id === id || m.caused_by.id === id) delete d.stale[m.id]
 }

@@ -15,14 +15,14 @@ import { RouterContext, useDoc, useJobsTick, useServices, useUi } from '../../ap
 import { scriptRoute } from '../../app/route'
 import type { Id, RefRole } from '../../contracts/types'
 import {
-  linkInto, nameMadePicture, pictureFromWords, pictureJob, ROLE_MORE, ROLE_PILLS, scriptFromLine, scriptOf, storyboardFromLine,
+  linkInto, nameMadePicture, pictureFromWords, pictureJob, ROLE_MORE, ROLE_PILLS, scriptFromLine, scriptHasWords, scriptOf, storyboardFromLine,
   suggestName, videoFromWords, videoSeconds, frameFromWords,
 } from '../../jobs/prompt'
 import { planOrJoin } from '../../jobs/plan'
 import { isActive, LOCAL_PERSON } from '../../jobs/runner'
 import { answerScriptVideo, PLAN_FIRST, scriptVideoAsk, scriptVideoQuestion, shotCount } from '../../jobs/scriptVideo'
 import { nameOf } from '../../lib/names'
-import { mainStoryboard, refsList } from '../../model/selectors'
+import { mainStoryboard, refsList, scriptText } from '../../model/selectors'
 import { AgentFigure } from '../agents/AgentFigure'
 import { sayer, type CastKey } from '../agents/cast'
 import { AskOptions } from '../AskCard'
@@ -33,6 +33,9 @@ import {
 } from './promptFlow'
 import '../askcard.css'
 import './prompt.css'
+import { FrontButtons } from '../../stages/FrontsNeeded'
+import { plainJobError } from '../../jobs/errorWords'
+import { FrontsMissingError, keysWithoutFront } from '../../lib/names'
 
 export interface PromptStartProps {
   kind: PromptKind
@@ -58,7 +61,8 @@ export function PromptStart({ kind, nodeId, place = 'card' }: PromptStartProps) 
       {state.show === 'storyboard' && <StoryboardStart storyboardId={nodeId} fromScript={state.fromScript} place={place} />}
       {state.show === 'video-block' && <VideoBlock videoId={nodeId} />}
       {state.show === 'video-script' && <ScriptVideoAsk videoId={nodeId} scriptId={state.scriptId} />}
-      {state.show === 'video-plan' && <StoryboardStart storyboardId={state.storyboardId} fromScript={false} place={place} scopeNode={nodeId} />}
+      {/* Answered "straight from the script" already: Plan shots (and why it cannot go yet), never the question again. */}
+      {state.show === 'video-plan' && <StoryboardStart storyboardId={state.storyboardId} fromScript={!!scriptVideoAsk(doc, nodeId)?.answers.length && scriptHasWords(doc, state.storyboardId)} place={place} scopeNode={nodeId} />}
       {state.show === 'image-frame' && <FrameStart shotId={nodeId} />}
       {state.show === 'image-picture' && <PictureStart nodeId={nodeId} />}
     </div>
@@ -163,7 +167,7 @@ function ScriptStart({ scriptId, place }: { scriptId: Id; place: 'card' | 'edito
         submit={submit} busy={busy} autoFocus={place === 'editor'} multiline={place === 'editor'} />
       {busy && <AtWork agent="skye" line={PROMPT_COPY.script.busy} />}
       {note && <div className="pstart-note" role="status">{note}</div>}
-      {error && <div className="pstart-error" role="alert">{error}</div>}
+      {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }
@@ -198,15 +202,20 @@ function StoryboardStart({ storyboardId, fromScript, place, scopeNode }: { story
   })
 
   if (fromScript) {
+    // A bare @key with no front stops Plan shots before it sends: said here before it is pressed.
+    const sid = scriptOf(doc, storyboardId)
+    const fronts = sid ? keysWithoutFront(doc, services.doc.get(), scriptText(doc, sid)) : []
+    const blocked = fronts.length ? new FrontsMissingError(fronts).message : null
     return (
       <section className="pstart-card" aria-label="Plan the shots">
         <Signed agent="dex" />
         <p className="pstart-line">{PROMPT_COPY.storyboard.fromScript}</p>
+        {blocked && !error && <div className="pstart-error" role="alert">{blocked}<FrontButtons text={blocked} /></div>}
         <div className="pstart-actions">
           <button className="btn sm primary" disabled={busy} onClick={() => void attempt(() => planOrJoin(services, { storyboardId }))}>Plan shots</button>
         </div>
         {busy && <AtWork agent="dex" line={PROMPT_COPY.storyboard.busy} />}
-        {error && <div className="pstart-error" role="alert">{error}</div>}
+        {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
       </section>
     )
   }
@@ -226,7 +235,7 @@ function StoryboardStart({ storyboardId, fromScript, place, scopeNode }: { story
         <AskOptions q={q} disabled={busy} onPick={(id) => void (id === SCRIPT_FIRST ? scriptFirst(line) : id === PLAN_NOW ? plan(line) : undefined)} />
         <div className="askcard-why faint">{PROMPT_COPY.later}</div>
         {busy && <AtWork agent="dex" line={PROMPT_COPY.storyboard.busy} />}
-        {error && <div className="askcard-note" role="alert">{error}</div>}
+        {error && <div className="askcard-note" role="alert">{error}<FrontButtons text={error} /></div>}
       </section>
     )
   }
@@ -235,7 +244,7 @@ function StoryboardStart({ storyboardId, fromScript, place, scopeNode }: { story
       <Signed agent="dex" />
       <PromptBox placeholder={PROMPT_COPY.storyboard.placeholder} hint={PROMPT_COPY.storyboard.hint} label="The ad in a line"
         submit={(w) => setLine(w.trim())} busy={busy} autoFocus={place === 'editor'} />
-      {error && <div className="pstart-error" role="alert">{error}</div>}
+      {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }
@@ -309,7 +318,7 @@ function VideoBlock({ videoId }: { videoId: Id }) {
         </div>
       )}
       {busy && <AtWork agent="dex" line={PROMPT_COPY.video.busy} />}
-      {error && <div className="askcard-note" role="alert">{error}</div>}
+      {error && <div className="askcard-note" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }
@@ -364,7 +373,7 @@ function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
       <AskOptions q={q} disabled={busy} onPick={(id) => void pick(id)} />
       <div className="askcard-why faint">{PROMPT_COPY.later}</div>
       {busy && <AtWork agent="dex" line="Dex is setting up the storyboard and planning the shots" />}
-      {error && <div className="askcard-note" role="alert">{error}</div>}
+      {error && <div className="askcard-note" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }
@@ -424,7 +433,7 @@ function FrameStart({ shotId }: { shotId: Id }) {
     <section className="pstart-card" aria-label="Start the picture">
       <Signed agent="wren" />
       <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint="Fin draws this shot's frame from it" label="Describe the picture" submit={submit} busy={busy} />
-      {error && <div className="pstart-error" role="alert">{error}</div>}
+      {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }
@@ -456,8 +465,8 @@ function PictureStart({ nodeId }: { nodeId: Id }) {
     <section className="pstart-card" aria-label="Start the picture">
       <Signed agent="wren" />
       <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint={PROMPT_COPY.image.hint} label="Describe the picture" submit={submit} busy={busy} />
-      {job?.state === 'failed' && !error && <div className="pstart-error" role="alert">{job.error?.message ?? 'Fin could not make it. Try again.'}</div>}
-      {error && <div className="pstart-error" role="alert">{error}</div>}
+      {job?.state === 'failed' && !error && <div className="pstart-error" role="alert">{job.error ? plainJobError(job.error, job.op).message : 'Fin could not make it. Try again.'}</div>}
+      {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }
@@ -509,7 +518,7 @@ function RolePicker({ jobId, nodeId, asset, words }: { jobId: Id; nodeId: Id; as
       <div className="pstart-actions">
         <button className="btn sm primary" disabled={busy} onClick={() => void save()}>Save</button>
       </div>
-      {error && <div className="pstart-error" role="alert">{error}</div>}
+      {error && <div className="pstart-error" role="alert">{error}<FrontButtons text={error} /></div>}
     </section>
   )
 }

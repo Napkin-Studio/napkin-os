@@ -79,6 +79,45 @@ def document_rules(doc: dict) -> list[str]:
     for qid, ask in (doc.get("asks") or {}).items():
         if isinstance(ask, dict) and ask.get("question", {}).get("id") != qid:
             problems.append(f"asks[{qid}]: its question's id is not its key")
+    problems += timeline_rules(doc)
+    return problems
+
+
+def item_length(item: dict) -> float:
+    """How long a timeline item lasts (clan-store integrity.ts itemLength): (out_s - in_s) / speed + hold_s."""
+    if item.get("track") == "text":
+        return max(0.0, item.get("to_s", 0) - item.get("from_s", 0))
+    src = item.get("source") or {}
+    return max(0.0, src.get("out_s", 0) - src.get("in_s", 0)) / item.get("speed", 1) + item.get("hold_s", 0)
+
+
+def timeline_rules(doc: dict) -> list[str]:
+    """Generations and timelines (features/make-and-edit.clan): parents exist, V1 never overlaps, a clip's
+    generation exists and has the footage it shows, a text ends after it starts."""
+    problems = []
+    gens = doc.get("generations") or {}
+    for gid, g in gens.items():
+        if isinstance(g, dict) and g.get("parent_id") and g["parent_id"] not in gens:
+            problems.append(f"generations[{gid}]: its parent {g['parent_id']} is not in the document")
+    for vid, v in (doc.get("videos") or {}).items():
+        v1 = []
+        for iid, item in ((v or {}).get("timeline") or {}).items():
+            if item.get("track") == "text":
+                if item.get("to_s", 0) <= item.get("from_s", 0):
+                    problems.append(f"videos[{vid}].timeline[{iid}]: the text ends before it starts")
+                continue
+            src = item.get("source") or {}
+            g = gens.get(src.get("generation_id")) if src.get("generation_id") else None
+            if src.get("generation_id") and g is None:
+                problems.append(f"videos[{vid}].timeline[{iid}]: its generation {src['generation_id']} is not in the document")
+            if g and g.get("duration_s") is not None and src.get("out_s", 0) > g["duration_s"] + 1e-3:
+                problems.append(f"videos[{vid}].timeline[{iid}]: its source runs past the generation's {g['duration_s']} s")
+            if item.get("track") == "V1":
+                v1.append((item.get("start_s", 0), item.get("start_s", 0) + item_length(item), iid))
+        v1.sort()
+        for (_, end, a), (start, _, b) in zip(v1, v1[1:]):
+            if start < end - 1e-3:
+                problems.append(f"videos[{vid}].timeline: {b} starts inside {a} (V1 never overlaps)")
     return problems
 
 
@@ -251,6 +290,35 @@ for case in json.loads((HERE / "examples" / "links.json").read_text())["cases"]:
     if allowed != case["ok"]:
         fail(f"✗ examples/links.json: {case['from']} → {case['to']} as {case['role']} is {'allowed' if allowed else 'refused'}; the case says {case['ok']}")
 print("✓ examples/links.json")
+
+# No price reaches the editor (features/make-and-edit.clan; owner 2026-10-13: costs only in History): the
+# generation record, the timeline and what a remake or a timeline render carries name no cost, usd, credit
+# or price.
+PRICEY = re.compile(r"cost|usd|credit|price", re.I)
+
+
+def priced(node, where: str) -> list[str]:
+    out = []
+    if isinstance(node, dict):
+        for k, v in node.get("properties", {}).items():
+            if PRICEY.search(k):
+                out.append(f"{where}.{k}")
+            out += priced(v, f"{where}.{k}")
+        for k in ("items", "additionalProperties"):
+            if isinstance(node.get(k), dict):
+                out += priced(node[k], where)
+    return out
+
+
+_doc_defs = schemas["document.schema.json"]["$defs"]
+_api_defs = schemas["relay-api.schema.json"]["$defs"]
+for where, node in [*((f"document {k}", _doc_defs[k]) for k in ("generation", "generationDelta", "timelineItem", "endCard", "transitionIn")),
+                    ("relay-api RemakeDelta", _api_defs["RemakeDelta"]), ("relay-api TimelinePlan", _api_defs["TimelinePlan"]),
+                    ("relay-api Job.remake", _api_defs["Job"]["properties"]["remake"]),
+                    ("relay-api JobRequest.remakeWith", _api_defs["JobRequest"]["properties"]["remakeWith"])]:
+    for leak in priced(node, where):
+        fail(f"✗ {leak}: a price field in what the editor shows; costs stay in History")
+print("✓ no price in generations, the timeline, remakes or timeline renders")
 
 # Every op has a quota class; the role table has a line for every role.
 ops = set(COMMON["op"]["enum"])

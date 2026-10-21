@@ -11,7 +11,7 @@ vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () =>
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { SnapshotStore, updateDoc } from '../doc/store'
 import { initialAppUi, type AppUi } from '../doc/ui'
-import { currentTake, edlOf, mainScript, mainStoryboard, mainVideo, reviewsList, scenesOf, shotsOf, storyboardReady, unplannedText } from '../model/selectors'
+import { currentTake, cutOf, mainScript, mainStoryboard, mainVideo, reviewsList, scenesOf, shotsOf, storyboardReady, unplannedText } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { ProjectIndex } from '../projects/projectIndex'
 import type { MakeClan } from '../projects/session'
@@ -92,26 +92,26 @@ describe('the Storyboard and Video panels on the .clan engine', () => {
     const { doc } = await newProject()
     let shotId = ''
     await updateDoc(doc, (x) => { shotId = addShot(x) }, 'add shot')
-    const takes = [id('take'), id('take')]
+    const takes = [id('gen'), id('gen')]
     await updateDoc(doc, (x) => {
       for (const [i, t] of takes.entries()) {
         x.assets[SHA(String(i + 1))] = { sha256: SHA(String(i + 1)), kind: 'video', mime: 'video/mp4', origin: 'mock', locations: [] }
-        x.takes[t] = { id: t, v: 1, field_v: {}, shot_id: shotId, version: i + 1, asset: SHA(String(i + 1)), job_id: id('job'), crew: 'wren', kind: 'mock', model: 'mock', provider: 'mock', duration_s: 5, segments: [] }
+        x.generations[t] = { id: t, v: 1, field_v: {}, kind: 'clip', shot_ids: [shotId], asset: SHA(String(i + 1)), duration_s: 5, state: 'ready', job_id: id('job'), crew: 'wren', mock: true, provider: 'mock', created_at: `2026-10-13T10:4${i}:00Z`, by: `human:${MAYA.id}` }
       }
     }, 'take')
     await updateDoc(doc, (x) => pickTake(x, shotId, takes[0]), 'pick take')
     await updateDoc(doc, (x) => pickTake(x, shotId, takes[1]), 'pick take')
     await doc.flush()
     let d = doc.get()
-    expect(edlOf(d)).toHaveLength(1)
+    expect(cutOf(d)).toHaveLength(1) // one clip for the shot, now playing the second take
     expect(currentTake(d, shotId)?.id).toBe(takes[1])
-    expect(edlOf(d)[0].pick?.alternates).toEqual([takes[0]])
+    expect(cutOf(d)[0].source).toEqual({ generation_id: takes[1], in_s: 0, out_s: 5 })
 
     await updateDoc(doc, (x) => { addTakeNote(x, { takeId: takes[1], shotId, shotS: 5, atS: 2.5, text: 'the umbrella is blue', by: `human:${MAYA.id}` }) }, 'comment')
     await doc.flush()
     d = doc.get()
     const [note] = reviewsList(d)
-    expect(note.target).toEqual({ kind: 'take', id: takes[1] })
+    expect(note.target).toEqual({ kind: 'generation', id: takes[1] })
     expect(note.window).toEqual({ from_s: 1, to_s: 4 })
     expect(note.state).toBe('open')
     expect(note.text).toBe('the umbrella is blue')

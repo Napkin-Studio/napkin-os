@@ -9,7 +9,6 @@ import { idbLocation } from '../../lib/blobs'
 import { currentPictureFrame, framesOf, pictureVersions, refsList } from '../../model/selectors'
 import { markStale } from '../../doc/remove'
 import { nameOf } from '../../lib/names'
-import { refreshClipStale } from '../../jobs/stale'
 import { systemUpdate, updateDoc } from '../../doc/store'
 import type { DocumentStore } from '../../doc/types'
 
@@ -38,7 +37,6 @@ export function applyEdited(d: ProductionDocument, shotId: string, parentId: str
   d.frames[frame.id] = frame
   const alternates = shot.pick?.alternates?.filter((a) => a !== frame.id) ?? [] // as selectFrame keeps them
   shot.pick = { current: frame.id, ...(alternates.length ? { alternates } : {}) }
-  refreshClipStale(d, shotId)
   return frame
 }
 

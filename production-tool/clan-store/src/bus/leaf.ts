@@ -11,7 +11,12 @@ export const TEXT_OWNED: Partial<Record<EntityName, readonly string[]>> = {
 
 const CAMERA_PARTS = ['size', 'angle', 'movement', 'movement_speed', 'lens_mm', 'macro']
 const PICK_PARTS = ['current', 'alternates']
-const EDL_ITEM_FIELDS = ['rank', 'kind', 'shot_id', 'in_s', 'out_s', 'seam']  // seam: the join into the item, set whole (connected-video)
+// A timeline item's leaves (features/make-and-edit.clan): source and follows also by part (a trim writes
+// source/in_s, a swap source/generation_id); transition_in is set whole, like seam was.
+const TIMELINE_ITEM_FIELDS = ['track', 'start_s', 'source', 'follows', 'fade_in_s', 'fade_out_s', 'transition_in', 'speed', 'hold_s', 'opacity',
+  'words', 'style', 'from_s', 'to_s']
+const SOURCE_PARTS = ['generation_id', 'asset', 'in_s', 'out_s']
+const FOLLOWS_PARTS = ['box_id', 'shot_id']
 const NEVER = ['id', 'v', 'field_v']
 const ID_RE = /^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$/
 
@@ -22,18 +27,19 @@ export function leafProblem(entity: EntityName, path: string): string | null {
   if (NEVER.includes(s[0])) return `${s[0]} is the bus's, never a patch's`
   if (entity === 'project' || entity === 'assets') return s.length === 1 ? null : `${entity} fields are set whole`
   if (s.length === 1) {
-    // A video's edl is a map of items, set by part; a size's edl (a cutdown's windows, an array) is set whole.
-    if (s[0] === 'camera' || s[0] === 'pick' || (s[0] === 'edl' && entity === 'videos')) return `${s[0]} has parts: set ${s[0]}/<part>`
+    // A video's timeline is a map of items, set by part; a size's edl (a cutdown's windows, an array) is set whole.
+    if (s[0] === 'camera' || s[0] === 'pick' || (s[0] === 'timeline' && entity === 'videos')) return `${s[0]} has parts: set ${s[0]}/<part>`
     return null
   }
   if (s[0] === 'camera') return s.length === 2 && CAMERA_PARTS.includes(s[1]) ? null : `camera's parts are ${CAMERA_PARTS.join(', ')}`
   if (s[0] === 'pick') return s.length === 2 && PICK_PARTS.includes(s[1]) ? null : 'pick has current and alternates'
-  if (s[0] === 'edl' && entity === 'videos') {
-    if (!ID_RE.test(s[1])) return 'an edl item is named by its id'
+  if (s[0] === 'timeline' && entity === 'videos') {
+    if (!ID_RE.test(s[1])) return 'a timeline item is named by its id'
     if (s.length === 2) return null
-    if (s.length === 3 && EDL_ITEM_FIELDS.includes(s[2])) return null
-    if (s.length === 4 && s[2] === 'pick' && PICK_PARTS.includes(s[3])) return null
-    return `edl/<item> has ${EDL_ITEM_FIELDS.join(', ')} and pick/current|alternates`
+    if (s.length === 3 && TIMELINE_ITEM_FIELDS.includes(s[2])) return null
+    if (s.length === 4 && s[2] === 'source' && SOURCE_PARTS.includes(s[3])) return null
+    if (s.length === 4 && s[2] === 'follows' && FOLLOWS_PARTS.includes(s[3])) return null
+    return `timeline/<item> has ${TIMELINE_ITEM_FIELDS.join(', ')}, source/${SOURCE_PARTS.join('|')} and follows/${FOLLOWS_PARTS.join('|')}`
   }
   return `${s[0]} is set whole`
 }
@@ -48,12 +54,12 @@ export function entityAddress(docId: string, entity: EntityName, id: string): st
   return entity === 'project' ? `${docId}#project` : `${docId}#${entity}[${id}]`
 }
 
-/** <doc>#map[id].field.part, nested map keys as [key]: shots[shot_X].camera.size, videos[v].edl[e].pick */
+/** <doc>#map[id].field.part, nested map keys as [key]: shots[shot_X].camera.size, videos[v].timeline[i].source.in_s */
 export function leafAddress(docId: string, entity: EntityName, id: string, path: string): string {
   let out = entityAddress(docId, entity, id)
   const s = path.split('/')
   s.forEach((seg, i) => {
-    out += ID_RE.test(seg) || (i > 0 && s[i - 1] === 'edl') ? `[${seg}]` : `.${seg}`
+    out += ID_RE.test(seg) || (i > 0 && s[i - 1] === 'timeline') ? `[${seg}]` : `.${seg}`
   })
   return out
 }
@@ -82,7 +88,7 @@ export function writePath(obj: Record<string, unknown>, path: string, value: unk
     }
     delete trail[trail.length - 1][last]
     for (let i = trail.length - 1; i > 0; i--) {
-      // Only a composite left empty goes (pick/current alone leaves no pick); a nested map (edl) stays, even empty.
+      // Only a composite left empty goes (pick/current alone leaves no pick); a nested map (timeline) stays, even empty.
       if (Object.keys(trail[i]).length || s[i - 1] !== 'pick') break
       delete trail[i - 1][s[i - 1]]
     }
@@ -98,7 +104,7 @@ export function writePath(obj: Record<string, unknown>, path: string, value: unk
 }
 
 /** The newest field_v of `path`, counting the leaves above and below it (camera/size
- * conflicts with a newer camera, and edl/X with a newer edl/X/pick/current). */
+ * conflicts with a newer camera, and timeline/X with a newer timeline/X/source/in_s). */
 export function newestFieldV(fieldV: Record<string, number>, path: string): number {
   let n = 0
   for (const [k, v] of Object.entries(fieldV)) {

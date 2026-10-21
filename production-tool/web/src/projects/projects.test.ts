@@ -355,7 +355,7 @@ describe('what a card shows', () => {
     const [shot] = addShots(d, 1, { duration_s: 4 })
     d.frames.frame_1 = { id: 'frame_1', v: 1, field_v: {}, shot_id: shot.id, version: 1, kind: 'mock', asset: SHA('b'), crew: 'wren' }
     shot.pick = { current: 'frame_1' }
-    const mark = (sid: string, frame: string) => ({ id: sid, v: 1, field_v: {}, target: { kind: 'take' as const, id: 't1' }, caused_by: { kind: 'frame' as const, id: frame }, reason: 'x' })
+    const mark = (sid: string, frame: string) => ({ id: sid, v: 1, field_v: {}, target: { kind: 'frame' as const, id: 'frame_1' }, caused_by: { kind: 'shot' as const, id: frame }, reason: 'x' })
     d.stale.stale_1 = mark('stale_1', 'f1')
     d.stale.stale_2 = mark('stale_2', 'f2')
     d.assets[SHA('c')] = { sha256: SHA('c'), kind: 'video', mime: 'video/mp4', origin: 'generated', locations: [], duration_s: 12.4 }

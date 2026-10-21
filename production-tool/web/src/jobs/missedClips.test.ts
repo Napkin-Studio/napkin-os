@@ -28,15 +28,15 @@ describe('finished clips that never landed', () => {
   it('land when the project opens, once', async () => {
     const { s, ids } = await project()
     expect(await landMissedClips(s)).toBe(2)
-    expect(Object.values(s.get().takes).map((t) => t.job_id).sort()).toEqual([...ids].sort())
+    expect(Object.values(s.get().generations).map((t) => t.job_id).sort()).toEqual([...ids].sort())
     expect(await landMissedClips(s)).toBe(0)
   })
 
   it('a clip whose take was deleted after it landed stays gone', async () => {
     const { s, shotId, ids } = await project()
     await landTake(s, { jobId: ids[0], op: 'clip', outputs: [{ sha256: SHA('a') }], provider: 'runway', model: 'veo3.1', kind: 'generated' } as unknown as Job, { for: 'clip', shotId })
-    await systemUpdate(s, (d) => { for (const t of Object.values(d.takes)) delete d.takes[t.id] }, 'delete the clip')
+    await systemUpdate(s, (d) => { for (const t of Object.values(d.generations)) delete d.generations[t.id]; for (const v of Object.values(d.videos)) v.timeline = {} }, 'delete the clip')
     expect(await landMissedClips(s)).toBe(1)
-    expect(Object.values(s.get().takes).map((t) => t.job_id)).toEqual([ids[1]])
+    expect(Object.values(s.get().generations).map((t) => t.job_id)).toEqual([ids[1]])
   })
 })

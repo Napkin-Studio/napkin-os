@@ -21,7 +21,7 @@ interface Case { sheet: Provider; op: 'clip' | 'clip_edit'; model: string | null
 const CASES = loadJson<{ cases: Case[] }>('examples/quality-cases.json').cases
 const ex = loadJson<ProductionDocument>('examples/document.ad.json')
 const SHOT = 'shot_01K7A000000000000000000015'
-const TAKE = 'take_01K7A000000000000000000024'
+const TAKE = 'gen_01K7A000000000000000000024'
 const VIDEO = 'video_01K7A000000000000000000027'
 const live: Config = CONFIGS.live
 const mockClip: Config = { ...live, routing: { ...live.routing, clip: ['mock', 'runway'], clip_edit: ['mock', 'runway'] } }
@@ -110,7 +110,7 @@ describe('what is sent', () => {
 
   it('Change the feel sends the clip\'s shape and the level; on a model that keeps the size, the clip\'s own', async () => {
     const d = doc()
-    const take = { ...d.takes[TAKE], quality: 'final' as const, size: '1080p' }
+    const take = { ...d.generations[TAKE], inputs: { ...d.generations[TAKE].inputs, quality: 'final' as const, size: '1080p' } }
     const { submit, deps: dd } = deps(d)
     await changeFeel(dd, SHOT, take, 'make it dusk', {}, { provider: 'runway', model: 'gemini_omni_flash_1.1' }, 'draft')
     const [, input, , , , , extras] = submit.mock.calls[0] as unknown as [string, { ratio?: string }, unknown, unknown, unknown, unknown, { quality: ClipQuality }]
@@ -123,9 +123,9 @@ describe('what is sent', () => {
 
   it('Remake as Final asks the relay to remake the draft from its own request', async () => {
     const d = doc()
-    const take = { ...d.takes[TAKE], quality: 'draft' as const, size: '480p' }
+    const take = { ...d.generations[TAKE], inputs: { ...d.generations[TAKE].inputs, quality: 'draft' as const, size: '480p' } }
     const held = { request: { input: { text: 'the bottle opens' }, modelChoice: { provider: 'runway', model: 'seedance2_5' } } }
-    const { submit, deps: dd } = deps(d, { [take.job_id]: held } as never)
+    const { submit, deps: dd } = deps(d, { [take.job_id!]: held } as never)
     await remakeAsFinal(dd, take)
     const [op, input, parents, purpose, , choice, extras] = submit.mock.calls[0] as unknown as unknown[]
     expect(op).toBe('clip')
@@ -160,10 +160,10 @@ describe('the request and the take', () => {
     const job = { jobId: 'job_01K7A0000000000000000000ZZ', op: 'clip', model: 'gemini_omni_flash_1.1', provider: 'runway', kind: 'generated',
       quality: { level: 'draft', size: '360p' }, outputs: [{ sha256: `sha256:${'a'.repeat(64)}`, url: 'https://x/y.mp4', mime: 'video/mp4', durationS: 5 }] } as unknown as Job
     const take = applyTake(d, job, { shotId: SHOT })!
-    expect([take.quality, take.size, qualityLabel(take.quality, take.size)]).toEqual(['draft', '360p', 'Draft 360p'])
+    expect([take.inputs?.quality, take.inputs?.size, qualityLabel(take.inputs?.quality, take.inputs?.size)]).toEqual(['draft', '360p', 'Draft 360p'])
     const edit = { ...job, jobId: 'job_01K7A0000000000000000000ZY', op: 'clip_edit', model: 'aleph2', quality: undefined,
       outputs: [{ ...job.outputs![0], sha256: `sha256:${'b'.repeat(64)}` }] } as unknown as Job
     const edited = applyTake(d, edit, { shotId: SHOT, parentTakeId: take.id })!
-    expect([edited.quality, edited.size]).toEqual(['draft', '360p'])
+    expect([edited.inputs?.quality, edited.inputs?.size]).toEqual(['draft', '360p'])
   })
 })

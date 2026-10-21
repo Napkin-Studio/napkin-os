@@ -20,7 +20,7 @@ import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
 import { jobShot, refsFor } from './select'
-import { refreshClipStale } from './stale'
+import { liveGet } from '../model/live'
 
 export type { FrameHow } from '../model/purpose'
 
@@ -29,6 +29,9 @@ export interface FrameDeps {
   doc: DocumentStore
   ui: UiStore
   runner: JobRunner
+  /** The Video editor is the two rooms (flags.makeAndEdit): a new take lands beside the others and never
+   *  touches the cut. Absent or false: the Video editor, which picks each new take in the cut. */
+  rooms?: () => boolean
 }
 
 /** The frame in a shot now (its pick). */
@@ -89,7 +92,7 @@ export async function frameInput(relay: Relay, d: ProductionDocument, index: num
 /** Draw the frame for the shot at `index` (of `opts.storyboardId`, else the main storyboard): a first
  *  version, or a new one of `parent`. */
 export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice; storyboardId?: string } = {}): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const sb = boardOf(d, opts.storyboardId)
   const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
@@ -131,7 +134,7 @@ export async function drawTheRest(deps: FrameDeps): Promise<void> {
 export async function continueDrawing(deps: FrameDeps, how: FrameHow = 'chain'): Promise<void> {
   const ui: UiState = deps.ui.get()
   if (!ui.drawingRest) return
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   if (frameJobRunning(d)) return
   const stop = () => deps.ui.update((u) => { u.drawingRest = false })
   // The storyboard open in the Storyboard panel (the node opened on the canvas), else the main one.
@@ -160,6 +163,5 @@ export function selectFrame(store: DocumentStore, shotId: string, frameId: strin
     if (!s || !d.frames[frameId] || s.pick?.current === frameId) return
     const alternates = s.pick?.alternates?.filter((a) => a !== frameId)
     s.pick = { current: frameId, ...(alternates?.length ? { alternates } : {}) }
-    refreshClipStale(d, shotId)
   }, 'select frame')
 }

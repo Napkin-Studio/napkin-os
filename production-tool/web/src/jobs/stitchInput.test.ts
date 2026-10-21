@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument, Shot } from '../contracts/types'
-import { mainVideo, shotsOf } from '../model/selectors'
+import { cutItemFor, cutOf, mainVideo, shotsOf } from '../model/selectors'
 import type { Relay } from '../relay/types'
 import { MAYA, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addShots, addTake, job } from '../test/model'
 import { stitchAt, stitchTimeline } from '../relay/mockRender'
 import { stitchInput } from './clips'
 
-// features/connected-video.clan, phase 1: the stitch request carries each clip's in and out points from
-// its edl item; a document without them gives exactly the request it always did.
+// The Video editor's stitch request (features/make-and-edit.clan: from the cut's V1 clips): each shot's clip
+// with its in and out points, in shot order.
 
 const CDN = 'https://cdn.test/out'
 
@@ -27,13 +27,14 @@ function made(order: number[] = [0, 1, 2]) {
   return { d, shots, deps: { relay: null as unknown as Relay, doc: { get: () => d } } as unknown as Parameters<typeof stitchInput>[0] }
 }
 
-const itemOf = (d: ProductionDocument, shot: Shot) => Object.values(mainVideo(d)!.edl).find((x) => x.shot_id === shot.id)!
+/** A shot's clip window in the cut. */
+const itemOf = (d: ProductionDocument, shot: Shot) => cutItemFor(d, shot.id)!.source!
 
 describe('stitchInput', () => {
-  it('an old document (no in or out points) gives exactly the request it always did', async () => {
+  it('sends each shot\'s clip from its start to the end of its slot in the cut', async () => {
     const { d, deps } = made()
     const { input, parents } = await stitchInput(deps)
-    const clip = (c: string, trimS: number) => ({ asset: { sha256: SHA(c), url: `${CDN}/${SHA(c)}`, mime: 'video/mp4' }, trimS })
+    const clip = (c: string, trimS: number) => ({ asset: { sha256: SHA(c), url: `${CDN}/${SHA(c)}`, mime: 'video/mp4' }, trimS, outS: trimS })
     expect(JSON.stringify(input)).toBe(JSON.stringify({ clips: [clip('a', 3), clip('b', 2), clip('c', 4)], ...(mainVideo(d)!.ratio ? { ratio: mainVideo(d)!.ratio } : {}) }))
     expect(parents).toHaveLength(3)
   })
@@ -47,16 +48,16 @@ describe('stitchInput', () => {
     expect(input.clips![2]).toMatchObject({ asset: { sha256: SHA('c') }, trimS: 4 })
   })
 
-  it('sends each edl item\'s in and out points as inS and outS', async () => {
+  it('sends each clip\'s in and out points as inS and outS', async () => {
     const { d, shots, deps } = made()
     Object.assign(itemOf(d, shots[0]), { in_s: 1.5, out_s: 4 })
     Object.assign(itemOf(d, shots[1]), { in_s: 0 }) // absent or 0: the clip's start, sent as nothing
     Object.assign(itemOf(d, shots[2]), { out_s: 3.5 })
     const { input } = await stitchInput(deps)
     expect(input.clips!.map(({ trimS, inS, outS }) => ({ trimS, inS, outS }))).toEqual([
-      { trimS: 3, inS: 1.5, outS: 4 }, { trimS: 2, inS: undefined, outS: undefined }, { trimS: 4, inS: undefined, outS: 3.5 },
+      { trimS: 3, inS: 1.5, outS: 4 }, { trimS: 2, inS: undefined, outS: 2 }, { trimS: 4, inS: undefined, outS: 3.5 },
     ])
-    expect(input.clips!.every((c) => !('transition' in c))).toBe(true) // phase 1 stores no seams: every join is a cut
+    expect(input.clips!.every((c) => !('transition' in c))).toBe(true) // no transitions asked for: every join is a cut
   })
 
   it('an out point at or before the in point is not sent', async () => {
@@ -67,12 +68,11 @@ describe('stitchInput', () => {
     expect('outS' in input.clips![0]).toBe(false)
   })
 
-  it('keeps shot order when the edl ranks follow the order the clips landed in (open question)', async () => {
+  it('keeps shot order whatever order the clips landed in: the cut is laid out in shot order', async () => {
     const { d, deps } = made([2, 0, 1])
-    const video = mainVideo(d)!
-    const byRank = Object.values(video.edl).sort((a, b) => (a.rank < b.rank ? -1 : 1)).map((x) => x.shot_id)
+    const byStart = cutOf(d).map((x) => x.follows?.shot_id)
     const byShot = shotsOf(d).map((s) => s.id)
-    expect(byRank).not.toEqual(byShot) // the design's "edl by rank = shot order" does not hold here
+    expect(byStart).toEqual(byShot)
     const { input } = await stitchInput(deps)
     expect(input.clips!.map((c) => c.asset.sha256)).toEqual([SHA('a'), SHA('b'), SHA('c')])
   })

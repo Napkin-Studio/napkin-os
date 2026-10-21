@@ -50,11 +50,11 @@ async function board(n = 6, clips: number[] = []) {
 }
 
 describe("Dex's words while dragging", () => {
-  it('names the neighbours and the clips the move marks', async () => {
+  it('names the neighbours, and says their clips stay as they are', async () => {
     const { store, order } = await board(6, [1, 4])
     const o = order()
     expect(dragWords(store.get(), o, o[4], { beforeId: o[1], afterId: o[2] }))
-      .toBe('If shot 5 lands between 2 and 3, the cuts on both sides change. I will mark clips 2 and 5 to check.')
+      .toBe('If shot 5 lands between 2 and 3, the cuts on both sides change. Clips 2 and 5 stay as they are.')
     expect(dragWords(store.get(), o, o[2], { beforeId: null, afterId: o[0] }))
       .toBe('If shot 3 goes first, before 1, the cut into 1 changes. No clips are made yet, so nothing needs checking.')
     expect(dragWords(store.get(), o, o[0], { beforeId: o[5], afterId: null }))
@@ -63,16 +63,15 @@ describe("Dex's words while dragging", () => {
 })
 
 describe('the drop is one undo step', () => {
-  it('moves the shot, marks the clips on both sides, and undo puts it back', async () => {
+  it('moves the shot and marks no clip; undo puts it back', async () => {
     const { store, order } = await board(6, [1, 2, 4])
     const o = order()
     await moveOnStoryboard(store, o[4], { beforeId: o[1], afterId: o[2] })
     expect(order()).toEqual([o[0], o[1], o[4], o[2], o[3], o[5]])
     const d: ProductionDocument = store.get()
-    const marked = Object.values(d.stale).filter((m) => m.target.kind === 'take').map((m) => d.takes[m.target.id].shot_id).sort()
-    expect(marked).toEqual([o[1], o[2], o[4]].sort())
+    expect(Object.values(d.stale)).toEqual([]) // takes are never marked (features/make-and-edit.clan)
     // Frames and takes stay with their shot: the shot keeps its id.
-    expect(Object.values(d.takes).find((t) => t.shot_id === o[4])).toBeTruthy()
+    expect(Object.values(d.generations).find((t) => t.shot_ids.includes(o[4]))).toBeTruthy()
     expect(store.undoLabels().undo).toMatch(/^move shots/)
     await store.undo()
     expect(order()).toEqual(o)
@@ -161,7 +160,7 @@ describe('the drag over the cards', () => {
     expect(el.querySelector(`[data-card="${o[4]}"]`)?.className).toContain('slot')
     expect(el.querySelector(`[data-card="${o[2]}"] .line`)?.textContent).toBe('Shot 5 moves here')
     expect(el.querySelector(`[data-card="${o[2]}"]`)?.className).toContain('drop-before')
-    expect(el.querySelector('.note')?.textContent).toBe('If shot 5 lands between 2 and 3, the cuts on both sides change. I will mark clips 2 and 5 to check.')
+    expect(el.querySelector('.note')?.textContent).toBe('If shot 5 lands between 2 and 3, the cuts on both sides change. Clips 2 and 5 stay as they are.')
     await pointer(document, 'pointerup', 240, 10)
     expect(moves).toEqual([{ shotId: o[4], place: { beforeId: o[1], afterId: o[2] } }])
     expect(el.querySelector('.note')).toBeNull()

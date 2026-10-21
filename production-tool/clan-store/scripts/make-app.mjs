@@ -19,7 +19,7 @@ const clan = process.env.CLAN_BIN || 'clan'
 // A minimal valid contract-3 document: the template's data. A new instance
 // never sees it (library create_instance resets the data), and
 // ClanDocumentStore.create writes the real first document in one attributed patch.
-const MAPS = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'takes', 'renders', 'reviews',
+const MAPS = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'generations', 'renders', 'reviews',
   'links', 'keys', 'refs', 'documents', 'texts', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 const TEMPLATE_DATA = {
   contract_version: '3',

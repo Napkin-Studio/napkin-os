@@ -53,9 +53,8 @@ export function sceneOfPlace(d: Doc, place: { beforeId: string | null; afterId: 
 const list = (ns: number[]) => (ns.length <= 1 ? String(ns[0] ?? '') : `${ns.slice(0, -1).join(', ')} and ${ns.at(-1)}`)
 
 /**
- * Dex's line while a shot is dragged (3.11): where it would land, and which clips the move
- * marks to check. The clips are the ones script/edits.ts orderMarks marks: the moved shot's and
- * its new neighbours', where each has one.
+ * Dex's line while a shot is dragged (3.11): where it would land. Its clips and its neighbours' stay as
+ * they are (takes are never marked, features/make-and-edit.clan).
  */
 export function dragWords(d: Doc, ids: string[], moving: string, place: { beforeId: string | null; afterId: string | null }): string {
   const n = (id: string | null) => (id ? ids.indexOf(id) + 1 : 0)
@@ -64,7 +63,7 @@ export function dragWords(d: Doc, ids: string[], moving: string, place: { before
     : place.afterId ? `goes first, before ${n(place.afterId)}, the cut into ${n(place.afterId)} changes`
       : `goes last, after ${n(place.beforeId)}, the cut out of ${n(place.beforeId)} changes`
   const clips = [moving, place.beforeId, place.afterId].filter((x): x is string => !!x && !!currentTake(d, x)).map(n).sort((a, b) => a - b)
-  const then = clips.length ? `I will mark ${clips.length === 1 ? 'clip' : 'clips'} ${list(clips)} to check.` : 'No clips are made yet, so nothing needs checking.'
+  const then = clips.length ? `${clips.length === 1 ? 'Clip' : 'Clips'} ${list(clips)} stay as they are.` : 'No clips are made yet, so nothing needs checking.'
   return `If shot ${me} ${where}. ${then}`
 }
 

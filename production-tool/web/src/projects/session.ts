@@ -15,6 +15,7 @@ import { SnapshotStore } from '../doc/store'
 import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
 import { JobRunner } from '../jobs/runner'
 import { CONFIGS } from '../contracts/load'
+import { effectiveConfig } from '../capabilities'
 import { resumeChains, wireJobs } from '../jobs/wire'
 import { ModelStore, type ModelStoreOptions } from '../model/store'
 import { browserClanStore } from '../store/browser'
@@ -108,7 +109,9 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   // Never send past the relay's per-person limit: the rest wait here, "In the queue" (it answered 429 before).
   runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
-  const frameDeps = { relay, doc, ui, runner }
+  // The rooms (flags.makeAndEdit) read from the config the person runs on, at each landing.
+  const rooms = () => !!effectiveConfig(ui.get().configChoice, ui.get().providerChoice, undefined, deps.remoteConfig).flags.makeAndEdit
+  const frameDeps = { relay, doc, ui, runner, rooms }
   wireJobs(frameDeps)
   runner.resume()
   void resumeChains(frameDeps)

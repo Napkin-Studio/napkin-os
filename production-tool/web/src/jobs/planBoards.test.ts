@@ -15,7 +15,7 @@ import { SnapshotStore, systemUpdate, updateDoc } from '../doc/store'
 import { initialUi, type UiState } from '../doc/ui'
 import { newId } from '../lib/ulid'
 import { purposeOf } from '../model/purpose'
-import { currentRender, currentTake, edlOf, mainStoryboard, mainVideo, openStoryboard, scenesOf, scriptOfStoryboard, shotsOf } from '../model/selectors'
+import { currentRender, currentTake, cutOf, mainStoryboard, mainVideo, openStoryboard, scenesOf, scriptOfStoryboard, shotsOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import { MAYA } from '../test/jobFixtures'
@@ -142,8 +142,8 @@ describe('Plan shots on a second storyboard', () => {
     }
     await land()
     await vi.waitFor(() => expect(shots.every((s) => !!currentTake(store.get(), s.id, video.id))).toBe(true), { timeout: 4000, interval: 10 })
-    expect(edlOf(store.get(), video.id)).toHaveLength(shots.length)
-    expect(edlOf(store.get(), mainVideo(store.get())!.id)).toHaveLength(0)
+    expect(cutOf(store.get(), video.id)).toHaveLength(shots.length)
+    expect(cutOf(store.get(), mainVideo(store.get())!.id)).toHaveLength(0)
     const ad = await renderAd(deps, { videoId: video.id })
     expect(store.get().jobs[ad].node).toEqual({ kind: 'video', id: video.id })
     expect(purposeOf(store.get().jobs[ad])).toEqual({ for: 'stitch', videoId: video.id })

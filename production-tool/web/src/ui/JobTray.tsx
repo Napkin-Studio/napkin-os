@@ -21,6 +21,7 @@ import { NapkinLoader } from './loader/NapkinLoader'
 import { Float } from './Float'
 import { fmtElapsed, useElapsed } from './hooks'
 import { jobLine, jobLook, trayGroups, WAITING, whereIs, type TrayRow } from './tray'
+import { plainJobError } from '../jobs/errorWords'
 
 export function JobTray({ phone = false }: {
   /** The phone bar: watch only, so no ask dock and no Show (asks are answered on a laptop or iPad, 2.5). */
@@ -102,7 +103,7 @@ function Row({ row, onShow, phone }: { row: TrayRow; onShow: () => void; phone: 
   const w = whoIsWorking(row.job, row.state, row.ctx, shotNumber(doc, shotId) || undefined)
   const model = row.job.model ? modelLabel(row.job.provider, row.job.model) : undefined
   const sub = failed
-    ? row.job.error?.message ?? 'Something went wrong.'
+    ? (row.job.error ? plainJobError(row.job.error, row.job.op).message : 'Something went wrong.')
     : waiting ? WAITING
     : [model, row.state === 'queued' ? 'in the queue' : undefined, row.queuePosition ? `#${row.queuePosition} in queue` : undefined].filter(Boolean).join(' · ')
   const ask = waiting ? askOf(doc, row.job.id) : undefined

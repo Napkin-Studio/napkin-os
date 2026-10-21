@@ -29,8 +29,11 @@ export type JobPurpose =
   /** endFrameId: the next shot's frame the clip ends on (features/connected-video.clan, a continue join).
    *  endsOnTake: Remake just this shot, landing on its window's out still (the take it remakes). */
   | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[]; endFrameId?: Id; endsOnTake?: Id }
-  /** One take of a run of shots (features/connected-video.clan): it lands as a take, a window of it, per shot. */
+  /** One take of a run of shots (features/connected-video.clan): it lands as one generation of the box. */
   | { for: 'run'; videoId: Id; runId: Id }
+  /** Change this… (features/make-and-edit.clan): a new take of `parentId` with one thing changed (the
+   *  request's remakeWith). It lands beside its parent, never in the cut. */
+  | { for: 'remake'; videoId: Id; parentId: Id }
   /** videoId: the video it renders (absent: the main one). */
   | { for: 'stitch'; videoId?: Id }
   /** A Generate on a sketch area (features/frame-aspect.clan): it lands as a frame made from the sketch. */
@@ -67,6 +70,7 @@ export function purposeWords(p: JobPurpose): string {
   if (p.for === 'size') return `size ${p.sizeId}`
   if (p.for === 'reframe') return `reframe ${p.key}`
   if (p.for === 'run') return `run ${p.runId}`
+  if (p.for === 'remake') return `remake ${p.parentId}`
   return p.for === 'frame' && p.how ? `frame ${p.how}` : p.for
 }
 
@@ -92,6 +96,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
       return { kind: 'format_set', id: p.setId }
     case 'film_plan':
     case 'run':
+    case 'remake':
       return { kind: 'video', id: p.videoId }
     default:
       // A Generate on today's canvas runs for the selection; its result is the canvas node named by the job's id.
@@ -103,9 +108,10 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
 export function purposeInputs(p: JobPurpose): JobInputRow[] {
   const rows: JobInputRow[] = []
   if ((p.for === 'frame' || p.for === 'frame_edit' || p.for === 'image_edit') && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
-  if (p.for === 'clip' && p.parentTakeId) rows.push({ kind: 'take', ref: p.parentTakeId, used_as: 'new version of', included: true })
+  if (p.for === 'clip' && p.parentTakeId) rows.push({ kind: 'generation', ref: p.parentTakeId, used_as: 'new version of', included: true })
+  if (p.for === 'remake') rows.push({ kind: 'generation', ref: p.parentId, used_as: 'new version of', included: true })
   if (p.for === 'clip' && p.endFrameId) rows.push({ kind: 'frame', ref: p.endFrameId, used_as: LAST_FRAME, included: true })
-  if (p.for === 'clip' && p.endsOnTake) rows.push({ kind: 'take', ref: p.endsOnTake, used_as: LAST_FRAME, included: true })
+  if (p.for === 'clip' && p.endsOnTake) rows.push({ kind: 'generation', ref: p.endsOnTake, used_as: LAST_FRAME, included: true })
   for (const r of (p.for === 'frame' ? p.fixReviewIds : p.for === 'clip' ? p.reviewIds : undefined) ?? []) {
     rows.push({ kind: 'note', ref: r, used_as: 'note to fix', included: true })
   }
@@ -134,6 +140,8 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
       return j.node?.kind === 'video' ? { for: 'film_plan', videoId: j.node.id } : null
     case 'run':
       return j.node?.kind === 'video' && how ? { for: 'run', videoId: j.node.id, runId: how } : null
+    case 'remake':
+      return j.node?.kind === 'video' && how ? { for: 'remake', videoId: j.node.id, parentId: how } : null
     case 'frame': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'frame', shotId: j.node.id }
@@ -158,12 +166,12 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
     case 'clip': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'clip', shotId: j.node.id }
-      const pt = parent('take')
+      const pt = parent('generation')
       if (pt) p.parentTakeId = pt
       if (notes.length) p.reviewIds = notes
       const end = (j.inputs ?? []).find((r) => r.kind === 'frame' && r.used_as === LAST_FRAME)?.ref
       if (end) p.endFrameId = end
-      const onTake = (j.inputs ?? []).find((r) => r.kind === 'take' && r.used_as === LAST_FRAME)?.ref
+      const onTake = (j.inputs ?? []).find((r) => r.kind === 'generation' && r.used_as === LAST_FRAME)?.ref
       if (onTake) p.endsOnTake = onTake
       return p
     }

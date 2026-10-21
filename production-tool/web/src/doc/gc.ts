@@ -5,7 +5,7 @@
 // entity of the document names (contract 3), and every image node still on the
 // canvas:
 //   - named references (refs: their picture, a typography ref's font file);
-//   - frames, takes, ad renders, read documents, format sizes, a note's still,
+//   - frames, generations (takes), ad renders, read documents, format sizes, a note's still,
 //     exports;
 //   - jobs' outputs (the record of what was made and paid for).
 // Everything else (drawings re-exported since, pictures dropped and taken off
@@ -21,7 +21,8 @@ export function roots(d: ProductionDocument, onCanvas: Iterable<Sha256>): Set<Sh
     add(r.font?.file)
   }
   for (const f of Object.values(d.frames)) add(f.asset)
-  for (const t of Object.values(d.takes)) add(t.asset)
+  for (const g of Object.values(d.generations)) add(g.asset)
+  for (const v of Object.values(d.videos)) add(v.end_card?.logo_asset)
   for (const r of Object.values(d.renders)) add(r.asset)
   for (const x of Object.values(d.documents)) add(x.asset)
   for (const s of Object.values(d.sizes)) add(s.asset)

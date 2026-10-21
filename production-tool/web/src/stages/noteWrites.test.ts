@@ -18,7 +18,7 @@ async function shotWithTake(durationS: number) {
     addFrame(d, shot, SHA('0'), { pick: true })
     addTake(d, shot, SHA('a'), job(d, 'clip', [], SHA('a')), { pick: true })
     shotId = shot.id
-    takeId = Object.keys(d.takes)[0]
+    takeId = Object.keys(d.generations)[0]
   }, 'sync')
   await s.flush()
   return { s, shotId, takeId }

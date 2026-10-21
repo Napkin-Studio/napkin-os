@@ -5,7 +5,7 @@
 // Then a size's edit (edlFor) and its captions (captionLayers: the spoken lines, timed in the cut).
 
 import type { Aspect, CropKey, CutdownPlan, CutdownShot, FormatSet, Id, ProductionDocument, PxBox, Region, Size, SizeBeat, SizeEdlWindow, TypeLayer } from '../contracts/types'
-import { beatsOf, currentTake, edlItemFor, shotsOf, storyboardOfVideo } from '../model/selectors'
+import { beatsOf, currentTake, cutItemFor, shotsOf, storyboardOfVideo } from '../model/selectors'
 import { formatById } from './formats'
 import { linesOf } from '../script/skye'
 import { METHOD_WORD } from './rules'
@@ -58,7 +58,7 @@ export function alephRatio(a: Aspect): (typeof ALEPH_RATIOS)[number] {
   return best
 }
 
-/** The key a shot made again for a shape is kept under: `<take id>@<w>x<h>` (the size's delivery). */
+/** The key a shot made again for a shape is kept under: `<generation id>@<w>x<h>` (the size's delivery). */
 export function reframeKey(takeId: Id, shape: { width: number; height: number }): string {
   return `${takeId}@${shape.width}x${shape.height}`
 }
@@ -155,8 +155,8 @@ export function cropKeys(take: Aspect, aspect: Aspect, subjects: readonly PxBox[
 
 export interface MasterShot extends CutdownShot { number: number; frameAsset?: string; takeAsset?: string }
 
-/** The master's shots in cut order, each with the window of its take the ad shows (stitch's: from its edl
- *  item's in point for the shot's length), its take's length and pixels, its words and its spoken lines. */
+/** The master's shots in cut order, each with the window of its take the ad shows (its V1 clip's source in and
+ *  out, at most the shot's length), its take's length and pixels, its words and its spoken lines. */
 export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
   const v = d.videos[videoId]
   const sb = storyboardOfVideo(d, videoId)
@@ -168,12 +168,13 @@ export function masterShots(d: ProductionDocument, videoId: Id): MasterShot[] {
       out.push({ shotId: s.id, number: i + 1, inS: 0, outS: CARD_S, endCard: true })
       continue
     }
-    if (!take) continue
-    const item = edlItemFor(d, s.id, videoId)
-    const ins = item?.in_s ?? 0
+    if (!take?.asset) continue
+    const item = cutItemFor(d, s.id, videoId)
+    const ins = item?.source?.in_s ?? 0
     const a = d.assets[take.asset]
     const takeS = a?.duration_s ?? take.duration_s ?? s.duration_s
-    const outS = item?.out_s !== undefined && item.out_s > ins ? Math.min(item.out_s, ins + s.duration_s) : ins + s.duration_s
+    const end = item?.source?.out_s
+    const outS = end !== undefined && end > ins ? Math.min(end, ins + s.duration_s) : ins + s.duration_s
     const spoken = spokenOf(d, s.id).map((x) => x.text).join(' ').slice(0, 600)
     out.push({
       shotId: s.id, number: i + 1, takeId: take.id, inS: r3(ins), outS: r3(outS), takeS: r3(Math.max(takeS, outS)),
@@ -216,7 +217,7 @@ export function edlFor(shots: readonly MasterShot[], beats: readonly SizeBeat[],
     const s = shots.find((x) => x.shotId === w.shotId)!
     const take = s.takeSize ?? { w: 1920, h: 1080 }
     const mine = before?.find((b) => b.shot_id === w.shotId && b.crop_by === 'person')
-    const item: SizeEdlWindow = { shot_id: w.shotId, ...(s.takeId ? { take_id: s.takeId } : {}), in_s: w.inS, out_s: w.outS, take_size: { ...take } }
+    const item: SizeEdlWindow = { shot_id: w.shotId, ...(s.takeId ? { generation_id: s.takeId } : {}), in_s: w.inS, out_s: w.outS, take_size: { ...take } }
     if (mine?.crop) return { ...item, crop: { ...mine.crop }, crop_by: 'person' }
     if (sameShape(take, shape)) return item
     const c = crops.find((x) => x.shotId === w.shotId && sameShape(x.aspect, shape))
@@ -279,8 +280,8 @@ export function filmFormat(id: FilmShapeId) {
 export function reframesOf(set: FormatSet, size: Size): { key: string; done: boolean }[] {
   const out: { key: string; done: boolean }[] = []
   for (const w of size.edl ?? []) {
-    if (!w.take_id) continue
-    const key = reframeKey(w.take_id, size.delivery)
+    if (!w.generation_id) continue
+    const key = reframeKey(w.generation_id, size.delivery)
     const r = set.reframes?.[key]
     if (r) out.push({ key, done: !!r.asset })
   }
@@ -290,7 +291,7 @@ export function reframesOf(set: FormatSet, size: Size): { key: string; done: boo
 /** The tile's caption line: how it is made ("Reframe · 2 shots new edges"), its length and its shots. */
 export function filmWords(set: FormatSet, size: Size): string {
   const kept = size.edl?.length ?? 0
-  const keys = (size.edl ?? []).map((w) => (w.take_id ? set.reframes?.[reframeKey(w.take_id, size.delivery)] : undefined)).filter(Boolean)
+  const keys = (size.edl ?? []).map((w) => (w.generation_id ? set.reframes?.[reframeKey(w.generation_id, size.delivery)] : undefined)).filter(Boolean)
   const edges = keys.filter((r) => r!.method === 'outpaint').length
   const remade = keys.filter((r) => r!.method === 'remake').length
   return [`${METHOD_WORD[size.method]} · ${kept} ${kept === 1 ? 'shot' : 'shots'}`, edges ? `${edges} new edges` : '', remade ? `${remade} remade` : ''].filter(Boolean).join(', ')
