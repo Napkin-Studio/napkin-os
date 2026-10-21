@@ -42,6 +42,8 @@ export interface PlanModel {
   minS?: number
   maxS?: number
   refsMax: number
+  /** Makes a clip from words alone, with no first frame (the sheet's textEndpoint). */
+  words?: boolean
 }
 
 export interface PlannedRun {
@@ -86,6 +88,7 @@ export function modelEntry(provider: Provider, model: string, sheets: Sheets = S
     ...('minS' in e && e.minS !== undefined ? { minS: e.minS } : {}),
     ...('maxS' in e && e.maxS !== undefined ? { maxS: e.maxS } : {}),
     refsMax: (('refs' in e && e.refs) || sheet.refs).max,
+    ...('textEndpoint' in e && e.textEndpoint ? { words: true } : {}),
   }
 }
 

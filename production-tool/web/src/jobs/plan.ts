@@ -30,7 +30,10 @@ import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
 import { landingWhy } from './landing'
 import { allNamed, jobShot } from './select'
+import { checkFronts } from '../lib/names'
+export { checkFronts }
 import { isActive } from './runner'
+import { liveGet } from '../model/live'
 
 // ── the request ─────────────────────────────────────────────────────────────
 
@@ -39,14 +42,17 @@ const boardToPlan = (d: ProductionDocument, storyboardId?: string) => (storyboar
 
 /** The shot_list request: the script's words, the target, the named pictures, the shots already there.
  *  `storyboardId`: the storyboard to plan (absent: the main one), from the script that drives it. */
-export async function planInput(relay: Relay, d: ProductionDocument, text?: string, storyboardId?: string): Promise<JobInput> {
+export async function planInput(relay: Relay, d: ProductionDocument, text?: string, storyboardId?: string, stored: ProductionDocument = d): Promise<JobInput> {
   const sb = boardToPlan(d, storyboardId)
   if (!sb) throw new Error('This project has no storyboard.')
+  const script = scriptOfStoryboard(d, sb.id)
+  const words = (script ? scriptText(d, script.id) : '').slice(0, SCRIPT_MAX)
+  // A bare @key with no front stops here, before anything is uploaded or sent.
+  checkFronts(d, stored, `${words}\n${text ?? ''}`)
   const refs = await allNamed(relay, d)
   const shots = shotsOf(d, sb.id)
-  const script = scriptOfStoryboard(d, sb.id)
   return {
-    script: (script ? scriptText(d, script.id) : '').slice(0, SCRIPT_MAX),
+    script: words,
     targetS: Math.min(600, Math.max(1, Math.round(sb.target_s))),
     ...(refs.length ? { refs } : {}),
     ...(shots.length ? { shots: shots.map((s) => jobShot(d, s, false)) } : {}),
@@ -56,8 +62,8 @@ export async function planInput(relay: Relay, d: ProductionDocument, text?: stri
 
 /** Ask Dex for a plan (or a re-plan) of a storyboard (absent: the main one). */
 export async function planShots(deps: FrameDeps, opts: { text?: string; storyboardId?: string } = {}): Promise<string> {
-  const d = deps.doc.get()
-  const input = await planInput(deps.relay, d, opts.text, opts.storyboardId)
+  const d = liveGet(deps.doc)
+  const input = await planInput(deps.relay, d, opts.text, opts.storyboardId, deps.doc.get())
   const sb = boardToPlan(d, opts.storyboardId)
   return deps.runner.submit('shot_list', input, [], sb && sb.id !== mainStoryboard(d)?.id ? { for: 'shot_list', storyboardId: sb.id } : { for: 'shot_list' })
 }
@@ -74,7 +80,7 @@ export function runningPlan(d: ProductionDocument, storyboardId?: string): strin
  * same node {kind: 'storyboard', id}. One already running is joined, never started twice.
  */
 export async function planOrJoin(deps: FrameDeps, opts: { text?: string; storyboardId?: string } = {}): Promise<{ jobId: string; joined: boolean }> {
-  const running = runningPlan(deps.doc.get(), opts.storyboardId)
+  const running = runningPlan(liveGet(deps.doc), opts.storyboardId)
   if (running) return { jobId: running, joined: true }
   return { jobId: await planShots(deps, opts), joined: false }
 }

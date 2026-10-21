@@ -1,5 +1,5 @@
 /* The inputs strip on a node card (ui-behaviour 3.16): one line, chips that never wrap the card. */
-.in-strip { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 11px; flex: none; }
+.in-strip { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: clip; overflow-y: visible; white-space: nowrap; font-size: 11px; flex: none; }
 .in-label { font-family: var(--f-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); margin-right: 2px; }
 .in-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 160px; padding: 1px 7px 1px 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink2); }
 .in-chip:not(:has(img)) { padding-left: 7px; }
@@ -8,9 +8,47 @@
 .in-chip .in-ref { color: var(--tool-ink); }
 .in-more { padding: 1px 7px; color: var(--ink3); }
 
+/* Editing the strip (3.16): a chip shows its input on the canvas; its × unlinks; "+ Link input" opens the picker. */
+.in-strip > .in-chip { flex: 0 1 auto; min-width: 36px; position: relative; }
+.in-strip > .in-chip:has(.in-x) { padding-right: 3px; }
+.in-show { all: unset; display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; cursor: pointer; }
+.in-show > span { overflow: hidden; text-overflow: ellipsis; }
+.in-show:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; border-radius: 999px; }
+.in-show img { width: 14px; height: 14px; border-radius: 50%; object-fit: cover; flex: none; }
+/* The ×: small to see, 44 px to hit (its ::before), shown on hover or focus (always on touch). */
+.in-x { all: unset; position: relative; flex: none; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; color: var(--ink3); cursor: pointer; opacity: 0; }
+.in-x::before { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+.in-chip:hover .in-x, .in-chip:focus-within .in-x { opacity: 1; }
+.in-x:hover { background: var(--danger-bg); color: var(--danger); }
+.in-x:focus-visible { opacity: 1; outline: 2px solid var(--tool); outline-offset: 1px; }
+@media (hover: none) { .in-x { opacity: 1; } }
+.in-add { all: unset; flex: none; padding: 1px 7px; border-radius: 999px; border: 1px dashed var(--line); color: var(--tool-ink); cursor: pointer; font-size: 11px; }
+.in-add:hover, .in-add[aria-expanded='true'] { background: var(--tool-soft); border-color: var(--tool); }
+.in-add:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+.in-said { color: var(--danger); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+
+/* The question before an unlink, and the picker: over everything, at the strip. */
+.in-pop { position: fixed; z-index: 1000; min-width: 220px; max-width: 340px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); box-shadow: var(--shadow-pop); font-size: 12.5px; white-space: normal; }
+.in-q { margin: 0 0 10px; line-height: 1.4; }
+.in-qbtns { display: flex; justify-content: flex-end; gap: 6px; }
+.in-pick { display: flex; flex-direction: column; gap: 8px; width: 300px; max-width: calc(100vw - 40px); }
+.in-pick .input { width: 100%; box-sizing: border-box; }
+.in-picklist { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.in-pickhead { font-family: var(--f-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); padding: 6px 4px 2px; }
+.in-choice { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.in-choice:hover, .in-choice:focus-visible { background: var(--tool-soft); }
+.in-choice.off { cursor: default; opacity: 0.55; }
+.in-choice.off:hover { background: none; }
+.in-choice img, .in-noimg { width: 26px; height: 26px; border-radius: 5px; object-fit: cover; flex: none; background: var(--line-soft); }
+.in-clabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.in-cwhat { flex: none; font-size: 11px; color: var(--ink3); }
+.in-none, .in-why-not { margin: 4px; color: var(--ink3); }
+.in-why-not { color: var(--danger); }
+
 /* An editor's scope line (the Storyboard editor's sub bar). */
 .in-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 20px; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
 .in-scope .in-strip { flex: 0 1 auto; }
+.in-refs .in-chip { white-space: nowrap; max-width: none; }
 .in-refs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 .in-why { font-size: 10.5px; color: var(--ink3); }
 .in-shots { font-family: var(--f-mono); font-size: 10px; color: var(--ink3); }

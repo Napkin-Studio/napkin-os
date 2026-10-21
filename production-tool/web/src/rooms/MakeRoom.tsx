@@ -15,7 +15,8 @@ import { makeClip, videoQuality } from '../jobs/clips'
 import { makeRuns, modelEntry } from '../jobs/runs'
 import { joinSelection, separateSelection, videoJoin } from '../jobs/runView'
 import { isRunning, jobAt } from '../jobs/select'
-import { shotNumber } from '../model/selectors'
+import { refName, refsList, shotNumber } from '../model/selectors'
+import { roomEmpty } from './emptyState'
 import { Float, MenuItem } from '../ui/Float'
 import { useSending } from '../ui/hooks'
 import { ChangeDrawer, type ChangeOpen } from './ChangeDrawer'
@@ -25,6 +26,14 @@ import { Compare, TakePlayer } from './Players'
 import { Poster } from './Poster'
 import type { RoomData, Selection } from './Rooms'
 import { appendTake } from './editOps'
+import { FrontButtons } from '../stages/FrontsNeeded'
+import { plainJobError } from '../jobs/errorWords'
+import { ClipChoice } from '../stages/ClipChoice'
+import { ShotEditor } from '../script/ShotEditor'
+import { scriptMentionHooks } from '../script/mentionHooks'
+import { planOrJoin } from '../jobs/plan'
+import { addBox, addShotRef, addShotToBox, removeShotRef, setStartFrame, shotRefLinks, startPicture } from './newBox'
+import { IMG_DRAG } from './Bin'
 
 type Tab = 'shot' | 'box' | 'change'
 const SIZES = ['close', 'medium', 'wide'] as const
@@ -82,12 +91,41 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
         const failed = await makeRuns(deps, { videoId: data.videoId, shotIds: [b.shotIds[0]], config, again: true, busy, ...(choice ? { modelChoice: choice } : {}), quality: videoQuality(doc, data.videoId) })
         if (failed.length) setError(failed.join(' '))
       } else {
-        await makeClip(deps, b.shotIds[0], { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}) })
+        // No frame: the clip is made from the shot's words and references (a new box, or straight from the script).
+        const fromWords = !selectedFrame(doc, b.shotIds[0]) && !startPicture(doc, b.shotIds[0]) && !!doc.shots[b.shotIds[0]]?.action?.trim()
+        await makeClip(deps, b.shotIds[0], { videoId: data.videoId, ...(choice ? { modelChoice: choice } : {}), ...(fromWords ? { fromWords } : {}) })
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   })
+
+  // What to do when there is nothing here yet (owner, 2026-10-21): plan the shots, fix what stopped the
+  // plan (a bare @key with no front: the same Choose Kapi's front as the Storyboard), or make a first take.
+  const empty = roomEmpty(doc, docStore.get(), data.videoId, shots.length, data.gens.length)
+  /** + New box: a shot of its own at the end, selected in the Shot tab to be written. */
+  const newBox = () => send(async () => {
+    setError(null)
+    try {
+      const id = await addBox(docStore, data.videoId)
+      onSel({ shotId: id })
+      setTab('shot')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
+  const tryPlan = () => send(async () => {
+    setError(null)
+    try {
+      if (empty.storyboardId) await planOrJoin(deps, { storyboardId: empty.storyboardId })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
+  const openStoryboard = () => uiStore.update((u) => {
+    if (empty.storyboardId) u.openNode = { ...u.openNode, storyboard: empty.storyboardId }
+    u.stage = 'storyboard'
+  }, 'stage')
 
   const compareGens = ticked.map((id) => data.gens.find((g) => g.id === id)).filter((g): g is Gen => !!g && g.state === 'ready')
   const beats = shown && shown.segments.length > 1 ? shown.segments.slice(1).map((s) => ({ atS: s.inS, label: `Shot ${shotNumber(doc, s.shotId)}` })) : undefined
@@ -95,13 +133,14 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
   return (
     <div className="rm-make">
       <section className="rm-centre" aria-label="Takes and boxes">
+        <ClipChoice videoId={data.videoId} />
         {comparing && compareGens.length === 2 ? (
           <Compare a={{ sha: compareGens[1].asset, label: `${genTitle(compareGens[1], data.boxes)} · ${compareGens[1].label}` }}
             b={{ sha: compareGens[0].asset, label: `${genTitle(compareGens[0], data.boxes)} · ${compareGens[0].label}` }}
             onClose={() => setComparing(false)} />
         ) : (
           <TakePlayer key={shown?.id ?? 'none'} sha={shown?.asset} label={shown ? `${shownBox ? boxName(shownBox) : 'Take'} · v${shown.version}` : ''} beats={beats}
-            className="rm-mainplayer">
+            className="rm-mainplayer" empty={empty.player}>
             <button type="button" className="btn" disabled={compareGens.length !== 2} onClick={() => setComparing(true)}
               title={compareGens.length === 2 ? 'Play the two ticked takes side by side' : 'Tick two takes under a box to compare them'}>
               <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="5" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" /><rect x="7.5" y="3" width="5" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
@@ -109,7 +148,21 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
             </button>
           </TakePlayer>
         )}
-        {error && <div role="alert" className="rm-error">{error}</div>}
+        {error && <div role="alert" className="rm-error">{error}<FrontButtons text={error} /></div>}
+        {empty.kind === 'no-shots' && (
+          <div className="rm-emptystate" role="status">
+            {empty.planning ? <p>Dex is planning the shots from the script…</p> : (
+              <>
+                <p>{empty.why ?? 'No shots yet. Make a box from words, or plan the shots in the Storyboard first.'}{empty.why && <FrontButtons text={empty.why} />}</p>
+                <div className="btns">
+                  <button type="button" className="btn primary" disabled={making} onClick={() => void newBox()}>+ New box</button>
+                  {empty.canPlan && <button type="button" className="btn" disabled={making} onClick={() => void tryPlan()}>{empty.why ? 'Try again' : 'Plan shots'}</button>}
+                  <button type="button" className="btn" onClick={openStoryboard}>Open the Storyboard</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <div className="rm-boxeshead">
           <b>Boxes</b>
           <span className="rm-faint">A box is one video made at once. A line inside a box is a cut. Tick two takes to compare.</span>
@@ -124,6 +177,8 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
               onChange={(g) => onChange({ parentId: g.id, ...(sel.shotId && g.shotIds.includes(sel.shotId) ? { shotId: sel.shotId } : {}) })}
               onAddToEdit={(g) => void appendTake(docStore, doc, data, g)} />
           ))}
+          <button type="button" className="rm-box rm-newbox" role="listitem" disabled={making} onClick={() => void newBox()}
+            title="A new box: a video made from your words and references, no storyboard frame needed">+ New box</button>
         </div>
       </section>
       <aside className="rm-direct" aria-label="Direct">
@@ -133,7 +188,10 @@ export function MakeRoom({ data, shots, sel, onSel, change, onChange, onCloseCha
           ))}
         </div>
         <div className="rm-directbody">
-          {tab === 'shot' && shot && box && <ShotTab key={shot.id} shot={shot} n={shotNumber(doc, shot.id)} box={box} data={data} onBox={() => setTab('box')} />}
+          {tab === 'shot' && !(shot && box) && <p className="rm-note rm-pad">{shots.length ? 'Select a shot in a box to direct it.' : 'No shots yet. Once the Storyboard has them, select one here to direct it.'}</p>}
+          {tab === 'box' && !box && <p className="rm-note rm-pad">{shots.length ? 'Select a box to set how it is made.' : 'No boxes yet: each shot becomes a box once the Storyboard has shots.'}</p>}
+          {tab === 'shot' && shot && box && <ShotTab key={shot.id} shot={shot} n={shotNumber(doc, shot.id)} box={box} data={data} onBox={() => setTab('box')}
+            onAddShot={() => void send(async () => { const id = await addShotToBox(docStore, data.videoId, box.shotIds); onSel({ shotId: id }) })} />}
           {tab === 'box' && box && <BoxTab key={box.key} box={box} data={data} shots={shots} model={models[box.key]} onModel={(m) => setModels({ ...models, [box.key]: m })} onMake={() => void make(box)} making={making} />}
           {tab === 'change' && (() => {
             const parent = change ? data.gens.find((g) => g.id === change.parentId) : (shown && shown.boxKey === box?.key ? shown : data.gens.find((g) => g.boxKey === box?.key && g.state === 'ready'))
@@ -159,6 +217,11 @@ function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox,
   const title = `${boxName(b)} · ${b.together ? 'Made together' : 'One shot'} · ${Math.round(b.lengthS * 10) / 10} s`
   const differs = useMemo(() => nextDiffers(doc, b, takes), [doc, b, takes])
   const has = takes.some((g) => g.state === 'ready')
+  // A Make the relay refused or that failed (no take for it): said on the box, never silent.
+  const ui = useUi()
+  const lastJob = jobAt(doc, ui, (c) => (c.for === 'clip' && b.shotIds.includes(c.shotId)) || (c.for === 'run' && !!doc.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.some((id) => b.shotIds.includes(id))))
+  const failedJob = lastJob ? doc.jobs[lastJob] : undefined
+  const failedLine = failedJob?.state === 'failed' && failedJob.error ? plainJobError(failedJob.error, failedJob.op).message : undefined
   return (
     <section className={`rm-box ${selected ? 'sel' : ''}`} role="listitem" aria-label={title}>
       <header className="rm-boxtop">
@@ -169,6 +232,7 @@ function BoxCard({ b, data, selected, sel, making, takes, ticked, onShot, onBox,
         </button>
       </header>
       {differs && <div className="rm-differs rm-clamp2" title={`Next take differs: ${differs}`}>Next take differs: {differs}</div>}
+      {failedLine && <div className="rm-error" role="alert">The last Make did not work: {failedLine}<FrontButtons text={failedLine} /></div>}
       <div className="rm-shots">
         {b.shotIds.map((id, i) => {
           const s = doc.shots[id]
@@ -264,8 +328,10 @@ function nextDiffers(d: ReturnType<typeof useDoc>, b: Box, takes: Gen[]): string
 
 /** The Shot tab: the shot's camera, its start and end frames, its cast and look, its length. Changes apply
  *  to the next take only. */
-function ShotTab({ shot, n, box, data, onBox }: { shot: Shot; n: number; box: Box; data: RoomData; onBox: () => void }) {
-  const { doc: docStore } = useServices()
+function ShotTab({ shot, n, box, data, onBox, onAddShot }: { shot: Shot; n: number; box: Box; data: RoomData; onBox: () => void; onAddShot: () => void }) {
+  const { doc: docStore, clan } = useServices()
+  const mentions = useMemo(() => (clan ? scriptMentionHooks(clan, undefined) : undefined), [clan])
+  const [over, setOver] = useState(false)
   const doc = useDoc()
   const { config } = useConfig()
   const set = (patch: Partial<Camera>, why: string) => void updateDoc(docStore, (d) => {
@@ -277,11 +343,11 @@ function ShotTab({ shot, n, box, data, onBox }: { shot: Shot; n: number; box: Bo
     if (s) s.duration_s = Math.max(0.5, Math.min(15, Math.round(v * 10) / 10))
   }, `shot ${n} length`)
   const frame = selectedFrame(doc, shot.id)
+  const start = frame ? undefined : startPicture(doc, shot.id)
   const i = box.shotIds.indexOf(shot.id)
   const nextFrame = i >= 0 && i < box.shotIds.length - 1 ? selectedFrame(doc, box.shotIds[i + 1]) : undefined
   const model = modelEntry(...(lastModel(doc, config)))
   const refsMax = model?.refsMax ?? 4
-  const refs = (shot.refs ?? []).map((id) => doc.refs[id]).filter(Boolean)
   const differs = nextDiffers(doc, box, data.gens.filter((g) => g.boxKey === box.key))
   return (
     <div className="rm-tab">
@@ -290,6 +356,16 @@ function ShotTab({ shot, n, box, data, onBox }: { shot: Shot; n: number; box: Bo
         <b className="rm-clamp2" title={shotTitle(shot, n)}>{shotTitle(shot, n)}</b>
       </div>
       {differs && <div className="rm-banner info" role="status">Next take differs: {differs}. The takes you have stay as they are.</div>}
+      <fieldset className="rm-field">
+        <legend className="rm-label">What happens</legend>
+        {clan ? <ShotEditor store={clan} shotId={shot.id} name={`Shot ${n}`} compact mentions={mentions} />
+          : <p className="rm-note">{shot.action || 'No words yet.'}</p>}
+        <p className="rm-note">Type @ to name a person or thing. A bare @name needs its front.</p>
+      </fieldset>
+      <fieldset className="rm-field">
+        <legend className="rm-label">References</legend>
+        <RefPicker shot={shot} max={refsMax} />
+      </fieldset>
       <fieldset className="rm-field">
         <legend className="rm-label">Camera</legend>
         <div className="rm-row"><span className="rm-rowname">Size</span>
@@ -315,21 +391,19 @@ function ShotTab({ shot, n, box, data, onBox }: { shot: Shot; n: number; box: Bo
       <fieldset className="rm-field">
         <legend className="rm-label">Start and end frame</legend>
         <div className="rm-wells">
-          <div className="rm-well"><span className="rm-rowname">Starts on</span><Poster sha={frame?.asset} words="No frame yet" /></div>
+          <div className={`rm-well ${over ? 'over' : ''}`} aria-label="Start frame: drop a Bin picture here"
+            onDragOver={(e) => { if (e.dataTransfer.types.includes(IMG_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setOver(true) } }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => { const refId = e.dataTransfer.getData(IMG_DRAG); setOver(false); if (refId) { e.preventDefault(); void setStartFrame(docStore, shot.id, refId) } }}>
+            <span className="rm-rowname">Starts on</span><Poster sha={frame?.asset ?? start?.sha} words="Optional: drop a Bin picture" />
+            {start?.refId && <button type="button" className="btn link" onClick={() => void setStartFrame(docStore, shot.id, null)}>Clear</button>}
+          </div>
           <div className={`rm-well ${box.together ? 'off' : ''}`}><span className="rm-rowname">Ends on</span>
             {box.together ? <div className="rm-poster empty"><span className="rm-clamp2">Not when shots are made together</span></div> : <Poster sha={nextFrame?.asset} words="Nothing set" />}
           </div>
         </div>
         {box.together && <p className="rm-note">This model can't end on a set frame when shots are made together.</p>}
         {box.together && <button type="button" className="btn link rm-linkrow" onClick={onBox}>Box settings</button>}
-      </fieldset>
-      <fieldset className="rm-field">
-        <legend className="rm-label">Cast and look</legend>
-        <div className="rm-chiprow wrap">
-          {refs.map((r) => <span key={r.id} className="rm-chip static" title={`@${r.key}_${r.variant}`}>@{r.key}</span>)}
-          {!refs.length && <span className="rm-faint">No one named in this shot.</span>}
-        </div>
-        <p className="rm-note">Name people and things with @ in the shot's words. Up to {refsMax} for this model.</p>
       </fieldset>
       <fieldset className="rm-field">
         <legend className="rm-label">Length</legend>
@@ -339,7 +413,48 @@ function ShotTab({ shot, n, box, data, onBox }: { shot: Shot; n: number; box: Bo
           <button type="button" className="rm-iconbtn" aria-label="Longer" onClick={() => setLength(shot.duration_s + 0.5)}>+</button>
         </div>
       </fieldset>
+      {box.shotIds.at(-1) === shot.id && (
+        <button type="button" className="btn rm-wide" onClick={onAddShot} title="Several shots in one video: add a shot made together with this one">+ Add a shot to this box</button>
+      )}
       <p className="rm-note">Changes here make the next take. The takes you have stay as they are.</p>
+    </div>
+  )
+}
+
+/** A shot's references: ref→shot links, picked from the Bin's named pictures, at most the model's limit. */
+function RefPicker({ shot, max }: { shot: Shot; max: number }) {
+  const doc = useDoc()
+  const { doc: docStore } = useServices()
+  const [q, setQ] = useState('')
+  const [why, setWhy] = useState<string | null>(null)
+  const links = shotRefLinks(doc, shot.id)
+  const chosen = new Set(links.map((l) => l.from.id))
+  const all = refsList(doc).filter((r) => r.asset && !chosen.has(r.id))
+  const typed = q.trim().replace(/^@/, '').toLowerCase()
+  const offer = typed ? all.filter((r) => refName(r).includes(typed)).slice(0, 8) : []
+  const full = links.length >= max
+  const add = (id: string) => { setQ(''); setWhy(null); void addShotRef(docStore, shot.id, id, max).catch((e) => setWhy(e instanceof Error ? e.message : 'That did not work.')) }
+  const label = (l: { from: { kind: string; id: string } }) => (l.from.kind === 'key' ? `@${doc.keys[l.from.id]?.key}` : doc.refs[l.from.id] ? `@${refName(doc.refs[l.from.id])}` : '@?')
+  return (
+    <div className="rm-refpick">
+      <div className="rm-chiprow wrap">
+        {links.map((l) => (
+          <span key={l.id} className="rm-chip static">{label(l)}
+            <button type="button" className="rm-chipx" aria-label={`Remove ${label(l)}`} onClick={() => void removeShotRef(docStore, l.id)}>×</button>
+          </span>
+        ))}
+        {!links.length && <span className="rm-faint">None chosen. Names typed with @ in the words go too.</span>}
+      </div>
+      <input className="input rm-refsearch" aria-label="Add a reference" placeholder={full ? `Up to ${max} for this model` : 'Add a reference: type @name'} disabled={full}
+        value={q} onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && offer[0]) add(offer[0].id) }} />
+      {offer.length > 0 && (
+        <div className="rm-chiprow wrap" role="listbox" aria-label="References to add">
+          {offer.map((r) => <button key={r.id} type="button" role="option" aria-selected={false} className="rm-chip" onClick={() => add(r.id)}>@{refName(r)}</button>)}
+        </div>
+      )}
+      {why && <p className="rm-note" role="alert">{why}</p>}
+      <p className="rm-note">Up to {max} for this model.</p>
     </div>
   )
 }
@@ -362,7 +477,17 @@ function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
   const i = shots.findIndex((s) => s.id === box.shotIds[0])
   const next = shots[i + box.shotIds.length]
   const take = (m: ModelChoice) => modelEntry(m.provider as Parameters<typeof modelEntry>[0], m.model)?.video.take
-  const why = (m: ModelChoice) => (box.together && !take(m)?.ok ? "Can't make several shots as one video" : undefined)
+  // What the box sends decides which models can make it: from words alone, references with no frame, a first frame.
+  const noFrame = !selectedFrame(doc, box.shotIds[0]) && !startPicture(doc, box.shotIds[0])
+  const hasRefs = box.shotIds.some((id) => shotRefLinks(doc, id).length > 0 || /@[a-z]/.test(doc.shots[id]?.action ?? ''))
+  const why = (m: ModelChoice) => {
+    const e = modelEntry(m.provider as Parameters<typeof modelEntry>[0], m.model)
+    if (box.together && !take(m)?.ok) return "Can't make several shots as one video"
+    if (noFrame && e && !e.words) return 'Needs a start frame'
+    if (noFrame && hasRefs && e && !e.video.refsWithoutFrame) return "Can't use references without a start frame"
+    if (!noFrame && hasRefs && e && !e.video.firstFrameWithRefs) return "Can't use references with a start frame"
+    return undefined
+  }
   const t = current ? take(current) : undefined
   return (
     <div className="rm-tab">
@@ -402,3 +527,4 @@ function BoxTab({ box, data, shots, model, onModel, onMake, making }: {
     </div>
   )
 }
+

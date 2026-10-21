@@ -249,6 +249,9 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
     // In the document before and not taken out by this canvas: someone removed it, so the arrow goes.
     if (mem.inDoc.has(id) && !mem.unlinked.has(id)) {
       erase.push(e.id)
+      // Not this canvas's to keep: an undo that puts the entry back draws a new arrow for it, and is
+      // never read as the person deleting the arrow (which unlinked it again, 2026-10-21).
+      mem.seen.delete(id)
       continue
     }
     mem.unlinked.delete(id)
@@ -388,4 +391,74 @@ export function unlinkInput(store: DocumentStore, linkId: string): Promise<unkno
   const l = store.get().links?.[linkId]
   if (!l) return Promise.resolve()
   return updateDoc(store, (d) => { delete d.links[linkId] }, `unlink ${l.from.kind} from ${l.to.kind}`)
+}
+
+// ── Linking from the inputs strip (ui-behaviour 3.16 "+ Link input"), by the rules of 3.4 ──────────
+
+/** A document endpoint as the link rules see it, with no canvas: a reference or a key is a picture of its role. */
+export function docEnd(doc: ProductionDocument, e: LinkEndpoint): { core: CoreEnd; refRole?: RefRole } | null {
+  switch (e.kind) {
+    case 'ref': {
+      const r = doc.refs?.[e.id]
+      if (!r) return null
+      const role = (keyNamed(doc, r.key)?.role ?? r.role) as RefRole
+      return { core: { kind: 'picture', role }, refRole: role }
+    }
+    case 'key': {
+      const k = doc.keys?.[e.id]
+      return k ? { core: { kind: 'picture', role: k.role }, refRole: k.role as RefRole } : null
+    }
+    case 'board': {
+      const b = doc.boards?.[e.id]
+      return b ? { core: { kind: 'board', purpose: b.purpose } } : null
+    }
+    case 'group': return { core: { kind: 'group' } }
+    case 'text': return doc.texts?.[e.id] ? { core: { kind: 'note' } } : null
+    case 'document': return doc.documents?.[e.id] ? { core: { kind: 'document' } } : null
+    case 'script': return doc.scripts?.[e.id] ? { core: { kind: 'script' } } : null
+    case 'storyboard': return doc.storyboards?.[e.id] ? { core: { kind: 'storyboard' } } : null
+    case 'video': return doc.videos?.[e.id] ? { core: { kind: 'video' } } : null
+    case 'sketch': return doc.sketches?.[e.id] ? { core: { kind: 'sketch' } } : null
+    case 'shot': return doc.shots?.[e.id] ? { core: { kind: 'shot' } } : null
+    default: return null
+  }
+}
+
+/** The link rules' graph of the document alone: every end its links name, and the links. */
+export function docLinkGraph(doc: ProductionDocument, extra: readonly LinkEndpoint[] = []): LinkGraph {
+  const ends = [...Object.values(doc.links ?? {}).flatMap((l) => [l.from, l.to]), ...extra]
+  const nodes = new Map<string, { id: string; kind: LinkKind; purpose?: string; role?: string }>()
+  for (const e of ends) {
+    if (nodes.has(e.id)) continue
+    const x = docEnd(doc, e)
+    if (x) nodes.set(e.id, { id: e.id, kind: x.core.kind, ...(x.core.purpose ? { purpose: x.core.purpose } : {}), ...(x.core.role ? { role: x.core.role } : {}) })
+  }
+  const links = Object.values(doc.links ?? {}).map((l) => ({ from: l.from.id, to: l.to.id, role: coreRole(l) }))
+  return { nodes: [...nodes.values()], links }
+}
+
+/** May `from` be linked into `to` now (3.4), and with which document role? */
+export function linkInputCheck(doc: ProductionDocument, from: LinkEndpoint, to: LinkEndpoint): { ok: true; role: LinkRole } | { ok: false; reason: string } {
+  const a = docEnd(doc, from)
+  const b = docEnd(doc, to)
+  if (!a || !b) return { ok: false, reason: 'That is gone.' }
+  const can = canLink(a.core, b.core)
+  if (!can.ok) return can
+  const role = can.roles[0]
+  const checked = checkLink(docLinkGraph(doc, [from, to]), from.id, to.id, role)
+  if (!checked.ok) return checked
+  return { ok: true, role: (role === 'reference' && a.refRole ? a.refRole : role) as LinkRole }
+}
+
+/**
+ * "+ Link input" (3.16): link a board, group, key or single reference into a node, as the person's one
+ * undo step. Only the document is written; the canvas draws its arrow on its next reconcile
+ * (reconcileLinks draw), as for any link written off the canvas, and takes it away again on undo.
+ */
+export async function linkInput(store: DocumentStore, doc: ProductionDocument, from: LinkEndpoint, to: LinkEndpoint): Promise<{ ok: true; link: Link } | { ok: false; reason: string }> {
+  const check = linkInputCheck(doc, from, to)
+  if (!check.ok) return check
+  const link: Link = { id: newId('link'), v: 1, field_v: {}, from: { kind: from.kind, id: from.id }, to: { kind: to.kind, id: to.id }, role: check.role }
+  await updateDoc(store, (d) => { d.links[link.id] = link }, `link ${link.from.kind} to ${link.to.kind}`)
+  return { ok: true, link }
 }

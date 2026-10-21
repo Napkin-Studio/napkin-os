@@ -121,3 +121,53 @@ export function mentions(doc: ProductionDocument, text: string): { found: NamedR
   }
   return { found, unknown }
 }
+
+/**
+ * The bare @keys in someone's words that cannot be sent: the key is known (it has, or had, pictures) but
+ * no live picture of it is its front. A bare @key stands for the whole character, led by its front
+ * (owner 2026-10-07), and the relay's director refuses a plan that names one without it, so this is
+ * checked before anything is sent. `live` is the document as the canvas has it alive (model/live.ts);
+ * `stored` the document as stored, so a key whose pictures were all deleted is still named.
+ */
+export function keysWithoutFront(live: ProductionDocument, stored: ProductionDocument, words: string): Key[] {
+  const out: Key[] = []
+  for (const m of words.matchAll(MENTION)) {
+    const k = m[1]
+    if (k.includes('_') || out.includes(k)) continue
+    const known = Object.values(stored.keys ?? {}).some((x) => x.key === k) || Object.values(stored.refs ?? {}).some((r) => r.key === k)
+    if (!known) continue
+    if (!refsList(live).some((r) => r.key === k && r.variant === 'front' && r.asset)) out.push(k)
+  }
+  return out
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Thrown before a send whose words name bare keys with no front: "Set a front for @kapi first: …". */
+export class FrontsMissingError extends Error {
+  readonly keys: Key[]
+  constructor(keys: Key[]) {
+    const named = keys.map((k) => `@${k}`)
+    const list = named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`
+    super(keys.length === 1
+      ? `Set a front for ${list} first: ${list} stands for the whole character, led by its front.`
+      : `Set a front for ${list} first: each stands for the whole character, led by its front.`)
+    this.name = 'FrontsMissingError'
+    this.keys = keys
+  }
+}
+
+/** "Kapi's front": the words on the button that chooses a key's front. */
+export const frontButton = (key: Key) => `Choose ${cap(key)}'s front`
+
+/** Throws FrontsMissingError when the words name a bare @key with no live front. */
+export function checkFronts(live: ProductionDocument, stored: ProductionDocument, words: string) {
+  const keys = keysWithoutFront(live, stored, words)
+  if (keys.length) throw new FrontsMissingError(keys)
+}
+
+/** The keys a FrontsMissingError's message names (where only its words reached the place that shows them). */
+export function frontKeysIn(message: string | null | undefined): Key[] {
+  const m = /^Set a front for (.+?) first: /.exec(message ?? '')
+  return m ? [...m[1].matchAll(/@([a-z][a-z0-9]{1,23})\b/g)].map((x) => x[1]) : []
+}

@@ -21,6 +21,8 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 /** The drag type a take carries onto the timeline. */
 export const GEN_DRAG = 'application/x-napkin-take'
+/** The drag type a Bin picture carries into a shot's start-frame well (its reference id). */
+export const IMG_DRAG = 'application/x-napkin-picture'
 
 export function Bin({ data, sel, room, onPick }: { data: RoomData; sel: Selection; room: RoomName; onPick: (g: Gen) => void }) {
   const doc = useDoc()
@@ -59,7 +61,8 @@ export function Bin({ data, sel, room, onPick }: { data: RoomData; sel: Selectio
           </div>
         ))}
         {shownImages.map((r) => (
-          <div key={r.id} className="rm-tile" role="listitem">
+          <div key={r.id} className="rm-tile" role="listitem" draggable title="Drag into a shot's start frame"
+            onDragStart={(e) => { e.dataTransfer.setData(IMG_DRAG, r.id); e.dataTransfer.effectAllowed = 'copy' }}>
             <Poster sha={r.asset} words={`@${r.key}`} />
             <div className="rm-tilename rm-clamp2" title={`@${r.key}_${r.variant}`}>@{r.key} · {r.variant}</div>
           </div>

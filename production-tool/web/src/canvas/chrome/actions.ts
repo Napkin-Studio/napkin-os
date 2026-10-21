@@ -23,6 +23,8 @@ export interface CanvasActions {
   picture(): void
   /** "+ Link input" on a node (3.16): the Link tool, with this node as the target; the person clicks what feeds it. */
   linkInto(node: { kind: string; id: string }): void
+  /** An inputs chip's click (3.16): fit the canvas to that input; false when it is not on the canvas. */
+  fitTo(end: { kind: string; id: string }): boolean
   /** The Storyboard a Script drives, made beside it on the canvas when it has none (3.10 Plan shots). */
   storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }>
   /** Make video (3.5): the Video node beside what it is made from, with its links, one undo step. */
@@ -38,6 +40,7 @@ class Bus {
   private boards: Pick<CanvasActions, 'board'> | null = null
   private pictures: Pick<CanvasActions, 'picture'> | null = null
   private into: Pick<CanvasActions, 'linkInto'> | null = null
+  private fits: Pick<CanvasActions, 'fitTo'> | null = null
   private makes: Pick<CanvasActions, 'storyboardFor' | 'makeVideo' | 'storyboardFromShots'> | null = null
   private madeCb: ((m: MadeOnCanvas) => void) | null = null
   private editCb: ((nodeId: string) => void) | null = null
@@ -51,6 +54,7 @@ class Bus {
     if (part.board) this.boards = { board: part.board }
     if (part.picture) this.pictures = { picture: part.picture }
     if (part.linkInto) this.into = { linkInto: part.linkInto }
+    if (part.fitTo) this.fits = { fitTo: part.fitTo }
     if (part.storyboardFor && part.makeVideo && part.storyboardFromShots) this.makes = { storyboardFor: part.storyboardFor, makeVideo: part.makeVideo, storyboardFromShots: part.storyboardFromShots }
     this.emit()
     return () => {
@@ -58,6 +62,7 @@ class Bus {
       if (part.board && this.boards?.board === part.board) this.boards = null
       if (part.picture && this.pictures?.picture === part.picture) this.pictures = null
       if (part.linkInto && this.into?.linkInto === part.linkInto) this.into = null
+      if (part.fitTo && this.fits?.fitTo === part.fitTo) this.fits = null
       if (part.makeVideo && this.makes?.makeVideo === part.makeVideo) this.makes = null
       this.current = null
       this.emit()
@@ -87,6 +92,11 @@ class Bus {
     if (!this.into) return false
     this.into.linkInto(node)
     return true
+  }
+
+  /** Fit the canvas to a link end (an inputs chip's click); false when no canvas can, or it is not there. */
+  fitTo(end: { kind: string; id: string }): boolean {
+    return this.fits ? this.fits.fitTo(end) : false
   }
 
   canLinkInto(): boolean {

@@ -25,9 +25,10 @@ import { addScene, importFountain } from '../script/edits'
 import { parseFountain } from '../script/fountain'
 import { startWrite } from '../script/skye'
 import { drawFrame, type FrameDeps } from './frames'
-import { runningPlan } from './plan'
+import { checkFronts, runningPlan } from './plan'
 import { isActive } from './runner'
 import { jobShot, namedInput, subjectPictures } from './select'
+import { liveGet } from '../model/live'
 
 type Doc = ProductionDocument
 
@@ -115,12 +116,13 @@ export function scriptHasWords(d: Doc, storyboardId: Id): boolean {
 
 /** The plan request from a line: the line is the script when the script has no words; the refs are the node's scope. */
 export async function ideaPlanInput(deps: FrameDeps, storyboardId: Id, idea: string, scopeNode: Id = storyboardId): Promise<JobInput> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const sb = d.storyboards[storyboardId]
   if (!sb) throw new Error('This storyboard is gone.')
-  const refs = await promptRefs(deps.relay, d, scopeNode, idea)
   const own = scriptOf(d, storyboardId)
   const script = scriptHasWords(d, storyboardId) ? scriptText(d, own).slice(0, IDEA_MAX) : idea.trim().slice(0, IDEA_MAX)
+  checkFronts(d, deps.doc.get(), `${script}\n${idea}`)
+  const refs = await promptRefs(deps.relay, d, scopeNode, idea)
   const shots = shotsOf(d, storyboardId)
   return {
     script,
@@ -136,7 +138,7 @@ export async function ideaPlanInput(deps: FrameDeps, storyboardId: Id, idea: str
  */
 export async function storyboardFromLine(deps: FrameDeps, storyboardId: Id, line: string, scopeNode: Id = storyboardId): Promise<{ jobId: string; joined: boolean }> {
   const words = line.trim()
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   if (!words && !scriptHasWords(d, storyboardId)) throw new Error(NO_WORDS.storyboard)
   const unknown = unknownName(d, words)
   if (unknown) throw new Error(unknown)
@@ -198,13 +200,13 @@ export async function ownShotList(store: DocumentStore, videoId: Id): Promise<Id
  * Free: no paid job starts (clips are made from Make clips, through the send tray).
  */
 export async function videoFromWords(deps: FrameDeps, videoId: Id, words: string): Promise<{ jobId: string; joined: boolean }> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   if (!d.videos[videoId]) throw new Error('This video is gone.')
   if (!words.trim()) throw new Error(NO_WORDS.video)
   const unknown = unknownName(d, words)
   if (unknown) throw new Error(unknown)
   let sb = storyboardOfVideo(d, videoId)
-  if (!sb && (!mainStoryboard(d) || mainStoryboard(d)?.implicit)) sb = deps.doc.get().storyboards[await ownShotList(deps.doc, videoId)]
+  if (!sb && (!mainStoryboard(d) || mainStoryboard(d)?.implicit)) sb = liveGet(deps.doc).storyboards[await ownShotList(deps.doc, videoId)]
   if (!sb) {
     const main = mainStoryboard(d)
     if (!main) throw new Error('This project has no storyboard.')
@@ -225,7 +227,7 @@ export function videoSeconds(d: Doc, videoId: Id): number {
 
 /** A shot's first frame from words (its Image editor while it has none): Fin's frame job. */
 export async function frameFromWords(deps: FrameDeps, shotId: Id, words: string): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const index = shotsOf(d).findIndex((s) => s.id === shotId)
   if (index < 0) throw new Error('This shot is not on the storyboard any more.')
   if (!words.trim()) throw new Error(NO_WORDS.image)
@@ -245,7 +247,7 @@ export function pictureJob(d: Doc, nodeId: Id) {
  * the node's scope. Its outputs land in the document's assets (jobs/runner); naming it is the next step.
  */
 export async function pictureFromWords(deps: FrameDeps, nodeId: Id, words: string, ratio?: Ratio): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   if (!words.trim()) throw new Error(NO_WORDS.image)
   const unknown = unknownName(d, words)
   if (unknown) throw new Error(unknown)
@@ -287,14 +289,17 @@ export async function nameMadePicture(store: DocumentStore, jobId: Id, name: { k
 export async function nameAsset(store: DocumentStore, asset: string, name: { key: string; variant: string; role: RefRole; label?: string }, nodeId?: Id): Promise<Id> {
   const problem = nameProblem(name.key, name.variant)
   if (problem) throw new Error(problem)
-  const d = store.get()
+  const d = liveGet(store)
   const full = `${name.key}_${name.variant}`
   const other = refsList(d).find((r) => nameOf(r) === full)
   if (other && other.asset !== asset) throw new Error(`@${full} is taken. Pick another name.`)
   if (other) return other.id
+  // A name a deleted picture held is free (model/live.ts): it is taken from that picture here.
+  const dead = refsList(store.get()).find((r) => nameOf(r) === full)
   const id = newId('ref')
   await updateDoc(store, (x) => {
     const now = new Date().toISOString()
+    if (dead) delete x.refs[dead.id]
     let k = keyNamed(x, name.key)
     if (!k) {
       const kid = newId('key')

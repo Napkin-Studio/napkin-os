@@ -24,6 +24,7 @@ import { scriptText, shotsOf, storyboardOfScript } from '../model/selectors'
 import type { FrameDeps } from './frames'
 import { planOrJoin, runningPlan } from './plan'
 import { linkInto, ownShotList, scriptOf, storyboardOfVideo } from './prompt'
+import { liveGet } from '../model/live'
 
 export { clipMode, isScriptVideoAsk, PLAN_FIRST, scriptVideoAsk, STRAIGHT, type ClipMode } from './clipMode'
 
@@ -77,6 +78,9 @@ export function scriptOfVideo(d: Doc, videoId: Id): Id | undefined {
  */
 export function waitsOnScriptAsk(d: Doc, videoId: Id): Id | null {
   if (!d.videos[videoId]) return null
+  // Answered once, never asked again (owner, 2026-10-21): a plan that then could not go or failed shows
+  // its own state (the Make room, the node's Plan shots), with Change in ClipChoice for a new answer.
+  if (scriptVideoAsk(d, videoId)?.answers.length) return null
   const sb = storyboardOfVideo(d, videoId)
   if (!sb) return scriptOfVideo(d, videoId) ?? null
   if (shotsOf(d, sb.id).length || runningPlan(d, sb.id)) return null
@@ -137,7 +141,7 @@ export function planShotsBlocked(d: Doc, scriptId: Id): string | null {
  * plan already running there is joined.
  */
 export async function planFromScript(deps: FrameDeps, scriptId: Id): Promise<{ storyboardId: Id; made: boolean; joined: boolean }> {
-  const blocked = planShotsBlocked(deps.doc.get(), scriptId)
+  const blocked = planShotsBlocked(liveGet(deps.doc), scriptId)
   if (blocked) throw new Error(blocked === 'Write the script first' ? 'Write the script first: Plan shots reads its words.' : blocked)
   const { storyboardId, made } = await storyboardForScript(deps.doc, scriptId)
   const r = await planOrJoin(deps, { storyboardId })
@@ -164,7 +168,7 @@ export async function storyboardFromShots(videoId: Id): Promise<{ storyboardId: 
  * Dex plans when there are no shots yet. Free: no clip starts. The script is checked before anything is written.
  */
 export async function answerScriptVideo(deps: FrameDeps, videoId: Id, optionId: string, by: string): Promise<{ storyboardId: Id }> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   if (!d.videos[videoId]) throw new Error('This video is gone.')
   const had = storyboardOfVideo(d, videoId)
   const scriptId = scriptOfVideo(d, videoId) ?? (had ? scriptOf(d, had.id) : undefined)
@@ -183,7 +187,7 @@ export async function answerScriptVideo(deps: FrameDeps, videoId: Id, optionId: 
     sbId = (await storyboardForScript(deps.doc, scriptId!)).storyboardId
     await linkInto(deps.doc, { kind: 'storyboard', id: sbId }, { kind: 'video', id: videoId })
   }
-  const now = deps.doc.get()
+  const now = liveGet(deps.doc)
   if (!shotsOf(now, sbId!).length && !runningPlan(now, sbId)) await planOrJoin(deps, { storyboardId: sbId })
   return { storyboardId: sbId! }
 }

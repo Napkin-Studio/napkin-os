@@ -29,6 +29,7 @@ import { croppedTo, landingWhy } from './handlers'
 import { ownAspect, type FrameDeps } from './frames'
 import { jobShot, refsFor } from './select'
 import { editShot } from './stale'
+import { liveGet } from '../model/live'
 
 // ── the words (ui-behaviour 3.11) ──────────────────────────────────────────────────────────────
 
@@ -149,7 +150,7 @@ export async function frameEditInput(relay: FrameDeps['relay'], d: ProductionDoc
 /** Send Change this frame (or a Redo of `redoOf`, the earlier frame_edit job, with the reworded text). */
 export async function changeFrame(deps: FrameDeps, shotId: string, text: string,
   opts: { region?: Region; mask?: string; redoOf?: string } = {}): Promise<string> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const input = await frameEditInput(deps.relay, d, shotId, text, opts)
   const frame = currentFrame(d, shotId)
   const purpose: JobPurpose = { for: 'frame_edit', shotId, ...(frame ? { parentFrameId: frame.id } : {}) }

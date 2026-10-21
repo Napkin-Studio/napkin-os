@@ -36,6 +36,7 @@ import {
 } from './scene'
 import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
+import { lifeOf, liveGet } from '../model/live'
 import { resizableKind, type Source as ResizeSource } from '../campaign/resizeSelection'
 import { frameText } from './text'
 
@@ -89,6 +90,7 @@ export class CanvasController {
     this.canvas = canvas
     this.s = services
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId), drawnBy: () => this.person() })
+    this.reportLife()
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
@@ -118,8 +120,10 @@ export class CanvasController {
     this.setEls(this.els().map((e) => (e.id === id ? fn(e) : e)), undoable)
   }
 
+  /** The document as the canvas has it alive (model/live.ts): no reference of a deleted picture. */
   private doc(): ProductionDocument {
-    return this.s.doc.get()
+    this.reportLife()
+    return liveGet(this.s.doc)
   }
 
   /** The element of a node (pic, drawn, note or gen) by its node id. */
@@ -161,8 +165,23 @@ export class CanvasController {
     await idbPut('kv', this.s.project.canvasKey, this.canvas.serialize())
   }
 
+  /**
+   * Tell the document's readers which nodes are alive on the canvas (model/live.ts): a reference whose
+   * picture is deleted stops counting at once, and comes back with the canvas's undo. Nothing is written.
+   */
+  reportLife() {
+    const ids = new Set<string>()
+    for (const e of this.canvas.elements()) {
+      ids.add(e.id)
+      const own = idOf(e)
+      if (own) ids.add(own)
+    }
+    lifeOf(this.s.doc).set(ids)
+  }
+
   /** Called on every scene change (throttled by the component). */
   onChange() {
+    this.reportLife()
     this.scheduleSave()
     void this.intakePictures()
     void this.restoreFiles().catch(() => {})
@@ -171,6 +190,7 @@ export class CanvasController {
   }
 
   private syncNow() {
+    this.reportLife()
     if (this.syncTimer) clearTimeout(this.syncTimer)
     this.syncTimer = null
     void this.sync.gens(this.els())

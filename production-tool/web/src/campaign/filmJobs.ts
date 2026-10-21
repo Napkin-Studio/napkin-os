@@ -26,6 +26,7 @@ import { brandKit, layersFor } from './layout'
 import { FRAME_PAD, FRAME_TOP, channelOfSize, placeBoard, sizesOf, type CampaignDeps } from './make'
 import type { MasterInfo } from './master'
 import { rowFracs } from './rules'
+import { liveGet } from '../model/live'
 
 /** What a film's jobs need: no canvas (they land after a reload too). */
 export type FilmDeps = Pick<CampaignDeps, 'doc' | 'runner' | 'relay'>
@@ -128,7 +129,7 @@ export async function planFilm(deps: FilmDeps, master: MasterInfo, shots: Master
       const live = deps.runner.liveInfo(jobId)
       if (live?.state === 'failed' || live?.state === 'cancelled' || live?.state === 'uncertain') {
         waiting.delete(jobId)
-        reject(new Error(deps.doc.get().jobs[jobId]?.error?.message ?? 'Dex could not plan the cuts. Try again.'))
+        reject(new Error(liveGet(deps.doc).jobs[jobId]?.error?.message ?? 'Dex could not plan the cuts. Try again.'))
         return
       }
       if (Date.now() - started > timeoutMs) {
@@ -153,7 +154,7 @@ export const formatOfShape = (label: string) => FILM_FORMATS[label]
  *  3 (the brand early), and the captions of the spoken lines on the social shapes (CF9) unless hidden;
  *  on the TV shapes only when a person turned them on. */
 export async function filmLayers(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size): Promise<TypeLayer[]> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const body = (size.edl ?? []).reduce((a, w) => a + (w.out_s - w.in_s), 0)
   const laid = (await layersFor(deps, set, size)).map((l): TypeLayer => l.kind === 'logo'
     ? { ...l, fromS: 0, toS: Math.min(3, body) }
@@ -245,7 +246,7 @@ export async function makeFilmSizes(deps: CampaignDeps, req: FilmRequest, by: Pe
 /** A size's render input: its windows of the takes (a reframed shot's own clip where the set has one,
  *  filled from its middle), its crops, its type and captions, the end card and the mix's fade. */
 export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size): Promise<JobInput> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const clips: CutdownClip[] = []
   for (const w of size.edl ?? []) {
     const take = w.generation_id ? d.generations[w.generation_id] : undefined
@@ -275,7 +276,7 @@ export async function cutdownInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, se
 
 /** Render one size (free): marked making, its job named on it. */
 export async function sendCutdown(deps: FilmDeps, setId: string, sizeId: string, _by?: PersonRef): Promise<string | null> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const set = d.format_sets[setId]
   const size = d.sizes[sizeId]
   if (!set || !size || size.media !== 'video') return null
@@ -312,7 +313,7 @@ async function croppedFrame(deps: Pick<CampaignDeps, 'relay'>, blob: Blob | unde
  *  Remake for vertical (a clip job: the shot's frame cropped to the shape, its words and its characters,
  *  at the shape, on `remake`). The reframe names its job. */
 export async function sendReframe(deps: FilmDeps, setId: string, key: string, remake?: ModelChoice, jobId = newUlidId('job')): Promise<string | null> {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const set = d.format_sets[setId]
   const r = set?.reframes?.[key]
   if (!set || !r) return null
@@ -361,7 +362,7 @@ export async function sendReframe(deps: FilmDeps, setId: string, key: string, re
  *  shot renders again (unless locked), once all its reframes are in. */
 export async function landReframe(deps: FilmDeps, job: Job, ctx: Extract<JobCtx, { for: 'reframe' }>) {
   const out = job.outputs?.[0]
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const r = d.format_sets[ctx.setId]?.reframes?.[ctx.key]
   if (!out || !r || r.job_id !== job.jobId) return
   const what = `${r.method === 'outpaint' ? 'new edges' : 'a vertical remake'} of a shot at ${r.aspect.w}×${r.aspect.h}`
@@ -372,7 +373,7 @@ export async function landReframe(deps: FilmDeps, job: Job, ctx: Extract<JobCtx,
     if (out.w && out.h) rf.size = { w: out.w, h: out.h }
     if (job.model) rf.model = job.model
   }, landingWhy(deps.doc, job.jobId, what))
-  const after = deps.doc.get()
+  const after = liveGet(deps.doc)
   const set = after.format_sets[ctx.setId]
   for (const s of sizesOf(after, ctx.setId)) {
     if (s.locked || s.media !== 'video' || !s.edl?.some((w) => w.generation_id === r.generation_id) || !sameShape(shapeOf(s), r.aspect)) continue
@@ -385,7 +386,7 @@ export async function landReframe(deps: FilmDeps, job: Job, ctx: Extract<JobCtx,
 /** Keep or drop a beat on a film's tile (one undo step): the windows refit to its length, then it renders
  *  again, free. A newly kept shot is cropped round what Dex saw in its take. */
 export async function setBeat(deps: FilmDeps, sizeId: string, shotId: Id, keep: boolean, by: PersonRef) {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const size = d.sizes[sizeId]
   const set = size && d.format_sets[size.set_id]
   const video = set?.master.kind === 'video' ? set.master.id : undefined
@@ -415,7 +416,7 @@ export async function setBeat(deps: FilmDeps, sizeId: string, shotId: Id, keep: 
 
 /** Adjust crop on a clip tile (one undo step): a person's still box for one shot, then it renders again. */
 export async function setShotCrop(deps: FilmDeps, sizeId: string, shotId: Id, crop: PxBox | null, by: PersonRef) {
-  const size = deps.doc.get().sizes[sizeId]
+  const size = liveGet(deps.doc).sizes[sizeId]
   if (!size) return
   await updateDoc(deps.doc, (x) => {
     const s = x.sizes[sizeId]
@@ -432,7 +433,7 @@ export async function setShotCrop(deps: FilmDeps, sizeId: string, shotId: Id, cr
 
 /** Captions on a film's tile on or off (one undo step), then it renders again. */
 export async function setCaptions(deps: FilmDeps, sizeId: string, on: boolean, by: PersonRef) {
-  const size = deps.doc.get().sizes[sizeId]
+  const size = liveGet(deps.doc).sizes[sizeId]
   if (!size) return
   await updateDoc(deps.doc, (x) => {
     const s = x.sizes[sizeId]
@@ -445,7 +446,7 @@ export async function setCaptions(deps: FilmDeps, sizeId: string, on: boolean, b
 /** Remake for vertical on a tile: each named shot made again at the tile's shape on `model` (paid, each its
  *  own job); the sizes of that shape render again as they land. */
 export async function remakeShots(deps: FilmDeps, sizeId: string, shotIds: Id[], model: ModelChoice) {
-  const d = deps.doc.get()
+  const d = liveGet(deps.doc)
   const size = d.sizes[sizeId]
   const set = size && d.format_sets[size.set_id]
   if (!size || !set) return []
@@ -463,6 +464,6 @@ export async function remakeShots(deps: FilmDeps, sizeId: string, shotIds: Id[],
     }
     for (const s of Object.values(x.sizes)) if (s.set_id === size.set_id && sameShape(shapeOf(s), shape) && !s.locked && s.edl?.some((w) => shotIds.includes(w.shot_id))) s.status = 'making'
   }, `remake ${shotIds.length} shots of format_sets[${size.set_id}] for ${shape.w}x${shape.h}`)
-  const st = deps.doc.get().format_sets[size.set_id]
+  const st = liveGet(deps.doc).format_sets[size.set_id]
   return Promise.all(keys.map((k) => sendReframe(deps, size.set_id, k, model, st?.reframes?.[k]?.job_id)))
 }

@@ -56,6 +56,7 @@ import { lastWorkedModel } from '../jobs/follow'
 import { frameMarks, joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
 import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
+import { FrontButtons } from './FrontsNeeded'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -212,7 +213,7 @@ export function Storyboard() {
       </div>
       <ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} />
       <div className="panel sb-body pt-grid">
-        {error && <div role="alert" className="sb-error">{error}</div>}
+        {error && <div role="alert" className="sb-error">{error}<FrontButtons text={error} /></div>}
         {deleted && (
           <div role="status" className="sb-deleted">
             <span>{deleted}</span>

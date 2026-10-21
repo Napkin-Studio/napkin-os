@@ -52,7 +52,7 @@ export function joinBefore(d: ProductionDocument, videoId: Id | undefined, shotI
 /** Write a person's join into each shot of `joins`, as their boxes: the shots are grouped by every join as it
  *  will be (theirs, else as it is now), and each group a changed join touches becomes one of their boxes (an
  *  earlier box of theirs over those shots that was never made goes). */
-function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamKind][]) {
+export function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamKind][]) {
   const v = x.videos[videoId]
   if (!v) return
   const shots = videoShots(x, videoId)

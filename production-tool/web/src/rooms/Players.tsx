@@ -7,8 +7,10 @@ import { useDoc } from '../app/context'
 import { isStill, tc, useAssetUrl } from './media'
 
 /** One take: its file between `span` (default the whole of it), a play button, a scrub bar, the time. */
-export function TakePlayer({ sha, label, span, beats, onTime, seekTo, children, className = '', overlay }: {
+export function TakePlayer({ sha, label, span, beats, onTime, seekTo, children, className = '', overlay, empty }: {
   sha?: string
+  /** What the stage says when there is nothing to play ("No shots yet…"), in place of "Pick a take to play it". */
+  empty?: string
   /** "Box 1 · v2": said before the time. */
   label: string
   span?: { inS: number; outS: number }
@@ -68,7 +70,7 @@ export function TakePlayer({ sha, label, span, beats, onTime, seekTo, children, 
                 if (span && now >= span.outS) e.currentTarget.pause()
               }}
               onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
-          ) : <div className="rm-stage-empty">{label ? 'No picture yet' : 'Pick a take to play it'}</div>}
+          ) : <div className="rm-stage-empty">{label ? 'No picture yet' : empty ?? 'Pick a take to play it'}</div>}
         {overlay}
       </div>
       <div className="rm-transport">
