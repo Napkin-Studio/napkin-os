@@ -379,7 +379,13 @@ var ClanFields=(function(){
   function dparts(d){ var m=/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:[T ].*)?$/.exec(String(d||'').trim()); return m&&(!m[2]||+m[2]>=1&&+m[2]<=12)?{y:+m[1],m:m[2]?+m[2]:0,d:m[3]?+m[3]:0,t:(/[T ](\d{2}:\d{2})/.exec(String(d))||[])[1]||''}:null; }
   function monthYear(d){ var p=dparts(d); return p?(p.m?MONTHS[p.m-1]+' ':'')+p.y:String(d||''); }
   function plainDate(d){ var p=dparts(d); return p?(p.d?p.d+' ':'')+monthYear(d):String(d||''); }
-  function dayMonth(d,time){ var p=dparts(d); if(!p||!p.d) return monthYear(d);
+  // A stamp with a time and a zone (the chain's) reads in the viewer's own
+  // zone, as the shell's panel shows it; a date, or a time with no zone (a
+  // source's), reads as written.
+  function dayMonth(d,time){
+    var s=String(d||'').trim(), at=/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/.test(s)?new Date(s):null;
+    if(at&&!isNaN(at)) return at.getDate()+' '+MON[at.getMonth()]+(at.getFullYear()!==new Date().getFullYear()?' '+at.getFullYear():'')+(time?', '+at.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'');
+    var p=dparts(d); if(!p||!p.d) return monthYear(d);
     return p.d+' '+MON[p.m-1]+(p.y!==new Date().getFullYear()?' '+p.y:'')+(time&&p.t?', '+p.t:''); }
   // A publisher the sources name in more than one way ("ShelfLife Magazine",
   // "Shelflife Magazine, 2026") reads as one: the first spelling, without the
@@ -619,10 +625,32 @@ var ClanFields=(function(){
     return null;
   }
   function isPerson(d){ return /^human(?::|$)/.test(d.actor||d.agent||''); }
+  // The proposal's id an older accept named in its words ("Accepted d_…: …",
+  // the drawer's own "Used proposal d_…"); '' when the write cites instead.
+  function acceptedId(d){ var m=/^(?:Accepted|Used proposal) (d_[A-Za-z0-9_-]+)/.exec(String(d&&d.rationale||'')); return m?m[1]:''; }
+  // The proposal a person's write accepted (middleware-api §10.5): the
+  // `propose` decision it cites, or the one its words name. Null for any
+  // other write.
+  function acceptOf(b){
+    var d=b&&b.decision||{}; if(!isPerson(d)||d.kind==='verdict'||d.polarity) return null;
+    var ids=[].concat(arr(d.cites),[].concat.apply([],arr(obj(d.reasoning).because).map(function(p){ return arr(p&&p.cites); }))), named=acceptedId(d);
+    if(named) ids.push(named);
+    for(var i=0;i<ids.length;i++){ var pb=blockOf(ids[i]); if(pb&&pb.decision.action==='propose') return pb; }
+    return null;
+  }
+  function isAccept(b){ var d=b&&b.decision||{}; return isPerson(d)&&(/^accept proposal\b/.test(String(d.action||''))||!!acceptedId(d)||!!acceptOf(b)); }
+  function drafterKey(){ var A=crew(); return A?A.forWork('draft')||'':''; }
+  // Who proposed what a person accepted, by name: the drafter when the
+  // proposal itself is no longer in the chain.
+  function proposerOf(b){ var pb=acceptOf(b); return givenOf(pb?crewKey(pb.decision):drafterKey())||'the crew'; }
+  // A person's reason as they gave it: an older accept began with the
+  // decision's id, which is nobody's words.
+  function saidWords(d){ return String(d&&d.rationale||'').replace(/^Accepted d_[A-Za-z0-9_-]+:\s*/,'Accepted ').replace(/^Used proposal d_[A-Za-z0-9_-]+\.?$/,'Used the proposal.'); }
   function provenance(path){
     var env=envAt(path); if(env) return ORIGIN[env.origin]||env.origin||'';
     var w=writerOf(path); if(!w) return '';
     var b=w.block, d=b.decision||{}, act=String(d.action||'');
+    if(isAccept(b)) return 'drafted by '+proposerOf(b)+' · '+(b.who&&b.who.you?'you accepted':'accepted');
     if(isPerson(d)) return b.who&&b.who.you?'you said':personName(/^human:/.test(d.actor||'')?d.actor:'human:'+(b.who&&b.who.name||'someone'))+' said';
     if(act==='extract') return 'from your material';
     if(act==='draft'||act==='regenerate'){ var g=givenOf(crewKey(d)); return 'drafted by '+(g||'the agent'); }
@@ -1028,12 +1056,20 @@ var ClanFields=(function(){
     var n=b.who&&b.who.name||(/^human:/.test(d.actor||'')?d.actor:'');
     return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The crew';
   }
+  // What a decision did, in words: the redraft loop's steps (a first draft
+  // the Judge sent back, the version that replaced it, the person's accept),
+  // else the action's own word, else the kind's.
+  function didWords(b){
+    var d=b.decision||{};
+    if(d.action==='propose') return 'proposed a '+(b.superseded||d.superseded_by?'first':'new')+' version';
+    if(isAccept(b)) return 'accepted '+proposerOf(b)+'’s new version';
+    return DID_ACTION[d.action]||(d.kind==='verdict'?(d.polarity==='bad'?'said it is wrong':'said it is right'):DID[d.kind]||'changed it');
+  }
   function history(path){
     var ds=arr(VIEW&&VIEW.decisions).filter(function(b){ return arr(b.targets).some(function(t){ return t.path===path; }); });
     if(!ds.length) return '';
-    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{};
-      var did=DID_ACTION[d.action]||(d.kind==='verdict'?(d.polarity==='bad'?'said it is wrong':'said it is right'):DID[d.kind]||'changed it');
-      return '<li><span><b>'+esc(whoDid(b))+'</b> '+did+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(d.rationale?' — “'+esc(d.rationale.length>160?d.rationale.slice(0,157)+'…':d.rationale)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
+    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{}, said=saidWords(d);
+      return '<li><span><b>'+esc(whoDid(b))+'</b> '+didWords(b)+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(said?' — “'+esc(said.length>160?said.slice(0,157)+'…':said)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
   }
   function wrote(ref){
     var el=document.querySelector('clan-field[ref="'+cssEsc(ref)+'"],clan-field[data-shows="'+cssEsc(ref)+'"],clan-quote[ref="'+cssEsc(ref)+'"],clan-gap[ref="'+cssEsc(ref)+'"]');
@@ -1082,15 +1118,23 @@ var ClanFields=(function(){
   // Where a bare value came from: its current writing decision, with what it
   // cites — the client's words, the library's passages, the facts with what
   // their source says, the points the crew worked out — and why.
+  // The person's ask, when a drafter kept it as a point of its reasoning
+  // ("Your ask: “…”", middleware-api §10.10): the words inside the quotes.
+  function askOf(p){ var m=/^Your ask:\s*[“"]?([\s\S]*?)[”"]?\s*$/.exec(String(p&&p.point||'')); return m?m[1].trim():''; }
   function writerBlock(ref){
     var w=writerOf(ref); if(!w) return '';
-    var b=w.block, d=b.decision||{}, rs=obj(d.reasoning), h='';
-    var ids=uniq([].concat.apply(arr(d.cites),arr(rs.because).map(function(p){ return arr(p&&p.cites); })).map(String));
+    // A person's accept of a proposal rests on what the proposal rested on.
+    var b=w.block, d=b.decision||{}, ab=acceptOf(b), src=ab?ab.decision:d, rs=obj(src.reasoning), h='';
+    var ids=uniq([].concat.apply(arr(src.cites),arr(rs.because).map(function(p){ return arr(p&&p.cites); })).map(String));
     var caps=ids.filter(function(i){ return kindOf(i)==='capture'&&captures()[i]; }), psgs=ids.filter(function(i){ return kindOf(i)==='passage'&&passages()[i]; });
     var fs=ids.filter(function(i){ return kindOf(i)==='pin'&&pins()[i]; }), fis=ids.filter(function(i){ return kindOf(i)==='finding'&&findings()[i]; });
     var viaCap={}; caps.forEach(function(c){ viaCap[captures()[c].material_id]=1; });
     var mats=ids.filter(function(i){ return kindOf(i)==='material'&&materials()[i]&&!viaCap[i]; });
-    if(isPerson(d)) h+='<p class="clf-by"><b>'+esc(whoDid(b))+'</b> wrote this'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(d.rationale?' — “'+esc(clip(d.rationale,200))+'”':'')+'</p>';
+    if(ab){ var pd=ab.decision;
+      h+='<p class="clf-by"><b>'+esc(givenOf(crewKey(pd))||'The crew')+'</b> wrote this'+(pd.timestamp?' on '+esc(dayMonth(pd.timestamp,true)):'')+(/your ask/.test(String(pd.rationale||''))?', on your ask':'')
+        +'; <b>'+esc(whoDid(b))+'</b> accepted it'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'.</p>'; }
+    else if(isAccept(b)) h+='<p class="clf-by"><b>'+esc(proposerOf(b))+'</b> wrote this; <b>'+esc(whoDid(b))+'</b> accepted it'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'.</p>';
+    else if(isPerson(d)) h+='<p class="clf-by"><b>'+esc(whoDid(b))+'</b> wrote this'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(saidWords(d)?' — “'+esc(clip(saidWords(d),200))+'”':'')+'</p>';
     else {
       var act=String(d.action||''), from=[];
       if(caps.length||mats.length) from.push('your material');
@@ -1110,7 +1154,10 @@ var ClanFields=(function(){
     // The prompt's own words, when the document keeps them (middleware-api §10.4), quoted; any other material by its name.
     var typed=mats.filter(function(m){ var mt=materials()[m]; return mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text; });
     mats=mats.filter(function(m){ return typed.indexOf(m)===-1; });
-    if(typed.length) h+='<div class="clf-sec"><h3>What you asked for</h3>'+typed.map(function(m){ return '<blockquote class="clf-q said">'+esc(clip(materials()[m].text,600))+'</blockquote><p class="clf-by">'+esc(matName(materials()[m]))+'</p>'; }).join('')+'</div>';
+    // The note typed for this draft first, then the prompt the document keeps.
+    var asks=arr(rs.because).map(askOf).filter(Boolean);
+    if(asks.length||typed.length) h+='<div class="clf-sec"><h3>What you asked for</h3>'+asks.map(function(a){ return '<blockquote class="clf-q said">'+esc(clip(a,600))+'</blockquote>'; }).join('')
+      +typed.map(function(m){ return '<blockquote class="clf-q said">'+esc(clip(materials()[m].text,600))+'</blockquote><p class="clf-by">'+esc(matName(materials()[m]))+'</p>'; }).join('')+'</div>';
     if(mats.length) h+='<div class="clf-sec"><h3>From your material</h3><div class="clf-rows">'+mats.map(function(m){ var mt=materials()[m]; return '<button type="button" class="clf-row" data-open="'+esc(m)+'"><span>'+esc(mt.name||'A file')+'<small>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</small></span><b></b></button>'; }).join('')+'</div></div>';
     if(psgs.length) h+='<div class="clf-sec"><h3>What the library says</h3><div class="clf-rows">'+psgs.map(function(p){ var pg=passages()[p];
       return '<button type="button" class="clf-row" data-open="'+esc(p)+'"><span>'+esc(pg.citation||'A passage')+(pg.text?'<small>“'+esc(clip(pg.text,180))+'”</small>':'')+'</span><b></b></button>'; }).join('')+'</div></div>';
@@ -1118,7 +1165,7 @@ var ClanFields=(function(){
       return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(label(p))+'<small>'+(q?'“'+esc(clip(q,160))+'” · ':'')+esc(srcShort(p))+'</small></span><b>'+(confidential(f)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
     if(fis.length) h+='<div class="clf-sec"><h3>Points the crew worked out</h3><div class="clf-rows">'+fis.map(function(f){ var fi=findings()[f];
       return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(fi.statement)+'<small>'+(fi.status==='proposed'?'derived by the agent · not checked yet':esc(STATUS_WORD[fi.status]||fi.status||''))+'</small></span><b></b></button>'; }).join('')+'</div></div>';
-    var why=becauseList(rs), sure=obj(rs.certainty);
+    var why=becauseList({because:arr(rs.because).filter(function(p){ return !askOf(p); })}), sure=obj(rs.certainty);
     if(why) h+='<details class="clf-more"><summary>Why it says this</summary>'+why+'</details>';
     if(sure.level) h+='<p class="clf-muted">How sure: '+esc(SURE[sure.level]||sure.level)+(sure.why?'. '+esc(sure.why.charAt(0).toUpperCase()+sure.why.slice(1)):'')+'.</p>';
     attnOf(rs).forEach(function(a){ h+='<p class="clf-muted">'+esc(a)+'</p>'; });
