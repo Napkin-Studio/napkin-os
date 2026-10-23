@@ -35,7 +35,7 @@ from ..util import iso
 from . import capture as cap_stage
 from . import provenance as prov
 from .drafters import _query
-from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, put
+from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
 from .job import BriefJob, log
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
@@ -602,8 +602,9 @@ class PlannedBriefJob(BriefJob):
                 out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, payload,
                                                  draft_schema(parts), max_tokens=8000)
                 got = self._clean(out, ev, "revise", keys=parts, prior=prior)
+                told = {x["part"]: x["instruction"] for x in revise}
                 for k, v in got.items():
-                    v["revised"] = True
+                    self._sent_back(k, v, told.get(k) or "", self._note_on(rv, k))
                     self.whole[k] = v
                 rl.note("revised", parts=sorted(got))
                 self.set_state(parts, "judging", "judge")
@@ -628,6 +629,8 @@ class PlannedBriefJob(BriefJob):
         if res["rewritten"]:
             self.set_state(list(res["rewritten"]), "revising", "drafter")
         for k, v in res["rewritten"].items():
+            back = v.pop("sent_back", None) or {}
+            self._sent_back(k, v, back.get("instruction") or "", back.get("why") or "")
             self.whole[k] = v
         self.set_state(list(self.whole), "judging", "judge")
         read = res["after"] or res["before"]
@@ -648,6 +651,96 @@ class PlannedBriefJob(BriefJob):
               if res["before"] else "Checked."}
         self.scores = [x["score"] for x in (res["before"], res["after"]) if x]
         self._place(rv, ev)
+
+    # -- the loop as it happened -----------------------------------------------------------------
+    def _sent_back(self, k, v, instruction, why):
+        """Mark a part Dara rewrote on Jude's note with what placing records of the loop: the
+        draft Jude sent back (`first`, when this job drafted it) and his note (`sent_back`).
+        The first draft stays in the chain, superseded by this one; nothing is collapsed."""
+        v["revised"] = True
+        if k in self.whole:
+            v["first"] = self.whole[k]
+        v["sent_back"] = {"instruction": instruction, "why": why}
+
+    @staticmethod
+    def _note_on(rv, k):
+        """Jude's fix note naming part `k` in a review, in his words."""
+        return next((n["note"] for n in rv.get("notes") or []
+                     if k in (n.get("parts") or []) and n.get("severity") == "fix"), "")
+
+    def _wrote(self, k, v, answers=None):
+        """What a draft decision says it did, and what steered it: Jude's note it answers, and
+        the planner's ask (a redraft comes with one). The line is the history's, so it names
+        the person's part in it, not only the crew's."""
+        on = (["Jude's note"] if answers else []) + (["your ask"] if self.guidance else [])
+        return (f"{'Rewrote' if answers else 'Wrote'} the {LABELS.get(k, k)}"
+                + (f" on {' and '.join(on)}" if on else "") + ".")
+
+    def _ask_cites(self):
+        """What the planner's ask is cited against: nothing here (a whole-brief draft has none)."""
+        return []
+
+    def _steer_points(self, v, answers):
+        """The points that say what steered a draft, each cited: the planner's ask in their own
+        words, and Jude's note this draft answers."""
+        pts = []
+        if self.guidance:
+            pts.append(rsn.point(f"Your ask: “{_short(self.guidance, 300)}”", self._ask_cites()))
+        if answers:
+            told = v.get("sent_back") or {}
+            pts.append(rsn.point(f"Jude's note: {_short(told.get('instruction') or told.get('why') or 'rewrite it', 300)}",
+                                 [answers]))
+        return pts
+
+    def _draft_decision(self, k, idparts, v, client, claim_bad, passages_out, answers=None):
+        """Dara's decision for one cleaned part: a proposal when a person holds the part, else
+        the write. `answers` is the verdict this draft answers: cited, and named in the line."""
+        bad = claim_bad.get(k)
+        extra = ["Check: " + " ".join(_short(f"{c['claim']} — {c['note']}", 200) for c in bad[:2])] if bad else []
+        pts, cert, attn = prov.because(v, client, extra_attention=extra)
+        if bad and v["basis"] in ("research", "library"):
+            cert = rsn.certainty("low", "Jude found a claim its fact does not fully support")
+        pts += self._steer_points(v, answers)
+        cites = list(v["cites"]) + ([answers] if answers else [])
+        r = rsn.make(self._wrote(k, v, answers), pts, cert,
+                     "the client says otherwise, the research changes, or a person edits it",
+                     only_option="one brief, written as a whole", attention=attn)
+        for c in cites:
+            if c in self.lib:
+                passages_out[c] = self.lib[c]
+        claims = {"claims": v["claims"]} if v.get("claims") else {}
+        if self.held.get(k):
+            return self.dec(idparts, "edit", "propose", [k], cites, r, "drafter", proposed_value=v["value"],
+                            basis=v["basis"], **claims)
+        return self.dec(idparts, "edit", "draft", [k], cites, r, "drafter", basis=v["basis"], **claims)
+
+    def _sent_back_verdict(self, k, told, prior):
+        """Jude's note on the draft he sent back, as the verdict it was: bad, citing that draft
+        (or what wrote the part before this job, when the job did not draft it)."""
+        why = _short(told.get("why") or told.get("instruction") or "Jude sent it back.", 300)
+        cites = [prior] if prior else [f"{self.doc}#{k}"]
+        r = rsn.make(why, [rsn.point(_short(told.get("instruction") or why, 400), cites)],
+                     rsn.certainty("medium", "a model judged the brief as a whole"),
+                     "the part is rewritten", only_option="one note on one part",
+                     attention="Jude sent it back to Dara, who rewrote it.")
+        return self.dec(("sent-back", k, "whole"), "verdict", "judge", [k], cites, r, "judge", polarity="bad",
+                        taxonomy_version="reason-codes/1", reason_code="brief_review")
+
+    def _answered(self, rv):
+        """Jude's pass on a part he sent back that the final review no longer flags: a good
+        verdict with a reason, so his note is answered on the record and not only by a draft."""
+        flagged = {p for n in rv.get("notes") or [] if n.get("severity") == "fix" for p in n.get("parts") or []}
+        out = []
+        for k, v in self.whole.items():
+            if not v.get("sent_back") or k in flagged or k not in self.writer:
+                continue
+            r = rsn.make(f"Checked the new {LABELS.get(k, k)}: it answers the note.",
+                         [rsn.point("Jude reviewed the brief again and left no note on it", [self.writer[k]])],
+                         rsn.certainty("medium", "a model judged the brief as a whole"),
+                         "the part changes again", only_option="the rewrite passed the review")
+            out.append(self.dec(("answered", k, "whole"), "verdict", "judge", [k], [self.writer[k]], r, "judge",
+                                polarity="good", taxonomy_version="reason-codes/1"))
+        return out
 
     # -- placing ---------------------------------------------------------------------------------
     def _question_seed(self):
@@ -683,32 +776,30 @@ class PlannedBriefJob(BriefJob):
                 continue
             if v["basis"] == "assumption":
                 assumed.append(k)
-            bad = claim_bad.get(k)
-            extra = ["Check: " + " ".join(_short(f"{c['claim']} — {c['note']}", 200) for c in bad[:2])] if bad else []
-            pts, cert, attn = prov.because(v, client, extra_attention=extra)
-            if bad and v["basis"] in ("research", "library"):
-                cert = rsn.certainty("low", "Jude found a claim its fact does not fully support")
-            cites = list(v["cites"])
-            r = rsn.make(f"Wrote the {LABELS.get(k, k)}" + (" after Jude's note." if v.get("revised") else "."), pts,
-                         cert, "the client says otherwise, the research changes, or a person edits it",
-                         only_option="one brief, written as a whole", attention=attn)
-            psg = [c for c in cites if c in self.lib]
-            for c in psg:
-                passages_out[c] = self.lib[c]
-            claims = {"claims": v["claims"]} if v.get("claims") else {}
+            # The loop as it happened, when Jude sent the part back: the draft he sent back,
+            # his note on it as the verdict it was, then this draft, which answers the note.
+            first, back, sent = v.get("first"), None, None
+            if first is not None:
+                back = self._draft_decision(k, ("first", k, "whole"), first, client, {}, passages_out)
+                decisions.append(back)
+            if v.get("sent_back"):
+                sent = self._sent_back_verdict(k, v["sent_back"],
+                                               back["id"] if back else last_writer(self.doc, self.chain, k))
+                decisions.append(sent)
+            d = self._draft_decision(k, ("propose" if self.held.get(k) else "draft", k, "whole"), v, client,
+                                     claim_bad, passages_out, answers=sent["id"] if sent else None)
+            if back is not None:
+                back["superseded_by"] = d["id"]
             if self.held.get(k):
-                d = self.dec(("propose", k, "whole"), "edit", "propose", [k], cites, r, "drafter",
-                             proposed_value=v["value"], basis=v["basis"], **claims)
                 self.proposals.append({"field": k, "value": v["value"], "decision": d["id"]})
                 self.set_state([k], "proposed", "judge")
             else:
-                d = self.dec(("draft", k, "whole"), "edit", "draft", [k], cites, r, "drafter", basis=v["basis"],
-                             **claims)
                 put(patch, k, v["value"])
                 self.set_state([k], "done", "judge")
             self.writer[k] = d["id"]
             self.basis[k] = v["basis"]
             decisions.append(d)
+        decisions += self._answered(rv)
         # Jude: one note per issue, naming the parts it touches
         for i, n in enumerate(rv.get("notes") or []):
             parts = [p for p in n["parts"] if p in KEYS and p not in self.locked]

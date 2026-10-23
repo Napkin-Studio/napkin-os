@@ -181,8 +181,12 @@ def test_with_jev_the_check_reads_only_the_named_parts_and_a_mended_argument_lea
     assert sorted(seen["explain"]["flagged"]) == OBJ, "jev reads the named parts only"
     assert sorted(seen["rewrite"]["rewrite"]) == OBJ, "Jude's chain issue reaches only the named parts"
     assert host.data["objectives"]["commercial"] == "objectives.commercial: up 10% by August"
+    # Jude's notes on the drafts he sent back are recorded (redraft-provenance), each on a draft the
+    # rewrite superseded; none stands on the brief as it is now
+    back = {d["id"] for d in host.chain if d.get("superseded_by")}
     assert not [d for d in host.chain if d["kind"] == "verdict" and d.get("handler", "").startswith("fix_parts@1")
-                and d.get("polarity") == "bad"], "jev reads the argument as mended: no new note"
+                and d.get("polarity") == "bad" and not set(d["cites"]) & back], \
+        "jev reads the argument as mended: no new note"
     assert standing_problem(DOC, host.chain, note["id"]) is None
     passed = [d for d in host.chain if d["kind"] == "verdict" and d.get("handler", "").startswith("fix_parts@1")
               and d.get("polarity") == "good"]
