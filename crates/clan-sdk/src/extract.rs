@@ -1939,7 +1939,12 @@ fn is_default_text(r: &str) -> bool {
     let changed = r
         .strip_prefix("Changed from \"")
         .is_some_and(|rest| rest.ends_with('"') && rest.matches("\" to \"").count() == 1);
+    // A person's accept of a proposal, in the brief maker's words: the old
+    // form named the decision's id, the new names the drafter.
+    let accepted = r.starts_with("Accepted ")
+        && (r.contains("\u{2019}s new version of") || r.contains("'s new version of"));
     changed
+        || accepted
         || r.starts_with("Accepted d_")
         || r.starts_with("Dismissed d_")
         || r.starts_with("Human locked ")
@@ -2224,6 +2229,24 @@ fn get_path<'v>(root: &'v Yaml, path: &str) -> Option<&'v Yaml> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_accepted_proposal_is_a_default_text_in_both_forms() {
+        // The brief maker before redraft-provenance named the decision's id.
+        assert!(is_default_text(
+            "Accepted d_TADM3ZN6NXTU: Dara\u{2019}s proposal for single-minded proposition."
+        ));
+        // Now it names the drafter, with either apostrophe.
+        assert!(is_default_text(
+            "Accepted Dara\u{2019}s new version of the single-minded proposition."
+        ));
+        assert!(is_default_text(
+            "Accepted Dara's new version of the single-minded proposition."
+        ));
+        // A person's own words that happen to start the same way are theirs.
+        assert!(!is_default_text("Accepted, though the tone is still off."));
+        assert!(!is_default_text("Accepted Dara's point about the tone."));
+    }
 
     fn hider_of(values: &[(Yaml, Option<&str>)]) -> Hider {
         let mut h = Hider::default();

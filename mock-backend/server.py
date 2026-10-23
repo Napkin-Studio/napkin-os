@@ -223,13 +223,21 @@ def startup_check(cfg: Config) -> None:
             "the layers with MOCK_FAKES=layers.")
 
 
+class Listener(ThreadingHTTPServer):
+    """Threaded, with a listen backlog wide enough for a burst of callers
+    arriving at once (the concurrency test opens twenty): the stdlib default
+    of five resets the connections it cannot queue."""
+
+    daemon_threads = True
+    request_queue_size = 64
+
+
 def main() -> None:
     cfg = Config()
     startup_check(cfg)
     cfg.data.mkdir(parents=True, exist_ok=True)
     backend = Backend(cfg)
-    httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(backend))
-    httpd.daemon_threads = True
+    httpd = Listener((cfg.host, cfg.port), make_handler(backend))
     log(f"listening on http://{cfg.host}:{cfg.port}  fakes={','.join(cfg.fakes)}  concurrency={cfg.concurrency}  "
         f"data={cfg.data}")
     if cfg.dump_dir:

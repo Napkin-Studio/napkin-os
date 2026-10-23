@@ -83,6 +83,16 @@ fn yaml(clan: &ClanFile, path: &str) -> Value {
     serde_json::to_value(y).unwrap()
 }
 
+/// The data without the projection's build stamp: a settle rebuilds the
+/// projection and stamps it to the second, so "nothing was written" compares
+/// everything but that stamp, or it fails whenever a second ticks over.
+fn without_build_time(mut data: Value) -> Value {
+    if let Some(built) = data.pointer_mut("/projection/built_from") {
+        built.as_object_mut().map(|b| b.remove("built_at"));
+    }
+    data
+}
+
 /// Reasoning in the shape `napkin.middleware/1` requires (§3).
 fn reasoning(decided: &str, cites: &[&str]) -> Value {
     json!({ "decided": decided,
@@ -1726,7 +1736,7 @@ fn an_engine_fact_conflict_is_recorded_as_a_flag_and_writes_nothing() {
     let (out, _) = settle(&f, reply_for(&clan));
     assert_eq!(out["data"]["change"]["applied"], true, "{out}");
     let before = on_disk(&f);
-    let data_before = yaml(&before, "shared/data.yaml");
+    let data_before = without_build_time(yaml(&before, "shared/data.yaml"));
     let facts_before = yaml(&before, FACTS_PATH);
 
     let clan = f.session.clan_context_for_agent();
@@ -1760,7 +1770,7 @@ fn an_engine_fact_conflict_is_recorded_as_a_flag_and_writes_nothing() {
 
     let after = on_disk(&f);
     assert_eq!(
-        yaml(&after, "shared/data.yaml"),
+        without_build_time(yaml(&after, "shared/data.yaml")),
         data_before,
         "no field is written"
     );

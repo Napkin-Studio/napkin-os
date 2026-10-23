@@ -329,6 +329,7 @@
   .prov .agent-figure{width:14px;height:19px;margin:0 -1px}
   .prov .you{width:16px;height:16px;border-radius:50%;border:1.2px solid currentColor;font-size:8.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
   .prov .q{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .prov .acc{font-size:10.5px;font-weight:400;color:var(--faint)}
   .ctrls{margin-left:auto;display:flex;gap:4px;opacity:0;transition:opacity .18s var(--ease)}
   .row:hover .ctrls,.row:focus-within .ctrls{opacity:1}
   @media (hover:none) and (pointer:coarse){.ctrls{opacity:1}}
@@ -908,11 +909,16 @@
   // no decision names it, and nobody dismissed it. The newest one only.
   function dismissed(){ return arr(get('dismissed_proposals')); }
   function proposalOf(key){
-    var p=about(key).filter(isProposal)[0]; if(!p) return null;
+    // A first draft Jude sent back is superseded by the second: never offered.
+    var p=about(key).filter(function(d){ return isProposal(d)&&!d.superseded_by; })[0]; if(!p) return null;
     if(dismissed().indexOf(p.id)!==-1) return null;
     var since=about(key).some(function(d){ return isWrite(d)&&newer(d,p); });
+    // Answered when a later write cites it (an accept, middleware-api §10.5)
+    // or, in an older brief, names its id. Jude's verdict on it is not an
+    // answer: a proposal he still fails stays offered, flagged.
+    var cited=CHAIN.decisions.some(function(d){ return d!==p&&!isVerdict(d)&&citesOf([d]).indexOf(p.id)!==-1; });
     var named=CHAIN.decisions.some(function(d){ return d!==p&&String(d.rationale||'').indexOf(p.id)!==-1; });
-    if(since||named) return null;
+    if(since||cited||named) return null;
     var v=p.proposed_value;
     if(v===undefined) arr(LAST_PROPOSALS).some(function(x){ if(x&&x.decision===p.id){ v=x.value; return true; } return false; });
     return v===undefined?null:{d:p, value:v};
@@ -958,14 +964,38 @@
         .forEach(function(c){ if(out.indexOf(c)===-1) out.push(c); }); });
     return out;
   }
+  // The proposal a person's write accepted (middleware-api §10.5): the
+  // `propose` decision it cites, or, in an older brief, the one whose id its
+  // rationale names. Null for any other decision: a verdict cites a draft to
+  // judge it, not to take it.
+  function acceptOf(d){
+    if(!d||isVerdict(d)||isProposal(d)) return null;
+    var ids=citesOf([d]), m=/^Accepted (d_[A-Za-z0-9_-]+)/.exec(String(d.rationale||''));
+    if(m) ids.push(m[1]);
+    for(var i=0;i<ids.length;i++){ var p=CHAIN.decisions.filter(function(x){ return x.id===ids[i]; })[0]; if(p&&isProposal(p)) return p; }
+    return null;
+  }
+  function isAccept(d){ return !!d&&(/^accept proposal\b/.test(String(d.action||''))||/^Accepted d_/.test(String(d.rationale||''))||!!acceptOf(d)); }
+  // Who proposed what a person accepted, as the crew names them: the drafter
+  // when the proposal itself is no longer in the chain.
+  function proposerOf(d){ var p=acceptOf(d); return p?agentKeyOf(p):'drafter'; }
+  // A person's reason as they gave it: an older accept began with the
+  // decision's id, which is nobody's words.
+  function saidWords(d){ return String(d&&d.rationale||'').replace(/^Accepted d_[A-Za-z0-9_-]+:\s*/,'Accepted '); }
+  // What a decision did, after the name: the redraft loop's steps in words;
+  // any other action as the record says it.
+  function actionWords(d){
+    if(isProposal(d)) return 'proposed a '+(d.superseded_by?'first':'new')+' version';
+    if(isAccept(d)) return 'accepted '+(AGENT_NAME[proposerOf(d)]||'the agent')+'’s new version';
+    return String(d.action||'');
+  }
   // The decision whose claims say what a part rests on (middleware-api
-  // §10.7): its own, or, when a person accepted a proposal, the proposal's
-  // ("Accepted d_…: …", §10.5), since accepting writes no cites.
+  // §10.7): its own, or, when a person accepted a proposal, the proposal's,
+  // since accepting carries no claims.
   function claimDecision(d){
     if(!d) return null;
     if(arr(d.claims).length) return d;
-    var m=/^Accepted (d_[A-Za-z0-9_-]+)/.exec(String(d.rationale||''));
-    return m?CHAIN.decisions.filter(function(x){ return x.id===m[1]; })[0]||null:null;
+    return acceptOf(d);
   }
   // A pin research found outside the measure list, kept in this brief only
   // and never written to the layers (Contract 3 §4). The projection carries
@@ -1046,8 +1076,8 @@
     var h='', d=ds[0];
     if(d){
       var r=hasReasoning(d)?d.reasoning:null;
-      h+='<div class="wh">'+whoMark(d)+'<b>'+esc(whoName(d))+'</b><span>'+esc(d.action||'')+'</span><time datetime="'+esc(d.timestamp)+'">'+esc(fmtDate(d.timestamp))+'</time></div>';
-      h+=r?reasoningBlock(r):(d.rationale?'<p class="rsn">'+esc(d.rationale)+'</p>':'<p class="muted">No reason was recorded.</p>');
+      h+='<div class="wh">'+whoMark(d)+'<b>'+esc(whoName(d))+'</b><span>'+esc(actionWords(d))+'</span><time datetime="'+esc(d.timestamp)+'">'+esc(fmtDate(d.timestamp))+'</time></div>';
+      h+=r?reasoningBlock(r):(d.rationale?'<p class="rsn">'+esc(saidWords(d))+'</p>':'<p class="muted">No reason was recorded.</p>');
       var look=r?plainJudge(r.attention,isVerdict(d)):'';
       if(look) h+='<div class="flag">'+fig(agentKeyOf(d),{state:'needs-you',decorative:true})+'<div><b>Look at this:</b> '+esc(look)+'</div></div>';
     }
@@ -1055,7 +1085,7 @@
     var cd=claimDecision(d);
     h+=sourcesHtml(citesOf([d, cd, v&&v.d]), cd?cd.claims:[]);
     if(ds.length>1) h+='<details class="earlier"><summary>'+(ds.length-1)+' earlier '+(ds.length===2?'decision':'decisions')+' on this field</summary><ol>'
-      +ds.slice(1,8).map(function(e){ return '<li><b>'+esc(whoName(e))+'</b> · '+esc(e.action||'')+' · '+esc(fmtDate(e.timestamp))+(e.rationale?' — '+esc(short(e.rationale,90)):'')+'</li>'; }).join('')+'</ol></details>';
+      +ds.slice(1,8).map(function(e){ return '<li><b>'+esc(whoName(e))+'</b> · '+esc(actionWords(e))+' · '+esc(fmtDate(e.timestamp))+(e.rationale?' — '+esc(short(saidWords(e),90)):'')+'</li>'; }).join('')+'</ol></details>';
     return h;
   }
   var OPEN_WHY={};
@@ -1079,9 +1109,12 @@
     // An empty part shows who judged it: the Judge, or the person whose
     // verdict (a doubt, or an override with a reason) is the latest on it.
     var by=d||(v&&isHuman(v.d)?v.d:null);
-    var who=by?whoMark(by):(v?fig('judge',{decorative:true}):'');
+    var who=by?whoMark(by):(v?fig('judge',{decorative:true}):''), name=by?esc(whoName(by)):v?esc(JUDE):'';
+    // A person's accept of a proposal credits its drafter; the accept is a note.
+    if(d&&isHuman(d)&&isAccept(d)){ var pk=proposerOf(d), yn=whoName(d);
+      who=fig(pk,{decorative:true}); name=esc(AGENT_NAME[pk]||'the agent')+'<span class="acc">'+(yn==='You'?'you accepted':esc(yn)+' accepted')+'</span>'; }
     return '<button type="button" class="prov act-why" aria-expanded="'+open+'" title="Where did this come from?">'
-      +who+(by?esc(whoName(by)):v?esc(JUDE):'')+'<span class="q">why?</span></button>';
+      +who+name+'<span class="q">why?</span></button>';
   }
   function toggleWhy(row,f){
     OPEN_WHY[f.key]=!OPEN_WHY[f.key];
@@ -1156,12 +1189,17 @@
     if(a) a.addEventListener('click',function(){ acceptProposal(f); });
     if(x) x.addEventListener('click',function(){ dismissProposal(f); });
   }
-  // Accepting is the person's write of the field, naming the proposal's
-  // decision (middleware-api §10.5); dismissing records that they saw it.
+  // Accepting is the person's write of the field, citing the proposal
+  // (middleware-api §10.5). The host keeps a view's `reasoning` and drops a
+  // bare `cites` (napkin-host ops/edit.rs, PatchData::parse), so the cite
+  // rides on the reasoning's point; the rationale names the drafter, never
+  // the decision's id. Dismissing records that they saw it.
   function acceptProposal(f){
     var p=proposalOf(f.key); if(!p||!window.clan) return;
-    window.clan.patchData(f.key, p.value, {actor:'human', pinned:false, action:'accept proposal '+f.key,
-      rationale:'Accepted '+p.d.id+': '+(AGENT_NAME[agentKeyOf(p.d)]||'the agent')+'’s proposal for '+f.label.toLowerCase()+'.'}).then(function(){ loadChain(); });
+    var who=AGENT_NAME[agentKeyOf(p.d)]||'the agent', part=partName(f), said='Accepted '+who+'’s new version of '+part+'.';
+    window.clan.patchData(f.key, p.value, {actor:'human', pinned:false, action:'accept proposal '+f.key, rationale:said,
+      reasoning:{decided:said, because:[{point:who+' proposed it.', cites:[p.d.id]}], only_option:'You chose to use it as it is.',
+        certainty:{level:'high', why:'You read it and chose it.'}, would_change_if:'You change the '+part+' again.'}}).then(function(){ loadChain(); });
   }
   function dismissProposal(f){
     var p=proposalOf(f.key); if(!p) return;
@@ -2094,7 +2132,7 @@
         var fs=(j.fields||{})[f.key]||{};
         if(j.error) setStatus(esc(j.error));
         // the middleware's summary stays in the record; the person hears Jude
-        else if(fs.state==='failed') setStatus(esc(JUDE+': I turned down the new '+f.label.toLowerCase()+' twice, so it wasn’t written.'));
+        else if(fs.state==='failed') setStatus(esc(JUDE+': the new '+f.label.toLowerCase()+' still fails my checks. It’s there, flagged: use it, change it, or ask again.'));
         else if(fs.state==='proposed') setStatus(esc(DARA+' suggests a new '+f.label.toLowerCase()+': you hold that part, so it wasn’t changed.'));
         else setStatus('');
         if(phase==='doc') renderStructured();

@@ -90,3 +90,44 @@ test('a run of look changes reads as one line', () => {
   const b = block({ action: 'look', rationale: 'Changed the look: Studio brief; Dark with orange palette' }, { kind: 'person', id: 'x', name: 'x', you: true })
   assert.equal(didWhat(b, view), 'changed the look: Studio brief, Dark with orange palette')
 })
+
+// A redraft of a part a person holds (redraft-provenance): Dara's drafts are
+// proposals, Jude's note sends the first back, and the person's accept is
+// credited to Dara. No line carries a decision's id.
+const smp = [{ address: 'd#single_minded_proposition', path: 'single_minded_proposition', label: 'Single-minded proposition', kind: 'field' as const, here: true }]
+const VIEW0: DecisionsView = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] }
+const me = { kind: 'person' as const, id: 'x', name: 'x', you: true }
+
+test('accepting a proposal is credited to whoever proposed it, never by its id', () => {
+  const prop = block({ id: 'd_P2', action: 'propose', rationale: 'Rewrote the single-minded proposition on Jude’s note and your ask.' }, agent('draft_brief@1.0/drafter'))
+  prop.targets = smp
+  const acc = block({ id: 'd_A', action: 'accept proposal single_minded_proposition', rationale: 'Accepted Dara’s new version of single-minded proposition.',
+    reasoning: { decided: 'Accepted it.', because: [{ point: 'Dara proposed it.', cites: ['d_P2'] }], rejected: [], certainty: { level: 'high', why: 'read' }, would_change_if: 'never' } }, me)
+  acc.targets = smp
+  const view = { ...VIEW0, decisions: [acc, prop] }
+  assert.equal(didWhat(acc, view), `accepted ${AGENTS.drafter.given}’s new version of single-minded proposition`)
+  // An older brief named the proposal's id in the rationale, with no cites.
+  const old = block({ id: 'd_O', rationale: 'Accepted d_P2: Dara’s proposal for single-minded proposition.' }, me)
+  old.targets = smp
+  assert.equal(didWhat(old, { ...VIEW0, decisions: [old, prop] }), `accepted ${AGENTS.drafter.given}’s new version of single-minded proposition`)
+  // Even when the proposal has left the chain, the drafter is credited.
+  assert.equal(didWhat(old, VIEW0), `accepted ${AGENTS.drafter.given}’s new version of single-minded proposition`)
+  assert.equal(plain('Accepted d_P2: Dara’s proposal for single-minded proposition.'), 'Accepted Dara’s proposal for single-minded proposition.')
+  assert.equal(plain('Used proposal d_P2'), 'Used the proposal.')
+})
+
+test('a proposal reads as a first or a new version, steered as its reason says', () => {
+  const first = block({ id: 'd_P1', action: 'propose', superseded_by: 'd_P2', rationale: 'Wrote the single-minded proposition on your ask.' }, agent('draft_brief@1.0/drafter'))
+  first.targets = smp
+  assert.equal(didWhat(first, VIEW0), 'proposed a first single-minded proposition on your ask')
+  const second = block({ id: 'd_P2', action: 'propose', rationale: 'Rewrote the single-minded proposition on Jude’s note and your ask.' }, agent('draft_brief@1.0/drafter'))
+  second.targets = smp
+  assert.equal(didWhat(second, VIEW0), `proposed a new single-minded proposition on ${AGENTS.judge.given}’s note and your ask`)
+  // The judge by the crew's name, whatever the record spelt; no steer, no tail.
+  const plainNote = block({ id: 'd_P3', action: 'propose', rationale: "Rewrote the single-minded proposition on Jude's note." }, agent('draft_brief@1.0/drafter'))
+  plainNote.targets = smp
+  assert.equal(didWhat(plainNote, VIEW0), `proposed a new single-minded proposition on ${AGENTS.judge.given}’s note`)
+  const bare = block({ id: 'd_P4', action: 'propose', rationale: 'Wrote the single-minded proposition.' }, agent('draft_brief@1.0/drafter'))
+  bare.targets = smp
+  assert.equal(didWhat(bare, VIEW0), 'proposed a new single-minded proposition')
+})

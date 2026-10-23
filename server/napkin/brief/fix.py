@@ -97,6 +97,25 @@ class FixPartsJob(PlannedBriefJob):
     def _problem_cites(self):
         return [p["decision"] for p in self.problem if p.get("decision")]
 
+    def _wrote(self, k, v, answers=None):
+        """A fix rewrites, and the line says on what: Jude's note it answers, the person's ask
+        (a redraft on a planned brief comes as one), else the standing note the problem quotes."""
+        on = ["Jude's note"] if answers else []
+        if self.guidance or any(p.get("by") == "a person" for p in self.problem):
+            on.append("your ask")
+        elif not answers:
+            on.append("Jude's note")
+        return f"Rewrote the {LABELS.get(k, k)} on {' and '.join(on)}."
+
+    def _ask_cites(self):
+        """The planner's ask is cited against the problem: what wrote the part, or the part."""
+        return self._problem_cites()
+
+    def _answered(self, rv):
+        """The fix's own pass (`_passed`) answers Jude's note on every part it wrote; only a
+        held part, which the fix proposes and never passes, gets the loop's answer."""
+        return [d for d in super()._answered(rv) if self.held.get(d["targets"][0].split("#", 1)[1])]
+
     # =========================================================================================
     # context: Sam plans the fix, then the research it needs
     # =========================================================================================
@@ -185,8 +204,10 @@ class FixPartsJob(PlannedBriefJob):
     def _passed(self, decisions):
         """Jude's pass on the parts the fix wrote that no new note names: a good verdict with
         a reason, which answers the old note as the Judge passing a redraft does."""
+        # a note on a draft the rewrite superseded is the loop's record, not a note that stands
+        back = {d["id"] for d in decisions if d.get("superseded_by")}
         noted = {t.split("#", 1)[1] for d in decisions if d["kind"] == "verdict" and d.get("polarity") == "bad"
-                 for t in d["targets"]}
+                 and not set(d.get("cites") or []) & back for t in d["targets"]}
         ok = [k for k in self.whole if k not in noted and not self.held.get(k) and k in self.writer]
         if not ok:
             return []
