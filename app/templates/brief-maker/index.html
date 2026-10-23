@@ -1199,7 +1199,7 @@
     var who=AGENT_NAME[agentKeyOf(p.d)]||'the agent', part=partName(f), said='Accepted '+who+'’s new version of '+part+'.';
     window.clan.patchData(f.key, p.value, {actor:'human', pinned:false, action:'accept proposal '+f.key, rationale:said,
       reasoning:{decided:said, because:[{point:who+' proposed it.', cites:[p.d.id]}], only_option:'You chose to use it as it is.',
-        certainty:{level:'high', why:'You read it and chose it.'}, would_change_if:'You change the '+part+' again.'}}).then(function(){ loadChain(); });
+        certainty:{level:'high', why:'You read it and chose it.'}, would_change_if:'You change '+part+' again.'}}).then(function(){ loadChain(); });
   }
   function dismissProposal(f){
     var p=proposalOf(f.key); if(!p) return;
