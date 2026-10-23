@@ -306,6 +306,19 @@ def test_judge_failure_gets_one_revision(tmp_path):
     draft = next(d for d in host.chain if d.get("action") == "draft" and f"{DOC}#insight" in d["targets"])
     assert draft["reasoning"]["certainty"]["level"] == "medium"  # passed after one revision: not low
     assert host.data["review"]["judge"]["fields"]["insight"]["outcome"] == "revised"
+    # the loop is recorded as it happened (redraft-provenance): the draft Jude sent back, kept and
+    # superseded; his verdict on it; the rewrite citing that verdict and saying what it answers
+    first = next(d for d in host.chain if d.get("action") == "draft" and f"{DOC}#insight" in d["targets"]
+                 and d.get("superseded_by"))
+    assert first["superseded_by"] == draft["id"] and not draft.get("superseded_by")
+    assert first["reasoning"]["decided"] == "Drafted the insight." and first["reasoning"]["certainty"]["level"] == "low"
+    sent = next(d for d in host.chain if d["kind"] == "verdict" and first["id"] in d["cites"])
+    assert sent["polarity"] == "bad" and sent["reasoning"]["decided"].startswith("The insight fails the rubric (is_tension)")
+    assert sent["id"] in draft["cites"] and draft["reasoning"]["decided"] == "Rewrote the insight on Jude's note."
+    assert any(p["point"].startswith("Jude's note: is_tension") and p["cites"] == [sent["id"]]
+               for p in draft["reasoning"]["because"])
+    assert v["id"] != sent["id"], "the pass after the revision is its own verdict"
+    check_change_rules(host)
 
 
 LONG_REASON = ("€1.2m spread across digital and OOH in two national markets (Ireland and Great Britain) is thin for "
@@ -580,6 +593,10 @@ def test_regenerate_field_redrafts_with_guidance(bserver):
     assert set(regen["data_patch"].get("desired_response", {})) == {"do"}  # the named leaf only
     assert any(d["action"] == "regenerate" for d in regen["decisions"])
     assert any(d["kind"] == "verdict" for d in regen["decisions"])
+    # the draft says what steered it, in the planner's words (redraft-provenance)
+    d = next(d for d in regen["decisions"] if d["action"] == "regenerate")
+    assert d["reasoning"]["decided"].endswith(" on your ask.")
+    assert {"point": "Your ask: “make it a ritual”", "cites": [f"{DOC}#desired_response.do"]} in d["reasoning"]["because"]
     check_change_rules(host)
 
 

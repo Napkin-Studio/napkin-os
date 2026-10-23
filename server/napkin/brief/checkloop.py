@@ -166,7 +166,9 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
                                     draft_schema(list(todo)), max_tokens=8000)
     for k, v in clean(got, list(todo)).items():
         why = ((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue") or ""
-        out["rewritten"][k] = {**v, "why": _short(f"Rewritten on Jude's note: {why}", 300), "revised": True}
+        out["rewritten"][k] = {**v, "why": _short(f"Rewritten on Jude's note: {why}", 300), "revised": True,
+                               # placing records the loop: Jude's note, in his words, on the draft he sent back
+                               "sent_back": {"instruction": _short(todo[k], 400), "why": _short(why, 400)}}
     after_vals = {**values, **{k: v["value"] for k, v in out["rewritten"].items()}}
     out["after"] = jev_read(job, after_vals, said, [k for k in open_keys if filled(after_vals.get(k))
                                                      and k != "open_questions"], "jev_after")

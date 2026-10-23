@@ -683,7 +683,7 @@ function provEnv(data: Record<string, unknown>, decisions: unknown[] = []) {
     citesOf(ds: unknown[]): string[]
     keptPin(pn: unknown): boolean
   }
-  return lift<F>(BM, ['srcLine', 'keptPin', 'wrongPin', 'sourcesHtml', 'citesOf', 'claimDecision'], {
+  return lift<F>(BM, ['srcLine', 'keptPin', 'wrongPin', 'sourcesHtml', 'citesOf', 'isVerdict', 'isProposal', 'acceptOf', 'claimDecision'], {
     get, arr, esc, short, passage, captureItem, citationOf, citeLabel,
     hasReasoning: (d: { reasoning?: { decided?: string } }) => !!(d && d.reasoning && d.reasoning.decided),
     CHAIN: { state: 'ok', decisions },
@@ -756,17 +756,175 @@ test('the drawer quotes the words the planner typed', () => {
     mat_f: { kind: 'client_brief', name: 'Lidl brief.pdf' },
   }
   const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
-  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'writerBlock'], {
+  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
     arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
     writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
     materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
     MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
     STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '', confidential: () => false, LOCK: '', fmt: () => '',
-    dayMonth: () => '', whoDid: () => '',
+    dayMonth: () => '', whoDid: () => '', blockOf: () => null, givenOf: () => 'Dara', proposerOf: () => 'Dara',
   })
   const h = w.writerBlock('background')
   assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">A brief for Lidl Connect: win back switchers\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
   // the attachment is still named, not quoted, and the prompt is not listed twice
   assert.match(h, /<h3>From your material<\/h3>.*Lidl brief\.pdf/)
   assert.equal(count(h, 'data-open="mat_p"'), 0)
+})
+
+// ── a redraft of a held part (redraft-provenance) ──────────────────────────
+// Dara's first draft, Jude's note that sent it back, Dara's second, and the
+// person's accept, as the chain holds them (newest first). Every reader
+// credits Dara, quotes the ask, and shows no decision's id.
+
+const SMP = 'single_minded_proposition'
+const SMP_ADDR = `brief#${SMP}`
+const SMP_T = [{ address: SMP_ADDR, path: SMP, label: 'Single-minded proposition', here: true }]
+const dara = { kind: 'agent', id: 'draft_brief', name: 'Drafter' }
+const jude = { kind: 'agent', id: 'judge', name: 'Judge' }
+const firstDraft = { decision: { id: 'd_P1', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', superseded_by: 'd_P2', proposed_value: 'One thing.',
+  targets: [SMP_ADDR], timestamp: '2026-10-23T09:00:00+00:00', rationale: 'Wrote the single-minded proposition on your ask.',
+  reasoning: { decided: 'One thing.', because: [{ point: 'Your ask: “Make it one thing.”' }] } }, who: dara, targets: SMP_T, superseded: true }
+const judeNo = { decision: { id: 'd_V', kind: 'verdict', polarity: 'bad', agent: 'napkin/brief/judge', cites: ['d_P1'], rationale: 'Say one thing, not two.',
+  targets: [SMP_ADDR], timestamp: '2026-10-23T09:01:00+00:00' }, who: jude, targets: SMP_T, superseded: false }
+const secondDraft = { decision: { id: 'd_P2', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', cites: ['d_V', 'mat_p'], proposed_value: 'One thing, said once.',
+  targets: [SMP_ADDR], timestamp: '2026-10-23T09:02:00+00:00', rationale: 'Rewrote the single-minded proposition on Jude’s note and your ask.',
+  reasoning: { decided: 'One thing, said once.', because: [{ point: 'Your ask: “Make it one thing.”' }, { point: 'It says one thing.' }] } }, who: dara, targets: SMP_T, superseded: false }
+const youAccept = { decision: { id: 'd_A', kind: 'edit', agent: 'human', actor: 'human:me', action: `accept proposal ${SMP}`, fields_changed: [SMP],
+  timestamp: '2026-10-23T09:05:00+00:00', rationale: 'Accepted Dara’s new version of single-minded proposition.',
+  reasoning: { decided: 'Accepted it.', because: [{ point: 'Dara proposed it.', cites: ['d_P2'] }] } }, who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: SMP_T, superseded: false }
+const oldAccept = { decision: { id: 'd_O', kind: 'edit', agent: 'human', actor: 'human:me', action: `edit ${SMP}`, fields_changed: [SMP],
+  timestamp: '2026-10-23T09:05:00+00:00', rationale: 'Accepted d_P2: Dara’s proposal for single-minded proposition.' },
+  who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: SMP_T, superseded: false }
+
+/** The drawer's readers over a chain, the crew named as the snippet names them, dates left as stamps. */
+function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
+  type F = {
+    provenance(path: string): string
+    history(path: string): string
+    writerBlock(path: string): string
+    proposalOf(path: string): { decision: { id: string } } | null
+    acceptOf(b: unknown): { decision: { id: string } } | null
+  }
+  const crewKey = (d: { agent?: string }) => (/drafter/.test(String(d.agent)) ? 'drafter' : /judge/.test(String(d.agent)) ? 'judge' : null)
+  const givenOf = (k: string | null) => ({ drafter: 'Dara', judge: 'Jude' } as Record<string, string>)[String(k)] || ''
+  const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
+  const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
+  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
+    'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history', 'writerBlock'], {
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION,
+    docId: () => 'brief', upstreams: () => ({}), valueAt: () => value, envAt: () => null, ORIGIN: {}, personName: () => 'ana',
+    crew: () => ({ forWork: (w: string) => (w === 'draft' ? 'drafter' : '') }), crewKey, givenOf,
+    whoDid: (b: { who: { you?: boolean }; decision: { agent?: string } }) => (b.who.you ? 'You' : givenOf(crewKey(b.decision)) || 'The crew'),
+    dayMonth: (d: string) => d, captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
+    materials: () => ({ mat_p: { kind: 'prompt', name: 'prompt', text: 'A brief for Lidl Connect.' } }), say: () => '', andList: listJoin, upTitle: () => '',
+    MAT_KIND: { prompt: 'your prompt', other: 'a file' }, textOf: String, SURE: {}, STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '',
+    confidential: () => false, LOCK: '', fmt: () => '',
+  })
+}
+
+test('the drawer shows a chain’s times in the viewer’s own zone', () => {
+  type D = { dayMonth(d: string, time?: boolean): string }
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'June', 'July', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const f = lift<D>(CLF, ['dparts', 'monthYear', 'dayMonth'], { MON, MONTHS })
+  const local = (stamp: string) => {
+    const at = new Date(stamp)
+    const year = at.getFullYear() === new Date().getFullYear() ? '' : ` ${at.getFullYear()}`
+    return { day: `${at.getDate()} ${MON[at.getMonth()]}${year}`, time: at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) }
+  }
+  for (const stamp of ['2026-10-23T09:05:00+00:00', '2026-10-23T09:05:00Z', '2026-10-23T09:05:00.944391699+00:00', '2026-10-23T09:05:00+05:30']) {
+    const { day, time } = local(stamp)
+    assert.equal(f.dayMonth(stamp, true), `${day}, ${time}`, stamp)
+    assert.equal(f.dayMonth(stamp), day, stamp)
+  }
+  // A stamp with no zone, or no time, reads as written: a source's own date.
+  const y = new Date().getFullYear() === 2026 ? '' : ' 2026'
+  assert.equal(f.dayMonth('2026-10-23T09:05', true), `23 Oct${y}, 09:05`)
+  assert.equal(f.dayMonth('2026-10-23', true), `23 Oct${y}`)
+  assert.equal(f.dayMonth('2025-03'), 'March 2025')
+})
+
+test('the drawer credits an accepted proposal to Dara and quotes the ask', () => {
+  const f = drawerEnv([youAccept, secondDraft, judeNo, firstDraft])
+  assert.equal(f.acceptOf(youAccept)?.decision.id, 'd_P2')
+  assert.equal(f.acceptOf(judeNo), null, 'a verdict cites a draft to judge it')
+  assert.equal(f.provenance(SMP), 'drafted by Dara · you accepted')
+  assert.equal(f.proposalOf(SMP), null, 'the accept answered it')
+
+  const h = f.writerBlock(SMP)
+  assert.match(h, /^<p class="clf-by"><b>Dara<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">Make it one thing\.<\/blockquote><blockquote class="clf-q said">A brief for Lidl Connect\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
+  // What the proposal rested on, not the accept; the ask is not listed twice.
+  assert.match(h, /<summary>Why it says this<\/summary><ul class="clf-hist"><li><span>It says one thing\.<\/span><\/li><\/ul>/)
+  assert.doesNotMatch(h, /Dara proposed it|d_P2|d_A/)
+
+  const lines = [...f.history(SMP).matchAll(/<li><span>(.*?)<\/span><\/li>/g)].map(m => m[1])
+  assert.deepEqual(lines, [
+    '<b>You</b> accepted Dara’s new version on 2026-10-23T09:05:00+00:00 — “Accepted Dara’s new version of single-minded proposition.”',
+    '<b>Dara</b> proposed a new version on 2026-10-23T09:02:00+00:00 — “Rewrote the single-minded proposition on Jude’s note and your ask.”',
+    '<b>Jude</b> said it is wrong on 2026-10-23T09:01:00+00:00 — “Say one thing, not two.”',
+    '<b>Dara</b> proposed a first version on 2026-10-23T09:00:00+00:00 — “Wrote the single-minded proposition on your ask.”',
+  ])
+  assert.doesNotMatch(f.history(SMP), /\bd_[A-Z0-9]/)
+
+  // Another person's accept.
+  const ana = { ...youAccept, who: { kind: 'person', id: 'ana', name: 'ana' } }
+  assert.equal(drawerEnv([ana, secondDraft, judeNo, firstDraft]).provenance(SMP), 'drafted by Dara · accepted')
+})
+
+test('an older brief’s accept reads the same, without the id it named', () => {
+  const f = drawerEnv([oldAccept, secondDraft, judeNo, firstDraft])
+  assert.equal(f.acceptOf(oldAccept)?.decision.id, 'd_P2')
+  assert.equal(f.provenance(SMP), 'drafted by Dara · you accepted')
+  assert.match(f.writerBlock(SMP), /^<p class="clf-by"><b>Dara<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.match(f.history(SMP), /<b>You<\/b> accepted Dara’s new version on 2026-10-23T09:05:00\+00:00 — “Accepted Dara’s proposal for single-minded proposition\.”/)
+  assert.doesNotMatch(f.history(SMP), /d_P2/)
+  // The proposal gone from the chain: still Dara's, by the crew's draft work.
+  const gone = drawerEnv([oldAccept])
+  assert.equal(gone.provenance(SMP), 'drafted by Dara · you accepted')
+  assert.match(gone.writerBlock(SMP), /^<p class="clf-by"><b>Dara<\/b> wrote this; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+})
+
+test('the drawer offers the second draft, never the first Jude sent back', () => {
+  assert.equal(drawerEnv([secondDraft, judeNo, firstDraft], 'Two things.').proposalOf(SMP)?.decision.id, 'd_P2')
+  assert.equal(drawerEnv([judeNo, firstDraft], 'Two things.').proposalOf(SMP), null)
+})
+
+test('the brief maker’s proposal is answered by the write that cites it', () => {
+  type F = { proposalOf(key: string): { d: { id: string }; value: unknown } | null; actionWords(d: unknown): string; provHtml(f: { key: string }): string }
+  const first = { id: 'd_P1', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', superseded_by: 'd_P2', proposed_value: 'One thing.', targets: [SMP_ADDR] }
+  const no = { id: 'd_V', kind: 'verdict', polarity: 'bad', agent: 'napkin/brief/judge', cites: ['d_P1'], rationale: 'Say one thing.', targets: [SMP_ADDR] }
+  const second = { id: 'd_P2', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', cites: ['d_V'], proposed_value: 'One thing, said once.', targets: [SMP_ADDR] }
+  const accept = { id: 'd_A', kind: 'edit', agent: 'human', actor: 'human:me', action: `accept proposal ${SMP}`, rationale: 'Accepted Dara’s new version of single-minded proposition.',
+    reasoning: { decided: 'Accepted it.', because: [{ point: 'Dara proposed it.', cites: ['d_P2'] }] } }
+  const stillNo = { id: 'd_V2', kind: 'verdict', polarity: 'bad', agent: 'napkin/brief/judge', cites: ['d_P2'], rationale: 'Still two things.', targets: [SMP_ADDR] }
+  const old = { id: 'd_O', kind: 'edit', agent: 'human', actor: 'human:me', action: `edit ${SMP}`, rationale: 'Accepted d_P2: Dara’s proposal for single-minded proposition.' }
+  const make = (decisions: unknown[], writer: unknown = null) => lift<F>(BM, ['about', 'names', 'pathOf', 'isVerdict', 'isProposal', 'isWrite', 'newer', 'proposalOf', 'citesOf',
+    'hasReasoning', 'acceptOf', 'isAccept', 'proposerOf', 'actionWords', 'provHtml', 'isHuman'], {
+    CHAIN: { state: 'ok', decisions }, arr, esc, docId: () => 'brief', dismissed: () => [], LAST_PROPOSALS: [], OPEN_WHY: {}, JUDE: 'Jude',
+    AGENT_NAME: { drafter: 'Dara', judge: 'Jude' }, agentKeyOf: (d: { agent?: string }) => (/judge/.test(String(d.agent)) ? 'judge' : 'drafter'),
+    get: () => 'x', hasVal: () => true, verdictOf: () => null, decisionsFor: () => (writer ? [writer] : []),
+    whoName: (d: { agent?: string }) => (/^human/.test(String(d.agent)) ? 'You' : 'Dara'), whoMark: () => '<you>', fig: (k: string) => `<fig ${k}>`,
+  })
+  // Newest first, as the chain is read.
+  assert.equal(make([second, no, first]).proposalOf(SMP)?.d.id, 'd_P2')
+  assert.equal(make([no, first]).proposalOf(SMP), null, 'a first draft Jude sent back is never offered')
+  assert.equal(make([accept, second, no, first]).proposalOf(SMP), null, 'the accept cites it')
+  assert.equal(make([old, second, no, first]).proposalOf(SMP), null, 'an older accept named it')
+  assert.equal(make([stillNo, second, no, first]).proposalOf(SMP)?.d.id, 'd_P2', 'a proposal Jude still fails stays offered')
+
+  // The chip and the rows: Dara's figure and name, the accept as a note.
+  const f = make([accept, second, no, first], accept)
+  assert.equal(f.provHtml({ key: SMP }), '<button type="button" class="prov act-why" aria-expanded="false" title="Where did this come from?"><fig drafter>Dara<span class="acc">you accepted</span><span class="q">why?</span></button>')
+  assert.equal(f.actionWords(accept), 'accepted Dara’s new version')
+  assert.equal(f.actionWords(old), 'accepted Dara’s new version')
+  assert.equal(f.actionWords(first), 'proposed a first version')
+  assert.equal(f.actionWords(second), 'proposed a new version')
+  assert.equal(f.actionWords({ action: 'edit background' }), 'edit background')
+  // The accept records the proposal as a cite on its reasoning, and names Dara, not the id.
+  const src = fn(BM, 'acceptProposal')
+  assert.match(src, /said='Accepted '\+who\+'’s new version of '\+part\+'\.'/)
+  assert.match(src, /reasoning:\{decided:said, because:\[\{point:who\+' proposed it\.', cites:\[p\.d\.id\]\}\]/)
+  assert.doesNotMatch(src, /rationale:'Accepted '\+p\.d\.id/)
+  assert.match(fn(BM, 'regenField'), /still fails my checks\. It’s there, flagged: use it, change it, or ask again\./)
 })

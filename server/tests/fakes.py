@@ -8,6 +8,7 @@ exercised for real (quote checks, tiering, merge, cite rule, identify rules).
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
 import re
@@ -15,6 +16,10 @@ from types import SimpleNamespace
 
 from napkin.doc import LENS_NAMESPACE
 from napkin.rules.markets import COUNTRIES
+
+# When the fake research read its sources: a few days ago, so the layers' facts are fresh
+# for research reuse (research.py reuse_days), whatever today's date is.
+READ = (_dt.date.today() - _dt.timedelta(days=2)).isoformat()
 
 STOP_CAPS = {"EXAMPLE", "TV", "TVC", "UK", "GB", "IE", "EU", "EV", "OOH", "BVOD", "I"}
 
@@ -275,15 +280,15 @@ class FakeResearch:
         v = _h(lens, market, category) % 60 + 5
         stat = f"The {lens} indicator for {market} stood at {v}% in 2025."
         srcs = [{"id": "s1", "url": f"https://www.cso.ie/en/{lens}/{market.lower()}", "publisher": "CSO",
-                 "title": f"{lens} {market}", "retrieved_at": "2026-09-20", "published_at": "2026-03-01",
+                 "title": f"{lens} {market}", "retrieved_at": READ, "published_at": "2026-03-01",
                  "excerpts": [stat]},
                 {"id": "s2", "url": f"https://www.simi.ie/{lens}-{market.lower()}", "publisher": "SIMI",
-                 "title": f"{lens} {market} (trade)", "retrieved_at": "2026-09-20", "published_at": None,
+                 "title": f"{lens} {market} (trade)", "retrieved_at": READ, "published_at": None,
                  "excerpts": [f"Industry figures: {stat}"]}]
         if lens == "market_structure":
             n = 19 + (["IE", "GB", "FR", "DE"].index(market) if market in ("IE", "GB", "FR", "DE") else 0)
             srcs.append({"id": "s3", "url": f"https://blog.example.net/{market.lower()}-players",
-                         "publisher": "A blog", "title": "Players", "retrieved_at": "2026-09-20", "published_at": None,
+                         "publisher": "A blog", "title": "Players", "retrieved_at": READ, "published_at": None,
                          "excerpts": [f"The category counts {n} players, the blog says."]})
         return {"sources": srcs, "trace": {"backend": "fake", "queries": [query]}}
 

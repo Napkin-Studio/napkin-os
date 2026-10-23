@@ -102,8 +102,10 @@ def test_the_planned_brief_plans_researches_writes_whole_and_reviews_once(tmp_pa
     assert by["mandatories"]["basis"] == "assumption"
     assert by["competitor_context"]["reasoning"]["attention"].startswith("Check:"), "Jude's partly-supported claim"
     assert host.data["objectives"]["commercial"].startswith("Grow under-30 visits"), "Dara rewrote it on Jude's note"
-    # Jude: one note per issue (two notes, not one per part), the fix marked bad
-    notes = [d for d in host.chain if d["kind"] == "verdict"]
+    # Jude: one note per issue (two notes, not one per part), the fix marked bad. His note on the
+    # draft he sent back is the loop's own verdict (test_the_loop_is_recorded_as_it_happened).
+    back = {d["id"] for d in host.chain if d.get("superseded_by")}
+    notes = [d for d in host.chain if d["kind"] == "verdict" and not set(d["cites"]) & back]
     assert len(notes) == 2 and {d["polarity"] for d in notes} == {"bad", "good"}
     assert sorted(t.split("#", 1)[1] for t in notes[-1]["targets"] + notes[0]["targets"]) == \
         ["objectives.behavioural", "objectives.commercial", "tone_and_world"]
@@ -201,7 +203,14 @@ def test_the_check_loop_rewrites_what_jev_flags_and_jude_explains(tmp_path):
     d = next(d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#tone_and_world"))
     # an assumption's why is in attention (brief-fact-provenance): never an uncited reason
     assert "Rewritten on Jude's note: tone_and_world is generic" in d["reasoning"]["attention"]
-    assert not [x for x in host.chain if x["kind"] == "verdict"], "no verdict per part: the reasons sit on the rewrites"
+    # the loop is recorded (redraft-provenance): Jude's note on the draft he sent back, as the verdict
+    # it was, and his pass on the rewrite; the brief as it stands has no note on it
+    back = next(x for x in host.chain if x.get("superseded_by") == d["id"])
+    verdicts = [x for x in host.chain if x["kind"] == "verdict"]
+    assert [(x["polarity"], x["cites"]) for x in verdicts] == [("good", [d["id"]]), ("bad", [back["id"]])]
+    sent = verdicts[1]
+    assert sent["id"] in d["cites"]
+    assert any(p["point"].startswith("Jude's note: ") and p["cites"] == [sent["id"]] for p in d["reasoning"]["because"])
     assert "What is the budget?" in host.data["open_questions"]
     assert host.data["review"]["judge"]["health"] == 100
     assert len(jev.calls) == 2, "jev before and after the rewrite"

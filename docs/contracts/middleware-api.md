@@ -1037,9 +1037,15 @@ The middleware **proposes** instead of writing a human-held field: the value
 goes in `result.proposals` (§10.6) and the change carries an `edit` decision
 with `action: propose`, `targets: ["<doc-id>#K"]`, the value as
 `proposed_value`, and reasoning — and no `data_patch` for `K`. Accepting is
-the view's human write of `K` (as §8.3's answers are), naming the proposal's
-decision id in its rationale; ignoring it changes nothing. Locked fields are
-not even proposed. A human-held `open_questions` is proposed like any field.
+the view's human write of `K` (as §8.3's answers are), citing the proposal's
+decision from a point of its reasoning (`reasoning.because[].cites`: the host
+keeps a view claim's reasoning, not a top-level `cites`); its rationale names
+the proposer and never an id
+(`Accepted Dara's new version of the single-minded proposition.`). Briefs from
+before 2026-10-23 named the id in the rationale instead (`Accepted d_…: …`), and
+readers still understand that form. Ignoring a proposal changes nothing. Locked
+fields are not even proposed. A human-held `open_questions` is proposed like
+any field.
 
 ### 10.6 Replies
 
@@ -1296,11 +1302,28 @@ field whose decisions are all in the chain.
   planner's steer — then `judge` — that field's checks, then the coherence
   checks that involve it. `desired_response.*` redrafts the named leaf only,
   with the other two as context. `progress`: `{done, total: 2}`.
-- It writes the field (an `edit`, action `regenerate`, plus its verdict) — or,
-  when the field is human-held, proposes it (§10.5): pressing Redraft asks for
-  a draft, and the planner decides whether it replaces their words. A field
-  that fails twice is not written; `result.summary` says why and the bad
-  verdict is recorded.
+- It writes the field (an `edit`, action `regenerate`; `draft` on a planned
+  brief, where the redraft runs as a one-part fix, §10.15 — plus its verdict)
+  — or, when the field is human-held, proposes it (§10.5): pressing Redraft
+  asks for a draft, and the planner decides whether it replaces their words. A
+  draft Jude still fails after one revision is placed all the same, with low
+  certainty and his reasons in its attention (an empty part helps nobody);
+  `result.summary` says so and the bad verdict is recorded.
+- **What steered a draft is on the record.** Its reasoning carries the
+  planner's guidance as a point in their own words, `Your ask: “…”`, cited
+  against the part (on a planned brief, against what wrote it), and its
+  `decided` line says so: `Drafted the insight on your ask.`
+- **The loop is recorded as it happened.** When Jude sends a draft back and
+  Dara revises it, the change carries three decisions for the part, in this
+  order: the draft he sent back (`superseded_by` the rewrite; certainty low,
+  `Jude sent it back`), his verdict on it (`bad`, citing that draft, his
+  reasons as its points), and the rewrite, citing the verdict, with the point
+  `Jude's note: …` and the line `Rewrote the insight on Jude's note and your
+  ask.` Nothing is collapsed into one line. The same holds for `draft_brief`'s
+  whole-brief review and for `fix_parts` (§10.15); there, Jude's pass on a
+  part he sent back that his final review no longer flags is a `good` verdict
+  with a reason, so his note is answered on the record and not only by a
+  draft.
 - *Changed 2026-10-19* (brief-fact-provenance; owner: no orphan route left).
   On a brief drafted by the planned engine (§10.3), `regenerate_field` runs
   as a one-part `fix_parts` (§10.15) with no verdict: the field is the only

@@ -136,6 +136,28 @@ export function mainTarget(block: DecisionBlock) {
 }
 
 /**
+ * The proposal a person's write accepted (middleware-api §10.5): the `propose`
+ * it cites, or, in an older chain, the one whose id its rationale names.
+ */
+function acceptedOf(block: DecisionBlock, view: DecisionsView): DecisionBlock | null {
+  const named = /^(?:Accepted|Used proposal) (d_[0-9A-Za-z_-]+)/.exec(block.decision.rationale)?.[1]
+  const ids = named ? [...citesOf(block), named] : citesOf(block)
+  return view.decisions.find(b => b.decision.action === 'propose' && !!b.decision.id && ids.includes(b.decision.id)) ?? null
+}
+const isAccept = (d: DecisionBlock['decision']) =>
+  /^accept proposal\b/.test(d.action) || /^(?:Accepted|Used proposal) d_/.test(d.rationale)
+
+/**
+ * How a draft was steered, as its rationale says: "on your ask", "on Jude’s
+ * note and your ask". The judge is named from the crew, however the record
+ * spelt it.
+ */
+function steerOf(rationale: string): string {
+  const m = /\b((?:on|after) \w+[’']s note(?: and your ask)?|on your ask)\b/.exec(rationale)
+  return m ? ` ${m[1].replace(/\w+[’']s note/, `${AGENTS.judge.given}’s note`)}` : ''
+}
+
+/**
  * What the decision did, after the name: "verified “…”", "picked 2 of 8
  * lenses …". A person's decision is said from its kind; an agent's from what
  * it decided.
@@ -147,6 +169,13 @@ export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   const client = clientLineOf(block, view)
   if (client) return client.rest
   if (block.who.kind === 'person') {
+    // Accepting a proposal is the person's write of the part, credited to
+    // whoever proposed it: the drafter when the proposal has left the chain.
+    const accepted = acceptedOf(block, view)
+    if (accepted || isAccept(d)) {
+      const by = (accepted && agentOf(accepted)) ?? 'drafter'
+      return `accepted ${AGENTS[by].given}’s new version of ${t ? partOf(t.label) : what}`
+    }
     switch (d.action) {
       case 'verify_finding': return `said “${clip(what, 90)}” is right`
       case 'reject_finding': return `turned down “${clip(what, 90)}”`
@@ -184,6 +213,9 @@ export function didWhat(block: DecisionBlock, view: DecisionsView): string {
     const n = sourcesOf(block, view).length
     return `found ${facts} fact${facts === 1 ? '' : 's'}${n ? ` in ${n} source${n === 1 ? '' : 's'}` : ''}`
   }
+  // A proposal for a part a person holds (§10.5): a first version when the
+  // Judge sent it back and a second replaced it, else a new one.
+  if (d.action === 'propose') return `proposed a ${d.superseded_by ? 'first' : 'new'} ${t ? partOf(t.label) : what}${steerOf(d.rationale)}`
   const said = d.reasoning?.decided || d.rationale.split(/\. Because/)[0] || d.action.replace(/_/g, ' ')
   return lower(pastTense(plain(said.replace(/\.$/, ''))))
 }
@@ -315,6 +347,9 @@ const LENS_WORDS: Record<string, string> = {
  */
 export function plain(text: string): string {
   return fixPlurals(String(text ?? ''))
+    // An older accept of a proposal named the decision's id in its words.
+    .replace(/^Accepted d_[0-9A-Za-z_-]+:\s*/, 'Accepted ')
+    .replace(/^Used proposal d_[0-9A-Za-z_-]+\.?$/, 'Used the proposal.')
     .replace(/\s*\((?:from |in )?(?:mat|d|msg|src|f|fi)_[0-9A-Za-z]{6,}\)/g, '')
     .replace(/\b(?:mat|msg)_[0-9A-Z]{8,}\b/g, 'your request')
     .replace(/\b([a-z]+_[a-z]+)\b/g, (w: string) => LENS_WORDS[w] ?? w)
