@@ -954,3 +954,72 @@ test('the brief maker’s proposal is answered by the write that cites it', () =
   assert.doesNotMatch(src, /rationale:'Accepted '\+p\.d\.id/)
   assert.match(fn(BM, 'regenField'), /still fails my checks\. It’s there, flagged: use it, change it, or ask again\./)
 })
+
+test('the brief’s export cites its sources: one number a publisher, links only for open web sources', () => {
+  type Cit = { marks: Record<string, number[]>; notes: { n: number; name: string; items: { text: string; uri: string | null }[] }[] }
+  type F = { exportCitations(parts: unknown[], env: unknown): Cit; exportMarkHtml(n?: number[]): string; exportSourcesHtml(c: Cit | null): string }
+  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesHtml'], { arr, esc })
+  const think = 'https://www.thinkbusiness.ie/articles/ballymaloe-foods-new-generation'
+  const env = {
+    sources: {
+      src_a: { publisher: 'ThinkBusiness', title: 'Ballymaloe Foods: Relishing a challenge | ThinkBusiness', uri: think, licence: 'open', published_at: '2024-05-01' },
+      src_b: { publisher: 'ThinkBusiness', title: 'Ballymaloe’s recipe for growth', uri: `${think}-2`, licence: 'open' },
+      src_c: { publisher: 'Irish Food & Drink (Bord Bia)', title: 'Suppliers', uri: 'https://www.irishfoodanddrink.com/s', licence: 'licensed-internal' },
+      src_d: { publisher: 'Client', title: 'RFT.pdf', uri: 'material:mat_f', licence: 'client-confidential' },
+      src_e: { publisher: 'Odd Site', title: '<img src=x onerror=alert(1)>', uri: 'javascript:alert(1)', licence: 'open' },
+      src_f: { publisher: 'someone', uri: 'human:ab12', tier: 'reviewer-verified', licence: 'client-confidential' },
+      src_g: { publisher: 'No Licence Ltd', title: 'Unmarked', uri: 'https://example.com/x' },
+    },
+    pins: { f_1: { sources: ['src_a'] }, f_2: { sources: ['src_b'] }, f_3: { sources: ['src_c'] }, f_4: { sources: ['src_d'] },
+      f_5: { sources: ['src_e'] }, f_6: { sources: ['src_f'] }, f_7: { sources: [] }, f_8: { sources: ['src_g'] } },
+    findings: { fi_1: { cites: ['f_1', 'f_3'] } },
+    capture: { items: { cap_1: { material_id: 'mat_p' }, cap_2: { material_id: 'mat_f' } } },
+    materials: { mat_p: { kind: 'prompt' }, mat_f: { kind: 'file', name: 'RFT.pdf' } },
+    passages: { psg_1: { source: 'Cannes Lions', section: 'Case 12', citation: 'Cannes Lions › Case 12' } },
+  }
+  const parts = [
+    { key: 'background', ids: ['f_1', 'f_3', 'd_9'] },
+    { key: 'insight', ids: ['cap_1', 'f_2', 'f_1', 'cap_1'] },
+    { key: 'smp', ids: ['d_9', 'f_7'] },
+    { key: 'audience', ids: ['fi_1', 'cap_2', 'psg_1', 'f_6', 'f_8', 'f_5'] },
+  ]
+  const c = f.exportCitations(parts, env)
+  // One number a publisher, in the order first cited; the same publisher's other article sits under it.
+  assert.deepEqual(c.notes.map(n => [n.n, n.name]), [[1, 'ThinkBusiness'], [2, 'Irish Food & Drink (Bord Bia)'], [3, 'Client material'], [4, 'Cannes Lions'],
+    [5, 'Checked by a person'], [6, 'No Licence Ltd'], [7, 'Odd Site']])
+  assert.deepEqual(c.notes[0].items.map(i => i.uri), [think, `${think}-2`], 'open https sources link, both articles under the one number')
+  assert.equal(c.notes[0].items[0].text, 'Ballymaloe Foods: Relishing a challenge · 2024', 'a title that ends with its publisher’s name loses it')
+  assert.deepEqual(c.marks, { background: [1, 2], insight: [1, 3], audience: [1, 2, 3, 4, 5, 6, 7] }, 'a part with nothing citable carries no mark')
+  // The licence rule: only an open https source links. Licensed-internal, client material and an unmarked licence are named.
+  assert.equal(c.notes[1].items[0].uri, null, 'licensed-internal is named, never linked')
+  assert.equal(c.notes[5].items[0].uri, null, 'an unknown licence counts as client-confidential')
+  assert.equal(c.notes[6].items[0].uri, null, 'an address that is not http or https is not a link, even on an open source')
+  assert.deepEqual(c.notes[2].items.map(i => i.text), ['The client’s request', 'RFT.pdf'], 'the client’s material is named, never linked')
+  // A pin with no source record is not cited; the page's own decision ids are not sources.
+  assert.ok(!JSON.stringify(c).includes('d_9') && !c.marks.smp)
+  // Twice over, the same numbers.
+  assert.deepEqual(f.exportCitations(parts, env), c)
+
+  const html = f.exportSourcesHtml(c)
+  assert.match(html, /<li value="1"><b>ThinkBusiness<\/b>: Ballymaloe Foods: Relishing a challenge · 2024 — <a href="https:\/\/www\.thinkbusiness\.ie\/articles\/ballymaloe-foods-new-generation">https:\/\/www\.thinkbusiness\.ie\/articles\/ballymaloe-foods-new-generation<\/a>; /)
+  // An address that is not http or https never becomes a link, and a title is escaped.
+  assert.doesNotMatch(html, /href="javascript:/i)
+  assert.doesNotMatch(html, /<img/i)
+  assert.match(html, /<b>Odd Site<\/b>: &#60;img src=x onerror=alert\(1\)&#62;<\/li>/)
+  // No sources, no section; no marks, no mark.
+  assert.equal(f.exportSourcesHtml({ marks: {}, notes: [] }), '')
+  assert.equal(f.exportSourcesHtml(null), '')
+  assert.equal(f.exportMarkHtml([]), '')
+  assert.equal(f.exportMarkHtml(undefined), '')
+  assert.equal(f.exportMarkHtml([1, 3]), '<sup class="fn">1,3</sup>')
+})
+
+test('the brief’s export waits for the decision chain and says so when it cannot read it', () => {
+  const src = fn(BM, 'chainForExport')
+  assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
+  assert.match(src, /CHAIN=\{state:'unavailable'/)
+  const build = fn(BM, 'buildExportHTML')
+  assert.match(build, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
+  assert.match(build, /Sources could not be read for this export\./)
+  assert.match(build, /CHAIN\.state==='ok'\?exportCitations/)
+})
