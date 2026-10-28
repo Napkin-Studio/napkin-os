@@ -1223,6 +1223,17 @@
   function clientFirst(a){ var n=String(a&&a.client&&a.client.name||'').trim(); return n?n.split(/\s+/)[0]:'the client'; }
   function clientOpenParts(){ return arr(((osView()||{}).client||{}).parts).filter(function(p){ return p&&p.state!=='accepted'&&!p.answered; }); }
   function addrLabel(a){ var f=fieldOfAddress(a.address); return a.label||(f?partLabel(f):pathOf(a.address)||''); }
+  // What the review rates short of Good: the scorecard's dimensions that are
+  // Too vague or Missing. The pills show them; the crew line has to agree.
+  function scoreGaps(){ var rv=get('review'); return rv&&rv.scorecard?arr(rv.scorecard.dimensions).filter(function(x){ return x&&x.verdict!=='pass'; }):[]; }
+  // Jude's line when his checks on the parts pass. "Nothing needs you" only
+  // when the review agrees: with a dimension rated short, it says so instead.
+  function holdsLine(passed, jOthers, gaps){
+    var t='I checked '+parts(passed)+' and '+(passed===1?'it holds':'they hold')+' up.';
+    if(gaps) t+=' The review still rates '+num(gaps)+' '+(gaps===1?'thing':'things')+' short of good.';
+    else if(!jOthers) t+=' Nothing needs you.';
+    return t;
+  }
   function renderCrewline(){
     var el=$('crewline'); if(!el) return;
     var ok=CHAIN.state==='ok', by={}, filled=0, passed=0, failed=[], props=[], locked=docLocked();
@@ -1272,15 +1283,15 @@
       var lw=lockBy.who&&lockBy.who.you?'You':lockBy.who&&lockBy.who.name||'Someone', lt=String(lockBy.decision.timestamp||'');
       h+='<div class="pair">'+fig('judge',{decorative:true})+say('judge', esc('This brief is locked. '+lw+' agreed to it'+(lt?' on '+fmtDate(lt):'')+'. A change from here makes a new version.'), 'left')+'</div>';
     } else if(ok||others.length){
-      var jt, jNeeds=!locked&&failed.length>0, jOthers=!locked&&others.length>0;
+      var jt, jNeeds=!locked&&failed.length>0, jOthers=!locked&&others.length>0, gaps=ok?scoreGaps().length:0, jGaps=!locked&&gaps>0;
       if(jNeeds) jt=esc(Num(failed.length)+' '+(failed.length===1?'part needs':'parts need')+' you: '+listWords(failed.map(partName))+'.')
         +SHOW_ME.replace('act-show','act-show" data-k="'+esc(failed[0].key));
       else if(!ok) jt='';
-      else if(passed) jt=esc('I checked '+parts(passed)+' and '+(passed===1?'it holds':'they hold')+' up.'+(jOthers?'':' Nothing needs you.'));
+      else if(passed) jt=esc(holdsLine(passed,jOthers,jGaps?gaps:0));
       else jt=esc(filled?'I haven’t checked this brief. Ask '+DARA+' to write a part again and I’ll check it.':'When there’s something written, I’ll check it.');
       if(jOthers) jt+=(jt?' ':'')+esc('Before the brief can lock, '+num(others.length)+' '+(jNeeds?'more ':'')+(others.length===1?'thing needs':'things need')+' you.')
         +LIST;
-      h+='<div class="pair">'+fig('judge',{state:jNeeds||jOthers?'needs-you':'idle',decorative:true})+say('judge', jt, 'left'+(jNeeds||jOthers?' warn':''))+'</div>';
+      h+='<div class="pair">'+fig('judge',{state:jNeeds||jOthers||jGaps?'needs-you':'idle',decorative:true})+say('judge', jt, 'left'+(jNeeds||jOthers||jGaps?' warn':''))+'</div>';
     }
     el.innerHTML=h;
     el.querySelectorAll('.act-show').forEach(function(b){ b.addEventListener('click',function(){ gotoField(b.getAttribute('data-k')); }); });

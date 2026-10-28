@@ -42,6 +42,7 @@ from .drafters import DraftContext, Drafter, _query, run_drafters
 from .fields import (KEYS, LABELS, RUBRIC_FIELDS, address, clean, drafter_of, field_map, field_paths, filled, get,
                      group_keys, holder, last_writer, locked, put, read_of, rubric_groups)
 from .judge import FIX_MAX, clip, coherence, definition_of_done, failures, judge_field, sentence
+from .questions import same_ask
 from .rubric import DEPENDENCIES, FAIL, PASS, REVIEW, health, reason_code
 
 log = logging.getLogger("napkin.brief")
@@ -1029,8 +1030,8 @@ class BriefJob:
         qs, pts = [], []
         capq = list((self.capture or {}).get("open_questions") or [])
         items = (self.capture or {}).get("items") or ((self.W.get("capture") or {}).get("items") or {})
-        have = {q["question"] for q in capq}
-        capq += [q for q in cap_stage.core_gap_questions(items) if q["question"] not in have]
+        capq += [q for q in cap_stage.core_gap_questions(items)
+                 if not any(same_ask(q["question"], c["question"]) for c in capq)]
         if capq:
             qs += [cap_stage.format_question(q) for q in capq]
             pts.append(rsn.point(f"{len(capq)} question(s) the client's material leaves open", f"{self.doc}#capture"))

@@ -524,6 +524,32 @@ test('the brief’s parts declare the words a client calls them by', () => {
   assert.match(fn(BM, 'fieldRow'), /row\.setAttribute\('data-clan-part-aliases', PART_ALIASES\[f\.key\]\)/)
 })
 
+test('Jude says nothing needs you only when the review agrees', () => {
+  type F = { scoreGaps(): { dimension: string }[]; holdsLine(passed: number, others: boolean, gaps: number): string }
+  const W = ['none', 'one', 'two', 'three', 'four', 'five']
+  const num = (n: number) => W[n] ?? String(n)
+  const parts = (n: number) => `${num(n)} ${n === 1 ? 'part' : 'parts'}`
+  const f = (review: unknown) => lift<F>(BM, ['scoreGaps', 'holdsLine'], { get: () => review, arr, num, parts })
+  const dims = (...v: string[]) => ({ scorecard: { dimensions: v.map((verdict, i) => ({ dimension: `d${i}`, verdict })) } })
+  // Every check passes and the review has no complaint: the old line stands.
+  assert.equal(f(dims('pass', 'pass')).scoreGaps().length, 0)
+  assert.equal(f(dims('pass')).holdsLine(3, false, 0), 'I checked three parts and they hold up. Nothing needs you.')
+  // A dimension rated Too vague or Missing is a gap, and the line says so instead.
+  const g = f(dims('pass', 'vague', 'missing', 'vague'))
+  assert.deepEqual(g.scoreGaps().map(x => x.dimension), ['d1', 'd2', 'd3'])
+  assert.equal(g.holdsLine(3, false, 3), 'I checked three parts and they hold up. The review still rates three things short of good.')
+  assert.equal(g.holdsLine(1, false, 1), 'I checked one part and it holds up. The review still rates one thing short of good.')
+  assert.doesNotMatch(g.holdsLine(3, false, 3), /Nothing needs you/)
+  // Lock items waiting never read as "nothing needs you" either.
+  assert.doesNotMatch(f(dims('pass')).holdsLine(3, true, 0), /Nothing needs you/)
+  // No review yet: no gaps.
+  assert.deepEqual(f(null).scoreGaps(), [])
+  assert.deepEqual(f({}).scoreGaps(), [])
+  // The page asks it of the review, in place of the old fixed sentence.
+  assert.match(fn(BM, 'renderCrewline'), /holdsLine\(passed,jOthers,jGaps\?gaps:0\)/)
+  assert.doesNotMatch(fn(BM, 'renderCrewline'), /' Nothing needs you\.'/)
+})
+
 test('a brief from research names the research by the title the research gave itself', () => {
   type F = { upTitle(): string }
   const UP_MARKET = { IE: 'Ireland', GB: 'Great Britain' }
