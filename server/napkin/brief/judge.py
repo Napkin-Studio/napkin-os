@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 
 from .fields import RUBRIC_FIELDS, filled
-from .rubric import DEPENDENCIES, DOD, FAIL, PASS, REVIEW, auto_checks, rubric_value
+from .rubric import DEPENDENCIES, DOD, FAIL, PASS, REVIEW, and_flag, auto_checks, rubric_value
 
 log = logging.getLogger("napkin.brief.judge")
 
@@ -95,6 +95,9 @@ def judge_field(model, rid: str, values: dict, rules: list[dict]) -> dict:
                "value": value, "context": {k: v for k, v in context.items() if filled(v)},
                "tests": [{"id": c["check"], "test": tests.get(c["check"], "")} for c in pending],
                "decision_rules": rules}
+    if rid == "smp" and and_flag(value) and any(c["check"] == "single_minded" for c in pending):
+        payload["flags"] = {"single_minded": "The line contains a standalone 'and' or '&'. Decide whether it "
+                                             "joins two thoughts (fail) or sits inside one thought (pass)."}
     schema = _obj({c["check"]: _VERDICT for c in pending})
     try:
         res = model.structured(f"judge_{rid}", JUDGE_SYSTEM, payload, schema, max_tokens=3000)
