@@ -211,7 +211,9 @@ def test_the_check_loop_rewrites_what_jev_flags_and_jude_explains(tmp_path):
     sent = verdicts[1]
     assert sent["id"] in d["cites"]
     assert any(p["point"].startswith("Jude's note: ") and p["cites"] == [sent["id"]] for p in d["reasoning"]["because"])
-    assert "What is the budget?" in host.data["open_questions"]
+    # Jude's "What is the budget?" and the plan's "What is the launch budget?" are one ask: it is
+    # asked once, in the plan's words, and the merge is in the run log.
+    assert [q for q in host.data["open_questions"] if "budget" in q.lower()] == ["What is the launch budget?"]
     assert host.data["review"]["judge"]["health"] == 100
     assert len(jev.calls) == 2, "jev before and after the rewrite"
     check_change_rules(host)

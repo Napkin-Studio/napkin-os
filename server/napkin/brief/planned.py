@@ -37,6 +37,7 @@ from . import provenance as prov
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
 from .job import BriefJob, log
+from .questions import dedupe
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
@@ -646,7 +647,7 @@ class PlannedBriefJob(BriefJob):
               "claims": prov.code_verdicts(self.whole), "notes": notes, "revise": [],
               "questions": res["questions"],
               "single_mindedness": {"verdict": "single", "split_into": []},
-              "summary": (f"jev checked every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
+              "summary": (f"A quick check read every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
                           f"; Jude sent {len(res['todo'])} back to Dara, who rewrote {len(res['rewritten'])}.")
               if res["before"] else "Checked."}
         self.scores = [x["score"] for x in (res["before"], res["after"]) if x]
@@ -819,12 +820,9 @@ class PlannedBriefJob(BriefJob):
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
-        seen, oq = set(), []
-        for q in qs:
-            key = " ".join(q.lower().split())[:80]
-            if key not in seen:
-                seen.add(key)
-                oq.append(q.strip())
+        oq, merged = dedupe(qs)
+        if merged:
+            self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
         oq = clean("open_questions", oq[:12])
         if oq and oq != clean("open_questions", get(self.W, "open_questions")) and "open_questions" not in self.locked:
             r = rsn.make(f"Gathered {len(oq)} question(s) only the client can answer.",

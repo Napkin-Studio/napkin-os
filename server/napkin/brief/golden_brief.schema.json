@@ -244,7 +244,7 @@
         "audience",
         "background"
       ],
-      "prompt": "A human tension, not a fact. Reveal WHY, not just WHAT. Shape: 'They [do/believe X] because [deeper motivation], which means [implication].' Survive the 'so what?' test ×3.",
+      "prompt": "A truth about the audience, usually a human tension, that when said out loud makes them feel understood and gives the product a role to play. Not a fact, a statistic or an observation. Reveal WHY, not just WHAT. Shape: 'They [do/believe X] because [deeper motivation], which means [implication].' Survive the 'so what?' test ×3.",
       "good_example": "Buyers don't reject the Fabia on its engineering — they reject it because 'it's still a Skoda', which means the job is to confront the prejudice, not to prove the car.",
       "bad_example": "The Fabia has brilliant engineering.",
       "bad_reason": "An observation about the product with no motivation and no implication; the creatives' answer was 'Yes, but it's still a Skoda' (Fallon 2006 p.77).",
@@ -270,8 +270,23 @@
           "method": "llm"
         },
         {
+          "id": "rings_true",
+          "method": "llm",
+          "test": "Is it true, and would the audience nod and feel seen?"
+        },
+        {
+          "id": "about_audience",
+          "method": "llm",
+          "test": "Is it about the audience, not a boast about the brand or a fact about the product?"
+        },
+        {
+          "id": "fresh",
+          "method": "llm",
+          "test": "Is it fresh, not a category cliche anyone could have written?"
+        },
+        {
           "id": "has_implication",
-          "test": "Says what the job actually is.",
+          "test": "Does it hand the product a role? Says what the job actually is. An insight that does not set up the proposition is just a nice observation.",
           "method": "llm"
         }
       ],
@@ -294,7 +309,7 @@
         "competitor_context",
         "audience"
       ],
-      "prompt": "ONE sentence — the one thing we want the audience to take away. It must follow from the problem and the insight, be true and backed by the reasons to believe, give this audience a reason to care, and be specific to this brand, not a category generic. Written for the creative team: it points to where the idea should be and is not the idea's final wording. Not a tagline, not 'creative', not a list. If you have two, choose.",
+      "prompt": "The single most motivating thing we can say to the defined audience, given the insight and what is honestly true about the product: ONE sentence, one thought, not a thought with an 'and'. It must follow from the problem and the insight, be true and backed by the reasons to believe, give this audience a reason to care, and be specific to this brand, not a category generic. Written for the creative team: it points to where the idea should be and is not the idea's final wording. Not a tagline, not 'creative', not a list. If you have two, choose, or find the higher thought that contains both.",
       "good_example": "A smart choice because you don't pay for what you don't need.",
       "bad_example": "Good drinks, fun times, real people.",
       "bad_reason": "'It is not a main idea, but three main ideas' (Steel 1998 p.169); averaged from research, it 'could have fitted any one of a host of other beverages' (p.89).",
@@ -313,13 +328,18 @@
           "id": "single_minded",
           "method": "llm",
           "tolerance": "hard",
-          "test": "One strategic choice: does it commit to one thing to communicate, rather than offering two or more claims for the creatives to choose between? (An 'and' or a comma is not by itself a fail.)"
+          "test": "One thought, not a thought with an 'and': does it commit to one thing to communicate, rather than joining two claims for the creatives to choose between? If it has an 'and', does the 'and' join two thoughts (fail) or sit inside one thought (pass)? Two clauses joined by a colon, semicolon or dash also count as two thoughts."
         },
         {
           "id": "derives_from",
           "method": "llm",
           "tolerance": "hard",
           "test": "Would a reader who has read only the problem and the insight see why this is the proposition?"
+        },
+        {
+          "id": "true_backed",
+          "method": "llm",
+          "test": "Is it true: supported by a reason to believe the brief actually holds?"
         },
         {
           "id": "not_a_tagline",

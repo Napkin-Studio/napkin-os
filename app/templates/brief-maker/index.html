@@ -1059,6 +1059,60 @@
     h+=ids.filter(function(id){ return !shown[id]; }).map(one).join('');
     return h?'<div class="srcs"><span class="rl">Sources</span><ul>'+h+'</ul></div>':'';
   }
+  // ---- Sources for the export (feature brief-sources-in-export). Pure: they read only what they are given.
+  // One number per publisher, in the order first cited, its other articles under it, as the research tool's
+  // Sources list does. Only an open https source links. A licensed-internal one is named; the client's own
+  // material, a person's confirmation and anything of unknown licence is named, never linked or quoted.
+  function exportClient(name){ return {group:'\u0001client', name:'Client material', text:name||'', uri:null}; }
+  function exportSource(s){
+    var uri=String(s.uri||'');
+    if(/^material:/.test(uri)) return exportClient(s.title);
+    if(/^human:/.test(uri)||s.tier==='reviewer-verified') return {group:'\u0002person', name:'Checked by a person', text:'', uri:null};
+    var pub=String(s.publisher||s.domain||'A source').trim(), y=/^\d{4}/.exec(s.published_at||''), t=String(s.title||'').trim();
+    // A page title often ends with the publisher's name ("… | ThinkBusiness"): the number already names it.
+    [' | ',' - ',' – ',' — '].forEach(function(sep){ var tail=sep+pub.toLowerCase();
+      if(t.length>tail.length&&t.toLowerCase().slice(-tail.length)===tail) t=t.slice(0,t.length-tail.length); });
+    return {group:pub.toLowerCase(), name:pub, text:[t, y&&y[0]].filter(Boolean).join(' · '),
+            uri:(s.licence==='open'&&/^https?:[/][/]/i.test(uri))?uri:null};
+  }
+  function exportNotes(id, env, depth){
+    var P=env.pins||{}, S=env.sources||{}, M=env.materials||{}, C=(env.capture&&env.capture.items)||{}, PS=env.passages||{}, F=env.findings||{};
+    id=String(id||'');
+    if(/^f_/.test(id)&&P[id]){
+      var sid=arr(P[id].sources).filter(function(x){ return S[x]; })[0];
+      return sid?[exportSource(S[sid])]:[];
+    }
+    if(/^fi_/.test(id)&&F[id]&&!depth) return [].concat.apply([],arr(F[id].cites).map(function(c){ return exportNotes(c,env,1); }));
+    if(/^psg_/.test(id)&&PS[id]){
+      var p=PS[id], nm=p.citation||[p.source,p.section].filter(Boolean).join(' › ');
+      return nm?[{group:'psg:'+String(p.source||nm).toLowerCase(), name:p.source||nm, text:p.source?nm.replace(p.source,'').replace(/^[\s›,·-]+/,''):'', uri:null}]:[];
+    }
+    var m=/^cap_/.test(id)?(C[id]&&M[C[id].material_id]):/^mat_/.test(id)?M[id]:null;
+    if(/^cap_/.test(id)&&C[id]||/^mat_/.test(id)&&M[id]) return [exportClient(m&&m.kind!=='prompt'?(m.name||''):'The client’s request')];
+    return [];
+  }
+  // parts: [{key, ids}] in the order the export prints them. -> {marks:{key:[n…]}, notes:[{n,name,items:[{text,uri}]}]}
+  function exportCitations(parts, env){
+    var order=[], by={}, marks={};
+    arr(parts).forEach(function(pt){
+      var seen={}, ns=[];
+      arr(pt.ids).forEach(function(id){ exportNotes(id,env,0).forEach(function(n){
+        if(!by[n.group]){ by[n.group]={n:order.length+1, name:n.name, items:[]}; order.push(by[n.group]); }
+        var g=by[n.group], key=n.text+'|'+(n.uri||'');
+        if(!g.items.some(function(x){ return x.key===key; })) g.items.push({key:key, text:n.text, uri:n.uri});
+        if(!seen[g.n]){ seen[g.n]=1; ns.push(g.n); }
+      }); });
+      if(ns.length) marks[pt.key]=ns.sort(function(a,b){ return a-b; });
+    });
+    return {marks:marks, notes:order.map(function(g){ return {n:g.n, name:g.name, items:g.items.map(function(x){ return {text:x.text, uri:x.uri}; })}; })};
+  }
+  function exportMarkHtml(nums){ return arr(nums).length?'<sup class="fn">'+arr(nums).join(',')+'</sup>':''; }
+  function exportSourcesHtml(cit){
+    var ns=arr(cit&&cit.notes); if(!ns.length) return '';
+    return '<section class="srcs"><h2>Sources</h2><ol>'+ns.map(function(g){
+      var its=g.items.map(function(x){ return (x.text?esc(x.text):'')+(x.uri?(x.text?' — ':'')+'<a href="'+esc(x.uri)+'">'+esc(x.uri)+'</a>':''); }).filter(Boolean);
+      return '<li value="'+g.n+'"><b>'+esc(g.name)+'</b>'+(its.length?': '+its.join('; '):'')+'</li>'; }).join('')+'</ol></section>';
+  }
   function verdictHtml(v){
     var d=v.d, r=hasReasoning(d)?d.reasoning:null, look=r?plainJudge(r.attention,1):'';
     return '<div class="vd'+(v.open?' open':'')+'">'
@@ -1223,6 +1277,17 @@
   function clientFirst(a){ var n=String(a&&a.client&&a.client.name||'').trim(); return n?n.split(/\s+/)[0]:'the client'; }
   function clientOpenParts(){ return arr(((osView()||{}).client||{}).parts).filter(function(p){ return p&&p.state!=='accepted'&&!p.answered; }); }
   function addrLabel(a){ var f=fieldOfAddress(a.address); return a.label||(f?partLabel(f):pathOf(a.address)||''); }
+  // What the review rates short of Good: the scorecard's dimensions that are
+  // Too vague or Missing. The pills show them; the crew line has to agree.
+  function scoreGaps(){ var rv=get('review'); return rv&&rv.scorecard?arr(rv.scorecard.dimensions).filter(function(x){ return x&&x.verdict!=='pass'; }):[]; }
+  // Jude's line when his checks on the parts pass. "Nothing needs you" only
+  // when the review agrees: with a dimension rated short, it says so instead.
+  function holdsLine(passed, jOthers, gaps){
+    var t='I checked '+parts(passed)+' and '+(passed===1?'it holds':'they hold')+' up.';
+    if(gaps) t+=' The review still rates '+num(gaps)+' '+(gaps===1?'thing':'things')+' short of good.';
+    else if(!jOthers) t+=' Nothing needs you.';
+    return t;
+  }
   function renderCrewline(){
     var el=$('crewline'); if(!el) return;
     var ok=CHAIN.state==='ok', by={}, filled=0, passed=0, failed=[], props=[], locked=docLocked();
@@ -1272,15 +1337,15 @@
       var lw=lockBy.who&&lockBy.who.you?'You':lockBy.who&&lockBy.who.name||'Someone', lt=String(lockBy.decision.timestamp||'');
       h+='<div class="pair">'+fig('judge',{decorative:true})+say('judge', esc('This brief is locked. '+lw+' agreed to it'+(lt?' on '+fmtDate(lt):'')+'. A change from here makes a new version.'), 'left')+'</div>';
     } else if(ok||others.length){
-      var jt, jNeeds=!locked&&failed.length>0, jOthers=!locked&&others.length>0;
+      var jt, jNeeds=!locked&&failed.length>0, jOthers=!locked&&others.length>0, gaps=ok?scoreGaps().length:0, jGaps=!locked&&gaps>0;
       if(jNeeds) jt=esc(Num(failed.length)+' '+(failed.length===1?'part needs':'parts need')+' you: '+listWords(failed.map(partName))+'.')
         +SHOW_ME.replace('act-show','act-show" data-k="'+esc(failed[0].key));
       else if(!ok) jt='';
-      else if(passed) jt=esc('I checked '+parts(passed)+' and '+(passed===1?'it holds':'they hold')+' up.'+(jOthers?'':' Nothing needs you.'));
+      else if(passed) jt=esc(holdsLine(passed,jOthers,jGaps?gaps:0));
       else jt=esc(filled?'I haven’t checked this brief. Ask '+DARA+' to write a part again and I’ll check it.':'When there’s something written, I’ll check it.');
       if(jOthers) jt+=(jt?' ':'')+esc('Before the brief can lock, '+num(others.length)+' '+(jNeeds?'more ':'')+(others.length===1?'thing needs':'things need')+' you.')
         +LIST;
-      h+='<div class="pair">'+fig('judge',{state:jNeeds||jOthers?'needs-you':'idle',decorative:true})+say('judge', jt, 'left'+(jNeeds||jOthers?' warn':''))+'</div>';
+      h+='<div class="pair">'+fig('judge',{state:jNeeds||jOthers||jGaps?'needs-you':'idle',decorative:true})+say('judge', jt, 'left'+(jNeeds||jOthers||jGaps?' warn':''))+'</div>';
     }
     el.innerHTML=h;
     el.querySelectorAll('.act-show').forEach(function(b){ b.addEventListener('click',function(){ gotoField(b.getAttribute('data-k')); }); });
@@ -2255,13 +2320,32 @@
       }).catch(function(){return null;});
     })).then(function(arr){return arr.filter(Boolean);});
   }
-  function exportField(f){
+  function exportField(f, nums){
     var v=get(f.key);
     if(!hasVal(v)) return '';
+    var mk=exportMarkHtml(nums);
     var val=f.type==='list'
-      ? '<ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul>'
-      : '<p'+(f.hero?' class="spp"':'')+'>'+esc(String(v))+'</p>';
+      ? '<ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul>'+(mk?'<div class="mk">'+mk+'</div>':'')
+      : '<p'+(f.hero?' class="spp"':'')+'>'+esc(String(v))+mk+'</p>';
     return '<div class="f"><div class="fl">'+esc(f.label)+'</div>'+val+'</div>';
+  }
+  // The decision chain, read now when the page has not read it yet: the export waits for it, and without it
+  // prints no sources and says so.
+  function chainForExport(){
+    if(CHAIN.state==='ok'||CHAIN.state==='unavailable') return Promise.resolve();
+    return fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
+      .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
+      .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; });
+  }
+  // What each printed part cites, in the order the export prints the parts.
+  function exportParts(){
+    var secs={}, order=[];
+    FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client'||!hasVal(get(f.key))) return;
+      if(!secs[f.sec]){ secs[f.sec]=[]; order.push(f.sec); } secs[f.sec].push(f); });
+    return [].concat.apply([],order.map(function(s){ return secs[s]; })).map(function(f){
+      var d=decisionsFor(f.key)[0], cd=claimDecision(d);
+      return {key:f.key, ids:citesOf([d, cd]).filter(function(id){ return !wrongPin(id); })};
+    });
   }
   function readsOnWhite(hex){
     var m=/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex||'').trim()); if(!m) return false;
@@ -2270,7 +2354,11 @@
     return 1.05/(.2126*l[0]+.7152*l[1]+.0722*l[2]+.05)>=3;
   }
   function buildExportHTML(){
-    return inlineImages().then(function(images){
+    return Promise.all([inlineImages(), chainForExport()]).then(function(got){
+      var images=got[0];
+      var pr=get('projection')||{};
+      var cit=CHAIN.state==='ok'?exportCitations(exportParts(), {pins:pr.pins, findings:pr.findings, sources:pr.sources,
+        passages:get('passages'), capture:get('capture'), materials:get('materials')}):{marks:{}, notes:[]};
       // Paper is white: a theme's pale accent would leave the headings faint,
       // so an accent under 3:1 on white prints as the house accent's ink.
       var accent=get('theme.accent')||'#FF4F2E';
@@ -2278,9 +2366,9 @@
       var proj=esc(workingTitle()||((window.__CLAN__||{}).manifest||{}).title||'Untitled brief');
       var client=esc(get('client')||'');
       var secs={},order=[];
-      FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client') return; var h=exportField(f); if(!h) return;
+      FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client') return; var h=exportField(f, cit.marks[f.key]); if(!h) return;
         if(!secs[f.sec]){secs[f.sec]=[];order.push(f.sec);} secs[f.sec].push(h); });
-      var body=order.map(function(s){return '<section><h2>'+esc(s)+'</h2>'+secs[s].join('')+'</section>';}).join('');
+      var body=order.map(function(s){return '<section><h2>'+esc(s)+'</h2>'+secs[s].join('')+'</section>';}).join('')+exportSourcesHtml(cit);
       var boards=images.length?'<section class="boards"><h2>Mood board</h2><div class="grid">'+
         images.map(function(im){return '<figure><img src="'+im.src+'"/><figcaption>'+esc(im.label)+'</figcaption></figure>';}).join('')+'</div></section>':'';
       var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
@@ -2300,6 +2388,9 @@
         +".boards .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}"
         +"figure{page-break-inside:avoid;break-inside:avoid}figure img{width:100%;border-radius:6px;display:block}"
         +"figcaption{font-family:ui-sans-serif,sans-serif;font-size:8pt;color:#9a9a9a;margin-top:4px}"
+        +".fn{font-family:ui-sans-serif,system-ui,sans-serif;font-size:7.5pt;color:#767676;margin-left:2px}.mk{margin-top:-6px}"
+        +".srcs ol{margin:0 0 0 22px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:9pt;line-height:1.5;color:#333}.srcs li{margin:4px 0}"
+        +".srcs a{color:#1a1a1a;word-break:break-all}"
         +"footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e2e2;font-family:ui-sans-serif,sans-serif;font-size:8.5pt;color:#767676;text-align:center}";
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's
       // bridge/style injectors can never mistake these literals for the
@@ -2307,7 +2398,7 @@
       return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+proj+'</title><style>'+css+'</style><\/head><body>'
         +'<header><div class="ey">Creative brief</div><h1>'+proj+'</h1>'+(client?'<div class="cli">'+client+'</div>':'')+'</header>'
         +body+boards
-        +'<footer>Generated with Napkin · powered by CLAN · '+esc(date)+'</footer>'
+        +'<footer>'+(CHAIN.state==='unavailable'?'Sources could not be read for this export. ':'')+'Generated with Napkin · powered by CLAN · '+esc(date)+'</footer>'
         +'<\/body><\/html>';
     });
   }

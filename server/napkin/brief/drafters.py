@@ -101,7 +101,7 @@ def field_system(rid: str, n: int = 1) -> str:
 
 
 RANK_SYSTEM = ("You are a strategy director ranking candidate '{label}' lines for a creative brief. Reward PURITY "
-               "and single-mindedness (one idea, never a list or an 'and'), ownable territory (a direct rival could "
+               "and single-mindedness (one thought, not a thought with an 'and': never a list, never two claims joined), ownable territory (a direct rival could "
                "not say the same line), and a real human tension specific to THIS brand. Penalise category truths "
                "everyone would nod at, restated brand taglines, and anything trying to say two things. Judge each "
                "on: {crit}. Return the candidate indexes best first, one line on why the winner wins, and one line "
