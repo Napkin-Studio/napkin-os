@@ -1158,8 +1158,18 @@
     var L={background:70, audience:80, budget_and_scope:50, competitor_context:70, insight:50, single_minded_proposition:20, tone_and_world:60, mandatories:80};
     return L[key]||0;
   }
+  // What a part prints as: text and numbers only. An object, a boolean or nothing is not text, so it counts as empty
+  // (the export writes it again) instead of printing as "[object Object]".
+  function gridText(v){
+    if(v==null) return '';
+    if(Array.isArray(v)) return v.map(gridText).filter(Boolean).join('; ');
+    if(typeof v==='number'&&isFinite(v)) return String(v);
+    return typeof v==='string'?v.trim():'';
+  }
+  function gridItems(v){ return (Array.isArray(v)?v:[v]).map(gridText).filter(Boolean); }
+  function gridHas(v){ return gridText(v)!==''; }
   function gridWords(v){
-    var s=Array.isArray(v)?v.join(' '):String(v==null?'':v), m=s.trim().match(/\S+/g);
+    var m=gridText(v).match(/\S+/g);
     return m?m.length:0;
   }
   // How far a part's type steps down in its own box when it runs over its limit: 0 none, 3 the floor.
@@ -1168,23 +1178,23 @@
     var r=words/limit; return r<=1.25?1:r<=1.6?2:3;
   }
   function gridCell(c, ctx){
-    var v=ctx.get(c.key), has=ctx.hasVal(v), mk=exportMarkHtml((ctx.cit.marks||{})[c.key]);
+    var v=ctx.get(c.key), has=gridHas(v), mk=exportMarkHtml((ctx.cit.marks||{})[c.key]);
     var step=gridStep(gridWords(v), gridLimit(c.key)), cls='box'+(c.kind==='hero'?' dark':'')+(step?' fit'+step:'');
-    var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+'</div>', body;
+    var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+'</div>', body, missing='<p class="todo">Missing: ask Dara to write this part.</p>';
     if(c.kind==='sources'){
-      var l=exportSourcesList(ctx.cit);
-      body=l?'<div class="src">'+l+'</div>':'<p>No outside sources were cited. Every claim rests on the client’s brief and on proposals marked to confirm.</p>';
-    } else if(!has&&c.key==='open_questions'){
-      body='<p>No open questions: the brief holds what it needs.</p>';
-    } else if(!has){
-      body='<p class="todo">Missing: ask Dara to write this part.</p>';
+      var l=exportSourcesList({notes:c.notes||arr(ctx.cit&&ctx.cit.notes)});
+      body=l?'<div class="src">'+l+'</div>':(c.done?'<p>All listed on the previous sheet.</p>':'<p>No outside sources were cited. Every claim rests on the client’s brief and on proposals marked to confirm.</p>');
     } else if(c.kind==='list'){
-      body='<ul>'+(Array.isArray(v)?v:[v]).map(function(x){ return '<li>'+esc(String(x))+'</li>'; }).join('')+'</ul>'+(mk?'<p class="mk">'+mk+'</p>':'');
+      var its=c.items||gridItems(v);
+      body=its.length?'<ul>'+its.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'+(mk?'<p class="mk">'+mk+'</p>':'')
+        :c.done?'<p>All listed on the previous sheet.</p>':c.key==='open_questions'?'<p>No open questions: the brief holds what it needs.</p>':missing;
+    } else if(!has){
+      body=missing;
     } else if(c.kind==='hero'){
       var ob=ctx.get('objection');
-      body='<p class="big">'+esc(String(v))+mk+'</p><p class="obj">The objection it has to beat: '+(ctx.hasVal(ob)?esc(String(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
+      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
     } else {
-      body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(String(v))+mk+'</p>';
+      body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(gridText(v))+mk+'</p>';
     }
     return '<div class="'+cls+'">'+tab+'<div class="bd">'+body+'</div></div>';
   }
@@ -1195,8 +1205,8 @@
     var out=[], seen={};
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       if(c.kind==='sources'||c.key==='open_questions'||seen[c.key]) return; seen[c.key]=1;
-      if(!ctx.hasVal(ctx.get(c.key))) out.push({key:c.key, label:c.label}); }); }); });
-    if(!ctx.hasVal(ctx.get('objection'))&&!seen.objection) out.push({key:'objection', label:'The objection to beat'});
+      if(!gridHas(ctx.get(c.key))) out.push({key:c.key, label:c.label}); }); }); });
+    if(!gridHas(ctx.get('objection'))&&!seen.objection) out.push({key:'objection', label:'The objection to beat'});
     return out;
   }
   // The info grid: every cell holds a value, a suggestion marked as one, or a prompt for what only a person knows.
@@ -1212,7 +1222,7 @@
       return '<div><small>'+esc(p[0])+'</small>'+(String(p[1]||'').trim()?esc(p[1]):'<span class="none">—</span>')+'</div>'; }).join('')+'</div>';
   }
   function gridSheet(n, total, sh, ctx){
-    var sub=sh.title||('Creative brief. '+ctx.project);
+    var sub=sh.title||('Creative brief. '+(ctx.project||'Untitled brief'));
     return '<div class="sheet"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
       +'<div class="shn">SHEET<b>'+n+'/'+total+'</b></div></div>'
       +(n===1?gridInfo(ctx.info):'')
@@ -1220,8 +1230,27 @@
       +'<div class="foot"><span>'+esc(['Napkin', gridClientName(ctx.client), ctx.project, 'Creative brief'+(ctx.version?' '+ctx.version:''), 'Confidential'].filter(Boolean).join(' / '))+'</span><span>'+n+' of '+total+'</span></div></div>';
   }
   // -> {html, sheets, warnings}: warnings name each part that ran over its box and was printed smaller.
+  // Evidence and questions run on over as many appendix sheets as they need, so nothing is cut: a box holds about 38 lines.
+  function gridChunks(items, cost, budget){
+    var out=[[]], used=0;
+    items.forEach(function(it){ var c=cost(it); if(used+c>budget&&out[out.length-1].length){ out.push([]); used=0; } out[out.length-1].push(it); used+=c; });
+    return out;
+  }
+  function gridAppendix(ctx){
+    var notes=arr(ctx.cit&&ctx.cit.notes), qs=gridItems(ctx.get('open_questions'));
+    var sc=gridChunks(notes, function(g){ var t=String(g.name).length; arr(g.items).forEach(function(x){ t+=String(x.text||'').length+String(x.uri||'').length; }); return Math.ceil(t/46)+1; }, 38);
+    var qc=gridChunks(qs, function(q){ return Math.ceil(q.length/50)+1; }, 38);
+    var n=Math.max(sc.length, qc.length), out=[];
+    for(var i=0;i<n;i++){
+      var more=i?' (continued)':'';
+      out.push({appendix:true, title:'Appendix'+more+'. Sources and questions to settle.', rows:[[
+        {num:'A', label:'Evidence and sources'+more, key:'sources', kind:'sources', big:false, notes:sc[i]||[], done:i>0&&!(sc[i]||[]).length},
+        {num:'B', label:'Questions to settle'+more, key:'open_questions', kind:'list', big:false, items:qc[i]||[], done:i>0&&!(qc[i]||[]).length}]]});
+    }
+    return out;
+  }
   function gridBody(ctx){
-    var sheets=gridSheets();
+    var sheets=gridSheets().filter(function(s){ return !s.appendix; }).concat(gridAppendix(ctx));
     var warnings=[];
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
@@ -2558,8 +2587,25 @@
         +'<\/body><\/html>';
     });
   }
+  // Which sheets run past their footer once drawn. Measured in a hidden frame, so the app's own styles stay as they are.
+  // A frame that cannot be measured reports none: the warnings by word limit still apply.
+  function gridOverflow(doc){
+    return new Promise(function(res){
+      var f=document.createElement('iframe'), done=false;
+      f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0;visibility:hidden';
+      function end(bad){ if(done) return; done=true; try{ document.body.removeChild(f); }catch(e){} res(bad); }
+      f.onload=function(){ try{
+        var bad=[];
+        [].forEach.call(f.contentDocument.querySelectorAll('.sheet'),function(sh,i){
+          var rows=sh.querySelectorAll('.row'), ft=sh.querySelector('.foot');
+          if(rows.length&&ft&&rows[rows.length-1].getBoundingClientRect().bottom>ft.getBoundingClientRect().top) bad.push(i+1); });
+        end(bad); }catch(e){ end([]); } };
+      f.srcdoc=doc; document.body.appendChild(f);
+      setTimeout(function(){ end([]); },4000);
+    });
+  }
   // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
-  var LAST_GRID_WARNINGS=[];
+  var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
   function buildGridExportHTML(){
     return chainForExport().then(function(){
       var pr=get('projection')||{}, m=(window.__CLAN__||{}).manifest||{};
@@ -2572,16 +2618,17 @@
       var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version});
       LAST_GRID_WARNINGS=g.warnings;
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
-      return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
+      var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
         +g.html+(CHAIN.state==='unavailable'?'<p style="text-align:center;font:9px sans-serif;color:#767676;margin:6px">Sources could not be read for this export.</p>':'')+'<\/body><\/html>';
+      return gridOverflow(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
     });
   }
   function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
   // Write the named parts, one at a time (the middleware takes one job at a time on a brief).
-  function fillParts(keys){
+  function fillParts(keys, guidanceFor){
     return keys.reduce(function(p,k){ return p.then(function(){ return new Promise(function(res){
       var f=FIELDS.filter(function(x){ return x.key===k; })[0]; if(!f) return res();
-      regenField(f,null,null,function(){ res(); }); }); }); }, Promise.resolve());
+      regenField(f,guidanceFor?guidanceFor(k):null,null,function(){ res(); }); }); }); }, Promise.resolve());
   }
   // A brief that leaves Napkin has nothing empty: the grid export first has Dara write any part still missing.
   function doExport(kind, style){
@@ -2598,14 +2645,26 @@
       runExport(kind, style);
     });
   }
-  function runExport(kind, style){
+  // A brief never leaves with a sheet clipped: one that runs past its footer has Dara tighten the longest parts, once;
+  // if it still does not fit, the export stops and says which sheet.
+  function runExport(kind, style, retried){
     toast('Preparing '+kind.toUpperCase()+'…');
-    buildExportHTML(style).then(function(html){
+    return buildExportHTML(style).then(function(html){
+      if(style!=='plain'&&LAST_GRID_OVERFLOW.length){
+        var long=LAST_GRID_WARNINGS.slice().sort(function(a,b){ return b.words/b.limit-a.words/a.limit; });
+        var names=listWords(long.map(function(w){ return w.label.toLowerCase(); }));
+        if(!retried&&long.length&&!docLocked()&&!noMiddleware()){
+          toast(DARA+' is tightening '+names+' to fit the sheet…');
+          return fillParts(long.map(function(w){ return w.key; }), function(k){ return 'Rewrite this part in at most '+gridLimit(k)+' words, keeping what matters most.'; })
+            .then(function(){ return runExport(kind, style, true); });
+        }
+        toast('Not exported: sheet '+LAST_GRID_OVERFLOW[0]+' is too full. Shorten '+(names||'its parts')+' and export again.');
+        return null;
+      }
       if(style!=='plain'&&LAST_GRID_WARNINGS.length) toast('Printed smaller to fit its box: '+LAST_GRID_WARNINGS.map(function(w){ return w.label.toLowerCase(); }).join(', ')+'.');
       var base=(get('project_name')||'brief').replace(/[^\w.-]+/g,'-');
-      return window.clan.exportDoc(kind,base,html);
-    }).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); })
-      .catch(function(e){ toast('Export failed: '+e); });
+      return window.clan.exportDoc(kind,base,html).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); });
+    }).catch(function(e){ toast('Export failed: '+e); });
   }
   $('exHtml').addEventListener('click',function(){ doExport('html'); });
   $('exPdf').addEventListener('click',function(){ doExport('pdf'); });

@@ -1036,13 +1036,16 @@ type Grid = {
   gridKeys(): string[]
   gridLimit(key: string): number
   gridWords(v: unknown): number
+  gridText(v: unknown): string
+  gridItems(v: unknown): string[]
+  gridHas(v: unknown): boolean
   gridStep(words: number, limit: number): number
   gridGaps(ctx: unknown): { key: string; label: string }[]
   gridHeaderInfo(e: unknown): string[][]
   gridBody(ctx: unknown): { html: string; sheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridSheets', 'gridKeys', 'gridLimit', 'gridWords', 'gridStep', 'gridCell', 'gridClientName', 'gridGaps', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1135,13 +1138,70 @@ test('a brief leaves with nothing empty: the gate names every empty part, the he
   assert.match(ex, /gridGaps\(ctx\)/)
   assert.match(ex, /fillParts\(gaps\.map/)
   assert.match(ex, /Not exported: /)
-  assert.match(fn(BM, 'fillParts'), /regenField\(f,null,null,function\(\)\{ res\(\); \}\)/)
+  assert.match(fn(BM, 'fillParts'), /regenField\(f,guidanceFor\?guidanceFor\(k\):null,null,function\(\)\{ res\(\); \}\)/)
   assert.match(fn(BM, 'regenField'), /if\(done\) done\(j\)/)
   // The three new parts are on the form beside the others, and the page can find them by the words a person uses.
   assert.match(BM, /key:'job',label:'The job'[\s\S]*key:'background'[\s\S]*key:'barrier',label:'The barrier'/)
   assert.match(BM, /key:'single_minded_proposition'[\s\S]*key:'objection',label:'The objection to beat'/)
   assert.match(BM, /job:'job, the job, task'/)
   assert.match(BM, /objection:'objection, the objection, doubt'/)
+})
+
+test('bad data never prints as junk: text and numbers print, anything else counts as empty', () => {
+  const g = grid()
+  assert.equal(g.gridText({ a: 1 }), '')
+  assert.equal(g.gridText(true), '')
+  assert.equal(g.gridText(null), '')
+  assert.equal(g.gridText(42), '42')
+  assert.equal(g.gridText('  hi  '), 'hi')
+  assert.equal(g.gridText(['a', { b: 1 }, ' ', 'c']), 'a; c')
+  assert.deepEqual(g.gridItems('one'), ['one'])
+  assert.deepEqual(g.gridItems(['a', null, { x: 1 }, 'b']), ['a', 'b'])
+  assert.equal(g.gridHas({}), false)
+  assert.equal(g.gridHas('   '), false)
+  const bad = { job: { nested: 'object' }, background: true, audience: [['a', 'b'], 'c'], insight: 12345, reasons_to_believe: 'a string, not a list', mandatories: 7 }
+  const out = g.gridBody({ ...ctxOf(bad), project: undefined, client: undefined })
+  assert.doesNotMatch(out.html, /\[object Object\]|undefined|>null<|>true<|>false</)
+  assert.match(out.html, /Creative brief\. Untitled brief/, 'a brief with no project name is not called undefined')
+  const gaps = g.gridGaps({ get: (k: string) => (bad as Record<string, unknown>)[k], hasVal }).map(x => x.key)
+  assert.ok(gaps.includes('job') && gaps.includes('background'), 'an object or a boolean is empty, so the export writes it')
+  assert.ok(!gaps.includes('insight') && !gaps.includes('mandatories'), 'a number is text')
+})
+
+test('the appendix runs on over as many sheets as it needs, and nothing in it is cut or repeated', () => {
+  const g = grid()
+  const many = Array.from({ length: 25 }, (_, i) => ({ n: i + 1, name: `Publisher ${i + 1}`, items: [{ text: `Article title number ${i + 1} · 2025`, uri: `https://example.com/a-${i + 1}/with/a/long/path/to/read` }] }))
+  const qs = Array.from({ length: 40 }, (_, i) => `Question ${i} about something only the client knows, in a sentence of a fair length?`)
+  const out = g.gridBody(ctxOf({ open_questions: qs }, { marks: {}, notes: many }))
+  const sheets = g.gridSheets().filter(s => !s.appendix).length
+  assert.ok(out.sheets > sheets + 1, 'more than one appendix sheet')
+  for (let i = 0; i < qs.length; i++) assert.equal((out.html.match(new RegExp(`Question ${i} about`, 'g')) || []).length, 1, `question ${i} printed once`)
+  for (let i = 1; i <= 25; i++) assert.equal((out.html.match(new RegExp(`<b>Publisher ${i}</b>`, 'g')) || []).length, 1, `source ${i} printed once`)
+  assert.match(out.html, /Appendix \(continued\)\. Sources and questions to settle\./)
+  assert.match(out.html, new RegExp(`SHEET<b>${out.sheets}/${out.sheets}</b>`))
+  // The same numbers a footnote carries, in order, across the sheets.
+  const nums = [...out.html.matchAll(/<li value="(\d+)"><b>Publisher/g)].map(m => +m[1])
+  assert.deepEqual(nums, Array.from({ length: 25 }, (_, i) => i + 1))
+  // A short list beside a long one says so, instead of an empty box.
+  const lopsided = g.gridBody(ctxOf({ open_questions: qs }, { marks: {}, notes: many.slice(0, 2) }))
+  assert.match(lopsided.html, /All listed on the previous sheet\./)
+  // A brief with nothing to list still has its appendix, saying so.
+  const none = g.gridBody(ctxOf({}))
+  assert.equal(none.sheets, sheets + 1)
+  assert.match(none.html, /No outside sources were cited\./)
+})
+
+test('an export never prints a clipped sheet: it is measured, Dara tightens the long parts once, and otherwise it stops', () => {
+  assert.match(fn(BM, 'gridOverflow'), /createElement\('iframe'\)/)
+  assert.match(fn(BM, 'gridOverflow'), /rows\[rows\.length-1\]\.getBoundingClientRect\(\)\.bottom>ft\.getBoundingClientRect\(\)\.top/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return gridOverflow\(doc\)\.then\(function\(bad\)\{ LAST_GRID_OVERFLOW=bad; return doc; \}\)/)
+  const run = fn(BM, 'runExport')
+  assert.match(run, /LAST_GRID_OVERFLOW\.length/)
+  assert.match(run, /Rewrite this part in at most '\+gridLimit\(k\)\+' words/)
+  assert.match(run, /!retried&&long\.length/)
+  assert.match(run, /Not exported: sheet '\+LAST_GRID_OVERFLOW\[0\]\+' is too full\./)
+  // the guard returns before exportDoc is called
+  assert.ok(run.indexOf('Not exported: sheet') < run.indexOf('window.clan.exportDoc'))
 })
 
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
