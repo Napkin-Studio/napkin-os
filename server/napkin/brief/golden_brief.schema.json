@@ -89,7 +89,7 @@
       "max_words": 70,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "Why are we here? The business problem or opportunity that makes this work necessary, in 2–3 sentences. What's going on, and why now? Plain words, no jargon. If there's no marketing strategy behind it, there's no brief yet.",
+      "prompt": "A focused, concise paragraph giving an overview of the CURRENT brief: the business problem or opportunity and enough relevant context to understand why the brief exists and why now (2–3 sentences). Plain words, no jargon. If there's no marketing strategy behind it, there's no brief yet.",
       "good_example": "Sales have plateaued and under-35s see us as 'their dad's beer.' A low-carb variant launches in Q3 — our one shot to feel relevant to a younger drinker.",
       "bad_example": "We want a big, disruptive campaign that goes viral and builds brand love.",
       "bad_reason": "States a wish for advertising, not the business problem; no 'why now'.",
@@ -128,7 +128,7 @@
         "behavioural",
         "attitudinal"
       ],
-      "prompt": "A handful, linked and logical, each measurable and time-stamped. Commercial = the business result; behavioural = what people must DO; attitudinal = what they must think/feel first.",
+      "prompt": "State what this brief is here to achieve. Lead with ONE primary objective, in the level that matters most; the other levels are supporting and only as far as they help it. Commercial = the business result; behavioural = what people must DO; attitudinal = what they must think/feel first. Each measurable and time-stamped where the input allows.",
       "good_example": "Commercial: +8% volume share in 18–34s within 12 months. Behavioural: 100k under-35s trial the variant. Attitudinal: from 'beer for older men' to 'beer for people like me.'",
       "bad_example": "Increase awareness, sales, loyalty and consideration.",
       "bad_reason": "Multiple unranked objectives, none measurable or time-bound; awareness is not a commercial outcome.",
@@ -161,7 +161,7 @@
       "depends_on": [
         "budget_scope"
       ],
-      "prompt": "A vivid picture of the audience built ONLY from the brief's data: who they are (demographics), what they think, feel and want (psychographics, needs), how and where they use the product, and who the brand is NOT for. Keep every audience the brief names, in priority order (primary / secondary); a B2B audience is a buying group, not a person. A group written in a pen-portrait voice is fine. Never invent a named person, an age, a city or habits the brief does not give. Avoid clichés like 'millennials'.",
+      "prompt": "A targeted, specific and succinct picture of the people the work is aimed at, built ONLY from the brief's data, with their relevant motivations, situation and behaviour (not generic demographics): who they are (demographics), what they think, feel and want (psychographics, needs), how and where they use the product, and who the brand is NOT for. Keep every audience the brief names, in priority order (primary / secondary); a B2B audience is a buying group, not a person. A group written in a pen-portrait voice is fine. Never invent a named person, an age, a city or habits the brief does not give. Avoid clichés like 'millennials'.",
       "good_example": "Busy (working) mothers. A 'Life is Sweet' / 'food is love' family where mum tends to over-feed everyone. She keeps the fridge well stocked as family meal-times can be erratic.",
       "bad_example": "ABC1 males 18–34, urban, social, brand-aware.",
       "bad_reason": "A bare data cell: 'Adults 18-64 really doesn't help the creative team' (Weichselbaum p.304). Nothing about how they think, what they want, or who is excluded. The opposite fault is as bad: a named person with an age, a city and habits the brief never gave.",
@@ -198,7 +198,7 @@
       "max_words": 50,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "The money, and the honest ambition it buys. Budget ↔ objectives ↔ audience are linked — move one and the others must move.",
+      "prompt": "The money, and the honest ambition it buys. Budget ↔ objectives ↔ audience are linked — move one and the others must move. State whether the budget includes VAT and whether media sits inside it; if the brief does not say, ask the client (an open question) rather than assuming. Never state a budget figure that was not given.",
       "good_example": "€1.2m working media. National reach unrealistic — prioritise four cities + always-on social.",
       "bad_example": "TBC / as needed.",
       "bad_reason": "No constraint = the backbone can't be balanced.",
@@ -219,7 +219,7 @@
       "max_words": 70,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "Who are we up against, and what does everyone in the category say/do? Needed to judge whether the SMP is ownable.",
+      "prompt": "Who are we up against, what does each rival claim (their positioning and messaging), and what space has no rival claimed? Needed to judge whether the single thought is ownable.",
       "good_example": "Rivals all claim heritage, mateship and 'the perfect pint.' White space: nobody owns 'the drink that signals your taste.'",
       "bad_example": "Everyone.",
       "bad_reason": "No real category read; can't locate white space.",
@@ -228,6 +228,11 @@
           "id": "names_rivals",
           "test": "Names rivals and the shared category claim.",
           "method": "auto"
+        },
+        {
+          "id": "names_open_space",
+          "method": "llm",
+          "test": "Does it name the space no rival has claimed (a messaging gap or opening), not only who the rivals are?"
         }
       ]
     },
@@ -244,7 +249,7 @@
         "audience",
         "background"
       ],
-      "prompt": "A truth about the audience, usually a human tension, that when said out loud makes them feel understood and gives the product a role to play. Not a fact, a statistic or an observation. Reveal WHY, not just WHAT. Shape: 'They [do/believe X] because [deeper motivation], which means [implication].' Survive the 'so what?' test ×3.",
+      "prompt": "A truth about the audience, usually a human tension, that when said out loud makes them feel understood and gives the product a role to play. A surprising, meaningful discovery the client did not already know (cultural, personal, human or industry-based), grounded in evidence rather than obvious statements. Not a fact, a statistic or an observation. Reveal WHY, not just WHAT. Shape: 'They [do/believe X] because [deeper motivation], which means [implication].' Survive the 'so what?' test ×3.",
       "good_example": "Buyers don't reject the Fabia on its engineering — they reject it because 'it's still a Skoda', which means the job is to confront the prejudice, not to prove the car.",
       "bad_example": "The Fabia has brilliant engineering.",
       "bad_reason": "An observation about the product with no motivation and no implication; the creatives' answer was 'Yes, but it's still a Skoda' (Fallon 2006 p.77).",
@@ -309,14 +314,14 @@
         "competitor_context",
         "audience"
       ],
-      "prompt": "The single most motivating thing we can say to the defined audience, given the insight and what is honestly true about the product: ONE sentence, one thought, not a thought with an 'and'. It must follow from the problem and the insight, be true and backed by the reasons to believe, give this audience a reason to care, and be specific to this brand, not a category generic. Written for the creative team: it points to where the idea should be and is not the idea's final wording. Not a tagline, not 'creative', not a list. If you have two, choose, or find the higher thought that contains both.",
+      "prompt": "The single most motivating thing we can say to the defined audience, given the insight and what is honestly true about the product: ONE thought, not a thought with an 'and': a word, a phrase or one sentence, never several thoughts. It must follow from the problem and the insight, be true and backed by the reasons to believe, give this audience a reason to care, and be specific to this brand, not a category generic. Written for the creative team: it points to where the idea should be and is not the idea's final wording. Not a tagline, not 'creative', not a list. If you have two, choose, or find the higher thought that contains both.",
       "good_example": "A smart choice because you don't pay for what you don't need.",
       "bad_example": "Good drinks, fun times, real people.",
       "bad_reason": "'It is not a main idea, but three main ideas' (Steel 1998 p.169); averaged from research, it 'could have fitted any one of a host of other beverages' (p.89).",
       "rubric": [
         {
           "id": "single_sentence",
-          "test": "Exactly one sentence.",
+          "test": "One sentence at most: a word, a phrase or one sentence is fine; several sentences are several thoughts.",
           "method": "auto"
         },
         {
@@ -388,7 +393,7 @@
       "depends_on": [
         "smp"
       ],
-      "prompt": "The few proof points that make the proposition credible — strongest first. Not a shopping list; number flexes by channel.",
+      "prompt": "The few validated facts, truths, statistics or sound logic that directly support the proposition: strongest first, not a shopping list. Validate the premises: logic does not replace empirical proof for a factual or product claim. Never invent supporting evidence; a reason you cannot prove from a fact starts 'To confirm:'.",
       "good_example": "You can stay always up to date · Nicam · widescreen · satellite",
       "bad_example": "Award-winning · trusted · premium · loved by thousands · refreshing · bold.",
       "bad_reason": "Generic, unprovable claims; a shopping list, not proof for the SMP.",
@@ -422,7 +427,7 @@
         "feel",
         "do"
       ],
-      "prompt": "The bridge from proposition to behaviour. One line each.",
+      "prompt": "The intended behavioural, attitudinal or other response to the work, clearly tied to the brief objectives: the meaningful change or action we want. One line each.",
       "good_example": "Think: 'this one's actually for me.' Feel: quietly proud to order it. Do: ask for it by name at the bar.",
       "bad_example": "Do: engage with the brand.",
       "bad_reason": "Vague; 'engage' is not an observable behaviour and doesn't ladder to the objective.",
@@ -524,6 +529,11 @@
           "id": "plain_words",
           "method": "llm",
           "test": "Is every word one a normal person would say out loud?"
+        },
+        {
+          "id": "one_change",
+          "method": "llm",
+          "test": "Does it name ONE change in ONE person, not several asks joined together?"
         }
       ]
     },
@@ -608,6 +618,11 @@
           "id": "plain_words",
           "method": "llm",
           "test": "Is every word one a normal person would say out loud?"
+        },
+        {
+          "id": "one_doubt",
+          "method": "llm",
+          "test": "Is it ONE doubt (one worry in one sentence), not two or three joined together?"
         }
       ]
     }

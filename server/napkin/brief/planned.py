@@ -37,6 +37,7 @@ from . import provenance as prov
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
 from .job import BriefJob, log
+from . import checks
 from .questions import dedupe
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
@@ -72,7 +73,7 @@ WHAT = {
     "desired_response.think": "what they should think", "desired_response.feel": "what they should feel",
     "desired_response.do": "what they should do",
     "tone_and_world": "how the work should feel (list of short phrases)",
-    "budget_and_scope": "deliverables, channels, timing; never a budget figure that was not given",
+    "budget_and_scope": "deliverables, channels, timing; never a budget figure that was not given; ask whether the budget includes VAT and whether media sits inside it",
     "mandatories": "what must appear or be avoided (list)",
     "open_questions": "what only the client can answer (list)",
 }
@@ -203,7 +204,15 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
    from what the brief already holds; never ask her to invent client facts. Never name a part only because a
    claim in it is worked out or marked to confirm.
 6. questions: what only the client can answer.
-7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary."""
+7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary.
+8. part tests: `tests` holds, for the insight, the proposition, the job, the barrier and the objection, the planning
+   tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
+   `revise` with one instruction that names the test and the fix. `part_checks` is what code measured (words against
+   the limit, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
+   fails when it joins two thoughts, and passes when it sits inside one.
+9. anti-patterns, also `revise`: a proposition that is really a tagline, or is the brand's own existing line; two
+   thoughts smuggled into one (an objection holding several doubts, a job asking for several changes); a wish-list
+   (more than one problem, audience or message); words a normal person would not say out loud."""
 
 
 def review_schema(keys):
@@ -283,7 +292,12 @@ class PlannedBriefJob(BriefJob):
                         self.caps.runlog)
 
     def _clean(self, out, ev, stage, keys=None, prior=None):
-        """Dara's parts with what each rests on (provenance.clean_parts): the one cleaner of every path."""
+        """Dara's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
+        An assumption says it is one first, so every sentence and the claim read from it are the same text."""
+        if isinstance(out, dict):
+            marked = checks.mark_assumptions(out, self.whole.get("insight"))
+            if marked:
+                self.caps.runlog.note("assumptions_marked", stage=stage, parts=marked)
         return prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
 
     def _prior(self, keys):
@@ -560,8 +574,15 @@ class PlannedBriefJob(BriefJob):
                 brief[k] = {"value": get(self.W, k), "basis": "person" if self.held.get(k) else "earlier",
                             "cites": [], "claims": earlier.get(k) or []}
         payload = {"brief": brief, "strategy": (self.plan_out or {}).get("strategy"), "facts": ev["facts"],
-                   "findings": ev["findings"], "client_said": self._said()}
+                   "findings": ev["findings"], "client_said": self._said(),
+                   "part_checks": checks.facts(self.whole), "tests": checks.tests(list(self.whole))}
         rv = self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, review_schema(list(KEYS)), max_tokens=8000)
+        if purpose == "review_brief":  # what code can measure goes back with Jude's own list, once
+            named = {x["part"] for x in rv.get("revise") or []}
+            extra = [x for x in checks.revisions(self.whole) if x["part"] not in named]
+            if extra:
+                rv["revise"] = list(rv.get("revise") or []) + extra
+                self.caps.runlog.note("checks_sent_back", parts=[x["part"] for x in extra])
         # Jude grades a worked-out claim on its working: one that recomputes is supported whatever he says;
         # code's own verdicts join his. None of them is a reason to rewrite.
         rv["claims"] = prov.judge_claims(self.whole, rv.get("claims") or [])

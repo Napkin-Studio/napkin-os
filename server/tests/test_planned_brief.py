@@ -101,7 +101,8 @@ def test_the_planned_brief_plans_researches_writes_whole_and_reviews_once(tmp_pa
     assert by["competitor_context"]["basis"] == "research" and by["competitor_context"]["cites"][0].startswith("f_")
     assert by["mandatories"]["basis"] == "assumption"
     assert by["competitor_context"]["reasoning"]["attention"].startswith("Check:"), "Jude's partly-supported claim"
-    assert host.data["objectives"]["commercial"].startswith("Grow under-30 visits"), "Dara rewrote it on Jude's note"
+    # Dara rewrote it on Jude's note; it is her proposal, so it says it is one (feature brief-first-draft-checks)
+    assert host.data["objectives"]["commercial"] == "To confirm: Grow under-30 visits by a measured share this summer"
     # Jude: one note per issue (two notes, not one per part), the fix marked bad. His note on the
     # draft he sent back is the loop's own verdict (test_the_loop_is_recorded_as_it_happened).
     back = {d["id"] for d in host.chain if d.get("superseded_by")}
@@ -261,7 +262,8 @@ def test_a_missing_dimension_reaches_dara_and_client_is_only_what_ellis_captured
         s.stop()
     assert seen["explain"]["missing_dimensions"].keys() == {"evaluation_criteria"}
     assert seen["rewrite"]["rewrite"] == {"desired_response.do": "say how the work will be judged"}
-    assert host.data["desired_response"]["do"].startswith("Visit twice in June")
+    # Dara's proposal says it is one (feature brief-first-draft-checks)
+    assert host.data["desired_response"]["do"].startswith("To confirm: Visit twice in June")
     bg = next(d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#background"))
     assert bg["basis"] == "assumption", "the client said nothing about sales: not the client's words"
 

@@ -446,7 +446,8 @@ def test_regenerate_field_on_a_planned_brief_is_a_one_part_fix(tmp_path):
     assert {r["job"]["stage"] for r in replies} <= {"context", "draft", "judge"}
     assert seen["plan_fix"]["planner_guidance"] == "Make it about 10 days"
     assert list(seen["fix"]["rewrite"]) == ["insight"]
-    assert host.data["insight"] == "Summer starts with an iced oat latte."
+    # a rewritten assumption says it is one (feature brief-first-draft-checks)
+    assert host.data["insight"] == "To confirm: Summer starts with an iced oat latte."
     check_change_rules(host)
 
 
