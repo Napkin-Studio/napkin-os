@@ -335,3 +335,20 @@ def test_a_brief_from_research_sees_every_fact_with_its_source_and_does_not_sear
     assert ("market_structure", "IE") not in research_calls and ("consumer_culture", "IE") in research_calls
     held = [d for d in host.chain if d.get("action") == "research_held"]
     assert held and "jev" in json.dumps(held[0]["reasoning"])
+
+
+def test_the_job_the_barrier_and_the_objection_are_drafted_with_the_other_parts(tmp_path):
+    seen = {}
+    s = Server(tmp_path, model=planned_model(seen), retrieval=retrieval(),
+               settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    assert replies[-1]["job"]["state"] == "done"
+    drafted = {t.split("#", 1)[1] for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
+    for k in ("job", "barrier", "objection"):
+        assert k in seen["draft"]["parts"], f"Dara is asked for {k}"
+        assert str(host.data.get(k) or "").strip(), f"{k} is written, not left empty"
+        assert k in drafted, f"{k} carries a draft decision with its reasons"

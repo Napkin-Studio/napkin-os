@@ -1037,10 +1037,12 @@ type Grid = {
   gridLimit(key: string): number
   gridWords(v: unknown): number
   gridStep(words: number, limit: number): number
+  gridGaps(ctx: unknown): { key: string; label: string }[]
+  gridHeaderInfo(e: unknown): string[][]
   gridBody(ctx: unknown): { html: string; sheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridSheets', 'gridKeys', 'gridLimit', 'gridWords', 'gridStep', 'gridCell', 'gridClientName', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridSheets', 'gridKeys', 'gridLimit', 'gridWords', 'gridStep', 'gridCell', 'gridClientName', 'gridGaps', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1089,24 +1091,57 @@ test('the grid prints a header, an info grid and a footer as the sheets need the
   assert.match(out.html, /<b>09<\/b>Why they should believe it<\/div><div class="bd"><ul><li>r1<\/li><li>r2<\/li><\/ul>/)
   assert.match(out.html, /<div class="src"><ol><li value="1"><b>ThinkBusiness<\/b>: A title · 2024 — <a href="https:\/\/example\.com\/a">/)
   assert.deepEqual(out.warnings, [])
-  // The parts the brief does not draft yet print as to be written, and the info cells with nothing say so with a dash.
-  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">To be written\.<\/p>/)
-  assert.match(out.html, /The objection it has to beat: <i>to be written<\/i>/)
-  assert.match(out.html, /<small>Reference<\/small><span class="none">—<\/span>/)
+  // A part nobody has written reads as missing, never as a quiet blank (the export writes it before it prints).
+  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">Missing: ask Dara to write this part\.<\/p>/)
+  assert.match(out.html, /The objection it has to beat: <i>missing: ask Dara to write it<\/i>/)
+  assert.doesNotMatch(out.html, /To be written|Not written yet/)
 })
 
 test('the grid names a part that ran over its box, drops an appendix with nothing in it, and escapes what it prints', () => {
   const g = grid()
   const vals = { single_minded_proposition: words(30), audience: '<script>alert(1)</script>', background: words(120) }
   const out = g.gridBody(ctxOf(vals))
-  assert.equal(out.sheets, 2, 'no sources and no questions: no appendix sheet')
-  assert.match(out.html, /SHEET<b>2\/2<\/b>/)
+  assert.equal(out.sheets, 3, 'the appendix is always there, and says so when it has nothing to list')
+  assert.match(out.html, /No outside sources were cited\. Every claim rests on the client’s brief and on proposals marked to confirm\./)
+  assert.match(out.html, /<p>No open questions: the brief holds what it needs\.<\/p>/)
   assert.deepEqual(out.warnings.map(w => [w.key, w.step]).sort(), [['background', 3], ['single_minded_proposition', 2]])
   assert.match(out.html, /class="box dark fit2"/, 'the single thought steps down inside its own box')
   assert.match(out.html, /class="box fit3"/)
   assert.doesNotMatch(out.html, /<script>/)
   assert.match(out.html, /&#60;script&#62;alert\(1\)&#60;\/script&#62;/)
-  assert.match(out.html, /<p class="todo">Not written yet\.<\/p>/, 'a part nobody has written yet is not left blank')
+  assert.match(out.html, /<p class="todo">Missing: ask Dara to write this part\.<\/p>/, 'a part nobody has written yet is not left blank')
+})
+
+test('a brief leaves with nothing empty: the gate names every empty part, the header holds suggestions, and Dara writes first', () => {
+  const g = grid()
+  const all = { job: 'J.', background: 'B.', barrier: 'Ba.', audience: 'A.', 'objectives.commercial': 'c', 'objectives.behavioural': 'b', 'objectives.attitudinal': 'a',
+    budget_and_scope: 'x', insight: 'I.', single_minded_proposition: 'S.', objection: 'O.', reasons_to_believe: ['r'], competitor_context: 'k',
+    'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['w'], mandatories: ['m'] }
+  assert.deepEqual(g.gridGaps({ get: (k: string) => (all as Record<string, unknown>)[k], hasVal }), [], 'a complete brief has no gap')
+  const thin = { ...all, job: '', barrier: undefined, objection: ' ', mandatories: [] }
+  assert.deepEqual(g.gridGaps({ get: (k: string) => (thin as Record<string, unknown>)[k], hasVal }).map(x => x.key), ['job', 'barrier', 'mandatories', 'objection'])
+  // The header: a value, a suggestion marked as one, or a prompt for what only a person knows. Never a blank.
+  const info = g.gridHeaderInfo({ client: 'Ballymaloe Relish, an Irish family relish brand.', project: 'Better With Ballymaloe', version: '1.2', date: '29 October 2026',
+    me: 'Sai', today: new Date(2026, 9, 29) })
+  assert.deepEqual(info.map(p => p[0]), ['Client', 'Project', 'Version', 'Date', 'Reference', 'Prepared by', 'Agency lead', 'Client lead'])
+  assert.equal(info.find(p => p[0] === 'Reference')?.[1], 'BAL-261029 (suggested)')
+  assert.deepEqual([info[5][1], info[6][1], info[7][1]], ['Sai', 'Sai', '[client lead, to confirm]'])
+  const blank = g.gridHeaderInfo({ date: '29 October 2026', today: new Date(2026, 9, 29) })
+  assert.ok(blank.every(p => String(p[1]).trim() !== ''), 'even a brief with no client, project or signed-in person has no empty cell')
+  assert.equal(blank.find(p => p[0] === 'Prepared by')?.[1], 'Napkin Studio')
+  // The export: the grid asks Dara for what is missing and stops, saying so, if it is still missing; the plain export never waits.
+  const ex = fn(BM, 'doExport')
+  assert.match(ex, /style==='plain'\)\s*return runExport\(kind, style\)/)
+  assert.match(ex, /gridGaps\(ctx\)/)
+  assert.match(ex, /fillParts\(gaps\.map/)
+  assert.match(ex, /Not exported: /)
+  assert.match(fn(BM, 'fillParts'), /regenField\(f,null,null,function\(\)\{ res\(\); \}\)/)
+  assert.match(fn(BM, 'regenField'), /if\(done\) done\(j\)/)
+  // The three new parts are on the form beside the others, and the page can find them by the words a person uses.
+  assert.match(BM, /key:'job',label:'The job'[\s\S]*key:'background'[\s\S]*key:'barrier',label:'The barrier'/)
+  assert.match(BM, /key:'single_minded_proposition'[\s\S]*key:'objection',label:'The objection to beat'/)
+  assert.match(BM, /job:'job, the job, task'/)
+  assert.match(BM, /objection:'objection, the objection, doubt'/)
 })
 
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
@@ -1124,7 +1159,7 @@ test('the grid prints on A4 sheets that break cleanly, and is the default export
   assert.match(css, /@page\{size:A4;margin:0\}/)
   assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
   assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(\)/)
-  assert.match(fn(BM, 'doExport'), /buildExportHTML\(style\)/)
+  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
   assert.match(BM, /id="exHtml"[\s\S]*id="exPdf"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
   assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
   assert.match(BM, /doExport\('html'\); \}\);\s*\$\('exPdf'\)/, 'the shell’s Export and the two main buttons are the grid')

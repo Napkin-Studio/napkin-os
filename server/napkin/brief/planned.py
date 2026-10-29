@@ -57,7 +57,9 @@ DIMS = ["objectives_quality", "audience_vividness", "single_minded_message", "ev
 BASES = ["client", "research", "library", "assumption"]
 WHAT = {
     "project_name": "a short working name", "client": "the client and brand",
+    "job": "the job in one plain sentence: the problem reframed as the change in what one person thinks, feels or does (not the task)",
     "background": "the business situation and why now",
+    "barrier": "what stands in their way: the belief, habit, fear or rival in their head or routine, in plain words",
     "objectives.commercial": "the business result, measurable and time-bound where the input allows",
     "objectives.behavioural": "what the audience should do differently",
     "objectives.attitudinal": "what the audience should think or feel differently",
@@ -65,6 +67,7 @@ WHAT = {
     "competitor_context": "named competitors, what each claims, and the space left open",
     "insight": "one human truth about the audience that opens the problem",
     "single_minded_proposition": "one sentence, one thought",
+    "objection": "the doubt already in their head that the proposition has to beat, in their words, one sentence",
     "reasons_to_believe": "proof points for the proposition (list)",
     "desired_response.think": "what they should think", "desired_response.feel": "what they should feel",
     "desired_response.do": "what they should do",

@@ -482,6 +482,134 @@
           "method": "auto"
         }
       ]
+    },
+    {
+      "id": "job",
+      "label": "The job — what must this work make a person do?",
+      "zone": 1,
+      "type": "text",
+      "required": true,
+      "max_words": 30,
+      "provenance_required": false,
+      "depends_on": [
+        "background",
+        "audience"
+      ],
+      "prompt": "The job in ONE plain sentence, from the audience's side: the business problem reframed as the change in what ONE person thinks, feels or does. Not the task ('make an ad'), the problem ('nobody under 35 thinks of us'). Words a normal person would say out loud.",
+      "good_example": "Get a tired thirty-year-old to think of us first when a plain Tuesday dinner needs lifting.",
+      "bad_example": "Launch a 30-second TV and social campaign to drive awareness.",
+      "bad_reason": "States the task, not the problem or the change in a person (strategic-planning skill: reframe the problem from the audience's side).",
+      "rubric": [
+        {
+          "id": "single_sentence",
+          "test": "Exactly one sentence.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "states_problem_not_task",
+          "method": "llm",
+          "test": "Does it state the problem or the change that is needed, not the task the client asked for?"
+        },
+        {
+          "id": "audience_side",
+          "method": "llm",
+          "test": "Is it written from the audience's side, naming the change in what one person thinks, feels or does?"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud?"
+        }
+      ]
+    },
+    {
+      "id": "barrier",
+      "label": "The barrier — what stands in their way?",
+      "zone": 1,
+      "type": "text",
+      "required": true,
+      "max_words": 60,
+      "provenance_required": false,
+      "depends_on": [
+        "audience",
+        "background"
+      ],
+      "prompt": "What stands between this person and the result right now: the belief, habit, fear or rival in their head or routine, in plain words. The strategy usually lives in removing one barrier. Rest it on what the brief holds, or mark it to confirm.",
+      "good_example": "They file the jar under 'my mum's cupboard', and nobody browses their parents' pantry.",
+      "bad_example": "Low awareness among younger people.",
+      "bad_reason": "A symptom a tracker measures, not what is in their heads or habits (strategic-planning skill: the barrier is in their heads or habits).",
+      "rubric": [
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "in_their_heads",
+          "method": "llm",
+          "test": "Does it name a belief, habit, fear or rival in the audience's head or routine, not a media, product or sales fact?"
+        },
+        {
+          "id": "one_barrier",
+          "method": "llm",
+          "test": "Does it name ONE barrier rather than a list of them?"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud?"
+        }
+      ]
+    },
+    {
+      "id": "objection",
+      "label": "The objection — the doubt the single thought must beat",
+      "zone": 3,
+      "type": "text",
+      "required": true,
+      "max_words": 30,
+      "provenance_required": false,
+      "depends_on": [
+        "smp",
+        "audience"
+      ],
+      "prompt": "The doubt already in the audience's head that the single-minded proposition has to beat, in their own words. The work answers it; it does not ignore it. ONE sentence.",
+      "good_example": "It's still a Skoda.",
+      "bad_example": "People may not know about the product.",
+      "bad_reason": "A gap in awareness, not a doubt the audience actually holds.",
+      "rubric": [
+        {
+          "id": "single_sentence",
+          "test": "Exactly one sentence.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "a_real_doubt",
+          "method": "llm",
+          "test": "Is it a doubt this audience actually holds, in their words, not a gap in awareness?"
+        },
+        {
+          "id": "answered_by_proposition",
+          "method": "llm",
+          "test": "Does the single-minded proposition answer this doubt rather than ignore it?",
+          "tolerance": "hard"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud?"
+        }
+      ]
     }
   ],
   "open_questions": {

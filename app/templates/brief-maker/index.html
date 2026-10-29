@@ -642,7 +642,9 @@
   var FIELDS=[
     {sec:'Identity',key:'project_name',label:'Project name',type:'text'},
     {sec:'Identity',key:'client',label:'Client / brand',type:'text'},
+    {sec:'The brief',key:'job',label:'The job',type:'text'},
     {sec:'The brief',key:'background',label:'Background',type:'text'},
+    {sec:'The brief',key:'barrier',label:'The barrier',type:'text'},
     {sec:'Objectives',key:'objectives.commercial',label:'Commercial',type:'text'},
     {sec:'Objectives',key:'objectives.behavioural',label:'Behavioural',type:'text'},
     {sec:'Objectives',key:'objectives.attitudinal',label:'Attitudinal',type:'text'},
@@ -650,6 +652,7 @@
     {sec:'Strategy',key:'competitor_context',label:'Competitor context',type:'text'},
     {sec:'Strategy',key:'insight',label:'The insight',type:'text'},
     {sec:'Strategy',key:'single_minded_proposition',label:'Single-minded proposition',type:'text',hero:true},
+    {sec:'Strategy',key:'objection',label:'The objection to beat',type:'text'},
     {sec:'Strategy',key:'reasons_to_believe',label:'Reasons to believe',type:'list'},
     {sec:'Desired response',key:'desired_response.think',label:'Think',type:'text'},
     {sec:'Desired response',key:'desired_response.feel',label:'Feel',type:'text'},
@@ -702,7 +705,9 @@
   var PART_ALIASES={
     project_name:'project name, project, working title',
     client:'client, brand',
+    job:'job, the job, task',
     background:'background, context, situation',
+    barrier:'barrier, the barrier, blocker',
     'objectives.commercial':'commercial objective, commercial, sales, revenue',
     'objectives.behavioural':'behavioural objective, behavioural, behaviour',
     'objectives.attitudinal':'attitudinal objective, attitudinal, attitude, perception',
@@ -710,6 +715,7 @@
     competitor_context:'competitor context, competitors, competitor, competition',
     insight:'insight, truth',
     single_minded_proposition:'proposition, line, idea, smp',
+    objection:'objection, the objection, doubt',
     reasons_to_believe:'reasons to believe, reasons, rtb, rtbs, proof points',
     'desired_response.think':'what they should think',
     'desired_response.feel':'what they should feel',
@@ -1167,14 +1173,16 @@
     var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+'</div>', body;
     if(c.kind==='sources'){
       var l=exportSourcesList(ctx.cit);
-      body=l?'<div class="src">'+l+'</div>':'<p class="todo">Nothing cited.</p>';
+      body=l?'<div class="src">'+l+'</div>':'<p>No outside sources were cited. Every claim rests on the client’s brief and on proposals marked to confirm.</p>';
+    } else if(!has&&c.key==='open_questions'){
+      body='<p>No open questions: the brief holds what it needs.</p>';
     } else if(!has){
-      body='<p class="todo">'+(c.kind==='new'?'To be written.':'Not written yet.')+'</p>';
+      body='<p class="todo">Missing: ask Dara to write this part.</p>';
     } else if(c.kind==='list'){
       body='<ul>'+(Array.isArray(v)?v:[v]).map(function(x){ return '<li>'+esc(String(x))+'</li>'; }).join('')+'</ul>'+(mk?'<p class="mk">'+mk+'</p>':'');
     } else if(c.kind==='hero'){
       var ob=ctx.get('objection');
-      body='<p class="big">'+esc(String(v))+mk+'</p><p class="obj">The objection it has to beat: '+(ctx.hasVal(ob)?esc(String(ob)):'<i>to be written</i>')+'</p>';
+      body='<p class="big">'+esc(String(v))+mk+'</p><p class="obj">The objection it has to beat: '+(ctx.hasVal(ob)?esc(String(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
     } else {
       body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(String(v))+mk+'</p>';
     }
@@ -1182,6 +1190,23 @@
   }
   // The client's name without the descriptor a brief often carries ("Ballymaloe Relish, an Irish family relish brand").
   function gridClientName(c){ return String(c||'').split(/[,(]/)[0].trim(); }
+  // The parts of the grid with nothing in them. A brief leaves Napkin with none: the export writes these first.
+  function gridGaps(ctx){
+    var out=[], seen={};
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      if(c.kind==='sources'||c.key==='open_questions'||seen[c.key]) return; seen[c.key]=1;
+      if(!ctx.hasVal(ctx.get(c.key))) out.push({key:c.key, label:c.label}); }); }); });
+    if(!ctx.hasVal(ctx.get('objection'))&&!seen.objection) out.push({key:'objection', label:'The objection to beat'});
+    return out;
+  }
+  // The info grid: every cell holds a value, a suggestion marked as one, or a prompt for what only a person knows.
+  function gridHeaderInfo(e){
+    var client=String(e.client||'').trim(), who=String(e.me||'').trim()||'Napkin Studio';
+    var initials=gridClientName(client).replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase()||'NAP';
+    var d=e.today||new Date(), yymmdd=String(d.getFullYear()).slice(2)+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2);
+    return [['Client',client||'[client, to confirm]'],['Project',e.project||'[project, to confirm]'],['Version',e.version||'1'],['Date',e.date],
+      ['Reference',initials+'-'+yymmdd+' (suggested)'],['Prepared by',who],['Agency lead',who],['Client lead','[client lead, to confirm]']];
+  }
   function gridInfo(info){
     return '<div class="info">'+arr(info).map(function(p){
       return '<div><small>'+esc(p[0])+'</small>'+(String(p[1]||'').trim()?esc(p[1]):'<span class="none">—</span>')+'</div>'; }).join('')+'</div>';
@@ -1196,7 +1221,7 @@
   }
   // -> {html, sheets, warnings}: warnings name each part that ran over its box and was printed smaller.
   function gridBody(ctx){
-    var sheets=gridSheets().filter(function(s){ return !s.appendix||arr(ctx.cit&&ctx.cit.notes).length||ctx.hasVal(ctx.get('open_questions')); });
+    var sheets=gridSheets();
     var warnings=[];
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
@@ -2312,7 +2337,7 @@
   // Redraft one field: a regenerate_field job (middleware-api §10.10) — one
   // Drafter, then the Judge. The host writes what passes; a field a person
   // holds comes back as a proposal.
-  function regenField(f,guidance,resumeId){
+  function regenField(f,guidance,resumeId,done){
     if(!window.clan) return;
     if(noMiddleware()){ setStatus(esc(NO_MW)); return; }
     var j=REGEN[f.key]={task:'regenerate_field', field:f.key, fields:{}, onUpdate:function(){ if(phase==='doc') renderRegen(f); },
@@ -2325,6 +2350,7 @@
         else if(fs.state==='proposed') setStatus(esc(DARA+' suggests a new '+f.label.toLowerCase()+': you hold that part, so it wasn’t changed.'));
         else setStatus('');
         if(phase==='doc') renderStructured();
+        if(done) done(j);
       }};
     setStatus('');
     if(phase==='doc') renderStructured();
@@ -2541,7 +2567,8 @@
         passages:get('passages'), capture:get('capture'), materials:get('materials')}):{marks:{}, notes:[]};
       var project=workingTitle()||m.title||'Untitled brief', client=String(get('client')||'').trim();
       var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
-      var info=[['Client',client],['Project',project],['Version',m.version],['Date',date],['Reference',''],['Prepared by',''],['Agency lead',''],['Client lead','']];
+      var me=((window.__CLAN__||{}).me||{}).name;
+      var info=gridHeaderInfo({client:client, project:project, version:m.version, date:date, me:me});
       var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version});
       LAST_GRID_WARNINGS=g.warnings;
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
@@ -2550,8 +2577,28 @@
     });
   }
   function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
+  // Write the named parts, one at a time (the middleware takes one job at a time on a brief).
+  function fillParts(keys){
+    return keys.reduce(function(p,k){ return p.then(function(){ return new Promise(function(res){
+      var f=FIELDS.filter(function(x){ return x.key===k; })[0]; if(!f) return res();
+      regenField(f,null,null,function(){ res(); }); }); }); }, Promise.resolve());
+  }
+  // A brief that leaves Napkin has nothing empty: the grid export first has Dara write any part still missing.
   function doExport(kind, style){
     if(!(window.clan&&window.clan.exportDoc)){ toast('Export needs the Napkin host.'); return; }
+    if(style==='plain') return runExport(kind, style);
+    var ctx={get:get, hasVal:hasVal}, gaps=gridGaps(ctx);
+    if(!gaps.length) return runExport(kind, style);
+    var names=listWords(gaps.map(function(g){ return g.label.toLowerCase(); }));
+    if(docLocked()||noMiddleware()){ toast('Still empty and not written here: '+names+'. Fill them in, then export.'); return; }
+    toast(DARA+' is writing '+names+' before the export…');
+    fillParts(gaps.map(function(g){ return g.key; })).then(function(){
+      var left=gridGaps(ctx);
+      if(left.length){ toast('Not exported: '+listWords(left.map(function(g){ return g.label.toLowerCase(); }))+' still needs writing. Ask '+DARA+' again from its row.'); return; }
+      runExport(kind, style);
+    });
+  }
+  function runExport(kind, style){
     toast('Preparing '+kind.toUpperCase()+'…');
     buildExportHTML(style).then(function(html){
       if(style!=='plain'&&LAST_GRID_WARNINGS.length) toast('Printed smaller to fit its box: '+LAST_GRID_WARNINGS.map(function(w){ return w.label.toLowerCase(); }).join(', ')+'.');
