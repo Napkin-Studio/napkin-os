@@ -591,6 +591,8 @@
         <button class="save-as" id="saveBtn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5A1 1 0 0 1 4 2.5h6.3L13 5.2V12.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Save as…</button>
         <button class="save-as" id="exHtml" title="Export a clean standalone HTML report"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>HTML</button>
         <button class="save-as" id="exPdf" title="Export a print-ready PDF"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>PDF</button>
+        <button class="save-as" id="exHtmlPlain" title="Export the plain layout, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain HTML</button>
+        <button class="save-as" id="exPdfPlain" title="Export the plain layout as a PDF, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain PDF</button>
         <span class="muted" id="lockedBadge" style="display:none;color:var(--ok)">Locked for handoff</span>
         <span class="muted status" id="status" role="status"></span>
         <div class="locklist" id="lockList" hidden></div>
@@ -1107,11 +1109,133 @@
     return {marks:marks, notes:order.map(function(g){ return {n:g.n, name:g.name, items:g.items.map(function(x){ return {text:x.text, uri:x.uri}; })}; })};
   }
   function exportMarkHtml(nums){ return arr(nums).length?'<sup class="fn">'+arr(nums).join(',')+'</sup>':''; }
-  function exportSourcesHtml(cit){
+  function exportSourcesList(cit){
     var ns=arr(cit&&cit.notes); if(!ns.length) return '';
-    return '<section class="srcs"><h2>Sources</h2><ol>'+ns.map(function(g){
+    return '<ol>'+ns.map(function(g){
       var its=g.items.map(function(x){ return (x.text?esc(x.text):'')+(x.uri?(x.text?' — ':'')+'<a href="'+esc(x.uri)+'">'+esc(x.uri)+'</a>':''); }).filter(Boolean);
-      return '<li value="'+g.n+'"><b>'+esc(g.name)+'</b>'+(its.length?': '+its.join('; '):'')+'</li>'; }).join('')+'</ol></section>';
+      return '<li value="'+g.n+'"><b>'+esc(g.name)+'</b>'+(its.length?': '+its.join('; '):'')+'</li>'; }).join('')+'</ol>';
+  }
+  function exportSourcesHtml(cit){
+    var l=exportSourcesList(cit); return l?'<section class="srcs"><h2>Sources</h2>'+l+'</section>':'';
+  }
+  // ---- The grid export (feature brief-grid-template). Pure: it reads only what it is given. ----
+  // Which part sits in which box on which sheet is this list, so the page rule (how many sheets) changes the
+  // list, not the code. kind: text, list, quote (the insight, large), hero (the single thought, large on black,
+  // with the objection it has to beat), new (a part the brief does not draft yet: printed 'to be written'
+  // while it is empty), sources (the numbered Sources list).
+  function gridSheets(){
+    function T(num,label,key,kind,big){ return {num:num, label:label, key:key, kind:kind||'text', big:!!big}; }
+    return [
+      {rows:[
+        [T('01','The job','job','new',true)],
+        [T('02','Where we are','background'), T('03','The barrier','barrier','new')],
+        [T('04','Who we are talking to','audience')],
+        [T('05','Objective. Commercial','objectives.commercial'), T('05','Objective. Behavioural','objectives.behavioural'), T('05','Objective. Attitudinal','objectives.attitudinal')],
+        [T('06','Budget and scope','budget_and_scope')]]},
+      {rows:[
+        [T('07','The insight','insight','quote')],
+        [T('08','The single thought','single_minded_proposition','hero')],
+        [T('09','Why they should believe it','reasons_to_believe','list'), T('10','Competitor context','competitor_context')],
+        [T('11','Desired response. Think','desired_response.think'), T('11','Desired response. Feel','desired_response.feel'), T('11','Desired response. Do','desired_response.do')],
+        [T('12','Tone and world','tone_and_world','list'), T('13','Mandatories','mandatories','list')]]},
+      {appendix:true, title:'Appendix. Sources and questions to settle.', rows:[
+        [T('A','Evidence and sources','sources','sources'), T('B','Questions to settle','open_questions','list')]]}
+    ];
+  }
+  // The keys the grid prints, in print order (what the footnote numbers follow).
+  function gridKeys(){
+    var out=[]; gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){ if(c.kind!=='sources'&&out.indexOf(c.key)===-1) out.push(c.key); }); }); });
+    return out.concat(['objection']);
+  }
+  // A box's size: the word limits the brief's schema sets for each part (server/napkin/brief/golden_brief.schema.json).
+  function gridLimit(key){
+    var L={background:70, audience:80, budget_and_scope:50, competitor_context:70, insight:50, single_minded_proposition:20, tone_and_world:60, mandatories:80};
+    return L[key]||0;
+  }
+  function gridWords(v){
+    var s=Array.isArray(v)?v.join(' '):String(v==null?'':v), m=s.trim().match(/\S+/g);
+    return m?m.length:0;
+  }
+  // How far a part's type steps down in its own box when it runs over its limit: 0 none, 3 the floor.
+  function gridStep(words, limit){
+    if(!limit||words<=limit) return 0;
+    var r=words/limit; return r<=1.25?1:r<=1.6?2:3;
+  }
+  function gridCell(c, ctx){
+    var v=ctx.get(c.key), has=ctx.hasVal(v), mk=exportMarkHtml((ctx.cit.marks||{})[c.key]);
+    var step=gridStep(gridWords(v), gridLimit(c.key)), cls='box'+(c.kind==='hero'?' dark':'')+(step?' fit'+step:'');
+    var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+'</div>', body;
+    if(c.kind==='sources'){
+      var l=exportSourcesList(ctx.cit);
+      body=l?'<div class="src">'+l+'</div>':'<p class="todo">Nothing cited.</p>';
+    } else if(!has){
+      body='<p class="todo">'+(c.kind==='new'?'To be written.':'Not written yet.')+'</p>';
+    } else if(c.kind==='list'){
+      body='<ul>'+(Array.isArray(v)?v:[v]).map(function(x){ return '<li>'+esc(String(x))+'</li>'; }).join('')+'</ul>'+(mk?'<p class="mk">'+mk+'</p>':'');
+    } else if(c.kind==='hero'){
+      var ob=ctx.get('objection');
+      body='<p class="big">'+esc(String(v))+mk+'</p><p class="obj">The objection it has to beat: '+(ctx.hasVal(ob)?esc(String(ob)):'<i>to be written</i>')+'</p>';
+    } else {
+      body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(String(v))+mk+'</p>';
+    }
+    return '<div class="'+cls+'">'+tab+'<div class="bd">'+body+'</div></div>';
+  }
+  // The client's name without the descriptor a brief often carries ("Ballymaloe Relish, an Irish family relish brand").
+  function gridClientName(c){ return String(c||'').split(/[,(]/)[0].trim(); }
+  function gridInfo(info){
+    return '<div class="info">'+arr(info).map(function(p){
+      return '<div><small>'+esc(p[0])+'</small>'+(String(p[1]||'').trim()?esc(p[1]):'<span class="none">—</span>')+'</div>'; }).join('')+'</div>';
+  }
+  function gridSheet(n, total, sh, ctx){
+    var sub=sh.title||('Creative brief. '+ctx.project);
+    return '<div class="sheet"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
+      +'<div class="shn">SHEET<b>'+n+'/'+total+'</b></div></div>'
+      +(n===1?gridInfo(ctx.info):'')
+      +sh.rows.map(function(r){ return '<div class="row c'+r.length+'">'+r.map(function(c){ return gridCell(c, ctx); }).join('')+'</div>'; }).join('')
+      +'<div class="foot"><span>'+esc(['Napkin', gridClientName(ctx.client), ctx.project, 'Creative brief'+(ctx.version?' '+ctx.version:''), 'Confidential'].filter(Boolean).join(' / '))+'</span><span>'+n+' of '+total+'</span></div></div>';
+  }
+  // -> {html, sheets, warnings}: warnings name each part that ran over its box and was printed smaller.
+  function gridBody(ctx){
+    var sheets=gridSheets().filter(function(s){ return !s.appendix||arr(ctx.cit&&ctx.cit.notes).length||ctx.hasVal(ctx.get('open_questions')); });
+    var warnings=[];
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
+      if(st) warnings.push({key:c.key, label:c.label, words:w, limit:lim, step:st}); }); }); });
+    return {html:sheets.map(function(s,i){ return gridSheet(i+1, sheets.length, s, ctx); }).join(''), sheets:sheets.length, warnings:warnings};
+  }
+  function gridCss(){
+    return "*{box-sizing:border-box;margin:0;padding:0}"
+      +"@page{size:A4;margin:0}"
+      +"body{background:#cfcfcf;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#000;-webkit-font-smoothing:antialiased}"
+      +".sheet{width:210mm;height:297mm;background:#fff;margin:18px auto;padding:10mm 11.5mm 0;position:relative;overflow:hidden;page-break-after:always;break-after:page}"
+      +".hd{display:flex;align-items:stretch;background:#000;color:#fff;height:16mm}"
+      +".logo{padding:0 6mm 0 5mm;font-weight:900;font-size:31px;letter-spacing:-.045em;display:flex;align-items:center;border-right:3px solid #fff}"
+      +".ttl{flex:1;padding:0 0 0 14px;display:flex;flex-direction:column;justify-content:center;border-right:3px solid #fff}"
+      +".ttl b{font-size:19px;font-weight:800;letter-spacing:-.02em}.ttl span{font-size:10px;color:#d8d8d8;margin-top:3px}"
+      +".shn{width:26mm;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:8px;letter-spacing:.16em}.shn b{font-size:23px;letter-spacing:-.02em;margin-top:2px}"
+      +".info{display:grid;grid-template-columns:repeat(4,1fr);border:2px solid #000;border-top:0}"
+      +".info div{padding:6px 9px 8px;font-size:10.5px;line-height:1.3;border-left:1px solid #000;border-top:1px solid #000}"
+      +".info div:nth-child(4n+1){border-left:0}.info div:nth-child(-n+4){border-top:0}"
+      +".info small{display:block;font-size:7.5px;letter-spacing:.16em;font-weight:800;margin-bottom:3px;text-transform:uppercase}.none{color:#8a8a8a}"
+      +".row{display:grid;border:2.5px solid #000;margin-top:-2.5px}"
+      +".c1{grid-template-columns:1fr}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}"
+      +".row>.box+.box{border-left:2.5px solid #000}"
+      +".lab{display:inline-flex;align-items:baseline;gap:7px;background:#000;color:#fff;font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;padding:5px 11px 5px 6px;font-weight:700}"
+      +".lab b{font-weight:900;font-size:11px;letter-spacing:0}"
+      +".bd{padding:11px 13px 14px;font-size:11.2px;line-height:1.46}"
+      +".bd p+p{margin-top:7px}.bd ul{padding-left:16px}.bd li{margin:3px 0}"
+      +".job{font-size:23px;line-height:1.18;font-weight:800;letter-spacing:-.022em}"
+      +".big{font-size:21px;line-height:1.2;font-weight:800;letter-spacing:-.02em}"
+      +".dark{background:#000;color:#fff}.dark .lab{background:#fff;color:#000}.dark .big{font-size:30px;line-height:1.12}"
+      +".obj{font-size:10px;color:#bbb}"
+      +".fit1 .bd{font-size:10.8px}.fit2 .bd{font-size:10.4px}.fit3 .bd{font-size:10px}"
+      +".fit1 .big{font-size:19px}.fit2 .big{font-size:17px}.fit3 .big{font-size:15px}"
+      +".dark.fit1 .big{font-size:26px}.dark.fit2 .big{font-size:22px}.dark.fit3 .big{font-size:19px}"
+      +"sup{font-size:7.5px;font-weight:800;margin-left:1px;vertical-align:super}.mk{margin-top:3px}"
+      +".todo{color:#7c7c7c;font-style:italic;border:1.5px dashed #9a9a9a;padding:8px 10px;font-size:10.5px}"
+      +".src ol{padding-left:16px;font-size:9.6px;line-height:1.5}.src a{color:#000;word-break:break-all}"
+      +".foot{position:absolute;left:11.5mm;right:11.5mm;bottom:7mm;display:flex;justify-content:space-between;gap:12px;font-size:8px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.foot span:last-child{white-space:nowrap}"
+      +"@media print{body{background:#fff}.sheet{margin:0;box-shadow:none}}";
   }
   function verdictHtml(v){
     var d=v.d, r=hasReasoning(d)?d.reasoning:null, look=r?plainJudge(r.attention,1):'';
@@ -2337,12 +2461,18 @@
       .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
       .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; });
   }
-  // What each printed part cites, in the order the export prints the parts.
-  function exportParts(){
-    var secs={}, order=[];
-    FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client'||!hasVal(get(f.key))) return;
-      if(!secs[f.sec]){ secs[f.sec]=[]; order.push(f.sec); } secs[f.sec].push(f); });
-    return [].concat.apply([],order.map(function(s){ return secs[s]; })).map(function(f){
+  // What each printed part cites, in the order the export prints the parts (the plain export's, or `keys` when
+  // the grid names its own order).
+  function exportParts(keys){
+    var fs;
+    if(keys){ fs=keys.map(function(k){ return FIELDS.filter(function(f){ return f.key===k; })[0]; }).filter(function(f){ return f&&hasVal(get(f.key)); }); }
+    else {
+      var secs={}, order=[];
+      FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client'||!hasVal(get(f.key))) return;
+        if(!secs[f.sec]){ secs[f.sec]=[]; order.push(f.sec); } secs[f.sec].push(f); });
+      fs=[].concat.apply([],order.map(function(s){ return secs[s]; }));
+    }
+    return fs.map(function(f){
       var d=decisionsFor(f.key)[0], cd=claimDecision(d);
       return {key:f.key, ids:citesOf([d, cd]).filter(function(id){ return !wrongPin(id); })};
     });
@@ -2353,7 +2483,7 @@
     var l=[0,2,4].map(function(i){ var v=parseInt(h.substr(i,2),16)/255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); });
     return 1.05/(.2126*l[0]+.7152*l[1]+.0722*l[2]+.05)>=3;
   }
-  function buildExportHTML(){
+  function buildPlainExportHTML(){
     return Promise.all([inlineImages(), chainForExport()]).then(function(got){
       var images=got[0];
       var pr=get('projection')||{};
@@ -2402,10 +2532,29 @@
         +'<\/body><\/html>';
     });
   }
-  function doExport(kind){
+  // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
+  var LAST_GRID_WARNINGS=[];
+  function buildGridExportHTML(){
+    return chainForExport().then(function(){
+      var pr=get('projection')||{}, m=(window.__CLAN__||{}).manifest||{};
+      var cit=CHAIN.state==='ok'?exportCitations(exportParts(gridKeys()), {pins:pr.pins, findings:pr.findings, sources:pr.sources,
+        passages:get('passages'), capture:get('capture'), materials:get('materials')}):{marks:{}, notes:[]};
+      var project=workingTitle()||m.title||'Untitled brief', client=String(get('client')||'').trim();
+      var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+      var info=[['Client',client],['Project',project],['Version',m.version],['Date',date],['Reference',''],['Prepared by',''],['Agency lead',''],['Client lead','']];
+      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version});
+      LAST_GRID_WARNINGS=g.warnings;
+      // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
+      return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
+        +g.html+(CHAIN.state==='unavailable'?'<p style="text-align:center;font:9px sans-serif;color:#767676;margin:6px">Sources could not be read for this export.</p>':'')+'<\/body><\/html>';
+    });
+  }
+  function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
+  function doExport(kind, style){
     if(!(window.clan&&window.clan.exportDoc)){ toast('Export needs the Napkin host.'); return; }
     toast('Preparing '+kind.toUpperCase()+'…');
-    buildExportHTML().then(function(html){
+    buildExportHTML(style).then(function(html){
+      if(style!=='plain'&&LAST_GRID_WARNINGS.length) toast('Printed smaller to fit its box: '+LAST_GRID_WARNINGS.map(function(w){ return w.label.toLowerCase(); }).join(', ')+'.');
       var base=(get('project_name')||'brief').replace(/[^\w.-]+/g,'-');
       return window.clan.exportDoc(kind,base,html);
     }).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); })
@@ -2413,6 +2562,8 @@
   }
   $('exHtml').addEventListener('click',function(){ doExport('html'); });
   $('exPdf').addEventListener('click',function(){ doExport('pdf'); });
+  $('exHtmlPlain').addEventListener('click',function(){ doExport('html','plain'); });
+  $('exPdfPlain').addEventListener('click',function(){ doExport('pdf','plain'); });
 
   // The shell's Export offers us the job before composing one from our markup —
   // which, since this view renders from data at runtime, would be the empty

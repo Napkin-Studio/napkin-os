@@ -958,7 +958,7 @@ test('the brief maker’s proposal is answered by the write that cites it', () =
 test('the brief’s export cites its sources: one number a publisher, links only for open web sources', () => {
   type Cit = { marks: Record<string, number[]>; notes: { n: number; name: string; items: { text: string; uri: string | null }[] }[] }
   type F = { exportCitations(parts: unknown[], env: unknown): Cit; exportMarkHtml(n?: number[]): string; exportSourcesHtml(c: Cit | null): string }
-  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesHtml'], { arr, esc })
+  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesList', 'exportSourcesHtml'], { arr, esc })
   const think = 'https://www.thinkbusiness.ie/articles/ballymaloe-foods-new-generation'
   const env = {
     sources: {
@@ -1014,12 +1014,118 @@ test('the brief’s export cites its sources: one number a publisher, links only
   assert.equal(f.exportMarkHtml([1, 3]), '<sup class="fn">1,3</sup>')
 })
 
-test('the brief’s export waits for the decision chain and says so when it cannot read it', () => {
+test('the brief’s exports wait for the decision chain and say so when it cannot read it', () => {
   const src = fn(BM, 'chainForExport')
   assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
   assert.match(src, /CHAIN=\{state:'unavailable'/)
-  const build = fn(BM, 'buildExportHTML')
-  assert.match(build, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
-  assert.match(build, /Sources could not be read for this export\./)
-  assert.match(build, /CHAIN\.state==='ok'\?exportCitations/)
+  const plain = fn(BM, 'buildPlainExportHTML')
+  assert.match(plain, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
+  assert.match(plain, /Sources could not be read for this export\./)
+  assert.match(plain, /CHAIN\.state==='ok'\?exportCitations/)
+  const grid = fn(BM, 'buildGridExportHTML')
+  assert.match(grid, /return chainForExport\(\)\.then/)
+  assert.match(grid, /Sources could not be read for this export\./)
+  assert.match(grid, /CHAIN\.state==='ok'\?exportCitations\(exportParts\(gridKeys\(\)\)/)
+})
+
+// ── the grid export ────────────────────────────────────────────────────────
+
+type GridCell = { num: string; label: string; key: string; kind: string; big: boolean }
+type Grid = {
+  gridSheets(): { appendix?: boolean; title?: string; rows: GridCell[][] }[]
+  gridKeys(): string[]
+  gridLimit(key: string): number
+  gridWords(v: unknown): number
+  gridStep(words: number, limit: number): number
+  gridBody(ctx: unknown): { html: string; sheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
+  gridCss(): string
+}
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridSheets', 'gridKeys', 'gridLimit', 'gridWords', 'gridStep', 'gridCell', 'gridClientName', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
+const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
+const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
+const ctxOf = (vals: Record<string, unknown>, cit: unknown = { marks: {}, notes: [] }) => ({
+  get: (k: string) => vals[k], hasVal, cit, project: 'Better With Ballymaloe', client: 'Ballymaloe Relish', version: '1.2',
+  info: [['Client', 'Ballymaloe Relish'], ['Project', 'Better With Ballymaloe'], ['Version', '1.2'], ['Date', '29 October 2026'], ['Reference', ''], ['Prepared by', ''], ['Agency lead', ''], ['Client lead', '']],
+})
+
+test('the grid numbers its sections once, in one sequence, and starts with the job', () => {
+  const g = grid()
+  const nums = g.gridSheets().flatMap(s => s.rows.flat()).map(c => c.num).filter(n => /^\d+$/.test(n))
+  assert.deepEqual([...new Set(nums)], ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13'])
+  assert.deepEqual(nums.filter(n => n === '05').length, 3, 'the three objectives share one number')
+  assert.equal(g.gridKeys()[0], 'job')
+  assert.ok(g.gridKeys().includes('objection') && !g.gridKeys().includes('sources'))
+  assert.equal(g.gridSheets().at(-1)?.appendix, true, 'the evidence and the questions sit on an appendix sheet')
+})
+
+test('a box’s word limit is the brief schema’s, and a long part steps its own type down', () => {
+  const g = grid()
+  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; max_words?: number }[] }
+  const key: Record<string, string> = { background: 'background', audience: 'audience', budget_scope: 'budget_and_scope', competitor_context: 'competitor_context',
+    insight: 'insight', smp: 'single_minded_proposition', tone_world_assets: 'tone_and_world', mandatories: 'mandatories' }
+  for (const f of schema.fields) if (key[f.id]) assert.equal(g.gridLimit(key[f.id]), f.max_words, `${f.id} keeps the schema's limit`)
+  assert.equal(g.gridLimit('job'), 0, 'a part with no limit is never stepped down')
+  assert.equal(g.gridWords(words(7)), 7)
+  assert.equal(g.gridWords(['a b', 'c']), 3)
+  assert.equal(g.gridWords(null), 0)
+  assert.deepEqual([[70, 70], [71, 70], [88, 70], [112, 70], [120, 70], [9, 0]].map(([w, l]) => g.gridStep(w, l)), [0, 1, 2, 2, 3, 0])
+})
+
+test('the grid prints a header, an info grid and a footer as the sheets need them, and places each part in its box', () => {
+  const g = grid()
+  const vals = { job: 'Make an ordinary person ring.', background: 'Where we are.', audience: 'Who.', 'objectives.commercial': 'C', 'objectives.behavioural': 'B', 'objectives.attitudinal': 'A',
+    budget_and_scope: 'Budget.', insight: 'The insight.', single_minded_proposition: 'One thought.', reasons_to_believe: ['r1', 'r2'], competitor_context: 'Rivals.',
+    'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['warm'], mandatories: ['logo'], open_questions: ['What is the budget?'] }
+  const out = g.gridBody(ctxOf(vals, { marks: { single_minded_proposition: [1] }, notes }))
+  assert.equal(out.sheets, 3)
+  for (const n of [1, 2, 3]) assert.match(out.html, new RegExp(`SHEET<b>${n}/3</b>`))
+  assert.equal((out.html.match(/class="hd"/g) || []).length, 3, 'a header on every sheet')
+  assert.equal((out.html.match(/class="info"/g) || []).length, 1, 'the info grid on the first sheet only')
+  assert.equal((out.html.match(/class="foot"/g) || []).length, 3, 'a footer on every sheet')
+  assert.match(out.html, /Napkin \/ Ballymaloe Relish \/ Better With Ballymaloe \/ Creative brief 1\.2 \/ Confidential/)
+  assert.match(out.html, /<b>01<\/b>The job<\/div><div class="bd"><p class="job">Make an ordinary person ring\.<\/p>/)
+  assert.match(out.html, /<div class="box dark"><div class="lab"><b>08<\/b>The single thought<\/div><div class="bd"><p class="big">One thought\.<sup class="fn">1<\/sup><\/p>/)
+  assert.match(out.html, /<b>09<\/b>Why they should believe it<\/div><div class="bd"><ul><li>r1<\/li><li>r2<\/li><\/ul>/)
+  assert.match(out.html, /<div class="src"><ol><li value="1"><b>ThinkBusiness<\/b>: A title · 2024 — <a href="https:\/\/example\.com\/a">/)
+  assert.deepEqual(out.warnings, [])
+  // The parts the brief does not draft yet print as to be written, and the info cells with nothing say so with a dash.
+  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">To be written\.<\/p>/)
+  assert.match(out.html, /The objection it has to beat: <i>to be written<\/i>/)
+  assert.match(out.html, /<small>Reference<\/small><span class="none">—<\/span>/)
+})
+
+test('the grid names a part that ran over its box, drops an appendix with nothing in it, and escapes what it prints', () => {
+  const g = grid()
+  const vals = { single_minded_proposition: words(30), audience: '<script>alert(1)</script>', background: words(120) }
+  const out = g.gridBody(ctxOf(vals))
+  assert.equal(out.sheets, 2, 'no sources and no questions: no appendix sheet')
+  assert.match(out.html, /SHEET<b>2\/2<\/b>/)
+  assert.deepEqual(out.warnings.map(w => [w.key, w.step]).sort(), [['background', 3], ['single_minded_proposition', 2]])
+  assert.match(out.html, /class="box dark fit2"/, 'the single thought steps down inside its own box')
+  assert.match(out.html, /class="box fit3"/)
+  assert.doesNotMatch(out.html, /<script>/)
+  assert.match(out.html, /&#60;script&#62;alert\(1\)&#60;\/script&#62;/)
+  assert.match(out.html, /<p class="todo">Not written yet\.<\/p>/, 'a part nobody has written yet is not left blank')
+})
+
+test('the footer names the client, not its descriptor, and the page count never wraps', () => {
+  const g = grid()
+  const ctx = { ...ctxOf({ audience: 'Who.' }), client: 'Ballymaloe Relish, an Irish family relish brand.' }
+  const out = g.gridBody(ctx)
+  assert.match(out.html, /Napkin \/ Ballymaloe Relish \/ Better With Ballymaloe \/ Creative brief 1\.2 \/ Confidential/)
+  assert.doesNotMatch(out.html, /class="foot"><span>[^<]*an Irish/)
+  assert.match(g.gridCss(), /\.foot span:last-child\{white-space:nowrap\}/)
+  assert.match(g.gridCss(), /\.fit3 \.bd\{font-size:10px\}/, 'the smallest step stays readable')
+})
+
+test('the grid prints on A4 sheets that break cleanly, and is the default export beside a plain one', () => {
+  const css = grid().gridCss()
+  assert.match(css, /@page\{size:A4;margin:0\}/)
+  assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
+  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(\)/)
+  assert.match(fn(BM, 'doExport'), /buildExportHTML\(style\)/)
+  assert.match(BM, /id="exHtml"[\s\S]*id="exPdf"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
+  assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
+  assert.match(BM, /doExport\('html'\); \}\);\s*\$\('exPdf'\)/, 'the shell’s Export and the two main buttons are the grid')
 })
