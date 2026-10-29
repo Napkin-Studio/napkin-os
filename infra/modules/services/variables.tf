@@ -51,6 +51,12 @@ variable "github_repository_ids" {
   default     = ""
 }
 
+variable "deploy_refs" {
+  description = "Git refs whose workflow runs may assume the deploy role. Staging and production: main only. The UAT stack also takes develop, where its deploy workflow is run from; the branch to build is a workflow input."
+  type        = list(string)
+  default     = ["refs/heads/main"]
+}
+
 variable "github_oidc_provider_arn" {
   description = "An existing token.actions.githubusercontent.com provider (one per account); empty creates it"
   type        = string
