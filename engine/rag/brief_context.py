@@ -96,7 +96,7 @@ CAMPAIGN_TO_EFFECTIVENESS = {"launch": "launch"}
 # the judge, and eventually by a person auditing where a claim came from, so "85" or a
 # 70-character filename will not do.
 CITE_PREFIX = {"ipa": "ipa", "effie": "effie", "cannes": "cannes", "dandad": "dandad",
-               "playbook": "pb", "template": "tpl", "dossier": "run"}
+               "playbook": "pb", "template": "tpl", "dossier": "run", "awardlib": "lib"}
 
 
 def estimate_tokens(text: str) -> int:
@@ -738,6 +738,103 @@ def _merge_rows(rows: list, more: list, cap: int) -> list:
     return (rows + [(sc, r) for sc, r in more if r.get("id") not in seen])[:cap]
 
 
+# ---- the award case library: a gated fill for thin categories ----------------------
+# `awardlib` is a set of short, Napkin-reconstructed award cases (public facts only). A
+# blind A/B (features/award-data-fit.clan) found them clearly better precedent where the
+# index has little of its own (recent technology, healthcare, b2b, fashion, telecoms
+# briefs) and worse where it is already rich. So they never join the main exemplars search:
+#   RAG_AWARDLIB=off   (default) hidden. Nothing changes until a person turns it on.
+#   RAG_AWARDLIB=thin  one extra exemplars search, pinned to the brief's category, only when
+#                      the index holds fewer than RAG_AWARDLIB_THIN_MAX (default 30) cases of
+#                      its own in that category. Merged before the validator orders the lot.
+#   RAG_AWARDLIB=on    no gate: the library competes everywhere (what the experiments ran).
+AWARDLIB_SOURCE = "awardlib"
+AWARDLIB_MODES = ("off", "thin", "on")
+AWARDLIB_THIN_MAX_DEFAULT = 30
+# Sources that are served as cases (a parent chunk per case). D&AD is excluded: its parents
+# are discipline groups, and it is stage=production, which the brief never reads.
+AWARDLIB_BASELINE_SOURCES = ("ipa", "effie", "cannes")
+_COUNTS_TTL_S = 600
+_counts_cache: dict = {}
+
+
+def awardlib_mode() -> str:
+    """RAG_AWARDLIB as one of AWARDLIB_MODES; unset or empty means off. An unknown value
+    raises: a typo must not silently leave the gate in the wrong state."""
+    raw = (os.environ.get("RAG_AWARDLIB") or "off").strip().lower()
+    if raw not in AWARDLIB_MODES:
+        raise ValueError(f"RAG_AWARDLIB={raw!r}: expected one of {', '.join(AWARDLIB_MODES)}")
+    return raw
+
+
+def awardlib_thin_max() -> int:
+    """RAG_AWARDLIB_THIN_MAX: a category is thin when the index holds fewer cases than this."""
+    raw = (os.environ.get("RAG_AWARDLIB_THIN_MAX") or "").strip()
+    if not raw:
+        return AWARDLIB_THIN_MAX_DEFAULT
+    try:
+        n = int(raw)
+    except ValueError:
+        n = 0
+    if n < 1:
+        raise ValueError(f"RAG_AWARDLIB_THIN_MAX={raw!r}: expected a positive integer")
+    return n
+
+
+def category_case_counts(store) -> dict | None:
+    """{category: cases the index holds of its own}, counted from the store (cached for
+    _COUNTS_TTL_S), or None when the store cannot count or fails. None makes the gate
+    withhold the library: not knowing a category is thin is not a reason to add to it."""
+    import time
+    import contract
+    count_where = getattr(store, "count_where", None)
+    if count_where is None:
+        return None
+    hit = _counts_cache.get(id(store))
+    if hit and hit[0] is store and time.time() - hit[1] < _COUNTS_TTL_S:
+        return hit[2]
+    try:
+        counts = {c: int(count_where({"source": {"in": list(AWARDLIB_BASELINE_SOURCES)},
+                                      "level": "parent", "status": {"ne": "superseded"},
+                                      "category": c}))
+                  for c in contract.SCHEMA.enum_values("category")}
+    except Exception:                       # a store that cannot answer is "unknown", never "thin"
+        return None
+    _counts_cache[id(store)] = (store, time.time(), counts)
+    return counts
+
+
+def _awardlib_fill(store, qvec, search_text: str, where: dict, filters: dict, rows: list,
+                   candidates: int, notes: list[str]) -> list:
+    """The `thin` gate. Adds library candidates to `rows` when the brief's category is thin.
+
+    The library search is pinned to that category and drops `effectiveness_type` (library
+    cases carry none, so an exact match on it would exclude every one). Its rows join the
+    baseline rows by score, so the validator, the budget and the egress check treat the
+    union as one list; the pool stays the same size."""
+    import rag
+    cat = filters.get("category")
+    if not cat:
+        notes.append("awardlib: withheld, the brief has no category")
+        return rows
+    counts = category_case_counts(store)
+    if counts is None:
+        notes.append("awardlib: withheld, the store cannot count cases")
+        return rows
+    have, limit = counts.get(cat, 0), awardlib_thin_max()
+    if have >= limit:
+        notes.append(f"awardlib: not needed, {cat} has {have} cases (limit {limit})")
+        return rows
+    lib_where = {k: v for k, v in where.items() if k not in ("source", "effectiveness_type")}
+    lib_where["source"] = AWARDLIB_SOURCE
+    more = rag.search_vec(store, qvec, search_text, k=candidates, where=lib_where)
+    seen = {r.get("id") for _, r in rows}
+    merged = rows + [(sc, r) for sc, r in more if r.get("id") not in seen]
+    merged.sort(key=lambda x: x[0], reverse=True)               # stable: ties keep baseline first
+    notes.append(f"awardlib: admitted for {cat} ({have} cases < {limit}), {len(more)} candidates")
+    return merged[:candidates]
+
+
 def _bucket_hits(store, qvec, search_text: str, bucket: str, filters: dict, scopes, tenants,
                  candidates: int, alt_categories, notes: list[str]) -> tuple[list[Hit], dict]:
     """Retrieve, widen while thin, collapse and convert one bucket. Returns (hits, the
@@ -749,7 +846,14 @@ def _bucket_hits(store, qvec, search_text: str, bucket: str, filters: dict, scop
     Only the similarity-ranked buckets widen; rules and instructions are filter-defined."""
     import rag
     where = bucket_filters(bucket, filters, scopes, tenants)
+    mode = awardlib_mode() if bucket == "exemplars" else "off"
+    if bucket == "exemplars" and mode != "on":
+        # The library never reaches the main search. The ladder below only drops `category`
+        # and `effectiveness_type`, so this clause stays through every widening step.
+        where = {**where, "source": {"nin": [AWARDLIB_SOURCE]}}
     rows = rag.search_vec(store, qvec, search_text, k=candidates, where=where)
+    if mode == "thin":
+        rows = _awardlib_fill(store, qvec, search_text, where, filters, rows, candidates, notes)
     need = MIN_DISTINCT_DOCS.get(bucket)
     if need and _distinct_docs(rows) < need:
         steps = []

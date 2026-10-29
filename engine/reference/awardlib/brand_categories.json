@@ -1,0 +1,7247 @@
+{
+ "derived_by": "Sonnet agents, 2026-10-22, from brand knowledge plus one or two campaign titles; rules: engine/schema/REVIEW-cannes-categories.md",
+ "reviewed_by_creative_director": false,
+ "note": "Brand to client category for the award case library slice. Model-derived and NOT reviewed: 'ambiguous' marks brands a planner could file in two categories. Cross-check on 126 brands shared with the creative-director-reviewed corpus: 112 agree (84 of 88 non-ambiguous). Lookup key is the brand lower-cased with non-alphanumerics collapsed to single spaces.",
+ "brands": {
+  "(anónimo)": {
+   "category": "other",
+   "ambiguous": false
+  },
+  "0307 Films": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "1001 Optometry": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "13th Street Winery": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "2degrees": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "2degrees Mobile": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "360 Energy Drink": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "7-Eleven": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "7-Eleven Australia / Mobil": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "7-ELEVEN CSR": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "A Million Girls Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "A&W Canada": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "A.L.M.A. / Racing Club": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "AB InBev / Ambev": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "AB InBev / Corona": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "AB InBev / Jupiler": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "AB InBev / Pony Malta": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Abbott Elementary": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Abbott's Village Bakery": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "AbbVie": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Absolut": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Absolut Vodka": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "AC Milan": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Accenture": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Accor Hotels": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "ACHS": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "ACKO": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Acne Studios": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Action Canada": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Ad Council / AFSP / JED": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "ADASA": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "adidas": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "adidas / DFB": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "adidas AG": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "adidas Basketball": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Adobe": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Adobe Acrobat": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Advil": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Aerolíneas Argentinas": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Aeroméxico": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "AFC Ajax": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "AfriSam": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "AfriSam + AfroBoutique": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "AIA Singapore": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "AIDES": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Airbnb": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Airtel": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "AJ Bell": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Ajinomoto": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Akron Children's": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "AL ETIHAD CREDIT BUREAU": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Alcaldía de Soacha": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "ALDI Australia": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Aldi UK": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Alivia Cancer Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Alivia Health": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Alkem Laboratories": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "All Nippon Airways": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Allegra": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Allianz Ireland + Women’s Aid": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "ALMARAI": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Almosafer": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "ALSÉÉN, Rijkswaterstaat": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "ALTAIR FOUNDATION": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Aman Resorts": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Amazon": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Amazon Ads": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Amazon Alexa": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Amazon Music": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Amazon Prime Video": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Ambev": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "American Honda Motor Co.": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "American Queen Voyages": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "American Red Cross": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "American Society of Clinical Oncology (ASCO)": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Amnesty International": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Amnesty International South Africa": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Amnistía Internacional": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "AMOREPACIFIC": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Ampara Silvestre": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Amplifon": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "An Post": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "And Just Like That... Season 2": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Andbox": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Andel": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Andrex": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Android": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "ANDROS": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Angel Broking": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Angel Soft": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "ANGFA": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Anghami": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Anheuser-Busch Inbev (China) Sales Company Limited -Harbin Brand": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Animal Político": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "AnNahar": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "AnNahar Newspaper": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Anne Frank House": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "ANZ": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "ANZ New Zealand": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Apple": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Apple / Formula 1": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Apple / HomePod": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Apple TV+": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Aprendo en Casa TV / Ministerio de Educación Pública": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Arby’s": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Argeta": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Argos": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Ariel": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "ARIEL INDIA": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Aritium": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Arizona Coyotes": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Arnold Turboust": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "AROYA": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "ArtHelps": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "ARTICLE 19 / Diario La Unión": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "ARTOTEL Group": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Asahi": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "ASDRA": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Asociación Lucha contra el Mal de Alzheimer": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Asociación Lucha contra el Mal de Alzheimer (ALMA)": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "ASPCA": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Association L'Enfant Bleu": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Association of Journalists for the Environment": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Association of Registered Graphic Designers": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "ASTER": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Astrid Chesney": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Athletics Canada": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Atlanta Falcons": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Atlas Golden Light": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Audi": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Audi Norway": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Aussie Home Loans": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Australian Government Department of Social Services": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Australian Lamb": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Auto Glass Now": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Avena Alpina": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Avianca": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Aviation Gin": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Avon Power Stay": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Avène": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Awakening Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "AWAL": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Aware.Org": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "AXA": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Axiata": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "B3, The Brazilian Stock Exchange": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Babitalk": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Babybel": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Babyn Yar Holocaust Memorial Center": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Babyshop": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Bacardi Bombay Sapphire": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "BACARDÍ": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Bahay Tuluyan Philippines (Shelter House)": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Baileys": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Bajaj Auto": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Bajaj Platina": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "BalaBala": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Banca Transilvania": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Banco Santander": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Bank al Etihad": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Bank of America": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Bank of Montréal": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "BARAKAT": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Bauhaus 100 Taiwan": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "BBC": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "BBC Sport": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "BBVA Colombia": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Bci": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "BCR": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Beam Suntory": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Beats": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Beats by Dre": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Beau Monde": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "BECO.": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Beko Appliances": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Belong": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Berger Paints / Roshni Helpline": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Berliner Verkehrsbetriebe (BVG)": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "BETR": {
+   "category": "gambling_betting",
+   "ambiguous": false
+  },
+  "Betty Crocker / General Mills": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Beyond Hearing": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "BIC Brasil": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "BILLY BOY": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Bimbo Colombia": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Bingo Group": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Biosol": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Black & Abroad": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Black Noise festival / TIXA Hungary": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Blockbuster": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Bloodline: Heroes of Lithas": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Bloomberg Businessweek": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Blu Radio": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Blush": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "BMO": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "BMW": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "BNP Paribas Poland / Polish Red Cross": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "BNY Mellon": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Bombay Sapphire": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Bonds": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Bongeziwe Mabandla": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Bonobos": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "BOOK FAIR ZURICH": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Boonthavorn": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Boris Lawrence Henson Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Born Free Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Borussia Dortmund": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "BOSS / Roland Corporation": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Boursin": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Boysen": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "bpost": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Branch Out Neurological Foundation": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Breast Cancer Now": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Bridge Senior Living": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Bridgerton": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Bring": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Brook": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Brooke Bond Taj Mahal Tea": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Brooks Running": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Bubby’s Baked by MariMed": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Buckaroo Footwear": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Budweiser": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Budweiser / AB InBev": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Budweiser Canada": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Buffalo Zine": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Buldak": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Bumble": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Bundaberg Rum": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Bungaejangter": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Bunnings Warehouse / Bluey": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Bupa / ParalympicsGB": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Burberry": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Burger King": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Burger King Colombia": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Burger King France": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Burger King Kuwait": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Burger King UK": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "BurgerFi": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Business Iceland": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "BVG": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Cadbury": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Cadbury Bournville": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Cadbury Bournvita": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Cadbury Celebrations": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Cadbury Dairy Milk": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Cadbury Silk": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Cadillac": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Cadum": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Call of Duty": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Call of Duty: Black Ops 6": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Callen-Lorde, MTA, NYC LGBT Historic Sites Project": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "CALM x ITV": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Camil": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Canadian Centre For Child Protection": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Canadian Club": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Canadian Femicide Observatory of Justice & Accountability": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Canadian Women's Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "CANAL+": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Cancer Council Victoria": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Cancer Institute NSW": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Canesbalance": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Canesten / Bayer": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Cann": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Cann and Weedmaps": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Canva": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "CarBravo": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Cards Against Humanity": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Careem": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Carer Gateway / Department of Social Services": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Caritas": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Carl's Jr. and Hardee's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Carling Black Label": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Carling Black Label / AB InBev Africa": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Carlings": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Carlsberg Sweden": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Carrefour": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Carrefour Romania": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Carrefour Solidaire": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "CarrefourSA": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Carrot": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Cash App": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Cashmere UltraLuxe / Kruger Products": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Castle Lite": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Castle Milk Stout": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Castrol CRB Turbomax": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Cathay Pacific / Cathay Dragon": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "CCWD": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "CelcomDigi": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Census 2021": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Centauro": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Centivo": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Central Department Store": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Central Office of Public Interest": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Central Pacific Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Centrepoint / Landmark Group": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Centrum Locika": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Cerveza Aguila": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Cerveza Arequipeña / AB InBev Perú": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Cerveza Victoria": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Cerveza Águila": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Change the Ref": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Change the Ref / March For Our Lives": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Channel 4": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Cheetos": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Cheez-It": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Chevrolet": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Chicago Red Stars": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Chicago Sun-Times": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Chick-fil-A": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Chicken Licken": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Chief + National Women’s History Museum": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Child Focus": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Child Poverty Action Group": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Childline": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Children of Female Prisoners Association": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Chili's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Chinese Man": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Chipotle": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Chocolat des Français": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Chorogusan for Children": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Christie's": {
+   "category": "luxury",
+   "ambiguous": false
+  },
+  "Christie’s": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Cigna": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "CITIX": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "City Centre Almaza": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "City of Chicago": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "City of Lahti": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "City of Malmö": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Claritin": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Clash of Clans": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Clash Royale": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Claude / Anthropic": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Cle de Peau Beaute": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Clean & Clear": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Clean Ocean Foundation Australia": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Clear / Unilever Japan": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Clin Kids": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Club Alianza Lima, Nike, Gatorade and Hyundai": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Club Premium Platino": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "CMI – Martti Ahtisaari Peace Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "CN": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "CNN": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Coca-Cola": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Coca-Cola / Uber Eats / Feeding America": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Coca-Cola Greater China": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Coca-Cola India & Southwest Asia": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Coca-Cola Pakistan": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Cocaine Bear": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Cochlear": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "CoCo Tea": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Cocolab": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Code Like A Girl": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Coinbase": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Cointreau": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Colgate": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Colgate Optic White Purple Toothpaste": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Colgate-Palmolive": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Color Of Change": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Colour Academy": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Columbia Journalism Review": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Columbia Sportswear": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Commerzbank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Committee to Protect Journalists": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Commonwealth Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "ComunidadMujer": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Consent Labs": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Consul": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Cook County Hospital": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Coors Light": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Cornetto": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Corona": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Costa Crociere": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Country Time Lemonade / Kraft Heinz": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Cover FX": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "COVERGIRL": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Coway Malaysia": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Cox Communications": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "CP Chicken": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "CPB London": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Crayola": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Crown Royal": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Cruzcampo": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "CSS": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "CU": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "CUPRA": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Cure Alzheimer’s Fund": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Curtea Veche Publishing": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Cărturești": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Dacia": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Dacia / Renault Italia": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Dagoma": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Dandelion Chocolate": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Danone": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Dansklærerforeningen": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "DAO Dachorganisation Frauenhäuser Schweiz & Liechtenstein": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "DASA Health Diagnostics": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Dastak Cooking Oil": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "DB Breweries": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "DB Export": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "De Standaard": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "De Warmste Week": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "De'Longhi": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Decathlon": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Decathlon Canada": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "DEGIRO": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Degree / Unilever": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Delhaize": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Delight": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Delivereasy": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Dell Technologies & Intel": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Delta Air Lines": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Denny's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Dentsu": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Department of Health and Aged Care": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Department of Internal Affairs": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "DEPARTMENT OF SOCIAL SERVICES": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Destination Toronto": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Dettol": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Deutsche Telekom": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "Deutsche Telekom & Electronic Beats": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Deutscher Sparkassen- und Giroverband e.V. & S-Communication Services GmbH": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Diablo IV": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Diageo - Malta Guinness": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Diageo portfolio": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Diageo-Guinness": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "DiGiorno": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "DillySocks AG": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Direct Line": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Discover / Diners Club del Ecuador": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Discover Financial Services": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Discover Ipswich": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Disney Star": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Distance": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Disturbed": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Dixie": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "DJ Snake with Amadou & Mariam": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Doconomy": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Dogwalkers Pre-Rolls": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Domino's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Don Julio 1942": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Donate Life California": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Doof Vlaanderen": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "DoorDash": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Doritos": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Doritos / PepsiCo": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Doritos / PepsiCo México Foods": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Dorival": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Dosy": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Dot Incorporation": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Dove": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Dove / Unilever": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Dove / Unilever Canada": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Dove Greece": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Down Syndrome International": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "DP World": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Dr. Squatch": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Dramamine": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "DrDoctor": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Dropbox": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "DSB": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "DTEK": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "DUBAI SCIENCE PARK": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Dubai Science Park / TECOM Group": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Dublin Samaritans": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Dublin Vinyl": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "DUKE / Garagista Brewery": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Dunkin'": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Dunkin' at Home": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Duolingo": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Duolingo + Netflix": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Duolingo + Peacock": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Durex": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Durex Romania": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Dutchie": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Dylan Alcott Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Dăruiește Viață NGO": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "E*TRADE": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "e.l.f. Beauty": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "e.l.f. Cosmetics": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "e.l.f. Cosmetics Halo Glow Liquid Filter": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "EA Skate": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "EA SPORTS Madden NFL 19": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Eager": {
+   "category": "alcohol",
+   "ambiguous": true
+  },
+  "Ease Labs": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "East Europe Foundation / SES Ukraine": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "East Japan Railway Company": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "easyJet": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Easypaisa": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "eBay": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "eBay Australia and New Zealand": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "EBM": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "EDEKA": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "EE": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "Egale": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Egale Canada": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "ekn footwear": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Election Super Centers": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Electronic Arts / Battlefield 6": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Eletromidia": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Eli Lilly": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Elimin8Hate": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "EMART": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Emirates Development Bank": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "EMIRATES RED CRESCENT": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "ENGIE": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Enpower Trading": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Entel Perú": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Enti.ma": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Environmental Leadership Canada": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "eos": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Epidemic Sound": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Equinox": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Eskort": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "ESL FACEIT GROUP": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "ESPN": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Essity / Bodyform / Libresse": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Estonian Sexual Health Association": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Estrella Jalisco": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Etihad Airways": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Etisalat": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Etisalat by e&": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Etisalat UAE": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "European Parliament": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "European Wax Center": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "EuroPride 2018": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "eve Sleep": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Every Kiwi Vote Counts": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Every Mind Matters / Department of Health and Social Care": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Expensify": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Extra Gum": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Eyebetes": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Ezaki Glico / Pocky": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "F*ck Cancer": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Facebook": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Facebook Korea / Young Chemical": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Facebook Marketplace": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Faculty": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "FamilyMart": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Fan Fairness Coalition": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Fanatics": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "FanDuel Casino": {
+   "category": "gambling_betting",
+   "ambiguous": false
+  },
+  "Fanta": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Favor": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Fazer": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "FC Barcelona / Patta / Nike": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "FC Como Women": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "FC Hogar & Deco": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "FDP - Free Democrats": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Fevikwik": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Fiftyfifty Lebanon": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "FightMND": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fila": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "FILM SUEZ": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Financial Times": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Finavia / Helsinki Airport": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Fine Acts": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Finish": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Finlayson": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Fire and Emergency New Zealand": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Fisher-Price": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "FIXBY": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Flair": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Flipkart": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Floward": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Flower by Edie Parker": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Flybondi": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "FocusFilm Media": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Fondation Anne de Gaulle": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fondation de France": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fondation Émergence": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fonzies": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Food Banks Canada": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Foodstuffs NZ": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Ford of Britain": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Fortnum & Mason": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Foundation for Media Alternatives": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Foundation to Combat Antisemitism": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Four Seasons Condoms": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "FOX Channels Portugal": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "France Télévisions/ France3": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Frank's RedHot": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Free Nationals": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Free Radicals": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "French's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Fresh Step": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Freshpet": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "FRIENDS OF CANCER PATIENTS": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Frontdoor": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Frontier Airlines": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Fukt Magazine": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Full'r": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Fundacion la Caixa": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Fundación El Herbólogo": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fundación Kodea": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fundación Niñas Valientes": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fundación Peruana de Cáncer": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Fundación Éxito / Grupo Éxito": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Furphy": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Furry's Kitchen": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "G-Star Raw": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Galactus Funware Technologies / MPL": {
+   "category": "gambling_betting",
+   "ambiguous": true
+  },
+  "Gallia": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Game to Grow": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Gap": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Garena Online Thailand": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "GARNIER": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Gatorade": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Gatorade / PepsiCo": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Gavião Kyikatejê FC": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "GE": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Geberit AquaClean": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "General Motors": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Generation Gaza": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Genesis": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Georgetown Optician": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Gerber": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Getty Images": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Getty Images, fiftyfifty": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Gift of Life Marrow Registry": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Gillette / Procter & Gamble São Paulo": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Gillette Venus / Procter & Gamble": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Girl Effect": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Girl Guides of Canada": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Girl Up": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Girls Who Code": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Glass House Farms": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Global Village": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Globant": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Globe Telecom": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Gojek": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Golden Days": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Golden Penny Semovita": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Golden State Warriors": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Goldfish": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Gone2Shit": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "good mood": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Goodbye Malaria": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Goody's Pain Powder": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Google": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Google Arts & Culture + Destination Tomorrow": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Google Chrome": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Google Cloud": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Google India": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Goose Island": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Gourmet Market Thailand": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Government of Pernambuco": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Government of Tuvalu": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "GQ Apparel": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Grab": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Grab Thailand / Grab Delivery": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "GrabConnect": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Great Southern Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Great Western Railway": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Green Food Bank": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Green Qween": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Greenies": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Greenpeace Colombia": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Greenpeace Southeast Asia - Philippines": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Grindr": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "GROSS INSURANCE / UZUM MARKET": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Grubhub": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "GS25 RETAIL": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Gucci": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Guinness": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Gun Free South Africa": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "H&M": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "H&R Block": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Haaga-Helia University of Applied Sciences": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Hackney Church": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Hajime Kensetsu": {
+   "category": "other",
+   "ambiguous": false
+  },
+  "Hamam Unilever": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Hamburger Kunsthalle / Hinz&Kunzt": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Hansa Pilsener": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Hanwha": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Harbin Beer": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Hargreaves Lansdown": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Harley-Davidson": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "HARMAN International": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Harvey Nichols": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Havaianas": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "HBO Max": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Head & Shoulders": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Heineken": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Heineken Beverages South Africa": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "HEINEKEN®": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Heinz": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Heinz Brasil": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Heinz Tomato Ketchup": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Hell's Kitchen": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Hellmann's": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Hellmann's Mayonnaise": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Hellmann’s": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Helsingin Sanomat": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Helsinki International Film Festival": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Hennessy": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Her.9": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Herconomy": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "HERSHEY'S": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Hershey’s": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Hey Duggee": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "heygoody": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Hidden Valley Ranch": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Highmark Blue Cross Blue Shield Delaware": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Hilda Baci": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Hilton": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Hinge": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Hivos, We Lead, Kenya": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Hoga Safe Pakistan": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Hollard": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Home Box": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Home Centre": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Home Vega": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Honda OneHeart": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Honey": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Hornbach": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Hospital Rooms": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Hospitals United for Sick Kids": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Hotel Ramada": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Hotel Tango": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "House of Lapland / Town of Salla": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "HP": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "HP Instant Ink": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "HSBC": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "HSBC UK": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "HTC Vive": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Hulu": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Humble Vegan": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Humo": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "HungerStation": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Husqvarna Group": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Hypo Toilet Cleaner": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Hyundai": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Hyundai / Fidocar": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Hyundai Kona": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Hyundai Motor America": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Hyundai Motor Company": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Hyundai Motor Group": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "IBM": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Iceland Foods": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Iceland's Ministry for the Environment, Energy, and Climate": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "ICRC": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "IDOMED / Instituto Yduqs": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "iFood": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "IGA": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "IIT Institute of Design": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "IKEA": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "IKEA Singapore (IKANO PTE. LTD.)": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "IKEA Spain": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "IKEA Sweden": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "IKEA Switzerland": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Illuma, Wyeth": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Inca Kola": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Income": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Income Insurance": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Independent": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Indian Association of Palliative Care": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Indian Association Palliative Care": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "ING": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "ING Bank Romania": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Inkbox": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Innocence en Danger": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Insmed": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Instacart": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Instagram": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Intel": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Intellias": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Intermarché": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Internationale Stiftung Mozarteum": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "IQads": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "iSEE Vietnam": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Island Wide Realty": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Itaú Unibanco": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "ITV": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "ITV and VegPower": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "ITVX": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "IWC Schaffhausen": {
+   "category": "luxury",
+   "ambiguous": false
+  },
+  "Jane/Finch Centre": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Japan Philharmonic Orchestra": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Jarden": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "JBL": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "JCDecaux": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Jeep": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "JEEP MIDDLE EAST": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "JEJU INSTITUTE OF KOREAN MEDICINE, HDM TECH": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Jelbi": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Jemena": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "JennAir": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "JetSMART": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "JFOODO": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Joburg Ballet": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "John Lewis": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Johnnie Walker": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Johnnie Walker / Diageo": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Johnson & Johnson": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Johnson's Baby": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Jollibee": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "JOOD": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Josh Cellars": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Joshua Ribera Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Jumbo / Centro Cuesta Nacional": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Junge Helden e.V.": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Just Eat": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Jüdisches Museum Frankfurt": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "K-Electric": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "K-Lynn": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "K11 MUSEA": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Kahlúa": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Kalapuri": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Kali Uchis / Interscope Records": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Kamasi Washington": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Kameya Yoshinaga / Bungashi": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KAO MagiClean": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Kassa": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Kathmandu": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Kaufland Romania": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Kbank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Kellanova": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Kellogg’s Rice Krispies Treats": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Kendrick Lamar": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Ketchup Maggi": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Ketnet": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "KFC": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC Australia": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC China": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC France": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC Hong Kong": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC Romania": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC Thailand": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC Thailand / Yum Restaurants International": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "KFC UK & Ireland": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Khalsa Aid": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Kia Morning": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Kiehl’s": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Killed Women": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Kimberly Clark South Africa": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Kind en Gezin": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Kinder": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Kinokuniya": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "KitchenAid": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "KitKat": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Klarna": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Kleenex": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "KLM": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Knix Wear": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Knorr": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Know My Name (Memoir) chanel-miller.com": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Komatsu: Demining Cambodia": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Konzum": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Korea's Liberation Day": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Kotsovolos": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "KPN": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Kraft Heinz": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Kraft Heinz Mustard": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Krungsri First Choice": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Kurkure Pakistan": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "KVI Brave Fund": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Kwai + KondZilla": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "KXNGS": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "L&P": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "L'Occitane": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "L'Oréal Paris": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "La Prensa Nicaragua": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "La Roche-Posay x Bristol Myers Squibb": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "La Vie": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Lacoste": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Lacta": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "LALCEC": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Land Rover": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Last Prisoner Project": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Latvian State Blood Donor Center": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Laut gegen Nazis": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "LAV": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Lay's": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Lay's / PepsiCo Romania": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Lay's India": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Lay's Vietnam": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Lay’s": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Lay’s / Netflix": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Lazada": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Le Chocolat des Français": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "LEAD School": {
+   "category": "other",
+   "ambiguous": false
+  },
+  "Leffe": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "LEGO": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "LEGO Hungary": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "LEGO Systems": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "LEGOLAND Florida Resort": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Leopold Museum": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Levi's": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Lexie Hearing": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Lexus Al-Futtaim": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "LGBT Association": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Liam's Lifesaving List": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Liamo": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Libresse": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Lidl GB": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "LIESA": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Life After Hate": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Life Direct / Trade Me NZ": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Life360": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Lifebuoy": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Lifebuoy / Unilever": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Lifeline Australia": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Lifeline International": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "LifeStyles Healthcare": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "LIFULL": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Liga Colombiana contra el Cáncer": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Ligue contre le cancer": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Lilo & Stitch": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "LINE BK": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "LINE MAN": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "LinkedIn": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Lion / Furphy": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Lipton": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Liquori Nazionali": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Living Concrete": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "LOEWE": {
+   "category": "luxury",
+   "ambiguous": false
+  },
+  "Lombard Odier": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "London Symphony Orchestra": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Lotus's": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Lufthansa": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Lungy Health": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "LV Prasad Eye Institute / Ravensburger": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "LVMH": {
+   "category": "luxury",
+   "ambiguous": false
+  },
+  "Lysol": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "M.A.L.I - MAROC": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "M.AD School of Ideas": {
+   "category": "other",
+   "ambiguous": false
+  },
+  "MACMA": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Madres e Hijos del Silencio": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Madrid Fusión": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Maeil Health Nutrition": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Maepranom": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Magazine Luiza": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Magdi Yacoub Heart Foundation": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Magnum": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Mahindra Scorpio-N": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Mahou San Miguel": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Mailchimp": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Maison Margiela": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Majid Al Futtaim City Centre": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Majorica": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Makai": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Makro Colombia": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Mami Wata": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Mandai Wildlife Reserve": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Mandaue Foam Home Store": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Manscaped": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Manulife Singapore": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Manzana Postobón": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Marat / Estonian Ministry of Defence": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "March Fourth": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Marias": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Marias Gamesa": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Marie Keating Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Mars Chocolate North America / Snickers": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Mars Chocolate North America/Snickers Almond": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Marvel Studios / Zillow": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Mastercard": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Match": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Matheson Food Company": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Matilda Bay Brewery": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Matkahuolto": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Mattie's Place": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "MAX Burgers": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Max Fashion": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Max Original Warrior": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Maxis": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Maxx Flash": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Maybelline New York": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Mayor of London": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "McCafé Hong Kong": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Australia": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Canada": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Denmark": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Finland": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Hong Kong": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Italy": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Japan": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Malaysia": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Netherlands": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Philippines": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald's Sweden": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s Canada": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s Hong Kong": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s India": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s Japan": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s New Zealand": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s Philippines": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "McDonald’s Polska": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Me & My Grown-Up": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Meat & Livestock Australia": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Medalla Light": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Mediacorp": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "MediaMarkt": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "MedLife": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Mental Health Commission": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "MEO": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Mercado Livre": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "MERCEDES-BENZ": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Mercedes-Benz España / smart": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Mercy Ships": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Merivale": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Meta": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "METER Group": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Metrolinx / GO Transit": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "MGA Entertainment": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "MGM Resorts International": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "MI KIDS GPS SMART WATCH": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Michael Kiwanuka": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Michelob ULTRA": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Microsoft": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Microsoft Xbox": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Mike's Amazing Foods": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "MindNation Philippines": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Mindy": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "MINI": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Mini Cheddars": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Ministry of Equipment and Water": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "MiraLAX": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Miscarriage Association": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Miss Grass": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Misterb&b": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "MITH Bangkok": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Mitsubishi Electric": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Mitsubishi Outlander": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Mitsubishi Triton": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "MOB Beauty": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Moe's / OTR": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Moholy-Nagy Foundation": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Molson Canadian": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Molson Coors Beverage Company": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Moncler": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "Monde Nissin / Voiz Waffle": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Mondelez India": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Mondelēz International": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Monster.com": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Montefiore": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Montefiore Einstein": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Mori Building": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Motor Neurone Disease New Zealand": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Motorola": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Mountain Dew": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Movember New Zealand": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Movistar": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Mozilla": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "MPA Alliance": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "MSD Colombia": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "MTN DEW": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "MTV / ARDSI": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "MTV Lebanon": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "MUBI": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Mucinex": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Mudah.my": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "MullenLowe Global": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Multiópticas": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Mumbai Police": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Munchkin": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Muoto": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Muschicraft Beer Company": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Musee de l'Armee": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Museum for the United Nations – UN Live / Spotify": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Museum of Chinese in Australia": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Musée National de la Marine": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "My Life, My Say": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "MyHooman / Mars Petcare": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Müller": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Nana": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Napoleon Fireplaces": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "NASA": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "National Australia Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "National Bank of Canada": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "National Centre for Domestic Violence": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "National Council of Social Service Singapore": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "National Event Management Agency / Chess Olympiad": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "National Gallery of Victoria / Lifeblood": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "National Gallery Singapore": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "National Mental Health Program How Are You?": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "National Museum of Ireland": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "National Portrait Gallery": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "National Railway Museum": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "National Safety Council": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Nationwide": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Nationwide Building Society": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Nature Made": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Nature Valley": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "NBA": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "NBC": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "NBC News Group": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Nedbank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Nescafé Mexico": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "NESCAFÉ Ready to Drink": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Nestle KitKat": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Nestlé": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Nestlé Indonesia": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Nestlé Toll House": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Net#work BBDO": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Netflix": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Netflix / Black Mirror": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Netflix / Stranger Things": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Netflix and Ben & Jerry's": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Netflix Indonesia": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Netflix Thailand": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Netflix's White Noise": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Netsafe": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Neutrogena": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Neutrogena / Kenvue": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "New Balance / Klutch Athletics": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "New York State MTA": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "New Zealand Blood Service": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "New Zealand Government": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "New Zealand Herpes Foundation": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Newfoundland and Labrador Tourism": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "NFL": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "NGO Ukrainian Witness": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Nightingales Medical Trust": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Nike": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Nike China": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Nike Perú": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "NikeWomen": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Nikka Whisky": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Nikka Whisky Taketsuru Pure Malt": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Nissan": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Nissan Juke": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "NISSAN MIDDLE EAST": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Nissan Motor Co.": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Nissan Philippines": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "NIVEA": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Noblex / Newsan": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Norco": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Nordea": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Nordic Leisure Travel Group / Spies": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Nordiska Museet": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Northern Territory Tourism": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Norwegian Postal Service": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Nosotras Women Connecting": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Noticias de la Comarca / Fundación Bomberos": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Notpla": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Nova Poshta": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Nova Post": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Novartis": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Novo Amor / Believe": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "NRK (Norwegian Broadcasting Cooperation)": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "NRMA Insurance": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "NSPCA": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "NTT Human Informatics Laboratories / WITH ALS": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Nubank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Nurofen": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Nutter Butter": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "NVIDIA": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "NYC Pride": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "NZ Lotteries": {
+   "category": "gambling_betting",
+   "ambiguous": false
+  },
+  "NZ Police": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "O2 / Virgin Media O2": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Oatly": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Oatly, Inc.": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "OBSESSO": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Ocean Spray Cranberries, Inc.": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "OCO Opticians": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Officeworks": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "OkCupid": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Olay": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Old Forester": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Old Pal": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Old Spice": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "One Medical": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "OOHA": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Open Plaza": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Opendoor": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Operation Smile Colombia": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Opportunity@Work": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Orange": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Orbis Hong Kong": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Orchard Valley Harvest": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Oreo": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Oreo / Mondelez": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Oreo / Mondelēz International": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "OREO x PAC-MAN": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Organon": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Origin by Ocean": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Oscar Mayer": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "OSESP": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "OTO CBD": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Otrivin": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Oumph!": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Outrider Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Ovarian Cancer Action (OCA)": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Over The Bloody Moon": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Ožujsko beer": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "P/S": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Paddy Power": {
+   "category": "gambling_betting",
+   "ambiguous": false
+  },
+  "Palm / CORNET": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Pampers": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Panera Bread": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Pantene": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Pantene Indonesia": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Papier": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Paracas": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Paralympic Team Belgium": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Paramount Home Entertainment": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Paris 2024": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Paris and Easy": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Parish Pastoral Council for Responsible Voting": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "parodontax": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Patagonia": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Paxel": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Paytm": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "PBS": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Peace Naturals": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "PedidosYa": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Pedigree": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Pedigree / Mars": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Pedigree / Mars New Zealand": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Peelz Mandarins": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Peer Gynt AS": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Peet's Coffee": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Penguin Random House": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Penguins International": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "PENNY": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "People y Colombiana": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "PEPSI": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "PepsiCo": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Perfect Days": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "PERGRAPHICA": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Perla Bebé": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Persil": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "PETA": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Petition C190 / Frauen100": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "PetPace": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Peugeot Cars": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Pfizer": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "phade": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Philadelphia Cream Cheese": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Philco": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Philips": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "PhonePe": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Piedmont Art Walk": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Pilsen / AB InBev Paraguay": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Pilsen Callao / BCP": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Pineapple": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Pinterest": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Piramal Capital and Housing Finance": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "PIRINSKO": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Pizza Hut": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Plan International Finland": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Plastic Oceans Foundation / LADbible": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Play-Doh (Hasbro)": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "PLAYMOBIL®": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "plazaVea": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Pluto TV “Stream Now. Pay Never”": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Plzeňský Prazdroj": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "PNC Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Pocari Sweat Returnable Bottle Project": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Polestar": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "POLIN Museum of the History of Polish Jews": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Political Shakti + The Times of India": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Ponds": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "PONOS": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Pony Malta / AB InBev": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Popeyes": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Popeyes New Zealand": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Pornhub": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Porsche": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Port of Montreal": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Pot Noodle": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Powerade": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "PPS": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Prada": {
+   "category": "luxury",
+   "ambiguous": false
+  },
+  "Prega News": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Pressbyrån": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Previdar": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Pride Connection México": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Prime Video": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Pringles / Kellanova": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Pringles / Kellogg's": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Privateer": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Prix Pictet": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "ProColombia": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Procter & Gamble": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Procter & Gamble / Ariel": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Progresso": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Project Amplify": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Promova": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Prudential": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Préma-Québec": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "PUBG MOBILE": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Puck": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Puffco": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Puissance Dys": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Pulco": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Puma": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Purina Pro Plan": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "QD Laser / RETISSA SUPER CAPTURE": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "QNET": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Quezon City Gender and Development Council": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Quilted Northern": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Racold": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "RACQ": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "RACV": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "RADAR Festival": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Raiffeisen Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Raiffeisen Bank Romania": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "RAINBOW": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Ralph Lauren": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Ram": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Ramp": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Razom for Ukraine": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "RC Cola": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Real Betis Balompié": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Reckitt": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Reckitt/Durex": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Reclame Aqui": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Red Lobster": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Reddit": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Redoxon / Bayer": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Reese's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "REFISAL": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Refuge": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "REI": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Reinserta": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Renault": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Reporter Magazine": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Reporters Without Borders": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Reporters Without Borders Germany": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "RepresentUs": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "RetuRO SGR": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Reverso / Chequeado": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "REWE": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "RHB Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "RHB Premier": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Rimas Music": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Riot Games": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Riot Games / League of Legends: Wild Rift": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Rip Curl": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Ripley": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Riyadh Season": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "RM": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "RMIT University": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "RNIB": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Robert Capa Contemporary Photography Center": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Robinhood": {
+   "category": "financial_services",
+   "ambiguous": true
+  },
+  "Roc Nation / The Brooklyn Library": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Roche Diagnostics": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Rock the Vote": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Rogers": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "ROLLING STONE MAGAZINE": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Roojai Online Insurance": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Rosalía": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Royal Ontario Museum": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Royal Society for Blind Children": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "RTA": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Ruavieja / Pernod Ricard": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Rugby League World Cup 2021": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "S.Pellegrino": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "SA Health": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "SA Heart": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "SAB (ABINBEV)": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "SADIA": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Safari": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "SAIC Audi": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Saint-Gobain Weber": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Saints Joints": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Salesforce": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Sammontana Bis!": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Samsung": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung Australia": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung Electronics": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung Electronics America": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung Electronics Benelux B.V.": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung New Zealand": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung Spain": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung Switzerland": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Samsung The Frame": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Sandy Hook Promise": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Sanlam": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Sanofi / Essentiale": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Santander Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Santander Brasil": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Sao Paulo Mayor's Office": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "SAP": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Sapeurs-Pompiers de France": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Sasa Santan": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Satake Corporation": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Saucony": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Saudi Telecom Company": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Saudi Telecom Company (stc)": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Savanna Cider": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Save One Person": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Save the Children": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Save the Children México": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Savlon / ITC": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Savlon Swasth India Mission": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "SC Johnson": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "SC Johnson / Ziploc": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Scandinavian Airlines": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Scania": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Schweppes": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Schär": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Scoliosis Philippines": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Scrabble": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Seara": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Seattle's Union Gospel Mission": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "SeaWorld Yas Island Abu Dhabi": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Second Chances": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Seki Milk": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Self / Apollo in Real Time": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "SENATUR": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Sennheiser": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Sensodyne": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Sentosa Development Corporation": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Seoul Foundation for Arts and Culture": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Sephora": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "ServiceNow": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Servpro": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Shanghai Science and Technology Elderly Service Center": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Shell Guatemala": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Shine / MSD": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Ships": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Shiseido": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "SHOEI INC.": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Showmax": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "SickKids Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Siemens Healthineers": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Silver Cross": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Silver Wolf Whiskey": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Simon Leoza": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Sinfonia Smith Square": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Singapore Tourism Board": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Sinyi Realty": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Sistema": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Sitges - International Fantastic Film Festival of Catalonia": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "SIUT Children’s Hospital": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Sivantos / Signia Hearing Aids": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "SK-II": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "Skateistan": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "SKF": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Skinny": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Skol": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Sky Kids": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Smart Communications": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Smartree": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "SMARTY": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Smirnoff Ice": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Snickers": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "So Foot": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Society X RSF (Reporters without borders)": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Société de l’assurance automobile du Québec": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Sodimac Homecenter": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Solgar": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Solo Stove": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "SONIC Drive-In": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Sonos": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Sony Pictures Entertainment": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Soprole": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "SOS Children’s Villages": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Southern Oil's B-Well & Unilever's Sunlight": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Spar Slovenia": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Speak": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Specsavers": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "Sportage": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "sportv": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Spotify": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Spotify Africa": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Spotify India": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Sprint": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Sprite": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Sprite / The Coca-Cola Company": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Squarespace": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "SriLankan Airlines": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "St-Germain": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Standard Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "State Bank of India": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "State Farm": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "State Street Global Advisors": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "States United to Prevent Gun Violence": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Stayfree": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "STC": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "STC Telcom": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Steel Rebars": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Steggles": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Stella Artois": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Stichting tegen Kanker & VAD": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Sting Thailand": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "STIR": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Stok'd": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Stonewall": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Story Espresso": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Street Grace": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Subaru Crosstrek": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Subway": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Subway UAE": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Suicide Zero": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Suncorp": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Sunsilk Pakistan": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Super Pollo": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Superbalist.com": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Supercell": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Supercell Clash of Clans": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "SuperSport": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Suzuki": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "SVENSKA SPEL": {
+   "category": "gambling_betting",
+   "ambiguous": false
+  },
+  "Swedish Cancer Society": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Swedish Holocaust Museum": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Sweepsouth": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "Sweethearts Candy": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Swiggy": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Swinburne University of Technology": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Swirl": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Switzerland Tourism": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Sydney Children's Hospitals Foundation / Hospitals United for Sick Kids": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Sydney Opera House": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Sydney Water": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "SYLVANIA": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Symphony Limited": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Sécurité Routière / Road Safety": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "T-Mobile": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "TAB": {
+   "category": "gambling_betting",
+   "ambiguous": false
+  },
+  "Taco Bell": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "TaDa": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Talabat": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Talita": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Tamango": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Tang": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "TD Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Team Gleason": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Team Heroine": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Tecate": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Tecate / Heineken México": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Tecate 0.0": {
+   "category": "alcohol",
+   "ambiguous": true
+  },
+  "Technics/Panasonic Corporation": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "TECOM GROUP / DUBAI DESIGN DISTRICT": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "TEDxAmsterdamWomen": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "TELE2 OPEN INTERNET": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telefónica Germany / o2 Deutschland": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telefónica Vivo and Motorola": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "Telekom": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telekom Romania": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telekom România": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telenet": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telenet / Child Focus": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "Telenor": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Telenor Pakistan": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "Telstra": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "TEMPTATIONS": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Tennessee Department of Tourism": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Tennessee Dept of Tourist Development": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Terre des Femmes": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Tesco": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Tesco Malaysia": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Testicular Cancer Society": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Thai Airways International": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Thai Health Promotion Foundation": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "THE BRITISH HEART FOUNDATION": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The Coca Cola Company": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "The Coca-Cola Company": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "The Coca-Cola Company / Coca-Cola": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "The Coca-Cola Company, The Walt Disney Company": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "the Curve": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "The Documentalists Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The Elder Scrolls Online": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The Entertainer": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "The Female Company": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "The Field Museum": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "The First Take": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The General Auto Insurance": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "The Georgian National Tourism Administration": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "The Great American Takeout": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "The Home Depot": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "The Hot Tea Stain": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "THE ICONIC": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "The Kraft Heinz Not Company": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "The LEGO Group": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "The Lion's Share Fund": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The Marvelous Mrs. Maisel": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The Methodist Church": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "The Mexican Red Cross": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The National": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The New York Times": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The New Yorker": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The Non-Violence Project Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The North Face": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "The Obama Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The ONE Campaign": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The Ordinary": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "The Palace Museum + Tencent / QQ Music": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "The RealReal": {
+   "category": "luxury",
+   "ambiguous": true
+  },
+  "The Recording Academy / 60th GRAMMYs": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The Ritz-Carlton / Late Checkout": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "The Singapore Army / Army Recruitment Centre": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "The Sunderland Collection": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "The Trade Desk": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "The UAE Government Media Office": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "The VIF Network": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "The Wall Street Journal": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "The Wishing Factory": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Three Ireland": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "TIAA": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Tide": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Tide / Marvel Studios": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "TikTok": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Tim Hortons": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Tinder": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Tip Top": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Tito's Handmade Vodka": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Today's Military / JAMRS": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Together for Palestine (T4P)": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Tonal": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Tourism Australia": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Tourism Ireland": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Tourism New Zealand": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Tourism Tasmania": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "TOY EIGHT": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Toyota": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Toyota Genuine Service": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Toyota Motor Corporation": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Toyota Motor North America": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "TOYOTA NEW ZEALAND": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "TRA Mongkut Fertilizer": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Tramontina": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Transport Accident Commission": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Transport Accident Commission Victoria": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Trapa Chocolates": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Travel Switzerland": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Travis Scott": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Triad": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Tribeca Film Institute": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Trinity College Dublin": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Tripadvisor": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Triple-S Advantage": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "TriVolt": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "True Match": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "truth": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Tubi": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Turkish Education Foundation": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Turners Group NZ Ltd": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Tusker Lager": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Twitch": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Twitter": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "Twix": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "TyC Sports": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "TymeBank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "TypeMates": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "U.S. Navy": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "UAE GOVERNMENT MEDIA OFFICE": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "UAE Government Media Office / Emirates Mars Mission": {
+   "category": "public_sector",
+   "ambiguous": false
+  },
+  "Uber": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Uber / Yellow May": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Uber Carshare": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Uber Eats": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Uber One": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Uber Trains": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Ubisoft": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Ujjivan Small Finance Bank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Ukrainian Institute": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Ukrainian PR Army": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Ukrainian Railways": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "UltraTech Cement": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "UN Women": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "UN Women Lebanon": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Uncommon / Stonewall": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Unicef": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "UNICEF Australia": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Unilever": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Unilever - Comfort South Africa": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Unilever Beauty and Personal Care": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Unilever Food Solutions": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "Unilever South Africa": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Unipads": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "UNIQLO": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "United Airlines": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "United for Global Mental Health": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "United Nations Development Programme": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "United Way / City of Kansas City": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "United Way Greater Toronto": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "United24 / Soledarity": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "UNITED24 Medevac": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Universal Music / CRO": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Universidad Casa Grande": {
+   "category": "other",
+   "ambiguous": true
+  },
+  "University of Melbourne": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Unto": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "UVA App": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "V&A": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "VACÍLATE ESTO": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Vanguard": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Vans": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Vaseline": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Vatika Hair Oils": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Vattenfall": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Vegan Tiger": {
+   "category": "fashion_beauty",
+   "ambiguous": true
+  },
+  "VeloBank": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "VELUX": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Velveeta": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Veolia Belux": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Verena Sure": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "Verizon": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Verkkokauppa.com": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Vestre": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Via Carota Craft Cocktails": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Viatris": {
+   "category": "healthcare",
+   "ambiguous": false
+  },
+  "VICE Media": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Vice UK / College Music": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Victoria Bitter": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Victoria University": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Vimeo": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "VinFast VF 3": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Vino Gato": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "Virgin Australia": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Virgin Australia Group": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Virgin Media": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Visa": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Visa Gift Card": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Vision Australia": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Visit Faroe Islands": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Visit Flanders": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Visit Flanders / Cycling in Flanders": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Visit Sweden": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "VisitOSLO": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "VisitScotland": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Vital Farms": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Vivo": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Vodacom / Vodafone / Safaricom": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Vodafone Egypt": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Vodafone Hungary": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Vodafone Idea Ltd.": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Vodafone India": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Vogel's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Vogel’s / Goodman Fielder": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "VOGUE": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Volg Konsumwaren AG": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "VOLKSWAGEN": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volkswagen Brazil": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volkswagen Group Australia": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volkswagen Group France": {
+   "category": "automotive",
+   "ambiguous": true
+  },
+  "Volkswagen Group of America": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volkswagen Ireland": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volkswagen South Africa": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volkswagen SUV": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volvo": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volvo Car Corporation": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volvo Car Nederland": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Volvo XC60": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "VOO Telecom": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "VOOM Sports Nutrition": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Vow": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "VR National Railways": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "VTEX / Desierto Vestido / Fashion Revolution": {
+   "category": "b2b",
+   "ambiguous": true
+  },
+  "Vuma": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Vuokkoset": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "W Hotels": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "Waitrose & Partners": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Walk Free": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Walmart": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Wana Brands": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "WE+": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "Weedmaps": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Wella Koleston": {
+   "category": "fashion_beauty",
+   "ambiguous": false
+  },
+  "Wendy's": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Wendy's Canada": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Whanau Ora": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "what3words": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "WhatsApp": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "WhatsApp Inc.": {
+   "category": "technology",
+   "ambiguous": false
+  },
+  "When We All Vote": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Whirlpool": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Whisper": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "White Ribbon": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Whānau Ora": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Wikifarmer": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Wikimedia Foundation": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "WINDTRE": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Wingo / Flybondi": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Wingstop": {
+   "category": "food_drink",
+   "ambiguous": false
+  },
+  "Wisp x Abortion Freedom Fund": {
+   "category": "healthcare",
+   "ambiguous": true
+  },
+  "WNBA": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "WOMANITY FOUNDATION": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Women in Games": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "Wong": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Woojer": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Woolworths New Zealand": {
+   "category": "retail",
+   "ambiguous": false
+  },
+  "Workday": {
+   "category": "b2b",
+   "ambiguous": false
+  },
+  "World Heritage (Gunkanjima)": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "World Science Festival": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Wotsits Giants": {
+   "category": "fmcg",
+   "ambiguous": true
+  },
+  "WWF": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "WWF France": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "WWF Germany": {
+   "category": "charity",
+   "ambiguous": false
+  },
+  "Xbox": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Xbox / Football Manager": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Xero": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Xfinity": {
+   "category": "telecoms",
+   "ambiguous": false
+  },
+  "Xfinity Home": {
+   "category": "telecoms",
+   "ambiguous": true
+  },
+  "XTB": {
+   "category": "financial_services",
+   "ambiguous": false
+  },
+  "Yahoo! JAPAN": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Yamaha Music Europe GmbH": {
+   "category": "media_entertainment",
+   "ambiguous": true
+  },
+  "Yangzhou Municipal Bureau of Culture, Radio, TV and Tourism": {
+   "category": "public_sector",
+   "ambiguous": true
+  },
+  "Yas Island": {
+   "category": "travel",
+   "ambiguous": false
+  },
+  "YAS ISLAND ABU DHABI": {
+   "category": "travel",
+   "ambiguous": true
+  },
+  "Yorkshire Tea": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "YouTube": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "YPF": {
+   "category": "other",
+   "ambiguous": false
+  },
+  "Zalando SE": {
+   "category": "retail",
+   "ambiguous": true
+  },
+  "Zantiis": {
+   "category": "fmcg",
+   "ambiguous": false
+  },
+  "Zespri International Japan": {
+   "category": "food_drink",
+   "ambiguous": true
+  },
+  "Zillow": {
+   "category": "technology",
+   "ambiguous": true
+  },
+  "Zrzutka.pl": {
+   "category": "charity",
+   "ambiguous": true
+  },
+  "ZSC Lions Eishockey AG": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Züribrätt / Inhalt und Form": {
+   "category": "media_entertainment",
+   "ambiguous": false
+  },
+  "Águila": {
+   "category": "alcohol",
+   "ambiguous": false
+  },
+  "ŠKODA": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Škoda UK": {
+   "category": "automotive",
+   "ambiguous": false
+  },
+  "Żabka Polska": {
+   "category": "retail",
+   "ambiguous": false
+  }
+ }
+}
