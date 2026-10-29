@@ -1042,10 +1042,11 @@ type Grid = {
   gridStep(words: number, limit: number): number
   gridGaps(ctx: unknown): { key: string; label: string }[]
   gridHeaderInfo(e: unknown): string[][]
-  gridBody(ctx: unknown): { html: string; sheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
+  gridBody(ctx: unknown): { html: string; sheets: number; contentSheets: number; appendixSheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
+  gridContentSheets(): number
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1083,8 +1084,14 @@ test('the grid prints a header, an info grid and a footer as the sheets need the
     budget_and_scope: 'Budget.', insight: 'The insight.', single_minded_proposition: 'One thought.', reasons_to_believe: ['r1', 'r2'], competitor_context: 'Rivals.',
     'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['warm'], mandatories: ['logo'], open_questions: ['What is the budget?'] }
   const out = g.gridBody(ctxOf(vals, { marks: { single_minded_proposition: [1] }, notes }))
+  // The page rule: two content sheets, and the appendix is outside that count. The footer still numbers every page.
   assert.equal(out.sheets, 3)
-  for (const n of [1, 2, 3]) assert.match(out.html, new RegExp(`SHEET<b>${n}/3</b>`))
+  assert.equal(out.contentSheets, 2)
+  assert.equal(out.appendixSheets, 1)
+  for (const n of [1, 2]) assert.match(out.html, new RegExp(`SHEET<b>${n}/2</b>`))
+  assert.match(out.html, /APPENDIX<b>1\/1<\/b>/)
+  assert.doesNotMatch(out.html, /SHEET<b>3\//, 'the appendix is not a third sheet')
+  for (const n of [1, 2, 3]) assert.match(out.html, new RegExp(`<span>${n} of 3</span>`))
   assert.equal((out.html.match(/class="hd"/g) || []).length, 3, 'a header on every sheet')
   assert.equal((out.html.match(/class="info"/g) || []).length, 1, 'the info grid on the first sheet only')
   assert.equal((out.html.match(/class="foot"/g) || []).length, 3, 'a footer on every sheet')
@@ -1178,7 +1185,8 @@ test('the appendix runs on over as many sheets as it needs, and nothing in it is
   for (let i = 0; i < qs.length; i++) assert.equal((out.html.match(new RegExp(`Question ${i} about`, 'g')) || []).length, 1, `question ${i} printed once`)
   for (let i = 1; i <= 25; i++) assert.equal((out.html.match(new RegExp(`<b>Publisher ${i}</b>`, 'g')) || []).length, 1, `source ${i} printed once`)
   assert.match(out.html, /Appendix \(continued\)\. Sources and questions to settle\./)
-  assert.match(out.html, new RegExp(`SHEET<b>${out.sheets}/${out.sheets}</b>`))
+  assert.match(out.html, new RegExp(`APPENDIX<b>${out.appendixSheets}/${out.appendixSheets}</b>`))
+  assert.equal(out.contentSheets, 2, 'a long appendix never adds a content sheet')
   // The same numbers a footnote carries, in order, across the sheets.
   const nums = [...out.html.matchAll(/<li value="(\d+)"><b>Publisher/g)].map(m => +m[1])
   assert.deepEqual(nums, Array.from({ length: 25 }, (_, i) => i + 1))
@@ -1189,6 +1197,24 @@ test('the appendix runs on over as many sheets as it needs, and nothing in it is
   const none = g.gridBody(ctxOf({}))
   assert.equal(none.sheets, sheets + 1)
   assert.match(none.html, /No outside sources were cited\./)
+})
+
+test('the page rule: a brief is two content sheets however long its parts run, and the appendix is outside the count', () => {
+  const g = grid()
+  assert.equal(g.gridContentSheets(), 2)
+  assert.ok(g.gridSheets().filter(s => !s.appendix).length <= g.gridContentSheets(), 'the sheet list holds at most two content sheets')
+  // Every part three times past its box, a long reasons list and a long appendix: the content stays on two sheets.
+  const long: Record<string, unknown> = {}
+  for (const s of g.gridSheets()) for (const r of s.rows) for (const c of r) long[c.key] = (g.gridLimit(c.key) ? words(g.gridLimit(c.key) * 3) : words(60))
+  long.reasons_to_believe = Array.from({ length: 12 }, (_, i) => `Reason ${i} ${words(25)}`)
+  long.open_questions = Array.from({ length: 40 }, (_, i) => `Question ${i} about something only the client knows, in a sentence of a fair length?`)
+  const out = g.gridBody(ctxOf(long, { marks: {}, notes }))
+  assert.equal(out.contentSheets, 2, 'long content never becomes a third content sheet')
+  assert.ok(out.warnings.length > 0, 'a part that ran over its box is named, not spilled')
+  assert.doesNotMatch(out.html, /SHEET<b>[3-9]\//)
+  // The appendix may run to several sheets, each labelled as appendix and numbered after the content sheets.
+  assert.equal(out.sheets, out.contentSheets + out.appendixSheets)
+  for (let n = 1; n <= out.appendixSheets; n++) assert.match(out.html, new RegExp(`APPENDIX<b>${n}/${out.appendixSheets}</b>`))
 })
 
 test('an export never prints a clipped sheet: it is measured, Dara tightens the long parts once, and otherwise it stops', () => {

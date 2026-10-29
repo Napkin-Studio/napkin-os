@@ -1221,10 +1221,12 @@
     return '<div class="info">'+arr(info).map(function(p){
       return '<div><small>'+esc(p[0])+'</small>'+(String(p[1]||'').trim()?esc(p[1]):'<span class="none">—</span>')+'</div>'; }).join('')+'</div>';
   }
-  function gridSheet(n, total, sh, ctx){
+  // n of total is the page number (the footer counts every page); tag is the header label: content sheets read
+  // SHEET 1/2, appendix sheets read APPENDIX 1/1, so the appendix is outside the two-sheet count.
+  function gridSheet(n, total, sh, ctx, tag){
     var sub=sh.title||('Creative brief. '+(ctx.project||'Untitled brief'));
     return '<div class="sheet"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
-      +'<div class="shn">SHEET<b>'+n+'/'+total+'</b></div></div>'
+      +'<div class="shn">'+tag+'</div></div>'
       +(n===1?gridInfo(ctx.info):'')
       +sh.rows.map(function(r){ return '<div class="row c'+r.length+'">'+r.map(function(c){ return gridCell(c, ctx); }).join('')+'</div>'; }).join('')
       +'<div class="foot"><span>'+esc(['Napkin', gridClientName(ctx.client), ctx.project, 'Creative brief'+(ctx.version?' '+ctx.version:''), 'Confidential'].filter(Boolean).join(' / '))+'</span><span>'+n+' of '+total+'</span></div></div>';
@@ -1249,13 +1251,22 @@
     }
     return out;
   }
+  // The page rule (Sai, 2026-10-29, option A): a brief is two content sheets, and the appendix (sources and
+  // questions) runs on after them and is not counted. Content that does not fit steps down inside its box and
+  // is reported in warnings; it never spills onto a third content sheet. Laurence still has to confirm the rule.
+  function gridContentSheets(){ return 2; }
+  // -> {html, sheets (all pages), contentSheets, appendixSheets, warnings}
   function gridBody(ctx){
-    var sheets=gridSheets().filter(function(s){ return !s.appendix; }).concat(gridAppendix(ctx));
+    var body=gridSheets().filter(function(s){ return !s.appendix; }), app=gridAppendix(ctx), sheets=body.concat(app);
+    if(body.length>gridContentSheets()) throw new Error('The grid has '+body.length+' content sheets; the page rule allows '+gridContentSheets()+'.');
     var warnings=[];
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
       if(st) warnings.push({key:c.key, label:c.label, words:w, limit:lim, step:st}); }); }); });
-    return {html:sheets.map(function(s,i){ return gridSheet(i+1, sheets.length, s, ctx); }).join(''), sheets:sheets.length, warnings:warnings};
+    return {html:sheets.map(function(s,i){
+        var tag=s.appendix?'APPENDIX<b>'+(i-body.length+1)+'/'+app.length+'</b>':'SHEET<b>'+(i+1)+'/'+body.length+'</b>';
+        return gridSheet(i+1, sheets.length, s, ctx, tag); }).join(''),
+      sheets:sheets.length, contentSheets:body.length, appendixSheets:app.length, warnings:warnings};
   }
   function gridCss(){
     return "*{box-sizing:border-box;margin:0;padding:0}"
