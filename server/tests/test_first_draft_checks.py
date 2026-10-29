@@ -20,7 +20,7 @@ def test_code_measures_words_sentences_and_a_standalone_and():
                       "insight": e("An insight."), "reasons_to_believe": e(["a", "b"])})
     assert f["single_minded_proposition"] == {"words": 3, "limit": 20, "sentences": 1, "standalone_and": True}
     assert f["job"]["sentences"] == 2 and f["audience"] == {"words": 100, "limit": 80}
-    assert "reasons_to_believe" not in f, "a part with no limit and no rule is not measured"
+    assert f["reasons_to_believe"] == {"items": 2, "max_items": 3}, "the skill keeps the two or three that matter"
     assert checks.facts({"single_minded_proposition": e("Tea you tried.")})["single_minded_proposition"]["standalone_and"] is False
 
 
@@ -99,3 +99,13 @@ def test_the_first_draft_goes_to_jude_with_the_tests_and_what_code_measured_and_
     brief = first["brief"]
     assert brief["insight"]["value"] == "To confirm: An assumed insight."
     assert brief["single_minded_proposition"]["value"].startswith("To confirm: ")
+
+
+def test_more_than_three_reasons_to_believe_go_back_and_the_schema_says_three():
+    assert RUBRIC_FIELDS["reasons_to_believe"]["max_items"] == 3
+    five = checks.revisions({"reasons_to_believe": e(["a", "b", "c", "d", "e"])})
+    assert [x["part"] for x in five] == ["reasons_to_believe"] and "keep the 3 strongest" in five[0]["instruction"]
+    assert checks.revisions({"reasons_to_believe": e(["a", "b", "c"])}) == []
+    for k in ("insight", "smp"):
+        assert "plain_words" in {c["id"] for c in RUBRIC_FIELDS[k]["rubric"]}, "plain human language is the skill's second rule"
+    assert "what the budget does not buy" in RUBRIC_FIELDS["budget_scope"]["prompt"]

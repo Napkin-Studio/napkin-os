@@ -204,7 +204,9 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
    from what the brief already holds; never ask her to invent client facts. Never name a part only because a
    claim in it is worked out or marked to confirm.
 6. questions: what only the client can answer.
-7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary.
+7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary. It is "multiple" when the
+   brief serves more than one problem, audience or message, or when the client's own input was a wish-list of
+   objectives, audiences and messages that was never narrowed to one: say in split_into what the one choice is.
 8. part tests: `tests` holds, for the insight, the proposition, the job, the barrier and the objection, the planning
    tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
    `revise` with one instruction that names the test and the fix. `part_checks` is what code measured (words against

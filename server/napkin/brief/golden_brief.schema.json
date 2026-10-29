@@ -198,7 +198,7 @@
       "max_words": 50,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "The money, and the honest ambition it buys. Budget ↔ objectives ↔ audience are linked — move one and the others must move. State whether the budget includes VAT and whether media sits inside it; if the brief does not say, ask the client (an open question) rather than assuming. Never state a budget figure that was not given.",
+      "prompt": "The money, and the honest ambition it buys. Budget ↔ objectives ↔ audience are linked — move one and the others must move. State whether the budget includes VAT and whether media sits inside it; if the brief does not say, ask the client (an open question) rather than assuming. Never state a budget figure that was not given. Say in one line what the budget does not buy; that line makes the rest believable.",
       "good_example": "€1.2m working media. National reach unrealistic — prioritise four cities + always-on social.",
       "bad_example": "TBC / as needed.",
       "bad_reason": "No constraint = the backbone can't be balanced.",
@@ -293,6 +293,11 @@
           "id": "has_implication",
           "test": "Does it hand the product a role? Says what the job actually is. An insight that does not set up the proposition is just a nice observation.",
           "method": "llm"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud? No strategist vocabulary."
         }
       ],
       "_example_sources": "Built from Fallon 2006 pp.77-80 (Skoda Fabia, Fallon London 2000): 'the biggest barrier was an irrational prejudice against the brand' (p.80); the good example's wording is ours, its facts are the source's. IPA case: 'It's a Skoda. Honest.' reduced marque rejection from 60% to 42%."
@@ -365,6 +370,11 @@
           "id": "room_for_many_ads",
           "method": "llm",
           "test": "Could a creative team write several quite different ads from it?"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud? No strategist vocabulary."
         }
       ],
       "_prompt_sources": "R1 2026-09-24 §1.1: Steel 1998 p.168-169; APG 1997 pp.56-57; BBG p.17; Excellence 1997 p.158; Reeves 1961 p.47; benefit not required (Ogilvy DO, BBH 1992 slide 32, Binet & Field 2007)",
@@ -388,19 +398,19 @@
       "zone": 3,
       "type": "list",
       "required": true,
-      "max_items": 5,
+      "max_items": 3,
       "provenance_required": true,
       "depends_on": [
         "smp"
       ],
-      "prompt": "The few validated facts, truths, statistics or sound logic that directly support the proposition: strongest first, not a shopping list. Validate the premises: logic does not replace empirical proof for a factual or product claim. Never invent supporting evidence; a reason you cannot prove from a fact starts 'To confirm:'.",
+      "prompt": "The two or three validated facts, truths, statistics or sound logic that directly support the proposition: strongest first. A long list means you have not chosen. Validate the premises: logic does not replace empirical proof for a factual or product claim. Never invent supporting evidence; a reason you cannot prove from a fact starts 'To confirm:'.",
       "good_example": "You can stay always up to date · Nicam · widescreen · satellite",
       "bad_example": "Award-winning · trusted · premium · loved by thousands · refreshing · bold.",
       "bad_reason": "Generic, unprovable claims; a shopping list, not proof for the SMP.",
       "rubric": [
         {
           "id": "max_items",
-          "test": "No more than five items.",
+          "test": "No more than three items: the two or three that actually matter.",
           "method": "auto"
         },
         {

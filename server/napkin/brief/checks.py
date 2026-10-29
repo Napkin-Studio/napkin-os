@@ -16,7 +16,7 @@ from .rubric import _sentences, and_flag
 # the app's part -> the schema's rubric field
 APP_RUBRIC = {"background": "background", "audience": "audience", "budget_and_scope": "budget_scope",
               "competitor_context": "competitor_context", "insight": "insight", "single_minded_proposition": "smp",
-              "tone_and_world": "tone_world_assets", "mandatories": "mandatories", "job": "job",
+              "tone_and_world": "tone_world_assets", "mandatories": "mandatories", "job": "job", "reasons_to_believe": "reasons_to_believe",
               "barrier": "barrier", "objection": "objection"}
 # the five parts Jude judges against the skill's tests
 TESTED = ("insight", "single_minded_proposition", "job", "barrier", "objection")
@@ -40,6 +40,11 @@ def limit(key: str) -> int | None:
     return (RUBRIC_FIELDS.get(rid) or {}).get("max_words") if rid else None
 
 
+def max_items(key: str) -> int | None:
+    rid = APP_RUBRIC.get(key)
+    return (RUBRIC_FIELDS.get(rid) or {}).get("max_items") if rid else None
+
+
 def facts(whole: dict) -> dict:
     """What code measured, per part Jude judges or that has a limit."""
     out = {}
@@ -48,6 +53,9 @@ def facts(whole: dict) -> dict:
         if not t:
             continue
         f = {}
+        cap = max_items(k)
+        if cap and isinstance(e.get("value"), list):
+            f["items"], f["max_items"] = len([x for x in e["value"] if text_of(x)]), cap
         lim = limit(k)
         if lim:
             f["words"], f["limit"] = len(t.split()), lim
@@ -67,6 +75,8 @@ def revisions(whole: dict) -> list[dict]:
         why = []
         if f.get("limit") and f["words"] > f["limit"] * MARGIN:
             why.append(f"it is {f['words']} words and the limit is {f['limit']}: cut it to at most {f['limit']} words, keeping what matters most")
+        if f.get("max_items") and f["items"] > f["max_items"]:
+            why.append(f"it has {f['items']} items and the skill keeps the two or three that matter: keep the {f['max_items']} strongest and drop the rest")
         if f.get("sentences", 0) > 1:
             why.append(f"it is {f['sentences']} sentences: say it in one (a word or a phrase is fine)")
         if why:
