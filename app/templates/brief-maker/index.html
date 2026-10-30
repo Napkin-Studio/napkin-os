@@ -2664,11 +2664,29 @@
     });
   }
   function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
+  // A part Jude rejected is written, not approved. Its stored value says so, the way the draft marks an assumption:
+  // "To confirm:" in front (a list marks its first line), which the sheet draws as the box's corner tag.
+  function confirmMarked(v){
+    if(Array.isArray(v)) return v.length?[confirmMarked(v[0])].concat(v.slice(1)):v;
+    var t=String(v==null?'':v).trim();
+    return !t||/^to confirm:/i.test(t)?v:'To confirm: '+t;
+  }
+  function notApprovedWords(labels){
+    return labels.length?'Written, not approved by '+JUDE+': '+listWords(labels.map(function(l){ return l.toLowerCase(); }))+'.':'';
+  }
   // Write the named parts, one at a time (the middleware takes one job at a time on a brief).
+  // -> the labels of the parts Jude rejected, each now marked "To confirm:".
   function fillParts(keys, guidanceFor){
+    var rejected=[];
     return keys.reduce(function(p,k){ return p.then(function(){ return new Promise(function(res){
       var f=FIELDS.filter(function(x){ return x.key===k; })[0]; if(!f) return res();
-      regenField(f,guidanceFor?guidanceFor(k):null,null,function(){ res(); }); }); }); }, Promise.resolve());
+      regenField(f,guidanceFor?guidanceFor(k):null,null,function(j){
+        var fs=((j&&j.fields)||{})[k]||{}, v=get(k), m=confirmMarked(v);
+        if(fs.state!=='failed'||!hasVal(v)) return res();
+        rejected.push(f.label);
+        if(m===v) return res();
+        Promise.resolve(patch(k,m,{actor:'human',pinned:false,action:'mark '+k+' to confirm',rationale:JUDE+' rejected the part the export wrote, so it is marked to confirm.'})).then(function(){ res(); },function(){ res(); }); }); }); }); }, Promise.resolve())
+      .then(function(){ return rejected; });
   }
   // The parts with the most words, longest first: what the export tightens when no part has a limit to break.
   function gridLongest(n){
@@ -2697,15 +2715,16 @@
     var names=listWords(gaps.map(function(g){ return g.label.toLowerCase(); }));
     if(docLocked()||noMiddleware()){ toast('Still empty and not written here: '+names+'. Fill them in, then export.'); return; }
     toast(DARA+' is writing '+names+' before the export…');
-    return fillParts(gaps.map(function(g){ return g.key; })).then(function(){
+    return fillParts(gaps.map(function(g){ return g.key; })).then(function(rejected){
       var left=gridGaps(ctx);
       if(left.length){ toast('Not exported: '+listWords(left.map(function(g){ return g.label.toLowerCase(); }))+' still needs writing. Ask '+DARA+' again from its row.'); return; }
-      return runExport(kind, style);
+      return runExport(kind, style, false, rejected);
     });
   }
   // A brief never leaves with a sheet clipped: one that runs past its footer has Dara tighten the longest parts, once;
   // if it still does not fit, the export stops and says which sheet.
-  function runExport(kind, style, retried){
+  function runExport(kind, style, retried, rejected){
+    rejected=rejected||[];
     toast('Preparing '+kind.toUpperCase()+'…');
     return buildExportHTML(style).then(function(html){
       // Fail closed: sheets that could not be measured are not printed.
@@ -2720,14 +2739,16 @@
         if(!retried&&long.length&&!docLocked()&&!noMiddleware()){
           toast(DARA+' is tightening '+names+' to fit the sheet…');
           return fillParts(long.map(function(w){ return w.key; }), function(k){ return gridLimit(k)?'Rewrite this part in at most '+gridLimit(k)+' words, keeping what matters most.':'Rewrite this part about a third shorter, keeping what matters most.'; })
-            .then(function(){ return runExport(kind, style, true); });
+            .then(function(more){ return runExport(kind, style, true, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
         }
         toast('Not exported: sheet '+LAST_GRID_OVERFLOW[0]+' is too full. Shorten '+(names||'its parts')+' and export again.');
         return null;
       }
       if(style!=='plain'&&LAST_GRID_WARNINGS.length) toast('Printed smaller to fit its box: '+LAST_GRID_WARNINGS.map(function(w){ return w.label.toLowerCase(); }).join(', ')+'.');
       var base=(get('project_name')||'brief').replace(/[^\w.-]+/g,'-');
-      return window.clan.exportDoc(kind,base,html).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); });
+      return window.clan.exportDoc(kind,base,html).then(function(res){
+        if(res&&res.ok===false) toast('Could not start export.');
+        else if(rejected.length) toast(notApprovedWords(rejected)); });
     }).catch(function(e){ toast('Export failed: '+e); });
   }
   $('exHtml').addEventListener('click',function(){ doExport('html'); });

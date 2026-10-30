@@ -1167,7 +1167,7 @@ test('a brief leaves with nothing empty: the gate names every empty part, the he
   assert.match(ex, /gridGaps\(ctx\)/)
   assert.match(ex, /fillParts\(gaps\.map/)
   assert.match(ex, /Not exported: /)
-  assert.match(fn(BM, 'fillParts'), /regenField\(f,guidanceFor\?guidanceFor\(k\):null,null,function\(\)\{ res\(\); \}\)/)
+  assert.match(fn(BM, 'fillParts'), /regenField\(f,guidanceFor\?guidanceFor\(k\):null,null,function\(j\)\{/)
   assert.match(fn(BM, 'regenField'), /if\(done\) done\(j\)/)
   // A fill that cannot start still finishes, so an export waiting on it never hangs; one export runs at a time.
   assert.match(fn(BM, 'regenField'), /if\(!window\.clan\)\{ if\(done\) done\(\); return; \}/)
@@ -1294,6 +1294,48 @@ test('a sheet that cannot be measured is never exported: one retry with a longer
   assert.match(said, /^Not exported: .*Plain PDF or Plain HTML/)
   await r.runExport('pdf', 'plain')
   assert.equal(printed, 1, 'the plain export is unaffected')
+})
+
+test('a part Jude rejected is exported as to confirm, and the export says it was written, not approved', async () => {
+  const mark = lift<{ confirmMarked(v: unknown): unknown }>(BM, ['confirmMarked'], {}).confirmMarked
+  assert.equal(mark('Families who cook.'), 'To confirm: Families who cook.')
+  assert.equal(mark('To confirm: Families.'), 'To confirm: Families.', 'a part already marked is left alone')
+  assert.deepEqual(mark(['a', 'b']), ['To confirm: a', 'b'], 'a list marks its first line')
+  assert.equal(mark(''), '')
+  // fillParts: Jude passes one part and rejects the other. Only the rejected one is marked in the brief.
+  const data: Record<string, unknown> = { audience: 'Families who cook.', insight: 'People skip dinner.' }
+  const patched: Array<[string, unknown]> = []
+  const FIELDS = [{ key: 'audience', label: 'Audience' }, { key: 'insight', label: 'The insight' }]
+  const state: Record<string, string> = { audience: 'done', insight: 'failed' }
+  const env = {
+    FIELDS, JUDE: 'Jude', hasVal, confirmMarked: mark, get: (k: string) => data[k],
+    patch: (k: string, v: unknown) => { patched.push([k, v]); data[k] = v; return Promise.resolve({ ok: true }) },
+    regenField: (f: { key: string }, _g: unknown, _r: unknown, done: (j: unknown) => void) => done({ fields: { [f.key]: { state: state[f.key] } } }),
+  }
+  const fill = lift<{ fillParts(keys: string[]): Promise<string[]> }>(BM, ['fillParts'], env)
+  assert.deepEqual(await fill.fillParts(['audience', 'insight']), ['The insight'])
+  assert.deepEqual(patched, [['insight', 'To confirm: People skip dinner.']])
+  // what prints: the sheet draws the mark as the box's corner tag, and the sentence reads clean
+  const g = grid()
+  const out = g.gridBody(ctxOf({ audience: data.audience, insight: data.insight }))
+  assert.equal((out.html.match(/<span class="tc">to confirm<\/span>/g) || []).length, 1, 'only the rejected part carries the tag')
+  assert.match(out.html, /People skip dinner\./)
+  assert.doesNotMatch(out.html, /To confirm: People/)
+  // the toast names it
+  const words = lift<{ notApprovedWords(l: string[]): string }>(BM, ['notApprovedWords'], { JUDE: 'Jude', listWords: listJoin }).notApprovedWords
+  assert.equal(words(['The insight', 'Audience']), 'Written, not approved by Jude: the insight and audience.')
+  assert.equal(words([]), '')
+  // the export passes them on and says so once the export has started
+  let said = ''
+  const run = lift<{ runExport(k: string, s: string, r?: boolean, rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
+    LAST_GRID_OVERFLOW: [], LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m }, buildExportHTML: () => Promise.resolve('<html>'),
+    get: () => 'x', notApprovedWords: words, window: { clan: { exportDoc: () => Promise.resolve({ ok: true }) } },
+  })
+  await run.runExport('pdf', 'grid', false, ['The insight'])
+  assert.equal(said, 'Written, not approved by Jude: the insight.')
+  await run.runExport('pdf', 'grid', false, [])
+  assert.equal(said, 'Preparing PDF…', 'nothing rejected: nothing extra is said')
+  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, rejected\)/)
 })
 
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
