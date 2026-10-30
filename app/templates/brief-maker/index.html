@@ -1228,11 +1228,23 @@
     if(!gridHas(ctx.get('objection'))&&!seen.objection) out.push({key:'objection', label:'The objection to beat'});
     return out;
   }
-  // A brief with next to nothing written is not worth a sheet: Dara would invent the lot. Under four parts held, the export stops.
-  function gridHollow(ctx){
+  // How many parts the brief holds, as gridGaps counts them.
+  function gridHeld(ctx){
     var total=gridGaps({get:function(){ return ''; }}).length;  // every part, as gridGaps counts them
-    return total-gridGaps(ctx).length<4;
+    return total-gridGaps(ctx).length;
   }
+  // How many held parts are not a guess. A stored part carries its mark and not its basis, so a text part without
+  // the "To confirm:" mark counts (client, research, library or person). A list is never marked, so it proves nothing.
+  function gridGrounded(ctx){
+    var n=0, seen={};
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      if(c.kind==='sources'||c.kind==='list'||seen[c.key]) return; seen[c.key]=1;
+      var v=ctx.get(c.key); if(gridHas(v)&&!gridFlag(v)) n++; }); }); });
+    return n;
+  }
+  // A brief with next to nothing written is not worth a sheet: Dara would invent the lot. Under four parts held, or
+  // under three that are not a guess (a one-word brief comes back whole and all marked), the export stops.
+  function gridHollow(ctx){ return gridHeld(ctx)<4||gridGrounded(ctx)<3; }
   // The info grid: every cell holds a value, a suggestion marked as one, or a prompt for what only a person knows.
   function gridHeaderInfo(e){
     var client=String(e.client||'').trim(), who=String(e.me||'').trim()||'Napkin Studio';
@@ -2630,8 +2642,8 @@
     });
   }
   // Which sheets run past their footer once drawn. Measured in a hidden frame, so the app's own styles stay as they are.
-  // A frame that cannot be measured reports none: the warnings by word limit still apply.
-  function gridOverflow(doc){
+  // A frame that cannot be measured within `wait` ms reports null, never an empty list: an unchecked sheet is not a fitting one.
+  function gridOverflow(doc, wait){
     return new Promise(function(res){
       var f=document.createElement('iframe'), done=false;
       f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0;visibility:hidden';
@@ -2642,10 +2654,14 @@
           var rows=sh.querySelectorAll('.row'), ft=sh.querySelector('.foot');
           var wide=[].some.call(sh.querySelectorAll('.box'),function(b){ return b.scrollWidth>b.clientWidth+1; });
           if(wide||(rows.length&&ft&&rows[rows.length-1].getBoundingClientRect().bottom>ft.getBoundingClientRect().top)) bad.push(i+1); });
-        end(bad); }catch(e){ end([]); } };
+        end(bad); }catch(e){ end(null); } };
       f.srcdoc=doc; document.body.appendChild(f);
-      setTimeout(function(){ end([]); },4000);
+      setTimeout(function(){ end(null); },wait);
     });
+  }
+  // Measure once; a slow browser gets one more go with a longer wait. Still null means the sheets could not be checked.
+  function measureGrid(doc){
+    return gridOverflow(doc,4000).then(function(bad){ return bad||gridOverflow(doc,8000); });
   }
   // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
   var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
@@ -2664,15 +2680,33 @@
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
       var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
         +g.html+(CHAIN.state==='unavailable'?'<p style="text-align:center;font:9px sans-serif;color:#767676;margin:6px">Sources could not be read for this export.</p>':'')+'<\/body><\/html>';
-      return gridOverflow(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
+      return measureGrid(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
     });
   }
   function buildExportHTML(style, tight){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(tight); }
+  // A part Jude rejected is written, not approved. Its stored value says so, the way the draft marks an assumption:
+  // "To confirm:" in front (a list marks its first line), which the sheet draws as the box's corner tag.
+  function confirmMarked(v){
+    if(Array.isArray(v)) return v.length?[confirmMarked(v[0])].concat(v.slice(1)):v;
+    var t=String(v==null?'':v).trim();
+    return !t||/^to confirm:/i.test(t)?v:'To confirm: '+t;
+  }
+  function notApprovedWords(labels){
+    return labels.length?'Written, not approved by '+JUDE+': '+listWords(labels.map(function(l){ return l.toLowerCase(); }))+'.':'';
+  }
   // Write the named parts, one at a time (the middleware takes one job at a time on a brief).
+  // -> the labels of the parts Jude rejected, each now marked "To confirm:".
   function fillParts(keys, guidanceFor){
+    var rejected=[];
     return keys.reduce(function(p,k){ return p.then(function(){ return new Promise(function(res){
       var f=FIELDS.filter(function(x){ return x.key===k; })[0]; if(!f) return res();
-      regenField(f,guidanceFor?guidanceFor(k):null,null,function(){ res(); }); }); }); }, Promise.resolve());
+      regenField(f,guidanceFor?guidanceFor(k):null,null,function(j){
+        var fs=((j&&j.fields)||{})[k]||{}, v=get(k), m=confirmMarked(v);
+        if(fs.state!=='failed'||!hasVal(v)) return res();
+        rejected.push(f.label);
+        if(m===v) return res();
+        Promise.resolve(patch(k,m,{actor:'human',pinned:false,action:'mark '+k+' to confirm',rationale:JUDE+' rejected the part the export wrote, so it is marked to confirm.'})).then(function(){ res(); },function(){ res(); }); }); }); }); }, Promise.resolve())
+      .then(function(){ return rejected; });
   }
   // The parts with the most words, longest first: what the export tightens when no part has a limit to break.
   function gridLongest(n){
@@ -2692,39 +2726,51 @@
     if(!(window.clan&&window.clan.exportDoc)){ toast('Export needs the Napkin host.'); return; }
     if(style==='plain') return runExport(kind, style);
     var ctx={get:get, hasVal:hasVal}, gaps=gridGaps(ctx);
+    if(gridHollow(ctx)){
+      toast(gridHeld(ctx)<4?'Not exported: there is hardly anything in this brief yet. Tell '+DARA+' about the client, the audience and the budget, then export.'
+        :'Not exported: almost everything here is a guess. Tell '+DARA+' what the client, the research or you know, or choose Plain PDF or Plain HTML.');
+      return;
+    }
     if(!gaps.length) return runExport(kind, style);
-    if(gridHollow(ctx)){ toast('Not exported: there is hardly anything in this brief yet. Tell '+DARA+' about the client, the audience and the budget, then export.'); return; }
     var names=listWords(gaps.map(function(g){ return g.label.toLowerCase(); }));
     if(docLocked()||noMiddleware()){ toast('Still empty and not written here: '+names+'. Fill them in, then export.'); return; }
     toast(DARA+' is writing '+names+' before the export…');
-    return fillParts(gaps.map(function(g){ return g.key; })).then(function(){
+    return fillParts(gaps.map(function(g){ return g.key; })).then(function(rejected){
       var left=gridGaps(ctx);
       if(left.length){ toast('Not exported: '+listWords(left.map(function(g){ return g.label.toLowerCase(); }))+' still needs writing. Ask '+DARA+' again from its row.'); return; }
-      return runExport(kind, style);
+      return runExport(kind, style, false, undefined, rejected);
     });
   }
   // A brief never leaves with a sheet clipped: one that runs past its footer has Dara tighten the longest parts, once
   // (a sheet with no part over its limit first prints one step smaller); if it still does not fit, the export stops and says which sheet.
-  function runExport(kind, style, retried, tight){
+  function runExport(kind, style, retried, tight, rejected){
+    rejected=rejected||[];
     toast('Preparing '+kind.toUpperCase()+'…');
     return buildExportHTML(style, tight).then(function(html){
+      // Fail closed: sheets that could not be measured are not printed.
+      if(style!=='plain'&&LAST_GRID_OVERFLOW===null){
+        toast('Not exported: this browser could not check that every sheet fits. Try again, or use Plain PDF or Plain HTML.');
+        return null;
+      }
       if(style!=='plain'&&LAST_GRID_OVERFLOW.length){
         // Too full with no part over its limit: the sheet steps its type down once, before anyone is asked to rewrite.
-        if(!tight&&!LAST_GRID_WARNINGS.length) return runExport(kind, style, retried, LAST_GRID_OVERFLOW.slice());
+        if(!tight&&!LAST_GRID_WARNINGS.length) return runExport(kind, style, retried, LAST_GRID_OVERFLOW.slice(), rejected);
         var long=LAST_GRID_WARNINGS.slice().sort(function(a,b){ return b.words/b.limit-a.words/a.limit; });
         if(!long.length) long=gridLongest(2);  // nothing over its limit: the longest parts have no limit, so they go first
         var names=listWords(long.map(function(w){ return w.label.toLowerCase(); }));
         if(!retried&&long.length&&!docLocked()&&!noMiddleware()){
           toast(DARA+' is tightening '+names+' to fit the sheet…');
           return fillParts(long.map(function(w){ return w.key; }), function(k){ return gridLimit(k)?'Rewrite this part in at most '+gridLimit(k)+' words, keeping what matters most.':'Rewrite this part about a third shorter, keeping what matters most.'; })
-            .then(function(){ return runExport(kind, style, true); });
+            .then(function(more){ return runExport(kind, style, true, tight, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
         }
         toast('Not exported: sheet '+LAST_GRID_OVERFLOW[0]+' is too full. Shorten '+(names||'its parts')+' and export again.');
         return null;
       }
       if(style!=='plain'&&LAST_GRID_WARNINGS.length) toast('Printed smaller to fit its box: '+LAST_GRID_WARNINGS.map(function(w){ return w.label.toLowerCase(); }).join(', ')+'.');
       var base=(get('project_name')||'brief').replace(/[^\w.-]+/g,'-');
-      return window.clan.exportDoc(kind,base,html).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); });
+      return window.clan.exportDoc(kind,base,html).then(function(res){
+        if(res&&res.ok===false) toast('Could not start export.');
+        else if(rejected.length) toast(notApprovedWords(rejected)); });
     }).catch(function(e){ toast('Export failed: '+e); });
   }
   $('exHtml').addEventListener('click',function(){ doExport('html'); });
