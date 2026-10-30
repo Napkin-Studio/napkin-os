@@ -1481,6 +1481,60 @@ test('the export tries the tight step once, writes with it, and fails only if th
   assert.ok(!built.some(t => Array.isArray(t)), 'no tight step when a part is over its limit')
 })
 
+// The overflow decision with the real pieces: the real runExport, buildGridExportHTML, gridBody and gridCss. Only the browser's
+// measure (gridOverflow) is a stand-in, and it reads the HTML that was really built: a sheet overflows unless it was drawn
+// tight, so a step that did nothing to the document leaves it over.
+test('the real overflow decision: a sheet with no part over its limit is redrawn tight, and one that still overflows goes to Dara, then stops naming the sheet', async () => {
+  const g = grid()
+  const NAMES = ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss', 'gridLongest', 'buildGridExportHTML', 'buildExportHTML', 'runExport']
+  const setup = (vals: Record<string, unknown>, alwaysOver: boolean) => {
+    const toasts: string[] = [], exported: string[] = [], renders: string[] = [], filled: string[][] = []
+    const env = {
+      arr, esc, GRID_MEDIA_ROW: false, hasVal, toast: (m: string) => toasts.push(m), listWords: listJoin, DARA: 'Dara',
+      LAST_GRID_WARNINGS: [] as unknown[], LAST_GRID_OVERFLOW: [] as number[], docLocked: () => false, noMiddleware: () => false,
+      get: (k: string) => vals[k], CHAIN: { state: 'ok' }, chainForExport: () => Promise.resolve(), exportCitations: () => ({ marks: {}, notes: [] }), exportParts: () => [],
+      workingTitle: () => 'Better With Ballymaloe', window: { __CLAN__: { manifest: { version: '1.2' }, me: { name: 'Sai' } },
+        clan: { exportDoc: (_k: string, _b: string, html: string) => { exported.push(html); return Promise.resolve({ ok: true }) } } },
+      FIELDS: Object.keys(vals).map(key => ({ key, label: key })),
+      gridOverflow: (doc: string) => {
+        renders.push(doc.includes('class="sheet tight"') ? 'tight' : 'plain')
+        const sheets = doc.split('<div class="sheet').slice(1)
+        return Promise.resolve(sheets.flatMap((sh, i) => (alwaysOver ? i === 0 : !sh.startsWith(' tight"') && i === 0) ? [i + 1] : []))
+      },
+      fillParts: (keys: string[]) => { filled.push(keys); return Promise.resolve() },
+      regenField: () => undefined,
+    }
+    const f = lift<{ runExport(kind: string, style?: string): Promise<unknown> }>(BM, NAMES, env)
+    return { f, toasts, exported, renders, filled }
+  }
+  // 1. too full with no part over its limit: drawn again with sheet 1 tight, exported, Dara never asked
+  const a = setup(AT_LIMIT(g), false)
+  await a.f.runExport('pdf', 'grid')
+  assert.deepEqual(a.renders, ['plain', 'tight'], 'measured plain, then redrawn tight')
+  assert.equal(a.exported.length, 1)
+  assert.match(a.exported[0], /^<!DOCTYPE html>.*<div class="sheet tight">/s, 'the document that went out has sheet 1 drawn tight')
+  assert.equal((a.exported[0].match(/class="sheet tight"/g) || []).length, 1, 'and only sheet 1')
+  assert.deepEqual(a.filled, [], 'no rewrite for a step')
+  assert.ok(!a.toasts.some(t => /Not exported|Printed smaller/.test(t)))
+  // 2. still too full when tight: Dara tightens the longest parts once, and then it refuses, naming the sheet
+  const b = setup(AT_LIMIT(g), true)
+  await b.f.runExport('pdf', 'grid')
+  assert.equal(b.exported.length, 0, 'nothing goes out')
+  assert.equal(b.renders[0], 'plain'); assert.equal(b.renders[1], 'tight', 'the step is tried before Dara is asked')
+  assert.equal(b.filled.length, 1, 'then Dara tightens, once')
+  assert.ok(b.filled[0].length > 0 && b.toasts.some(t => /Dara is tightening/.test(t)))
+  assert.ok(b.toasts.some(t => /Not exported: sheet 1 is too full\./.test(t)), 'and it stops naming the sheet')
+  assert.ok(b.toasts.indexOf(b.toasts.find(t => /Dara is tightening/.test(t))!) < b.toasts.findIndex(t => /Not exported/.test(t)))
+  assert.ok(b.renders.length <= 4, `bounded: ${b.renders}`)
+  // 3. a part over its limit is the old path: Dara first, no tight step before her
+  const c = setup({ ...AT_LIMIT(g), job: words(60) }, false)
+  await c.f.runExport('pdf', 'grid')
+  assert.equal(c.renders[0], 'plain')
+  assert.equal(c.filled.length, 1, 'a part over its limit goes to Dara, not to the step')
+  assert.equal(c.filled[0][0], 'job')
+  assert.equal(c.renders[1], 'plain', 'the first redraw after Dara is the plain one, then the step')
+})
+
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
   const g = grid()
   const ctx = { ...ctxOf({ audience: 'Who.' }), client: 'Ballymaloe Relish, an Irish family relish brand.' }
