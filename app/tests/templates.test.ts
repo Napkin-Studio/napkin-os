@@ -1498,7 +1498,7 @@ test('the export tries the tight step once, writes with it, and fails only if th
 // tight, so a step that did nothing to the document leaves it over.
 test('the real overflow decision: a sheet with no part over its limit is redrawn tight, and one that still overflows goes to Dara, then stops naming the sheet', async () => {
   const g = grid()
-  const NAMES = ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss', 'gridLongest', 'buildGridExportHTML', 'buildExportHTML', 'runExport']
+  const NAMES = ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss', 'gridLongest', 'measureGrid', 'buildGridExportHTML', 'buildExportHTML', 'runExport']
   const setup = (vals: Record<string, unknown>, alwaysOver: boolean) => {
     const toasts: string[] = [], exported: string[] = [], renders: string[] = [], filled: string[][] = []
     const env = {
@@ -1613,15 +1613,15 @@ test('a part Jude rejected is exported as to confirm, and the export says it was
   assert.equal(words([]), '')
   // the export passes them on and says so once the export has started
   let said = ''
-  const run = lift<{ runExport(k: string, s: string, r?: boolean, rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
+  const run = lift<{ runExport(k: string, s: string, r?: boolean, t?: number[], rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
     LAST_GRID_OVERFLOW: [], LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m }, buildExportHTML: () => Promise.resolve('<html>'),
     get: () => 'x', notApprovedWords: words, window: { clan: { exportDoc: () => Promise.resolve({ ok: true }) } },
   })
-  await run.runExport('pdf', 'grid', false, ['The insight'])
+  await run.runExport('pdf', 'grid', false, undefined, ['The insight'])
   assert.equal(said, 'Written, not approved by Jude: the insight.')
-  await run.runExport('pdf', 'grid', false, [])
+  await run.runExport('pdf', 'grid', false, undefined, [])
   assert.equal(said, 'Preparing PDF…', 'nothing rejected: nothing extra is said')
-  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, rejected\)/)
+  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, undefined, rejected\)/)
 })
 
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
