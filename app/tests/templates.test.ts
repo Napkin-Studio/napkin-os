@@ -1041,6 +1041,8 @@ type Grid = {
   gridHas(v: unknown): boolean
   gridStep(words: number, limit: number): number
   gridGaps(ctx: unknown): { key: string; label: string }[]
+  gridHeld(ctx: unknown): number
+  gridGrounded(ctx: unknown): number
   gridHollow(ctx: unknown): boolean
   gridFlag(v: unknown): boolean
   gridHeaderInfo(e: unknown): string[][]
@@ -1048,7 +1050,7 @@ type Grid = {
   gridContentSheets(): number
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeld', 'gridGrounded', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1138,7 +1140,18 @@ test('a brief leaves with nothing empty: the gate names every empty part, the he
   assert.equal(g.gridHollow(at({})), true, 'an empty brief is not exported')
   assert.equal(g.gridHollow(at({ single_minded_proposition: 'Just one thing.' })), true)
   assert.equal(g.gridHollow(at({ job: 'J.', background: 'B.', audience: 'A.', insight: 'I.' })), false)
-  assert.match(BM, /gridHollow\(ctx\)\)\{ toast\('Not exported: there is hardly anything/)
+  assert.match(BM, /Not exported: there is hardly anything/)
+  assert.match(BM, /Not exported: almost everything here is a guess/)
+  // A one-word brief: every part comes back, every text part marked, the lists invented. Complete-looking and hollow.
+  const guess = Object.fromEntries(Object.keys(all).map(k => [k, Array.isArray((all as Record<string, unknown>)[k]) ? ['x'] : 'To confirm: A guess.']))
+  assert.deepEqual(g.gridGaps(at(guess)), [], 'nothing is empty')
+  assert.equal(g.gridGrounded(at(guess)), 0)
+  assert.equal(g.gridHollow(at(guess)), true, 'a brief of guesses is not exported as a grid')
+  // Ballymaloe: the client's own words in several parts, the rest proposed.
+  const rooted = { ...guess, job: 'Make an ordinary person ring.', audience: 'Families who cook.', budget_and_scope: '40k, Irish retail.' }
+  assert.equal(g.gridHollow(at(rooted)), false)
+  assert.equal(g.gridHollow(at({ ...rooted, audience: 'To confirm: A.' })), true, 'two grounded parts are not enough')
+  assert.equal(g.gridHollow(at({ goal: 'make me a brief' })), true)
   // The header: a value, a suggestion marked as one, or a prompt for what only a person knows. Never a blank.
   const info = g.gridHeaderInfo({ client: 'Ballymaloe Relish, an Irish family relish brand.', project: 'Better With Ballymaloe', version: '1.2', date: '29 October 2026',
     me: 'Sai', today: new Date(2026, 9, 29) })

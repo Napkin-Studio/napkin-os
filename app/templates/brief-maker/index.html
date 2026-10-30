@@ -1215,11 +1215,23 @@
     if(!gridHas(ctx.get('objection'))&&!seen.objection) out.push({key:'objection', label:'The objection to beat'});
     return out;
   }
-  // A brief with next to nothing written is not worth a sheet: Dara would invent the lot. Under four parts held, the export stops.
-  function gridHollow(ctx){
+  // How many parts the brief holds, as gridGaps counts them.
+  function gridHeld(ctx){
     var total=gridGaps({get:function(){ return ''; }}).length;  // every part, as gridGaps counts them
-    return total-gridGaps(ctx).length<4;
+    return total-gridGaps(ctx).length;
   }
+  // How many held parts are not a guess. A stored part carries its mark and not its basis, so a text part without
+  // the "To confirm:" mark counts (client, research, library or person). A list is never marked, so it proves nothing.
+  function gridGrounded(ctx){
+    var n=0, seen={};
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      if(c.kind==='sources'||c.kind==='list'||seen[c.key]) return; seen[c.key]=1;
+      var v=ctx.get(c.key); if(gridHas(v)&&!gridFlag(v)) n++; }); }); });
+    return n;
+  }
+  // A brief with next to nothing written is not worth a sheet: Dara would invent the lot. Under four parts held, or
+  // under three that are not a guess (a one-word brief comes back whole and all marked), the export stops.
+  function gridHollow(ctx){ return gridHeld(ctx)<4||gridGrounded(ctx)<3; }
   // The info grid: every cell holds a value, a suggestion marked as one, or a prompt for what only a person knows.
   function gridHeaderInfo(e){
     var client=String(e.client||'').trim(), who=String(e.me||'').trim()||'Napkin Studio';
@@ -2672,8 +2684,12 @@
     if(!(window.clan&&window.clan.exportDoc)){ toast('Export needs the Napkin host.'); return; }
     if(style==='plain') return runExport(kind, style);
     var ctx={get:get, hasVal:hasVal}, gaps=gridGaps(ctx);
+    if(gridHollow(ctx)){
+      toast(gridHeld(ctx)<4?'Not exported: there is hardly anything in this brief yet. Tell '+DARA+' about the client, the audience and the budget, then export.'
+        :'Not exported: almost everything here is a guess. Tell '+DARA+' what the client, the research or you know, or choose Plain PDF or Plain HTML.');
+      return;
+    }
     if(!gaps.length) return runExport(kind, style);
-    if(gridHollow(ctx)){ toast('Not exported: there is hardly anything in this brief yet. Tell '+DARA+' about the client, the audience and the budget, then export.'); return; }
     var names=listWords(gaps.map(function(g){ return g.label.toLowerCase(); }));
     if(docLocked()||noMiddleware()){ toast('Still empty and not written here: '+names+'. Fill them in, then export.'); return; }
     toast(DARA+' is writing '+names+' before the export…');
