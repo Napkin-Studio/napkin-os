@@ -723,3 +723,20 @@ def test_a_request_to_the_crew_is_never_captured_as_the_clients_brief():
     q = "Make a brief on bulmers cider, they want to enter the beer market and target young people in Dublin."
     assert echoes_request("A brief on Bulmers cider's beer market entry", [q])
     assert not echoes_request("Enter the beer market", [q]) and not echoes_request("Young people in Dublin", [q])
+
+
+def test_the_field_by_field_flow_drafts_and_regenerates_both_new_parts(bserver):
+    """The legacy path: rubric_value and regenerate_field know the new keys."""
+    host = Host()
+    replies = run(bserver, host)
+    assert replies[-1]["job"]["state"] == "done"
+    assert host.data["media_roles"][0].startswith("Radio:") and host.data["measurement"][0].startswith("Judged by:")
+    for k in ("media_roles", "measurement"):
+        replies = run(bserver, host, task="regenerate_field", inp={"field": k, "guidance": "fewer lines"})
+        last = replies[-1]
+        assert last["task"] == "regenerate_field" and last["job"]["state"] == "done", k
+        pl = [pl for p, pl, _ in bserver.model.calls if p == f"draft_{k}"][-1]
+        assert pl["planner_guidance"] == "fewer lines"
+        assert set(host.changes[-1]["data_patch"]) - {"passages"} == {k} and isinstance(host.data[k], list)
+        assert any(d["kind"] == "verdict" for d in host.changes[-1]["decisions"])
+    check_change_rules(host)

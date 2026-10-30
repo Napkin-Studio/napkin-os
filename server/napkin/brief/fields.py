@@ -1,4 +1,4 @@
-"""Brief Maker's document shape (middleware-api.md §10.4–§10.5): the twenty-one
+"""Brief Maker's document shape (middleware-api.md §10.4–§10.5): the twenty-three
 fields, the field map, locks, who holds a field, and the patch paths a staged
 change is judged by.
 
@@ -19,9 +19,9 @@ KEYS = [
     "project_name", "client", "job", "background", "barrier", "objectives.commercial", "objectives.behavioural",
     "objectives.attitudinal", "audience", "competitor_context", "insight", "single_minded_proposition", "objection",
     "reasons_to_believe", "desired_response.think", "desired_response.feel", "desired_response.do",
-    "tone_and_world", "budget_and_scope", "mandatories", "open_questions",
+    "tone_and_world", "budget_and_scope", "media_roles", "measurement", "mandatories", "open_questions",
 ]
-ARRAY_KEYS = {"reasons_to_believe", "tone_and_world", "mandatories", "open_questions"}
+ARRAY_KEYS = {"reasons_to_believe", "tone_and_world", "media_roles", "measurement", "mandatories", "open_questions"}
 NESTED = ("objectives", "desired_response")
 
 BUILTIN_FIELD_MAP = {
@@ -36,6 +36,8 @@ BUILTIN_FIELD_MAP = {
     "audience": {"class": "captured", "rubric": "audience"},
     "competitor_context": {"class": "captured", "rubric": "competitor_context"},
     "budget_and_scope": {"class": "captured", "rubric": "budget_scope"},
+    "media_roles": {"class": "drafted", "rubric": "media_roles", "loop": "loop6_substantiation"},
+    "measurement": {"class": "drafted", "rubric": "measurement", "loop": "loop6_substantiation"},
     "mandatories": {"class": "captured", "rubric": "mandatories"},
     "tone_and_world": {"class": "captured", "rubric": "tone_world_assets"},
     "insight": {"class": "drafted", "rubric": "insight", "loop": "loop4_insight"},
@@ -60,7 +62,8 @@ LABELS = {
     "single_minded_proposition": "single-minded proposition", "reasons_to_believe": "reasons to believe",
     "desired_response.think": "desired response (think)", "desired_response.feel": "desired response (feel)",
     "desired_response.do": "desired response (do)", "tone_and_world": "tone and world",
-    "budget_and_scope": "budget and scope", "mandatories": "mandatories", "open_questions": "open questions",
+    "budget_and_scope": "budget and scope", "media_roles": "role of each medium",
+    "measurement": "how we will know it worked", "mandatories": "mandatories", "open_questions": "open questions",
     "desired_response": "desired response",
 }
 
@@ -69,7 +72,7 @@ RUBRIC_FIELDS = {f["id"]: f for f in RUBRIC["fields"]}
 
 
 def field_map(clan: dict) -> dict:
-    """The declared map, or the built-in one. Only the eighteen keys count."""
+    """The declared map, or the built-in one. Only the keys of the map count."""
     fm = ((clan or {}).get("pipeline") or {}).get("fields") if isinstance((clan or {}).get("pipeline"), dict) else None
     out = copy.deepcopy(BUILTIN_FIELD_MAP)
     if isinstance(fm, dict):

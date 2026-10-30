@@ -18,7 +18,7 @@ import pytest
 from napkin import reasoning as rsn
 from napkin.brief import checkloop, fix, planned
 from napkin.brief import provenance as prov
-from napkin.brief.fields import KEYS
+from napkin.brief.fields import ARRAY_KEYS, KEYS
 from napkin.brief.planned import DIMS
 from napkin.rules import derive
 
@@ -91,8 +91,7 @@ def lidl_model(seen, *, dara_cites=True, tie=None, jude_partly=False, bg_basis="
         seen["draft"] = p
         a, b = ids_by_key(p["facts"])
         seen["ids"] = (a, b)
-        out = {k: {"value": [f"A {k} item"] if k in ("reasons_to_believe", "tone_and_world", "mandatories",
-                                                      "open_questions") else f"A proposal for the {k}",
+        out = {k: {"value": [f"A {k} item"] if k in ARRAY_KEYS else f"A proposal for the {k}",
                    "basis": "assumption", "cites": [], "builds_on_client": False, "why": "a planner's proposal"}
                for k in p["parts"]}
         out["background"] = {"value": BG, "basis": bg_basis, "cites": [a, b] if dara_cites else [],

@@ -435,6 +435,14 @@ def brief_responder(model, purpose):
     def draft_objection(p):
         return {"value": "A midweek drink undoes my week.", "grounds": _grounds(p, extra_bad=False)}
 
+    def draft_media_roles(p):
+        return {"value": ["Radio: reaches them in the car, when the evening plan is made", "Social: cheap repeats of the one idea"],
+                "grounds": _grounds(p, extra_bad=False)}
+
+    def draft_measurement(p):
+        return {"value": ["Judged by: sales against last year, as the client set it", "Attribution: two regions on air, two held back",
+                          "The lag: sales land in the flight, the tracker after it"], "grounds": _grounds(p, extra_bad=False)}
+
     def sharpen_insight(p):
         return {"value": INSIGHT_SHARP, "grounds": _grounds(p)}
 
@@ -491,6 +499,7 @@ def brief_responder(model, purpose):
              "draft_smp": draft_smp, "rank_insight": rank, "rank_smp": rank, "sharpen_insight": sharpen_insight,
              "sharpen_smp": sharpen_smp, "draft_reasons_to_believe": draft_rtb, "draft_desired_response": draft_dr,
              "draft_job": draft_job, "draft_barrier": draft_barrier, "draft_objection": draft_objection,
+             "draft_media_roles": draft_media_roles, "draft_measurement": draft_measurement,
              "judge_coherence": coherence}
     if purpose in table:
         return table[purpose]

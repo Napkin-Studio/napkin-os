@@ -74,9 +74,23 @@ WHAT = {
     "desired_response.do": "what they should do",
     "tone_and_world": "how the work should feel (list of short phrases)",
     "budget_and_scope": "deliverables, channels, timing; never a budget figure that was not given; ask whether the budget includes VAT and whether media sits inside it",
+    "media_roles": "one line per medium, at most four and 55 words in all: 'Medium: the job it does for this audience and why', chosen "
+                   "from the job, never from habit; no reach, frequency or cost figure the client or the facts did not give; a medium the "
+                   "client did not name starts 'To confirm:' (list)",
+    "measurement": "how the work is judged and how we will know it worked, one line each, at most five and 70 words in all: Judged by "
+                   "(the client's own criteria, else the objectives it is read against, marked 'To confirm:'); Attribution (a holdout "
+                   "or geo comparison); Before and after (a tracker wave in market before launch, on the attitude the work changes); "
+                   "In flight (the fast reads, one of them the action asked for); The lag (what lands inside the flight, what after). "
+                   "Targets are the objectives' own, never new; a tracker wave or holdout nobody has budgeted starts 'To confirm:' (list)",
     "mandatories": "what must appear or be avoided (list)",
     "open_questions": "what only the client can answer (list)",
 }
+
+
+def _listed(words) -> str:
+    """'a, b and c': names in a sentence."""
+    w = list(words)
+    return w[0] if len(w) == 1 else ", ".join(w[:-1]) + " and " + w[-1]
 
 
 def _obj(props: dict, required=None) -> dict:
@@ -188,7 +202,8 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
    the brief), fix (one sentence)}:
    objectives_quality (a handful at most, benchmarked and time-stamped, the commercial/behavioural/attitudinal
    chain linked), audience_vividness (a vivid picture, not a bare age range; who it is NOT for),
-   single_minded_message (ONE message with relevant proof), evaluation_criteria (how the work will be judged),
+   single_minded_message (ONE message with relevant proof), evaluation_criteria (how the work will be judged and how we will know it worked: the
+   measurement part),
    budget_interlock (budget, objectives and audience feasible together), strategic_clarity (a clear choice,
    including what not to do), language (simple, succinct, no jargon).
 2. chain: does objective -> audience -> insight -> proposition -> reasons to believe hold as one argument?
@@ -207,14 +222,15 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
 7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary. It is "multiple" when the
    brief serves more than one problem, audience or message, or when the client's own input was a wish-list of
    objectives, audiences and messages that was never narrowed to one: say in split_into what the one choice is.
-8. part tests: `tests` holds, for the insight, the proposition, the job, the barrier and the objection, the planning
+8. part tests: `tests` holds, for @TESTED@, the planning
    tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
    `revise` with one instruction that names the test and the fix. `part_checks` is what code measured (words against
-   the limit, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
+   the limit, items against the item cap, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
    fails when it joins two thoughts, and passes when it sits inside one.
 9. anti-patterns, also `revise`: a proposition that is really a tagline, or is the brand's own existing line; two
    thoughts smuggled into one (an objection holding several doubts, a job asking for several changes); a wish-list
-   (more than one problem, audience or message); words a normal person would not say out loud."""
+   (more than one problem, audience or message); a medium whose job is really the creative idea; words a normal person
+   would not say out loud.""".replace("@TESTED@", _listed(checks.TESTED_WORDS.values()))
 
 
 def review_schema(keys):
@@ -871,6 +887,7 @@ class PlannedBriefJob(BriefJob):
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
+        qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
         oq, merged = dedupe(qs)
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
