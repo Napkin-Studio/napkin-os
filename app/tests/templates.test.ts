@@ -1373,3 +1373,140 @@ test('a part the draft marks "To confirm:" prints a corner tag, not the words in
   assert.doesNotMatch(marked, /To confirm: Tension/)
   assert.equal((marked.match(/class="tc"/g) || []).length, 1, 'one tag, only on the marked box')
 })
+
+// ── Brief Maker: intake (brief-intake-qa) ─────────────────────────────────
+
+// The draft may stop once, in needs_input, for a few questions (middleware-api §10.6). The page keeps
+// polling, shows them with Skip on each and Skip, just draft for all, and answers with answer_question.
+test('a needs_input reply keeps the poll alive, carries the questions, and a running reply resumes', () => {
+  type J = Record<string, unknown> & { state: string; questions?: unknown; questions_id?: unknown }
+  const ended: J[] = [], polled: string[] = [], stored: Record<string, string | null> = {}
+  const f = lift<{ onJobReply(j: J, r: unknown): void }>(BM, ['onJobReply'], {
+    hostErr: () => null, mwBody: (r: unknown) => r, endJob: (j: J) => { ended.push(j) },
+    store: (k: string, v: string | null) => { stored[k] = v }, jobKey: (t: string) => `k.${t}`, loadChain: () => {},
+    pollJob: (j: J) => { polled.push(j.state) }, setTimeout: (fn: () => void) => { fn(); return 1 }, clearTimeout: () => {},
+    LAST_PROPOSALS: null,
+  })
+  const q = [{ id: 'q_budget', key: 'budget', text: 'What is the budget?', why: 'w', priority: 'important', skippable: true }]
+  const j: J = { task: 'draft_brief', state: 'running', delay: 900, onUpdate: () => {}, onEnd: () => {} }
+  f.onJobReply(j, { job: { id: 'job_1', state: 'needs_input', stage: 'context', question: null, questions_id: 'qs_1', questions: q } })
+  assert.equal(j.state, 'needs_input')
+  assert.deepEqual(j.questions, q)
+  assert.equal(j.questions_id, 'qs_1')
+  assert.equal(ended.length, 0, 'the finished state never shows while the job waits')
+  assert.deepEqual(polled, ['needs_input'], 'it keeps polling')
+  assert.equal(stored['k.draft_brief'], 'job_1', 'a reload picks the waiting job up')
+  // answered, skipped or timed out: the job runs again and the questions go
+  f.onJobReply(j, { job: { id: 'job_1', state: 'running', stage: 'context', question: null } })
+  assert.equal(j.questions, null)
+  assert.equal(ended.length, 0)
+  f.onJobReply(j, { job: { id: 'job_1', state: 'done', stage: 'judge' } })
+  assert.equal(ended.length, 1)
+})
+
+test('answers go out as answer_question; a refusal after the wait ran out is not the end of the draft', async () => {
+  type J = Record<string, unknown>
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const replies: unknown[] = []
+  const toasts: string[] = [], polls: J[] = [], updates: J[] = [], handled: unknown[] = []
+  const f = lift<{ answerJob(j: J, a: Record<string, string | null>): void }>(BM, ['answerJob'], {
+    window: { clan: { apiProxy: (_: string, body: { task: string; input: Record<string, unknown> }) => { sent.push(body); return Promise.resolve(replies.shift()) } } },
+    hostErr: (r: { error?: string }) => (r && r.error ? r.error : null), toast: (m: string) => { toasts.push(m) },
+    pollJob: (j: J) => { polls.push(j) }, onJobReply: (_: J, r: unknown) => { handled.push(r) }, clearTimeout: () => {},
+  })
+  const j: J = { task: 'draft_brief', id: 'job_1', questions_id: 'qs_1', state: 'needs_input', onUpdate: (x: J) => { updates.push({ ...x }) } }
+  replies.push({ job: { state: 'running' } })
+  f.answerJob(j, { q_budget: 'EUR 150,000 incl. VAT', q_timeline: null })
+  f.answerJob(j, {})  // a second click while the first is out sends nothing
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(sent.length, 1)
+  assert.deepEqual(sent[0], { task: 'answer_question', input: { job_id: 'job_1', questions_id: 'qs_1', answers: { q_budget: 'EUR 150,000 incl. VAT', q_timeline: null } } })
+  assert.equal(handled.length, 1, 'the reply is the job’s, as a poll’s')
+  assert.equal(j.answering, false)
+  // the wait ran out first (409): say so, keep polling, never end the draft
+  replies.push({ error: 'job_state (409): nobody answered in time, so it went on without' })
+  f.answerJob(j, {})
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(handled.length, 1)
+  assert.equal(polls.length, 1)
+  assert.match(toasts[0], /went on without/)
+  // nothing is sent when the job holds no open questions
+  f.answerJob({ ...j, questions_id: null }, {})
+  assert.equal(sent.length, 2)
+})
+
+test('the questions panel has Skip on each question and Skip, just draft for all', () => {
+  const html = lift<{ askHtml(qs: unknown[]): string }>(BM, ['askHtml'], { esc, SAM: 'Sam', DARA: 'Dara' }).askHtml([
+    { id: 'q_budget', text: 'What is the budget?', why: 'Scope depends on it', skippable: true },
+    { id: 'q_client', text: 'Which client <b>?', skippable: false }])
+  assert.match(html, /<h3>Before Sam plans<\/h3>/)
+  assert.match(html, /<div class="q" data-q="q_budget"><label for="ask_q_budget">What is the budget\?<\/label><div class="why">Scope depends on it<\/div><textarea id="ask_q_budget" rows="2"><\/textarea><button type="button" class="skip" data-skip="q_budget">Skip this one<\/button><\/div>/)
+  // a question that is not skippable has no Skip; text is escaped
+  assert.match(html, /<div class="q" data-q="q_client"><label for="ask_q_client">Which client &#60;b&#62;\?<\/label><textarea id="ask_q_client" rows="2"><\/textarea><\/div>/)
+  assert.equal(html.split('data-skip=').length - 1, 1)
+  assert.match(html, /<button type="button" class="ghost big" id="askSkipAll">Skip, just draft<\/button><button type="button" class="go" id="askSend">Send answers<\/button>/)
+})
+
+test('the panel is drawn once per set of questions, so typed text survives a poll; Skip all sends none, Send sends typed', () => {
+  type El = { value?: string; disabled?: boolean; handlers: Record<string, () => void>; classList: { toggle(): void }; addEventListener(e: string, f: () => void): void; querySelector(s: string): El; focus(): void; textContent?: string }
+  const mk = (): El => { const el: El = { value: '', handlers: {}, classList: { toggle() {} }, addEventListener(e, f) { el.handlers[e] = f }, querySelector: () => el, focus() {} }; return el }
+  const attrs: Record<string, string> = {}
+  let writes = 0
+  const askEl = mk(), sendEl = mk(), skipAllEl = mk(), row = mk(), ta = mk()
+  const box = {
+    hidden: true, get innerHTML() { return '' }, set innerHTML(_: string) { writes++ },
+    getAttribute: (k: string) => attrs[k] ?? null, setAttribute: (k: string, v: string) => { attrs[k] = v }, removeAttribute: (k: string) => { delete attrs[k] },
+    querySelector: (sel: string) => (sel === '#askSkipAll' ? skipAllEl : sel === '#askSend' ? sendEl : sel.startsWith('#ask_') ? ta : { ...row, querySelector: (s: string) => (s === 'textarea' ? ta : s === '.skip' ? skipBtn : row) }),
+    querySelectorAll: () => [],
+  }
+  const skipBtn = mk()
+  void askEl
+  const sent: Record<string, string | null>[] = []
+  const f = lift<{ renderAsk(j: Record<string, unknown>): void }>(BM, ['askHtml', 'renderAsk'], {
+    esc, SAM: 'Sam', DARA: 'Dara', $: () => box, answerJob: (_: unknown, a: Record<string, string | null>) => { sent.push(a) },
+  })
+  const qs = [{ id: 'q_budget', text: 'Budget?', skippable: true }]
+  const j: Record<string, unknown> = { state: 'needs_input', questions: qs, questions_id: 'qs_1' }
+  f.renderAsk(j)
+  assert.equal(writes, 1)
+  ta.value = 'EUR 150,000'
+  f.renderAsk(j); f.renderAsk(j)  // the next polls
+  assert.equal(writes, 1, 'the panel is not redrawn, so what is typed stays')
+  assert.equal(ta.value, 'EUR 150,000')
+  sendEl.handlers.click()
+  assert.deepEqual(sent[0], { q_budget: 'EUR 150,000' })
+  skipBtn.handlers.click()  // Skip drops the typed answer
+  sendEl.handlers.click()
+  assert.deepEqual(sent[1], { q_budget: null })
+  skipAllEl.handlers.click()
+  assert.deepEqual(sent[2], {})
+  // a new set of questions is drawn afresh
+  f.renderAsk({ ...j, questions_id: 'qs_2' })
+  assert.equal(writes, 2)
+  // the wait over: the panel goes
+  f.renderAsk({ state: 'running' })
+  assert.equal(box.hidden, true)
+  assert.equal(attrs['data-qs'], undefined)
+  assert.match(BM, /<div class="ask" id="ask" hidden><\/div>/)
+  assert.match(fn(BM, 'renderProc'), /renderAsk\(j\)/)
+  // the working page counts needs_input as live: it can be stopped, and it never reads as finished
+  assert.match(fn(BM, 'renderProc'), /var asking=j\.state==='needs_input';\s*var live=[^;]*\|\|asking;/)
+  assert.match(fn(BM, 'renderProc'), /canStop=live&&j\.id/)
+})
+
+test('only the new draft asks for intake', () => {
+  assert.equal(BM.split('intake:true').length - 1, 1, 'one request carries it')
+  type J = { task: string }
+  const runs: { j: J; input: Record<string, unknown> }[] = []
+  const f = lift<{ startDraft(p: string, a: unknown[], id?: string): void }>(BM, ['startDraft'], {
+    DRAFT: null, forceIntake: false, reduce: true, renderProc: () => {}, setPhase: () => {}, render: () => {}, arr,
+    window: { scrollTo: () => {} }, setTimeout: () => 0, pollJob: () => {},
+    runJob: (j: J, input: Record<string, unknown>) => { runs.push({ j, input }) },
+  })
+  f.startDraft('A brief for Brewline', [{ name: 'a.pdf' }])
+  assert.equal(runs[0].j.task, 'draft_brief')
+  assert.equal(runs[0].input.intake, true)
+  assert.deepEqual(runs[0].input.attachments, [{ name: 'a.pdf' }])
+  // the redraft and the part fixes go through other jobs and ask nothing
+  for (const name of ['regenField', 'fixParts']) assert.doesNotMatch(fn(BM, name), /intake/)
+})

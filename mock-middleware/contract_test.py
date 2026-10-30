@@ -294,8 +294,13 @@ class Suite:
             check(k in job, f"job.{k} missing")
         check(isinstance(job["id"], str) and job["id"], "job.id empty")
         check(job["state"] in ("queued", "running", "needs_input", "done", "failed"), f"job.state {job['state']}")
-        check(job["state"] != "needs_input" or body["task"] == "start_campaign",
-              "only a start_campaign job waits for input")
+        # start_campaign waits with job.question (§8.3); a draft_brief asked to take intake (input.intake true,
+        # §10.3) waits with job.questions and job.questions_id, job.question null (§10.6). No other job waits.
+        check(job["state"] != "needs_input" or body["task"] == "start_campaign" or
+              (body["task"] == "draft_brief" and job.get("question") is None and
+               isinstance(job.get("questions"), list) and job["questions"] and
+               isinstance(job.get("questions_id"), str) and job["questions_id"]),
+              "only a start_campaign job, or a draft_brief asked to take intake, waits for input")
         if states:
             check(job["state"] in states, f"job.state {job['state']} not in {states}")
         p = job["progress"]

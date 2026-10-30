@@ -14,7 +14,10 @@ not drafted, written or proposed (`kept`); a field a person holds is proposed
 written; every passage a decision cites is written into `data.passages` by
 the same change; every decision carries reasoning whose cites resolve.
 
-No stage halts the brief (the owner, 2026-09-30). A stage that raises, that
+No stage halts the brief (the owner, 2026-09-30), and the brief waits only for intake: a draft_brief the
+request asks to be asked first (input.intake) may pause once, in `needs_input`, for a few questions, for
+at most the intake wait (settings.brief_intake_wait) and never past cancel_job. Nobody answering is a
+recorded default (the questions stay open), never a halt. A stage that raises, that
 the model refuses or answers malformed, or that outlives STAGE_TIMEOUT is a
 recorded gap — a decision naming the stage, why, and what the job does without
 it — and the next stage runs; the job ends `done` with what it has, and
@@ -29,13 +32,14 @@ import copy
 import logging
 import re
 import threading
+import time
 import traceback
 
 from .. import reasoning as rsn
 from ..doc import apply_patch, ctx_data, ctx_decisions, decision, deep_merge
 from ..jobs import Abandoned, abandon, abandoned, bounded
 from ..model import ModelError
-from ..util import TaskError, iso, uid
+from ..util import TaskError, bad, iso, uid
 from . import capture as cap_stage
 from . import fill as fill_stage
 from .drafters import DraftContext, Drafter, _query, run_drafters
@@ -144,6 +148,9 @@ class BriefJob:
         self.chain = ctx_decisions(req.clan)
         self.fm = field_map(req.clan)
         self.lock = threading.RLock()
+        self.cond = threading.Condition(self.lock)
+        self.questions, self.questions_id, self.answers = [], None, None  # intake's, while state is needs_input
+        self.unattended = False  # the wait ran out: the job went on without answers
         self.state, self.stage_idx = "queued", 0
         self.started_at, self.finished_at, self.error = iso(), None, None
         self.chunks: list[Chunk] = []
@@ -217,14 +224,15 @@ class BriefJob:
         self.thread.start()
 
     def cancel(self) -> bool:
-        """A person stopped the job: `cancelled` at once. What it sent stays;
-        the fields still in flight are `failed`; one decision says where."""
+        """A person stopped the job: `cancelled` at once, even while it waits for answers. What it sent
+        stays; the fields still in flight are `failed`; one decision says where."""
         with self.lock:
-            if self.state not in ("queued", "running"):
+            if self.state not in ("queued", "running", "needs_input"):
                 return False
             stage = self.stages[min(self.stage_idx, len(self.stages) - 1)]
-            self.state, self.finished_at = "cancelled", iso()
+            self.state, self.finished_at, self.questions = "cancelled", iso(), []
             self.caps.jobs.stop()
+            self.cond.notify_all()
             for k, f in self.fields.items():
                 if f["state"] in IN_FLIGHT:
                     self.fields[k] = {"state": "failed", "by": f["by"]}
@@ -241,6 +249,48 @@ class BriefJob:
         except Exception:  # noqa: BLE001 - the job is cancelled either way
             log.error("%s %s: the cancel could not be recorded", self.task, self.id)
         return True
+
+    def ask(self, questions, wait):
+        """Pause for the person (intake): the job is `needs_input` with `questions` until `answer` arrives,
+        cancel_job, or `wait` seconds pass. -> ({question id: answer or None}, timed_out). Called from a
+        stage; the wait is bounded by `wait`, never by STAGE_TIMEOUT."""
+        end = time.monotonic() + wait
+        with self.lock:
+            if self.state != "running":
+                return {}, False  # cancelled before it asked
+            self.questions, self.answers = copy.deepcopy(questions), None
+            self.questions_id = uid("qs_", self.doc, self.id, *[q["id"] for q in questions])
+            self.state = "needs_input"
+            while self.state == "needs_input" and time.monotonic() < end:
+                self.cond.wait(timeout=end - time.monotonic())
+            timed_out = self.state == "needs_input"
+            if timed_out:
+                self.state, self.unattended = "running", True
+            self.questions = []
+            return dict(self.answers or {}), timed_out
+
+    def answer(self, clan, inp):
+        """answer_question for a brief job: `{questions_id, answers: {question id: text | null}}`. A null, a
+        missing id or an empty `answers` is a skip. Raises TaskError: 409 when the job is not waiting (never
+        asked, already answered, or went on without), 400 for an answer to no question."""
+        with self.lock:
+            if self.state != "needs_input":
+                why = "; nobody answered in time, so it went on without" if self.unattended else ""
+                raise TaskError(409, "job_state", f"job {self.id} is {self.state}, not waiting for an answer{why}")
+            if inp.get("questions_id") != self.questions_id:
+                raise bad("questions_id is not the job's open questions")
+            given = inp.get("answers")
+            if not isinstance(given, dict):
+                raise bad("answers must be an object: {question id: text, or null to skip}")
+            ids = {q["id"] for q in self.questions}
+            for k, v in given.items():
+                if k not in ids:
+                    raise bad(f"{k} is not one of the job's questions")
+                if v is not None and not isinstance(v, str):
+                    raise bad("an answer is text, or null to skip the question")
+            self.answers = given
+            self.state = "running"
+            self.cond.notify_all()
 
     def _run(self):
         with self.lock:
@@ -372,11 +422,14 @@ class BriefJob:
     def view(self):
         with self.lock:
             n = len(self.stages)
-            return {"id": self.id, "state": self.state,
-                    "progress": {"done": n if self.state == "done" else min(self.stage_idx, n - 1) if self.state != "failed"
-                                 else self.stage_idx, "total": n},
-                    "stage": self.stages[min(self.stage_idx, n - 1)], "question": None,
-                    "started_at": self.started_at, "finished_at": self.finished_at, "error": self.error}
+            out = {"id": self.id, "state": self.state,
+                   "progress": {"done": n if self.state == "done" else min(self.stage_idx, n - 1) if self.state != "failed"
+                                else self.stage_idx, "total": n},
+                   "stage": self.stages[min(self.stage_idx, n - 1)], "question": None,
+                   "started_at": self.started_at, "finished_at": self.finished_at, "error": self.error}
+            if self.state == "needs_input":  # `question` stays null: it is the Research Tool's one question
+                out["questions_id"], out["questions"] = self.questions_id, copy.deepcopy(self.questions)
+            return out
 
     def result(self):
         with self.lock:
@@ -394,6 +447,8 @@ class BriefJob:
             s = f"Failed at {v['stage']}: {self.error['message']}"
         elif v["state"] == "cancelled":
             s = f"Cancelled at the {v['stage']} stage: what finished before it is in the brief."
+        elif v["state"] == "needs_input":
+            s = "A few questions before the draft: answer them, or skip."
         elif v["stage"] == "draft" and drafting:
             s = f"Drafting {len(drafting)} field(s) in parallel."
         else:
