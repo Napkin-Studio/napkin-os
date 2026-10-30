@@ -1283,3 +1283,96 @@ test('a part the draft marks "To confirm:" prints a corner tag, not the words in
   assert.doesNotMatch(marked, /To confirm: Tension/)
   assert.equal((marked.match(/class="tc"/g) || []).length, 1, 'one tag, only on the marked box')
 })
+
+// ── Brief Maker: intake (brief-intake-qa) ─────────────────────────────────
+
+// The draft may stop once, in needs_input, for a few questions (middleware-api §10.6). The page keeps
+// polling, shows them with Skip on each and Skip, just draft for all, and answers with answer_question.
+test('a needs_input reply keeps the poll alive, carries the questions, and a running reply resumes', () => {
+  type J = Record<string, unknown> & { state: string; questions?: unknown; questions_id?: unknown }
+  const ended: J[] = [], polled: string[] = [], stored: Record<string, string | null> = {}
+  const f = lift<{ onJobReply(j: J, r: unknown): void }>(BM, ['onJobReply'], {
+    hostErr: () => null, mwBody: (r: unknown) => r, endJob: (j: J) => { ended.push(j) },
+    store: (k: string, v: string | null) => { stored[k] = v }, jobKey: (t: string) => `k.${t}`, loadChain: () => {},
+    pollJob: (j: J) => { polled.push(j.state) }, setTimeout: (fn: () => void) => { fn(); return 1 }, clearTimeout: () => {},
+    LAST_PROPOSALS: null,
+  })
+  const q = [{ id: 'q_budget', key: 'budget', text: 'What is the budget?', why: 'w', priority: 'important', skippable: true }]
+  const j: J = { task: 'draft_brief', state: 'running', delay: 900, onUpdate: () => {}, onEnd: () => {} }
+  f.onJobReply(j, { job: { id: 'job_1', state: 'needs_input', stage: 'context', question: null, questions_id: 'qs_1', questions: q } })
+  assert.equal(j.state, 'needs_input')
+  assert.deepEqual(j.questions, q)
+  assert.equal(j.questions_id, 'qs_1')
+  assert.equal(ended.length, 0, 'the finished state never shows while the job waits')
+  assert.deepEqual(polled, ['needs_input'], 'it keeps polling')
+  assert.equal(stored['k.draft_brief'], 'job_1', 'a reload picks the waiting job up')
+  // answered, skipped or timed out: the job runs again and the questions go
+  f.onJobReply(j, { job: { id: 'job_1', state: 'running', stage: 'context', question: null } })
+  assert.equal(j.questions, null)
+  assert.equal(ended.length, 0)
+  f.onJobReply(j, { job: { id: 'job_1', state: 'done', stage: 'judge' } })
+  assert.equal(ended.length, 1)
+})
+
+test('answers go out as answer_question; a refusal after the wait ran out is not the end of the draft', async () => {
+  type J = Record<string, unknown>
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const replies: unknown[] = []
+  const toasts: string[] = [], polls: J[] = [], updates: J[] = [], handled: unknown[] = []
+  const f = lift<{ answerJob(j: J, a: Record<string, string | null>): void }>(BM, ['answerJob'], {
+    window: { clan: { apiProxy: (_: string, body: { task: string; input: Record<string, unknown> }) => { sent.push(body); return Promise.resolve(replies.shift()) } } },
+    hostErr: (r: { error?: string }) => (r && r.error ? r.error : null), toast: (m: string) => { toasts.push(m) },
+    pollJob: (j: J) => { polls.push(j) }, onJobReply: (_: J, r: unknown) => { handled.push(r) }, clearTimeout: () => {},
+  })
+  const j: J = { task: 'draft_brief', id: 'job_1', questions_id: 'qs_1', state: 'needs_input', onUpdate: (x: J) => { updates.push({ ...x }) } }
+  replies.push({ job: { state: 'running' } })
+  f.answerJob(j, { q_budget: 'EUR 150,000 incl. VAT', q_timeline: null })
+  f.answerJob(j, {})  // a second click while the first is out sends nothing
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(sent.length, 1)
+  assert.deepEqual(sent[0], { task: 'answer_question', input: { job_id: 'job_1', questions_id: 'qs_1', answers: { q_budget: 'EUR 150,000 incl. VAT', q_timeline: null } } })
+  assert.equal(handled.length, 1, 'the reply is the job’s, as a poll’s')
+  assert.equal(j.answering, false)
+  // the wait ran out first (409): say so, keep polling, never end the draft
+  replies.push({ error: 'job_state (409): nobody answered in time, so it went on without' })
+  f.answerJob(j, {})
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(handled.length, 1)
+  assert.equal(polls.length, 1)
+  assert.match(toasts[0], /went on without/)
+  // nothing is sent when the job holds no open questions
+  f.answerJob({ ...j, questions_id: null }, {})
+  assert.equal(sent.length, 2)
+})
+
+test('the questions panel has Skip on each question and Skip, just draft for all, and holds what is typed', () => {
+  const ask = fn(BM, 'renderAsk')
+  assert.match(ask, /Skip this one/)
+  assert.match(ask, /id="askSkipAll">Skip, just draft</)
+  assert.match(ask, /answerJob\(j, \{\}\)/, 'skip all sends no answers')
+  assert.match(ask, /out\[q\.id\]=v\|\|null/, 'a skipped or blank question is null')
+  // drawn once per set of questions, so the next poll does not wipe what the planner is typing
+  assert.match(ask, /getAttribute\('data-qs'\)!==j\.questions_id/)
+  assert.match(BM, /<div class="ask" id="ask" hidden><\/div>/)
+  assert.match(fn(BM, 'renderProc'), /renderAsk\(j\)/)
+  // the working page counts needs_input as live: it can be stopped, and it never reads as finished
+  assert.match(fn(BM, 'renderProc'), /var asking=j\.state==='needs_input';\s*var live=[^;]*\|\|asking;/)
+  assert.match(fn(BM, 'renderProc'), /canStop=live&&j\.id/)
+})
+
+test('only the new draft asks for intake', () => {
+  assert.equal(BM.split('intake:true').length - 1, 1, 'one request carries it')
+  type J = { task: string }
+  const runs: { j: J; input: Record<string, unknown> }[] = []
+  const f = lift<{ startDraft(p: string, a: unknown[], id?: string): void }>(BM, ['startDraft'], {
+    DRAFT: null, forceIntake: false, reduce: true, renderProc: () => {}, setPhase: () => {}, render: () => {}, arr,
+    window: { scrollTo: () => {} }, setTimeout: () => 0, pollJob: () => {},
+    runJob: (j: J, input: Record<string, unknown>) => { runs.push({ j, input }) },
+  })
+  f.startDraft('A brief for Brewline', [{ name: 'a.pdf' }])
+  assert.equal(runs[0].j.task, 'draft_brief')
+  assert.equal(runs[0].input.intake, true)
+  assert.deepEqual(runs[0].input.attachments, [{ name: 'a.pdf' }])
+  // the redraft and the part fixes go through other jobs and ask nothing
+  for (const name of ['regenField', 'fixParts']) assert.doesNotMatch(fn(BM, name), /intake/)
+})
