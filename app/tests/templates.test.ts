@@ -1199,7 +1199,6 @@ function printedSize(css: string, ancestors: string[][], el: string[]): number {
   }
   return size
 }
-const classesOf = (tag: string) => (/class="([^"]*)"/.exec(tag)?.[1] || '').split(/\s+/).filter(Boolean)
 
 test('every box with a word limit prints smaller when it steps down, and on a tight sheet, in the type that is really on the page', () => {
   const g = grid(true) as GridCellFns
