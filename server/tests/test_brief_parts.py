@@ -5,7 +5,10 @@ import json
 import re
 from pathlib import Path
 
-from napkin.brief.fields import BUILTIN_FIELD_MAP, KEYS, LABELS, RUBRIC_FIELDS
+import pytest
+
+from napkin.brief import checks
+from napkin.brief.fields import ARRAY_KEYS, BUILTIN_FIELD_MAP, KEYS, LABELS, RUBRIC_FIELDS
 from napkin.brief.rubric import rubric_value
 
 REPO = Path(__file__).resolve().parents[2]
@@ -50,3 +53,51 @@ def test_the_template_declares_the_same_parts():
     declared = dict(re.findall(r"^  ([\w.]+):\s+\{ class: (\w+)", text, re.M))
     assert {k: v["class"] for k, v in BUILTIN_FIELD_MAP.items()} == declared, "pipeline.yaml and fields.py declare one map"
     assert re.search(r"edits: \[[^\]]*\bjob\b[^\]]*\bbarrier\b[^\]]*\bobjection\b", text), "their edits carry reasoning"
+
+
+# -- the role of each medium and how we will know it worked (feature brief-media-measure) --------------------
+
+LISTS = ("media_roles", "measurement")
+
+
+def test_both_new_parts_are_drafted_required_lists_in_reading_order_after_the_budget():
+    for k in LISTS:
+        assert k in KEYS and k in LABELS and k in ARRAY_KEYS
+        assert BUILTIN_FIELD_MAP[k]["class"] == "drafted" and BUILTIN_FIELD_MAP[k]["rubric"] == k
+        assert BUILTIN_FIELD_MAP[k]["rubric"] in RUBRIC_FIELDS and RUBRIC_FIELDS[k]["required"]
+        f = RUBRIC_FIELDS[k]
+        ids = {c["id"] for c in f["rubric"]}
+        assert {"max_items", "within_limit", "plain_words"} <= ids and f["max_words"] and f["max_items"]
+        assert f["prompt"] and f["good_example"] and f["bad_example"]
+    assert KEYS.index("budget_and_scope") < KEYS.index("media_roles") < KEYS.index("measurement") < KEYS.index("mandatories")
+
+
+def test_every_list_or_limited_part_has_the_limits_the_checks_read():
+    """The code's limits come from the schema, for every part that has one: nothing is a second copy."""
+    for k, v in BUILTIN_FIELD_MAP.items():
+        f = RUBRIC_FIELDS.get(v.get("rubric") or "")
+        if not f or k not in checks.APP_RUBRIC:
+            continue
+        assert checks.limit(k) == f.get("max_words") and checks.max_items(k) == f.get("max_items")
+    assert checks.max_items("media_roles") == 4 and checks.limit("media_roles") == 55
+    assert checks.max_items("measurement") == 5 and checks.limit("measurement") == 70
+
+
+@pytest.mark.parametrize("k", LISTS)
+def test_the_values_are_read_from_the_apps_keys_as_lists(k):
+    assert rubric_value(k, {k: ["a", "b"]}) == ["a", "b"], "a list part stays a list for the rubric's item cap"
+    assert rubric_value(k, {}) is None
+
+
+def test_the_template_declares_both_lists_and_their_reasoning():
+    schema = json.loads((REPO / "app/templates/brief-maker/schema.json").read_text())
+    assert all(schema["properties"][k] == {"type": "array", "items": {"type": "string"}} for k in LISTS)
+    text = (REPO / "app/templates/brief-maker/app/pipeline.yaml").read_text()
+    for k in LISTS:
+        assert re.search(rf"^  {k}:\s+\{{ class: drafted, rubric: {k}, loop: \w+ \}}", text, re.M)
+        assert re.search(rf"edits: \[[^\]]*\b{k}\b", text), f"{k} edits carry reasoning"
+    # every rubric field with a type of list is an array in the template
+    for f in RUBRIC_FIELDS.values():
+        if f.get("type") == "list":
+            ks = [k for k, v in BUILTIN_FIELD_MAP.items() if v.get("rubric") == f["id"]]
+            assert all(k in ARRAY_KEYS for k in ks), f"{f['id']} is a list in the document"

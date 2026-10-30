@@ -4,7 +4,7 @@ what he names, Jude scores again; and the run log records all of it."""
 
 import json
 
-from napkin.brief.fields import KEYS
+from napkin.brief.fields import ARRAY_KEYS, KEYS
 from napkin.brief.planned import DIMS
 
 from conftest import Server
@@ -39,7 +39,7 @@ def planned_model(seen):
         psg = p["library"][0]["id"] if p["library"] else None
         out = {}
         for k in p["parts"]:
-            arr = k in ("reasons_to_believe", "tone_and_world", "mandatories", "open_questions")
+            arr = k in ARRAY_KEYS
             out[k] = {"value": [f"{k} item"] if arr else f"The {k} for Brewline", "basis": "assumption",
                       "cites": [], "builds_on_client": False, "why": "a planner's proposal"}
         out["competitor_context"] = {"value": "The category has a flagship.", "basis": "research", "cites": [fid],
@@ -354,3 +354,60 @@ def test_the_job_the_barrier_and_the_objection_are_drafted_with_the_other_parts(
         assert k in seen["draft"]["parts"], f"Dara is asked for {k}"
         assert str(host.data.get(k) or "").strip(), f"{k} is written, not left empty"
         assert k in drafted, f"{k} carries a draft decision with its reasons"
+
+
+def _planned_run(tmp_path, seen, draft_edit):
+    m = planned_model(seen)
+    orig = m.overrides["draft_brief_whole"]
+    m.overrides["draft_brief_whole"] = lambda p: draft_edit(orig(p))
+    s = Server(tmp_path, model=m, retrieval=retrieval(), settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    assert replies[-1]["job"]["state"] == "done"
+    return host
+
+
+def test_the_role_of_each_medium_and_the_measurement_are_drafted_in_the_one_call_and_judged(tmp_path):
+    seen = {}
+    host = _planned_run(tmp_path, seen, lambda out: out)
+    for k in ("media_roles", "measurement"):
+        assert k in seen["draft"]["parts"], f"Dara is asked for {k} in the one draft call"
+        assert isinstance(host.data[k], list) and host.data[k], f"{k} is written as a list"
+    assert "at most four" in seen["draft"]["parts"]["media_roles"] and "Judged by" in seen["draft"]["parts"]["measurement"]
+    assert sum(1 for p in seen["reviews"] if p) == len(seen["reviews"]) and len(seen["reviews"]) == 2, "no extra review call"
+    first = seen["reviews"][0]
+    assert {"media_roles", "measurement"} <= set(first["tests"]) and "can_attribute" in first["tests"]["measurement"]
+    assert {"media_roles", "measurement"} <= set(first["part_checks"])
+    drafted = {t.split("#", 1)[1] for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
+    assert {"media_roles", "measurement"} <= drafted
+    # an assumption says it is one on its first item, so the printed box carries the corner tag
+    assert host.data["media_roles"][0] == "To confirm: media_roles item"
+    dod = {d["id"]: d["status"] for d in host.data["review"]["judge"]["definition_of_done"]}
+    assert dod["all_required_filled"] == "pass"
+
+
+def test_a_brief_without_either_part_fails_all_required_filled(tmp_path):
+    def drop(out):
+        out["media_roles"] = out["measurement"] = None
+        return out
+    host = _planned_run(tmp_path, {}, drop)
+    assert not host.data.get("media_roles") and not host.data.get("measurement")
+    dod = {d["id"]: d["status"] for d in host.data["review"]["judge"]["definition_of_done"]}
+    assert dod["all_required_filled"] == "fail", "an old brief with neither part is not done until they are written"
+
+
+def test_a_figure_in_the_new_parts_that_no_fact_holds_stays_an_assumption_and_is_not_sent_back_for_it(tmp_path):
+    seen = {}
+
+    def edit(out):
+        out["media_roles"] = {"value": ["Radio: 60% of shoppers listen on the way to the shop"], "basis": "research",
+                              "cites": ["f_MADEUP"], "builds_on_client": False, "why": "made up"}
+        return out
+    host = _planned_run(tmp_path, seen, edit)
+    by = {t.split("#", 1)[1]: d for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
+    assert by["media_roles"]["basis"] == "assumption", "a research claim citing nothing it was given is assumed"
+    assert host.data["media_roles"] == ["Radio: 60% of shoppers listen on the way to the shop"], "the words are never edited"
+    assert "media_roles" not in (seen.get("rewrite") or {}).get("rewrite", {}), "a figure alone is not a reason to rewrite"

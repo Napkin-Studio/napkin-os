@@ -635,6 +635,137 @@
           "test": "Is it ONE doubt (one worry in one sentence), not two or three joined together?"
         }
       ]
+    },
+    {
+      "id": "media_roles",
+      "label": "Role of each medium",
+      "zone": 2,
+      "type": "list",
+      "required": true,
+      "max_words": 55,
+      "max_items": 4,
+      "provenance_required": true,
+      "depends_on": [
+        "budget_scope",
+        "mandatories",
+        "audience",
+        "objectives"
+      ],
+      "prompt": "One line per medium: the medium, and the job it does for this audience and why. Choose each medium from the job, not from habit: if you cannot write the reason in one line, cut the medium. Take the media from what the client said (budget and scope, mandatories) and add one only as a proposal that starts 'To confirm:'. Check each against where this audience actually is. Set the medium's job, never the idea. Give no reach, frequency, cost or percentage the client, a pin or the objectives did not give.",
+      "good_example": "Radio: reaches shoppers in the car on the way to the supermarket, when the shopping list is made · Instore: the last reminder at the shelf · Social: cheap repeats of the recipe idea for the under-thirties",
+      "bad_example": "TV, radio, OOH, social, PR, influencers, cinema, sponsorship, email, search.",
+      "bad_reason": "A list of media by habit with no job and no reason; the media plan's test is that a medium whose reason cannot be written is cut.",
+      "rubric": [
+        {
+          "id": "max_items",
+          "test": "No more than four media: one line each.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "reason_in_a_line",
+          "test": "Does every medium have a one-line job and reason, with none that only names the medium?",
+          "method": "llm"
+        },
+        {
+          "id": "from_the_job",
+          "test": "Does each medium follow from the job and the objectives it has to do, not from habit?",
+          "method": "llm"
+        },
+        {
+          "id": "fits_the_audience",
+          "test": "Does each medium match where this audience actually is and what they do there?",
+          "method": "llm",
+          "tolerance": "hard"
+        },
+        {
+          "id": "fits_the_budget",
+          "test": "Can the media named be afforded inside the budget and scope part?",
+          "method": "llm"
+        },
+        {
+          "id": "no_invented_numbers",
+          "test": "Is every reach, frequency, cost or percentage one the client, a pin or the objectives gave?",
+          "method": "llm"
+        },
+        {
+          "id": "plain_words",
+          "test": "Is every word one a normal person would say out loud?",
+          "method": "llm"
+        }
+      ]
+    },
+    {
+      "id": "measurement",
+      "label": "How we will know it worked",
+      "zone": 2,
+      "type": "list",
+      "required": true,
+      "max_words": 70,
+      "max_items": 5,
+      "provenance_required": true,
+      "depends_on": [
+        "objectives",
+        "desired_response",
+        "budget_scope"
+      ],
+      "prompt": "How the work is judged and how we will know it worked, decided before the work is bought. One line each: (1) Judged by: how the work is judged before creative starts, from the client's own criteria if given, else the objectives it will be read against, marked 'To confirm:'. (2) Attribution: a holdout or geo phasing, naming the comparison. (3) Before and after: the attitude the work exists to change, with the first wave in market before launch. (4) In flight: the fast reads, one of them the action the work asks for. (5) The lag: which measures land inside the flight and which after. Targets are the objectives' own numbers, never new ones; a target the client has not given is an open question, not a figure. A tracker wave costs working media: mark it 'To confirm:' when no research budget is given.",
+      "good_example": "Judged by: sales against last year in the test regions, as the client set it · Attribution: two regions on air, two held back · Before and after: a tracker wave before launch and one after, on whether people think of us first · In flight: branded search and shelf-talker coupon use, weekly · The lag: coupons land in the flight, the tracker after it",
+      "bad_example": "Track impressions, clicks and likes, and report monthly.",
+      "bad_reason": "Vanity measures tied to no objective, with no comparison, no start before launch and no word on what arrives after.",
+      "rubric": [
+        {
+          "id": "max_items",
+          "test": "No more than five lines.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "ties_to_objectives",
+          "test": "Does every measure read one of the three objectives or the action the work asks for, not a vanity metric?",
+          "method": "llm"
+        },
+        {
+          "id": "can_attribute",
+          "test": "Does it name a holdout or a geo comparison that could tell the work's effect from the season?",
+          "method": "llm",
+          "tolerance": "hard"
+        },
+        {
+          "id": "starts_before_launch",
+          "test": "Does the before-and-after measure start before launch, not at launch?",
+          "method": "llm"
+        },
+        {
+          "id": "says_the_lag",
+          "test": "Does it say which measures land inside the flight and which after?",
+          "method": "llm",
+          "tolerance": "hard"
+        },
+        {
+          "id": "no_invented_targets",
+          "test": "Is every target one the objectives hold, with none made up?",
+          "method": "llm"
+        },
+        {
+          "id": "fits_the_budget",
+          "test": "If it needs a tracker wave or a holdout, is that affordable inside the budget, or marked to confirm?",
+          "method": "llm"
+        },
+        {
+          "id": "plain_words",
+          "test": "Is every word one a normal person would say out loud?",
+          "method": "llm"
+        }
+      ]
     }
   ],
   "open_questions": {
