@@ -38,9 +38,22 @@ def test_each_item_settles_its_question(have, settles):
     assert settles in keys(intake.questions({}, {}, 10))
 
 
-def test_the_client_is_settled_by_the_named_client_not_by_an_item():
+def test_the_client_is_settled_by_the_named_client_or_an_answer_not_by_any_item():
     assert "client" in keys(intake.questions(EVERYTHING, {}, 10))
+    assert "client" in keys(intake.questions(held("background_context"), {}, 10), )
     assert "client" not in keys(intake.questions({}, NAMED, 10))
+
+
+def test_an_answered_client_is_not_asked_again_on_a_redraft_that_names_no_client():
+    asked = intake.questions({}, {}, 10)
+    mat, items, *_ = intake.answer_items(asked, {"q_client": "Brewline"})
+    stored = {mat.id: mat.entry("2026-10-30T09:00:00Z")}  # what the document holds after the first draft
+    # the re-draft's own capture names no client: only the document's stored items and materials remain
+    assert intake.answer_materials(stored) == {mat.id}
+    assert "client" not in keys(intake.questions(items, {}, 10, intake.answer_materials(stored)))
+    # a background_context item from some other material is not an answer
+    other = {"cap_x": item("background_context")}
+    assert "client" in keys(intake.questions(other, {}, 10, intake.answer_materials(stored)))
 
 
 def test_one_question_per_gap_in_priority_order_and_capped():

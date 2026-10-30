@@ -471,6 +471,24 @@ def test_intake_pauses_before_the_plan_and_an_answer_is_written_as_the_clients_w
     assert any(e["ev"] == "note" and e["what"] == "intake_skipped" for e in evs)
 
 
+def test_an_answered_client_is_not_asked_again_on_a_redraft_whose_text_names_no_client(tmp_path):
+    no_client = ASKABLE.replace("Client: Brewline\n", "")
+    s = intake_server(tmp_path, {})
+    try:
+        host = Host()
+        first = answering(s, host, {"client": "Brewline", "budget": FIGURE})
+        run(s, host, inp={"prompt": no_client, "attachments": [], "intake": True}, on_reply=first)
+        (asked,) = first.sent
+        assert asked[0]["key"] == "client"
+        # the same document, drafted again from text that still names no client
+        second = answering(s, host, {"budget": FIGURE})
+        run(s, host, inp={"prompt": no_client, "attachments": [], "intake": True}, on_reply=second)
+    finally:
+        s.stop()
+    again = [q["key"] for q in (second.sent[0] if second.sent else [])]
+    assert "client" not in again and "budget" not in again, again
+
+
 def test_skipping_everything_gives_todays_brief_with_the_question_open_once(tmp_path):
     runs = []
     for intake_on, sub in ((False, "off"), (True, "skip")):

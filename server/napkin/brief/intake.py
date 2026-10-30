@@ -23,7 +23,8 @@ from .capture import Material, cap_id, format_question, material_id
 NAME = "Intake answers"
 
 # (key, capture keys that settle it, capture key an answer is filed under, the question, why, priority)
-# In priority order. `client` is settled by the capture's named client, not by an item.
+# In priority order. `client` is settled by the capture's named client, or by an item filed from an Intake answers material (its
+# answer: background_context is a key the capture fills from anything, so only that material's item counts).
 ASKS = [
     ("client", (), "background_context", "Which client and brand is this brief for?",
      "The brief is filed under the client, and the research starts from the brand.", "blocker"),
@@ -49,14 +50,23 @@ ANCHORS = {"client": "client brand name", "objective": "objective goal measure k
            "timeline": "timeline timing date deadline"}
 
 
-def questions(items: dict, named: dict, cap: int) -> list[dict]:
+def answer_materials(materials: dict | None) -> set:
+    """The ids of the document's "Intake answers" materials: what a person answered at intake, earlier."""
+    return {mid for mid, m in (materials or {}).items() if isinstance(m, dict) and m.get("name") == NAME}
+
+
+def questions(items: dict, named: dict, cap: int, answered_in: set | frozenset = frozenset()) -> list[dict]:
     """The questions the capture leaves open, most important first, at most `cap`. `items` is every capture
-    item the brief holds (this job's and the document's), so an answer given before is never asked again."""
+    item the brief holds (this job's and the document's), so an answer given before is never asked again;
+    `answered_in` is the ids of the document's intake-answer materials (answer_materials), which is how an
+    answered client is told from any other background_context item on a re-draft whose text names no client."""
     have = {i.get("key") for i in (items or {}).values()}
+    client_answered = any(i.get("key") == "background_context" and i.get("material_id") in answered_in
+                          for i in (items or {}).values())
     out = []
     for key, settled_by, _, text, why, prio in ASKS:
         if key == "client":
-            if (named or {}).get("client"):
+            if (named or {}).get("client") or client_answered:
                 continue
         elif any(k in have for k in settled_by):
             continue

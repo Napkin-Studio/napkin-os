@@ -376,7 +376,7 @@ class PlannedBriefJob(BriefJob):
             leaves = [{"code": x["code"], "name": x.get("name")} for x in self.caps.layers.leaves()]
         except Exception as e:  # noqa: BLE001 - no research to run, the plan still stands
             rl.note("leaves", error=f"{type(e).__name__}: {str(e)[:200]}")
-        self._intake()  # the one pause: the lookups above overlapped with the person reading the questions
+        self._intake()  # the one pause: the lookups above have finished, so the person is asked after them, not alongside
         if self.caps.jobs.cancelled:
             return
         ev = self._evidence()
@@ -421,7 +421,8 @@ class PlannedBriefJob(BriefJob):
         if self.task != "draft_brief" or self.intake_wait <= 0 or self.capture is None:
             return
         items = {**((self.W.get("capture") or {}).get("items") or {}), **self.capture["items"]}
-        asked = intake.questions(items, self.capture.get("named"), self.intake_max)
+        asked = intake.questions(items, self.capture.get("named"), self.intake_max,
+                                 intake.answer_materials(self.W.get("materials")))
         if not asked:
             return
         t0 = time.monotonic()
