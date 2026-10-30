@@ -10,6 +10,8 @@ Jude's call, given the test."""
 
 from __future__ import annotations
 
+import re
+
 from .fields import RUBRIC_FIELDS
 from .rubric import _sentences, and_flag
 
@@ -27,12 +29,23 @@ MARGIN = 1.15
 MARK = "To confirm:"
 # the proposition and the objection rest on the insight: when it is an assumption, so are they
 INHERIT = ("single_minded_proposition", "objection")
+# names the brief is filed under: a guess there is a name, not a claim, and headings and file names carry it as it is
+IDENTITY = ("project_name", "client")
+
+
+# a name with an ampersand ("Crust & Co", "Marks & Spencer") is one thing, not two thoughts
+_NAMES = re.compile(r"\b[A-Z][\w'.-]*\s+&\s+[A-Z][\w'.-]*")
 
 
 def text_of(v) -> str:
     if isinstance(v, list):
         return "; ".join(text_of(x) for x in v if text_of(x))
     return v.strip() if isinstance(v, str) else ""
+
+
+def _spoken(v) -> str:
+    """The words of a part, without the 'To confirm:' mark: the mark is not part of what is said."""
+    return re.sub(r"(?i)^\s*to confirm:\s*", "", text_of(v))
 
 
 def limit(key: str) -> int | None:
@@ -49,20 +62,21 @@ def facts(whole: dict) -> dict:
     """What code measured, per part Jude judges or that has a limit."""
     out = {}
     for k, e in whole.items():
-        t = text_of(e.get("value"))
+        t = _spoken(e.get("value"))
         if not t:
             continue
         f = {}
-        cap = max_items(k)
+        own = e.get("basis") == "client"  # the client's own words are written out, not cut to a limit
+        cap = None if own else max_items(k)
         if cap and isinstance(e.get("value"), list):
             f["items"], f["max_items"] = len([x for x in e["value"] if text_of(x)]), cap
-        lim = limit(k)
+        lim = None if own else limit(k)
         if lim:
             f["words"], f["limit"] = len(t.split()), lim
         if k in ONE_SENTENCE:
             f["sentences"] = len(_sentences(t))
         if k == "single_minded_proposition":
-            f["standalone_and"] = and_flag(t)
+            f["standalone_and"] = and_flag(_NAMES.sub(" ", t))
         if f:
             out[k] = f
     return out
@@ -79,6 +93,8 @@ def revisions(whole: dict) -> list[dict]:
             why.append(f"it has {f['items']} items and the skill keeps the two or three that matter: keep the {f['max_items']} strongest and drop the rest")
         if f.get("sentences", 0) > 1:
             why.append(f"it is {f['sentences']} sentences: say it in one (a word or a phrase is fine)")
+        if f.get("standalone_and"):
+            why.append("it has a standalone 'and' or '&': the proposition is one thought, so keep the one that matters and say it without 'and'")
         if why:
             out.append({"part": k, "instruction": "; ".join(why).capitalize() + "."})
     return out
@@ -108,7 +124,7 @@ def mark_assumptions(entries: dict, insight: dict | None = None) -> list[str]:
             marked.append(k)
 
     for k, e in entries.items():
-        if isinstance(e, dict) and e.get("basis") == "assumption":
+        if k not in IDENTITY and isinstance(e, dict) and e.get("basis") == "assumption":
             put(k, e)
     ins = entries.get("insight") or insight
     if isinstance(ins, dict) and (ins.get("basis") == "assumption" or text_of(ins.get("value")).lower().startswith("to confirm")):
@@ -116,4 +132,19 @@ def mark_assumptions(entries: dict, insight: dict | None = None) -> list[str]:
             e = entries.get(k)
             if isinstance(e, dict) and e.get("basis") not in ("client", "person", "research"):
                 put(k, e)
+    return marked
+
+
+def mark_downgraded(entries: dict) -> list[str]:
+    """Provenance moved some parts to 'assumption' (Dara said research, library or client; nothing tied the claim).
+    They say so too. A part with figures is left as it is: a mark in front of its first sentence would stop the
+    sentence from tying to its claim."""
+    marked = []
+    for k, e in entries.items():
+        if k in IDENTITY or not isinstance(e, dict) or not e.get("downgraded") or e.get("basis") != "assumption":
+            continue
+        v = e.get("value")
+        if isinstance(v, str) and v.strip() and not re.search(r"\d", v) and not v.strip().lower().startswith("to confirm"):
+            e["value"] = f"{MARK} {v.strip()}"
+            marked.append(k)
     return marked

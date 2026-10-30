@@ -109,3 +109,41 @@ def test_more_than_three_reasons_to_believe_go_back_and_the_schema_says_three():
     for k in ("insight", "smp"):
         assert "plain_words" in {c["id"] for c in RUBRIC_FIELDS[k]["rubric"]}, "plain human language is the skill's second rule"
     assert "what the budget does not buy" in RUBRIC_FIELDS["budget_scope"]["prompt"]
+
+
+def test_a_standalone_and_in_the_proposition_goes_back_with_the_other_measurable_faults():
+    e = lambda v: {"value": v, "basis": "assumption"}
+    out = checks.revisions({"single_minded_proposition": e("Easy and fresh.")})
+    assert [x["part"] for x in out] == ["single_minded_proposition"]
+    assert "'and'" in out[0]["instruction"]
+    assert checks.revisions({"single_minded_proposition": e("Easy, fresh.")}) == []
+
+
+def test_a_name_with_an_ampersand_is_not_an_and():
+    e = lambda v: {"value": v, "basis": "assumption"}
+    assert checks.revisions({"single_minded_proposition": e("Crust & Co makes your weekday morning yours.")}) == []
+    assert checks.revisions({"single_minded_proposition": e("Fresh & easy.")})  # lower case: still two thoughts
+
+
+def test_the_names_a_brief_is_filed_under_are_never_marked():
+    e = lambda v, b="assumption": {"value": v, "basis": b}
+    out = {"project_name": e("Bake Off"), "client": e("Acme"), "insight": e("A tension."), "objection": e("A doubt.", "client")}
+    marked = checks.mark_assumptions(out)
+    assert "project_name" not in marked and "client" not in marked
+    assert out["project_name"]["value"] == "Bake Off" and out["objection"]["value"] == "A doubt."
+
+
+def test_the_clients_own_words_are_not_cut_to_a_limit_and_the_mark_is_not_counted():
+    long_text = " ".join(["word"] * 90)
+    assert checks.revisions({"background": {"value": long_text, "basis": "client"}}) == []
+    assert checks.revisions({"background": {"value": long_text, "basis": "assumption"}})
+    near = "To confirm: " + " ".join(["word"] * 68)  # 68 words, 70 with the mark
+    assert checks.facts({"background": {"value": near, "basis": "assumption"}})["background"]["words"] == 68
+
+
+def test_a_part_provenance_downgraded_to_an_assumption_says_so_unless_it_carries_figures():
+    out = {"audience": {"value": "Women who skip breakfast.", "basis": "assumption", "downgraded": True},
+           "background": {"value": "Sales fell 12% last year.", "basis": "assumption", "downgraded": True},
+           "budget_and_scope": {"value": "Fine.", "basis": "assumption"}}
+    assert checks.mark_downgraded(out) == ["audience"]
+    assert out["audience"]["value"].startswith("To confirm:") and out["background"]["value"] == "Sales fell 12% last year."

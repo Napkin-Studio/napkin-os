@@ -300,7 +300,11 @@ class PlannedBriefJob(BriefJob):
             marked = checks.mark_assumptions(out, self.whole.get("insight"))
             if marked:
                 self.caps.runlog.note("assumptions_marked", stage=stage, parts=marked)
-        return prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
+        got = prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
+        late = checks.mark_downgraded(got)  # claimed research or client words with nothing under it
+        if late:
+            self.caps.runlog.note("assumptions_marked", stage=stage + "_downgraded", parts=late)
+        return got
 
     def _prior(self, keys):
         """Each part's claims as it stands: this job's draft, else the decision that wrote it."""
@@ -614,32 +618,47 @@ class PlannedBriefJob(BriefJob):
         rv = self._review(ev, "review_brief")
         revise = [x for x in rv.get("revise") or [] if x["part"] in self.whole]
         if revise:
-            parts = [x["part"] for x in revise]
-            self.set_state(parts, "revising", "drafter")
-            prior = self._prior(parts)
-            payload = {"client_said": self._said(), "captured": self._captured(),
-                       "client_words": self._client().payload(), "plan": self.plan_out,
-                       "brief": {k: v["value"] for k, v in self.whole.items()},
-                       "rewrite": {x["part"]: x["instruction"] for x in revise},
-                       "prior_claims": {k: prior.get(k) or [] for k in parts},
-                       "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
-                       "library": self._library(12),
-                       "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in parts}}
-            try:
-                out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, payload,
-                                                 draft_schema(parts), max_tokens=8000)
-                got = self._clean(out, ev, "revise", keys=parts, prior=prior)
-                told = {x["part"]: x["instruction"] for x in revise}
-                for k, v in got.items():
-                    self._sent_back(k, v, told.get(k) or "", self._note_on(rv, k))
-                    self.whole[k] = v
-                rl.note("revised", parts=sorted(got))
-                self.set_state(parts, "judging", "judge")
-                rv = self._review(ev, "review_brief_again")
-            except Exception as e:  # noqa: BLE001 - the first review stands
-                rl.note("revise_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+            rv = self._rewrite(revise, rv, ev, "review_brief_again") or rv
+        # what code can still measure after the one rewrite goes back once more, then Jude reads it again
+        left = checks.revisions(self.whole)
+        if left:
+            rl.note("checks_sent_back_again", parts=[x["part"] for x in left])
+            rv = self._rewrite(left, rv, ev, "review_brief_again") or rv
         self.review_out = rv
         self._place(rv, ev)
+
+    def _rewrite(self, revise, rv, ev, purpose):
+        """Dara rewrites the parts named in `revise`, Jude reads the brief again. -> his new review, or None
+        when the rewrite failed and the review before it stands."""
+        rl = self.caps.runlog
+        parts = [x["part"] for x in revise]
+        before = dict(self.whole)  # the brief the review in hand was written about
+        self.set_state(parts, "revising", "drafter")
+        prior = self._prior(parts)
+        payload = {"client_said": self._said(), "captured": self._captured(),
+                   "client_words": self._client().payload(), "plan": self.plan_out,
+                   "brief": {k: v["value"] for k, v in self.whole.items()},
+                   "rewrite": {x["part"]: x["instruction"] for x in revise},
+                   "prior_claims": {k: prior.get(k) or [] for k in parts},
+                   "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
+                   "library": self._library(12),
+                   "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in parts}}
+        try:
+            out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, payload,
+                                             draft_schema(parts), max_tokens=8000)
+            got = self._clean(out, ev, "revise", keys=parts, prior=prior)
+            told = {x["part"]: x["instruction"] for x in revise}
+            for k, v in got.items():
+                self._sent_back(k, v, told.get(k) or "", self._note_on(rv, k))
+                self.whole[k] = v
+            rl.note("revised", parts=sorted(got))
+            self.set_state(parts, "judging", "judge")
+            return self._review(ev, purpose)
+        except Exception as e:  # noqa: BLE001 - the review before stands, so does the brief it read
+            self.whole.clear()
+            self.whole.update(before)
+            rl.note("revise_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+            return None
 
     def _judge_by_jev(self, ev):
         """The check loop on the whole draft: jev flags, Jude says why, Dara rewrites; then the
@@ -685,8 +704,14 @@ class PlannedBriefJob(BriefJob):
         draft Jude sent back (`first`, when this job drafted it) and his note (`sent_back`).
         The first draft stays in the chain, superseded by this one; nothing is collapsed."""
         v["revised"] = True
-        if k in self.whole:
-            v["first"] = self.whole[k]
+        prev = self.whole.get(k)
+        if prev is not None:
+            # sent back twice (Jude's note, then what code measured): the chain keeps the first draft and both asks
+            v["first"] = prev.get("first") or prev
+            before = prev.get("sent_back") or {}
+            if before.get("instruction"):
+                instruction = f"{before['instruction']} Then: {instruction}"
+                why = before.get("why") or why
         v["sent_back"] = {"instruction": instruction, "why": why}
 
     @staticmethod
