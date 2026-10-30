@@ -426,6 +426,15 @@ def brief_responder(model, purpose):
         return {"ranking": order, "why_winner": "the purest", "losers": [{"index": i, "why": "less ownable"}
                                                                         for i in idx if i != order[0]]}
 
+    def draft_job(p):
+        return {"value": "Get a midweek drinker to reach for Harbour Tonic when a plain evening needs a treat.", "grounds": _grounds(p, extra_bad=False)}
+
+    def draft_barrier(p):
+        return {"value": "They think a treat midweek has to be earned, so they pass on it.", "grounds": _grounds(p, extra_bad=False)}
+
+    def draft_objection(p):
+        return {"value": "A midweek drink undoes my week.", "grounds": _grounds(p, extra_bad=False)}
+
     def sharpen_insight(p):
         return {"value": INSIGHT_SHARP, "grounds": _grounds(p)}
 
@@ -481,6 +490,7 @@ def brief_responder(model, purpose):
              "fill_context": fill_context,
              "draft_smp": draft_smp, "rank_insight": rank, "rank_smp": rank, "sharpen_insight": sharpen_insight,
              "sharpen_smp": sharpen_smp, "draft_reasons_to_believe": draft_rtb, "draft_desired_response": draft_dr,
+             "draft_job": draft_job, "draft_barrier": draft_barrier, "draft_objection": draft_objection,
              "judge_coherence": coherence}
     if purpose in table:
         return table[purpose]

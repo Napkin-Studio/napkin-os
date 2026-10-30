@@ -865,9 +865,11 @@ merge_policies:
   "*": ask
 ```
 
-`rubric` names a field of the golden-brief rubric
-(`engine/golden-brief/golden_brief.schema.json`), bundled with the handler
-and versioned with it (Contract 5 §9, O9). The three `desired_response`
+`rubric` names a field of the golden-brief rubric, bundled with the handler
+and versioned with it (Contract 5 §9, O9). The Brief Maker reads the server's
+copy, `server/napkin/brief/golden_brief.schema.json`, which differs from
+`engine/golden-brief/golden_brief.schema.json` on purpose (ADR 0034, 0035): it
+has the job, barrier and objection fields and the planning skill's tests. The three `desired_response`
 leaves share one drafter: they are a ladder.
 
 ### 10.3 The flow
