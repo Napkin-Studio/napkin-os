@@ -1345,14 +1345,58 @@ test('answers go out as answer_question; a refusal after the wait ran out is not
   assert.equal(sent.length, 2)
 })
 
-test('the questions panel has Skip on each question and Skip, just draft for all, and holds what is typed', () => {
-  const ask = fn(BM, 'renderAsk')
-  assert.match(ask, /Skip this one/)
-  assert.match(ask, /id="askSkipAll">Skip, just draft</)
-  assert.match(ask, /answerJob\(j, \{\}\)/, 'skip all sends no answers')
-  assert.match(ask, /out\[q\.id\]=v\|\|null/, 'a skipped or blank question is null')
-  // drawn once per set of questions, so the next poll does not wipe what the planner is typing
-  assert.match(ask, /getAttribute\('data-qs'\)!==j\.questions_id/)
+test('the questions panel has Skip on each question and Skip, just draft for all', () => {
+  const html = lift<{ askHtml(qs: unknown[]): string }>(BM, ['askHtml'], { esc, SAM: 'Sam', DARA: 'Dara' }).askHtml([
+    { id: 'q_budget', text: 'What is the budget?', why: 'Scope depends on it', skippable: true },
+    { id: 'q_client', text: 'Which client <b>?', skippable: false }])
+  assert.match(html, /<h3>Before Sam plans<\/h3>/)
+  assert.match(html, /<div class="q" data-q="q_budget"><label for="ask_q_budget">What is the budget\?<\/label><div class="why">Scope depends on it<\/div><textarea id="ask_q_budget" rows="2"><\/textarea><button type="button" class="skip" data-skip="q_budget">Skip this one<\/button><\/div>/)
+  // a question that is not skippable has no Skip; text is escaped
+  assert.match(html, /<div class="q" data-q="q_client"><label for="ask_q_client">Which client &#60;b&#62;\?<\/label><textarea id="ask_q_client" rows="2"><\/textarea><\/div>/)
+  assert.equal(html.split('data-skip=').length - 1, 1)
+  assert.match(html, /<button type="button" class="ghost big" id="askSkipAll">Skip, just draft<\/button><button type="button" class="go" id="askSend">Send answers<\/button>/)
+})
+
+test('the panel is drawn once per set of questions, so typed text survives a poll; Skip all sends none, Send sends typed', () => {
+  type El = { value?: string; disabled?: boolean; handlers: Record<string, () => void>; classList: { toggle(): void }; addEventListener(e: string, f: () => void): void; querySelector(s: string): El; focus(): void; textContent?: string }
+  const mk = (): El => { const el: El = { value: '', handlers: {}, classList: { toggle() {} }, addEventListener(e, f) { el.handlers[e] = f }, querySelector: () => el, focus() {} }; return el }
+  const attrs: Record<string, string> = {}
+  let writes = 0
+  const askEl = mk(), sendEl = mk(), skipAllEl = mk(), row = mk(), ta = mk()
+  const box = {
+    hidden: true, get innerHTML() { return '' }, set innerHTML(_: string) { writes++ },
+    getAttribute: (k: string) => attrs[k] ?? null, setAttribute: (k: string, v: string) => { attrs[k] = v }, removeAttribute: (k: string) => { delete attrs[k] },
+    querySelector: (sel: string) => (sel === '#askSkipAll' ? skipAllEl : sel === '#askSend' ? sendEl : sel.startsWith('#ask_') ? ta : { ...row, querySelector: (s: string) => (s === 'textarea' ? ta : s === '.skip' ? skipBtn : row) }),
+    querySelectorAll: () => [],
+  }
+  const skipBtn = mk()
+  void askEl
+  const sent: Record<string, string | null>[] = []
+  const f = lift<{ renderAsk(j: Record<string, unknown>): void }>(BM, ['askHtml', 'renderAsk'], {
+    esc, SAM: 'Sam', DARA: 'Dara', $: () => box, answerJob: (_: unknown, a: Record<string, string | null>) => { sent.push(a) },
+  })
+  const qs = [{ id: 'q_budget', text: 'Budget?', skippable: true }]
+  const j: Record<string, unknown> = { state: 'needs_input', questions: qs, questions_id: 'qs_1' }
+  f.renderAsk(j)
+  assert.equal(writes, 1)
+  ta.value = 'EUR 150,000'
+  f.renderAsk(j); f.renderAsk(j)  // the next polls
+  assert.equal(writes, 1, 'the panel is not redrawn, so what is typed stays')
+  assert.equal(ta.value, 'EUR 150,000')
+  sendEl.handlers.click()
+  assert.deepEqual(sent[0], { q_budget: 'EUR 150,000' })
+  skipBtn.handlers.click()  // Skip drops the typed answer
+  sendEl.handlers.click()
+  assert.deepEqual(sent[1], { q_budget: null })
+  skipAllEl.handlers.click()
+  assert.deepEqual(sent[2], {})
+  // a new set of questions is drawn afresh
+  f.renderAsk({ ...j, questions_id: 'qs_2' })
+  assert.equal(writes, 2)
+  // the wait over: the panel goes
+  f.renderAsk({ state: 'running' })
+  assert.equal(box.hidden, true)
+  assert.equal(attrs['data-qs'], undefined)
   assert.match(BM, /<div class="ask" id="ask" hidden><\/div>/)
   assert.match(fn(BM, 'renderProc'), /renderAsk\(j\)/)
   // the working page counts needs_input as live: it can be stopped, and it never reads as finished

@@ -1969,6 +1969,14 @@
     var see=$('procSee'); if(see) see.addEventListener('click',function(){ DRAFT=null; forceIntake=false; setPhase('doc'); render(); });
     var back=$('procBack'); if(back) back.addEventListener('click',function(){ DRAFT=null; forceIntake=true; setPhase('intake'); render(); });
   }
+  // The questions panel's markup: Skip on each skippable question, "Skip, just draft" for all.
+  function askHtml(qs){
+    return '<h3>Before '+esc(SAM)+' plans</h3><p class="asklede">One line each is plenty. What you skip, '+esc(DARA)+' proposes and marks for you to confirm.</p>'
+      +qs.map(function(q){ return '<div class="q" data-q="'+esc(q.id)+'"><label for="ask_'+esc(q.id)+'">'+esc(q.text)+'</label>'
+        +(q.why?'<div class="why">'+esc(q.why)+'</div>':'')+'<textarea id="ask_'+esc(q.id)+'" rows="2"></textarea>'
+        +(q.skippable===false?'':'<button type="button" class="skip" data-skip="'+esc(q.id)+'">Skip this one</button>')+'</div>'; }).join('')
+      +'<div class="asks"><button type="button" class="ghost big" id="askSkipAll">Skip, just draft</button><button type="button" class="go" id="askSend">Send answers</button></div>';
+  }
   // Intake's questions (§10.1 input.intake, §10.6 job.questions): drawn once per set so what is typed
   // survives the next poll; Skip drops one question, "Skip, just draft" sends none.
   function renderAsk(j){
@@ -1976,11 +1984,7 @@
     if(!qs){ if(!box.hidden){ box.hidden=true; box.innerHTML=''; } box.removeAttribute('data-qs'); return; }
     if(box.getAttribute('data-qs')!==j.questions_id){
       box.setAttribute('data-qs', j.questions_id); j.skipped={};
-      box.innerHTML='<h3>Before '+esc(SAM)+' plans</h3><p class="asklede">One line each is plenty. What you skip, '+esc(DARA)+' proposes and marks for you to confirm.</p>'
-        +qs.map(function(q){ return '<div class="q" data-q="'+esc(q.id)+'"><label for="ask_'+esc(q.id)+'">'+esc(q.text)+'</label>'
-          +(q.why?'<div class="why">'+esc(q.why)+'</div>':'')+'<textarea id="ask_'+esc(q.id)+'" rows="2"></textarea>'
-          +(q.skippable===false?'':'<button type="button" class="skip" data-skip="'+esc(q.id)+'">Skip this one</button>')+'</div>'; }).join('')
-        +'<div class="asks"><button type="button" class="ghost big" id="askSkipAll">Skip, just draft</button><button type="button" class="go" id="askSend">Send answers</button></div>';
+      box.innerHTML=askHtml(qs);
       qs.forEach(function(q){
         var row=box.querySelector('.q[data-q="'+q.id+'"]'), ta=row.querySelector('textarea'), sk=row.querySelector('.skip');
         if(sk) sk.addEventListener('click',function(){
