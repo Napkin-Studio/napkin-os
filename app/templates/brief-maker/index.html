@@ -2623,8 +2623,8 @@
     });
   }
   // Which sheets run past their footer once drawn. Measured in a hidden frame, so the app's own styles stay as they are.
-  // A frame that cannot be measured reports none: the warnings by word limit still apply.
-  function gridOverflow(doc){
+  // A frame that cannot be measured within `wait` ms reports null, never an empty list: an unchecked sheet is not a fitting one.
+  function gridOverflow(doc, wait){
     return new Promise(function(res){
       var f=document.createElement('iframe'), done=false;
       f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0;visibility:hidden';
@@ -2635,10 +2635,14 @@
           var rows=sh.querySelectorAll('.row'), ft=sh.querySelector('.foot');
           var wide=[].some.call(sh.querySelectorAll('.box'),function(b){ return b.scrollWidth>b.clientWidth+1; });
           if(wide||(rows.length&&ft&&rows[rows.length-1].getBoundingClientRect().bottom>ft.getBoundingClientRect().top)) bad.push(i+1); });
-        end(bad); }catch(e){ end([]); } };
+        end(bad); }catch(e){ end(null); } };
       f.srcdoc=doc; document.body.appendChild(f);
-      setTimeout(function(){ end([]); },4000);
+      setTimeout(function(){ end(null); },wait);
     });
+  }
+  // Measure once; a slow browser gets one more go with a longer wait. Still null means the sheets could not be checked.
+  function measureGrid(doc){
+    return gridOverflow(doc,4000).then(function(bad){ return bad||gridOverflow(doc,8000); });
   }
   // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
   var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
@@ -2656,7 +2660,7 @@
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
       var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
         +g.html+(CHAIN.state==='unavailable'?'<p style="text-align:center;font:9px sans-serif;color:#767676;margin:6px">Sources could not be read for this export.</p>':'')+'<\/body><\/html>';
-      return gridOverflow(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
+      return measureGrid(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
     });
   }
   function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
@@ -2704,6 +2708,11 @@
   function runExport(kind, style, retried){
     toast('Preparing '+kind.toUpperCase()+'…');
     return buildExportHTML(style).then(function(html){
+      // Fail closed: sheets that could not be measured are not printed.
+      if(style!=='plain'&&LAST_GRID_OVERFLOW===null){
+        toast('Not exported: this browser could not check that every sheet fits. Try again, or use Plain PDF or Plain HTML.');
+        return null;
+      }
       if(style!=='plain'&&LAST_GRID_OVERFLOW.length){
         var long=LAST_GRID_WARNINGS.slice().sort(function(a,b){ return b.words/b.limit-a.words/a.limit; });
         if(!long.length) long=gridLongest(2);  // nothing over its limit: the longest parts have no limit, so they go first

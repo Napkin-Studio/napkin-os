@@ -1251,7 +1251,7 @@ test('the page rule: a brief is two content sheets however long its parts run, a
 test('an export never prints a clipped sheet: it is measured, Dara tightens the long parts once, and otherwise it stops', () => {
   assert.match(fn(BM, 'gridOverflow'), /createElement\('iframe'\)/)
   assert.match(fn(BM, 'gridOverflow'), /rows\[rows\.length-1\]\.getBoundingClientRect\(\)\.bottom>ft\.getBoundingClientRect\(\)\.top/)
-  assert.match(fn(BM, 'buildGridExportHTML'), /return gridOverflow\(doc\)\.then\(function\(bad\)\{ LAST_GRID_OVERFLOW=bad; return doc; \}\)/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)\.then\(function\(bad\)\{ LAST_GRID_OVERFLOW=bad; return doc; \}\)/)
   const run = fn(BM, 'runExport')
   assert.match(run, /LAST_GRID_OVERFLOW\.length/)
   assert.match(run, /Rewrite this part in at most '\+gridLimit\(k\)\+' words/)
@@ -1259,6 +1259,41 @@ test('an export never prints a clipped sheet: it is measured, Dara tightens the 
   assert.match(run, /Not exported: sheet '\+LAST_GRID_OVERFLOW\[0\]\+' is too full\./)
   // the guard returns before exportDoc is called
   assert.ok(run.indexOf('Not exported: sheet') < run.indexOf('window.clan.exportDoc'))
+})
+
+test('a sheet that cannot be measured is never exported: one retry with a longer wait, then the plain buttons are offered', async () => {
+  assert.match(fn(BM, 'gridOverflow'), /setTimeout\(function\(\)\{ end\(null\); \},wait\)/)
+  assert.match(fn(BM, 'measureGrid'), /gridOverflow\(doc,4000\)[\s\S]*gridOverflow\(doc,8000\)/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)/)
+  const run = fn(BM, 'runExport')
+  assert.ok(run.indexOf('LAST_GRID_OVERFLOW===null') < run.indexOf('LAST_GRID_OVERFLOW.length'), 'null is read before the length')
+  assert.match(run, /Try again, or use Plain PDF or Plain HTML/)
+  // run it: a frame that never loads must not reach exportDoc, and the wait doubles once
+  const waits: number[] = []
+  const timers: Array<() => void> = []
+  const doc = { createElement: () => ({ setAttribute() {}, style: {} }), body: { appendChild() {}, removeChild() {} } }
+  const g = lift<{ gridOverflow: (d: string, w: number) => Promise<unknown>; measureGrid: (d: string) => Promise<unknown> }>(
+    BM, ['gridOverflow', 'measureGrid'],
+    { document: doc, setTimeout: (cb: () => void, ms: number) => { waits.push(ms); timers.push(cb) } })
+  const p = g.measureGrid('<html>')
+  timers[0]()
+  await new Promise(r => setImmediate(r))
+  timers[1]()
+  assert.equal(await p, null)
+  assert.deepEqual(waits, [4000, 8000])
+  let printed = 0, said = ''
+  const env = {
+    LAST_GRID_OVERFLOW: null, LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m },
+    buildExportHTML: () => Promise.resolve('<html>'), listWords: (a: string[]) => a.join(', '), gridLongest: () => [],
+    docLocked: () => false, noMiddleware: () => false, DARA: 'Dara', fillParts: () => Promise.resolve(), gridLimit: () => 0,
+    get: () => 'x', window: { clan: { exportDoc: () => { printed++; return Promise.resolve({ ok: true }) } } },
+  }
+  const r = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], env)
+  await r.runExport('pdf')
+  assert.equal(printed, 0, 'an unmeasured sheet never reaches print')
+  assert.match(said, /^Not exported: .*Plain PDF or Plain HTML/)
+  await r.runExport('pdf', 'plain')
+  assert.equal(printed, 1, 'the plain export is unaffected')
 })
 
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
