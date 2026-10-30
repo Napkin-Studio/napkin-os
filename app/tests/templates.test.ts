@@ -1170,6 +1170,73 @@ test('a box’s word limit is the brief schema’s for every part that has one, 
   assert.equal(g.gridStep(g.gridWords(words(45)), g.gridLimit('job')), 2, 'a job twice its size steps down now it has a limit')
 })
 
+// What size a part's text really prints at: the grid's own CSS read with a small cascade (class chains, specificity, order),
+// so a step-down class that no rule reaches shows as "no smaller", whatever the page claims in its toast.
+type GridCellFns = Grid & { gridCell(c: unknown, ctx: unknown): string }
+function printedSize(css: string, ancestors: string[][], el: string[]): number {
+  const rules: { chain: string[][]; spec: number; order: number; px: number }[] = []
+  let order = 0
+  for (const m of css.matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+    const px = /font-size:([\d.]+)px/.exec(m[2])
+    if (!px || m[1].trim().startsWith('*')) continue
+    for (const sel of m[1].split(',')) {
+      const chain = sel.trim().split(/\s+/).map(part => part.split('.').filter(Boolean))
+      rules.push({ chain, spec: chain.flat().length, order: order++, px: Number(px[1]) })
+    }
+  }
+  // the element chain: sheet > box > .bd > the text element; a rule applies when its chain is a subsequence ending at a node of the chain
+  const nodes = [...ancestors, el]
+  const applies = (rule: (typeof rules)[number], upto: number) => {
+    let i = rule.chain.length - 1
+    if (!rule.chain[i].every(c => nodes[upto].includes(c))) return false
+    for (let n = upto - 1; n >= 0 && i > 0; n--) if (rule.chain[i - 1].every(c => nodes[n].includes(c))) i--
+    return i === 0 || (i === 1 && false)
+  }
+  let size = 0
+  for (let upto = 0; upto < nodes.length; upto++) {
+    const hit = rules.filter(r => applies(r, upto)).sort((a, b) => a.spec - b.spec || a.order - b.order).pop()
+    if (hit) size = hit.px
+  }
+  return size
+}
+const classesOf = (tag: string) => (/class="([^"]*)"/.exec(tag)?.[1] || '').split(/\s+/).filter(Boolean)
+
+test('every box with a word limit prints smaller when it steps down, and on a tight sheet, in the type that is really on the page', () => {
+  const g = grid(true) as GridCellFns
+  const css = g.gridCss()
+  const cells = g.gridSheets().flatMap(s => s.rows.flat()).filter(c => c.kind !== 'sources' && g.gridLimit(c.key))
+  assert.deepEqual(cells.map(c => c.key).sort(), Object.keys(AT_LIMIT(g)).filter(k => g.gridLimit(k)).sort().filter(k => k !== 'objection'), 'every limited box is checked')
+  assert.ok(['job', 'barrier', 'media_roles', 'measurement', 'single_minded_proposition', 'insight'].every(k => cells.some(c => c.key === k)))
+  const render = (c: GridCell, n: number, tight: boolean) => {
+    const base = AT_LIMIT(g)
+    const v = { ...base, [c.key]: c.kind === 'list' ? [words(n)] : words(n), objection: words(g.gridLimit('objection')) }
+    const html = g.gridCell(c, ctxOf(v))
+    const box = /<div class="(box[^"]*)">/.exec(html)![1].split(/\s+/)
+    const text = /<p class="([^"]*)">|<(li)>/.exec(html.slice(html.indexOf('class="bd"')))!
+    const el = text[2] ? [] : (text[1] || '').split(/\s+/).filter(Boolean)
+    return printedSize(css, [['sheet', ...(tight ? ['tight'] : [])], box, ['bd']], el)
+  }
+  for (const c of cells) {
+    const lim = g.gridLimit(c.key)
+    const full = render(c, lim, false), over = render(c, Math.ceil(lim * 1.7), false), tight = render(c, lim, true)
+    assert.ok(full > 0 && over > 0, `${c.key} has a printed size`)
+    assert.ok(over < full, `${c.key} over its limit prints smaller (${over}px, was ${full}px)`)
+    assert.ok(tight < full, `${c.key} on a tight sheet prints smaller (${tight}px, was ${full}px)`)
+  }
+  // the objection sits in the single thought's box: it steps down in its own line, is named as over, and tightens with the sheet
+  const hero = cells.find(c => c.key === 'single_minded_proposition')!
+  const obj = (n: number, tight = false) => {
+    const v = { ...AT_LIMIT(g), objection: words(n) }
+    const html = g.gridCell(hero, ctxOf(v)), p = /<p class="(obj[^"]*)">/.exec(html)![1].split(/\s+/)
+    return printedSize(css, [['sheet', ...(tight ? ['tight'] : [])], /<div class="(box[^"]*)">/.exec(html)![1].split(/\s+/), ['bd']], p)
+  }
+  assert.ok(obj(52) < obj(30), 'an over-long objection prints smaller')
+  assert.ok(obj(30, true) < obj(30), 'and on a tight sheet')
+  const body = g.gridBody(ctxOf({ ...AT_LIMIT(g), objection: words(52) }))
+  assert.deepEqual(body.warnings.map(w => [w.key, w.step]), [['objection', 3]], 'the over-long objection is named, so the toast is true')
+  assert.deepEqual(g.gridBody(ctxOf({ ...AT_LIMIT(g), objection: words(30) })).warnings, [])
+})
+
 test('the grid prints a header, an info grid and a footer as the sheets need them, and places each part in its box', () => {
   const g = grid()
   const vals = { job: 'Make an ordinary person ring.', background: 'Where we are.', audience: 'Who.', 'objectives.commercial': 'C', 'objectives.behavioural': 'B', 'objectives.attitudinal': 'A',

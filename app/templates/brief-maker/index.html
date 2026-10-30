@@ -1209,7 +1209,8 @@
       body=missing;
     } else if(c.kind==='hero'){
       var ob=ctx.get('objection');
-      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
+      var os=gridStep(gridWords(ob), gridLimit('objection'));
+      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj'+(os?' o'+os:'')+'">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
     } else {
       body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(gridText(v))+mk+'</p>';
     }
@@ -1286,6 +1287,9 @@
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
       if(st) warnings.push({key:c.key, label:c.label, words:w, limit:lim, step:st}); }); }); });
+    // The objection prints inside the single thought's box, so it is no box of its own: it steps down in its own line.
+    var ow=gridWords(ctx.get('objection')), ost=gridStep(ow, gridLimit('objection'));
+    if(ost&&gridHas(ctx.get('single_minded_proposition'))) warnings.push({key:'objection', label:'The objection to beat', words:ow, limit:gridLimit('objection'), step:ost});
     return {html:sheets.map(function(s,i){
         var tag=s.appendix?'APPENDIX<b>'+(i-body.length+1)+'/'+app.length+'</b>':'SHEET<b>'+(i+1)+'/'+body.length+'</b>';
         return gridSheet(i+1, sheets.length, s, ctx, tag); }).join(''),
@@ -1316,10 +1320,12 @@
       +".big{font-size:21px;line-height:1.2;font-weight:800;letter-spacing:-.02em}"
       +".dark{background:#000;color:#fff}.dark .lab{background:#fff;color:#000}.dark .big{font-size:30px;line-height:1.12}"
       +".obj{font-size:10px;color:#bbb}"
-      +".tight .bd{font-size:10.6px;line-height:1.38}.tight .job{font-size:21px}.tight .big{font-size:19px}.tight .dark .big{font-size:27px}"
+      +".tight .bd{font-size:10.6px;line-height:1.38}.tight .job{font-size:21px}.tight .big{font-size:19px}.tight .dark .big{font-size:27px}.tight .obj{font-size:9.6px}"
       +".fit1 .bd{font-size:10.8px}.fit2 .bd{font-size:10.4px}.fit3 .bd{font-size:10px}"
+      +".fit1 .job{font-size:21px}.fit2 .job{font-size:19px}.fit3 .job{font-size:17px}"
       +".fit1 .big{font-size:19px}.fit2 .big{font-size:17px}.fit3 .big{font-size:15px}"
       +".dark.fit1 .big{font-size:26px}.dark.fit2 .big{font-size:22px}.dark.fit3 .big{font-size:19px}"
+      +".obj.o1{font-size:9.6px}.obj.o2{font-size:9.2px}.obj.o3{font-size:8.8px}"
       +"sup{font-size:7.5px;font-weight:800;margin-left:1px;vertical-align:super}.mk{margin-top:3px}"
       +".box{position:relative}.tc{position:absolute;bottom:4px;right:7px;font-size:6.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b}.dark .tc{color:#bdbdbd}"
       +".todo{color:#7c7c7c;font-style:italic;border:1.5px dashed #9a9a9a;padding:8px 10px;font-size:10.5px}"
