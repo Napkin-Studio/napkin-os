@@ -1041,12 +1041,14 @@ type Grid = {
   gridHas(v: unknown): boolean
   gridStep(words: number, limit: number): number
   gridGaps(ctx: unknown): { key: string; label: string }[]
+  gridHollow(ctx: unknown): boolean
+  gridFlag(v: unknown): boolean
   gridHeaderInfo(e: unknown): string[][]
   gridBody(ctx: unknown): { html: string; sheets: number; contentSheets: number; appendixSheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
   gridContentSheets(): number
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1130,6 +1132,13 @@ test('a brief leaves with nothing empty: the gate names every empty part, the he
   assert.deepEqual(g.gridGaps({ get: (k: string) => (all as Record<string, unknown>)[k], hasVal }), [], 'a complete brief has no gap')
   const thin = { ...all, job: '', barrier: undefined, objection: ' ', mandatories: [] }
   assert.deepEqual(g.gridGaps({ get: (k: string) => (thin as Record<string, unknown>)[k], hasVal }).map(x => x.key), ['job', 'barrier', 'mandatories', 'objection'])
+  const at = (o: object) => ({ get: (k: string) => (o as Record<string, unknown>)[k], hasVal })
+  assert.equal(g.gridHollow(at(all)), false)
+  assert.equal(g.gridHollow(at(thin)), false, 'a brief missing four parts is still a brief')
+  assert.equal(g.gridHollow(at({})), true, 'an empty brief is not exported')
+  assert.equal(g.gridHollow(at({ single_minded_proposition: 'Just one thing.' })), true)
+  assert.equal(g.gridHollow(at({ job: 'J.', background: 'B.', audience: 'A.', insight: 'I.' })), false)
+  assert.match(BM, /gridHollow\(ctx\)\)\{ toast\('Not exported: there is hardly anything/)
   // The header: a value, a suggestion marked as one, or a prompt for what only a person knows. Never a blank.
   const info = g.gridHeaderInfo({ client: 'Ballymaloe Relish, an Irish family relish brand.', project: 'Better With Ballymaloe', version: '1.2', date: '29 October 2026',
     me: 'Sai', today: new Date(2026, 9, 29) })
@@ -1140,13 +1149,22 @@ test('a brief leaves with nothing empty: the gate names every empty part, the he
   assert.ok(blank.every(p => String(p[1]).trim() !== ''), 'even a brief with no client, project or signed-in person has no empty cell')
   assert.equal(blank.find(p => p[0] === 'Prepared by')?.[1], 'Napkin Studio')
   // The export: the grid asks Dara for what is missing and stops, saying so, if it is still missing; the plain export never waits.
-  const ex = fn(BM, 'doExport')
+  const ex = fn(BM, 'exportOnce')
   assert.match(ex, /style==='plain'\)\s*return runExport\(kind, style\)/)
   assert.match(ex, /gridGaps\(ctx\)/)
   assert.match(ex, /fillParts\(gaps\.map/)
   assert.match(ex, /Not exported: /)
   assert.match(fn(BM, 'fillParts'), /regenField\(f,guidanceFor\?guidanceFor\(k\):null,null,function\(\)\{ res\(\); \}\)/)
   assert.match(fn(BM, 'regenField'), /if\(done\) done\(j\)/)
+  // A fill that cannot start still finishes, so an export waiting on it never hangs; one export runs at a time.
+  assert.match(fn(BM, 'regenField'), /if\(!window\.clan\)\{ if\(done\) done\(\); return; \}/)
+  assert.match(fn(BM, 'regenField'), /setStatus\(esc\(NO_MW\)\); if\(done\) done\(\); return;/)
+  assert.match(fn(BM, 'doExport'), /if\(EXPORTING\)\{ toast\('An export is already running\.'\); return; \}/)
+  assert.match(fn(BM, 'doExport'), /EXPORTING=false/)
+  // Sideways overflow counts, and when no part is over a limit the longest parts are the ones tightened.
+  assert.match(fn(BM, 'gridOverflow'), /scrollWidth>b\.clientWidth/)
+  assert.match(fn(BM, 'runExport'), /if\(!long\.length\) long=gridLongest\(2\)/)
+  assert.match(BM, /overflow-wrap:anywhere/)
   // The three new parts are on the form beside the others, and the page can find them by the words a person uses.
   assert.match(BM, /key:'job',label:'The job'[\s\S]*key:'background'[\s\S]*key:'barrier',label:'The barrier'/)
   assert.match(BM, /key:'single_minded_proposition'[\s\S]*key:'objection',label:'The objection to beat'/)
@@ -1249,4 +1267,19 @@ test('the grid prints on A4 sheets that break cleanly, and is the default export
   assert.match(BM, /id="exHtml"[\s\S]*id="exPdf"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
   assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
   assert.match(BM, /doExport\('html'\); \}\);\s*\$\('exPdf'\)/, 'the shell’s Export and the two main buttons are the grid')
+})
+
+
+test('a part the draft marks "To confirm:" prints a corner tag, not the words in the sentence', () => {
+  const g = grid()
+  assert.equal(g.gridText('To confirm: Easy.'), 'Easy.')
+  assert.equal(g.gridText(['To confirm: a', 'b']), 'a; b')
+  assert.equal(g.gridFlag('To confirm: Easy.'), true)
+  assert.equal(g.gridFlag(['x', 'to confirm: y']), true)
+  assert.equal(g.gridFlag('Easy. To confirm: later'), false, 'only a leading mark counts')
+  const ctx = (v: Record<string, unknown>) => ({ get: (k: string) => v[k], hasVal, cit: { marks: {}, notes: [] }, info: [], project: 'P', client: 'C', version: '1' })
+  const marked = g.gridBody(ctx({ insight: 'To confirm: Tension here.', background: 'Plain fact.' })).html
+  assert.match(marked, /class="tc">to confirm</)
+  assert.doesNotMatch(marked, /To confirm: Tension/)
+  assert.equal((marked.match(/class="tc"/g) || []).length, 1, 'one tag, only on the marked box')
 })
