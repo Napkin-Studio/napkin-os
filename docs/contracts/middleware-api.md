@@ -200,10 +200,13 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
   laptop closing (N2), so a job outlives the request that started it.
 - **`needs_input`** (`start_campaign`, and a `draft_brief` asked to take intake,
   §10.3): the job is waiting for the person.
-  It carries `job.question` (§8.3) and stays so — polls are free and change
-  nothing — until an `answer_question` for it is accepted, or until its wait
-  runs out and the job goes on with the question's stated default (§8.3;
-  *changed 2026-09-30*: no stage may halt a research job).
+  A `start_campaign` job carries `job.question` (§8.3) and stays so — polls are
+  free and change nothing — until an `answer_question` for it is accepted, or
+  until its wait runs out and the job goes on with the question's stated default
+  (§8.3; *changed 2026-09-30*: no stage may halt a research job). A `draft_brief`
+  instead carries `job.questions` (a list) and `job.questions_id`, with
+  `job.question` `null`, and its wait ends with each question skipped (§10.3,
+  §10.6), not with a default.
 - `progress.total` is the number of units of work: for `research_lens`, one per
   lens × market. `progress.done` never goes backwards.
 - A `job_status` response describes the job: its `task` and `handler` are the
