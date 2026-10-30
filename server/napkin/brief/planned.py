@@ -24,6 +24,7 @@ Every call, search, decision and stage is in the job's run log (napkin.runlog).
 from __future__ import annotations
 
 import copy
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
@@ -37,8 +38,8 @@ from . import provenance as prov
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
 from .job import BriefJob, log
-from . import checks
-from .questions import dedupe
+from . import checks, intake
+from .questions import dedupe, without_answered
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
@@ -252,8 +253,12 @@ def _short(s, n=220):
 class PlannedBriefJob(BriefJob):
     """draft_brief, planned (module docstring)."""
 
-    def __init__(self, *a, research_max: int = 3, judge: str = "review", **kw):
+    def __init__(self, *a, research_max: int = 3, judge: str = "review", intake_wait: float = 0,
+                 intake_max: int = 3, **kw):
         super().__init__(*a, **kw)
+        # intake (brief/intake.py): off unless the request asked and the wait is above 0
+        self.intake_wait, self.intake_max = max(0, float(intake_wait)), max(0, int(intake_max))
+        self.intake_skipped, self.intake_answered = [], {}  # questions left open; {key: the words it was asked in}
         self.research_max = max(0, int(research_max))
         self.judge_mode = judge  # "review": Jude reviews the whole brief; "jev": the check loop (checkloop.py)
         self.plan_out, self.plan_dec = None, None
@@ -371,6 +376,9 @@ class PlannedBriefJob(BriefJob):
             leaves = [{"code": x["code"], "name": x.get("name")} for x in self.caps.layers.leaves()]
         except Exception as e:  # noqa: BLE001 - no research to run, the plan still stands
             rl.note("leaves", error=f"{type(e).__name__}: {str(e)[:200]}")
+        self._intake()  # the one pause: the lookups above overlapped with the person reading the questions
+        if self.caps.jobs.cancelled:
+            return
         ev = self._evidence()
         payload = {"client_said": self._said(), "captured": self._captured(),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
@@ -404,6 +412,59 @@ class PlannedBriefJob(BriefJob):
         self.plan_dec = self.dec(("plan",), "edit", "plan", [], mat_ids, r, "synthesise")
         decisions = [self.plan_dec] + self._research_asked(plan)
         self.add_chunk("context", {}, decisions, facts=self.new_pins, sources=self.new_sources)
+
+    def _intake(self):
+        """Ask the person what the capture leaves open, once, before the plan (brief/intake.py). Zero model
+        calls; zero seconds when nothing is askable. What is answered becomes client words, what is skipped or
+        not answered in time changes nothing and says so."""
+        rl = self.caps.runlog
+        if self.task != "draft_brief" or self.intake_wait <= 0 or self.capture is None:
+            return
+        items = {**((self.W.get("capture") or {}).get("items") or {}), **self.capture["items"]}
+        asked = intake.questions(items, self.capture.get("named"), self.intake_max)
+        if not asked:
+            return
+        t0 = time.monotonic()
+        answers, timed_out = self.ask(asked, self.intake_wait)
+        if self.caps.jobs.cancelled:
+            return
+        mat, new, done, skipped = intake.answer_items(asked, answers)
+        rl.note("intake_wait", secs=round(time.monotonic() - t0, 1), asked=[q["key"] for q in asked],
+                outcome="unanswered" if timed_out else "answered" if done else "skipped")
+        self.intake_skipped = skipped
+        self.intake_answered = {q["key"]: q["text"] for q in done}
+        patch, decisions = {}, []
+        if mat is not None:
+            self.mats.insert(0, mat)  # first: _said() is cut at its limit, and the answers must not be what goes
+            self.capture["items"].update(new)
+            patch = {"materials": {mat.id: mat.entry(iso())}, "capture": {"items": new}}
+            pts = [rsn.point(f"The answer to “{q['text']}”: “{_short(answers[q['id']].strip(), 160)}”", mat.id)
+                   for q in done]
+            r = rsn.make(f"A person answered {len(done)} question(s) before the draft: "
+                         f"{', '.join(q['key'] for q in done)}.", pts,
+                         rsn.certainty("high", "typed by the person and kept verbatim; the planner, not the client, "
+                                               "gave it"),
+                         "the client says otherwise, or a person edits the capture",
+                         only_option="an answer is the client's word as the planner gave it",
+                         attention="Answered by the planner at intake, as the planner gave it: not read from the "
+                                   "client's own material.")
+            decisions.append(self.dec(("intake", "answered"), "edit", "capture",
+                                      ["capture", f"materials[{mat.id}]"], [mat.id], r, "extract",
+                                      material_read=[mat.id]))
+        if skipped:
+            why = "nobody answered within the wait" if timed_out else "a person chose to skip them"
+            rl.note("intake_unanswered" if timed_out else "intake_skipped", keys=[q["key"] for q in skipped])
+            r = rsn.make(f"Went on without an answer to {len(skipped)} intake question(s): {why}.",
+                         [rsn.point(f"“{q['text']}” was asked and not answered: {why}") for q in skipped],
+                         rsn.certainty("high", "the questions were asked and no answer came"),
+                         "the client answers, or a person edits the part",
+                         only_option="nothing is invented to stand for an answer",
+                         attention="The parts these feed are assumptions marked To confirm, and the questions stay "
+                                   "open.")
+            decisions.append(self.dec(("intake", "unanswered" if timed_out else "skipped"), "edit", "capture", [], [],
+                                      r, "extract"))
+        if decisions:
+            self.add_chunk("context", patch, decisions)
 
     def _research_asked(self, plan):
         """The research `plan` asks for, less what the brief already holds, capped: its decisions."""
@@ -796,8 +857,10 @@ class PlannedBriefJob(BriefJob):
 
     # -- placing ---------------------------------------------------------------------------------
     def _question_seed(self):
-        """The client questions placing starts from: the plan's."""
-        return [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
+        """The client questions placing starts from: intake's that were skipped (their wording stands), then the
+        plan's."""
+        return [intake.worded(q) for q in self.intake_skipped] + \
+            [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
 
     def _unwritten_outcome(self, k):
         """The review's entry for a part this job did not write."""
@@ -871,7 +934,7 @@ class PlannedBriefJob(BriefJob):
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
-        oq, merged = dedupe(qs)
+        oq, merged = dedupe(without_answered(qs, self.intake_answered))
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
         oq = clean("open_questions", oq[:12])

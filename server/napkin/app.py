@@ -182,10 +182,13 @@ class Middleware:
 
         if mod.KIND == "answer":
             job = self.jobs.get(inp.get("job_id"), scope, doc)
-            if job.task != "start_campaign":
+            if job.task == "start_campaign":
+                mod.answer(job, req)
+                return self.campaign_envelope(job, job.reply_change(clan))
+            if getattr(job, "kind", None) != "brief":
                 raise TaskError(409, "job_state", "that job does not wait for answers")
-            mod.answer(job, req)
-            return self.campaign_envelope(job, job.reply_change(clan))
+            mod.answer(job, req)  # a brief job refuses (409) unless it is waiting for its intake answers
+            return self.brief_envelope(job, job.reply_change(clan))
         if mod.KIND == "campaign":
             if self.jobs.unfinished_campaign(scope, doc):
                 raise TaskError(409, "job_state", "a start_campaign job on this document is still running or "

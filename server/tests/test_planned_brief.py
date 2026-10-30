@@ -3,13 +3,16 @@ asks for, Dara writes every part in one call, Jude reviews the whole brief once,
 what he names, Jude scores again; and the run log records all of it."""
 
 import json
+import time
+
+import pytest
 
 from napkin.brief.fields import KEYS
 from napkin.brief.planned import DIMS
 
 from conftest import Server
 from fakes import FakeModel
-from test_brief import Host, check_change_rules, retrieval, run
+from test_brief import DOC, Host, check_change_rules, post, retrieval, run
 
 THIN = "Can you make me a brief? Brewline, an Irish coffee chain, is launching an oat-milk iced latte this " \
        "summer and wants more under-30s coming in."
@@ -354,3 +357,268 @@ def test_the_job_the_barrier_and_the_objection_are_drafted_with_the_other_parts(
         assert k in seen["draft"]["parts"], f"Dara is asked for {k}"
         assert str(host.data.get(k) or "").strip(), f"{k} is written, not left empty"
         assert k in drafted, f"{k} carries a draft decision with its reasons"
+
+
+# ---- intake (brief/intake.py, feature brief-intake-qa) ----------------------------------------------------
+
+import fakes
+
+ASKABLE = ("Client: Brewline\nProject: Iced Latte\nObjective (commercial): Grow iced coffee sales by 10% by Q4.\n"
+           "Audience: Under-30s who meet friends in cafes.\nMandatory: The Brewline logo.")  # no budget, no timeline
+EVERYTHING = ASKABLE + "\nBudget: Not set yet.\nTimeline: Live by 1 June."
+FIGURE = "EUR 150,000 incl. VAT, media inside it"
+
+
+@pytest.fixture(autouse=True)
+def _timeline_label(monkeypatch):
+    monkeypatch.setitem(fakes.LABEL_KEYS, "Timeline", "timeline")  # the fake capture reads a Timeline: line
+
+
+def intake_model(seen):
+    """The planned fakes, with Dara resting the budget on the client's words whenever there are some."""
+    m = planned_model(seen)
+    whole = m.overrides["draft_brief_whole"]
+
+    def draft(p):
+        out = whole(p)
+        out["budget_and_scope"] = {"value": f"Budget: {FIGURE}.", "basis": "client", "cites": [],
+                                   "builds_on_client": True, "why": "the planner's answer"}
+        return out
+    m.overrides["draft_brief_whole"] = draft
+    return m
+
+
+def intake_server(tmp_path, seen, wait=30, **kw):
+    return Server(tmp_path, model=intake_model(seen), retrieval=retrieval(),
+                  settings_kw={"brief_flow": "planned", "brief_research_max": 1, "brief_intake_wait": wait,
+                               "runlog_dir": str(tmp_path / "runs"), **kw})
+
+
+def answering(s, host, answers):
+    """on_reply: answer the open questions once, with `answers` ({key: text | None}; {} skips them all)."""
+    sent = []
+
+    def go(body):
+        job = body["job"]
+        if job["state"] != "needs_input" or sent:
+            return
+        sent.append(job["questions"])
+        given = {q["id"]: answers.get(q["key"]) for q in job["questions"] if q["key"] in answers}
+        st, rb = post(s, "answer_question", {"job_id": job["id"], "questions_id": job["questions_id"],
+                                             "answers": given}, host.clan())
+        assert st == 200, rb
+        host.apply(rb["change"])
+    go.sent = sent
+    return go
+
+
+def states(replies):
+    return [r["job"]["state"] for r in replies]
+
+
+def events(tmp_path):
+    (log,) = list((tmp_path / "runs").rglob("draft_brief-*.jsonl"))
+    return [json.loads(x) for x in log.read_text().splitlines()]
+
+
+def parts_to_confirm(data):
+    return sorted(k for k, v in {**data, **data.get("objectives", {})}.items()
+                  if isinstance(v, str) and v.startswith("To confirm:"))
+
+
+def test_intake_pauses_before_the_plan_and_an_answer_is_written_as_the_clients_word(tmp_path):
+    seen = {}
+    s = intake_server(tmp_path, seen)
+    try:
+        host = Host()
+        go = answering(s, host, {"budget": FIGURE})
+        replies = run(s, host, inp={"prompt": ASKABLE, "attachments": [], "intake": True}, on_reply=go)
+    finally:
+        s.stop()
+    assert "needs_input" in states(replies) and states(replies)[-1] == "done"
+    (asked,) = go.sent
+    assert [q["key"] for q in asked] == ["budget", "timeline"]
+    waiting = next(r for r in replies if r["job"]["state"] == "needs_input")
+    assert waiting["job"]["question"] is None and waiting["job"]["stage"] == "context"
+    assert waiting["job"]["progress"]["total"] == 4 and waiting["job"]["questions_id"]
+    # the plan was not called until the answer arrived, and it reads the answer as the client's words
+    assert FIGURE in seen["plan"]["client_said"] and FIGURE in seen["draft"]["client_said"]
+    assert any(FIGURE in str(w) for r in seen["reviews"] for w in [r.get("client_said")]), "Jude reads it too"
+    # the part it feeds is the client's, not an assumption
+    assert host.data["budget_and_scope"] == f"Budget: {FIGURE}."
+    by = {t.split("#", 1)[1]: d for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
+    assert by["budget_and_scope"]["basis"] == "client"
+    # one material and one capture item, the answer verbatim, and one decision saying a person answered
+    (mid,) = [m for m, e in host.data["materials"].items() if e["name"] == "Intake answers"]
+    assert host.data["materials"][mid]["kind"] == "other"
+    (cap,) = [i for i in host.data["capture"]["items"].values() if i["material_id"] == mid]
+    assert cap["key"] == "budget" and cap["quote"] == FIGURE and cap["status"] == "fact"
+    dec = next(d for d in host.chain if d["action"] == "capture" and mid in d["cites"])
+    assert "A person answered" in dec["reasoning"]["decided"] and "planner" in dec["reasoning"]["attention"]
+    # it is answered once: no budget question comes back, whatever wording the model used; the timeline was
+    # skipped and is asked once
+    oq = host.data["open_questions"]
+    assert not [q for q in oq if "launch budget" in q.lower()] and "How will the work be judged?" in oq
+    assert sum("when does it need to be live" in q.lower() for q in oq) == 1
+    check_change_rules(host)
+    # zero added model calls: the purposes are today's, each called once
+    evs = events(tmp_path)
+    purposes = [e["purpose"] for e in evs if e["ev"] == "model"]
+    assert {"capture", "scorecard", "plan_brief", "draft_brief_whole", "review_brief"} <= set(purposes)
+    assert all(purposes.count(p) == 1 for p in ("capture", "scorecard", "plan_brief", "draft_brief_whole"))
+    wait = next(e for e in evs if e.get("what") == "intake_wait")
+    assert wait["outcome"] == "answered" and wait["asked"] == ["budget", "timeline"]
+    assert any(e["ev"] == "note" and e["what"] == "intake_skipped" for e in evs)
+
+
+def test_skipping_everything_gives_todays_brief_with_the_question_open_once(tmp_path):
+    runs = []
+    for intake_on, sub in ((False, "off"), (True, "skip")):
+        seen = {}
+        s = intake_server(tmp_path / sub, seen)
+        try:
+            host = Host()
+            replies = run(s, host, inp={"prompt": ASKABLE, "attachments": [], "intake": intake_on},
+                          on_reply=answering(s, host, {}))
+        finally:
+            s.stop()
+        assert replies[-1]["job"]["state"] == "done"
+        runs.append((host, replies, seen, tmp_path / sub))
+    (off, off_replies, off_seen, _), (skip, skip_replies, skip_seen, skip_dir) = runs
+    assert "needs_input" not in states(off_replies) and "needs_input" in states(skip_replies)
+    # the fields are the same as with intake off; the budget is a To confirm, the question is open once, worded by intake
+    for k in ("budget_and_scope", "audience", "insight"):
+        assert skip.data.get(k) == off.data.get(k)
+    assert parts_to_confirm(skip.data) == parts_to_confirm(off.data)
+    oq = skip.data["open_questions"]
+    assert sum("budget" in q.lower() for q in oq) == 1
+    assert next(q for q in oq if "budget" in q.lower()).startswith("[important] What is the budget, and does it "
+                                                                    "include VAT")
+    assert skip_seen["plan"]["client_said"] == off_seen["plan"]["client_said"]
+    evs = events(skip_dir)
+    assert next(e for e in evs if e.get("what") == "intake_wait")["outcome"] == "skipped"
+    assert any(e["ev"] == "note" and e["what"] == "intake_skipped" for e in evs)
+    assert any("Went on without an answer" in d["reasoning"]["decided"] for d in skip.chain)
+    check_change_rules(skip)
+
+
+def test_an_unanswered_question_times_out_into_a_recorded_default_and_a_late_answer_is_refused(tmp_path):
+    seen = {}
+    s = intake_server(tmp_path, seen, wait=0.5)
+    try:
+        host = Host()
+        t0 = time.time()
+        replies = run(s, host, inp={"prompt": ASKABLE, "attachments": [], "intake": True})
+        waited = time.time() - t0
+        last = replies[-1]
+        st, body = post(s, "answer_question", {"job_id": last["job"]["id"], "questions_id": "x", "answers": {}},
+                        host.clan())
+    finally:
+        s.stop()
+    assert last["job"]["state"] == "done" and "needs_input" in states(replies) and waited < 20
+    assert st == 409 and "went on without" in json.dumps(body), body
+    evs = events(tmp_path)
+    assert next(e for e in evs if e.get("what") == "intake_wait")["outcome"] == "unanswered"
+    assert any(e.get("what") == "intake_unanswered" for e in evs)
+    assert any("nobody answered within the wait" in d["reasoning"]["decided"] for d in host.chain)
+    assert sum("budget" in q.lower() for q in host.data["open_questions"]) == 1
+    check_change_rules(host)
+
+
+def test_cancel_job_ends_the_wait_at_once_and_the_plan_is_never_called(tmp_path):
+    seen = {}
+    s = intake_server(tmp_path, seen, wait=60)
+    try:
+        host = Host()
+        st, body = post(s, "draft_brief", {"prompt": ASKABLE, "attachments": [], "intake": True}, host.clan())
+        jid, t0 = body["job"]["id"], time.time()
+        while body["job"]["state"] != "needs_input":
+            assert time.time() - t0 < 20, body["job"]
+            time.sleep(0.02)
+            _, body = post(s, "job_status", {"job_id": jid}, host.clan())
+            host.apply(body["change"])
+        t1 = time.time()
+        st, body = post(s, "cancel_job", {"job_id": jid}, host.clan())
+        host.apply(body["change"])
+        job = s.app.state.mw.jobs.get(jid, s.app.state.mw.settings.scope, DOC)
+        job.thread.join(5)
+    finally:
+        s.stop()
+    assert body["job"]["state"] == "cancelled" and time.time() - t1 < 5 and not job.thread.is_alive()
+    assert "plan" not in seen and "questions" not in body["job"]
+    check_change_rules(host)
+
+
+def test_a_brief_with_every_askable_item_never_pauses_and_adds_no_second(tmp_path):
+    seen = {}
+    s = intake_server(tmp_path, seen, wait=60)
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": EVERYTHING, "attachments": [], "intake": True}, timeout=20)
+    finally:
+        s.stop()
+    assert set(states(replies)) <= {"queued", "running", "done"}
+    assert not any(str(e.get("what")).startswith("intake") for e in events(tmp_path))
+
+
+def test_without_input_intake_an_incomplete_brief_never_pauses(tmp_path):
+    for inp in ({"prompt": ASKABLE, "attachments": []}, {"prompt": ASKABLE, "attachments": [], "intake": False}):
+        s = intake_server(tmp_path / str(len(inp)), {}, wait=60)
+        try:
+            replies = run(s, Host(), inp=inp, timeout=20)
+        finally:
+            s.stop()
+        assert "needs_input" not in states(replies) and states(replies)[-1] == "done"
+    # and a wait of 0 is the same as off, even when the request asks
+    s = intake_server(tmp_path / "zero", {}, wait=0)
+    try:
+        replies = run(s, Host(), inp={"prompt": ASKABLE, "attachments": [], "intake": True}, timeout=20)
+    finally:
+        s.stop()
+    assert "needs_input" not in states(replies)
+
+
+def test_the_fields_flow_and_a_bad_intake_value_ignore_or_refuse_intake(tmp_path):
+    s = Server(tmp_path, retrieval=retrieval(), settings_kw={"brief_flow": "fields", "brief_intake_wait": 60})
+    try:
+        replies = run(s, Host(), inp={"prompt": ASKABLE, "attachments": [], "intake": True}, timeout=20)
+        st, body = post(s, "draft_brief", {"prompt": ASKABLE, "attachments": [], "intake": "yes"}, Host().clan())
+    finally:
+        s.stop()
+    assert "needs_input" not in states(replies) and states(replies)[-1] == "done"
+    assert st == 400 and "intake" in json.dumps(body)
+
+
+def test_answer_question_is_routed_to_a_brief_job_and_refused_for_one_that_is_not_waiting(tmp_path):
+    seen = {}
+    s = intake_server(tmp_path, seen, wait=60)
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": EVERYTHING, "attachments": [], "intake": True}, timeout=20)
+        jid = replies[-1]["job"]["id"]
+        st, body = post(s, "answer_question", {"job_id": jid, "questions_id": "x", "answers": {}}, host.clan())
+        assert st == 409 and body["error"]["type"] == "job_state", body  # a draft_brief that is not waiting
+        replies = run(s, host, task="regenerate_field", inp={"field": "insight"}, timeout=20)
+        st, body = post(s, "answer_question", {"job_id": replies[-1]["job"]["id"], "questions_id": "x",
+                                               "answers": {}}, host.clan())
+        assert st == 409 and body["error"]["type"] == "job_state", body  # a regenerate_field job
+        # while waiting: a wrong questions_id, an answer to no question and a non-text answer are 400s
+        host = Host()  # a document that has not answered intake before
+        st, body = post(s, "draft_brief", {"prompt": ASKABLE, "attachments": [], "intake": True}, host.clan())
+        jid = body["job"]["id"]
+        t0 = time.time()
+        while body["job"]["state"] != "needs_input":
+            assert time.time() - t0 < 20
+            time.sleep(0.02)
+            _, body = post(s, "job_status", {"job_id": jid}, host.clan())
+            host.apply(body["change"])
+        qid = body["job"]["questions_id"]
+        for inp in ({"questions_id": "other", "answers": {}}, {"questions_id": qid, "answers": {"q_nope": "x"}},
+                    {"questions_id": qid, "answers": {"q_budget": 5}}, {"questions_id": qid, "answers": []}):
+            st, bad = post(s, "answer_question", {"job_id": jid, **inp}, host.clan())
+            assert st == 400, bad
+        st, ok = post(s, "answer_question", {"job_id": jid, "questions_id": qid, "answers": {}}, host.clan())
+        assert st == 200 and ok["job"]["state"] == "running" and "questions" not in ok["job"]
+        post(s, "cancel_job", {"job_id": jid}, host.clan())
+    finally:
+        s.stop()
