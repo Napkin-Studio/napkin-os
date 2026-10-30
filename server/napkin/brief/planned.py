@@ -887,6 +887,7 @@ class PlannedBriefJob(BriefJob):
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
+        qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
         oq, merged = dedupe(qs)
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])

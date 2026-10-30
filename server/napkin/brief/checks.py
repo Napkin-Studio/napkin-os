@@ -48,9 +48,15 @@ def text_of(v) -> str:
     return v.strip() if isinstance(v, str) else ""
 
 
+_LEAD_MARK = re.compile(r"(?i)^\s*to confirm:\s*")
+
+
 def _spoken(v) -> str:
-    """The words of a part, without the 'To confirm:' mark: the mark is not part of what is said."""
-    return re.sub(r"(?i)^\s*to confirm:\s*", "", text_of(v))
+    """The words of a part, without the 'To confirm:' mark: the mark is not part of what is said. A list can carry
+    the mark on any of its items (a redraft or a person may put it on several), so it comes off every item."""
+    if isinstance(v, list):
+        return "; ".join(t for t in (_LEAD_MARK.sub("", text_of(x)) for x in v) if t)
+    return _LEAD_MARK.sub("", text_of(v))
 
 
 def limit(key: str) -> int | None:
@@ -171,3 +177,18 @@ def mark_downgraded(entries: dict) -> list[str]:
         if not re.search(r"\d", text_of(e.get("value"))) and _mark(k, e):
             marked.append(k)
     return marked
+
+
+def figure_questions(entries: dict, label=lambda k: k) -> list[str]:
+    """A part provenance moved to 'assumption' that holds a figure is left unmarked (mark_downgraded: a mark would
+    break the tie between its first sentence and its claim). The figure is still to confirm, so it is asked of the
+    client as an open question, one per part. -> the questions, in part order."""
+    out = []
+    for k, e in entries.items():
+        if k in IDENTITY or not isinstance(e, dict) or not e.get("downgraded") or e.get("basis") != "assumption":
+            continue
+        t = text_of(e.get("value"))
+        m = re.search(r"\S*\d\S*", t)
+        if m and not t.lower().startswith("to confirm"):
+            out.append(f"Which figure in {label(k).lower()} can you stand behind ({m.group(0).strip('.,;:')}), and where does it come from?")
+    return out

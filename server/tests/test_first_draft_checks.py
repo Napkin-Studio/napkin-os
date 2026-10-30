@@ -196,6 +196,21 @@ def test_both_parts_carry_the_skills_tests_and_the_schema_declares_them_required
     assert {"fits_the_audience", "can_attribute", "says_the_lag"} == hard
 
 
+def test_the_mark_comes_off_every_item_of_a_list_before_it_is_counted():
+    five = ["To confirm: Judged by: sales", "Attribution: a holdout region", "To confirm: Before and after: wave one", "The lag: eight weeks", "To confirm: Tracker: monthly"]
+    assert checks._spoken(five) == "Judged by: sales; Attribution: a holdout region; Before and after: wave one; The lag: eight weeks; Tracker: monthly"
+    assert checks.facts({"measurement": e(five)})["measurement"]["words"] == 18, "the three marks (6 words) are not counted"
+    assert checks._spoken("To confirm: One thing.") == "One thing." and checks._spoken(["a", "b"]) == "a; b"
+
+
+def test_a_figure_left_unmarked_is_asked_of_the_client():
+    down = {"media_roles": {**e(["Radio: 60% listen"]), "downgraded": True}, "measurement": {**e(["Attribution: a holdout"]), "downgraded": True},
+            "audience": e("Shoppers over 40")}
+    assert checks.figure_questions(down, lambda k: {"media_roles": "Role of each medium"}.get(k, k)) == [
+        "Which figure in role of each medium can you stand behind (60%), and where does it come from?"]
+    assert checks.figure_questions({"media_roles": {**e(["To confirm: Radio: 60%"]), "downgraded": True}}) == [], "a marked part is already to confirm"
+
+
 def test_an_assumed_list_part_marks_its_first_item_and_other_lists_stay_as_they_are():
     out = {"media_roles": e(["Radio: the car", "Social: repeats"]), "measurement": e(["Judged by: sales"], "client"),
            "reasons_to_believe": e(["a proof"]), "tone_and_world": e(["warm"])}

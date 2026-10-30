@@ -411,3 +411,6 @@ def test_a_figure_in_the_new_parts_that_no_fact_holds_stays_an_assumption_and_is
     assert by["media_roles"]["basis"] == "assumption", "a research claim citing nothing it was given is assumed"
     assert host.data["media_roles"] == ["Radio: 60% of shoppers listen on the way to the shop"], "the words are never edited"
     assert "media_roles" not in (seen.get("rewrite") or {}).get("rewrite", {}), "a figure alone is not a reason to rewrite"
+    # it carries no mark (a mark would break the tie to its claim), so the figure is put to the client as an open question instead
+    qs = [q for q in host.data["open_questions"] if "60%" in q]
+    assert len(qs) == 1 and "role of each medium" in qs[0].lower(), host.data["open_questions"]
