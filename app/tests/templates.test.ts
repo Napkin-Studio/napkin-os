@@ -10,7 +10,9 @@
 // offered on a part the Judge failed, empty or not.
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -1048,7 +1050,7 @@ type Grid = {
   gridContentSheets(): number
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = (GRID_MEDIA_ROW = false) => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc, GRID_MEDIA_ROW })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1067,17 +1069,105 @@ test('the grid numbers its sections once, in one sequence, and starts with the j
   assert.equal(g.gridSheets().at(-1)?.appendix, true, 'the evidence and the questions sit on an appendix sheet')
 })
 
-test('a box’s word limit is the brief schema’s, and a long part steps its own type down', () => {
+// The media row (feature brief-media-measure): built, and switched off by one constant until Laurence confirms the page rule.
+const AT_LIMIT = (g: Grid) => {
+  const v: Record<string, unknown> = {}
+  const text = (n: number) => Array.from({ length: n }, (_, i) => (['the', 'family', 'brand', 'grows', 'because', 'shoppers', 'rarely', 'reach', 'for', 'relish'])[i % 10]).join(' ')
+  const ITEMS: Record<string, number> = { media_roles: 4, measurement: 5, reasons_to_believe: 3 }
+  for (const s of g.gridSheets()) for (const r of s.rows) for (const c of r) {
+    const lim = g.gridLimit(c.key) || 20, n = c.kind === 'list' ? ITEMS[c.key] || 3 : 0
+    // a list's words are shared out over its items so that they add up to the limit exactly
+    v[c.key] = n ? Array.from({ length: n }, (_, i) => text(Math.floor(lim / n) + (i < lim % n ? 1 : 0))) : text(lim)
+  }
+  return v
+}
+
+test('the media row is one constant, off: today’s print is unchanged, and the parts are still on the form', () => {
+  assert.equal((BM.match(/GRID_MEDIA_ROW\s*=/g) || []).length, 1, 'one place switches the row')
+  assert.match(BM, /var GRID_MEDIA_ROW=false;/)
   const g = grid()
-  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; max_words?: number }[] }
-  const key: Record<string, string> = { background: 'background', audience: 'audience', budget_scope: 'budget_and_scope', competitor_context: 'competitor_context',
-    insight: 'insight', smp: 'single_minded_proposition', tone_world_assets: 'tone_and_world', mandatories: 'mandatories' }
-  for (const f of schema.fields) if (key[f.id]) assert.equal(g.gridLimit(key[f.id]), f.max_words, `${f.id} keeps the schema's limit`)
-  assert.equal(g.gridLimit('job'), 0, 'a part with no limit is never stepped down')
+  const keys = g.gridSheets().flatMap(s => s.rows.flat()).map(c => c.key)
+  assert.ok(!keys.includes('media_roles') && !keys.includes('measurement'), 'neither box is printed')
+  assert.ok(!g.gridKeys().includes('media_roles'))
+  const rows = g.gridSheets()[0].rows
+  assert.equal(rows.length, 5, 'sheet 1 is the five rows it was')
+  assert.deepEqual(g.gridSheets()[1].rows.flat().map(c => c.num).filter(n => /^\d+$/.test(n)).slice(0, 2), ['07', '08'], 'the insight is 07 and the single thought 08')
+  const out = g.gridBody(ctxOf({ ...AT_LIMIT(g), media_roles: ['x'], measurement: ['y'] }))
+  assert.equal(out.contentSheets, 2)
+  assert.doesNotMatch(out.html, /Role of each medium|How we will know it worked/)
+  // a brief without the parts is not held up by them: the export writes no part the sheet does not print
+  assert.ok(!g.gridGaps({ get: () => 'x', hasVal } as never).some(x => x.key === 'media_roles' || x.key === 'measurement'))
+  // both are on the form and found by the words a person uses
+  assert.match(BM, /key:'budget_and_scope',label:'Budget & scope',type:'text'\},\s*\{sec:'Execution',key:'media_roles',label:'Role of each medium',type:'list'\},\s*\{sec:'Execution',key:'measurement',label:'How we will know it worked',type:'list'\}/)
+  assert.match(BM, /media_roles:'media, channels, role of each medium/)
+  assert.match(BM, /measurement:'measurement, how we will know it worked/)
+})
+
+test('switched on, the media row is two boxes on sheet 1 after the budget, and the later boxes run 09 to 15', () => {
+  const g = grid(true)
+  const sheets = g.gridSheets()
+  const rows = sheets[0].rows
+  assert.equal(rows.length, 6)
+  assert.deepEqual(rows[4].map(c => c.key), ['budget_and_scope'])
+  assert.deepEqual(rows[5].map(c => [c.num, c.key, c.kind, c.label]), [['07', 'media_roles', 'list', 'Role of each medium'], ['08', 'measurement', 'list', 'How we will know it worked']])
+  const nums = sheets.flatMap(s => s.rows.flat()).map(c => c.num).filter(n => /^\d+$/.test(n))
+  assert.deepEqual([...new Set(nums)], ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15'])
+  assert.deepEqual(sheets[1].rows.flat().map(c => [c.num, c.key]).slice(0, 3), [['09', 'insight'], ['10', 'single_minded_proposition'], ['11', 'reasons_to_believe']])
+  assert.equal(sheets.filter(s => !s.appendix).length, g.gridContentSheets(), 'still two content sheets')
+  assert.ok(g.gridKeys().indexOf('media_roles') === g.gridKeys().indexOf('budget_and_scope') + 1 && g.gridKeys().includes('measurement'))
+  assert.ok(g.gridKeys().includes('objection'))
+})
+
+test('switched on, every box at its limit is two content sheets, nothing named as over, and the corner tag prints on a list', () => {
+  const g = grid(true)
+  const v = AT_LIMIT(g)
+  for (const [k, lim] of [['media_roles', 55], ['measurement', 70]] as const) assert.equal(g.gridWords(v[k]), lim, `${k} is filled to its limit`)
+  const out = g.gridBody(ctxOf(v, { marks: {}, notes }))
+  assert.equal(out.contentSheets, 2)
+  assert.deepEqual(out.warnings, [], 'at its limit a box does not step down')
+  assert.match(out.html, /<b>07<\/b>Role of each medium<\/div><div class="bd"><ul>/)
+  assert.match(out.html, /<b>08<\/b>How we will know it worked<\/div><div class="bd"><ul>/)
+  assert.match(out.html, /<b>15<\/b>Mandatories/)
+  assert.doesNotMatch(out.html, /SHEET<b>3\//)
+  // over its limit a new box steps down like the others, and a part that rests on an assumption carries the tag
+  const over = g.gridBody(ctxOf({ ...v, media_roles: ['To confirm: ' + words(4 * 20)], measurement: [words(120)] }))
+  assert.deepEqual(over.warnings.map(w => [w.key, w.step]).sort(), [['measurement', 3], ['media_roles', 2]])
+  assert.equal((over.html.match(/class="tc"/g) || []).length, 1, 'the list box carries the to-confirm tag from its first item')
+  assert.doesNotMatch(over.html, /To confirm:/)
+  // a brief that has neither part prints the missing box and the gate names them
+  const bare = g.gridBody(ctxOf({}))
+  assert.equal((bare.html.match(/Missing: ask Dara to write this part\./g) || []).length, 19, 'every box but the open questions reads missing')
+  assert.ok(g.gridGaps({ get: () => '', hasVal } as never).some(x => x.key === 'media_roles'))
+  assert.ok(g.gridGaps({ get: () => '', hasVal } as never).some(x => x.key === 'measurement'))
+})
+
+test('a box’s word limit is the brief schema’s for every part that has one, and a long part steps its own type down', () => {
+  const g = grid()
+  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; type?: string; max_words?: number; max_items?: number }[] }
+  // the app's key for each schema field, as the template's own pipeline declares it (one key per field: the objectives and the response have none with a limit)
+  const pipeline = readFileSync(join(templates(), 'brief-maker', 'app', 'pipeline.yaml'), 'utf8')
+  const keyOf: Record<string, string[]> = {}
+  for (const m of pipeline.matchAll(/^ {2}([\w.]+):\s+\{ class: \w+, rubric: (\w+)/gm)) (keyOf[m[2]] ||= []).push(m[1])
+  const limited = schema.fields.filter(f => f.max_words)
+  assert.ok(limited.length >= 13, 'every schema field with a word limit is checked')
+  for (const f of limited) {
+    assert.equal(keyOf[f.id]?.length, 1, `${f.id} is one part of the brief`)
+    assert.equal(g.gridLimit(keyOf[f.id][0]), f.max_words, `${f.id} keeps the schema's limit in gridLimit`)
+  }
+  // every list part with an item cap is a list on the form and in the document
+  const doc = JSON.parse(readFileSync(join(templates(), 'brief-maker', 'schema.json'), 'utf8')) as { properties: Record<string, { type: string }> }
+  for (const f of schema.fields.filter(x => x.max_items)) {
+    const k = keyOf[f.id][0]
+    assert.equal(doc.properties[k].type, 'array', `${f.id} is an array in the document`)
+    assert.match(BM, new RegExp(`key:'${k}',label:'[^']+',type:'list'`), `${f.id} is a list row on the form`)
+  }
+  assert.ok(schema.fields.filter(x => x.max_items).length >= 3)
+  assert.equal(g.gridLimit('objectives.commercial'), 0, 'a part with no limit is never stepped down')
   assert.equal(g.gridWords(words(7)), 7)
   assert.equal(g.gridWords(['a b', 'c']), 3)
   assert.equal(g.gridWords(null), 0)
   assert.deepEqual([[70, 70], [71, 70], [88, 70], [112, 70], [120, 70], [9, 0]].map(([w, l]) => g.gridStep(w, l)), [0, 1, 2, 2, 3, 0])
+  assert.equal(g.gridStep(g.gridWords(words(45)), g.gridLimit('job')), 2, 'a job twice its size steps down now it has a limit')
 })
 
 test('the grid prints a header, an info grid and a footer as the sheets need them, and places each part in its box', () => {
@@ -1248,6 +1338,82 @@ test('an export never prints a clipped sheet: it is measured, Dara tightens the 
   assert.ok(run.indexOf('Not exported: sheet') < run.indexOf('window.clan.exportDoc'))
 })
 
+// The real render: every box at its limit, drawn in headless Chrome, and the room left above each footer. Off unless
+// NAPKIN_RENDER_CHECK=1 (and a Chrome is found), because the room depends on the machine's fonts: the figures in the
+// feature record were measured on the Mac the page is made on, where the first sheet keeps 265 px (row off) and 34 px (row on).
+const CHROME = [process.env.CHROME_BIN, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => p && existsSync(p))
+test('rendered, every box at its limit leaves room above the footer: the row off as before, the row on with two content sheets', { skip: process.env.NAPKIN_RENDER_CHECK !== '1' || !CHROME }, () => {
+  const room = (on: boolean) => {
+    const g = grid(on)
+    const meas = `<script>onload=function(){var r=[];[].forEach.call(document.querySelectorAll('.sheet'),function(sh){var rows=sh.querySelectorAll('.row'),ft=sh.querySelector('.foot').getBoundingClientRect().top;r.push(Math.round(ft-rows[rows.length-1].getBoundingClientRect().bottom))});document.body.setAttribute('data-r',r.join(','))}</script>`
+    const html = `<!DOCTYPE html><html><head><meta charset=utf-8><style>${g.gridCss()}</style></head><body>${g.gridBody(ctxOf(AT_LIMIT(g))).html}${meas}</body></html>`
+    const dir = mkdtempSync(join(tmpdir(), 'brief-render-'))
+    try {
+      writeFileSync(join(dir, 'p.html'), html)
+      const r = spawnSync(CHROME as string, ['--headless=new', '--disable-gpu', '--window-size=900,1200', '--virtual-time-budget=3000', '--dump-dom', `file://${join(dir, 'p.html')}`], { encoding: 'utf8' })
+      return (/data-r="([^"]*)"/.exec(r.stdout)?.[1] ?? '').split(',').map(Number)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  }
+  const off = room(false), on = room(true)
+  assert.ok(off[0] > 200 && off[1] > 100, `row off: no sheet is full (${off})`)
+  assert.ok(on[0] >= 30 && on[1] > 100, `row on: sheet 1 keeps at least 30 px, sheet 2 is untouched (${on})`)
+  assert.equal(on.length, off.length, 'the row adds no sheet')
+})
+
+test('a sheet too full with no part over its limit prints one step smaller, on that sheet only, before anyone is asked to rewrite', () => {
+  const g = grid()
+  const v = AT_LIMIT(g)
+  const plain = g.gridBody(ctxOf(v))
+  assert.doesNotMatch(plain.html, /class="sheet tight"/)
+  const out = g.gridBody({ ...ctxOf(v), tight: [1] })
+  assert.equal((out.html.match(/class="sheet tight"/g) || []).length, 1, 'only the named sheet')
+  assert.match(out.html, /^<div class="sheet tight">/, 'and it is sheet 1')
+  assert.deepEqual(out.warnings, [], 'nothing is named as over its limit: the step is not a rewrite')
+  const css = g.gridCss()
+  assert.match(css, /\.tight \.bd\{font-size:10\.6px;line-height:1\.38\}/)
+  assert.ok(css.indexOf('.tight .bd') < css.indexOf('.fit1 .bd'), 'a box already stepped down by its own limit keeps its own step')
+})
+
+test('the export tries the tight step once, writes with it, and fails only if the sheet still overflows', async () => {
+  const toasts: string[] = []
+  const exported: string[] = []
+  const built: unknown[] = []
+  const filled: string[][] = []
+  const OVER: number[] = [], WARN: unknown[] = []
+  let stillOver = false
+  const env = {
+    toast: (m: string) => toasts.push(m), listWords: listJoin, gridLimit: (k: string) => (k === 'job' ? 30 : 0), gridLongest: () => [{ key: 'insight', label: 'The insight', words: 40 }],
+    LAST_GRID_OVERFLOW: OVER, LAST_GRID_WARNINGS: WARN, docLocked: () => false, noMiddleware: () => false, DARA: 'Dara', get: () => 'p',
+    buildExportHTML: (_style: string, tight?: number[]) => {
+      built.push(tight)
+      OVER.length = 0
+      if (!tight || stillOver) OVER.push(1)
+      return Promise.resolve(tight ? '<tight/>' : '<plain/>')
+    },
+    fillParts: (keys: string[]) => { filled.push(keys); return Promise.resolve() },
+    window: { clan: { exportDoc: (_k: string, _b: string, html: string) => { exported.push(html); return Promise.resolve({ ok: true }) } } },
+  }
+  const run = lift<{ runExport(kind: string, style?: string, retried?: boolean, tight?: number[]): Promise<unknown> }>(BM, ['runExport'], env)
+  // too full, nothing over a limit: one tight render, and it goes out. Dara is not asked.
+  await run.runExport('pdf', 'grid')
+  assert.deepEqual(built, [undefined, [1]], 'measured, then drawn tight on sheet 1')
+  assert.deepEqual(exported, ['<tight/>'])
+  assert.deepEqual(filled, [], 'no rewrite for a sheet that only needed a step')
+  assert.ok(!toasts.some(t => /Not exported/.test(t)))
+  // still too full after the step: it goes on to the old retry once, then stops naming the sheet, never looping
+  built.length = 0; exported.length = 0; toasts.length = 0; stillOver = true
+  await run.runExport('pdf', 'grid')
+  assert.deepEqual(exported, [])
+  assert.equal(filled.length, 1, 'Dara tightens the longest parts once')
+  assert.ok(toasts.some(t => /Not exported: sheet 1 is too full\./.test(t)))
+  assert.ok(built.length <= 6, 'a bounded number of renders')
+  // a part over its limit is the old path: Dara first, no tight step
+  built.length = 0; filled.length = 0; toasts.length = 0; WARN.push({ key: 'job', label: 'The job', words: 60, limit: 30, step: 3 })
+  await run.runExport('pdf', 'grid')
+  assert.equal(filled[0]?.[0], 'job')
+  assert.ok(!built.some(t => Array.isArray(t)), 'no tight step when a part is over its limit')
+})
+
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
   const g = grid()
   const ctx = { ...ctxOf({ audience: 'Who.' }), client: 'Ballymaloe Relish, an Irish family relish brand.' }
@@ -1262,8 +1428,8 @@ test('the grid prints on A4 sheets that break cleanly, and is the default export
   const css = grid().gridCss()
   assert.match(css, /@page\{size:A4;margin:0\}/)
   assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
-  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(\)/)
-  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
+  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(tight\)/)
+  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style, tight\)/)
   assert.match(BM, /id="exHtml"[\s\S]*id="exPdf"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
   assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
   assert.match(BM, /doExport\('html'\); \}\);\s*\$\('exPdf'\)/, 'the shell’s Export and the two main buttons are the grid')
