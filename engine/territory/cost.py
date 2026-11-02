@@ -28,8 +28,9 @@ def _price(model, tin, tout):
     return round(tin / 1e6 * pin + tout / 1e6 * pout, 4)
 
 
-#: measured 2026-11-02: the first live Ballymaloe run cost $0.53 over 7 calls against a $0.40 estimate
-CALIBRATION = 1.35
+#: measured 2026-11-02: four live runs (Ballymaloe, Skybridge, Samaritans, Burger King), 8 calls each, token-based
+#: estimates of $0.62, $0.68, $0.86 and $0.80, mean $0.74, against an uncalibrated card of $0.43
+CALIBRATION = 1.71
 
 
 def estimate(baseline: bool = True) -> dict:
@@ -46,7 +47,7 @@ def estimate(baseline: bool = True) -> dict:
         calls += 1
         usd += u
     return {"rows": rows, "calls": calls, "est_usd": round(usd, 2), "estimated": True,
-            "note": "Estimate from fixed token sizes, scaled by one measured run (Ballymaloe, $0.53 vs $0.40). Per-stage actuals are not yet recorded."}
+            "note": "Estimate from fixed token sizes, scaled to the mean of four measured runs ($0.74). Those are token-based estimates, not charges, and a longer brief costs more (Samaritans, 38k characters, $0.86)."}
 
 
 def render(card: dict) -> str:

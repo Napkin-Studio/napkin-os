@@ -91,7 +91,7 @@ def _sort(llm, survivors) -> list[dict]:
     for s in survivors:
         x = by.get(s["id"]) or {}
         tier, defaulted = ladder.clean_tier(x.get("tier"))
-        res.append({**s, "tier": tier, "tier_reason": x.get("reason"), "tier_defaulted": defaulted})
+        res.append({**s, "tier": tier, "tier_reason": x.get("reason"), "tier_defaulted": defaulted, "group": str(x.get("group") or s["id"]).strip().lower()})
     return res
 
 
@@ -103,37 +103,51 @@ def _score(llm, kept) -> dict:
 
 
 def _choose(kept, scores, max_keep, min_keep=3) -> list[dict]:
-    """Best total first, no two sharing a mechanism or a tension (relaxed only to reach min_keep), and keep one
-    deliberately Safe territory if any exists."""
+    """Best total first. Never two territories with the same mechanism or the same group (versions of one idea);
+    no two on the same tension unless that is the only way to reach min_keep. Keeps one deliberately Safe territory
+    if any exists, then tries to cover Stretch and Brave too."""
     for s in kept:
         sc = scores.get(s["id"]) or {}
         s["score"] = {"total": ladder.total(sc), "of": ladder.MAX_SCORE, "by_dimension": {d: sc.get(d) for d in ladder.SCORE_DIMS}, "reasons": sc.get("reasons") or {}, "advisory": True}
     ranked = sorted(kept, key=lambda s: -s["score"]["total"])
     min_keep = min(min_keep, max_keep)
-    chosen, mechs, tens = [], set(), set()
+    chosen, mechs, tens, groups = [], set(), set(), set()
+
+    def clash(s, rest):
+        m = (s.get("mechanism") or "").strip().lower()
+        return any((m and m == (r.get("mechanism") or "").strip().lower()) or (s.get("group") and s.get("group") == r.get("group")) for r in rest)
 
     def take(s, unique_tension):
-        m = (s.get("mechanism") or "").strip().lower()
-        if (m and m in mechs) or (unique_tension and s.get("tension") in tens):
+        if clash(s, chosen) or (unique_tension and s.get("tension") in tens):
             return False
         chosen.append(s)
-        mechs.add(m)
         tens.add(s.get("tension"))
         return True
 
     for s in ranked:
         if len(chosen) < max_keep:
             take(s, True)
-    for s in ranked:                                   # too few distinct tensions: relax that rule, never the mechanism rule
+    for s in ranked:                                   # too few distinct tensions: relax that rule only
         if len(chosen) >= min_keep:
             break
         if s not in chosen:
             take(s, False)
     if chosen and not any(s["tier"] == "safe" for s in chosen):
-        safe = next((s for s in ranked if s["tier"] == "safe" and s not in chosen), None)
+        safe = next((s for s in ranked if s["tier"] == "safe" and s not in chosen and not clash(s, chosen[:-1])), None)
         if safe:
             chosen[-1] = safe
-    return chosen
+    for want in ("stretch", "brave"):                  # cover the ladder, replacing only a tier that appears twice
+        if any(s["tier"] == want for s in chosen):
+            continue
+        cand = next((s for s in ranked if s["tier"] == want and s not in chosen), None)
+        counts = {tr: sum(1 for s in chosen if s["tier"] == tr) for tr in ladder.TIERS}
+        victims = [s for s in chosen if counts[s["tier"]] > 1]
+        if cand and victims:
+            victim = min(victims, key=lambda s: s["score"]["total"])
+            rest = [s for s in chosen if s is not victim]
+            if not clash(cand, rest):
+                chosen[chosen.index(victim)] = cand
+    return sorted(chosen, key=lambda s: -s["score"]["total"])
 
 
 def _proof(terr: dict, cases: list[dict], brief_category: str) -> dict | None:
@@ -188,6 +202,6 @@ def run(task: dict, llm, precedent=None, n_seeds: int = 30, max_keep: int = 5, t
     res.update(territories=out, assumed_brief=assumed, tensions=tensions,
                diversity={"seeds_made": n_made, "kept_after_clustering": len(kept), "duplicate_rate": diversity.duplicate_rate(kept, dropped)},
                kill_gate={"seeds_in": len(kept), "killed": killed, "survivors": len(survivors), "restored": [s["id"] for s in restored]},
-               spread_ok=ladder.spread_ok(out), notes=[] if len(out) >= 3 else [f"only {len(out)} territories survived the cull"],
+               spread_ok=ladder.spread_ok(out), notes=[] if len(out) >= 3 else [f"only {len(out)} distinct ideas survived the cull"],
                client_questions=assumed.get("questions", []))
     return res

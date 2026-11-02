@@ -36,8 +36,8 @@ def outputs():
             {"id": "s5", "line": "a thing", "tension": "t1", "mechanism": "vague"}]},
         "kill": {"verdicts": [{"id": "s1", "keep": True, "strength": 4}, {"id": "s3", "keep": True, "strength": 4}, {"id": "s4", "keep": True, "strength": 3},
                               {"id": "s5", "keep": False, "strength": 1, "tests": {"say_it_out_loud": {"fails": True, "reason": "'a thing' says nothing"}}}]},
-        "sort": {"tiers": [{"id": "s1", "tier": "stretch", "reason": "a sharper door"}, {"id": "s3", "tier": "Brave", "reason": "the dare is the format"},
-                           {"id": "s4", "tier": "safe", "reason": "answers the brief as written"}]},
+        "sort": {"tiers": [{"id": "s1", "tier": "stretch", "reason": "a sharper door", "group": "ritual"}, {"id": "s3", "tier": "Brave", "reason": "the dare is the format", "group": "dare"},
+                           {"id": "s4", "tier": "safe", "reason": "answers the brief as written", "group": "honesty"}]},
         "score": {"scores": [{"id": "s1", "fit": 5, "truth": 5, "ownability": 4, "distinct": 3, "travel": 4, "fame": 3, "assets": 3},
                              {"id": "s3", "fit": 3, "truth": 3, "ownability": 4, "distinct": 5, "travel": 3, "fame": 4, "assets": 3},
                              {"id": "s4", "fit": 4, "truth": 4, "ownability": 2, "distinct": 1, "travel": 4, "fame": 2, "assets": 2}]},
@@ -266,4 +266,44 @@ def test_seed_prompt_asks_for_a_safe_quarter_and_spread_and_has_no_conventions()
 
 
 def test_cost_card_is_calibrated_to_the_measured_run():
-    assert 0.45 <= cost.estimate()["est_usd"] <= 0.7
+    assert 0.65 <= cost.estimate()["est_usd"] <= 0.85
+
+
+def _cand(i, tier, group, tension="t1", mech=None, total=5):
+    return {"id": f"s{i}", "line": f"l{i}", "tension": tension, "mechanism": mech or f"m{i}", "tier": tier, "group": group}, {d: total for d in ladder.SCORE_DIMS}
+
+
+def _choose(rows, **kw):
+    kept = [r[0] for r in rows]
+    return pipeline._choose(kept, {r[0]["id"]: r[1] for r in rows}, **kw)
+
+
+def test_versions_of_one_idea_never_both_survive():
+    rows = [_cand(1, "stretch", "not-bad-enough", "t1", total=5), _cand(2, "stretch", "not-bad-enough", "t2", total=4),
+            _cand(3, "safe", "weather", "t3", total=3), _cand(4, "brave", "pass-it-on", "t4", total=2)]
+    chosen = _choose(rows, max_keep=5)
+    assert sorted(s["id"] for s in chosen) == ["s1", "s3", "s4"]            # s2 is a version of s1
+    assert "not-bad-enough" not in [s["group"] for s in chosen if s["id"] == "s2"]
+
+
+def test_the_ladder_is_covered_by_replacing_only_a_repeated_tier():
+    rows = [_cand(1, "stretch", "a", "t1", total=5), _cand(2, "stretch", "b", "t2", total=4), _cand(3, "stretch", "c", "t3", total=3),
+            _cand(4, "safe", "d", "t4", total=2), _cand(5, "brave", "e", "t5", total=2)]
+    chosen = _choose(rows, max_keep=3)
+    assert {s["tier"] for s in chosen} == {"safe", "stretch", "brave"} and len(chosen) == 3
+    assert sorted(s["id"] for s in chosen) == ["s1", "s4", "s5"]            # the best Stretch stays; the weaker repeat makes room
+    only = [_cand(1, "stretch", "a", "t1"), _cand(2, "stretch", "b", "t2"), _cand(3, "stretch", "c", "t3")]
+    assert {s["tier"] for s in _choose(only, max_keep=3)} == {"stretch"}      # nothing to cover with: no invention
+
+
+def test_sort_prompt_asks_for_group_labels_and_seeds_for_a_brave_quarter():
+    from territory.llm import prompt
+    assert '"group"' in prompt("sort") and "versions of one idea" in prompt("sort")
+    assert "Brave routes that change the shape" in prompt("seeds")
+
+
+def test_end_to_end_result_carries_the_group_and_drops_a_variant():
+    o = outputs()
+    o["sort"]["tiers"][0]["group"] = "dare"                                   # s1 now a version of s3's idea
+    ids = [t["id"] for t in pipeline.run(task(), FakeLLM(o), precedent)["territories"]]
+    assert ids.count("s1") + ids.count("s3") == 1 and "s4" in ids

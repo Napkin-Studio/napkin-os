@@ -49,7 +49,8 @@ def main(argv=None) -> int:
         out.with_name(out.stem + ".blind-pack.json").write_text(json.dumps(pack, indent=1, ensure_ascii=False))
         out.with_name(out.stem + ".blind-key.json").write_text(json.dumps(key, indent=1))   # keep this from the grader
         out.with_name(out.stem + ".baseline.json").write_text(json.dumps(base, indent=1, ensure_ascii=False))
-    print(f"Real usage: ${sum(u.get('usd', 0) for u in llm.usage):.2f} over {len(llm.usage)} calls.")
+    est = any(u.get("usd_estimated") for u in llm.usage)
+    print(f"{'Estimated' if est else 'Real'} usage: ${sum(u.get('usd', 0) for u in llm.usage):.2f} over {len(llm.usage)} calls" + (" (token-based estimate: the CLI login reports no charge)." if est else "."))
     return 0
 
 
