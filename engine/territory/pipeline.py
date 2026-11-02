@@ -85,21 +85,33 @@ def _score(llm, kept) -> dict:
     return {r["id"]: r for r in out.get("scores") or [] if "id" in r}
 
 
-def _choose(kept, scores, max_keep) -> list[dict]:
-    """Best total first, no two sharing a mechanism, and keep one deliberately Safe territory if any exists."""
+def _choose(kept, scores, max_keep, min_keep=3) -> list[dict]:
+    """Best total first, no two sharing a mechanism or a tension (relaxed only to reach min_keep), and keep one
+    deliberately Safe territory if any exists."""
     for s in kept:
         sc = scores.get(s["id"]) or {}
         s["score"] = {"total": ladder.total(sc), "of": ladder.MAX_SCORE, "by_dimension": {d: sc.get(d) for d in ladder.SCORE_DIMS}, "reasons": sc.get("reasons") or {}, "advisory": True}
     ranked = sorted(kept, key=lambda s: -s["score"]["total"])
-    chosen, mechs = [], set()
-    for s in ranked:
+    min_keep = min(min_keep, max_keep)
+    chosen, mechs, tens = [], set(), set()
+
+    def take(s, unique_tension):
         m = (s.get("mechanism") or "").strip().lower()
-        if m and m in mechs:
-            continue
+        if (m and m in mechs) or (unique_tension and s.get("tension") in tens):
+            return False
         chosen.append(s)
         mechs.add(m)
-        if len(chosen) == max_keep:
+        tens.add(s.get("tension"))
+        return True
+
+    for s in ranked:
+        if len(chosen) < max_keep:
+            take(s, True)
+    for s in ranked:                                   # too few distinct tensions: relax that rule, never the mechanism rule
+        if len(chosen) >= min_keep:
             break
+        if s not in chosen:
+            take(s, False)
     if chosen and not any(s["tier"] == "safe" for s in chosen):
         safe = next((s for s in ranked if s["tier"] == "safe" and s not in chosen), None)
         if safe:

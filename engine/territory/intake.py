@@ -2,6 +2,8 @@
 and decide whether the tool may run (the zero-input tree, design 4b). Nothing here calls a model."""
 from __future__ import annotations
 
+import json
+
 BRIEF_FIELDS = ["background", "objectives", "audience", "competitor_context", "insight", "smp",
                 "reasons_to_believe", "desired_response", "tone_world_assets", "budget_scope", "mandatories"]
 
@@ -14,7 +16,9 @@ def tag_field(f: dict | None) -> str:
     f = f or {}
     if not f.get("value"):
         return "missing"
-    text = f"{f.get('kind', '')} {f.get('mark', '')} {f.get('value') if isinstance(f.get('value'), str) else ''}".lower()
+    v = f.get("value")
+    body = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, default=str)   # lists and dicts carry "To confirm" too
+    text = f"{f.get('kind', '')} {f.get('mark', '')} {body}".lower()
     if any(w in text for w in _INFERRED):
         return "inferred"
     return "given"

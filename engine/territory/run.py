@@ -12,13 +12,13 @@ import json
 import sys
 from pathlib import Path
 
-from . import cards, cost, intake, pipeline
+from . import cards, compare, cost, intake, pipeline
 from .llm import LiveLLM
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--brief", help="a Brief Maker brief_object.json")
+    ap.add_argument("--brief", help="a Brief Maker .clan or brief_object.json")
     ap.add_argument("--category"), ap.add_argument("--market"), ap.add_argument("--prompt", default=""), ap.add_argument("--brand")
     ap.add_argument("--live", action="store_true"), ap.add_argument("--yes-cost", action="store_true")
     ap.add_argument("--out", help="write the full result JSON here")
@@ -27,7 +27,8 @@ def main(argv=None) -> int:
     if a.brief:
         sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
         from deck import inputs
-        fields = inputs.load_brief(Path(a.brief))[0]
+        loader = inputs.load_brief_clan if a.brief.endswith(".clan") else inputs.load_brief
+        fields = loader(Path(a.brief))[0]
     gate = intake.assess(fields, a.category, a.market, a.prompt, a.brand)
     print(f"Gate: {gate['action']}: {gate['why']}. Thinness {gate['thinness']['score']}.")
     if gate["action"] != "proceed":
@@ -40,8 +41,14 @@ def main(argv=None) -> int:
     llm = LiveLLM(approved=True)
     res = pipeline.run({"fields": fields, "category": a.category, "market": a.market, "prompt": a.prompt, "brand": a.brand}, llm)
     print(cards.render_text(res))
+    base = compare.baseline({"fields": fields, "category": a.category, "market": a.market, "prompt": a.prompt}, llm)
+    pack, key = compare.blind_pack(cards.cards(res), base)
     if a.out:
-        Path(a.out).write_text(json.dumps(res, indent=1, ensure_ascii=False))
+        out = Path(a.out)
+        out.write_text(json.dumps({**res, "usage": llm.usage}, indent=1, ensure_ascii=False))
+        out.with_name(out.stem + ".blind-pack.json").write_text(json.dumps(pack, indent=1, ensure_ascii=False))
+        out.with_name(out.stem + ".blind-key.json").write_text(json.dumps(key, indent=1))   # keep this from the grader
+        out.with_name(out.stem + ".baseline.json").write_text(json.dumps(base, indent=1, ensure_ascii=False))
     print(f"Real usage: ${sum(u.get('usd', 0) for u in llm.usage):.2f} over {len(llm.usage)} calls.")
     return 0
 

@@ -56,6 +56,9 @@ def test_tag_field_and_thinness():
     assert intake.tag_field({"value": "x", "kind": "client_stated"}) == "given"
     assert intake.tag_field({"value": "x", "kind": "inferred"}) == "inferred"
     assert intake.tag_field({"value": "x", "mark": "To confirm"}) == "inferred"
+    assert intake.tag_field({"value": ["To confirm: pack shot", "x"], "kind": "brief-maker"}) == "inferred"
+    assert intake.tag_field({"value": {"do": "To confirm: buy a jar"}, "kind": "brief-maker"}) == "inferred"
+    assert intake.tag_field({"value": ["plain", "list"], "kind": "brief-maker"}) == "given"
     assert intake.tag_field({"value": ""}) == "missing" and intake.tag_field(None) == "missing"
     th = intake.thinness({})
     assert th["score"] == 1.0 and len(th["missing"]) == len(intake.BRIEF_FIELDS)
@@ -208,3 +211,25 @@ def test_blind_pack_hides_the_arm_and_keeps_a_key():
     text = json.dumps(pack)
     assert "tier" not in text and "UNVERIFIED" not in text and "score" not in text
     assert compare.blind_pack(cards.cards(res), base, seed=3)[1] == key
+
+
+def test_choice_spreads_over_tensions_and_relaxes_only_to_reach_three():
+    kept = [{"id": f"s{i}", "line": f"l{i}", "tension": ten, "mechanism": f"m{i}", "tier": "stretch", "breaks": ["c1"]}
+            for i, ten in enumerate(["t1", "t1", "t1", "t2", "t3"])]
+    scores = {f"s{i}": {d: 5 - i for d in ladder.SCORE_DIMS} for i in range(5)}
+    chosen = pipeline._choose(kept, scores, max_keep=5)
+    assert [s["tension"] for s in chosen] == ["t1", "t2", "t3"]          # one per tension: s0, s3, s4
+    only_one = [{**k, "tension": "t1"} for k in kept]
+    assert len(pipeline._choose(only_one, scores, max_keep=5)) == 3      # relaxed to reach three, mechanisms still distinct
+    same_mech = [{**k, "tension": "t1", "mechanism": "m"} for k in kept]
+    assert len(pipeline._choose(same_mech, scores, max_keep=5)) == 1     # the mechanism rule is never relaxed
+
+
+def test_seed_prompt_asks_for_a_safe_quarter_and_spread():
+    from territory.llm import prompt
+    p = prompt("seeds")
+    assert "quarter" in p and "break no convention" in p and "different tensions" in p
+
+
+def test_cost_card_is_calibrated_to_the_measured_run():
+    assert 0.5 <= cost.estimate()["est_usd"] <= 0.6

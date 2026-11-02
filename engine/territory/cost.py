@@ -27,21 +27,25 @@ def _price(model, tin, tout):
     return round(tin / 1e6 * pin + tout / 1e6 * pout, 4)
 
 
+#: measured 2026-11-02: the first live Ballymaloe run cost $0.53 over 7 calls against a $0.40 estimate
+CALIBRATION = 1.35
+
+
 def estimate(baseline: bool = True) -> dict:
     """The card: per-stage calls, tokens and dollars, and a total. ``baseline`` adds the one plain-prompt call."""
     rows, calls, usd = [], 0, 0.0
     for name, (c, tin, tout, model) in STAGES.items():
-        u = _price(model, tin, tout)
+        u = round(_price(model, tin, tout) * CALIBRATION, 4)
         rows.append({"stage": name, "calls": c, "model": model, "est_prompt_tokens": tin, "est_completion_tokens": tout, "est_usd": u})
         calls += c
         usd += u
     if baseline:
-        u = _price("claude-opus-5-5", 3000, 2500)
+        u = round(_price("claude-opus-5-5", 3000, 2500) * CALIBRATION, 4)
         rows.append({"stage": "baseline", "calls": 1, "model": "claude-opus-5-5", "est_prompt_tokens": 3000, "est_completion_tokens": 2500, "est_usd": u})
         calls += 1
         usd += u
     return {"rows": rows, "calls": calls, "est_usd": round(usd, 2), "estimated": True,
-            "note": "Estimate from fixed token sizes, not measured. Real usage replaces it after the first live run."}
+            "note": "Estimate from fixed token sizes, scaled by one measured run (Ballymaloe, $0.53 vs $0.40). Per-stage actuals are not yet recorded."}
 
 
 def render(card: dict) -> str:
