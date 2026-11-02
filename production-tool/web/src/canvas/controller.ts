@@ -611,13 +611,16 @@ export class CanvasController {
     const aspect = this.aspectOfEl(frame)
     const ratio = exactRatio(aspect)
     const area = this.canvas.sketchArea({ x: frame.x, y: frame.y, w: frame.width, h: frame.height, sketchId })
+    // Later elements draw on top, and a frame sits AFTER its children, so the area goes before the first of
+    // the frame and its strokes, never at the frame's own slot (that covered the drawing: 2026-11-02).
+    const all = this.els()
+    const first = all.findIndex((e) => e.id === frame.id || e.frameId === frame.id)
     const next: El[] = []
-    for (const e of this.els()) {
-      if (e.id === frame.id) {
-        next.push(area) // where the frame was: below its strokes
-        next.push(this.canvas.patch(e, { isDeleted: true }))
-      } else next.push(e.frameId === frame.id ? this.canvas.patch(e, { frameId: null }) : e)
-    }
+    all.forEach((e, i) => {
+      if (i === first) next.push(area)
+      if (e.id === frame.id) next.push(this.canvas.patch(e, { isDeleted: true }))
+      else next.push(e.frameId === frame.id ? this.canvas.patch(e, { frameId: null }) : e)
+    })
     this.setEls(next)
     await systemUpdate(this.s.doc, (d) => {
       d.sketches[sketchId] = { id: sketchId, v: 1, field_v: {}, aspect, ...(ratio ? { ratio } : {}), drawn_by: this.person() }

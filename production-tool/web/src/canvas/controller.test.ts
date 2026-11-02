@@ -164,6 +164,17 @@ describe('a person’s frame used in Generate becomes a sketch area', () => {
     expect(row).toMatchObject({ aspect: { w: 320, h: 180 }, ratio: '16:9', drawn_by: 'human:p_1' })
   })
 
+  it('the area goes under the strokes it frees: a frame sits after its children, so its own slot would hide the drawing', async () => {
+    t.canvas.els = [stroke('before', 5, 5), stroke('in', 10, 10, 20, 20, 'F'), stroke('cross', 310, 40, 300, 10, 'F'), frame('F', 0, 0, 320, 180), stroke('after', 3, 3)]
+    await t.ctrl.generate(['F'], 'a jogger in the park')
+    const order = t.canvas.els.map((e) => e.id)
+    const areaAt = t.canvas.els.findIndex((e) => (e.customData as Rec | undefined)?.kind === 'sketch')
+    expect(areaAt).toBeLessThan(order.indexOf('in'))
+    expect(areaAt).toBeLessThan(order.indexOf('cross'))
+    expect(order.indexOf('before')).toBeLessThan(areaAt)
+    expect(order.indexOf('after')).toBeGreaterThan(areaAt)
+  })
+
   it('a stroke in the frame selected alone converts the frame too', async () => {
     withFrame(t)
     await t.ctrl.generate(['in'], 'a jogger')
