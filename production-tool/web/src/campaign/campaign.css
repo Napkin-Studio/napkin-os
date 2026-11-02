@@ -102,7 +102,7 @@
 .cb-tick { display: inline-flex; align-items: center; gap: 4px; }
 .cb-warn { margin: 0; font-size: 12px; color: var(--warn); }
 /* The tile's and the board's send tray (phase 4): method and model per size, never a price. */
-.cb-tray { position: absolute; right: 24px; top: 56px; transform-origin: 100% 0; z-index: 4; width: 380px; max-height: 60vh; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; pointer-events: auto; }
+.cb-tray { position: fixed; z-index: 30; width: 380px; max-height: 60vh; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; pointer-events: auto; }
 .cb-trayhead { display: flex; align-items: baseline; gap: 8px; }
 .cb-trayrows { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
 .cb-trayrow { display: flex; align-items: baseline; gap: 6px; }

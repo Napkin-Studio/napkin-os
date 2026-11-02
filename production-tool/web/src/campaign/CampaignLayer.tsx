@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { placeFloating } from '../lib/place'
+import { placeBeside, placeFloating } from '../lib/place'
 import { keepsPick, onScreen, tilePick } from './pick'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
@@ -226,7 +226,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
           deps={deps} by={by} say={say} />
       })}
       {note && <div className="cb-note" role="status">{note}</div>}
-      {tray && <SendTray tray={tray} zoom={zoom} onClose={() => setTray(null)} />}
+      {tray && <SendTray tray={tray} setId={set.id} onClose={() => setTray(null)} />}
     </div>
   )
 }
@@ -251,10 +251,31 @@ interface TrayOpen {
   send(): Promise<void>
 }
 
-function SendTray({ tray, zoom, onClose }: { tray: TrayOpen; zoom: number; onClose(): void }) {
+/**
+ * The tray sits beside the picture it is for (placeBeside: at the picture's edge, right then left), on the
+ * page like the tile's bar, so it is a fixed size at any zoom and never in a corner of the group. One
+ * size: that tile's picture; several (Update sizes, Export at full size): the board itself.
+ */
+function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onClose(): void }) {
   const [busy, setBusy] = useState(false)
-  return (
-    <div className="cb-tray pt-panel" role="dialog" aria-label={tray.title} style={{ transform: `scale(${1 / zoom})` }} onPointerDown={(e) => e.stopPropagation()}>
+  const panel = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = panel.current
+    if (!el) return
+    const one = tray.rows.length === 1 ? tray.rows[0]!.id : null
+    const anchor = (one && document.querySelector(`[data-size="${CSS.escape(one)}"] .cb-pic`)) || document.querySelector(`[data-set="${CSS.escape(setId)}"]`)
+    const a = anchor?.getBoundingClientRect()
+    if (!a) return
+    const view = { w: window.innerWidth, h: window.innerHeight }
+    if (!onScreen(a, view)) { onClose(); return }
+    const p = placeBeside(a, { w: el.offsetWidth, h: el.offsetHeight }, view)
+    // Placed on the element itself after every render (the board moves with the canvas's view).
+    el.style.left = `${p.left}px`
+    el.style.top = `${p.top}px`
+    el.style.visibility = 'visible'
+  })
+  return createPortal(
+    <div ref={panel} className="cb-tray pt-panel" role="dialog" aria-label={tray.title} style={{ left: 0, top: 0, visibility: 'hidden' }} onPointerDown={(e) => e.stopPropagation()}>
       <div className="cb-trayhead"><b>{tray.title}</b><span className="faint">{tray.who === 'rhea' ? 'Rhea' : 'Wren'} will make</span></div>
       <div className="cb-trayrows" role="list">
         {tray.rows.map((r) => (
@@ -269,7 +290,8 @@ function SendTray({ tray, zoom, onClose }: { tray: TrayOpen; zoom: number; onClo
           {busy ? 'Sending…' : `Send ${tray.rows.length === 1 ? '' : tray.rows.length}`.trim()}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

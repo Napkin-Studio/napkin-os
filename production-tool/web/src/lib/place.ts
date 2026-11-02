@@ -63,3 +63,16 @@ export function placeMenu(anchor: Rect, size: { w: number; h: number }, view: { 
   const top = maxTop < margin ? margin : Math.min(Math.max(goAbove ? above : below, margin), maxTop)
   return { left, top, above: goAbove }
 }
+
+/**
+ * Where a panel opened for one picture goes: beside it, at the picture's edge (right first, then left),
+ * top lined up with the picture, always inside the view. When neither side has room it goes below
+ * (the Campaign send tray, features/art-director.clan slice 0: it used to sit in the board's corner).
+ */
+export function placeBeside(anchor: Rect, size: { w: number; h: number }, view: { w: number; h: number }, gap = 12, margin = 8): { left: number; top: number; side: 'right' | 'left' | 'below' } {
+  const clampTop = (y: number) => { const m = view.h - size.h - margin; return m < margin ? margin : Math.min(Math.max(y, margin), m) }
+  if (anchor.right + gap + size.w <= view.w - margin) return { left: anchor.right + gap, top: clampTop(anchor.top), side: 'right' }
+  if (anchor.left - gap - size.w >= margin) return { left: anchor.left - gap - size.w, top: clampTop(anchor.top), side: 'left' }
+  const m = placeMenu(anchor, size, view, 'start', 'below', gap, margin)
+  return { left: m.left, top: m.top, side: 'below' }
+}
