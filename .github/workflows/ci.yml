@@ -191,6 +191,13 @@ jobs:
           BRIEF_TESTS_OFFLINE: "1"
         run: python -m pytest -q -p no:cacheprovider
 
+      - name: Territory tool tests
+        working-directory: engine
+        env:
+          BRIEF_TESTS_OFFLINE: "1"
+          PYTHONPATH: .
+        run: python -m pytest -q -p no:cacheprovider territory/tests
+
       - name: Mock-agent tests
         working-directory: mock-agent
         run: python -m pytest -q -p no:cacheprovider
