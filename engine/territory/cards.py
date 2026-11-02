@@ -9,8 +9,10 @@ def card(t: dict, result: dict) -> dict:
         risks.append("assumption-dependent: rests on an assumed audience or an invented tension")
     if not t.get("proposition_ok"):
         risks.append("no proposition passed the one-thought rule: " + "; ".join(t.get("proposition_problems") or ["none offered"]))
-    if t["tier"] != "safe":
-        risks.append("breaks " + ", ".join(t.get("breaks") or []) + " (conventions are model-inferred; check with a creative director)")
+    if t.get("tier_defaulted"):
+        risks.append("tier unclear: placed at stretch by default")
+    elif t["tier"] != "safe":
+        risks.append(f"{t['tier']}: placed by a model from the definitions; check with a creative director")
     proof = t.get("proof")
     assumes = [f["key"] for f in (result.get("assumed_brief") or {}).get("fields", []) if f.get("tag") == "assumed"]
     return {"id": t["id"], "name": t.get("line"), "thought": t.get("proposition") or t.get("line"), "why": t.get("tension_text"),

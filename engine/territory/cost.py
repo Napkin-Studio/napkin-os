@@ -5,9 +5,10 @@ from __future__ import annotations
 #: stage -> (calls, prompt tokens, completion tokens, model); estimates, to be replaced by measured usage
 STAGES = {
     "assumed_brief": (1, 3000, 1200, "claude-sonnet-5-5"),
-    "conventions": (1, 5000, 1500, "claude-sonnet-5-5"),
     "tensions": (1, 4000, 1500, "claude-sonnet-5-5"),
     "seeds": (1, 5000, 4000, "claude-opus-5-5"),
+    "kill": (1, 5000, 2000, "claude-sonnet-5-5"),
+    "sort": (1, 3000, 800, "claude-sonnet-5-5"),
     "score": (1, 5000, 2000, "claude-sonnet-5-5"),
     "propositions": (1, 4000, 1500, "claude-opus-5-5"),
 }

@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 PROMPTS = Path(__file__).parent / "prompts"
-STAGE_MODEL = {"assumed_brief": "claude-sonnet-5-5", "conventions": "claude-sonnet-5-5", "tensions": "claude-sonnet-5-5",
-               "seeds": "claude-opus-5-5", "score": "claude-sonnet-5-5", "propositions": "claude-opus-5-5", "baseline": "claude-opus-5-5"}
+STAGE_MODEL = {"assumed_brief": "claude-sonnet-5-5", "tensions": "claude-sonnet-5-5",
+               "seeds": "claude-opus-5-5", "kill": "claude-sonnet-5-5", "sort": "claude-sonnet-5-5", "score": "claude-sonnet-5-5", "propositions": "claude-opus-5-5", "baseline": "claude-opus-5-5"}
 
 
 def prompt(name: str) -> str:

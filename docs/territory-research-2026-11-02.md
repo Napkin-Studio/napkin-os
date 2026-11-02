@@ -1,3 +1,5 @@
+> **Update, 2 Nov 2026 (Laurence's reply):** the conventions map (Section 4, step 3) is cut for now. A kill gate now sits straight after the 30 seeds, before the Safe/Stretch/Brave sort, and tiers are placed by definition (safe answers the brief as written; stretch is a sharper door; brave changes the shape). Sections 4 and 6 below are the original plan and are superseded where they mention the convention map or the convention-count ladder. The rest was confirmed, including the Ballymaloe plus one no-brief run against a plain prompt.
+
 # Napkin after Brief Maker: what happens next, and how to plan with thin or no client info
 
 *Prepared for Sai, 2 Nov 2026 (revised after critic review). The agency-practice material is partly research-backed, from web research with skeptic checks. The data counts come from reading docs and feature records in the repo. Claims that failed or only half passed a skeptic check are marked **[weak]** or **[unverified]**. Rows and steps that are Napkin's own invention are marked **[design bet]**.*

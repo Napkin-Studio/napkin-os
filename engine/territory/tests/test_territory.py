@@ -25,17 +25,19 @@ def outputs():
     return {
         "assumed_brief": {"fields": [{"key": "audience", "value": "under-35s", "tag": "given"}, {"key": "budget_scope", "value": "TBC", "tag": "wrong-tag"}],
                           "diagnosis": "d", "audiences": ["a"], "questions": [{"question": f"q{i}", "why": "w"} for i in range(5)]},
-        "conventions": {"conventions": [{"id": "c1", "convention": "family table", "cases": ["k1", "k2", "k3", "nope"]},
-                                        {"id": "c2", "convention": "red hero shot", "cases": ["k1", "k2"]},
-                                        {"id": "c3", "convention": "heritage claims", "cases": ["k2", "k3", "k5"]}]},
         "tensions": {"tensions": [{"id": "t1", "x_but_y": "invented one, but", "evidence": "invented"},
                                   {"id": "t2", "x_but_y": "observed one, but", "evidence": "observed"},
                                   {"id": "t3", "x_but_y": "generic, but", "evidence": "observed", "swap_test": "fail"}]},
         "seeds": {"seeds": [
-            {"id": "s1", "line": "the last decision at the table", "tension": "t2", "mechanism": "elevating an overlooked ritual", "breaks": ["c1"]},
-            {"id": "s2", "line": "the last decision at the table again", "tension": "t2", "mechanism": "elevating an overlooked ritual", "breaks": ["c1"]},
-            {"id": "s3", "line": "sauce as a dare", "tension": "t1", "mechanism": "dare", "breaks": ["c1", "c3", "ghost"]},
-            {"id": "s4", "line": "heritage told honestly", "tension": "t2", "mechanism": "plain honesty", "breaks": []}]},
+            {"id": "s1", "line": "the last decision at the table", "tension": "t2", "mechanism": "elevating an overlooked ritual"},
+            {"id": "s2", "line": "the last decision at the table again", "tension": "t2", "mechanism": "elevating an overlooked ritual"},
+            {"id": "s3", "line": "sauce as a dare", "tension": "t1", "mechanism": "dare"},
+            {"id": "s4", "line": "heritage told honestly", "tension": "t2", "mechanism": "plain honesty"},
+            {"id": "s5", "line": "a thing", "tension": "t1", "mechanism": "vague"}]},
+        "kill": {"verdicts": [{"id": "s1", "keep": True, "strength": 4}, {"id": "s3", "keep": True, "strength": 4}, {"id": "s4", "keep": True, "strength": 3},
+                              {"id": "s5", "keep": False, "strength": 1, "tests": {"say_it_out_loud": {"fails": True, "reason": "'a thing' says nothing"}}}]},
+        "sort": {"tiers": [{"id": "s1", "tier": "stretch", "reason": "a sharper door"}, {"id": "s3", "tier": "Brave", "reason": "the dare is the format"},
+                           {"id": "s4", "tier": "safe", "reason": "answers the brief as written"}]},
         "score": {"scores": [{"id": "s1", "fit": 5, "truth": 5, "ownability": 4, "distinct": 3, "travel": 4, "fame": 3, "assets": 3},
                              {"id": "s3", "fit": 3, "truth": 3, "ownability": 4, "distinct": 5, "travel": 3, "fame": 4, "assets": 3},
                              {"id": "s4", "fit": 4, "truth": 4, "ownability": 2, "distinct": 1, "travel": 4, "fame": 2, "assets": 2}]},
@@ -86,8 +88,9 @@ def test_assumed_audience_marks_assumption_dependent():
 
 # ---------------------------------------------------------------- ladder, diversity, cost
 
-def test_ladder_rule_and_score():
-    assert [ladder.tier(b) for b in ([], ["a"], ["a", "b"], ["a", "a"])] == ["safe", "stretch", "brave", "stretch"]
+def test_ladder_tiers_and_score():
+    assert ladder.clean_tier("Brave") == ("brave", False) and ladder.clean_tier(" SAFE ") == ("safe", False)
+    assert ladder.clean_tier("wild") == ("stretch", True) and ladder.clean_tier(None) == ("stretch", True)
     assert ladder.total({d: 5 for d in ladder.SCORE_DIMS}) == 35
     assert ladder.total({}) == 7 and ladder.total({"fit": 99, "truth": 0, "ownability": "x"}) == 5 + 1 + 1 + 4
     assert not ladder.spread_ok([{"mechanism": "Dare"}, {"mechanism": "dare "}]) and ladder.spread_ok([{"mechanism": "a"}, {"mechanism": "b"}])
@@ -115,8 +118,8 @@ def test_keep_one_per_cluster():
 
 def test_cost_card_is_flagged_as_an_estimate():
     c = cost.estimate()
-    assert c["estimated"] and c["calls"] == 7 and c["est_usd"] > 0
-    assert cost.estimate(baseline=False)["calls"] == 6 and "total" in cost.render(c)
+    assert c["estimated"] and c["calls"] == 8 and c["est_usd"] > 0
+    assert cost.estimate(baseline=False)["calls"] == 7 and "total" in cost.render(c)
 
 
 def test_live_llm_refuses_without_approval():
@@ -136,32 +139,62 @@ def test_gate_refusal_makes_no_model_call():
 def test_pipeline_end_to_end():
     llm = FakeLLM(outputs())
     res = pipeline.run(task(), llm, precedent)
-    assert llm.calls == ["assumed_brief", "conventions", "tensions", "seeds", "score", "propositions"]
-    assert res["status"] == "proceed" and res["coverage"] == {"n": 5, "label": "thin: treat as anecdote"}
+    assert llm.calls == ["assumed_brief", "tensions", "seeds", "kill", "sort", "score", "propositions"]
+    assert "conventions" not in res and res["status"] == "proceed" and res["coverage"] == {"n": 5, "label": "thin: treat as anecdote"}
     # a wrong tag becomes assumed; only the top three questions are kept
     assert {f["key"]: f["tag"] for f in res["assumed_brief"]["fields"]}["budget_scope"] == "assumed" and len(res["client_questions"]) == 3
-    # a convention needs three listed cases: unknown ids are dropped, two cases is not enough
-    c = {x["id"]: x for x in res["conventions"]}
-    assert c["c1"]["cases"] == ["k1", "k2", "k3"] and c["c1"]["evidence"] == "cases"
-    assert c["c2"]["evidence"] == "inferred" and c["c2"]["cases"] == []
-    assert all("not dominant in the market" in x["caveat"] for x in res["conventions"])
     # swap-test failures are dropped, invented tensions sort last
     assert [t["id"] for t in res["tensions"]] == ["t2", "t1"]
-    # s2 duplicates s1 and is clustered away; unknown convention ids are dropped before the tier is set
+    # s2 duplicates s1 and is clustered away; the kill gate then drops s5 with its reasons
+    assert res["diversity"]["seeds_made"] == 5 and res["diversity"]["kept_after_clustering"] == 4
+    kg = res["kill_gate"]
+    assert kg["seeds_in"] == 4 and kg["survivors"] == 3 and [k["id"] for k in kg["killed"]] == ["s5"] and kg["restored"] == []
+    assert kg["killed"][0]["kill_gate"]["tests"]["say_it_out_loud"]["fails"] is True
     ids = [t["id"] for t in res["territories"]]
-    assert "s2" not in ids and res["diversity"]["kept_after_clustering"] == 3 and res["diversity"]["seeds_made"] == 4
     t = {x["id"]: x for x in res["territories"]}
-    assert t["s3"]["breaks"] == ["c1", "c3"] and t["s3"]["tier"] == "brave" and t["s1"]["tier"] == "stretch" and t["s4"]["tier"] == "safe"
-    assert ids == ["s1", "s3", "s4"] and res["spread_ok"]
+    assert ids == ["s1", "s3", "s4"] and "s5" not in ids and res["spread_ok"]
+    # the sort happens after the kill gate, by definition; tier text is cleaned
+    assert t["s3"]["tier"] == "brave" and t["s1"]["tier"] == "stretch" and t["s4"]["tier"] == "safe" and not t["s1"]["tier_defaulted"]
     assert t["s1"]["score"]["total"] == 27 and t["s1"]["score"]["advisory"] is True
     # propositions: the one-thought rule picks the first valid wording; none valid is flagged
     assert t["s1"]["proposition"] == "The part you tell friends about" and t["s1"]["proposition_ok"]
     assert t["s3"]["proposition"] is None and not t["s3"]["proposition_ok"] and t["s3"]["proposition_problems"]
-    # the brief's audience is given but the insight is inferred and tensions can be invented: assumption-dependent is per territory
-    assert t["s3"]["assumption_dependent"] and not t["s3"]["ready"]
-    assert t["s1"]["tension_evidence"] == "observed"
+    assert t["s3"]["assumption_dependent"] and not t["s3"]["ready"] and t["s1"]["tension_evidence"] == "observed"
     # proof prefers a case from another category and is always UNVERIFIED until a person verifies
     assert t["s1"]["proof"]["id"] == "k4" and t["s1"]["proof"]["badge"] == "UNVERIFIED" and "mechanism, not the execution" in t["s1"]["proof"]["note"]
+
+
+def test_kill_gate_runs_before_the_sort_and_the_sort_never_sees_killed_seeds():
+    seen = {}
+    o = outputs()
+    o["sort"] = lambda user: (seen.setdefault("user", user), outputs()["sort"])[1]
+    pipeline.run(task(), FakeLLM(o), precedent)
+    assert "s5" not in seen["user"] and "s1" in seen["user"]
+
+
+def test_kill_gate_keeps_an_unjudged_seed_and_flags_it():
+    o = outputs()
+    o["kill"] = {"verdicts": [{"id": "s1", "keep": True, "strength": 4}]}          # s3, s4, s5 not judged
+    res = pipeline.run(task(), FakeLLM(o), precedent)
+    assert res["kill_gate"]["killed"] == [] and res["kill_gate"]["survivors"] == 4
+    assert {x["id"]: x["kill_gate"]["judged"] for x in res["territories"]}["s4"] is False
+
+
+def test_kill_gate_restores_the_strongest_to_reach_three():
+    o = outputs()
+    o["kill"] = {"verdicts": [{"id": "s1", "keep": False, "strength": 2}, {"id": "s3", "keep": False, "strength": 5},
+                              {"id": "s4", "keep": False, "strength": 4}, {"id": "s5", "keep": False, "strength": 1}]}
+    res = pipeline.run(task(), FakeLLM(o), precedent)
+    assert set(res["kill_gate"]["restored"]) == {"s3", "s4", "s1"} and [k["id"] for k in res["kill_gate"]["killed"]] == ["s5"]
+    assert all(x["kill_gate"].get("restored") for x in res["territories"])
+
+
+def test_unknown_tier_defaults_to_stretch_and_is_flagged():
+    o = outputs()
+    o["sort"] = {"tiers": [{"id": "s1", "tier": "medium"}]}
+    t = {x["id"]: x for x in pipeline.run(task(), FakeLLM(o), precedent)["territories"]}
+    assert t["s1"]["tier"] == "stretch" and t["s1"]["tier_defaulted"] is True
+    assert any("tier unclear" in r for r in cards.card(t["s1"], {})["risks"])
 
 
 def test_scorer_is_blind_to_tier():
@@ -169,7 +202,7 @@ def test_scorer_is_blind_to_tier():
     o = outputs()
     o["score"] = lambda user: (seen.setdefault("user", user), outputs()["score"])[1]
     pipeline.run(task(), FakeLLM(o), precedent)
-    assert "tier" not in seen["user"] and "breaks" not in seen["user"]
+    assert "tier" not in seen["user"]
 
 
 def test_one_safe_territory_is_kept_when_one_exists():
@@ -225,11 +258,12 @@ def test_choice_spreads_over_tensions_and_relaxes_only_to_reach_three():
     assert len(pipeline._choose(same_mech, scores, max_keep=5)) == 1     # the mechanism rule is never relaxed
 
 
-def test_seed_prompt_asks_for_a_safe_quarter_and_spread():
+def test_seed_prompt_asks_for_a_safe_quarter_and_spread_and_has_no_conventions():
     from territory.llm import prompt
     p = prompt("seeds")
-    assert "quarter" in p and "break no convention" in p and "different tensions" in p
+    assert "quarter" in p and "Safe" in p and "different tensions" in p and "convention" not in p.lower()
+    assert "kill gate" in prompt("kill_gate").lower() and "safe: answers the brief as written" in prompt("sort")
 
 
 def test_cost_card_is_calibrated_to_the_measured_run():
-    assert 0.5 <= cost.estimate()["est_usd"] <= 0.6
+    assert 0.45 <= cost.estimate()["est_usd"] <= 0.7

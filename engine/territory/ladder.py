@@ -1,15 +1,19 @@
-"""Safe / Stretch / Brave by a stated rule, never by mood (design step 7). The count of dominant conventions a
-territory breaks places it: 0 is Safe, 1 is Stretch, 2 or more is Brave. The conventions are model-inferred and
-unvalidated, so the tier is a working label for Laurence to check."""
+"""Safe / Stretch / Brave by stated definition (Laurence's cut of the conventions step, 2 Nov 2026), judged by a model
+after the kill gate. Safe answers the brief as written; Stretch is the same job through a sharper door; Brave changes
+the shape (the media, behaviour or format becomes the idea). The placement is a working label for a person to check."""
 from __future__ import annotations
+
+TIERS = ("safe", "stretch", "brave")
+
+
+def clean_tier(x) -> tuple[str, bool]:
+    """(tier, defaulted): an unknown or missing tier reads as stretch and is flagged."""
+    x = str(x or "").strip().lower()
+    return (x, False) if x in TIERS else ("stretch", True)
+
 
 SCORE_DIMS = ["fit", "truth", "ownability", "distinct", "travel", "fame", "assets"]   # 7 x 5 = 35
 MAX_SCORE = 5 * len(SCORE_DIMS)
-
-
-def tier(breaks: list) -> str:
-    n = len(set(breaks or []))
-    return "safe" if n == 0 else "stretch" if n == 1 else "brave"
 
 
 def total(scores: dict) -> int:

@@ -1,7 +1,8 @@
-"""The first-slice pipeline (design steps 1-8): assumed brief, conventions, tensions, seeds, cull, proof, score,
-propositions. ``run(task, llm, precedent)`` makes at most six model calls and none when the gate says no.
+"""The first-slice pipeline: assumed brief, tensions, 30 seeds, a kill gate, the Safe/Stretch/Brave sort, a blind score,
+propositions, proof cases. ``run(task, llm, precedent)`` makes at most seven model calls and none when the gate says no.
+Laurence cut the conventions step on 2 Nov 2026 and added the kill gate straight after the seeds.
 
-Everything labelled a design bet in docs/territory-research-2026-11-02.md (the ladder rule, the /35 score,
+Everything labelled a design bet in docs/territory-research-2026-11-02.md (the ladder, the /35 score,
 one-seed-per-cluster) is a working label here, not a validated method. Scores are advisory: a person decides."""
 from __future__ import annotations
 
@@ -11,7 +12,6 @@ from . import diversity, intake, ladder
 from .llm import prompt
 
 EVIDENCE_RANK = {"observed": 0, "triangulated": 1, "invented": 2}
-CAVEAT = "dominant among award winners, not dominant in the market"
 THIN_N = 30
 
 
@@ -39,43 +39,60 @@ def _assumed(llm, task, gate) -> dict:
     return out
 
 
-def _conventions(llm, task, cases) -> list[dict]:
-    ids = {c["id"] for c in cases}
-    out = _ask(llm, "conventions", prompt("conventions"), {"category": task["category"], "market": task["market"], "cases": cases})
-    res = []
-    for i, c in enumerate(out.get("conventions") or []):
-        cited = [x for x in (c.get("cases") or []) if x in ids]
-        if len(cited) < 3:
-            c = {**c, "cases": [], "evidence": "inferred"}
-        else:
-            c = {**c, "cases": cited, "evidence": "cases"}
-        c.setdefault("id", f"c{i + 1}")
-        c["caveat"] = c.get("caveat") or CAVEAT
-        if CAVEAT not in c["caveat"]:
-            c["caveat"] = f"{c['caveat']} ({CAVEAT})"
-        res.append(c)
-    return res
-
-
-def _tensions(llm, task, assumed, conventions) -> list[dict]:
-    out = _ask(llm, "tensions", prompt("tensions"), {"assumed_brief": assumed, "conventions": conventions})
+def _tensions(llm, task, assumed) -> list[dict]:
+    out = _ask(llm, "tensions", prompt("tensions"), {"assumed_brief": assumed})
     ts = [t for t in (out.get("tensions") or []) if t.get("swap_test", "pass") == "pass"]
     ts = [{**t, "evidence": t.get("evidence") if t.get("evidence") in EVIDENCE_RANK else "invented"} for t in ts]
     ts.sort(key=lambda t: EVIDENCE_RANK[t["evidence"]])      # invented tensions sort last
     return ts[:10]
 
 
-def _seeds(llm, tensions, conventions, n_seeds, threshold):
+def _seeds(llm, tensions, n_seeds, threshold):
     recipes = diversity.seed_recipes(n_seeds)
-    out = _ask(llm, "seeds", prompt("seeds"), {"tensions": tensions, "conventions": conventions, "recipes": recipes})
-    known = {c["id"] for c in conventions}
-    seeds = []
-    for s in out.get("seeds") or []:
-        s = {**s, "breaks": [b for b in (s.get("breaks") or []) if b in known]}
-        s["tier"] = ladder.tier(s["breaks"])
-        seeds.append(s)
+    out = _ask(llm, "seeds", prompt("seeds"), {"tensions": tensions, "recipes": recipes})
+    seeds = list(out.get("seeds") or [])
     kept, dropped = diversity.keep_one_per_cluster(seeds, threshold=threshold)
     return kept, dropped, len(seeds)
+
+
+def _kill(llm, task, assumed, tensions, seeds, min_keep) -> tuple[list[dict], list[dict], list[dict]]:
+    """The kill gate (Laurence, 2 Nov 2026): drop the weak seeds before they are sorted onto the ladder.
+    Returns (survivors, killed, restored). A seed the gate did not judge is kept and flagged. If fewer than
+    min_keep survive, the strongest killed seeds are restored and flagged, so the run never ends empty-handed."""
+    blind = [{k: s.get(k) for k in ("id", "line", "tension", "mechanism")} for s in seeds]
+    out = _ask(llm, "kill", prompt("kill_gate"), {"assumed_brief": assumed, "tensions": tensions, "seeds": blind})
+    verdicts = {v["id"]: v for v in out.get("verdicts") or [] if "id" in v}
+    survivors, killed = [], []
+    for s in seeds:
+        v = verdicts.get(s["id"])
+        if v is None:
+            survivors.append({**s, "kill_gate": {"judged": False}})
+        elif v.get("keep") is True:
+            survivors.append({**s, "kill_gate": {"judged": True, "strength": v.get("strength")}})
+        else:
+            killed.append({**s, "kill_gate": {"judged": True, "strength": v.get("strength"), "tests": v.get("tests") or {}}})
+    restored = []
+    if len(survivors) < min_keep:
+        for s in sorted(killed, key=lambda s: -(s["kill_gate"].get("strength") or 0)):
+            if len(survivors) >= min_keep:
+                break
+            s["kill_gate"]["restored"] = True
+            survivors.append(s)
+            restored.append(s)
+        killed = [s for s in killed if s not in restored]
+    return survivors, killed, restored
+
+
+def _sort(llm, survivors) -> list[dict]:
+    """Place each survivor on the ladder by the stated definitions. The scorer never sees this."""
+    out = _ask(llm, "sort", prompt("sort"), {"territories": [{k: s.get(k) for k in ("id", "line", "tension", "mechanism")} for s in survivors]})
+    by = {x["id"]: x for x in out.get("tiers") or [] if "id" in x}
+    res = []
+    for s in survivors:
+        x = by.get(s["id"]) or {}
+        tier, defaulted = ladder.clean_tier(x.get("tier"))
+        res.append({**s, "tier": tier, "tier_reason": x.get("reason"), "tier_defaulted": defaulted})
+    return res
 
 
 def _score(llm, kept) -> dict:
@@ -147,11 +164,12 @@ def run(task: dict, llm, precedent=None, n_seeds: int = 30, max_keep: int = 5, t
     if gate["assumption_dependent"]:
         res["banner"] = "Built on an assumed brief. Confirm the category and audience before relying on these."
     assumed = _assumed(llm, task, gate)
-    conventions = _conventions(llm, task, cases)
-    tensions = _tensions(llm, task, assumed, conventions)
-    kept, dropped, n_made = _seeds(llm, tensions, conventions, n_seeds, threshold)
-    scores = _score(llm, kept)
-    chosen = _choose(kept, scores, max_keep)
+    tensions = _tensions(llm, task, assumed)
+    kept, dropped, n_made = _seeds(llm, tensions, n_seeds, threshold)
+    survivors, killed, restored = _kill(llm, task, assumed, tensions, kept, min_keep=3)
+    sorted_ = _sort(llm, survivors)
+    scores = _score(llm, sorted_)
+    chosen = _choose(sorted_, scores, max_keep)
     props = {p["id"]: p for p in (_ask(llm, "propositions", prompt("propositions"), {"territories": [{k: s.get(k) for k in ("id", "line", "tension", "mechanism")} for s in chosen]}).get("propositions") or [])}
     by_tension = {t["id"]: t for t in tensions}
     out = []
@@ -167,8 +185,9 @@ def run(task: dict, llm, precedent=None, n_seeds: int = 30, max_keep: int = 5, t
                     "proposition_problems": [r for _, (ok, rs) in valid if not ok for r in rs],
                     "would_have_to_be_true": p.get("would_have_to_be_true") or [], "cheapest_test": p.get("cheapest_test"),
                     "proof": _proof(s, cases, task["category"]), "assumption_dependent": dep, "ready": not dep})
-    res.update(territories=out, assumed_brief=assumed, conventions=conventions, tensions=tensions,
+    res.update(territories=out, assumed_brief=assumed, tensions=tensions,
                diversity={"seeds_made": n_made, "kept_after_clustering": len(kept), "duplicate_rate": diversity.duplicate_rate(kept, dropped)},
+               kill_gate={"seeds_in": len(kept), "killed": killed, "survivors": len(survivors), "restored": [s["id"] for s in restored]},
                spread_ok=ladder.spread_ok(out), notes=[] if len(out) >= 3 else [f"only {len(out)} territories survived the cull"],
                client_questions=assumed.get("questions", []))
     return res
