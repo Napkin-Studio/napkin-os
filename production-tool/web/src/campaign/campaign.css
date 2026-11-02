@@ -137,3 +137,54 @@
 .rs-frame { position: absolute; border: 1.5px dashed var(--tool); border-radius: 2px; box-sizing: border-box; pointer-events: none; }
 .rs-tag { position: absolute; left: 2px; top: 2px; font-size: 10px; line-height: 1; padding: 2px 4px; border-radius: 3px; background: var(--card); color: var(--ink); font-family: var(--f-mono); opacity: 0.92; }
 .rs-trayrows { max-height: 220px; border: 1px solid var(--line-soft); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; }
+
+/* Folded lanes on the board: a clickable lane title with a chevron, a stack in place of the tiles
+   (features/art-director.clan, slice 2). */
+.cb-lane { pointer-events: auto; cursor: pointer; user-select: none; }
+.cb-chev { width: 12px; color: var(--ink3); }
+.cb-lanebadge { font-size: 11px; text-transform: none; letter-spacing: 0; border-radius: 999px; padding: 1px 8px; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+.cb-stack { position: absolute; pointer-events: auto; cursor: pointer; border: 0; background: none; padding: 0; }
+.cb-stack .ov-st { bottom: 0; }
+
+/* The Sizes overview screen (SizesOverview.tsx): over the canvas, under the send tray and tile bar (z 30). */
+.ov { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); font-size: 13px; }
+.ov-head { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.ov-head h1 { font-size: 14px; margin: 0; font-weight: 600; }
+.ov-seg { display: flex; align-items: center; gap: 4px; color: var(--ink3); }
+.ov-seg > span { margin-right: 4px; }
+.ov-head .btn.on { border-color: var(--tool); background: var(--tool-soft); }
+.ov-main { flex: 1; display: flex; min-height: 0; }
+.ov-side { width: 230px; border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+.ov-master { aspect-ratio: 3 / 2; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); position: relative; overflow: hidden; }
+.ov-master img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-master i { position: absolute; left: 10px; bottom: 8px; font-style: normal; font-size: 11px; color: #fff; text-shadow: 0 1px 3px #000a; }
+.ov-stat { display: flex; justify-content: space-between; color: var(--ink2); }
+.ov-stat b { color: var(--ink); }
+.ov-bar { height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; display: flex; }
+.ov-bar i { display: block; height: 100%; }
+.ov-scroll { flex: 1; overflow: auto; padding: 18px 22px 80px; }
+.ov-group { margin-bottom: 22px; }
+.ov-ghead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; cursor: pointer; user-select: none; background: none; border: 0; color: inherit; font: inherit; padding: 0; }
+.ov-ghead h2 { font-size: 12.5px; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+.ov-chev { width: 14px; color: var(--ink3); transition: transform 0.15s; }
+.ov-group.closed .ov-chev { transform: rotate(-90deg); }
+.ov-count { color: var(--ink3); }
+.ov-badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; }
+.ov-badge.warn { background: var(--warn-bg); color: var(--warn); }
+.ov-badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.ov-badge.run { background: var(--tool-soft); color: var(--tool); }
+.ov-stack { position: relative; display: block; height: 118px; width: 200px; margin: 4px 0 0 6px; cursor: pointer; background: none; border: 0; padding: 0; }
+.ov-st { position: absolute; bottom: 0; max-width: 90px; border-radius: 5px; border: 1px solid var(--line); background: var(--soft); overflow: hidden; display: block; }
+.ov-st img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.ov-tile { cursor: pointer; position: relative; }
+.ov-pic { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); position: relative; overflow: hidden; }
+.ov-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-blank { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--ink3); }
+.ov-tile.sel .ov-pic { outline: 2px solid var(--tool); outline-offset: 2px; }
+.ov-chip { position: absolute; left: 6px; top: 6px; font-size: 10.5px; padding: 1px 7px; border-radius: 999px; color: #fff; z-index: 1; }
+.ov-chip.ready { background: #2fa36b; } .ov-chip.look { background: #b07a14; } .ov-chip.run { background: #4458c8; }
+.ov-lock { position: absolute; right: 6px; top: 6px; font-size: 11px; }
+.ov-cap { margin-top: 6px; font-size: 11.5px; }
+.ov-cap b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-cap span { color: var(--ink3); font-size: 11px; white-space: nowrap; }

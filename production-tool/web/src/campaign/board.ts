@@ -15,10 +15,15 @@ export const MIN_TILE_W = 90
 export const CAPTION_H = 46
 export const GAP = 24
 export const MAX_ROW_W = 1680
+/** A folded lane's stack: the room it takes in place of its tiles (features/art-director.clan, slice 2). */
+export const STACK_W = 230
+export const STACK_H = 130
 
 export interface TileIn { id: string; channel: FormatChannel; aspect: { w: number; h: number } }
 export interface TileBox { x: number; y: number; w: number; h: number }
-export interface LaneBox { channel: FormatChannel; label: string; y: number; count: number }
+export interface LaneBox { channel: FormatChannel; label: string; y: number; count: number
+  /** Folded into a stack: no tiles of its own, one stack box instead. */
+  stack?: TileBox & { ids: string[] } }
 export interface BoardLayout { w: number; h: number; lanes: LaneBox[]; tiles: Record<string, TileBox> }
 
 /** A tile's picture size at true proportion: TILE_H tall, narrower than MAX_TILE_W, never a sliver. */
@@ -37,7 +42,7 @@ export function tileSize(aspect: { w: number; h: number }): { w: number; h: numb
   return { w: Math.round(w), h: Math.round(h) }
 }
 
-export function boardLayout(tiles: readonly TileIn[]): BoardLayout {
+export function boardLayout(tiles: readonly TileIn[], folded: ReadonlySet<FormatChannel> = new Set()): BoardLayout {
   const lanes: LaneBox[] = []
   const out: Record<string, TileBox> = {}
   let y = HEAD_H
@@ -45,8 +50,15 @@ export function boardLayout(tiles: readonly TileIn[]): BoardLayout {
   for (const lane of LANES) {
     const mine = tiles.filter((t) => t.channel === lane.channel)
     if (!mine.length) continue
-    lanes.push({ channel: lane.channel, label: lane.label, y, count: mine.length })
+    const lb: LaneBox = { channel: lane.channel, label: lane.label, y, count: mine.length }
+    lanes.push(lb)
     y += LANE_HEAD
+    if (folded.has(lane.channel)) {
+      lb.stack = { x: PAD, y, w: STACK_W, h: STACK_H, ids: mine.map((t) => t.id) }
+      widest = Math.max(widest, PAD + STACK_W + PAD)
+      y += STACK_H + CAPTION_H / 2 + GAP
+      continue
+    }
     let x = PAD
     let rowH = 0
     for (const t of mine) {

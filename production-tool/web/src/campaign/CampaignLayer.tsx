@@ -10,10 +10,11 @@
 // The board: Update sizes when the master changed, Export zip, Export at full size (Magnific upscales,
 // through the same tray).
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { placeBeside, placeFloating } from '../lib/place'
+import { placeBeside } from '../lib/place'
 import { keepsPick, onScreen, tilePick } from './pick'
+import { TileFloat } from './TileFloat'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { modelChoicesFor } from '../capabilities'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
@@ -23,10 +24,12 @@ import { download } from '../export'
 import { useBlobUrl } from '../ui/hooks'
 import { useProjectName } from '../ui/useDownload'
 import { boardLayout, CAPTION_H, type TileBox } from './board'
+import { campaignFold, isFolded } from './fold'
+import { SizesOverview } from './SizesOverview'
 import { panCrop, zoomCrop } from './crop'
 import { fullPlan } from './delivery'
 import { exportSizes } from './exportZip'
-import { formatById, shortName, sizeWords } from './formats'
+import { formatById, LANES, shortName, sizeWords } from './formats'
 import { adjustCrop, changeMethod, channelOfSize, redoSize, setLocked, sizesOf, staleSizes, updateSizes, upscaleForDelivery, type CampaignDeps } from './make'
 import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
 import { campaignSheet } from './sheet'
@@ -87,7 +90,10 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
   const [typing, setTyping] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const sizes = sizesOf(doc, set.id)
-  const layout = boardLayout(sizes.map((s) => ({ id: s.id, channel: channelOfSize(s), aspect: { w: s.delivery.width, h: s.delivery.height } })))
+  useSyncExternalStore(campaignFold.subscribe, campaignFold.version)
+  const foldedLanes = new Set(LANES.map((l) => l.channel).filter((c) => sizes.some((s) => channelOfSize(s) === c) && isFolded(set.id, c, sizes.length)))
+  const layout = boardLayout(sizes.map((s) => ({ id: s.id, channel: channelOfSize(s), aspect: { w: s.delivery.width, h: s.delivery.height } })), foldedLanes)
+  const [overview, setOverview] = useState(false)
   const stale = staleSizes(doc, els, set.id)
   const staleIds = new Set(stale.map((s) => s.id))
   const masterUrl = useBlobUrl(set.master.asset)
@@ -117,6 +123,10 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
       if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         campaignSheet.toggleSafeAreas()
+      }
+      if (e.key === 'Enter' && selected && !picked && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        setOverview(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -186,7 +196,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
   return (
     <div className={`cb-board ${selected ? 'selected' : ''}`} style={{ ...style, height: layout.h }} data-set={set.id}>
       <header className="cb-head">
-        <b className="cb-title">{(title ?? 'Campaign').replace(/^Campaign · /, '')}</b>
+        <b className="cb-title" onDoubleClick={() => setOverview(true)}>{(title ?? 'Campaign').replace(/^Campaign · /, '')}</b>
         <span className="cb-count">{sizes.length} formats · {counts.ready} ready{counts.look ? ` · ${counts.look} need a look` : ''}{counts.making ? ` · ${counts.making} making` : ''}{counts.notMade ? ` · ${counts.notMade} not made yet` : ''}</span>
         <span className="pt-grow" />
         {stale.length > 0 && (
@@ -194,6 +204,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
             <button type="button" className="btn xs primary" onClick={update}>Update sizes</button>
           </span>
         )}
+        <button type="button" className="btn xs cb-seeall" title="Every size on one screen (Enter)" onClick={() => setOverview(true)}>See all sizes ⤢</button>
         <button type="button" className={`btn xs ${safe ? 'on' : 'ghost'}`} aria-pressed={safe} title="Safe areas (S)" onClick={() => campaignSheet.toggleSafeAreas()}>Safe areas <kbd>S</kbd></button>
         <button type="button" className="btn xs" onClick={() => void exportAll()}>Export zip</button>
         {upscaling.length > 0
@@ -202,8 +213,21 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
             ? <button type="button" className="btn xs primary" onClick={() => { setFullWanted(false); void exportAll(true) }}>Full size ready · Download</button>
             : <button type="button" className="btn xs" onClick={exportFull} title="Each size at its delivery size: Magnific upscales what needs it">Export at full size</button>}
       </header>
-      {layout.lanes.map((l) => (
-        <div key={l.channel} className="cb-lane" style={{ top: l.y }}>{l.label}<span className="cb-lanecount">{l.count}</span></div>
+      {layout.lanes.map((l) => {
+        const looks = sizes.filter((s) => channelOfSize(s) === l.channel && s.status === 'look').length
+        return (
+          <div key={l.channel} className="cb-lane" style={{ top: l.y }} role="button" aria-expanded={!l.stack} title={l.stack ? 'Open this lane' : 'Fold this lane into a stack'}
+            onPointerDown={(e) => e.stopPropagation()} onClick={() => campaignFold.toggle(set.id, l.channel, sizes.length)}>
+            <span className="cb-chev">{l.stack ? '▸' : '▾'}</span>{l.label}<span className="cb-lanecount">{l.count}</span>
+            {l.stack && looks > 0 && <span className="cb-lanebadge">{looks} need a look</span>}
+          </div>
+        )
+      })}
+      {layout.lanes.map((l) => l.stack && (
+        <button key={`st-${l.channel}`} type="button" className="cb-stack" aria-label={`Open ${l.label}`} style={{ left: l.stack.x, top: l.stack.y, width: l.stack.w, height: l.stack.h }}
+          onPointerDown={(e) => e.stopPropagation()} onClick={() => campaignFold.set(set.id, l.channel, false)}>
+          {l.stack.ids.slice(0, 4).map((id, j) => { const sz = sizes.find((x) => x.id === id); return sz ? <BoardStackPic key={id} size={sz} index={j} /> : null })}
+        </button>
       ))}
       {sizes.map((s) => {
         const box = layout.tiles[s.id]
@@ -226,6 +250,11 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
           deps={deps} by={by} say={say} />
       })}
       {note && <div className="cb-note" role="status">{note}</div>}
+      {overview && (
+        <SizesOverview set={set} sizes={sizes} staleIds={staleIds} models={models} deps={deps} by={by} title={(title ?? 'Campaign').replace(/^Campaign · /, '')}
+          onClose={() => setOverview(false)} onTray={setTray} onLock={(id, on) => void setLocked(services.doc, id, on)}
+          onEditOnBoard={(id) => { setOverview(false); tilePick.pick(set.id, id); canvas.select([]) }} />
+      )}
       {tray && <SendTray tray={tray} setId={set.id} onClose={() => setTray(null)} />}
     </div>
   )
@@ -263,7 +292,8 @@ function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onC
     const el = panel.current
     if (!el) return
     const one = tray.rows.length === 1 ? tray.rows[0]!.id : null
-    const anchor = (one && document.querySelector(`[data-size="${CSS.escape(one)}"] .cb-pic`)) || document.querySelector(`[data-set="${CSS.escape(setId)}"]`)
+    // The Sizes overview, when it is open, is where the person is looking: its picture first, then the board's.
+    const anchor = (one && (document.querySelector(`.ov [data-size="${CSS.escape(one)}"] .ov-pic`) || document.querySelector(`[data-size="${CSS.escape(one)}"] .cb-pic`))) || document.querySelector(`.ov`) || document.querySelector(`[data-set="${CSS.escape(setId)}"]`)
     const a = anchor?.getBoundingClientRect()
     if (!a) return
     const view = { w: window.innerWidth, h: window.innerHeight }
@@ -293,6 +323,12 @@ function SendTray({ tray, setId, onClose }: { tray: TrayOpen; setId: string; onC
     </div>,
     document.body,
   )
+}
+
+function BoardStackPic({ size, index }: { size: Size; index: number }) {
+  const url = useBlobUrl(size.media === 'image' ? size.asset : undefined)
+  const r = size.delivery.width / size.delivery.height
+  return <span className="ov-st" style={{ left: index * 30, height: Math.min(92, 70 / r), aspectRatio: String(r), transform: `rotate(${(index - 1.5) * 3}deg)`, zIndex: index }}>{url ? <img src={url} alt="" /> : null}</span>
 }
 
 const STATUS: Record<NonNullable<Size['status']>, string> = { making: 'Making…', ready: 'Ready', look: 'Needs a look', stale: 'Out of date' }
@@ -460,34 +496,3 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
   )
 }
 
-/**
- * The picked tile's bar (and Jude's flag list above it), on the page rather than on the canvas: a fixed
- * size whatever the zoom, placed as the canvas's floating toolbars are (lib/place.ts placeFloating:
- * centred above the tile, below it only when there is no room above), so it never covers the next
- * row. The tile panned or zoomed off screen closes it.
- */
-function TileFloat({ anchor, children }: { anchor: RefObject<HTMLDivElement | null>; children: ReactNode }) {
-  const panel = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const a = anchor.current?.getBoundingClientRect()
-    const el = panel.current
-    if (!a || !el) return
-    const view = { w: window.innerWidth, h: window.innerHeight }
-    if (!onScreen(a, view)) {
-      tilePick.clear()
-      return
-    }
-    const p = placeFloating({ x: (a.left + a.right) / 2, top: a.top, bottom: a.bottom }, { w: el.offsetWidth, h: el.offsetHeight }, view, 10)
-    // Placed on the element itself after every render (the board moves with the canvas's view).
-    el.style.left = `${p.left}px`
-    el.style.top = `${p.top}px`
-    el.style.visibility = 'visible'
-  })
-  return createPortal(
-    <div ref={panel} className="cb-float" style={{ left: 0, top: 0, visibility: 'hidden' }}
-      onPointerDown={(e) => e.stopPropagation()}>
-      {children}
-    </div>,
-    document.body,
-  )
-}
