@@ -456,6 +456,21 @@
             }
           }
         },
+        "checks": {
+          "type": "array",
+          "description": "While no gate is open: what has been checked so far in this run, shown as Checked so far. Optional; written by the server, or by a fixture until then.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "decisions": {
           "type": "array",
           "description": "Every approve, edit or retry at a gate, in order.",

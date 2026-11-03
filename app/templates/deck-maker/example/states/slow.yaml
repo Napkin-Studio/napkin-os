@@ -246,6 +246,17 @@ run:
       by: Sai
       at: '2026-11-03T10:12:00Z'
       decision: approve
+  checks:
+  - ok: true
+    text: Every figure traces to a source or the brief
+  - ok: true
+    text: No rejected finding used
+  - ok: false
+    text: All 3 mandatories are still to confirm with the client
+  - ok: false
+    text: 6 research findings are single-source and unverified
+  - ok: false
+    text: 1 beat needs details only you have
   agent:
     key: strategy
     activity: write
@@ -620,6 +631,7 @@ fixture:
   label: sample, not engine output
   engine_cannot_supply_yet:
   - run.agent
+  - run.checks
   - run.cost_usd
   - run.stages[].items
   - exports.*.bytes
