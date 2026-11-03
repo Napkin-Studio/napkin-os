@@ -20,6 +20,9 @@
   --tool:#2F64F5; --tool-ink:color-mix(in oklab,var(--tool) 78%,var(--ink)); --tool-soft:color-mix(in oklab,var(--tool) 10%,transparent);
   --ok-bg:#e7f6ed; --ok-fg:#15803d; --warn-bg:#fdf3e3; --warn-fg:#b45309;
   --shadow-soft:0 10px 30px rgba(20,30,60,.08); --shadow-lift:0 12px 32px rgba(20,30,60,.16),0 2px 6px rgba(20,30,60,.08);
+  /* the agent circle's ring: one colour per activity, the state also said in words */
+  --ring-work:#FF4F2E; --ring-think:#7A5AF8; --ring-read:#B87100; --ring-check:#238A55; --ring-human:#E0560C; --ring-error:#16191D;
+  --ring-wait:#9EA3AB; --ring-track:#D3D6DC; --ring-edge:#D3D6DC;
   --f-display:'Geist','Helvetica Neue',Arial,sans-serif; --f-mono:'Geist Mono',ui-monospace,Menlo,monospace;
 }
 :root[data-color-scheme="dark"]{
@@ -29,6 +32,8 @@
   --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
   --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
   --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+  --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
+  --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
@@ -38,6 +43,8 @@
     --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
     --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
     --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+    --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
+    --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
   }
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -97,6 +104,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .inp{width:100%;height:42px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font-size:15px;background:var(--card)}
 .inp.ta{height:auto;min-height:120px;padding:10px 12px;line-height:1.5;resize:vertical;font-family:inherit}
 .bf{font-size:13px;line-height:1.5;color:var(--ink2);background:var(--soft);border-radius:12px;padding:10px 14px}
+.bf>span{display:block}
 .bf .miss{display:block;color:var(--warn-fg)}
 .q{padding:12px 0;border-top:1px solid var(--line-soft)}
 .q .qt{font-size:14px;font-weight:600;line-height:1.4}
@@ -131,14 +139,87 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .stage b{display:block;font-size:14px;font-weight:500} .stage.now b{font-weight:700}
 .stage span.s{display:block;font-family:var(--f-mono);font-size:11px;color:var(--ink3)}
 .dex{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line-soft);background:var(--soft)}
-.dex .av{width:28px;height:28px;border-radius:999px;background:var(--tool);color:var(--on-fill);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.dex .cir{flex:none}
 .beat{display:flex;gap:16px;padding:13px 20px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
 .beat .n{font-family:var(--f-mono);font-size:12px;color:var(--ink3);width:22px;padding-top:2px}
+.dex .dexp{margin-left:auto;flex:none}
+/* gate 2: each territory is a button that picks it; gate 3: the idea line, its work, what it rests on */
+.terr{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line-soft);border-radius:0;background:transparent;color:var(--ink);align-items:center;min-height:44px}
+.terr:last-child{border-bottom:0}
+.terr:focus-visible{outline-offset:-3px}
+.terr[aria-pressed="true"]{background:var(--tool-soft);box-shadow:inset 3px 0 0 var(--tool)}
+.terr .n{padding-top:0}
+.terr .tb{display:block;flex:1;min-width:0}
+.terr .tn{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px;font-weight:600;line-height:1.35}
+.terr .tt{display:block;margin-top:5px;font-size:14px;line-height:1.45}
+.terr .tw{display:block;margin-top:5px;font-size:13px;line-height:1.45;color:var(--ink2)}
+.terr .tw b{font-weight:600;color:var(--ink)}
+.terr .sel{width:22px;height:22px;border-radius:999px;border:1.5px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center}
+.terr[aria-pressed="true"] .sel{border-color:var(--tool)}
+.terr[aria-pressed="true"] .sel::after{content:"";width:12px;height:12px;border-radius:999px;background:var(--tool)}
+.iline{align-items:center}
+.iline .il{font-size:24px;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.beat .ex{margin-top:4px;font-size:14px;line-height:1.45;color:var(--ink)}
+.rests{padding:16px 20px}
+.rests .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.asked{margin-top:8px;font-size:13px;color:var(--warn-fg)}
 .check{display:flex;gap:10px;align-items:center;font-size:13px}
 .tick{width:16px;height:16px;border-radius:999px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tick.ok{background:var(--ok-bg);color:var(--ok-fg)} .tick.warn{background:var(--warn-bg);color:var(--warn-fg)}
-.spin{animation:qspin 2.4s ease-in-out infinite;transform-origin:50% 50%}
-@keyframes qspin{0%{transform:rotate(-45deg)}100%{transform:rotate(315deg)}}
+/* the agent circle: flat, its ring turns only while an agent works, and never when motion is reduced */
+.cir{display:block;flex:none;overflow:visible}
+.cir .act{transform-box:view-box;transform-origin:0 0}
+@keyframes cir-turn{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:no-preference){
+  .cir[data-activity="work"] .act,.cir[data-activity="write"] .act,.cir[data-activity="handoff"] .act{animation:cir-turn 6s linear infinite}
+  .cir[data-activity="think"] .act{animation:cir-turn 9s linear infinite}
+  .cir[data-activity="read"] .act,.cir[data-activity="check"] .act{animation:cir-turn 4.5s linear infinite}
+  .mk.now svg{animation:cir-turn 1.6s linear infinite}
+}
+/* the 3D circle (the engine in the page script): the flat svg stays under a canvas, as the fallback and for screen readers; its drawing is hidden only while the 3D one is on */
+.cir3d{position:relative;display:inline-block;flex:none;line-height:0;vertical-align:middle}
+.cir3d.big{touch-action:none}
+.cir3d>canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.cir3d:not(.on)>canvas{display:none}
+.cir3d.on>svg.cir>*{visibility:hidden}
+.cir3d.on .act{animation:none}
+/* the status card's circle: 60px in a row, enlarged in place (the page script animates the change) while an agent works or the run waits */
+.status .srow{display:flex;align-items:center;gap:14px}
+.status .slot{display:block;position:relative;flex:none;width:60px;height:60px}
+.status.hero .srow{flex-direction:column;text-align:center;gap:12px;padding-top:4px}
+.status.hero .slot{width:130px;height:130px}
+.status .orbb{appearance:none;display:block;border:0;background:none;padding:0;margin:0;border-radius:999px;line-height:0;cursor:pointer}
+.status .say{margin:10px auto 0;min-height:40px;max-width:260px;text-align:center;font-size:13px;line-height:1.5;color:var(--ink3)}
+.status .say.on{color:var(--ink)}
+/* the running Build screen: the status card says who and how, the content box what is being done */
+.status .sword{margin-top:3px;font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
+.status .sword.ok{color:var(--ok-fg)} .status .sword.err{color:var(--ink)}
+.cbox{overflow:hidden}
+.cbox-h{padding:14px 20px;border-bottom:1px solid var(--line-soft);background:var(--soft)}
+.crow{display:flex;gap:14px;align-items:flex-start;padding:13px 20px;border-bottom:1px solid var(--line-soft)}
+.crow:last-child{border-bottom:0}
+.crow .t{font-size:15px;font-weight:600;line-height:1.35}
+.crow .t .n{font-size:12px;font-weight:400;color:var(--ink3);margin-right:10px}
+.crow.pending .t{color:var(--ink2);font-weight:500}
+.crow.failed{background:var(--soft)}
+.mk{width:20px;height:20px;border-radius:999px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px}
+.mk.done{background:var(--ok-fg);color:var(--on-fill)}
+.mk.pending{border:1.5px dashed var(--line)}
+.mk.failed{background:var(--ink);color:var(--paper)}
+.mk.supply{background:var(--warn-bg);color:var(--warn-fg)}
+.mk.now svg{display:block}
+.mk-track{stroke:var(--line-soft);stroke-width:.24}
+.mk-arc{stroke:var(--warn-fg);stroke-width:.24;stroke-linecap:round}
+.pill.wait{color:var(--ink2);background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.pill.fail{color:var(--ink);background:var(--card);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px 20px}
+.cslide{border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px;background:var(--soft)}
+.cslide .t{margin-top:8px;font-size:14px;font-weight:600;line-height:1.35}
+.cslide.now{border:1.5px solid var(--create);background:var(--card)}
+.cslide.pending{border-style:dashed;background:transparent;color:var(--ink2)}
+.cslide.failed{border:1.5px solid var(--ink);background:var(--card)}
+.ctail{padding:0 20px 16px;font-size:13px;color:var(--ink2)}
+@media (max-width:640px){.cgrid{grid-template-columns:minmax(0,1fr)}}
 
 /* screen 3 */
 .review{display:grid;grid-template-columns:230px minmax(0,1fr) 320px;gap:24px;padding:20px 24px 40px;max-width:1500px;margin:0 auto;align-items:start}
@@ -164,6 +245,18 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .ev{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:12px;margin-bottom:10px}
 .ev .id{font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);margin-bottom:4px}
 .side{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px}
+/* the deck's own status (Review, Present): the Approval agent's circle and its word; Approve the deck; the appendix */
+.lcol{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px;max-height:calc(100vh - 92px);overflow:auto}
+.lcol .rail{position:static;max-height:none;overflow:visible}
+.dstat{display:inline-flex;align-items:center;gap:8px;flex:none}
+.dword{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
+.dword.ok{color:var(--ok-fg)}
+.btn.tall{height:44px;padding:0 20px;font-size:14px}
+.appx{border:0;border-radius:999px;background:transparent;font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);padding:2px 8px;min-height:44px}
+.appx[aria-expanded="true"]{background:var(--tool-soft)}
+.rail-div{margin:12px 4px 8px}
+.rep{margin-top:14px;font-size:13px;color:var(--ink)}
+.rep .eyebrow{margin-right:8px}
 
 /* screen 4 */
 .present{display:grid;grid-template-columns:minmax(0,760px) 210px 360px;gap:32px;padding:24px 32px 40px;max-width:1500px;margin:0 auto;align-items:start;justify-content:space-between}
@@ -191,7 +284,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .toast.on{opacity:1}
 @media (max-width:1100px){
   .start,.build,.review,.present{grid-template-columns:minmax(0,1fr);padding:20px 16px 48px}
-  .rail,.side{position:static;max-height:none}
+  .rail,.side,.lcol{position:static;max-height:none}
   .bar{flex-wrap:wrap;height:auto;padding:8px 16px}
   h1{font-size:34px}
 }
@@ -267,22 +360,147 @@ var DeckLogic = (function () {
     return out;
   }
 
-  /** One gate approved: that stage is done and the next one starts. Anything but the open gate is refused. */
-  function approveGate(run, gateId, by, at) {
+  /**
+   * One gate approved: that stage is done and the next one starts. Anything but the open gate is refused. The approval
+   * says what was decided ({by, at, decision: 'approve', picked?, note?}) and is added to run.decisions. At a gate that
+   * offers territories, `choice.picked` names the one picked (else the gate's own pick, else the judge's first); a pick
+   * that is not one of them is refused. The agent feed is cleared (agent: null), since it described the gate.
+   */
+  function approveGate(run, gateId, by, at, choice) {
     if (!run || !run.gate || run.gate.id !== gateId) return null;
-    var stages = run.stages.map(function (s) { return { id: s.id, name: s.name, sub: s.sub, status: s.status }; });
+    // Stages are copied whole, as approveDeck does: the store replaces arrays, so a key left out (items) would be lost.
+    var stages = (Array.isArray(run.stages) ? run.stages : []).filter(isObj).map(function (s) {
+      var o = {};
+      Object.keys(s).forEach(function (k) { o[k] = s[k]; });
+      return o;
+    });
     var i = stages.findIndex(function (s) { return s.id === gateId; });
     if (i < 0) return null;
+    var c = isObj(choice) ? choice : {}, picked = null;
+    var ids = territoriesOf(run.gate).map(function (t) { return t.id; });
+    if (ids.length) {
+      picked = c.picked != null ? String(c.picked) : ids.indexOf(run.gate.picked) >= 0 ? run.gate.picked : run.gate.first_pick;
+      if (ids.indexOf(picked) < 0) return null;
+    }
     stages[i].status = 'done';
     var next = stages.find(function (s, k) { return k > i && s.status === 'next'; });
     if (next) next.status = 'now';
     var approvals = {};
     Object.keys(run.approvals || {}).forEach(function (k) { approvals[k] = run.approvals[k]; });
-    approvals[gateId] = { by: by, at: at };
+    approvals[gateId] = { by: by, at: at, decision: 'approve' };
+    if (picked) approvals[gateId].picked = picked;
+    if (typeof c.note === 'string' && c.note.trim()) approvals[gateId].note = c.note.trim();
     return {
       state: 'building', stage: next ? next.id : run.stage, cost_usd: run.cost_usd,
-      stages: stages, gate: null, approvals: approvals
+      stages: stages, gate: null, approvals: approvals, agent: null,
+      decisions: decisionsOf(run).concat([{ gate: gateId, kind: 'approve', by: by, at: at }])
     };
+  }
+
+  /** The decisions recorded so far, as a new list (the store replaces arrays, so a write carries the whole list). */
+  function decisionsOf(run) { return (isObj(run) && Array.isArray(run.decisions) ? run.decisions : []).filter(isObj); }
+
+  /**
+   * An edit or a retry asked at the open gate: recorded in run.decisions and run.gate_requests (status waiting), like
+   * change_requests. It launches nothing: the engine acts on it once it is connected. Null for any gate but the open one,
+   * or another kind. The patch goes under `run`.
+   */
+  function gateRequest(run, gateId, kind, by, at) {
+    if (!isObj(run) || !isObj(run.gate) || run.gate.id !== gateId || (kind !== 'edit' && kind !== 'retry')) return null;
+    var asked = (Array.isArray(run.gate_requests) ? run.gate_requests : []).filter(isObj);
+    return {
+      decisions: decisionsOf(run).concat([{ gate: gateId, kind: kind, by: by, at: at }]),
+      gate_requests: asked.concat([{ gate: gateId, kind: kind, at: at, status: 'waiting' }])
+    };
+  }
+
+  // ── the gate registry: what each gate asks for and what it shows (phase 3). Gate id = stage id. ──
+  var GATES = {
+    storyline: {
+      body: 'beats', title: 'Approve the storyline', approve: 'Approve and continue', edit: ['beats', 'Edit beats'], hold: 'Nothing runs until you approve',
+      lede: 'This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.',
+      next: 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.'
+    },
+    territories: {
+      body: 'territories', title: 'Pick a territory', approve: 'Pick this territory', edit: ['territories', 'Edit a territory'], hold: 'Nothing runs until you pick',
+      lede: '', next: 'Next, the idea and its work are developed from the territory you pick.', dexProposed: true
+    },
+    idea: {
+      body: 'idea', title: 'Approve the idea', approve: 'Approve and continue', edit: ['idea', 'Edit the idea'], hold: 'Nothing runs until you approve',
+      lede: '', next: 'After this gate the run goes on by itself: Copy, Deck and Review, then you review the deck.', dexProposed: true
+    }
+  };
+  /** A gate this app has no words for: generic words, and whatever body its data carries. */
+  var GATE_OTHER = {
+    body: '', title: 'A step needs you', approve: 'Approve and continue', edit: ['gate', 'Edit'], hold: 'Nothing runs until you approve',
+    lede: 'The run stops here until you approve it.', next: 'Once you approve, the run goes on to its next step.', dexProposed: true
+  };
+  var NUMWORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  /** Tone of a label the runner wrote: from the brief or research is sourced, anything else is ours or still open. */
+  var TONES = { ok: 'ok', warn: 'warn', plain: 'plain' };
+  var BASIS = { brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn'] };
+
+  function str(v) { return v == null ? '' : String(v); }
+
+  /** The territories a gate offers, safe to render: { id, n, name, thought, why }. An entry without an id or name is left out. */
+  function territoriesOf(gate) {
+    var seen = Object.create(null);
+    return (isObj(gate) && Array.isArray(gate.territories) ? gate.territories : []).filter(function (t) {
+      return isObj(t) && validId(t.id) && str(t.name).trim() && !seen[t.id] && (seen[t.id] = true);
+    }).map(function (t, i) {
+      var n = /^\d{1,3}$/.test(str(t.n)) ? pad2(t.n) : pad2(i + 1);
+      return { id: t.id, n: n, name: str(t.name).trim(), thought: str(t.thought), why: str(t.why) };
+    });
+  }
+
+  /**
+   * What the open gate shows, from the registry and its data: { id, n, of, known, body ('beats' | 'territories' | 'idea' |
+   * 'none'), title, lede, approve, edit_key, edit_label, hold, next, dex, dex_proposed, territories, first_pick, picked,
+   * idea, asked }. `pick` is the person's unsaved pick (view state); it counts only if it is one of the territories.
+   * Null with no gate open. Never throws: a gate this app does not know gets generic words.
+   */
+  function gateView(run, pick) {
+    var g = isObj(run) && isObj(run.gate) ? run.gate : null;
+    if (!g) return null;
+    var id = str(g.id), known = own(GATES, id), spec = known ? GATES[id] : GATE_OTHER;
+    var terr = territoriesOf(g), ids = terr.map(function (t) { return t.id; });
+    var body = spec.body || (Array.isArray(g.beats) ? 'beats' : terr.length ? 'territories' : isObj(g.idea) ? 'idea' : 'none');
+    var out = {
+      id: id, n: g.n, of: g.of, known: known, body: body, title: spec.title, lede: spec.lede, approve: spec.approve,
+      edit_key: spec.edit[0], edit_label: spec.edit[1], hold: spec.hold, next: spec.next,
+      dex: typeof g.dex === 'string' ? g.dex : '', dex_proposed: !!spec.dexProposed,
+      territories: terr, first_pick: ids.indexOf(g.first_pick) >= 0 ? g.first_pick : null, picked: null, idea: null,
+      asked: (isObj(run) && Array.isArray(run.gate_requests) ? run.gate_requests : []).filter(function (q) {
+        return isObj(q) && q.gate === id && q.status === 'waiting' && (q.kind === 'edit' || q.kind === 'retry');
+      }).map(function (q) { return q.kind; })
+    };
+    if (body === 'territories') {
+      out.picked = ids.indexOf(pick) >= 0 ? pick : ids.indexOf(g.picked) >= 0 ? g.picked : out.first_pick;
+      var k = terr.length;
+      out.lede = (k === 1 ? 'One territory is written.' : (NUMWORD[k] || String(k)) + ' territories are written.') +
+        (k ? ' A second model judged them without seeing who wrote them. Pick the one the idea grows from. Picking later costs more.' : '');
+    }
+    if (body === 'idea' && isObj(g.idea)) {
+      var x = g.idea, basis = own(BASIS, x.basis) ? BASIS[x.basis] : null;
+      var from = terr.filter(function (t) { return t.id === x.territory_id; })[0];
+      var tname = str(x.territory_name).trim();
+      out.idea = {
+        line: str(x.line), basis: basis ? basis[0] : '', basis_tone: basis ? basis[1] : 'plain',
+        territory: from ? 'territory ' + Number(from.n) + ', ' + from.name : tname ? 'the territory you picked: ' + tname : 'the territory you picked',
+        executions: (Array.isArray(x.executions) ? x.executions : []).filter(function (e) { return isObj(e) && str(e.channel).trim(); }).map(function (e, i) {
+          var tag = str(e.tag).trim();
+          return {
+            n: /^\d{1,3}$/.test(str(e.n)) ? pad2(e.n) : pad2(i + 1), channel: str(e.channel), summary: str(e.summary), tag: tag,
+            tone: /^from (the )?(brief|research)/i.test(tag) ? 'ok' : tag ? 'warn' : 'plain'
+          };
+        }),
+        rests_on: (Array.isArray(x.rests_on) ? x.rests_on : []).filter(function (r) { return isObj(r) && str(r.label).trim(); }).map(function (r) {
+          return { label: str(r.label), tone: own(TONES, r.tone) ? r.tone : 'plain' };
+        })
+      };
+      out.lede = (x.basis === 'proposal' ? 'Approve the idea (our proposal). ' : 'Approve the idea. ') + 'One idea and the work that carries it, from ' + out.idea.territory + '.';
+    }
+    return out;
   }
 
   /** The rule the gate exists for: with a gate open, no stage after it may be running. */
@@ -731,15 +949,476 @@ var DeckLogic = (function () {
       .map(function (e) { return { title: String(e.title || (e.direct ? 'the brief' : 'a source')) }; });
   }
 
+  // ── the agent circle: who is working and what they are doing (features/deck-maker-circle-ui.clan) ──
+  // Geometry copied from the agent sphere + ring clan (agents.json), rounded to 3 decimals, for the eight agents this
+  // app shows. An arc is [cx, cy, radius, start angle, sweep, width, opacity]; a circle is [cx, cy, r, width, solid, opacity].
+  // The emblem sits in a unit circle; the ring goes round it. Colours of the ring are tokens (--ring-*), so the theme can
+  // set them; the materials are the agents' own fixed colours.
+  var AGENTS = {
+    brief: { n: 1, name: 'Brief', mat: 'pearl', role: 'Shapes the ask', arcs: [[0,0,0.794,0.558,1.257,0.094,1],[0,0,0.559,-2.549,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
+    research: { n: 2, name: 'Research', mat: 'glass', role: 'Finds evidence', arcs: [[0,0,0.794,1.797,1.484,0.094,1],[-0.001,0.009,0.412,-2.979,3.097,0.097,1]], circs: [[0.265,-0.176,0.118,0.047,0,1],[-0.382,-0.382,0.073,0,1,1]] },
+    strategy: { n: 3, name: 'Strategy', mat: 'graphite', role: 'Builds territories', arcs: [[0,0,0.794,3.037,1.71,0.094,1],[0.001,-0.001,0.471,0.945,2.876,0.073,1],[0.002,-0.004,0.265,-2.773,3.207,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
+    idea: { n: 7, name: 'Idea', mat: 'glass', role: 'Opens directions', arcs: [[0,0,0.794,1.711,1.483,0.094,1],[0,0,0.471,-0.383,2.878,0.073,1],[-0.002,-0.001,0.265,2.191,3.193,0.073,1]], circs: [[-0.382,-0.382,0.073,0,1,1]] },
+    copy: { n: 9, name: 'Copy', mat: 'paper', role: 'Crafts words', arcs: [[0,0,0.794,-2.095,1.938,0.094,1],[0,0,0.324,-1.571,1.065,0.044,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
+    deck: { n: 21, name: 'Deck', mat: 'paper', role: 'Builds pitches', arcs: [[0,0,0.794,0.209,1.257,0.094,1],[0,0,0.559,-2.897,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
+    review: { n: 23, name: 'Review', mat: 'pearl', role: 'Checks the brief', arcs: [[0,0,0.794,2.688,1.711,0.094,1],[0,0,0.471,0.594,2.879,0.073,1],[0,-0.002,0.265,-3.114,3.191,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
+    approval: { n: 24, name: 'Approval', mat: 'paper', role: 'Asks for sign-off', arcs: [[0,0,0.794,-2.356,1.938,0.094,1],[0.206,-0.147,0.294,-1.308,3.838,0.073,1],[0,0,0.324,-1.832,1.065,0.044,0.4]], circs: [[-0.206,0.147,0.235,0.059,0,1]] }
+  };
+
+  /** The flat materials: the body's colour and the emblem's ink. Fixed brand colours, the same in light and dark. */
+  var MATS = {
+    pearl: { base: '#EEECE7', ink: '#16191D' }, glass: { base: '#DCE6F2', ink: '#16191D' },
+    graphite: { base: '#242936', ink: '#EEF0F4' }, paper: { base: '#F7F7F5', ink: '#16191D' }
+  };
+
+  /** What each activity is called. The state is always words as well as a ring: never colour alone. */
+  var ACTIVITY_WORD = {
+    work: 'Working', write: 'Writing', think: 'Thinking', read: 'Reading', check: 'Checking', human: 'Needs you',
+    error: 'Failed, retrying', complete: 'Done', waiting: 'Waiting', handoff: 'Handing off'
+  };
+
+  /** The agent each display stage belongs to and what it does there. */
+  var STAGE_AGENT = {
+    inputs: ['brief', 'read'], scans: ['research', 'read'], storyline: ['strategy', 'write'], territories: ['idea', 'think'],
+    idea: ['idea', 'write'], copy: ['copy', 'write'], check: ['review', 'check'], review: ['approval', 'human']
+  };
+  /** The agent shown at a gate when the run does not name one. */
+  var GATE_AGENT = { storyline: 'strategy', territories: 'strategy', idea: 'idea' };
+
+  var CIRCLE_R = 1.04; // the ring's radius; the body is scaled to 0.82 inside it, and the viewBox reaches 1.15
+
+  function own(o, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); }
+  function num(v) { var r = Math.round(v * 1000) / 1000; return String(r === 0 ? 0 : r); }
+  function escAttr(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  /** An SVG path for an arc of a circle centred at (cx, cy), from angle a0 (radians) through sweep. A full turn is two halves. */
+  function arcPath(cx, cy, rho, a0, sweep) {
+    var pt = function (a) { return num(cx + rho * Math.cos(a)) + ' ' + num(cy + rho * Math.sin(a)); };
+    if (Math.abs(sweep) >= 2 * Math.PI - 0.01) {
+      return 'M' + pt(a0) + 'A' + num(rho) + ' ' + num(rho) + ' 0 1 1 ' + pt(a0 + Math.PI) + 'A' + num(rho) + ' ' + num(rho) + ' 0 1 1 ' + pt(a0);
+    }
+    return 'M' + pt(a0) + 'A' + num(rho) + ' ' + num(rho) + ' 0 ' + (Math.abs(sweep) > Math.PI ? 1 : 0) + ' ' + (sweep >= 0 ? 1 : 0) + ' ' + pt(a0 + sweep);
+  }
+
+  /** The ring for one activity: an arc in that activity's look and token colour, drawn from the top. */
+  function ringOf(activity) {
+    var R = CIRCLE_R, top = -Math.PI / 2;
+    var stroke = function (d, tok, w, extra) {
+      return '<path d="' + d + '" fill="none" stroke="var(--ring-' + tok + ')" stroke-width="' + w + '" stroke-linecap="round"' + (extra || '') + '/>';
+    };
+    switch (activity) {
+      case 'work': case 'write': case 'handoff':
+        return stroke(arcPath(0, 0, R, top, 1.9), 'work', '.1');
+      case 'think':
+        return stroke(arcPath(0, 0, R, top, 4.2), 'think', '.11', ' stroke-dasharray=".001 .17"');
+      case 'read':
+        return [0, 1, 2, 3, 4, 5].map(function (i) {
+          var a = top + i * 0.3, c = Math.cos(a), s = Math.sin(a);
+          return '<line x1="' + num(0.97 * c) + '" y1="' + num(0.97 * s) + '" x2="' + num(1.11 * c) + '" y2="' + num(1.11 * s) + '" stroke="var(--ring-read)" stroke-width=".06" stroke-linecap="round" stroke-opacity="' + num(0.35 + i * 0.13) + '"/>';
+        }).join('');
+      case 'check':
+        return stroke(arcPath(0, 0, R, top, 0.45), 'check', '.09') + stroke(arcPath(0, 0, R, top + 0.8, 0.45), 'check', '.09');
+      case 'human':
+        return stroke(arcPath(0, 0, R, top, Math.PI / 2), 'human', '.14');
+      case 'error':
+        var end = top + 3.6 + 0.55;
+        return stroke(arcPath(0, 0, R, top, 3.6), 'error', '.1') +
+          '<circle cx="' + num(R * Math.cos(end)) + '" cy="' + num(R * Math.sin(end)) + '" r=".07" fill="var(--ring-error)"/>';
+      case 'complete':
+        return stroke(arcPath(0, 0, R, top, 2 * Math.PI), 'work', '.1');
+      default: // waiting: two short neutral arcs
+        return stroke(arcPath(0, 0, R, -2.3, 0.6), 'wait', '.09') + stroke(arcPath(0, 0, R, Math.PI - 2.3, 0.6), 'wait', '.09');
+    }
+  }
+
+  /** The agent's emblem in its material, inside the unit circle. An unknown agent is a plain neutral body. */
+  function emblemOf(a) {
+    if (!a) return '<circle r="1" fill="var(--soft-2)" stroke="var(--ring-edge)" stroke-width=".03"/>';
+    var m = MATS[a.mat] || MATS.pearl, out = '<circle r="1" fill="' + m.base + '" stroke="var(--ring-edge)" stroke-width=".03"/>';
+    out += '<g fill="none" stroke="' + m.ink + '" stroke-linecap="round">';
+    a.arcs.forEach(function (x) {
+      out += '<path d="' + arcPath(x[0], x[1], x[2], x[3], x[4]) + '" stroke-width="' + num(x[5]) + '"' + (x[6] < 1 ? ' stroke-opacity="' + num(x[6]) + '"' : '') + '/>';
+    });
+    a.circs.forEach(function (c) {
+      out += c[4] ? '<circle cx="' + num(c[0]) + '" cy="' + num(c[1]) + '" r="' + num(c[2]) + '" fill="' + m.ink + '" stroke="none"/>'
+        : '<circle cx="' + num(c[0]) + '" cy="' + num(c[1]) + '" r="' + num(c[2]) + '" stroke-width="' + num(c[3]) + '"/>';
+    });
+    return out + '</g>';
+  }
+
+  var blendSeq = 0; // each blend's clip ids are new, so two circles on one page never share one
+
+  /**
+   * The hand-off: one body, two agents. A flat front (no gradient) at p, 0 to 1, from the bottom: below it the next agent
+   * (to), above it the one handing over (from), each in its own material and emblem. The clip ids are unique per call.
+   * An unknown agent is drawn as the neutral body. p outside 0 to 1, or not a number, is 0.5.
+   */
+  function blend(from, to, p) {
+    var a = own(AGENTS, from) ? AGENTS[from] : null, b = own(AGENTS, to) ? AGENTS[to] : null;
+    var q = typeof p === 'number' && p >= 0 && p <= 1 ? p : 0.5;
+    var y = 1 - 2 * q, id = 'dmho' + (++blendSeq);
+    return '<defs><clipPath id="' + id + 'a"><rect x="-1.2" y="-1.2" width="2.4" height="' + num(y + 1.2) + '"/></clipPath>' +
+      '<clipPath id="' + id + 'b"><rect x="-1.2" y="' + num(y) + '" width="2.4" height="' + num(1.2 - y) + '"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + 'a)">' + emblemOf(a) + '</g><g clip-path="url(#' + id + 'b)">' + emblemOf(b) + '</g>' +
+      '<line x1="-1" y1="' + num(y) + '" x2="1" y2="' + num(y) + '" stroke="var(--ring-edge)" stroke-width=".03"/>';
+  }
+
+  /**
+   * The agent circle as a flat SVG string: the agent's emblem in its material and the ring of what it is doing.
+   * { agent: key, activity, size (px, default 60), label (the name said, default the agent's), word (the state word said,
+   * default the activity's), to (with activity handoff: the agent taking over, drawn as a flat blend), p (the blend's front) }.
+   * role="img", and the aria-label says the name and the state word. Where the screen writes them beside the circle,
+   * `aria` says what the label still needs: 'name' (the word is beside it) labels it with the name only, 'hidden' (both
+   * are beside it) hides it from screen readers. An unknown agent or activity is a neutral waiting circle. Never throws.
+   */
+  function circleSvg(opts) {
+    var o = isObj(opts) ? opts : {};
+    var a = own(AGENTS, o.agent) ? AGENTS[o.agent] : null;
+    var act = own(ACTIVITY_WORD, o.activity) ? o.activity : 'waiting';
+    if (!a) act = 'waiting';
+    var to = act === 'handoff' && own(AGENTS, o.to) && o.to !== o.agent ? o.to : null;
+    var size = typeof o.size === 'number' && o.size > 0 && o.size <= 512 ? Math.round(o.size) : 60;
+    var name = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (a ? a.name + (to ? ' to ' + AGENTS[to].name : '') : 'Agent');
+    var word = typeof o.word === 'string' && o.word.trim() ? o.word.trim() : ACTIVITY_WORD[act];
+    var cls = 'cir' + (size === 60 || size === 32 ? ' s' + size : '');
+    var said = o.aria === 'hidden' ? 'aria-hidden="true"' : 'role="img" aria-label="' + escAttr(o.aria === 'name' ? name : name + ', ' + word) + '"';
+    return '<svg class="' + cls + '" width="' + size + '" height="' + size + '" viewBox="-1.15 -1.15 2.3 2.3" ' + said + ' data-agent="' + (a ? o.agent : 'none') + '"' + (to ? ' data-to="' + to + '"' : '') + ' data-activity="' + act + '">' +
+      '<circle r="' + CIRCLE_R + '" fill="none" stroke="var(--ring-track)" stroke-width=".05"/>' +
+      '<g class="act">' + ringOf(act) + '</g><g transform="scale(.82)">' + (to ? blend(o.agent, to, o.p) : emblemOf(a)) + '</g></svg>';
+  }
+
+  /**
+   * Who the circle shows and what they are doing, from the run: { agent, activity, word, role, step_index, step_total,
+   * handoff }. run.agent (written by the server) names them when present; an open gate always needs a person, a failed
+   * stage is an error, a finished run is done, and with no live feed nothing is running, so the stage's agent is shown
+   * waiting. A feed whose key this app does not know (dex: Dex is the voice, not a circle) counts as no feed, so the
+   * gate, failure, done and stage rows still decide. Never throws.
+   */
+  function agentState(run) {
+    var out = { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false, to: null };
+    try {
+      var r = isObj(run) ? run : {};
+      var stages = Array.isArray(r.stages) ? r.stages.filter(isObj) : [];
+      var gate = isObj(r.gate) ? r.gate : null;
+      var feed = isObj(r.agent) && own(AGENTS, r.agent.key) ? r.agent : null;
+      var failedStage = stages.filter(function (s) { return s.status === 'failed'; })[0];
+      var nowStage = stages.filter(function (s) { return s.status === 'now'; })[0];
+      var byStage = function (s) { return s && own(STAGE_AGENT, s.id) ? STAGE_AGENT[s.id] : null; };
+      var key, act;
+      if (feed) {
+        key = feed.key;
+        act = own(ACTIVITY_WORD, feed.activity) ? feed.activity : 'work';
+      }
+      if (gate) {
+        key = key || (own(AGENTS, gate.agent) ? gate.agent : GATE_AGENT[gate.id] || 'strategy');
+        act = 'human';
+      } else if (r.state === 'failed' || failedStage) {
+        key = key || (byStage(failedStage) || byStage(nowStage) || ['deck'])[0];
+        act = 'error';
+      } else if (r.state === 'done') {
+        key = key || 'deck';
+        act = 'complete';
+      } else if (!feed) {
+        var st = byStage(nowStage);
+        key = st ? st[0] : stages.length ? 'strategy' : 'brief';
+        act = 'waiting';
+      }
+      var a = AGENTS[key];
+      out.agent = key; out.activity = act; out.role = a.role;
+      out.handoff = !!(feed && act !== 'human' && act !== 'error' && own(AGENTS, feed.to) && feed.to !== key);
+      if (out.handoff && act !== 'complete') { out.activity = act = 'handoff'; out.to = feed.to; } else out.handoff = false;
+      // A failure the server will not retry by itself must not say "retrying".
+      var word = act === 'error' && isObj(r.error) && r.error.retryable === false ? 'Failed' : ACTIVITY_WORD[act];
+      out.word = word + (feed && feed.slow === true && act !== 'human' && act !== 'complete' && act !== 'error' ? ' · taking longer than usual' : '');
+      if (feed && Number.isInteger(feed.step_index) && Number.isInteger(feed.step_total) && feed.step_index > 0 && feed.step_index <= feed.step_total) {
+        out.step_index = feed.step_index; out.step_total = feed.step_total;
+      }
+      return out;
+    } catch (e) {
+      return { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false, to: null };
+    }
+  }
+
+  /**
+   * How big the status card's circle is: 130 (px) while an agent is working or the run is waiting (work, write, think, read,
+   * check, handoff, waiting), 60 when a person is needed (human), on a failure (error) and when done (complete). Takes
+   * agentState's answer or an activity word; anything else is the waiting circle's size. Never throws.
+   */
+  var CIRCLE_BIG = 130, CIRCLE_SMALL = 60, CIRCLE_CALM = { human: 1, error: 1, complete: 1 };
+  function circleSizeFor(state) {
+    var act = typeof state === 'string' ? state : isObj(state) && typeof state.activity === 'string' ? state.activity : 'waiting';
+    return own(CIRCLE_CALM, act) ? CIRCLE_SMALL : CIRCLE_BIG;
+  }
+
+  /**
+   * What the enlarged circle says when pressed, one line per press, in turn: who it is, what it is doing (or why nothing is
+   * running), and that it grows and shrinks with the state. Honest: no progress, no time, no numbers it was not given.
+   * who is agentState's answer. Always at least three lines; never throws.
+   */
+  function circleSays(who) {
+    var w = isObj(who) ? who : {}, a = own(AGENTS, w.agent) ? AGENTS[w.agent] : null, name = a ? a.name : 'This agent';
+    var act = typeof w.activity === 'string' ? w.activity : 'waiting';
+    var doing = act === 'waiting' ? 'Nothing is running: the engine is not connected to this document yet, so I am waiting for it.'
+      : act === 'handoff' && own(AGENTS, w.to) ? name + ' is handing the work to ' + AGENTS[w.to].name + '.'
+      : 'I am ' + (own(ACTIVITY_WORD, act) ? ACTIVITY_WORD[act].toLowerCase() : 'working') + ' right now. I can not tell you how far along, only what is in the box.';
+    return [
+      'I am ' + name + (a ? ', the agent that ' + a.role.charAt(0).toLowerCase() + a.role.slice(1) : '') + '.',
+      doing,
+      'I grow while work goes on or the run waits, and shrink back when you are needed, when something fails and when it is done.'
+    ];
+  }
+
+  // ── the running Build screen: the content box says what is being done (phase 2) ──
+  // Stage words: the box's title, the line under it, its header, and the pill for an item done, now and still to come.
+  var READ_COPY = { title: 'Reading your inputs', lede: 'Then it stops for you at the storyline.', head: 'What it is reading', pills: ['Read', 'Reading now', 'Waiting'] };
+  var RUN_COPY = {
+    inputs: READ_COPY, scans: READ_COPY,
+    storyline: { title: 'Drafting the storyline', lede: 'Each beat tied to your brief or research. Then you approve it.', head: 'The storyline, as it is being written', pills: ['Written', 'Writing now', 'Not yet written'], numbered: true },
+    territories: { title: 'Drafting the territories', lede: 'Three territories, then a second model judges them without seeing who wrote them. You pick one.', head: 'Three territories, as they are written', pills: ['Written', 'Writing now', 'Waiting'], numbered: true },
+    idea: { title: 'Developing the idea', lede: 'The idea line from the territory you picked, then its work for each channel.', head: 'The idea and its work', pills: ['Written', 'Writing now', 'Waiting'], numbered: true },
+    copy: { title: 'Writing the slide copy', lede: 'Every claim gets a source, or is labelled as our proposal.', head: 'Slide lines, as they are written', pills: ['Written', 'Writing now', 'Waiting'], numbered: true },
+    check: { title: 'Checking the deck', lede: 'Each number against its source, then the rules and the length.', head: 'Numbers being checked', pills: ['Checked', 'Checking now', 'Waiting'] }
+  };
+  /** The Deck agent builds slides, whichever stage the run calls it: a grid of slides, each by its title. */
+  var DECK_COPY = { title: 'Building the slides', lede: 'The pitch slides first, then the appendix.', head: 'Slides, as they are built', pills: ['Built', 'Building now', 'Waiting'], grid: true };
+  var OTHER_COPY = { title: '', lede: '', head: 'What it is doing', pills: ['Done', 'Doing now', 'Waiting'] };
+  var SLOW_LEDE = 'Taking a little longer than usual. Nothing is wrong.';
+
+  function pad2(n) { return (Number(n) < 10 ? '0' : '') + Number(n); }
+
+  /** The words for a stage and its agent. */
+  function copyFor(stage, agent) {
+    if (agent === 'deck') return DECK_COPY;
+    return stage && own(RUN_COPY, stage.id) ? RUN_COPY[stage.id] : OTHER_COPY;
+  }
+
+  /**
+   * One content-box row per item the runner wrote at run.stages[].items: "title · detail" split in two, the pill in the
+   * stage's words. A grid row ("Slide N") takes that slide's title from the deck; any other grid item is a line under the
+   * grid (tail). On a failed stage the item that was running is the one that failed.
+   */
+  function itemRows(stage, copy, deck, failWord) {
+    var items = stage && Array.isArray(stage.items) ? stage.items.filter(isObj) : [];
+    var ids = presented(deck), k = 0;
+    return items.map(function (it) {
+      var text = String(it.text == null ? '' : it.text), cut = text.indexOf(' · ');
+      var st = it.status === 'done' || it.status === 'now' ? it.status : 'pending';
+      if (failWord && st === 'now') st = 'failed';
+      var row = { n: '', title: cut >= 0 ? text.slice(0, cut) : text, sub: cut >= 0 ? text.slice(cut + 3) : '', status: st, tail: false };
+      if (copy.grid) {
+        var m = /^Slide (\d{1,3})$/.exec(text.trim());
+        if (m) {
+          row.n = pad2(m[1]);
+          var sid = ids[Number(m[1]) - 1];
+          if (sid && deck.slides[sid].title) row.title = String(deck.slides[sid].title);
+        } else row.tail = true;
+      } else if (copy.numbered) row.n = pad2(++k);
+      row.pill = st === 'failed' ? failWord : copy.pills[st === 'done' ? 0 : st === 'now' ? 1 : 2];
+      return row;
+    });
+  }
+
+  /** The done box: the pitch and appendix slides, then each fact still to supply, by its slide. */
+  function doneRows(run, deck) {
+    var ids = presented(deck), dn = isObj(run.done) ? run.done : {};
+    var n = ids.length || (Number.isInteger(dn.slides) ? dn.slides : 0);
+    var app = (Array.isArray(deck.appendix_ids) ? deck.appendix_ids : []).filter(function (id) { return isObj(deck.slides[id]); });
+    if (!app.length) app = Object.keys(deck.slides || {}).filter(function (id) { return isObj(deck.slides[id]) && deck.slides[id].appendix === true; });
+    var na = Number.isInteger(dn.appendix) ? dn.appendix : typeof deck.appendix_count === 'number' ? deck.appendix_count : app.length;
+    var rows = [];
+    if (n) rows.push({ n: '', title: n + (n === 1 ? ' pitch slide' : ' pitch slides'), sub: ids.map(function (id) { return String(deck.slides[id].section || ''); }).filter(Boolean).join(', '), status: 'done', pill: 'Ready', tail: false });
+    if (na) rows.push({ n: '', title: na + (na === 1 ? ' appendix slide' : ' appendix slides'), sub: app.map(function (id) { return String(deck.slides[id].title || ''); }).filter(Boolean).join(', '), status: 'done', pill: 'Ready', tail: false });
+    ids.forEach(function (id, i) {
+      var sl = deck.slides[id];
+      if (sl.status !== 'needs_human') return;
+      var said = [];
+      (sl.blocks || []).forEach(function (b) {
+        if (isPlaceholder(b)) said.push(String(b.text || ''));
+        ((isObj(b) && Array.isArray(b.items)) ? b.items : []).forEach(function (x) { if (isObj(x) && x.human === true) said.push(String(x.text || '')); });
+      });
+      if (!said.length) said.push(String(sl.title || 'This slide'));
+      said.forEach(function (t) {
+        rows.push({ n: '', title: t.trim().replace(/^\[([^\]]+)\]$/, '$1'), sub: 'Slide ' + pad2(i + 1) + ' · needs a person', status: 'supply', pill: 'To supply', tail: false });
+      });
+    });
+    return rows;
+  }
+
+  /**
+   * What the Build screen shows with no gate open, as data: { kind, title, lede, head, grid, items, tail, stage,
+   * retryable }. kind is 'gate' (the gate's own view), 'failed', 'done', 'running' (a live feed: run.agent, or items on
+   * the running stage) or 'waiting' (nothing reports progress, so the engine is not connected). The words come from
+   * the stage and its agent; the items from the runner. No percentage and no time are ever made. Never throws.
+   */
+  function runView(run, deck) {
+    var r = isObj(run) ? run : {}, dk = isObj(deck) && isObj(deck.slides) ? deck : { order: [], slides: {} };
+    var stages = Array.isArray(r.stages) ? r.stages.filter(isObj) : [];
+    var base = { kind: 'waiting', title: '', lede: '', head: '', grid: false, items: [], tail: [], stage: '', retryable: false };
+    var fill = function (o) { Object.keys(o).forEach(function (k) { base[k] = o[k]; }); return base; };
+    try {
+      if (isObj(r.gate)) return fill({ kind: 'gate', stage: String(r.gate.id || '') });
+      var who = agentState(r), feed = isObj(r.agent) ? r.agent : null;
+      var byId = function (id) { return stages.filter(function (s) { return s.id === id; })[0]; };
+      var failed = stages.filter(function (s) { return s.status === 'failed'; })[0];
+      if (r.state === 'failed' || failed) {
+        var err = isObj(r.error) ? r.error : {}, retry = err.retryable !== false;
+        var fs = failed || byId(err.stage) || byId(r.stage);
+        var fc = copyFor(fs, who.agent);
+        var rows = itemRows(fs, fc, dk, retry ? 'Failed, retrying' : 'Failed');
+        return fill({
+          kind: 'failed', title: 'Something failed', head: fc.head, grid: !!fc.grid, retryable: retry,
+          lede: String(err.message || (retry ? 'A step did not finish. It is trying again by itself.' : 'A step did not finish. Try it again.')),
+          stage: fs ? String(fs.id) : String(err.stage || r.stage || ''),
+          items: rows.filter(function (x) { return !x.tail; }), tail: rows.filter(function (x) { return x.tail; }).map(function (x) { return x.title; })
+        });
+      }
+      if (r.state === 'done') {
+        var dn = isObj(r.done) ? r.done : {};
+        return fill({ kind: 'done', title: 'The deck is ready for you', head: 'What is ready', stage: 'review', items: doneRows(r, dk),
+          // The title already says it is ready: a summary that opens by saying so again starts after that sentence.
+          lede: String(dn.summary || 'Every slide is built and checked. Open it to review.').replace(/^The deck is ready for you\.\s+(?=\S)/i, '') });
+      }
+      var now = stages.filter(function (s) { return s.status === 'now'; })[0];
+      var hasItems = !!(now && Array.isArray(now.items) && now.items.some(isObj));
+      if (!feed && !hasItems) return fill({ kind: 'waiting', stage: now ? String(now.id) : '', title: now ? String(now.name || '') : '' });
+      var c = copyFor(now, who.agent), items = itemRows(now, c, dk, '');
+      var view = {
+        kind: 'running', title: c.title || (now ? String(now.name || '') : 'Working'), lede: c.lede, head: c.head, grid: !!c.grid,
+        stage: now ? String(now.id) : '', items: items.filter(function (x) { return !x.tail; }), tail: items.filter(function (x) { return x.tail; }).map(function (x) { return x.title; })
+      };
+      if (who.handoff) {
+        var to = AGENTS[who.to];
+        view.title = 'Passing the work on';
+        view.lede = AGENTS[who.agent].name + ' hands the work to ' + to.name + ', who picks it up from here.';
+        view.head = 'Handed over to ' + to.name;
+        view.items = view.items.map(function (x) { x.n = ''; x.pill = x.status === 'done' ? 'Done' : x.status === 'now' ? 'Passing on' : 'Waiting'; return x; });
+      }
+      if (feed && feed.slow === true) view.lede = SLOW_LEDE;
+      return fill(view);
+    } catch (e) {
+      return { kind: 'waiting', title: '', lede: '', head: '', grid: false, items: [], tail: [], stage: '', retryable: false };
+    }
+  }
+
+  // ── Review and Present (phase 4): the appendix, the deck approval, the export rows and the report line ──
+  /**
+   * The appendix slides: { ids, count, selectable }. ids from deck.appendix_ids (slides the deck holds, not presented,
+   * once each), else the slides marked appendix: true; count is their number, else deck.appendix_count. With ids
+   * the appendix can be opened in the rail; with only a count it is a number, as before. Never throws.
+   */
+  function appendixOf(deck) {
+    var dk = isObj(deck) && isObj(deck.slides) ? deck : { order: [], slides: {} };
+    var shown = presented(dk), seen = Object.create(null);
+    var ok = function (id) { return validId(id) && isObj(dk.slides[id]) && shown.indexOf(id) < 0 && !seen[id] && (seen[id] = true); };
+    var ids = (Array.isArray(dk.appendix_ids) ? dk.appendix_ids : []).filter(ok);
+    if (!ids.length) ids = Object.keys(dk.slides).filter(function (id) { return isObj(dk.slides[id]) && dk.slides[id].appendix === true; }).filter(ok);
+    var n = Number.isInteger(dk.appendix_count) && dk.appendix_count > 0 ? dk.appendix_count : 0;
+    return { ids: ids, count: ids.length || n, selectable: ids.length > 0 };
+  }
+
+  /**
+   * The deck's own status at Review and Present, from the run: null while there is no finished deck to approve;
+   * 'open' once the run is done and nobody has approved the deck; 'approved' once run.approvals.deck is written.
+   * The Approval agent holds it ('Needs you', then 'Approved'). The counts are what is still open: to supply (toSupply)
+   * and to confirm (confirmList). Approving with some open is allowed; the counts are said beside it (`clear` when none).
+   * { state, agent, name, role, activity, word, by, at, step_index, step_total, to_supply, verified, total, open, clear }
+   */
+  function deckApproval(data) {
+    var x = isObj(data) ? data : {}, run = isObj(x.run) ? x.run : {};
+    var deck = isObj(x.deck) && isObj(x.deck.slides) ? x.deck : null;
+    if (!deck || !presented(deck).length) return null;
+    var ap = isObj(run.approvals) && isObj(run.approvals.deck) ? run.approvals.deck : null;
+    if (!ap && (run.state !== 'done' || isObj(run.gate))) return null;
+    var a = AGENTS.approval, c = confirmList(x), t = toSupply(x);
+    var feed = isObj(run.agent) && run.agent.key === 'approval' ? run.agent : null;
+    var out = {
+      state: ap ? 'approved' : 'open', agent: 'approval', name: a.name, role: a.role,
+      activity: ap ? 'complete' : 'human', word: ap ? 'Approved' : ACTIVITY_WORD.human,
+      by: ap ? str(ap.by).trim() : '', at: ap ? str(ap.at) : '', step_index: null, step_total: null,
+      to_supply: t.count, verified: c.verified, total: c.total, open: c.open, clear: t.count === 0 && c.open === 0
+    };
+    if (feed && Number.isInteger(feed.step_index) && Number.isInteger(feed.step_total) && feed.step_index > 0 && feed.step_index <= feed.step_total) {
+      out.step_index = feed.step_index; out.step_total = feed.step_total;
+    }
+    return out;
+  }
+
+  /**
+   * Approve the deck: recorded like a gate approval. run.approvals.deck = { by, at, decision: 'approve' }, a decision
+   * { gate: 'deck', kind: 'approve' } added to run.decisions, the review stage done, the agent feed cleared (the server
+   * writes the next one). Refused (null) unless the run is done with no gate open and the deck is not yet approved.
+   * The patch goes under `run`; stages are copied whole (the store replaces arrays).
+   */
+  function approveDeck(run, by, at) {
+    if (!isObj(run) || run.state !== 'done' || isObj(run.gate)) return null;
+    if (isObj(run.approvals) && isObj(run.approvals.deck)) return null;
+    var stages = (Array.isArray(run.stages) ? run.stages : []).filter(isObj).map(function (s) {
+      var o = {};
+      Object.keys(s).forEach(function (k) { o[k] = s[k]; });
+      if (s.id === 'review') o.status = 'done';
+      return o;
+    });
+    var approvals = {};
+    Object.keys(isObj(run.approvals) ? run.approvals : {}).forEach(function (k) { approvals[k] = run.approvals[k]; });
+    approvals.deck = { by: by, at: at, decision: 'approve' };
+    return { stages: stages, approvals: approvals, agent: null, decisions: decisionsOf(run).concat([{ gate: 'deck', kind: 'approve', by: by, at: at }]) };
+  }
+
+  // The four formats, in the order the Export card lists them: key, mark, name, action, what the older `true` shape says.
+  var EXPORTS = [
+    ['web', 'WEB', 'Web deck', 'Open', 'Ready to open'], ['pptx', 'PPTX', 'PowerPoint', 'Download', 'Notes kept, appendix hidden'],
+    ['anim', 'ANIM', 'Animated deck', 'Get project', 'Project ready'], ['pdf', 'PDF', 'PDF', 'Download', 'Presented slides only']
+  ];
+
+  /** A file name the engine wrote, as shown: its last path part, at most 120 characters. */
+  function fileName(v) {
+    var f = str(v).trim().split(/[\\/]/).pop() || '';
+    return f.length > 120 ? f.slice(0, 117) + '...' : f;
+  }
+
+  /**
+   * The Export card's rows: { key, x, name, action, ready, file, note }. A format is ready when exports.<key> is an
+   * object with a file, or one of the older shapes: `true`, or the file name as a string. The note is the file name
+   * (the web deck says Ready to open), else Not built yet. The animated deck reads like the others: the engine does
+   * not build it yet, so it is Not built yet until a runner writes it. Never throws.
+   */
+  function exportRows(exports) {
+    var ex = isObj(exports) ? exports : {};
+    return EXPORTS.map(function (f) {
+      var v = own(ex, f[0]) ? ex[f[0]] : undefined;
+      var file = isObj(v) ? fileName(v.file) : (typeof v === 'string' && v.trim() ? fileName(v) : '');
+      var ready = v === true || !!file;
+      return {
+        key: f[0], x: f[1], name: f[2], action: f[3], ready: ready, file: ready ? file : '',
+        note: !ready ? 'Not built yet' : f[0] === 'web' ? 'Ready to open' : file || f[4]
+      };
+    });
+  }
+
+  /**
+   * The report line under the exports: the checker's errors (validation.errors), then placeholders. With 0 errors every
+   * number traced, since an untraced number is an error (engine/deck/validate.py numbers_trace). { known, errors, line }.
+   */
+  function reportLine(data) {
+    var x = isObj(data) ? data : {}, v = isObj(x.validation) ? x.validation : null, t = toSupply(x).count;
+    var ph = 'placeholders ' + (t ? t + ' to supply' : 'none');
+    if (!v || !Number.isInteger(v.errors) || v.errors < 0) return { known: false, errors: null, line: 'No check report yet, ' + ph };
+    var e = v.errors;
+    return { known: true, errors: e, line: e === 0 ? '0 errors, every number traced, ' + ph : e + (e === 1 ? ' error' : ' errors') + ' to fix, see Checks on Review, ' + ph };
+  }
+
   return {
+    appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
+    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleSays: circleSays, arcPath: arcPath, blend: blend, runView: runView,
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
     researchRequest: researchRequest, upstreamChanged: upstreamChanged,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
-    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate,
-    gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown
+    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, gateRequest: gateRequest,
+    GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
+    isObj: isObj, own: own
   };
 })();
 </script>
@@ -759,7 +1438,7 @@ var DeckLogic = (function () {
   }
 
   // View state only. Anything the document should keep is written with put().
-  var view = { screen: null, slide: null, tab: 'evidence', present: 0 };
+  var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false };
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
   var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
@@ -781,7 +1460,8 @@ var DeckLogic = (function () {
   function screenOf(s) {
     if (view.screen) return view.screen;
     if (s.run.state === 'done') return 'review';
-    if (s.run.state === 'gate' || s.run.state === 'building') return 'build';
+    // A failed run is shown where it failed, on Build, with what it was doing and a retry.
+    if (s.run.state === 'gate' || s.run.state === 'building' || s.run.state === 'failed') return 'build';
     return 'start';
   }
 
@@ -789,7 +1469,6 @@ var DeckLogic = (function () {
   var MARK = '<svg aria-hidden="true" width="24" height="24" viewBox="0 0 32 32"><g transform="rotate(-45 16 16)">' +
     '<path d="M16 16 L16 2 A14 14 0 0 1 30 16 Z" fill="#FF4F2E"/><path d="M16 16 L30 16 A14 14 0 0 1 16 30 Z" fill="#8B919E"/>' +
     '<path d="M16 16 L16 30 A14 14 0 0 1 2 16 Z" fill="#14161B"/><path d="M16 16 L2 16 A14 14 0 0 1 16 2 Z" fill="#DADDE3"/></g></svg>';
-  var MARK_SPIN = MARK.replace('width="24" height="24"', 'class="spin" width="40" height="40"').replace('<g transform="rotate(-45 16 16)">', '<g>');
 
   function bar(s, scr) {
     var p = s.inputs.prompt;
@@ -995,41 +1674,191 @@ var DeckLogic = (function () {
   }
 
   // ── 2 · Build, with gates ─────────────────────────────────────────────
+  // A gate is drawn from the registry (L.gateView): its head, Dex's note, its body (the storyline's beats, gate 2's
+  // territories, gate 3's idea) and its actions. Gate 1's markup is the same as before the registry, byte for byte.
+  function gateHead(gv) {
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gv.n) + ' of ' + esc(gv.of) + '</span></div>' +
+      '<h1 class="sm" style="margin-bottom:6px">' + esc(gv.title) + '</h1>' +
+      '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">' + esc(gv.lede) + '</p>';
+  }
+
+  /** Dex's note at the top of the gate card, beside the circle of the agent holding the work. Notes written for gates 2 and 3 are marked as proposed. */
+  function dexRow(gv, who) {
+    return '<div class="dex">' + L.circleSvg({ agent: who.agent, activity: 'human', size: 32 }) + '<span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gv.dex) + '</span>' +
+      (gv.dex_proposed && gv.dex ? '<span class="pill plain dexp" title="Dex\'s note here is our proposed wording, not yet agreed">Proposed</span>' : '') + '</div>';
+  }
+
+  var BASES = { brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn'] };
+
+  function gateBody(gv, gate) {
+    if (gv.body === 'beats') {
+      return (Array.isArray(gate.beats) ? gate.beats : []).filter(L.isObj).map(function (b) {
+        var c = L.own(BASES, b.basis) ? BASES[b.basis] : BASES.brief;
+        return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
+      }).join('') +
+        (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '');
+    }
+    if (gv.body === 'territories') {
+      // Each territory is a button: pressing it picks it (view state only); Pick this territory writes the pick.
+      return '<div role="group" aria-label="Territories">' + gv.territories.map(function (t) {
+        var on = t.id === gv.picked;
+        return '<button class="beat terr" data-territory="' + esc(t.id) + '" aria-pressed="' + on + '"><span class="n">' + esc(t.n) + '</span><span class="tb">' +
+          '<span class="tn"><span>' + esc(t.name) + '</span>' + (t.id === gv.first_pick ? '<span class="pill ok">Blind judge’s first pick</span>' : '') + '</span>' +
+          (t.thought ? '<span class="tt">' + esc(t.thought) + '</span>' : '') + (t.why ? '<span class="tw"><b>Why it fits:</b> ' + esc(t.why) + '</span>' : '') +
+          '</span><span class="sel" aria-hidden="true"></span></button>';
+      }).join('') + '</div>';
+    }
+    if (gv.body === 'idea' && gv.idea) {
+      var x = gv.idea;
+      return '<div class="beat iline"><div style="flex:1;min-width:0"><div class="eyebrow" style="margin-bottom:6px">The idea line</div><div class="il">' + esc(x.line) + '</div></div>' +
+          (x.basis ? '<span class="pill ' + x.basis_tone + '">' + esc(x.basis) + '</span>' : '') + '</div>' +
+        x.executions.map(function (e) {
+          return '<div class="beat"><span class="n">' + esc(e.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(e.channel) + '</div>' +
+            (e.summary ? '<div class="ex">' + esc(e.summary) + '</div>' : '') + '</div>' + (e.tag ? '<span class="pill ' + e.tone + '">' + esc(e.tag) + '</span>' : '') + '</div>';
+        }).join('') +
+        (x.rests_on.length ? '<div class="rests"><div class="eyebrow">What the idea rests on</div><div class="chips">' + x.rests_on.map(function (r) {
+          return '<span class="chip ' + r.tone + '">' + esc(r.label) + '</span>';
+        }).join('') + '</div></div>' : '');
+    }
+    return '<div class="crow pending"><span class="note">Nothing to show for this gate yet.</span></div>';
+  }
+
+  /** Approve (or Pick), Edit and Ask Dex. Edit and Ask Dex record a request; once one waits, the gate says so. */
+  function gateActions(gv) {
+    var none = gv.body === 'territories' && !gv.picked;
+    var asked = gv.asked.length ? '<p class="note asked" role="status" data-asked>You asked ' + (gv.asked.indexOf('edit') >= 0 && gv.asked.indexOf('retry') >= 0 ? 'for an edit and a new try'
+      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'Dex to try again') + '. It waits for the engine, which is not connected yet; nothing has changed.</p>' : '';
+    return '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve"' + (none ? ' disabled' : '') + '>' + esc(gv.approve) + '</button>' +
+      '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="' + esc(gv.edit_key) + '">' + esc(gv.edit_label) + '</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="' + esc(gv.id) + '">Ask Dex to try again</button></div>' +
+      (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked;
+  }
+
   function build(s) {
-    var run = s.run, gate = run.gate;
+    var run = s.run, gate = run.gate, who = L.agentState(run); // the circle: who is working and what they are doing
     var stages = run.stages.map(function (st) {
       var glyph = st.status === 'done' ? '✓' : st.status === 'now' ? '•' : st.status === 'failed' ? '!' : '';
       return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
     }).join('');
-    var main;
-    if (gate) {
-      var bases = {
-        brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn']
-      };
-      main = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gate.n) + ' of ' + esc(gate.of) + '</span></div>' +
-        '<h1 class="sm" style="margin-bottom:6px">Approve the storyline</h1>' +
-        '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.</p>' +
-        '<div class="card" style="overflow:hidden"><div class="dex"><span class="av" aria-hidden="true">D</span><span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gate.dex) + '</span></div>' +
-        gate.beats.map(function (b) {
-          var c = bases[b.basis] || bases.brief;
-          return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
-        }).join('') +
-        (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '') + '</div>' +
-        '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve">Approve and continue</button>' +
-        '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="beats">Edit beats</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="storyline">Ask Dex to try again</button></div>';
-    } else {
-      var now = run.stages.filter(function (x) { return x.status === 'now'; })[0];
-      main = '<h1 class="sm" style="margin-bottom:6px">' + (now ? esc(now.name) : 'Waiting') + '</h1>' +
-        '<p class="note" style="font-size:15px;max-width:600px">' + (now ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
-    }
-    var checks = gate ? '<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
-      gate.checks.map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
+    var main, gv = gate ? L.gateView(run, view.pick) : null; // the gate registry: words and body for the open gate
+    if (gate) main = gateHead(gv) + '<div class="card" style="overflow:hidden">' + dexRow(gv, who) + gateBody(gv, gate) + '</div>' + gateActions(gv);
+    // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
+    var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
+    if (rv && !live) {
+      main = '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
+        '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
+    } else if (live) main = runBody(rv);
+    // A gate's own checks when it wrote them (even none), else what the run has checked.
+    var gateChecks = !!gate && Array.isArray(gate.checks), list = gateChecks ? gate.checks : run.checks;
+    var checks = Array.isArray(list) && (gateChecks || list.length) ? checkedCard(list) : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
-      '<section>' + main + '</section><aside class="stack">' +
-      '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + (gate ? MARK_SPIN.replace('class="spin"', '') : MARK_SPIN) +
-        '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? 'Nothing runs until you approve' : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
-        '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>' +
-      builtLine(builtOf(s)) + checks + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+      '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
+      (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
+        '<div><div style="font-size:14px;font-weight:600">Waiting for you</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(gv.hold) + '</div></div></div><div class="rule"></div>' +
+        '<p class="note">' + esc(gv.next) + '</p></div>' : waitingCard(who))) +
+      (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+  }
+
+  /** Checked so far: what the run has checked (a gate's checks, or run.checks), each passed or to look at. */
+  function checkedCard(list) {
+    return '<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
+      list.filter(function (c) { return c && typeof c === 'object'; }).map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>';
+  }
+
+  var HINT = 'Press the circle to ask what is happening.';
+
+  /**
+   * The circle in a status card. At 60px it is just the circle (the card says the name and the word, so it is hidden from
+   * screen readers). Enlarged (circleSizeFor) it is a real button that says the agent and the state once, and pressing it
+   * (data-orb) shows a few honest lines under it.
+   */
+  function orbHtml(who, name) {
+    var size = L.circleSizeFor(who), svg = L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: size, aria: 'hidden' });
+    if (size === 60) return '<span class="slot">' + svg + '</span>';
+    return '<span class="slot big"><button type="button" class="orbb" data-orb aria-label="' + esc(name + ', ' + who.word + '. Press to ask what is happening.') + '">' + svg + '</button></span>';
+  }
+  function nameOf(who) {
+    var A = L.AGENTS, a = A[who.agent], b = who.handoff ? A[who.to] : null;
+    return { name: a ? a.name + (b ? ' → ' + b.name : '') : 'Agent', role: a ? a.role + (b ? ' → ' + b.role : '') : '' };
+  }
+  function sayHtml(who) { return L.circleSizeFor(who) === 60 ? '' : '<p class="say" data-say aria-live="polite">' + HINT + '</p>'; }
+
+  /** The status card while an agent works: the circle (60px, or enlarged in place while it works), who (a hand-off names both), their role, the state word, the step. */
+  function statusCard(who) {
+    var n = nameOf(who), name = n.name, role = n.role, big = L.circleSizeFor(who) !== 60;
+    var tone = who.activity === 'complete' ? ' ok' : who.activity === 'error' ? ' err' : '';
+    return '<div class="card status' + (big ? ' hero' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, name) +
+      '<div class="stext"><div style="font-size:14px;font-weight:600">' + esc(name) + '</div>' + (role ? '<div class="note">' + esc(role) + '</div>' : '') +
+      '<div class="sword' + tone + '">' + esc(who.word) + '</div>' +
+      (who.step_index ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Step ' + who.step_index + ' of ' + who.step_total + '</div>' : '') +
+      '</div></div>' + sayHtml(who) + '</div>';
+  }
+
+  /** The card while the engine is not connected: the same enlarged circle in its place, a short honest prompt, no time and no progress. */
+  function waitingCard(who) {
+    var n = nameOf(who);
+    return '<div class="card status hero" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name) +
+      '<div class="stext"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div></div></div>' +
+      sayHtml(who) + '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
+  }
+
+  /** One mark for a content-box row: done, now (a small turning arc), still to come, failed, or to supply. */
+  function rowMark(st) {
+    if (st === 'now') return '<span class="mk now" aria-hidden="true"><svg width="20" height="20" viewBox="-1.2 -1.2 2.4 2.4"><circle r="1" fill="none" class="mk-track"/><path d="' + L.arcPath(0, 0, 1, -Math.PI / 2, 2.2) + '" fill="none" class="mk-arc"/></svg></span>';
+    return '<span class="mk ' + st + '" aria-hidden="true">' + (st === 'done' ? '✓' : st === 'failed' || st === 'supply' ? '!' : '') + '</span>';
+  }
+  var PILL_TONE = { done: 'ok', now: 'warn', pending: 'wait', failed: 'fail', supply: 'warn' };
+
+  /** The running, failed and done views: title, the line under it, the content box of what is being done, then the action. */
+  function runBody(v) {
+    var rows = v.grid
+      ? '<div class="cgrid">' + v.items.map(function (x) {
+          return '<div class="cslide ' + x.status + '"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + esc(x.n) + '</span><div class="spacer"></div>' +
+            '<span class="pill ' + PILL_TONE[x.status] + '">' + esc(x.pill) + '</span></div><div class="t">' + esc(x.title) + '</div></div>';
+        }).join('') + '</div>'
+      : v.items.map(function (x) {
+          return '<div class="crow ' + x.status + '">' + rowMark(x.status) + '<div style="flex:1;min-width:0"><div class="t">' + (x.n ? '<span class="mono n">' + esc(x.n) + '</span>' : '') + esc(x.title) + '</div>' +
+            (x.sub ? '<div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(x.sub) + '</div>' : '') + '</div><span class="pill ' + PILL_TONE[x.status] + '">' + esc(x.pill) + '</span></div>';
+        }).join('');
+    var tail = v.tail.map(function (t) { return '<div class="ctail">' + esc(t) + '</div>'; }).join('');
+    var act = v.kind === 'done' ? '<div style="margin-top:18px"><button class="btn go big" data-go="review">Open the deck</button></div>'
+      : v.kind === 'failed' ? '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn big' + (v.retryable ? '' : ' go') + '" style="padding:0 20px;font-size:14px" data-retry="' + esc(v.stage) + '">' + (v.retryable ? 'Try again now' : 'Try again') + '</button>' +
+        '<span class="note">Nothing you approved is lost. The run starts again from this step.</span></div>' : '';
+    return '<h1 class="sm" style="margin-bottom:6px">' + esc(v.title) + '</h1>' +
+      '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">' + esc(v.lede) + '</p>' +
+      '<div class="card cbox' + (v.kind === 'failed' ? ' failed' : '') + '" data-run="' + esc(v.kind) + '"><div class="cbox-h eyebrow">' + esc(v.head) + '</div>' + (rows || '<div class="crow pending"><span class="note">Nothing to show yet.</span></div>') + tail + '</div>' + act;
+  }
+
+  // ── the deck's own status, on Review and Present (phase 4): the Approval agent asks for sign-off ──
+  /** The circle and its word, inline: in the Review head beside Approve the deck, and in the Export card's head. The word is beside it, so the circle says only the name. */
+  function deckStat(ds) {
+    var ok = ds.state === 'approved';
+    return '<span class="dstat" data-deck="' + ds.state + '">' + L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 32, aria: 'name' }) +
+      '<span class="dword' + (ok ? ' ok' : '') + '">' + esc(ds.word) + '</span></span>';
+  }
+
+  /** The status card: the 60px circle, Approval and its role, the word, then the step or who approved. The card says the name and word, so the circle is hidden from screen readers. */
+  function deckCard(ds) {
+    var ok = ds.state === 'approved';
+    var foot = ok && ds.by ? 'Approved by ' + ds.by : ds.step_index ? 'Step ' + ds.step_index + ' of ' + ds.step_total : '';
+    return '<div class="card status" style="padding:16px" data-status="' + ds.activity + '" data-deck="' + ds.state + '"><div style="display:flex;align-items:center;gap:14px">' +
+      L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 60, aria: 'hidden' }) +
+      '<div style="min-width:0"><div style="font-size:14px;font-weight:600">' + esc(ds.name) + '</div><div class="note">' + esc(ds.role) + '</div>' +
+      '<div class="sword' + (ok ? ' ok' : '') + '">' + esc(ds.word) + '</div>' +
+      (foot ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">' + esc(foot) + '</div>' : '') + '</div></div></div>';
+  }
+
+  /** The status card, then Checked so far when the run wrote it. */
+  function deckSide(s, ds) {
+    return deckCard(ds) + (Array.isArray(s.run.checks) && s.run.checks.length ? checkedCard(s.run.checks) : '');
+  }
+
+  /** What is still open when the deck is approved now. Approving is allowed; this says what stays marked. Empty when nothing is open. */
+  function approveNote(ds) {
+    if (ds.state !== 'open' || ds.clear) return '';
+    var parts = [];
+    if (ds.to_supply) parts.push(ds.to_supply + ' to supply');
+    if (ds.open) parts.push((ds.total - ds.open) + ' of ' + ds.total + ' to confirm verified');
+    return '<p class="note" data-approve-note style="margin:0 0 12px">Still open: ' + esc(parts.join(', ')) + '. You can approve the deck now; what is open stays marked on its slide.</p>';
   }
 
   // ── 3 · Review ────────────────────────────────────────────────────────
@@ -1046,15 +1875,30 @@ var DeckLogic = (function () {
   function review(s) {
     var ids = L.presented(s.deck);
     if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">No deck yet</h1><p class="lede" style="margin-top:8px">Build a deck first. Nothing to review until the engine has written one.</p></main>';
-    if (!view.slide || ids.indexOf(view.slide) < 0) view.slide = ids[Math.min(3, ids.length - 1)];
-    var id = view.slide, sl = s.deck.slides[id], n = ids.indexOf(id) + 1;
+    // The appendix opens in the rail when the deck names its slides (appendix_ids, or slide.appendix); a count alone stays a count.
+    var ax = L.appendixOf(s.deck), ds = L.deckApproval(s.raw);
+    if (!view.slide || (ids.indexOf(view.slide) < 0 && ax.ids.indexOf(view.slide) < 0)) view.slide = ids[Math.min(3, ids.length - 1)];
+    var id = view.slide, sl = s.deck.slides[id], k = ax.ids.indexOf(id), inAx = k >= 0, n = inAx ? k + 1 : ids.indexOf(id) + 1;
+    if (inAx) view.appendix = true;
     var st = L.STATUS[L.statusOf(sl)];
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
-    var rail = ids.map(function (sid, i) {
+    // A pitch slide goes by its section; every appendix slide shares the section Appendix, so it goes by its title.
+    var thumb = function (sid, label, name) {
       var x = s.deck.slides[sid], t = L.STATUS[L.statusOf(x)];
-      return '<button class="thumb" data-slide="' + sid + '"' + (sid === id ? ' aria-current="true"' : '') + '><span class="n">' + String(i + 1).padStart(2, '0') + '</span>' +
-        '<span><span class="t">' + esc(x.section) + '</span><span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
-    }).join('');
+      return '<button class="thumb" data-slide="' + sid + '"' + (sid === id ? ' aria-current="true"' : '') + '><span class="n">' + label + '</span>' +
+        '<span><span class="t">' + esc(name) + '</span><span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
+    };
+    var rail = ids.map(function (sid, i) { return thumb(sid, String(i + 1).padStart(2, '0'), s.deck.slides[sid].section); }).join('') +
+      (ax.selectable && view.appendix ? '<div class="eyebrow rail-div">Appendix</div>' + ax.ids.map(function (sid, i) {
+        var x = s.deck.slides[sid];
+        return thumb(sid, 'A' + (i + 1), x.title || x.section);
+      }).join('') : '');
+    var axHead = ax.selectable
+      ? '<button class="appx" data-appendix="' + (view.appendix ? 'hide' : 'show') + '" aria-expanded="' + !!view.appendix + '" aria-label="' + (view.appendix ? 'Hide' : 'Show') + ' the ' + ax.count + ' appendix slides">+ ' + ax.count + ' appendix</button>'
+      : '<span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + esc(ax.count) + ' appendix</span>';
+    var nav = '<nav class="frost rail" aria-label="Slides"><div style="display:flex;align-items:center;margin-bottom:10px;padding:0 4px"><span class="eyebrow">' + esc(s.inputs.format === 'full' ? 'Full' : 'Pitch') + ' · ' + ids.length + '</span><div class="spacer"></div>' + axHead + '</div>' + rail + '</nav>';
+    // Once the deck is finished, the Approval agent holds it: its circle in the head with Approve the deck, its card under the rail.
+    var approve = ds ? deckStat(ds) + (ds.state === 'open' ? '<button class="btn go tall" id="approve-deck" data-approve="deck">Approve the deck</button>' : '') : '';
     var tabs = [['evidence', 'Evidence'], ['checks', 'Checks'], ['who', 'History']].map(function (t) {
       return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (view.tab === t[0]) + '">' + t[1] + '</button>';
     }).join('');
@@ -1074,12 +1918,13 @@ var DeckLogic = (function () {
         '<div class="mono eyebrow" style="margin-top:10px;text-transform:none;letter-spacing:0">Answers ' + (sl.requirements && sl.requirements.length ? esc(sl.requirements.join(', ')) : 'no requirement') + '</div>';
     }
     var s1 = slideHtml(id, s, n, ids.length);
-    return '<main class="review"><nav class="frost rail" aria-label="Slides"><div style="display:flex;margin-bottom:10px;padding:0 4px"><span class="eyebrow">' + esc(s.inputs.format === 'full' ? 'Full' : 'Pitch') + ' · ' + ids.length + '</span><div class="spacer"></div><span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + esc((s.deck.appendix_count || 0)) + ' appendix</span></div>' + rail + '</nav>' +
-      '<section><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">Slide ' + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
-        '<button class="btn sm" data-act="appendix">Move to appendix</button><button class="btn sm" data-tab="evidence">Why this slide</button></div>' +
+    return '<main class="review">' + (ds ? '<div class="lcol">' + nav + deckSide(s, ds) + '</div>' : nav) +
+      '<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + (inAx ? 'Appendix ' : 'Slide ') + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
+        (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
+      (ds ? approveNote(ds) : '') +
       '<div style="margin-bottom:12px">' + builtLine(builtOf(s)) + '</div>' +
       '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
-        '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + String(n).padStart(2, '0') + '</span></div></div>' +
+        '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
       '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
@@ -1095,8 +1940,9 @@ var DeckLogic = (function () {
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
     var supply = L.toSupply(s.raw).ids.length, counts = L.sourcedCounts(s.raw);
     var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
-    var fmts = [['web', 'WEB', 'Web deck', 'One file, animated, works offline', 'Open'], ['pptx', 'PPTX', 'PowerPoint', 'Notes kept, appendix hidden', 'Download'],
-      ['anim', 'ANIM', 'Animated deck', 'Present it from HyperFrames', 'Get project'], ['pdf', 'PDF', 'PDF', 'Presented slides only', 'Download']];
+    var ds = L.deckApproval(s.raw), rep = L.reportLine(s.raw), ax = L.appendixOf(s.deck);
+    var head = ds ? deckStat(ds) : '<span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span>';
+    var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn tall" data-go="review">Approve it on Review</button></div>' : '';
     return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' +
       '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
       '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
@@ -1104,27 +1950,638 @@ var DeckLogic = (function () {
       '<div class="card" style="margin-top:14px;padding:18px 22px"><div class="eyebrow" style="margin-bottom:8px">Notes for this slide</div><div style="font-size:18px;line-height:1.5">' + esc(sl.notes || 'No notes for this slide.') + '</div>' +
       (refs ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + refs + '</div>' : '') + '</div></section>' +
       '<aside class="stack"><div class="eyebrow">Next</div>' + (nx ? '<div class="mini"><div class="k">' + esc(nx.section) + '</div><div class="t">' + esc(nx.title) + '</div></div>' : '<div class="note">That is the last presented slide.</div>') +
-      '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(s.deck.appendix_count || 0) + ' backup slides are hidden. They keep their sources.</div></aside>' +
-      '<aside class="stack">' + confirmPanel(s) + '<div class="frost" style="padding:22px"><div style="display:flex;align-items:center"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div><span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span></div>' +
-      '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' +
-      fmts.map(function (f) {
-        var ready = !!s.exports[f[0]];
-        return '<div class="fmt"><span class="x" aria-hidden="true">' + f[1] + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + f[2] + '</div><div class="note" style="font-size:12px">' + (ready ? f[3] : 'Not built yet') + '</div></div>' +
-          '<button class="btn sm" data-export="' + f[0] + '"' + (ready ? '' : ' disabled') + ' style="font-weight:600">' + f[4] + '</button></div>';
+      '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(ax.count) + ' backup slides are hidden. They keep their sources.</div>' +
+      (ds ? deckSide(s, ds) : '') + '</aside>' +
+      '<aside class="stack">' + confirmPanel(s) + '<div class="frost" style="padding:22px"><div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div>' + head + '</div>' +
+      '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' + unapproved +
+      L.exportRows(s.exports).map(function (r) {
+        return '<div class="fmt" data-fmt="' + r.key + '"><span class="x" aria-hidden="true">' + r.x + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + r.name + '</div><div class="note" style="font-size:12px;overflow-wrap:anywhere">' + esc(r.note) + '</div></div>' +
+          '<button class="btn sm" data-export="' + r.key + '"' + (r.ready ? '' : ' disabled') + ' style="font-weight:600"' + (r.file ? ' aria-label="' + esc(r.action + ' ' + r.file) + '"' : '') + '>' + r.action + '</button></div>';
       }).join('') +
+      '<p class="note rep" data-report><span class="mono eyebrow">Report</span>' + esc(rep.line) + '</p>' +
       (supply ? '<div class="callout" data-to-supply>' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
       (counts.total || counts.supplied ? '<p class="note" style="margin-top:10px;font-size:12px" data-sourced>' + counts.verified + ' of ' + counts.total + ' to confirm verified · ' + counts.supplied + ' supplied by you · ' + counts.sourced + ' counted as sourced</p>' : '') +
       '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></div></aside></main>';
   }
 
+  // ═══ Orbs: one WebGL context for every agent circle (the clan's sphere + ring shader, ported; see features/deck-maker-circle-ui.clan) ═══
+  var Orbs = (function () {
+// ── copied verbatim from the clan (final-mock.template.html) ──
+const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const ease = x => .5 - .5 * Math.cos(Math.PI * x);
+const angDiff = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
+const MATS = {
+  pearl:    { base: '#EEECE7', ink: '#16191D', gloss: .70, metal: 0,   glass: 0 },
+  graphite: { base: '#242936', ink: '#EEF0F4', gloss: .50, metal: .15, glass: 0 },
+  chrome:   { base: '#C9CED8', ink: '#16191D', gloss: 1,   metal: .95, glass: 0 },
+  glass:    { base: '#DCE6F2', ink: '#16191D', gloss: 1,   metal: 0,   glass: .85 },
+  ceramic:  { base: '#E4DCCF', ink: '#2A2622', gloss: .40, metal: 0,   glass: 0 },
+  stone:    { base: '#B9BCC3', ink: '#16191D', gloss: .25, metal: 0,   glass: 0 },
+  onyx:     { base: '#12141A', ink: '#F1F2F5', gloss: .95, metal: .25, glass: 0 },
+  paper:    { base: '#F7F7F5', ink: '#16191D', gloss: .15, metal: 0,   glass: 0 },
+};
+const TYPES = { scan: { wob: [0, .006, 0, .004], breath: .004 }, unfold: { wob: [.012, .014, .006, 0], breath: .022 }, sweep: { wob: [0, .008, .012, .006], breath: .006 },
+  hold: { wob: [.003, .002, 0, 0], breath: .004 }, align: { wob: [.005, 0, .005, 0], breath: .008 }, pulse: { wob: [.006, 0, .004, 0], breath: .028 } };
+const TYPE_OF = {};
+for (const n of ['Research', 'Competitor', 'Culture', 'Audience', 'Knowledge']) TYPE_OF[n] = 'scan';
+for (const n of ['Idea', 'Concept', 'Character', 'Strategy', 'Storyboard']) TYPE_OF[n] = 'unfold';
+for (const n of ['Video', 'Motion', 'Image', 'Edit', 'Upscale', 'Adapt']) TYPE_OF[n] = 'sweep';
+for (const n of ['Review', 'Compliance', 'Approval', 'Asset', 'Client']) TYPE_OF[n] = 'hold';
+for (const n of ['Orchestrator', 'Job', 'Performance', 'Art Director']) TYPE_OF[n] = 'align';
+for (const n of ['Brief', 'Copy', 'Deck', 'Voice', 'Music']) TYPE_OF[n] = 'pulse';
+const STYLE = {   // period, duty, breadth, scroll, glow, shimmer, beat, ticks-in, broken, turning speed (deg/s)
+  work:     [100, 1,   3.5, 0,  0, .35, 0, 0, 0, 70],
+  write:    [100, 1,   3.5, 0,  1, 0,   0, 0, 0, 90],
+  think:    [7,   .28, 3.2, 6,  0, 0,   0, 0, 0, 40],
+  search:   [14,  .57, 3.4, 10, 0, 0,   0, 0, 0, 110],
+  read:     [100, 1,   2.2, 0,  0, 0,   0, 1, 0, 60],
+  provider: [100, 1,   6.0, 0,  0, .5,  0, 0, 0, 55],
+  check:    [100, 1,   2.4, 0,  0, 0,   1, 0, 0, 120],
+  human:    [100, 1,   6.5, 0,  0, .6,  0, 0, 0, 25],
+  queue:    [24,  .55, 2.4, 4,  0, 0,   0, 0, 0, 18],
+  error:    [100, 1,   3.5, 0,  0, 0,   0, 0, 1, 0],
+  complete: [100, 1,   4.5, 0,  0, 0,   0, 0, 0, 0],
+};
+const PA = new Float32Array(28), PB = new Float32Array(28), CA = new Float32Array(12), CB = new Float32Array(12);
+const arc0 = new Float32Array(16), arc1 = new Float32Array(16), cir0 = new Float32Array(8), cir1 = new Float32Array(8);
+const v2 = new Float32Array(2), v3 = new Float32Array(3), v4 = new Float32Array(4), rip = new Float32Array(16), ringA = new Float32Array(4), pingV = new Float32Array(4);
+const rs = new Float32Array(4), rf = new Float32Array(4), rg = new Float32Array(4);
+const wobV = new Float32Array(4), accV = new Float32Array(3), ringCol = new Float32Array(3);
+function rotC(arr, o, x, y, ang) { const c = Math.cos(ang), s = Math.sin(ang); arr[o] = x * c - y * s; arr[o + 1] = x * s + y * c; }
+const POSE_SPAN = (a, t, outA, outC) => {                    // the agent's own idle motion, written into the scratch arrays
+  outA.set(a.arcF); outC.set(a.cirF);
+  const sp = a.sp;
+  for (let i = 0; i < a.na; i++) { const o = i * 7;
+    switch (a.type) {
+      case 'scan': outA[o + 3] += .6 * Math.sin(t * .7 * sp + i * 1.7) * (i % 2 ? -1 : 1); break;
+      case 'unfold': outA[o + 4] = Math.min(outA[o + 4] * (1 + .26 * Math.sin(t * .8 * sp + i * 1.1)), 6.2); outA[o + 3] += .14 * Math.sin(t * .4 * sp + i); break;
+      case 'sweep': outA[o + 3] += t * sp * (.5 + .35 * i) * (i % 2 ? -1 : 1); break;
+      case 'hold': outA[o + 3] += .04 * Math.sin(t * .6 * sp + i); break;
+      case 'align': outA[o + 3] += .55 * Math.sin(t * .45 * sp) * (1 - i * .3); break;
+      case 'pulse': outA[o + 5] *= 1 + .3 * Math.sin(t * 2.4 * sp + i); outA[o + 4] *= 1 + .08 * Math.sin(t * 2.4 * sp); break;
+    } }
+  for (let i = 0; i < a.nc; i++) { const o = i * 6, x = outC[o], y = outC[o + 1];
+    switch (a.type) {
+      case 'scan': rotC(outC, o, x, y, .5 * Math.sin(t * .6 * sp + i)); break;
+      case 'unfold': outC[o + 2] *= 1 + .3 * Math.sin(t * .9 * sp + i * 2); break;
+      case 'sweep': rotC(outC, o, x, y, t * sp * .6 * (i % 2 ? -1 : 1)); break;
+      case 'hold': outC[o + 1] = y + .01 * Math.sin(t * .7 * sp); break;
+      case 'align': rotC(outC, o, x, y, .4 * Math.sin(t * .45 * sp)); break;
+      case 'pulse': outC[o + 1] = y + .045 * Math.sin(t * 2.4 * sp + i); break;
+    } }
+};
+function writeStatic(A, C) {                                  // p = 0: no second pose, no blending
+  for (let i = 0; i < 4; i++) { const o = i * 7, q = i * 4; arc0[q] = A[o]; arc0[q + 1] = A[o + 1]; arc0[q + 2] = A[o + 2]; arc0[q + 3] = A[o + 3];
+    arc1[q] = i < 4 ? A[o + 4] : 0; arc1[q + 1] = A[o + 5]; arc1[q + 2] = A[o + 6]; arc1[q + 3] = 0; }
+  for (let i = 0; i < 2; i++) { const o = i * 6, q = i * 4; cir0[q] = C[o]; cir0[q + 1] = C[o + 1]; cir0[q + 2] = C[o + 2]; cir0[q + 3] = C[o + 3]; cir1[q] = C[o + 4]; cir1[q + 1] = C[o + 5]; cir1[q + 2] = 0; cir1[q + 3] = 0; }
+}
+function writeMix(a, na, b, nb, p, flow) {                    // the flow: staggered, arcs spin through, circles orbit
+  for (let i = 0; i < 4; i++) {
+    const ha = i < na, hb = i < nb, oa = i * 7, ob = i * 7;
+    const q = ease(clamp(p * 1.3 - i * .1, 0, 1)), spin = flow * Math.sin(Math.PI * q) * 2.2 * (i % 2 ? -1 : 1), k = i * 4;
+    const ax = ha ? PA[oa] : PB[ob], ay = ha ? PA[oa + 1] : PB[ob + 1], ar = ha ? PA[oa + 2] : PB[ob + 2], aa = ha ? PA[oa + 3] : PB[ob + 3];
+    const bx = hb ? PB[ob] : PA[oa], by = hb ? PB[ob + 1] : PA[oa + 1], br = hb ? PB[ob + 2] : PA[oa + 2], ba = hb ? PB[ob + 3] : PA[oa + 3];
+    const asw = ha ? PA[oa + 4] : 0, aw = ha ? PA[oa + 5] : 0, at = ha ? PA[oa + 6] : (hb ? PB[ob + 6] : 1);
+    const bsw = hb ? PB[ob + 4] : 0, bw = hb ? PB[ob + 5] : 0, bt = hb ? PB[ob + 6] : at;
+    arc0[k] = ax + (bx - ax) * q; arc0[k + 1] = ay + (by - ay) * q; arc0[k + 2] = ar + (br - ar) * q; arc0[k + 3] = aa + angDiff(aa, ba) * q + spin;
+    arc1[k] = asw + (bsw - asw) * q; arc1[k + 1] = (aw + (bw - aw) * q) * (1 - .25 * flow * Math.sin(Math.PI * q)); arc1[k + 2] = at + (bt - at) * q; arc1[k + 3] = 0;
+  }
+  for (let i = 0; i < 2; i++) {
+    const ha = i < a.nc, hb = i < b.nc, oa = i * 6, ob = i * 6, k = i * 4, q = ease(clamp(p * 1.3 - i * .15, 0, 1));
+    const ax = ha ? CA[oa] : CB[ob], ay = ha ? CA[oa + 1] : CB[ob + 1], bx = hb ? CB[ob] : CA[oa], by = hb ? CB[ob + 1] : CA[oa + 1];
+    const ra = Math.hypot(ax, ay), rb = Math.hypot(bx, by);
+    const ta = ra > .02 ? Math.atan2(ay, ax) : Math.atan2(by, bx), tb = rb > .02 ? Math.atan2(by, bx) : ta;
+    const th = ta + angDiff(ta, tb) * q + flow * Math.sin(Math.PI * q) * 1.6 * (i % 2 ? -1 : 1), rad = ra + (rb - ra) * q;
+    const aR = ha ? CA[oa + 2] : 0, bR = hb ? CB[ob + 2] : 0, aW = ha ? CA[oa + 3] : (hb ? CB[ob + 3] : 0), bW = hb ? CB[ob + 3] : aW;
+    const aS = ha ? CA[oa + 4] : (hb ? CB[ob + 4] : 0), bS = hb ? CB[ob + 4] : aS, aT = ha ? CA[oa + 5] : (hb ? CB[ob + 5] : 1), bT = hb ? CB[ob + 5] : aT;
+    cir0[k] = rad * Math.cos(th); cir0[k + 1] = rad * Math.sin(th); cir0[k + 2] = aR + (bR - aR) * q; cir0[k + 3] = aW + (bW - aW) * q;
+    cir1[k] = aS + (bS - aS) * q; cir1[k + 1] = aT + (bT - aT) * q; cir1[k + 2] = 0; cir1[k + 3] = 0;
+  }
+}
+const VERT = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }';
+const FRAG = `
+precision highp float;
+uniform vec2 uRes, uC, uRC, uDir, uLight; uniform vec4 uWob;
+uniform float uDpr, uTime, uR, uBreath, uP, uTw, uSlosh, uRingR, uRT, uSwell, uRipOn, uPingOn;
+uniform vec3 uBaseA, uInkA, uMatA, uBaseB, uInkB, uMatB, uAccent, uRingCol, uBg, uTrack;   // PORT: + uTrack
+uniform vec4 uArc0[4], uArc1[4], uCir0[2], uCir1[2], uRip[4], uRS, uRFx, uRG, uPing;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + vec2(1., 1.)), f.x), f.y); }
+
+float ripH(vec2 p){
+  float h = 0.;
+  for (int i = 0; i < 4; i++) {
+    float age = uRip[i].z;
+    if (age >= 0. && uRip[i].w > .001) {
+      float d = length(p - uRip[i].xy), front = age * uR * 1.4, x = (d - front) / (uR * .55);
+      h += exp(-age * 1.7) * uRip[i].w * exp(-x * x) * cos((d - front) / (uR * .13));
+    }
+  }
+  return h;
+}
+float body(vec2 p){
+  vec2 q = p - uC;
+  float qd = dot(q, uDir), qp = dot(q, vec2(-uDir.y, uDir.x));
+  vec2 qq = vec2(qd / (1. + uSlosh), qp * (1. + uSlosh * .5));
+  float ang = atan(qq.y, qq.x);
+  float w = uWob.x * sin(2. * ang + uTime * .9) + uWob.y * sin(3. * ang - uTime * 1.3 + 1.) + uWob.z * sin(4. * ang + uTime * 1.7 + 2.) + uWob.w * sin(5. * ang - uTime * 2.1 + .5);
+  float d = length(qq) - uR * uBreath * (1. + w);
+  if (uRipOn > .5) d -= uR * .06 * ripH(p);
+  return d;
+}
+vec2 arcCov(vec2 u, vec4 A, vec4 B, float aa){
+  if (B.y < .001) return vec2(0.);
+  vec2 q = u - A.xy; float d = length(q);
+  float rel = mod(atan(q.y, q.x) - A.w, 6.2831853), w = B.y * .5, dist;
+  if (rel <= B.x) dist = abs(d - A.z);
+  else { vec2 e0 = A.xy + A.z * vec2(cos(A.w), sin(A.w)), e1 = A.xy + A.z * vec2(cos(A.w + B.x), sin(A.w + B.x)); dist = min(length(u - e0), length(u - e1)); }
+  float c = 1. - smoothstep(w - aa, w + aa, dist);
+  return B.z > 1.5 ? vec2(0., c) : vec2(c * B.z, 0.);
+}
+vec2 cirCov(vec2 u, vec4 C0, vec4 C1, float aa){
+  if (C0.z < .001) return vec2(0.);
+  float d = length(u - C0.xy);
+  float c = C1.x > .5 ? 1. - smoothstep(C0.z - aa, C0.z + aa, d) : 1. - smoothstep(C0.w * .5 - aa, C0.w * .5 + aa, abs(d - C0.z));
+  return C1.y > 1.5 ? vec2(0., c) : vec2(c * C1.y, 0.);
+}
+
+// The ring: a travelling arc. It turns (uRG.y is where its tail is), its LENGTH is how complete the run is (uRG.x, in turns),
+// and its look is a set of numbers that ease from step to step: texture (dash period and duty), breadth (thickness), colour.
+// uRS = (dash period px, duty 0-1, breadth px, scroll px/s). uRFx = (head glow, shimmer, two-beat, ticks flowing in). uRG = (length, tail, broken flag).
+vec4 ringLayer(vec2 p){
+  vec2 q = p - uRC; float r = length(q), rr = uRingR, band = abs(r - rr);
+  if (band > 16. && uPingOn < .5) return vec4(0.);
+  float t = fract((atan(q.y, q.x) + 1.5707963) / 6.2831853), circ = 6.2831853 * rr;
+  float aa = 1.1, th = uRS.z * .5 + .9 * uSwell;
+  vec3 neutral = uTrack;   // PORT: was vec3(.827, .839, .863), the light track; a uniform so the dark theme works
+  float track = 1. - smoothstep(.75, .75 + aa, band);
+  vec4 o = vec4(neutral * track, track);
+  float u = fract(t - uRG.y) * circ, Lpx = uRG.x * circ;                                           // u: distance along the ring from the arc's tail
+  float dEnd = u <= Lpx ? 0. : min(u - Lpx, circ - u);
+  float dArc = length(vec2(dEnd, band));                                                            // a capsule: round ends
+  float P = max(uRS.x, 1.), Lg = P * uRS.y, x = mod(u - uRT * uRS.w + P * .5, P) - P * .5;
+  float dDash = length(vec2(max(abs(x) - max(Lg * .5 - th, 0.), 0.), band));                        // the texture, flowing along the arc
+  float stroke = 1. - smoothstep(th, th + aa, max(dArc, dDash));
+  float f = clamp(u / max(Lpx, 1.), 0., 1.);                                                       // 0 at the tail, 1 at the head
+  stroke *= mix(1., .28 + .72 * f * f, uRFx.x);                                                    // writing: the head glows, the tail fades
+  stroke *= 1. - uRFx.y * (.5 - .5 * sin(u / 40. - uRT * 2.5)) * .6;                               // shimmer
+  float beat = max(exp(-pow((fract(uRT * .9) - .1) * 7., 2.)), exp(-pow((fract(uRT * .9) - .4) * 7., 2.)));
+  stroke *= mix(1., .28 + .72 * beat, uRFx.z);                                                     // checking: two ticks
+  float loc = mod(u, 9.) - 4.5, rd = r - rr, inArc = 1. - smoothstep(0., 2., dEnd);
+  float tick = (1. - smoothstep(.8, 1.7, abs(loc))) * step(-2., rd) * step(rd, 8.) * pow(1. - fract((rd + 2.) / 10. + uRT * .8), 3.) * inArc;
+  stroke = mix(stroke, max(tick, stroke * .3), uRFx.w);                                            // reading: ticks flowing in
+  float brk = 1. - smoothstep(1.6, 2.6, length(vec2(u - Lpx - 24., band)));
+  stroke = clamp(stroke + brk * uRG.z, 0., 1.);                                                    // error: a dot beyond the broken arc
+  o = vec4(uRingCol * stroke, stroke) + o * (1. - stroke);
+  if (uPingOn > .5) {                                                                                // search pings: rings that leave, one per query
+    for (int i = 0; i < 4; i++) {
+      float age = uPing[i];
+      if (age >= 0.) { float pa = (1. - smoothstep(.6, 1.6, abs(r - (rr + 6. + age * 55.)))) * exp(-age * 2.4) * .8; o = vec4(uRingCol * pa, pa) + o * (1. - pa); }
+    }
+  }
+  return o;
+}
+
+void main(){
+  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;
+  float sh = .10 * (1. - smoothstep(-uR * .05, uR * .32, length(p - uC - vec2(0., uR * .22)) - uR));   // a cheap circle shadow
+  vec4 acc = vec4(vec3(.08, .10, .20) * sh, sh);
+  vec4 rg = ringLayer(p); acc = rg + acc * (1. - rg.a);
+
+  float d = body(p);
+  if (d < 1.5) {
+    vec2 uv = (p - uC) / uR;
+    float t = clamp(-d / uR, 0., 1.);
+    vec2 g = vec2(body(p + vec2(1., 0.)) - body(p - vec2(1., 0.)), body(p + vec2(0., 1.)) - body(p - vec2(0., 1.)));
+    vec2 gd = g / max(length(g), 1e-4);
+    float rim = 1. - t;
+    vec3 n = normalize(vec3(gd * rim, sqrt(max(1. - rim * rim, .02))));
+    vec2 rgrad = vec2(0.);
+    if (uRipOn > .5) {
+      float re = uR * .017;
+      rgrad = vec2(ripH(p + vec2(re, 0.)) - ripH(p - vec2(re, 0.)), ripH(p + vec2(0., re)) - ripH(p - vec2(0., re)));
+      n = normalize(n + vec3(-rgrad * 2.8, 0.));
+    }
+    float s = dot(uv, uDir) * .5 + .5 + .55 * (vnoise(uv * 2.1 + vec2(uTime * .22, -uTime * .17)) - .5);
+    float f = -.7 + 2.4 * uP, m = 1. - smoothstep(f - .2, f + .2, s);
+    float edge = exp(-pow((s - f) / .07, 2.)) * sin(3.14159 * uP);
+    vec3 base = mix(uBaseA, uBaseB, m), inkc = mix(uInkA, uInkB, m), mat = mix(uMatA, uMatB, m);
+    float gloss = mat.x, metal = mat.y, glass = mat.z;
+    vec3 L = normalize(vec3(-.45 + uLight.x, -.62 + uLight.y, .64));
+    float diff = clamp(dot(n, L), 0., 1.);
+    vec3 H = normalize(L + vec3(0., 0., 1.));
+    float spec = pow(max(dot(n, H), 0.), mix(18., 110., gloss)) * mix(.25, 1.1, gloss), fres = pow(1. - n.z, 3.);
+    vec3 lit = base * (.50 + .62 * diff);
+    vec3 env = mix(vec3(.95, .97, 1.), vec3(.18, .20, .26), smoothstep(-.5, .6, n.y)); env += .25 * smoothstep(.3, 0., abs(n.x + .35));
+    lit = mix(lit, env * mix(base, vec3(1.), .35), metal * .75);
+    vec3 gl = mix(uBg, base, .35) + .2 * diff;
+    lit = mix(lit, gl, glass * (.35 + .4 * n.z));
+    lit = mix(lit, base * .75 + uAccent * .12, glass * fres * .8);
+    lit = mix(lit, lit * .84 + vec3(0., .02, .06), fres * .5);
+    lit += edge * .12;
+    float tw = uTw * (1. - smoothstep(0., 1.1, length(uv))), cs = cos(tw), sn = sin(tw);
+    vec2 ug = vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y) + rgrad * .22;
+    float aa = 1.5 / uR; vec2 cov = vec2(0.);
+    for (int i = 0; i < 4; i++) cov += arcCov(ug, uArc0[i], uArc1[i], aa);
+    for (int i = 0; i < 2; i++) cov += cirCov(ug, uCir0[i], uCir1[i], aa);
+    cov = clamp(cov, 0., 1.);
+    lit = mix(lit, inkc * (.88 + .2 * diff), cov.x * .95);
+    lit = mix(lit, uAccent, cov.y * .95);
+    lit += spec * (1. - .7 * max(cov.x, cov.y));
+    float aB = 1. - smoothstep(-.7, .7, d);
+    acc = vec4(lit * aB, aB) + acc * (1. - aB);
+  }
+  gl_FragColor = acc;
+}`;
+// ── end of the verbatim copy ──
+
+const L_MIN = .1, WOBK = [.7, .6, .5, .35], DIRV = [1, 0];   // as in the clan
+// Deck Maker's activity -> the clan's ring style. "waiting" (nothing running yet) uses the clan's queue look.
+const STYLE_OF = { work: 'work', write: 'write', think: 'think', read: 'read', check: 'check', human: 'human', error: 'error', complete: 'complete', waiting: 'queue', handoff: 'work' };
+// The clan's colours come from its --k-* tokens; ours are Deck Maker's --ring-* tokens (theme-aware).
+const TOKEN_OF = { work: '--ring-work', write: '--ring-work', complete: '--ring-work', think: '--ring-think', read: '--ring-read', check: '--ring-check',
+  human: '--ring-human', error: '--ring-error', queue: '--ring-wait', search: '--ring-work', provider: '--ring-work' };
+const GAP_K = 20 / 140;   // the clan's ring sits 20 px outside a ~140 px sphere; kept as a proportion so it scales
+const MAXW = 2048, MAXH = 1024;   // the atlas never grows past this; more circles than fit are drawn in batches
+const SOFT = /swiftshader|llvmpipe|softpipe|software/i;   // a software renderer: one pixel per CSS pixel
+
+const motion = { reduce: false };
+const ENG = { ok: false, frames: 0, skipped: 0, draws: 0, uploads: 0, flushes: 0, drawn: 0, px: 0, cpuMs: 0, avgMs: 16, fps: 0, scale: 1, lost: false, soft: false, reason: '', renderer: '' };
+const ALL = [], LIST = [];   // every upgraded circle; the ones drawn this frame (reused, never reallocated per frame)
+const SLOTS = new Map();     // slot id -> the circle's state, kept across re-renders so a ring never snaps and a pour never restarts
+const COLORS = {}; const bgV = new Float32Array(3), trackV = new Float32Array(3);   // accV is the clan's scratch buffer
+let gl = null, glcv = null, U = null, AW = 256, AH = 256, phase = 0;   // phase: 0 not started, 1 running, -1 flat for good
+
+// ── the agent table for the shader, built once per agent from Deck Maker's AGENTS (as the clan builds RAW) ──
+const G = {};
+function agentGL(key) {
+  if (G[key]) return G[key];
+  const src = Object.prototype.hasOwnProperty.call(L.AGENTS, key) ? L.AGENTS[key] : null; if (!src) return null;
+  const m = MATS[src.mat] || MATS.pearl, a = { key, n: src.n, name: src.name };
+  a.base = rgb(m.base); a.ink = rgb(m.ink); a.mat = [m.gloss, m.metal, m.glass];
+  a.type = TYPE_OF[src.name] || 'hold'; a.t = TYPES[a.type]; a.sp = .8 + ((a.n * 37) % 11) / 20;
+  const arcs = src.arcs.slice().sort((x, y) => y[2] - x[2]).slice(0, 4), circs = src.circs.slice().sort((x, y) => y[2] - x[2]).slice(0, 2);
+  a.na = arcs.length; a.nc = circs.length;
+  a.arcF = new Float32Array(28); arcs.forEach((r, i) => a.arcF.set(r.slice(0, 7), i * 7));
+  a.cirF = new Float32Array(12); circs.forEach((r, i) => a.cirF.set(r.slice(0, 6), i * 6));
+  return (G[key] = a);
+}
+
+// ── theme: ring colours, the surface behind glass, the track, all read from the page's CSS tokens ──
+function colour(v, fb) {
+  v = String(v || '').trim();
+  let m = /^#([0-9a-f]{6})$/i.exec(v); if (m) return rgb('#' + m[1]);
+  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v); if (m) return rgb('#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3]);
+  m = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(v); if (m) return [m[1] / 255, m[2] / 255, m[3] / 255];
+  return rgb(fb);
+}
+function readTheme() {
+  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n);
+  for (const k of Object.keys(STYLE)) COLORS[k] = colour(tok(TOKEN_OF[k] || '--ring-work'), '#FF4F2E');
+  accV.set(colour(tok('--ring-work'), '#FF4F2E')); bgV.set(colour(tok('--card'), '#FFFFFF')); trackV.set(colour(tok('--ring-track'), '#D3D6DC'));
+  wake();
+}
+
+// ── the one context ──
+function init() {
+  const reducedData = matchMedia('(prefers-reduced-data: reduce)').matches || !!(navigator.connection && navigator.connection.saveData);
+  if (reducedData) { ENG.reason = 'reduced data: flat SVG'; return false; }
+  glcv = document.createElement('canvas'); glcv.width = AW; glcv.height = AH;
+  glcv.addEventListener('webglcontextlost', e => { e.preventDefault(); ENG.ok = false; ENG.lost = true; for (const c of ALL) c.wrap.classList.remove('on'); });   // the flat SVG shows again
+  glcv.addEventListener('webglcontextrestored', () => { if (build()) { ENG.lost = false; for (const c of ALL) c.wrap.classList.add('on'); wake(); } });   // and the 3D comes back
+  return build();
+}
+function build() {
+  try {
+    gl = glcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    if (!gl) { ENG.reason = 'no WebGL: flat SVG'; return (ENG.ok = false); }
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.clearColor(0, 0, 0, 0); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    // Uniform cache, as in the clan: a value that did not change is not sent again.
+    const locs = {}, last = {};
+    const UL = n => locs[n] ?? (locs[n] = gl.getUniformLocation(pr, n));
+    const same = (a, b) => { if (!b || a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+    U = {
+      f1(n, v) { if (last[n] === v) return; last[n] = v; gl.uniform1f(UL(n), v); ENG.uploads++; },
+      v(n, size, arr) { const l = last[n]; if (same(arr, l)) return; last[n] = l && l.length === arr.length ? (l.set(arr), l) : Float32Array.from(arr);
+        (size === 2 ? gl.uniform2fv : size === 3 ? gl.uniform3fv : gl.uniform4fv).call(gl, UL(n), arr); ENG.uploads++; },
+    };
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    ENG.renderer = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    ENG.soft = SOFT.test(ENG.renderer);   // software rendering: pixel ratio 1, drawn at CSS size
+    return (ENG.ok = true);
+  } catch (e) { ENG.reason = 'shader failed: flat SVG (' + e.message + ')'; gl = null; return (ENG.ok = false); }
+}
+// Started by the first circle on the page, not at load; a page that never draws one never makes a context.
+function ensure() {
+  if (phase) return phase > 0;
+  phase = -1;
+  try {
+    if (typeof document === 'undefined' || typeof matchMedia !== 'function' || typeof requestAnimationFrame !== 'function' || typeof MutationObserver !== 'function') { ENG.reason = 'no browser: flat SVG'; return false; }
+    lastWall = performance.now() / 1000;
+    motion.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!init()) return false;
+    phase = 1;
+    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', e => { motion.reduce = e.matches; wake(); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+    new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-color-scheme'] });
+    document.addEventListener('visibilitychange', () => { lastWall = performance.now() / 1000; lastFrame = 0; wake(); });
+    readTheme();
+    requestAnimationFrame(frame);
+    return true;
+  } catch (e) { ENG.reason = 'flat SVG (' + e.message + ')'; ENG.ok = false; return false; }
+}
+
+// ── a circle: the app's svg stays (its role and aria-label are the accessible name, and it is the fallback); a canvas goes on top ──
+const io = typeof IntersectionObserver === 'function' ? new IntersectionObserver(es => { for (const e of es) { const c = e.target.__orb; if (c) { c.vis = e.isIntersecting; if (c.vis) c.wakeUntil = performance.now() / 1000 + .5; } } }, { rootMargin: '40px' }) : null;
+function fresh(wrap, svg, cv, size, A, B, act, sig, now) {
+  const c = {
+    wrap, svg, cv, ctx: cv.getContext('2d'), size, k: clamp(size / 100, .4, 1), A, B: A, next: B, act, sig, steps: null, inAll: false,
+    phase: act === 'handoff' && B !== A ? 'hold' : 'run', ho: 0, holdT: 0, dir: [1, 0], arrive: -99,
+    mt: Math.random() * 30, energy: 1, vis: true, wakeUntil: now + 2.5, ax: 0, ay: 0, d: 0,
+    RING: { v: Float32Array.from(STYLE.work), c: new Float32Array(3), fill: -1, swell: 0, rt: 0, ringR: 0, len: L_MIN, ang: Math.random() },
+    I: { ox: 0, oy: 0, vx: 0, vy: 0, hov: 0, light: [0, 0], ptr: null, drag: null, rips: [], ripI: 0, R: 50, busy: false, ripOn: 0 },
+    rip: new Float32Array(16),
+  };
+  c.R0 = (size / 2 / c.k - 9) / (1 + GAP_K + .2);
+  return c;
+}
+function upgrade(svg, opt) {
+  opt = opt || {};
+  if (!ENG.ok || svg.__orb || svg.hasAttribute('data-flat') || !svg.parentNode) return null;
+  const A = agentGL(svg.getAttribute('data-agent')); if (!A) return null;          // an unknown agent stays the flat neutral circle
+  const size = +svg.getAttribute('width') || 60, act = svg.getAttribute('data-activity') || 'waiting';
+  const B = agentGL(svg.getAttribute('data-to')) || A, sig = A.key + '|' + B.key + '|' + act, now = performance.now() / 1000;
+  const wrap = document.createElement('span'); wrap.className = 'cir3d on' + (size >= 100 ? ' big' : ''); wrap.style.width = wrap.style.height = size + 'px';
+  svg.parentNode.insertBefore(wrap, svg); wrap.appendChild(svg);
+  const cv = document.createElement('canvas'); cv.setAttribute('aria-hidden', 'true'); wrap.appendChild(cv);
+  let c = opt.slot ? SLOTS.get(opt.slot) : null;
+  if (c) {
+    // the same place as before, at any size (the slot key has no size, so growing in place never resets the ring): keep the ring, the turn and a pour in progress; only a change of who or what restarts the clock
+    if (c.size !== size) { c.size = size; c.k = clamp(size / 100, .4, 1); c.R0 = (size / 2 / c.k - 9) / (1 + GAP_K + .2); }
+    c.wrap = wrap; c.svg = svg; c.cv = cv; c.ctx = cv.getContext('2d'); c.vis = true; c.wakeUntil = now + 2.5;
+    c.I.ptr = null; c.I.drag = null; c.I.rips.length = 0;
+    if (c.sig !== sig) { c.sig = sig; c.A = A; c.B = A; c.next = B; c.act = act; c.phase = act === 'handoff' && B !== A ? 'hold' : 'run'; c.ho = 0; c.holdT = 0; c.dir = [1, 0]; }
+  } else {
+    c = fresh(wrap, svg, cv, size, A, B, act, sig, now);
+    // start eased at the target look, so a first paint does not animate in from "work"
+    c.steps = opt.steps || null;
+    const s0 = styleName(c); c.RING.v.set(STYLE[s0]); c.RING.c.set(COLORS[s0]); c.RING.len = targetLen(c, 0);
+  }
+  c.steps = opt.steps || null;
+  if (opt.slot) SLOTS.set(opt.slot, c);
+  svg.__orb = c; wrap.__orb = c;
+  wrap.addEventListener('pointermove', e => { c.I.ptr = localPt(c, e); c.wakeUntil = performance.now() / 1000 + .3; });
+  wrap.addEventListener('pointerleave', () => { if (!c.I.drag) c.I.ptr = null; });
+  wrap.addEventListener('pointerdown', e => { const q = localPt(c, e); c.I.ptr = q; if (Math.hypot(q.x, q.y) >= c.I.R * 1.2) return; try { wrap.setPointerCapture(e.pointerId); } catch (x) { /* no capture */ } c.I.drag = { sx: q.x, sy: q.y }; addRipple(c, q.x, q.y, 1); });
+  const release = () => { if (c.I.drag) { c.I.drag = null; addRipple(c, c.I.ox * .3, c.I.oy * .3, .8); } };
+  wrap.addEventListener('pointerup', release); wrap.addEventListener('pointercancel', release);
+  if (io) io.observe(wrap);
+  if (!c.inAll) { c.inAll = true; ALL.push(c); }
+  return c;
+}
+function localPt(c, e) { const r = c.wrap.getBoundingClientRect(); return { x: (e.clientX - r.left - r.width / 2) / c.k, y: (e.clientY - r.top - r.height / 2) / c.k }; }
+function addRipple(c, x, y, amp) { c.I.rips[c.I.ripI++ % 4] = { x, y, t0: performance.now() / 1000, amp: amp * (motion.reduce ? .4 : 1) }; }
+/**
+ * Upgrade every flat agent circle under `root` to the 3D one. `who` is agentState's answer: its steps (step_index - 1 done of
+ * step_total) become the ring's length for the circle that shows that agent. Each circle's place on the screen (its slot) keeps
+ * its ring and pour clock across a re-render. Returns the circles upgraded; none when the page must stay flat.
+ */
+function scan(root, who) {
+  if (!root || typeof root.querySelectorAll !== 'function' || !ensure() || !ENG.ok) return [];
+  const out = [], used = new Set(), n = {}, svgs = root.querySelectorAll('svg.cir[data-agent]');
+  for (let i = 0; i < svgs.length; i++) {
+    const s = svgs[i], where = s.closest('.dex') ? 'dex' : s.closest('.dstat') ? 'dstat' : s.closest('[data-status]') || s.closest('aside.stack') ? 'status' : 'other';
+    // the slot is where the circle lives, never how big it is: the status circle grows and shrinks in place and keeps its ring
+    const base = where === 'other' ? where + ':' + (s.getAttribute('width') || '') : where, slot = base + ':' + (n[base] = (n[base] || 0) + 1);
+    const steps = who && who.step_index && who.step_total && who.agent === s.getAttribute('data-agent') ? [who.step_index - 1, who.step_total] : null;
+    const c = upgrade(s, { slot, steps }); if (c) { out.push(c); used.add(slot); }
+  }
+  for (const k of Array.from(SLOTS.keys())) if (!used.has(k)) SLOTS.delete(k);
+  return out;
+}
+
+function styleName(c) {
+  if (c.phase === 'handoff') return 'work';
+  if (c.phase === 'hold') return 'complete';
+  return STYLE_OF[c.act === 'handoff' ? 'work' : c.act] || 'queue';
+}
+function targetLen(c, p) {   // the clan's completion: steps finished / total; full when done; .62 on an error; shrinks through a hand-off
+  if (c.act === 'error') return .62;
+  if (c.phase === 'hold' || c.act === 'complete') return 1;
+  if (c.phase === 'handoff') return 1 + (L_MIN - 1) * p;
+  const s = c.steps; return s && s[1] > 0 ? Math.max(L_MIN, Math.min(s[0], s[1]) / s[1]) : L_MIN;
+}
+
+// ── the hand-off clock: the UI owns it (clan 13.3): hold 1.5 s with a full ring, then one 2.4 s pour ──
+function clock(c, dt, wall) {
+  if (c.act !== 'handoff' || c.next === c.A) return;
+  if (c.phase === 'hold') { c.holdT += dt; if (c.holdT >= 1.5) { c.phase = 'handoff'; c.ho = 0; c.B = c.next; const k = c.A.n * 2.399 + c.B.n * 1.7; c.dir = [Math.cos(k), Math.sin(k)]; } return; }
+  if (c.phase === 'handoff') {
+    c.ho += dt / 2.4;
+    if (c.ho >= 1) { c.A = c.B; c.ho = 0; c.arrive = wall; c.phase = 'run'; c.holdT = 0; }
+  }
+}
+// ── interaction, the clan's interact() per circle (pointer and ripples are relative to the circle's centre) ──
+function interact(c, dt, wall) {
+  const I = c.I, max = I.R * .22; let tx = 0, ty = 0;
+  if (I.drag && I.ptr && !motion.reduce) { tx = (I.ptr.x - I.drag.sx) * .6; ty = (I.ptr.y - I.drag.sy) * .6; const m = Math.hypot(tx, ty); if (m > max) { tx *= max / m; ty *= max / m; } }
+  I.vx += (-170 * (I.ox - tx) - 10 * I.vx) * dt; I.vy += (-170 * (I.oy - ty) - 10 * I.vy) * dt; I.ox += I.vx * dt; I.oy += I.vy * dt;
+  const near = I.ptr && Math.hypot(I.ptr.x, I.ptr.y) < I.R * 1.35; I.hov += ((near ? 1 : 0) - I.hov) * (1 - Math.exp(-dt * 8));
+  const hit = I.R * 1.35, lk = 1 - Math.exp(-dt * 6);
+  I.light[0] += ((near ? I.ptr.x / hit * .9 : 0) - I.light[0]) * lk; I.light[1] += ((near ? I.ptr.y / hit * .9 : 0) - I.light[1]) * lk;
+  let alive = 0; for (let i = 0; i < 4; i++) { const r = I.rips[i]; if (r && wall - r.t0 < 3.2) alive = 1; }
+  I.ripOn = alive;
+  I.busy = !!(I.drag || alive || Math.abs(I.vx) + Math.abs(I.vy) + Math.abs(I.ox) + Math.abs(I.oy) > .05 || I.hov > .01 && I.hov < .99 || near
+    || Math.abs(I.light[0]) + Math.abs(I.light[1]) > .002);
+}
+
+// ── one circle into its atlas cell: the clan's render(), with the stage replaced by the cell ──
+const wob = wobV;   // the clan's scratch buffers (v2, rs, rf, rg, pingV, accV) are reused as they are
+function renderOne(c, dt, wall, dpr) {
+  const rm = motion.reduce, flow = rm ? 0 : 1, I = c.I, RING = c.RING;
+  const A = c.A, B = c.B, handoff = c.phase === 'handoff', p = handoff ? ease(clamp(c.ho, 0, 1)) : 0, bump = Math.sin(Math.PI * p);
+  const complete = c.phase === 'hold' || c.act === 'complete', err = c.act === 'error' && c.phase === 'run';
+  const eT = (err || c.act === 'human') ? .3 : complete ? .25 : 1;
+  c.energy += (eT - c.energy) * Math.min(1, dt * 3); if (!rm) c.mt += dt * c.energy;
+  const mt = c.mt, uDpr = dpr * c.k, half = c.d / uDpr / 2;
+  const cx = c.ax / uDpr + half, cy = c.ay / uDpr + half;
+  const R = c.R0 * (1 + .035 * I.hov); I.R = R;
+
+  POSE_SPAN(A, rm ? 0 : mt, PA, CA);
+  if (p > 0) { POSE_SPAN(B, rm ? 0 : mt, PB, CB); writeMix(A, A.na, B, B.na, p, flow); } else writeStatic(PA, CA);
+
+  const atype = A.t.wob, btype = B.t.wob;
+  for (let i = 0; i < 4; i++) wob[i] = (atype[i] + (btype[i] - atype[i]) * p) * (rm ? 0 : 1) + flow * .05 * bump * WOBK[i];
+  const breath = 1 + (rm ? 0 : (A.t.breath + (B.t.breath - A.t.breath) * p) * Math.sin(mt * 2.4 * A.sp));
+  const settle = rm ? 0 : Math.exp(-(wall - c.arrive) * 1.8);
+  const off = Math.hypot(I.ox, I.oy), dragOn = off > 1 && p === 0;
+  if (dragOn) { DIRV[0] = I.ox / off; DIRV[1] = I.oy / off; } const dir = dragOn ? DIRV : c.dir;
+  const slosh = rm ? 0 : flow * .11 * bump * Math.sin(wall * 2.6) + .09 * settle * Math.sin((wall - c.arrive) * 8) + (dragOn ? off / (R * 1.6) : 0);
+  const tw = flow * 1.6 * bump * (1 + .35 * Math.sin(wall * .9));
+
+  const ek = 1 - Math.exp(-dt * 6), sName = err ? 'error' : styleName(c), T = STYLE[sName], tc = COLORS[sName];
+  for (let i = 0; i < 10; i++) RING.v[i] += (T[i] - RING.v[i]) * ek;
+  for (let i = 0; i < 3; i++) RING.c[i] += (tc[i] - RING.c[i]) * ek;
+  RING.swell += (bump - RING.swell) * ek;
+  RING.rt += dt * (rm ? 0 : 1 + 3 * RING.swell);
+  RING.len += (targetLen(c, p) - RING.len) * (1 - Math.exp(-dt * 3));
+  if (!rm) RING.ang += dt * (RING.v[9] + 180 * RING.swell) / 360;
+  const ringPad = R * (Math.abs(wob[0]) + Math.abs(wob[1]) + Math.abs(wob[2]) + Math.abs(wob[3]) + Math.abs(slosh) + Math.max(0, breath - 1));
+  RING.ringR = Math.min(R + GAP_K * R + ringPad, half - 8);   // PORT: clamped so the ring never leaves the circle's box
+
+  gl.viewport(c.ax, AH - c.ay - c.d, c.d, c.d);
+  v2[0] = AW; v2[1] = AH; U.v('uRes', 2, v2); U.f1('uDpr', uDpr);
+  v2[0] = cx + I.ox; v2[1] = cy + I.oy; U.v('uC', 2, v2); v2[0] = cx; v2[1] = cy; U.v('uRC', 2, v2);
+  U.f1('uR', R); v2[0] = dir[0]; v2[1] = dir[1]; U.v('uDir', 2, v2); U.v('uWob', 4, wob);
+  U.f1('uTime', mt); U.f1('uBreath', breath); U.f1('uP', p); U.f1('uTw', tw); U.f1('uSlosh', slosh);
+  U.f1('uRingR', RING.ringR); U.f1('uRT', RING.rt); U.f1('uSwell', RING.swell); U.f1('uPingOn', 0);
+  U.v('uBaseA', 3, A.base); U.v('uInkA', 3, A.ink); U.v('uMatA', 3, A.mat); U.v('uBaseB', 3, B.base); U.v('uInkB', 3, B.ink); U.v('uMatB', 3, B.mat);
+  U.v('uAccent', 3, accV); U.v('uRingCol', 3, RING.c); U.v('uBg', 3, bgV); U.v('uTrack', 3, trackV);
+  U.v('uArc0', 4, arc0); U.v('uArc1', 4, arc1); U.v('uCir0', 4, cir0); U.v('uCir1', 4, cir1);
+  const rip = c.rip;
+  for (let i = 0; i < 4; i++) { const r = I.rips[i], q = i * 4; if (r) { rip[q] = cx + r.x; rip[q + 1] = cy + r.y; rip[q + 2] = wall - r.t0; rip[q + 3] = r.amp; } else { rip[q] = 0; rip[q + 1] = 0; rip[q + 2] = -1; rip[q + 3] = 0; } }
+  U.v('uRip', 4, rip); U.f1('uRipOn', I.ripOn ? 1 : 0); v2[0] = I.light[0]; v2[1] = I.light[1]; U.v('uLight', 2, v2);
+  rs[0] = RING.v[0]; rs[1] = RING.v[1]; rs[2] = RING.v[2]; rs[3] = RING.v[3]; U.v('uRS', 4, rs); rf[0] = RING.v[4]; rf[1] = RING.v[5]; rf[2] = RING.v[6]; rf[3] = RING.v[7]; U.v('uRFx', 4, rf);
+  rg[0] = RING.len; rg[1] = RING.ang - Math.floor(RING.ang); rg[2] = RING.v[8]; U.v('uRG', 4, rg); pingV.fill(-1); U.v('uPing', 4, pingV);
+  gl.drawArrays(gl.TRIANGLES, 0, 3); ENG.draws++; ENG.px += c.d * c.d;
+}
+
+// ── the frame: pack the circles that need drawing into the atlas, draw each, copy each cell to its canvas ──
+let nBatch = 0; const BATCH = [];
+function flush() {
+  for (let i = 0; i < nBatch; i++) {
+    const c = BATCH[i];
+    if (c.cv.width !== c.d) { c.cv.width = c.cv.height = c.d; }
+    c.ctx.globalCompositeOperation = 'copy'; c.ctx.drawImage(glcv, c.ax, c.ay, c.d, c.d, 0, 0, c.d, c.d);
+  }
+  nBatch = 0; ENG.flushes++;
+}
+let lastWall = 0, lastFrame = 0, govN = 0, fpsT = 0, fpsN = 0, wakeAll = true;
+function frame(nowMs) {
+  requestAnimationFrame(frame);
+  if (!ENG.ok) return;
+  const wall = nowMs / 1000, dt = Math.max(0, Math.min(.05, wall - lastWall)); lastWall = wall;
+  const t0 = performance.now();
+  let n = 0;
+  for (let i = ALL.length - 1; i >= 0; i--) {
+    const c = ALL[i];
+    if (!c.wrap.isConnected) { if (io) io.unobserve(c.wrap); c.inAll = false; ALL.splice(i, 1); continue; }
+    clock(c, dt, wall); interact(c, dt, wall);
+    if (c.vis && (wakeAll || !motion.reduce || c.I.busy || c.phase !== 'run' || wall < c.wakeUntil)) LIST[n++] = c;
+  }
+  wakeAll = false;
+  if (!n) { ENG.skipped++; lastFrame = 0; return; }
+  if (lastFrame) { const ms = nowMs - lastFrame; ENG.avgMs += (ms - ENG.avgMs) * .05;
+    if (!ENG.soft && ++govN > 45) { govN = 0; if (ENG.avgMs > 26 && ENG.scale > .6) ENG.scale = Math.max(.6, ENG.scale - .15); else if (ENG.avgMs < 14 && ENG.scale < 1) ENG.scale = Math.min(1, ENG.scale + .1); } }
+  lastFrame = nowMs;
+  const dpr = ENG.soft ? 1 : Math.min(window.devicePixelRatio || 1, 2) * ENG.scale;   // a software renderer draws at CSS size
+  ENG.uploads = 0; ENG.draws = 0; ENG.flushes = 0; ENG.px = 0; ENG.drawn = n;
+  // the atlas is sized to what is drawn (a big idle buffer costs a full-buffer copy on software renderers)
+  let x = 0, y = 0, shelf = 0, needW = 0, needH = 0;
+  for (let i = n - 1; i >= 0; i--) { const d = Math.max(1, Math.round(LIST[i].size * dpr)); if (x + d > MAXW) { x = 0; y += shelf; shelf = 0; } x += d; if (x > needW) needW = x; if (d > shelf) shelf = d; }
+  needH = Math.min(MAXH, y + shelf);
+  if (needW > AW || needH > AH || needW < AW / 2 || needH < AH / 2) { AW = Math.max(64, needW); AH = Math.max(64, needH); glcv.width = AW; glcv.height = AH; }
+  x = 0; y = 0; shelf = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const c = LIST[i], d = Math.max(1, Math.round(c.size * dpr));
+    if (x + d > AW) { x = 0; y += shelf; shelf = 0; }
+    if (y + d > AH) { flush(); x = 0; y = 0; shelf = 0; }
+    c.ax = x; c.ay = y; c.d = d; renderOne(c, dt, wall, dpr); BATCH[nBatch++] = c;
+    x += d; if (d > shelf) shelf = d;
+  }
+  flush();
+  const cpu = performance.now() - t0; ENG.cpuMs += (cpu - ENG.cpuMs) * .1; ENG.frames++;
+  fpsN++; if (wall - fpsT >= .5) { ENG.fps = fpsN / (wall - fpsT); fpsN = 0; fpsT = wall; }
+}
+
+function wake() { wakeAll = true; for (const c of ALL) c.wakeUntil = performance.now() / 1000 + 2.5; }
+
+return {
+  scan, upgrade, ok: () => ENG.ok, stats: () => ({ ...ENG, circles: ALL.length, slots: SLOTS.size }), motion,
+  setReduce(v) { motion.reduce = !!v; wake(); },
+  // a press from the keyboard: the same ripple a pointer press makes
+  kick(svg) { const c = svg && svg.__orb; if (c) { addRipple(c, 0, 0, 1); c.wakeUntil = performance.now() / 1000 + 2.5; wakeAll = true; } },
+};
+})();
+
   // ── render and events ─────────────────────────────────────────────────
+
+  // ── the status circle, enlarged in place ──
+  // Every state change draws the page again, so the card's size before it is remembered and the change is played from there: the
+  // circle scales from where it was (it never travels), the card's height follows, the text fades in. 300 ms, ease-out. With
+  // reduced motion there is no size animation: the new size is instant, with a cross-fade.
+  var GROW_MS = 300, GROW_EASE = 'cubic-bezier(.2,.8,.2,1)', pressed = { at: [], i: -1 };
+  function reducedMotion() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
+  function statusEls() {
+    var app = document.getElementById('app');
+    if (!app || typeof app.querySelector !== 'function') return null;
+    var card = app.querySelector('main.build aside.stack > .card'), svg = card && card.querySelector('svg.cir');
+    if (!svg) return null;
+    return { card: card, svg: svg, circle: svg.closest('.cir3d') || svg, size: +svg.getAttribute('width') || 0 };
+  }
+  function cardBefore() {
+    try {
+      var e = statusEls(); if (!e) return null;
+      var r = e.circle.getBoundingClientRect();
+      return { size: e.size, h: e.card.offsetHeight, x: r.left, y: r.top, w: r.width };
+    } catch (x) { return null; }
+  }
+  function growCard(b) {
+    try {
+      var e = statusEls();
+      if (!b || !e || !b.size || !e.size || b.size === e.size || typeof e.card.animate !== 'function') return;
+      pressed = { at: [], i: -1 };
+      var text = e.card.querySelector('.stext');
+      if (reducedMotion()) { // instant size, cross-fade
+        e.card.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+        return;
+      }
+      var r = e.circle.getBoundingClientRect(), h1 = e.card.offsetHeight, k = r.width ? b.w / r.width : 1;
+      e.card.style.overflow = 'hidden';
+      var anim = e.card.animate([{ height: b.h + 'px' }, { height: h1 + 'px' }], { duration: GROW_MS, easing: GROW_EASE });
+      anim.onfinish = anim.oncancel = function () { e.card.style.overflow = ''; };
+      e.circle.style.transformOrigin = '0 0';
+      var c = e.circle.animate([{ transform: 'translate(' + (b.x - r.left) + 'px,' + (b.y - r.top) + 'px) scale(' + k + ')' }, { transform: 'none' }], { duration: GROW_MS, easing: GROW_EASE });
+      c.onfinish = c.oncancel = function () { e.circle.style.transformOrigin = ''; };
+      if (text) text.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, delay: 80, easing: 'ease-out', fill: 'backwards' });
+    } catch (x) { /* no animation: the new size simply stands */ }
+  }
+
+  /** Pressing the enlarged circle: one honest line in turn (who it is, what it does, that it grows and shrinks); pressing too fast gets the shrug. */
+  function pressOrb(btn, fromKeyboard) {
+    var e = statusEls(); if (!e) return;
+    var who = L.agentState(d().run), lines = L.circleSays(who), now = Date.now();
+    pressed.at = pressed.at.filter(function (t) { return now - t < 1100; }).concat(now);
+    var say = e.card.querySelector('[data-say]');
+    if (say) {
+      if (pressed.at.length >= 4) { say.textContent = "Pressing faster won't start it sooner. Sorry."; pressed.at = []; }
+      else { pressed.i = (pressed.i + 1) % lines.length; say.textContent = lines[pressed.i]; }
+      say.classList.add('on');
+    }
+    if (reducedMotion() || typeof e.circle.animate !== 'function') return;
+    if (fromKeyboard) Orbs.kick(e.svg); // a pointer press already makes its own ripple
+    e.circle.animate([{ transform: 'scale(1)' }, { transform: 'scale(.93)', offset: .25 }, { transform: 'scale(1.035)', offset: .65 }, { transform: 'scale(1)' }], { duration: 520, easing: 'ease-out' });
+  }
   function render() {
     var s = d(), scr = screenOf(s);
     var ae = document.activeElement, focusId = ae && ae.id && /^(qt_|ptext$|client$|project$|agency$)/.test(ae.id) ? ae.id : '';
     var selS = focusId ? ae.selectionStart : null, selE = focusId ? ae.selectionEnd : null;
+    var focusSel = focusId ? '' : focusAgain(ae);
     stashDraft();
+    var before = cardBefore();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
     document.getElementById('app').innerHTML = bar(s, scr) + body;
+    Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
+    growCard(before); // the status card's circle grows or shrinks in place when the state changes its size
     document.title = 'Deck Maker';
     restoreDrafts(s);
     if (focusId) {
@@ -1134,7 +2591,25 @@ var DeckLogic = (function () {
         try { if (selS != null && fe.setSelectionRange) fe.setSelectionRange(selS, selE); } catch (e) { /* not a text field */ }
       }
     }
+    if (focusSel && typeof document.querySelector === 'function') {
+      // The control pressed is drawn again: keep the keyboard on it. Gone (the deck just approved): nothing to do.
+      try { var fb = document.querySelector(focusSel); if (fb && fb.focus) fb.focus(); } catch (e) { /* a selector the page cannot read */ }
+    }
     loadUpstream(s);
+  }
+
+  /**
+   * The selector that finds the focused control again after a re-render: a territory (by its id), the appendix
+   * toggle (its value flips between show and hide) or Approve the deck. Empty for anything else.
+   */
+  function focusAgain(ae) {
+    if (!ae || typeof ae.getAttribute !== 'function') return '';
+    var cssEsc = function (v) { return typeof CSS !== 'undefined' && CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'); };
+    if (ae.id === 'approve-deck') return '#approve-deck';
+    var terr = ae.getAttribute('data-territory');
+    if (terr != null) return '[data-territory="' + cssEsc(terr) + '"]';
+    if (ae.getAttribute('data-appendix') != null) return '[data-appendix]';
+    return '';
   }
 
   /** Ask the host whether the brief or research changed since this deck. Any failure shows nothing. */
@@ -1174,6 +2649,7 @@ var DeckLogic = (function () {
   document.addEventListener('click', function (e) {
     var t = e.target.closest('button'); if (!t) return;
     var s = d(), a = t.dataset;
+    if (a.orb !== undefined) return pressOrb(t, e.detail === 0);
     if (a.go) { view.screen = a.go; return render(); }
     if (a.dtype || a.dtskip) {
       stashDraft();
@@ -1185,6 +2661,12 @@ var DeckLogic = (function () {
     if (a.kind) { pending.kind = a.kind; return render(); }
     if (a.format) { pending.format = a.format; return render(); }
     if (a.slide) { view.slide = a.slide; return render(); }
+    if (a.appendix) {
+      // Opening the appendix is view state; closing it while an appendix slide is open goes back to the pitch.
+      view.appendix = a.appendix === 'show';
+      if (!view.appendix && L.appendixOf(s.deck).ids.indexOf(view.slide) >= 0) view.slide = null;
+      return render();
+    }
     if (a.tab) { view.tab = a.tab; return render(); }
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
@@ -1223,13 +2705,38 @@ var DeckLogic = (function () {
       toast('Recorded. Launching research needs the server, which is not connected yet.');
       return;
     }
-    if (t.id === 'approve') {
-      var next = L.approveGate(s.run, s.run.gate && s.run.gate.id, 'You', now());
-      if (!next) return;
-      put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved');
+    if (a.territory) {
+      // Picking is view state only: Pick this territory writes it, with the approval.
+      if (s.run.gate) view.pick = a.territory;
+      return render();
+    }
+    if (a.approve === 'deck') {
+      // Approve the deck: recorded like a gate approval (run.approvals.deck, run.decisions), with what was still open said.
+      var ds = L.deckApproval(s.raw), nd = ds && ds.state === 'open' ? L.approveDeck(s.run, 'You', now()) : null;
+      if (!nd) return;
+      put({ run: nd }, 'approve deck', 'deck approved: ' + (ds.clear ? 'nothing open' : ds.to_supply + ' to supply, ' + (ds.total - ds.open) + ' of ' + ds.total + ' to confirm verified'));
+      toast('Deck approved. Its files are on Present.');
       return;
     }
-    if (a.edit || a.retry) { toast('Editing and retrying a gate need the engine server.'); return; }
+    if (t.id === 'approve') {
+      var gv = L.gateView(s.run, view.pick);
+      if (!gv) return;
+      if (gv.body === 'territories' && !gv.picked) { toast('Pick a territory first.'); return; }
+      var next = L.approveGate(s.run, gv.id, 'You', now(), gv.picked ? { picked: gv.picked } : null);
+      if (!next) return;
+      var picked = gv.territories.filter(function (x) { return x.id === gv.picked; })[0];
+      view.pick = null;
+      put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved' + (picked ? ': picked ' + picked.name : ''));
+      return;
+    }
+    if (a.retry && !s.run.gate) { toast('Retrying a step needs the engine server, which is not connected yet.'); return; }
+    if (a.edit || a.retry) {
+      // At the open gate an edit or a retry is recorded (run.decisions, run.gate_requests) and launches nothing.
+      var kind = a.edit ? 'edit' : 'retry', req = s.run.gate ? L.gateRequest(s.run, s.run.gate.id, kind, 'You', now()) : null;
+      if (req) put({ run: req }, kind + ' ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ': asked, launches nothing');
+      toast('Recorded. Editing and retrying a gate need the engine server.');
+      return;
+    }
     if (a.act === 'appendix') { toast('Moving slides to the appendix needs the engine server.'); return; }
     if (a.change) {
       var reqs = (s.changes || []).concat([{ slide: view.slide, change: a.change, at: now(), status: 'waiting' }]);
@@ -1237,7 +2744,11 @@ var DeckLogic = (function () {
       toast('Recorded. The words change when the engine is connected; sources stay.');
       return;
     }
-    if (a.export) { toast('Open the file from the document export.'); return; }
+    if (a.export) {
+      var row = L.exportRows(s.exports).filter(function (r) { return r.key === a.export; })[0];
+      toast(row && row.file ? 'Open ' + row.file + ' from the document export.' : 'Open the file from the document export.');
+      return;
+    }
   });
 
   document.addEventListener('input', function () { stashDraft(); });
