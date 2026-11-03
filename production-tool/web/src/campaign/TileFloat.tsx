@@ -20,7 +20,13 @@ export function TileFloat({ anchor, children, onOffscreen = () => tilePick.clear
       onOffscreen()
       return
     }
-    const p = placeFloating({ x: (a.left + a.right) / 2, top: a.top, bottom: a.bottom }, { w: el.offsetWidth, h: el.offsetHeight }, view, 10)
+    // Never over the board's own header (See all sizes, Safe areas, Export): a tile in the top row would
+    // otherwise put its bar right across them.
+    const head = anchor.current?.closest('.cb-board')?.querySelector('.cb-head')?.getBoundingClientRect()
+    const avoid = head ? [{ left: head.left, top: head.top, right: head.right, bottom: head.bottom }] : []
+    // Below the tile's caption, not across it.
+    const bottom = anchor.current?.closest('.cb-tile')?.getBoundingClientRect().bottom ?? a.bottom
+    const p = placeFloating({ x: (a.left + a.right) / 2, top: a.top, bottom }, { w: el.offsetWidth, h: el.offsetHeight }, view, 10, 8, avoid)
     // Placed on the element itself after every render (the board moves with the canvas's view).
     el.style.left = `${p.left}px`
     el.style.top = `${p.top}px`
