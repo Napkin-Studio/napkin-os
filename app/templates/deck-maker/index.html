@@ -20,6 +20,9 @@
   --tool:#2F64F5; --tool-ink:color-mix(in oklab,var(--tool) 78%,var(--ink)); --tool-soft:color-mix(in oklab,var(--tool) 10%,transparent);
   --ok-bg:#e7f6ed; --ok-fg:#15803d; --warn-bg:#fdf3e3; --warn-fg:#b45309;
   --shadow-soft:0 10px 30px rgba(20,30,60,.08); --shadow-lift:0 12px 32px rgba(20,30,60,.16),0 2px 6px rgba(20,30,60,.08);
+  /* the agent circle's ring: one colour per activity, the state also said in words */
+  --ring-work:#FF4F2E; --ring-think:#7A5AF8; --ring-read:#B87100; --ring-check:#238A55; --ring-human:#E0560C; --ring-error:#16191D;
+  --ring-wait:#9EA3AB; --ring-track:#D3D6DC; --ring-edge:#D3D6DC;
   --f-display:'Geist','Helvetica Neue',Arial,sans-serif; --f-mono:'Geist Mono',ui-monospace,Menlo,monospace;
 }
 :root[data-color-scheme="dark"]{
@@ -29,6 +32,8 @@
   --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
   --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
   --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+  --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
+  --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
@@ -38,6 +43,8 @@
     --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
     --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
     --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+    --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
+    --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
   }
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -131,14 +138,21 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .stage b{display:block;font-size:14px;font-weight:500} .stage.now b{font-weight:700}
 .stage span.s{display:block;font-family:var(--f-mono);font-size:11px;color:var(--ink3)}
 .dex{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line-soft);background:var(--soft)}
-.dex .av{width:28px;height:28px;border-radius:999px;background:var(--tool);color:var(--on-fill);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.dex .cir{flex:none}
 .beat{display:flex;gap:16px;padding:13px 20px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
 .beat .n{font-family:var(--f-mono);font-size:12px;color:var(--ink3);width:22px;padding-top:2px}
 .check{display:flex;gap:10px;align-items:center;font-size:13px}
 .tick{width:16px;height:16px;border-radius:999px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tick.ok{background:var(--ok-bg);color:var(--ok-fg)} .tick.warn{background:var(--warn-bg);color:var(--warn-fg)}
-.spin{animation:qspin 2.4s ease-in-out infinite;transform-origin:50% 50%}
-@keyframes qspin{0%{transform:rotate(-45deg)}100%{transform:rotate(315deg)}}
+/* the agent circle: flat, its ring turns only while an agent works, and never when motion is reduced */
+.cir{display:block;flex:none;overflow:visible}
+.cir .act{transform-box:view-box;transform-origin:0 0}
+@keyframes cir-turn{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:no-preference){
+  .cir[data-activity="work"] .act,.cir[data-activity="write"] .act,.cir[data-activity="handoff"] .act{animation:cir-turn 6s linear infinite}
+  .cir[data-activity="think"] .act{animation:cir-turn 9s linear infinite}
+  .cir[data-activity="read"] .act,.cir[data-activity="check"] .act{animation:cir-turn 4.5s linear infinite}
+}
 
 /* screen 3 */
 .review{display:grid;grid-template-columns:230px minmax(0,1fr) 320px;gap:24px;padding:20px 24px 40px;max-width:1500px;margin:0 auto;align-items:start}
@@ -731,7 +745,174 @@ var DeckLogic = (function () {
       .map(function (e) { return { title: String(e.title || (e.direct ? 'the brief' : 'a source')) }; });
   }
 
+  // ── the agent circle: who is working and what they are doing (features/deck-maker-circle-ui.clan) ──
+  // Geometry copied from the agent sphere + ring clan (agents.json), rounded to 3 decimals, for the eight agents this
+  // app shows. An arc is [cx, cy, radius, start angle, sweep, width, opacity]; a circle is [cx, cy, r, width, solid, opacity].
+  // The emblem sits in a unit circle; the ring goes round it. Colours of the ring are tokens (--ring-*), so the theme can
+  // set them; the materials are the agents' own fixed colours.
+  var AGENTS = {
+    brief: { n: 1, name: 'Brief', mat: 'pearl', role: 'Shapes the ask', arcs: [[0,0,0.794,0.558,1.257,0.094,1],[0,0,0.559,-2.549,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
+    research: { n: 2, name: 'Research', mat: 'glass', role: 'Finds evidence', arcs: [[0,0,0.794,1.797,1.484,0.094,1],[-0.001,0.009,0.412,-2.979,3.097,0.097,1]], circs: [[0.265,-0.176,0.118,0.047,0,1],[-0.382,-0.382,0.073,0,1,1]] },
+    strategy: { n: 3, name: 'Strategy', mat: 'graphite', role: 'Builds territories', arcs: [[0,0,0.794,3.037,1.71,0.094,1],[0.001,-0.001,0.471,0.945,2.876,0.073,1],[0.002,-0.004,0.265,-2.773,3.207,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
+    idea: { n: 7, name: 'Idea', mat: 'glass', role: 'Opens directions', arcs: [[0,0,0.794,1.711,1.483,0.094,1],[0,0,0.471,-0.383,2.878,0.073,1],[-0.002,-0.001,0.265,2.191,3.193,0.073,1]], circs: [[-0.382,-0.382,0.073,0,1,1]] },
+    copy: { n: 9, name: 'Copy', mat: 'paper', role: 'Crafts words', arcs: [[0,0,0.794,-2.095,1.938,0.094,1],[0,0,0.324,-1.571,1.065,0.044,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
+    deck: { n: 21, name: 'Deck', mat: 'paper', role: 'Builds pitches', arcs: [[0,0,0.794,0.209,1.257,0.094,1],[0,0,0.559,-2.897,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
+    review: { n: 23, name: 'Review', mat: 'pearl', role: 'Complete', arcs: [[0,0,0.794,2.688,1.711,0.094,1],[0,0,0.471,0.594,2.879,0.073,1],[0,-0.002,0.265,-3.114,3.191,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
+    approval: { n: 24, name: 'Approval', mat: 'paper', role: 'Asks for sign-off', arcs: [[0,0,0.794,-2.356,1.938,0.094,1],[0.206,-0.147,0.294,-1.308,3.838,0.073,1],[0,0,0.324,-1.832,1.065,0.044,0.4]], circs: [[-0.206,0.147,0.235,0.059,0,1]] }
+  };
+
+  /** The flat materials: the body's colour and the emblem's ink. Fixed brand colours, the same in light and dark. */
+  var MATS = {
+    pearl: { base: '#EEECE7', ink: '#16191D' }, glass: { base: '#DCE6F2', ink: '#16191D' },
+    graphite: { base: '#242936', ink: '#EEF0F4' }, paper: { base: '#F7F7F5', ink: '#16191D' }
+  };
+
+  /** What each activity is called. The state is always words as well as a ring: never colour alone. */
+  var ACTIVITY_WORD = {
+    work: 'Working', write: 'Writing', think: 'Thinking', read: 'Reading', check: 'Checking', human: 'Needs you',
+    error: 'Failed, retrying', complete: 'Done', waiting: 'Waiting', handoff: 'Handing off'
+  };
+
+  /** The agent each display stage belongs to and what it does there. */
+  var STAGE_AGENT = {
+    inputs: ['brief', 'read'], scans: ['research', 'read'], storyline: ['strategy', 'write'], territories: ['idea', 'think'],
+    idea: ['idea', 'write'], copy: ['copy', 'write'], check: ['review', 'check'], review: ['approval', 'human']
+  };
+  /** The agent shown at a gate when the run does not name one. */
+  var GATE_AGENT = { storyline: 'strategy', territories: 'strategy', idea: 'idea' };
+
+  var CIRCLE_R = 1.04; // the ring's radius; the body is scaled to 0.82 inside it, and the viewBox reaches 1.15
+
+  function own(o, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); }
+  function num(v) { var r = Math.round(v * 1000) / 1000; return String(r === 0 ? 0 : r); }
+  function escAttr(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  /** An SVG path for an arc of a circle centred at (cx, cy), from angle a0 (radians) through sweep. A full turn is two halves. */
+  function arcPath(cx, cy, rho, a0, sweep) {
+    var pt = function (a) { return num(cx + rho * Math.cos(a)) + ' ' + num(cy + rho * Math.sin(a)); };
+    if (Math.abs(sweep) >= 2 * Math.PI - 0.01) {
+      return 'M' + pt(a0) + 'A' + num(rho) + ' ' + num(rho) + ' 0 1 1 ' + pt(a0 + Math.PI) + 'A' + num(rho) + ' ' + num(rho) + ' 0 1 1 ' + pt(a0);
+    }
+    return 'M' + pt(a0) + 'A' + num(rho) + ' ' + num(rho) + ' 0 ' + (Math.abs(sweep) > Math.PI ? 1 : 0) + ' ' + (sweep >= 0 ? 1 : 0) + ' ' + pt(a0 + sweep);
+  }
+
+  /** The ring for one activity: an arc in that activity's look and token colour, drawn from the top. */
+  function ringOf(activity) {
+    var R = CIRCLE_R, top = -Math.PI / 2;
+    var stroke = function (d, tok, w, extra) {
+      return '<path d="' + d + '" fill="none" stroke="var(--ring-' + tok + ')" stroke-width="' + w + '" stroke-linecap="round"' + (extra || '') + '/>';
+    };
+    switch (activity) {
+      case 'work': case 'write': case 'handoff':
+        return stroke(arcPath(0, 0, R, top, 1.9), 'work', '.1');
+      case 'think':
+        return stroke(arcPath(0, 0, R, top, 4.2), 'think', '.11', ' stroke-dasharray=".001 .17"');
+      case 'read':
+        return [0, 1, 2, 3, 4, 5].map(function (i) {
+          var a = top + i * 0.3, c = Math.cos(a), s = Math.sin(a);
+          return '<line x1="' + num(0.97 * c) + '" y1="' + num(0.97 * s) + '" x2="' + num(1.11 * c) + '" y2="' + num(1.11 * s) + '" stroke="var(--ring-read)" stroke-width=".06" stroke-linecap="round" stroke-opacity="' + num(0.35 + i * 0.13) + '"/>';
+        }).join('');
+      case 'check':
+        return stroke(arcPath(0, 0, R, top, 0.45), 'check', '.09') + stroke(arcPath(0, 0, R, top + 0.8, 0.45), 'check', '.09');
+      case 'human':
+        return stroke(arcPath(0, 0, R, top, Math.PI / 2), 'human', '.14');
+      case 'error':
+        var end = top + 3.6 + 0.55;
+        return stroke(arcPath(0, 0, R, top, 3.6), 'error', '.1') +
+          '<circle cx="' + num(R * Math.cos(end)) + '" cy="' + num(R * Math.sin(end)) + '" r=".07" fill="var(--ring-error)"/>';
+      case 'complete':
+        return stroke(arcPath(0, 0, R, top, 2 * Math.PI), 'work', '.1');
+      default: // waiting: two short neutral arcs
+        return stroke(arcPath(0, 0, R, -2.3, 0.6), 'wait', '.09') + stroke(arcPath(0, 0, R, Math.PI - 2.3, 0.6), 'wait', '.09');
+    }
+  }
+
+  /** The agent's emblem in its material, inside the unit circle. An unknown agent is a plain neutral body. */
+  function emblemOf(a) {
+    if (!a) return '<circle r="1" fill="var(--soft-2)" stroke="var(--ring-edge)" stroke-width=".03"/>';
+    var m = MATS[a.mat] || MATS.pearl, out = '<circle r="1" fill="' + m.base + '" stroke="var(--ring-edge)" stroke-width=".03"/>';
+    out += '<g fill="none" stroke="' + m.ink + '" stroke-linecap="round">';
+    a.arcs.forEach(function (x) {
+      out += '<path d="' + arcPath(x[0], x[1], x[2], x[3], x[4]) + '" stroke-width="' + num(x[5]) + '"' + (x[6] < 1 ? ' stroke-opacity="' + num(x[6]) + '"' : '') + '/>';
+    });
+    a.circs.forEach(function (c) {
+      out += c[4] ? '<circle cx="' + num(c[0]) + '" cy="' + num(c[1]) + '" r="' + num(c[2]) + '" fill="' + m.ink + '" stroke="none"/>'
+        : '<circle cx="' + num(c[0]) + '" cy="' + num(c[1]) + '" r="' + num(c[2]) + '" stroke-width="' + num(c[3]) + '"/>';
+    });
+    return out + '</g>';
+  }
+
+  /**
+   * The agent circle as a flat SVG string: the agent's emblem in its material and the ring of what it is doing.
+   * { agent: key, activity, size (px, default 60), label (the name said, default the agent's) }. role="img", and the
+   * aria-label says the name and the state word. An unknown agent or activity is a neutral waiting circle. Never throws.
+   */
+  function circleSvg(opts) {
+    var o = isObj(opts) ? opts : {};
+    var a = own(AGENTS, o.agent) ? AGENTS[o.agent] : null;
+    var act = own(ACTIVITY_WORD, o.activity) ? o.activity : 'waiting';
+    if (!a) act = 'waiting';
+    var size = typeof o.size === 'number' && o.size > 0 && o.size <= 512 ? Math.round(o.size) : 60;
+    var name = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (a ? a.name : 'Agent');
+    var cls = 'cir' + (size === 60 || size === 32 ? ' s' + size : '');
+    return '<svg class="' + cls + '" width="' + size + '" height="' + size + '" viewBox="-1.15 -1.15 2.3 2.3" role="img" aria-label="' +
+      escAttr(name + ', ' + ACTIVITY_WORD[act]) + '" data-agent="' + (a ? o.agent : 'none') + '" data-activity="' + act + '">' +
+      '<circle r="' + CIRCLE_R + '" fill="none" stroke="var(--ring-track)" stroke-width=".05"/>' +
+      '<g class="act">' + ringOf(act) + '</g><g transform="scale(.82)">' + emblemOf(a) + '</g></svg>';
+  }
+
+  /**
+   * Who the circle shows and what they are doing, from the run: { agent, activity, word, role, step_index, step_total,
+   * handoff }. run.agent (written by the server) names them when present; an open gate always needs a person, a failed
+   * stage is an error, a finished run is done, and with no live feed nothing is running, so the stage's agent is shown
+   * waiting. An unknown agent key is a neutral waiting circle (agent null). Never throws.
+   */
+  function agentState(run) {
+    var out = { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false };
+    try {
+      var r = isObj(run) ? run : {};
+      var stages = Array.isArray(r.stages) ? r.stages.filter(isObj) : [];
+      var gate = isObj(r.gate) ? r.gate : null;
+      var feed = isObj(r.agent) ? r.agent : null;
+      var failedStage = stages.filter(function (s) { return s.status === 'failed'; })[0];
+      var nowStage = stages.filter(function (s) { return s.status === 'now'; })[0];
+      var byStage = function (s) { return s && own(STAGE_AGENT, s.id) ? STAGE_AGENT[s.id] : null; };
+      var key, act;
+      if (feed) {
+        if (!own(AGENTS, feed.key)) return out; // an agent this app does not know: neutral, waiting
+        key = feed.key;
+        act = own(ACTIVITY_WORD, feed.activity) ? feed.activity : 'work';
+      }
+      if (gate) {
+        key = key || (own(AGENTS, gate.agent) ? gate.agent : GATE_AGENT[gate.id] || 'strategy');
+        act = 'human';
+      } else if (r.state === 'failed' || failedStage) {
+        key = key || (byStage(failedStage) || byStage(nowStage) || ['deck'])[0];
+        act = 'error';
+      } else if (r.state === 'done') {
+        key = key || 'deck';
+        act = 'complete';
+      } else if (!feed) {
+        var st = byStage(nowStage);
+        key = st ? st[0] : stages.length ? 'strategy' : 'brief';
+        act = 'waiting';
+      }
+      var a = AGENTS[key];
+      out.agent = key; out.activity = act; out.role = a.role;
+      out.handoff = !!(feed && act !== 'human' && act !== 'error' && own(AGENTS, feed.to) && feed.to !== key);
+      if (out.handoff && act !== 'complete') out.activity = act = 'handoff';
+      out.word = ACTIVITY_WORD[act] + (feed && feed.slow === true && act !== 'human' && act !== 'complete' ? ' · taking longer than usual' : '');
+      if (feed && Number.isInteger(feed.step_index) && Number.isInteger(feed.step_total) && feed.step_index > 0 && feed.step_index <= feed.step_total) {
+        out.step_index = feed.step_index; out.step_total = feed.step_total;
+      }
+      return out;
+    } catch (e) {
+      return { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false };
+    }
+  }
+
   return {
+    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, arcPath: arcPath,
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
@@ -789,7 +970,6 @@ var DeckLogic = (function () {
   var MARK = '<svg aria-hidden="true" width="24" height="24" viewBox="0 0 32 32"><g transform="rotate(-45 16 16)">' +
     '<path d="M16 16 L16 2 A14 14 0 0 1 30 16 Z" fill="#FF4F2E"/><path d="M16 16 L30 16 A14 14 0 0 1 16 30 Z" fill="#8B919E"/>' +
     '<path d="M16 16 L16 30 A14 14 0 0 1 2 16 Z" fill="#14161B"/><path d="M16 16 L2 16 A14 14 0 0 1 16 2 Z" fill="#DADDE3"/></g></svg>';
-  var MARK_SPIN = MARK.replace('width="24" height="24"', 'class="spin" width="40" height="40"').replace('<g transform="rotate(-45 16 16)">', '<g>');
 
   function bar(s, scr) {
     var p = s.inputs.prompt;
@@ -996,7 +1176,7 @@ var DeckLogic = (function () {
 
   // ── 2 · Build, with gates ─────────────────────────────────────────────
   function build(s) {
-    var run = s.run, gate = run.gate;
+    var run = s.run, gate = run.gate, who = L.agentState(run); // the circle: who is working and what they are doing
     var stages = run.stages.map(function (st) {
       var glyph = st.status === 'done' ? '✓' : st.status === 'now' ? '•' : st.status === 'failed' ? '!' : '';
       return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
@@ -1009,7 +1189,7 @@ var DeckLogic = (function () {
       main = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gate.n) + ' of ' + esc(gate.of) + '</span></div>' +
         '<h1 class="sm" style="margin-bottom:6px">Approve the storyline</h1>' +
         '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.</p>' +
-        '<div class="card" style="overflow:hidden"><div class="dex"><span class="av" aria-hidden="true">D</span><span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gate.dex) + '</span></div>' +
+        '<div class="card" style="overflow:hidden"><div class="dex">' + L.circleSvg({ agent: who.agent, activity: 'human', size: 32 }) + '<span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gate.dex) + '</span></div>' +
         gate.beats.map(function (b) {
           var c = bases[b.basis] || bases.brief;
           return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
@@ -1026,7 +1206,7 @@ var DeckLogic = (function () {
       gate.checks.map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
       '<section>' + main + '</section><aside class="stack">' +
-      '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + (gate ? MARK_SPIN.replace('class="spin"', '') : MARK_SPIN) +
+      '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
         '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? 'Nothing runs until you approve' : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
         '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>' +
       builtLine(builtOf(s)) + checks + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';

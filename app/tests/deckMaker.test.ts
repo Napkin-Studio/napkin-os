@@ -48,6 +48,11 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   confirmList(data: unknown): { items: { ref: string; kind: string; text: string; verified: { by: string; at: string } | null }[]; total: number; verified: number; open: number }
   verifyPatch(ref: string, at: string): unknown
   sourcedCounts(data: unknown): { toSupply: number; verified: number; total: number; open: number; supplied: number; sourced: number }
+  AGENTS: Record<string, { n: number; name: string; mat: string; role: string; arcs: number[][]; circs: number[][] }>
+  ACTIVITY_WORD: Record<string, string>
+  circleSvg(opts: unknown): string
+  agentState(run: unknown): { agent: string | null; activity: string; word: string; role: string; step_index: number | null; step_total: number | null; handoff: boolean }
+  arcPath(cx: number, cy: number, rho: number, a0: number, sweep: number): string
 }
 // Results come from another realm, so their arrays are not this realm's Arrays: compare as plain JSON.
 const plain = (v: unknown) => JSON.parse(JSON.stringify(v))
@@ -706,4 +711,161 @@ test('Present lists the confirm items before Export and says what counts as sour
   const h = m.app.innerHTML
   assert.ok(h.indexOf('Confirm list') > -1 && h.indexOf('Confirm list') < h.indexOf('>Export<'))
   assert.ok(h.includes('data-sourced') && h.includes('counted as sourced'))
+})
+
+// ── the agent circle (features/deck-maker-circle-ui.clan, phase 1) ──────────────
+const css = /<style>([\s\S]*?)<\/style>/.exec(html)![1]
+const used = { brief: 1, research: 2, strategy: 3, idea: 7, copy: 9, deck: 21, review: 23, approval: 24 }
+
+test('the circle carries the eight agents\' geometry, rounded to 3 decimals', () => {
+  assert.deepEqual(plain(Object.keys(L.AGENTS).sort()), Object.keys(used).sort())
+  for (const [k, n] of Object.entries(used)) {
+    const a = L.AGENTS[k]
+    assert.equal(a.n, n, k)
+    assert.ok(a.arcs.length && a.circs.length, k)
+    for (const v of [...a.arcs, ...a.circs].flat()) assert.equal(Math.round(v * 1000) / 1000, v, `${k} ${v}`)
+  }
+})
+
+test('circleSvg: a flat SVG with role img, the name and state word, the size and data-activity', () => {
+  const s = L.circleSvg({ agent: 'strategy', activity: 'human', size: 60 })
+  assert.match(s, /^<svg class="cir s60" width="60" height="60" viewBox="-1\.15 -1\.15 2\.3 2\.3" role="img"/)
+  assert.match(s, /aria-label="Strategy, Needs you"/)
+  assert.match(s, /data-activity="human"/)
+  assert.match(s, /data-agent="strategy"/)
+  const small = L.circleSvg({ agent: 'idea', activity: 'think', size: 32 })
+  assert.match(small, /class="cir s32" width="32" height="32"/)
+  assert.match(small, /aria-label="Idea, Thinking"/)
+  for (const [act, word] of Object.entries(L.ACTIVITY_WORD)) {
+    const x = L.circleSvg({ agent: 'copy', activity: act, size: 60 })
+    assert.ok(x.includes(`aria-label="Copy, ${word}"`), act)
+    assert.ok(x.includes(`data-activity="${act}"`), act)
+  }
+  assert.match(L.circleSvg({ agent: 'deck', activity: 'work', size: 60, label: 'Dex' }), /aria-label="Dex, Working"/)
+  assert.equal(L.circleSvg({ agent: 'deck', activity: 'work', label: hostile }).includes('<img'), false)
+})
+
+test('circleSvg: an unknown agent or activity is a neutral waiting circle, and junk never throws', () => {
+  for (const o of [{ agent: 'nobody', activity: 'work' }, { agent: '__proto__' }, { agent: 'constructor', activity: 'human' }, null, undefined, 5, 'x', { activity: 'toString', agent: 'deck', size: -3 }]) {
+    const s = L.circleSvg(o)
+    assert.match(s, /^<svg class="cir/)
+    assert.match(s, /data-activity="waiting"/)
+    assert.match(s, /role="img"/)
+  }
+  assert.match(L.circleSvg({ agent: 'nobody' }), /data-agent="none"[^>]*>/)
+  assert.match(L.circleSvg({ agent: 'nobody' }), /aria-label="Agent, Waiting"/)
+  assert.match(L.circleSvg({}), /width="60" height="60"/)
+})
+
+test('arcPath draws a partial arc with the right flags and a full turn as two halves', () => {
+  assert.equal(L.arcPath(0, 0, 1, 0, Math.PI / 2), 'M1 0A1 1 0 0 1 0 1')
+  assert.match(L.arcPath(0, 0, 1, 0, 4), /A1 1 0 1 1 /)
+  assert.equal((L.arcPath(0, 0, 1, 0, 2 * Math.PI).match(/A/g) || []).length, 2)
+})
+
+const stg = (pairs: [string, string][]) => pairs.map(([id, status]) => ({ id, name: id, sub: '', status }))
+const all = ['inputs', 'scans', 'storyline', 'territories', 'idea', 'copy', 'check', 'review']
+const withNow = (id: string) => stg(all.map(x => [x, all.indexOf(x) < all.indexOf(id) ? 'done' : x === id ? 'now' : 'next'] as [string, string]))
+
+test('agentState: every row of the table', () => {
+  const pick = (r: unknown) => { const s = L.agentState(r); return [s.agent, s.activity, s.word] }
+  // an open gate always needs a person: the gate's agent, else Strategy for gates 1 and 2, Idea for 3
+  assert.deepEqual(plain(pick({ state: 'gate', stages: withNow('storyline'), gate: { id: 'storyline' } })), ['strategy', 'human', 'Needs you'])
+  assert.deepEqual(plain(pick({ state: 'gate', stages: withNow('idea'), gate: { id: 'idea' } })), ['idea', 'human', 'Needs you'])
+  assert.deepEqual(plain(pick({ state: 'gate', stages: [], gate: { id: 'storyline', agent: 'review' } })), ['review', 'human', 'Needs you'])
+  assert.deepEqual(plain(pick({ state: 'gate', stages: [], gate: { id: 'x' }, agent: { key: 'copy', activity: 'write' } })), ['copy', 'human', 'Needs you'])
+  // failed is an error, on the failed stage's agent
+  assert.deepEqual(plain(pick({ state: 'building', stages: stg([['inputs', 'done'], ['copy', 'failed']]) })), ['copy', 'error', 'Failed, retrying'])
+  assert.deepEqual(plain(pick({ state: 'failed', stages: [] })), ['deck', 'error', 'Failed, retrying'])
+  // done is complete
+  assert.deepEqual(plain(pick({ state: 'done', stages: [] })), ['deck', 'complete', 'Done'])
+  // nothing running (no live feed): the stage's agent, waiting
+  assert.deepEqual(plain(pick({ state: 'building', stages: withNow('territories'), gate: null })), ['idea', 'waiting', 'Waiting'])
+  assert.deepEqual(plain(pick({ state: 'building', stages: withNow('check') })), ['review', 'waiting', 'Waiting'])
+  assert.deepEqual(plain(pick({ state: 'draft', stages: [] })), ['brief', 'waiting', 'Waiting'])
+  // the server's run.agent names who works and how
+  for (const [act, word] of [['work', 'Working'], ['write', 'Writing'], ['think', 'Thinking'], ['read', 'Reading'], ['check', 'Checking']]) {
+    assert.deepEqual(plain(pick({ state: 'building', stages: withNow('copy'), agent: { key: 'copy', activity: act } })), ['copy', act, word])
+  }
+  assert.deepEqual(plain(pick({ state: 'building', stages: [], agent: { key: 'copy' } })), ['copy', 'work', 'Working'])
+  const slow = L.agentState({ state: 'building', stages: [], agent: { key: 'idea', activity: 'think', slow: true, step_index: 2, step_total: 4 } })
+  assert.equal(slow.word, 'Thinking · taking longer than usual')
+  assert.deepEqual(plain([slow.step_index, slow.step_total, slow.role]), [2, 4, 'Opens directions'])
+  const ho = L.agentState({ state: 'building', stages: [], agent: { key: 'strategy', activity: 'write', to: 'idea' } })
+  assert.deepEqual(plain([ho.agent, ho.activity, ho.word, ho.handoff]), ['strategy', 'handoff', 'Handing off', true])
+  // an agent this app does not know: neutral, waiting
+  assert.deepEqual(plain(pick({ state: 'building', stages: withNow('copy'), agent: { key: 'dex', activity: 'work' } })), [null, 'waiting', 'Waiting'])
+  assert.deepEqual(plain(pick({ state: 'building', stages: [], agent: { key: '__proto__' } })), [null, 'waiting', 'Waiting'])
+})
+
+test('agentState never throws on junk', () => {
+  for (const r of [null, undefined, 1, 'x', [], { stages: 'x' }, { stages: [null, 1] }, { gate: 5 }, { agent: [] }, { agent: { key: 'idea', step_index: 9, step_total: 2 } }]) {
+    const s = L.agentState(r)
+    assert.ok(s && typeof s.word === 'string' && s.word.length)
+  }
+  assert.equal(L.agentState({ agent: { key: 'idea', step_index: 9, step_total: 2 } }).step_index, null)
+})
+
+const gateRun = () => ({
+  state: 'gate', stage: 'storyline', cost_usd: 1.14, stages: withNow('storyline'), approvals: {},
+  gate: {
+    id: 'storyline', n: 1, of: 3, dex: 'I put the answer to the brief first.', more_beats: 4,
+    beats: [{ n: '01', title: 'First beat', src: 'Brief · objective', basis: 'brief' }],
+    checks: [{ ok: true, text: 'Every number traces to a source' }, { ok: false, text: '2 beats need details only you have' }],
+  },
+})
+const buildData = (r: unknown) => ({ inputs: { prompt: { client: 'Lumen', project: 'P', text: 'x' } }, run: r })
+const statusCard = (h: string) => /<aside class="stack"><div class="card" style="padding:20px">([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
+
+test('gate 1: the status card shows the 60px circle with the same words, and Dex is a 32px circle', () => {
+  const h = mount(buildData(gateRun())).app.innerHTML
+  const card = statusCard(h)
+  assert.match(card, /<svg class="cir s60" width="60" height="60"[^>]*aria-label="Strategy, Needs you"[^>]*data-activity="human"/)
+  assert.ok(card.includes('>Waiting for you<') && card.includes('>Nothing runs until you approve<'))
+  assert.match(h, /<div class="dex"><svg class="cir s32" width="32" height="32"[^>]*aria-label="Strategy, Needs you"[^>]*>[\s\S]*?<\/svg><span class="mono" style="font-size:12px">Dex · directs<\/span>/)
+  assert.equal(h.includes('class="av"'), false)
+  assert.equal(/class="spin"|qspin/.test(h), false)
+  // the gate keeps its controls
+  for (const want of ['id="approve"', 'data-edit="beats"', 'data-retry="storyline"', 'Approve the storyline', 'Gate 1 of 3', '+ 4 more beats']) assert.ok(h.includes(want), want)
+})
+
+test('with no gate the status card shows the waiting circle and still says it waits for the engine', () => {
+  const m = mount(buildData(gateRun()))
+  m.click({}, 'approve')
+  const next = (m.writes[0].obj as { run: unknown }).run
+  const h = mount(buildData(next)).app.innerHTML
+  const card = statusCard(h)
+  assert.match(card, /<svg class="cir s60"[^>]*aria-label="Idea, Waiting"[^>]*data-activity="waiting"/)
+  assert.ok(card.includes('>Waiting for the engine<') && card.includes('>Not connected to this document yet<'))
+  assert.equal(h.includes('class="dex"'), false)
+})
+
+test('the build screens show no percentage and no time range', () => {
+  const m = mount(buildData(gateRun()))
+  m.click({}, 'approve')
+  const runs = [gateRun(), (m.writes[0].obj as { run: unknown }).run, { state: 'building', stages: stg([['inputs', 'done'], ['copy', 'failed']]), gate: null, approvals: {} },
+    { state: 'building', stages: withNow('copy'), gate: null, approvals: {}, agent: { key: 'copy', activity: 'write', slow: true } }]
+  for (const r of runs) {
+    const h = mount(buildData(r)).app.innerHTML
+    assert.ok(h.includes('class="cir s60"'))
+    assert.equal(/\d\s?%/.test(h), false)
+    assert.equal(/\d+\s?(min|sec|hours?)\b/.test(h), false)
+  }
+})
+
+test('the ring turns only when motion is allowed, and the spinner is gone', () => {
+  assert.equal(/MARK_SPIN|qspin|\.spin\{/.test(html), false)
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important/)
+  const anims = [...css.matchAll(/animation:cir-turn/g)].map(m => m.index!)
+  const block = /@media \(prefers-reduced-motion:no-preference\)\{[\s\S]*?\n\}/.exec(css)!
+  assert.ok(anims.length > 0)
+  for (const i of anims) assert.ok(i > block.index && i < block.index + block[0].length, 'every turn is inside the no-preference block')
+  assert.equal(/data-activity="human"\] \.act\{animation/.test(css), false)
+})
+
+test('the ring colours are tokens in light, dark and OS-dark', () => {
+  for (const tok of ['--ring-work', '--ring-think', '--ring-read', '--ring-check', '--ring-human', '--ring-error', '--ring-wait', '--ring-track', '--ring-edge']) {
+    assert.equal((css.match(new RegExp(`${tok}:`, 'g')) ?? []).length, 3, tok)
+    assert.ok(L.circleSvg({ agent: 'deck', activity: 'work' }).includes('var(--ring-track)'))
+  }
 })
