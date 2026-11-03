@@ -173,6 +173,29 @@ test('each state carries what its screen needs', () => {
   assert.equal(f('done').deck.appendix_ids.length, f('done').deck.appendix_count)
 })
 
+test('review-ready and both export states have every fact supplied and every confirm item verified', () => {
+  for (const n of ['review-ready', 'export-ready', 'export-none']) {
+    const d = load(`example/states/${n}.yaml`)
+    assert.equal(d.validation.to_supply, 0, n)
+    assert.equal(d.run.done.to_supply, 0, n)
+    const refs = d.deck.meta.confirm.map((c: { ref: string }) => c.ref)
+    assert.deepEqual(Object.keys(d.intake.verified).sort(), [...refs].sort(), `${n}: every confirm item verified`)
+    const card = d.intake.questions.find((q: { kind?: string }) => q.kind === 'supply')
+    assert.ok(card && d.intake.answers[card.id].text, `${n}: the supply card is answered`)
+    const s06 = d.deck.slides.s06
+    assert.equal(s06.status, 'from_source')
+    assert.deepEqual(s06.supplied.refs, ['answer:' + card.id])
+    assert.ok(d.evidence['answer:' + card.id], `${n}: the answer is evidence`)
+    assert.ok(d.run.checks.length > 0, `${n}: Checked so far`)
+    for (const id of d.deck.appendix_ids) assert.equal(d.deck.slides[id].blocks.length, 1, `${n}: ${id} has a line`)
+  }
+  for (const n of ['export-ready', 'export-none']) {
+    const r = load(`example/states/${n}.yaml`).run
+    assert.equal(r.approvals.deck.decision, 'approve')
+    assert.deepEqual(r.decisions.at(-1), { gate: 'deck', kind: 'approve', by: 'Sai', at: r.approvals.deck.at })
+  }
+})
+
 test('exports take the older `true` shape as well as the object', () => {
   const d = load('example/states/export-ready.yaml')
   d.exports = { web: true, pptx: { file: 'a.pptx' } }

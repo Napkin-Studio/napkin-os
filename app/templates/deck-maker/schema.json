@@ -328,13 +328,18 @@
           "properties": {
             "deck": {
               "type": "object",
-              "description": "The deck approval at Review.",
+              "description": "The deck approval at Review (Approve the deck): who, when, and the decision. Written by the app until the server writes it.",
               "properties": {
                 "by": {
                   "type": "string"
                 },
                 "at": {
                   "type": "string"
+                },
+                "decision": {
+                  "enum": [
+                    "approve"
+                  ]
                 }
               }
             }
@@ -477,7 +482,7 @@
         },
         "decisions": {
           "type": "array",
-          "description": "Every approve, edit or retry at a gate, in order.",
+          "description": "Every approve, edit or retry at a gate, in order, and the deck approval (gate `deck`).",
           "items": {
             "type": "object",
             "required": [
@@ -619,6 +624,24 @@
             "properties": {
               "appendix": {
                 "type": "boolean"
+              },
+              "supplied": {
+                "type": "object",
+                "description": "A human-only slide the engine rebuilt from what the person supplied (engine assemble._fill_human_only): basis, by, refs.",
+                "properties": {
+                  "basis": {
+                    "type": "string"
+                  },
+                  "by": {
+                    "type": "string"
+                  },
+                  "refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }

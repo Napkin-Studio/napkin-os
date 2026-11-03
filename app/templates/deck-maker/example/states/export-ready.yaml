@@ -1,6 +1,7 @@
 # HAND-BUILT FIXTURE, NOT ENGINE OUTPUT. State "export-ready" of the Deck Maker run, on the Ballymaloe Relish sample
 # (a hand-built sample: the brief fields are real Brief Maker output, the research is six web findings, the rest
-# is written by hand). Dev and test only: not packed into the app. Territories, the idea and its executions are
+# is written by hand). Every fact to supply is in: one supply card answered (slide 6 rebuilt from it; the card takes
+# the timing question's place) and every confirm item verified, as the f19/f22 designs show. Dev and test only: not packed into the app. Territories, the idea and its executions are
 # our proposals. `fixture` lists what the engine cannot supply yet (run.agent, cost, file sizes); the cost is a
 # placeholder. No time or percentage is shown anywhere.
 inputs:
@@ -169,19 +170,6 @@ intake:
     - id: none
       label: Nothing confirmed yet
       value: null
-  - id: q_timing
-    text: What are the campaign dates, the TV versus social split and the retailers?
-    address: brief.budget_and_scope
-    allow_text: true
-    options:
-    - id: unknown
-      label: Not decided yet
-      value: null
-    - id: social_led
-      label: Social carries reach, TV targeted
-      value: social-led, targeted TV
-      origin: proposed
-      source: As €150k is tight for TV, social and cut-downs should carry reach
   - id: q_guidelines
     text: Are there brand guidelines, a logo or pack shot, legal wording or broadcast clearance to follow?
     address: brief.mandatories
@@ -196,6 +184,45 @@ intake:
     - id: none
       label: None that I know of
       value: null
+  - id: q_supply_team
+    text: Who presents, and how does the €150k split between TV and social?
+    address: deck.slides.s06
+    kind: supply
+    fills: team
+    allow_text: true
+    options: []
+  answers:
+    q_supply_team:
+      text: "Aoife Byrne, Strategy lead, presents with Cian Doyle, Creative\nSplit: €95k TV, €55k social and cut-downs"
+      at: '2026-11-03T11:02:00Z'
+  verified:
+    slide:team:
+      by: Sai
+      at: '2026-11-03T11:04:00Z'
+    proposal:b1e7a904:
+      by: Sai
+      at: '2026-11-03T11:05:00Z'
+    brief:objectives:
+      by: Sai
+      at: '2026-11-03T11:06:00Z'
+    brief:audience:
+      by: Sai
+      at: '2026-11-03T11:07:00Z'
+    brief:insight:
+      by: Sai
+      at: '2026-11-03T11:08:00Z'
+    brief:competitor_context:
+      by: Sai
+      at: '2026-11-03T11:09:00Z'
+    brief:reasons_to_believe:
+      by: Sai
+      at: '2026-11-03T11:10:00Z'
+    brief:budget_and_scope:
+      by: Sai
+      at: '2026-11-03T11:11:00Z'
+    brief:mandatories:
+      by: Sai
+      at: '2026-11-03T11:12:00Z'
 run:
   state: done
   stage: review
@@ -251,6 +278,16 @@ run:
     deck:
       by: Sai
       at: '2026-11-03T11:20:00Z'
+      decision: approve
+  checks:
+  - ok: true
+    text: Every figure traces to a source or the brief
+  - ok: true
+    text: No rejected finding used
+  - ok: true
+    text: Slide 6 is rebuilt from what you supplied
+  - ok: false
+    text: 6 research findings are single-source and unverified
   agent:
     key: approval
     activity: complete
@@ -269,11 +306,15 @@ run:
     kind: approve
     by: Sai
     at: '2026-11-03T10:52:00Z'
+  - gate: deck
+    kind: approve
+    by: Sai
+    at: '2026-11-03T11:20:00Z'
   done:
-    summary: The deck is ready for you. Seven slides and five appendix slides. Two facts are still to supply.
+    summary: The deck is ready for you. Seven slides and five appendix slides. Every fact to supply is in.
     slides: 7
     appendix: 5
-    to_supply: 2
+    to_supply: 0
 deck:
   meta:
     client: Ballymaloe Relish
@@ -540,21 +581,30 @@ deck:
       type: team
       section: Team and work
       title: Here is who presents and what €150k covers.
-      status: needs_human
+      status: from_source
       requirements:
       - R3
+      supplied:
+        basis: supplied by Sai
+        by: Sai
+        refs:
+        - answer:q_supply_team
       blocks:
       - kind: text
-        text: '[Presenter name and role]'
-        human: true
+        text: 'Presenter: Aoife Byrne, Strategy lead, with Cian Doyle, Creative'
+        basis: sourced
+        refs:
+        - answer:q_supply_team
       - kind: text
         text: 'Budget: €150k, from the brief.'
         basis: sourced
         refs:
         - brief:budget_and_scope
       - kind: text
-        text: '[Split between TV and social]'
-        human: true
+        text: 'Split: €95k TV, €55k social and cut-downs'
+        basis: sourced
+        refs:
+        - answer:q_supply_team
       claims:
       - text: The budget is €150k.
         refs:
@@ -562,7 +612,7 @@ deck:
         basis: sourced
       visual:
         kind: layout
-      notes: 'Who presents: [Presenter name and role], to be supplied. The brief gives only the €150k total, so the split stays a placeholder for you to fill.'
+      notes: 'Aoife Byrne presents, with Cian Doyle. The €150k total is the brief''s; the split is yours: €95k TV, €55k social and cut-downs.'
     s07:
       type: next_step
       section: Next step
@@ -587,7 +637,11 @@ deck:
       title: Audience (to confirm)
       status: from_source
       appendix: true
-      blocks: []
+      blocks:
+      - kind: text
+        text: 'The 28-year-old renter is the brief''s assumption, still to confirm with consumer research.'
+        basis: proposal
+        refs: []
       claims: []
       visual:
         kind: layout
@@ -598,7 +652,11 @@ deck:
       title: Competitors (to confirm)
       status: from_source
       appendix: true
-      blocks: []
+      blocks:
+      - kind: text
+        text: 'Category led by Unilever, Heinz and Mars; own label is gaining ground.'
+        basis: sourced
+        refs: [f_w5]
       claims: []
       visual:
         kind: layout
@@ -609,7 +667,11 @@ deck:
       title: Tone and world
       status: from_source
       appendix: true
-      blocks: []
+      blocks:
+      - kind: text
+        text: 'Warm, Irish and a little wry: the jar on a Tuesday, not a feast.'
+        basis: proposal
+        refs: []
       claims: []
       visual:
         kind: layout
@@ -620,7 +682,11 @@ deck:
       title: Open questions
       status: from_source
       appendix: true
-      blocks: []
+      blocks:
+      - kind: text
+        text: 'Baseline sales and awareness, the campaign dates and the retailers are still to agree.'
+        basis: sourced
+        refs: [brief:objectives]
       claims: []
       visual:
         kind: layout
@@ -631,7 +697,11 @@ deck:
       title: Sources
       status: from_source
       appendix: true
-      blocks: []
+      blocks:
+      - kind: text
+        text: 'Bord Bia Origin Green directory, Agriland and Euromonitor (2024 edition).'
+        basis: sourced
+        refs: [f_w2, f_w3, f_w5]
       claims: []
       visual:
         kind: layout
@@ -644,6 +714,9 @@ deck:
   - a04
   - a05
 evidence:
+  answer:q_supply_team:
+    kind: your answer
+    text: "Aoife Byrne, Strategy lead, presents with Cian Doyle, Creative. Split: €95k TV, €55k social and cut-downs."
   brief:objectives:
     kind: brief
     text: Get under-35s in Ireland buying Ballymaloe Relish. Sales, distribution and awareness figures and the reason for launching now need the client's input.
@@ -676,7 +749,7 @@ evidence:
     text: 'Euromonitor: category led by Unilever Ireland, HJ Heinz (Ireland) and Mars Ireland; private labels gaining ground (2024 edition). https://www.euromonitor.com/sauces-dips-and-condiments-in-ireland/report Figures paywalled; unverified.'
 validation:
   errors: 0
-  to_supply: 2
+  to_supply: 0
   findings:
     s03:
     - level: warn
@@ -684,11 +757,6 @@ validation:
     s04:
     - level: warn
       message: The line itself is a proposal, so it has no source
-    s06:
-    - level: warn
-      message: 'Presenter missing: add it'
-    - level: warn
-      message: 'Budget split missing: add it'
 report:
   seconds: 0
   tokens: 0
@@ -708,6 +776,7 @@ fixture:
   label: sample, not engine output
   engine_cannot_supply_yet:
   - run.agent
+  - run.checks
   - run.cost_usd
   - run.stages[].items
   - exports.*.bytes
