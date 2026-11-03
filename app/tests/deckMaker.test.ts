@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
+import { parseYaml } from './deckMakerYaml'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
@@ -51,9 +52,13 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   AGENTS: Record<string, { n: number; name: string; mat: string; role: string; arcs: number[][]; circs: number[][] }>
   ACTIVITY_WORD: Record<string, string>
   circleSvg(opts: unknown): string
-  agentState(run: unknown): { agent: string | null; activity: string; word: string; role: string; step_index: number | null; step_total: number | null; handoff: boolean }
+  agentState(run: unknown): { agent: string | null; activity: string; word: string; role: string; step_index: number | null; step_total: number | null; handoff: boolean; to: string | null }
   arcPath(cx: number, cy: number, rho: number, a0: number, sweep: number): string
+  blend(from: unknown, to: unknown, p?: unknown): string
+  runView(run: unknown, deck: unknown): RunView
 }
+type RunRow = { n: string; title: string; sub: string; status: string; pill: string }
+type RunView = { kind: string; title: string; lede: string; head: string; grid: boolean; items: RunRow[]; tail: string[]; stage: string; retryable: boolean }
 // Results come from another realm, so their arrays are not this realm's Arrays: compare as plain JSON.
 const plain = (v: unknown) => JSON.parse(JSON.stringify(v))
 
@@ -868,4 +873,198 @@ test('the ring colours are tokens in light, dark and OS-dark', () => {
     assert.equal((css.match(new RegExp(`${tok}:`, 'g')) ?? []).length, 3, tok)
     assert.ok(L.circleSvg({ agent: 'deck', activity: 'work' }).includes('var(--ring-track)'))
   }
+})
+
+// ── the running Build screen (phase 2): driven by the state fixtures in example/states/ ──────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Fx = Record<string, any>
+const fixture = (name: string) => parseYaml(readFileSync(new URL(`templates/deck-maker/example/states/${name}.yaml`, root), 'utf8')) as Fx
+const RUNNING = ['reading', 'handoff', 'storyline', 'territories', 'slow', 'idea', 'copy', 'deck', 'check']
+const rightAside = (h: string) => /<\/section><aside class="stack">([\s\S]*)<\/aside><\/main>/.exec(h)?.[1] ?? ''
+const box = (h: string) => /<div class="card cbox[^"]*" data-run="(\w+)">([\s\S]*?)<\/section>/.exec(h)
+
+test('runView: each fixture is the view its name says, and junk never throws', () => {
+  for (const n of RUNNING) assert.equal(L.runView(fixture(n).run, fixture(n).deck).kind, 'running', n)
+  for (const n of ['gate1', 'gate2', 'gate3']) assert.equal(L.runView(fixture(n).run, fixture(n).deck).kind, 'gate', n)
+  assert.equal(L.runView(fixture('failed').run, fixture('failed').deck).kind, 'failed')
+  assert.equal(L.runView(fixture('done').run, fixture('done').deck).kind, 'done')
+  // with no live feed and no items, nothing reports progress: the engine is not connected
+  assert.equal(L.runView({ state: 'building', stages: withNow('copy'), gate: null }, null).kind, 'waiting')
+  for (const j of [null, undefined, 5, 'x', [], { stages: 'x' }, { stages: [null, { status: 'now', items: 'x' }] }, { state: 'failed' }, { state: 'done', done: 3 }]) {
+    const v = L.runView(j, j)
+    assert.ok(v && typeof v.kind === 'string' && Array.isArray(v.items))
+  }
+})
+
+test('runView: the running stage\'s items are the content box rows, split at " · ", in the stage\'s words', () => {
+  const r = L.runView(fixture('reading').run, null)
+  assert.deepEqual(plain([r.title, r.head]), ['Reading your inputs', 'What it is reading'])
+  assert.deepEqual(plain(r.items.map(x => [x.title, x.status, x.pill])), [
+    ['Ballymaloe brief', 'done', 'Read'], ['Ballymaloe research', 'done', 'Read'], ['Image-only pages', 'now', 'Reading now']])
+  assert.equal(r.items[2].sub, 'Scanned pages with no text layer')
+  const st = L.runView(fixture('storyline').run, null)
+  assert.deepEqual(plain(st.items.map(x => x.n)), ['01', '02', '03', '04', '05', '06'])
+  assert.deepEqual(plain(st.items.slice(3).map(x => x.pill)), ['Writing now', 'Not yet written', 'Not yet written'])
+  assert.equal(L.runView(fixture('check').run, null).items[0].pill, 'Checked')
+})
+
+test('runView: the Deck agent builds a grid of slides by their titles, and the appendix line goes under it', () => {
+  const f = fixture('deck'), v = L.runView(f.run, f.deck)
+  assert.equal(v.grid, true)
+  assert.equal(v.title, 'Building the slides')
+  assert.equal(v.items.length, 7)
+  assert.equal(v.items[4].title, f.deck.slides[f.deck.order[4]].title)
+  assert.deepEqual(plain([v.items[4].n, v.items[4].status, v.items[4].pill]), ['05', 'now', 'Building now'])
+  assert.deepEqual(plain(v.tail), ['Appendix: 5 slides to follow'])
+})
+
+test('runView: slow says nothing is wrong, with no time; a hand-off names who takes over', () => {
+  const slow = L.runView(fixture('slow').run, null)
+  assert.match(slow.lede, /longer than usual\. Nothing is wrong/)
+  const ho = L.runView(fixture('handoff').run, null)
+  assert.deepEqual(plain([ho.title, ho.head]), ['Passing the work on', 'Handed over to Strategy'])
+  assert.match(ho.lede, /^Brief hands the work to Strategy/)
+  assert.equal(ho.items.at(-1)!.pill, 'Passing on')
+})
+
+test('runView: a failure shows the failed stage\'s items, the one running marked failed, and whether it retries', () => {
+  const f = fixture('failed'), v = L.runView(f.run, f.deck)
+  assert.deepEqual(plain([v.title, v.stage, v.retryable, v.lede]), ['Something failed', 'check', true, f.run.error.message])
+  assert.deepEqual(plain(v.items.map(x => x.status)), ['done', 'done', 'failed', 'pending', 'pending'])
+  assert.equal(v.items[2].pill, 'Failed, retrying')
+  const hard = { ...f.run, error: { stage: 'check', message: 'x', retryable: false } }
+  assert.equal(L.runView(hard, f.deck).items[2].pill, 'Failed')
+  assert.equal(L.agentState(hard).word, 'Failed') // never "retrying" when it will not
+  assert.equal(L.agentState(f.run).word, 'Failed, retrying')
+})
+
+test('runView: done lists the pitch and appendix slides, then each fact to supply by its slide', () => {
+  const f = fixture('done'), v = L.runView(f.run, f.deck)
+  assert.deepEqual(plain([v.title, v.lede]), ['The deck is ready for you', 'Seven slides and five appendix slides. Two facts are still to supply.'])
+  assert.deepEqual(plain(v.items.map(x => [x.title, x.pill])), [
+    ['7 pitch slides', 'Ready'], ['5 appendix slides', 'Ready'], ['Presenter name and role', 'To supply'], ['Split between TV and social', 'To supply']])
+  assert.equal(v.items[2].sub, 'Slide 06 · needs a person')
+  assert.match(v.items[1].sub, /^Audience \(to confirm\), Competitors/)
+  // an old deck with only appendix_count still counts its appendix
+  const old = { ...f.deck, appendix_ids: undefined, slides: { ...f.deck.slides } }
+  for (const k of Object.keys(old.slides)) if (old.slides[k].appendix) delete old.slides[k]
+  assert.equal(L.runView({ state: 'done', stages: [] }, old).items[1].title, '5 appendix slides')
+})
+
+test('agentState names who takes over at a hand-off, and only then', () => {
+  const ho = L.agentState(fixture('handoff').run)
+  assert.deepEqual(plain([ho.agent, ho.to, ho.activity, ho.handoff, ho.word]), ['brief', 'strategy', 'handoff', true, 'Handing off'])
+  assert.equal(L.agentState(fixture('storyline').run).to, null)
+  assert.equal(L.agentState({ state: 'done', stages: [], agent: { key: 'copy', activity: 'complete', to: 'deck' } }).handoff, false)
+})
+
+test('the hand-off circle is a flat blend: both agents, unique clip ids, no gradient', () => {
+  const a = L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'handoff', size: 60 })
+  const b = L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'handoff', size: 60 })
+  assert.match(a, /aria-label="Brief to Strategy, Handing off"/)
+  assert.match(a, /data-agent="brief" data-to="strategy" data-activity="handoff"/)
+  assert.equal(/Gradient/.test(a), false)
+  const ids = (s: string) => [...s.matchAll(/<clipPath id="([^"]+)"/g)].map(m => m[1])
+  assert.equal(ids(a).length, 2)
+  assert.equal(new Set([...ids(a), ...ids(b)]).size, 4, 'two circles on one page never share a clip id')
+  for (const id of ids(a)) assert.ok(a.includes(`clip-path="url(#${id})"`))
+  assert.ok(a.includes('#242936') && a.includes('#EEECE7'), 'Strategy graphite below, Brief pearl above')
+  // the front sits at p; junk p is the middle; no "to", or the same agent, is the plain circle
+  assert.match(L.blend('brief', 'strategy', 1), /<clipPath id="[^"]+b"><rect x="-1.2" y="-1"/)
+  assert.match(L.blend('brief', 'strategy', 'x'), /<line x1="-1" y1="0"/)
+  assert.equal(/clipPath/.test(L.circleSvg({ agent: 'brief', activity: 'handoff' })), false)
+  assert.equal(/clipPath/.test(L.circleSvg({ agent: 'brief', to: 'brief', activity: 'handoff' })), false)
+  assert.equal(/clipPath/.test(L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'work' })), false)
+})
+
+for (const n of RUNNING) {
+  test(`Build, ${n}: the status card comes first, then the content box shows what is being done`, () => {
+    const f = fixture(n), h = mount(f).app.innerHTML, who = L.agentState(f.run)
+    const aside = rightAside(h)
+    assert.ok(aside.startsWith('<div class="card status"'), 'the status card is first')
+    assert.match(aside, new RegExp(`^<div class="card status" style="padding:20px" data-status="${who.activity}"><div[^>]*><svg class="cir s60" width="60" height="60"[^>]*role="img" aria-label="[^"]+, ${who.word}"`))
+    assert.ok(aside.includes(`<div class="sword">${who.word}</div>`), 'the state word is text, not colour alone')
+    assert.ok(aside.includes(`Step ${f.run.agent.step_index} of 7`))
+    assert.ok(aside.includes('Checked so far'))
+    const b = box(h)!
+    assert.equal(b[1], 'running')
+    const items = f.run.stages.find((s: Fx) => s.status === 'now').items.filter((x: Fx) => !/^Appendix/.test(x.text))
+    assert.equal((b[2].match(/class="(crow|cslide) /g) || []).length, items.length)
+    assert.equal((b[2].match(/class="mk now"|class="cslide now"/g) || []).length, 1, 'one thing is being done now')
+    assert.equal(/\d\s?%/.test(h), false)
+    assert.equal(/\d+\s?(min|sec|hours?)\b/i.test(h), false)
+    assert.equal(h.includes('Waiting for the engine'), false)
+    assert.equal(h.includes('class="dex"'), false)
+  })
+}
+
+test('Build, hand-off: the card names both agents over one blended circle', () => {
+  const h = mount(fixture('handoff')).app.innerHTML
+  const aside = rightAside(h)
+  assert.ok(aside.includes('>Brief → Strategy<') && aside.includes('Shapes the ask → Builds territories'))
+  assert.match(aside, /aria-label="Brief to Strategy, Handing off"/)
+  assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Passing the work on</h1>'))
+})
+
+test('Build, slow: the state word says it takes longer, the line says nothing is wrong', () => {
+  const h = mount(fixture('slow')).app.innerHTML
+  assert.ok(rightAside(h).includes('<div class="sword">Writing · taking longer than usual</div>'))
+  assert.ok(h.includes('Nothing is wrong'))
+})
+
+test('Build, deck: a grid of slides with the one being built marked, and the appendix line under it', () => {
+  const b = box(mount(fixture('deck')).app.innerHTML)!
+  assert.equal((b[2].match(/class="cslide /g) || []).length, 7)
+  assert.ok(b[2].includes('class="cslide now"') && b[2].includes('Building now'))
+  assert.ok(b[2].includes('<div class="ctail">Appendix: 5 slides to follow</div>'))
+})
+
+test('Build, failed: a failed run opens on Build with the failure, the failed row and a retry that writes nothing', () => {
+  const f = fixture('failed'), m = mount(f), h = m.app.innerHTML
+  assert.ok(h.includes('aria-current="step">Build<'), 'failed routes to Build, not Start')
+  assert.ok(h.includes('>Something failed</h1>') && h.includes(f.run.error.message))
+  assert.match(rightAside(h), /data-status="error"[\s\S]*aria-label="Review, Failed, retrying"/)
+  assert.ok(rightAside(h).includes('<div class="sword err">Failed, retrying</div>'))
+  const b = box(h)!
+  assert.equal(b[1], 'failed')
+  assert.ok(b[2].includes('class="crow failed"') && b[2].includes('<span class="pill fail">Failed, retrying</span>'))
+  assert.match(h, /<button class="btn big" [^>]*data-retry="check">Try again now<\/button>/)
+  assert.ok(h.includes('<span class="ring failed" aria-hidden="true">!</span>'), 'the stage list marks the failed stage')
+  m.click({ retry: 'check' })
+  assert.equal(m.writes.length, 0)
+  assert.match(m.toastEl.textContent, /Retrying a step needs the engine server/)
+})
+
+test('Build, done: the deck is ready, what to supply is listed, and Open the deck goes to Review', () => {
+  const m = mount(fixture('done'))
+  assert.ok(m.app.innerHTML.includes('aria-current="step">Review<'), 'done still opens on Review')
+  m.click({ go: 'build' })
+  const h = m.app.innerHTML
+  assert.ok(h.includes('>The deck is ready for you</h1>'))
+  assert.match(rightAside(h), /data-status="complete"[\s\S]*aria-label="Review, Done"/)
+  assert.ok(rightAside(h).includes('<div class="sword ok">Done</div>'))
+  const b = box(h)!
+  assert.equal(b[1], 'done')
+  assert.equal((b[2].match(/class="crow supply"/g) || []).length, 2)
+  assert.match(h, /<button class="btn go big" data-go="review">Open the deck<\/button>/)
+  m.click({ go: 'review' })
+  assert.ok(m.app.innerHTML.includes('<main class="review">'))
+})
+
+test('the running views keep every button a big target and every word escaped', () => {
+  for (const n of [...RUNNING, 'failed']) {
+    const h = mount(fixture(n)).app.innerHTML
+    for (const btn of h.match(/<button class="[^"]*"[^>]*data-(retry|go)="(check|review)"/g) || []) assert.match(btn, /btn[^"]*big/)
+  }
+  const f = fixture('reading')
+  f.run.stages[1].items[2].text = hostile + ' · ' + hostile
+  const h = mount(f).app.innerHTML
+  assert.equal(h.includes('<img'), false)
+  assert.ok(h.includes('&lt;img'))
+})
+
+test('the gate 1 fixture keeps the gate view, with no content box (gates 2 and 3 are phase 3)', () => {
+  const h = mount(fixture('gate1')).app.innerHTML
+  assert.equal(box(h), null)
+  assert.ok(h.includes('id="approve"') && h.includes('>Waiting for you<') && h.includes('Approve the storyline'))
 })

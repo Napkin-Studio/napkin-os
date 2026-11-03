@@ -104,6 +104,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .inp{width:100%;height:42px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font-size:15px;background:var(--card)}
 .inp.ta{height:auto;min-height:120px;padding:10px 12px;line-height:1.5;resize:vertical;font-family:inherit}
 .bf{font-size:13px;line-height:1.5;color:var(--ink2);background:var(--soft);border-radius:12px;padding:10px 14px}
+.bf>span{display:block}
 .bf .miss{display:block;color:var(--warn-fg)}
 .q{padding:12px 0;border-top:1px solid var(--line-soft)}
 .q .qt{font-size:14px;font-weight:600;line-height:1.4}
@@ -152,7 +153,37 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
   .cir[data-activity="work"] .act,.cir[data-activity="write"] .act,.cir[data-activity="handoff"] .act{animation:cir-turn 6s linear infinite}
   .cir[data-activity="think"] .act{animation:cir-turn 9s linear infinite}
   .cir[data-activity="read"] .act,.cir[data-activity="check"] .act{animation:cir-turn 4.5s linear infinite}
+  .mk.now svg{animation:cir-turn 1.6s linear infinite}
 }
+/* the running Build screen: the status card says who and how, the content box what is being done */
+.status .sword{margin-top:3px;font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
+.status .sword.ok{color:var(--ok-fg)} .status .sword.err{color:var(--ink)}
+.cbox{overflow:hidden}
+.cbox-h{padding:14px 20px;border-bottom:1px solid var(--line-soft);background:var(--soft)}
+.crow{display:flex;gap:14px;align-items:flex-start;padding:13px 20px;border-bottom:1px solid var(--line-soft)}
+.crow:last-child{border-bottom:0}
+.crow .t{font-size:15px;font-weight:600;line-height:1.35}
+.crow .t .n{font-size:12px;font-weight:400;color:var(--ink3);margin-right:10px}
+.crow.pending .t{color:var(--ink3);font-weight:500}
+.crow.failed{background:var(--soft)}
+.mk{width:20px;height:20px;border-radius:999px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px}
+.mk.done{background:var(--ok-fg);color:var(--on-fill)}
+.mk.pending{border:1.5px dashed var(--line)}
+.mk.failed{background:var(--ink);color:var(--paper)}
+.mk.supply{background:var(--warn-bg);color:var(--warn-fg)}
+.mk.now svg{display:block}
+.mk-track{stroke:var(--line-soft);stroke-width:.24}
+.mk-arc{stroke:var(--warn-fg);stroke-width:.24;stroke-linecap:round}
+.pill.wait{color:var(--ink3);background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.pill.fail{color:var(--ink);background:var(--card);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px 20px}
+.cslide{border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px;background:var(--soft)}
+.cslide .t{margin-top:8px;font-size:14px;font-weight:600;line-height:1.35}
+.cslide.now{border:1.5px solid var(--create);background:var(--card)}
+.cslide.pending{border-style:dashed;background:transparent;color:var(--ink3)}
+.cslide.failed{border:1.5px solid var(--ink);background:var(--card)}
+.ctail{padding:0 20px 16px;font-size:13px;color:var(--ink2)}
+@media (max-width:640px){.cgrid{grid-template-columns:minmax(0,1fr)}}
 
 /* screen 3 */
 .review{display:grid;grid-template-columns:230px minmax(0,1fr) 320px;gap:24px;padding:20px 24px 40px;max-width:1500px;margin:0 auto;align-items:start}
@@ -757,7 +788,7 @@ var DeckLogic = (function () {
     idea: { n: 7, name: 'Idea', mat: 'glass', role: 'Opens directions', arcs: [[0,0,0.794,1.711,1.483,0.094,1],[0,0,0.471,-0.383,2.878,0.073,1],[-0.002,-0.001,0.265,2.191,3.193,0.073,1]], circs: [[-0.382,-0.382,0.073,0,1,1]] },
     copy: { n: 9, name: 'Copy', mat: 'paper', role: 'Crafts words', arcs: [[0,0,0.794,-2.095,1.938,0.094,1],[0,0,0.324,-1.571,1.065,0.044,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
     deck: { n: 21, name: 'Deck', mat: 'paper', role: 'Builds pitches', arcs: [[0,0,0.794,0.209,1.257,0.094,1],[0,0,0.559,-2.897,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
-    review: { n: 23, name: 'Review', mat: 'pearl', role: 'Complete', arcs: [[0,0,0.794,2.688,1.711,0.094,1],[0,0,0.471,0.594,2.879,0.073,1],[0,-0.002,0.265,-3.114,3.191,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
+    review: { n: 23, name: 'Review', mat: 'pearl', role: 'Checks the brief', arcs: [[0,0,0.794,2.688,1.711,0.094,1],[0,0,0.471,0.594,2.879,0.073,1],[0,-0.002,0.265,-3.114,3.191,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
     approval: { n: 24, name: 'Approval', mat: 'paper', role: 'Asks for sign-off', arcs: [[0,0,0.794,-2.356,1.938,0.094,1],[0.206,-0.147,0.294,-1.308,3.838,0.073,1],[0,0,0.324,-1.832,1.065,0.044,0.4]], circs: [[-0.206,0.147,0.235,0.059,0,1]] }
   };
 
@@ -842,23 +873,44 @@ var DeckLogic = (function () {
     return out + '</g>';
   }
 
+  var blendSeq = 0; // each blend's clip ids are new, so two circles on one page never share one
+
+  /**
+   * The hand-off: one body, two agents. A flat front (no gradient) at p, 0 to 1, from the bottom: below it the next agent
+   * (to), above it the one handing over (from), each in its own material and emblem. The clip ids are unique per call.
+   * An unknown agent is drawn as the neutral body. p outside 0 to 1, or not a number, is 0.5.
+   */
+  function blend(from, to, p) {
+    var a = own(AGENTS, from) ? AGENTS[from] : null, b = own(AGENTS, to) ? AGENTS[to] : null;
+    var q = typeof p === 'number' && p >= 0 && p <= 1 ? p : 0.5;
+    var y = 1 - 2 * q, id = 'dmho' + (++blendSeq);
+    return '<defs><clipPath id="' + id + 'a"><rect x="-1.2" y="-1.2" width="2.4" height="' + num(y + 1.2) + '"/></clipPath>' +
+      '<clipPath id="' + id + 'b"><rect x="-1.2" y="' + num(y) + '" width="2.4" height="' + num(1.2 - y) + '"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + 'a)">' + emblemOf(a) + '</g><g clip-path="url(#' + id + 'b)">' + emblemOf(b) + '</g>' +
+      '<line x1="-1" y1="' + num(y) + '" x2="1" y2="' + num(y) + '" stroke="var(--ring-edge)" stroke-width=".03"/>';
+  }
+
   /**
    * The agent circle as a flat SVG string: the agent's emblem in its material and the ring of what it is doing.
-   * { agent: key, activity, size (px, default 60), label (the name said, default the agent's) }. role="img", and the
-   * aria-label says the name and the state word. An unknown agent or activity is a neutral waiting circle. Never throws.
+   * { agent: key, activity, size (px, default 60), label (the name said, default the agent's), word (the state word said,
+   * default the activity's), to (with activity handoff: the agent taking over, drawn as a flat blend), p (the blend's front) }.
+   * role="img", and the aria-label says the name and the state word. An unknown agent or activity is a neutral waiting
+   * circle. Never throws.
    */
   function circleSvg(opts) {
     var o = isObj(opts) ? opts : {};
     var a = own(AGENTS, o.agent) ? AGENTS[o.agent] : null;
     var act = own(ACTIVITY_WORD, o.activity) ? o.activity : 'waiting';
     if (!a) act = 'waiting';
+    var to = act === 'handoff' && own(AGENTS, o.to) && o.to !== o.agent ? o.to : null;
     var size = typeof o.size === 'number' && o.size > 0 && o.size <= 512 ? Math.round(o.size) : 60;
-    var name = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (a ? a.name : 'Agent');
+    var name = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (a ? a.name + (to ? ' to ' + AGENTS[to].name : '') : 'Agent');
+    var word = typeof o.word === 'string' && o.word.trim() ? o.word.trim() : ACTIVITY_WORD[act];
     var cls = 'cir' + (size === 60 || size === 32 ? ' s' + size : '');
     return '<svg class="' + cls + '" width="' + size + '" height="' + size + '" viewBox="-1.15 -1.15 2.3 2.3" role="img" aria-label="' +
-      escAttr(name + ', ' + ACTIVITY_WORD[act]) + '" data-agent="' + (a ? o.agent : 'none') + '" data-activity="' + act + '">' +
+      escAttr(name + ', ' + word) + '" data-agent="' + (a ? o.agent : 'none') + '"' + (to ? ' data-to="' + to + '"' : '') + ' data-activity="' + act + '">' +
       '<circle r="' + CIRCLE_R + '" fill="none" stroke="var(--ring-track)" stroke-width=".05"/>' +
-      '<g class="act">' + ringOf(act) + '</g><g transform="scale(.82)">' + emblemOf(a) + '</g></svg>';
+      '<g class="act">' + ringOf(act) + '</g><g transform="scale(.82)">' + (to ? blend(o.agent, to, o.p) : emblemOf(a)) + '</g></svg>';
   }
 
   /**
@@ -868,7 +920,7 @@ var DeckLogic = (function () {
    * waiting. An unknown agent key is a neutral waiting circle (agent null). Never throws.
    */
   function agentState(run) {
-    var out = { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false };
+    var out = { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false, to: null };
     try {
       var r = isObj(run) ? run : {};
       var stages = Array.isArray(r.stages) ? r.stages.filter(isObj) : [];
@@ -900,19 +952,153 @@ var DeckLogic = (function () {
       var a = AGENTS[key];
       out.agent = key; out.activity = act; out.role = a.role;
       out.handoff = !!(feed && act !== 'human' && act !== 'error' && own(AGENTS, feed.to) && feed.to !== key);
-      if (out.handoff && act !== 'complete') out.activity = act = 'handoff';
-      out.word = ACTIVITY_WORD[act] + (feed && feed.slow === true && act !== 'human' && act !== 'complete' ? ' · taking longer than usual' : '');
+      if (out.handoff && act !== 'complete') { out.activity = act = 'handoff'; out.to = feed.to; } else out.handoff = false;
+      // A failure the server will not retry by itself must not say "retrying".
+      var word = act === 'error' && isObj(r.error) && r.error.retryable === false ? 'Failed' : ACTIVITY_WORD[act];
+      out.word = word + (feed && feed.slow === true && act !== 'human' && act !== 'complete' && act !== 'error' ? ' · taking longer than usual' : '');
       if (feed && Number.isInteger(feed.step_index) && Number.isInteger(feed.step_total) && feed.step_index > 0 && feed.step_index <= feed.step_total) {
         out.step_index = feed.step_index; out.step_total = feed.step_total;
       }
       return out;
     } catch (e) {
-      return { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false };
+      return { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false, to: null };
+    }
+  }
+
+  // ── the running Build screen: the content box says what is being done (phase 2) ──
+  // Stage words: the box's title, the line under it, its header, and the pill for an item done, now and still to come.
+  var READ_COPY = { title: 'Reading your inputs', lede: 'Then it stops for you at the storyline.', head: 'What it is reading', pills: ['Read', 'Reading now', 'Waiting'] };
+  var RUN_COPY = {
+    inputs: READ_COPY, scans: READ_COPY,
+    storyline: { title: 'Drafting the storyline', lede: 'Each beat tied to your brief or research. Then you approve it.', head: 'The storyline, as it is being written', pills: ['Written', 'Writing now', 'Not yet written'], numbered: true },
+    territories: { title: 'Drafting the territories', lede: 'Three territories, then a second model judges them without seeing who wrote them. You pick one.', head: 'Three territories, as they are written', pills: ['Written', 'Writing now', 'Waiting'], numbered: true },
+    idea: { title: 'Developing the idea', lede: 'The idea line from the territory you picked, then its work for each channel.', head: 'The idea and its work', pills: ['Written', 'Writing now', 'Waiting'], numbered: true },
+    copy: { title: 'Writing the slide copy', lede: 'Every claim gets a source, or is labelled as our proposal.', head: 'Slide lines, as they are written', pills: ['Written', 'Writing now', 'Waiting'], numbered: true },
+    check: { title: 'Checking the deck', lede: 'Each number against its source, then the rules and the length.', head: 'Numbers being checked', pills: ['Checked', 'Checking now', 'Waiting'] }
+  };
+  /** The Deck agent builds slides, whichever stage the run calls it: a grid of slides, each by its title. */
+  var DECK_COPY = { title: 'Building the slides', lede: 'The pitch slides first, then the appendix.', head: 'Slides, as they are built', pills: ['Built', 'Building now', 'Waiting'], grid: true };
+  var OTHER_COPY = { title: '', lede: '', head: 'What it is doing', pills: ['Done', 'Doing now', 'Waiting'] };
+  var SLOW_LEDE = 'Taking a little longer than usual. Nothing is wrong.';
+
+  function pad2(n) { return (Number(n) < 10 ? '0' : '') + Number(n); }
+
+  /** The words for a stage and its agent. */
+  function copyFor(stage, agent) {
+    if (agent === 'deck') return DECK_COPY;
+    return stage && own(RUN_COPY, stage.id) ? RUN_COPY[stage.id] : OTHER_COPY;
+  }
+
+  /**
+   * One content-box row per item the runner wrote at run.stages[].items: "title · detail" split in two, the pill in the
+   * stage's words. A grid row ("Slide N") takes that slide's title from the deck; any other grid item is a line under the
+   * grid (tail). On a failed stage the item that was running is the one that failed.
+   */
+  function itemRows(stage, copy, deck, failWord) {
+    var items = stage && Array.isArray(stage.items) ? stage.items.filter(isObj) : [];
+    var ids = presented(deck), k = 0;
+    return items.map(function (it) {
+      var text = String(it.text == null ? '' : it.text), cut = text.indexOf(' · ');
+      var st = it.status === 'done' || it.status === 'now' ? it.status : 'pending';
+      if (failWord && st === 'now') st = 'failed';
+      var row = { n: '', title: cut >= 0 ? text.slice(0, cut) : text, sub: cut >= 0 ? text.slice(cut + 3) : '', status: st, tail: false };
+      if (copy.grid) {
+        var m = /^Slide (\d{1,3})$/.exec(text.trim());
+        if (m) {
+          row.n = pad2(m[1]);
+          var sid = ids[Number(m[1]) - 1];
+          if (sid && deck.slides[sid].title) row.title = String(deck.slides[sid].title);
+        } else row.tail = true;
+      } else if (copy.numbered) row.n = pad2(++k);
+      row.pill = st === 'failed' ? failWord : copy.pills[st === 'done' ? 0 : st === 'now' ? 1 : 2];
+      return row;
+    });
+  }
+
+  /** The done box: the pitch and appendix slides, then each fact still to supply, by its slide. */
+  function doneRows(run, deck) {
+    var ids = presented(deck), dn = isObj(run.done) ? run.done : {};
+    var n = ids.length || (Number.isInteger(dn.slides) ? dn.slides : 0);
+    var app = (Array.isArray(deck.appendix_ids) ? deck.appendix_ids : []).filter(function (id) { return isObj(deck.slides[id]); });
+    if (!app.length) app = Object.keys(deck.slides || {}).filter(function (id) { return isObj(deck.slides[id]) && deck.slides[id].appendix === true; });
+    var na = Number.isInteger(dn.appendix) ? dn.appendix : typeof deck.appendix_count === 'number' ? deck.appendix_count : app.length;
+    var rows = [];
+    if (n) rows.push({ n: '', title: n + (n === 1 ? ' pitch slide' : ' pitch slides'), sub: ids.map(function (id) { return String(deck.slides[id].section || ''); }).filter(Boolean).join(', '), status: 'done', pill: 'Ready', tail: false });
+    if (na) rows.push({ n: '', title: na + (na === 1 ? ' appendix slide' : ' appendix slides'), sub: app.map(function (id) { return String(deck.slides[id].title || ''); }).filter(Boolean).join(', '), status: 'done', pill: 'Ready', tail: false });
+    ids.forEach(function (id, i) {
+      var sl = deck.slides[id];
+      if (sl.status !== 'needs_human') return;
+      var said = [];
+      (sl.blocks || []).forEach(function (b) {
+        if (isPlaceholder(b)) said.push(String(b.text || ''));
+        ((isObj(b) && Array.isArray(b.items)) ? b.items : []).forEach(function (x) { if (isObj(x) && x.human === true) said.push(String(x.text || '')); });
+      });
+      if (!said.length) said.push(String(sl.title || 'This slide'));
+      said.forEach(function (t) {
+        rows.push({ n: '', title: t.trim().replace(/^\[([^\]]+)\]$/, '$1'), sub: 'Slide ' + pad2(i + 1) + ' · needs a person', status: 'supply', pill: 'To supply', tail: false });
+      });
+    });
+    return rows;
+  }
+
+  /**
+   * What the Build screen shows with no gate open, as data: { kind, title, lede, head, grid, items, tail, stage,
+   * retryable }. kind is 'gate' (the gate's own view), 'failed', 'done', 'running' (a live feed: run.agent, or items on
+   * the running stage) or 'waiting' (nothing reports progress, so the engine is not connected). The words come from
+   * the stage and its agent; the items from the runner. No percentage and no time are ever made. Never throws.
+   */
+  function runView(run, deck) {
+    var r = isObj(run) ? run : {}, dk = isObj(deck) && isObj(deck.slides) ? deck : { order: [], slides: {} };
+    var stages = Array.isArray(r.stages) ? r.stages.filter(isObj) : [];
+    var base = { kind: 'waiting', title: '', lede: '', head: '', grid: false, items: [], tail: [], stage: '', retryable: false };
+    var fill = function (o) { Object.keys(o).forEach(function (k) { base[k] = o[k]; }); return base; };
+    try {
+      if (isObj(r.gate)) return fill({ kind: 'gate', stage: String(r.gate.id || '') });
+      var who = agentState(r), feed = isObj(r.agent) ? r.agent : null;
+      var byId = function (id) { return stages.filter(function (s) { return s.id === id; })[0]; };
+      var failed = stages.filter(function (s) { return s.status === 'failed'; })[0];
+      if (r.state === 'failed' || failed) {
+        var err = isObj(r.error) ? r.error : {}, retry = err.retryable !== false;
+        var fs = failed || byId(err.stage) || byId(r.stage);
+        var fc = copyFor(fs, who.agent);
+        var rows = itemRows(fs, fc, dk, retry ? 'Failed, retrying' : 'Failed');
+        return fill({
+          kind: 'failed', title: 'Something failed', head: fc.head, grid: !!fc.grid, retryable: retry,
+          lede: String(err.message || (retry ? 'A step did not finish. It is trying again by itself.' : 'A step did not finish. Try it again.')),
+          stage: fs ? String(fs.id) : String(err.stage || r.stage || ''),
+          items: rows.filter(function (x) { return !x.tail; }), tail: rows.filter(function (x) { return x.tail; }).map(function (x) { return x.title; })
+        });
+      }
+      if (r.state === 'done') {
+        var dn = isObj(r.done) ? r.done : {};
+        return fill({ kind: 'done', title: 'The deck is ready for you', head: 'What is ready', stage: 'review', items: doneRows(r, dk),
+          // The title already says it is ready: a summary that opens by saying so again starts after that sentence.
+          lede: String(dn.summary || 'Every slide is built and checked. Open it to review.').replace(/^The deck is ready for you\.\s+(?=\S)/i, '') });
+      }
+      var now = stages.filter(function (s) { return s.status === 'now'; })[0];
+      var hasItems = !!(now && Array.isArray(now.items) && now.items.some(isObj));
+      if (!feed && !hasItems) return fill({ kind: 'waiting', stage: now ? String(now.id) : '', title: now ? String(now.name || '') : '' });
+      var c = copyFor(now, who.agent), items = itemRows(now, c, dk, '');
+      var view = {
+        kind: 'running', title: c.title || (now ? String(now.name || '') : 'Working'), lede: c.lede, head: c.head, grid: !!c.grid,
+        stage: now ? String(now.id) : '', items: items.filter(function (x) { return !x.tail; }), tail: items.filter(function (x) { return x.tail; }).map(function (x) { return x.title; })
+      };
+      if (who.handoff) {
+        var to = AGENTS[who.to];
+        view.title = 'Passing the work on';
+        view.lede = AGENTS[who.agent].name + ' hands the work to ' + to.name + ', who picks it up from here.';
+        view.head = 'Handed over to ' + to.name;
+        view.items = view.items.map(function (x) { x.n = ''; x.pill = x.status === 'done' ? 'Done' : x.status === 'now' ? 'Passing on' : 'Waiting'; return x; });
+      }
+      if (feed && feed.slow === true) view.lede = SLOW_LEDE;
+      return fill(view);
+    } catch (e) {
+      return { kind: 'waiting', title: '', lede: '', head: '', grid: false, items: [], tail: [], stage: '', retryable: false };
     }
   }
 
   return {
-    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, arcPath: arcPath,
+    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, arcPath: arcPath, blend: blend, runView: runView,
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
@@ -962,7 +1148,8 @@ var DeckLogic = (function () {
   function screenOf(s) {
     if (view.screen) return view.screen;
     if (s.run.state === 'done') return 'review';
-    if (s.run.state === 'gate' || s.run.state === 'building') return 'build';
+    // A failed run is shown where it failed, on Build, with what it was doing and a retry.
+    if (s.run.state === 'gate' || s.run.state === 'building' || s.run.state === 'failed') return 'build';
     return 'start';
   }
 
@@ -1197,19 +1384,62 @@ var DeckLogic = (function () {
         (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '') + '</div>' +
         '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve">Approve and continue</button>' +
         '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="beats">Edit beats</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="storyline">Ask Dex to try again</button></div>';
-    } else {
-      var now = run.stages.filter(function (x) { return x.status === 'now'; })[0];
-      main = '<h1 class="sm" style="margin-bottom:6px">' + (now ? esc(now.name) : 'Waiting') + '</h1>' +
-        '<p class="note" style="font-size:15px;max-width:600px">' + (now ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
     }
-    var checks = gate ? '<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
-      gate.checks.map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
+    // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
+    var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
+    if (rv && !live) {
+      main = '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
+        '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
+    } else if (live) main = runBody(rv);
+    var list = gate ? gate.checks : run.checks;
+    var checks = Array.isArray(list) && (gate || list.length) ?'<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
+      list.map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
-      '<section>' + main + '</section><aside class="stack">' +
+      '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
       '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
         '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? 'Nothing runs until you approve' : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
-        '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>' +
-      builtLine(builtOf(s)) + checks + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+        '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>') +
+      (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+  }
+
+  /** The status card while an agent works: the 60px circle, who (a hand-off names both), their role, the state word, the step. */
+  function statusCard(who) {
+    var A = L.AGENTS, a = A[who.agent], b = who.handoff ? A[who.to] : null;
+    var name = a ? a.name + (b ? ' → ' + b.name : '') : 'Agent', role = a ? a.role + (b ? ' → ' + b.role : '') : '';
+    var tone = who.activity === 'complete' ? ' ok' : who.activity === 'error' ? ' err' : '';
+    return '<div class="card status" style="padding:20px" data-status="' + esc(who.activity) + '"><div style="display:flex;align-items:center;gap:14px">' +
+      L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: 60 }) +
+      '<div style="min-width:0"><div style="font-size:14px;font-weight:600">' + esc(name) + '</div>' + (role ? '<div class="note">' + esc(role) + '</div>' : '') +
+      '<div class="sword' + tone + '">' + esc(who.word) + '</div>' +
+      (who.step_index ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Step ' + who.step_index + ' of ' + who.step_total + '</div>' : '') +
+      '</div></div></div>';
+  }
+
+  /** One mark for a content-box row: done, now (a small turning arc), still to come, failed, or to supply. */
+  function rowMark(st) {
+    if (st === 'now') return '<span class="mk now" aria-hidden="true"><svg width="20" height="20" viewBox="-1.2 -1.2 2.4 2.4"><circle r="1" fill="none" class="mk-track"/><path d="' + L.arcPath(0, 0, 1, -Math.PI / 2, 2.2) + '" fill="none" class="mk-arc"/></svg></span>';
+    return '<span class="mk ' + st + '" aria-hidden="true">' + (st === 'done' ? '✓' : st === 'failed' || st === 'supply' ? '!' : '') + '</span>';
+  }
+  var PILL_TONE = { done: 'ok', now: 'warn', pending: 'wait', failed: 'fail', supply: 'warn' };
+
+  /** The running, failed and done views: title, the line under it, the content box of what is being done, then the action. */
+  function runBody(v) {
+    var rows = v.grid
+      ? '<div class="cgrid">' + v.items.map(function (x) {
+          return '<div class="cslide ' + x.status + '"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + esc(x.n) + '</span><div class="spacer"></div>' +
+            '<span class="pill ' + PILL_TONE[x.status] + '">' + esc(x.pill) + '</span></div><div class="t">' + esc(x.title) + '</div></div>';
+        }).join('') + '</div>'
+      : v.items.map(function (x) {
+          return '<div class="crow ' + x.status + '">' + rowMark(x.status) + '<div style="flex:1;min-width:0"><div class="t">' + (x.n ? '<span class="mono n">' + esc(x.n) + '</span>' : '') + esc(x.title) + '</div>' +
+            (x.sub ? '<div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(x.sub) + '</div>' : '') + '</div><span class="pill ' + PILL_TONE[x.status] + '">' + esc(x.pill) + '</span></div>';
+        }).join('');
+    var tail = v.tail.map(function (t) { return '<div class="ctail">' + esc(t) + '</div>'; }).join('');
+    var act = v.kind === 'done' ? '<div style="margin-top:18px"><button class="btn go big" data-go="review">Open the deck</button></div>'
+      : v.kind === 'failed' ? '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn big' + (v.retryable ? '' : ' go') + '" style="padding:0 20px;font-size:14px" data-retry="' + esc(v.stage) + '">' + (v.retryable ? 'Try again now' : 'Try again') + '</button>' +
+        '<span class="note">Nothing you approved is lost. The run starts again from this step.</span></div>' : '';
+    return '<h1 class="sm" style="margin-bottom:6px">' + esc(v.title) + '</h1>' +
+      '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">' + esc(v.lede) + '</p>' +
+      '<div class="card cbox' + (v.kind === 'failed' ? ' failed' : '') + '" data-run="' + esc(v.kind) + '"><div class="cbox-h eyebrow">' + esc(v.head) + '</div>' + (rows || '<div class="crow pending"><span class="note">Nothing to show yet.</span></div>') + tail + '</div>' + act;
   }
 
   // ── 3 · Review ────────────────────────────────────────────────────────
@@ -1409,6 +1639,7 @@ var DeckLogic = (function () {
       put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved');
       return;
     }
+    if (a.retry && !s.run.gate) { toast('Retrying a step needs the engine server, which is not connected yet.'); return; }
     if (a.edit || a.retry) { toast('Editing and retrying a gate need the engine server.'); return; }
     if (a.act === 'appendix') { toast('Moving slides to the appendix needs the engine server.'); return; }
     if (a.change) {
