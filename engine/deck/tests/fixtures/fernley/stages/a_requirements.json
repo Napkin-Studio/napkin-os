@@ -1,0 +1,43 @@
+{
+ "stage": "a_requirements",
+ "produced_by": "live claude-sonnet-5-5",
+ "requirements": [
+  {
+   "id": "R1",
+   "kind": "objective",
+   "text": "Make Fernley sparkling iced tea known among the target audience (build awareness).",
+   "ref": "prompt:1"
+  },
+  {
+   "id": "R2",
+   "kind": "objective",
+   "text": "Get the target audience to try Fernley sparkling iced tea.",
+   "ref": "brief:desired_response"
+  },
+  {
+   "id": "R3",
+   "kind": "audience",
+   "text": "18 to 34 year olds in Ireland.",
+   "ref": "brief:audience"
+  },
+  {
+   "id": "R4",
+   "kind": "scope",
+   "text": "An agency pitch for a spring-to-summer 2027 campaign in Ireland.",
+   "ref": "brief:background"
+  }
+ ],
+ "scoring": [],
+ "rules": [],
+ "usage": {
+  "calls": 1,
+  "secs": 3.8,
+  "model": "claude-sonnet-5-5",
+  "prompt_tokens": 2,
+  "completion_tokens": 235,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 1309,
+  "usd": 0.0084,
+  "usd_estimated": true
+ }
+}

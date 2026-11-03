@@ -1,0 +1,119 @@
+{
+ "edits": [
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "field": "b0",
+   "text": "Hypothesis: young adults may see tea as a home drink, not a summer choice. They may never think of it when wanting something cold and fizzy. Fernley should take tea from the kitchen table into the Irish summer, cold and sparkling."
+  },
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "field": "b1",
+   "text": "Our insight."
+  },
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "field": "b2",
+   "text": "Fernley: Cork-based sparkling iced tea."
+  },
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "field": "b3",
+   "text": "Campaign: spring to summer 2027, Ireland."
+  },
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "field": "b4",
+   "text": "Goal: 18 to 34 year olds know and try Fernley."
+  },
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "field": "b5",
+   "text": "No research supplied: hypothesis."
+  },
+  {
+   "slide": "The single thought",
+   "field": "b0.from",
+   "text": "Young adults may know tea only from home. This is a hypothesis."
+  },
+  {
+   "slide": "The single thought",
+   "field": "b1.i0",
+   "text": "A sparkling iced tea: tea made cold and fizzy."
+  },
+  {
+   "slide": "The single thought",
+   "field": "b1.i1",
+   "text": "From Fernley Drinks, a Cork-based brand."
+  },
+  {
+   "slide": "The single thought",
+   "field": "b1.i2",
+   "text": "Further reasons to believe must come from the client."
+  },
+  {
+   "slide": "The single thought",
+   "field": "b2",
+   "text": "The objection it must beat: This insight rests on no research. We should not believe it yet. It is a testable hypothesis; we propose quick audience interviews to confirm or replace it before creative development."
+  },
+  {
+   "slide": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "field": "b0.r1.c1",
+   "text": "None in brief: set before launch"
+  },
+  {
+   "slide": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "field": "b0.r2.c1",
+   "text": "None in brief: set before launch"
+  },
+  {
+   "slide": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "field": "b0.r3.c1",
+   "text": "None in brief: set before launch"
+  },
+  {
+   "slide": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "field": "b0.r1.c2",
+   "text": "Survey before launch and after the spring to summer 2027 flight. No figure supplied; first wave sets the baseline."
+  },
+  {
+   "slide": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "field": "b0.r2.c2",
+   "text": "Same survey asks about trying Fernley. Use of sales or stockist data is for the client to say."
+  },
+  {
+   "slide": "No baseline was supplied, so a survey before launch sets one and the campaign is judged against it.",
+   "field": "b0.r3.c2",
+   "text": "Pre-development interviews test whether the audience would take tea off the kitchen table on a summer day; the survey then tracks it."
+  }
+ ],
+ "narrowed": [
+  {
+   "slide": "Young adults may know tea well but not think of it for summer, so Fernley can make tea the cold, sparkling choice. This must be confirmed.",
+   "headline": "Fernley, a Cork sparkling iced tea brand, could make tea the cold, sparkling choice for 18 to 34 year olds in Ireland; the home-drink insight is unconfirmed.",
+   "reason": "Dropped the stated young-adult tea belief as a premise; kept brand, audience and goal the evidence supports, and flagged the insight as unconfirmed."
+  },
+  {
+   "slide": "The single thought",
+   "headline": "Fernley, a Cork-based sparkling iced tea, makes tea something to try cold and sparkling this summer.",
+   "reason": "Removed the home-only tea belief as a claim; kept only the product and origin facts the evidence supports."
+  },
+  {
+   "slide": "What could go wrong, and what we would do about it",
+   "headline": "Risks: an untested insight and no baseline, and what we would do about them",
+   "reason": "Removed alcohol-occasion and code-compliance framing, which has no cited evidence; kept the missing insight and baseline."
+  }
+ ],
+ "stage": "e_copy",
+ "produced_by": "live claude-sonnet-5-5",
+ "usage": {
+  "prompt_tokens": 2,
+  "completion_tokens": 4631,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 3695,
+  "model": "claude-sonnet-5-5",
+  "secs": 28.8,
+  "calls": 1,
+  "usd": 0.0833,
+  "usd_estimated": true
+ }
+}
