@@ -185,7 +185,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .crow:last-child{border-bottom:0}
 .crow .t{font-size:15px;font-weight:600;line-height:1.35}
 .crow .t .n{font-size:12px;font-weight:400;color:var(--ink3);margin-right:10px}
-.crow.pending .t{color:var(--ink3);font-weight:500}
+.crow.pending .t{color:var(--ink2);font-weight:500}
 .crow.failed{background:var(--soft)}
 .mk{width:20px;height:20px;border-radius:999px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px}
 .mk.done{background:var(--ok-fg);color:var(--on-fill)}
@@ -195,13 +195,13 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .mk.now svg{display:block}
 .mk-track{stroke:var(--line-soft);stroke-width:.24}
 .mk-arc{stroke:var(--warn-fg);stroke-width:.24;stroke-linecap:round}
-.pill.wait{color:var(--ink3);background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.pill.wait{color:var(--ink2);background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 .pill.fail{color:var(--ink);background:var(--card);box-shadow:inset 0 0 0 1.5px var(--ink)}
 .cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px 20px}
 .cslide{border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px;background:var(--soft)}
 .cslide .t{margin-top:8px;font-size:14px;font-weight:600;line-height:1.35}
 .cslide.now{border:1.5px solid var(--create);background:var(--card)}
-.cslide.pending{border-style:dashed;background:transparent;color:var(--ink3)}
+.cslide.pending{border-style:dashed;background:transparent;color:var(--ink2)}
 .cslide.failed{border:1.5px solid var(--ink);background:var(--card)}
 .ctail{padding:0 20px 16px;font-size:13px;color:var(--ink2)}
 @media (max-width:640px){.cgrid{grid-template-columns:minmax(0,1fr)}}
@@ -237,7 +237,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .dword{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
 .dword.ok{color:var(--ok-fg)}
 .btn.tall{height:44px;padding:0 20px;font-size:14px}
-.appx{border:0;border-radius:999px;background:transparent;font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);padding:2px 8px;min-height:24px}
+.appx{border:0;border-radius:999px;background:transparent;font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);padding:2px 8px;min-height:44px}
 .appx[aria-expanded="true"]{background:var(--tool-soft)}
 .rail-div{margin:12px 4px 8px}
 .rep{margin-top:14px;font-size:13px;color:var(--ink)}
@@ -1052,8 +1052,9 @@ var DeckLogic = (function () {
    * The agent circle as a flat SVG string: the agent's emblem in its material and the ring of what it is doing.
    * { agent: key, activity, size (px, default 60), label (the name said, default the agent's), word (the state word said,
    * default the activity's), to (with activity handoff: the agent taking over, drawn as a flat blend), p (the blend's front) }.
-   * role="img", and the aria-label says the name and the state word. An unknown agent or activity is a neutral waiting
-   * circle. Never throws.
+   * role="img", and the aria-label says the name and the state word. Where the screen writes them beside the circle,
+   * `aria` says what the label still needs: 'name' (the word is beside it) labels it with the name only, 'hidden' (both
+   * are beside it) hides it from screen readers. An unknown agent or activity is a neutral waiting circle. Never throws.
    */
   function circleSvg(opts) {
     var o = isObj(opts) ? opts : {};
@@ -1065,8 +1066,8 @@ var DeckLogic = (function () {
     var name = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (a ? a.name + (to ? ' to ' + AGENTS[to].name : '') : 'Agent');
     var word = typeof o.word === 'string' && o.word.trim() ? o.word.trim() : ACTIVITY_WORD[act];
     var cls = 'cir' + (size === 60 || size === 32 ? ' s' + size : '');
-    return '<svg class="' + cls + '" width="' + size + '" height="' + size + '" viewBox="-1.15 -1.15 2.3 2.3" role="img" aria-label="' +
-      escAttr(name + ', ' + word) + '" data-agent="' + (a ? o.agent : 'none') + '"' + (to ? ' data-to="' + to + '"' : '') + ' data-activity="' + act + '">' +
+    var said = o.aria === 'hidden' ? 'aria-hidden="true"' : 'role="img" aria-label="' + escAttr(o.aria === 'name' ? name : name + ', ' + word) + '"';
+    return '<svg class="' + cls + '" width="' + size + '" height="' + size + '" viewBox="-1.15 -1.15 2.3 2.3" ' + said + ' data-agent="' + (a ? o.agent : 'none') + '"' + (to ? ' data-to="' + to + '"' : '') + ' data-activity="' + act + '">' +
       '<circle r="' + CIRCLE_R + '" fill="none" stroke="var(--ring-track)" stroke-width=".05"/>' +
       '<g class="act">' + ringOf(act) + '</g><g transform="scale(.82)">' + (to ? blend(o.agent, to, o.p) : emblemOf(a)) + '</g></svg>';
   }
@@ -1719,13 +1720,13 @@ var DeckLogic = (function () {
       list.filter(function (c) { return c && typeof c === 'object'; }).map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>';
   }
 
-  /** The status card while an agent works: the 60px circle, who (a hand-off names both), their role, the state word, the step. */
+  /** The status card while an agent works: the 60px circle, who (a hand-off names both), their role, the state word, the step. The card says the name and word, so the circle is hidden from screen readers. */
   function statusCard(who) {
     var A = L.AGENTS, a = A[who.agent], b = who.handoff ? A[who.to] : null;
     var name = a ? a.name + (b ? ' → ' + b.name : '') : 'Agent', role = a ? a.role + (b ? ' → ' + b.role : '') : '';
     var tone = who.activity === 'complete' ? ' ok' : who.activity === 'error' ? ' err' : '';
     return '<div class="card status" style="padding:20px" data-status="' + esc(who.activity) + '"><div style="display:flex;align-items:center;gap:14px">' +
-      L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: 60 }) +
+      L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: 60, aria: 'hidden' }) +
       '<div style="min-width:0"><div style="font-size:14px;font-weight:600">' + esc(name) + '</div>' + (role ? '<div class="note">' + esc(role) + '</div>' : '') +
       '<div class="sword' + tone + '">' + esc(who.word) + '</div>' +
       (who.step_index ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Step ' + who.step_index + ' of ' + who.step_total + '</div>' : '') +
@@ -1760,19 +1761,19 @@ var DeckLogic = (function () {
   }
 
   // ── the deck's own status, on Review and Present (phase 4): the Approval agent asks for sign-off ──
-  /** The circle and its word, inline: in the Review head beside Approve the deck, and in the Export card's head. */
+  /** The circle and its word, inline: in the Review head beside Approve the deck, and in the Export card's head. The word is beside it, so the circle says only the name. */
   function deckStat(ds) {
     var ok = ds.state === 'approved';
-    return '<span class="dstat" data-deck="' + ds.state + '">' + L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 32 }) +
+    return '<span class="dstat" data-deck="' + ds.state + '">' + L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 32, aria: 'name' }) +
       '<span class="dword' + (ok ? ' ok' : '') + '">' + esc(ds.word) + '</span></span>';
   }
 
-  /** The status card: the 60px circle, Approval and its role, the word, then the step or who approved. */
+  /** The status card: the 60px circle, Approval and its role, the word, then the step or who approved. The card says the name and word, so the circle is hidden from screen readers. */
   function deckCard(ds) {
     var ok = ds.state === 'approved';
     var foot = ok && ds.by ? 'Approved by ' + ds.by : ds.step_index ? 'Step ' + ds.step_index + ' of ' + ds.step_total : '';
     return '<div class="card status" style="padding:16px" data-status="' + ds.activity + '" data-deck="' + ds.state + '"><div style="display:flex;align-items:center;gap:14px">' +
-      L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 60 }) +
+      L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 60, aria: 'hidden' }) +
       '<div style="min-width:0"><div style="font-size:14px;font-weight:600">' + esc(ds.name) + '</div><div class="note">' + esc(ds.role) + '</div>' +
       '<div class="sword' + (ok ? ' ok' : '') + '">' + esc(ds.word) + '</div>' +
       (foot ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">' + esc(foot) + '</div>' : '') + '</div></div></div>';
@@ -1873,7 +1874,7 @@ var DeckLogic = (function () {
     var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
     var ds = L.deckApproval(s.raw), rep = L.reportLine(s.raw), ax = L.appendixOf(s.deck);
     var head = ds ? deckStat(ds) : '<span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span>';
-    var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn" data-go="review">Approve it on Review</button></div>' : '';
+    var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn tall" data-go="review">Approve it on Review</button></div>' : '';
     return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' +
       '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
       '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
@@ -1900,6 +1901,7 @@ var DeckLogic = (function () {
     var s = d(), scr = screenOf(s);
     var ae = document.activeElement, focusId = ae && ae.id && /^(qt_|ptext$|client$|project$|agency$)/.test(ae.id) ? ae.id : '';
     var selS = focusId ? ae.selectionStart : null, selE = focusId ? ae.selectionEnd : null;
+    var focusSel = focusId ? '' : focusAgain(ae);
     stashDraft();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
     document.getElementById('app').innerHTML = bar(s, scr) + body;
@@ -1912,7 +1914,25 @@ var DeckLogic = (function () {
         try { if (selS != null && fe.setSelectionRange) fe.setSelectionRange(selS, selE); } catch (e) { /* not a text field */ }
       }
     }
+    if (focusSel && typeof document.querySelector === 'function') {
+      // The control pressed is drawn again: keep the keyboard on it. Gone (the deck just approved): nothing to do.
+      try { var fb = document.querySelector(focusSel); if (fb && fb.focus) fb.focus(); } catch (e) { /* a selector the page cannot read */ }
+    }
     loadUpstream(s);
+  }
+
+  /**
+   * The selector that finds the focused control again after a re-render: a territory (by its id), the appendix
+   * toggle (its value flips between show and hide) or Approve the deck. Empty for anything else.
+   */
+  function focusAgain(ae) {
+    if (!ae || typeof ae.getAttribute !== 'function') return '';
+    var cssEsc = function (v) { return typeof CSS !== 'undefined' && CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&'); };
+    if (ae.id === 'approve-deck') return '#approve-deck';
+    var terr = ae.getAttribute('data-territory');
+    if (terr != null) return '[data-territory="' + cssEsc(terr) + '"]';
+    if (ae.getAttribute('data-appendix') != null) return '[data-appendix]';
+    return '';
   }
 
   /** Ask the host whether the brief or research changed since this deck. Any failure shows nothing. */

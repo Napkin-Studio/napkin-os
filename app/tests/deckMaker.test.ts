@@ -288,7 +288,7 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   const app = { innerHTML: '' }
   const toastEl = { textContent: '', classList: { add() {}, remove() {} }, _t: 0 }
   const els: Record<string, unknown> = { app, toast: toastEl, ...extraEls }
-  const doc = {
+  const doc: Record<string, unknown> = {
     getElementById: (id: string) => els[id] ?? null,
     addEventListener: (t: string, f: (e: unknown) => void) => { (handlers[t] ||= []).push(f) },
     title: '',
@@ -304,7 +304,7 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   vm.runInContext(src, ctx)
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
-  return { app, writes, click, toastEl }
+  return { app, writes, click, toastEl, doc }
 }
 
 const hostile = '<img src=x onerror=alert(1)>'
@@ -1006,7 +1006,9 @@ for (const n of RUNNING) {
     const f = fixture(n), h = mount(f).app.innerHTML, who = L.agentState(f.run)
     const aside = rightAside(h)
     assert.ok(aside.startsWith('<div class="card status"'), 'the status card is first')
-    assert.match(aside, new RegExp(`^<div class="card status" style="padding:20px" data-status="${who.activity}"><div[^>]*><svg class="cir s60" width="60" height="60"[^>]*role="img" aria-label="[^"]+, ${who.word}"`))
+    // the card says the name and the word, so its circle is hidden from screen readers (said once, not twice)
+    assert.match(aside, new RegExp(`^<div class="card status" style="padding:20px" data-status="${who.activity}"><div[^>]*><svg class="cir s60" width="60" height="60"[^>]*aria-hidden="true"`))
+    assert.equal(/<svg class="cir s60"[^>]*(role="img"|aria-label=)/.test(aside), false)
     assert.ok(aside.includes(`<div class="sword">${who.word}</div>`), 'the state word is text, not colour alone')
     assert.ok(aside.includes(`Step ${f.run.agent.step_index} of 7`))
     assert.ok(aside.includes('Checked so far'))
@@ -1026,7 +1028,7 @@ test('Build, hand-off: the card names both agents over one blended circle', () =
   const h = mount(fixture('handoff')).app.innerHTML
   const aside = rightAside(h)
   assert.ok(aside.includes('>Brief → Strategy<') && aside.includes('Shapes the ask → Builds territories'))
-  assert.match(aside, /aria-label="Brief to Strategy, Handing off"/)
+  assert.match(aside, /<svg class="cir s60"[^>]*aria-hidden="true" data-agent="brief" data-to="strategy" data-activity="handoff"/)
   assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Passing the work on</h1>'))
 })
 
@@ -1047,7 +1049,7 @@ test('Build, failed: a failed run opens on Build with the failure, the failed ro
   const f = fixture('failed'), m = mount(f), h = m.app.innerHTML
   assert.ok(h.includes('aria-current="step">Build<'), 'failed routes to Build, not Start')
   assert.ok(h.includes('>Something failed</h1>') && h.includes(f.run.error.message))
-  assert.match(rightAside(h), /data-status="error"[\s\S]*aria-label="Review, Failed, retrying"/)
+  assert.match(rightAside(h), /data-status="error"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
   assert.ok(rightAside(h).includes('<div class="sword err">Failed, retrying</div>'))
   const b = box(h)!
   assert.equal(b[1], 'failed')
@@ -1065,7 +1067,7 @@ test('Build, done: the deck is ready, what to supply is listed, and Open the dec
   m.click({ go: 'build' })
   const h = m.app.innerHTML
   assert.ok(h.includes('>The deck is ready for you</h1>'))
-  assert.match(rightAside(h), /data-status="complete"[\s\S]*aria-label="Review, Done"/)
+  assert.match(rightAside(h), /data-status="complete"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
   assert.ok(rightAside(h).includes('<div class="sword ok">Done</div>'))
   const b = box(h)!
   assert.equal(b[1], 'done')
@@ -1405,14 +1407,14 @@ test('reportLine: errors from the checker, every number traced only at 0 errors,
 test('Review, ready: the Approval circle and Approve the deck in the head, its card and Checked so far under the rail', () => {
   const h = review('review-ready').app.innerHTML
   const hd = head(h)
-  assert.match(hd, /<span class="dstat" data-deck="open"><svg class="cir s32" width="32" height="32"[^>]*role="img" aria-label="Approval, Needs you"[^>]*data-activity="human"/)
+  assert.match(hd, /<span class="dstat" data-deck="open"><svg class="cir s32" width="32" height="32"[^>]*role="img" aria-label="Approval"[^>]*data-activity="human"/)
   assert.ok(hd.includes('<span class="dword">Needs you</span>'), 'the state is a word, not colour alone')
   assert.ok(hd.includes('<button class="btn go tall" id="approve-deck" data-approve="deck">Approve the deck</button>'))
   assert.ok(hd.indexOf('data-act="appendix"') < hd.indexOf('data-tab="evidence"') && hd.indexOf('data-tab="evidence"') < hd.indexOf('Approve the deck'))
   assert.equal(h.includes('data-approve-note'), false, 'nothing is open, so nothing to say')
   const lc = leftCol(h)
   assert.ok(lc.startsWith('<nav class="frost rail" aria-label="Slides">'), 'the rail comes first')
-  assert.match(lc, /<div class="card status" style="padding:16px" data-status="human" data-deck="open">[\s\S]*aria-label="Approval, Needs you"[\s\S]*>Asks for sign-off<[\s\S]*<div class="sword">Needs you<\/div>[\s\S]*Step 7 of 7/)
+  assert.match(lc, /<div class="card status" style="padding:16px" data-status="human" data-deck="open">[\s\S]*aria-hidden="true" data-agent="approval"[\s\S]*>Asks for sign-off<[\s\S]*<div class="sword">Needs you<\/div>[\s\S]*Step 7 of 7/)
   assert.ok(lc.indexOf('Checked so far') > lc.indexOf('data-deck="open"'))
   assert.equal((lc.match(/class="tick ok"/g) || []).length, 3)
   // every fact supplied: the supply card answered, 0 to supply, every confirm item verified
@@ -1443,7 +1445,7 @@ test('Approve the deck writes the approval and the decision under run only, and 
   assert.equal(after.run.agent, undefined, 'the feed is cleared, as at a gate')
   const a = review(after)
   const h = a.app.innerHTML
-  assert.match(head(h), /<span class="dstat" data-deck="approved"><svg[^>]*aria-label="Approval, Approved"[^>]*data-activity="complete"[\s\S]*<span class="dword ok">Approved<\/span><\/span>$/)
+  assert.match(head(h), /<span class="dstat" data-deck="approved"><svg[^>]*aria-label="Approval"[^>]*data-activity="complete"[\s\S]*<span class="dword ok">Approved<\/span><\/span>$/)
   assert.equal(h.includes('id="approve-deck"'), false, 'approved once, no button')
   assert.ok(leftCol(h).includes('>Approved by You<'))
   a.click({ tab: 'who' })
@@ -1491,7 +1493,7 @@ test('Review with only an appendix count keeps the count as text, and an unfinis
 test('Present, exported: Approved in the Export head, the file rows, the report line, and the confirm list kept', () => {
   const h = present('export-ready').app.innerHTML
   const ex = exportCard(h)
-  assert.match(ex, /^<div style="display:flex;align-items:center;gap:10px"><span[^>]*>Export<\/span><div class="spacer"><\/div><span class="dstat" data-deck="approved"><svg class="cir s32"[^>]*aria-label="Approval, Approved"/)
+  assert.match(ex, /^<div style="display:flex;align-items:center;gap:10px"><span[^>]*>Export<\/span><div class="spacer"><\/div><span class="dstat" data-deck="approved"><svg class="cir s32"[^>]*role="img" aria-label="Approval"[^>]*data-agent="approval"/)
   assert.equal(ex.includes('class="chip'), false)
   assert.ok(ex.includes('<div class="note" style="font-size:12px;overflow-wrap:anywhere">Ready to open</div></div><button class="btn sm" data-export="web" style="font-weight:600" aria-label="Open index.html">Open</button>'))
   assert.ok(ex.includes('>better-with-ballymaloe.pptx</div></div><button class="btn sm" data-export="pptx" style="font-weight:600" aria-label="Download better-with-ballymaloe.pptx">Download</button>'))
@@ -1503,7 +1505,7 @@ test('Present, exported: Approved in the Export head, the file rows, the report 
   assert.ok(h.indexOf('Confirm list') > -1 && h.indexOf('Confirm list') < h.indexOf('>Export<'), 'the confirm list stays on Present (open question)')
   const mid = middle(h)
   assert.ok(mid.includes('5 backup slides are hidden'))
-  assert.match(mid, /data-deck="approved"[\s\S]*aria-label="Approval, Approved"[\s\S]*<div class="sword ok">Approved<\/div>[\s\S]*>Approved by Sai<[\s\S]*Checked so far/)
+  assert.match(mid, /data-deck="approved"[\s\S]*aria-hidden="true" data-agent="approval"[\s\S]*<div class="sword ok">Approved<\/div>[\s\S]*>Approved by Sai<[\s\S]*Checked so far/)
 })
 
 test('Present: with no files every row is Not built yet, and an unapproved deck points to Review', () => {
@@ -1512,8 +1514,8 @@ test('Present: with no files every row is Not built yet, and an unapproved deck 
   assert.equal((none.match(/data-export="\w+" disabled/g) || []).length, 4)
   assert.ok(none.includes('data-deck="approved"'))
   const m = present('review-ready'), ex = exportCard(m.app.innerHTML)
-  assert.match(ex, /<span class="dstat" data-deck="open">[\s\S]*aria-label="Approval, Needs you"/)
-  assert.ok(ex.includes('The deck is not approved yet.') && ex.includes('<button class="btn" data-go="review">Approve it on Review</button>'))
+  assert.match(ex, /<span class="dstat" data-deck="open"><svg class="cir s32"[^>]*aria-label="Approval"[^>]*>[\s\S]*<span class="dword">Needs you<\/span>/)
+  assert.ok(ex.includes('The deck is not approved yet.') && ex.includes('<button class="btn tall" data-go="review">Approve it on Review</button>'))
   m.click({ go: 'review' })
   assert.ok(m.app.innerHTML.includes('id="approve-deck"'))
 })
@@ -1609,4 +1611,74 @@ test('the export rows take the older file-name string and the animated deck on P
   assert.ok(ex.includes('>deck.pptx</div></div><button class="btn sm" data-export="pptx" style="font-weight:600" aria-label="Download deck.pptx">Download</button>'))
   assert.ok(ex.includes('>deck.hf.json</div></div><button class="btn sm" data-export="anim" style="font-weight:600" aria-label="Get project deck.hf.json">Get project</button>'))
   assert.ok(ex.includes('data-export="pdf" disabled'))
+})
+
+test('a territory, the appendix toggle and Approve the deck keep the keyboard after they re-render', () => {
+  const focusOn = (m: ReturnType<typeof mount>, attrs: Record<string, string>, id = '') => {
+    const asked: string[] = []
+    let focused = 0
+    m.doc.activeElement = { id, getAttribute: (k: string) => (k in attrs ? attrs[k] : null) }
+    m.doc.querySelector = (sel: string) => { asked.push(sel); return { focus() { focused++ } } }
+    return { asked, focused: () => focused }
+  }
+  const g = mount(fixture('gate2')), tid = fixture('gate2').run.gate.territories[2].id
+  const t = focusOn(g, { 'data-territory': tid })
+  g.click({ territory: tid })
+  assert.deepEqual(t.asked, [`[data-territory="${tid}"]`])
+  assert.equal(t.focused(), 1)
+  const q = focusOn(g, { 'data-territory': 'a"b' })
+  g.click({ territory: 'a"b' })
+  assert.deepEqual(q.asked, ['[data-territory="a\\"b"]'], 'the id is escaped in the selector')
+  const m = review('review-ready')
+  const a = focusOn(m, { 'data-appendix': 'show' })
+  m.click({ appendix: 'show' })
+  assert.deepEqual(a.asked, ['[data-appendix]'], 'the toggle is found again though its value flips')
+  assert.equal(a.focused(), 1)
+  const d = focusOn(m, {}, 'approve-deck')
+  m.click({ tab: 'checks' })
+  assert.deepEqual(d.asked, ['#approve-deck'])
+  const other = focusOn(m, { 'data-tab': 'who' })
+  m.click({ tab: 'who' })
+  assert.deepEqual(other.asked, [], 'other controls are left as before')
+})
+
+test('the circle says the name only, or nothing, where the screen writes the rest beside it', () => {
+  assert.match(L.circleSvg({ agent: 'approval', activity: 'human', aria: 'name' }), /role="img" aria-label="Approval" data-agent="approval"/)
+  const hid = L.circleSvg({ agent: 'copy', activity: 'write', aria: 'hidden' })
+  assert.match(hid, /aria-hidden="true" data-agent="copy"/)
+  assert.equal(/role=|aria-label=/.test(hid), false)
+  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', aria: 'junk' }), /role="img" aria-label="Copy, Writing"/)
+  // the Review head: the circle names Approval, the word beside it says Needs you; the card says both, its circle is hidden
+  const h = review('review-ready').app.innerHTML
+  assert.match(h, /<span class="dstat" data-deck="open"><svg class="cir s32"[^>]*role="img" aria-label="Approval" [^>]*>[\s\S]*?<\/svg><span class="dword">Needs you<\/span>/)
+  assert.match(leftCol(h), /<svg class="cir s60"[^>]*aria-hidden="true"[^>]*>[\s\S]*<div style="font-size:14px;font-weight:600">Approval<\/div>/)
+})
+
+test('the new targets are 44px, and the waiting words and pending rows meet 4.5:1 in every theme', () => {
+  assert.match(css, /\.appx\{[^}]*min-height:44px\}/)
+  // the state words and the pending rows use tokens that pass on every surface they sit on
+  assert.match(css, /\.pill\.wait\{color:var\(--ink2\);/)
+  assert.match(css, /\.crow\.pending \.t\{color:var\(--ink2\);/)
+  assert.match(css, /\.cslide\.pending\{[^}]*color:var\(--ink2\)\}/)
+  assert.match(css, /\.status \.sword\{[^}]*color:var\(--warn-fg\)\}/)
+  const block = (re: RegExp) => Object.fromEntries([...re.exec(css)![1].matchAll(/--([\w-]+):(#[0-9A-Fa-f]{6})\b/g)].map(m => [m[1], m[2]])) as Record<string, string>
+  const lum = (hex: string) => {
+    const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+  }
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05) }
+  const themes: Record<string, Record<string, string>> = {
+    light: block(/:root\{([^}]*)\}/),
+    dark: block(/:root\[data-color-scheme="dark"\]\{([^}]*)\}/),
+    'os dark': block(/:root:not\(\[data-color-scheme="light"\]\):not\(\[data-color-scheme="dark"\]\)\{([^}]*)\}/),
+  }
+  for (const [name, t] of Object.entries(themes)) {
+    for (const fg of ['ink2', 'warn-fg', 'ok-fg']) {
+      for (const bg of ['card', 'canvas', 'soft']) {
+        assert.ok(t[fg] && t[bg], `${name}: --${fg} and --${bg} are hex tokens`)
+        assert.ok(ratio(t[fg], t[bg]) >= 4.5, `${name}: --${fg} on --${bg} is ${ratio(t[fg], t[bg]).toFixed(2)}:1`)
+      }
+    }
+  }
+  assert.ok(ratio(themes.light.ink3, themes.light.card) < 4.5, 'why --ink3 is not used for these words')
 })
