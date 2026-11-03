@@ -111,6 +111,29 @@
                   "next",
                   "failed"
                 ]
+              },
+              "items": {
+                "type": "array",
+                "description": "The content box of a running stage: what it is reading or writing, one row each.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "text",
+                    "status"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "done",
+                        "now",
+                        "pending"
+                      ]
+                    }
+                  }
+                }
               }
             }
           }
@@ -175,11 +198,143 @@
                   }
                 }
               }
+            },
+            "agent": {
+              "enum": [
+                "strategy",
+                "idea",
+                "research",
+                "brief",
+                "copy",
+                "deck",
+                "approval",
+                "review",
+                "dex"
+              ],
+              "description": "The circle at the gate; Strategy for gates 1 and 2, Idea for gate 3 when absent."
+            },
+            "territories": {
+              "type": "array",
+              "description": "Gate 2: the territories to pick from.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "n": {
+                    "type": [
+                      "integer",
+                      "string"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "thought": {
+                    "type": "string"
+                  },
+                  "why": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "first_pick": {
+              "type": "string",
+              "description": "Gate 2: the id of the blind judge's first pick."
+            },
+            "picked": {
+              "type": "string",
+              "description": "Gate 2: the id the person picked."
+            },
+            "idea": {
+              "type": "object",
+              "description": "Gate 3: the one idea and the work that carries it.",
+              "properties": {
+                "line": {
+                  "type": "string"
+                },
+                "basis": {
+                  "enum": [
+                    "brief",
+                    "research",
+                    "proposal",
+                    "placeholder"
+                  ]
+                },
+                "territory_id": {
+                  "type": "string"
+                },
+                "executions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "channel",
+                      "summary"
+                    ],
+                    "properties": {
+                      "n": {
+                        "type": [
+                          "integer",
+                          "string"
+                        ]
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      },
+                      "tag": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "rests_on": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "label"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "tone": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         },
         "approvals": {
           "type": "object",
+          "description": "gate id (or `deck`) -> who approved and when; a gate approval may also say what was decided.",
+          "properties": {
+            "deck": {
+              "type": "object",
+              "description": "The deck approval at Review.",
+              "properties": {
+                "by": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -188,6 +343,174 @@
               },
               "at": {
                 "type": "string"
+              },
+              "decision": {
+                "enum": [
+                  "approve",
+                  "edit",
+                  "retry"
+                ]
+              },
+              "picked": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "agent": {
+          "type": "object",
+          "description": "What the agent circle shows: which agent, doing what, which step of how many. Optional; written by the server, or by a fixture until then. `slow` is a flag, never a time.",
+          "required": [
+            "key",
+            "activity"
+          ],
+          "properties": {
+            "key": {
+              "enum": [
+                "strategy",
+                "idea",
+                "research",
+                "brief",
+                "copy",
+                "deck",
+                "approval",
+                "review",
+                "dex"
+              ]
+            },
+            "activity": {
+              "enum": [
+                "work",
+                "write",
+                "think",
+                "read",
+                "check",
+                "human",
+                "error",
+                "complete",
+                "waiting"
+              ]
+            },
+            "step_index": {
+              "type": "integer"
+            },
+            "step_total": {
+              "type": "integer"
+            },
+            "to": {
+              "enum": [
+                "strategy",
+                "idea",
+                "research",
+                "brief",
+                "copy",
+                "deck",
+                "approval",
+                "review",
+                "dex"
+              ],
+              "description": "Hand-off: the agent the work passes to."
+            },
+            "slow": {
+              "type": "boolean"
+            }
+          }
+        },
+        "error": {
+          "type": "object",
+          "description": "With state failed: which stage failed and whether it can be retried.",
+          "required": [
+            "stage",
+            "message"
+          ],
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          }
+        },
+        "done": {
+          "type": "object",
+          "description": "With state done: what is ready.",
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "slides": {
+              "type": "integer"
+            },
+            "appendix": {
+              "type": "integer"
+            },
+            "to_supply": {
+              "type": "integer"
+            }
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "description": "Every approve, edit or retry at a gate, in order.",
+          "items": {
+            "type": "object",
+            "required": [
+              "gate",
+              "kind"
+            ],
+            "properties": {
+              "gate": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "approve",
+                  "edit",
+                  "retry"
+                ]
+              },
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "gate_requests": {
+          "type": "array",
+          "description": "An edit or retry asked for at a gate, recorded like change_requests; launches nothing.",
+          "items": {
+            "type": "object",
+            "required": [
+              "gate",
+              "kind"
+            ],
+            "properties": {
+              "gate": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "edit",
+                  "retry"
+                ]
+              },
+              "at": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "waiting"
+                ]
               }
             }
           }
@@ -255,6 +578,29 @@
             "confirm_summary": {
               "type": "object",
               "description": "total, verified, supplied, sourced, open, needs_person (engine intake.confirm_summary)."
+            }
+          }
+        },
+        "appendix_count": {
+          "type": "integer",
+          "description": "How many appendix slides; the fallback when appendix_ids is absent."
+        },
+        "appendix_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Slide ids kept in the appendix."
+        },
+        "slides": {
+          "type": "object",
+          "description": "Slides keyed by id.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "appendix": {
+                "type": "boolean"
+              }
             }
           }
         }
@@ -473,6 +819,137 @@
         },
         "at": {
           "type": "string"
+        }
+      }
+    },
+    "exports": {
+      "type": "object",
+      "description": "What has been written, per format. Absent means 'Not built yet'. `true` is the older shape; the object names the file.",
+      "properties": {
+        "web": {
+          "oneOf": [
+            {
+              "enum": [
+                true
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "file"
+              ],
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          ]
+        },
+        "pptx": {
+          "oneOf": [
+            {
+              "enum": [
+                true
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "file"
+              ],
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          ]
+        },
+        "pdf": {
+          "oneOf": [
+            {
+              "enum": [
+                true
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "file"
+              ],
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          ]
+        },
+        "anim": {
+          "oneOf": [
+            {
+              "enum": [
+                true
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "file"
+              ],
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "change_requests": {
+      "type": "array",
+      "description": "An Ask-for-a-change click. Words only; sources stay.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "slide": {
+            "type": "string"
+          },
+          "change": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
         }
       }
     }

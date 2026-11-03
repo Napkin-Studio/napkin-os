@@ -13,6 +13,10 @@ Every shape below is the engine's own, except `run`, `evidence`, `exports`, `int
 Sample: `app/templates/deck-maker/example/data.yaml` (checked against `engine/deck/deck.schema.json` by
 `engine/deck/tests/test_deck_maker_fixture.py`).
 
+State fixtures for every screen (`app/templates/deck-maker/example/states/*.yaml`, hand-built on the
+Ballymaloe sample, dev and test only, not packed) are checked against the schema by
+`app/tests/deckMakerFixtures.test.ts`.
+
 ## What a deck is built from
 
 The Deck stands alone. A deck builds from any of: the prompt text, documents the person attached, a
@@ -46,12 +50,19 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `research_request` `{status: "asked", at}` | the app | the Strengthen click. Records a request and **launches nothing** |
 | `run.stages[]` `{id,name,sub,status}` | the runner | `engine/deck/stages.py` |
 | `run.gate` | the runner | the open gate, or `null` |
-| `run.approvals.<gate>` `{by, at}` | the app | on Approve |
+| `run.approvals.<gate>` `{by, at, decision?, picked?, note?}` | the app | on Approve; `decision` is `approve\|edit\|retry`, `picked` the territory id at gate 2. `approvals.deck` `{by, at}` is the deck approval at Review |
+| `run.agent` `{key, activity, step_index?, step_total?, to?, slow?}` | the server (a fixture until then) | what the agent circle shows. Optional. `slow` is a flag, never a time |
+| `run.stages[].items[]` `{text, status: done\|now\|pending}` | the runner | the content box of a running stage. Optional |
+| `run.error` `{stage, message, retryable}` | the runner | with `state: failed`. Optional |
+| `run.done` `{summary, slides, appendix, to_supply}` | the runner | with `state: done`. Optional |
+| `run.gate.agent`, `run.gate.territories[]` `{id, n, name, thought, why}`, `first_pick`, `picked`, `run.gate.idea` `{line, basis, territory_id, executions[], rests_on[]}` | the runner | gates 2 and 3. Territories, the idea and its executions are proposals. Optional |
+| `run.decisions[]` `{gate, kind, by, at}`, `run.gate_requests[]` `{gate, kind, at, status}` | the app | every approve, edit or retry; an edit or retry ask is recorded like `change_requests` and launches nothing. Optional |
+| `deck.appendix_ids[]`, `deck.slides.<id>.appendix` | the runner, or the app via `put` | the appendix; `appendix_count` stays the fallback. Optional |
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
 | `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
-| `exports.web\|pptx\|anim\|pdf` | the runner | file names, once written. Absent means "Not built yet" |
+| `exports.web\|pptx\|anim\|pdf` | the runner | `true` (older) or `{file, url?, bytes?}`, once written. Absent means "Not built yet" |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 
 On Build the app writes only the person's own inputs (`inputs.prompt`, `kind`, `format`). The Brief and
