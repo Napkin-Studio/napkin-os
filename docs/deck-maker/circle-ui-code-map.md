@@ -142,3 +142,12 @@ Materials: Strategy graphite, Idea and Research glass, Brief and Review pearl, C
 | Total | about 12.5 days (2.5 weeks), matches the design's 2 to 3 weeks. Phase 5 not estimated. |
 
 Real data for phases 2 to 4 depends on `features/deck-maker-server.clan`; until then fixtures drive everything.
+
+## 9. Phase 6: the status circle grows in place
+
+While an agent works or the run waits (work, write, think, read, check, handoff, waiting, so also slow and Waiting for the engine) the status card's circle is 130px and the card is a column; at a gate (Needs you), on failure and when done it is 60px in a row. `DeckLogic.circleSizeFor(state)` decides (130 or 60); `circleSays(who)` gives the three honest lines (who it is, what it is doing or why nothing runs, that it grows and shrinks). The enlarged circle sits in a `<button data-orb class="orbb">` whose aria-label says the agent and the state once (the svg inside is aria-hidden); pressing it (click, Enter or Space) shows the next line in `[data-say]`, four presses inside 1.1s get the shrug. Pointer hover, press ripple and drag turn come from the Orbs engine; `Orbs.kick` gives a keyboard press the same ripple.
+
+- Growth: `render()` records the card's height and the circle's size and place first (`cardBefore`), then `growCard` plays the change: the circle scales from where it was (FLIP, no travel), the card height follows, the text fades in, 300 ms `cubic-bezier(.2,.8,.2,1)`. The content box and the other columns do not move. Under `prefers-reduced-motion: reduce` there is no size animation: the size is instant with a 200 ms cross-fade.
+- Slot key: `Orbs.scan` keys a circle by where it lives (`dex`, `dstat`, `status`), never by size (only an unnamed place also uses width), and `upgrade` resizes the same circle when the width changes, so the ring, turn and a pour in progress survive growing and shrinking. The gate's waiting card (aside.stack) shares the `status` slot.
+- Markup: `statusCard` and the new `waitingCard` use `.srow` + `.slot` + `.stext`; the enlarged card adds `.hero`. The gate card ("Waiting for you") and gate 1 are byte-identical to before. No time and no percentage are shown anywhere, including the waiting prompt.
+- Flat fallback: `circleSvg` scales to any size (viewBox fixed), so without WebGL the 130px flat circle and the button still work.

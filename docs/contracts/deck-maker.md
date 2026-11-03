@@ -315,3 +315,7 @@ is not JSON gets one repair call. Bench cost ranges are assumptions, plus or min
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.
 - Live measures for the twelve craft fixes (ADR 0030 to 0032 are proposed), the app reading the Gate 1 payload, and the
   `schema.json` entries for the new slide types.
+
+## The status circle's size
+
+The status card's circle is 130px while an agent works or the run waits (`run.agent.activity` work, write, think, read, check, a hand-off, or no feed and nothing open), and 60px when a gate needs the person, on failure and when done (`DeckLogic.circleSizeFor`). It grows and shrinks in place; no new data is read or written. While enlarged it is a button that answers with a few fixed lines (who it is, what it is doing, that it changes size); it shows no progress, percentage or time.

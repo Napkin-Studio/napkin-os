@@ -56,6 +56,8 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   ACTIVITY_WORD: Record<string, string>
   circleSvg(opts: unknown): string
   agentState(run: unknown): { agent: string | null; activity: string; word: string; role: string; step_index: number | null; step_total: number | null; handoff: boolean; to: string | null }
+  circleSizeFor(state: unknown): number
+  circleSays(who: unknown): string[]
   arcPath(cx: number, cy: number, rho: number, a0: number, sweep: number): string
   blend(from: unknown, to: unknown, p?: unknown): string
   runView(run: unknown, deck: unknown): RunView
@@ -844,7 +846,7 @@ const gateRun = () => ({
   },
 })
 const buildData = (r: unknown) => ({ inputs: { prompt: { client: 'Lumen', project: 'P', text: 'x' } }, run: r })
-const statusCard = (h: string) => /<aside class="stack"><div class="card" style="padding:20px">([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
+const statusCard = (h: string) => /<aside class="stack"><div class="card(?: status hero)?" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 
 test('gate 1: the status card shows the 60px circle with the same words, and Dex is a 32px circle', () => {
   const h = mount(buildData(gateRun())).app.innerHTML
@@ -864,7 +866,8 @@ test('with no gate the status card shows the waiting circle and still says it wa
   const next = (m.writes[0].obj as { run: unknown }).run
   const h = mount(buildData(next)).app.innerHTML
   const card = statusCard(h)
-  assert.match(card, /<svg class="cir s60"[^>]*aria-label="Idea, Waiting"[^>]*data-activity="waiting"/)
+  // nothing is running: the circle is enlarged in place and is a button that says who and what once
+  assert.match(card, /<button type="button" class="orbb" data-orb aria-label="Idea, Waiting\. Press to ask what is happening\."><svg class="cir" width="130" height="130"[^>]*aria-hidden="true"[^>]*data-activity="waiting"/)
   assert.ok(card.includes('>Waiting for the engine<') && card.includes('>Not connected to this document yet<'))
   assert.equal(h.includes('class="dex"'), false)
 })
@@ -876,7 +879,7 @@ test('the build screens show no percentage and no time range', () => {
     { state: 'building', stages: withNow('copy'), gate: null, approvals: {}, agent: { key: 'copy', activity: 'write', slow: true } }]
   for (const r of runs) {
     const h = mount(buildData(r)).app.innerHTML
-    assert.ok(h.includes('class="cir s60"'))
+    assert.ok(/class="cir( s60)?" width="(60|130)"/.test(h))
     assert.equal(/\d\s?%/.test(h), false)
     assert.equal(/\d+\s?(min|sec|hours?)\b/.test(h), false)
   }
@@ -1005,10 +1008,12 @@ for (const n of RUNNING) {
   test(`Build, ${n}: the status card comes first, then the content box shows what is being done`, () => {
     const f = fixture(n), h = mount(f).app.innerHTML, who = L.agentState(f.run)
     const aside = rightAside(h)
-    assert.ok(aside.startsWith('<div class="card status"'), 'the status card is first')
+    const px = L.circleSizeFor(who), cls = px === 60 ? 'cir s60' : 'cir'
+    assert.ok(aside.startsWith('<div class="card status'), 'the status card is first')
     // the card says the name and the word, so its circle is hidden from screen readers (said once, not twice)
-    assert.match(aside, new RegExp(`^<div class="card status" style="padding:20px" data-status="${who.activity}"><div[^>]*><svg class="cir s60" width="60" height="60"[^>]*aria-hidden="true"`))
-    assert.equal(/<svg class="cir s60"[^>]*(role="img"|aria-label=)/.test(aside), false)
+    assert.match(aside, new RegExp(`^<div class="card status${px === 60 ? '' : ' hero'}" style="padding:20px" data-status="${who.activity}"><div class="srow"><span class="slot[^"]*">(<button[^>]*>)?<svg class="${cls}" width="${px}" height="${px}"[^>]*aria-hidden="true"`))
+    assert.equal(new RegExp(`<svg class="${cls}"[^>]*(role="img"|aria-label=)`).test(aside), false)
+    assert.equal(aside.includes('data-orb'), px !== 60, 'only the enlarged circle is a button')
     assert.ok(aside.includes(`<div class="sword">${who.word}</div>`), 'the state word is text, not colour alone')
     assert.ok(aside.includes(`Step ${f.run.agent.step_index} of 7`))
     assert.ok(aside.includes('Checked so far'))
@@ -1024,11 +1029,106 @@ for (const n of RUNNING) {
   })
 }
 
+// ── the status circle grows in place while an agent works or the run waits (phase 6) ──
+test('circleSizeFor: 130 while it works or waits, 60 when a person is needed, on a failure and when done', () => {
+  for (const a of ['work', 'write', 'think', 'read', 'check', 'handoff', 'waiting']) assert.equal(L.circleSizeFor(a), 130, a)
+  for (const a of ['human', 'error', 'complete']) assert.equal(L.circleSizeFor(a), 60, a)
+  // it takes agentState's answer too, and junk is the waiting size without a throw
+  assert.equal(L.circleSizeFor({ activity: 'human' }), 60)
+  assert.equal(L.circleSizeFor({ activity: 'write' }), 130)
+  for (const j of [null, undefined, 7, {}, [], 'nope', { activity: 4 }]) assert.equal(L.circleSizeFor(j), 130)
+  // every fixture: the size follows the state the run is in
+  for (const n of [...RUNNING, 'failed', 'done', 'gate1', 'gate2', 'gate3']) {
+    const f = fixture(n), who = L.agentState(f.run), calm = ['human', 'error', 'complete'].includes(who.activity)
+    assert.equal(L.circleSizeFor(who), calm ? 60 : 130, n)
+  }
+})
+
+test('the status card: 130px and a button while running or waiting; 60px and no button at a gate, on failure and when done', () => {
+  for (const n of RUNNING) {
+    const aside = rightAside(mount(fixture(n)).app.innerHTML)
+    assert.match(aside, /<span class="slot big"><button type="button" class="orbb" data-orb aria-label="[^"]+\. Press to ask what is happening\."><svg class="cir" width="130" height="130"/, n)
+    assert.ok(aside.includes('data-say'), n)
+  }
+  for (const n of ['failed', 'done', 'gate1', 'gate2', 'gate3']) {
+    const m = mount(fixture(n))
+    if (n === 'done') m.click({ go: 'build' }) // a finished run opens on Review
+    const h = m.app.innerHTML
+    assert.equal(/data-orb|class="card status hero"/.test(rightAside(h)), false, n)
+    assert.match(rightAside(h), /<svg class="cir s60" width="60" height="60"/, n)
+  }
+})
+
+test('circle: the aria-label says the agent and the state once, and the svg inside the button says nothing', () => {
+  const aside = rightAside(mount(fixture('copy')).app.innerHTML)
+  assert.equal((aside.match(/aria-label=/g) ?? []).length, 1)
+  assert.match(aside, /aria-label="Copy, Writing\. Press to ask what is happening\."/)
+  assert.match(aside, /<svg class="cir"[^>]*aria-hidden="true"/)
+  // Waiting for the engine: the same circle, a short prompt, no percentage and no time at all
+  const w = mount(buildData({ state: 'building', stages: stg([['inputs', 'done'], ['storyline', 'now']]), gate: null, approvals: {} })).app.innerHTML
+  assert.ok(w.includes('Waiting for the engine') && w.includes('Press the circle to ask what is happening.'))
+  assert.equal(/\d\s?%|\d+\s?(min|sec|hours?)\b/i.test(w), false)
+})
+
+test('circleSays: who it is, what it is doing or why nothing runs, and that it grows and shrinks; honest, no figures', () => {
+  const waiting = L.circleSays(L.agentState({ state: 'building', stages: stg([['inputs', 'done'], ['storyline', 'now']]), gate: null, approvals: {} }))
+  assert.ok(waiting.length >= 3)
+  assert.match(waiting[0], /^I am Strategy, the agent that builds territories\.$/)
+  assert.match(waiting[1], /Nothing is running: the engine is not connected to this document yet/)
+  assert.match(waiting[2], /grow .* shrink back/)
+  const writing = L.circleSays(L.agentState(fixture('copy').run))
+  assert.match(writing[1], /I am writing right now\. I can not tell you how far along/)
+  assert.match(L.circleSays(L.agentState(fixture('handoff').run))[1], /Brief is handing the work to Strategy/)
+  for (const w of [waiting, writing]) for (const l of w) assert.equal(/\d/.test(l), false, l)
+  assert.ok(L.circleSays(null).length >= 3)
+})
+
+test('the circle keeps its ring when it grows: the slot key has no size, and the engine resizes the same circle', () => {
+  const scan = /function scan\(root, who\) \{[\s\S]*?\n\}\n/.exec(html)![0]
+  const key = /const base = [^\n]*/.exec(scan)![0]
+  assert.ok(key.includes("where === 'other' ?"), 'only an unnamed place is told apart by width')
+  assert.equal(/width/.test(key.replace(/where === 'other' \? where \+ ':' \+ \(s\.getAttribute\('width'\) \|\| ''\)/, '')), false, 'the status slot key carries no size')
+  assert.ok(scan.includes("s.closest('aside.stack') ? 'status'"), 'the gate card and the running card share one slot')
+  const up = /function upgrade\(svg, opt\) \{[\s\S]*?\n\}\n/.exec(html)![0]
+  assert.equal(up.includes('c.size === size'), false, 'a slot is reused at any size')
+  assert.ok(up.includes('if (c.size !== size) { c.size = size;'), 'and resized, not rebuilt')
+})
+
+test('the growth: 300 ms ease-out, no size animation under reduced motion (instant, cross-fade), and the circle is a real button', () => {
+  const g = /function growCard\(b\) \{[\s\S]*?\n {2}\}\n/.exec(html)![0]
+  assert.ok(html.includes('GROW_MS = 300') && /GROW_EASE = 'cubic-bezier\(\.2,\.8,\.2,1\)'/.test(html))
+  const reduced = g.indexOf('if (reducedMotion())'), sizeAnim = g.indexOf("height: b.h + 'px'")
+  assert.ok(reduced > 0 && sizeAnim > reduced, 'the reduced-motion branch returns before any size animation')
+  assert.match(g.slice(reduced, sizeAnim), /opacity: 0 \}, \{ opacity: 1 \}[\s\S]*return;/)
+  assert.ok(html.includes("window.matchMedia('(prefers-reduced-motion: reduce)')"))
+  // the press: keyboard and pointer both arrive as a click on the button, and the engine's kick is for the keyboard only
+  assert.ok(html.includes('if (a.orb !== undefined) return pressOrb(t, e.detail === 0);'))
+  assert.match(css, /\.status\.hero \.slot\{width:130px;height:130px\}/)
+  assert.match(css, /\.status \.orbb\{appearance:none;[^}]*border-radius:999px/)
+  // the circle's flat svg scales: circleSvg at 130 keeps its viewBox
+  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', size: 130 }), /width="130" height="130" viewBox="-1\.15 -1\.15 2\.3 2\.3"/)
+})
+
+test('pressing the circle shows one honest line after another, and a flurry gets the shrug', () => {
+  const lines: string[] = []
+  const say = { textContent: '', classList: { add() {} } }
+  const card = { querySelector: (q: string) => (q === '[data-say]' ? say : q === 'svg.cir' ? svg : null), offsetHeight: 200 }
+  const svg = { getAttribute: () => '130', closest: () => null }
+  const m = mount(fixture('copy'), undefined, {})
+  ;(m.doc as Record<string, unknown>).getElementById = (id: string) => (id === 'app' ? { innerHTML: '', querySelector: () => card } : null)
+  for (let i = 0; i < 3; i++) { m.click({ orb: '' }); lines.push(say.textContent) }
+  assert.match(lines[0], /^I am Copy, the agent that crafts words\.$/)
+  assert.match(lines[1], /I am writing right now/)
+  assert.match(lines[2], /grow while work goes on/)
+  m.click({ orb: '' })
+  assert.equal(say.textContent, "Pressing faster won't start it sooner. Sorry.")
+})
+
 test('Build, hand-off: the card names both agents over one blended circle', () => {
   const h = mount(fixture('handoff')).app.innerHTML
   const aside = rightAside(h)
   assert.ok(aside.includes('>Brief → Strategy<') && aside.includes('Shapes the ask → Builds territories'))
-  assert.match(aside, /<svg class="cir s60"[^>]*aria-hidden="true" data-agent="brief" data-to="strategy" data-activity="handoff"/)
+  assert.match(aside, /<svg class="cir" width="130" height="130"[^>]*aria-hidden="true" data-agent="brief" data-to="strategy" data-activity="handoff"/)
   assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Passing the work on</h1>'))
 })
 
