@@ -191,8 +191,8 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .status .slot{display:block;position:relative;flex:none;width:60px;height:60px}
 .status.hero .srow{flex-direction:column;text-align:center;gap:12px;padding-top:4px}
 .status.hero .slot{width:130px;height:130px}
-.status.hero.centre{max-width:380px;margin:44px auto 0;background:transparent;border-color:transparent;box-shadow:none}
-.status.hero.centre .slot{width:184px;height:184px}
+.status.hero.centre{max-width:none;margin:24px auto 0;background:transparent;border-color:transparent;box-shadow:none}
+.status.hero.centre .stext,.status.hero.centre .say,.status.hero.centre .note{max-width:420px;margin-left:auto;margin-right:auto}
 .status .orbb{appearance:none;display:block;border:0;background:none;padding:0;margin:0;border-radius:999px;line-height:0;cursor:pointer}
 .status .say{margin:10px auto 0;min-height:40px;max-width:260px;text-align:center;font-size:13px;line-height:1.5;color:var(--ink3)}
 .status .say.on{color:var(--ink)}
@@ -1156,6 +1156,16 @@ var DeckLogic = (function () {
   }
 
   /**
+   * The circle of an empty Build screen: as big as fits beside the heading and the card's words, so it fills the page
+   * without pushing them off it. Never under 184 or over 720; 184 when the window's size is not known.
+   */
+  function circleCentreSize(w, h) {
+    w = +w; h = +h;
+    if (!(w > 0) || !(h > 0)) return 184;
+    return Math.round(Math.max(184, Math.min(w * 0.62, h - 250, 720)));
+  }
+
+  /**
    * What the enlarged circle says when pressed, one line per press, in turn: who it is, what it is doing (or why nothing is
    * running), and that it grows and shrinks with the state. Honest: no progress, no time, no numbers it was not given.
    * who is agentState's answer. Always at least three lines; never throws.
@@ -1414,7 +1424,7 @@ var DeckLogic = (function () {
 
   return {
     appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
-    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleSays: circleSays, arcPath: arcPath, blend: blend, runView: runView,
+    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, blend: blend, runView: runView,
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
@@ -1794,7 +1804,6 @@ var DeckLogic = (function () {
   }
 
   var HINT = 'Press the circle to ask what is happening.';
-  var CIRCLE_CENTRE = 184; // the circle in the middle of an empty Build screen, larger than the 130 it has in the right column
 
   /**
    * The circle in a status card. At 60px it is just the circle (the card says the name and the word, so it is hidden from
@@ -1804,7 +1813,7 @@ var DeckLogic = (function () {
   function orbHtml(who, name, bigSize) {
     var size = bigSize || L.circleSizeFor(who), svg = L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: size, aria: 'hidden' });
     if (size === 60) return '<span class="slot">' + svg + '</span>';
-    return '<span class="slot big"><button type="button" class="orbb" data-orb aria-label="' + esc(name + ', ' + who.word + '. Press to ask what is happening.') + '">' + svg + '</button></span>';
+    return '<span class="slot big"' + (bigSize ? ' style="width:' + size + 'px;height:' + size + 'px"' : '') + '><button type="button" class="orbb" data-orb aria-label="' + esc(name + ', ' + who.word + '. Press to ask what is happening.') + '">' + svg + '</button></span>';
   }
   function nameOf(who) {
     var A = L.AGENTS, a = A[who.agent], b = who.handoff ? A[who.to] : null;
@@ -1826,7 +1835,7 @@ var DeckLogic = (function () {
   /** The card while the engine is not connected: the same enlarged circle in its place, a short honest prompt, no time and no progress. */
   function waitingCard(who, centre) {
     var n = nameOf(who);
-    return '<div class="card status hero' + (centre ? ' centre' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name, centre ? CIRCLE_CENTRE : 0) +
+    return '<div class="card status hero' + (centre ? ' centre' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name, centre ? L.circleCentreSize(window.innerWidth, window.innerHeight) : 0) +
       '<div class="stext"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div></div></div>' +
       sayHtml(who) + '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
   }
@@ -2818,6 +2827,11 @@ return {
     // The bridge fires these when the document's data changes or loads, and sets data-color-scheme itself.
     window.addEventListener('clan:dataupdated', render);
     window.addEventListener('napkin:ready', render);
+    // The centred circle follows the window's size.
+    window.addEventListener('resize', function () {
+      var app = document.getElementById('app');
+      if (app && typeof app.querySelector === 'function' && app.querySelector('.status.centre')) render();
+    });
     // The OS asks for the bar again on load, and says which tab was pressed. Only the frame's parent may.
     window.addEventListener('message', function (e) {
       var m = e.data;

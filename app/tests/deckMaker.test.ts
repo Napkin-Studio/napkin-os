@@ -57,6 +57,7 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   circleSvg(opts: unknown): string
   agentState(run: unknown): { agent: string | null; activity: string; word: string; role: string; step_index: number | null; step_total: number | null; handoff: boolean; to: string | null }
   circleSizeFor(state: unknown): number
+  circleCentreSize(w: unknown, h: unknown): number
   circleSays(who: unknown): string[]
   arcPath(cx: number, cy: number, rho: number, a0: number, sweep: number): string
   blend(from: unknown, to: unknown, p?: unknown): string
@@ -1941,4 +1942,13 @@ test('on its own, Deck Maker keeps its bar and sends nothing', () => {
   assert.ok(p.app.innerHTML.includes('class="bar"'))
   assert.deepEqual(p.classes, [])
   assert.equal(p.posted.length, 0)
+})
+
+test('the centred circle fills the window but stays between 184 and 720, and is 184 when the window is unknown', () => {
+  assert.equal(L.circleCentreSize(undefined, undefined), 184)
+  assert.equal(L.circleCentreSize(0, 800), 184)
+  assert.equal(L.circleCentreSize(1460, 812), 562) // the height leaves 250 for the words: 812 - 250
+  assert.equal(L.circleCentreSize(800, 2000), 496) // narrow: 62% of the width
+  assert.equal(L.circleCentreSize(4000, 4000), 720)
+  assert.equal(L.circleCentreSize(300, 300), 184)
 })
