@@ -59,6 +59,15 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   arcPath(cx: number, cy: number, rho: number, a0: number, sweep: number): string
   blend(from: unknown, to: unknown, p?: unknown): string
   runView(run: unknown, deck: unknown): RunView
+  appendixOf(deck: unknown): { ids: string[]; count: number; selectable: boolean }
+  deckApproval(data: unknown): DeckApproval | null
+  approveDeck(run: unknown, by: string, at: string): Record<string, unknown> | null
+  exportRows(exports: unknown): { key: string; x: string; name: string; action: string; ready: boolean; file: string; note: string }[]
+  reportLine(data: unknown): { known: boolean; errors: number | null; line: string }
+}
+type DeckApproval = {
+  state: string; agent: string; name: string; role: string; activity: string; word: string; by: string; at: string
+  step_index: number | null; step_total: number | null; to_supply: number; verified: number; total: number; open: number; clear: boolean
 }
 type GateView = {
   id: string; body: string; title: string; lede: string; approve: string; edit_key: string; edit_label: string; hold: string; next: string
@@ -1312,4 +1321,229 @@ test('Start and every Build state render byte-identical markup', () => {
   got.push('<!-- example/states/done.yaml, Build -->', done.app.innerHTML, '')
   if (process.env.DM_WRITE_GOLDEN) writeFileSync(golden, got.join('\n'))
   assert.equal(got.join('\n'), readFileSync(golden, 'utf8'))
+})
+
+// ── Review and Present (phase 4): Approve the deck, the appendix, the export rows and the report line ──────────
+const review = (n: string | Fx) => mount(typeof n === 'string' ? fixture(n) : n)
+const leftCol = (h: string) => /<main class="review"><div class="lcol">([\s\S]*?)<\/div><section>/.exec(h)?.[1] ?? ''
+const head = (h: string) => /<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">([\s\S]*?)<\/div>(?:<p class="note" data-approve-note|<div style="margin-bottom:12px">)/.exec(h)?.[1] ?? ''
+const exportCard = (h: string) => /<div class="frost" style="padding:22px">([\s\S]*?)<\/div><\/aside><\/main>/.exec(h)?.[1] ?? ''
+const middle = (h: string) => /<\/section><aside class="stack"><div class="eyebrow">Next<\/div>([\s\S]*?)<\/aside><aside class="stack">/.exec(h)?.[1] ?? ''
+const present = (n: string | Fx) => { const m = review(n); m.click({ go: 'present' }); return m }
+
+test('appendixOf: the named appendix slides, else the marked ones, else only a count; junk never throws', () => {
+  const deck = { order: ['s1'], slides: { s1: {}, a1: { appendix: true }, a2: {}, a3: {} }, appendix_ids: ['a2', 'gone', 's1', 'a2', '__proto__', 'a3'], appendix_count: 9 }
+  assert.deepEqual(plain(L.appendixOf(deck)), { ids: ['a2', 'a3'], count: 2, selectable: true })
+  assert.deepEqual(plain(L.appendixOf({ ...deck, appendix_ids: undefined })), { ids: ['a1'], count: 1, selectable: true })
+  assert.deepEqual(plain(L.appendixOf({ order: [], slides: {}, appendix_count: 5 })), { ids: [], count: 5, selectable: false })
+  for (const junk of [undefined, null, 5, { slides: 'x' }, { slides: {}, appendix_ids: 'a', appendix_count: -2 }]) assert.equal(L.appendixOf(junk).count, 0)
+  assert.deepEqual(plain(L.appendixOf(fixture('review-ready').deck).ids), ['a01', 'a02', 'a03', 'a04', 'a05'])
+})
+
+test('deckApproval: nothing before the run is done, open once it is, approved once run.approvals.deck is written', () => {
+  for (const n of ['storyline', 'gate3', 'check', 'failed']) assert.equal(L.deckApproval(fixture(n)), null, n)
+  assert.equal(L.deckApproval({ run: { state: 'done' }, deck: { order: [], slides: {} } }), null, 'no deck, nothing to approve')
+  const ready = L.deckApproval(fixture('review-ready'))!
+  assert.deepEqual(plain([ready.state, ready.agent, ready.activity, ready.word, ready.step_index, ready.step_total]), ['open', 'approval', 'human', 'Needs you', 7, 7])
+  assert.deepEqual(plain([ready.to_supply, ready.verified, ready.total, ready.open, ready.clear]), [0, 9, 9, 0, true])
+  const done = L.deckApproval(fixture('done'))!
+  assert.deepEqual(plain([done.state, done.to_supply, done.verified, done.open, done.clear, done.step_index]), ['open', 2, 0, 9, false, null])
+  const ok = L.deckApproval(fixture('export-ready'))!
+  assert.deepEqual(plain([ok.state, ok.activity, ok.word, ok.by]), ['approved', 'complete', 'Approved', 'Sai'])
+  for (const junk of [undefined, null, 'x', { run: 5, deck: [] }]) assert.equal(L.deckApproval(junk), null)
+})
+
+test('approveDeck records the approval like a gate: approvals.deck, a decision, the review stage done, the feed cleared', () => {
+  const r = fixture('review-ready').run
+  const before = JSON.stringify(r)
+  const next = plain(L.approveDeck(r, 'Sai', at))
+  assert.deepEqual(Object.keys(next).sort(), ['agent', 'approvals', 'decisions', 'stages'])
+  assert.deepEqual(next.approvals.deck, { by: 'Sai', at, decision: 'approve' })
+  assert.deepEqual(next.approvals.territories, r.approvals.territories, 'earlier approvals are kept')
+  assert.deepEqual(next.decisions.at(-1), { gate: 'deck', kind: 'approve', by: 'Sai', at })
+  assert.equal(next.decisions.length, r.decisions.length + 1)
+  assert.equal(next.agent, null)
+  assert.deepEqual(next.stages.map((s: Fx) => s.status), r.stages.map((s: Fx) => (s.id === 'review' ? 'done' : s.status)))
+  assert.equal(JSON.stringify(r), before, 'the run passed in is not changed')
+  assert.equal(L.approveDeck(fixture('export-ready').run, 'Sai', at), null, 'approved once')
+  assert.equal(L.approveDeck(fixture('gate2').run, 'Sai', at), null, 'a gate is open')
+  assert.equal(L.approveDeck(fixture('check').run, 'Sai', at), null, 'still building')
+  assert.equal(L.approveDeck(null, 'Sai', at), null)
+})
+
+test('exportRows: absent is Not built yet, `true` is ready, an object names its file; the animated deck is never built', () => {
+  const none = L.exportRows(undefined)
+  assert.deepEqual(plain(none.map(r => [r.key, r.ready, r.note, r.action])), [
+    ['web', false, 'Not built yet', 'Open'], ['pptx', false, 'Not built yet', 'Download'], ['anim', false, 'Not built yet', 'Get project'], ['pdf', false, 'Not built yet', 'Download']])
+  const old = L.exportRows({ web: true, pptx: true, anim: true, pdf: true })
+  assert.deepEqual(plain(old.map(r => [r.ready, r.file, r.note])), [[true, '', 'Ready to open'], [true, '', 'Notes kept, appendix hidden'], [false, '', 'Not built yet'], [true, '', 'Presented slides only']])
+  const ex = L.exportRows(fixture('export-ready').exports)
+  assert.deepEqual(plain(ex.map(r => [r.ready, r.file, r.note])), [[true, 'index.html', 'Ready to open'], [true, 'better-with-ballymaloe.pptx', 'better-with-ballymaloe.pptx'], [false, '', 'Not built yet'], [true, 'better-with-ballymaloe.pdf', 'better-with-ballymaloe.pdf']])
+  assert.equal(L.exportRows({ pptx: { file: '/tmp/out/deck.pptx' } })[1].file, 'deck.pptx', 'only the file name, never a path')
+  assert.equal(L.exportRows({ pptx: { file: 'x'.repeat(300) } })[1].file.length, 120)
+  assert.equal(L.exportRows({ pptx: { file: '  ' } })[1].ready, false)
+  assert.equal(L.exportRows({ pdf: 'a.pdf', web: { url: 'u' } }).filter(r => r.ready).length, 0)
+})
+
+test('reportLine: errors from the checker, every number traced only at 0 errors, then placeholders', () => {
+  assert.equal(L.reportLine(fixture('export-ready')).line, '0 errors, every number traced, placeholders none')
+  assert.equal(L.reportLine(fixture('done')).line, '0 errors, every number traced, placeholders 2 to supply')
+  assert.equal(L.reportLine({ validation: { errors: 1, to_supply: 0 } }).line, '1 error to fix, see Checks on Review, placeholders none')
+  assert.equal(L.reportLine({ validation: { errors: 3 } }).errors, 3)
+  assert.deepEqual(plain(L.reportLine({})), { known: false, errors: null, line: 'No check report yet, placeholders none' })
+  assert.equal(L.reportLine({ validation: { errors: '0' } }).known, false)
+})
+
+test('Review, ready: the Approval circle and Approve the deck in the head, its card and Checked so far under the rail', () => {
+  const h = review('review-ready').app.innerHTML
+  const hd = head(h)
+  assert.match(hd, /<span class="dstat" data-deck="open"><svg class="cir s32" width="32" height="32"[^>]*role="img" aria-label="Approval, Needs you"[^>]*data-activity="human"/)
+  assert.ok(hd.includes('<span class="dword">Needs you</span>'), 'the state is a word, not colour alone')
+  assert.ok(hd.includes('<button class="btn go tall" id="approve-deck" data-approve="deck">Approve the deck</button>'))
+  assert.ok(hd.indexOf('data-act="appendix"') < hd.indexOf('data-tab="evidence"') && hd.indexOf('data-tab="evidence"') < hd.indexOf('Approve the deck'))
+  assert.equal(h.includes('data-approve-note'), false, 'nothing is open, so nothing to say')
+  const lc = leftCol(h)
+  assert.ok(lc.startsWith('<nav class="frost rail" aria-label="Slides">'), 'the rail comes first')
+  assert.match(lc, /<div class="card status" style="padding:16px" data-status="human" data-deck="open">[\s\S]*aria-label="Approval, Needs you"[\s\S]*>Asks for sign-off<[\s\S]*<div class="sword">Needs you<\/div>[\s\S]*Step 7 of 7/)
+  assert.ok(lc.indexOf('Checked so far') > lc.indexOf('data-deck="open"'))
+  assert.equal((lc.match(/class="tick ok"/g) || []).length, 3)
+  // every fact supplied: the supply card answered, 0 to supply, every confirm item verified
+  assert.ok(h.includes('<span class="pill ok" data-to-supply>0 to supply</span>') && h.includes('Supplied by you'))
+  assert.ok(h.includes('9 of 9 verified') && !h.includes('data-verify='))
+  assert.ok(h.includes('0 errors · 0 to supply'))
+})
+
+test('Review, done with facts open: Approve the deck is offered and says what stays open', () => {
+  const h = review('done').app.innerHTML
+  assert.ok(head(h).includes('id="approve-deck"'))
+  assert.match(h, /<p class="note" data-approve-note[^>]*>Still open: 2 to supply, 0 of 9 to confirm verified\. You can approve the deck now; what is open stays marked on its slide\.<\/p>/)
+  assert.equal(leftCol(h).includes('Step '), false, 'the review agent finished; no Approval step is claimed')
+})
+
+test('Approve the deck writes the approval and the decision under run only, and the deck then reads Approved', () => {
+  const f = fixture('review-ready'), m = review(f)
+  m.click({ approve: 'deck' })
+  assert.equal(m.writes.length, 1)
+  const w = m.writes[0]
+  assert.deepEqual(Object.keys(w.obj), ['run'])
+  assert.equal(w.action, 'approve deck')
+  const r = (w.obj as Write).run
+  assert.deepEqual(plain(r.approvals.deck), { by: 'You', at: r.approvals.deck.at, decision: 'approve' })
+  assert.deepEqual(plain(r.decisions.at(-1)), { gate: 'deck', kind: 'approve', by: 'You', at: r.approvals.deck.at })
+  assert.match(m.toastEl.textContent, /Deck approved/)
+  const after = merge(f, w.obj) as Fx
+  assert.equal(after.run.agent, undefined, 'the feed is cleared, as at a gate')
+  const a = review(after)
+  const h = a.app.innerHTML
+  assert.match(head(h), /<span class="dstat" data-deck="approved"><svg[^>]*aria-label="Approval, Approved"[^>]*data-activity="complete"[\s\S]*<span class="dword ok">Approved<\/span><\/span>$/)
+  assert.equal(h.includes('id="approve-deck"'), false, 'approved once, no button')
+  assert.ok(leftCol(h).includes('>Approved by You<'))
+  a.click({ tab: 'who' })
+  assert.ok(a.app.innerHTML.includes('You approved the deck'))
+  a.click({ approve: 'deck' })
+  assert.equal(a.writes.length, 0, 'a second approval writes nothing')
+  assert.deepEqual(L.deckApproval(after)?.state, 'approved')
+})
+
+test('Review: the appendix opens in the rail, its slides are selectable, and closing it goes back to the pitch', () => {
+  const m = review('review-ready')
+  let h = m.app.innerHTML
+  assert.ok(h.includes('<button class="appx" data-appendix="show" aria-expanded="false" aria-label="Show the 5 appendix slides">+ 5 appendix</button>'))
+  assert.equal(h.includes('data-slide="a01"'), false)
+  m.click({ appendix: 'show' })
+  h = m.app.innerHTML
+  assert.ok(h.includes('data-appendix="hide" aria-expanded="true"'))
+  assert.equal((h.match(/data-slide="a0\d"/g) || []).length, 5)
+  assert.ok(h.includes('<div class="eyebrow rail-div">Appendix</div>') && h.includes('<span class="n">A3</span>'))
+  assert.ok(h.includes('<span class="n">A3</span><span><span class="t">Tone and world</span>'), 'an appendix slide goes by its title, not the shared section')
+  m.click({ slide: 'a03' })
+  h = m.app.innerHTML
+  assert.ok(h.includes('data-slide="a03" aria-current="true"'))
+  assert.ok(head(h).startsWith('<span class="mono" style="font-size:12px;color:var(--ink3)">Appendix 03</span>'))
+  assert.equal(head(h).includes('Move to appendix'), false, 'an appendix slide is not moved to the appendix')
+  assert.ok(h.includes('<h2>Tone and world</h2>') && h.includes('<span>A3</span></div></div>'))
+  assert.ok(head(h).includes('Approve the deck'), 'the deck can be approved from any slide')
+  m.click({ appendix: 'hide' })
+  h = m.app.innerHTML
+  assert.equal(h.includes('data-slide="a01"'), false)
+  assert.ok(h.includes('data-slide="s04" aria-current="true"'), 'back to the pitch')
+  assert.equal(m.writes.length, 0, 'opening the appendix is view state only')
+})
+
+test('Review with only an appendix count keeps the count as text, and an unfinished run shows no approval', () => {
+  const sample = parseYaml(readFileSync(new URL('templates/deck-maker/example/data.yaml', root), 'utf8')) as Fx
+  const m = mount(sample)
+  m.click({ go: 'review' })
+  const h = m.app.innerHTML
+  assert.ok(h.includes('<span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + (sample.deck.appendix_count ?? 0) + ' appendix</span>'))
+  assert.equal(h.includes('data-appendix='), false)
+  assert.equal(h.includes('class="lcol"') || h.includes('approve-deck') || h.includes('class="dstat"'), false)
+})
+
+test('Present, exported: Approved in the Export head, the file rows, the report line, and the confirm list kept', () => {
+  const h = present('export-ready').app.innerHTML
+  const ex = exportCard(h)
+  assert.match(ex, /^<div style="display:flex;align-items:center;gap:10px"><span[^>]*>Export<\/span><div class="spacer"><\/div><span class="dstat" data-deck="approved"><svg class="cir s32"[^>]*aria-label="Approval, Approved"/)
+  assert.equal(ex.includes('class="chip'), false)
+  assert.ok(ex.includes('<div class="note" style="font-size:12px;overflow-wrap:anywhere">Ready to open</div></div><button class="btn sm" data-export="web" style="font-weight:600" aria-label="Open index.html">Open</button>'))
+  assert.ok(ex.includes('>better-with-ballymaloe.pptx</div></div><button class="btn sm" data-export="pptx" style="font-weight:600" aria-label="Download better-with-ballymaloe.pptx">Download</button>'))
+  assert.ok(ex.includes('>Not built yet</div></div><button class="btn sm" data-export="anim" disabled style="font-weight:600">Get project</button>'))
+  assert.ok(ex.includes('data-export="pdf" style="font-weight:600" aria-label="Download better-with-ballymaloe.pdf"'))
+  assert.ok(ex.includes('<p class="note rep" data-report><span class="mono eyebrow">Report</span>0 errors, every number traced, placeholders none</p>'))
+  assert.ok(ex.includes('9 of 9 to confirm verified · 1 supplied by you · 10 counted as sourced'))
+  assert.equal(ex.includes('data-approve-hint') || ex.includes('class="callout"'), false)
+  assert.ok(h.indexOf('Confirm list') > -1 && h.indexOf('Confirm list') < h.indexOf('>Export<'), 'the confirm list stays on Present (open question)')
+  const mid = middle(h)
+  assert.ok(mid.includes('5 backup slides are hidden'))
+  assert.match(mid, /data-deck="approved"[\s\S]*aria-label="Approval, Approved"[\s\S]*<div class="sword ok">Approved<\/div>[\s\S]*>Approved by Sai<[\s\S]*Checked so far/)
+})
+
+test('Present: with no files every row is Not built yet, and an unapproved deck points to Review', () => {
+  const none = exportCard(present('export-none').app.innerHTML)
+  assert.equal((none.match(/>Not built yet</g) || []).length, 4)
+  assert.equal((none.match(/data-export="\w+" disabled/g) || []).length, 4)
+  assert.ok(none.includes('data-deck="approved"'))
+  const m = present('review-ready'), ex = exportCard(m.app.innerHTML)
+  assert.match(ex, /<span class="dstat" data-deck="open">[\s\S]*aria-label="Approval, Needs you"/)
+  assert.ok(ex.includes('The deck is not approved yet.') && ex.includes('<button class="btn" data-go="review">Approve it on Review</button>'))
+  m.click({ go: 'review' })
+  assert.ok(m.app.innerHTML.includes('id="approve-deck"'))
+})
+
+test('Present: an export click names its file and writes nothing; a run not yet done keeps the old Checked chip', () => {
+  const m = present('export-ready')
+  m.click({ export: 'pptx' })
+  assert.equal(m.toastEl.textContent, 'Open better-with-ballymaloe.pptx from the document export.')
+  m.click({ export: 'web' })
+  assert.equal(m.toastEl.textContent, 'Open index.html from the document export.')
+  assert.equal(m.writes.length, 0)
+  const old = present({ ...runData(), run: { state: 'building', stages: [], gate: null, approvals: {} }, exports: { web: true, pptx: true, pdf: true } })
+  const ex = exportCard(old.app.innerHTML)
+  assert.ok(ex.includes('<span class="chip ok">Checked</span>') && !ex.includes('class="dstat"'))
+  assert.equal((ex.match(/data-export="\w+" style/g) || []).length, 3, 'the older `true` shape still opens')
+  assert.ok(ex.includes('>Notes kept, appendix hidden<'))
+})
+
+test('Review and Present escape what the run wrote, and show no percentage and no time', () => {
+  const f = fixture('export-ready')
+  f.exports.pptx.file = hostile + '.pptx'
+  f.run.approvals.deck.by = hostile
+  f.run.checks[0].text = hostile
+  for (const h of [review(f).app.innerHTML, present(f).app.innerHTML]) {
+    assert.equal(h.includes('<img'), false)
+    assert.ok(h.includes('&lt;img'))
+  }
+  for (const n of ['done', 'review-ready', 'export-ready', 'export-none']) {
+    for (const h of [review(n).app.innerHTML, present(n).app.innerHTML]) {
+      assert.equal(/\d\s?%/.test(h.replace(/width:\d+%/g, '')), false, n)
+      assert.equal(/\d+\s?(min|sec|hours?)\b/i.test(h), false, n)
+    }
+  }
+})
+
+test('Approve the deck is a 44px target, and the new styles use tokens', () => {
+  assert.match(css, /\.btn\.tall\{height:44px;/)
+  assert.match(css, /\.dword\{[^}]*color:var\(--warn-fg\)\}/)
+  assert.match(css, /\.dword\.ok\{color:var\(--ok-fg\)\}/)
+  assert.match(css, /\.rail,\.side,\.lcol\{position:static;max-height:none\}/)
 })

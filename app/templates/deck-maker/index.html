@@ -230,6 +230,18 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .ev{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:12px;margin-bottom:10px}
 .ev .id{font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);margin-bottom:4px}
 .side{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px}
+/* the deck's own status (Review, Present): the Approval agent's circle and its word; Approve the deck; the appendix */
+.lcol{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px;max-height:calc(100vh - 92px);overflow:auto}
+.lcol .rail{position:static;max-height:none;overflow:visible}
+.dstat{display:inline-flex;align-items:center;gap:8px;flex:none}
+.dword{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
+.dword.ok{color:var(--ok-fg)}
+.btn.tall{height:44px;padding:0 20px;font-size:14px}
+.appx{border:0;border-radius:999px;background:transparent;font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);padding:2px 8px;min-height:24px}
+.appx[aria-expanded="true"]{background:var(--tool-soft)}
+.rail-div{margin:12px 4px 8px}
+.rep{margin-top:14px;font-size:13px;color:var(--ink)}
+.rep .eyebrow{margin-right:8px}
 
 /* screen 4 */
 .present{display:grid;grid-template-columns:minmax(0,760px) 210px 360px;gap:32px;padding:24px 32px 40px;max-width:1500px;margin:0 auto;align-items:start;justify-content:space-between}
@@ -257,7 +269,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .toast.on{opacity:1}
 @media (max-width:1100px){
   .start,.build,.review,.present{grid-template-columns:minmax(0,1fr);padding:20px 16px 48px}
-  .rail,.side{position:static;max-height:none}
+  .rail,.side,.lcol{position:static;max-height:none}
   .bar{flex-wrap:wrap;height:auto;padding:8px 16px}
   h1{font-size:34px}
 }
@@ -1238,7 +1250,113 @@ var DeckLogic = (function () {
     }
   }
 
+  // ── Review and Present (phase 4): the appendix, the deck approval, the export rows and the report line ──
+  /**
+   * The appendix slides: { ids, count, selectable }. ids from deck.appendix_ids (slides the deck holds, not presented,
+   * once each), else the slides marked appendix: true; count is their number, else deck.appendix_count. With ids
+   * the appendix can be opened in the rail; with only a count it is a number, as before. Never throws.
+   */
+  function appendixOf(deck) {
+    var dk = isObj(deck) && isObj(deck.slides) ? deck : { order: [], slides: {} };
+    var shown = presented(dk), seen = Object.create(null);
+    var ok = function (id) { return validId(id) && isObj(dk.slides[id]) && shown.indexOf(id) < 0 && !seen[id] && (seen[id] = true); };
+    var ids = (Array.isArray(dk.appendix_ids) ? dk.appendix_ids : []).filter(ok);
+    if (!ids.length) ids = Object.keys(dk.slides).filter(function (id) { return isObj(dk.slides[id]) && dk.slides[id].appendix === true; }).filter(ok);
+    var n = Number.isInteger(dk.appendix_count) && dk.appendix_count > 0 ? dk.appendix_count : 0;
+    return { ids: ids, count: ids.length || n, selectable: ids.length > 0 };
+  }
+
+  /**
+   * The deck's own status at Review and Present, from the run: null while there is no finished deck to approve;
+   * 'open' once the run is done and nobody has approved the deck; 'approved' once run.approvals.deck is written.
+   * The Approval agent holds it ('Needs you', then 'Approved'). The counts are what is still open: to supply (toSupply)
+   * and to confirm (confirmList). Approving with some open is allowed; the counts are said beside it (`clear` when none).
+   * { state, agent, name, role, activity, word, by, at, step_index, step_total, to_supply, verified, total, open, clear }
+   */
+  function deckApproval(data) {
+    var x = isObj(data) ? data : {}, run = isObj(x.run) ? x.run : {};
+    var deck = isObj(x.deck) && isObj(x.deck.slides) ? x.deck : null;
+    if (!deck || !presented(deck).length) return null;
+    var ap = isObj(run.approvals) && isObj(run.approvals.deck) ? run.approvals.deck : null;
+    if (!ap && (run.state !== 'done' || isObj(run.gate))) return null;
+    var a = AGENTS.approval, c = confirmList(x), t = toSupply(x);
+    var feed = isObj(run.agent) && run.agent.key === 'approval' ? run.agent : null;
+    var out = {
+      state: ap ? 'approved' : 'open', agent: 'approval', name: a.name, role: a.role,
+      activity: ap ? 'complete' : 'human', word: ap ? 'Approved' : ACTIVITY_WORD.human,
+      by: ap ? str(ap.by).trim() : '', at: ap ? str(ap.at) : '', step_index: null, step_total: null,
+      to_supply: t.count, verified: c.verified, total: c.total, open: c.open, clear: t.count === 0 && c.open === 0
+    };
+    if (feed && Number.isInteger(feed.step_index) && Number.isInteger(feed.step_total) && feed.step_index > 0 && feed.step_index <= feed.step_total) {
+      out.step_index = feed.step_index; out.step_total = feed.step_total;
+    }
+    return out;
+  }
+
+  /**
+   * Approve the deck: recorded like a gate approval. run.approvals.deck = { by, at, decision: 'approve' }, a decision
+   * { gate: 'deck', kind: 'approve' } added to run.decisions, the review stage done, the agent feed cleared (the server
+   * writes the next one). Refused (null) unless the run is done with no gate open and the deck is not yet approved.
+   * The patch goes under `run`; stages are copied whole (the store replaces arrays).
+   */
+  function approveDeck(run, by, at) {
+    if (!isObj(run) || run.state !== 'done' || isObj(run.gate)) return null;
+    if (isObj(run.approvals) && isObj(run.approvals.deck)) return null;
+    var stages = (Array.isArray(run.stages) ? run.stages : []).filter(isObj).map(function (s) {
+      var o = {};
+      Object.keys(s).forEach(function (k) { o[k] = s[k]; });
+      if (s.id === 'review') o.status = 'done';
+      return o;
+    });
+    var approvals = {};
+    Object.keys(isObj(run.approvals) ? run.approvals : {}).forEach(function (k) { approvals[k] = run.approvals[k]; });
+    approvals.deck = { by: by, at: at, decision: 'approve' };
+    return { stages: stages, approvals: approvals, agent: null, decisions: decisionsOf(run).concat([{ gate: 'deck', kind: 'approve', by: by, at: at }]) };
+  }
+
+  // The four formats, in the order the Export card lists them: key, mark, name, action, what the older `true` shape says.
+  var EXPORTS = [
+    ['web', 'WEB', 'Web deck', 'Open', 'Ready to open'], ['pptx', 'PPTX', 'PowerPoint', 'Download', 'Notes kept, appendix hidden'],
+    ['anim', 'ANIM', 'Animated deck', 'Get project', ''], ['pdf', 'PDF', 'PDF', 'Download', 'Presented slides only']
+  ];
+
+  /** A file name the engine wrote, as shown: its last path part, at most 120 characters. */
+  function fileName(v) {
+    var f = str(v).trim().split(/[\\/]/).pop() || '';
+    return f.length > 120 ? f.slice(0, 117) + '...' : f;
+  }
+
+  /**
+   * The Export card's rows: { key, x, name, action, ready, file, note }. A format is ready when exports.<key> is the
+   * older `true` or an object with a file; the note is the file name (the web deck says Ready to open), else Not built
+   * yet. The animated deck is never built by the engine, so it is always Not built yet. Never throws.
+   */
+  function exportRows(exports) {
+    var ex = isObj(exports) ? exports : {};
+    return EXPORTS.map(function (f) {
+      var v = own(ex, f[0]) ? ex[f[0]] : undefined, file = isObj(v) ? fileName(v.file) : '';
+      var ready = f[0] !== 'anim' && (v === true || !!file);
+      return {
+        key: f[0], x: f[1], name: f[2], action: f[3], ready: ready, file: ready ? file : '',
+        note: !ready ? 'Not built yet' : f[0] === 'web' ? 'Ready to open' : file || f[4]
+      };
+    });
+  }
+
+  /**
+   * The report line under the exports: the checker's errors (validation.errors), then placeholders. With 0 errors every
+   * number traced, since an untraced number is an error (engine/deck/validate.py numbers_trace). { known, errors, line }.
+   */
+  function reportLine(data) {
+    var x = isObj(data) ? data : {}, v = isObj(x.validation) ? x.validation : null, t = toSupply(x).count;
+    var ph = 'placeholders ' + (t ? t + ' to supply' : 'none');
+    if (!v || !Number.isInteger(v.errors) || v.errors < 0) return { known: false, errors: null, line: 'No check report yet, ' + ph };
+    var e = v.errors;
+    return { known: true, errors: e, line: e === 0 ? '0 errors, every number traced, ' + ph : e + (e === 1 ? ' error' : ' errors') + ' to fix, see Checks on Review, ' + ph };
+  }
+
   return {
+    appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
     AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, arcPath: arcPath, blend: blend, runView: runView,
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
@@ -1267,7 +1385,7 @@ var DeckLogic = (function () {
   }
 
   // View state only. Anything the document should keep is written with put().
-  var view = { screen: null, slide: null, tab: 'evidence', present: 0 };
+  var view = { screen: null, slide: null, tab: 'evidence', present: 0, appendix: false };
   var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
   var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
@@ -1577,14 +1695,19 @@ var DeckLogic = (function () {
         '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
     } else if (live) main = runBody(rv);
     var list = gate ? gate.checks : run.checks;
-    var checks = Array.isArray(list) && (gate || list.length) ?'<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
-      list.filter(function (c) { return c && typeof c === 'object'; }).map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
+    var checks = Array.isArray(list) && (gate || list.length) ? checkedCard(list) : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
       '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
       '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
         '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? esc(gv.hold) : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
         '<p class="note">' + (gate ? esc(gv.next) : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>') +
       (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+  }
+
+  /** Checked so far: what the run has checked (a gate's checks, or run.checks), each passed or to look at. */
+  function checkedCard(list) {
+    return '<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
+      list.filter(function (c) { return c && typeof c === 'object'; }).map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>';
   }
 
   /** The status card while an agent works: the 60px circle, who (a hand-off names both), their role, the state word, the step. */
@@ -1627,6 +1750,39 @@ var DeckLogic = (function () {
       '<div class="card cbox' + (v.kind === 'failed' ? ' failed' : '') + '" data-run="' + esc(v.kind) + '"><div class="cbox-h eyebrow">' + esc(v.head) + '</div>' + (rows || '<div class="crow pending"><span class="note">Nothing to show yet.</span></div>') + tail + '</div>' + act;
   }
 
+  // ── the deck's own status, on Review and Present (phase 4): the Approval agent asks for sign-off ──
+  /** The circle and its word, inline: in the Review head beside Approve the deck, and in the Export card's head. */
+  function deckStat(ds) {
+    var ok = ds.state === 'approved';
+    return '<span class="dstat" data-deck="' + ds.state + '">' + L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 32 }) +
+      '<span class="dword' + (ok ? ' ok' : '') + '">' + esc(ds.word) + '</span></span>';
+  }
+
+  /** The status card: the 60px circle, Approval and its role, the word, then the step or who approved. */
+  function deckCard(ds) {
+    var ok = ds.state === 'approved';
+    var foot = ok && ds.by ? 'Approved by ' + ds.by : ds.step_index ? 'Step ' + ds.step_index + ' of ' + ds.step_total : '';
+    return '<div class="card status" style="padding:16px" data-status="' + ds.activity + '" data-deck="' + ds.state + '"><div style="display:flex;align-items:center;gap:14px">' +
+      L.circleSvg({ agent: ds.agent, activity: ds.activity, word: ds.word, size: 60 }) +
+      '<div style="min-width:0"><div style="font-size:14px;font-weight:600">' + esc(ds.name) + '</div><div class="note">' + esc(ds.role) + '</div>' +
+      '<div class="sword' + (ok ? ' ok' : '') + '">' + esc(ds.word) + '</div>' +
+      (foot ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">' + esc(foot) + '</div>' : '') + '</div></div></div>';
+  }
+
+  /** The status card, then Checked so far when the run wrote it. */
+  function deckSide(s, ds) {
+    return deckCard(ds) + (Array.isArray(s.run.checks) && s.run.checks.length ? checkedCard(s.run.checks) : '');
+  }
+
+  /** What is still open when the deck is approved now. Approving is allowed; this says what stays marked. Empty when nothing is open. */
+  function approveNote(ds) {
+    if (ds.state !== 'open' || ds.clear) return '';
+    var parts = [];
+    if (ds.to_supply) parts.push(ds.to_supply + ' to supply');
+    if (ds.open) parts.push((ds.total - ds.open) + ' of ' + ds.total + ' to confirm verified');
+    return '<p class="note" data-approve-note style="margin:0 0 12px">Still open: ' + esc(parts.join(', ')) + '. You can approve the deck now; what is open stays marked on its slide.</p>';
+  }
+
   // ── 3 · Review ────────────────────────────────────────────────────────
   function slideHtml(id, s, n, total, big) {
     var sl = s.deck.slides[id];
@@ -1641,15 +1797,30 @@ var DeckLogic = (function () {
   function review(s) {
     var ids = L.presented(s.deck);
     if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">No deck yet</h1><p class="lede" style="margin-top:8px">Build a deck first. Nothing to review until the engine has written one.</p></main>';
-    if (!view.slide || ids.indexOf(view.slide) < 0) view.slide = ids[Math.min(3, ids.length - 1)];
-    var id = view.slide, sl = s.deck.slides[id], n = ids.indexOf(id) + 1;
+    // The appendix opens in the rail when the deck names its slides (appendix_ids, or slide.appendix); a count alone stays a count.
+    var ax = L.appendixOf(s.deck), ds = L.deckApproval(s.raw);
+    if (!view.slide || (ids.indexOf(view.slide) < 0 && ax.ids.indexOf(view.slide) < 0)) view.slide = ids[Math.min(3, ids.length - 1)];
+    var id = view.slide, sl = s.deck.slides[id], k = ax.ids.indexOf(id), inAx = k >= 0, n = inAx ? k + 1 : ids.indexOf(id) + 1;
+    if (inAx) view.appendix = true;
     var st = L.STATUS[L.statusOf(sl)];
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
-    var rail = ids.map(function (sid, i) {
+    // A pitch slide goes by its section; every appendix slide shares the section Appendix, so it goes by its title.
+    var thumb = function (sid, label, name) {
       var x = s.deck.slides[sid], t = L.STATUS[L.statusOf(x)];
-      return '<button class="thumb" data-slide="' + sid + '"' + (sid === id ? ' aria-current="true"' : '') + '><span class="n">' + String(i + 1).padStart(2, '0') + '</span>' +
-        '<span><span class="t">' + esc(x.section) + '</span><span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
-    }).join('');
+      return '<button class="thumb" data-slide="' + sid + '"' + (sid === id ? ' aria-current="true"' : '') + '><span class="n">' + label + '</span>' +
+        '<span><span class="t">' + esc(name) + '</span><span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
+    };
+    var rail = ids.map(function (sid, i) { return thumb(sid, String(i + 1).padStart(2, '0'), s.deck.slides[sid].section); }).join('') +
+      (ax.selectable && view.appendix ? '<div class="eyebrow rail-div">Appendix</div>' + ax.ids.map(function (sid, i) {
+        var x = s.deck.slides[sid];
+        return thumb(sid, 'A' + (i + 1), x.title || x.section);
+      }).join('') : '');
+    var axHead = ax.selectable
+      ? '<button class="appx" data-appendix="' + (view.appendix ? 'hide' : 'show') + '" aria-expanded="' + !!view.appendix + '" aria-label="' + (view.appendix ? 'Hide' : 'Show') + ' the ' + ax.count + ' appendix slides">+ ' + ax.count + ' appendix</button>'
+      : '<span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + esc(ax.count) + ' appendix</span>';
+    var nav = '<nav class="frost rail" aria-label="Slides"><div style="display:flex;align-items:center;margin-bottom:10px;padding:0 4px"><span class="eyebrow">' + esc(s.inputs.format === 'full' ? 'Full' : 'Pitch') + ' · ' + ids.length + '</span><div class="spacer"></div>' + axHead + '</div>' + rail + '</nav>';
+    // Once the deck is finished, the Approval agent holds it: its circle in the head with Approve the deck, its card under the rail.
+    var approve = ds ? deckStat(ds) + (ds.state === 'open' ? '<button class="btn go tall" id="approve-deck" data-approve="deck">Approve the deck</button>' : '') : '';
     var tabs = [['evidence', 'Evidence'], ['checks', 'Checks'], ['who', 'History']].map(function (t) {
       return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (view.tab === t[0]) + '">' + t[1] + '</button>';
     }).join('');
@@ -1669,12 +1840,13 @@ var DeckLogic = (function () {
         '<div class="mono eyebrow" style="margin-top:10px;text-transform:none;letter-spacing:0">Answers ' + (sl.requirements && sl.requirements.length ? esc(sl.requirements.join(', ')) : 'no requirement') + '</div>';
     }
     var s1 = slideHtml(id, s, n, ids.length);
-    return '<main class="review"><nav class="frost rail" aria-label="Slides"><div style="display:flex;margin-bottom:10px;padding:0 4px"><span class="eyebrow">' + esc(s.inputs.format === 'full' ? 'Full' : 'Pitch') + ' · ' + ids.length + '</span><div class="spacer"></div><span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + esc((s.deck.appendix_count || 0)) + ' appendix</span></div>' + rail + '</nav>' +
-      '<section><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">Slide ' + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
-        '<button class="btn sm" data-act="appendix">Move to appendix</button><button class="btn sm" data-tab="evidence">Why this slide</button></div>' +
+    return '<main class="review">' + (ds ? '<div class="lcol">' + nav + deckSide(s, ds) + '</div>' : nav) +
+      '<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + (inAx ? 'Appendix ' : 'Slide ') + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
+        (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
+      (ds ? approveNote(ds) : '') +
       '<div style="margin-bottom:12px">' + builtLine(builtOf(s)) + '</div>' +
       '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
-        '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + String(n).padStart(2, '0') + '</span></div></div>' +
+        '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (inAx ? 'A' + n : String(n).padStart(2, '0')) + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
       '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
@@ -1690,8 +1862,9 @@ var DeckLogic = (function () {
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
     var supply = L.toSupply(s.raw).ids.length, counts = L.sourcedCounts(s.raw);
     var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
-    var fmts = [['web', 'WEB', 'Web deck', 'One file, animated, works offline', 'Open'], ['pptx', 'PPTX', 'PowerPoint', 'Notes kept, appendix hidden', 'Download'],
-      ['anim', 'ANIM', 'Animated deck', 'Present it from HyperFrames', 'Get project'], ['pdf', 'PDF', 'PDF', 'Presented slides only', 'Download']];
+    var ds = L.deckApproval(s.raw), rep = L.reportLine(s.raw), ax = L.appendixOf(s.deck);
+    var head = ds ? deckStat(ds) : '<span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span>';
+    var unapproved = ds && ds.state === 'open' ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 14px" data-approve-hint><span class="note" style="flex:1;min-width:160px">The deck is not approved yet.</span><button class="btn" data-go="review">Approve it on Review</button></div>' : '';
     return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' +
       '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
       '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
@@ -1699,14 +1872,15 @@ var DeckLogic = (function () {
       '<div class="card" style="margin-top:14px;padding:18px 22px"><div class="eyebrow" style="margin-bottom:8px">Notes for this slide</div><div style="font-size:18px;line-height:1.5">' + esc(sl.notes || 'No notes for this slide.') + '</div>' +
       (refs ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + refs + '</div>' : '') + '</div></section>' +
       '<aside class="stack"><div class="eyebrow">Next</div>' + (nx ? '<div class="mini"><div class="k">' + esc(nx.section) + '</div><div class="t">' + esc(nx.title) + '</div></div>' : '<div class="note">That is the last presented slide.</div>') +
-      '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(s.deck.appendix_count || 0) + ' backup slides are hidden. They keep their sources.</div></aside>' +
-      '<aside class="stack">' + confirmPanel(s) + '<div class="frost" style="padding:22px"><div style="display:flex;align-items:center"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div><span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span></div>' +
-      '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' +
-      fmts.map(function (f) {
-        var ready = !!s.exports[f[0]];
-        return '<div class="fmt"><span class="x" aria-hidden="true">' + f[1] + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + f[2] + '</div><div class="note" style="font-size:12px">' + (ready ? f[3] : 'Not built yet') + '</div></div>' +
-          '<button class="btn sm" data-export="' + f[0] + '"' + (ready ? '' : ' disabled') + ' style="font-weight:600">' + f[4] + '</button></div>';
+      '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(ax.count) + ' backup slides are hidden. They keep their sources.</div>' +
+      (ds ? deckSide(s, ds) : '') + '</aside>' +
+      '<aside class="stack">' + confirmPanel(s) + '<div class="frost" style="padding:22px"><div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div>' + head + '</div>' +
+      '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' + unapproved +
+      L.exportRows(s.exports).map(function (r) {
+        return '<div class="fmt" data-fmt="' + r.key + '"><span class="x" aria-hidden="true">' + r.x + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + r.name + '</div><div class="note" style="font-size:12px;overflow-wrap:anywhere">' + esc(r.note) + '</div></div>' +
+          '<button class="btn sm" data-export="' + r.key + '"' + (r.ready ? '' : ' disabled') + ' style="font-weight:600"' + (r.file ? ' aria-label="' + esc(r.action + ' ' + r.file) + '"' : '') + '>' + r.action + '</button></div>';
       }).join('') +
+      '<p class="note rep" data-report><span class="mono eyebrow">Report</span>' + esc(rep.line) + '</p>' +
       (supply ? '<div class="callout" data-to-supply>' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
       (counts.total || counts.supplied ? '<p class="note" style="margin-top:10px;font-size:12px" data-sourced>' + counts.verified + ' of ' + counts.total + ' to confirm verified · ' + counts.supplied + ' supplied by you · ' + counts.sourced + ' counted as sourced</p>' : '') +
       '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></div></aside></main>';
@@ -1780,6 +1954,12 @@ var DeckLogic = (function () {
     if (a.kind) { pending.kind = a.kind; return render(); }
     if (a.format) { pending.format = a.format; return render(); }
     if (a.slide) { view.slide = a.slide; return render(); }
+    if (a.appendix) {
+      // Opening the appendix is view state; closing it while an appendix slide is open goes back to the pitch.
+      view.appendix = a.appendix === 'show';
+      if (!view.appendix && L.appendixOf(s.deck).ids.indexOf(view.slide) >= 0) view.slide = null;
+      return render();
+    }
     if (a.tab) { view.tab = a.tab; return render(); }
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
@@ -1823,6 +2003,14 @@ var DeckLogic = (function () {
       if (s.run.gate) view.pick = a.territory;
       return render();
     }
+    if (a.approve === 'deck') {
+      // Approve the deck: recorded like a gate approval (run.approvals.deck, run.decisions), with what was still open said.
+      var ds = L.deckApproval(s.raw), nd = ds && ds.state === 'open' ? L.approveDeck(s.run, 'You', now()) : null;
+      if (!nd) return;
+      put({ run: nd }, 'approve deck', 'deck approved: ' + (ds.clear ? 'nothing open' : ds.to_supply + ' to supply, ' + (ds.total - ds.open) + ' of ' + ds.total + ' to confirm verified'));
+      toast('Deck approved. Its files are on Present.');
+      return;
+    }
     if (t.id === 'approve') {
       var gv = L.gateView(s.run, view.pick);
       if (!gv) return;
@@ -1849,7 +2037,11 @@ var DeckLogic = (function () {
       toast('Recorded. The words change when the engine is connected; sources stay.');
       return;
     }
-    if (a.export) { toast('Open the file from the document export.'); return; }
+    if (a.export) {
+      var row = L.exportRows(s.exports).filter(function (r) { return r.key === a.export; })[0];
+      toast(row && row.file ? 'Open ' + row.file + ' from the document export.' : 'Open the file from the document export.');
+      return;
+    }
   });
 
   document.addEventListener('input', function () { stashDraft(); });
