@@ -55,7 +55,7 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `run.stages[].items[]` `{text, status: done\|now\|pending}` | the runner | the content box of a running stage. Optional |
 | `run.error` `{stage, message, retryable}` | the runner | with `state: failed`. Optional |
 | `run.done` `{summary, slides, appendix, to_supply}` | the runner | with `state: done`. Optional |
-| `run.gate.agent`, `run.gate.territories[]` `{id, n, name, thought, why}`, `first_pick`, `picked`, `run.gate.idea` `{line, basis, territory_id, executions[], rests_on[]}` | the runner | gates 2 and 3. Territories, the idea and its executions are proposals. Optional |
+| `run.gate.agent`, `run.gate.territories[]` `{id, n, name, thought, why}`, `first_pick`, `picked`, `run.gate.idea` `{line, basis, territory_id, territory_name?, executions[], rests_on[]}` | the runner | gates 2 and 3. Territories, the idea and its executions are proposals. Optional |
 | `run.decisions[]` `{gate, kind, by, at}`, `run.gate_requests[]` `{gate, kind, at, status}` | the app | every approve, edit or retry; an edit or retry ask is recorded like `change_requests` and launches nothing. Optional |
 | `deck.appendix_ids[]`, `deck.slides.<id>.appendix` | the runner, or the app via `put` | the appendix; `appendix_count` stays the fallback. Optional |
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
@@ -143,10 +143,23 @@ rejected and is never used on a slide.
 ## Gates
 
 A gate stops the run. `run.gate` names it and every stage after it is `next`, never `now`
-(`DeckLogic.gateHolds`). Approving writes one patch: the gate's stage `done`, the next stage `now`,
-`gate: null`, `approvals.<gate> = {by, at}`, with the decision `approve <gate>`. Only the open gate
-can be approved. Edit beats and Ask Dex to try again are specified here and not built: the app only
-toasts that they need the engine server.
+(`DeckLogic.gateHolds`). The gate id is the stage id. The app draws a gate from its registry
+(`DeckLogic.GATES`, read through `DeckLogic.gateView`): `storyline` (gate 1) shows `gate.beats`,
+`territories` (gate 2) shows `gate.territories` with the blind judge's `first_pick` marked and picked
+until the person picks another, and `idea` (gate 3) shows `gate.idea` (the line, its `executions`, what
+it `rests_on`). A gate the registry does not know gets generic words and whatever body its data carries;
+no gate assumes `beats`. Dex's note (`gate.dex`) on gates 2 and 3 is marked as proposed wording.
+
+Approving writes one patch under `run`: the gate's stage `done`, the next stage `now`, `gate: null`,
+`agent: null` (the feed described the gate), `approvals.<gate> = {by, at, decision: "approve", picked?,
+note?}` and `decisions[]` with `{gate, kind: "approve", by, at}` added, with the decision `approve <gate>`.
+At gate 2 the pick is view state until Pick this territory writes it as `approvals.territories.picked`;
+a pick that is not one of the territories is refused. Only the open gate can be approved.
+
+Edit and Ask Dex to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
+and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or
+`retry <gate>`, and launch nothing: the engine acts on them once it is connected. The gate then says the
+request waits.
 
 ## Rules the screens keep
 
@@ -274,7 +287,9 @@ is not JSON gets one repair call. Bench cost ranges are assumptions, plus or min
   `app/pipeline.yaml`) needs the server feature.
 - Launching the Research Tool on a Strengthen yes (only the request is recorded).
 - Attaching documents from the app (the display list is written by the host).
-- The territory and idea gates' screens, and Edit beats and retry.
+- Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
+  writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
+  tags and `rests_on`, `territory_name` and Dex's notes come from the state fixtures only.
 - File delivery for `exports`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.
 - Live measures for the twelve craft fixes (ADR 0030 to 0032 are proposed), the app reading the Gate 1 payload, and the
