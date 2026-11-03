@@ -57,6 +57,7 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   circleSvg(opts: unknown): string
   agentState(run: unknown): { agent: string | null; activity: string; word: string; role: string; step_index: number | null; step_total: number | null; handoff: boolean; to: string | null }
   circleSizeFor(state: unknown): number
+  circleCentreSize(w: unknown, h: unknown): number
   circleSays(who: unknown): string[]
   arcPath(cx: number, cy: number, rho: number, a0: number, sweep: number): string
   blend(from: unknown, to: unknown, p?: unknown): string
@@ -847,6 +848,8 @@ const gateRun = () => ({
   },
 })
 const buildData = (r: unknown) => ({ inputs: { prompt: { client: 'Lumen', project: 'P', text: 'x' } }, run: r })
+// The card while nothing runs and no gate holds: in the middle column, the circle at 184, not in the right one.
+const centreCard = (h: string) => /<section>[\s\S]*?<div class="card status hero centre" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 const statusCard = (h: string) => /<aside class="stack"><div class="card(?: status hero)?" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 
 test('gate 1: the status card shows the 60px circle with the same words, and Dex is a 32px circle', () => {
@@ -866,11 +869,12 @@ test('with no gate the status card shows the waiting circle and still says it wa
   m.click({}, 'approve')
   const next = (m.writes[0].obj as { run: unknown }).run
   const h = mount(buildData(next)).app.innerHTML
-  const card = statusCard(h)
-  // nothing is running: the circle is enlarged in place and is a button that says who and what once
-  assert.match(card, /<button type="button" class="orbb" data-orb aria-label="Idea, Waiting\. Press to ask what is happening\."><svg class="cir" width="130" height="130"[^>]*aria-hidden="true"[^>]*data-activity="waiting"/)
+  const card = centreCard(h)
+  // nothing is running: the circle is in the middle, larger, and is a button that says who and what once
+  assert.match(card, /<button type="button" class="orbb" data-orb aria-label="Idea, Waiting\. Press to ask what is happening\."><svg class="cir" width="184" height="184"[^>]*aria-hidden="true"[^>]*data-activity="waiting"/)
   assert.ok(card.includes('>Waiting for the engine<') && card.includes('>Not connected to this document yet<'))
   assert.equal(h.includes('class="dex"'), false)
+  assert.equal(/<aside class="stack">[\s\S]*Waiting for the engine/.test(h), false, 'the card is not also in the right column')
 })
 
 test('the build screens show no percentage and no time range', () => {
@@ -880,7 +884,7 @@ test('the build screens show no percentage and no time range', () => {
     { state: 'building', stages: withNow('copy'), gate: null, approvals: {}, agent: { key: 'copy', activity: 'write', slow: true } }]
   for (const r of runs) {
     const h = mount(buildData(r)).app.innerHTML
-    assert.ok(/class="cir( s60)?" width="(60|130)"/.test(h))
+    assert.ok(/class="cir( s60)?" width="(60|130|184)"/.test(h))
     assert.equal(/\d\s?%/.test(h), false)
     assert.equal(/\d+\s?(min|sec|hours?)\b/.test(h), false)
   }
@@ -1938,4 +1942,13 @@ test('on its own, Deck Maker keeps its bar and sends nothing', () => {
   assert.ok(p.app.innerHTML.includes('class="bar"'))
   assert.deepEqual(p.classes, [])
   assert.equal(p.posted.length, 0)
+})
+
+test('the centred circle fills the window but stays between 184 and 720, and is 184 when the window is unknown', () => {
+  assert.equal(L.circleCentreSize(undefined, undefined), 184)
+  assert.equal(L.circleCentreSize(0, 800), 184)
+  assert.equal(L.circleCentreSize(1460, 812), 562) // the height leaves 250 for the words: 812 - 250
+  assert.equal(L.circleCentreSize(800, 2000), 496) // narrow: 62% of the width
+  assert.equal(L.circleCentreSize(4000, 4000), 720)
+  assert.equal(L.circleCentreSize(300, 300), 184)
 })
