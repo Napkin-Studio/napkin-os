@@ -2,6 +2,7 @@
 // extend and regenerate sizes are marked out of date, because making them again spends.
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { FormatSet, ProtectBox } from '../contracts/types'
 import { ProtectEditor } from './ProtectEditor'
 import './campaign.css'
@@ -13,7 +14,8 @@ export function ProtectSheet({ set, onSave, onClose }: {
 }) {
   const [boxes, setBoxes] = useState<ProtectBox[]>(set.protect?.boxes ?? [])
   const same = JSON.stringify(boxes) === JSON.stringify(set.protect?.boxes ?? [])
-  return (
+  // On the page, not in the board: the board scales and moves with the canvas.
+  return createPortal(
     <div className="cf-scrim" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <section className="cf-sheet pt-panel" role="dialog" aria-modal="true" aria-label="What must stay">
         <header className="cf-sheethead">
@@ -31,6 +33,7 @@ export function ProtectSheet({ set, onSave, onClose }: {
           </footer>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }

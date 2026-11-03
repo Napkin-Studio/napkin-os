@@ -32,7 +32,7 @@
 .cf-pbox { cursor: move; }
 .cf-pbox.sel { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px currentColor; color: var(--tool); }
 .cf-pbox.product.sel { color: var(--status-amber); }
-.cf-ptag { position: absolute; left: 3px; top: 3px; max-width: calc(100% - 6px); overflow: hidden; text-overflow: ellipsis; padding: 1px 6px; border-radius: 4px; background: var(--card); color: var(--ink); border: 1px solid var(--line); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.cf-ptag { position: absolute; left: 3px; top: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; padding: 1px 6px; border-radius: 4px; background: var(--card); color: var(--ink); border: 1px solid var(--line); font-size: 11px; white-space: nowrap; pointer-events: none; }
 .cf-handle { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 2px; background: var(--card); border: 2px solid currentColor; box-sizing: border-box; }
 .cf-handle.nw { left: 0; top: 0; cursor: nwse-resize; } .cf-handle.n { left: 50%; top: 0; cursor: ns-resize; } .cf-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
 .cf-handle.e { left: 100%; top: 50%; cursor: ew-resize; } .cf-handle.se { left: 100%; top: 100%; cursor: nwse-resize; } .cf-handle.s { left: 50%; top: 100%; cursor: ns-resize; }
