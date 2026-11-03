@@ -50,7 +50,7 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `research_request` `{status: "asked", at}` | the app | the Strengthen click. Records a request and **launches nothing** |
 | `run.stages[]` `{id,name,sub,status}` | the runner | `engine/deck/stages.py` |
 | `run.gate` | the runner | the open gate, or `null` |
-| `run.approvals.<gate>` `{by, at, decision?, picked?, note?}` | the app | on Approve; `decision` is `approve\|edit\|retry`, `picked` the territory id at gate 2. `approvals.deck` `{by, at}` is the deck approval at Review |
+| `run.approvals.<gate>` `{by, at, decision?, picked?, note?}` | the app | on Approve; `decision` is `approve\|edit\|retry`, `picked` the territory id at gate 2. `approvals.deck` `{by, at, decision}` is the deck approval at Review (see Review and Present) |
 | `run.agent` `{key, activity, step_index?, step_total?, to?, slow?}` | the server (a fixture until then) | what the agent circle shows. Optional. `slow` is a flag, never a time |
 | `run.stages[].items[]` `{text, status: done\|now\|pending}` | the runner | the content box of a running stage. Optional |
 | `run.error` `{stage, message, retryable}` | the runner | with `state: failed`. Optional |
@@ -62,7 +62,7 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
 | `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
-| `exports.web\|pptx\|anim\|pdf` | the runner | `true` (older) or `{file, url?, bytes?}`, once written. Absent means "Not built yet" |
+| `exports.web\|pptx\|anim\|pdf` | the runner | `true` (older) or `{file, url?, bytes?}`, once written. Absent means "Not built yet". The app shows `file` (its last path part), never `url` or `bytes`, and the animated deck as Not built yet |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 
 On Build the app writes only the person's own inputs (`inputs.prompt`, `kind`, `format`). The Brief and
@@ -160,6 +160,26 @@ Edit and Ask Dex to try again, at any gate, write `{gate, kind: edit|retry, by, 
 and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or
 `retry <gate>`, and launch nothing: the engine acts on them once it is connected. The gate then says the
 request waits.
+
+## Review and Present: the deck approval, the appendix, the exports
+
+Once `run.state` is `done` and the deck has presented slides, the Approval agent holds the deck
+(`DeckLogic.deckApproval`): Needs you until `run.approvals.deck` is written, then Approved. Review shows
+its circle and word beside Approve the deck, with its status card and Checked so far (`run.checks`) under
+the rail; Present shows the same card and checks, and the circle in the Export card's head.
+
+Approve the deck (`DeckLogic.approveDeck`) writes one patch under `run`, like a gate: `approvals.deck =
+{by, at, decision: "approve"}`, `decisions[]` with `{gate: "deck", kind: "approve", by, at}` added, the
+`review` stage `done` and `agent: null`, with the decision `approve deck` and the open counts in the
+rationale. It is refused while a gate is open, before the run is done, and once approved. Approving with
+facts to supply or items to confirm still open is allowed; the screen says what stays open.
+
+The appendix (`DeckLogic.appendixOf`) is `deck.appendix_ids` (slides the deck holds, not presented), else
+the slides marked `appendix: true`; with either it opens in the Review rail and each slide can be
+selected; with only `appendix_count` it stays a count. The Export rows come from `DeckLogic.exportRows`
+and the report line from `DeckLogic.reportLine` (`validation.errors`; at 0 errors every number traced,
+since an untraced number is an error; then placeholders from the To supply count). The confirm list
+stays on Present as well as Review.
 
 ## Rules the screens keep
 
@@ -290,7 +310,8 @@ is not JSON gets one repair call. Bench cost ranges are assumptions, plus or min
 - Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
   writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
   tags and `rests_on`, `territory_name` and Dex's notes come from the state fixtures only.
-- File delivery for `exports`.
+- File delivery for `exports` (Open and Download name the file and say where to find it), the animated deck,
+  and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.
 - Live measures for the twelve craft fixes (ADR 0030 to 0032 are proposed), the app reading the Gate 1 payload, and the
   `schema.json` entries for the new slide types.
