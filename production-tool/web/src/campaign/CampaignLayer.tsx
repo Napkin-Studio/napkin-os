@@ -25,6 +25,7 @@ import { useBlobUrl } from '../ui/hooks'
 import { useProjectName } from '../ui/useDownload'
 import { boardLayout, CAPTION_H, type TileBox } from './board'
 import { campaignFold, isFolded } from './fold'
+import { brandKit } from './layout'
 import { ProtectSheet } from './ProtectSheet'
 import { SizesOverview } from './SizesOverview'
 import { panCrop, zoomCrop } from './crop'
@@ -460,7 +461,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
               {c!.result === 'flag' && !c!.ignored && code === 'look_match' && PAID.has(size.method) && !size.locked && (
                 <button type="button" className="btn xs" onClick={() => paidTray(size.method, 'Redo to match', () => redoSize(deps, size.id, by))}>Redo</button>
               )}
-              {c!.result === 'flag' && !c!.ignored && code === 'logo_present' && size.render?.drawn !== undefined && (
+              {c!.result === 'flag' && !c!.ignored && code === 'logo_present' && size.render?.drawn !== undefined && !!brandKit(doc).logo && (
                 <button type="button" className="btn xs" onClick={() => void sendSize(deps, set.id, size.id, by, { retype: true })}>Draw again</button>
               )}
               {c!.result === 'unverified' ? null : c!.ignored ? <span className="faint">Ignored</span> : <button type="button" className="btn xs ghost" onClick={() => onIgnore(code as FormatCheckCode)}>Ignore</button>}

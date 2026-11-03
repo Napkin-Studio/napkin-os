@@ -10,7 +10,10 @@ export interface LookStats {
   sd: number
 }
 
-/** Above this distance (0-1) a size is flagged. A starting value, not yet tuned on real sets: adjust it against them. */
+/**
+ * Above this distance (0-1) a size is flagged. Read on one real set of 11 extend/regenerate sizes (2026-11-03): 0.025 to 0.105,
+ * and one visibly hazier size at 0.183; crops read 0.005. Few samples: adjust it as more sets come in.
+ */
 export const LOOK_FLAG = 0.14
 
 const lum = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b
