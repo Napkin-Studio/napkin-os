@@ -47,6 +47,7 @@ python3 -m deck.run_deck --kind investor --brief outputs/deck_inputs/seed/brief.
 | Option | What it does |
 |---|---|
 | `--live` | Runs missing model stages and saves them to `--stages`. **Paid** (about $0.65-1.25 a deck in the 2026-10-05 eval): ask first |
+| `--until STAGE` | Stop after a stage (`a0`, `a`, `b`, `c`, `d`, or `i` for an investor deck) and write `report.json` with `until` set; `deck` stops once the deck is assembled and validated, before any file is rendered (so no LibreOffice is needed). The stage outputs stay in `--stages`: a later run carries on from them. A live run makes a missing `--stages` folder first. How the Deck Maker server runs a deck one gate at a time (`features/deck-maker-server.clan`) |
 | `--format pitch\|full` | `pitch` (default): at most 18 presented slides, an Appendix divider, backup slides hidden. `full`: every slide in story order (ADR 0024) |
 | `--audience review\|client` | `review` (default) shows agency notes and flags; `client` drops them and fails on any agency-only text left on screen |
 | `--kind agency\|investor` | Agency response to a brief (default) or a seed investor deck (ADR 0025) |
