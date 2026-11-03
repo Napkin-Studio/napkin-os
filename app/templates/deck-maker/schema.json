@@ -270,6 +270,10 @@
                 "territory_id": {
                   "type": "string"
                 },
+                "territory_name": {
+                  "type": "string",
+                  "description": "The picked territory's name, for the line under the gate's title when run.gate.territories is not carried."
+                },
                 "executions": {
                   "type": "array",
                   "items": {

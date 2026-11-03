@@ -645,6 +645,9 @@ fixture:
   label: sample, not engine output
   engine_cannot_supply_yet:
   - run.agent
+  - 'run.gate (gates 2 and 3: the engine has no gates; run_deck.py runs straight through)'
+  - 'run.gate.first_pick (from c_territories.json ranking.order[0])'
+  - 'run.gate.dex (our proposed wording)'
   - run.cost_usd
   - run.stages[].items
   - exports.*.bytes

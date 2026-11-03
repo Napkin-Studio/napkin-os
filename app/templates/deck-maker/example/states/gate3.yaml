@@ -243,6 +243,7 @@ run:
       line: Tuesday's tea, but you tried.
       basis: proposal
       territory_id: t1
+      territory_name: The one small thing
       executions:
       - n: 1
         channel: 30s TV
@@ -661,6 +662,11 @@ fixture:
   label: sample, not engine output
   engine_cannot_supply_yet:
   - run.agent
+  - 'run.gate (gates 2 and 3: the engine has no gates; run_deck.py runs straight through)'
+  - 'run.gate.idea.executions[].summary and tag (d_idea.json executions carry channel, role and copy: no one-line summary, no To confirm tag)'
+  - 'run.gate.idea.rests_on (mandatories met, budget split)'
+  - 'run.gate.dex (our proposed wording)'
+  - run.gate.idea.territory_name
   - run.cost_usd
   - run.stages[].items
   - exports.*.bytes
