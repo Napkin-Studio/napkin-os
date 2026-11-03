@@ -1873,3 +1873,69 @@ test('the engine does nothing where there is no browser (the pure tests, a host 
   vm.runInContext(`${logicSrc}; var L = DeckLogic; ${orbsSrc}; var r = Orbs.scan({ querySelectorAll: function () { return []; } }, null);`, ctx)
   assert.equal((ctx.r as unknown[]).length, 0)
 })
+
+// ── the OS bar (features/app-bar-actions.clan) ────────────────────────────────
+type Posted = { type: string; v?: number; items?: { kind: string; id?: string; label: string; current?: boolean; tone?: string | null }[] }
+function pageIn(shell: boolean) {
+  const handlers: Record<string, ((e: unknown) => void)[]> = {}
+  const app = { innerHTML: '' }
+  const classes: string[] = []
+  const doc = {
+    getElementById: (id: string) => (id === 'app' ? app : null),
+    addEventListener() {},
+    documentElement: { classList: { add: (c: string) => classes.push(c) } },
+    title: '',
+  }
+  const posted: Posted[] = []
+  // A copy, so the page's arrays (from the page's own realm) compare as plain ones.
+  const parent = { postMessage: (m: Posted) => posted.push(JSON.parse(JSON.stringify(m))) }
+  const win: Record<string, unknown> = {
+    __CLAN__: { data: { inputs: { prompt: {} } } },
+    clan: { patchData: () => Promise.resolve() },
+    addEventListener: (t: string, f: (e: unknown) => void) => { (handlers[t] ||= []).push(f) },
+  }
+  win.parent = shell ? parent : win
+  const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
+  const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, Promise, setTimeout, clearTimeout, Date })
+  vm.runInContext(logicSrc, ctx)
+  vm.runInContext(src, ctx)
+  const tell = (data: unknown, source: unknown = parent) => (handlers.message ?? []).forEach(h => h({ data, source }))
+  return { app, classes, posted, tell, parent }
+}
+
+test('in the OS, Deck Maker draws no bar and asks the OS bar for its steps', () => {
+  const p = pageIn(true)
+  assert.ok(!p.app.innerHTML.includes('class="bar"'), 'no second bar')
+  assert.deepEqual(p.classes, ['in-shell'])
+  assert.equal(p.posted.length, 1)
+  const m = p.posted[0]
+  assert.equal(m.type, 'clan:bar')
+  assert.equal(m.v, 1)
+  const tabs = (m.items ?? []).filter(i => i.kind === 'tab')
+  assert.deepEqual(tabs.map(t => t.id), ['start', 'build', 'review', 'present'])
+  assert.deepEqual(tabs.filter(t => t.current).map(t => t.id), ['start'])
+})
+
+test('the OS bar presses a step: Deck Maker goes there and says so, and only the OS may press', () => {
+  const p = pageIn(true)
+  p.tell({ type: 'clan:bar-action', id: 'build' }, { postMessage() {} }) // another window
+  p.tell({ type: 'clan:bar-action', id: 'nowhere' }) // not a step
+  assert.equal(p.posted.length, 1, 'nothing moved')
+  p.tell({ type: 'clan:bar-action', id: 'build' })
+  assert.equal(p.posted.length, 2)
+  assert.deepEqual((p.posted[1].items ?? []).filter(i => i.current).map(i => i.id), ['build'])
+})
+
+test('the OS asking again gets the same list again, and an unchanged screen does not repeat it by itself', () => {
+  const p = pageIn(true)
+  p.tell({ type: 'clan:bar?' })
+  assert.equal(p.posted.length, 2)
+  assert.deepEqual(p.posted[1], p.posted[0])
+})
+
+test('on its own, Deck Maker keeps its bar and sends nothing', () => {
+  const p = pageIn(false)
+  assert.ok(p.app.innerHTML.includes('class="bar"'))
+  assert.deepEqual(p.classes, [])
+  assert.equal(p.posted.length, 0)
+})

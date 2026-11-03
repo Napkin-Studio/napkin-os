@@ -60,6 +60,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--create);outline
 .eyebrow.dark{color:var(--ink2)}
 
 /* bar */
+:root{--barh:48px}
+/* In the OS the tabs and chips are in its bar (clan:bar), so this one is not drawn. */
+.in-shell{--barh:0px}
 .bar{position:sticky;top:0;z-index:10;height:48px;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--frost);
   -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line-soft)}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
@@ -223,7 +226,7 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 
 /* screen 3 */
 .review{display:grid;grid-template-columns:230px minmax(0,1fr) 320px;gap:24px;padding:20px 24px 40px;max-width:1500px;margin:0 auto;align-items:start}
-.rail{padding:14px;position:sticky;top:68px;max-height:calc(100vh - 92px);overflow:auto}
+.rail{padding:14px;position:sticky;top:calc(var(--barh) + 20px);max-height:calc(100vh - var(--barh) - 44px);overflow:auto}
 .thumb{width:100%;text-align:left;display:flex;gap:10px;align-items:center;padding:8px;border-radius:12px;border:1.5px solid transparent;background:transparent;margin-bottom:8px}
 .thumb[aria-current="true"]{border-color:var(--tool);background:var(--tool-soft)}
 .thumb .n{font-family:var(--f-mono);font-size:11px;color:var(--ink3);width:16px}
@@ -244,9 +247,9 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .tabs button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(20,22,27,.1)}
 .ev{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:12px;margin-bottom:10px}
 .ev .id{font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);margin-bottom:4px}
-.side{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px}
+.side{display:flex;flex-direction:column;gap:12px;position:sticky;top:calc(var(--barh) + 20px)}
 /* the deck's own status (Review, Present): the Approval agent's circle and its word; Approve the deck; the appendix */
-.lcol{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px;max-height:calc(100vh - 92px);overflow:auto}
+.lcol{display:flex;flex-direction:column;gap:12px;position:sticky;top:calc(var(--barh) + 20px);max-height:calc(100vh - var(--barh) - 44px);overflow:auto}
 .lcol .rail{position:static;max-height:none;overflow:visible}
 .dstat{display:inline-flex;align-items:center;gap:8px;flex:none}
 .dword{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
@@ -1467,19 +1470,46 @@ var DeckLogic = (function () {
 
   // ── pieces ────────────────────────────────────────────────────────────
 
+  var STEPS = [['start', 'Start'], ['build', 'Build'], ['review', 'Review'], ['present', 'Present']];
+  // In the OS (this frame has a parent) the OS bar shows the steps and chips, so no bar of our own is drawn.
+  var inShell = typeof window !== 'undefined' && !!window.parent && window.parent !== window;
+  if (inShell && typeof document !== 'undefined' && document.documentElement) document.documentElement.classList.add('in-shell');
+
+  // The error and cost readouts: the same words in either bar.
+  function barChips(s, scr) {
+    var v = s.validation, out = [];
+    if (s.run.state === 'done' || scr === 'review') {
+      out.push({ text: (v.errors || 0) + ' errors · ' + L.toSupply(s.raw).count + ' to supply', tone: (v.errors || 0) ? 'warn' : 'ok', cls: 'chip ' + ((v.errors || 0) ? 'warn' : 'ok') });
+    }
+    if (s.run.cost_usd != null && scr !== 'start') out.push({ text: '$' + Number(s.run.cost_usd).toFixed(2) + ' so far', tone: null, cls: 'chip cost' });
+    return out;
+  }
+
   function bar(s, scr) {
+    if (inShell) return '';
     var p = s.inputs.prompt;
     var title = (p.client && p.project) ? esc(p.client) + ' · ' + esc(p.project) : 'New deck';
-    var steps = [['start', 'Start'], ['build', 'Build'], ['review', 'Review'], ['present', 'Present']];
-    var v = s.validation;
-    var chip = s.run.state === 'done' || scr === 'review'
-      ? '<span class="chip ' + ((v.errors || 0) ? 'warn' : 'ok') + '">' + (v.errors || 0) + ' errors · ' + L.toSupply(s.raw).count + ' to supply</span>' : '';
-    var cost = (s.run.cost_usd != null && scr !== 'start') ? '<span class="chip cost">$' + Number(s.run.cost_usd).toFixed(2) + ' so far</span>' : '';
-    return '<header class="bar"><span class="crumb">' + title + '</span>' + chip +
+    var chips = barChips(s, scr);
+    function spans(list) { return list.map(function (c) { return '<span class="' + c.cls + '">' + esc(c.text) + '</span>'; }).join(''); }
+    var first = spans(chips.filter(function (c) { return c.cls !== 'chip cost'; })), cost = spans(chips.filter(function (c) { return c.cls === 'chip cost'; }));
+    return '<header class="bar"><span class="crumb">' + title + '</span>' + first +
       '<div class="spacer"></div>' + cost +
-      '<nav class="steps" aria-label="Deck steps">' + steps.map(function (st) {
+      '<nav class="steps" aria-label="Deck steps">' + STEPS.map(function (st) {
         return '<button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : '') + '>' + st[1] + '</button>';
       }).join('') + '</nav></header>';
+  }
+
+  // What the OS bar is asked to show (clan:bar): the steps, then the chips. The whole list each time, sent only when it
+  // changes, and again when the OS asks (clan:bar?).
+  var lastBar = null;
+  function sendBar(s, scr) {
+    if (!inShell) return;
+    var items = STEPS.map(function (st) { return { kind: 'tab', id: st[0], label: st[1], current: scr === st[0] }; })
+      .concat(barChips(s, scr).map(function (c) { return { kind: 'chip', label: c.text, tone: c.tone }; }));
+    var sig = JSON.stringify(items);
+    if (sig === lastBar) return;
+    lastBar = sig;
+    window.parent.postMessage({ type: 'clan:bar', v: 1, items: items }, '*');
   }
 
   function pick(name, id, cur, title, note) {
@@ -2576,6 +2606,7 @@ return {
     var before = cardBefore();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
     document.getElementById('app').innerHTML = bar(s, scr) + body;
+    sendBar(s, scr);
     Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
     growCard(before); // the status card's circle grows or shrinks in place when the state changes its size
     document.title = 'Deck Maker';
@@ -2783,6 +2814,13 @@ return {
     // The bridge fires these when the document's data changes or loads, and sets data-color-scheme itself.
     window.addEventListener('clan:dataupdated', render);
     window.addEventListener('napkin:ready', render);
+    // The OS asks for the bar again on load, and says which tab was pressed. Only the frame's parent may.
+    window.addEventListener('message', function (e) {
+      var m = e.data;
+      if (!inShell || e.source !== window.parent || !m) return;
+      if (m.type === 'clan:bar?') { lastBar = null; var s = d(); sendBar(s, screenOf(s)); }
+      else if (m.type === 'clan:bar-action' && STEPS.some(function (st) { return st[0] === m.id; })) { view.screen = m.id; render(); }
+    });
   }
   render();
 })();

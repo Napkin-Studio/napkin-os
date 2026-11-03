@@ -11,12 +11,18 @@ import ThemeToggle from './ThemeToggle'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { signedInUser } from '../host/http'
 import { signOut } from '../shell/signOut'
+import { overflowButtons, type BarItem } from '../shell/appBar'
+import { BarButtons, BarChips, BarTabs } from './AppBarItems'
 import './chrome.css'
 
 interface Props {
   /** The open document's tool: "Napkin Studio <name>" in the tool's colour and face. */
   tool?: ToolBrand | null
   title?: string
+  /** What the app asked the bar to show: its tabs, buttons and chips (shell/appBar.ts). */
+  bar?: BarItem[]
+  /** A tab or button of the app's was pressed: tell the app which. */
+  onBarAction?: (id: string) => void
   isTemplate?: boolean
   trusted?: boolean
   onHome: () => void
@@ -214,7 +220,7 @@ function BarBrand({ tool, compact }: { tool?: ToolBrand | null; compact?: boolea
 }
 
 export default function Toolbar({
-  title, tool, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
+  title, bar, onBarAction, tool, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
   onClientReview, clientAnswered, clientMode, docPath, onSpinoff, sidebarOpen, loading, validation, saved,
 }: Props) {
   const invalid = !!validation && validation !== 'OK'
@@ -223,7 +229,11 @@ export default function Toolbar({
   const [user, setUser] = useState<string | null>(null)
   useEffect(() => { signedInUser().then(u => setUser(u ? u.username : null)) }, [])
 
+  // The app's own buttons past the two the bar has room for are in More, at the top, in the app's order.
+  const overflow = overflowButtons(bar ?? [])
+
   const items: MenuItem[] = [
+    ...overflow.map(b => ({ label: b.label, hint: b.title || undefined, run: () => onBarAction?.(b.id) })),
     ...(onToggleEdit && !editMode
       ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: onToggleEdit }]
       : []),
@@ -282,7 +292,10 @@ export default function Toolbar({
           <span className="ch-chip-dot" />Something’s wrong with this file
         </span>
       )}
+      <BarChips bar={bar ?? []} />
       <span className="ch-bar-sep" />
+      <BarTabs bar={bar ?? []} onAction={onBarAction} />
+      <BarButtons bar={bar ?? []} onAction={onBarAction} />
       {onClientReview && !editMode && (
         <button
           className={clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}
