@@ -14,7 +14,8 @@ import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
-import { refreshApp } from './appExport'
+import { barAction, refreshApp } from './appExport'
+import type { BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp } from '../host'
 import { PoweredByClan } from '../brand/PoweredByClan'
@@ -188,6 +189,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const onChrome = useCallback((mode: 'glass' | 'solid', tint: string | null) => {
     setChrome({ doc: docRef.current, mode, tint: tint && readsWithChromeInk(tint) ? tint : null })
   }, [])
+  // What the open document asked the OS bar to show (`clan:bar`), kept with the
+  // document that asked like the chrome above: the next document starts with an
+  // empty bar until it sends its own. Client review keeps the bar to itself.
+  const [barState, setBarState] = useState<{ doc: string | null; items: BarItem[] }>({ doc: null, items: [] })
+  const onBar = useCallback((items: BarItem[]) => setBarState({ doc: docRef.current, items }), [])
+  const barItems = barState.doc === docPath && !clientOn ? barState.items : []
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null
@@ -233,6 +240,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <div className="ch-strip" />
       <Toolbar
         title={barTitle}
+        bar={barItems}
+        onBarAction={barAction}
         tool={brand}
         isTemplate={open.is_template}
         trusted={open.trusted}
@@ -281,6 +290,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onPartMark={onPartMark}
             onEditRequest={onEditRequest}
             onChrome={onChrome}
+            onBar={onBar}
             insets={shown}
           />
         </main>
