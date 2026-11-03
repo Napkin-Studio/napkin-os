@@ -1466,9 +1466,6 @@ var DeckLogic = (function () {
   }
 
   // ── pieces ────────────────────────────────────────────────────────────
-  var MARK = '<svg aria-hidden="true" width="24" height="24" viewBox="0 0 32 32"><g transform="rotate(-45 16 16)">' +
-    '<path d="M16 16 L16 2 A14 14 0 0 1 30 16 Z" fill="#FF4F2E"/><path d="M16 16 L30 16 A14 14 0 0 1 16 30 Z" fill="#8B919E"/>' +
-    '<path d="M16 16 L16 30 A14 14 0 0 1 2 16 Z" fill="#14161B"/><path d="M16 16 L2 16 A14 14 0 0 1 16 2 Z" fill="#DADDE3"/></g></svg>';
 
   function bar(s, scr) {
     var p = s.inputs.prompt;
@@ -1478,8 +1475,7 @@ var DeckLogic = (function () {
     var chip = s.run.state === 'done' || scr === 'review'
       ? '<span class="chip ' + ((v.errors || 0) ? 'warn' : 'ok') + '">' + (v.errors || 0) + ' errors · ' + L.toSupply(s.raw).count + ' to supply</span>' : '';
     var cost = (s.run.cost_usd != null && scr !== 'start') ? '<span class="chip cost">$' + Number(s.run.cost_usd).toFixed(2) + ' so far</span>' : '';
-    return '<header class="bar">' + MARK +
-      '<span class="brand">Napkin Studio <span class="tool">Deck</span></span><span class="sep">/</span><span class="crumb">' + title + '</span>' + chip +
+    return '<header class="bar"><span class="crumb">' + title + '</span>' + chip +
       '<div class="spacer"></div>' + cost +
       '<nav class="steps" aria-label="Deck steps">' + steps.map(function (st) {
         return '<button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : '') + '>' + st[1] + '</button>';

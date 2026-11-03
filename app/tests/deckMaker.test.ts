@@ -186,8 +186,9 @@ test('Geist and Geist Mono are the type', () => {
   assert.match(html, /--f-mono:'Geist Mono'/)
 })
 
-test('the mark is the studio mark in fixed brand colours, not theme tokens', () => {
-  for (const hex of ['#FF4F2E', '#8B919E', '#14161B', '#DADDE3']) assert.ok(html.includes(`fill="${hex}"`), hex)
+test('the app draws no brand of its own: the OS bar above it already carries the studio mark and name', () => {
+  assert.ok(!html.includes('class="brand"'))
+  assert.ok(!html.includes('rotate(-45 16 16)'))
 })
 
 test('the only inputs are the three prompt fields, the open prompt and the file picker', () => {
