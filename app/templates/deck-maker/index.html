@@ -191,6 +191,8 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .status .slot{display:block;position:relative;flex:none;width:60px;height:60px}
 .status.hero .srow{flex-direction:column;text-align:center;gap:12px;padding-top:4px}
 .status.hero .slot{width:130px;height:130px}
+.status.hero.centre{max-width:380px;margin:44px auto 0;background:transparent;border-color:transparent;box-shadow:none}
+.status.hero.centre .slot{width:184px;height:184px}
 .status .orbb{appearance:none;display:block;border:0;background:none;padding:0;margin:0;border-radius:999px;line-height:0;cursor:pointer}
 .status .say{margin:10px auto 0;min-height:40px;max-width:260px;text-align:center;font-size:13px;line-height:1.5;color:var(--ink3)}
 .status .say.on{color:var(--ink)}
@@ -1771,7 +1773,8 @@ var DeckLogic = (function () {
     var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
     if (rv && !live) {
       main = '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
-        '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
+        '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>' +
+        waitingCard(who, true);
     } else if (live) main = runBody(rv);
     // A gate's own checks when it wrote them (even none), else what the run has checked.
     var gateChecks = !!gate && Array.isArray(gate.checks), list = gateChecks ? gate.checks : run.checks;
@@ -1780,7 +1783,7 @@ var DeckLogic = (function () {
       '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
       (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
         '<div><div style="font-size:14px;font-weight:600">Waiting for you</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(gv.hold) + '</div></div></div><div class="rule"></div>' +
-        '<p class="note">' + esc(gv.next) + '</p></div>' : waitingCard(who))) +
+        '<p class="note">' + esc(gv.next) + '</p></div>' : '')) +
       (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
   }
 
@@ -1791,14 +1794,15 @@ var DeckLogic = (function () {
   }
 
   var HINT = 'Press the circle to ask what is happening.';
+  var CIRCLE_CENTRE = 184; // the circle in the middle of an empty Build screen, larger than the 130 it has in the right column
 
   /**
    * The circle in a status card. At 60px it is just the circle (the card says the name and the word, so it is hidden from
    * screen readers). Enlarged (circleSizeFor) it is a real button that says the agent and the state once, and pressing it
    * (data-orb) shows a few honest lines under it.
    */
-  function orbHtml(who, name) {
-    var size = L.circleSizeFor(who), svg = L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: size, aria: 'hidden' });
+  function orbHtml(who, name, bigSize) {
+    var size = bigSize || L.circleSizeFor(who), svg = L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: size, aria: 'hidden' });
     if (size === 60) return '<span class="slot">' + svg + '</span>';
     return '<span class="slot big"><button type="button" class="orbb" data-orb aria-label="' + esc(name + ', ' + who.word + '. Press to ask what is happening.') + '">' + svg + '</button></span>';
   }
@@ -1820,9 +1824,9 @@ var DeckLogic = (function () {
   }
 
   /** The card while the engine is not connected: the same enlarged circle in its place, a short honest prompt, no time and no progress. */
-  function waitingCard(who) {
+  function waitingCard(who, centre) {
     var n = nameOf(who);
-    return '<div class="card status hero" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name) +
+    return '<div class="card status hero' + (centre ? ' centre' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name, centre ? CIRCLE_CENTRE : 0) +
       '<div class="stext"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div></div></div>' +
       sayHtml(who) + '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
   }
@@ -2550,7 +2554,7 @@ return {
   function statusEls() {
     var app = document.getElementById('app');
     if (!app || typeof app.querySelector !== 'function') return null;
-    var card = app.querySelector('main.build aside.stack > .card'), svg = card && card.querySelector('svg.cir');
+    var card = app.querySelector('main.build .card.status, main.build aside.stack > .card'), svg = card && card.querySelector('svg.cir');
     if (!svg) return null;
     return { card: card, svg: svg, circle: svg.closest('.cir3d') || svg, size: +svg.getAttribute('width') || 0 };
   }
