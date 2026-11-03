@@ -1294,3 +1294,22 @@ test('gate 1 renders byte-identical markup: the sample, the gate1 fixture and a 
   if (process.env.DM_WRITE_GOLDEN) writeFileSync(golden, got)
   assert.equal(got, readFileSync(golden, 'utf8'))
 })
+
+// ── every screen before Review stays byte-identical (phase 4 changes only Review and Present) ──────────────
+// The golden is Start and every Build state as phases 0 to 3 left them. Regenerate it only for an intended change
+// to those screens: DM_WRITE_GOLDEN=1 npm test, then review the diff of deckMakerEarlier.golden.html.
+test('Start and every Build state render byte-identical markup', () => {
+  const golden = new URL('tests/deckMakerEarlier.golden.html', root)
+  const sample = parseYaml(readFileSync(new URL('templates/deck-maker/example/data.yaml', root), 'utf8')) as Fx
+  const start = mount(sample)
+  start.click({ go: 'start' })
+  const done = mount(fixture('done'))
+  done.click({ go: 'build' })
+  const got = ['<!-- example/data.yaml, Start -->', start.app.innerHTML]
+  for (const n of ['reading', 'handoff', 'storyline', 'territories', 'slow', 'gate2', 'idea', 'gate3', 'copy', 'deck', 'check', 'failed']) {
+    got.push(`<!-- example/states/${n}.yaml -->`, mount(fixture(n)).app.innerHTML)
+  }
+  got.push('<!-- example/states/done.yaml, Build -->', done.app.innerHTML, '')
+  if (process.env.DM_WRITE_GOLDEN) writeFileSync(golden, got.join('\n'))
+  assert.equal(got.join('\n'), readFileSync(golden, 'utf8'))
+})
