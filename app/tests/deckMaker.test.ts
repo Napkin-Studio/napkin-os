@@ -817,9 +817,14 @@ test('agentState: every row of the table', () => {
   assert.deepEqual(plain([slow.step_index, slow.step_total, slow.role]), [2, 4, 'Opens directions'])
   const ho = L.agentState({ state: 'building', stages: [], agent: { key: 'strategy', activity: 'write', to: 'idea' } })
   assert.deepEqual(plain([ho.agent, ho.activity, ho.word, ho.handoff]), ['strategy', 'handoff', 'Handing off', true])
-  // an agent this app does not know: neutral, waiting
-  assert.deepEqual(plain(pick({ state: 'building', stages: withNow('copy'), agent: { key: 'dex', activity: 'work' } })), [null, 'waiting', 'Waiting'])
-  assert.deepEqual(plain(pick({ state: 'building', stages: [], agent: { key: '__proto__' } })), [null, 'waiting', 'Waiting'])
+  // a feed key this app does not know (dex is the voice, not a circle) counts as no feed: the other rows still decide
+  assert.deepEqual(plain(pick({ state: 'building', stages: withNow('copy'), agent: { key: 'dex', activity: 'work' } })), ['copy', 'waiting', 'Waiting'])
+  assert.deepEqual(plain(pick({ state: 'building', stages: [], agent: { key: '__proto__' } })), ['brief', 'waiting', 'Waiting'])
+  assert.deepEqual(plain(pick({ state: 'gate', stages: withNow('storyline'), gate: { id: 'storyline' }, agent: { key: 'dex', activity: 'write' } })), ['strategy', 'human', 'Needs you'])
+  assert.deepEqual(plain(pick({ state: 'failed', stages: stg([['inputs', 'done'], ['check', 'failed']]), agent: { key: 'dex' } })), ['review', 'error', 'Failed, retrying'])
+  assert.deepEqual(plain(pick({ state: 'done', stages: [], agent: { key: 'dex', activity: 'complete' } })), ['deck', 'complete', 'Done'])
+  const dex = L.agentState({ state: 'building', stages: withNow('copy'), agent: { key: 'dex', activity: 'write', step_index: 2, step_total: 7, to: 'deck' } })
+  assert.deepEqual(plain([dex.step_index, dex.handoff, dex.to]), [null, false, null], 'nothing is read from a feed the app does not know')
 })
 
 test('agentState never throws on junk', () => {
@@ -1371,18 +1376,21 @@ test('approveDeck records the approval like a gate: approvals.deck, a decision, 
   assert.equal(L.approveDeck(null, 'Sai', at), null)
 })
 
-test('exportRows: absent is Not built yet, `true` is ready, an object names its file; the animated deck is never built', () => {
+test('exportRows: absent is Not built yet, `true` is ready, an object or a string names its file; the animated deck reads the same', () => {
   const none = L.exportRows(undefined)
   assert.deepEqual(plain(none.map(r => [r.key, r.ready, r.note, r.action])), [
     ['web', false, 'Not built yet', 'Open'], ['pptx', false, 'Not built yet', 'Download'], ['anim', false, 'Not built yet', 'Get project'], ['pdf', false, 'Not built yet', 'Download']])
   const old = L.exportRows({ web: true, pptx: true, anim: true, pdf: true })
-  assert.deepEqual(plain(old.map(r => [r.ready, r.file, r.note])), [[true, '', 'Ready to open'], [true, '', 'Notes kept, appendix hidden'], [false, '', 'Not built yet'], [true, '', 'Presented slides only']])
+  assert.deepEqual(plain(old.map(r => [r.ready, r.file, r.note])), [[true, '', 'Ready to open'], [true, '', 'Notes kept, appendix hidden'], [true, '', 'Project ready'], [true, '', 'Presented slides only']])
+  // the older file-name string: ready, by its last path part
+  const str = L.exportRows({ web: 'out/index.html', pptx: 'better-with-ballymaloe.pptx', anim: { file: '/x/deck.hf.json' }, pdf: '  ' })
+  assert.deepEqual(plain(str.map(r => [r.ready, r.file, r.note])), [[true, 'index.html', 'Ready to open'], [true, 'better-with-ballymaloe.pptx', 'better-with-ballymaloe.pptx'], [true, 'deck.hf.json', 'deck.hf.json'], [false, '', 'Not built yet']])
   const ex = L.exportRows(fixture('export-ready').exports)
   assert.deepEqual(plain(ex.map(r => [r.ready, r.file, r.note])), [[true, 'index.html', 'Ready to open'], [true, 'better-with-ballymaloe.pptx', 'better-with-ballymaloe.pptx'], [false, '', 'Not built yet'], [true, 'better-with-ballymaloe.pdf', 'better-with-ballymaloe.pdf']])
   assert.equal(L.exportRows({ pptx: { file: '/tmp/out/deck.pptx' } })[1].file, 'deck.pptx', 'only the file name, never a path')
   assert.equal(L.exportRows({ pptx: { file: 'x'.repeat(300) } })[1].file.length, 120)
   assert.equal(L.exportRows({ pptx: { file: '  ' } })[1].ready, false)
-  assert.equal(L.exportRows({ pdf: 'a.pdf', web: { url: 'u' } }).filter(r => r.ready).length, 0)
+  assert.equal(L.exportRows({ pdf: 5, pptx: false, web: { url: 'u' } }).filter(r => r.ready).length, 0)
 })
 
 test('reportLine: errors from the checker, every number traced only at 0 errors, then placeholders', () => {
@@ -1546,4 +1554,59 @@ test('Approve the deck is a 44px target, and the new styles use tokens', () => {
   assert.match(css, /\.dword\{[^}]*color:var\(--warn-fg\)\}/)
   assert.match(css, /\.dword\.ok\{color:var\(--ok-fg\)\}/)
   assert.match(css, /\.rail,\.side,\.lcol\{position:static;max-height:none\}/)
+})
+
+// ── the final review's fixes ───────────────────────────────────────────────────────────────────────
+test('approveGate copies each stage whole, so what the runner wrote (items) survives Pick and Approve', () => {
+  const r = fixture('gate2').run
+  r.stages[0].items = [{ text: 'Brief · read', status: 'done' }]
+  r.stages[1].note = 'kept'
+  const before = JSON.stringify(r)
+  const next = plain(L.approveGate(r, 'territories', 'Sai', at, { picked: r.gate.territories[1].id }))
+  assert.deepEqual(next.stages[0].items, r.stages[0].items)
+  assert.equal(next.stages[1].note, 'kept')
+  assert.deepEqual(next.stages.map((s: Fx) => Object.keys(s)), r.stages.map((s: Fx) => Object.keys(s)))
+  assert.deepEqual(next.stages.map((s: Fx) => s.status), r.stages.map((s: Fx) => (s.id === 'territories' ? 'done' : s.id === 'idea' ? 'now' : s.status)))
+  assert.equal(JSON.stringify(r), before, 'the run passed in is not changed')
+  // the page writes the same: Pick this territory keeps the items
+  const m = mount({ ...fixture('gate2'), run: JSON.parse(before) })
+  m.click({}, 'approve')
+  assert.deepEqual(plain((m.writes[0].obj as Write).run.stages[0].items), r.stages[0].items)
+})
+
+test('Build at a gate: Checked so far shows the gate\'s own checks, else run.checks', () => {
+  const runLevel = [{ ok: true, text: 'Run-level check' }]
+  const noGateChecks = gateRun() as Fx
+  delete noGateChecks.gate.checks
+  noGateChecks.checks = runLevel
+  const h = mount(buildData(noGateChecks)).app.innerHTML
+  assert.ok(h.includes('Checked so far') && h.includes('Run-level check'))
+  const both = gateRun() as Fx
+  both.checks = runLevel
+  const h2 = mount(buildData(both)).app.innerHTML
+  assert.ok(h2.includes('Every number traces to a source') && !h2.includes('Run-level check'), 'the gate\'s own checks win')
+  const none = gateRun() as Fx
+  delete none.gate.checks
+  assert.equal(mount(buildData(none)).app.innerHTML.includes('Checked so far'), false)
+})
+
+test('gate 1 with junk beats draws the good ones and never throws', () => {
+  const r = gateRun() as Fx
+  r.gate = { id: 'storyline', beats: [null] }
+  assert.ok(mount(buildData(r)).app.innerHTML.includes('Approve the storyline'))
+  r.gate = { id: 'storyline', n: 1, of: 3, beats: [null, 5, 'x', [], { n: '01', title: 'Kept', basis: 'constructor' }, { n: '02', title: 'Two', basis: 'research' }] }
+  const h = mount(buildData(r)).app.innerHTML
+  assert.equal((h.match(/<div class="beat">/g) || []).length, 2)
+  assert.ok(h.includes('Kept</div>') && h.includes('<span class="pill ok">From brief</span>'), 'an unknown basis reads as the brief')
+  assert.ok(h.includes('<span class="pill ok">From research</span>'))
+  assert.equal(/class="pill undefined"|>undefined</.test(h), false)
+})
+
+test('the export rows take the older file-name string and the animated deck on Present', () => {
+  const f = fixture('export-ready')
+  f.exports = { web: 'index.html', pptx: 'out/deck.pptx', anim: { file: 'deck.hf.json' } }
+  const ex = exportCard(present(f).app.innerHTML)
+  assert.ok(ex.includes('>deck.pptx</div></div><button class="btn sm" data-export="pptx" style="font-weight:600" aria-label="Download deck.pptx">Download</button>'))
+  assert.ok(ex.includes('>deck.hf.json</div></div><button class="btn sm" data-export="anim" style="font-weight:600" aria-label="Get project deck.hf.json">Get project</button>'))
+  assert.ok(ex.includes('data-export="pdf" disabled'))
 })

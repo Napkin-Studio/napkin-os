@@ -866,7 +866,7 @@
     },
     "exports": {
       "type": "object",
-      "description": "What has been written, per format. Absent means 'Not built yet'. `true` is the older shape; the object names the file.",
+      "description": "What has been written, per format. Absent means 'Not built yet'. `true` and a file-name string are the older shapes; the object names the file.",
       "properties": {
         "web": {
           "oneOf": [
@@ -874,6 +874,9 @@
               "enum": [
                 true
               ]
+            },
+            {
+              "type": "string"
             },
             {
               "type": "object",
@@ -902,6 +905,9 @@
               ]
             },
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "required": [
                 "file"
@@ -928,6 +934,9 @@
               ]
             },
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "required": [
                 "file"
@@ -952,6 +961,9 @@
               "enum": [
                 true
               ]
+            },
+            {
+              "type": "string"
             },
             {
               "type": "object",

@@ -353,7 +353,12 @@ var DeckLogic = (function () {
    */
   function approveGate(run, gateId, by, at, choice) {
     if (!run || !run.gate || run.gate.id !== gateId) return null;
-    var stages = run.stages.map(function (s) { return { id: s.id, name: s.name, sub: s.sub, status: s.status }; });
+    // Stages are copied whole, as approveDeck does: the store replaces arrays, so a key left out (items) would be lost.
+    var stages = (Array.isArray(run.stages) ? run.stages : []).filter(isObj).map(function (s) {
+      var o = {};
+      Object.keys(s).forEach(function (k) { o[k] = s[k]; });
+      return o;
+    });
     var i = stages.findIndex(function (s) { return s.id === gateId; });
     if (i < 0) return null;
     var c = isObj(choice) ? choice : {}, picked = null;
@@ -1070,7 +1075,8 @@ var DeckLogic = (function () {
    * Who the circle shows and what they are doing, from the run: { agent, activity, word, role, step_index, step_total,
    * handoff }. run.agent (written by the server) names them when present; an open gate always needs a person, a failed
    * stage is an error, a finished run is done, and with no live feed nothing is running, so the stage's agent is shown
-   * waiting. An unknown agent key is a neutral waiting circle (agent null). Never throws.
+   * waiting. A feed whose key this app does not know (dex: Dex is the voice, not a circle) counts as no feed, so the
+   * gate, failure, done and stage rows still decide. Never throws.
    */
   function agentState(run) {
     var out = { agent: null, activity: 'waiting', word: ACTIVITY_WORD.waiting, role: '', step_index: null, step_total: null, handoff: false, to: null };
@@ -1078,13 +1084,12 @@ var DeckLogic = (function () {
       var r = isObj(run) ? run : {};
       var stages = Array.isArray(r.stages) ? r.stages.filter(isObj) : [];
       var gate = isObj(r.gate) ? r.gate : null;
-      var feed = isObj(r.agent) ? r.agent : null;
+      var feed = isObj(r.agent) && own(AGENTS, r.agent.key) ? r.agent : null;
       var failedStage = stages.filter(function (s) { return s.status === 'failed'; })[0];
       var nowStage = stages.filter(function (s) { return s.status === 'now'; })[0];
       var byStage = function (s) { return s && own(STAGE_AGENT, s.id) ? STAGE_AGENT[s.id] : null; };
       var key, act;
       if (feed) {
-        if (!own(AGENTS, feed.key)) return out; // an agent this app does not know: neutral, waiting
         key = feed.key;
         act = own(ACTIVITY_WORD, feed.activity) ? feed.activity : 'work';
       }
@@ -1317,7 +1322,7 @@ var DeckLogic = (function () {
   // The four formats, in the order the Export card lists them: key, mark, name, action, what the older `true` shape says.
   var EXPORTS = [
     ['web', 'WEB', 'Web deck', 'Open', 'Ready to open'], ['pptx', 'PPTX', 'PowerPoint', 'Download', 'Notes kept, appendix hidden'],
-    ['anim', 'ANIM', 'Animated deck', 'Get project', ''], ['pdf', 'PDF', 'PDF', 'Download', 'Presented slides only']
+    ['anim', 'ANIM', 'Animated deck', 'Get project', 'Project ready'], ['pdf', 'PDF', 'PDF', 'Download', 'Presented slides only']
   ];
 
   /** A file name the engine wrote, as shown: its last path part, at most 120 characters. */
@@ -1327,15 +1332,17 @@ var DeckLogic = (function () {
   }
 
   /**
-   * The Export card's rows: { key, x, name, action, ready, file, note }. A format is ready when exports.<key> is the
-   * older `true` or an object with a file; the note is the file name (the web deck says Ready to open), else Not built
-   * yet. The animated deck is never built by the engine, so it is always Not built yet. Never throws.
+   * The Export card's rows: { key, x, name, action, ready, file, note }. A format is ready when exports.<key> is an
+   * object with a file, or one of the older shapes: `true`, or the file name as a string. The note is the file name
+   * (the web deck says Ready to open), else Not built yet. The animated deck reads like the others: the engine does
+   * not build it yet, so it is Not built yet until a runner writes it. Never throws.
    */
   function exportRows(exports) {
     var ex = isObj(exports) ? exports : {};
     return EXPORTS.map(function (f) {
-      var v = own(ex, f[0]) ? ex[f[0]] : undefined, file = isObj(v) ? fileName(v.file) : '';
-      var ready = f[0] !== 'anim' && (v === true || !!file);
+      var v = own(ex, f[0]) ? ex[f[0]] : undefined;
+      var file = isObj(v) ? fileName(v.file) : (typeof v === 'string' && v.trim() ? fileName(v) : '');
+      var ready = v === true || !!file;
       return {
         key: f[0], x: f[1], name: f[2], action: f[3], ready: ready, file: ready ? file : '',
         note: !ready ? 'Not built yet' : f[0] === 'web' ? 'Ready to open' : file || f[4]
@@ -1365,7 +1372,8 @@ var DeckLogic = (function () {
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, gateRequest: gateRequest,
-    GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown
+    GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
+    isObj: isObj, own: own
   };
 })();
 </script>
@@ -1639,8 +1647,8 @@ var DeckLogic = (function () {
 
   function gateBody(gv, gate) {
     if (gv.body === 'beats') {
-      return (Array.isArray(gate.beats) ? gate.beats : []).map(function (b) {
-        var c = BASES[b.basis] || BASES.brief;
+      return (Array.isArray(gate.beats) ? gate.beats : []).filter(L.isObj).map(function (b) {
+        var c = L.own(BASES, b.basis) ? BASES[b.basis] : BASES.brief;
         return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
       }).join('') +
         (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '');
@@ -1694,8 +1702,9 @@ var DeckLogic = (function () {
       main = '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
         '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
     } else if (live) main = runBody(rv);
-    var list = gate ? gate.checks : run.checks;
-    var checks = Array.isArray(list) && (gate || list.length) ? checkedCard(list) : '';
+    // A gate's own checks when it wrote them (even none), else what the run has checked.
+    var gateChecks = !!gate && Array.isArray(gate.checks), list = gateChecks ? gate.checks : run.checks;
+    var checks = Array.isArray(list) && (gateChecks || list.length) ? checkedCard(list) : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
       '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
       '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +

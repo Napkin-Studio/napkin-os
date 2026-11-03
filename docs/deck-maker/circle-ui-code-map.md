@@ -61,7 +61,7 @@ Add to `T/schema.json` (the schema is also silent on `exports` and `change_reque
 | `run.approvals.<gate>` | add `decision: approve\|edit\|retry`, `picked?`, `note?` (keeps `{by,at}`) | app now, server later |
 | `run.decisions[]` | `{gate, kind: approve\|edit\|retry, by, at}` | app |
 | `run.gate_requests[]` | `{gate, kind, at, status:'waiting'}` (edit/retry asks, like `change_requests`) | app |
-| `exports.<web\|pptx\|pdf\|anim>` | `oneOf` legacy `true` or `{file, url?, bytes?}` | server |
+| `exports.<web\|pptx\|pdf\|anim>` | `oneOf` legacy `true`, legacy file-name string, or `{file, url?, bytes?}` | server |
 | `deck.appendix_ids[]`, `slide.appendix` | string[], bool (`appendix_count` stays fallback) | server; app may write via `put` |
 | `run.approvals.deck` | `{by, at}` (deck approval) | app |
 

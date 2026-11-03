@@ -62,7 +62,7 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
 | `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
-| `exports.web\|pptx\|anim\|pdf` | the runner | `true` (older) or `{file, url?, bytes?}`, once written. Absent means "Not built yet". The app shows `file` (its last path part), never `url` or `bytes`, and the animated deck as Not built yet |
+| `exports.web\|pptx\|anim\|pdf` | the runner | `{file, url?, bytes?}`, once written; the older shapes, `true` and the file name as a string, still read as written. Absent means "Not built yet". The app shows the file name (its last path part), never `url` or `bytes`. The animated deck reads the same way; the engine does not build it yet, so it shows Not built yet until a runner writes it |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 
 On Build the app writes only the person's own inputs (`inputs.prompt`, `kind`, `format`). The Brief and

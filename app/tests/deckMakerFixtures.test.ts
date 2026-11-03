@@ -196,11 +196,15 @@ test('review-ready and both export states have every fact supplied and every con
   }
 })
 
-test('exports take the older `true` shape as well as the object', () => {
+test('exports take the older `true` and file-name shapes as well as the object', () => {
   const d = load('example/states/export-ready.yaml')
   d.exports = { web: true, pptx: { file: 'a.pptx' } }
   assert.deepEqual(validate(d, schema), [])
-  d.exports = { web: 'a.html' }
+  d.exports = { web: 'a.html', pptx: 'a.pptx', anim: 'a.hf.json', pdf: 'a.pdf' }
+  assert.deepEqual(validate(d, schema), [])
+  d.exports = { web: 5 }
+  assert.notDeepEqual(validate(d, schema), [])
+  d.exports = { web: false }
   assert.notDeepEqual(validate(d, schema), [])
   d.exports = { pdf: { url: 'x' } }
   assert.notDeepEqual(validate(d, schema), [])
