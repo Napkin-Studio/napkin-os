@@ -2,15 +2,15 @@
 // or a pack and the film lengths, Wren's ask "What must stay in every size?" (once per master), and the
 // send tray: every format with the method the rule table picked, no prices, untick any, Send.
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { PersonRef, ProtectBox } from '../contracts/types'
 import { useConfig, useDoc } from '../app/context'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { useBlobUrl } from '../ui/hooks'
 import { choicesFor, DEFAULT_LENGTHS, FILMS_FROM_VIDEO, LANES, rowsFor, shortName, sizeWords } from './formats'
 import { makeAllSizes, type CampaignDeps, type TrayRow } from './make'
 import { setsOf, type MasterInfo } from './master'
+import { ProtectEditor } from './ProtectEditor'
 import { availableMethods, METHOD_WORD, methodFor, methodModels, methodWords, PAID } from './rules'
 import './campaign.css'
 
@@ -176,7 +176,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
   )
 }
 
-/** Wren's ask, once per master: drag over what must stay (the subject, the product). */
+/** Wren's ask, once per master: mark what must stay (the subject, the product), name it, change it. */
 function ProtectAsk({ master, boxes, setBoxes, onBack, onDone, onKeepMiddle }: {
   master: MasterInfo
   boxes: ProtectBox[]
@@ -185,35 +185,6 @@ function ProtectAsk({ master, boxes, setBoxes, onBack, onDone, onKeepMiddle }: {
   onDone(): void
   onKeepMiddle(): void
 }) {
-  const url = useBlobUrl(master.asset)
-  const wrap = useRef<HTMLDivElement>(null)
-  const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
-  const [role, setRole] = useState<ProtectBox['role']>(boxes.some((b) => b.role === 'subject') ? 'product' : 'subject')
-  const scale = Math.min(560 / master.w, 340 / master.h)
-  const W = Math.round(master.w * scale)
-  const H = Math.round(master.h * scale)
-  const at = (e: React.PointerEvent) => {
-    const r = wrap.current!.getBoundingClientRect()
-    return { x: Math.min(Math.max(e.clientX - r.left, 0), W) / scale, y: Math.min(Math.max(e.clientY - r.top, 0), H) / scale }
-  }
-  const finish = () => {
-    if (!draft) return
-    const x = Math.min(draft.x0, draft.x1)
-    const y = Math.min(draft.y0, draft.y1)
-    let w = Math.abs(draft.x1 - draft.x0)
-    let h = Math.abs(draft.y1 - draft.y0)
-    // A tap marks a box round the point: a tenth of the picture each way.
-    if (w < 8 / scale && h < 8 / scale) {
-      w = master.w * 0.2
-      h = master.h * 0.3
-    }
-    const bx = Math.max(0, Math.min(x - (Math.abs(draft.x1 - draft.x0) < 8 / scale ? w / 2 : 0), master.w - w))
-    const by = Math.max(0, Math.min(y - (Math.abs(draft.y1 - draft.y0) < 8 / scale ? h / 2 : 0), master.h - h))
-    const label = role === 'subject' ? 'subject' : role === 'product' ? 'product' : 'keep'
-    setBoxes([...boxes, { role, label, x: Math.round(bx), y: Math.round(by), w: Math.round(w), h: Math.round(h) }].slice(0, 8))
-    setDraft(null)
-    if (role === 'subject') setRole('product')
-  }
   return (
     <div className="cf-body">
       <section className="askcard open cf-ask" role="group" aria-label="wren asks: What must stay in every size?">
@@ -222,29 +193,9 @@ function ProtectAsk({ master, boxes, setBoxes, onBack, onDone, onKeepMiddle }: {
           <span className="askcard-who">{sayer('wren')}</span>
         </div>
         <div className="askcard-q">What must stay in every size?</div>
-        <div className="askcard-why faint">Drag over the subject and the product (or tap them). I keep them inside every size's safe area. The logo and the words come from the Brand board as layers, so leave them out.</div>
+        <div className="askcard-why faint">Drag over the subject and the product, or tap them. Click a box to move it, resize it, rename it or remove it. I keep them inside every size's safe area. The logo and the words come from the Brand board as layers, so leave them out.</div>
       </section>
-      <div className="cf-roles" role="radiogroup" aria-label="Marking">
-        {(['subject', 'product', 'other'] as const).map((r) => (
-          <button key={r} type="button" role="radio" aria-checked={role === r} className={`cf-chip ${role === r ? 'on' : ''}`} onClick={() => setRole(r)}>
-            {r === 'subject' ? 'Subject' : r === 'product' ? 'Product' : 'Something else'}
-          </button>
-        ))}
-      </div>
-      <div ref={wrap} className="cf-protect" style={{ width: W, height: H }} data-testid="protect-picture"
-        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); const p = at(e); setDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }) }}
-        onPointerMove={(e) => { if (draft) { const p = at(e); setDraft({ ...draft, x1: p.x, y1: p.y }) } }}
-        onPointerUp={finish}>
-        {url && <img src={url} alt="" draggable={false} style={{ width: W, height: H }} />}
-        {boxes.map((b, i) => (
-          <span key={i} className={`cf-pbox ${b.role}`} style={{ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale }}>
-            <span className="cf-ptag">{b.role === 'subject' ? 'Subject' : b.role === 'product' ? 'Product' : 'Keep'}
-              <button type="button" aria-label="Remove this box" onPointerDown={(e) => e.stopPropagation()} onClick={() => setBoxes(boxes.filter((_, j) => j !== i))}>×</button>
-            </span>
-          </span>
-        ))}
-        {draft && <span className={`cf-pbox ${role} draft`} style={{ left: Math.min(draft.x0, draft.x1) * scale, top: Math.min(draft.y0, draft.y1) * scale, width: Math.abs(draft.x1 - draft.x0) * scale, height: Math.abs(draft.y1 - draft.y0) * scale }} />}
-      </div>
+      <ProtectEditor master={master} boxes={boxes} setBoxes={setBoxes} />
       <footer className="cf-foot">
         <button type="button" className="btn ghost" onClick={onBack}>Back</button>
         <span className="pt-grow" />

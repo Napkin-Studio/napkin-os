@@ -44,6 +44,45 @@ REGENERATE_PROMPT = ("Recreate @master for a {shape} format: the same people, ob
 REGENERATE_SKETCH_PROMPT = ("Turn the sketch @master into a finished, photographic picture for a {shape} format: keep its "
                             "layout, subjects and their poses. Recompose for the shape so nothing important is cut off. "
                             "No text, no letters, no logos.")
+# What the person marked as "must stay" (Make all sizes), told to a regenerate in words: what each thing is and
+# where it sits in @master. A model cannot be handed a box, so the words carry it.
+REGENERATE_KEEP = " Keep {things} fully in frame, unchanged and not cropped."
+KEEP_MAX = 8
+
+
+def _where(cx: float, cy: float) -> str:
+    h = "left" if cx < 0.36 else "right" if cx > 0.64 else "centre"
+    v = "upper" if cy < 0.36 else "lower" if cy > 0.64 else "middle"
+    if h == "centre" and v == "middle":
+        return "centre"
+    if h == "centre":
+        return f"{v} centre"
+    if v == "middle":
+        return h
+    return f"{v} {h}"
+
+
+def keep_words(protect: list[dict] | None, master: dict) -> str:
+    """The "keep ..." clause for a regenerate prompt: "the can (centre of @master) and the model (left of @master)".
+    Empty when nothing is marked. Labels are the person's words: trimmed, one line, no @ (a tag in a prompt)."""
+    mw, mh = master.get("w") or 0, master.get("h") or 0
+    items = []
+    for b in (protect or [])[:KEEP_MAX]:
+        if not (b.get("w", 0) > 0 and b.get("h", 0) > 0 and mw > 0 and mh > 0):
+            continue
+        label = " ".join(str(b.get("label") or "").replace("@", "").split())[:40] or {"other": "the marked area"}.get(b.get("role"), b.get("role") or "subject")
+        name = label if label == "the marked area" else f"the {label}"
+        items.append(f"{name} ({_where((b['x'] + b['w'] / 2) / mw, (b['y'] + b['h'] / 2) / mh)} of @master)")
+    if not items:
+        return ""
+    things = items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+    return REGENERATE_KEEP.format(things=things)
+
+
+# Another size of the same ad, already made, tagged @sibling: the new picture matches its colour, light and style, so the
+# sizes of a set look like one campaign (art-director). It is for the look only: its composition is not copied.
+REGENERATE_LOOK = (" @sibling is another size of the same ad: match its colour, light, grain and style exactly, "
+                   "but compose for this shape.")
 # A named picture's other views (features/resize-selection.clan): the same character or object, kept itself.
 REGENERATE_REFS = " {tags} show the same {what} from other sides: keep them exactly themselves."
 # At most this many other views go with a regenerate (Gemini 3 Pro takes 14 refs, 5 of them human).

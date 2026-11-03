@@ -286,8 +286,8 @@
       "additionalProperties": false
     },
     "formatCheckCode": {
-      "enum": ["subject_safe", "logo_safe", "clear_space", "type_size", "ooh_words", "line_present", "end_card", "sound_off", "brand_first_3s"],
-      "description": "Jude's per-format checks (features/campaign-formats.clan); they never block. subject_safe: every protected box inside the safe area. logo_safe: the logo inside the safe area. clear_space: the logo's clear space is free of type. type_size: type at least the format's minimum size. ooh_words: an out-of-home line is 7 words or fewer. line_present: the brand line is on the size. end_card: a film ends on its end card. sound_off: social video carries supers or captions. brand_first_3s: social video shows the brand in its first 3 s."
+      "enum": ["subject_safe", "logo_safe", "clear_space", "type_size", "ooh_words", "line_present", "end_card", "sound_off", "brand_first_3s", "logo_present", "look_match"],
+      "description": "Jude's per-format checks (features/campaign-formats.clan); they never block. subject_safe: every protected box inside the safe area. logo_safe: the logo inside the safe area. clear_space: the logo's clear space is free of type. type_size: type at least the format's minimum size. ooh_words: an out-of-home line is 7 words or fewer. line_present: the brand line is on the size. end_card: a film ends on its end card. sound_off: social video carries supers or captions. brand_first_3s: social video shows the brand in its first 3 s. logo_present: the Brand board has a logo and it is drawn on the size (added 2026-11-03, additive). look_match: the size's colour and tone are close to the master's (added 2026-11-03, additive). A check's result is pass, flag, or unverified (Jude cannot measure it, e.g. what must stay in a regenerated picture)."
     },
     "refRole": {
       "enum": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"],

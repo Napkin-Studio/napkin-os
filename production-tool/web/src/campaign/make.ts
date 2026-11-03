@@ -27,6 +27,7 @@ import { channelOf, formatById, PACKS_VERSION, type PlanRow } from './formats'
 import { currentMasterAsset, type MasterInfo } from './master'
 import { aspectOf, PAID, rowFracs, type MethodChoice } from './rules'
 import { checksFor, flagged } from './checks'
+import { lookOf } from './look'
 import { brandKit, layersFor, layoutPanel, panelCrop } from './layout'
 
 export const FRAME_PAD = 32
@@ -166,6 +167,22 @@ export async function plainRef(relay: CampaignDeps['relay'], sha: string, d: Pic
   return { sha256: res.sha256, url: res.url, mime }
 }
 
+/**
+ * The size whose look a regenerate should match: the nearest-shaped other size of the set that was drawn by the
+ * model (extend or regenerate), is made, and kept its clean plate. A crop is no use: it is the master's own pixels,
+ * which the regenerate already has. None when no other size has been drawn yet.
+ */
+export function lookSibling(d: ProductionDocument, size: Size): Size | undefined {
+  const r = Math.log(size.delivery.width / size.delivery.height)
+  let best: Size | undefined
+  for (const s of sizesOf(d, size.set_id)) {
+    if (s.id === size.id || s.media !== 'image' || !PAID.has(s.method) || !s.plate || !s.asset) continue
+    if (s.status !== 'ready' && s.status !== 'look') continue
+    if (!best || Math.abs(Math.log(s.delivery.width / s.delivery.height) - r) < Math.abs(Math.log(best.delivery.width / best.delivery.height) - r)) best = s
+  }
+  return best
+}
+
 /** The job input for one size: the master's clean plate, the shape, the crop (a layout's panel and
  *  colour field) and the type layers. `retype`: the size's own plate, drawn again with its type (free). */
 export async function sizeInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size, retype = false): Promise<JobInput> {
@@ -188,12 +205,16 @@ export async function sizeInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: 
   }
   const master = { w: set.master.w!, h: set.master.h! }
   const layout = size.method === 'layout'
+  // A regenerate draws a new picture: show it a size already made so the set looks like one campaign.
+  const sibling = size.method === 'regenerate' ? lookSibling(d, size) : undefined
+  const look = sibling?.plate ? await plainRef(deps.relay, sibling.plate, d).catch(() => undefined) : undefined
   return {
     ...base,
     image: await assetRef(deps.relay, set.master.asset!, d),
     resize: {
       method: size.method,
       masterSize: master,
+      ...(look ? { look } : {}),
       ...(set.protect?.boxes?.length ? { protect: set.protect.boxes } : {}),
       ...(size.crop && (size.method === 'crop' || layout) ? { crop: size.crop } : {}),
       ...(layout ? { panel: layoutPanel({ w: size.delivery.width, h: size.delivery.height }, master), background: brandKit(d).field } : {}),
@@ -229,7 +250,7 @@ export async function sendSize(deps: CampaignDeps, setId: string, sizeId: string
 
 /** A size's result as its picture (Wren's landing): the typed preview, and the plate it was drawn on.
  *  A job the size no longer names is dropped. An upscale for delivery lands as the size's full file. */
-export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate?: DocAsset): Size | undefined {
+export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate?: DocAsset, look?: number): Size | undefined {
   const size = d.sizes[sizeId]
   const out = job.outputs?.[0]
   if (!size || !out) return undefined
@@ -246,6 +267,12 @@ export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate
     size.plate = plate.sha256
   }
   if (job.resize?.crop && !size.crop) size.crop = job.resize.crop
+  // What was measured when this picture landed (Jude reads it): the type layers the relay drew, and the look.
+  const render: NonNullable<Size['render']> = {}
+  if (typeof job.resize?.layers === 'number') render.drawn = job.resize.layers
+  if (look !== undefined) render.look = Math.round(look * 1000) / 1000
+  if (Object.keys(render).length) size.render = render
+  else delete size.render
   if (set) size.checks = checksFor(size, set, d)
   size.status = flagged(size) ? 'look' : 'ready'
   return size
@@ -276,7 +303,11 @@ export async function landSize(store: DocumentStore, job: Job, ctx: Extract<JobC
   const f = formatById(s.format.format_id)
   const what = job.op === 'upscale' ? `the ${f?.format.name ?? s.format.format_id} file at full size` : `the ${f?.format.name ?? s.format.format_id} size`
   const plate = await keepPlate(relay, job)
-  return landUpdate(store, (x) => { applySize(x, job, ctx.sizeId, plate) }, landingWhy(store, job.jobId, what))
+  // Extend and regenerate redraw the picture: how far its look is from the master's (crop and layout keep the master's pixels).
+  const look = plate && PAID.has(s.method) && d.format_sets[s.set_id]?.master.asset
+    ? await lookOf(await getBlob(d.format_sets[s.set_id].master.asset!), await getBlob(plate.sha256)).catch(() => undefined)
+    : undefined
+  return landUpdate(store, (x) => { applySize(x, job, ctx.sizeId, plate, look) }, landingWhy(store, job.jobId, what))
 }
 
 /** Sizes that are out of date: their master changed (and they are not locked), or they were marked stale. */
@@ -330,6 +361,41 @@ export async function updateSizes(deps: CampaignDeps, setId: string, by: PersonR
   }, `update ${stale.length} sizes of format_sets[${setId}]`)
   for (const s of stale) void sendSize(deps, setId, s.id, by).catch((e) => console.warn('the size was not sent', e))
   return stale.length
+}
+
+/**
+ * Change what must stay, after the sizes exist (one undo step). Crop and layout sizes get the rule's crop for the new
+ * boxes (a person's own crop is kept) and are made again, free. Extend and regenerate sizes are marked out of date: they
+ * spend, so Update sizes asks first. Locked sizes never change. Jude's checks are worked out again for all of them.
+ */
+export async function setProtect(deps: CampaignDeps, setId: string, protect: { boxes: ProtectBox[]; keep_middle?: boolean }, by: PersonRef): Promise<{ again: number; stale: number }> {
+  const again: string[] = []
+  const stale: string[] = []
+  await updateDoc(deps.doc, (x) => {
+    const set = x.format_sets[setId]
+    if (!set) return
+    set.protect = { boxes: protect.boxes, ...(protect.keep_middle ? { keep_middle: true } : {}) }
+    const dims = { w: set.master.w ?? 1, h: set.master.h ?? 1 }
+    for (const s of sizesOf(x, setId)) {
+      if (s.locked || s.media !== 'image') continue
+      if (s.method === 'crop' || s.method === 'layout') {
+        if (s.crop_by !== 'person' || !s.crop) {
+          const row = formatById(s.format.format_id)
+          const shape = { w: s.delivery.width, h: s.delivery.height }
+          s.crop = s.method === 'layout' ? panelCrop(dims, shape, protect.boxes) : cropBox(dims, shape, protect.boxes, row ? rowFracs({ format: row.format }) : undefined).crop
+          s.crop_by = 'rule'
+        }
+        s.status = 'making'
+        again.push(s.id)
+      } else if (s.asset) {
+        s.status = 'stale'
+        stale.push(s.id)
+      }
+      s.checks = checksFor(s, set, x)
+    }
+  }, `change what must stay in format_sets[${setId}]: ${protect.boxes.length} marked`)
+  for (const id of again) void sendSize(deps, setId, id, by).catch((e) => console.warn('the size was not sent', e))
+  return { again: again.length, stale: stale.length }
 }
 
 /** Adjust crop: the person's crop for this size (one undo step), then the size is made again. */
@@ -422,21 +488,6 @@ export function redoSize(deps: CampaignDeps, sizeId: string, by: PersonRef) {
   const size = deps.doc.get().sizes[sizeId]
   if (!size || !PAID.has(size.method)) return Promise.resolve(null)
   return sendSize(deps, size.set_id, sizeId, by)
-}
-
-/** What must stay changed: crop sizes go out of date, nothing is sent until Update sizes. */
-export function setProtect(store: DocumentStore, setId: string, protect: { boxes: ProtectBox[]; keep_middle?: boolean }) {
-  return updateDoc(store, (x) => {
-    const set = x.format_sets[setId]
-    if (!set) return
-    set.protect = { ...set.protect, boxes: protect.boxes, ...(protect.keep_middle ? { keep_middle: true } : {}) }
-    if (!protect.keep_middle) delete set.protect.keep_middle
-    for (const s of Object.values(x.sizes)) {
-      // A crop, a layout's panel and an extend's placement follow what must stay; a regenerate does not.
-      if (s.set_id !== setId || s.locked || !['crop', 'layout', 'extend'].includes(s.method) || s.crop_by === 'person') continue
-      if (s.asset) s.status = 'stale'
-    }
-  }, `change what must stay in format_sets[${setId}]`)
 }
 
 /** The preview each size is made at (the relay's), for names and the manifest. */

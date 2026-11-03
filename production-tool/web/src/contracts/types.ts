@@ -114,9 +114,9 @@ export type SizeMethod = (typeof SIZE_METHODS)[number]
 export const TYPE_LAYER_KINDS = ['line', 'logo', 'supers', 'legal', 'captions'] as const
 export type TypeLayerKind = (typeof TYPE_LAYER_KINDS)[number]
 export interface TypeLayerOverride { hidden?: boolean; text?: string; box?: Region; scale?: number }
-export const FORMAT_CHECK_CODES = ['subject_safe', 'logo_safe', 'clear_space', 'type_size', 'ooh_words', 'line_present', 'end_card', 'sound_off', 'brand_first_3s'] as const
+export const FORMAT_CHECK_CODES = ['subject_safe', 'logo_safe', 'clear_space', 'type_size', 'ooh_words', 'line_present', 'end_card', 'sound_off', 'brand_first_3s', 'logo_present', 'look_match'] as const
 export type FormatCheckCode = (typeof FORMAT_CHECK_CODES)[number]
-export interface FormatCheck { result: 'pass' | 'flag'; note: string; ignored?: { by: PersonRef; at: string } }
+export interface FormatCheck { result: 'pass' | 'flag' | 'unverified'; note: string; ignored?: { by: PersonRef; at: string } }
 /** A crop at a point through a window (0: its in, 1: its out): a slow pan moves between them. */
 export interface CropKey { at: number; box: PxBox }
 export interface SizeEdlWindow {
@@ -820,6 +820,8 @@ export interface Size extends EntityBase {
   checks?: Partial<Record<FormatCheckCode, FormatCheck>>
   /** The picture before its type layers: Edit type draws on it again for free; Export at full size upscales it. */
   plate?: Sha256
+  /** Facts measured when the picture landed (Jude reads them): type layers the relay drew, and how far its look is from the master's (0-1). */
+  render?: { drawn?: number; look?: number }
   /** The delivery-size file Export at full size made, for the asset it was made for (from). */
   full?: { asset?: Sha256; job_id?: Id; from: Sha256; scale?: 4 | 8 }
 }
@@ -1100,6 +1102,8 @@ export interface ResizeInput {
   layers?: TypeLayer[]
   /** regenerate: what the picture is; a sketch (a scamp) is drawn as a finished picture. */
   source?: 'picture' | 'sketch'
+  /** regenerate: another size of the same ad, made already, whose look the new picture matches (art-director). */
+  look?: AssetRef
 }
 /** A shot of the master as Dex's plan reads it (cutdown step plan). */
 export interface CutdownShot {

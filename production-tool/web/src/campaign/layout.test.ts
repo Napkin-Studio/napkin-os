@@ -92,6 +92,40 @@ describe('Jude on the fixtures', () => {
   })
 })
 
+describe('Jude on what a picture cannot show (art-director)', () => {
+  const boxes = [{ role: 'subject' as const, x: 600, y: 200, w: 300, h: 400 }]
+  const SETP = { ...SET, protect: { boxes } }
+  const made = (over: Partial<Size>) => size('meta-reels-9x16', 1440, 2560, { asset: `sha256:${'7'.repeat(64)}`, ...over })
+
+  it('a regenerated picture cannot be measured: unverified, never a pass; an extend keeps what must stay', () => {
+    expect(checksFor(made({ method: 'regenerate' }), SETP, DOC).subject_safe?.result).toBe('unverified')
+    expect(checksFor(made({ method: 'extend' }), SETP, DOC).subject_safe?.result).toBe('pass')
+  })
+  it('an unverified check never makes a size need a look', async () => {
+    const { flagged } = await import('./checks')
+    expect(flagged({ checks: checksFor(made({ method: 'regenerate' }), SETP, DOC) })).toBe(false)
+  })
+  it('no logo on the Brand board is said out loud, not passed over', () => {
+    const none = { refs: {}, assets: {} } as unknown as ProductionDocument
+    expect(checksFor(made({}), SET, none).logo_present?.result).toBe('flag')
+    expect(checksFor(made({}), SET, none).logo_present?.note).toMatch(/no logo on the Brand board/i)
+  })
+  it('a logo the relay could not draw is a flag; one it drew passes; before the picture lands there is no claim', () => {
+    // Words drawn: line and legal (2). A third layer drawn means the logo was.
+    expect(checksFor(made({ render: { drawn: 2 } }), SET, DOC).logo_present?.result).toBe('flag')
+    expect(checksFor(made({ render: { drawn: 3 } }), SET, DOC).logo_present?.result).toBe('pass')
+    expect(checksFor(made({}), SET, DOC).logo_present?.result).toBe('pass')
+  })
+  it('a hidden logo is the person\'s choice: the logo_safe check names it, logo_present stays quiet', () => {
+    expect(checksFor(made({ layers: { logo: { hidden: true } }, render: { drawn: 2 } }), SET, DOC).logo_present).toBeUndefined()
+  })
+  it('an extend or regenerate far from the master\'s look is flagged; a close one passes; a crop is never measured', () => {
+    expect(checksFor(made({ method: 'regenerate', render: { look: 0.3 } }), SET, DOC).look_match?.result).toBe('flag')
+    expect(checksFor(made({ method: 'extend', render: { look: 0.05 } }), SET, DOC).look_match?.result).toBe('pass')
+    expect(checksFor(made({ method: 'crop', render: { look: 0.9 } }), SET, DOC).look_match).toBeUndefined()
+  })
+})
+
 describe('layout: the picture in a panel on the brand colour field', () => {
   const M = { w: 1536, h: 864 }
   it('a banner strip puts the picture at its left end, at most 40%, the type beside it', () => {

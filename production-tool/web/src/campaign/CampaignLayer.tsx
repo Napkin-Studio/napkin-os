@@ -25,12 +25,13 @@ import { useBlobUrl } from '../ui/hooks'
 import { useProjectName } from '../ui/useDownload'
 import { boardLayout, CAPTION_H, type TileBox } from './board'
 import { campaignFold, isFolded } from './fold'
+import { ProtectSheet } from './ProtectSheet'
 import { SizesOverview } from './SizesOverview'
 import { panCrop, zoomCrop } from './crop'
 import { fullPlan } from './delivery'
 import { exportSizes } from './exportZip'
 import { formatById, LANES, shortName, sizeWords } from './formats'
-import { adjustCrop, changeMethod, channelOfSize, redoSize, setLocked, sizesOf, staleSizes, updateSizes, upscaleForDelivery, type CampaignDeps } from './make'
+import { adjustCrop, changeMethod, channelOfSize, redoSize, sendSize, setLocked, setProtect, sizesOf, staleSizes, updateSizes, upscaleForDelivery, type CampaignDeps } from './make'
 import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
 import { campaignSheet } from './sheet'
 import { TypeEditor, TypeOverlay } from './TypeEditor'
@@ -94,6 +95,7 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
   const foldedLanes = new Set(LANES.map((l) => l.channel).filter((c) => sizes.some((s) => channelOfSize(s) === c) && isFolded(set.id, c, sizes.length)))
   const layout = boardLayout(sizes.map((s) => ({ id: s.id, channel: channelOfSize(s), aspect: { w: s.delivery.width, h: s.delivery.height } })), foldedLanes)
   const [overview, setOverview] = useState(false)
+  const [protectOpen, setProtectOpen] = useState(false)
   const stale = staleSizes(doc, els, set.id)
   const staleIds = new Set(stale.map((s) => s.id))
   const masterUrl = useBlobUrl(set.master.asset)
@@ -200,9 +202,13 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
         <span className="cb-count">{sizes.length} formats · {counts.ready} ready{counts.look ? ` · ${counts.look} need a look` : ''}{counts.making ? ` · ${counts.making} making` : ''}{counts.notMade ? ` · ${counts.notMade} not made yet` : ''}</span>
         <span className="pt-grow" />
         {stale.length > 0 && (
-          <span className="cb-stale" role="status">Master changed · {stale.length} out of date
+          <span className="cb-stale" role="status">{stale.length} out of date
             <button type="button" className="btn xs primary" onClick={update}>Update sizes</button>
           </span>
+        )}
+        {sizes.some((z) => z.media === 'image') && (
+          <button type="button" className="btn xs ghost" title="What must stay in every size: mark, move, rename or remove" onClick={() => setProtectOpen(true)}>
+            What must stay{set.protect?.boxes?.length ? ` · ${set.protect.boxes.length}` : set.protect?.keep_middle ? ' · the middle' : ''}</button>
         )}
         <button type="button" className="btn xs cb-seeall" title="Every size on one screen (Enter)" onClick={() => setOverview(true)}>See all sizes ⤢</button>
         <button type="button" className={`btn xs ${safe ? 'on' : 'ghost'}`} aria-pressed={safe} title="Safe areas (S)" onClick={() => campaignSheet.toggleSafeAreas()}>Safe areas <kbd>S</kbd></button>
@@ -254,6 +260,12 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
         <SizesOverview set={set} sizes={sizes} staleIds={staleIds} models={models} deps={deps} by={by} title={(title ?? 'Campaign').replace(/^Campaign · /, '')}
           onClose={() => setOverview(false)} onTray={setTray} onLock={(id, on) => void setLocked(services.doc, id, on)}
           onEditOnBoard={(id) => { setOverview(false); tilePick.pick(set.id, id); canvas.select([]) }} />
+      )}
+      {protectOpen && (
+        <ProtectSheet set={set} onClose={() => setProtectOpen(false)} onSave={(p) => {
+          setProtectOpen(false)
+          void setProtect(deps, set.id, p, by).then((r) => say(r.stale ? `Kept · ${r.again} crops made again · ${r.stale} out of date, Update sizes remakes them` : `Kept · ${r.again} crops made again`))
+        }} />
       )}
       {tray && <SendTray tray={tray} setId={set.id} onClose={() => setTray(null)} />}
     </div>
@@ -368,7 +380,8 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
   const failed = live === 'failed'
   const status = failed ? 'failed' : (size.status === 'ready' || size.status === 'look') && stale ? 'stale' : size.status
   const crop = adjusting ?? size.crop
-  const flags = Object.entries(size.checks ?? {}).filter(([, c]) => c && c.result === 'flag')
+  const checks = Object.entries(size.checks ?? {}).filter(([, c]) => c && (c.result === 'flag' || c.result === 'unverified'))
+  const flags = checks.filter(([, c]) => c!.result === 'flag')
   const [drag, setDrag] = useState<{ x: number; y: number; crop: PxBox } | null>(null)
   const pic = useRef<HTMLDivElement>(null)
   const [methodOpen, setMethodOpen] = useState(false)
@@ -428,9 +441,10 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         ))}
         <span className={`cb-status ${status ?? 'notmade'}`} title={failure}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
         {size.locked && <span className="cb-lock" title="Locked: Update sizes never changes it">🔒</span>}
-        {flags.length > 0 && (
+        {checks.length > 0 && (
           <button type="button" className={`cb-flag ${flags.every(([, c]) => c!.ignored) ? 'ignored' : ''}`} onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => tilePick.toggleFlags(set.id, size.id)} aria-expanded={flagsOpen}>⚑ Jude · {flags.length}</button>
+            onClick={() => tilePick.toggleFlags(set.id, size.id)} aria-expanded={flagsOpen}>
+            {flags.length ? `⚑ Jude · ${flags.length}` : 'Jude · cannot verify'}</button>
         )}
       </div>
       <div className="cb-caption" style={{ height: CAPTION_H }}>
@@ -438,12 +452,18 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         <span className="cb-meta">{f ? sizeWords(f.format) : `${size.delivery.width}×${size.delivery.height}`} · {methodLine}</span>
       </div>
       {picked && !typing && <TileFloat anchor={pic}>
-      {flagsOpen && flags.length > 0 && (
+      {flagsOpen && checks.length > 0 && (
         <div className="cb-flags pt-panel" role="dialog" aria-label="Jude's checks">
-          {flags.map(([code, c]) => (
+          {checks.map(([code, c]) => (
             <div key={code} className="cb-check">
-              <span>{c!.note}</span>
-              {c!.ignored ? <span className="faint">Ignored</span> : <button type="button" className="btn xs ghost" onClick={() => onIgnore(code as FormatCheckCode)}>Ignore</button>}
+              <span>{c!.result === 'unverified' ? <><b>Cannot verify.</b> {c!.note}</> : c!.note}</span>
+              {c!.result === 'flag' && !c!.ignored && code === 'look_match' && PAID.has(size.method) && !size.locked && (
+                <button type="button" className="btn xs" onClick={() => paidTray(size.method, 'Redo to match', () => redoSize(deps, size.id, by))}>Redo</button>
+              )}
+              {c!.result === 'flag' && !c!.ignored && code === 'logo_present' && size.render?.drawn !== undefined && (
+                <button type="button" className="btn xs" onClick={() => void sendSize(deps, set.id, size.id, by, { retype: true })}>Draw again</button>
+              )}
+              {c!.result === 'unverified' ? null : c!.ignored ? <span className="faint">Ignored</span> : <button type="button" className="btn xs ghost" onClick={() => onIgnore(code as FormatCheckCode)}>Ignore</button>}
             </div>
           ))}
         </div>

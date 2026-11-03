@@ -2059,13 +2059,18 @@ class Relay:
             ratio = self._resize_ratio(sheet, model, inp)
             prompt = (formats.REGENERATE_SKETCH_PROMPT if rz.get("source") == "sketch" else formats.REGENERATE_PROMPT).format(
                 shape=formats.shape_words(aw, ah))
+            prompt += formats.keep_words(rz.get("protect"), rz.get("masterSize") or {})
             refs = [{"sha256": inp["image"]["sha256"], "name": "master", "role": "object"}]
             # A named picture's other views as tagged references, so a character stays itself
             # (features/resize-selection.clan); extend and crop send the picture only.
             views = [r for r in inp.get("refs") or [] if (r.get("asset") or {}).get("sha256") != inp["image"]["sha256"]]
             views = views[:formats.REGENERATE_REFS_MAX]
+            look = rz.get("look")  # another size of this ad, already made: the look to match
+            if look:
+                refs.append({"sha256": look["sha256"], "name": "sibling", "role": "object"})
+                prompt += formats.REGENERATE_LOOK
             if views:
-                tags = names.wire_tags([{"id": "master", "name": "master"}, *views])
+                tags = names.wire_tags([{"id": "master", "name": "master"}, *([{"id": "sibling", "name": "sibling"}] if look else []), *views])
                 human = any(r.get("role") == "character" for r in views)
                 refs += [{"sha256": r["asset"]["sha256"], "name": tags[r["id"]],
                           "role": "character" if r.get("role") == "character" else "object"} for r in views]

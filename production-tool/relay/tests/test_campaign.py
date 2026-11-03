@@ -181,6 +181,36 @@ def test_regenerate_sends_the_master_as_at_master_to_gemini_3_pro_at_the_nearest
     assert out.size == (1152, 2048)
 
 
+def test_regenerate_is_told_what_must_stay_and_where():
+    """The boxes a person marked reach the model as words: it cannot be handed a box (art-director)."""
+    h = paid_harness()
+    token = h.as_person()
+    protect = [{"role": "product", "label": "can @x", "x": 130, "y": 70, "w": 60, "h": 40},
+               {"role": "subject", "x": 0, "y": 0, "w": 60, "h": 50}]
+    h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate", protect=protect))
+    (sent,) = h.providers["runway"].submits
+    assert "Keep the can x (centre of @master) and the subject (upper left of @master) fully in frame" in sent["prompt"]
+    assert "@x" not in sent["prompt"]
+
+
+def test_regenerate_gets_a_made_size_as_sibling_to_match_its_look():
+    """A regenerate shown another size of the same ad, so the set looks like one campaign (art-director)."""
+    h = paid_harness()
+    token = h.as_person()
+    look = stored(h, 7)
+    h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate", look=look))
+    (sent,) = h.providers["runway"].submits
+    assert {"sha256": look["sha256"], "name": "sibling", "role": "object"} in sent["refs"]
+    assert "@sibling" in sent["prompt"] and "match its colour" in sent["prompt"]
+    assert sent["refs"][0]["name"] == "master"
+
+
+def test_keep_words_is_empty_with_nothing_marked_and_says_other_as_the_marked_area():
+    assert formats.keep_words([], {"w": 100, "h": 100}) == ""
+    assert formats.keep_words(None, {"w": 100, "h": 100}) == ""
+    assert "the marked area (right of @master)" in formats.keep_words([{"role": "other", "x": 70, "y": 40, "w": 20, "h": 20}], {"w": 100, "h": 100})
+
+
 def view_ref(h, n, name, role="character"):
     return {"id": f"ref_{n:026d}"[:30], "name": name, "role": role, "kind": "picture", "asset": stored(h, n)}
 

@@ -2523,6 +2523,15 @@
           "$ref": "common.schema.json#/$defs/sha256",
           "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)."
         },
+        "render": {
+          "type": "object",
+          "description": "Facts measured when the size's picture landed, read by Jude's checks: drawn is how many type layers the relay drew on it (a logo it could not read is not drawn); look is how far its colour and tone are from the master's, 0 (the same) to 1, measured for extend and regenerate. Added 2026-11-03 (art-director, additive).",
+          "properties": {
+            "drawn": { "type": "integer", "minimum": 0 },
+            "look": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
         "full": {
           "type": "object",
           "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).",
@@ -2683,7 +2692,8 @@
               "result": {
                 "enum": [
                   "pass",
-                  "flag"
+                  "flag",
+                  "unverified"
                 ]
               },
               "note": {

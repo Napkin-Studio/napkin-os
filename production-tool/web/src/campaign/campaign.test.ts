@@ -13,10 +13,11 @@ import { isFreeRequest } from '../jobs/runner'
 import { boardLayout, tileSize } from './board'
 import { cropBox, previewSize, protectedInside, safeFracs, panCrop, zoomCrop } from './crop'
 import { channelOf, PACKS, planChoices, rowsOf } from './formats'
-import { availableMethods, methodFor, methodModels, methodWords, REGENERATE_BELOW, filled } from './rules'
+import { availableMethods, methodFor, methodModels, methodWords, SET_REGENERATE_BELOW, filled } from './rules'
 import { deliveryInput, deliveryScale, fullPlan } from './delivery'
 import { checksFor, flagged } from './checks'
-import { applySize, placeBoard } from './make'
+import { applySize, lookSibling, placeBoard, setProtect } from './make'
+import { SnapshotDocumentStore } from '../doc/store'
 import { keepsPick, onScreen, tilePick } from './pick'
 import { exportSizes, fileName } from './exportZip'
 
@@ -86,8 +87,13 @@ describe('the rule table', () => {
     expect(methodFor(by('meta-feed-image-4x5'), MASTER, SUBJECT).method).toBe('crop')
     const wide: ProtectBox[] = [{ role: 'subject', x: 100, y: 100, w: 300, h: 600 }, { role: 'product', x: 1200, y: 400, w: 200, h: 300 }]
     expect(methodFor(by('meta-feed-image-1x1'), MASTER, wide).method).toBe('extend')
-    expect(filled(MASTER, { w: 9, h: 16 })).toBeLessThan(REGENERATE_BELOW)
-    expect(methodFor(by('meta-reels-9x16'), MASTER, wide).method).toBe('regenerate')
+    // 9:16 from a landscape master fills about a third: extend keeps the master's own pixels, so it wins (art-director).
+    expect(filled(MASTER, { w: 9, h: 16 })).toBeGreaterThan(SET_REGENERATE_BELOW)
+    expect(methodFor(by('meta-reels-9x16'), MASTER, wide).method).toBe('extend')
+    // Regenerate is the last resort: a shape the master would fill under a quarter of.
+    const sliver = { ...by('meta-reels-9x16'), format: { ...by('meta-reels-9x16').format, delivery_px: { width: 500, height: 2000 } } }
+    expect(filled(MASTER, { w: 500, h: 2000 })).toBeLessThan(SET_REGENERATE_BELOW)
+    expect(methodFor(sliver, MASTER, wide).method).toBe('regenerate')
     expect(methodFor(by('iab-728x90'), MASTER, SUBJECT).method).toBe('layout')
     expect(methodFor(by('iab-300x250'), MASTER, SUBJECT).method).toBe('crop')
   })
@@ -131,7 +137,7 @@ function size(over: Partial<Size> = {}): Size {
   return { id: 'size_01K7C00000000000000000CS01', v: 1, field_v: {}, set_id: SET.id, rank: 'a0', format: { pack_id: 'social', pack_version: 'x', format_id: 'meta-reels-9x16' }, aspect: { w: 1440, h: 2560 }, delivery: { width: 1440, height: 2560 },
     safe_area: { type: 'insets', top: 14, right: 6, bottom: 35, left: 6, unit: '%' }, method: 'crop', media: 'image', crop: { x: 525, y: 0, w: 486, h: 864 }, status: 'making', job_id: 'job_01K7C00000000000000000CJ01', ...over }
 }
-const doc = (sizes: Size[]): ProductionDocument => ({ format_sets: { [SET.id]: SET }, sizes: Object.fromEntries(sizes.map((s) => [s.id, s])), assets: {}, jobs: {}, project: { title: 'First Light' } } as unknown as ProductionDocument)
+const doc = (sizes: Size[]): ProductionDocument => ({ format_sets: { [SET.id]: SET }, sizes: Object.fromEntries(sizes.map((s) => [s.id, s])), assets: {}, refs: { r1: { id: 'r1', role: 'logo', asset: `sha256:${'a'.repeat(64)}`, key: 'brand', variant: 'logo' } }, jobs: {}, project: { title: 'First Light' } } as unknown as ProductionDocument)
 
 describe('landing and Jude', () => {
   it('a crop lands as the size\'s picture; one cutting the subject needs a look', () => {
@@ -157,6 +163,46 @@ describe('landing and Jude', () => {
     expect(c.subject_safe?.ignored).toBeTruthy()
     expect(flagged({ checks: c })).toBe(false)
     expect(protectedInside({ x: 0, y: 0, w: 486, h: 864 }, SUBJECT)).toBe(false)
+  })
+})
+
+describe('the look a regenerate matches', () => {
+  const made = (id: string, w: number, h: number, o: Partial<Size> = {}) => size({ id, delivery: { width: w, height: h }, aspect: { w, h }, method: 'extend', plate: `sha256:${id.slice(-1).repeat(64)}`, asset: `sha256:${'8'.repeat(64)}`, status: 'ready', ...o })
+  it('is the nearest-shaped size the model drew, never a crop, a size still making, or itself', () => {
+    const me = made('size_01K7C00000000000000000CSM', 1080, 1920, { method: 'regenerate', plate: undefined })
+    const wide = made('size_01K7C00000000000000000CSA', 1920, 1080)
+    const tall = made('size_01K7C00000000000000000CSB', 1080, 1350)
+    const crop = made('size_01K7C00000000000000000CSC', 1080, 1920, { method: 'crop' })
+    const busy = made('size_01K7C00000000000000000CSD', 1080, 1900, { status: 'making' })
+    const d = doc([me, wide, tall, crop, busy])
+    expect(lookSibling(d, me)?.id).toBe(tall.id)
+    expect(lookSibling(doc([me, crop, busy]), me)).toBeUndefined()
+    expect(lookSibling(doc([me]), me)).toBeUndefined()
+  })
+})
+
+describe('changing what must stay after the sizes exist', () => {
+  const sub = (id: string, o: Partial<Size>) => size({ id, asset: `sha256:${'9'.repeat(64)}`, status: 'ready', ...o })
+  it('crops follow and go out again; paid sizes are marked out of date; locked and person-cropped sizes stay', async () => {
+    const crop = sub('size_01K7C00000000000000000CS11', { method: 'crop', crop: { x: 0, y: 0, w: 486, h: 864 }, crop_by: 'rule' })
+    const person = sub('size_01K7C00000000000000000CS12', { method: 'crop', crop: { x: 5, y: 0, w: 486, h: 864 }, crop_by: 'person' })
+    const paid = sub('size_01K7C00000000000000000CS13', { method: 'regenerate' })
+    const locked = sub('size_01K7C00000000000000000CS14', { method: 'crop', locked: true, crop: { x: 0, y: 0, w: 486, h: 864 }, crop_by: 'rule' })
+    const store = new SnapshotDocumentStore(doc([crop, person, paid, locked]))
+    const sent: string[] = []
+    const deps = {
+      doc: store, canvas: {}, relay: {}, runner: { submit: async () => { sent.push('x') } },
+    } as unknown as Parameters<typeof setProtect>[0]
+    const r = await setProtect(deps, SET.id, { boxes: SUBJECT }, 'human:p_a')
+    const d = store.get()
+    expect(r).toEqual({ again: 2, stale: 1 })
+    expect(d.format_sets[SET.id].protect?.boxes).toEqual(SUBJECT)
+    expect(d.sizes[paid.id].status).toBe('stale')
+    expect(d.sizes[locked.id].status).toBe('ready')
+    expect(d.sizes[person.id].crop).toEqual({ x: 5, y: 0, w: 486, h: 864 })
+    expect(d.sizes[crop.id].crop_by).toBe('rule')
+    // The crop now keeps the subject: it was cut by the old crop (x 0..486 vs the subject at 690..850).
+    expect(d.sizes[crop.id].crop!.x + d.sizes[crop.id].crop!.w).toBeGreaterThanOrEqual(850)
   })
 })
 

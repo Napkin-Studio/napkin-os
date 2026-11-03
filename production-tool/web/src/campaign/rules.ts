@@ -30,8 +30,13 @@ export const METHOD_WORD: Record<SizeMethod, string> = {
   crop: 'Crop', extend: 'Extend', regenerate: 'Regenerate', layout: 'Layout', nearest: 'Nearest ratio', reedit: 'Re-edit', reframe: 'Reframe',
 }
 
-/** Below this share of the size filled by the master, an extend leaves the subject small: regenerate. */
+/** Below this share of the size filled by the master, an extend leaves the subject small: regenerate (Resize on canvas pictures). */
 export const REGENERATE_BELOW = 0.35
+/**
+ * The same, for Make all sizes (2026-11-03, art-director): lower, because a regenerate draws a new picture that rarely
+ * matches the master, so it is the last resort; an extend keeps the master's own pixels.
+ */
+export const SET_REGENERATE_BELOW = 0.25
 /** A display banner this long or this tall is laid out on a brand colour field. */
 export const STRIP = 3
 
@@ -126,7 +131,7 @@ export function methodFor(row: PlanRow, master: Master, protect: readonly Protec
   let method: SizeMethod
   if (row.format.kind === 'display' && (r >= STRIP || r <= 1 / STRIP) && available.has('layout')) method = 'layout'
   else if (fits || (!available.has('extend') && !available.has('regenerate'))) method = 'crop'
-  else if (filled(master, target) < REGENERATE_BELOW && available.has('regenerate')) method = 'regenerate'
+  else if (filled(master, target) < SET_REGENERATE_BELOW && available.has('regenerate')) method = 'regenerate'
   else method = available.has('extend') ? 'extend' : 'regenerate'
   if (RUNNABLE.has(method) && (!PAID.has(method) || available.has(method))) return { method, now: method, fits }
   return { method, now: 'crop', waits: wait(method), fits }

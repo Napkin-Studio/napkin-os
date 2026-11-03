@@ -3,8 +3,11 @@
 // checks out (an Ignore recorded on a check is kept while its result stands).
 //
 //   subject_safe    every protected box inside the safe area of the crop (a layout: of its panel; an
-//                   extend keeps the whole master; a regenerate is not measured)
+//                   extend keeps the whole master; a regenerate is a new picture Jude cannot measure:
+//                   "unverified", never a pass)
 //   logo_safe       the logo inside the safe area (a logo on the Brand board that is not on the size too)
+//   logo_present    the Brand board has a logo, and the relay drew it on the size's picture
+//   look_match      an extend or regenerate came back near the master's colour and tone
 //   clear_space     no words inside the logo's clear space
 //   type_size       every word at least the channel's minimum size
 //   ooh_words       an out-of-home line of 7 words or fewer
@@ -19,11 +22,13 @@ import { formatById } from './formats'
 import { CLEAR, OOH_WORDS, MIN_CAP, layoutInput, layoutType } from './layout'
 import { rowFracs } from './rules'
 import { spokenOf } from './film'
+import { LOOK_FLAG } from './look'
 
 type Checks = Partial<Record<FormatCheckCode, FormatCheck>>
 
 const pass = (note: string): FormatCheck => ({ result: 'pass', note })
 const flag = (note: string): FormatCheck => ({ result: 'flag', note })
+const unverified = (note: string): FormatCheck => ({ result: 'unverified', note })
 const overlaps = (a: Region, b: Region) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
 const SOCIAL_SHAPES = [[9, 16], [4, 5], [1, 1]]
@@ -36,7 +41,8 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   if (size.media === 'image' && set.protect?.boxes?.length) {
     // An extend keeps the whole master, placed with what must stay in the middle of the safe area (relay
     // formats.pad_plan); a regenerate is a new picture Jude cannot measure, so it makes no claim.
-    if (size.method === 'extend') out.subject_safe = pass('Extended round the whole master: what must stay is kept, in the safe area.')
+    if (size.method === 'regenerate') out.subject_safe = unverified('This picture was drawn again, so I cannot measure what must stay. I told the model where it is: look at it.')
+    else if (size.method === 'extend') out.subject_safe = pass('Extended round the whole master: what must stay is kept, in the safe area.')
     else if (size.crop && (size.method === 'crop' || size.method === 'layout')) {
       out.subject_safe = protectedInside(size.crop, set.protect.boxes, size.method === 'layout' ? [0, 0, 0, 0] : fr)
         ? pass('What must stay is inside the safe area.')
@@ -48,6 +54,19 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   const logo = laid.find((l) => l.kind === 'logo')
   const typed = laid.filter((l) => l.kind !== 'logo')
   const inside = (b: Region) => b.x >= fr[0] - 1e-6 && b.y >= fr[1] - 1e-6 && b.x + b.w <= 1 - fr[2] + 1e-6 && b.y + b.h <= 1 - fr[3] + 1e-6
+  if (size.media === 'image') {
+    // The logo is a layer from the Brand board, never part of the model's picture. Without one on the board, or
+    // when the relay could not draw it, the size has none: say so instead of passing quietly.
+    if (!inp.brand.logo) out.logo_present = flag('There is no logo on the Brand board, so this size has none. Add the logo there.')
+    else if (logo && size.asset && size.render?.drawn !== undefined && size.render.drawn - typedDrawnCount(laid) < 1) {
+      out.logo_present = flag('The logo is not on this picture: the relay could not read its file. Redo this size.')
+    } else if (logo) out.logo_present = pass('The logo is on this size.')
+  }
+  if (size.method && size.media === 'image' && ['extend', 'regenerate'].includes(size.method) && size.render?.look !== undefined) {
+    out.look_match = size.render.look > LOOK_FLAG
+      ? flag('This size came back noticeably different from the master in colour or tone. Redo it to match.')
+      : pass('It looks like the master.')
+  }
   if (inp.brand.logo) {
     if (!logo) out.logo_safe = flag(size.layers?.logo?.hidden ? 'The logo is hidden on this size.' : 'The logo did not fit this size.')
     else {
@@ -91,6 +110,11 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
     }
   }
   return keepIgnores(size.checks, out)
+}
+
+/** How many of the laid layers are words (the logo is drawn from a file and can fail on its own). */
+function typedDrawnCount(laid: readonly { kind: string }[]): number {
+  return laid.filter((l) => l.kind !== 'logo').length
 }
 
 /** An Ignore stays on a check while its result stands. */
