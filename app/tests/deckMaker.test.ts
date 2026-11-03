@@ -1682,3 +1682,93 @@ test('the new targets are 44px, and the waiting words and pending rows meet 4.5:
   }
   assert.ok(ratio(themes.light.ink3, themes.light.card) < 4.5, 'why --ink3 is not used for these words')
 })
+
+// ── the 3D circle: the engine is in the page script, the flat circle stays the fallback ──
+const uiSrc = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
+const orbsSrc = /var Orbs = \(function \(\) \{[\s\S]*?\n\}\)\(\);\n/.exec(uiSrc)?.[0]
+
+test('the 3D engine lives in the page script, never in the pure block', () => {
+  assert.ok(orbsSrc, 'the page script holds the Orbs engine')
+  for (const word of ['Orbs', 'WebGL', 'getContext', 'FRAG', 'requestAnimationFrame', 'uTrack']) assert.equal(logicSrc.includes(word), false, word)
+  assert.match(orbsSrc!, /uniform vec3 [^;]*uTrack/)
+  assert.match(orbsSrc!, /vec3 neutral = uTrack;/)
+  assert.match(uiSrc, /Orbs\.scan\(document\.getElementById\('app'\), L\.agentState\(s\.run\)\)/)
+  assert.equal((orbsSrc!.match(/getContext\('webgl'/g) ?? []).length, 1, 'one WebGL context for every circle')
+})
+
+test('the 3D circle is only added: the flat circle code the goldens pin is unchanged', () => {
+  for (const name of ['circleSvg', 'ringOf', 'emblemOf', 'blend', 'arcPath', 'agentState']) assert.match(logicSrc, new RegExp(`function ${name}\\(`), name)
+  assert.ok(L.circleSvg({ agent: 'deck', activity: 'work' }).startsWith('<svg class="cir'))
+})
+
+test('the flat circle stays whenever the 3D one cannot or should not run', () => {
+  for (const cond of ['prefers-reduced-data', 'saveData', 'no WebGL', 'shader failed', 'webglcontextlost', 'webglcontextrestored', 'swiftshader', 'an unknown agent stays the flat neutral circle'])
+    assert.ok(orbsSrc!.toLowerCase().includes(cond.toLowerCase()), cond)
+  assert.match(orbsSrc!, /ENG\.soft \? 1 :/, 'a software renderer draws at pixel ratio 1')
+  assert.match(orbsSrc!, /classList\.remove\('on'\)/, 'a lost context shows the flat circle')
+  assert.match(orbsSrc!, /classList\.add\('on'\)/, 'a restored one shows the 3D circle again')
+  assert.match(orbsSrc!, /IntersectionObserver/)
+  assert.match(orbsSrc!, /MutationObserver[\s\S]*data-color-scheme/)
+  assert.match(orbsSrc!, /--ring-track/)
+})
+
+test('the 3D circle honours reduced motion: still ring, no drift, weaker ripple', () => {
+  assert.match(orbsSrc!, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/)
+  assert.match(orbsSrc!, /const rm = motion\.reduce, flow = rm \? 0 : 1/)
+  assert.match(orbsSrc!, /if \(!rm\) c\.mt \+= dt \* c\.energy/)
+  assert.match(orbsSrc!, /if \(!rm\) RING\.ang \+=/)
+  assert.match(orbsSrc!, /motion\.reduce \? \.4 : 1/)
+})
+
+test('the 3D circle CSS has no colour of its own and touch-action only on the large circle', () => {
+  const rules = css.split('\n').filter(l => l.includes('.cir3d'))
+  assert.ok(rules.length >= 5)
+  for (const r of rules) assert.deepEqual(r.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g) ?? [], [], r)
+  assert.ok(css.includes('.cir3d.on .act{animation:none}'))
+  assert.ok(css.includes('.cir3d.big{touch-action:none}'))
+  assert.equal((css.match(/touch-action/g) ?? []).length, 1)
+})
+
+// A page with the engine and a pretend browser: what it does when WebGL is missing, refused or lost.
+function runOrbs(opts: { reducedData?: boolean }) {
+  const made: string[] = []
+  const wrapped: unknown[] = []
+  const el = (tag: string): Record<string, unknown> => ({
+    tag, style: {}, classList: { add() {}, remove() {} }, appendChild() {}, setAttribute() {}, addEventListener() {},
+    getContext: (kind: string) => { made.push(kind); return null },
+  })
+  const svg = {
+    __orb: undefined, parentNode: { insertBefore: (w: unknown) => wrapped.push(w) }, hasAttribute: () => false, closest: () => null,
+    getAttribute: (n: string) => ({ 'data-agent': 'strategy', width: '60', 'data-activity': 'work' } as Record<string, string>)[n] ?? null,
+  }
+  const root = { querySelectorAll: () => [svg] }
+  const ctx = vm.createContext({
+    document: { createElement: el, documentElement: {}, addEventListener() {} },
+    matchMedia: (q: string) => ({ matches: !!opts.reducedData && q.includes('reduced-data'), addEventListener() {} }),
+    navigator: {}, requestAnimationFrame() {}, MutationObserver: class { observe() {} }, getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    performance: { now: () => 0 }, Math, Float32Array, Object, Array, String, Set, Map, Error, parseInt, console,
+  })
+  vm.runInContext(`${logicSrc}; var L = DeckLogic; ${orbsSrc}; var scanned = Orbs.scan(__root, null); var okNow = Orbs.ok(); var why = Orbs.stats().reason`, Object.assign(ctx, { __root: root }))
+  return { made, wrapped, scanned: ctx.scanned as unknown[], ok: ctx.okNow as boolean, why: ctx.why as string }
+}
+
+test('without WebGL the page keeps the flat circle and wraps nothing', () => {
+  const r = runOrbs({})
+  assert.equal(r.ok, false)
+  assert.equal(r.scanned.length, 0)
+  assert.equal(r.wrapped.length, 0)
+  assert.match(r.why, /no WebGL/)
+})
+
+test('a browser that asks for less data never starts a WebGL context', () => {
+  const r = runOrbs({ reducedData: true })
+  assert.deepEqual(r.made, [])
+  assert.equal(r.scanned.length, 0)
+  assert.match(r.why, /reduced data/)
+})
+
+test('the engine does nothing where there is no browser (the pure tests, a host stub)', () => {
+  const ctx = vm.createContext({ Math, Float32Array, Object, Array, String, Set, Map, Error, parseInt })
+  vm.runInContext(`${logicSrc}; var L = DeckLogic; ${orbsSrc}; var r = Orbs.scan({ querySelectorAll: function () { return []; } }, null);`, ctx)
+  assert.equal((ctx.r as unknown[]).length, 0)
+})

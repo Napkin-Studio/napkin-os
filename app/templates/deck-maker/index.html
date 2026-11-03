@@ -176,6 +176,13 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
   .cir[data-activity="read"] .act,.cir[data-activity="check"] .act{animation:cir-turn 4.5s linear infinite}
   .mk.now svg{animation:cir-turn 1.6s linear infinite}
 }
+/* the 3D circle (the engine in the page script): the flat svg stays under a canvas, as the fallback and for screen readers; its drawing is hidden only while the 3D one is on */
+.cir3d{position:relative;display:inline-block;flex:none;line-height:0;vertical-align:middle}
+.cir3d.big{touch-action:none}
+.cir3d>canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.cir3d:not(.on)>canvas{display:none}
+.cir3d.on>svg.cir>*{visibility:hidden}
+.cir3d.on .act{animation:none}
 /* the running Build screen: the status card says who and how, the content box what is being done */
 .status .sword{margin-top:3px;font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn-fg)}
 .status .sword.ok{color:var(--ok-fg)} .status .sword.err{color:var(--ink)}
@@ -1896,6 +1903,551 @@ var DeckLogic = (function () {
       '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></div></aside></main>';
   }
 
+  // ═══ Orbs: one WebGL context for every agent circle (the clan's sphere + ring shader, ported; see features/deck-maker-circle-ui.clan) ═══
+  var Orbs = (function () {
+// ── copied verbatim from the clan (final-mock.template.html) ──
+const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const ease = x => .5 - .5 * Math.cos(Math.PI * x);
+const angDiff = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
+const MATS = {
+  pearl:    { base: '#EEECE7', ink: '#16191D', gloss: .70, metal: 0,   glass: 0 },
+  graphite: { base: '#242936', ink: '#EEF0F4', gloss: .50, metal: .15, glass: 0 },
+  chrome:   { base: '#C9CED8', ink: '#16191D', gloss: 1,   metal: .95, glass: 0 },
+  glass:    { base: '#DCE6F2', ink: '#16191D', gloss: 1,   metal: 0,   glass: .85 },
+  ceramic:  { base: '#E4DCCF', ink: '#2A2622', gloss: .40, metal: 0,   glass: 0 },
+  stone:    { base: '#B9BCC3', ink: '#16191D', gloss: .25, metal: 0,   glass: 0 },
+  onyx:     { base: '#12141A', ink: '#F1F2F5', gloss: .95, metal: .25, glass: 0 },
+  paper:    { base: '#F7F7F5', ink: '#16191D', gloss: .15, metal: 0,   glass: 0 },
+};
+const TYPES = { scan: { wob: [0, .006, 0, .004], breath: .004 }, unfold: { wob: [.012, .014, .006, 0], breath: .022 }, sweep: { wob: [0, .008, .012, .006], breath: .006 },
+  hold: { wob: [.003, .002, 0, 0], breath: .004 }, align: { wob: [.005, 0, .005, 0], breath: .008 }, pulse: { wob: [.006, 0, .004, 0], breath: .028 } };
+const TYPE_OF = {};
+for (const n of ['Research', 'Competitor', 'Culture', 'Audience', 'Knowledge']) TYPE_OF[n] = 'scan';
+for (const n of ['Idea', 'Concept', 'Character', 'Strategy', 'Storyboard']) TYPE_OF[n] = 'unfold';
+for (const n of ['Video', 'Motion', 'Image', 'Edit', 'Upscale', 'Adapt']) TYPE_OF[n] = 'sweep';
+for (const n of ['Review', 'Compliance', 'Approval', 'Asset', 'Client']) TYPE_OF[n] = 'hold';
+for (const n of ['Orchestrator', 'Job', 'Performance', 'Art Director']) TYPE_OF[n] = 'align';
+for (const n of ['Brief', 'Copy', 'Deck', 'Voice', 'Music']) TYPE_OF[n] = 'pulse';
+const STYLE = {   // period, duty, breadth, scroll, glow, shimmer, beat, ticks-in, broken, turning speed (deg/s)
+  work:     [100, 1,   3.5, 0,  0, .35, 0, 0, 0, 70],
+  write:    [100, 1,   3.5, 0,  1, 0,   0, 0, 0, 90],
+  think:    [7,   .28, 3.2, 6,  0, 0,   0, 0, 0, 40],
+  search:   [14,  .57, 3.4, 10, 0, 0,   0, 0, 0, 110],
+  read:     [100, 1,   2.2, 0,  0, 0,   0, 1, 0, 60],
+  provider: [100, 1,   6.0, 0,  0, .5,  0, 0, 0, 55],
+  check:    [100, 1,   2.4, 0,  0, 0,   1, 0, 0, 120],
+  human:    [100, 1,   6.5, 0,  0, .6,  0, 0, 0, 25],
+  queue:    [24,  .55, 2.4, 4,  0, 0,   0, 0, 0, 18],
+  error:    [100, 1,   3.5, 0,  0, 0,   0, 0, 1, 0],
+  complete: [100, 1,   4.5, 0,  0, 0,   0, 0, 0, 0],
+};
+const PA = new Float32Array(28), PB = new Float32Array(28), CA = new Float32Array(12), CB = new Float32Array(12);
+const arc0 = new Float32Array(16), arc1 = new Float32Array(16), cir0 = new Float32Array(8), cir1 = new Float32Array(8);
+const v2 = new Float32Array(2), v3 = new Float32Array(3), v4 = new Float32Array(4), rip = new Float32Array(16), ringA = new Float32Array(4), pingV = new Float32Array(4);
+const rs = new Float32Array(4), rf = new Float32Array(4), rg = new Float32Array(4);
+const wobV = new Float32Array(4), accV = new Float32Array(3), ringCol = new Float32Array(3);
+function rotC(arr, o, x, y, ang) { const c = Math.cos(ang), s = Math.sin(ang); arr[o] = x * c - y * s; arr[o + 1] = x * s + y * c; }
+const POSE_SPAN = (a, t, outA, outC) => {                    // the agent's own idle motion, written into the scratch arrays
+  outA.set(a.arcF); outC.set(a.cirF);
+  const sp = a.sp;
+  for (let i = 0; i < a.na; i++) { const o = i * 7;
+    switch (a.type) {
+      case 'scan': outA[o + 3] += .6 * Math.sin(t * .7 * sp + i * 1.7) * (i % 2 ? -1 : 1); break;
+      case 'unfold': outA[o + 4] = Math.min(outA[o + 4] * (1 + .26 * Math.sin(t * .8 * sp + i * 1.1)), 6.2); outA[o + 3] += .14 * Math.sin(t * .4 * sp + i); break;
+      case 'sweep': outA[o + 3] += t * sp * (.5 + .35 * i) * (i % 2 ? -1 : 1); break;
+      case 'hold': outA[o + 3] += .04 * Math.sin(t * .6 * sp + i); break;
+      case 'align': outA[o + 3] += .55 * Math.sin(t * .45 * sp) * (1 - i * .3); break;
+      case 'pulse': outA[o + 5] *= 1 + .3 * Math.sin(t * 2.4 * sp + i); outA[o + 4] *= 1 + .08 * Math.sin(t * 2.4 * sp); break;
+    } }
+  for (let i = 0; i < a.nc; i++) { const o = i * 6, x = outC[o], y = outC[o + 1];
+    switch (a.type) {
+      case 'scan': rotC(outC, o, x, y, .5 * Math.sin(t * .6 * sp + i)); break;
+      case 'unfold': outC[o + 2] *= 1 + .3 * Math.sin(t * .9 * sp + i * 2); break;
+      case 'sweep': rotC(outC, o, x, y, t * sp * .6 * (i % 2 ? -1 : 1)); break;
+      case 'hold': outC[o + 1] = y + .01 * Math.sin(t * .7 * sp); break;
+      case 'align': rotC(outC, o, x, y, .4 * Math.sin(t * .45 * sp)); break;
+      case 'pulse': outC[o + 1] = y + .045 * Math.sin(t * 2.4 * sp + i); break;
+    } }
+};
+function writeStatic(A, C) {                                  // p = 0: no second pose, no blending
+  for (let i = 0; i < 4; i++) { const o = i * 7, q = i * 4; arc0[q] = A[o]; arc0[q + 1] = A[o + 1]; arc0[q + 2] = A[o + 2]; arc0[q + 3] = A[o + 3];
+    arc1[q] = i < 4 ? A[o + 4] : 0; arc1[q + 1] = A[o + 5]; arc1[q + 2] = A[o + 6]; arc1[q + 3] = 0; }
+  for (let i = 0; i < 2; i++) { const o = i * 6, q = i * 4; cir0[q] = C[o]; cir0[q + 1] = C[o + 1]; cir0[q + 2] = C[o + 2]; cir0[q + 3] = C[o + 3]; cir1[q] = C[o + 4]; cir1[q + 1] = C[o + 5]; cir1[q + 2] = 0; cir1[q + 3] = 0; }
+}
+function writeMix(a, na, b, nb, p, flow) {                    // the flow: staggered, arcs spin through, circles orbit
+  for (let i = 0; i < 4; i++) {
+    const ha = i < na, hb = i < nb, oa = i * 7, ob = i * 7;
+    const q = ease(clamp(p * 1.3 - i * .1, 0, 1)), spin = flow * Math.sin(Math.PI * q) * 2.2 * (i % 2 ? -1 : 1), k = i * 4;
+    const ax = ha ? PA[oa] : PB[ob], ay = ha ? PA[oa + 1] : PB[ob + 1], ar = ha ? PA[oa + 2] : PB[ob + 2], aa = ha ? PA[oa + 3] : PB[ob + 3];
+    const bx = hb ? PB[ob] : PA[oa], by = hb ? PB[ob + 1] : PA[oa + 1], br = hb ? PB[ob + 2] : PA[oa + 2], ba = hb ? PB[ob + 3] : PA[oa + 3];
+    const asw = ha ? PA[oa + 4] : 0, aw = ha ? PA[oa + 5] : 0, at = ha ? PA[oa + 6] : (hb ? PB[ob + 6] : 1);
+    const bsw = hb ? PB[ob + 4] : 0, bw = hb ? PB[ob + 5] : 0, bt = hb ? PB[ob + 6] : at;
+    arc0[k] = ax + (bx - ax) * q; arc0[k + 1] = ay + (by - ay) * q; arc0[k + 2] = ar + (br - ar) * q; arc0[k + 3] = aa + angDiff(aa, ba) * q + spin;
+    arc1[k] = asw + (bsw - asw) * q; arc1[k + 1] = (aw + (bw - aw) * q) * (1 - .25 * flow * Math.sin(Math.PI * q)); arc1[k + 2] = at + (bt - at) * q; arc1[k + 3] = 0;
+  }
+  for (let i = 0; i < 2; i++) {
+    const ha = i < a.nc, hb = i < b.nc, oa = i * 6, ob = i * 6, k = i * 4, q = ease(clamp(p * 1.3 - i * .15, 0, 1));
+    const ax = ha ? CA[oa] : CB[ob], ay = ha ? CA[oa + 1] : CB[ob + 1], bx = hb ? CB[ob] : CA[oa], by = hb ? CB[ob + 1] : CA[oa + 1];
+    const ra = Math.hypot(ax, ay), rb = Math.hypot(bx, by);
+    const ta = ra > .02 ? Math.atan2(ay, ax) : Math.atan2(by, bx), tb = rb > .02 ? Math.atan2(by, bx) : ta;
+    const th = ta + angDiff(ta, tb) * q + flow * Math.sin(Math.PI * q) * 1.6 * (i % 2 ? -1 : 1), rad = ra + (rb - ra) * q;
+    const aR = ha ? CA[oa + 2] : 0, bR = hb ? CB[ob + 2] : 0, aW = ha ? CA[oa + 3] : (hb ? CB[ob + 3] : 0), bW = hb ? CB[ob + 3] : aW;
+    const aS = ha ? CA[oa + 4] : (hb ? CB[ob + 4] : 0), bS = hb ? CB[ob + 4] : aS, aT = ha ? CA[oa + 5] : (hb ? CB[ob + 5] : 1), bT = hb ? CB[ob + 5] : aT;
+    cir0[k] = rad * Math.cos(th); cir0[k + 1] = rad * Math.sin(th); cir0[k + 2] = aR + (bR - aR) * q; cir0[k + 3] = aW + (bW - aW) * q;
+    cir1[k] = aS + (bS - aS) * q; cir1[k + 1] = aT + (bT - aT) * q; cir1[k + 2] = 0; cir1[k + 3] = 0;
+  }
+}
+const VERT = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }';
+const FRAG = `
+precision highp float;
+uniform vec2 uRes, uC, uRC, uDir, uLight; uniform vec4 uWob;
+uniform float uDpr, uTime, uR, uBreath, uP, uTw, uSlosh, uRingR, uRT, uSwell, uRipOn, uPingOn;
+uniform vec3 uBaseA, uInkA, uMatA, uBaseB, uInkB, uMatB, uAccent, uRingCol, uBg, uTrack;   // PORT: + uTrack
+uniform vec4 uArc0[4], uArc1[4], uCir0[2], uCir1[2], uRip[4], uRS, uRFx, uRG, uPing;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + vec2(1., 1.)), f.x), f.y); }
+
+float ripH(vec2 p){
+  float h = 0.;
+  for (int i = 0; i < 4; i++) {
+    float age = uRip[i].z;
+    if (age >= 0. && uRip[i].w > .001) {
+      float d = length(p - uRip[i].xy), front = age * uR * 1.4, x = (d - front) / (uR * .55);
+      h += exp(-age * 1.7) * uRip[i].w * exp(-x * x) * cos((d - front) / (uR * .13));
+    }
+  }
+  return h;
+}
+float body(vec2 p){
+  vec2 q = p - uC;
+  float qd = dot(q, uDir), qp = dot(q, vec2(-uDir.y, uDir.x));
+  vec2 qq = vec2(qd / (1. + uSlosh), qp * (1. + uSlosh * .5));
+  float ang = atan(qq.y, qq.x);
+  float w = uWob.x * sin(2. * ang + uTime * .9) + uWob.y * sin(3. * ang - uTime * 1.3 + 1.) + uWob.z * sin(4. * ang + uTime * 1.7 + 2.) + uWob.w * sin(5. * ang - uTime * 2.1 + .5);
+  float d = length(qq) - uR * uBreath * (1. + w);
+  if (uRipOn > .5) d -= uR * .06 * ripH(p);
+  return d;
+}
+vec2 arcCov(vec2 u, vec4 A, vec4 B, float aa){
+  if (B.y < .001) return vec2(0.);
+  vec2 q = u - A.xy; float d = length(q);
+  float rel = mod(atan(q.y, q.x) - A.w, 6.2831853), w = B.y * .5, dist;
+  if (rel <= B.x) dist = abs(d - A.z);
+  else { vec2 e0 = A.xy + A.z * vec2(cos(A.w), sin(A.w)), e1 = A.xy + A.z * vec2(cos(A.w + B.x), sin(A.w + B.x)); dist = min(length(u - e0), length(u - e1)); }
+  float c = 1. - smoothstep(w - aa, w + aa, dist);
+  return B.z > 1.5 ? vec2(0., c) : vec2(c * B.z, 0.);
+}
+vec2 cirCov(vec2 u, vec4 C0, vec4 C1, float aa){
+  if (C0.z < .001) return vec2(0.);
+  float d = length(u - C0.xy);
+  float c = C1.x > .5 ? 1. - smoothstep(C0.z - aa, C0.z + aa, d) : 1. - smoothstep(C0.w * .5 - aa, C0.w * .5 + aa, abs(d - C0.z));
+  return C1.y > 1.5 ? vec2(0., c) : vec2(c * C1.y, 0.);
+}
+
+// The ring: a travelling arc. It turns (uRG.y is where its tail is), its LENGTH is how complete the run is (uRG.x, in turns),
+// and its look is a set of numbers that ease from step to step: texture (dash period and duty), breadth (thickness), colour.
+// uRS = (dash period px, duty 0-1, breadth px, scroll px/s). uRFx = (head glow, shimmer, two-beat, ticks flowing in). uRG = (length, tail, broken flag).
+vec4 ringLayer(vec2 p){
+  vec2 q = p - uRC; float r = length(q), rr = uRingR, band = abs(r - rr);
+  if (band > 16. && uPingOn < .5) return vec4(0.);
+  float t = fract((atan(q.y, q.x) + 1.5707963) / 6.2831853), circ = 6.2831853 * rr;
+  float aa = 1.1, th = uRS.z * .5 + .9 * uSwell;
+  vec3 neutral = uTrack;   // PORT: was vec3(.827, .839, .863), the light track; a uniform so the dark theme works
+  float track = 1. - smoothstep(.75, .75 + aa, band);
+  vec4 o = vec4(neutral * track, track);
+  float u = fract(t - uRG.y) * circ, Lpx = uRG.x * circ;                                           // u: distance along the ring from the arc's tail
+  float dEnd = u <= Lpx ? 0. : min(u - Lpx, circ - u);
+  float dArc = length(vec2(dEnd, band));                                                            // a capsule: round ends
+  float P = max(uRS.x, 1.), Lg = P * uRS.y, x = mod(u - uRT * uRS.w + P * .5, P) - P * .5;
+  float dDash = length(vec2(max(abs(x) - max(Lg * .5 - th, 0.), 0.), band));                        // the texture, flowing along the arc
+  float stroke = 1. - smoothstep(th, th + aa, max(dArc, dDash));
+  float f = clamp(u / max(Lpx, 1.), 0., 1.);                                                       // 0 at the tail, 1 at the head
+  stroke *= mix(1., .28 + .72 * f * f, uRFx.x);                                                    // writing: the head glows, the tail fades
+  stroke *= 1. - uRFx.y * (.5 - .5 * sin(u / 40. - uRT * 2.5)) * .6;                               // shimmer
+  float beat = max(exp(-pow((fract(uRT * .9) - .1) * 7., 2.)), exp(-pow((fract(uRT * .9) - .4) * 7., 2.)));
+  stroke *= mix(1., .28 + .72 * beat, uRFx.z);                                                     // checking: two ticks
+  float loc = mod(u, 9.) - 4.5, rd = r - rr, inArc = 1. - smoothstep(0., 2., dEnd);
+  float tick = (1. - smoothstep(.8, 1.7, abs(loc))) * step(-2., rd) * step(rd, 8.) * pow(1. - fract((rd + 2.) / 10. + uRT * .8), 3.) * inArc;
+  stroke = mix(stroke, max(tick, stroke * .3), uRFx.w);                                            // reading: ticks flowing in
+  float brk = 1. - smoothstep(1.6, 2.6, length(vec2(u - Lpx - 24., band)));
+  stroke = clamp(stroke + brk * uRG.z, 0., 1.);                                                    // error: a dot beyond the broken arc
+  o = vec4(uRingCol * stroke, stroke) + o * (1. - stroke);
+  if (uPingOn > .5) {                                                                                // search pings: rings that leave, one per query
+    for (int i = 0; i < 4; i++) {
+      float age = uPing[i];
+      if (age >= 0.) { float pa = (1. - smoothstep(.6, 1.6, abs(r - (rr + 6. + age * 55.)))) * exp(-age * 2.4) * .8; o = vec4(uRingCol * pa, pa) + o * (1. - pa); }
+    }
+  }
+  return o;
+}
+
+void main(){
+  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;
+  float sh = .10 * (1. - smoothstep(-uR * .05, uR * .32, length(p - uC - vec2(0., uR * .22)) - uR));   // a cheap circle shadow
+  vec4 acc = vec4(vec3(.08, .10, .20) * sh, sh);
+  vec4 rg = ringLayer(p); acc = rg + acc * (1. - rg.a);
+
+  float d = body(p);
+  if (d < 1.5) {
+    vec2 uv = (p - uC) / uR;
+    float t = clamp(-d / uR, 0., 1.);
+    vec2 g = vec2(body(p + vec2(1., 0.)) - body(p - vec2(1., 0.)), body(p + vec2(0., 1.)) - body(p - vec2(0., 1.)));
+    vec2 gd = g / max(length(g), 1e-4);
+    float rim = 1. - t;
+    vec3 n = normalize(vec3(gd * rim, sqrt(max(1. - rim * rim, .02))));
+    vec2 rgrad = vec2(0.);
+    if (uRipOn > .5) {
+      float re = uR * .017;
+      rgrad = vec2(ripH(p + vec2(re, 0.)) - ripH(p - vec2(re, 0.)), ripH(p + vec2(0., re)) - ripH(p - vec2(0., re)));
+      n = normalize(n + vec3(-rgrad * 2.8, 0.));
+    }
+    float s = dot(uv, uDir) * .5 + .5 + .55 * (vnoise(uv * 2.1 + vec2(uTime * .22, -uTime * .17)) - .5);
+    float f = -.7 + 2.4 * uP, m = 1. - smoothstep(f - .2, f + .2, s);
+    float edge = exp(-pow((s - f) / .07, 2.)) * sin(3.14159 * uP);
+    vec3 base = mix(uBaseA, uBaseB, m), inkc = mix(uInkA, uInkB, m), mat = mix(uMatA, uMatB, m);
+    float gloss = mat.x, metal = mat.y, glass = mat.z;
+    vec3 L = normalize(vec3(-.45 + uLight.x, -.62 + uLight.y, .64));
+    float diff = clamp(dot(n, L), 0., 1.);
+    vec3 H = normalize(L + vec3(0., 0., 1.));
+    float spec = pow(max(dot(n, H), 0.), mix(18., 110., gloss)) * mix(.25, 1.1, gloss), fres = pow(1. - n.z, 3.);
+    vec3 lit = base * (.50 + .62 * diff);
+    vec3 env = mix(vec3(.95, .97, 1.), vec3(.18, .20, .26), smoothstep(-.5, .6, n.y)); env += .25 * smoothstep(.3, 0., abs(n.x + .35));
+    lit = mix(lit, env * mix(base, vec3(1.), .35), metal * .75);
+    vec3 gl = mix(uBg, base, .35) + .2 * diff;
+    lit = mix(lit, gl, glass * (.35 + .4 * n.z));
+    lit = mix(lit, base * .75 + uAccent * .12, glass * fres * .8);
+    lit = mix(lit, lit * .84 + vec3(0., .02, .06), fres * .5);
+    lit += edge * .12;
+    float tw = uTw * (1. - smoothstep(0., 1.1, length(uv))), cs = cos(tw), sn = sin(tw);
+    vec2 ug = vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y) + rgrad * .22;
+    float aa = 1.5 / uR; vec2 cov = vec2(0.);
+    for (int i = 0; i < 4; i++) cov += arcCov(ug, uArc0[i], uArc1[i], aa);
+    for (int i = 0; i < 2; i++) cov += cirCov(ug, uCir0[i], uCir1[i], aa);
+    cov = clamp(cov, 0., 1.);
+    lit = mix(lit, inkc * (.88 + .2 * diff), cov.x * .95);
+    lit = mix(lit, uAccent, cov.y * .95);
+    lit += spec * (1. - .7 * max(cov.x, cov.y));
+    float aB = 1. - smoothstep(-.7, .7, d);
+    acc = vec4(lit * aB, aB) + acc * (1. - aB);
+  }
+  gl_FragColor = acc;
+}`;
+// ── end of the verbatim copy ──
+
+const L_MIN = .1, WOBK = [.7, .6, .5, .35], DIRV = [1, 0];   // as in the clan
+// Deck Maker's activity -> the clan's ring style. "waiting" (nothing running yet) uses the clan's queue look.
+const STYLE_OF = { work: 'work', write: 'write', think: 'think', read: 'read', check: 'check', human: 'human', error: 'error', complete: 'complete', waiting: 'queue', handoff: 'work' };
+// The clan's colours come from its --k-* tokens; ours are Deck Maker's --ring-* tokens (theme-aware).
+const TOKEN_OF = { work: '--ring-work', write: '--ring-work', complete: '--ring-work', think: '--ring-think', read: '--ring-read', check: '--ring-check',
+  human: '--ring-human', error: '--ring-error', queue: '--ring-wait', search: '--ring-work', provider: '--ring-work' };
+const GAP_K = 20 / 140;   // the clan's ring sits 20 px outside a ~140 px sphere; kept as a proportion so it scales
+const MAXW = 2048, MAXH = 1024;   // the atlas never grows past this; more circles than fit are drawn in batches
+const SOFT = /swiftshader|llvmpipe|softpipe|software/i;   // a software renderer: one pixel per CSS pixel
+
+const motion = { reduce: false };
+const ENG = { ok: false, frames: 0, skipped: 0, draws: 0, uploads: 0, flushes: 0, drawn: 0, px: 0, cpuMs: 0, avgMs: 16, fps: 0, scale: 1, lost: false, soft: false, reason: '', renderer: '' };
+const ALL = [], LIST = [];   // every upgraded circle; the ones drawn this frame (reused, never reallocated per frame)
+const SLOTS = new Map();     // slot id -> the circle's state, kept across re-renders so a ring never snaps and a pour never restarts
+const COLORS = {}; const bgV = new Float32Array(3), trackV = new Float32Array(3);   // accV is the clan's scratch buffer
+let gl = null, glcv = null, U = null, AW = 256, AH = 256, phase = 0;   // phase: 0 not started, 1 running, -1 flat for good
+
+// ── the agent table for the shader, built once per agent from Deck Maker's AGENTS (as the clan builds RAW) ──
+const G = {};
+function agentGL(key) {
+  if (G[key]) return G[key];
+  const src = Object.prototype.hasOwnProperty.call(L.AGENTS, key) ? L.AGENTS[key] : null; if (!src) return null;
+  const m = MATS[src.mat] || MATS.pearl, a = { key, n: src.n, name: src.name };
+  a.base = rgb(m.base); a.ink = rgb(m.ink); a.mat = [m.gloss, m.metal, m.glass];
+  a.type = TYPE_OF[src.name] || 'hold'; a.t = TYPES[a.type]; a.sp = .8 + ((a.n * 37) % 11) / 20;
+  const arcs = src.arcs.slice().sort((x, y) => y[2] - x[2]).slice(0, 4), circs = src.circs.slice().sort((x, y) => y[2] - x[2]).slice(0, 2);
+  a.na = arcs.length; a.nc = circs.length;
+  a.arcF = new Float32Array(28); arcs.forEach((r, i) => a.arcF.set(r.slice(0, 7), i * 7));
+  a.cirF = new Float32Array(12); circs.forEach((r, i) => a.cirF.set(r.slice(0, 6), i * 6));
+  return (G[key] = a);
+}
+
+// ── theme: ring colours, the surface behind glass, the track, all read from the page's CSS tokens ──
+function colour(v, fb) {
+  v = String(v || '').trim();
+  let m = /^#([0-9a-f]{6})$/i.exec(v); if (m) return rgb('#' + m[1]);
+  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v); if (m) return rgb('#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3]);
+  m = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(v); if (m) return [m[1] / 255, m[2] / 255, m[3] / 255];
+  return rgb(fb);
+}
+function readTheme() {
+  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n);
+  for (const k of Object.keys(STYLE)) COLORS[k] = colour(tok(TOKEN_OF[k] || '--ring-work'), '#FF4F2E');
+  accV.set(colour(tok('--ring-work'), '#FF4F2E')); bgV.set(colour(tok('--card'), '#FFFFFF')); trackV.set(colour(tok('--ring-track'), '#D3D6DC'));
+  wake();
+}
+
+// ── the one context ──
+function init() {
+  const reducedData = matchMedia('(prefers-reduced-data: reduce)').matches || !!(navigator.connection && navigator.connection.saveData);
+  if (reducedData) { ENG.reason = 'reduced data: flat SVG'; return false; }
+  glcv = document.createElement('canvas'); glcv.width = AW; glcv.height = AH;
+  glcv.addEventListener('webglcontextlost', e => { e.preventDefault(); ENG.ok = false; ENG.lost = true; for (const c of ALL) c.wrap.classList.remove('on'); });   // the flat SVG shows again
+  glcv.addEventListener('webglcontextrestored', () => { if (build()) { ENG.lost = false; for (const c of ALL) c.wrap.classList.add('on'); wake(); } });   // and the 3D comes back
+  return build();
+}
+function build() {
+  try {
+    gl = glcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    if (!gl) { ENG.reason = 'no WebGL: flat SVG'; return (ENG.ok = false); }
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.clearColor(0, 0, 0, 0); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    // Uniform cache, as in the clan: a value that did not change is not sent again.
+    const locs = {}, last = {};
+    const UL = n => locs[n] ?? (locs[n] = gl.getUniformLocation(pr, n));
+    const same = (a, b) => { if (!b || a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+    U = {
+      f1(n, v) { if (last[n] === v) return; last[n] = v; gl.uniform1f(UL(n), v); ENG.uploads++; },
+      v(n, size, arr) { const l = last[n]; if (same(arr, l)) return; last[n] = l && l.length === arr.length ? (l.set(arr), l) : Float32Array.from(arr);
+        (size === 2 ? gl.uniform2fv : size === 3 ? gl.uniform3fv : gl.uniform4fv).call(gl, UL(n), arr); ENG.uploads++; },
+    };
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    ENG.renderer = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    ENG.soft = SOFT.test(ENG.renderer);   // software rendering: pixel ratio 1, drawn at CSS size
+    return (ENG.ok = true);
+  } catch (e) { ENG.reason = 'shader failed: flat SVG (' + e.message + ')'; gl = null; return (ENG.ok = false); }
+}
+// Started by the first circle on the page, not at load; a page that never draws one never makes a context.
+function ensure() {
+  if (phase) return phase > 0;
+  phase = -1;
+  try {
+    if (typeof document === 'undefined' || typeof matchMedia !== 'function' || typeof requestAnimationFrame !== 'function' || typeof MutationObserver !== 'function') { ENG.reason = 'no browser: flat SVG'; return false; }
+    lastWall = performance.now() / 1000;
+    motion.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!init()) return false;
+    phase = 1;
+    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', e => { motion.reduce = e.matches; wake(); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+    new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-color-scheme'] });
+    document.addEventListener('visibilitychange', () => { lastWall = performance.now() / 1000; lastFrame = 0; wake(); });
+    readTheme();
+    requestAnimationFrame(frame);
+    return true;
+  } catch (e) { ENG.reason = 'flat SVG (' + e.message + ')'; ENG.ok = false; return false; }
+}
+
+// ── a circle: the app's svg stays (its role and aria-label are the accessible name, and it is the fallback); a canvas goes on top ──
+const io = typeof IntersectionObserver === 'function' ? new IntersectionObserver(es => { for (const e of es) { const c = e.target.__orb; if (c) { c.vis = e.isIntersecting; if (c.vis) c.wakeUntil = performance.now() / 1000 + .5; } } }, { rootMargin: '40px' }) : null;
+function fresh(wrap, svg, cv, size, A, B, act, sig, now) {
+  const c = {
+    wrap, svg, cv, ctx: cv.getContext('2d'), size, k: clamp(size / 100, .4, 1), A, B: A, next: B, act, sig, steps: null, inAll: false,
+    phase: act === 'handoff' && B !== A ? 'hold' : 'run', ho: 0, holdT: 0, dir: [1, 0], arrive: -99,
+    mt: Math.random() * 30, energy: 1, vis: true, wakeUntil: now + 2.5, ax: 0, ay: 0, d: 0,
+    RING: { v: Float32Array.from(STYLE.work), c: new Float32Array(3), fill: -1, swell: 0, rt: 0, ringR: 0, len: L_MIN, ang: Math.random() },
+    I: { ox: 0, oy: 0, vx: 0, vy: 0, hov: 0, light: [0, 0], ptr: null, drag: null, rips: [], ripI: 0, R: 50, busy: false, ripOn: 0 },
+    rip: new Float32Array(16),
+  };
+  c.R0 = (size / 2 / c.k - 9) / (1 + GAP_K + .2);
+  return c;
+}
+function upgrade(svg, opt) {
+  opt = opt || {};
+  if (!ENG.ok || svg.__orb || svg.hasAttribute('data-flat') || !svg.parentNode) return null;
+  const A = agentGL(svg.getAttribute('data-agent')); if (!A) return null;          // an unknown agent stays the flat neutral circle
+  const size = +svg.getAttribute('width') || 60, act = svg.getAttribute('data-activity') || 'waiting';
+  const B = agentGL(svg.getAttribute('data-to')) || A, sig = A.key + '|' + B.key + '|' + act, now = performance.now() / 1000;
+  const wrap = document.createElement('span'); wrap.className = 'cir3d on' + (size >= 184 ? ' big' : ''); wrap.style.width = wrap.style.height = size + 'px';
+  svg.parentNode.insertBefore(wrap, svg); wrap.appendChild(svg);
+  const cv = document.createElement('canvas'); cv.setAttribute('aria-hidden', 'true'); wrap.appendChild(cv);
+  let c = opt.slot ? SLOTS.get(opt.slot) : null;
+  if (c && c.size === size) {
+    // the same place as before: keep the ring, the turn and a pour in progress; only a change of who or what restarts the clock
+    c.wrap = wrap; c.svg = svg; c.cv = cv; c.ctx = cv.getContext('2d'); c.vis = true; c.wakeUntil = now + 2.5;
+    c.I.ptr = null; c.I.drag = null; c.I.rips.length = 0;
+    if (c.sig !== sig) { c.sig = sig; c.A = A; c.B = A; c.next = B; c.act = act; c.phase = act === 'handoff' && B !== A ? 'hold' : 'run'; c.ho = 0; c.holdT = 0; c.dir = [1, 0]; }
+  } else {
+    c = fresh(wrap, svg, cv, size, A, B, act, sig, now);
+    // start eased at the target look, so a first paint does not animate in from "work"
+    c.steps = opt.steps || null;
+    const s0 = styleName(c); c.RING.v.set(STYLE[s0]); c.RING.c.set(COLORS[s0]); c.RING.len = targetLen(c, 0);
+  }
+  c.steps = opt.steps || null;
+  if (opt.slot) SLOTS.set(opt.slot, c);
+  svg.__orb = c; wrap.__orb = c;
+  wrap.addEventListener('pointermove', e => { c.I.ptr = localPt(c, e); c.wakeUntil = performance.now() / 1000 + .3; });
+  wrap.addEventListener('pointerleave', () => { if (!c.I.drag) c.I.ptr = null; });
+  wrap.addEventListener('pointerdown', e => { const q = localPt(c, e); c.I.ptr = q; if (Math.hypot(q.x, q.y) >= c.I.R * 1.2) return; try { wrap.setPointerCapture(e.pointerId); } catch (x) { /* no capture */ } c.I.drag = { sx: q.x, sy: q.y }; addRipple(c, q.x, q.y, 1); });
+  const release = () => { if (c.I.drag) { c.I.drag = null; addRipple(c, c.I.ox * .3, c.I.oy * .3, .8); } };
+  wrap.addEventListener('pointerup', release); wrap.addEventListener('pointercancel', release);
+  if (io) io.observe(wrap);
+  if (!c.inAll) { c.inAll = true; ALL.push(c); }
+  return c;
+}
+function localPt(c, e) { const r = c.wrap.getBoundingClientRect(); return { x: (e.clientX - r.left - r.width / 2) / c.k, y: (e.clientY - r.top - r.height / 2) / c.k }; }
+function addRipple(c, x, y, amp) { c.I.rips[c.I.ripI++ % 4] = { x, y, t0: performance.now() / 1000, amp: amp * (motion.reduce ? .4 : 1) }; }
+/**
+ * Upgrade every flat agent circle under `root` to the 3D one. `who` is agentState's answer: its steps (step_index - 1 done of
+ * step_total) become the ring's length for the circle that shows that agent. Each circle's place on the screen (its slot) keeps
+ * its ring and pour clock across a re-render. Returns the circles upgraded; none when the page must stay flat.
+ */
+function scan(root, who) {
+  if (!root || typeof root.querySelectorAll !== 'function' || !ensure() || !ENG.ok) return [];
+  const out = [], used = new Set(), n = {}, svgs = root.querySelectorAll('svg.cir[data-agent]');
+  for (let i = 0; i < svgs.length; i++) {
+    const s = svgs[i], where = s.closest('.dex') ? 'dex' : s.closest('[data-status]') ? 'status' : s.closest('.dstat') ? 'dstat' : 'other';
+    const base = where + ':' + (s.getAttribute('width') || ''), slot = base + ':' + (n[base] = (n[base] || 0) + 1);
+    const steps = who && who.step_index && who.step_total && who.agent === s.getAttribute('data-agent') ? [who.step_index - 1, who.step_total] : null;
+    const c = upgrade(s, { slot, steps }); if (c) { out.push(c); used.add(slot); }
+  }
+  for (const k of Array.from(SLOTS.keys())) if (!used.has(k)) SLOTS.delete(k);
+  return out;
+}
+
+function styleName(c) {
+  if (c.phase === 'handoff') return 'work';
+  if (c.phase === 'hold') return 'complete';
+  return STYLE_OF[c.act === 'handoff' ? 'work' : c.act] || 'queue';
+}
+function targetLen(c, p) {   // the clan's completion: steps finished / total; full when done; .62 on an error; shrinks through a hand-off
+  if (c.act === 'error') return .62;
+  if (c.phase === 'hold' || c.act === 'complete') return 1;
+  if (c.phase === 'handoff') return 1 + (L_MIN - 1) * p;
+  const s = c.steps; return s && s[1] > 0 ? Math.max(L_MIN, Math.min(s[0], s[1]) / s[1]) : L_MIN;
+}
+
+// ── the hand-off clock: the UI owns it (clan 13.3): hold 1.5 s with a full ring, then one 2.4 s pour ──
+function clock(c, dt, wall) {
+  if (c.act !== 'handoff' || c.next === c.A) return;
+  if (c.phase === 'hold') { c.holdT += dt; if (c.holdT >= 1.5) { c.phase = 'handoff'; c.ho = 0; c.B = c.next; const k = c.A.n * 2.399 + c.B.n * 1.7; c.dir = [Math.cos(k), Math.sin(k)]; } return; }
+  if (c.phase === 'handoff') {
+    c.ho += dt / 2.4;
+    if (c.ho >= 1) { c.A = c.B; c.ho = 0; c.arrive = wall; c.phase = 'run'; c.holdT = 0; }
+  }
+}
+// ── interaction, the clan's interact() per circle (pointer and ripples are relative to the circle's centre) ──
+function interact(c, dt, wall) {
+  const I = c.I, max = I.R * .22; let tx = 0, ty = 0;
+  if (I.drag && I.ptr && !motion.reduce) { tx = (I.ptr.x - I.drag.sx) * .6; ty = (I.ptr.y - I.drag.sy) * .6; const m = Math.hypot(tx, ty); if (m > max) { tx *= max / m; ty *= max / m; } }
+  I.vx += (-170 * (I.ox - tx) - 10 * I.vx) * dt; I.vy += (-170 * (I.oy - ty) - 10 * I.vy) * dt; I.ox += I.vx * dt; I.oy += I.vy * dt;
+  const near = I.ptr && Math.hypot(I.ptr.x, I.ptr.y) < I.R * 1.35; I.hov += ((near ? 1 : 0) - I.hov) * (1 - Math.exp(-dt * 8));
+  const hit = I.R * 1.35, lk = 1 - Math.exp(-dt * 6);
+  I.light[0] += ((near ? I.ptr.x / hit * .9 : 0) - I.light[0]) * lk; I.light[1] += ((near ? I.ptr.y / hit * .9 : 0) - I.light[1]) * lk;
+  let alive = 0; for (let i = 0; i < 4; i++) { const r = I.rips[i]; if (r && wall - r.t0 < 3.2) alive = 1; }
+  I.ripOn = alive;
+  I.busy = !!(I.drag || alive || Math.abs(I.vx) + Math.abs(I.vy) + Math.abs(I.ox) + Math.abs(I.oy) > .05 || I.hov > .01 && I.hov < .99 || near
+    || Math.abs(I.light[0]) + Math.abs(I.light[1]) > .002);
+}
+
+// ── one circle into its atlas cell: the clan's render(), with the stage replaced by the cell ──
+const wob = wobV;   // the clan's scratch buffers (v2, rs, rf, rg, pingV, accV) are reused as they are
+function renderOne(c, dt, wall, dpr) {
+  const rm = motion.reduce, flow = rm ? 0 : 1, I = c.I, RING = c.RING;
+  const A = c.A, B = c.B, handoff = c.phase === 'handoff', p = handoff ? ease(clamp(c.ho, 0, 1)) : 0, bump = Math.sin(Math.PI * p);
+  const complete = c.phase === 'hold' || c.act === 'complete', err = c.act === 'error' && c.phase === 'run';
+  const eT = (err || c.act === 'human') ? .3 : complete ? .25 : 1;
+  c.energy += (eT - c.energy) * Math.min(1, dt * 3); if (!rm) c.mt += dt * c.energy;
+  const mt = c.mt, uDpr = dpr * c.k, half = c.d / uDpr / 2;
+  const cx = c.ax / uDpr + half, cy = c.ay / uDpr + half;
+  const R = c.R0 * (1 + .035 * I.hov); I.R = R;
+
+  POSE_SPAN(A, rm ? 0 : mt, PA, CA);
+  if (p > 0) { POSE_SPAN(B, rm ? 0 : mt, PB, CB); writeMix(A, A.na, B, B.na, p, flow); } else writeStatic(PA, CA);
+
+  const atype = A.t.wob, btype = B.t.wob;
+  for (let i = 0; i < 4; i++) wob[i] = (atype[i] + (btype[i] - atype[i]) * p) * (rm ? 0 : 1) + flow * .05 * bump * WOBK[i];
+  const breath = 1 + (rm ? 0 : (A.t.breath + (B.t.breath - A.t.breath) * p) * Math.sin(mt * 2.4 * A.sp));
+  const settle = rm ? 0 : Math.exp(-(wall - c.arrive) * 1.8);
+  const off = Math.hypot(I.ox, I.oy), dragOn = off > 1 && p === 0;
+  if (dragOn) { DIRV[0] = I.ox / off; DIRV[1] = I.oy / off; } const dir = dragOn ? DIRV : c.dir;
+  const slosh = rm ? 0 : flow * .11 * bump * Math.sin(wall * 2.6) + .09 * settle * Math.sin((wall - c.arrive) * 8) + (dragOn ? off / (R * 1.6) : 0);
+  const tw = flow * 1.6 * bump * (1 + .35 * Math.sin(wall * .9));
+
+  const ek = 1 - Math.exp(-dt * 6), sName = err ? 'error' : styleName(c), T = STYLE[sName], tc = COLORS[sName];
+  for (let i = 0; i < 10; i++) RING.v[i] += (T[i] - RING.v[i]) * ek;
+  for (let i = 0; i < 3; i++) RING.c[i] += (tc[i] - RING.c[i]) * ek;
+  RING.swell += (bump - RING.swell) * ek;
+  RING.rt += dt * (rm ? 0 : 1 + 3 * RING.swell);
+  RING.len += (targetLen(c, p) - RING.len) * (1 - Math.exp(-dt * 3));
+  if (!rm) RING.ang += dt * (RING.v[9] + 180 * RING.swell) / 360;
+  const ringPad = R * (Math.abs(wob[0]) + Math.abs(wob[1]) + Math.abs(wob[2]) + Math.abs(wob[3]) + Math.abs(slosh) + Math.max(0, breath - 1));
+  RING.ringR = Math.min(R + GAP_K * R + ringPad, half - 8);   // PORT: clamped so the ring never leaves the circle's box
+
+  gl.viewport(c.ax, AH - c.ay - c.d, c.d, c.d);
+  v2[0] = AW; v2[1] = AH; U.v('uRes', 2, v2); U.f1('uDpr', uDpr);
+  v2[0] = cx + I.ox; v2[1] = cy + I.oy; U.v('uC', 2, v2); v2[0] = cx; v2[1] = cy; U.v('uRC', 2, v2);
+  U.f1('uR', R); v2[0] = dir[0]; v2[1] = dir[1]; U.v('uDir', 2, v2); U.v('uWob', 4, wob);
+  U.f1('uTime', mt); U.f1('uBreath', breath); U.f1('uP', p); U.f1('uTw', tw); U.f1('uSlosh', slosh);
+  U.f1('uRingR', RING.ringR); U.f1('uRT', RING.rt); U.f1('uSwell', RING.swell); U.f1('uPingOn', 0);
+  U.v('uBaseA', 3, A.base); U.v('uInkA', 3, A.ink); U.v('uMatA', 3, A.mat); U.v('uBaseB', 3, B.base); U.v('uInkB', 3, B.ink); U.v('uMatB', 3, B.mat);
+  U.v('uAccent', 3, accV); U.v('uRingCol', 3, RING.c); U.v('uBg', 3, bgV); U.v('uTrack', 3, trackV);
+  U.v('uArc0', 4, arc0); U.v('uArc1', 4, arc1); U.v('uCir0', 4, cir0); U.v('uCir1', 4, cir1);
+  const rip = c.rip;
+  for (let i = 0; i < 4; i++) { const r = I.rips[i], q = i * 4; if (r) { rip[q] = cx + r.x; rip[q + 1] = cy + r.y; rip[q + 2] = wall - r.t0; rip[q + 3] = r.amp; } else { rip[q] = 0; rip[q + 1] = 0; rip[q + 2] = -1; rip[q + 3] = 0; } }
+  U.v('uRip', 4, rip); U.f1('uRipOn', I.ripOn ? 1 : 0); v2[0] = I.light[0]; v2[1] = I.light[1]; U.v('uLight', 2, v2);
+  rs[0] = RING.v[0]; rs[1] = RING.v[1]; rs[2] = RING.v[2]; rs[3] = RING.v[3]; U.v('uRS', 4, rs); rf[0] = RING.v[4]; rf[1] = RING.v[5]; rf[2] = RING.v[6]; rf[3] = RING.v[7]; U.v('uRFx', 4, rf);
+  rg[0] = RING.len; rg[1] = RING.ang - Math.floor(RING.ang); rg[2] = RING.v[8]; U.v('uRG', 4, rg); pingV.fill(-1); U.v('uPing', 4, pingV);
+  gl.drawArrays(gl.TRIANGLES, 0, 3); ENG.draws++; ENG.px += c.d * c.d;
+}
+
+// ── the frame: pack the circles that need drawing into the atlas, draw each, copy each cell to its canvas ──
+let nBatch = 0; const BATCH = [];
+function flush() {
+  for (let i = 0; i < nBatch; i++) {
+    const c = BATCH[i];
+    if (c.cv.width !== c.d) { c.cv.width = c.cv.height = c.d; }
+    c.ctx.globalCompositeOperation = 'copy'; c.ctx.drawImage(glcv, c.ax, c.ay, c.d, c.d, 0, 0, c.d, c.d);
+  }
+  nBatch = 0; ENG.flushes++;
+}
+let lastWall = 0, lastFrame = 0, govN = 0, fpsT = 0, fpsN = 0, wakeAll = true;
+function frame(nowMs) {
+  requestAnimationFrame(frame);
+  if (!ENG.ok) return;
+  const wall = nowMs / 1000, dt = Math.max(0, Math.min(.05, wall - lastWall)); lastWall = wall;
+  const t0 = performance.now();
+  let n = 0;
+  for (let i = ALL.length - 1; i >= 0; i--) {
+    const c = ALL[i];
+    if (!c.wrap.isConnected) { if (io) io.unobserve(c.wrap); c.inAll = false; ALL.splice(i, 1); continue; }
+    clock(c, dt, wall); interact(c, dt, wall);
+    if (c.vis && (wakeAll || !motion.reduce || c.I.busy || c.phase !== 'run' || wall < c.wakeUntil)) LIST[n++] = c;
+  }
+  wakeAll = false;
+  if (!n) { ENG.skipped++; lastFrame = 0; return; }
+  if (lastFrame) { const ms = nowMs - lastFrame; ENG.avgMs += (ms - ENG.avgMs) * .05;
+    if (!ENG.soft && ++govN > 45) { govN = 0; if (ENG.avgMs > 26 && ENG.scale > .6) ENG.scale = Math.max(.6, ENG.scale - .15); else if (ENG.avgMs < 14 && ENG.scale < 1) ENG.scale = Math.min(1, ENG.scale + .1); } }
+  lastFrame = nowMs;
+  const dpr = ENG.soft ? 1 : Math.min(window.devicePixelRatio || 1, 2) * ENG.scale;   // a software renderer draws at CSS size
+  ENG.uploads = 0; ENG.draws = 0; ENG.flushes = 0; ENG.px = 0; ENG.drawn = n;
+  // the atlas is sized to what is drawn (a big idle buffer costs a full-buffer copy on software renderers)
+  let x = 0, y = 0, shelf = 0, needW = 0, needH = 0;
+  for (let i = n - 1; i >= 0; i--) { const d = Math.max(1, Math.round(LIST[i].size * dpr)); if (x + d > MAXW) { x = 0; y += shelf; shelf = 0; } x += d; if (x > needW) needW = x; if (d > shelf) shelf = d; }
+  needH = Math.min(MAXH, y + shelf);
+  if (needW > AW || needH > AH || needW < AW / 2 || needH < AH / 2) { AW = Math.max(64, needW); AH = Math.max(64, needH); glcv.width = AW; glcv.height = AH; }
+  x = 0; y = 0; shelf = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const c = LIST[i], d = Math.max(1, Math.round(c.size * dpr));
+    if (x + d > AW) { x = 0; y += shelf; shelf = 0; }
+    if (y + d > AH) { flush(); x = 0; y = 0; shelf = 0; }
+    c.ax = x; c.ay = y; c.d = d; renderOne(c, dt, wall, dpr); BATCH[nBatch++] = c;
+    x += d; if (d > shelf) shelf = d;
+  }
+  flush();
+  const cpu = performance.now() - t0; ENG.cpuMs += (cpu - ENG.cpuMs) * .1; ENG.frames++;
+  fpsN++; if (wall - fpsT >= .5) { ENG.fps = fpsN / (wall - fpsT); fpsN = 0; fpsT = wall; }
+}
+
+function wake() { wakeAll = true; for (const c of ALL) c.wakeUntil = performance.now() / 1000 + 2.5; }
+
+return {
+  scan, upgrade, ok: () => ENG.ok, stats: () => ({ ...ENG, circles: ALL.length, slots: SLOTS.size }), motion,
+  setReduce(v) { motion.reduce = !!v; wake(); },
+};
+})();
+
   // ── render and events ─────────────────────────────────────────────────
   function render() {
     var s = d(), scr = screenOf(s);
@@ -1905,6 +2457,7 @@ var DeckLogic = (function () {
     stashDraft();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
     document.getElementById('app').innerHTML = bar(s, scr) + body;
+    Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
     document.title = 'Deck Maker';
     restoreDrafts(s);
     if (focusId) {
