@@ -142,6 +142,27 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .dex .cir{flex:none}
 .beat{display:flex;gap:16px;padding:13px 20px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
 .beat .n{font-family:var(--f-mono);font-size:12px;color:var(--ink3);width:22px;padding-top:2px}
+.dex .dexp{margin-left:auto;flex:none}
+/* gate 2: each territory is a button that picks it; gate 3: the idea line, its work, what it rests on */
+.terr{width:100%;text-align:left;border:0;border-bottom:1px solid var(--line-soft);border-radius:0;background:transparent;color:var(--ink);align-items:center;min-height:44px}
+.terr:last-child{border-bottom:0}
+.terr:focus-visible{outline-offset:-3px}
+.terr[aria-pressed="true"]{background:var(--tool-soft);box-shadow:inset 3px 0 0 var(--tool)}
+.terr .n{padding-top:0}
+.terr .tb{display:block;flex:1;min-width:0}
+.terr .tn{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px;font-weight:600;line-height:1.35}
+.terr .tt{display:block;margin-top:5px;font-size:14px;line-height:1.45}
+.terr .tw{display:block;margin-top:5px;font-size:13px;line-height:1.45;color:var(--ink2)}
+.terr .tw b{font-weight:600;color:var(--ink)}
+.terr .sel{width:22px;height:22px;border-radius:999px;border:1.5px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center}
+.terr[aria-pressed="true"] .sel{border-color:var(--tool)}
+.terr[aria-pressed="true"] .sel::after{content:"";width:12px;height:12px;border-radius:999px;background:var(--tool)}
+.iline{align-items:center}
+.iline .il{font-size:24px;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.beat .ex{margin-top:4px;font-size:14px;line-height:1.45;color:var(--ink)}
+.rests{padding:16px 20px}
+.rests .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.asked{margin-top:8px;font-size:13px;color:var(--warn-fg)}
 .check{display:flex;gap:10px;align-items:center;font-size:13px}
 .tick{width:16px;height:16px;border-radius:999px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tick.ok{background:var(--ok-bg);color:var(--ok-fg)} .tick.warn{background:var(--warn-bg);color:var(--warn-fg)}
@@ -312,22 +333,142 @@ var DeckLogic = (function () {
     return out;
   }
 
-  /** One gate approved: that stage is done and the next one starts. Anything but the open gate is refused. */
-  function approveGate(run, gateId, by, at) {
+  /**
+   * One gate approved: that stage is done and the next one starts. Anything but the open gate is refused. The approval
+   * says what was decided ({by, at, decision: 'approve', picked?, note?}) and is added to run.decisions. At a gate that
+   * offers territories, `choice.picked` names the one picked (else the gate's own pick, else the judge's first); a pick
+   * that is not one of them is refused. The agent feed is cleared (agent: null), since it described the gate.
+   */
+  function approveGate(run, gateId, by, at, choice) {
     if (!run || !run.gate || run.gate.id !== gateId) return null;
     var stages = run.stages.map(function (s) { return { id: s.id, name: s.name, sub: s.sub, status: s.status }; });
     var i = stages.findIndex(function (s) { return s.id === gateId; });
     if (i < 0) return null;
+    var c = isObj(choice) ? choice : {}, picked = null;
+    var ids = territoriesOf(run.gate).map(function (t) { return t.id; });
+    if (ids.length) {
+      picked = c.picked != null ? String(c.picked) : ids.indexOf(run.gate.picked) >= 0 ? run.gate.picked : run.gate.first_pick;
+      if (ids.indexOf(picked) < 0) return null;
+    }
     stages[i].status = 'done';
     var next = stages.find(function (s, k) { return k > i && s.status === 'next'; });
     if (next) next.status = 'now';
     var approvals = {};
     Object.keys(run.approvals || {}).forEach(function (k) { approvals[k] = run.approvals[k]; });
-    approvals[gateId] = { by: by, at: at };
+    approvals[gateId] = { by: by, at: at, decision: 'approve' };
+    if (picked) approvals[gateId].picked = picked;
+    if (typeof c.note === 'string' && c.note.trim()) approvals[gateId].note = c.note.trim();
     return {
       state: 'building', stage: next ? next.id : run.stage, cost_usd: run.cost_usd,
-      stages: stages, gate: null, approvals: approvals
+      stages: stages, gate: null, approvals: approvals, agent: null,
+      decisions: decisionsOf(run).concat([{ gate: gateId, kind: 'approve', by: by, at: at }])
     };
+  }
+
+  /** The decisions recorded so far, as a new list (the store replaces arrays, so a write carries the whole list). */
+  function decisionsOf(run) { return (isObj(run) && Array.isArray(run.decisions) ? run.decisions : []).filter(isObj); }
+
+  /**
+   * An edit or a retry asked at the open gate: recorded in run.decisions and run.gate_requests (status waiting), like
+   * change_requests. It launches nothing: the engine acts on it once it is connected. Null for any gate but the open one,
+   * or another kind. The patch goes under `run`.
+   */
+  function gateRequest(run, gateId, kind, by, at) {
+    if (!isObj(run) || !isObj(run.gate) || run.gate.id !== gateId || (kind !== 'edit' && kind !== 'retry')) return null;
+    var asked = (Array.isArray(run.gate_requests) ? run.gate_requests : []).filter(isObj);
+    return {
+      decisions: decisionsOf(run).concat([{ gate: gateId, kind: kind, by: by, at: at }]),
+      gate_requests: asked.concat([{ gate: gateId, kind: kind, at: at, status: 'waiting' }])
+    };
+  }
+
+  // ── the gate registry: what each gate asks for and what it shows (phase 3). Gate id = stage id. ──
+  var GATES = {
+    storyline: {
+      body: 'beats', title: 'Approve the storyline', approve: 'Approve and continue', edit: ['beats', 'Edit beats'], hold: 'Nothing runs until you approve',
+      lede: 'This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.',
+      next: 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.'
+    },
+    territories: {
+      body: 'territories', title: 'Pick a territory', approve: 'Pick this territory', edit: ['territories', 'Edit a territory'], hold: 'Nothing runs until you pick',
+      lede: '', next: 'Next, the idea and its work are developed from the territory you pick.', dexProposed: true
+    },
+    idea: {
+      body: 'idea', title: 'Approve the idea', approve: 'Approve and continue', edit: ['idea', 'Edit the idea'], hold: 'Nothing runs until you approve',
+      lede: '', next: 'After this gate the run goes on by itself: Copy, Deck and Review, then you review the deck.', dexProposed: true
+    }
+  };
+  /** A gate this app has no words for: generic words, and whatever body its data carries. */
+  var GATE_OTHER = {
+    body: '', title: 'A step needs you', approve: 'Approve and continue', edit: ['gate', 'Edit'], hold: 'Nothing runs until you approve',
+    lede: 'The run stops here until you approve it.', next: 'Once you approve, the run goes on to its next step.', dexProposed: true
+  };
+  var NUMWORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  /** Tone of a label the runner wrote: from the brief or research is sourced, anything else is ours or still open. */
+  var TONES = { ok: 'ok', warn: 'warn', plain: 'plain' };
+  var BASIS = { brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn'] };
+
+  function str(v) { return v == null ? '' : String(v); }
+
+  /** The territories a gate offers, safe to render: { id, n, name, thought, why }. An entry without an id or name is left out. */
+  function territoriesOf(gate) {
+    var seen = Object.create(null);
+    return (isObj(gate) && Array.isArray(gate.territories) ? gate.territories : []).filter(function (t) {
+      return isObj(t) && validId(t.id) && str(t.name).trim() && !seen[t.id] && (seen[t.id] = true);
+    }).map(function (t, i) {
+      var n = /^\d{1,3}$/.test(str(t.n)) ? pad2(t.n) : pad2(i + 1);
+      return { id: t.id, n: n, name: str(t.name).trim(), thought: str(t.thought), why: str(t.why) };
+    });
+  }
+
+  /**
+   * What the open gate shows, from the registry and its data: { id, n, of, known, body ('beats' | 'territories' | 'idea' |
+   * 'none'), title, lede, approve, edit_key, edit_label, hold, next, dex, dex_proposed, territories, first_pick, picked,
+   * idea, asked }. `pick` is the person's unsaved pick (view state); it counts only if it is one of the territories.
+   * Null with no gate open. Never throws: a gate this app does not know gets generic words.
+   */
+  function gateView(run, pick) {
+    var g = isObj(run) && isObj(run.gate) ? run.gate : null;
+    if (!g) return null;
+    var id = str(g.id), known = own(GATES, id), spec = known ? GATES[id] : GATE_OTHER;
+    var terr = territoriesOf(g), ids = terr.map(function (t) { return t.id; });
+    var body = spec.body || (Array.isArray(g.beats) ? 'beats' : terr.length ? 'territories' : isObj(g.idea) ? 'idea' : 'none');
+    var out = {
+      id: id, n: g.n, of: g.of, known: known, body: body, title: spec.title, lede: spec.lede, approve: spec.approve,
+      edit_key: spec.edit[0], edit_label: spec.edit[1], hold: spec.hold, next: spec.next,
+      dex: typeof g.dex === 'string' ? g.dex : '', dex_proposed: !!spec.dexProposed,
+      territories: terr, first_pick: ids.indexOf(g.first_pick) >= 0 ? g.first_pick : null, picked: null, idea: null,
+      asked: (isObj(run) && Array.isArray(run.gate_requests) ? run.gate_requests : []).filter(function (q) {
+        return isObj(q) && q.gate === id && q.status === 'waiting' && (q.kind === 'edit' || q.kind === 'retry');
+      }).map(function (q) { return q.kind; })
+    };
+    if (body === 'territories') {
+      out.picked = ids.indexOf(pick) >= 0 ? pick : ids.indexOf(g.picked) >= 0 ? g.picked : out.first_pick;
+      var k = terr.length;
+      out.lede = (k === 1 ? 'One territory is written.' : (NUMWORD[k] || String(k)) + ' territories are written.') +
+        (k ? ' A second model judged them without seeing who wrote them. Pick the one the idea grows from. Picking later costs more.' : '');
+    }
+    if (body === 'idea' && isObj(g.idea)) {
+      var x = g.idea, basis = own(BASIS, x.basis) ? BASIS[x.basis] : null;
+      var from = terr.filter(function (t) { return t.id === x.territory_id; })[0];
+      var tname = str(x.territory_name).trim();
+      out.idea = {
+        line: str(x.line), basis: basis ? basis[0] : '', basis_tone: basis ? basis[1] : 'plain',
+        territory: from ? 'territory ' + Number(from.n) + ', ' + from.name : tname ? 'the territory you picked: ' + tname : 'the territory you picked',
+        executions: (Array.isArray(x.executions) ? x.executions : []).filter(function (e) { return isObj(e) && str(e.channel).trim(); }).map(function (e, i) {
+          var tag = str(e.tag).trim();
+          return {
+            n: /^\d{1,3}$/.test(str(e.n)) ? pad2(e.n) : pad2(i + 1), channel: str(e.channel), summary: str(e.summary), tag: tag,
+            tone: /^from (the )?(brief|research)/i.test(tag) ? 'ok' : tag ? 'warn' : 'plain'
+          };
+        }),
+        rests_on: (Array.isArray(x.rests_on) ? x.rests_on : []).filter(function (r) { return isObj(r) && str(r.label).trim(); }).map(function (r) {
+          return { label: str(r.label), tone: own(TONES, r.tone) ? r.tone : 'plain' };
+        })
+      };
+      out.lede = (x.basis === 'proposal' ? 'Approve the idea (our proposal). ' : 'Approve the idea. ') + 'One idea and the work that carries it, from ' + out.idea.territory + '.';
+    }
+    return out;
   }
 
   /** The rule the gate exists for: with a gate open, no stage after it may be running. */
@@ -1105,8 +1246,8 @@ var DeckLogic = (function () {
     researchRequest: researchRequest, upstreamChanged: upstreamChanged,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
-    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate,
-    gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown
+    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, gateRequest: gateRequest,
+    GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown
   };
 })();
 </script>
@@ -1362,29 +1503,73 @@ var DeckLogic = (function () {
   }
 
   // ── 2 · Build, with gates ─────────────────────────────────────────────
+  // A gate is drawn from the registry (L.gateView): its head, Dex's note, its body (the storyline's beats, gate 2's
+  // territories, gate 3's idea) and its actions. Gate 1's markup is the same as before the registry, byte for byte.
+  function gateHead(gv) {
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gv.n) + ' of ' + esc(gv.of) + '</span></div>' +
+      '<h1 class="sm" style="margin-bottom:6px">' + esc(gv.title) + '</h1>' +
+      '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">' + esc(gv.lede) + '</p>';
+  }
+
+  /** Dex's note at the top of the gate card, beside the circle of the agent holding the work. Notes written for gates 2 and 3 are marked as proposed. */
+  function dexRow(gv, who) {
+    return '<div class="dex">' + L.circleSvg({ agent: who.agent, activity: 'human', size: 32 }) + '<span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gv.dex) + '</span>' +
+      (gv.dex_proposed && gv.dex ? '<span class="pill plain dexp" title="Dex\'s note here is our proposed wording, not yet agreed">Proposed</span>' : '') + '</div>';
+  }
+
+  var BASES = { brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn'] };
+
+  function gateBody(gv, gate) {
+    if (gv.body === 'beats') {
+      return (Array.isArray(gate.beats) ? gate.beats : []).map(function (b) {
+        var c = BASES[b.basis] || BASES.brief;
+        return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
+      }).join('') +
+        (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '');
+    }
+    if (gv.body === 'territories') {
+      // Each territory is a button: pressing it picks it (view state only); Pick this territory writes the pick.
+      return '<div role="group" aria-label="Territories">' + gv.territories.map(function (t) {
+        var on = t.id === gv.picked;
+        return '<button class="beat terr" data-territory="' + esc(t.id) + '" aria-pressed="' + on + '"><span class="n">' + esc(t.n) + '</span><span class="tb">' +
+          '<span class="tn"><span>' + esc(t.name) + '</span>' + (t.id === gv.first_pick ? '<span class="pill ok">Blind judge’s first pick</span>' : '') + '</span>' +
+          (t.thought ? '<span class="tt">' + esc(t.thought) + '</span>' : '') + (t.why ? '<span class="tw"><b>Why it fits:</b> ' + esc(t.why) + '</span>' : '') +
+          '</span><span class="sel" aria-hidden="true"></span></button>';
+      }).join('') + '</div>';
+    }
+    if (gv.body === 'idea' && gv.idea) {
+      var x = gv.idea;
+      return '<div class="beat iline"><div style="flex:1;min-width:0"><div class="eyebrow" style="margin-bottom:6px">The idea line</div><div class="il">' + esc(x.line) + '</div></div>' +
+          (x.basis ? '<span class="pill ' + x.basis_tone + '">' + esc(x.basis) + '</span>' : '') + '</div>' +
+        x.executions.map(function (e) {
+          return '<div class="beat"><span class="n">' + esc(e.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(e.channel) + '</div>' +
+            (e.summary ? '<div class="ex">' + esc(e.summary) + '</div>' : '') + '</div>' + (e.tag ? '<span class="pill ' + e.tone + '">' + esc(e.tag) + '</span>' : '') + '</div>';
+        }).join('') +
+        (x.rests_on.length ? '<div class="rests"><div class="eyebrow">What the idea rests on</div><div class="chips">' + x.rests_on.map(function (r) {
+          return '<span class="chip ' + r.tone + '">' + esc(r.label) + '</span>';
+        }).join('') + '</div></div>' : '');
+    }
+    return '<div class="crow pending"><span class="note">Nothing to show for this gate yet.</span></div>';
+  }
+
+  /** Approve (or Pick), Edit and Ask Dex. Edit and Ask Dex record a request; once one waits, the gate says so. */
+  function gateActions(gv) {
+    var none = gv.body === 'territories' && !gv.picked;
+    var asked = gv.asked.length ? '<p class="note asked" role="status" data-asked>You asked ' + (gv.asked.indexOf('edit') >= 0 && gv.asked.indexOf('retry') >= 0 ? 'for an edit and a new try'
+      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'Dex to try again') + '. It waits for the engine, which is not connected yet; nothing has changed.</p>' : '';
+    return '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve"' + (none ? ' disabled' : '') + '>' + esc(gv.approve) + '</button>' +
+      '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="' + esc(gv.edit_key) + '">' + esc(gv.edit_label) + '</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="' + esc(gv.id) + '">Ask Dex to try again</button></div>' +
+      (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked;
+  }
+
   function build(s) {
     var run = s.run, gate = run.gate, who = L.agentState(run); // the circle: who is working and what they are doing
     var stages = run.stages.map(function (st) {
       var glyph = st.status === 'done' ? '✓' : st.status === 'now' ? '•' : st.status === 'failed' ? '!' : '';
       return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
     }).join('');
-    var main;
-    if (gate) {
-      var bases = {
-        brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn']
-      };
-      main = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gate.n) + ' of ' + esc(gate.of) + '</span></div>' +
-        '<h1 class="sm" style="margin-bottom:6px">Approve the storyline</h1>' +
-        '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.</p>' +
-        '<div class="card" style="overflow:hidden"><div class="dex">' + L.circleSvg({ agent: who.agent, activity: 'human', size: 32 }) + '<span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gate.dex) + '</span></div>' +
-        gate.beats.map(function (b) {
-          var c = bases[b.basis] || bases.brief;
-          return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
-        }).join('') +
-        (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '') + '</div>' +
-        '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve">Approve and continue</button>' +
-        '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="beats">Edit beats</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="storyline">Ask Dex to try again</button></div>';
-    }
+    var main, gv = gate ? L.gateView(run, view.pick) : null; // the gate registry: words and body for the open gate
+    if (gate) main = gateHead(gv) + '<div class="card" style="overflow:hidden">' + dexRow(gv, who) + gateBody(gv, gate) + '</div>' + gateActions(gv);
     // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
     var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
     if (rv && !live) {
@@ -1393,12 +1578,12 @@ var DeckLogic = (function () {
     } else if (live) main = runBody(rv);
     var list = gate ? gate.checks : run.checks;
     var checks = Array.isArray(list) && (gate || list.length) ?'<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
-      list.map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
+      list.filter(function (c) { return c && typeof c === 'object'; }).map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
       '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
       '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
-        '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? 'Nothing runs until you approve' : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
-        '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>') +
+        '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? esc(gv.hold) : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
+        '<p class="note">' + (gate ? esc(gv.next) : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>') +
       (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
   }
 
@@ -1633,14 +1818,30 @@ var DeckLogic = (function () {
       toast('Recorded. Launching research needs the server, which is not connected yet.');
       return;
     }
+    if (a.territory) {
+      // Picking is view state only: Pick this territory writes it, with the approval.
+      if (s.run.gate) view.pick = a.territory;
+      return render();
+    }
     if (t.id === 'approve') {
-      var next = L.approveGate(s.run, s.run.gate && s.run.gate.id, 'You', now());
+      var gv = L.gateView(s.run, view.pick);
+      if (!gv) return;
+      if (gv.body === 'territories' && !gv.picked) { toast('Pick a territory first.'); return; }
+      var next = L.approveGate(s.run, gv.id, 'You', now(), gv.picked ? { picked: gv.picked } : null);
       if (!next) return;
-      put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved');
+      var picked = gv.territories.filter(function (x) { return x.id === gv.picked; })[0];
+      view.pick = null;
+      put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved' + (picked ? ': picked ' + picked.name : ''));
       return;
     }
     if (a.retry && !s.run.gate) { toast('Retrying a step needs the engine server, which is not connected yet.'); return; }
-    if (a.edit || a.retry) { toast('Editing and retrying a gate need the engine server.'); return; }
+    if (a.edit || a.retry) {
+      // At the open gate an edit or a retry is recorded (run.decisions, run.gate_requests) and launches nothing.
+      var kind = a.edit ? 'edit' : 'retry', req = s.run.gate ? L.gateRequest(s.run, s.run.gate.id, kind, 'You', now()) : null;
+      if (req) put({ run: req }, kind + ' ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ': asked, launches nothing');
+      toast('Recorded. Editing and retrying a gate need the engine server.');
+      return;
+    }
     if (a.act === 'appendix') { toast('Moving slides to the appendix needs the engine server.'); return; }
     if (a.change) {
       var reqs = (s.changes || []).concat([{ slide: view.slide, change: a.change, at: now(), status: 'waiting' }]);

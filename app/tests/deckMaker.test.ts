@@ -6,7 +6,7 @@
 // that its page keeps to the host's rules and the house look.
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import { parseYaml } from './deckMakerYaml'
@@ -26,7 +26,10 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   evidenceFor(slide: unknown, evidence: unknown): Evidence[]
   statusOf(slide: unknown): string
   checksFor(id: string, slide: unknown, validation: unknown): Check[]
-  approveGate(run: unknown, gate: string | null | undefined, by: string, at: string): (Run & { gate: null }) | null
+  approveGate(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): (Run & { gate: null }) | null
+  gateRequest(run: unknown, gate: string, kind: string, by: string, at: string): { decisions: unknown[]; gate_requests: unknown[] } | null
+  GATES: Record<string, { body: string; title: string }>
+  gateView(run: unknown, pick?: unknown): GateView | null
   gateHolds(run: unknown): boolean
   summaryOf(inputs: unknown, deck: unknown): { title: string; note: string }
   agencyShown(inputs: unknown): string
@@ -57,6 +60,12 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   blend(from: unknown, to: unknown, p?: unknown): string
   runView(run: unknown, deck: unknown): RunView
 }
+type GateView = {
+  id: string; body: string; title: string; lede: string; approve: string; edit_key: string; edit_label: string; hold: string; next: string
+  dex: string; dex_proposed: boolean; known: boolean; first_pick: string | null; picked: string | null; asked: string[]
+  territories: { id: string; n: string; name: string; thought: string; why: string }[]
+  idea: { line: string; basis: string; basis_tone: string; territory: string; executions: { n: string; channel: string; summary: string; tag: string; tone: string }[]; rests_on: { label: string; tone: string }[] } | null
+}
 type RunRow = { n: string; title: string; sub: string; status: string; pill: string }
 type RunView = { kind: string; title: string; lede: string; head: string; grid: boolean; items: RunRow[]; tail: string[]; stage: string; retryable: boolean }
 // Results come from another realm, so their arrays are not this realm's Arrays: compare as plain JSON.
@@ -80,8 +89,9 @@ test('approving the open gate finishes it, starts the next stage and records who
   const next = L.approveGate(run(), 'storyline', 'Sai', '2026-10-15T10:00:00Z')!
   assert.equal(next.gate, null)
   assert.deepEqual(plain(next.stages.map((s: Stage) => s.status)), ['done', 'done', 'now', 'next'])
-  assert.deepEqual(plain(next.approvals.storyline), { by: 'Sai', at: '2026-10-15T10:00:00Z' })
+  assert.deepEqual(plain(next.approvals.storyline), { by: 'Sai', at: '2026-10-15T10:00:00Z', decision: 'approve' })
   assert.equal(next.stage, 'territories')
+  assert.deepEqual(plain((next as unknown as { decisions: unknown }).decisions), [{ gate: 'storyline', kind: 'approve', by: 'Sai', at: '2026-10-15T10:00:00Z' }])
 })
 
 test('only the open gate can be approved, and the old run is not changed', () => {
@@ -1063,8 +1073,224 @@ test('the running views keep every button a big target and every word escaped', 
   assert.ok(h.includes('&lt;img'))
 })
 
-test('the gate 1 fixture keeps the gate view, with no content box (gates 2 and 3 are phase 3)', () => {
+test('the gate 1 fixture keeps the gate view, with no content box', () => {
   const h = mount(fixture('gate1')).app.innerHTML
   assert.equal(box(h), null)
   assert.ok(h.includes('id="approve"') && h.includes('>Waiting for you<') && h.includes('Approve the storyline'))
+})
+
+// ── gates 2 and 3 (phase 3): the gate registry, the territory pick, the idea, and what the person decided ──────────
+type Write = { run: Fx }
+const at = '2026-11-03T11:00:00Z'
+
+test('gateView: the registry gives each gate its words and body, and never assumes beats', () => {
+  assert.deepEqual(plain(Object.keys(L.GATES)), ['storyline', 'territories', 'idea'])
+  const g1 = L.gateView(fixture('gate1').run)!, g2 = L.gateView(fixture('gate2').run)!, g3 = L.gateView(fixture('gate3').run)!
+  assert.deepEqual(plain([g1.body, g1.title, g1.approve, g1.edit_key, g1.dex_proposed]), ['beats', 'Approve the storyline', 'Approve and continue', 'beats', false])
+  assert.deepEqual(plain([g2.body, g2.title, g2.approve, g2.edit_key, g2.hold, g2.dex_proposed]), ['territories', 'Pick a territory', 'Pick this territory', 'territories', 'Nothing runs until you pick', true])
+  assert.deepEqual(plain([g3.body, g3.title, g3.approve, g3.edit_key, g3.edit_label, g3.dex_proposed]), ['idea', 'Approve the idea', 'Approve and continue', 'idea', 'Edit the idea', true])
+  assert.equal(L.gateView({ gate: null }), null)
+  // a gate this app has no words for: generic words, and the body its data carries
+  const other = L.gateView({ gate: { id: 'budget', n: 4, of: 4 } })!
+  assert.deepEqual(plain([other.known, other.body, other.title]), [false, 'none', 'A step needs you'])
+  assert.equal(L.gateView({ gate: { id: 'budget', beats: [] } })!.body, 'beats')
+  for (const j of [{ gate: 5 }, { gate: [] }, { gate: { id: 5 } }, { gate: { id: 'territories', territories: 'x' } }, { gate: { id: 'idea', idea: [] } }, { gate: { id: 'idea', idea: { executions: [null, 3], rests_on: 'x' } } }]) {
+    const v = L.gateView(j)
+    assert.ok(v === null || typeof v.title === 'string')
+  }
+})
+
+test('gateView, gate 2: three territories, the judge\'s first pick marked and picked until the person picks another', () => {
+  const r = fixture('gate2').run, v = L.gateView(r)!
+  assert.deepEqual(plain(v.territories.map(t => [t.id, t.n, t.name])), [['t1', '01', 'The one small thing'], ['t2', '02', 'Tried, not fussed'], ['t3', '03', 'Not your mum\'s cupboard']])
+  assert.deepEqual(plain([v.first_pick, v.picked]), ['t1', 't1'])
+  assert.equal(L.gateView(r, 't3')!.picked, 't3')
+  assert.equal(L.gateView(r, 'nope')!.picked, 't1', 'a pick that is not one of them does not count')
+  assert.equal(L.gateView({ gate: { ...r.gate, picked: 't2' } }, null)!.picked, 't2')
+  assert.equal(L.gateView({ gate: { ...r.gate, first_pick: 'zz' } })!.picked, null, 'no judge pick, nothing picked')
+  assert.match(v.lede, /^Three territories are written\. A second model judged them/)
+  assert.equal(L.gateView({ gate: { id: 'territories', territories: [{ id: 'a', name: 'A' }] } })!.lede.startsWith('One territory is written.'), true)
+  // an entry without an id or a name, or a repeated id, is left out
+  const junk = L.gateView({ gate: { id: 'territories', territories: [{ id: 'a', name: 'A' }, { id: 'a', name: 'B' }, { name: 'C' }, { id: 'b' }, null] } })!
+  assert.deepEqual(plain(junk.territories.map(t => t.id)), ['a'])
+})
+
+test('gateView, gate 3: the idea line, its work for each channel, what it rests on, from the territory picked', () => {
+  const v = L.gateView(fixture('gate3').run)!
+  const x = v.idea!
+  assert.deepEqual(plain([x.line, x.basis, x.basis_tone]), ['Tuesday\'s tea, but you tried.', 'Our proposal', 'warn'])
+  assert.deepEqual(plain(x.executions.map(e => [e.n, e.channel, e.tag, e.tone])), [['01', '30s TV', 'Our proposal', 'warn'], ['02', 'Social', 'Our proposal', 'warn'], ['03', 'To confirm', 'To confirm', 'warn']])
+  assert.deepEqual(plain(x.rests_on.map(r => r.tone)), ['ok', 'warn', 'warn'])
+  assert.equal(v.lede, 'Approve the idea (our proposal). One idea and the work that carries it, from the territory you picked: The one small thing.')
+  const withList = { gate: { ...fixture('gate3').run.gate, territories: fixture('gate2').run.gate.territories } }
+  assert.match(L.gateView(withList)!.lede, /from territory 1, The one small thing\.$/)
+  const bare = { gate: { id: 'idea', idea: { line: 'L', basis: 'brief', executions: [{ channel: 'TV', summary: 's', tag: 'From brief' }] } } }
+  const b = L.gateView(bare)!
+  assert.equal(b.lede, 'Approve the idea. One idea and the work that carries it, from the territory you picked.')
+  assert.deepEqual(plain([b.idea!.basis_tone, b.idea!.executions[0].tone, b.idea!.executions[0].n]), ['ok', 'ok', '01'])
+})
+
+test('approveGate at gate 2 records the pick and the decision; a pick that is not offered is refused', () => {
+  const r = fixture('gate2').run
+  const next = L.approveGate(r, 'territories', 'Sai', at, { picked: 't2' }) as unknown as Fx
+  assert.deepEqual(plain(next.approvals.territories), { by: 'Sai', at, decision: 'approve', picked: 't2' })
+  assert.deepEqual(plain(next.approvals.storyline), plain(r.approvals.storyline), 'earlier approvals are kept')
+  assert.deepEqual(plain(next.decisions.map((d: Fx) => [d.gate, d.kind])), [['storyline', 'approve'], ['territories', 'approve']])
+  assert.deepEqual(plain([next.gate, next.stage, next.agent]), [null, 'idea', null])
+  assert.equal(next.stages.find((s: Fx) => s.id === 'idea').status, 'now')
+  assert.equal(L.approveGate(r, 'territories', 'Sai', at, { picked: 'zz' }), null)
+  assert.equal((L.approveGate(r, 'territories', 'Sai', at) as unknown as Fx).approvals.territories.picked, 't1', 'no choice: the judge\'s first pick')
+  assert.equal(L.approveGate(r, 'idea', 'Sai', at), null, 'only the open gate')
+  assert.equal(r.decisions.length, 1, 'the old run is not changed')
+  const n3 = L.approveGate(fixture('gate3').run, 'idea', 'Sai', at, { note: ' keep the tone ' }) as unknown as Fx
+  assert.deepEqual(plain(n3.approvals.idea), { by: 'Sai', at, decision: 'approve', note: 'keep the tone' })
+  assert.deepEqual(plain([n3.stage, n3.decisions.length]), ['copy', 3])
+})
+
+test('gateRequest: an edit or a retry at the open gate is recorded, waiting, and launches nothing', () => {
+  const r = fixture('gate2').run
+  const q = L.gateRequest(r, 'territories', 'edit', 'Sai', at)!
+  assert.deepEqual(plain(q.gate_requests), [{ gate: 'territories', kind: 'edit', at, status: 'waiting' }])
+  assert.deepEqual(plain(q.decisions.at(-1)), { gate: 'territories', kind: 'edit', by: 'Sai', at })
+  assert.equal(q.decisions.length, 2)
+  assert.deepEqual(plain(Object.keys(q).sort()), ['decisions', 'gate_requests'], 'nothing else in the run is written')
+  assert.equal(L.gateRequest(r, 'idea', 'retry', 'Sai', at), null)
+  assert.equal(L.gateRequest(r, 'territories', 'approve', 'Sai', at), null)
+  assert.equal(L.gateRequest(null, 'territories', 'edit', 'Sai', at), null)
+  assert.equal(L.gateView({ ...r, gate_requests: q.gate_requests })!.asked[0], 'edit')
+})
+
+test('Build, gate 2: three territory buttons, the first pick marked and pressed, Pick / Edit / Ask Dex', () => {
+  const h = mount(fixture('gate2')).app.innerHTML
+  assert.equal(box(h), null, 'a gate, not a content box')
+  assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Pick a territory</h1>') && h.includes('Gate 2 of 3'))
+  assert.equal((h.match(/<button class="beat terr" data-territory="t\d"/g) || []).length, 3)
+  assert.equal((h.match(/aria-pressed="true"/g) || []).length, 1)
+  assert.ok(h.includes('data-territory="t1" aria-pressed="true"'))
+  assert.equal((h.match(/Blind judge’s first pick/g) || []).length, 1)
+  assert.ok(h.includes('<b>Why it fits:</b> it is the brief'))
+  assert.match(h, /<button class="btn go big" id="approve">Pick this territory<\/button>/)
+  assert.ok(h.includes('data-edit="territories">Edit a territory<') && h.includes('data-retry="territories">Ask Dex to try again<'))
+  // Dex's note sits beside the Strategy circle and is marked as proposed
+  assert.match(h, /<div class="dex"><svg class="cir s32"[^>]*aria-label="Strategy, Needs you"[\s\S]*?<span class="pill plain dexp"[^>]*>Proposed<\/span><\/div>/)
+  const aside = rightAside(h)
+  assert.match(aside, /aria-label="Strategy, Needs you"/)
+  assert.ok(aside.includes('>Waiting for you<') && aside.includes('>Nothing runs until you pick<') && aside.includes('developed from the territory you pick'))
+  assert.ok(aside.includes('Checked so far') && aside.includes('All 3 mandatories are still to confirm'))
+  assert.equal(/\d\s?%/.test(h), false)
+  assert.equal(/\d+\s?(min|sec|hours?)\b/i.test(h), false)
+})
+
+test('Build, gate 2: picking is view state; Pick this territory writes the pick, the approval and the decision', () => {
+  const m = mount(fixture('gate2'))
+  m.click({ territory: 't3' })
+  assert.equal(m.writes.length, 0, 'picking writes nothing')
+  assert.ok(m.app.innerHTML.includes('data-territory="t3" aria-pressed="true"'))
+  assert.ok(m.app.innerHTML.includes('data-territory="t1" aria-pressed="false"'))
+  m.click({}, 'approve')
+  assert.equal(m.writes.length, 1)
+  assert.equal(m.writes[0].action, 'approve territories')
+  const w = (m.writes[0].obj as Write).run
+  assert.deepEqual(plain(w.approvals.territories), { by: 'You', at: w.approvals.territories.at, decision: 'approve', picked: 't3' })
+  assert.deepEqual(plain(w.decisions.at(-1).kind), 'approve')
+  assert.equal(w.gate, null)
+  // the next screen, from what was written: the idea stage is next, waiting for the engine
+  const h = mount({ ...fixture('gate2'), run: { ...fixture('gate2').run, ...w } }).app.innerHTML
+  assert.ok(h.includes('<span class="ring now" aria-hidden="true">•</span><div><b>One idea and its work</b>'))
+})
+
+test('Build, gate 2: with no pick Pick this territory is off and says so', () => {
+  const f = fixture('gate2')
+  f.run.gate.first_pick = undefined
+  const m = mount(f)
+  assert.match(m.app.innerHTML, /<button class="btn go big" id="approve" disabled>Pick this territory<\/button>/)
+  assert.ok(m.app.innerHTML.includes('Pick a territory first.'))
+  m.click({}, 'approve')
+  assert.equal(m.writes.length, 0)
+  m.click({ territory: 't2' })
+  assert.match(m.app.innerHTML, /id="approve">Pick this territory</)
+  m.click({}, 'approve')
+  assert.equal((m.writes[0].obj as Write).run.approvals.territories.picked, 't2')
+})
+
+test('Build, gate 3: the idea line, three executions, what it rests on, Approve / Edit the idea / Ask Dex', () => {
+  const m = mount(fixture('gate3')), h = m.app.innerHTML
+  assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Approve the idea</h1>') && h.includes('Gate 3 of 3'))
+  assert.ok(h.includes('from the territory you picked: The one small thing.'))
+  assert.ok(h.includes('<div class="il">Tuesday&#39;s tea, but you tried.</div></div><span class="pill warn">Our proposal</span>'))
+  assert.equal((h.match(/<div class="ex">/g) || []).length, 3)
+  assert.ok(h.includes('<span class="pill warn">To confirm</span>'))
+  assert.ok(h.includes('<div class="rests"><div class="eyebrow">What the idea rests on</div>'))
+  assert.equal((h.match(/<span class="chip (ok|warn)">/g) || []).length, 3)
+  assert.ok(h.includes('data-edit="idea">Edit the idea<') && h.includes('data-retry="idea">Ask Dex to try again<'))
+  assert.ok(h.includes('Every approve, edit or retry is recorded with who did it.'))
+  assert.match(h, /<div class="dex"><svg class="cir s32"[^>]*aria-label="Idea, Needs you"/)
+  assert.match(rightAside(h), /aria-label="Idea, Needs you"[\s\S]*>Nothing runs until you approve<[\s\S]*Copy, Deck and Review/)
+  m.click({}, 'approve')
+  const w = (m.writes[0].obj as Write).run
+  assert.equal(m.writes[0].action, 'approve idea')
+  assert.deepEqual(plain([w.approvals.idea.decision, 'picked' in w.approvals.idea, w.stage, w.decisions.length]), ['approve', false, 'copy', 3])
+})
+
+test('Edit and Ask Dex at any gate record a request and say it waits; the gate then shows it', () => {
+  for (const [name, edit, gate] of [['gate1', 'beats', 'storyline'], ['gate2', 'territories', 'territories'], ['gate3', 'idea', 'idea']]) {
+    const m = mount(fixture(name))
+    m.click({ edit })
+    m.click({ retry: gate })
+    assert.deepEqual(plain(m.writes.map(w => w.action)), [`edit ${gate}`, `retry ${gate}`], name)
+    const w = (m.writes[0].obj as Write).run
+    assert.deepEqual(plain(Object.keys(w).sort()), ['decisions', 'gate_requests'])
+    assert.equal(w.gate_requests.at(-1).status, 'waiting')
+    assert.match(m.toastEl.textContent, /^Recorded\. Editing and retrying a gate need the engine server/)
+    const f = fixture(name)
+    f.run.gate_requests = [{ gate, kind: 'edit', at, status: 'waiting' }]
+    assert.ok(mount(f).app.innerHTML.includes('data-asked>You asked for an edit. It waits for the engine'))
+  }
+})
+
+test('every gate fixture renders, and a gate with no body data does not throw', () => {
+  for (const n of ['gate1', 'gate2', 'gate3']) assert.ok(mount(fixture(n)).app.innerHTML.includes('id="approve"'), n)
+  for (const gate of [{ id: 'storyline', n: 1, of: 3 }, { id: 'territories', n: 2, of: 3 }, { id: 'idea', n: 3, of: 3, idea: 'x' }, { id: 'budget', n: 4, of: 4, checks: [null, 5] }]) {
+    const f = fixture('gate1')
+    f.run.gate = gate
+    const h = mount(f).app.innerHTML
+    assert.ok(h.includes('id="approve"'), gate.id)
+  }
+  const f = fixture('gate1')
+  f.run.gate = { id: 'budget', n: 4, of: 4 }
+  assert.ok(mount(f).app.innerHTML.includes('Nothing to show for this gate yet.'))
+})
+
+test('gates 2 and 3 escape every word the runner wrote', () => {
+  const f2 = fixture('gate2'), f3 = fixture('gate3')
+  Object.assign(f2.run.gate.territories[0], { name: hostile, thought: hostile, why: hostile })
+  f2.run.gate.dex = hostile
+  Object.assign(f3.run.gate.idea, { line: hostile, territory_name: hostile })
+  Object.assign(f3.run.gate.idea.executions[0], { channel: hostile, summary: hostile, tag: hostile })
+  f3.run.gate.idea.rests_on[0].label = hostile
+  for (const f of [f2, f3]) {
+    const h = mount(f).app.innerHTML
+    assert.equal(h.includes('<img'), false)
+    assert.ok(h.includes('&lt;img'))
+  }
+})
+
+test('a territory button is a big target and its pick shows in tokens only', () => {
+  assert.match(css, /\.terr\{[^}]*min-height:44px/)
+  assert.match(css, /\.terr\[aria-pressed="true"\]\{background:var\(--tool-soft\)/)
+})
+
+// ── gate 1 stays byte-identical (phase 3 adds gates 2 and 3 beside it) ──────────────────────
+// The golden is the markup gate 1 rendered before the gate registry. Regenerate it only for an intended change to
+// gate 1: DM_WRITE_GOLDEN=1 npm test, then review the diff of deckMakerGate1.golden.html.
+test('gate 1 renders byte-identical markup: the sample, the gate1 fixture and a bare gate', () => {
+  const golden = new URL('tests/deckMakerGate1.golden.html', root)
+  const sample = parseYaml(readFileSync(new URL('templates/deck-maker/example/data.yaml', root), 'utf8')) as Fx
+  const got = [
+    '<!-- example/data.yaml -->', mount(sample).app.innerHTML,
+    '<!-- example/states/gate1.yaml -->', mount(fixture('gate1')).app.innerHTML,
+    '<!-- a bare gate 1 (gateRun) -->', mount(buildData(gateRun())).app.innerHTML, '',
+  ].join('\n')
+  if (process.env.DM_WRITE_GOLDEN) writeFileSync(golden, got)
+  assert.equal(got, readFileSync(golden, 'utf8'))
 })
