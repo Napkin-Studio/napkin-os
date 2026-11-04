@@ -276,3 +276,8 @@ export function routeOfDocument(m: { client?: { id: string } | null; app?: { app
   const tool = toolOfApp(m.app?.app_id)
   return tool ? { level: 'tool', client, tool: tool.id } : { level: 'client', client }
 }
+
+/** "Adopt clients" button label: how many names are on offer. */
+export function adoptLabel(n: number): string {
+  return `Adopt clients (${n})`
+}

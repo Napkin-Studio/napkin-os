@@ -7,16 +7,26 @@
 // circle. If the very first read fails the host predates the library route and
 // the shell keeps the Launcher as home; a later failure keeps what is shown.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { addClient, loadLanding, type LandingData, type LandingHost } from './store'
-import type { ClientMaterial } from '../../host'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { addClient, adoptNames, loadArchived, loadLegacy, loadLanding, renameClient, setArchived, type LandingData, type LandingHost, type ManageHost } from './store'
+import type { ClientMaterial, ClientRecord, LegacyName } from '../../host'
 
 export type LandingState = 'loading' | 'ready' | 'unavailable'
 
 /** How often the landing re-reads while it is the screen. */
 export const POLL_MS = 5000
 
-export function useLanding(host: LandingHost, active: boolean, enabled = true) {
+/** Looking after the registry from the screen; each write re-reads the landing and answers with the host's words on a refusal. */
+export interface Manage {
+  rename: (id: string, name: string) => Promise<string | null>
+  archive: (id: string) => Promise<string | null>
+  restore: (id: string) => Promise<string | null>
+  archived: () => Promise<ClientRecord[]>
+  legacy: () => Promise<LegacyName[]>
+  adopt: (names: string[]) => Promise<{ words: string } | { error: string }>
+}
+
+export function useLanding(host: LandingHost & ManageHost, active: boolean, enabled = true) {
   const [state, setState] = useState<LandingState>('loading')
   const [data, setData] = useState<LandingData | null>(null)
   const seq = useRef(0)
@@ -62,5 +72,31 @@ export function useLanding(host: LandingHost, active: boolean, enabled = true) {
     return refused
   }, [host, reload])
 
-  return { state, data, reload, add }
+  const manage = useMemo<Manage>(() => ({
+    rename: async (id, name) => {
+      const refused = await renameClient(host, id, name)
+      if (!refused) await reload()
+      return refused
+    },
+    archive: async id => {
+      const refused = await setArchived(host, id, true)
+      if (!refused) await reload()
+      return refused
+    },
+    restore: async id => {
+      const refused = await setArchived(host, id, false)
+      if (!refused) await reload()
+      return refused
+    },
+    archived: () => loadArchived(host),
+    legacy: () => loadLegacy(host),
+    adopt: async names => {
+      const r = await adoptNames(host, names)
+      if ('error' in r) return r
+      await reload()
+      return { words: r.words }
+    },
+  }), [host, reload])
+
+  return { state, data, reload, add, manage }
 }

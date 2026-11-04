@@ -400,6 +400,7 @@ export default function App() {
       data={landing.data}
       go={go}
       onAdd={name => landing.add(name)}
+      manage={landing.manage}
       onStart={launchApp}
       onOpenDocument={openPath}
       onAllTools={() => setAllTools(true)}

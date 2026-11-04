@@ -313,3 +313,70 @@ test('a tool under a client says its ring in words as well as in its ring', () =
   assert.match(html, /<small>1 open · reading<\/small>/)
   assert.match(html, /<small>1 open<\/small>/)
 })
+
+// ── Phase 5: adopt, rename, archive, restore, and 20 and 100 clients ─────────
+
+import { adoptLabel } from '../src/shell/landing/model.ts'
+import { AdoptPanel, ArchivedList, ClientActions } from '../src/shell/landing/Registry.tsx'
+
+test('Adopt clients shows on the clients page only when there is something to adopt, with the count', () => {
+  assert.doesNotMatch(clientsPage(3), /adopt-button/)
+  const html = clientsPage(3, { adoptCount: 2, onAdopt: noop })
+  assert.match(html, /data-testid="adopt-button"/)
+  assert.match(html, /Adopt clients \(2\)/)
+  assert.equal(adoptLabel(5), 'Adopt clients (5)')
+  // while the panel is open the button steps aside
+  assert.doesNotMatch(clientsPage(3, { adoptCount: 2, onAdopt: noop, panel: createElement('p', null, 'open') }), /adopt-button/)
+})
+
+test('the adopt panel lists every name ticked with its document count, in words', () => {
+  const html = renderToStaticMarkup(createElement(AdoptPanel, {
+    offer: [{ name: 'Client A', documents: 2 }, { name: 'Client B', documents: 1 }],
+    onAdopt: async () => ({ words: 'x' }), onClose: noop,
+  }))
+  assert.match(html, /aria-label="Adopt clients"/)
+  assert.equal(count(html, /type="checkbox"/g), 2)
+  assert.equal(count(html, /checked=""/g), 2)
+  assert.match(html, /2 documents/)
+  assert.match(html, /1 document</)
+  assert.match(html, /Adopt 2 names/)
+})
+
+test('the archived list says what archiving kept, and names each Restore', () => {
+  assert.equal(renderToStaticMarkup(createElement(ArchivedList, { archived: [], onRestore: async () => null })), '')
+  const html = renderToStaticMarkup(createElement(ArchivedList, { archived: [client(0), client(1)], onRestore: async () => null }))
+  assert.match(html, /Archived clients \(2\)/)
+  assert.match(html, /aria-label="Restore Client A"/)
+  assert.match(html, /Their work is kept/)
+})
+
+test('a client page offers Rename and Archive by name, and none when the registry cannot be managed', () => {
+  const c = client(0)
+  const page = (actions?: React.ReactNode) => renderToStaticMarkup(createElement(ClientPage, {
+    summary: summarise(c, []), items: [], live: new Set(TOOLS.map(t => t.id as string)), onOpenTool: noop, onSoon: noop, onOpenItem: noop, actions,
+  }))
+  assert.doesNotMatch(page(), /Rename Client A/)
+  const html = page(createElement(ClientActions, { client: c, onRename: async () => null, onArchive: async () => null }))
+  assert.match(html, /aria-label="Rename Client A"/)
+  assert.match(html, /aria-label="Archive Client A"/)
+})
+
+test('20 clients show 8 and search, 100 clients show 8, the rest behind Show all', () => {
+  const twenty = Array.from({ length: 20 }, (_, i) => `Client ${i}`)
+  const mk = (n: number, extra: Partial<Parameters<typeof ClientsPage>[0]> = {}) => {
+    const cs = Array.from({ length: n }, (_, i) => ({ ...client(i % 4), id: `cli_${String(i + 1).padStart(8, '0')}`, name: `Client ${i}`, initials: `C${i % 10}` }))
+    return renderToStaticMarkup(createElement(ClientsPage, {
+      agency: 'Studio A', clients: ordered(cs, []), query: '', showAll: false, adding: false,
+      onQuery: noop, onShowAll: noop, onAdding: noop, onOpenClient: noop, onAdd: async () => null, ...extra,
+    }))
+  }
+  assert.equal(twenty.length, 20)
+  for (const n of [20, 100]) {
+    const html = mk(n)
+    assert.equal(count(html, /data-testid="client-circle"/g), 8, `${n} clients`)
+    assert.match(html, new RegExp(`Show all ${n}`))
+    assert.match(html, /type="search"/)
+    assert.equal(count(mk(n, { showAll: true }), /data-testid="client-circle"/g), n)
+    assert.equal(count(mk(n, { query: 'Client 7' }), /data-testid="client-circle"/g), n >= 70 ? 11 : 1)
+  }
+})

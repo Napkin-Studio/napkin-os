@@ -219,3 +219,21 @@
 html[data-orbs-gl='0'] .lc-flat-toggle { display: none; }
 /* the flat svg is above the canvas, so its initials read over the sphere (its disc and ring are hidden once the canvas shows) */
 .lc-c3 .lc-cir { position: relative; z-index: 1; }
+
+/* Phase 5: adopt, rename, archive, restore, and the registry's error banner. */
+.lc-adopt .lc-fields { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.lc-adopt legend { font: 600 12px/1.3 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink2); padding: 0; }
+.lc-hint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink2); max-width: 62ch; }
+.lc-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 280px; overflow: auto; }
+.lc-checks label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px; cursor: pointer; }
+.lc-checks input { width: 20px; height: 20px; flex: none; accent-color: var(--accent, currentColor); }
+.lc-ck-name { font-weight: 500; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.lc-ck-n { color: var(--ink2); font-size: 13px; white-space: nowrap; }
+.lc-manage p { margin: 0; }
+.lc-archived { margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 4px 16px 12px; }
+.lc-archived summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 500; }
+.lc-archived summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
+.lc-arch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; flex-wrap: wrap; }
+.lc-banner { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--danger); border-radius: 10px; }
+@media (max-width: 560px) { .lc-phr .ch-btn { flex: 1 1 auto; min-height: 44px; } .lc-arch-row .ch-btn { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .lc-archived, .lc-adopt, .lc-manage { transition: none; animation: none; } }

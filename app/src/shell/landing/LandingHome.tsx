@@ -11,6 +11,9 @@ import { LandingPage } from './LandingPage'
 import { ClientsPage } from './ClientsPage'
 import { ClientPage } from './ClientPage'
 import { ToolPage } from './ToolPage'
+import { AdoptPanel, ArchivedList, ClientActions } from './Registry'
+import type { Manage } from './useLanding'
+import type { ClientRecord, LegacyName } from '../../host'
 import { agencySummary, newsOf, ordered, summarise, whoIs, type AgencySummary } from './model'
 import { greeting } from '../when'
 import { TOOLS, isLive, toolById } from './tools'
@@ -27,6 +30,8 @@ interface Props {
   data: LandingData
   go: (r: Route, replace?: boolean) => void
   onAdd: (name: string) => Promise<string | null>
+  /** Rename, archive, restore and adopt; absent where the host cannot. */
+  manage?: Manage
   /** Start a document of `appId` for a client. */
   onStart: (appId: string, clientId: string) => void
   onOpenDocument: (path: string) => void
@@ -35,11 +40,27 @@ interface Props {
   onRefresh: () => Promise<void>
 }
 
-export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, onAllTools, onRefresh }: Props) {
+export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onAllTools, onRefresh }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
   const top = useRef<HTMLDivElement>(null)
+
+  // What the registry can still be asked to do, read when the clients page opens and again after a change
+  // (never on the slow poll: finding the free-text names reads every document).
+  const [offer, setOffer] = useState<LegacyName[]>([])
+  const [archived, setArchived] = useState<ClientRecord[]>([])
+  const [adopting, setAdopting] = useState(false)
+  const [registryNote, setRegistryNote] = useState<string | null>(null)
+  const onClients = route.level === 'clients'
+  const stamp = `${data.clients.length}:${data.unassigned}`
+  useEffect(() => {
+    if (!onClients || !manage) return
+    let fresh = true
+    manage.legacy().then(o => { if (fresh) setOffer(o) }, () => { if (fresh) setOffer([]) })
+    manage.archived().then(a => { if (fresh) setArchived(a) }, () => { if (fresh) setArchived([]) })
+    return () => { fresh = false }
+  }, [onClients, manage, stamp])
 
   // Each level's heading takes focus on arrival, so a keyboard or a screen reader lands on it.
   const key = formatRoute(route)
@@ -147,6 +168,17 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
         onOpenTool={t => go({ level: 'tool', client: client.id, tool: t.id })}
         onSoon={t => setSoon(p => ({ key, text: `${t.full} is coming soon. It keeps its place.`, n: (p?.n ?? 0) + 1 }))}
         onOpenItem={onOpenDocument}
+        actions={manage && (
+          <ClientActions
+            client={client}
+            onRename={name => manage.rename(client.id, name)}
+            onArchive={async () => {
+              const refused = await manage.archive(client.id)
+              if (!refused) go({ level: 'clients' })
+              return refused
+            }}
+          />
+        )}
       />
     )
   } else if (route.level === 'clients' || clientId) {
@@ -167,6 +199,21 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
           if (!refused) setAdding(false)
           return refused
         }}
+        adoptCount={manage ? offer.length : 0}
+        onAdopt={() => setAdopting(true)}
+        panel={manage && adopting && offer.length > 0 ? (
+          <AdoptPanel offer={offer} onAdopt={manage.adopt} onClose={() => setAdopting(false)} />
+        ) : undefined}
+        archivedList={manage && archived.length > 0 ? (
+          <ArchivedList
+            archived={archived}
+            onRestore={async id => {
+              const refused = await manage.restore(id)
+              if (!refused) setRegistryNote('Restored.')
+              return refused
+            }}
+          />
+        ) : undefined}
       />
     )
   } else {
@@ -185,6 +232,12 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
     <div className="lc" ref={top}>
       <p className="lc-sr" role="status" aria-live="polite" data-testid="live">{say}</p>
       <p className="lc-sr" role="status" aria-live="polite" data-testid="news">{news}</p>
+      <p className="lc-sr" role="status" aria-live="polite" data-testid="registry-note">{registryNote}</p>
+      {data.registryError && (
+        <p className="lc-error lc-banner" role="alert" data-testid="registry-error">
+          The client list could not be read, so names shown are the documents\u2019 own. {data.registryError}
+        </p>
+      )}
       {body}
       <footer className="lc-foot">
         <button className="lc-link" onClick={onAllTools}>All tools</button>

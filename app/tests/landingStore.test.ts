@@ -117,3 +117,55 @@ test('the web host reaches the tenant\'s own routes', async () => {
 test('a refusal comes back as the host\'s own words', async () => {
   await assert.rejects(httpHost.clients.create('Dup'), /there is already a client called "Dup"/)
 })
+
+// ── Phase 5: looking after the registry ──────────────────────────────────────
+
+import { adoptNames, adoptedWords, loadArchived, loadLegacy, renameClient, setArchived, type ManageHost } from '../src/shell/landing/store.ts'
+
+function manage(over: Partial<ManageHost['clients']> = {}): ManageHost {
+  return {
+    clients: {
+      list: async () => [
+        { ...rec('Client A'), id: 'cli_00000001' },
+        { ...rec('Client B'), id: 'cli_00000002', archived_at: '2026-11-02T00:00:00Z' },
+        { ...rec('Client C'), id: 'cli_00000003', archived_at: '2026-11-03T00:00:00Z' },
+      ],
+      update: async (id, p) => ({ ...rec(p.name ?? 'x'), id }),
+      archive: async id => ({ ...rec('x'), id }),
+      restore: async id => ({ ...rec('x'), id }),
+      adopt: async names => ({ created: names.map(rec), linked: 3 }),
+      legacy: async () => [{ name: 'Client D', documents: 2 }],
+      ...over,
+    },
+  }
+}
+
+test('archived clients are the ones with archived_at, newest archive first', async () => {
+  const a = await loadArchived(manage())
+  assert.deepEqual(a.map(c => c.name), ['Client C', 'Client B'])
+})
+
+test('rename and archive resolve with null, and with the host words when refused', async () => {
+  assert.equal(await renameClient(manage(), 'cli_1', 'Client Z'), null)
+  assert.equal(await renameClient(manage({ update: async () => { throw new Error('409: a client called that exists') } }), 'cli_1', 'Client A'), '409: a client called that exists')
+  assert.equal(await renameClient(manage({ update: async () => { throw new Error('') } }), 'cli_1', 'x'), 'The client could not be renamed.')
+  assert.equal(await setArchived(manage(), 'cli_1', true), null)
+  assert.equal(await setArchived(manage({ restore: async () => { throw new Error('no such client') } }), 'cli_1', false), 'no such client')
+  assert.equal(await setArchived(manage({ archive: async () => { throw 'boom' } }), 'cli_1', true), 'boom')
+})
+
+test('adopt needs a chosen name, says what it did, and reports a refusal', async () => {
+  assert.deepEqual(await adoptNames(manage(), []), { error: 'Choose at least one name to adopt.' })
+  const ok = await adoptNames(manage(), ['Client D', 'Client E'])
+  assert.ok('words' in ok)
+  assert.equal(ok.words, 'Added 2 clients, linked 3 documents.')
+  assert.deepEqual(await adoptNames(manage({ adopt: async () => { throw new Error('registry is read-only') } }), ['Client D']), { error: 'registry is read-only' })
+  assert.equal(adoptedWords({ created: [], linked: 1 }), 'No new clients, linked 1 document.')
+  assert.deepEqual(await loadLegacy(manage()), [{ name: 'Client D', documents: 2 }])
+})
+
+test('the library listing carries the registry error into the landing data', async () => {
+  const d = await loadLanding(fake({ listLibrary: async () => ({ items: [], clients_unassigned: 0, registry_error: 'cannot read' }) }))
+  assert.equal(d.registryError, 'cannot read')
+  assert.equal((await loadLanding(fake())).registryError, undefined)
+})

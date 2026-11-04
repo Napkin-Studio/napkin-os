@@ -24,6 +24,8 @@ interface Props {
   /** A tool that is not here yet was chosen (Idea, Prod): say so, go nowhere. */
   onSoon: (tool: Tool) => void
   onOpenItem: (path: string) => void
+  /** Rename and archive, when the host lets this screen look after the registry. */
+  actions?: React.ReactNode
 }
 
 function count(summary: ClientSummary, t: Tool, live: boolean): { small: string; say: string } {
@@ -40,7 +42,7 @@ function count(summary: ClientSummary, t: Tool, live: boolean): { small: string;
   return { small: act === 'idle' ? `${n} open` : `${n} open · ${ACTIVITY_WORD[act]}`, say }
 }
 
-export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenItem }: Props) {
+export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenItem, actions }: Props) {
   const c = summary.client
   // One tab stop for the six tools (roving tabindex): the arrows move it.
   const [at, setAt] = useState(0)
@@ -81,6 +83,7 @@ export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenIte
           <h1 className="lc-h1 lc-h1-left" tabIndex={-1}>{c.name}</h1>
           <p className="lc-lede">{summary.status}</p>
         </div>
+        {actions}
       </header>
 
       <div className="lc-wheel" role="group" aria-label={`Tools for ${c.name}`} onKeyDown={onKeyDown}>

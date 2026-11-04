@@ -7,7 +7,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { Circle } from './Circle'
-import { ACTIVITY_WORD, boxFor, circleName, initialsOf, pageOf, plural, type ClientSummary } from './model'
+import { ACTIVITY_WORD, adoptLabel, boxFor, circleName, initialsOf, pageOf, plural, type ClientSummary } from './model'
 
 interface Props {
   agency: string
@@ -23,6 +23,11 @@ interface Props {
   onOpenClient: (id: string) => void
   /** Make a client; resolves with the host's words when it was refused. */
   onAdd: (name: string) => Promise<string | null>
+  /** Adopt clients, the panel to adopt with, and the archived list: given by the home when the registry can be looked after. */
+  adoptCount?: number
+  onAdopt?: () => void
+  panel?: React.ReactNode
+  archivedList?: React.ReactNode
 }
 
 function Status({ s }: { s: ClientSummary }) {
@@ -72,7 +77,7 @@ function AddForm({ onAdd, onCancel }: { onAdd: (name: string) => Promise<string 
   )
 }
 
-export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, onShowAll, onAdding, onOpenClient, onAdd }: Props) {
+export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, onShowAll, onAdding, onOpenClient, onAdd, adoptCount = 0, onAdopt, panel, archivedList }: Props) {
   const page = pageOf(clients, query, showAll)
   const n = clients.length
   const ring = page.shown.length + 1 <= 7
@@ -96,10 +101,14 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
           {n > 0 && !adding && (
             <button className="ch-btn" onClick={() => onAdding(true)}>Add client</button>
           )}
+          {adoptCount > 0 && onAdopt && !panel && (
+            <button className="ch-btn" data-testid="adopt-button" onClick={onAdopt}>{adoptLabel(adoptCount)}</button>
+          )}
         </div>
       </header>
 
       {adding && <AddForm onAdd={onAdd} onCancel={() => onAdding(false)} />}
+      {panel}
 
       <div className="lc-stagewrap">
         {n === 0 && !adding ? (
@@ -148,6 +157,7 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
           </div>
         )}
       </div>
+      {archivedList}
       {n > 0 && (
         <p className="lc-legend">
           <span><i className="lc-dot" data-activity="human" aria-hidden /> Needs you</span>
