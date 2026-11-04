@@ -508,6 +508,8 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
     manifest.document_type = Some("document".to_string());
     manifest.app = Some(app.clone());
     manifest.fork = None;
+    // Who the source was for, this is for: a spin-off stays with its client.
+    manifest.client = src_manifest.client.clone();
     manifest.lineage = Some(Lineage {
         // The source document is the substantive parent — it is where the
         // content came from. The template is recorded alongside it.
@@ -1176,6 +1178,41 @@ mod tests {
             "ie.napkin.film"
         );
         assert_eq!(clan.manifest().document_type.as_deref(), Some("document"));
+    }
+
+    #[test]
+    fn spinoff_carries_the_sources_client_and_adds_none_when_it_had_none() {
+        let template = film_template(Some(spec_for_film()));
+
+        // A source with no client: the spin-off has none, and its manifest
+        // text does not mention the field at all (older readers see no change).
+        let plain = filled_source("ie.napkin.brief");
+        let out =
+            ClanFile::from_bytes(spinoff(&template, &plain, SpinoffOptions::default()).unwrap())
+                .unwrap();
+        assert!(out.manifest().client.is_none());
+        assert!(!String::from_utf8(out.read_entry("manifest.yaml").unwrap())
+            .unwrap()
+            .contains("client:"));
+
+        // A source for Client A: the spin-off is for Client A.
+        let mut b = crate::container::ClanBuilder::new(plain.manifest().clone());
+        b.manifest_mut().client = Some(crate::manifest::ClientRef {
+            id: "cli_0a1b2c3d".into(),
+            name: "Client A".into(),
+        });
+        for (p, bytes) in plain.read_all_entries().unwrap() {
+            if p != "manifest.yaml" {
+                b.add_entry(p, bytes);
+            }
+        }
+        let source = ClanFile::from_bytes(b.build().unwrap()).unwrap();
+        let out =
+            ClanFile::from_bytes(spinoff(&template, &source, SpinoffOptions::default()).unwrap())
+                .unwrap();
+        let client = out.manifest().client.as_ref().expect("client carried");
+        assert_eq!(client.id, "cli_0a1b2c3d");
+        assert_eq!(client.name, "Client A");
     }
 
     #[test]
