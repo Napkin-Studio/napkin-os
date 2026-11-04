@@ -260,6 +260,8 @@ def main(argv=None):
     ap.add_argument("--prompt-file", type=Path, help="a text file holding the person's prompt")
     ap.add_argument("--answers", type=Path, help="JSON of the person's answers to the intake questions: {qid: {text|option_id, at, skipped?}}")
     ap.add_argument("--research", type=Path)
+    ap.add_argument("--document", type=Path, help="a Deck document's carried brief and research, {data, members} as the host prints them "
+                    "(the server's way in; instead of --brief and --research)")
     ap.add_argument("--stages", required=True, type=Path)
     ap.add_argument("--client", required=True)
     ap.add_argument("--project", required=True)
@@ -288,7 +290,9 @@ def main(argv=None):
     if a.prompt_text and a.prompt_file:
         ap.error("give --prompt-text or --prompt-file, not both")
     prompt_text = (a.prompt_file.expanduser().read_text(encoding="utf-8", errors="replace") if a.prompt_file else a.prompt_text or "").strip()
-    if not (prompt_text or a.doc or a.brief or a.research):
+    if a.document and (a.brief or a.research):
+        ap.error("give --document or --brief and --research, not both: the document already carries them")
+    if not (prompt_text or a.doc or a.brief or a.research or a.document):
         ap.error("nothing to build a deck from: give a prompt (--prompt-text or --prompt-file), a document (--doc), a brief (--brief) or research (--research)")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.live:
@@ -306,7 +310,10 @@ def main(argv=None):
             ap.error(f"--doc key {key!r} is given twice: each document needs its own key")
         docs.append((key, Path(path).expanduser()))
     answers, verified = _read_answers(a.answers)
-    inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+    if a.document:
+        inp = inputs.load_document(a.document, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
+    else:
+        inp = inputs.load(a.brief, a.research, a.stages / "doc_facts.json", docs, prompt_text=prompt_text, answers=answers, verified=verified)
     rep["stages"]["inputs"] = {"secs": round(time.time() - t, 2), "model": None, "tokens_in": 0, "tokens_out": 0, "usd": 0}
     choice = intake.chosen_type(inp, a.kind)   # an explicit --kind wins, then the person's answer, then the stated default
     profile = profiles.load(choice["type"])

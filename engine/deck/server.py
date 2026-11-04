@@ -53,6 +53,8 @@ ORDER = {"agency": ["a0", "a", "b", "c", "d", "final"], "investor": ["a0", "i", 
 #: The gate after each stage, per deck kind.
 PLAN = {"agency": [("b", "storyline"), ("c", "territories"), ("d", "idea")], "investor": [("i", "storyline")]}
 KINDS = tuple(PLAN)
+#: The most carried brief and research one request may hold (bytes of JSON): a larger one is refused, not cut.
+MAX_DECK_INPUTS = 8_000_000
 SERVED = ("deck.html", "deck.pptx", "deck.pdf", "report.json")
 CONTENT = {".html": "text/html; charset=utf-8", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
            ".pdf": "application/pdf", ".json": "application/json"}
@@ -102,11 +104,11 @@ def safe_name(doc) -> str:
     return d
 
 
-def inputs_key(inp: dict) -> str:
-    """What a run's cache is keyed by: the inputs that decide its stage outputs. Change one and the run starts again."""
+def inputs_key(inp: dict, deck_inputs: dict | None = None) -> str:
+    """What a run's cache is keyed by: the inputs that decide its stage outputs, the carried brief and research included. Change one and the run starts again."""
     p = inp.get("prompt") or {}
     blob = json.dumps({"p": [p.get("text", ""), p.get("client", ""), p.get("project", ""), p.get("agency", "")],
-                       "k": inp.get("kind", "agency"), "f": inp.get("format", "pitch")}, sort_keys=True)
+                       "k": inp.get("kind", "agency"), "f": inp.get("format", "pitch"), "d": deck_inputs or None}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
@@ -122,8 +124,15 @@ def validate_request(body: dict, settings: Settings) -> dict:
         raise Refused(400, "unsupported_kind", f"deck kind {kind!r} is not run by this server yet (it runs {', '.join(KINDS)})")
     if inp.get("format", "pitch") not in ("pitch", "full"):
         raise Refused(400, "bad_request", "format must be pitch or full")
-    if not str(prompt.get("text") or "").strip():
-        raise Refused(400, "no_inputs", "give the deck something to build from: the prompt text is empty")
+    di = body.get("deck_inputs")
+    if di is not None:
+        if not (isinstance(di, dict) and isinstance(di.get("data"), dict) and isinstance(di.get("members"), dict)):
+            raise Refused(400, "bad_request", "deck_inputs must be {data, members}, as the host prints them")
+        if len(json.dumps(di)) > MAX_DECK_INPUTS:
+            raise Refused(400, "too_large", f"deck_inputs is over {MAX_DECK_INPUTS // 1_000_000} MB: the carried brief and research are too large to send")
+    carried = bool(di and (di["data"].get("upstream") or {}))
+    if not str(prompt.get("text") or "").strip() and not carried:
+        raise Refused(400, "no_inputs", "give the deck something to build from: the prompt text is empty and no brief or research is carried")
     mode = body.get("mode") or ("live" if settings.live and not settings.replay else "replay")
     if mode not in ("replay", "live"):
         raise Refused(400, "bad_request", "mode must be replay or live")
@@ -136,7 +145,7 @@ def validate_request(body: dict, settings: Settings) -> dict:
         d = (a or {}).get("decision", "approve")
         if d != "approve":
             raise Refused(400, "not_supported", f"a '{d}' decision at the {gate} gate is recorded but the engine cannot act on it yet: only approve goes on")
-    return {"doc": doc, "inputs": inp, "prompt": prompt, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
+    return {"doc": doc, "inputs": inp, "prompt": prompt, "deck_inputs": di if carried else None, "kind": kind, "format": inp.get("format", "pitch"), "mode": mode,
             "approvals": approvals, "render": body.get("render", True) is not False}
 
 
@@ -194,7 +203,7 @@ class Server:
             if self.busy:
                 raise Refused(409, "job_state", f"a run is already going ({self.busy}): the engine runs one segment at a time")
             d = self.docs.setdefault(req["doc"], Doc(self.s.data / req["doc"], req["doc"]))
-            d.folder = self.s.data / req["doc"] / inputs_key(req["inputs"])
+            d.folder = self.s.data / req["doc"] / inputs_key(req["inputs"], req["deck_inputs"])
             d.stages.mkdir(parents=True, exist_ok=True)
             d.req, d.notices, d.error, d.pay = req, [], None, None
             present = {p.name for p in d.stages.glob("*.json")}
@@ -285,6 +294,7 @@ class Server:
     def segment(self, d: Doc, req: dict, until: str | None) -> None:
         try:
             self.seed(d, req, until)
+            self.write_document(d, req)
             inp = self.load_inputs(d, req)
             d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
             rep = self.call_engine(d, req, until)
@@ -308,8 +318,15 @@ class Server:
     def load_inputs(self, d: Doc, req: dict):
         """The engine's own reading of the inputs (no model): what the rows under 'Read the inputs' say, and what the evidence resolves against."""
         answers, verified = run_deck._read_answers(None)
-        return inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=str(req["prompt"].get("text") or "").strip(),
-                               answers=answers, verified=verified)
+        text = str(req["prompt"].get("text") or "").strip()
+        if req["deck_inputs"]:
+            return inputs_mod.load_document(d.folder / "document.json", d.stages / "doc_facts.json", [], prompt_text=text, answers=answers, verified=verified)
+        return inputs_mod.load(None, None, d.stages / "doc_facts.json", [], prompt_text=text, answers=answers, verified=verified)
+
+    def write_document(self, d: Doc, req: dict) -> None:
+        """The carried brief and research, as the host printed them, in the run's folder for run_deck --document to read."""
+        if req["deck_inputs"]:
+            (d.folder / "document.json").write_text(json.dumps({"data": req["deck_inputs"]["data"], "members": req["deck_inputs"]["members"]}, ensure_ascii=False))
 
     def seed(self, d: Doc, req: dict, until: str | None) -> None:
         """Replay only: copy the recorded stage files for the stages up to the stop into the cache, as a live run would write them."""
@@ -344,6 +361,8 @@ class Server:
                 "--project", str(p.get("project") or "[Project]"), "--out", str(d.out), "--kind", req["kind"], "--format", req["format"], "--no-qa"]
         if p.get("agency"):
             argv += ["--agency", str(p["agency"])]
+        if req["deck_inputs"]:
+            argv += ["--document", str(d.folder / "document.json")]
         if until:
             argv += ["--until", until]
         elif not req["render"]:

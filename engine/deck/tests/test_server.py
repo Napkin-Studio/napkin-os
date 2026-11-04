@@ -255,3 +255,51 @@ def test_the_guess_follows_the_stages_that_exist_up_to_the_stop(tmp_path):
     d.until = "b"
     d.state = "gate"
     assert s.guess_step(d) is None
+
+
+# ── the carried brief and research (features/deck-maker-spinoff-inputs.clan) ──
+def deck_inputs():
+    from test_intake import _brief_clan_data, _research_rows
+    facts, findings, sources, chain = _research_rows()
+    return {"data": {"upstream": {"brief-1": _brief_clan_data(), "res-1": {"campaign": {"name": "Lumen"}}}},
+            "members": {"facts": facts, "findings": findings, "sources": sources, "decisions": chain}}
+
+
+def start_with(e, doc, di, text=PROMPT, approvals=None):
+    inputs = {**INPUTS, "prompt": {**INPUTS["prompt"], "text": text}}
+    return call(e.base, "/run", {"doc": doc, "inputs": inputs, "approvals": approvals or {}, "mode": "replay", "render": False, "deck_inputs": di})
+
+
+def test_a_carried_brief_and_research_are_written_for_the_engine_and_a_deck_needs_no_typed_prompt(engine):
+    status, _ = start_with(engine, "spun", deck_inputs(), text="")
+    assert status == 202
+    v = wait(engine.base, "spun")
+    assert v["state"] == "gate" and v["run"]["gate"]["id"] == "storyline"
+    doc = json.loads(next((engine.dir / "spun").glob("*/document.json")).read_text())
+    assert set(doc) == {"data", "members"} and doc["data"]["upstream"]["brief-1"]["background"] == "Lumen Water serves a region."
+    assert [c["text"] for c in v["run"]["checks"] if c["ok"]][0].startswith("Built from: brief")
+
+
+def test_the_carried_inputs_decide_the_cache_so_a_changed_brief_starts_the_run_again(engine):
+    start_with(engine, "spun", deck_inputs()); wait(engine.base, "spun")
+    other = deck_inputs()
+    other["data"]["upstream"]["brief-1"]["background"] = "Lumen sells water to businesses."
+    start_with(engine, "spun", other); wait(engine.base, "spun")
+    assert len(list((engine.dir / "spun").iterdir())) == 2
+    same = start_with(engine, "spun", deck_inputs())[0]
+    assert same == 202 and len(list((engine.dir / "spun").iterdir())) == 2, "the same inputs reuse their cache"
+
+
+@pytest.mark.parametrize("di,kind", [("nope", "bad_request"), ({"data": {}}, "bad_request"), ({"data": [], "members": {}}, "bad_request")])
+def test_a_malformed_carried_payload_is_refused(engine, di, kind):
+    status, err = start_with(engine, "x", di)
+    assert status == 400 and err["error"]["type"] == kind
+
+
+def test_an_empty_prompt_with_nothing_carried_is_still_refused_and_a_huge_payload_too(engine):
+    status, err = start_with(engine, "x", None, text="  ")
+    assert status == 400 and err["error"]["type"] == "no_inputs"
+    big = deck_inputs()
+    big["members"]["facts"] = [{"id": f"f_{i}", "value": "x" * 1000} for i in range(9000)]
+    status, err = start_with(engine, "x", big)
+    assert status == 400 and err["error"]["type"] == "too_large"

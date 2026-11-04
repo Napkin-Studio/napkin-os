@@ -296,6 +296,28 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
     return inp
 
 
+def load_document(path: Path, doc_facts: Path | None = None, docs: list | None = None, prompt_text: str = "",
+                  answers: dict | None = None, verified: dict | None = None) -> Inputs:
+    """The Inputs for a run on a Deck document's carried brief and research (``run_deck --document``). The file is
+    ``{data, members}`` as the host prints them (``extract::deck_inputs``, middleware-api.md section 12: the brief's
+    fields, the research's rows, the chain's verdicts, the ``model: false`` marks already honoured) and is read by
+    ``from_upstream``, so there is one mapping. The person's own prompt, answers and attached documents come from the
+    run's arguments, as they do with files."""
+    payload = json.loads(Path(path).read_text())
+    inp = from_upstream(dict(payload.get("data") or {}), payload.get("members") or {})
+    inp.prompt_text, inp.answers, inp.verified = prompt_text or "", answers or {}, verified or {}
+    for key, p in docs or []:
+        if key in inp.docs:
+            raise ValueError(f"document key {key!r} is used twice: each document needs its own key")
+        inp.docs[key] = load_doc(p)
+    if docs:
+        inp.coverage["docs"] = {k: d["chars"] for k, d in inp.docs.items()}
+    if doc_facts and Path(doc_facts).exists():
+        inp.doc_facts = json.loads(Path(doc_facts).read_text()).get("figures", {})
+        inp.coverage["doc_figures"] = len(inp.doc_facts)
+    return inp
+
+
 def _is_brief_data(d: dict) -> bool:
     """True when an upstream entry is a Brief Maker's data (it holds brief fields or a capture)."""
     return isinstance(d, dict) and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
