@@ -100,15 +100,18 @@ test('landing, clients, add a client, reload, open a client, start work', async 
   await trail.getByRole('button', { name: 'Clients' }).click()
   await expect(page).toHaveURL(/#clients$/)
 
-  // Start work for a client: the tool opens, on a document that is already theirs.
+  // Start work for a client: the tool's page, then a document that is already theirs.
   await page.getByRole('button', { name: /^Client C,/ }).click()
   await page.getByTestId('tool-brief').click()
+  await expect(page.getByTestId('tool-page')).toBeVisible()
+  await page.getByTestId('new-doc').click()
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
   const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
   const recent = await page.request.get(`/api/t/${tenant}/library?app=ie.napkin.brief-maker`)
   // A blank is not work yet: still only the two that were made.
   expect((await recent.json() as { items: unknown[] }).items).toHaveLength(2)
-  await page.getByTitle('Back to the studio').first().click()
+  // The trail in the bar is the way back: the client's circle goes to the client.
+  await page.getByRole('navigation', { name: 'Where you are' }).getByRole('button', { name: 'Client C' }).click()
   await expect(page.getByTestId('client-page')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Client C' })).toBeVisible()
 })
@@ -204,6 +207,17 @@ test('on a phone every crumb has a name and a 44px target', async ({ page }) => 
     expect(box.height, 'crumb height').toBeGreaterThanOrEqual(43.5)
     expect(((await b.getAttribute('aria-label')) ?? '').length, 'crumb has a name').toBeGreaterThan(0)
   }
+  // None is clipped by the bar: every crumb lies inside the window, and the one you are on shows its name.
+  for (const b of await trail.getByRole('button').all()) {
+    const box = (await b.boundingBox())!
+    expect(box.x, 'crumb left edge').toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width, 'crumb right edge').toBeLessThanOrEqual(390 + 0.5)
+  }
+  const here = trail.getByRole('button', { name: 'Client A' })
+  const label = here.locator('.lc-cn')
+  expect((await label.boundingBox())!.width, 'the current level shows its name').toBeGreaterThan(20)
+  const bar = (await page.locator('header.studio-top').boundingBox())!
+  expect((await here.boundingBox())!.y + 44, 'inside the bar').toBeLessThanOrEqual(bar.y + bar.height + 0.5)
 })
 
 test('no sideways scroll at 320, 390 and 760 on the clients and client pages', async ({ page }) => {
@@ -228,9 +242,14 @@ test('a client route for a client that is not here is corrected to the clients p
   await expect(page).toHaveURL(/#clients$/)
   await page.goto('/')
   const { a } = await seed(page)
-  await page.goto(`/#tool-${a}-brief`)
+  // A tool that is Soon is its client's page; a live one is the tool's own page.
+  await page.goto(`/#tool-${a}-idea`)
   await page.reload()
   await expect(page.getByTestId('client-page')).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
   await expect(page.getByRole('navigation', { name: 'Where you are' }).getByRole('button', { name: 'Tool' })).toHaveCount(0)
+  await page.goto(`/#tool-${a}-brief`)
+  await page.reload()
+  await expect(page.getByTestId('tool-page')).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`#tool-${a}-brief$`))
 })
