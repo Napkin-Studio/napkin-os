@@ -35,6 +35,8 @@ export interface ManifestInfo {
   file_count: number
   lineage?: LineageInfo
   app?: AppMeta
+  /** Who the document is for (`manifest.client`), when it has a client. */
+  client?: ClientRef
 }
 
 export interface OpenResult {
@@ -109,6 +111,89 @@ export interface RecentState {
   /** Things a person must check before the lock, one per place (the document’s own "Needs you"). */
   needs_you: number
   locked: boolean
+}
+
+// ── Clients and the library listing (`napkin_host::{clients, listing}`) ──────
+
+/** Who a document is for: the registry's id, and the name it has now. */
+export interface ClientRef {
+  /** `cli_` and eight lowercase hex digits. */
+  id: string
+  name: string
+}
+
+/** One client of the studio, as the registry holds it. */
+export interface ClientRecord {
+  id: string
+  name: string
+  /** One to three characters for the circle. */
+  initials: string
+  material: ClientMaterial
+  /** Who opened it (`human:name@agency`): informational, never a permission. */
+  owner: string
+  created_at: string
+  /** When it was archived; absent while it is live. */
+  archived_at?: string | null
+}
+
+export type ClientMaterial = 'pearl' | 'ceramic' | 'stone' | 'graphite'
+
+/** What a person may change on a client. */
+export interface ClientPatch {
+  name?: string
+  initials?: string
+  material?: ClientMaterial
+}
+
+/** What `clients.adopt` did. */
+export interface Adopted {
+  created: ClientRecord[]
+  linked: number
+}
+
+/** A tool running on a document, as the landing says it. */
+export interface RunInfo {
+  state: 'idle' | 'working' | 'waiting' | 'failed' | 'done'
+  label: string
+  since?: string
+}
+
+/** One piece of work in the library, with who it is for. */
+export interface LibraryItem {
+  path: string
+  app_id: string | null
+  title: string
+  updated_at: string
+  client: ClientRef | null
+  state?: RecentState | null
+  run: RunInfo | null
+}
+
+export interface LibraryListing {
+  /** Newest first, uncapped, after the filter. */
+  items: LibraryItem[]
+  /** Documents with no client, whatever the filter. */
+  clients_unassigned: number
+}
+
+export interface LibraryFilter {
+  /** A client id. */
+  client?: string
+  /** An app id. */
+  app?: string
+}
+
+/** The client registry, through the host. */
+export interface ClientsApi {
+  /** Live clients in the order made; archived ones too with `includeArchived`. */
+  list(includeArchived?: boolean): Promise<ClientRecord[]>
+  /** Open a client. A name already in use is refused with the host's words. */
+  create(name: string, material?: ClientMaterial): Promise<ClientRecord>
+  update(id: string, patch: ClientPatch): Promise<ClientRecord>
+  archive(id: string): Promise<ClientRecord>
+  restore(id: string): Promise<ClientRecord>
+  /** Turn chosen free-text names into clients and link the documents that name them. */
+  adopt(names: string[]): Promise<Adopted>
 }
 
 // ── The decision view (`napkin_host::ops::decisions`) ─────────────────────────
@@ -463,7 +548,8 @@ export interface Host {
   // ── Documents ─────────────────────────────────────────────────────────────
   openClan(path: string): Promise<OpenResult>
   openHome(): Promise<OpenResult>
-  newDocumentFromApp(appId: string, title: string | null): Promise<OpenResult>
+  /** A new document of `appId`, for `clientId` when one is given (`manifest.client`). */
+  newDocumentFromApp(appId: string, title: string | null, clientId?: string | null): Promise<OpenResult>
   /** The .clan path the app was launched with, if any. Cleared by reading it. */
   takeLaunchFile(): Promise<string | null>
 
@@ -532,6 +618,14 @@ export interface Host {
   installApp(srcPath: string): Promise<InstalledApp>
   /** Documents in the store, most recently updated first (the host keeps 12). */
   listRecent(): Promise<RecentDoc[]>
+  /**
+   * Every piece of work, by client: uncapped, newest first, optionally narrowed
+   * to a client and/or an app. Rejects on a host that predates it (the shell
+   * then keeps the Launcher as home).
+   */
+  listLibrary(filter?: LibraryFilter): Promise<LibraryListing>
+  /** The client registry. */
+  readonly clients: ClientsApi
 
   // ── Branching one document into another app ───────────────────────────────
   /**

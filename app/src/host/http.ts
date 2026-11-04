@@ -18,6 +18,10 @@ import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
 import type {
   ClientConfirmReply,
+  Adopted,
+  ClientRecord,
+  LibraryFilter,
+  LibraryListing,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
@@ -43,6 +47,15 @@ interface SessionInfo {
 /** The signed-in person, when the server has accounts; null when it is anonymous. */
 export async function signedInUser(): Promise<SessionInfo['user'] | null> {
   try { return (await session()).user ?? null } catch { return null }
+}
+
+/** `?client=<id>&app=<app_id>`, or nothing: only what the filter names. */
+export function libraryQuery(filter?: LibraryFilter): string {
+  const q = new URLSearchParams()
+  if (filter?.client) q.set('client', filter.client)
+  if (filter?.app) q.set('app', filter.app)
+  const s = q.toString()
+  return s ? `?${s}` : ''
 }
 
 /** An opened document, plus what the frame needs to talk to the host. */
@@ -241,8 +254,8 @@ export const httpHost: Host = {
 
   openClan: path => adopt(json<OpenView>(`/d/${encodeURIComponent(path)}`)),
   openHome: () => adopt(json<OpenView>('/home')),
-  newDocumentFromApp: async (appId, title) =>
-    adopt(json<OpenView>('/documents', postJson({ app_id: appId, title }))),
+  newDocumentFromApp: async (appId, title, clientId) =>
+    adopt(json<OpenView>('/documents', postJson({ app_id: appId, title, ...(clientId ? { client_id: clientId } : {}) }))),
 
   // A shared link — `?open=<document>` — is the web's answer to double-clicking
   // a .clan. Consumed once, then cleared so a reload does not re-open it.
@@ -328,6 +341,17 @@ export const httpHost: Host = {
   // The tenant's own /recent (napkin-web api.rs), not the frame's clan://
   // origin: that one needs an open document's token, and home has none.
   listRecent: () => json<RecentDoc[]>('/recent'),
+
+  listLibrary: (filter?: LibraryFilter) => json<LibraryListing>(`/library${libraryQuery(filter)}`),
+  clients: {
+    list: (includeArchived = false) => json<ClientRecord[]>(`/clients${includeArchived ? '?archived=1' : ''}`),
+    create: (name, material) => json<ClientRecord>('/clients', postJson({ name, ...(material ? { material } : {}) })),
+    update: (id, patch) =>
+      json<ClientRecord>(`/clients/${encodeURIComponent(id)}`, { ...postJson(patch), method: 'PATCH' }),
+    archive: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/archive`, { method: 'POST' }),
+    restore: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
+    adopt: names => json<Adopted>('/clients/adopt', postJson({ names })),
+  },
 
   spinoffTargets: () => json<SpinoffTarget[]>(`/d/${requireDoc()}/spinoff-targets`),
   spinoffDocument: (appId, title, map) =>

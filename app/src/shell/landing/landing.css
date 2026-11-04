@@ -1,0 +1,168 @@
+/* The landing: the studio, its clients and their tools as circles. Every colour
+   and face comes from the OS tokens (index.css), so light and dark follow. The
+   ring colours are named once here (--lc-*), so a change of accent is one place.
+   Flat SVG: no script draws a circle. */
+
+.lc {
+  --lc-ring-active: var(--accent);
+  --lc-ring-error: var(--ink);
+  --lc-ring-wait: var(--ink3);
+  --lc-ring-track: color-mix(in oklab, var(--ink) 16%, var(--paper));
+  --lc-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  flex: 1;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0 16px 48px;
+}
+.lc-page { max-width: 1040px; margin: 0 auto; }
+.lc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.lc-mut { color: var(--ink3); }
+.lc button { font: inherit; color: inherit; }
+.lc button:focus-visible, .lc input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* the greeting and the page heads */
+.lc-hello { display: grid; justify-items: center; gap: 10px; padding: 40px 0 8px; text-align: center; }
+.lc-h1 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 800; letter-spacing: -0.025em; line-height: 1.05; text-wrap: balance; }
+.lc-h1:focus { outline: none; }
+.lc-h1-left { text-align: left; }
+.lc-phead { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; padding: 32px 0 16px; }
+.lc-phl { flex: 1 1 320px; display: grid; gap: 8px; min-width: 0; }
+.lc-lede { font-size: 15px; color: var(--ink2); min-height: 22px; }
+.lc-phr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* the agency circle: the door */
+.lc-door { display: grid; justify-items: center; padding: 8px 0 0; }
+.lc-doorbtn { appearance: none; background: none; border: 0; padding: 16px 24px 8px; display: grid; justify-items: center; gap: 14px; cursor: pointer; border-radius: var(--r-card); }
+.lc-doorbtn .lc-orb { display: block; line-height: 0; transition: transform 377ms var(--lc-ease); }
+.lc-doorbtn:hover .lc-orb, .lc-doorbtn:focus-visible .lc-orb { transform: translateY(-6px) scale(1.02); }
+.lc-dl { display: grid; gap: 4px; text-align: center; }
+.lc-dname { font-size: clamp(24px, 4vw, 34px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.lc-dline { font-size: 15px; color: var(--ink2); }
+.lc-dhint { font-size: 13px; color: var(--ink3); }
+
+/* the circle */
+.lc-cir { display: block; flex: none; overflow: visible; }
+.lc-ini { font-family: var(--f-display); font-weight: 700; letter-spacing: -0.01em; }
+.lc-act { transform-box: view-box; transform-origin: 0 0; }
+@keyframes lc-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .lc-cir[data-activity='work'] .lc-act { animation: lc-turn 6s linear infinite; }
+}
+
+/* strips: what needs you, what is running */
+.lc-strips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 40px; }
+.lc-strip-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 600 12px/1.3 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink2); }
+.lc-n { display: inline-block; min-width: 20px; padding: 0 6px; background: var(--accent); color: var(--create-fg); font: 700 12px/20px var(--f-display); text-align: center; border-radius: var(--r-pill); letter-spacing: 0; }
+.lc-cards { list-style: none; display: grid; gap: 8px; }
+.lc-card {
+  appearance: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%;
+  min-height: 44px; padding: 12px 16px; text-align: left; cursor: pointer;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card);
+  transition: border-color var(--dur) var(--ease);
+}
+.lc-card:hover { border-color: var(--ink); }
+.lc-card-t { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-card-m { grid-column: 1; font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-tag { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: var(--r-pill); white-space: nowrap; }
+.lc-tag-need { background: var(--accent); color: var(--create-fg); }
+.lc-tag-run { border: 1px solid var(--accent); color: var(--ink); }
+.lc-tag-fail { background: var(--ink); color: var(--paper); }
+.lc-nothing { font-size: 13.5px; color: var(--ink2); border: 1px dashed var(--line); border-radius: var(--r-card); padding: 12px 16px; }
+.lc-unassigned { margin-top: 24px; font-size: 13px; color: var(--ink3); text-align: center; }
+
+/* the clients page */
+.lc-stagewrap { border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--card); }
+.lc-row { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 28px 8px; min-height: 380px; padding: 28px 8px; }
+.lc-client {
+  appearance: none; position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: calc(var(--box) + 14px); padding: 6px 2px 8px; background: none; border: 0; border-radius: var(--r-card); text-align: center; cursor: pointer;
+}
+.lc-client .lc-orb { display: block; line-height: 0; transition: transform 233ms var(--lc-ease); }
+.lc-client:hover .lc-orb, .lc-client:focus-visible .lc-orb { transform: translateY(-4px); }
+.lc-lbl { display: block; width: max-content; max-width: calc(var(--box) + 56px); }
+.lc-nm { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.25; }
+.lc-st { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--ink2); }
+.lc-dot { display: inline-block; width: 7px; height: 7px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; background: var(--accent); }
+.lc-dot-hollow { background: none; border: 1.5px solid var(--lc-ring-wait); }
+.lc-dot-ink { background: var(--ink); }
+.lc-addc { display: grid; place-items: center; width: 89px; height: 89px; border: 1.5px dashed var(--ink3); border-radius: 50%; color: var(--ink3); font-size: 28px; line-height: 1; transition: border-color 233ms linear, color 233ms linear; }
+.lc-add-client:hover .lc-addc, .lc-add-client:focus-visible .lc-addc, .lc-addc-big:hover, .lc-addc-big:focus-visible { border-color: var(--ink); color: var(--ink); }
+.lc-add-client .lc-nm { font-weight: 500; color: var(--ink2); }
+.lc-addc-big { appearance: none; background: none; width: 89px; height: 89px; }
+.lc-empty { display: grid; justify-items: center; gap: 16px; text-align: center; padding: 48px 16px; min-height: 340px; align-content: center; }
+.lc-empty p { color: var(--ink2); max-width: 42ch; }
+.lc-more { display: flex; justify-content: center; padding: 0 0 16px; }
+.lc-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; padding: 12px 0; font-size: 12px; color: var(--ink2); }
+.lc-search input { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: var(--r-pill); min-height: 32px; padding: 0 14px; font: inherit; font-size: 13px; width: 220px; max-width: 100%; }
+
+/* the ring of clients: on a wide screen and few clients, they stand round the centre */
+@media (min-width: 720px) {
+  .lc-ring { position: relative; display: block; height: 520px; padding: 0; }
+  .lc-ring .lc-client {
+    position: absolute;
+    --a: calc(-90deg + 360deg / var(--n) * var(--i));
+    left: calc(50% + 190px * cos(var(--a)) - (var(--box) + 14px) / 2);
+    top: calc(46% + 170px * sin(var(--a)) - var(--box) / 2 - 6px);
+  }
+  .lc-ring > .lc-nothing { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+}
+
+/* the add form */
+.lc-add { display: grid; gap: 6px; margin: 0 0 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--soft); }
+.lc-add label { font: 600 12px/1.3 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink2); }
+.lc-add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.lc-add input { flex: 1 1 220px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--card); color: var(--ink); font: inherit; font-size: 14px; }
+.lc-error { color: var(--danger); font-size: 13px; }
+
+/* one client: its tools in a ring around it */
+.lc-wheel { position: relative; width: min(100%, 560px); height: 460px; margin: 8px auto 24px; }
+.lc-centre { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); line-height: 0; }
+.lc-tool {
+  appearance: none; position: absolute; left: calc(50% + var(--x) * 175px); top: calc(50% + var(--y) * 175px);
+  transform: translate(-50%, -50%); width: 112px; padding: 0; background: none; border: 0; border-radius: var(--r-card); cursor: pointer;
+  display: grid; justify-items: center; gap: 4px; min-height: 44px;
+}
+.lc-tool .lc-orb { display: block; line-height: 0; transition: transform 233ms var(--lc-ease); }
+.lc-tool:hover .lc-orb, .lc-tool:focus-visible .lc-orb { transform: translateY(-3px); }
+.lc-soon { cursor: default; }
+.lc-soon:hover .lc-orb { transform: none; }
+.lc-tl { display: grid; gap: 1px; text-align: center; line-height: 1.15; }
+.lc-tl b { font-size: 13px; font-weight: 700; }
+.lc-tl small { font-size: 11.5px; color: var(--ink2); font-weight: 600; }
+.lc-work { max-width: 720px; margin: 0 auto; }
+
+/* the trail of circles in the bar */
+.lc-trail { flex: 1; min-width: 0; overflow: hidden; }
+.lc-trail ol { display: flex; align-items: center; gap: 4px; list-style: none; min-width: 0; }
+.lc-trail li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.lc-trail li + li::before { content: '\203A'; color: var(--ink3); font-size: 18px; line-height: 1; }
+.lc-crumb { appearance: none; background: none; border: 0; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px; border-radius: var(--r-card); cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink2); min-width: 0; }
+.lc-crumb:hover { color: var(--ink); }
+.lc-crumb[aria-current='page'] { color: var(--ink); font-weight: 600; cursor: default; }
+.lc-crumb:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.lc-cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-crumb .lc-cir { flex: none; }
+
+.lc-foot { display: flex; justify-content: center; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line-soft); max-width: 1040px; margin-inline: auto; }
+.lc-link { appearance: none; background: none; border: 0; padding: 0 12px; min-height: 44px; color: var(--ink2); font-size: 13px; text-decoration: underline; cursor: pointer; }
+.lc-link:hover { color: var(--ink); }
+
+@media (max-width: 720px) { .lc-strips { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .lc-hello { padding-top: 24px; }
+  .lc-doorbtn { padding: 8px 0; }
+  .lc-doorbtn .lc-cir { width: 190px; height: 190px; }
+  .lc-row { gap: 20px 4px; }
+  .lc-crumb:not([aria-current]) .lc-cn { display: none; }
+  .lc-search input { width: 100%; }
+  .lc-phr { width: 100%; }
+  .lc-wheel { height: 400px; }
+  .lc-tool { left: calc(50% + var(--x) * 135px); top: calc(50% + var(--y) * 150px); width: 96px; }
+  .lc-tool .lc-cir { width: 72px; height: 72px; }
+}
+/* reduced motion: no lift, no travel */
+@media (prefers-reduced-motion: reduce) {
+  .lc-doorbtn .lc-orb, .lc-client .lc-orb, .lc-tool .lc-orb { transition: none; }
+  .lc-doorbtn:hover .lc-orb, .lc-doorbtn:focus-visible .lc-orb, .lc-client:hover .lc-orb, .lc-client:focus-visible .lc-orb, .lc-tool:hover .lc-orb { transform: none; }
+}

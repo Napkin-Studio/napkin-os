@@ -14,6 +14,11 @@ import { useFileDrop } from './offline/useFileDrop'
 import { applyUpdate, onLaunchFiles, useUpdateReady } from './pwa/pwa'
 import { askAppToExport } from './shell/appExport'
 import Launcher from './shell/Launcher'
+import { LandingHome } from './shell/landing/LandingHome'
+import { Trail } from './shell/landing/Trail'
+import { useLanding } from './shell/landing/useLanding'
+import { whoIs } from './shell/landing/model'
+import { useRoute } from './shell/useRoute'
 import AppHost from './shell/AppHost'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
@@ -45,6 +50,10 @@ function resetTheme() {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
+  // Where the landing is (the URL hash), and whether the person asked for the
+  // plain list of tools instead of it.
+  const [route, go] = useRoute()
+  const [allTools, setAllTools] = useState(false)
   const [running, setRunning] = useState<RunningApp | null>(null)
   const [installed, setInstalled] = useState<InstalledApp[]>([])
   const [pendingLaunch, setPendingLaunch] = useState<OpenResult | null>(null)
@@ -64,6 +73,8 @@ export default function App() {
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
   const updateReady = useUpdateReady()
+  // The landing's data, read through the host. Not on the device's own home.
+  const landing = useLanding(host, screen === 'home' && !allTools, !(device && !serverless))
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
     setToast({ title, body })
@@ -198,11 +209,11 @@ export default function App() {
     if (selected) await openPath(selected)
   }, [openPath, chooseDeviceFile])
 
-  const launchApp = useCallback(async (appId: string) => {
+  const launchApp = useCallback(async (appId: string, clientId?: string) => {
     const n = nextOpen()
     setLoading(true); setError(null)
     try {
-      const result = await host.newDocumentFromApp(appId, null)
+      const result = await host.newDocumentFromApp(appId, null, clientId)
       await runArtifact(n, result)
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
@@ -319,7 +330,7 @@ export default function App() {
     return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
   }, [device, openPath, handleOpenFile, saveCurrent])
 
-  const goHome = useCallback(() => { openHome() }, [openHome])
+  const goHome = useCallback(() => { setAllTools(false); openHome() }, [openHome])
 
   const onInstall = useCallback(async () => {
     if (!pendingLaunch) return
@@ -355,15 +366,43 @@ export default function App() {
     />
   ) : !booted ? (
     <LogoSpinnerFill label="Opening the studio…" />
+  ) : landing.state === 'ready' && landing.data && !allTools ? (
+    <LandingHome
+      route={route}
+      data={landing.data}
+      go={go}
+      onAdd={name => landing.add(name)}
+      onStart={launchApp}
+      onOpenDocument={openPath}
+      onAllTools={() => setAllTools(true)}
+    />
+  ) : landing.state === 'loading' && !allTools ? (
+    <LogoSpinnerFill label="Opening the studio…" />
   ) : (
+    // Where the host cannot list the library, the Launcher is the home as it was.
     <Launcher
       installed={installed}
       loading={loading}
       onLaunchApp={launchApp}
       onOpenFile={handleOpenFile}
       onOpenDocument={openPath}
+      onLanding={landing.state === 'ready' ? () => setAllTools(false) : undefined}
     />
   )
+
+  // The trail of circles, while the studio shows one of its landing screens.
+  const onLanding = landing.state === 'ready' && landing.data && !allTools && !(device && !serverless)
+  const trailClient = landing.data && (route.level === 'client' || route.level === 'tool')
+    ? landing.data.clients.find(c => c.id === route.client) ?? null
+    : null
+  const trail = onLanding && landing.data ? (
+    <Trail
+      route={route}
+      agency={whoIs(landing.data.person).agency}
+      client={trailClient}
+      onGo={go}
+    />
+  ) : undefined
 
   return (
     <>
@@ -398,6 +437,7 @@ export default function App() {
         />
       ) : (
         <StudioShell
+          trail={trail}
           tools={hasServer && !device ? (
             <button className="ch-btn" onClick={() => setOfflineOpen(true)} title="Documents kept on this device">
               Offline
