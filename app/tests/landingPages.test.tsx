@@ -174,6 +174,8 @@ test('the trail is circles you can go back through, and the last is where you ar
   assert.equal(count(html, /aria-current="page"/g), 1)
   assert.match(html, /Studio A/)
   assert.match(html, /Clients/)
+  // Every crumb has a name of its own, even where its label is hidden on a phone.
+  for (const n of ['Studio A', 'Clients', 'Client A']) assert.match(html, new RegExp(`<button[^>]*aria-label="${n}"`))
   assert.match(html, /aria-current="page"[^>]*>.*?Client A/s)
   const landing = renderToStaticMarkup(createElement(Trail, { route: { level: 'agency' }, agency: 'Studio A', onGo: noop }))
   assert.equal(count(landing, /<li/g), 1)

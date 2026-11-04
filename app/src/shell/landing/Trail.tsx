@@ -42,6 +42,7 @@ export function Trail({ route, agency, client, onGo }: Props) {
                 className="lc-crumb"
                 data-level={c.route.level}
                 aria-current={here ? 'page' : undefined}
+                aria-label={c.label}
                 onClick={() => { if (!here) onGo(c.route) }}
               >
                 {c.disc}
