@@ -1588,6 +1588,7 @@ Errors keep the existing `{ok:false, error:"message"}` shape.
 | `POST /clients {name, material?}` | `201` + the record. `400` bad name or material, `409` duplicate. |
 | `PATCH /clients/{id} {name?, initials?, material?}` | The record. `404`, `409` (name clash), `400`. |
 | `POST /clients/{id}/archive`, `/restore` | The record. Idempotent. `404`. |
+| `GET /clients/legacy` | `[{name, documents}]`: the free-text client names (Brief and Advertising `client`, Research `campaign.brand`, `client_org`) that documents without a client carry and no client has yet, most documents first. Reads every document, so the shell asks when the clients page opens and after a change, never on its poll. Tauri `legacy_client_names`, wasm `legacyClientNames`. |
 | `POST /clients/adopt {names[]}` | `{created: [record], linked: n}`. Makes a client for each chosen free-text name (reusing one that exists) and links the documents with no client whose own data names it (`client`, `client_org`, `campaign.client_org`, `campaign.brand`). Nothing is guessed: only the names sent are adopted. |
 | `GET /library[?client=<id>][&app=<app_id>]` | `{items: [LibraryItem], clients_unassigned: n}`; below. |
 
@@ -1608,6 +1609,23 @@ tenant workspace) keeps what a scan worked out per document, keyed on the
 document's id, `updated_at` and size. Every write mints a new revision, so a
 changed document is a different key and no invalidation hook is needed. The
 client's name is resolved from the registry on every call, never cached.
+
+#### Looking after the registry from the shell (P5)
+
+Only the shell's landing writes the registry (never a document's app, which
+reaches the host through `clan://` and has no route to it). The clients page
+shows **Adopt clients (n)** when `GET /clients/legacy` offers n names: a panel
+of ticked names with their document counts; the chosen ones go to
+`POST /clients/adopt`, which says `Added x clients, linked y documents.`
+Nothing is guessed: a name left unticked changes nothing. A client's page has
+**Rename** (`PATCH`; a name in use is refused with the host's words, and its
+work keeps its link because documents follow the id) and **Archive** (asks
+first; the work is kept and the client leaves the circles). **Archived clients**
+on the clients page lists them with **Restore**. A `registry_error` on the
+library listing is shown as a banner. Escape closes whichever of these is open
+before it goes up a level. Adopt rewrites each linked document's manifest; a
+host session that holds one of those documents open can write its older
+snapshot over the link (open question on the record).
 
 #### Running, from the middleware's replies (`napkin_host::RunTracker`)
 
