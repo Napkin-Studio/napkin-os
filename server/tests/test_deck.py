@@ -261,3 +261,36 @@ def test_a_document_whose_pipeline_names_the_task_with_no_handler_still_finds_it
 def test_the_existing_tasks_resolve_as_before():
     for task, handler in (("draft_brief", "draft_brief@1.0"), ("start_campaign", "start_campaign@1.0"), ("reconsider", "reconsider@2.0")):
         assert registry.resolve(task, {})[1] == handler
+
+
+# ── the carried brief and research (features/deck-maker-spinoff-inputs.clan) ──
+CARRIED = {"data": {"upstream": {"brief-1": {"background": "Lumen Water serves a region."}}}, "members": {"facts": [], "findings": [], "sources": [], "decisions": []}}
+
+
+def carrying(extra=None):
+    h = Host(data=deck_data(), schema=SCHEMA)
+    base = h.clan
+    h.clan = lambda: {**base(), "deck_inputs": CARRIED, **(extra or {})}
+    return h
+
+
+def test_the_hosts_deck_inputs_go_to_the_engine_and_a_deck_that_carries_them_needs_no_prompt(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = carrying()
+    host.data["inputs"]["prompt"]["text"] = ""
+    replies = build(deck, host)
+    assert replies[-1]["job"]["state"] == "done"
+    assert fake.posts[0]["deck_inputs"] == CARRIED and fake.posts[0]["inputs"]["prompt"]["text"] == ""
+
+
+def test_what_the_host_left_out_is_named_in_the_result_and_never_a_value(deck, monkeypatch):
+    use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    host = carrying({"deck_inputs_skipped": [{"what": "brief-1#audience", "why": "marked not for agents"}]})
+    replies = build(deck, host)
+    assert replies[-1]["result"]["left_out"] == [{"what": "brief-1#audience", "why": "marked not for agents"}]
+
+
+def test_a_deck_that_carries_nothing_sends_no_deck_inputs(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    build(deck, Host(data=deck_data(), schema=SCHEMA))
+    assert "deck_inputs" not in fake.posts[0]

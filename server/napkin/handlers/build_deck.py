@@ -17,8 +17,11 @@ def start(req, caps, settings, jid):
     data = ctx_data(req.clan)
     inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
     prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
-    if not str(prompt.get("text") or "").strip():
-        raise bad("give the deck something to build from: inputs.prompt.text is empty")
+    # What the host printed from the brief and research this deck carries (middleware-api.md section 12), if any.
+    carried = req.clan.get("deck_inputs") if isinstance(req.clan.get("deck_inputs"), dict) else None
+    carries = bool(carried and isinstance(carried.get("data"), dict) and carried["data"].get("upstream"))
+    if not str(prompt.get("text") or "").strip() and not carries:
+        raise bad("give the deck something to build from: inputs.prompt.text is empty and no brief or research is carried")
     port = eng.port_for(settings)
     if port is None:
         raise TaskError(503, "engine_unavailable", "no deck engine is configured for this middleware (NAPKIN_DECK_ENGINE_URL)")
@@ -28,4 +31,7 @@ def start(req, caps, settings, jid):
             "inputs": {"prompt": {k: prompt.get(k) or "" for k in ("text", "client", "project", "agency")},
                        "kind": inputs.get("kind") or "agency", "format": inputs.get("format") or "pitch"},
             "approvals": approvals, "render": bool(getattr(settings, "deck_render", True))}
-    return DeckJob(jid, TASK, req.handler, req, caps, port=port, body=body)
+    if carries:
+        body["deck_inputs"] = {"data": carried["data"], "members": carried.get("members") or {}}
+    skipped = req.clan.get("deck_inputs_skipped") if isinstance(req.clan.get("deck_inputs_skipped"), list) else []
+    return DeckJob(jid, TASK, req.handler, req, caps, port=port, body=body, left_out=skipped)

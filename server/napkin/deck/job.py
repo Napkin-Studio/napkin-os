@@ -58,11 +58,12 @@ class DeckJob:
     kind = "deck"
     stages = ["build"]
 
-    def __init__(self, jid, task, handler, req, caps, *, port, body):
+    def __init__(self, jid, task, handler, req, caps, *, port, body, left_out=()):
         self.id, self.task, self.handler = jid, task, handler
         self.doc, self.base, self.clan = req.doc, req.base, req.clan
         self.caps, self.scope = caps, caps.scope
         self.port, self.body = port, body
+        self.left_out = [x for x in left_out if isinstance(x, dict)]   # what the host left out of the carried brief and research, and why
         self.W = copy.deepcopy(ctx_data(req.clan))
         self.lock = threading.RLock()
         self.state, self.started_at, self.finished_at, self.error = "queued", iso(), None, None
@@ -219,4 +220,7 @@ class DeckJob:
                 s = "Cancelled: what the engine had written stays in its cache."
             else:
                 s = "The deck engine is running." if self.state == "running" else "queued"
-            return {"summary": s, "engine": {"state": self.engine_state, "mode": self.mode, "notices": list(self.notices), "cost_usd": self.cost}}
+            out = {"summary": s, "engine": {"state": self.engine_state, "mode": self.mode, "notices": list(self.notices), "cost_usd": self.cost}}
+            if self.left_out:   # display only: what of the carried brief and research the deck was not given (a mark, a cap), never a value
+                out["left_out"] = [{"what": x.get("what"), "why": x.get("why")} for x in self.left_out]
+            return out
