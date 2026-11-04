@@ -2,7 +2,8 @@
 # Run the Deck Maker locally with the deck engine behind it: the engine server, the middleware and the web host, wired together.
 #
 #   scripts/deck-local.sh            # replays a recorded run (Fernley, a fictional client): free, no model
-#   NAPKIN_DECK_LIVE=1 scripts/deck-local.sh   # also allows live runs: paid model calls, about 0.65 to 1.25 USD a deck
+#   NAPKIN_DECK_LIVE=1 scripts/deck-local.sh   # the REAL engine: your prompt, paid model calls, about 0.65 to 1.25 USD a deck,
+#                                              # stopping at NAPKIN_DECK_MAX_USD (default 2.00) a run. No recording is replayed.
 #
 # Open http://127.0.0.1:8099/ , start a Deck Maker document, type a prompt and press Build deck. The run stops at the storyline,
 # territories and idea gates; approve each to go on. Ctrl-C stops everything. Ports: web 8099, middleware 8795, engine 8793
@@ -14,7 +15,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUN="${DECK_LOCAL_DIR:-$ROOT/.deck-local}"
 WEB_PORT="${DECK_WEB_PORT:-8099}"
-REPLAY="${NAPKIN_DECK_REPLAY:-$ROOT/engine/deck/tests/fixtures/fernley/stages}"
+if [ "${NAPKIN_DECK_LIVE:-}" = 1 ]; then
+  # Live: the real engine, paid model calls. No recording unless you ask for one (a recording would win over live).
+  REPLAY="${NAPKIN_DECK_REPLAY:-}"
+  export BRIEF_CLAUDE_TRANSPORT="${BRIEF_CLAUDE_TRANSPORT:-auto}"   # the API key when there is one, else the Claude Code login
+else
+  REPLAY="${NAPKIN_DECK_REPLAY:-$ROOT/engine/deck/tests/fixtures/fernley/stages}"
+fi
 mkdir -p "$RUN/engine" "$RUN/web" "$RUN/config" "$RUN/seed" "$RUN/logs"
 
 if command -v soffice >/dev/null && command -v pdftoppm >/dev/null; then RENDER="${NAPKIN_DECK_RENDER:-1}"; else RENDER="${NAPKIN_DECK_RENDER:-0}"; fi
@@ -55,6 +62,6 @@ for url in "http://127.0.0.1:8793/status" "http://127.0.0.1:8795/healthz" "http:
   curl -fs "$url" >/dev/null 2>&1 || { echo "did not start: $url (see $RUN/logs)"; exit 1; }
 done
 echo "Deck Maker: http://127.0.0.1:$WEB_PORT/   (engine :8793, middleware :8795; logs in $RUN/logs)"
-if [ "${NAPKIN_DECK_LIVE:-}" = 1 ]; then echo "LIVE runs are allowed: paid, capped at ${NAPKIN_DECK_MAX_USD:-2.00} USD a run."; else echo "Replay only: free, no model."; fi
+if [ "${NAPKIN_DECK_LIVE:-}" = 1 ]; then echo "LIVE: the real engine on your prompt. Paid model calls ($BRIEF_CLAUDE_TRANSPORT transport), capped at ${NAPKIN_DECK_MAX_USD:-2.00} USD a run."; else echo "Replay only: free, no model."; fi
 [ "$RENDER" = 1 ] || echo "Files (pptx, web, pdf) are skipped: soffice and pdftoppm are not both installed."
 wait
