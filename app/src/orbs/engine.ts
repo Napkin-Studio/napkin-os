@@ -163,6 +163,8 @@ export function createOrbs() {
   let AW = 256, AH = 256, phase = 0 // phase: 0 not started, 1 running, -1 flat for good
   let rafId = 0, lastWall = 0, lastFrame = 0, govN = 0, fpsT = 0, fpsN = 0, wakeAll = true
   let themeEl: HTMLElement | null = null
+  let epoch = 0 // bumps when the context comes back, so circles drawn while it was gone can try again
+  const listeners = new Set<() => void>()
   let io: IntersectionObserver | null = null
   const undo: Array<() => void> = []
   const BATCH: Circle[] = []
@@ -276,10 +278,10 @@ export function createOrbs() {
       e.preventDefault(); ENG.ok = false; ENG.lost = true; ENG.reason = 'WebGL context lost: flat SVG'
       for (const c of ALL) c.wrap.removeAttribute('data-orb')
       for (const c of ALL) c.shown = false
-      publish()
+      publish(); epoch++; for (const f of [...listeners]) f()
     }) // the flat SVG shows again
     glcv.addEventListener('webglcontextrestored', () => {
-      if (build()) { ENG.lost = false; ENG.reason = ''; wake(); publish() }
+      if (build()) { ENG.lost = false; ENG.reason = ''; wake(); publish(); epoch++; for (const f of [...listeners]) f() }
     }) // and the 3D comes back, circle by circle, at its next drawn frame
     return build()
   }
@@ -623,6 +625,16 @@ export function createOrbs() {
   return {
     attach,
     scan,
+    /** Subscribe to the engine losing or getting its context back; returns the unsubscribe. */
+    onChange(f: () => void) { listeners.add(f); return () => { listeners.delete(f) } },
+    /** Counts losses and restorations of the context. */
+    epoch: () => epoch,
+    /**
+     * Can circles be drawn in 3D now (WebGL is up)? Starts the engine on the first ask, so a page that
+     * never shows a circle never makes a context. A circle renders its canvas only when this is true,
+     * so a page without WebGL has no canvas in it at all.
+     */
+    canDraw(): boolean { return ensure() && ENG.ok },
     ensure,
     /** A press from the keyboard on a circle's host element: the same ripple a pointer press makes. */
     kick(el: Element | null) { const c = el && BYWRAP.get(el); if (c) { addRipple(c, 0, 0, 1); c.wakeUntil = nowS() + 2.5; wakeAll = true } },

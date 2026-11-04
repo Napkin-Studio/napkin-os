@@ -111,7 +111,7 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
           </div>
         ) : (
           <div className={`lc-row${ring ? ' lc-ring' : ''}`} role="group" aria-label="Clients" style={{ '--n': page.shown.length + 1 } as React.CSSProperties}>
-            {ring && <span className="lc-hub" aria-hidden><Circle size={64} material="onyx" initials={initialsOf(agency)} /></span>}
+            {ring && <span className="lc-hub" aria-hidden><Circle size={64} material="onyx" initials={initialsOf(agency)} slot="agency-hub" orb /></span>}
             {page.shown.map((s, i) => {
               // Standing round the agency they are all one size; in rows the first three lead.
               const box = ring ? 110 : boxFor(i, page.shown.length)
@@ -125,7 +125,7 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
                   aria-label={circleName(s)}
                   onClick={() => onOpenClient(s.client.id)}
                 >
-                  <span className="lc-orb"><Circle size={box} material={s.client.material} initials={s.client.initials || initialsOf(s.client.name)} activity={s.activity} /></span>
+                  <span className="lc-orb"><Circle size={box} material={s.client.material} initials={s.client.initials || initialsOf(s.client.name)} activity={s.activity} slot={`client:${s.client.id}`} orb /></span>
                   <span className="lc-lbl">
                     <span className="lc-nm">{s.client.name}</span>
                     <span className="lc-st"><Status s={s} /></span>

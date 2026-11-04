@@ -85,7 +85,7 @@ export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenIte
 
       <div className="lc-wheel" role="group" aria-label={`Tools for ${c.name}`} onKeyDown={onKeyDown}>
         <span className="lc-centre" aria-hidden>
-          <Circle size={144} material={c.material} initials={c.initials || initialsOf(c.name)} activity={summary.activity} />
+          <Circle size={144} material={c.material} initials={c.initials || initialsOf(c.name)} activity={summary.activity} slot={`client:${c.id}`} orb />
         </span>
         {TOOLS.map((t, i) => {
           const on = live.has(t.id)
@@ -105,7 +105,7 @@ export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenIte
               aria-disabled={on ? undefined : true}
               onClick={() => choose(i)}
             >
-              <span className="lc-orb"><Circle size={89} material="pearl" initials={t.name.slice(0, 1)} activity={on ? activityOf(summary.perTool[t.id]) : 'idle'} dim={!on} /></span>
+              <span className="lc-orb"><Circle size={89} material="pearl" initials={t.name.slice(0, 1)} activity={on ? activityOf(summary.perTool[t.id]) : 'idle'} dim={!on} slot={`tool:${c.id}:${t.id}`} orb /></span>
               <span className="lc-tl"><b>{t.name}</b><small>{k.small}</small></span>
             </button>
           )

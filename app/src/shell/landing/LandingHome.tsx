@@ -17,6 +17,9 @@ import { TOOLS, isLive, toolById } from './tools'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
+import { shared } from '../../orbs/engine'
+import { installPressGate } from '../../orbs/gate'
+import { applyFlatPref, flatPref, setFlatPref } from '../../orbs/prefs'
 import './landing.css'
 
 interface Props {
@@ -43,6 +46,16 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
   useEffect(() => {
     top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true })
   }, [key])
+
+  // The circles are 3D where the engine can draw them. A press is seen (squish and ripple) before the page
+  // moves on; "Flat circles" is the person's own switch. Neither is ever needed for anything to work.
+  const [flat, setFlat] = useState(flatPref)
+  const viewRef = useRef(key)
+  useEffect(() => { viewRef.current = key })
+  useEffect(() => {
+    applyFlatPref()
+    return top.current ? installPressGate(top.current, shared(), () => viewRef.current) : undefined
+  }, [])
 
   // Escape goes up one level (agency stays), unless it is closing something of its own.
   const goRef = useRef(go)
@@ -175,6 +188,13 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
       {body}
       <footer className="lc-foot">
         <button className="lc-link" onClick={onAllTools}>All tools</button>
+        <button
+          className="lc-link lc-flat-toggle"
+          aria-pressed={flat}
+          onClick={() => { setFlatPref(!flat); setFlat(!flat) }}
+        >
+          Flat circles
+        </button>
       </footer>
     </div>
   )

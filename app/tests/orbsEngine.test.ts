@@ -117,6 +117,34 @@ test('context lost puts the flat circle back; restored brings the 3D back', () =
   assert.equal(b.root.attrs['data-orbs'], 'gl')
 })
 
+test('losing and regaining the context is announced, so a circle can drop or grow its canvas', () => {
+  const { b, orbs } = start()
+  assert.equal(orbs.canDraw(), true, 'asking starts the engine')
+  orbs.attach(host().h, spec({ slot: 'a' }))
+  run(orbs.step, T0(), 2)
+  let told = 0
+  const off = orbs.onChange(() => { told++ })
+  b.glCanvas.fire('webglcontextlost')
+  assert.equal(told, 1)
+  assert.equal(orbs.canDraw(), false, 'no canvas is wanted while it is lost')
+  assert.equal(orbs.attach(host().h, spec({ slot: 'late' })), null, 'a circle made while it is lost stays flat')
+  assert.equal(orbs.epoch(), 1)
+  b.glCanvas.fire('webglcontextrestored')
+  assert.equal(told, 2)
+  assert.equal(orbs.canDraw(), true)
+  assert.ok(orbs.attach(host().h, spec({ slot: 'late' })), 'and may try again')
+  off()
+  b.glCanvas.fire('webglcontextlost'); b.glCanvas.fire('webglcontextrestored')
+  assert.equal(told, 2, 'unsubscribed')
+})
+
+test('a page with no WebGL is told so up front: no canvas is wanted', () => {
+  const { orbs } = start({ gl: null })
+  assert.equal(orbs.canDraw(), false)
+  const r = start({ media: { '(prefers-reduced-data: reduce)': true } })
+  assert.equal(r.orbs.canDraw(), false)
+})
+
 test('Force flat: the flat circle shows, no frame is drawn, and 3D comes back when it is switched off', () => {
   const { orbs } = start()
   const a = host()

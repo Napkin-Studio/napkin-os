@@ -79,7 +79,7 @@ export function LandingPage({ agency, greeting, summary, onOpenAgency, onOpenIte
       <div className="lc-door">
         <button className="lc-doorbtn" onClick={onOpenAgency} data-testid="agency-circle">
           <span className="lc-orb">
-            <Circle size={233} material="onyx" initials={initialsOf(agency)} activity={summary.activity} />
+            <Circle size={233} material="onyx" initials={initialsOf(agency)} activity={summary.activity} slot="agency" orb />
           </span>
           <span className="lc-dl">
             <span className="lc-dname">{agency}</span>

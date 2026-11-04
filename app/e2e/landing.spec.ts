@@ -4,7 +4,7 @@
 //
 //   npm run e2e            (in app/; starts the stack, see stack.mjs)
 
-import { expect, test, type Page } from '@playwright/test'
+import { chromium, expect, test, type Page } from '@playwright/test'
 
 interface Seeded { tenant: string; a: string; b: string }
 
@@ -174,14 +174,19 @@ test('the keyboard reaches the circles and Enter opens one', async ({ page }) =>
   await expect(page.getByTestId('client-page')).toBeVisible()
 })
 
-test('reduced motion and no WebGL: the circles are flat SVG, nothing animates', async ({ browser }) => {
-  const ctx = await browser.newContext({ reducedMotion: 'reduce' })
+// Phase 4 (3D circles): reduced motion alone no longer means flat (the approved mock shows still
+// 3D spheres; circles.spec.ts covers that). This test is about its other half, no WebGL at all, so
+// it starts its own browser without WebGL, as its name says. The assertions are unchanged.
+test('reduced motion and no WebGL: the circles are flat SVG, nothing animates', async () => {
+  const browser = await chromium.launch({ args: ['--disable-webgl', '--disable-webgl2', '--disable-3d-apis', '--disable-gpu'] })
+  const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL: test.info().project.use.baseURL })
   const page = await ctx.newPage()
   await page.goto('/')
   await expect(page.getByTestId('landing')).toBeVisible()
   expect(await page.locator('canvas').count()).toBe(0)
   expect(await page.locator('svg.lc-cir').count()).toBeGreaterThan(0)
   await ctx.close()
+  await browser.close()
 })
 
 // ── layout and names at the widths that broke ───────────────────────────────
