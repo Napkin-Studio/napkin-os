@@ -11,7 +11,7 @@ import { LandingPage } from './LandingPage'
 import { ClientsPage } from './ClientsPage'
 import { ClientPage } from './ClientPage'
 import { ToolPage } from './ToolPage'
-import { agencySummary, ordered, summarise, whoIs } from './model'
+import { agencySummary, newsOf, ordered, summarise, whoIs, type AgencySummary } from './model'
 import { greeting } from '../when'
 import { TOOLS, isLive, toolById } from './tools'
 import { arrival, isTyping } from './keys'
@@ -63,6 +63,16 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
   const who = whoIs(data.person)
   const summary = useMemo(() => agencySummary(data.clients, data.items, data.unassigned), [data])
   const all = useMemo(() => ordered(data.clients, data.items), [data])
+
+  // A refresh that finds more needing the person, or a new failure, says so once (polite live region).
+  const last = useRef<AgencySummary | null>(null)
+  const [news, setNews] = useState('')
+  useEffect(() => {
+    const said = newsOf(last.current, summary)
+    last.current = summary
+    // The announcement is a reaction to the data that just arrived.
+    if (said) setNews(said)
+  }, [summary])
   const installed = useMemo(() => data.apps.map(app_id => ({ app_id })), [data.apps])
   const live = useMemo(() => new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string)), [installed])
 
@@ -161,6 +171,7 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
   return (
     <div className="lc" ref={top}>
       <p className="lc-sr" role="status" aria-live="polite" data-testid="live">{say}</p>
+      <p className="lc-sr" role="status" aria-live="polite" data-testid="news">{news}</p>
       {body}
       <footer className="lc-foot">
         <button className="lc-link" onClick={onAllTools}>All tools</button>

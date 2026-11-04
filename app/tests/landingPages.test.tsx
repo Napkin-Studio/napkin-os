@@ -250,3 +250,56 @@ test('a trail whose client is not known yet still names every circle', () => {
   const html = renderToStaticMarkup(createElement(Trail, { route: { level: 'client', client: 'cli_00000009' }, agency: 'Studio A', onGo: noop }))
   assert.match(html, /<button[^>]*aria-label="Client"/)
 })
+
+// ── Phase 3 ────────────────────────────────────────────────────────────────
+
+test('the Needs you strip says why, the Running strip says what, a Failed strip appears only when something failed', () => {
+  const [a, b] = [client(0), client(1)]
+  const items = [
+    item(a, BRIEF, { title: 'Spring brief', state: { needs_you: 2, locked: false } }),
+    item(b, 'ie.napkin.deck-maker', { title: 'Pitch', run: { state: 'waiting', label: 'Waiting at the gate' } }),
+    item(b, 'ie.napkin.campaign-research', { title: 'Category scan', run: { state: 'working', label: 'Working: research (3 of 6)', stage: 'research' } }),
+  ]
+  const render = (its: LibraryItem[]) => renderToStaticMarkup(createElement(LandingPage, {
+    agency: 'Studio A', greeting: 'Hello.', summary: agencySummary([a, b], its, 0), onOpenAgency: noop, onOpenItem: noop,
+  }))
+  const html = render(items)
+  assert.match(html, /data-testid="strip-needs"/)
+  assert.match(html, /2 things to check · Spring brief/)
+  assert.match(html, /Waiting at the gate · Pitch/)
+  assert.match(html, /Working: research \(3 of 6\)/)
+  assert.match(html, /data-activity="human"/, 'the agency ring says needs you')
+  assert.doesNotMatch(html, /data-testid="strip-failed"/)
+  const failed = render([...items, item(a, BRIEF, { title: 'Broken', run: { state: 'failed', label: 'Failed: select' } })])
+  assert.match(failed, /data-testid="strip-failed"/)
+  assert.match(failed, /Failed: select · Broken/)
+})
+
+test('the agency circle wears the strongest verb and says it in words', () => {
+  const a = client(0)
+  const html = renderToStaticMarkup(createElement(LandingPage, {
+    agency: 'Studio A', greeting: 'Hello.', onOpenAgency: noop, onOpenItem: noop,
+    summary: agencySummary([a], [item(a, BRIEF, { run: { state: 'working', label: 'Working: extract', stage: 'extract' } })], 0),
+  }))
+  assert.match(html, /data-activity="read"/)
+  assert.match(html, /The studio is reading\./)
+})
+
+test('every verb has its own ring, drawn flat and from the ring tokens', () => {
+  const seen = new Set<string>()
+  for (const activity of ['work', 'think', 'read', 'check', 'human', 'error', 'idle'] as const) {
+    const html = renderToStaticMarkup(createElement(Circle, { size: 89, material: 'stone', initials: 'CA', activity }))
+    assert.match(html, new RegExp(`data-activity="${activity}"`))
+    assert.doesNotMatch(html, /<canvas/)
+    if (activity !== 'idle') assert.match(html, new RegExp(`var\\(--lc-ring-${activity}\\)`))
+    seen.add(html.replace(/data-activity="\w+"/, ''))
+  }
+  assert.equal(seen.size, 7, 'no two verbs draw the same ring')
+})
+
+test('a client circle on the clients page says a quiet verb in words', () => {
+  const a = client(0)
+  const html = clientsPage(2, {}, [item(a, BRIEF, { run: { state: 'working', label: 'x', stage: 'synthesise' } })])
+  assert.match(html, /1 brief · 1 running · thinking/)
+  assert.match(html, /aria-label="Client A, 1 brief · 1 running, thinking\. Opens its tools"/)
+})

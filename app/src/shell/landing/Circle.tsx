@@ -23,6 +23,8 @@ interface Props {
 
 const R = 1 // the ring
 const TAU = 2 * Math.PI
+/** How much of the ring each verb's arc covers. */
+const ARC = { work: 0.28, think: 0.34, check: 0.5 } as const
 
 export function Circle({ size, material, initials, activity = 'idle', dim }: Props) {
   const m = materialOf(material)
@@ -39,15 +41,24 @@ export function Circle({ size, material, initials, activity = 'idle', dim }: Pro
       style={dim ? { opacity: 0.55 } : undefined}
     >
       <circle r={R} fill="none" stroke="var(--lc-ring-track)" strokeWidth={0.05} />
-      {activity === 'work' && (
-        // A turning quarter-ring: one arc, so it reads as motion and not as a gauge.
+      {(activity === 'work' || activity === 'think' || activity === 'read' || activity === 'check') && (
+        // A turning arc, one colour per verb (the app's ring tokens): work is a quarter, thinking a
+        // slower third, reading two short opposed arcs, checking a long slow arc. Shape and
+        // speed differ as well as colour; the words beside the circle say it too.
         <g className="lc-act">
-          <circle r={R} fill="none" stroke="var(--lc-ring-active)" strokeWidth={0.07} strokeLinecap="round"
-            strokeDasharray={`${len * 0.28} ${len}`} transform="rotate(-90)" />
+          {activity === 'read' ? (
+            [0, 180].map(a => (
+              <circle key={a} r={R} fill="none" stroke={`var(--lc-ring-${activity})`} strokeWidth={0.07} strokeLinecap="round"
+                strokeDasharray={`${len * 0.14} ${len}`} transform={`rotate(${a - 90})`} />
+            ))
+          ) : (
+            <circle r={R} fill="none" stroke={`var(--lc-ring-${activity})`} strokeWidth={0.07} strokeLinecap="round"
+              strokeDasharray={`${len * ARC[activity]} ${len}`} transform="rotate(-90)" />
+          )}
         </g>
       )}
       {activity === 'human' && (
-        <circle r={R} fill="none" stroke="var(--lc-ring-active)" strokeWidth={0.06} strokeLinecap="round" />
+        <circle r={R} fill="none" stroke="var(--lc-ring-human)" strokeWidth={0.06} strokeLinecap="round" />
       )}
       {activity === 'error' && (
         // Broken, and ink: failed is not colour alone.

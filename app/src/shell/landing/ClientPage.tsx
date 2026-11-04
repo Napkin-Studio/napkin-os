@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
 import { Circle } from './Circle'
-import { initialsOf, needsYou, type ClientSummary } from './model'
+import { activityOf, initialsOf, needsYou, type ClientSummary } from './model'
 import { lastTouched } from '../when'
 import { TOOLS, toolOfApp, type Tool } from './tools'
 import { isTyping, wheelKey } from './keys'
@@ -103,7 +103,7 @@ export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenIte
               aria-disabled={on ? undefined : true}
               onClick={() => choose(i)}
             >
-              <span className="lc-orb"><Circle size={89} material="pearl" initials={t.name.slice(0, 1)} activity={on ? summary.perTool[t.id].needsYou ? 'human' : summary.perTool[t.id].failed ? 'error' : summary.perTool[t.id].running ? 'work' : 'idle' : 'idle'} dim={!on} /></span>
+              <span className="lc-orb"><Circle size={89} material="pearl" initials={t.name.slice(0, 1)} activity={on ? activityOf(summary.perTool[t.id]) : 'idle'} dim={!on} /></span>
               <span className="lc-tl"><b>{t.name}</b><small>{k.small}</small></span>
             </button>
           )

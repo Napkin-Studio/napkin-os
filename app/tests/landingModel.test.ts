@@ -11,7 +11,7 @@ import { test } from 'node:test'
 
 import type { ClientRecord, LibraryItem } from '../src/host/types.ts'
 import {
-  activityOf, agencySummary, boxFor, circleName, countsLine, FIRST_PAGE, initialsOf, matches, needsYou,
+  ACTIVITY_ORDER, ACTIVITY_WORD, activityOf, activityOfItem, agencySummary, newsOf, needsReason, runWords, stageActivity, strongest, boxFor, circleName, countsLine, FIRST_PAGE, initialsOf, matches, needsYou,
   ordered, pageOf, plural, summarise, whoIs,
 } from '../src/shell/landing/model.ts'
 import { TOOLS, isLive, toolOfApp } from '../src/shell/landing/tools.ts'
@@ -170,4 +170,102 @@ test('plurals and the greeting', () => {
   assert.equal(lastTouched('not a date'), '')
   assert.match(lastTouched('2026-11-04T09:00:00', new Date(2026, 10, 4, 12)), /^Today, /)
   assert.match(lastTouched('2026-11-03T09:00:00', new Date(2026, 10, 4, 12)), /^Yesterday, /)
+})
+
+// ── Phase 3: tool-neutral Running and Needs you ────────────────────────────
+
+const running = (stage: string | undefined) => ({ state: 'working' as const, label: 'x', stage })
+
+test('the full ring order: needs you, failed, working, thinking, reading, checking, idle', () => {
+  assert.deepEqual([...ACTIVITY_ORDER], ['human', 'error', 'work', 'think', 'read', 'check', 'idle'])
+  assert.equal(strongest(['idle', 'check', 'read']), 'read')
+  assert.equal(strongest(['check', 'think', 'read']), 'think')
+  assert.equal(strongest(['think', 'work']), 'work')
+  assert.equal(strongest(['work', 'error', 'think']), 'error')
+  assert.equal(strongest(['error', 'human', 'work']), 'human')
+  assert.equal(strongest([]), 'idle')
+  for (const a of ACTIVITY_ORDER) assert.ok(ACTIVITY_WORD[a], `${a} has a word`)
+})
+
+test('a run stage says what the tool is doing', () => {
+  assert.equal(stageActivity('extract'), 'read')
+  assert.equal(stageActivity('research'), 'read')
+  assert.equal(stageActivity('synthesise'), 'think')
+  assert.equal(stageActivity('select'), 'think')
+  assert.equal(stageActivity('Verify sources'), 'check')
+  assert.equal(stageActivity('Layout'), 'work')
+  assert.equal(stageActivity(undefined), 'work')
+})
+
+test('one document: waiting beats failed beats what it is doing', () => {
+  const a = client(1)
+  assert.equal(activityOfItem(item(a, BRIEF, { run: { state: 'waiting', label: 'Waiting for you' } })), 'human')
+  assert.equal(activityOfItem(item(a, BRIEF, { state: { needs_you: 1, locked: false }, run: running('research') })), 'human')
+  assert.equal(activityOfItem(item(a, BRIEF, { run: { state: 'failed', label: 'Failed' } })), 'error')
+  assert.equal(activityOfItem(item(a, BRIEF, { run: running('extract') })), 'read')
+  assert.equal(activityOfItem(item(a, BRIEF, { run: { state: 'done', label: 'Done' } })), 'idle')
+  assert.equal(activityOfItem(item(a, BRIEF)), 'idle')
+})
+
+test('a client and its tools show the strongest verb of what runs', () => {
+  const a = client(1)
+  const s = summarise(a, [
+    item(a, BRIEF, { run: running('extract') }),
+    item(a, BRIEF, { run: running('synthesise') }),
+    item(a, RESEARCH, { run: running('check') }),
+  ])
+  assert.equal(s.activity, 'think')
+  assert.equal(activityOf(s.perTool.brief), 'think')
+  assert.equal(activityOf(s.perTool.research), 'check')
+  assert.equal(activityOf(s.perTool.deck), 'idle')
+  assert.equal(summarise(a, [item(a, BRIEF, { run: running('extract') }), item(a, BRIEF, { run: { state: 'failed', label: 'Failed' } })]).activity, 'error')
+  assert.equal(circleName(summarise(a, [item(a, BRIEF, { run: running('extract') })])), 'Client A, 1 brief · 1 running, reading. Opens its tools')
+})
+
+test('the agency ring and both strips are computed across every client, tool-neutral', () => {
+  const [a, b] = [client(1), client(2)]
+  const deck = 'ie.napkin.deck-maker'
+  const items = [
+    item(a, BRIEF, { state: { needs_you: 2, locked: false } }),
+    item(b, deck, { run: { state: 'waiting', label: 'Waiting at the gate' } }),
+    item(b, RESEARCH, { run: running('research') }),
+    item(null, BRIEF, { run: { state: 'failed', label: 'Failed: select' } }),
+  ]
+  const s = agencySummary([a, b], items, 1)
+  assert.equal(s.needsYou.length, 2, 'a brief with things to check and a Deck at its gate')
+  assert.equal(s.running.length, 1)
+  assert.equal(s.failed.length, 1)
+  assert.equal(s.activity, 'human')
+  assert.equal(agencySummary([a], [item(a, BRIEF, { run: running('extract') })], 0).activity, 'read')
+  assert.equal(agencySummary([a], [item(a, BRIEF)], 0).activity, 'idle')
+  assert.equal(countsLine(s), '2 clients · 4 open · 2 need you · 1 running · 1 failed')
+})
+
+test('urgent clients also come first by verb: a reading client before an idle one', () => {
+  const [a, b] = [client(1), client(2)]
+  assert.deepEqual(ordered([a, b], [item(b, BRIEF, { run: running('extract') })]).map(s => s.client.name), ['Client B', 'Client A'])
+})
+
+test('why a document needs you, and what a run says in words', () => {
+  const a = client(1)
+  assert.equal(needsReason(item(a, BRIEF, { state: { needs_you: 1, locked: false } })), '1 thing to check')
+  assert.equal(needsReason(item(a, BRIEF, { state: { needs_you: 3, locked: false } })), '3 things to check')
+  assert.equal(needsReason(item(a, BRIEF, { run: { state: 'waiting', label: 'Waiting for you' } })), 'Waiting for you')
+  assert.equal(runWords(item(a, BRIEF, { run: running('extract') })), 'x')
+  assert.equal(runWords(item(a, BRIEF, { run: { state: 'failed', label: '' } })), 'Failed')
+})
+
+test('a refresh announces only what got worse', () => {
+  const [a] = [client(1)]
+  const none = agencySummary([a], [], 0)
+  const one = agencySummary([a], [item(a, BRIEF, { state: { needs_you: 1, locked: false } })], 0)
+  const both = agencySummary([a], [
+    item(a, BRIEF, { state: { needs_you: 1, locked: false } }), item(a, BRIEF, { state: { needs_you: 1, locked: false } }),
+    item(a, BRIEF, { run: { state: 'failed', label: 'Failed' } }),
+  ], 0)
+  assert.equal(newsOf(null, one), '', 'the first read says nothing')
+  assert.equal(newsOf(none, one), '1 more needs you')
+  assert.equal(newsOf(one, both), '1 more needs you, 1 more failed')
+  assert.equal(newsOf(both, none), '', 'a job finishing is not announced')
+  assert.equal(newsOf(one, one), '')
 })

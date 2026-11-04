@@ -7,7 +7,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { Circle } from './Circle'
-import { boxFor, circleName, initialsOf, pageOf, plural, type ClientSummary } from './model'
+import { ACTIVITY_WORD, boxFor, circleName, initialsOf, pageOf, plural, type ClientSummary } from './model'
 
 interface Props {
   agency: string
@@ -27,7 +27,9 @@ interface Props {
 
 function Status({ s }: { s: ClientSummary }) {
   const mark = s.activity === 'idle' ? 'lc-dot lc-dot-hollow' : s.activity === 'error' ? 'lc-dot lc-dot-ink' : 'lc-dot'
-  return <><i className={mark} aria-hidden />{s.status}</>
+  // The quieter verbs are said too: the dot is never the only word.
+  const verb = s.activity === 'think' || s.activity === 'read' || s.activity === 'check' ? ` · ${ACTIVITY_WORD[s.activity]}` : ''
+  return <><i className={mark} data-activity={s.activity} aria-hidden />{s.status}{verb}</>
 }
 
 function AddForm({ onAdd, onCancel }: { onAdd: (name: string) => Promise<string | null>; onCancel: () => void }) {
@@ -148,8 +150,9 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
       </div>
       {n > 0 && (
         <p className="lc-legend">
-          <span><i className="lc-dot" aria-hidden /> Needs you or running</span>
+          <span><i className="lc-dot" data-activity="human" aria-hidden /> Needs you</span>
           <span><i className="lc-dot lc-dot-ink" aria-hidden /> Failed</span>
+          <span><i className="lc-dot" data-activity="work" aria-hidden /> Working, thinking, reading or checking</span>
           <span><i className="lc-dot lc-dot-hollow" aria-hidden /> Idle</span>
           <span className="lc-mut">Every state is also said in words.</span>
         </p>

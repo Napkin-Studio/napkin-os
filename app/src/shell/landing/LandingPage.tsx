@@ -7,7 +7,7 @@
 
 import type { LibraryItem } from '../../host'
 import { Circle } from './Circle'
-import { countsLine, initialsOf, plural, toolName, type AgencySummary } from './model'
+import { ACTIVITY_WORD, countsLine, initialsOf, needsReason, plural, runWords, toolName, type AgencySummary } from './model'
 import { lastTouched } from '../when'
 
 const STRIP_SHOWN = 5
@@ -23,17 +23,22 @@ interface Props {
 
 /** "Brief · Client A": the tool and who it is for; the document's own name below. */
 function Strip({
-  title, items, tag, empty, clientOf, onOpenItem,
+  title, items, tag, why, empty, clientOf, onOpenItem, testId, hideWhenEmpty,
 }: {
   title: string
   items: LibraryItem[]
   tag: (i: LibraryItem) => { text: string; kind: 'need' | 'run' | 'fail' }
+  /** The reason, in words, beside the title: "2 things to check". */
+  why?: (i: LibraryItem) => string
+  testId: string
+  hideWhenEmpty?: boolean
   empty: string
   clientOf: (i: LibraryItem) => string
   onOpenItem: (path: string) => void
 }) {
+  if (hideWhenEmpty && items.length === 0) return null
   return (
-    <section className="lc-strip" aria-label={title}>
+    <section className={`lc-strip lc-strip-${testId}`} aria-label={title} data-testid={`strip-${testId}`}>
       <h2 className="lc-strip-h">
         {title}
         {items.length > 0 && <span className="lc-n">{items.length}</span>}
@@ -49,7 +54,7 @@ function Strip({
                 <button className="lc-card" onClick={() => onOpenItem(i.path)}>
                   <span className="lc-card-t">{toolName(i)?.name ?? 'Work'} · {clientOf(i)}</span>
                   <span className={`lc-tag lc-tag-${t.kind}`}>{t.text}</span>
-                  <span className="lc-card-m">{i.title || 'Untitled'} · {lastTouched(i.updated_at)}</span>
+                  <span className="lc-card-m">{why ? `${why(i)} · ` : ''}{i.title || 'Untitled'} · {lastTouched(i.updated_at)}</span>
                 </button>
               </li>
             )
@@ -74,11 +79,14 @@ export function LandingPage({ agency, greeting, summary, onOpenAgency, onOpenIte
       <div className="lc-door">
         <button className="lc-doorbtn" onClick={onOpenAgency} data-testid="agency-circle">
           <span className="lc-orb">
-            <Circle size={233} material="onyx" initials={initialsOf(agency)} activity={summary.needsYou.length ? 'human' : summary.running.length ? 'work' : 'idle'} />
+            <Circle size={233} material="onyx" initials={initialsOf(agency)} activity={summary.activity} />
           </span>
           <span className="lc-dl">
             <span className="lc-dname">{agency}</span>
             <span className="lc-dline" data-testid="counts">{countsLine(summary)}</span>
+            {(summary.activity === 'think' || summary.activity === 'read' || summary.activity === 'check') && (
+              <span className="lc-dverb" data-testid="agency-verb">The studio is {ACTIVITY_WORD[summary.activity]}.</span>
+            )}
           </span>
           <span className="lc-dhint">{hasClients ? 'Open the studio to see its clients.' : 'Open the studio to add your first client.'}</span>
         </button>
@@ -88,7 +96,9 @@ export function LandingPage({ agency, greeting, summary, onOpenAgency, onOpenIte
         <Strip
           title="Needs you"
           items={summary.needsYou}
+          testId="needs"
           empty="Nothing is waiting on you."
+          why={needsReason}
           tag={() => ({ text: 'Needs you', kind: 'need' })}
           clientOf={clientOf}
           onOpenItem={onOpenItem}
@@ -96,8 +106,20 @@ export function LandingPage({ agency, greeting, summary, onOpenAgency, onOpenIte
         <Strip
           title="Running"
           items={summary.running}
+          testId="running"
           empty="Nothing is running."
-          tag={i => ({ text: i.run?.label ?? 'Running', kind: 'run' })}
+          tag={i => ({ text: runWords(i), kind: 'run' })}
+          clientOf={clientOf}
+          onOpenItem={onOpenItem}
+        />
+        <Strip
+          title="Failed"
+          items={summary.failed}
+          testId="failed"
+          hideWhenEmpty
+          empty=""
+          tag={() => ({ text: 'Failed', kind: 'fail' })}
+          why={runWords}
           clientOf={clientOf}
           onOpenItem={onOpenItem}
         />

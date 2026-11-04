@@ -15,10 +15,39 @@ import type { ClientRecord, LibraryItem } from '../../host'
 import { TOOLS, toolOfApp, type Tool } from './tools'
 import type { Route, ToolId } from '../route'
 
-/** The ring on a circle, in the order that wins when a client has several. */
-export type Activity = 'human' | 'error' | 'work' | 'idle'
+/**
+ * The ring on a circle, in the order that wins when a client has several:
+ * needs you, failed, working, thinking, reading, checking, idle. The same
+ * vocabulary and order as the Orbs rings (features/landing-circles.clan).
+ */
+export type Activity = 'human' | 'error' | 'work' | 'think' | 'read' | 'check' | 'idle'
 
-export const ACTIVITY_ORDER: readonly Activity[] = ['human', 'error', 'work', 'idle']
+export const ACTIVITY_ORDER: readonly Activity[] = ['human', 'error', 'work', 'think', 'read', 'check', 'idle']
+
+/** The words for a ring: said in text beside every circle, never colour alone. */
+export const ACTIVITY_WORD: Record<Activity, string> = {
+  human: 'needs you', error: 'failed', work: 'working', think: 'thinking', read: 'reading', check: 'checking', idle: 'idle',
+}
+
+/** The one that wins. */
+export function strongest(list: readonly Activity[]): Activity {
+  let best: Activity = 'idle'
+  for (const a of list) if (ACTIVITY_ORDER.indexOf(a) < ACTIVITY_ORDER.indexOf(best)) best = a
+  return best
+}
+
+/**
+ * What a running tool is doing, from the stage its run names. Research stages
+ * (`extract`, `research`) read; `select`, `synthesise`, `report` think; a
+ * gate or a check checks; any other stage (Deck's `Layout`) is plain work.
+ */
+export function stageActivity(stage: string | undefined): 'work' | 'think' | 'read' | 'check' {
+  const s = (stage ?? '').toLowerCase()
+  if (/check|verif|review|valid|proof|judg|lock|gate/.test(s)) return 'check'
+  if (/read|extract|research|source|search|ingest|scan|fetch|retriev/.test(s)) return 'read'
+  if (/think|identif|select|synthes|draft|plan|reason|compose|report|write/.test(s)) return 'think'
+  return 'work'
+}
 
 /** The first page of the clients page; the rest wait behind "Show all". */
 export const FIRST_PAGE = 8
@@ -30,6 +59,8 @@ export interface Tally {
   needsYou: number
   running: number
   failed: number
+  /** The strongest of what the running ones are doing (working, thinking, reading, checking); work when unsaid. */
+  busy?: Activity
 }
 
 const zero = (): Tally => ({ open: 0, needsYou: 0, running: 0, failed: 0 })
@@ -37,7 +68,10 @@ const zero = (): Tally => ({ open: 0, needsYou: 0, running: 0, failed: 0 })
 function add(t: Tally, item: LibraryItem) {
   t.open += 1
   if (needsYou(item)) t.needsYou += 1
-  if (item.run?.state === 'working') t.running += 1
+  if (item.run?.state === 'working') {
+    t.running += 1
+    t.busy = strongest([t.busy ?? 'idle', stageActivity(item.run.stage)])
+  }
   if (item.run?.state === 'failed') t.failed += 1
 }
 
@@ -62,7 +96,15 @@ export interface ClientSummary {
 export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`
 
 export function activityOf(t: Tally): Activity {
-  return t.needsYou ? 'human' : t.failed ? 'error' : t.running ? 'work' : 'idle'
+  return t.needsYou ? 'human' : t.failed ? 'error' : t.running ? t.busy ?? 'work' : 'idle'
+}
+
+/** What one piece of work shows: waiting on a person, failed, what it is doing, or nothing. */
+export function activityOfItem(item: LibraryItem): Activity {
+  if (needsYou(item)) return 'human'
+  if (item.run?.state === 'failed') return 'error'
+  if (item.run?.state === 'working') return stageActivity(item.run.stage)
+  return 'idle'
 }
 
 /** "3 briefs · 1 needs you · 1 running · 1 failed": nothing said about a zero. */
@@ -89,7 +131,7 @@ export function summarise(client: ClientRecord, items: readonly LibraryItem[]): 
   return { client, total, perTool, other, activity: activityOf(total), status: statusLine(perTool, total), latest }
 }
 
-const URGENCY: Record<Activity, number> = { human: 4, error: 3, work: 2, idle: 0 }
+const URGENCY: Record<Activity, number> = { human: 4, error: 3, work: 2, think: 2, read: 2, check: 2, idle: 0 }
 
 /** Urgency first (needs you, failed, running), then the order the clients were made in. */
 export function ordered(clients: readonly ClientRecord[], items: readonly LibraryItem[]): ClientSummary[] {
@@ -131,7 +173,9 @@ export interface AgencySummary {
   open: number
   needsYou: LibraryItem[]
   running: LibraryItem[]
-  failed: number
+  failed: LibraryItem[]
+  /** The ring on the agency circle: the strongest across all work (needs you, failed, working, thinking, reading, checking, idle). */
+  activity: Activity
   /** Work that has no client yet. */
   unassigned: number
 }
@@ -142,7 +186,8 @@ export function agencySummary(clients: readonly ClientRecord[], items: readonly 
     open: items.length,
     needsYou: items.filter(needsYou),
     running: items.filter(isRunning),
-    failed: items.filter(i => i.run?.state === 'failed').length,
+    failed: items.filter(i => i.run?.state === 'failed'),
+    activity: strongest(items.map(activityOfItem)),
     unassigned,
   }
 }
@@ -153,14 +198,43 @@ export function countsLine(s: AgencySummary): string {
   const parts = [plural(s.clients, 'client'), `${s.open} open`]
   if (s.needsYou.length) parts.push(s.needsYou.length === 1 ? '1 needs you' : `${s.needsYou.length} need you`)
   if (s.running.length) parts.push(`${s.running.length} running`)
-  if (s.failed) parts.push(`${s.failed} failed`)
+  if (s.failed.length) parts.push(`${s.failed.length} failed`)
   return parts.join(' · ')
 }
 
 /** The circle's accessible name: everything the sighted see, in words. */
 export function circleName(s: ClientSummary): string {
-  return `${s.client.name}, ${s.status}${s.activity === 'idle' ? ', idle' : ''}. Opens its tools`
+  // Needs you, failed and running are already in the status line; the quieter
+  // verbs (thinking, reading, checking) are said here so the ring has words.
+  const quiet = s.activity === 'think' || s.activity === 'read' || s.activity === 'check' ? `, ${ACTIVITY_WORD[s.activity]}` : ''
+  return `${s.client.name}, ${s.status}${quiet}${s.activity === 'idle' ? ', idle' : ''}. Opens its tools`
 }
+
+/**
+ * What the polite live region says when a refresh finds something new, so a
+ * person who is not looking hears it: more needing them, or a new failure.
+ * Nothing when nothing got worse (a job finishing is not announced).
+ */
+export function newsOf(before: Pick<AgencySummary, 'needsYou' | 'failed'> | null, now: Pick<AgencySummary, 'needsYou' | 'failed'>): string {
+  if (!before) return ''
+  const parts: string[] = []
+  const more = now.needsYou.length - before.needsYou.length
+  if (more > 0) parts.push(more === 1 ? '1 more needs you' : `${more} more need you`)
+  const fails = now.failed.length - before.failed.length
+  if (fails > 0) parts.push(fails === 1 ? '1 more failed' : `${fails} more failed`)
+  return parts.join(', ')
+}
+
+/** Why a document is on the Needs you strip, in words: a run waiting, or how many things to check. */
+export function needsReason(item: LibraryItem): string {
+  if (item.run?.state === 'waiting') return item.run.label || 'Waiting for you'
+  const n = item.state?.needs_you ?? 0
+  return `${n} ${n === 1 ? 'thing' : 'things'} to check`
+}
+
+/** What a running or failed document is doing, in words (the run's own label; Failed when it says nothing). */
+export const runWords = (item: LibraryItem): string =>
+  item.run?.label || (item.run?.state === 'failed' ? 'Failed' : 'Running')
 
 /** Which tool a document belongs to, for a strip's second line. */
 export const toolName = (item: LibraryItem): Tool | undefined => toolOfApp(item.app_id)

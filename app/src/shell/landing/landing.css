@@ -4,9 +4,11 @@
    Flat SVG: no script draws a circle. */
 
 .lc {
-  --lc-ring-active: var(--accent);
-  --lc-ring-error: var(--ink);
-  --lc-ring-wait: var(--ink3);
+  /* The ring tokens are the app's own (the Deck Maker agent circle's --ring-*): one per verb, with a
+     dark set. Failed is ink, and the state is always also said in words. */
+  --lc-ring-work: #FF4F2E; --lc-ring-think: #7A5AF8; --lc-ring-read: #B87100; --lc-ring-check: #238A55;
+  --lc-ring-human: #E0560C; --lc-ring-error: #16191D; --lc-ring-wait: #9EA3AB;
+  --lc-ring-active: var(--lc-ring-work);
   --lc-ring-track: color-mix(in oklab, var(--ink) 16%, var(--paper));
   --lc-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   flex: 1;
@@ -14,6 +16,10 @@
   background: var(--paper);
   color: var(--ink);
   padding: 0 16px 48px;
+}
+:root[data-theme='dark'] .lc {
+  --lc-ring-work: #FF6A4D; --lc-ring-think: #9F86FA; --lc-ring-read: #E0A030; --lc-ring-check: #3DBA75;
+  --lc-ring-human: #FF7A3D; --lc-ring-error: #E6E8EC; --lc-ring-wait: #7A808C;
 }
 .lc-page { max-width: 1040px; margin: 0 auto; }
 .lc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -42,6 +48,8 @@
 .lc-dl { display: grid; gap: 4px; text-align: center; }
 .lc-dname { font-size: clamp(24px, 4vw, 34px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .lc-dline { font-size: 15px; color: var(--ink2); }
+.lc-dverb { font-size: 13px; font-weight: 600; color: var(--ink); }
+.lc-strip-failed { grid-column: 1 / -1; }
 .lc-dhint { font-size: 13px; color: var(--ink2); }
 
 /* the circle */
@@ -51,6 +59,9 @@
 @keyframes lc-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: no-preference) {
   .lc-cir[data-activity='work'] .lc-act { animation: lc-turn 6s linear infinite; }
+  .lc-cir[data-activity='think'] .lc-act { animation: lc-turn 11s linear infinite reverse; }
+  .lc-cir[data-activity='read'] .lc-act { animation: lc-turn 8s linear infinite; }
+  .lc-cir[data-activity='check'] .lc-act { animation: lc-turn 14s linear infinite; }
 }
 
 /* strips: what needs you, what is running */
@@ -87,6 +98,11 @@
 .lc-nm { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.25; }
 .lc-st { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--ink2); }
 .lc-dot { display: inline-block; width: 7px; height: 7px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; background: var(--accent); }
+.lc-dot[data-activity='human'] { background: var(--lc-ring-human); }
+.lc-dot[data-activity='work'] { background: var(--lc-ring-work); }
+.lc-dot[data-activity='think'] { background: var(--lc-ring-think); }
+.lc-dot[data-activity='read'] { background: var(--lc-ring-read); }
+.lc-dot[data-activity='check'] { background: var(--lc-ring-check); }
 .lc-dot-hollow { background: none; border: 1.5px solid var(--lc-ring-wait); }
 .lc-dot-ink { background: var(--ink); }
 .lc-addc { display: grid; place-items: center; width: 89px; height: 89px; border: 1.5px dashed var(--ink3); border-radius: 50%; color: var(--ink3); font-size: 28px; line-height: 1; transition: border-color 233ms linear, color 233ms linear; }

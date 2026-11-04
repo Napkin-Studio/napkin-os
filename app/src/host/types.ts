@@ -155,6 +155,8 @@ export interface Adopted {
 export interface RunInfo {
   state: 'idle' | 'working' | 'waiting' | 'failed' | 'done'
   label: string
+  /** The stage it is at (`research`, `Layout`), when it says: what the ring shows. */
+  stage?: string
   since?: string
 }
 
