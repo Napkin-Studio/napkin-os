@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use napkin_host::{Ctx, DocId, DocStore, HostConfig, HostResult, Session};
+use napkin_host::{Ctx, DocId, DocStore, HostConfig, HostResult, LibraryCache, Session};
 
 use crate::events::EventBus;
 use crate::exports::ExportStore;
@@ -40,6 +40,9 @@ pub struct Workspace {
     /// Who every session of this workspace acts as by default: its tenant.
     ctx: Ctx,
     sessions: Mutex<SessionCache>,
+    /// What the library listing worked out per document, so a poll does not
+    /// re-read every decision chain (napkin-host `listing`).
+    pub library: LibraryCache,
 }
 
 impl Workspace {
@@ -48,6 +51,7 @@ impl Workspace {
             store,
             ctx,
             sessions: Mutex::new(SessionCache::default()),
+            library: LibraryCache::new(),
         }
     }
 

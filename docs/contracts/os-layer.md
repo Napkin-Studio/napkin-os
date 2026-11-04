@@ -1517,3 +1517,116 @@ Checked against the nine questions in `campaign-flow-usecases.clan`.
 
 Amended by this contract: W1-C1, W1-C3, W1-C4, W1P-I5, W2-A3, W2-A4, W2-A5,
 W2-C4, W2-C6, W2-D1, W3-J3, W4-V1, W4-V2, W5-Z1.
+
+---
+
+## 12. Clients, the library listing and the landing
+
+Feature `landing-circles`. Agencies work by client; before this, "client" was
+free text inside three tools. This section gives a client an identity the OS
+owns, and gives the shell one read that answers "what is open, for whom, and
+what needs me". Everything below is additive: an older shell on a newer host,
+and a newer shell on an older host, both keep working (the shell falls back to
+the Launcher when `/library` answers 404).
+
+### 12.1 The client registry
+
+One CLAN document per tenant (desktop: per data directory, browser: per tab),
+`document_type: client-registry`, whose `shared/data.yaml` holds
+`clients: [ClientRecord]`. It lives beside the home app (`Library::home("clients-v1")`),
+never in `Library::documents()`, so it is not work and never appears in the
+recent list or the library. It is created by the first write; a tenant with no
+registry has an empty list. Every write is a `Change` through
+`PartStore::apply`, based on the version just read (a lost race is a `409`,
+never an overwrite). Code: `crates/napkin-host/src/clients.rs`, which uses only
+the store traits, so it is the same on `FsStore`, `TenantStore` and the
+browser's `MemStore`.
+
+```
+ClientRecord {
+  id:          "cli_" + 8 lowercase hex   minted by the host, never from a name
+  name:        1..60 chars, whitespace collapsed, no control characters
+  initials:    1..3 chars; derived from the name unless set by hand
+  material:    pearl | ceramic | stone | graphite   (a look, not a permission)
+  owner:       the actor who opened it ("human:name@agency"); informational
+  created_at:  RFC 3339
+  archived_at: RFC 3339, absent while live
+}
+```
+
+Rules. Names are unique per tenant ignoring case and spacing, archived ones
+included (`409`). A rename changes the registry only; initials follow the name
+unless hand-set. Archive hides a client from the circles and keeps every
+document linked to it; archive and restore are idempotent; an archived client
+takes no new work (`409`). Every person in a tenant sees every client: there
+are no per-client permissions in this feature.
+
+### 12.2 `manifest.client`
+
+An optional manifest block `client: {id, name}` (spec/CLAN-SPEC.md section 5;
+`clan_sdk::ClientRef`). `id` is the link. `name` is the name when the document
+was attached; the registry is the truth and the library always answers with the
+registry's current name (a rename never rewrites documents). Absent on every
+earlier file; the field is not written when empty, and a reader that does not
+know it ignores it. Every write carries it, and a spin-off takes its source's
+client. `clan_sdk::with_client` is the one function that sets it on existing
+bytes (new revision id; `updated_at` unchanged, because attaching a document to
+a client is not work done in it).
+
+`POST /documents` takes an optional `client_id`. An id this tenant's registry
+does not hold is `404` (so another tenant's id is a `404`, never a link). A
+blank document is reused only for the same client (or for none): a blank made
+for one client is never handed to another.
+
+### 12.3 Routes (napkin-web, tenant-addressed under `/api/t/{tenant}`)
+
+Errors keep the existing `{ok:false, error:"message"}` shape.
+
+| Route | Does |
+|---|---|
+| `GET /clients[?archived=1]` | The clients in the order made; archived ones only with the flag. |
+| `POST /clients {name, material?}` | `201` + the record. `400` bad name or material, `409` duplicate. |
+| `PATCH /clients/{id} {name?, initials?, material?}` | The record. `404`, `409` (name clash), `400`. |
+| `POST /clients/{id}/archive`, `/restore` | The record. Idempotent. `404`. |
+| `POST /clients/adopt {names[]}` | `{created: [record], linked: n}`. Makes a client for each chosen free-text name (reusing one that exists) and links the documents with no client whose own data names it (`client`, `client_org`, `campaign.client_org`, `campaign.brand`). Nothing is guessed: only the names sent are adopted. |
+| `GET /library[?client=<id>][&app=<app_id>]` | `{items: [LibraryItem], clients_unassigned: n}`; below. |
+
+`LibraryItem` is `{path, app_id, title, updated_at, client: {id,name}|null,
+state: {needs_you, locked}|null, run: {state, label, since?}|null}`, newest
+first, uncapped. It leaves out documents nobody has worked in and installed
+templates. `needs_you`/`locked` are `recent_state`, exactly what `/recent`
+reports. `run` is the document's own `data.run` (Deck Maker: `building`
+is `working`, `gate` is `waiting`, `failed`, `done`, `draft` is `idle`; anything
+else is none); live middleware jobs are phase 3 of the feature.
+`clients_unassigned` counts documents with no client whatever the filter.
+`/recent` is unchanged (capped at 12, same fields).
+
+Cost. The listing opens every document, so `napkin_host::LibraryCache` (one per
+tenant workspace) keeps what a scan worked out per document, keyed on the
+document's id, `updated_at` and size. Every write mints a new revision, so a
+changed document is a different key and no invalidation hook is needed. The
+client's name is resolved from the registry on every call, never cached.
+
+### 12.4 The three hosts
+
+The shell reads and writes through `Host` only (`app/src/host/types.ts`):
+`listLibrary(filter?)`, `clients.{list, create, update, archive, restore, adopt}`,
+and `newDocumentFromApp(appId, title, clientId?)`. They are implemented in
+`http.ts` (the routes above), `tauri.ts` (Tauri commands `list_library`,
+`list_clients`, `create_client`, `update_client`, `set_client_archived`,
+`adopt_clients`; `new_document_from_app` takes `client_id`) and `wasm.ts`
+(`NapkinHost.listLibrary`, `listClients`, `createClient`, `updateClient`,
+`setClientArchived`, `adoptClients`, `newDocument(.., clientId)`). All three call the same
+`napkin_host::{clients, scan_library}` code. The client writes are deliberately
+not `clan://` routes: those are reachable by the app inside a document, and an
+app must not be able to open or archive the studio's clients.
+
+### 12.5 The shell route (read by the shell only)
+
+`#agency` (the landing), `#clients`, `#client-<id>`, `#tool-<id>-<tool>`, where
+`<id>` is a client id (`cli_` + 8 hex, ASCII) and `<tool>` is `brief | research |
+idea | deck | prod | ads`. Anything else falls back to `#agency`. Written from
+the shell's screen state, never the other way round: `hashchange` only reads.
+Parsed and formatted in `app/src/shell/route.ts` (pure, table-tested).
+In this phase the shell serves `#agency` and `#clients`; the deeper levels are
+parsed and fall back until the tool wheel lands.

@@ -53,6 +53,9 @@ pub struct ManifestInfo {
     pub file_count: usize,
     pub lineage: Option<LineageInfo>,
     pub app: Option<AppMeta>,
+    /// Who the document is for, when it has a client (`manifest.client`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<clan_sdk::ClientRef>,
 }
 
 /// App metadata surfaced to the shell (launcher cards, "running an app" chrome).

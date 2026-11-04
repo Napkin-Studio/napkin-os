@@ -25,7 +25,9 @@ use crate::container::{ClanBuilder, ClanFile, MANIFEST_PATH};
 use crate::decision::{Certainty, Decision, DecisionChain, ReasonPoint, Reasoning};
 use crate::error::{Error, Result};
 use crate::hash::sha256_prefixed;
-use crate::manifest::{AppInfo, Carried, FileEntry, Lineage, Manifest, ParentRef, ViewState};
+use crate::manifest::{
+    AppInfo, Carried, ClientRef, FileEntry, Lineage, Manifest, ParentRef, ViewState,
+};
 use crate::merge::MERGE_REPORT_PATH;
 
 const DATA_PATH: &str = "shared/data.yaml";
@@ -277,6 +279,23 @@ pub struct SpinoffOptions {
     /// Where the source file lives, recorded in lineage. Defaults to the
     /// `file:///unknown/<id>.clan` form used elsewhere.
     pub source_uri: Option<String>,
+}
+
+/// `clan`'s bytes with `manifest.client` set to `client` (or cleared with
+/// `None`), and every other entry untouched. The revision id changes, as on
+/// any write; `updated_at` does not, because attaching a document to a client
+/// is not work done in it and must not reorder the recent list.
+pub fn with_client(clan: &ClanFile, client: Option<ClientRef>) -> Result<Vec<u8>> {
+    let mut manifest = clan.manifest().clone();
+    manifest.next_revision();
+    manifest.client = client;
+    let mut b = ClanBuilder::new(manifest);
+    for (path, bytes) in clan.read_all_entries()? {
+        if path != MANIFEST_PATH {
+            b.add_entry(path, bytes);
+        }
+    }
+    b.build()
 }
 
 /// Branch a finished document into a new document of a different app, carrying

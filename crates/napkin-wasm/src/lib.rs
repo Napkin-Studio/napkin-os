@@ -20,7 +20,10 @@ mod store;
 
 use std::sync::Arc;
 
-use napkin_host::{library, Change, Ctx, DocId, HostRequest, NoConfig, PartStore, Session};
+use napkin_host::{
+    clients, library, Change, Ctx, DocId, HostRequest, LibraryCache, LibraryFilter, NoConfig,
+    PartStore, Session,
+};
 use wasm_bindgen::prelude::*;
 
 use crate::store::MemStore;
@@ -61,6 +64,8 @@ fn err(e: impl std::fmt::Display) -> JsValue {
 pub struct NapkinHost {
     store: Arc<MemStore>,
     session: Session,
+    /// What the library listing worked out per document (napkin-host `listing`).
+    library: LibraryCache,
 }
 
 #[wasm_bindgen]
@@ -76,6 +81,7 @@ impl NapkinHost {
             // A browser tab has one user and no tenancy, so it acts as the
             // local human, exactly as the desktop does.
             session: Session::with_ctx(store, Ctx::local()),
+            library: LibraryCache::new(),
         }
     }
 
@@ -98,10 +104,77 @@ impl NapkinHost {
         to_js(&library::scan_recent(&*self.store))
     }
 
-    /// Instantiate a working document from an installed app and open it.
+    /// Every piece of work in this tab, by client: the landing's one read.
+    /// `client` is a registry id and `app` an app id; either may be absent.
+    #[wasm_bindgen(js_name = listLibrary)]
+    pub fn list_library(&self, client: Option<String>, app: Option<String>) -> JsValue {
+        let filter = LibraryFilter {
+            client: client.filter(|c| !c.is_empty()),
+            app: app.filter(|a| !a.is_empty()),
+        };
+        to_js(&napkin_host::scan_library(
+            &*self.store,
+            &self.library,
+            &filter,
+        ))
+    }
+
+    /// The clients, live ones (or all, with `include_archived`).
+    #[wasm_bindgen(js_name = listClients)]
+    pub fn list_clients(&self, include_archived: bool) -> Result<JsValue, JsValue> {
+        clients::list(&*self.store, include_archived)
+            .map(|c| to_js(&c))
+            .map_err(err)
+    }
+
+    #[wasm_bindgen(js_name = createClient)]
+    pub fn create_client(&self, name: &str, material: Option<String>) -> Result<JsValue, JsValue> {
+        clients::create_client(&*self.store, self.session.ctx(), name, material.as_deref())
+            .map(|c| to_js(&c))
+            .map_err(err)
+    }
+
+    /// `patch` is JSON: `{name?, initials?, material?}`.
+    #[wasm_bindgen(js_name = updateClient)]
+    pub fn update_client(&self, id: &str, patch: &str) -> Result<JsValue, JsValue> {
+        let patch: clients::ClientPatch = serde_json::from_str(patch).map_err(err)?;
+        clients::update_client(&*self.store, self.session.ctx(), id, patch)
+            .map(|c| to_js(&c))
+            .map_err(err)
+    }
+
+    #[wasm_bindgen(js_name = setClientArchived)]
+    pub fn set_client_archived(&self, id: &str, archived: bool) -> Result<JsValue, JsValue> {
+        clients::set_archived(&*self.store, self.session.ctx(), id, archived)
+            .map(|c| to_js(&c))
+            .map_err(err)
+    }
+
+    /// `names` is a JSON array of strings.
+    #[wasm_bindgen(js_name = adoptClients)]
+    pub fn adopt_clients(&self, names: &str) -> Result<JsValue, JsValue> {
+        let names: Vec<String> = serde_json::from_str(names).map_err(err)?;
+        clients::adopt(&*self.store, self.session.ctx(), &names)
+            .map(|a| to_js(&a))
+            .map_err(err)
+    }
+
+    /// Instantiate a working document from an installed app and open it, for
+    /// `client_id` when one is named.
     #[wasm_bindgen(js_name = newDocument)]
-    pub fn new_document(&self, app_id: &str, title: Option<String>) -> Result<JsValue, JsValue> {
-        let id = library::create_instance(&*self.store, app_id, title).map_err(err)?;
+    pub fn new_document(
+        &self,
+        app_id: &str,
+        title: Option<String>,
+        client_id: Option<String>,
+    ) -> Result<JsValue, JsValue> {
+        let client = client_id
+            .filter(|c| !c.is_empty())
+            .map(|id| clients::get(&*self.store, &id))
+            .transpose()
+            .map_err(err)?;
+        let id = library::create_instance_for(&*self.store, app_id, title, client.as_ref())
+            .map_err(err)?;
         self.session.open(id).map(|o| to_js(&o)).map_err(err)
     }
 

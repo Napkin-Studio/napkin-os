@@ -20,6 +20,7 @@
 //! desktop binds that to a custom URI scheme and Tauri events; a web server
 //! binds the same table to HTTP.
 
+pub mod clients;
 pub mod config;
 pub mod ctx;
 pub mod document;
@@ -29,6 +30,7 @@ pub mod event;
 pub mod export;
 pub mod html;
 pub mod library;
+pub mod listing;
 pub mod log;
 pub mod ops;
 #[cfg(feature = "native")]
@@ -46,9 +48,12 @@ pub use document::{Base, Change, Document, Version};
 pub use error::{HostError, HostResult};
 pub use event::HostEvent;
 pub use library::{
-    create_instance, ensure_home, home_change, install_app, install_change, instance_change,
-    scan_apps, scan_recent, spinoff_change, spinoff_document, spinoff_targets, InstalledApp,
-    RecentDoc, SpinoffTarget,
+    create_instance, create_instance_for, ensure_home, home_change, install_app, install_change,
+    instance_change, scan_apps, scan_recent, spinoff_change, spinoff_document, spinoff_targets,
+    InstalledApp, RecentDoc, SpinoffTarget,
+};
+pub use listing::{
+    scan_library, LibraryCache, LibraryFilter, LibraryItem, LibraryListing, RunInfo,
 };
 pub use ops::Outcome;
 pub use routes::{
