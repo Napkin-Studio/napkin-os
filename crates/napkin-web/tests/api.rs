@@ -2676,3 +2676,136 @@ async fn a_spinoff_of_a_clients_document_is_that_clients_in_the_library() {
     let b_child = library(&s, &b, &format!("?client={idb}&app=ie.napkin.child")).await;
     assert_eq!(b_child["items"], serde_json::json!([]));
 }
+
+// ── What is running (feature landing-circles, phase 3) ───────────────────────
+
+/// A middleware whose one job says whatever the test last set: `(state, stage)`.
+async fn jobbed_middleware() -> (String, Arc<std::sync::Mutex<(String, String)>>) {
+    let now = Arc::new(std::sync::Mutex::new((
+        "queued".to_string(),
+        "extract".to_string(),
+    )));
+    let seen = now.clone();
+    let app = Router::new().route(
+        "/v1/tasks",
+        axum::routing::post(move || {
+            let seen = seen.clone();
+            async move {
+                let (state, stage) = seen.lock().unwrap().clone();
+                axum::Json(serde_json::json!({
+                    "api": "napkin.middleware/1", "task": "start_campaign",
+                    "handler": "start_campaign@1.0",
+                    "job": {"id": "job_0123abcd", "state": state, "stage": stage,
+                            "progress": {"done": 1, "total": 6},
+                            "started_at": "2026-11-04T09:00:00Z"},
+                    "result": {"summary": "x"}, "change": null, "trace": {},
+                }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1/tasks", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (url, now)
+}
+
+#[tokio::test]
+async fn a_job_the_middleware_reports_is_the_documents_run_in_the_library() {
+    let (url, now) = jobbed_middleware().await;
+    let s = server_with(Arc::new(WithMiddleware(url)));
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let ca = add_client(&s, &b, "Client A").await;
+    let ida = ca["id"].as_str().unwrap();
+    let working = new_doc(&s, &b, "ie.napkin.test", "Working brief", Some(ida))
+        .await
+        .json();
+    let idle = new_doc(&s, &b, "ie.napkin.test", "Idle brief", Some(ida))
+        .await
+        .json();
+    assert!(idle["token"].is_string(), "{idle}");
+    let run_of = |lib: &Value, title: &str| {
+        lib["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["title"] == title)
+            .unwrap_or_else(|| panic!("{title} in {lib}"))["run"]
+            .clone()
+    };
+    let proxy = format!("/s/{}/api-proxy", working["token"].as_str().unwrap());
+    let ask = || middleware_task("start_campaign");
+
+    // Nothing has been asked: no run anywhere.
+    let lib = library(&s, &b, "").await;
+    assert_eq!(run_of(&lib, "Working brief"), Value::Null);
+
+    // queued -> running: working, with the stage and progress the reply carried.
+    for (state, stage) in [("queued", "extract"), ("running", "research")] {
+        *now.lock().unwrap() = (state.into(), stage.into());
+        let r = post(&s, &proxy, &b.cookie, ask()).await;
+        assert_eq!(
+            r.status,
+            StatusCode::OK,
+            "{}",
+            String::from_utf8_lossy(&r.body)
+        );
+        let lib = library(&s, &b, "").await;
+        let run = run_of(&lib, "Working brief");
+        assert_eq!(run["state"], "working", "{state}: {run}");
+        assert_eq!(run["stage"], stage);
+        assert_eq!(run["label"], format!("Working: {stage} (1 of 6)"));
+        assert_eq!(run_of(&lib, "Idle brief"), Value::Null);
+    }
+    // A client filter keeps the run on the item.
+    let lib = library(&s, &b, &format!("?client={ida}")).await;
+    assert_eq!(run_of(&lib, "Working brief")["state"], "working");
+
+    // needs_input is waiting on a person.
+    *now.lock().unwrap() = ("needs_input".into(), "select".into());
+    post(&s, &proxy, &b.cookie, ask()).await;
+    assert_eq!(
+        run_of(&library(&s, &b, "").await, "Working brief")["state"],
+        "waiting"
+    );
+
+    // failed, then done on a new job: the listing follows.
+    *now.lock().unwrap() = ("failed".into(), "research".into());
+    post(&s, &proxy, &b.cookie, ask()).await;
+    assert_eq!(
+        run_of(&library(&s, &b, "").await, "Working brief")["state"],
+        "failed"
+    );
+    *now.lock().unwrap() = ("done".into(), "report".into());
+    post(&s, &proxy, &b.cookie, ask()).await;
+    assert_eq!(
+        run_of(&library(&s, &b, "").await, "Working brief"),
+        Value::Null
+    );
+}
+
+#[tokio::test]
+async fn one_tenants_job_is_never_another_tenants_run() {
+    let (url, _) = jobbed_middleware().await;
+    let s = server_with(Arc::new(WithMiddleware(url)));
+    let a = browser(&s).await;
+    let m = browser(&s).await;
+    install_app(&s, &a, "ie.napkin.test", "Test App").await;
+    install_app(&s, &m, "ie.napkin.test", "Test App").await;
+    let da = new_doc(&s, &a, "ie.napkin.test", "Same title", None)
+        .await
+        .json();
+    new_doc(&s, &m, "ie.napkin.test", "Same title", None).await;
+    post(
+        &s,
+        &format!("/s/{}/api-proxy", da["token"].as_str().unwrap()),
+        &a.cookie,
+        middleware_task("start_campaign"),
+    )
+    .await;
+    assert_eq!(
+        library(&s, &a, "").await["items"][0]["run"]["state"],
+        "working"
+    );
+    assert_eq!(library(&s, &m, "").await["items"][0]["run"], Value::Null);
+}

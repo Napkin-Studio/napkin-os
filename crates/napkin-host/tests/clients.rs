@@ -577,3 +577,144 @@ fn an_unreadable_registry_is_said_in_the_listing_and_not_taken_for_empty() {
     assert!(bad.registry_error.is_some());
     assert_eq!(bad.items.len(), 1, "the work is still listed");
 }
+
+// ── What is running (feature landing-circles, phase 3) ──────────────────────
+
+use napkin_host::Session;
+use std::sync::Arc;
+
+fn job_reply(id: &str, state: &str, stage: &str) -> serde_json::Value {
+    serde_json::json!({ "ok": true, "status": 200, "endpoint": "http://middleware.test/v1/tasks",
+        "error": null,
+        "data": { "api": "napkin.middleware/1", "task": "start_campaign",
+                  "handler": "start_campaign@1.0",
+                  "job": { "id": id, "state": state, "stage": stage,
+                           "progress": { "done": 2, "total": 6 },
+                           "started_at": "2026-11-04T09:00:00Z" },
+                  "result": { "summary": "x" }, "change": null, "trace": {} } })
+}
+
+fn tracked_session(s: &Arc<MemStore>, cache: &LibraryCache, doc: &DocId) -> Session {
+    let session = Session::new(s.clone()).with_runs(cache.runs());
+    session.open(doc.clone()).unwrap();
+    session
+}
+
+#[test]
+fn a_middleware_reply_puts_the_job_on_the_library_and_done_takes_it_off() {
+    let s = Arc::new(store_with_apps());
+    let a = clients::create_client(&*s, &ctx(), "Client A", None).unwrap();
+    let doc = work(&*s, BRIEF, "Spring brief", Some(&a));
+    let other = work(&*s, BRIEF, "Quiet brief", Some(&a));
+    let cache = LibraryCache::new();
+    let session = tracked_session(&s, &cache, &doc);
+    let f = LibraryFilter::default();
+    let run = |t: &str| {
+        scan_library(&*s, &cache, &f)
+            .items
+            .into_iter()
+            .find(|i| i.title == t)
+            .unwrap()
+            .run
+    };
+    assert!(run("Spring brief").is_none());
+
+    session.settle_middleware(session.ctx(), job_reply("job_1", "queued", "extract"));
+    let r = run("Spring brief").expect("a queued job is working");
+    assert_eq!(r.state, "working");
+    assert_eq!(r.stage.as_deref(), Some("extract"));
+    assert_eq!(r.label, "Working: extract (2 of 6)");
+    assert!(
+        run("Quiet brief").is_none(),
+        "only the document the job is on"
+    );
+
+    session.settle_middleware(session.ctx(), job_reply("job_1", "needs_input", "select"));
+    assert_eq!(run("Spring brief").unwrap().state, "waiting");
+
+    session.settle_middleware(session.ctx(), job_reply("job_1", "running", "research"));
+    assert_eq!(run("Spring brief").unwrap().state, "working");
+
+    session.settle_middleware(session.ctx(), job_reply("job_1", "failed", "research"));
+    assert_eq!(run("Spring brief").unwrap().state, "failed");
+
+    session.settle_middleware(session.ctx(), job_reply("job_2", "running", "extract"));
+    session.settle_middleware(session.ctx(), job_reply("job_2", "done", "report"));
+    assert!(run("Spring brief").is_none());
+    let _ = other;
+}
+
+#[test]
+fn a_reply_that_is_not_the_middleware_is_never_a_run() {
+    let s = Arc::new(store_with_apps());
+    let doc = work(&*s, BRIEF, "Spring brief", None);
+    let cache = LibraryCache::new();
+    let session = tracked_session(&s, &cache, &doc);
+    let mut reply = job_reply("job_1", "running", "extract");
+    reply["data"]["api"] = serde_json::json!("somebody.else/9");
+    session.settle_middleware(session.ctx(), reply);
+    let mut failed = job_reply("job_1", "running", "extract");
+    failed["ok"] = serde_json::json!(false);
+    session.settle_middleware(session.ctx(), failed);
+    assert!(cache.runs().is_empty());
+    assert!(
+        scan_library(&*s, &cache, &LibraryFilter::default()).items[0]
+            .run
+            .is_none()
+    );
+}
+
+#[test]
+fn the_tracker_wins_over_a_decks_own_run_and_a_deck_run_stands_alone() {
+    let s = Arc::new(store_with_apps());
+    let deck = work(&*s, DECK, "Deck", None);
+    set_data(&*s, &deck, "run:\n  state: building\n  stage: Layout\n");
+    let cache = LibraryCache::new();
+    let f = LibraryFilter::default();
+    let lib = scan_library(&*s, &cache, &f);
+    assert_eq!(lib.items[0].run.as_ref().unwrap().label, "Building: Layout");
+    let session = tracked_session(&s, &cache, &deck);
+    session.settle_middleware(session.ctx(), job_reply("job_1", "needs_input", "select"));
+    assert_eq!(
+        scan_library(&*s, &cache, &f).items[0]
+            .run
+            .as_ref()
+            .unwrap()
+            .state,
+        "waiting"
+    );
+    session.settle_middleware(session.ctx(), job_reply("job_1", "done", "report"));
+    assert_eq!(
+        scan_library(&*s, &cache, &f).items[0]
+            .run
+            .as_ref()
+            .unwrap()
+            .label,
+        "Building: Layout",
+        "with no job, the document's own run is what is said"
+    );
+}
+
+#[test]
+fn an_open_contest_is_needs_you_in_the_listing() {
+    let s = store_with_apps();
+    let doc = work(&s, BRIEF, "Contested", None);
+    let calm = work(&s, BRIEF, "Calm", None);
+    set_data(&s, &calm, "n: 1\n");
+    set_data(
+        &s,
+        &doc,
+        "selection:\n  contested:\n  - id: c1\n    key: tone\n    status: open\n    values:\n    - fact_id: f1\n    - fact_id: f2\n",
+    );
+    let lib = list(&s, &LibraryFilter::default());
+    let state = |t: &str| {
+        lib.items
+            .iter()
+            .find(|i| i.title == t)
+            .unwrap()
+            .state
+            .clone()
+    };
+    assert_eq!(state("Contested").unwrap().needs_you, 1);
+    assert_eq!(state("Calm").unwrap().needs_you, 0);
+}

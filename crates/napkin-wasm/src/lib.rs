@@ -76,12 +76,13 @@ impl NapkinHost {
         // tells nobody anything.
         console_error_panic_hook::set_once();
         let store = Arc::new(MemStore::new());
+        let library = LibraryCache::new();
         NapkinHost {
             store: store.clone(),
             // A browser tab has one user and no tenancy, so it acts as the
             // local human, exactly as the desktop does.
-            session: Session::with_ctx(store, Ctx::local()),
-            library: LibraryCache::new(),
+            session: Session::with_ctx(store, Ctx::local()).with_runs(library.runs()),
+            library,
         }
     }
 

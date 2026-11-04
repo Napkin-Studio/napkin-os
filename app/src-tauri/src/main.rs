@@ -49,11 +49,13 @@ impl AppState {
         self.host.get_or_init(|| {
             let data_dir = app.path().app_data_dir().unwrap_or_default();
             let config_dir = app.path().app_config_dir().unwrap_or_default();
+            let library = LibraryCache::new();
             HostCtx {
                 // One person on their own machine: every write is theirs.
-                session: Session::with_ctx(Arc::new(FsStore::new(data_dir)), Ctx::local()),
+                session: Session::with_ctx(Arc::new(FsStore::new(data_dir)), Ctx::local())
+                    .with_runs(library.runs()),
                 config: FsConfig::new(config_dir),
-                library: LibraryCache::new(),
+                library,
             }
         })
     }

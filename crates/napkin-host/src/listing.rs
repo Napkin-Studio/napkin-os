@@ -18,13 +18,14 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use clan_sdk::{ClanFile, ClientRef};
 use serde::Serialize;
 
 use crate::clients::{self, ClientRecord};
 use crate::library::{is_blank_in, recent_state, RecentState};
+use crate::runs::RunTracker;
 use crate::store::{DocId, DocStore};
 
 const DATA: &str = "shared/data.yaml";
@@ -57,6 +58,10 @@ pub struct RunInfo {
     pub state: String,
     /// What it is doing, in words: "Building", "Waiting at gate".
     pub label: String,
+    /// The stage it is at, when it says (`research`, `gate`): the shell turns it
+    /// into what the circle's ring shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
     /// When that began, when the document says.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<String>,
@@ -111,11 +116,20 @@ pub struct LibraryCache {
     seen: Mutex<HashMap<DocId, (Key, Option<Core>)>>,
     hits: AtomicUsize,
     misses: AtomicUsize,
+    /// Jobs the host has heard of (middleware replies), told apart from the
+    /// per-document cache: it is live state and is never keyed on a revision.
+    runs: Arc<RunTracker>,
 }
 
 impl LibraryCache {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The tracker a [`crate::Session`] of this tenant records into
+    /// ([`crate::Session::with_runs`]); the listing reads it.
+    pub fn runs(&self) -> Arc<RunTracker> {
+        self.runs.clone()
     }
 
     /// `(hits, misses)` since this cache was made: what a test or a log reads
@@ -206,7 +220,8 @@ pub fn scan_library(
             updated_at: core.updated_at,
             client,
             state: core.state,
-            run: core.run,
+            // What the host heard of a job first, else what the document records.
+            run: cache.runs.run_for(&id).or(core.run),
         });
     }
     // A document that is gone must not be remembered.
@@ -267,6 +282,7 @@ fn run_of(clan: &ClanFile) -> Option<RunInfo> {
     Some(RunInfo {
         state: state.into(),
         label,
+        stage: stage.map(String::from),
         since: run
             .get("since")
             .and_then(serde_yaml::Value::as_str)

@@ -62,7 +62,9 @@ impl Workspace {
         }
         // Open outside the lock: reading and validating an archive is real work
         // and must not block every other document of this tenant.
-        let session = Arc::new(Session::with_ctx(self.store.clone(), self.ctx.clone()));
+        let session = Arc::new(
+            Session::with_ctx(self.store.clone(), self.ctx.clone()).with_runs(self.library.runs()),
+        );
         session.open(doc.clone())?;
 
         let mut cache = self.sessions.lock().unwrap();

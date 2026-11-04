@@ -146,6 +146,9 @@ pub struct Session {
     /// per-request [`Ctx`] to the `_as` operations instead.
     ctx: Ctx,
     view: Mutex<ViewState>,
+    /// Where the jobs a middleware reply names are noted, so the library can say
+    /// what is running. Absent for a session nobody lists (tests, one-offs).
+    runs: Option<Arc<crate::runs::RunTracker>>,
 }
 
 /// Counts the legacy patches that reached the store, so tests can assert that
@@ -166,7 +169,15 @@ impl Session {
             store,
             ctx,
             view: Mutex::new(ViewState::default()),
+            runs: None,
         }
+    }
+
+    /// Note every middleware job this session sees in `runs` (the tenant's
+    /// [`crate::LibraryCache::runs`]).
+    pub fn with_runs(mut self, runs: Arc<crate::runs::RunTracker>) -> Self {
+        self.runs = Some(runs);
+        self
     }
 
     pub fn store(&self) -> &Arc<dyn DocStore> {
@@ -554,6 +565,10 @@ impl Session {
                 }),
                 Vec::new(),
             );
+        }
+        // Whatever else it carries, the reply says what the job is doing.
+        if let (Some(runs), Some(doc)) = (&self.runs, self.current_id()) {
+            runs.record(&doc, &data);
         }
         if data.get("change").map_or(true, Value::is_null) {
             return (envelope, Vec::new());

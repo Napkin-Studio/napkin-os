@@ -36,6 +36,7 @@ pub mod ops;
 #[cfg(feature = "native")]
 pub mod proxy;
 pub mod routes;
+pub mod runs;
 pub mod session;
 pub mod store;
 pub mod view;
@@ -59,6 +60,7 @@ pub use ops::Outcome;
 pub use routes::{
     dispatch, dispatch_async, handle, handle_async, is_async, HostRequest, HostResponse,
 };
+pub use runs::RunTracker;
 pub use session::{AppMeta, Applied, LineageInfo, ManifestInfo, OpenResult, Session, ViewState};
 #[cfg(feature = "native")]
 pub use store::FsStore;
