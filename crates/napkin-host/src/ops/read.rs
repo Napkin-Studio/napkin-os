@@ -459,6 +459,11 @@ fn splice_text(doc: &Document, attachments: Option<&mut Value>, key: &str) {
 /// A document the brief tasks run on that carries research also gets
 /// `upstream_payload`: the research as the brief engine takes it
 /// ([`upstream_payload`], `napkin.middleware/1` §1, §10.13).
+///
+/// A document the Deck's `build_deck` runs on that carries a brief or
+/// research gets `deck_inputs`: the brief's fields and the research's rows
+/// as the Deck engine takes them ([`deck_inputs`], `napkin.middleware/1`
+/// §12), with the `model: false` marks honoured.
 pub fn clan_context_for_agent(doc: &Document) -> Value {
     let clan = doc.clan();
     let yaml_to_json = |p: &str| -> Value {
@@ -506,7 +511,44 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
             }
         }
     }
+    if runs_deck_tasks(doc, &context["pipeline"]) {
+        if let Some(d) = deck_inputs(doc) {
+            context["deck_inputs"] = d.payload;
+            if !d.skipped.is_empty() {
+                context["deck_inputs_skipped"] = d
+                    .skipped
+                    .iter()
+                    .map(|s| json!({ "what": s.what, "why": s.why }))
+                    .collect();
+            }
+        }
+    }
     context
+}
+
+/// The middleware tasks that read `clan.deck_inputs`.
+pub const DECK_TASKS: &[&str] = &["build_deck"];
+
+/// Deck Maker's app id: its documents run the deck tasks whether or not
+/// they carry a pipeline.
+pub const DECK_APP: &str = "ie.napkin.deck-maker";
+
+/// Whether the deck tasks run on `doc`: its pipeline declares one, or it is
+/// a Deck Maker document.
+fn runs_deck_tasks(doc: &Document, pipeline: &Value) -> bool {
+    let declared = pipeline
+        .get("tasks")
+        .and_then(Value::as_object)
+        .is_some_and(|t| DECK_TASKS.iter().any(|k| t.contains_key(*k)));
+    declared || doc.app_id() == Some(DECK_APP)
+}
+
+/// The brief and research `doc` carries, as the Deck engine takes them: the
+/// extract's `deck_inputs` printer over the document's own bytes. `None`
+/// when it carries neither. Built at the call, sent and thrown away: never
+/// stored, logged or cached.
+pub fn deck_inputs(doc: &Document) -> Option<extract::DeckInputs> {
+    extract::deck_inputs(doc.clan())
 }
 
 /// The middleware tasks that read `clan.upstream_payload`.
@@ -1073,6 +1115,85 @@ mod tests {
         assert!(!text.contains("human:"));
         // The rest of the context is unchanged: the frozen data is still an index.
         assert_eq!(ctx["data"]["upstream"][R]["direct"], true);
+    }
+
+    const DECK_PIPELINE: &[u8] = b"pipeline: napkin-deck\nversion: 2\nrequest_kind: middleware\ntasks:\n  build_deck:\n    handler: build_deck@1\n";
+
+    fn deck_template(pipeline: bool) -> ClanFile {
+        let spec = SpinoffSpec {
+            accepts: vec![BRIEF_APP.into(), "ie.napkin.campaign-research".into()],
+            upstream: true,
+            ..Default::default()
+        };
+        let adds: &[(&str, &[u8], Option<FileEntry>)] = if pipeline {
+            &[("app/pipeline.yaml", DECK_PIPELINE, None)]
+        } else {
+            &[]
+        };
+        let scaffold = doc("Deck Maker", app("Deck Maker", DECK_APP, None), None, adds);
+        ClanFile::from_bytes(
+            make_template(
+                &scaffold,
+                app("Deck Maker", DECK_APP, Some(spec)),
+                MakeTemplateOptions::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn deck(pipeline: bool) -> Document {
+        let brief_bytes =
+            spinoff(&brief_template(), &research(), SpinoffOptions::default()).unwrap();
+        let source = ClanFile::from_bytes(brief_bytes).unwrap();
+        let bytes = spinoff(&deck_template(pipeline), &source, SpinoffOptions::default()).unwrap();
+        Document::from_bytes(DocId::new("deck.clan"), bytes).unwrap()
+    }
+
+    #[test]
+    fn a_deck_carrying_research_sends_the_decks_inputs_and_not_the_briefs() {
+        let d = deck(true);
+        let ctx = clan_context_for_agent(&d);
+        let di = &ctx["deck_inputs"];
+        assert!(di["members"]["facts"]
+            .as_array()
+            .is_some_and(|f| !f.is_empty()));
+        assert!(di["data"]["upstream"]
+            .as_object()
+            .is_some_and(|u| !u.is_empty()));
+        // It is the printer's output, exactly.
+        assert_eq!(*di, deck_inputs(&d).unwrap().payload);
+        // The brief engine's payload is for brief tasks only.
+        assert!(ctx.get("upstream_payload").is_none());
+        // The frozen data is still only an index in `data`.
+        assert!(ctx["data"]["upstream"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|v| v.get("keys").is_some()));
+    }
+
+    #[test]
+    fn a_deck_with_no_pipeline_is_still_a_deck_by_its_app_id() {
+        assert!(clan_context_for_agent(&deck(false))
+            .get("deck_inputs")
+            .is_some());
+    }
+
+    #[test]
+    fn documents_the_deck_task_does_not_run_on_send_no_deck_inputs() {
+        assert!(clan_context_for_agent(&brief())
+            .get("deck_inputs")
+            .is_none());
+        assert!(clan_context_for_agent(&open(&research()))
+            .get("deck_inputs")
+            .is_none());
+        assert!(
+            clan_context_for_agent(&open(&deck_template(true)))
+                .get("deck_inputs")
+                .is_none(),
+            "a deck that carries nothing"
+        );
     }
 
     #[test]
