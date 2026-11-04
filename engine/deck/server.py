@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Deck Maker engine server: run_deck behind a small HTTP port, one segment at a time, stopping at each gate.
 
-    python3 -m deck.server                      # from engine/; listens on 127.0.0.1:8795
+    python3 -m deck.server                      # from engine/; listens on 127.0.0.1:8793
 
 The middleware's ``build_deck`` task calls it (features/deck-maker-server.clan); nothing else does. It holds no document: the
 caller sends the inputs and the person's approvals, and the server decides how far to run. The stage outputs are kept in a
@@ -17,7 +17,7 @@ Routes (JSON; failures are non-2xx with ``{"error": {"type", "message"}}``, neve
 
 Env (all optional)::
 
-    NAPKIN_DECK_PORT       listen port (default 8795; 8787 is the agent-server, 8788 the live relay)
+    NAPKIN_DECK_PORT       listen port (default 8793; 8787 is the agent-server, 8788 the live relay, 8795 the middleware)
     NAPKIN_DECK_DATA       where the per-document folders go (default ./deck-runs)
     NAPKIN_DECK_REPLAY     a folder of recorded stage files: with it, mode "replay" replays them, paced by nothing, free
     NAPKIN_DECK_LIVE       1 to allow mode "live": paid model calls (about 0.65 to 1.25 USD a deck). Off by default
@@ -87,7 +87,7 @@ class Cap:
 class Settings:
     def __init__(self, env=None):
         e = os.environ if env is None else env
-        self.port = int(e.get("NAPKIN_DECK_PORT") or 8795)
+        self.port = int(e.get("NAPKIN_DECK_PORT") or 8793)
         self.data = Path(e.get("NAPKIN_DECK_DATA") or "deck-runs")
         self.replay = Path(e["NAPKIN_DECK_REPLAY"]) if e.get("NAPKIN_DECK_REPLAY") else None
         self.live = (e.get("NAPKIN_DECK_LIVE") or "").strip() == "1"

@@ -307,7 +307,7 @@ NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server    
 
 | Env | |
 |---|---|
-| `NAPKIN_DECK_PORT` | default 8795 (8787 is the agent-server, 8788 the live relay) |
+| `NAPKIN_DECK_PORT` | default 8793 (8787 is the agent-server, 8788 the live relay, 8795 the middleware) |
 | `NAPKIN_DECK_DATA` | where the per-document, per-inputs folders go (default `./deck-runs`); they are a cache: a changed prompt starts again |
 | `NAPKIN_DECK_REPLAY` | a folder of recorded stage files: mode `replay` copies them in stage by stage, free |
 | `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.65 to 1.25 USD a deck). Off by default |
