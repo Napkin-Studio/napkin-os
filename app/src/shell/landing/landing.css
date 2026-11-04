@@ -96,7 +96,7 @@
 .lc-client:hover .lc-orb, .lc-client:focus-visible .lc-orb { transform: translateY(-4px); }
 .lc-lbl { display: block; width: max-content; max-width: calc(var(--box) + 56px); }
 .lc-nm { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.25; }
-.lc-st { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--ink2); }
+.lc-st { text-wrap: balance; display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--ink2); }
 .lc-dot { display: inline-block; width: 7px; height: 7px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; background: var(--accent); }
 .lc-dot[data-activity='human'] { background: var(--lc-ring-human); }
 .lc-dot[data-activity='work'] { background: var(--lc-ring-work); }
