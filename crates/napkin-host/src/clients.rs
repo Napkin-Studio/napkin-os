@@ -521,3 +521,19 @@ pub fn legacy_names(store: &dyn DocStore) -> HostResult<Vec<(String, usize)>> {
     out.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     Ok(out)
 }
+
+/// One free-text client name on offer to "Adopt clients", and how many
+/// documents carry it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LegacyName {
+    pub name: String,
+    pub documents: usize,
+}
+
+/// [`legacy_names`] as the hosts return it to the shell.
+pub fn legacy_offer(store: &dyn DocStore) -> HostResult<Vec<LegacyName>> {
+    Ok(legacy_names(store)?
+        .into_iter()
+        .map(|(name, documents)| LegacyName { name, documents })
+        .collect())
+}

@@ -19,6 +19,7 @@ import { fetchFile } from './fetchFile'
 import type {
   ClientConfirmReply,
   Adopted,
+  LegacyName,
   ClientRecord,
   LibraryFilter,
   LibraryListing,
@@ -350,6 +351,7 @@ export const httpHost: Host = {
       json<ClientRecord>(`/clients/${encodeURIComponent(id)}`, { ...postJson(patch), method: 'PATCH' }),
     archive: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/archive`, { method: 'POST' }),
     restore: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
+    legacy: () => json<LegacyName[]>('/clients/legacy'),
     adopt: names => json<Adopted>('/clients/adopt', postJson({ names })),
   },
 

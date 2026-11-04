@@ -145,6 +145,13 @@ export interface ClientPatch {
   material?: ClientMaterial
 }
 
+/** A free-text client name the documents carry, offered to `clients.adopt`. */
+export interface LegacyName {
+  name: string
+  /** How many documents carry it. */
+  documents: number
+}
+
 /** What `clients.adopt` did. */
 export interface Adopted {
   created: ClientRecord[]
@@ -196,6 +203,8 @@ export interface ClientsApi {
   update(id: string, patch: ClientPatch): Promise<ClientRecord>
   archive(id: string): Promise<ClientRecord>
   restore(id: string): Promise<ClientRecord>
+  /** Free-text client names in the documents that no client has yet. */
+  legacy(): Promise<LegacyName[]>
   /** Turn chosen free-text names into clients and link the documents that name them. */
   adopt(names: string[]): Promise<Adopted>
 }

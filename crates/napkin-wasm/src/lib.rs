@@ -151,6 +151,14 @@ impl NapkinHost {
             .map_err(err)
     }
 
+    /// The free-text client names no client has yet, with their document counts.
+    #[wasm_bindgen(js_name = legacyClientNames)]
+    pub fn legacy_client_names(&self) -> Result<JsValue, JsValue> {
+        clients::legacy_offer(&*self.store)
+            .map(|l| to_js(&l))
+            .map_err(err)
+    }
+
     /// `names` is a JSON array of strings.
     #[wasm_bindgen(js_name = adoptClients)]
     pub fn adopt_clients(&self, names: &str) -> Result<JsValue, JsValue> {

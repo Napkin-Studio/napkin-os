@@ -55,6 +55,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/recent", get(recent))
         .route("/t/{tenant}/library", get(library_listing))
         .route("/t/{tenant}/clients", get(list_clients).post(create_client))
+        .route("/t/{tenant}/clients/legacy", get(legacy_clients))
         .route("/t/{tenant}/clients/adopt", post(adopt_clients))
         .route("/t/{tenant}/clients/{id}", patch_method(update_client))
         .route("/t/{tenant}/clients/{id}/archive", post(archive_client))
@@ -363,6 +364,15 @@ async fn restore_client(
     Ok(Json(clients::set_archived(
         &*ws.store, &acting, &id, false,
     )?))
+}
+
+/// The free-text client names the documents carry that no client has yet:
+/// what "Adopt clients" offers.
+async fn legacy_clients(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+) -> ApiResult<Json<Vec<clients::LegacyName>>> {
+    Ok(Json(clients::legacy_offer(&*ctx.workspace(&tenant).store)?))
 }
 
 #[derive(Deserialize)]

@@ -14,6 +14,7 @@ import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialo
 
 import type {
   Adopted,
+  LegacyName,
   ClientRecord,
   Host,
   HostEvents,
@@ -84,6 +85,7 @@ export const tauriHost: Host = {
     update: (id, patch) => invoke<ClientRecord>('update_client', { id, patch }),
     archive: id => invoke<ClientRecord>('set_client_archived', { id, archived: true }),
     restore: id => invoke<ClientRecord>('set_client_archived', { id, archived: false }),
+    legacy: () => invoke<LegacyName[]>('legacy_client_names'),
     adopt: names => invoke<Adopted>('adopt_clients', { names }),
   },
 

@@ -12,6 +12,10 @@ export class NapkinHost {
      */
     adoptClients(names: string): any;
     /**
+     * The free-text client names no client has yet, with their document counts.
+     */
+    legacyClientNames(): any;
+    /**
      * Compose a standalone document from the open `.clan` — bindings
      * resolved, assets inlined, scripts stripped, brand chrome. The same SDK
      * call every other shell makes; only the delivery differs, because there

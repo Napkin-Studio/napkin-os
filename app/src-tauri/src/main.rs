@@ -237,6 +237,12 @@ fn set_client_archived(
 }
 
 #[tauri::command]
+fn legacy_client_names(app: tauri::AppHandle) -> Result<Vec<clients::LegacyName>, String> {
+    let ctx = host(&app);
+    clients::legacy_offer(&**ctx.session.store()).map_err(String::from)
+}
+
+#[tauri::command]
 fn adopt_clients(app: tauri::AppHandle, names: Vec<String>) -> Result<clients::Adopted, String> {
     let ctx = host(&app);
     clients::adopt(&**ctx.session.store(), ctx.session.ctx(), &names).map_err(String::from)
@@ -429,6 +435,7 @@ fn main() {
             update_client,
             set_client_archived,
             adopt_clients,
+            legacy_client_names,
             spinoff_targets,
             spinoff_document,
             agent_prompt,

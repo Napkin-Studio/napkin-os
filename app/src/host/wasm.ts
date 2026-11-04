@@ -19,6 +19,7 @@ import init, { NapkinHost } from '../wasm/napkin_wasm'
 import { prepareFrameHtml } from './wasmFrame'
 import type {
   Adopted,
+  LegacyName,
   ClientConfirmReply,
   ClientRecord,
   LibraryListing,
@@ -325,6 +326,7 @@ export const wasmHost: Host = {
     update: async (id, patch) => (await boot()).updateClient(id, JSON.stringify(patch)) as ClientRecord,
     archive: async id => (await boot()).setClientArchived(id, true) as ClientRecord,
     restore: async id => (await boot()).setClientArchived(id, false) as ClientRecord,
+    legacy: async () => (await boot()).legacyClientNames() as LegacyName[],
     adopt: async names => (await boot()).adoptClients(JSON.stringify(names)) as Adopted,
   },
 

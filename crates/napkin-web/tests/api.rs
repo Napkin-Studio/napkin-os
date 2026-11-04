@@ -2602,6 +2602,23 @@ async fn adopting_names_makes_clients_and_links_only_what_was_chosen() {
     assert_eq!(out.json()["created"].as_array().unwrap().len(), 0);
 }
 
+// "Adopt clients" asks for the free-text names on offer. A studio with none
+// (documents that carry no name, or only names it already has as clients) is
+// offered an empty list, and the route is the tenant's own and needs a session.
+#[tokio::test]
+async fn the_adopt_offer_is_a_list_and_is_empty_when_nothing_names_a_client() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    new_doc(&s, &b, "ie.napkin.test", "No name here", None).await;
+    let t = &b.tenant;
+    let out = get(&s, &format!("/api/t/{t}/clients/legacy"), Some(&b.cookie)).await;
+    assert_eq!(out.status, StatusCode::OK);
+    assert_eq!(out.json(), serde_json::json!([]));
+    let anon = get(&s, &format!("/api/t/{t}/clients/legacy"), None).await;
+    assert_ne!(anon.status, StatusCode::OK, "needs a session");
+}
+
 // A client's document, branched into another tool, is still that client's: the
 // tool's list for the client (`/library?client=&app=`) shows the child, and the
 // client's other tools do not change. The shell reads this to keep the trail.

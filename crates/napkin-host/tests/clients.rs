@@ -718,3 +718,20 @@ fn an_open_contest_is_needs_you_in_the_listing() {
     assert_eq!(state("Contested").unwrap().needs_you, 1);
     assert_eq!(state("Calm").unwrap().needs_you, 0);
 }
+
+#[test]
+fn legacy_offer_names_the_documents_for_the_shell() {
+    let s = store_with_apps();
+    let one = work(&s, BRIEF, "Brief one", None);
+    set_data(&s, &one, "client: Client A\n");
+    let two = work(&s, BRIEF, "Brief two", None);
+    set_data(&s, &two, "client: client  a\n");
+    let offer = clients::legacy_offer(&s).unwrap();
+    assert_eq!(
+        serde_json::to_value(&offer).unwrap(),
+        serde_json::json!([{ "name": "Client A", "documents": 2 }])
+    );
+    // Once adopted, the name is no longer on offer.
+    clients::adopt(&s, &ctx(), &["Client A".into()]).unwrap();
+    assert!(clients::legacy_offer(&s).unwrap().is_empty());
+}
