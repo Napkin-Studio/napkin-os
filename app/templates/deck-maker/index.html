@@ -294,6 +294,52 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
   h1{font-size:34px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* The landing page: one prompt box; the rest is read from it or asked (features/deck-maker-simple-start.clan). */
+.ld{display:flex;flex-direction:column;align-items:center;padding:56px 20px 80px;text-align:center}
+.ld-in{width:100%;max-width:760px;display:flex;flex-direction:column;align-items:center}
+.ld-h{font-size:46px;font-weight:800;letter-spacing:-.035em;line-height:1.05;margin:6px 0 10px}
+.ld-sub{font-size:17px;color:var(--ink2);max-width:520px}
+.ld-bar{margin-top:28px;width:100%;max-width:700px;display:flex;align-items:flex-end;gap:10px;background:var(--card);border:1.5px solid var(--line);border-radius:30px;padding:10px 10px 10px 22px;box-shadow:var(--shadow-soft);text-align:left}
+.ld-bar:focus-within{border-color:var(--ink)}
+.ld-bar textarea{flex:1;border:0;background:transparent;resize:none;outline:none;font:inherit;font-size:16px;line-height:1.5;color:var(--ink);padding:9px 0;max-height:220px;min-height:28px}
+.ld-bar textarea::placeholder{color:var(--ink3)}
+.ld-attach{width:40px;height:40px;border-radius:50%;border:0;background:var(--soft);display:grid;place-items:center;color:var(--ink2);flex:none;cursor:pointer}
+.ld-attach:hover{background:var(--soft-2)}
+.ld-go{height:44px;padding:0 22px;border-radius:999px;border:0;background:var(--create);color:var(--create-fg);font-weight:700;font-size:15px;flex:none}
+.ld-files{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.ld-file{display:inline-flex;align-items:center;gap:8px;background:var(--soft);border-radius:999px;padding:5px 12px;font-size:13px}
+.ld-eg{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;color:var(--ink3);font-size:13px}
+.ld-eg button{border:1px dashed var(--line);background:transparent;border-radius:999px;padding:7px 14px;font-size:13px;color:var(--ink2);max-width:520px;text-align:left}
+.ld-eg button:hover{background:var(--soft)}
+.ld-drop{margin-top:22px;font-size:14px;color:var(--ink2)} .ld-drop b{color:var(--ink);font-weight:600}
+.ld-read{width:100%;max-width:700px;text-align:left;margin:0 auto}
+.ld-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:17px;line-height:2}
+.ld-line .lead{color:var(--ink2)}
+.ld-rc{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 13px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;gap:7px;box-shadow:0 1px 2px rgba(20,22,27,.05)}
+.ld-rc:hover{border-color:var(--ink3)} .ld-rc.open{border-color:var(--ink);background:var(--soft)}
+.ld-rc small{font-family:var(--f-mono);font-size:10px;color:var(--ink3);font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.ld-rc.ph{border-style:dashed;color:var(--warn-fg);background:var(--warn-bg);border-color:transparent}
+.ld-ed{margin:12px 0 4px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-soft)}
+.ld-ed .opt{display:block;text-align:left;width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:14px}
+.ld-ed .opt[aria-pressed="true"]{border-color:var(--ink);background:var(--soft)}
+.ld-ed .opt span{display:block;font-size:12px;color:var(--ink3)}
+.ld-ed input[type=text]{height:40px;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:var(--paper);font-size:15px;outline:none;color:var(--ink)}
+.ld-ed .row2{display:flex;gap:8px;justify-content:flex-end}
+.ld-q{margin-top:26px;width:100%;max-width:700px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:22px 24px;box-shadow:var(--shadow-soft)}
+.ld-q .n{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.ld-q h3{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:6px 0 4px}
+.ld-q .why{font-size:13px;color:var(--ink3);margin-bottom:14px}
+.ld-opts{display:flex;flex-wrap:wrap;gap:8px}
+.ld-opts button{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:9px 15px;font-size:14px;font-weight:500}
+.ld-opts button:hover{border-color:var(--ink)}
+.ld-qtext{display:flex;gap:8px;margin-top:12px}
+.ld-qtext input{flex:1;height:42px;border:1px solid var(--line);border-radius:999px;padding:0 16px;background:var(--paper);font-size:14px;outline:none;color:var(--ink)}
+.ld-qfoot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:13px;color:var(--ink3)}
+.ld-link{border:0;background:none;color:var(--ink2);text-decoration:underline;font-size:13px}
+.ld-strip{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;max-width:1180px;margin:14px auto 0;padding:10px 20px;font-size:14px;color:var(--ink2)}
+.ld-strip b{color:var(--ink);font-weight:600}
+@media (max-width:640px){.ld-h{font-size:32px}.ld-bar{border-radius:24px}}
 </style>
 </head>
 <body>
@@ -622,6 +668,72 @@ var DeckLogic = (function () {
   }
 
   /** The legacy inputs.kind a deck type maps to: investor_seed is 'investor', every other type 'agency'. */
+
+  // ── the landing page's read (features/deck-maker-simple-start.clan) ──────────────────────────────────────────
+  // What the prompt says about the deck, read with plain rules (no model, no cost, instant): the deck type, the client, the project, the
+  // agency and the length. What it cannot read is left empty, never made up: the page shows a labelled placeholder and asks. The engine
+  // still decides at intake; this only saves the person typing what they have already written.
+  var NOT_A_NAME = { We: 1, I: 1, They: 1, It: 1, The: 1, A: 1, An: 1, Our: 1, This: 1, That: 1, There: 1, Pitch: 1, Please: 1, Irish: 1, Ireland: 1,
+    Cork: 1, Dublin: 1, Galway: 1, Europe: 1, European: 1, British: 1, Britain: 1, UK: 1, US: 1, USA: 1, Spring: 1, Summer: 1, Autumn: 1, Winter: 1,
+    Christmas: 1, January: 1, February: 1, March: 1, April: 1, May: 1, June: 1, July: 1, August: 1, September: 1, October: 1, November: 1, December: 1,
+    Monday: 1, Tuesday: 1, Wednesday: 1, Thursday: 1, Friday: 1, Seed: 1, Series: 1, Tender: 1, Brief: 1, Agency: 1 };
+  var NAME = "[A-Z][\\w&'’-]*(?:\\s+[A-Z][\\w&'’-]*){0,3}";
+  /** A name the prompt gives for the client: the subject of a sentence ("Fernley Drinks, a Cork brand, wants ..."), or what follows for / from / client. */
+  function clientIn(text) {
+    var pats = [new RegExp('(?:^|[.!?]\\s+)(' + NAME + ')\\s*(?:,|\\s+(?:is|are|wants?|needs?|asked|has|have|launches|launching|would))'),
+                new RegExp('\\b(?:for|from|client:?|brand:?)\\s+(' + NAME + ')')];
+    for (var i = 0; i < pats.length; i++) {
+      var m = pats[i].exec(text);
+      if (!m) continue;
+      var words = m[1].trim().split(/\s+/);
+      while (words.length && NOT_A_NAME[words[0]]) words.shift();
+      while (words.length && NOT_A_NAME[words[words.length - 1]]) words.pop();
+      if (words.length) return words.join(' ');
+    }
+    return '';
+  }
+  /** The deck type the prompt names, as a DECK_TYPES id, or null when it names none or more than one (the page asks). */
+  function typeIn(text) {
+    var t = String(text || '').toLowerCase(), hit = [];
+    if (/\b(tender|rfp|rfq|procurement)\b/.test(t)) hit.push('tender_response');
+    if (/\b(seed|raising|investors?|series [ab]|fundrais\w*)\b/.test(t)) hit.push('investor_seed');
+    if (/\b(credentials|chemistry meeting|capabilities deck)\b/.test(t)) hit.push('credentials');
+    if (/\b(pitch|agency|campaign|territor\w+)\b/.test(t) && !hit.length) hit.push('agency_pitch');
+    return hit.length === 1 ? hit[0] : null;
+  }
+  /** The whole read of a prompt: {text, type, typeFrom, client, project, agency, length}. `typeFrom` is 'read' or null. */
+  function readPrompt(text) {
+    var t = String(text || '').trim();
+    var type = typeIn(t), pj = /\bproject[: ]+([A-Z][^.,;\n]{2,48})/.exec(t), ag = new RegExp('\\bagency[: ]+(' + NAME + ')').exec(t);
+    return { text: t, type: type, typeFrom: type ? 'read' : null, client: clientIn(t), project: pj ? pj[1].trim() : '',
+             agency: ag && !NOT_A_NAME[ag[1]] ? ag[1].trim() : '', length: /\b(full (story|deck)|every slide|long.?form)\b/i.test(t) ? 'full' : 'pitch' };
+  }
+  /** What the read left open, as questions to ask one at a time: the deck type when it is not clear, the client when none was named. At most five. */
+  function readQuestions(r) {
+    var qs = [];
+    if (!r.type) qs.push({ id: 'type', n: 'The kind of deck', text: 'What kind of deck is this?', why: 'Your prompt does not say, so I would rather ask than guess.',
+                           opts: DECK_TYPES.map(function (x) { return { label: x.label, value: x.id }; }) });
+    if (!r.client) qs.push({ id: 'client', n: 'The client', text: 'Who is the client?', why: 'I could not find a name in what you wrote. Without one the cover says [Client].', opts: [], free: true });
+    return qs.slice(0, 5);
+  }
+  /** One field of a read set (by a change link or an answer): the type clears its question, a new client likewise. Returns a new read. */
+  function readApply(r, field, value) {
+    var o = {}; Object.keys(r).forEach(function (k) { o[k] = r[k]; });
+    var v = String(value == null ? '' : value).trim();
+    if (field === 'type') { if (!typeById(v)) return o; o.type = v; o.typeFrom = 'asked'; }
+    else if (field === 'length') o.length = v === 'full' ? 'full' : 'pitch';
+    else if (field === 'client' || field === 'project' || field === 'agency') o[field] = v;
+    o.qs = (o.qs || []).filter(function (q) { return !(q.id === 'type' && o.type) && !(q.id === 'client' && o.client); });
+    if (o.qi >= o.qs.length) o.qi = Math.max(0, o.qs.length - 1);
+    return o;
+  }
+  /** The one line that says what was read, in words, for the strip on the Build screen. */
+  function readSentence(r) {
+    var ty = typeById(r.type || DEFAULT_TYPE);
+    return (ty ? ty.article : 'A deck') + ' for ' + (r.client || '[Client]') + (r.project ? ', ' + r.project : '') + (r.agency ? ' from ' + r.agency : '') +
+           ', ' + (r.length === 'full' ? 'the full story' : 'up to 18 slides');
+  }
+
   function kindOfType(typeId) { return typeId === 'investor_seed' ? 'investor' : 'agency'; }
 
   var HINTS = {
@@ -1441,7 +1553,7 @@ var DeckLogic = (function () {
     researchRequest: researchRequest, upstreamChanged: upstreamChanged,
     supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
-    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, gateRequest: gateRequest,
+    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate, humanApproval: humanApproval, readPrompt: readPrompt, readQuestions: readQuestions, readApply: readApply, readSentence: readSentence, gateRequest: gateRequest,
     GATES: GATES, gateView: gateView, gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown,
     isObj: isObj, own: own
   };
@@ -1737,7 +1849,111 @@ var DeckLogic = (function () {
           '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section></div>';
   }
 
+
+  // ── the landing page (features/deck-maker-simple-start.clan) ──────────────────────────────────────────────────
+  var EXAMPLES = [
+    'Fernley Drinks is a small Irish cordial maker launching a sparkling elderflower drink. Pitch a summer campaign for 25 to 35 year olds. Modest budget.',
+    'Seed deck for Lumen Labs, a water-tracking app. We are raising 1.2m.',
+    'A deck for a drinks brand about summer.'
+  ];
+  var CLIP = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+  /** A fresh document gets the landing page; one that already has a prompt, files, a brief or research, intake questions or a run keeps the full form. */
+  function isFresh(s) {
+    var p = s.inputs.prompt || {};
+    return !String(p.text || '').trim() && !L.documentsOf(s.raw).length && !Object.keys(s.upstream || {}).length &&
+      !L.gapView(s.intake).questions.length && !(s.run.stages || []).length && !Object.keys(s.run.approvals || {}).length && !s.asked;
+  }
+  function landing(s) {
+    var files = L.documentsOf(s.raw);
+    return '<main class="ld"><div class="ld-in">' +
+      '<h1 class="ld-h">What are we pitching?</h1>' +
+      '<p class="ld-sub">Tell us in a line or paste everything you have. Add anything they sent you.</p>' +
+      '<div class="ld-bar"><textarea id="ptext" data-land rows="1" placeholder="The client, the brand and what they want" aria-label="What are we pitching?">' + esc(draft('text', '')) + '</textarea>' +
+        '<label class="ld-attach" for="attach" title="Attach files" aria-label="Attach files">' + CLIP + '</label><input type="file" id="attach" multiple hidden>' +
+        '<button class="ld-go" id="land-build">Build deck</button></div>' +
+      (files.length ? '<div class="ld-files">' + files.map(function (f) { return '<span class="ld-file">' + esc(f.name) + '</span>'; }).join('') + '</div>' : '') +
+      '<div class="ld-eg"><span>For example:</span>' + EXAMPLES.map(function (e, i) { return '<button data-eg="' + i + '">“' + esc(e) + '”</button>'; }).join('') + '</div>' +
+      '<p class="ld-drop"><b>Got a brief, an email or a deck?</b> Attach it with the paperclip.</p>' +
+      '</div></main>';
+  }
+  /** One chip of the read line: what was read, with a pencil to change it. A placeholder is dashed. */
+  function rchip(k, label, text, ph, open) {
+    return '<button class="ld-rc' + (ph ? ' ph' : '') + (open ? ' open' : '') + '" data-rd="' + k + '"><small>' + label + '</small>' + esc(text) + ' <span aria-hidden="true" style="color:var(--ink3);font-size:11px">✎</span></button>';
+  }
+  function readLineHtml(r, s) {
+    var ty = r.type ? L.DECK_TYPES.filter(function (x) { return x.id === r.type; })[0] : null, files = L.documentsOf(s.raw), ed = r.editing;
+    return '<span class="lead">I read this as</span>' + rchip('type', 'Kind', ty ? ty.label : 'Not sure yet', !ty, ed === 'type') +
+      '<span class="lead">for</span>' + rchip('client', 'Client', r.client || '[Client]', !r.client, ed === 'client') +
+      rchip('project', 'Project', r.project || '[Project]', !r.project, ed === 'project') +
+      (r.agency ? '<span class="lead">from</span>' + rchip('agency', 'Agency', r.agency, false, ed === 'agency') : '') +
+      '<span class="lead">·</span>' + rchip('length', 'Length', r.length === 'full' ? 'Full story' : 'Up to 18 slides', false, ed === 'length') +
+      (files.length ? '<span class="lead">·</span>' + rchip('files', 'Files', files.length + (files.length > 1 ? ' files' : ' file'), false, ed === 'files') : '') +
+      (!r.agency && ed !== 'agency' ? '<button class="ld-link" data-rd="agency">add the agency</button>' : '');
+  }
+  function editorHtml(r, s) {
+    var k = r.editing;
+    if (!k) return '';
+    var h = '<div class="ld-ed">';
+    if (k === 'type') h += L.DECK_TYPES.map(function (x) { return '<button class="opt" data-rdset="type:' + x.id + '" aria-pressed="' + (r.type === x.id) + '">' + esc(x.label) + '<span>' + esc(x.one_line) + '</span></button>'; }).join('');
+    else if (k === 'length') h += [['pitch', 'Up to 18 slides', 'Pitch, then an appendix of backup'], ['full', 'Full story', 'Every slide in story order']].map(function (x) {
+      return '<button class="opt" data-rdset="length:' + x[0] + '" aria-pressed="' + (r.length === x[0]) + '">' + x[1] + '<span>' + x[2] + '</span></button>'; }).join('');
+    else if (k === 'files') h += '<p class="note">' + (L.documentsOf(s.raw).length ? L.documentsOf(s.raw).map(function (f) { return esc(f.name); }).join(', ') : 'No files attached.') +
+      '</p><div class="row2"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple hidden></div>';
+    else h += '<input type="text" id="rd-val" value="' + esc(r[k] || '') + '" placeholder="' + (k === 'agency' ? 'Shows as [Agency] if left empty' : 'Type it here') + '">' +
+      '<div class="row2"><button class="btn" data-rdcancel>Cancel</button><button class="btn go" data-rdsave="' + k + '">Save</button></div>';
+    return h + (k === 'type' || k === 'length' ? '<div class="row2"><button class="btn" data-rdcancel>Close</button></div>' : k === 'files' ? '<div class="row2"><button class="btn" data-rdcancel>Close</button></div>' : '') + '</div>';
+  }
+  function questionHtml(r) {
+    var q = (r.qs || [])[r.qi];
+    if (!q) return '';
+    return '<div class="ld-q"><div class="n">Question ' + (r.qi + 1) + ' of ' + r.qs.length + ' · ' + esc(q.n) + '</div><h3>' + esc(q.text) + '</h3><div class="why">' + esc(q.why) + '</div>' +
+      (q.opts.length ? '<div class="ld-opts">' + q.opts.map(function (o) { return '<button data-ra="' + esc(o.value) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>' : '') +
+      (q.free ? '<div class="ld-qtext"><input type="text" id="rd-q" placeholder="Type it here"><button class="btn go" data-rsend style="height:42px;padding:0 18px">Answer</button></div>' : '') +
+      '<div class="ld-qfoot"><span>' + (r.qs.length - r.qi - 1) + ' more · you can skip any</span><button class="ld-link" data-rskip>Skip</button></div></div>';
+  }
+  /** The read, shown: what was read with a pencil on each part, and the first question the prompt left open. */
+  function readScreen(s) {
+    var r = view.read;
+    return '<main class="ld"><div class="ld-read"><div class="eyebrow" style="margin-bottom:6px">What I read</div><div class="ld-line">' + readLineHtml(r, s) + '</div>' +
+      editorHtml(r, s) + '</div>' + questionHtml(r) +
+      (!(r.qs || []).length ? '<div style="margin-top:22px"><button class="ld-go" data-rdgo>Build deck again</button></div>' : '') + '</main>';
+  }
+  /** On the Build screen: what was read, in one line, and a way back to change it (which starts the deck again). */
+  function readStrip(scr) {
+    if (scr !== 'build' || !view.readLine) return '';
+    return '<div class="ld-strip"><span><b>Reading:</b> ' + esc(view.readLine) + '</span><button class="ld-link" data-rdagain>Change this and start again</button></div>';
+  }
+  /** The read is settled (nothing left to ask, or the person skipped it): save it, go to Build, and let the engine carry on by itself. */
+  function commitRead() {
+    var s = d(), r = view.read;
+    if (!r) return;
+    var kind = L.kindOfType(r.type || 'agency_pitch');
+    var saved = put({ inputs: { prompt: { client: r.client || '', project: r.project || '', agency: r.agency || '', text: r.text }, kind: kind, format: r.length } },
+      'start deck', 'inputs read from the prompt' + (r.typeFrom === 'asked' ? ', deck type answered by the person' : ''));
+    var tp = L.typePatch(s.raw, r.type || null, now());
+    var typed = tp ? put(tp, r.type ? 'deck type' : 'skip deck type', r.typeFrom === 'asked' ? 'answered by the person' : r.type ? 'read from the prompt' : 'skipped') : null;
+    view.readLine = L.readSentence(r);
+    view.last = r; view.read = null; view.screen = 'build'; view.landText = null;
+    render();
+    if (mwOn()) {
+      toast('Saved. The engine is starting: it stops at the first gate and waits for you.');
+      Promise.all([saved, typed]).then(startBuild);
+    } else toast('Saved. Live building needs the engine server.');
+  }
+  /** Ask the next question, or carry on when none is left. */
+  function afterAnswer() {
+    var r = view.read;
+    if (!r.qs.length || r.qi >= r.qs.length) return commitRead();
+    return render();
+  }
+
   function start(s) {
+    if (view.read) return readScreen(s);
+    if (isFresh(s)) return landing(s);
+    return startFull(s);
+  }
+
+  function startFull(s) {
     var inp = s.inputs, p = inp.prompt || {};
     var dt = L.deckTypeOf(s.raw), typed = dt.source === 'answered';
     var kind = typed ? L.kindOfType(dt.id) : (pending.kind || inp.kind), format = pending.format || inp.format;
@@ -2706,8 +2922,9 @@ return {
     stashDraft();
     var before = cardBefore();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
-    document.getElementById('app').innerHTML = bar(s, scr) + body;
+    document.getElementById('app').innerHTML = bar(s, scr) + readStrip(scr) + body;
     sendBar(s, scr);
+    grow(document.getElementById('ptext'));
     Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
     growCard(before); // the status card's circle grows or shrinks in place when the state changes its size
     document.title = 'Deck Maker';
@@ -2797,6 +3014,46 @@ return {
     }
     if (a.tab) { view.tab = a.tab; return render(); }
     if (a.pres) { view.present += Number(a.pres); return render(); }
+    if (t.id === 'land-build') {
+      stashDraft();
+      var typed0 = String(draft('text', '')).trim();
+      if (!typed0 && !L.documentsOf(s.raw).length) { toast('Give the deck something to build from: a line about what you are pitching, or a document.'); return; }
+      var rd = L.readPrompt(typed0);
+      rd.qs = L.readQuestions(rd); rd.qi = 0; rd.editing = null;
+      view.read = rd;
+      return afterAnswer();
+    }
+    if (a.eg !== undefined) {
+      // Into the box itself: a re-draw first copies the box back into the draft, so setting only the draft would be undone.
+      var egText = EXAMPLES[Number(a.eg)] || '', box = document.getElementById('ptext');
+      if (box) box.value = egText;
+      pending.text = egText;
+      return render();
+    }
+    if (a.rd) { if (view.read) { view.read.editing = view.read.editing === a.rd ? null : a.rd; render(); } return; }
+    if (a.rdcancel !== undefined) { if (view.read) { view.read.editing = null; render(); } return; }
+    if (a.rdset) { var kv = a.rdset.split(':'); if (view.read) { view.read = L.readApply(view.read, kv[0], kv[1]); view.read.editing = null; } return render(); }
+    if (a.rdsave) {
+      var inpEl = document.getElementById('rd-val');
+      if (view.read) { view.read = L.readApply(view.read, a.rdsave, inpEl ? inpEl.value : ''); view.read.editing = null; }
+      return render();
+    }
+    if (a.ra !== undefined || a.rsend !== undefined || a.rskip !== undefined) {
+      var r0 = view.read, q0 = r0 && r0.qs[r0.qi];
+      if (!q0) return;
+      var val = a.ra !== undefined ? a.ra : a.rsend !== undefined ? ((document.getElementById('rd-q') || {}).value || '').trim() : '';
+      if (a.rsend !== undefined && !val) { toast('Type an answer, or skip.'); return; }
+      if (val) view.read = L.readApply(r0, q0.id, val);
+      else { view.read.qs = view.read.qs.filter(function (x) { return x !== q0; }); }   // skipped: left as the placeholder, not asked again
+      return afterAnswer();
+    }
+    if (a.rdgo !== undefined) return commitRead();
+    if (a.rdagain !== undefined) {
+      var back = view.last || L.readPrompt(String(d().inputs.prompt.text || ''));
+      back.qs = []; back.qi = 0; back.editing = null;   // everything was already settled: change what you like, then build again
+      view.read = back; view.screen = 'start'; view.readLine = null;
+      return render();
+    }
     if (t.id === 'build') {
       stashDraft();
       var prompt = { client: draft('client', ''), project: draft('project', ''), agency: draft('agency', ''), text: draft('text', '') };
@@ -2899,7 +3156,20 @@ return {
     }
   });
 
-  document.addEventListener('input', function () { stashDraft(); });
+  /** The landing page's prompt box grows with what is typed, to a limit. */
+  function grow(el) {
+    if (el && el.hasAttribute && el.hasAttribute('data-land') && el.style) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight || 0, 220) + 'px'; }
+  }
+  document.addEventListener('input', function (e) { stashDraft(); grow(e.target); });
+  // Enter sends on the landing page and in the read's answers; Shift+Enter is a new line in the prompt.
+  document.addEventListener('keydown', function (e) {
+    var el = e.target;
+    if (e.key !== 'Enter' || e.shiftKey || !el || !el.id) return;
+    var go = el.id === 'ptext' && el.hasAttribute && el.hasAttribute('data-land') ? 'land-build' : el.id === 'rd-q' ? 'rsend' : el.id === 'rd-val' ? 'rdsave' : '';
+    if (!go) return;
+    var btn = go === 'land-build' ? document.getElementById('land-build') : document.querySelector && document.querySelector('[data-' + go + ']');
+    if (btn && typeof btn.click === 'function') { e.preventDefault(); btn.click(); }
+  });
 
   // Attach files: the host stores each one as an asset; the list is written to inputs.documents.
   document.addEventListener('change', function (e) {

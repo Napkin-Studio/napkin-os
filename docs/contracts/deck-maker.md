@@ -300,6 +300,27 @@ Each live stage records `usd`: the transport's figure, else tokens at `spec.PRIC
 `report.json` `usd_total` includes recorded stages priced the same way and `usd_basis` says it is an estimate. A reply that
 is not JSON gets one repair call. Bench cost ranges are assumptions, plus or minus 30% (ADR 0032, proposed).
 
+## The landing page and the read
+
+A **fresh** document (no prompt, no files, no upstream brief or research, no intake questions, no run) opens on one input bar:
+a heading, the prompt box, an attach button, Build deck and three example prompts. Nothing else is on it. A document that already
+has any of those keeps the full form (`startFull`).
+
+Pressing Build deck **reads** the prompt, with plain rules in the app (`DeckLogic.readPrompt`: no model, no cost, instant): the deck
+type (`typeIn`, one of the four `DECK_TYPES`, or none when it names none or two), the client (`clientIn`: the subject of a sentence
+or what follows *for* / *from* / *client*), the project and agency (only when written as `project:` or `agency:`) and the length. What
+it cannot read is left empty, never made up: the page shows a dashed placeholder (`[Client]`, `[Project]`, "Not sure yet") and asks.
+It asks, one card at a time and each skippable, the deck type when it is not clear and the client when none was named
+(`readQuestions`, at most five). The read is shown as one line, "I read this as ... for ... ", every part with a pencil that changes
+it in place; nothing is saved until the read is settled.
+
+When nothing is left to ask, or the last card is answered or skipped, the read is saved (`inputs.prompt.{client, project, agency, text}`,
+`inputs.kind`, `inputs.format`, and the deck type as `intake.answers.q_deck_type`, read or asked) and, with a middleware behind the
+document, the engine carries on by itself (`build_deck`). The Build screen keeps the read as a line ("Reading: ..."), with a way back
+that changes it and builds again. The engine still decides at intake: its own questions (budget, success, tone) are not on the landing
+page until the server writes `intake` into the document.
+
+
 ## The gates
 
 The run stops at three gates and nowhere else. Review is the screen after the last gate, not a gate. The engine has no gates of its

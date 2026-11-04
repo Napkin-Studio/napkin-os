@@ -28,6 +28,10 @@ const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
   checksFor(id: string, slide: unknown, validation: unknown): Check[]
   approveGate(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): (Run & { gate: null }) | null
   humanApproval(run: unknown, gate: string | null | undefined, by: string, at: string, choice?: unknown): { approvals: unknown; decisions: unknown } | null
+  readPrompt(text: string): { text: string; type: string | null; typeFrom: string | null; client: string; project: string; agency: string; length: string }
+  readQuestions(r: unknown): { id: string; text: string; opts: { label: string; value: string }[]; free?: boolean }[]
+  readApply(r: unknown, field: string, value: string): { type: string | null; client: string; length: string; qs: { id: string }[]; qi: number }
+  readSentence(r: unknown): string
   gateRequest(run: unknown, gate: string, kind: string, by: string, at: string): { decisions: unknown[]; gate_requests: unknown[] } | null
   GATES: Record<string, { body: string; title: string }>
   gateView(run: unknown, pick?: unknown): GateView | null
@@ -195,7 +199,7 @@ test('the app draws no brand of its own: the OS bar above it already carries the
 
 test('the only inputs are the three prompt fields, the open prompt and the file picker', () => {
   assert.deepEqual([...html.matchAll(/field\('(\w+)'/g)].map(m => m[1]), ['client', 'project', 'agency'])
-  assert.equal(html.match(/<textarea/gi)?.length, 2) // the open prompt, and the free-text box of a supply card
+  assert.equal(html.match(/<textarea/gi)?.length, 3) // the landing page's prompt box, the full form's open prompt, and the free-text box of a supply card
   assert.equal(html.match(/contenteditable/gi)?.length ?? 0, 0)
 })
 
@@ -335,7 +339,7 @@ test('markup in a brief name, a document name, a gap or a question is escaped', 
 })
 
 test('Start shows Optional with no upstream and offers Build with no brief', () => {
-  const m = mount({ inputs: { prompt: {} } })
+  const m = mount({ inputs: { prompt: { text: 'A deck.' } } })   // a document with a prompt keeps the full form (a fresh one gets the landing page)
   assert.ok(m.app.innerHTML.includes('Optional'))
   assert.ok(m.app.innerHTML.includes('Built from:'))
   assert.ok(m.app.innerHTML.includes('numbers stay placeholders'))
@@ -522,18 +526,18 @@ test('builtFrom shows the type when given one, and describeBuiltFrom names it', 
 })
 
 test('Start shows the selector with the inferred type highlighted and its quote, escaped', () => {
-  const m = mount({ inputs: { prompt: {} }, intake: { questions: [typeQ()] } })
+  const m = mount({ inputs: { prompt: { text: 'A deck.' } }, intake: { questions: [typeQ()] } })
   assert.ok(m.app.innerHTML.includes('What kind of deck?'))
   assert.ok(m.app.innerHTML.includes('Looks like a tender: you wrote &quot;Response to ITT 4417 with scoring criteria&quot;'))
   assert.ok(m.app.innerHTML.includes('To make this one stronger, bring: the buyer'))
   assert.ok(/data-dtype="tender_response" aria-pressed="true"/.test(m.app.innerHTML))
-  const bad = mount({ inputs: { prompt: {} }, intake: { questions: [typeQ({ options: [{ id: 'tender_response', label: 'T', value: 'tender_response', origin: 'proposed', source: hostile }] })] } })
+  const bad = mount({ inputs: { prompt: { text: 'A deck.' } }, intake: { questions: [typeQ({ options: [{ id: 'tender_response', label: 'T', value: 'tender_response', origin: 'proposed', source: hostile }] })] } })
   assert.equal(bad.app.innerHTML.includes('<img'), false)
   assert.ok(bad.app.innerHTML.includes('&lt;img'))
 })
 
 test('with no type question Start defaults to agency pitch', () => {
-  const m = mount({ inputs: { prompt: {} } })
+  const m = mount({ inputs: { prompt: { text: 'A deck.' } } })
   assert.ok(m.app.innerHTML.includes('Defaults to agency pitch'))
 })
 
@@ -2070,4 +2074,150 @@ test('humanApproval is the person\'s half of approveGate and is refused where ap
   assert.equal(JSON.stringify(L.humanApproval(run, 'storyline', 'You', 't')), JSON.stringify({ approvals: full.approvals, decisions: full.decisions }))
   assert.equal(L.humanApproval(run, 'territories', 'You', 't'), null, 'not the open gate')
   assert.equal(L.humanApproval({ state: 'draft', stages: [], gate: null }, 'storyline', 'You', 't'), null)
+})
+
+
+// ── the landing page (features/deck-maker-simple-start.clan) ──
+const EX = [
+  'Fernley Drinks is a small Irish cordial maker launching a sparkling elderflower drink. Pitch a summer campaign for 25 to 35 year olds. Modest budget.',
+  'Seed deck for Lumen Labs, a water-tracking app. We are raising 1.2m.',
+  'A deck for a drinks brand about summer.',
+]
+
+test('the reader takes the type and the client from what the prompt says, and leaves the rest empty', () => {
+  const a = L.readPrompt(EX[0])
+  assert.deepEqual([a.type, a.typeFrom, a.client, a.project, a.agency, a.length], ['agency_pitch', 'read', 'Fernley Drinks', '', '', 'pitch'])
+  const b = L.readPrompt(EX[1])
+  assert.deepEqual([b.type, b.client], ['investor_seed', 'Lumen Labs'])
+  const fern = L.readPrompt('Fernley Drinks, a Cork sparkling iced tea brand, wants an agency pitch for a spring-to-summer 2027 Irish campaign.')
+  assert.deepEqual([fern.type, fern.client], ['agency_pitch', 'Fernley Drinks'])
+  const c = L.readPrompt(EX[2])
+  assert.deepEqual([c.type, c.typeFrom, c.client], [null, null, ''], 'nothing to read: nothing made up')
+})
+
+test('the reader is not fooled by a place, a pronoun or two kinds of deck at once', () => {
+  assert.equal(L.readPrompt('We are raising 1.2m for Ireland.').client, '')
+  assert.equal(L.readPrompt('Pitch us a campaign for Dublin.').client, '')
+  assert.equal(L.readPrompt('Please make a tender response for Acme Foods.').client, 'Acme Foods')
+  assert.equal(L.readPrompt('Please make a tender response for Acme Foods.').type, 'tender_response')
+  assert.equal(L.readPrompt('A seed deck and a tender response.').type, null, 'two kinds: ask')
+  assert.equal(L.readPrompt('A credentials deck for Acme Foods, agency: Napkin Studio').agency, 'Napkin Studio')
+  assert.equal(L.readPrompt('Show every slide, the full story.').length, 'full')
+  assert.deepEqual(L.readPrompt('').client, '')
+})
+
+test('the read asks the type when it is not clear and the client when none was named, and answering clears the question', () => {
+  const r = { ...L.readPrompt(EX[2]), qs: [] as { id: string }[], qi: 0 }
+  r.qs = L.readQuestions(r)
+  assert.equal(JSON.stringify(r.qs.map(q => q.id)), JSON.stringify(['type', 'client']))
+  assert.equal(L.readQuestions(L.readPrompt(EX[0])).length, 0, 'a clear prompt asks nothing')
+  const t = L.readApply(r, 'type', 'investor_seed')
+  assert.equal(JSON.stringify([t.type, t.qs.map(q => q.id)]), JSON.stringify(['investor_seed', ['client']]))
+  assert.equal(L.readApply(r, 'type', 'not_a_type').type, null, 'a type that does not exist is refused')
+  const c = L.readApply(t, 'client', 'Acme Foods')
+  assert.deepEqual([c.client, c.qs.length], ['Acme Foods', 0])
+  assert.equal(L.readApply(c, 'length', 'full').length, 'full')
+  assert.equal(L.readSentence({ ...c, project: '', agency: '', length: 'pitch' }), 'An investor seed deck for Acme Foods, up to 18 slides')
+})
+
+test('a fresh document shows the landing page and nothing else on Start', () => {
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), {}, { apiProxy: proxy().apiProxy })
+  const h = m.app.innerHTML
+  assert.ok(h.includes('What are we pitching?') && h.includes('id="land-build"') && h.includes('data-land') && h.includes('Build deck'))
+  for (const gone of ['class="card sec"', 'Kind of deck', 'Agency (optional)', 'You will get', 'From the team library', 'data-dtype']) assert.equal(h.includes(gone), false, gone)
+  assert.equal((h.match(/data-eg=/g) || []).length, 3)
+})
+
+test('Build deck with nothing typed is refused with the usual line and writes nothing', () => {
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), {}, { apiProxy: proxy().apiProxy })
+  m.click({}, 'land-build')
+  assert.match(m.toastEl.textContent, /something to build from/)
+  assert.equal(m.writes.length, 0)
+})
+
+test('a clear prompt is read, saved with what was read, and the engine carries on by itself', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), { ptext: { value: EX[0] } }, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'land-build')
+  await settle()
+  const inputs = (m.writes[0].obj as { inputs: { prompt: Record<string, string>; kind: string; format: string } }).inputs
+  assert.deepEqual([inputs.prompt.client, inputs.prompt.text, inputs.kind, inputs.format], ['Fernley Drinks', EX[0], 'agency', 'pitch'])
+  assert.deepEqual(Object.keys((m.writes[1].obj as { intake: { answers: object } }).intake.answers), ['q_deck_type'], 'the type, read from the prompt, is recorded as the deck type')
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'], 'nothing was asked, so the engine started')
+  assert.match(m.app.innerHTML, /Reading:<\/b> An agency pitch for Fernley Drinks/)
+})
+
+test('an unclear prompt asks one question at a time, skippable, and then carries on with placeholders', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), { ptext: { value: EX[2] }, 'rd-q': { value: '' } }, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'land-build')
+  assert.match(m.app.innerHTML, /Question 1 of 2 · The kind of deck/)
+  assert.match(m.app.innerHTML, /Not sure yet/)
+  assert.equal(m.writes.length, 0, 'nothing is saved until the read is settled')
+  m.click({ ra: 'investor_seed' })
+  assert.match(m.app.innerHTML, /Question 1 of 1 · The client/)
+  m.click({ rskip: '' })
+  await settle()
+  const inputs = (m.writes[0].obj as { inputs: { prompt: Record<string, string>; kind: string } }).inputs
+  assert.deepEqual([inputs.prompt.client, inputs.kind], ['', 'investor'], 'a client that was skipped is left empty: [Client] on the cover, never made up')
+  assert.deepEqual(p.calls.map(c => c.task), ['build_deck'])
+  assert.match(m.app.innerHTML, /An investor seed deck for \[Client\]/)
+})
+
+test('a part of the read is changed from its pencil, in one place, and the answer to the last question settles it', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), { ptext: { value: EX[2] }, 'rd-val': { value: 'Acme Foods' }, 'rd-q': { value: 'Acme Foods' } }, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'land-build')
+  m.click({ rd: 'length' })
+  assert.match(m.app.innerHTML, /Up to 18 slides<span>Pitch, then an appendix of backup/)
+  m.click({ rdset: 'length:full' })
+  assert.match(m.app.innerHTML, /Full story/)
+  m.click({ rd: 'client' })
+  m.click({ rdsave: 'client' })
+  assert.match(m.app.innerHTML, /Acme Foods/)
+  assert.match(m.app.innerHTML, /Question 1 of 1 · The kind of deck/, 'naming the client cleared its question')
+  m.click({ ra: 'agency_pitch' })
+  await settle()
+  const inputs = (m.writes[0].obj as { inputs: { prompt: Record<string, string>; format: string } }).inputs
+  assert.deepEqual([inputs.prompt.client, inputs.format], ['Acme Foods', 'full'])
+})
+
+test('an example fills the prompt box itself, and the draft survives the re-draw that follows', () => {
+  const box = { value: '' }   // the box is in the page: a re-draw copies it back into the draft first
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), { ptext: box }, { apiProxy: proxy().apiProxy })
+  m.click({ eg: '1' })
+  assert.equal(box.value, EX[1])
+  assert.ok(m.app.innerHTML.includes('Seed deck for Lumen Labs'))
+  m.click({}, 'land-build')
+  assert.match(m.app.innerHTML, /Lumen Labs/, 'and Build deck reads that text')
+})
+
+test('the Build screen says what was read and the way back starts the deck again', async () => {
+  const p = proxy(reply('queued'), reply('done'), reply('queued'))
+  const m = mount({ inputs: { prompt: {} } }, middleware(true), { ptext: { value: EX[0] } }, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'land-build')
+  await settle()
+  m.timers.shift()!.fn(); await settle()   // the first segment finishes: only then can another start
+  assert.match(m.app.innerHTML, /Change this and start again/)
+  m.click({ rdagain: '' })
+  assert.match(m.app.innerHTML, /What I read/)
+  assert.match(m.app.innerHTML, /Build deck again/)
+  m.click({ rdgo: '' })
+  await settle()
+  assert.equal(p.calls.filter(c => c.task === 'build_deck').length, 2, 'building again asks the engine again')
+})
+
+test('with no middleware the landing page still reads and saves, and says the engine is not there', async () => {
+  const p = proxy(reply('queued'))
+  const m = mount({ inputs: { prompt: {} } }, middleware(false), { ptext: { value: EX[0] } }, { apiProxy: p.apiProxy, timers: true })
+  await settle()
+  m.click({}, 'land-build')
+  await settle()
+  assert.equal(m.writes.length, 2)
+  assert.equal(p.calls.length, 0)
+  assert.match(m.toastEl.textContent, /needs the engine server/)
 })
