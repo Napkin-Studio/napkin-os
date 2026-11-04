@@ -60,10 +60,11 @@ export function AdoptPanel({ offer, onAdopt, onClose }: {
           studio: each becomes a client, and the documents that name it are linked to it. Nothing is changed for a name you leave unticked.
         </p>
         <ul className="lc-checks">
-          {offer.map(o => (
+          {offer.map((o, i) => (
             <li key={o.name}>
               <label>
-                <input type="checkbox" checked={chosen.has(o.name)} onChange={() => toggle(o.name)} />
+                {/* focus lands in the panel, so Escape closes it and a screen reader is told where it is */}
+                <input autoFocus={i === 0} type="checkbox" checked={chosen.has(o.name)} onChange={() => toggle(o.name)} />
                 <span className="lc-ck-name">{o.name}</span>
                 <span className="lc-ck-n">{plural(o.documents, 'document')}</span>
               </label>

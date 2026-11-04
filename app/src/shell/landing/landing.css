@@ -235,5 +235,5 @@ html[data-orbs-gl='0'] .lc-flat-toggle { display: none; }
 .lc-archived summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
 .lc-arch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; flex-wrap: wrap; }
 .lc-banner { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--danger); border-radius: 10px; }
-@media (max-width: 560px) { .lc-phr .ch-btn { flex: 1 1 auto; min-height: 44px; } .lc-arch-row .ch-btn { min-height: 44px; } }
+@media (max-width: 560px) { .lc-add .ch-btn, .lc-add input { min-height: 44px; } .lc-phr .ch-btn { flex: 1 1 auto; min-height: 44px; } .lc-arch-row .ch-btn { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .lc-archived, .lc-adopt, .lc-manage { transition: none; animation: none; } }
