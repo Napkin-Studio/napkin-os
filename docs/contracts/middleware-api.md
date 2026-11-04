@@ -1668,3 +1668,43 @@ stand-in. The host finds the parts itself, deterministically, from the
 client's words and the app's part names (Contract 4 §7.5.2a), and nothing in
 client review calls the middleware. A request for `find_client_parts` is
 `400 unknown_task`.
+
+## 12. Deck Maker: `build_deck`
+
+*Added 2026-11-04* (`features/deck-maker-server.clan`). One task, `build_deck@1`, runs one **segment** of a Deck Maker run through the
+deck engine (`engine/deck/server.py`) and writes what the engine reports into the document. The Deck's `app/pipeline.yaml` declares
+`request_kind: middleware`: the host settles a reply's change only for that kind (`ops/middleware.rs`, `REQUEST_KIND`).
+
+- **Input.** `input` is empty: the job reads the document. The engine is sent `inputs.prompt` (`text`, `client`, `project`, `agency`),
+  `inputs.kind` (`agency` or `investor`), `inputs.format` and `run.approvals`, which the person wrote, and the process-wide
+  `NAPKIN_DECK_RENDER` (`0`: the last segment stops at the deck and writes no files, so no LibreOffice is needed).
+- **A segment, not a run.** The job is `long` with one stage, `build`. It runs the engine up to the next gate, or on to the finished deck
+  once the last gate is approved, then ends `done`. A gate is a finished segment with `run.state: gate`; nothing waits across it, so a
+  restart of the middleware loses nothing. A gate goes on only when its approval is in `run.approvals` **and** the stage output it covers
+  existed when the call arrived (the engine decides; an approval of an earlier run never skips a gate of a new one). The gates are
+  `storyline` (after stage b), `territories` (after c) and `idea` (after d); Review is the screen after the last gate, not a gate.
+  An investor deck has the storyline gate only.
+- **The change.** Each poll that finds the engine's report changed carries one staged change. Its `data_patch` writes the run keys
+  the engine owns (`run.state`, `run.stage`, `run.stages`, `run.gate`, `run.agent`, `run.checks`, `run.error`, `run.done`,
+  `run.cost_usd`; a key the run no longer has, such as the agent at a gate or the gate once approved, is set to `null`), and once the deck
+  is built `deck`, `validation`, `evidence`, `report` and `exports` (file names and sizes: the files stay on the engine's disk). It never writes
+  `run.approvals`, `run.decisions` or `run.gate_requests`: the person writes those beside it, so the **read-set** names `run.<key>`, never
+  the whole `run`, and a decision the person made while the job ran does not make the host judge the job's base stale. Each change
+  carries one `edit` decision by `build_deck@1.x/engine` with its reasoning; its `targets` are the paths it writes. The merged data
+  validates against the app's `schema.json`. A repeated poll of a finished job returns the same change, and the host skips it (§5).
+- **Failure is shown as failure.** An engine that answers an error, does not answer in time, cannot be reached, or answers something that
+  is not a run ends the job `failed` with its message (`job.error.type`: the engine's own type, or `engine_timeout`, `engine_unreachable`,
+  `engine_garbage`), and the run is written `failed` with the same message in `run.error` (`retryable: true`, the running row marked
+  `failed`, the agent in its `error` state). Nothing is ever made up: no deck, no cost, no percentage. What the engine had already written
+  stays in its cache, so the next call resumes there.
+- **Errors at the call.** `400 invalid_input` when `inputs.prompt.text` is empty; `503 engine_unavailable` when no engine is configured
+  (`NAPKIN_DECK_ENGINE_URL` unset); `409 job_state` when a `build_deck` for this document is still running (one segment at a time). The
+  engine itself runs one segment at a time too: its own 409 ends this job `failed`, with its message.
+- **Cancel.** `cancel_job` stops the job at once. The engine's segment cannot be stopped from here: it finishes, and its stage outputs
+  stay in the engine's cache.
+- **Cost.** `run.cost_usd` is the engine's own figure (live runs only; replay and recorded stages show none). `trace.usage` reports
+  zeros: the engine's model calls are its own, capped there (`NAPKIN_DECK_MAX_USD`), not metered by this middleware.
+- **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the document's brief and
+  research as inputs, the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
+  restart of the middleware (an in-memory job store, as everywhere here: the next `build_deck` resumes from the engine's cache).
+
