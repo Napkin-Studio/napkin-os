@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
 import { Circle } from './Circle'
-import { activityOf, initialsOf, needsYou, type ClientSummary } from './model'
+import { ACTIVITY_WORD, activityOf, initialsOf, needsYou, type ClientSummary } from './model'
 import { lastTouched } from '../when'
 import { TOOLS, toolOfApp, type Tool } from './tools'
 import { isTyping, wheelKey } from './keys'
@@ -35,7 +35,9 @@ function count(summary: ClientSummary, t: Tool, live: boolean): { small: string;
   if (tally.needsYou) say += ', needs you'
   else if (tally.failed) say += ', failed'
   else if (tally.running) say += `, ${tally.running} running`
-  return { small: `${n} open`, say }
+  // The ring's verb is said in words under the tool as well.
+  const act = activityOf(tally)
+  return { small: act === 'idle' ? `${n} open` : `${n} open · ${ACTIVITY_WORD[act]}`, say }
 }
 
 export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenItem }: Props) {

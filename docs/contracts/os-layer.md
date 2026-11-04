@@ -1592,12 +1592,14 @@ Errors keep the existing `{ok:false, error:"message"}` shape.
 | `GET /library[?client=<id>][&app=<app_id>]` | `{items: [LibraryItem], clients_unassigned: n}`; below. |
 
 `LibraryItem` is `{path, app_id, title, updated_at, client: {id,name}|null,
-state: {needs_you, locked}|null, run: {state, label, since?}|null}`, newest
+state: {needs_you, locked}|null, run: {state, label, stage?, since?}|null}`, newest
 first, uncapped. It leaves out documents nobody has worked in and installed
 templates. `needs_you`/`locked` are `recent_state`, exactly what `/recent`
-reports. `run` is the document's own `data.run` (Deck Maker: `building`
+reports. `run` is, first, what the host has heard of a middleware job on that
+document (below), else the document's own `data.run` (Deck Maker: `building`
 is `working`, `gate` is `waiting`, `failed`, `done`, `draft` is `idle`; anything
-else is none); live middleware jobs are phase 3 of the feature.
+else is none). `stage` is the stage the run names; the shell turns it into the
+ring's verb.
 `clients_unassigned` counts documents with no client whatever the filter.
 `/recent` is unchanged (capped at 12, same fields).
 
@@ -1606,6 +1608,29 @@ tenant workspace) keeps what a scan worked out per document, keyed on the
 document's id, `updated_at` and size. Every write mints a new revision, so a
 changed document is a different key and no invalidation hook is needed. The
 client's name is resolved from the registry on every call, never cached.
+
+#### Running, from the middleware's replies (`napkin_host::RunTracker`)
+
+Brief and Research jobs live in the middleware's memory; the host sees them only
+in `settle_middleware`, where every `napkin.middleware/1` reply carries
+`job {id, state, stage?, progress?, started_at?}` (middleware-api.md section 2).
+A `RunTracker` held beside the tenant's `LibraryCache` and fed by that function
+keeps the last word per document and job id: `queued`/`running` is `working`
+(label `Working: <stage> (<done> of <total>)`), `needs_input` is `waiting` ("Waiting
+for you"), `failed` is `failed`, `done` drops the job. A new job on a document clears
+its old failure. It never starts, polls or cancels anything, restarts empty, and
+adds no middleware route. Two limits, on purpose: a job nobody has polled for 10
+minutes (the document was closed) is not reported, and a failure is reported for a
+day. The contract has no `cancelled` state, so there is none here. `Session::with_runs`
+connects a session to the tracker; napkin-web, the Tauri host and napkin-wasm all do.
+
+The shell reads this one listing for Needs you (document `needs_you`, or a run
+`waiting`), Running and Failed, per client and for the studio, and rings each
+circle with the strongest of: needs you, failed, working, thinking, reading,
+checking, idle (`app/src/shell/landing/model.ts`). The verb comes from the run's
+stage (`extract`/`research` read, `select`/`synthesise`/`report` think, a check or gate
+checks, anything else works). Every state is also said in words. The landing re-reads
+on focus and every 5 s while it is the screen.
 
 ### 12.4 The three hosts
 

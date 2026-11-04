@@ -303,3 +303,13 @@ test('a client circle on the clients page says a quiet verb in words', () => {
   assert.match(html, /1 brief · 1 running · thinking/)
   assert.match(html, /aria-label="Client A, 1 brief · 1 running, thinking\. Opens its tools"/)
 })
+
+test('a tool under a client says its ring in words as well as in its ring', () => {
+  const a = client(0)
+  const items = [item(a, BRIEF, { run: { state: 'working', label: 'x', stage: 'extract' } }), item(a, 'ie.napkin.campaign-research')]
+  const html = renderToStaticMarkup(createElement(ClientPage, {
+    summary: summarise(a, items), items, live: new Set(['brief', 'research']), onOpenTool: noop, onSoon: noop, onOpenItem: noop,
+  }))
+  assert.match(html, /<small>1 open · reading<\/small>/)
+  assert.match(html, /<small>1 open<\/small>/)
+})
