@@ -20,15 +20,17 @@ import './landing.css'
 interface Props {
   route: Route
   data: LandingData
-  go: (r: Route) => void
+  go: (r: Route, replace?: boolean) => void
   onAdd: (name: string) => Promise<string | null>
   /** Start a document of `appId` for a client. */
   onStart: (appId: string, clientId: string) => void
   onOpenDocument: (path: string) => void
   onAllTools: () => void
+  /** Read the studio again now; resolves when the new data is in. */
+  onRefresh: () => Promise<void>
 }
 
-export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, onAllTools }: Props) {
+export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, onAllTools, onRefresh }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -51,6 +53,27 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
   const clientId = route.level === 'client' || route.level === 'tool' ? route.client : null
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
 
+  // A client route must name a client that is here. One that is not (archived,
+  // another studio's, mistyped) is corrected to #clients, so the trail, the page
+  // and the URL agree. Until the tool page exists (phase 2) a #tool-… route is its client's page.
+  // The data on screen may be a few seconds old, and the client may be one just made, so
+  // an unknown one is looked for afresh once before the route is corrected.
+  const [checked, setChecked] = useState<string | null>(null)
+  useEffect(() => {
+    if (!clientId) return
+    if (client) {
+      if (route.level === 'tool') go({ level: 'client', client: client.id }, true)
+      return
+    }
+    if (checked === clientId) {
+      go({ level: 'clients' }, true)
+      return
+    }
+    let live = true
+    void onRefresh().finally(() => { if (live) setChecked(clientId) })
+    return () => { live = false }
+  }, [clientId, client, route.level, go, checked, onRefresh])
+
   let body
   if (clientId && client) {
     const mine = data.items.filter(i => i.client?.id === client.id)
@@ -64,7 +87,7 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
       />
     )
   } else if (route.level === 'clients' || clientId) {
-    // A client route whose client is not here (archived, or another studio's) shows the clients.
+    // While the correction above lands, the clients page stands in.
     body = (
       <ClientsPage
         agency={who.agency}

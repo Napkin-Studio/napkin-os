@@ -375,6 +375,7 @@ export default function App() {
       onStart={launchApp}
       onOpenDocument={openPath}
       onAllTools={() => setAllTools(true)}
+      onRefresh={landing.reload}
     />
   ) : landing.state === 'loading' && !allTools ? (
     <LogoSpinnerFill label="Opening the studio…" />

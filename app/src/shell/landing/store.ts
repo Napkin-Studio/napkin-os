@@ -20,20 +20,27 @@ export interface LandingData {
   apps: string[]
 }
 
-/** One read of everything the landing draws. Rejects if the host cannot answer the library. */
-export async function loadLanding(h: LandingHost): Promise<LandingData> {
+/**
+ * One read of everything the landing draws. Rejects if the host cannot answer
+ * the library, or the app list on the first read (`lastApps` unset): a failure
+ * must not read as "no tool is installed". Later reads keep `lastApps` instead.
+ */
+export async function loadLanding(h: LandingHost, lastApps?: string[]): Promise<LandingData> {
   const [clients, listing, person, apps] = await Promise.all([
     h.clients.list(false),
     h.listLibrary(),
     h.whoAmI().catch(() => null),
-    h.listApps().catch(() => []),
+    h.listApps().then(
+      list => list.map(a => a.app_id),
+      e => { if (lastApps) return lastApps; throw e },
+    ),
   ])
   return {
     clients,
     items: listing.items,
     unassigned: listing.clients_unassigned,
     person,
-    apps: apps.map(a => a.app_id),
+    apps,
   }
 }
 

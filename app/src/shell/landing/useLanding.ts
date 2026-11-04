@@ -20,12 +20,14 @@ export function useLanding(host: LandingHost, active: boolean, enabled = true) {
   const [state, setState] = useState<LandingState>('loading')
   const [data, setData] = useState<LandingData | null>(null)
   const seq = useRef(0)
+  const apps = useRef<string[] | undefined>(undefined)
 
   const reload = useCallback(async () => {
     const n = ++seq.current
     try {
-      const d = await loadLanding(host)
+      const d = await loadLanding(host, apps.current)
       if (n !== seq.current) return
+      apps.current = d.apps
       setData(d)
       setState('ready')
     } catch {
@@ -41,7 +43,6 @@ export function useLanding(host: LandingHost, active: boolean, enabled = true) {
     // WebAssembly host just to find out).
     if (!enabled) return
     // The load from the host: state is set when it answers.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload()
     if (!active) return
     const id = window.setInterval(() => { if (!document.hidden) void reload() }, POLL_MS)

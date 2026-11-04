@@ -11,7 +11,7 @@ import { formatRoute, parseRoute, sameRoute, type Route } from './route'
 
 const here = (): Route => parseRoute(window.location.hash)
 
-export function useRoute(): [Route, (r: Route) => void] {
+export function useRoute(): [Route, (r: Route, replace?: boolean) => void] {
   const [route, setRoute] = useState<Route>(here)
 
   useEffect(() => {
@@ -27,10 +27,13 @@ export function useRoute(): [Route, (r: Route) => void] {
     }
   }, [])
 
-  const go = useCallback((next: Route) => {
+  const go = useCallback((next: Route, replace = false) => {
     setRoute(prev => (sameRoute(prev, next) ? prev : next))
     const want = formatRoute(next)
-    if (window.location.hash !== want) window.history.pushState(null, '', want)
+    if (window.location.hash !== want) {
+      if (replace) window.history.replaceState(null, '', want)
+      else window.history.pushState(null, '', want)
+    }
   }, [])
 
   return [route, go]

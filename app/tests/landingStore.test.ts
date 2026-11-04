@@ -39,12 +39,18 @@ test('one read gathers the clients, the library, who is here and which apps are 
   assert.equal(d.person?.id, 'a@b')
 })
 
-test('who and apps failing do not stop the landing; the library failing does', async () => {
-  const d = await loadLanding(fake({ whoAmI: async () => { throw new Error('x') }, listApps: async () => { throw new Error('y') } }))
+test('who failing does not stop the landing; the library or the app list failing does', async () => {
+  const d = await loadLanding(fake({ whoAmI: async () => { throw new Error('x') } }))
   assert.equal(d.person, null)
-  assert.deepEqual(d.apps, [])
   await assert.rejects(loadLanding(fake({ listLibrary: async () => { throw new Error('404 Not Found') } })), /404/)
   await assert.rejects(loadLanding(fake({ clients: { list: async () => { throw new Error('boom') }, create: async n => rec(n) } })), /boom/)
+  // A failed app list on the first read is a fault, not "no tool is installed".
+  await assert.rejects(loadLanding(fake({ listApps: async () => { throw new Error('y') } })), /y/)
+})
+
+test('a later app-list failure keeps the last known apps', async () => {
+  const d = await loadLanding(fake({ listApps: async () => { throw new Error('y') } }), ['ie.napkin.brief-maker'])
+  assert.deepEqual(d.apps, ['ie.napkin.brief-maker'])
 })
 
 test('adding a client resolves null, or with the host\'s own words when refused', async () => {
