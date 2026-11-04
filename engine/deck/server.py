@@ -160,6 +160,7 @@ class Doc:
         self.name, self.root = name, root
         self.thread: threading.Thread | None = None
         self.state, self.held, self.error, self.current, self.started = "draft", None, None, None, 0.0
+        self.until: str | None = None   # the stage this segment stops after (None: it runs on to the finished deck)
         self.notices: list[str] = []
         self.req: dict | None = None
         self.folder: Path | None = None
@@ -210,6 +211,7 @@ class Server:
                 raise Refused(409, "no_renderer", "the last step builds the PowerPoint, the web deck and the PDF and needs LibreOffice (soffice) and "
                                                   "poppler (pdftoppm) on this machine; ask for render false to stop at the deck without the files")
             d.state, d.held, d.current, d.started = "building", None, None, time.time()
+            d.until = until
             self.busy = d.name
             self.write_status(d)
             d.thread = threading.Thread(target=self.segment, args=(d, req, until), daemon=True, name=f"deck-{d.name}")
@@ -251,19 +253,29 @@ class Server:
         return out
 
     def guess_step(self, d: Doc) -> str | None:
-        """The step under way, from which stage files exist: the first one a segment up to its stop has still to write."""
+        """The step under way, from which stage files exist, looking only as far as this segment goes: the first stage up to its stop
+        that has not been written, the insight judge once the storyline is written and its judge is not, else the stop itself (it is
+        finishing). A segment that stops at the storyline never shows the territories: they are not started."""
         if d.state != "building" or not d.req:
             return None
+        from . import assemble
         present = {p.name for p in d.stages.glob("*.json")}
-        for key in ORDER[d.req["kind"]]:
+        order = ORDER[d.req["kind"]]
+        stop = order.index(d.until) if d.until in order else len(order) - 1
+        for key in order[: stop + 1]:
             if key == "final":
                 break
             if key == "a0" and "a0_intake.json" not in present and not (d.summary or {}).get("needs_intake", False):
                 continue
-            if STAGE_FILES[key][0] not in present:
+            fn = STAGE_FILES[key][0]
+            if fn not in present:
                 return key
-            if key == "b" and "insight_judge.json" not in present and (d.summary or {}).get("candidates"):
-                return "insight_judge"
+            if key in ("b", "i") and "insight_judge.json" not in present:
+                story = rs.stage_file(d.stages, fn) or {}
+                if key == "b" and assemble.valid_candidates(story):
+                    return "insight_judge"
+        if d.until:
+            return d.until
         for key in ("fit", "e", "red_team"):
             if {"fit": "fit.json", "e": "e_copy.json", "red_team": "red_team.json"}[key] not in present:
                 return key

@@ -214,3 +214,44 @@ def test_a_file_is_served_only_by_name_from_its_own_documents_folder(engine):
     assert call(engine.base, "/file/doc1/deck.html")[0] == 404
     assert call(engine.base, "/file/doc1/..%2F..%2Fsecret")[0] in (400, 404)
     assert call(engine.base, "/nope")[0] == 404
+
+
+def test_a_segment_that_stops_at_the_storyline_never_shows_the_territories_as_under_way(engine, monkeypatch):
+    """The screen said 'Drafting the territories, storyline approved' while the engine was still finishing the storyline: the guess of the
+    step under way looked past the segment's stop. It looks only as far as the segment goes."""
+    gate, go = threading.Event(), threading.Event()
+    real = srv.Server.call_engine
+
+    def slow(self, d, req, until):
+        self.seed(d, req, until)   # the storyline files are written; the segment is still finishing (the judge, the retry)
+        gate.set()
+        go.wait(10)
+        return real(self, d, req, until)
+    monkeypatch.setattr(srv.Server, "call_engine", slow)
+    start(engine)
+    assert gate.wait(10)
+    v = call(engine.base, "/run/doc1")[1]
+    assert v["state"] == "building" and v["run"]["stage"] == "storyline", v["run"]["stage"]
+    rows = {r["id"]: r["status"] for r in v["run"]["stages"]}
+    assert rows["storyline"] == "now" and rows["territories"] == "next", rows
+    go.set()
+    assert wait(engine.base, "doc1")["run"]["gate"]["id"] == "storyline"
+
+
+def test_the_guess_follows_the_stages_that_exist_up_to_the_stop(tmp_path):
+    cfg = srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path), "NAPKIN_DECK_REPLAY": str(FERN / "stages"), "NAPKIN_DECK_PORT": "0"})
+    s = srv.Server(cfg)
+    d = srv.Doc(tmp_path, "g")
+    d.folder = tmp_path / "g" / "k"
+    d.stages.mkdir(parents=True)
+    d.state, d.req, d.until, d.summary = "building", {"kind": "agency"}, "b", {"needs_intake": False}
+    guess = lambda *names: ([(d.stages / n).write_bytes((FERN / "stages" / n).read_bytes()) for n in names], s.guess_step(d))[1]  # noqa: E731
+    assert guess() == "a"                                         # nothing yet; the intake is not needed
+    assert guess("a_requirements.json") == "b"
+    assert guess("b_storyline.json") == "insight_judge"           # the storyline is written, its judge is not
+    assert guess("insight_judge.json") == "b"                     # all of it exists: the segment is finishing, still on the storyline
+    d.until = "c"
+    assert guess() == "c"
+    d.until = "b"
+    d.state = "gate"
+    assert s.guess_step(d) is None
