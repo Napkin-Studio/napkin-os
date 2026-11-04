@@ -2601,3 +2601,78 @@ async fn adopting_names_makes_clients_and_links_only_what_was_chosen() {
     .await;
     assert_eq!(out.json()["created"].as_array().unwrap().len(), 0);
 }
+
+// A client's document, branched into another tool, is still that client's: the
+// tool's list for the client (`/library?client=&app=`) shows the child, and the
+// client's other tools do not change. The shell reads this to keep the trail.
+#[tokio::test]
+async fn a_spinoff_of_a_clients_document_is_that_clients_in_the_library() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let t = |p: &str| format!("/api/t/{}{p}", b.tenant);
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let up = post(
+        &s,
+        &t("/documents/upload"),
+        &b.cookie,
+        a_template_with(
+            "ie.napkin.child",
+            "Child",
+            Some(clan_sdk::SpinoffSpec {
+                upstream: true,
+                ..Default::default()
+            }),
+        ),
+    )
+    .await;
+    let template = up.json()["path"].as_str().unwrap().to_string();
+    let installed = post(
+        &s,
+        &t(&format!("/apps/from/{template}")),
+        &b.cookie,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(installed.status, StatusCode::OK);
+
+    let ca = add_client(&s, &b, "Client A").await;
+    let cb = add_client(&s, &b, "Client B").await;
+    let (ida, idb) = (ca["id"].as_str().unwrap(), cb["id"].as_str().unwrap());
+    let parent = new_doc(&s, &b, "ie.napkin.test", "Brief for A", Some(ida)).await;
+    new_doc(&s, &b, "ie.napkin.test", "Brief for B", Some(idb)).await;
+    let parent_path = parent.json()["path"].as_str().unwrap().to_string();
+
+    let child = post_json(
+        &s,
+        &t(&format!("/d/{parent_path}/spinoff")),
+        &b.cookie,
+        serde_json::json!({ "app_id": "ie.napkin.child" }),
+    )
+    .await;
+    assert_eq!(
+        child.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&child.body)
+    );
+    assert_eq!(child.json()["manifest"]["client"]["id"], ida);
+    assert_eq!(child.json()["manifest"]["client"]["name"], "Client A");
+
+    // Spin-off documents are blank until worked on; give the child a title of its own
+    // so the library counts it, then ask for A's list per tool.
+    let child_token = child.json()["token"].as_str().unwrap().to_string();
+    clan_ok(
+        &s,
+        &child_token,
+        "/patch-data",
+        serde_json::json!({ "agent": "human", "rationale": "work", "patch": { "tone": "Warm" } }),
+    )
+    .await;
+    let child_list = library(&s, &b, &format!("?client={ida}&app=ie.napkin.child")).await;
+    assert_eq!(child_list["items"].as_array().unwrap().len(), 1);
+    assert_eq!(child_list["items"][0]["client"]["id"], ida);
+    let parent_list = library(&s, &b, &format!("?client={ida}&app=ie.napkin.test")).await;
+    assert_eq!(parent_list["items"].as_array().unwrap().len(), 1);
+    let b_child = library(&s, &b, &format!("?client={idb}&app=ie.napkin.child")).await;
+    assert_eq!(b_child["items"], serde_json::json!([]));
+}
