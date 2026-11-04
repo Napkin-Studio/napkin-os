@@ -180,3 +180,57 @@ test('reduced motion and no WebGL: the circles are flat SVG, nothing animates', 
   expect(await page.locator('svg.lc-cir').count()).toBeGreaterThan(0)
   await ctx.close()
 })
+
+// ── layout and names at the widths that broke ───────────────────────────────
+
+const noSideScroll = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('.lc')!
+    return { page: document.documentElement.scrollWidth - window.innerWidth, lc: el.scrollWidth - el.clientWidth }
+  })
+
+test('on a phone every crumb has a name and a 44px target', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.goto('/')
+  const { a } = await seed(page)
+  await page.goto(`/#client-${a}`)
+  await page.reload()
+  const trail = page.getByRole('navigation', { name: 'Where you are' })
+  await expect(trail.getByRole('button')).toHaveCount(3)
+  for (const name of ['Clients', 'Client A']) await expect(trail.getByRole('button', { name })).toBeVisible()
+  for (const b of await trail.getByRole('button').all()) {
+    const box = (await b.boundingBox())!
+    expect(box.width, 'crumb width').toBeGreaterThanOrEqual(43.5)
+    expect(box.height, 'crumb height').toBeGreaterThanOrEqual(43.5)
+    expect(((await b.getAttribute('aria-label')) ?? '').length, 'crumb has a name').toBeGreaterThan(0)
+  }
+})
+
+test('no sideways scroll at 320, 390 and 760 on the clients and client pages', async ({ page }) => {
+  await page.goto('/')
+  const { a } = await seed(page)
+  for (const width of [320, 390, 760]) {
+    await page.setViewportSize({ width, height: 900 })
+    for (const hash of ['#agency', '#clients', `#client-${a}`]) {
+      await page.goto(`/${hash}`)
+      await page.reload()
+      await expect(page.getByTestId('landing').or(page.getByTestId('clients')).or(page.getByTestId('client-page'))).toBeVisible()
+      const o = await noSideScroll(page)
+      expect(o.page, `${width}px ${hash} page`).toBeLessThanOrEqual(0)
+      expect(o.lc, `${width}px ${hash} .lc`).toBeLessThanOrEqual(0)
+    }
+  }
+})
+
+test('a client route for a client that is not here is corrected to the clients page', async ({ page }) => {
+  await page.goto('/#client-cli_00000000')
+  await expect(page.getByTestId('clients')).toBeVisible()
+  await expect(page).toHaveURL(/#clients$/)
+  await page.goto('/')
+  const { a } = await seed(page)
+  await page.goto(`/#tool-${a}-brief`)
+  await page.reload()
+  await expect(page.getByTestId('client-page')).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
+  await expect(page.getByRole('navigation', { name: 'Where you are' }).getByRole('button', { name: 'Tool' })).toHaveCount(0)
+})
