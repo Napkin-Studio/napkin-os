@@ -1628,5 +1628,28 @@ app must not be able to open or archive the studio's clients.
 idea | deck | prod | ads`. Anything else falls back to `#agency`. Written from
 the shell's screen state, never the other way round: `hashchange` only reads.
 Parsed and formatted in `app/src/shell/route.ts` (pure, table-tested).
-In this phase the shell serves `#agency` and `#clients`; the deeper levels are
-parsed and fall back until the tool wheel lands.
+The shell serves all four levels:
+
+- `#client-<id>`: the client's six tools round it, in fixed places (a hexagon, Brief
+  at the top, then Research, Idea, Deck, Prod, Ads clockwise). Idea and Prod, and any
+  tool whose app is not installed, are dimmed "Soon" and go nowhere.
+- `#tool-<id>-<tool>`: that tool for that client: the client's documents of the tool
+  (from `GET /library`, the same listing the counts come from) and "New", which is
+  `POST /documents {app_id, client_id}`, so the document is the client's from birth
+  (`manifest.client`). A document opened from here runs the app as before.
+- Corrections, so the page, the trail and the URL agree: a client that is not here
+  (archived, another studio's, mistyped) is `#clients`; a tool that is not live is its
+  client's page (`correctRoute` in `route.ts`).
+- Escape goes up one level (`up`); the browser's Back and Forward walk the levels; a
+  document takes one history entry of its own, so Back from it lands where it was
+  opened from.
+- The trail (Agency > Clients > Client > Tool) is drawn in the OS bar while a landing
+  screen shows, and **in an open document's bar** in place of the studio-home button,
+  before the title (the app's own tabs and buttons follow it unchanged, appBar.ts). In
+  a document the trail comes from the document itself (`manifest.client`, and the tool
+  its `app_id` is in the tool table), not from the route, so it is right for a document
+  opened from a strip and after a spin-off, which carries `manifest.client`. A document
+  with no client keeps the plain home button.
+- Keyboard: the six tools are one tab stop (roving tabindex); arrows, Home and End
+  move, `1` to `6` pick a tool, Enter opens it; a live region says each level on
+  arrival and "coming soon" for a Soon tool (`app/src/shell/landing/keys.ts`).
