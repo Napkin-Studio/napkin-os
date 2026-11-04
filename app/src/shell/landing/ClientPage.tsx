@@ -63,7 +63,7 @@ export function ClientPage({ summary, items, live, onStart, onOpenItem }: Props)
               aria-disabled={on ? undefined : true}
               onClick={() => { if (on) onStart(t) }}
             >
-              <span className="lc-orb"><Circle size={89} material="pearl" activity={on ? summary.perTool[t.id].needsYou ? 'human' : summary.perTool[t.id].failed ? 'error' : summary.perTool[t.id].running ? 'work' : 'idle' : 'idle'} dim={!on} /></span>
+              <span className="lc-orb"><Circle size={89} material="pearl" initials={t.name.slice(0, 1)} activity={on ? summary.perTool[t.id].needsYou ? 'human' : summary.perTool[t.id].failed ? 'error' : summary.perTool[t.id].running ? 'work' : 'idle' : 'idle'} dim={!on} /></span>
               <span className="lc-tl"><b>{t.name}</b><small>{k.small}</small></span>
             </button>
           )

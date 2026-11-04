@@ -109,8 +109,10 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
           </div>
         ) : (
           <div className={`lc-row${ring ? ' lc-ring' : ''}`} role="group" aria-label="Clients" style={{ '--n': page.shown.length + 1 } as React.CSSProperties}>
+            {ring && <span className="lc-hub" aria-hidden><Circle size={64} material="onyx" initials={initialsOf(agency)} /></span>}
             {page.shown.map((s, i) => {
-              const box = boxFor(i, page.shown.length)
+              // Standing round the agency they are all one size; in rows the first three lead.
+              const box = ring ? 110 : boxFor(i, page.shown.length)
               return (
                 <button
                   key={s.client.id}
@@ -130,7 +132,7 @@ export function ClientsPage({ agency, clients, query, showAll, adding, onQuery, 
               )
             })}
             {!adding && (
-              <button className="lc-client lc-add-client" style={{ '--box': '89px', '--i': page.shown.length } as React.CSSProperties} onClick={() => onAdding(true)} aria-label="Add client">
+              <button className="lc-client lc-add-client" style={{ '--box': ring ? '110px' : '89px', '--i': page.shown.length } as React.CSSProperties} onClick={() => onAdding(true)} aria-label="Add client">
                 <span className="lc-orb"><span className="lc-addc" aria-hidden>+</span></span>
                 <span className="lc-lbl"><span className="lc-nm">Add client</span></span>
               </button>

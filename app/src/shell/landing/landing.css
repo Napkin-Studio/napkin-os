@@ -89,24 +89,29 @@
 .lc-addc { display: grid; place-items: center; width: 89px; height: 89px; border: 1.5px dashed var(--ink3); border-radius: 50%; color: var(--ink3); font-size: 28px; line-height: 1; transition: border-color 233ms linear, color 233ms linear; }
 .lc-add-client:hover .lc-addc, .lc-add-client:focus-visible .lc-addc, .lc-addc-big:hover, .lc-addc-big:focus-visible { border-color: var(--ink); color: var(--ink); }
 .lc-add-client .lc-nm { font-weight: 500; color: var(--ink2); }
-.lc-addc-big { appearance: none; background: none; width: 89px; height: 89px; }
+.lc-addc-big { appearance: none; background: none; width: 89px; height: 89px; cursor: pointer; }
+.lc .lc-addc, .lc .lc-addc-big { font-size: 28px; line-height: 1; color: var(--ink3); }
+.lc .lc-addc-big:hover, .lc .lc-addc-big:focus-visible { color: var(--ink); }
 .lc-empty { display: grid; justify-items: center; gap: 16px; text-align: center; padding: 48px 16px; min-height: 340px; align-content: center; }
 .lc-empty p { color: var(--ink2); max-width: 42ch; }
 .lc-more { display: flex; justify-content: center; padding: 0 0 16px; }
 .lc-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; padding: 12px 0; font-size: 12px; color: var(--ink2); }
 .lc-search input { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: var(--r-pill); min-height: 32px; padding: 0 14px; font: inherit; font-size: 13px; width: 220px; max-width: 100%; }
 
-/* the ring of clients: on a wide screen and few clients, they stand round the centre */
+/* the ring of clients: on a wide screen and few clients, they stand round the agency */
 @media (min-width: 720px) {
-  .lc-ring { position: relative; display: block; height: 520px; padding: 0; }
+  .lc-ring { position: relative; display: block; height: 580px; padding: 0; }
   .lc-ring .lc-client {
     position: absolute;
     --a: calc(-90deg + 360deg / var(--n) * var(--i));
-    left: calc(50% + 190px * cos(var(--a)) - (var(--box) + 14px) / 2);
-    top: calc(46% + 170px * sin(var(--a)) - var(--box) / 2 - 6px);
+    left: calc(50% + 300px * cos(var(--a)) - (var(--box) + 14px) / 2);
+    top: calc(50% - 24px + 190px * sin(var(--a)) - var(--box) / 2 - 6px);
   }
   .lc-ring > .lc-nothing { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .lc-ring .lc-hub { position: absolute; left: 50%; top: calc(50% - 24px); transform: translate(-50%, -50%); }
 }
+.lc-hub { display: none; line-height: 0; }
+@media (min-width: 720px) { .lc-ring .lc-hub { display: block; } }
 
 /* the add form */
 .lc-add { display: grid; gap: 6px; margin: 0 0 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--soft); }

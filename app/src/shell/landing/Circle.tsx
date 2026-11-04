@@ -42,12 +42,12 @@ export function Circle({ size, material, initials, activity = 'idle', dim }: Pro
       {activity === 'work' && (
         // A turning quarter-ring: one arc, so it reads as motion and not as a gauge.
         <g className="lc-act">
-          <circle r={R} fill="none" stroke="var(--lc-ring-active)" strokeWidth={0.09} strokeLinecap="round"
+          <circle r={R} fill="none" stroke="var(--lc-ring-active)" strokeWidth={0.07} strokeLinecap="round"
             strokeDasharray={`${len * 0.28} ${len}`} transform="rotate(-90)" />
         </g>
       )}
       {activity === 'human' && (
-        <circle r={R} fill="none" stroke="var(--lc-ring-active)" strokeWidth={0.1} strokeLinecap="round" />
+        <circle r={R} fill="none" stroke="var(--lc-ring-active)" strokeWidth={0.06} strokeLinecap="round" />
       )}
       {activity === 'error' && (
         // Broken, and ink: failed is not colour alone.
