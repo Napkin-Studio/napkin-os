@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 from .capabilities import CAPABILITY_VERSION
-from .handlers import (answer_question, ask_research, compose_report, draft_brief, extract_ask, fix_parts,
+from .handlers import (answer_question, ask_research, build_deck, compose_report, draft_brief, extract_ask, fix_parts,
                        reconsider, regenerate_field, research_lens, start_campaign, synthesise_findings)
 from .util import bad
 
@@ -30,6 +30,7 @@ REGISTRY = {
     "fix_parts": {1: fix_parts},
     "ask_research": {1: ask_research},
     "reconsider": {2: reconsider},
+    "build_deck": {1: build_deck},
 }
 # Used only when a document carries no pipeline: the declared built-in map.
 BUILTIN_PIPELINE = {
@@ -38,7 +39,7 @@ BUILTIN_PIPELINE = {
     "answer_question": "answer_question@1", "compose_report": "compose_report@1",
     "draft_brief": "draft_brief@1", "regenerate_field": "regenerate_field@1",
     "ask_research": "ask_research@1", "fix_parts": "fix_parts@1",
-    "reconsider": "reconsider@2",
+    "reconsider": "reconsider@2", "build_deck": "build_deck@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status", "cancel_job"}
 
@@ -67,15 +68,16 @@ def lookup(declared: str, task: str):
 
 # Tasks added after documents were made: a document whose pipeline predates
 # one may still use it, through the built-in handler, until it declares it.
-LATER_TASKS = {"ask_research", "reconsider", "fix_parts"}
+LATER_TASKS = {"ask_research", "reconsider", "fix_parts", "build_deck"}
 
 
 def resolve(task: str, clan: dict):
     """The document's pipeline decides; no pipeline -> the built-in map."""
     pipeline = clan.get("pipeline")
-    if pipeline and task in LATER_TASKS and isinstance(pipeline, dict) \
-            and task not in (pipeline.get("tasks") or {}):
-        return lookup(BUILTIN_PIPELINE[task], task)
+    if pipeline and task in LATER_TASKS and isinstance(pipeline, dict):
+        decl = (pipeline.get("tasks") or {}).get(task)
+        if decl is None or (isinstance(decl, dict) and not decl.get("handler")):   # not declared, or declared with no handler yet
+            return lookup(BUILTIN_PIPELINE[task], task)
     if pipeline:
         if not isinstance(pipeline, dict) or not isinstance(pipeline.get("tasks"), dict):
             raise bad("clan.pipeline is present but has no tasks map")
