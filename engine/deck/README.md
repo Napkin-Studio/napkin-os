@@ -284,3 +284,42 @@ does read what the person supplies. `spec.HUMAN_ONLY_TYPES` means never invented
   `intake.verified.<ref> = {by, at}` (read from the `verified` key of `--answers`); `intake.confirm_summary(deck)` counts
   `verified`, `supplied` and `sourced` (verified plus supplied: nothing else counts). The renderers' "DRAFT · N slides need a
   person" wording is unchanged; they can call `confirm_summary` for the verified count.
+
+## The server (`deck/server.py`)
+
+`run_deck` behind a small HTTP port, for the Deck Maker app's `build_deck` task (`features/deck-maker-server.clan`). It runs one
+segment at a time and stops at each gate: **storyline** (after stage b), **territories** (after c), **idea** (after d); an investor
+deck has the storyline only (after i). Review is the screen after the last gate, not a gate. `deck/run_state.py` turns the stage files
+into the `run` object the screens read (rows, items, agent, gate payloads, checks, cost) and, once built, the deck, validation,
+evidence, report and exports (names and sizes).
+
+```bash
+cd engine
+NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server     # free: replays a recording, no model call
+```
+
+| Route | |
+|---|---|
+| `GET /status` | what is on and what is busy |
+| `POST /run` | `{doc, inputs: {prompt: {text, client, project, agency}, kind, format}, approvals: {storyline, territories: {picked}, idea}, mode, render}`: the next segment of this document's run |
+| `GET /run/<doc>` | the run so far: `state` (building, gate, done, failed), `run`, notices, and once built the `payload` |
+| `GET /file/<doc>/<name>` | `deck.html`, `deck.pptx`, `deck.pdf` or `report.json`, once written |
+
+| Env | |
+|---|---|
+| `NAPKIN_DECK_PORT` | default 8795 (8787 is the agent-server, 8788 the live relay) |
+| `NAPKIN_DECK_DATA` | where the per-document, per-inputs folders go (default `./deck-runs`); they are a cache: a changed prompt starts again |
+| `NAPKIN_DECK_REPLAY` | a folder of recorded stage files: mode `replay` copies them in stage by stage, free |
+| `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.65 to 1.25 USD a deck). Off by default |
+| `NAPKIN_DECK_MAX_USD` | the most one live run may spend (default 2.00); the run stops at the cap with its message and what it wrote stays |
+
+A gate goes on only when the request carries the person's approval of it **and** its stage output already existed when the request
+arrived, so an approval of an earlier run never skips a gate of a new one. Only `approve` goes on; `edit` and `retry` are refused
+with `not_supported` until the engine can act on them. One run at a time: a second `POST /run` is a 409 `job_state`. A failing engine
+is a `failed` state with its message, never a success; a missing cache with no recording and no live is a 409, never invented output.
+The last segment builds the PowerPoint, the web deck and the PDF and needs LibreOffice (`soffice`) and poppler (`pdftoppm`):
+without them it is refused before it starts, and `render: false` stops at the deck instead (`--until deck`).
+
+Not yet: the document's brief and research as inputs (the server takes the prompt), the person's intake answers (`--answers`), attached
+documents (`--doc`), `edit` and `retry`, `ask_change`, and a run that survives a restart of the server (a restarted server answers
+404 for a run it did not start; posting the same request again resumes from the cache).
