@@ -5,11 +5,13 @@
 // One client: its circle, its six tools around it, and its work. Idea and Prod
 // are dimmed "Soon". A live tool starts a document that is already the client's.
 
+import { useEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
 import { Circle } from './Circle'
 import { initialsOf, needsYou, type ClientSummary } from './model'
 import { lastTouched } from '../when'
 import { TOOLS, toolOfApp, type Tool } from './tools'
+import { isTyping, wheelKey } from './keys'
 
 interface Props {
   summary: ClientSummary
@@ -17,7 +19,10 @@ interface Props {
   items: LibraryItem[]
   /** Which tools have an installed app. */
   live: ReadonlySet<string>
-  onStart: (tool: Tool) => void
+  /** A live tool was chosen: go to that tool for this client. */
+  onOpenTool: (tool: Tool) => void
+  /** A tool that is not here yet was chosen (Idea, Prod): say so, go nowhere. */
+  onSoon: (tool: Tool) => void
   onOpenItem: (path: string) => void
 }
 
@@ -33,8 +38,39 @@ function count(summary: ClientSummary, t: Tool, live: boolean): { small: string;
   return { small: `${n} open`, say }
 }
 
-export function ClientPage({ summary, items, live, onStart, onOpenItem }: Props) {
+export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenItem }: Props) {
   const c = summary.client
+  // One tab stop for the six tools (roving tabindex): the arrows move it.
+  const [at, setAt] = useState(0)
+  const buttons = useRef<(HTMLButtonElement | null)[]>([])
+  const choose = (i: number) => {
+    const t = TOOLS[i]
+    if (live.has(t.id)) onOpenTool(t)
+    else onSoon(t)
+  }
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return
+    const i = buttons.current.findIndex(b => b === document.activeElement)
+    const m = wheelKey(e.key, i < 0 ? at : i, TOOLS.length)
+    if (m?.kind !== 'move') return
+    e.preventDefault()
+    setAt(m.to)
+    buttons.current[m.to]?.focus()
+  }
+  // The number keys pick a tool wherever the focus is on this page, except in a field.
+  const pick = useRef(choose)
+  useEffect(() => { pick.current = choose })
+  useEffect(() => {
+    const onNumber = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return
+      const m = wheelKey(e.key, 0, TOOLS.length)
+      if (m?.kind !== 'pick') return
+      e.preventDefault()
+      pick.current(m.index)
+    }
+    document.addEventListener('keydown', onNumber)
+    return () => document.removeEventListener('keydown', onNumber)
+  }, [])
   return (
     <div className="lc-page" data-testid="client-page" data-client={c.id}>
       <header className="lc-phead">
@@ -45,7 +81,7 @@ export function ClientPage({ summary, items, live, onStart, onOpenItem }: Props)
         </div>
       </header>
 
-      <div className="lc-wheel" role="group" aria-label={`Tools for ${c.name}`}>
+      <div className="lc-wheel" role="group" aria-label={`Tools for ${c.name}`} onKeyDown={onKeyDown}>
         <span className="lc-centre" aria-hidden>
           <Circle size={144} material={c.material} initials={c.initials || initialsOf(c.name)} activity={summary.activity} />
         </span>
@@ -56,12 +92,16 @@ export function ClientPage({ summary, items, live, onStart, onOpenItem }: Props)
           return (
             <button
               key={t.id}
+              ref={el => { buttons.current[i] = el }}
+              tabIndex={i === at ? 0 : -1}
+              aria-keyshortcuts={String(i + 1)}
+              onFocus={() => setAt(i)}
               className={`lc-tool${on ? '' : ' lc-soon'}`}
               data-testid={`tool-${t.id}`}
               style={{ '--x': Math.cos(angle).toFixed(3), '--y': Math.sin(angle).toFixed(3) } as React.CSSProperties}
               aria-label={`${t.full} for ${c.name}, ${k.say} (${i + 1} of ${TOOLS.length})`}
               aria-disabled={on ? undefined : true}
-              onClick={() => { if (on) onStart(t) }}
+              onClick={() => choose(i)}
             >
               <span className="lc-orb"><Circle size={89} material="pearl" initials={t.name.slice(0, 1)} activity={on ? summary.perTool[t.id].needsYou ? 'human' : summary.perTool[t.id].failed ? 'error' : summary.perTool[t.id].running ? 'work' : 'idle' : 'idle'} dim={!on} /></span>
               <span className="lc-tl"><b>{t.name}</b><small>{k.small}</small></span>

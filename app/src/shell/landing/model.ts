@@ -13,7 +13,7 @@
 
 import type { ClientRecord, LibraryItem } from '../../host'
 import { TOOLS, toolOfApp, type Tool } from './tools'
-import type { ToolId } from '../route'
+import type { Route, ToolId } from '../route'
 
 /** The ring on a circle, in the order that wins when a client has several. */
 export type Activity = 'human' | 'error' | 'work' | 'idle'
@@ -190,4 +190,15 @@ export function whoIs(person: { id: string; name: string | null } | null): { fir
     first: person.name ? person.name.split(/\s+/)[0] : titleCase(local),
     agency: agency ? titleCase(agency) : 'Your studio',
   }
+}
+
+/**
+ * Where a document belongs in the trail: its client's tool, else just its client;
+ * null when it has no client (then the bar keeps its plain way home).
+ */
+export function routeOfDocument(m: { client?: { id: string } | null; app?: { app_id: string } | null }): Route | null {
+  const client = m.client?.id
+  if (!client) return null
+  const tool = toolOfApp(m.app?.app_id)
+  return tool ? { level: 'tool', client, tool: tool.id } : { level: 'client', client }
 }

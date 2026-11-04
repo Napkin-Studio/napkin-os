@@ -75,3 +75,28 @@ export function ancestry(r: Route): Route[] {
     case 'tool': return [AGENCY, { level: 'clients' }, { level: 'client', client: r.client }]
   }
 }
+
+/** One level up, which is what Escape and Back-to-parent do; the agency has no parent. */
+export function up(r: Route): Route {
+  switch (r.level) {
+    case 'agency': return AGENCY
+    case 'clients': return AGENCY
+    case 'client': return { level: 'clients' }
+    case 'tool': return { level: 'client', client: r.client }
+  }
+}
+
+/**
+ * The route the shell may actually show, given what is here: a client that is
+ * not here (archived, another studio's, mistyped) is `#clients`, and a tool that
+ * is not live (Idea, Prod, an app not installed) is its client's page. Anything
+ * else is as asked. Pure, so the table of corrections is tested without a host.
+ */
+export function correctRoute(
+  r: Route,
+  here: { client: (id: string) => boolean; tool: (id: ToolId) => boolean },
+): Route {
+  if ((r.level === 'client' || r.level === 'tool') && !here.client(r.client)) return { level: 'clients' }
+  if (r.level === 'tool' && !here.tool(r.tool)) return { level: 'client', client: r.client }
+  return r
+}

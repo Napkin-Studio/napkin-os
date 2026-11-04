@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { ancestry, formatRoute, isClientId, parseRoute, sameRoute, TOOL_IDS } from '../src/shell/route.ts'
+import { ancestry, correctRoute, formatRoute, isClientId, parseRoute, sameRoute, TOOL_IDS, up } from '../src/shell/route.ts'
 
 const ID = 'cli_0a1b2c3d'
 
@@ -66,4 +66,31 @@ test('the trail is the levels above, nearest last', () => {
   )
   assert.ok(sameRoute(parseRoute('#clients'), { level: 'clients' }))
   assert.ok(!sameRoute(parseRoute('#clients'), { level: 'agency' }))
+})
+
+test('up is one level: tool to client to clients to agency, and the agency stays', () => {
+  assert.deepEqual(up({ level: 'tool', client: ID, tool: 'ads' }), { level: 'client', client: ID })
+  assert.deepEqual(up({ level: 'client', client: ID }), { level: 'clients' })
+  assert.deepEqual(up({ level: 'clients' }), { level: 'agency' })
+  assert.deepEqual(up({ level: 'agency' }), { level: 'agency' })
+  // The same steps as the trail's last parent.
+  for (const r of [{ level: 'clients' }, { level: 'client', client: ID }, { level: 'tool', client: ID, tool: 'deck' }] as const) {
+    assert.ok(sameRoute(up(r), ancestry(r).at(-1)!))
+  }
+})
+
+test('a route is corrected to what is here: an unknown client is #clients, a Soon tool is its client', () => {
+  const here = { client: (id: string) => id === ID, tool: (t: string) => t !== 'idea' && t !== 'prod' }
+  const table: [Parameters<typeof correctRoute>[0], string][] = [
+    [{ level: 'agency' }, '#agency'],
+    [{ level: 'clients' }, '#clients'],
+    [{ level: 'client', client: ID }, `#client-${ID}`],
+    [{ level: 'client', client: 'cli_00000000' }, '#clients'],
+    [{ level: 'tool', client: ID, tool: 'brief' }, `#tool-${ID}-brief`],
+    [{ level: 'tool', client: ID, tool: 'idea' }, `#client-${ID}`],
+    [{ level: 'tool', client: ID, tool: 'prod' }, `#client-${ID}`],
+    [{ level: 'tool', client: 'cli_00000000', tool: 'brief' }, '#clients'],
+    [{ level: 'tool', client: 'cli_00000000', tool: 'idea' }, '#clients'],
+  ]
+  for (const [r, want] of table) assert.equal(formatRoute(correctRoute(r, here)), want, formatRoute(r))
 })

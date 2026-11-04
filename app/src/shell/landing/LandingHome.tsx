@@ -10,11 +10,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LandingPage } from './LandingPage'
 import { ClientsPage } from './ClientsPage'
 import { ClientPage } from './ClientPage'
+import { ToolPage } from './ToolPage'
 import { agencySummary, ordered, summarise, whoIs } from './model'
 import { greeting } from '../when'
-import { TOOLS, isLive, type Tool } from './tools'
+import { TOOLS, isLive, toolById } from './tools'
+import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
-import type { Route } from '../route'
+import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import './landing.css'
 
 interface Props {
@@ -37,11 +39,26 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
   const top = useRef<HTMLDivElement>(null)
 
   // Each level's heading takes focus on arrival, so a keyboard or a screen reader lands on it.
-  const level = route.level
-  const key = route.level === 'client' || route.level === 'tool' ? `${level}:${route.client}` : level
+  const key = formatRoute(route)
   useEffect(() => {
     top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true })
   }, [key])
+
+  // Escape goes up one level (agency stays), unless it is closing something of its own.
+  const goRef = useRef(go)
+  const routeRef = useRef(route)
+  useEffect(() => { goRef.current = go; routeRef.current = route })
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return
+      const r = routeRef.current
+      if (r.level === 'agency') return
+      e.preventDefault()
+      goRef.current(up(r))
+    }
+    document.addEventListener('keydown', onEsc)
+    return () => document.removeEventListener('keydown', onEsc)
+  }, [])
 
   const who = whoIs(data.person)
   const summary = useMemo(() => agencySummary(data.clients, data.items, data.unassigned), [data])
@@ -54,35 +71,58 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
 
   // A client route must name a client that is here. One that is not (archived,
-  // another studio's, mistyped) is corrected to #clients, so the trail, the page
-  // and the URL agree. Until the tool page exists (phase 2) a #tool-… route is its client's page.
-  // The data on screen may be a few seconds old, and the client may be one just made, so
-  // an unknown one is looked for afresh once before the route is corrected.
+  // another studio's, mistyped) is corrected to #clients, and a tool that is not
+  // live (Idea, Prod, an app not installed) to its client's page, so the trail,
+  // the page and the URL agree. The data on screen may be a few seconds old, and
+  // the client may be one just made, so an unknown one is looked for afresh once
+  // before the route is corrected.
   const [checked, setChecked] = useState<string | null>(null)
   useEffect(() => {
     if (!clientId) return
     if (client) {
-      if (route.level === 'tool') go({ level: 'client', client: client.id }, true)
+      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) })
+      if (!sameRoute(fixed, route)) go(fixed, true)
       return
     }
     if (checked === clientId) {
-      go({ level: 'clients' }, true)
+      go(correctRoute(route, { client: () => false, tool: () => false }), true)
       return
     }
-    let live = true
-    void onRefresh().finally(() => { if (live) setChecked(clientId) })
-    return () => { live = false }
-  }, [clientId, client, route.level, go, checked, onRefresh])
+    let fresh = true
+    void onRefresh().finally(() => { if (fresh) setChecked(clientId) })
+    return () => { fresh = false }
+  }, [clientId, client, route, go, checked, onRefresh, live])
+
+  // What the live region says: the level arrived at, or a word about a tool that is not here yet.
+  const [soon, setSoon] = useState<{ key: string; text: string; n: number } | null>(null)
+  const tool = route.level === 'tool' ? toolById(route.tool) : undefined
+  const mine = client ? data.items.filter(i => i.client?.id === client.id) : []
+  const inTool = tool?.appId ? mine.filter(i => i.app_id === tool.appId) : []
+  // a repeated word is still a change to the region, so it is said again
+  const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : '\u00a0') : arrival(route, {
+    agency: who.agency, client: client?.name, tool: tool?.full, tools: TOOLS.length, open: inTool.length,
+  })
 
   let body
-  if (clientId && client) {
-    const mine = data.items.filter(i => i.client?.id === client.id)
+  if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
+    body = (
+      <ToolPage
+        client={client}
+        tool={tool}
+        items={inTool}
+        onNew={() => { if (tool.appId) onStart(tool.appId, client.id) }}
+        onOpenItem={onOpenDocument}
+        onBack={() => go({ level: 'client', client: client.id })}
+      />
+    )
+  } else if (clientId && client) {
     body = (
       <ClientPage
         summary={summarise(client, data.items)}
         items={mine}
         live={live}
-        onStart={(t: Tool) => { if (t.appId) onStart(t.appId, client.id) }}
+        onOpenTool={t => go({ level: 'tool', client: client.id, tool: t.id })}
+        onSoon={t => setSoon(p => ({ key, text: `${t.full} is coming soon. It keeps its place.`, n: (p?.n ?? 0) + 1 }))}
         onOpenItem={onOpenDocument}
       />
     )
@@ -120,6 +160,7 @@ export function LandingHome({ route, data, go, onAdd, onStart, onOpenDocument, o
 
   return (
     <div className="lc" ref={top}>
+      <p className="lc-sr" role="status" aria-live="polite" data-testid="live">{say}</p>
       {body}
       <footer className="lc-foot">
         <button className="lc-link" onClick={onAllTools}>All tools</button>

@@ -17,8 +17,9 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { Trail } from './shell/landing/Trail'
 import { useLanding } from './shell/landing/useLanding'
-import { whoIs } from './shell/landing/model'
+import { initialsOf, routeOfDocument, whoIs } from './shell/landing/model'
 import { useRoute } from './shell/useRoute'
+import { type Route } from './shell/route'
 import AppHost from './shell/AppHost'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
@@ -47,6 +48,12 @@ function resetTheme() {
   const root = document.documentElement
   for (const v of Object.values(THEME_VARS)) root.style.removeProperty(v)
 }
+
+/** The history entry an open document stands on, so Back leaves it and lands where it was opened. */
+const DOC_ENTRY = { napkinDoc: true }
+const isDocEntry = () => (window.history.state as { napkinDoc?: boolean } | null)?.napkinDoc === true
+/** The document's entry becomes the page it leaves to: no stale entry left to Back into. */
+const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(null, '', window.location.href) }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
@@ -139,6 +146,9 @@ export default function App() {
     resetTheme() // clear any prior app's theme before this one (re)applies its own
     setRunning({ artifactPath: open.path, open, htmlContent: html, editMode: false, source })
     setScreen('app')
+    // The browser's Back leaves the document for where it was opened from: the
+    // document takes one history entry of its own (once, however many it opens).
+    if (!isDocEntry()) window.history.pushState(DOC_ENTRY, '', window.location.href)
   }, [])
 
   // A .clan from this device — dropped, chosen, handed over by the OS, or an
@@ -330,7 +340,25 @@ export default function App() {
     return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
   }, [device, openPath, handleOpenFile, saveCurrent])
 
-  const goHome = useCallback(() => { setAllTools(false); openHome() }, [openHome])
+  const goHome = useCallback(() => { retireDocEntry(); setAllTools(false); openHome() }, [openHome])
+
+  // A level of the trail, chosen from inside a document: leave the document for it.
+  const leaveTo = useCallback((r: Route) => {
+    retireDocEntry()
+    go(r, true)
+    setAllTools(false)
+    openHome()
+  }, [go, openHome])
+
+  // The browser's Back (or a pasted link) while a document is open leaves it.
+  const screenRef = useRef(screen)
+  useEffect(() => { screenRef.current = screen }, [screen])
+  useEffect(() => {
+    const leave = () => { if (screenRef.current === 'app' && !isDocEntry()) { setAllTools(false); openHome() } }
+    window.addEventListener('popstate', leave)
+    window.addEventListener('hashchange', leave)
+    return () => { window.removeEventListener('popstate', leave); window.removeEventListener('hashchange', leave) }
+  }, [openHome])
 
   const onInstall = useCallback(async () => {
     if (!pendingLaunch) return
@@ -405,6 +433,17 @@ export default function App() {
     />
   ) : undefined
 
+  // The same trail in the bar of an open document, from the document's own client
+  // and tool (so it is right for a document opened from a strip, and after a spin-off).
+  const docRoute = running && !device ? routeOfDocument(running.open.manifest) : null
+  const docClient = docRoute && running?.open.manifest.client
+    ? landing.data?.clients.find(c => c.id === running.open.manifest.client!.id)
+      ?? { name: running.open.manifest.client.name, initials: initialsOf(running.open.manifest.client.name), material: 'pearl' }
+    : null
+  const docTrail = docRoute && landing.state === 'ready' && landing.data ? (
+    <Trail route={docRoute} agency={whoIs(landing.data.person).agency} client={docClient} inDocument onGo={leaveTo} />
+  ) : undefined
+
   return (
     <>
       {error && (
@@ -421,6 +460,7 @@ export default function App() {
           tool={installed.find(a => a.app_id === running.open.manifest.app?.app_id) ?? null}
           onOpenDocument={openPath}
           onHome={goHome}
+          trail={docTrail}
           onOpenFile={handleOpenFile}
           onSave={saveCurrent}
           onKeepOffline={!device && hasServer && !running.open.is_template ? keepCurrentOffline : undefined}

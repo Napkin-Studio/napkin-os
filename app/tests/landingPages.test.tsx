@@ -17,9 +17,10 @@ import { Circle } from '../src/shell/landing/Circle.tsx'
 import { ClientPage } from '../src/shell/landing/ClientPage.tsx'
 import { ClientsPage } from '../src/shell/landing/ClientsPage.tsx'
 import { LandingPage } from '../src/shell/landing/LandingPage.tsx'
+import { ToolPage } from '../src/shell/landing/ToolPage.tsx'
 import { Trail } from '../src/shell/landing/Trail.tsx'
 import { agencySummary, initialsOf, ordered, summarise } from '../src/shell/landing/model.ts'
-import { TOOLS } from '../src/shell/landing/tools.ts'
+import { TOOLS, toolById } from '../src/shell/landing/tools.ts'
 
 const name = (i: number) => `Client ${String.fromCharCode(65 + i)}`
 const client = (i: number): ClientRecord => ({
@@ -145,7 +146,7 @@ test('a client page puts six tools round it; Idea and Prod are Soon and disabled
   ]
   const live = new Set(['brief', 'research', 'deck', 'ads'])
   const html = renderToStaticMarkup(createElement(ClientPage, {
-    summary: summarise(a, items), items, live, onStart: noop, onOpenItem: noop,
+    summary: summarise(a, items), items, live, onOpenTool: noop, onSoon: noop, onOpenItem: noop,
   }))
   for (const t of TOOLS) assert.match(html, new RegExp(`data-testid="tool-${t.id}"`))
   assert.match(html, /Brief Maker for Client A, 1 open, needs you \(1 of 6\)/)
@@ -160,7 +161,7 @@ test('a client page puts six tools round it; Idea and Prod are Soon and disabled
 
 test('a client with no work says where to start', () => {
   const a = client(0)
-  const html = renderToStaticMarkup(createElement(ClientPage, { summary: summarise(a, []), items: [], live: new Set(['brief']), onStart: noop, onOpenItem: noop }))
+  const html = renderToStaticMarkup(createElement(ClientPage, { summary: summarise(a, []), items: [], live: new Set(['brief']), onOpenTool: noop, onSoon: noop, onOpenItem: noop }))
   assert.match(html, /Nothing yet\. Pick a tool above to start the first piece of work for Client A\./)
 })
 
@@ -191,4 +192,61 @@ test('a circle is drawn flat and says its ring', () => {
   }
   // an unknown material is still a circle
   assert.match(renderToStaticMarkup(createElement(Circle, { size: 40, material: 'unobtainium' })), /<svg/)
+})
+
+test('the six tools are one tab stop: the first has tabindex 0 and the rest -1, each with its number', () => {
+  const a = client(0)
+  const html = renderToStaticMarkup(createElement(ClientPage, {
+    summary: summarise(a, []), items: [], live: new Set(['brief', 'research', 'deck', 'ads']), onOpenTool: noop, onSoon: noop, onOpenItem: noop,
+  }))
+  const tabs = [...html.matchAll(/data-testid="tool-(\w+)"/g)].map(m => m[1])
+  assert.deepEqual(tabs, ['brief', 'research', 'idea', 'deck', 'prod', 'ads'], 'a fixed order round the circle')
+  assert.equal(count(html, /tabindex="0"/gi) - count(html, /<h1[^>]*tabindex="0"/gi), 1)
+  assert.equal(count(html, /<button[^>]*tabindex="-1"/g), 5)
+  for (let i = 1; i <= 6; i++) assert.match(html, new RegExp(`aria-keyshortcuts="${i}"`))
+  // The positions are fixed: a hexagon, the first at the top.
+  assert.match(html, /data-testid="tool-brief"[^>]*--x:0\.000;--y:-1\.000/)
+})
+
+test('the tool page lists the client’s documents of that tool and offers a new one for them', () => {
+  const a = client(0)
+  const brief = toolById('brief')!
+  const items = [
+    item(a, BRIEF, { title: 'Spring brief', state: { needs_you: 1, locked: false } }),
+    item(a, BRIEF, { title: 'Autumn brief' }),
+  ]
+  const html = renderToStaticMarkup(createElement(ToolPage, { client: a, tool: brief, items, onNew: noop, onOpenItem: noop, onBack: noop }))
+  assert.match(html, /data-testid="tool-page"[^>]*data-client="cli_00000001"[^>]*data-tool="brief"/)
+  assert.match(html, /<h1[^>]*>Brief Maker<\/h1>/)
+  assert.match(html, /Client: Client A/)
+  assert.match(html, /2 briefs for Client A/)
+  assert.match(html, /New brief for Client A/)
+  assert.equal(count(html, /data-testid="work-item"/g), 2)
+  assert.match(html, /Needs you/)
+  assert.match(html, /Back to Client A/)
+})
+
+test('the tool page with nothing says so and still offers New', () => {
+  const html = renderToStaticMarkup(createElement(ToolPage, { client: client(1), tool: toolById('research')!, items: [], onNew: noop, onOpenItem: noop, onBack: noop }))
+  assert.match(html, /No research for Client B yet\./)
+  assert.match(html, /New research for Client B/)
+  assert.doesNotMatch(html, /data-testid="work-item"/)
+})
+
+test('the trail of a tool has four circles, each with a name; in a document none is "here"', () => {
+  const route = { level: 'tool', client: 'cli_00000001', tool: 'deck' } as const
+  const props = { route, agency: 'Studio A', client: { name: 'Client A', initials: 'CA', material: 'pearl' }, onGo: noop }
+  const page = renderToStaticMarkup(createElement(Trail, props))
+  assert.equal(count(page, /<button/g), 4, 'agency, clients, client, tool')
+  for (const n of ['Studio A', 'Clients', 'Client A', 'Deck Maker']) assert.match(page, new RegExp(`<button[^>]*aria-label="${n}"`))
+  assert.equal(count(page, /aria-current="page"/g), 1)
+  const inDoc = renderToStaticMarkup(createElement(Trail, { ...props, inDocument: true }))
+  assert.equal(count(inDoc, /aria-current/g), 0)
+  assert.equal(count(inDoc, /<button/g), 4)
+  assert.match(inDoc, /title="Back to the studio"/, 'the agency circle is the way home')
+})
+
+test('a trail whose client is not known yet still names every circle', () => {
+  const html = renderToStaticMarkup(createElement(Trail, { route: { level: 'client', client: 'cli_00000009' }, agency: 'Studio A', onGo: noop }))
+  assert.match(html, /<button[^>]*aria-label="Client"/)
 })
