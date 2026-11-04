@@ -2226,6 +2226,274 @@ fn get_path<'v>(root: &'v Yaml, path: &str) -> Option<&'v Yaml> {
     Some(at)
 }
 
+// ── the Deck's inputs ───────────────────────────────────────────────────────
+
+/// The Brief Maker data keys the Deck engine reads from a carried brief:
+/// the values of `CLAN_FIELDS` in `engine/deck/inputs.py`, and the open
+/// questions. Nothing else of the brief is printed.
+pub const DECK_BRIEF_KEYS: &[&str] = &[
+    "background",
+    "objectives",
+    "audience",
+    "competitor_context",
+    "insight",
+    "single_minded_proposition",
+    "reasons_to_believe",
+    "desired_response",
+    "tone_and_world",
+    "budget_and_scope",
+    "mandatories",
+    "open_questions",
+];
+
+/// The printer's output for the Deck engine: `payload` is `{data, members}`,
+/// the two arguments of `inputs.from_upstream` (engine/deck/inputs.py).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeckInputs {
+    pub payload: Json,
+    /// What was left out, in the order it was met.
+    pub skipped: Vec<Skipped>,
+}
+
+/// A brief's own data: it holds one of the keys a brief has.
+fn is_brief_copy(v: &Yaml) -> bool {
+    v.is_mapping()
+        && (DECK_BRIEF_KEYS.iter().any(|k| v.get(*k).is_some()) || v.get("capture").is_some())
+}
+
+/// `v` as JSON with every exact occurrence of a hidden value replaced, in
+/// every string and every number, except the ids and references that are
+/// shared vocabulary (§5.4).
+fn redact_json(h: &Hider, v: Json) -> Json {
+    match v {
+        Json::String(t) => Json::String(h.redact(&t)),
+        Json::Array(a) => Json::Array(a.into_iter().map(|x| redact_json(h, x)).collect()),
+        Json::Object(o) => Json::Object(
+            o.into_iter()
+                .map(|(k, x)| {
+                    let shared = matches!(k.as_str(), "id" | "ref" | "unit")
+                        || k.ends_with("_id")
+                        || k.ends_with("_ids");
+                    (k, if shared { x } else { redact_json(h, x) })
+                })
+                .collect(),
+        ),
+        Json::Number(n) => {
+            let t = n.to_string();
+            let r = h.redact(&t);
+            if r == t {
+                Json::Number(n)
+            } else {
+                Json::String(r)
+            }
+        }
+        other => other,
+    }
+}
+
+fn to_json(v: &Yaml) -> Json {
+    serde_json::to_value(v).unwrap_or(Json::Null)
+}
+
+/// What the Deck engine is given from a spun-off Deck document: the carried
+/// brief's fields and the carried research's rows, as `inputs.from_upstream`
+/// takes them (`{data: {upstream: {<brief id>: ..., <research id>: ...}},
+/// members: {facts, findings, sources, decisions}}`), or `None` when the
+/// document carries neither.
+///
+/// It is the agent version, like [`upstream`]: a value marked `model: false`
+/// is left out of the row or field that holds it, and wherever that exact
+/// value appears in another is replaced by [`MARKED`]; a mark on the whole
+/// brief or the whole research leaves it out. Only an allowlist of brief
+/// fields is printed ([`DECK_BRIEF_KEYS`] and the how-to-win points), only
+/// the research's name and its pin, finding and source rows, and of the
+/// decision chain only the verdicts the engine reads to keep a rejected
+/// pin or finding rejected. No clock, no randomness, no network, no model.
+///
+/// **Never a halt:** what could not be printed is named in
+/// [`DeckInputs::skipped`] and the rest is printed.
+pub fn deck_inputs(clan: &ClanFile) -> Option<DeckInputs> {
+    let data = read_yaml(clan, DATA_PATH).ok()?;
+    let up = data.get(UPSTREAM_KEY)?.as_mapping()?;
+    let brief_id = up
+        .iter()
+        .find(|(_, v)| is_brief_copy(v))
+        .and_then(|(k, _)| k.as_str())
+        .map(String::from);
+    let research_id = carried_research(clan).filter(|r| Some(r) != brief_id.as_ref());
+    if brief_id.is_none() && research_id.is_none() {
+        return None;
+    }
+    let own = clan.document_id();
+    let mut skipped = Vec::new();
+    let chain = match clan.read_entry(CHAIN_PATH) {
+        Ok(b) => DecisionChain::from_yaml(&b).unwrap_or_else(|_| {
+            skipped.push(skip(
+                CHAIN_PATH,
+                "does not parse; no decisions and no marks were read",
+            ));
+            DecisionChain::default()
+        }),
+        Err(_) => DecisionChain::default(),
+    };
+    let facts = member(
+        clan,
+        "pinned-facts",
+        "shared/facts.yaml",
+        "facts",
+        &mut skipped,
+    );
+    let findings = member(
+        clan,
+        "findings",
+        "shared/findings.yaml",
+        "findings",
+        &mut skipped,
+    );
+    let sources = member(
+        clan,
+        "sources",
+        "shared/sources.yaml",
+        "sources",
+        &mut skipped,
+    );
+
+    // The research: its marks and its hidden values, as the brief engine's printer has them.
+    let rdoc = research_id.as_deref().map(|r| {
+        let frozen = up.get(r).cloned().unwrap_or(Yaml::Null);
+        let direct = clan.manifest().carried().map(|c| c.document_id.as_str()) == Some(r);
+        Doc::new(
+            r,
+            Own {
+                id: own,
+                data: &data,
+            },
+            frozen,
+            chain.clone(),
+            facts.clone(),
+            findings.clone(),
+            sources.clone(),
+            direct,
+        )
+    });
+    let research_closed = rdoc.as_ref().is_some_and(|d| d.marks.closes_document());
+    let mut hider = rdoc.as_ref().map(|d| d.hider()).unwrap_or_default();
+
+    // The brief: its marks (`<brief id>#<field>`), and its hidden values added to the hider.
+    let bmarks = brief_id.as_deref().map(|b| Marks::of(&chain, b, own));
+    let brief_closed = bmarks.as_ref().is_some_and(|m| m.closes_document());
+    if let (Some(b), Some(m)) = (brief_id.as_deref(), bmarks.as_ref()) {
+        if !brief_closed {
+            let frozen = &up[Yaml::from(b)];
+            for key in DECK_BRIEF_KEYS {
+                if let Some(v) = frozen.get(*key).filter(|_| m.path_hidden(key)) {
+                    hider.add(v, None);
+                }
+            }
+        }
+    }
+
+    let mut upstream = Map::new();
+    if let (Some(b), Some(m)) = (brief_id.as_deref(), bmarks.as_ref()) {
+        if brief_closed {
+            skipped.push(skip(b, "the brief is marked not for agents as a whole"));
+        } else {
+            let frozen = &up[Yaml::from(b)];
+            let mut o = Map::new();
+            for key in DECK_BRIEF_KEYS {
+                let Some(v) = frozen.get(*key) else { continue };
+                if m.path_hidden(key) {
+                    skipped.push(skip(&format!("{b}#{key}"), "marked not for agents"));
+                    continue;
+                }
+                o.insert((*key).to_string(), redact_json(&hider, to_json(v)));
+            }
+            if let Some(how) = frozen.get("capture").and_then(|c| c.get("how_to_win")) {
+                if m.path_hidden("capture") || m.path_hidden("capture.how_to_win") {
+                    skipped.push(skip(
+                        &format!("{b}#capture.how_to_win"),
+                        "marked not for agents",
+                    ));
+                } else {
+                    o.insert(
+                        "capture".into(),
+                        json!({ "how_to_win": redact_json(&hider, to_json(how)) }),
+                    );
+                }
+            }
+            upstream.insert(b.to_string(), Json::Object(o));
+        }
+    }
+    let mut members = Map::new();
+    for key in ["facts", "findings", "sources", "decisions"] {
+        members.insert(key.into(), Json::Array(Vec::new()));
+    }
+    if let Some(r) = research_id.as_deref() {
+        if research_closed {
+            skipped.push(skip(r, "the research is marked not for agents as a whole"));
+        } else if let Some(d) = rdoc.as_ref() {
+            let name = up
+                .get(r)
+                .and_then(|c| c.get("campaign"))
+                .and_then(|c| c.get("name"))
+                // A campaign field is an envelope ({value, origin, ...}); the engine wants the plain name.
+                .and_then(|n| n.as_str().or_else(|| n.get("value").and_then(Yaml::as_str)))
+                .filter(|_| !d.marks.path_hidden("campaign.name"));
+            upstream.insert(
+                r.to_string(),
+                json!({ "campaign": { "name": name.map(|n| hider.redact(n)) } }),
+            );
+            let mut put = |key: &str, member: &'static str, rows: &[Yaml]| {
+                let out: Vec<Json> = rows
+                    .iter()
+                    .filter_map(|row| {
+                        let id = s(row, "id").unwrap_or_default();
+                        if d.marks.entry_hidden(member, id) {
+                            skipped.push(skip(id, "marked not for agents"));
+                            return None;
+                        }
+                        Some(redact_json(&hider, to_json(row)))
+                    })
+                    .collect();
+                members.insert(key.into(), Json::Array(out));
+            };
+            put("facts", "facts", &facts);
+            put("findings", "findings", &findings);
+            put("sources", "sources", &sources);
+            // Only the verdicts: what the engine reads to keep a rejected pin or finding rejected.
+            let verdicts: Vec<Json> = chain
+                .decisions
+                .iter()
+                .filter(|dec| dec.kind.as_deref() == Some("verdict"))
+                .filter(|dec| {
+                    !dec.id
+                        .as_deref()
+                        .is_some_and(|i| d.marks.entry_hidden("decisions", i))
+                })
+                .map(|dec| {
+                    let v = serde_json::to_value(dec).unwrap_or(Json::Null);
+                    let mut o = Map::new();
+                    for k in ["id", "kind", "polarity", "targets"] {
+                        if let Some(x) = v.get(k).filter(|x| !x.is_null()) {
+                            o.insert(k.into(), redact_json(&hider, x.clone()));
+                        }
+                    }
+                    // The engine's `reason` is the person's own words: the decision's rationale.
+                    if !dec.rationale.is_empty() {
+                        o.insert("reason".into(), Json::String(hider.redact(&dec.rationale)));
+                    }
+                    Json::Object(o)
+                })
+                .collect();
+            members.insert("decisions".into(), Json::Array(verdicts));
+        }
+    }
+    Some(DeckInputs {
+        payload: json!({ "data": { "upstream": Json::Object(upstream) }, "members": Json::Object(members) }),
+        skipped,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
