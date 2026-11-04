@@ -39,7 +39,7 @@
 .lc-dl { display: grid; gap: 4px; text-align: center; }
 .lc-dname { font-size: clamp(24px, 4vw, 34px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .lc-dline { font-size: 15px; color: var(--ink2); }
-.lc-dhint { font-size: 13px; color: var(--ink3); }
+.lc-dhint { font-size: 13px; color: var(--ink2); }
 
 /* the circle */
 .lc-cir { display: block; flex: none; overflow: visible; }
@@ -53,7 +53,7 @@
 /* strips: what needs you, what is running */
 .lc-strips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 40px; }
 .lc-strip-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font: 600 12px/1.3 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink2); }
-.lc-n { display: inline-block; min-width: 20px; padding: 0 6px; background: var(--accent); color: var(--create-fg); font: 700 12px/20px var(--f-display); text-align: center; border-radius: var(--r-pill); letter-spacing: 0; }
+.lc-n { display: inline-block; min-width: 20px; padding: 0 6px; background: color-mix(in oklab, var(--accent) 18%, var(--paper)); color: var(--ink); border: 1px solid var(--accent); font: 700 12px/18px var(--f-display); text-align: center; border-radius: var(--r-pill); letter-spacing: 0; }
 .lc-cards { list-style: none; display: grid; gap: 8px; }
 .lc-card {
   appearance: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%;
@@ -65,7 +65,7 @@
 .lc-card-t { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lc-card-m { grid-column: 1; font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lc-tag { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: var(--r-pill); white-space: nowrap; }
-.lc-tag-need { background: var(--accent); color: var(--create-fg); }
+.lc-tag-need { background: color-mix(in oklab, var(--accent) 18%, var(--paper)); color: var(--ink); border: 1px solid var(--accent); }
 .lc-tag-run { border: 1px solid var(--accent); color: var(--ink); }
 .lc-tag-fail { background: var(--ink); color: var(--paper); }
 .lc-nothing { font-size: 13.5px; color: var(--ink2); border: 1px dashed var(--line); border-radius: var(--r-card); padding: 12px 16px; }
@@ -98,8 +98,8 @@
 .lc-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; padding: 12px 0; font-size: 12px; color: var(--ink2); }
 .lc-search input { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: var(--r-pill); min-height: 32px; padding: 0 14px; font: inherit; font-size: 13px; width: 220px; max-width: 100%; }
 
-/* the ring of clients: on a wide screen and few clients, they stand round the agency */
-@media (min-width: 720px) {
+/* the ring of clients (needs ~724px of room, so only from 800px): on a wide screen and few clients, they stand round the agency */
+@media (min-width: 800px) {
   .lc-ring { position: relative; display: block; height: 580px; padding: 0; }
   .lc-ring .lc-client {
     position: absolute;
@@ -111,7 +111,7 @@
   .lc-ring .lc-hub { position: absolute; left: 50%; top: calc(50% - 24px); transform: translate(-50%, -50%); }
 }
 .lc-hub { display: none; line-height: 0; }
-@media (min-width: 720px) { .lc-ring .lc-hub { display: block; } }
+@media (min-width: 800px) { .lc-ring .lc-hub { display: block; } }
 
 /* the add form */
 .lc-add { display: grid; gap: 6px; margin: 0 0 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--soft); }
@@ -141,8 +141,10 @@
 .lc-trail { flex: 1; min-width: 0; overflow: hidden; }
 .lc-trail ol { display: flex; align-items: center; gap: 4px; list-style: none; min-width: 0; }
 .lc-trail li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+/* the levels above keep their 44px target; only the current one gives way to a long name */
+.lc-trail li:not(:last-child) { flex: none; }
 .lc-trail li + li::before { content: '\203A'; color: var(--ink3); font-size: 18px; line-height: 1; }
-.lc-crumb { appearance: none; background: none; border: 0; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px; border-radius: var(--r-card); cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink2); min-width: 0; }
+.lc-crumb { appearance: none; background: none; border: 0; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 6px; border-radius: var(--r-card); cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink2); }
 .lc-crumb:hover { color: var(--ink); }
 .lc-crumb[aria-current='page'] { color: var(--ink); font-weight: 600; cursor: default; }
 .lc-crumb:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -165,6 +167,10 @@
   .lc-wheel { height: 400px; }
   .lc-tool { left: calc(50% + var(--x) * 135px); top: calc(50% + var(--y) * 150px); width: 96px; }
   .lc-tool .lc-cir { width: 72px; height: 72px; }
+}
+@media (max-width: 359px) {
+  .lc-tool { left: calc(50% + var(--x) * min(120px, 34vw)); top: calc(50% + var(--y) * 138px); width: 88px; }
+  .lc-tool .lc-cir { width: 64px; height: 64px; }
 }
 /* reduced motion: no lift, no travel */
 @media (prefers-reduced-motion: reduce) {

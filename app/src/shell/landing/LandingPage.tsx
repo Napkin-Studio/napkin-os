@@ -36,7 +36,7 @@ function Strip({
     <section className="lc-strip" aria-label={title}>
       <h2 className="lc-strip-h">
         {title}
-        {items.length > 0 && <span className="lc-n" aria-label={`${items.length}`}>{items.length}</span>}
+        {items.length > 0 && <span className="lc-n">{items.length}</span>}
       </h2>
       {items.length === 0 ? (
         <p className="lc-nothing">{empty}</p>
