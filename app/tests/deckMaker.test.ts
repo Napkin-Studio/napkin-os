@@ -1956,6 +1956,7 @@ test('the centred circle fills the window but stays between 184 and 720, and is 
   assert.equal(L.circleCentreSize(800, 2000), 496) // narrow: 62% of the width
   assert.equal(L.circleCentreSize(4000, 4000), 720)
   assert.equal(L.circleCentreSize(300, 300), 184)
+})
 
 // ── the engine, through the middleware (features/deck-maker-server.clan, middleware-api.md section 12) ──
 const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r)) }
