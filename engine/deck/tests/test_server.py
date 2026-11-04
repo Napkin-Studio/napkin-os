@@ -303,3 +303,11 @@ def test_an_empty_prompt_with_nothing_carried_is_still_refused_and_a_huge_payloa
     big["members"]["facts"] = [{"id": f"f_{i}", "value": "x" * 1000} for i in range(9000)]
     status, err = start_with(engine, "x", big)
     assert status == 400 and err["error"]["type"] == "too_large"
+
+
+def test_a_replay_with_no_recording_of_this_deck_kind_fails_instead_of_opening_an_empty_gate(engine):
+    inv = {**INPUTS, "kind": "investor", "prompt": {**INPUTS["prompt"], "text": "An investor seed deck for Lumen Labs, up to 18 slides"}}
+    call(engine.base, "/run", {"doc": "inv", "inputs": inv, "approvals": {}, "mode": "replay", "render": False})
+    v = wait(engine.base, "inv")
+    assert v["state"] == "failed" and "NAPKIN_DECK_LIVE" in v["error"]["message"] and v["error"]["retryable"] is False
+    assert call(engine.base, "/status")[1]["busy"] is None

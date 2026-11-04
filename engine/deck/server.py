@@ -298,6 +298,9 @@ class Server:
             inp = self.load_inputs(d, req)
             d.summary = {**rs.inputs_summary(inp), "needs_intake": run_deck._needs_intake(inp)}
             rep = self.call_engine(d, req, until)
+            if until and req["mode"] == "replay" and not (d.stages / STAGE_FILES[until][0]).exists():
+                raise Refused(409, "no_recording", f"The recording has no {req['kind']} deck to replay, so there is no {dict(PLAN[req['kind']])[until]} to show. "
+                                                   "Start the stack live (NAPKIN_DECK_LIVE=1) to build this deck for real.")
             with self.lock:
                 if until:
                     d.state, d.held = "gate", next(g for s, g in PLAN[req["kind"]] if s == until)
@@ -306,7 +309,7 @@ class Server:
                     d.state, d.held = "done", None
                 d.error, d.cost = None, rs.spent(d.stages)
         except Refused as e:
-            self.fail(d, e.message, retryable=e.kind != "cost_cap")
+            self.fail(d, e.message, retryable=e.kind not in ("cost_cap", "no_recording"))
         except BaseException as e:   # noqa: BLE001 - a failing engine ends the job as failed with its message, never a mock success
             traceback.print_exc()
             self.fail(d, f"{type(e).__name__}: {e}"[:600] if not isinstance(e, SystemExit) else f"the engine refused the run: {e.code}"[:600], retryable=True)
