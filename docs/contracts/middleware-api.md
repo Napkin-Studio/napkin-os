@@ -100,6 +100,26 @@ name the stand-in, its port, or branch on which implementation answered.
     left out. Its absence is not an error: the brief is drafted without
     research.
   - It is built at the call and never stored, logged or cached by the host.
+- **`deck_inputs`** (2026-11-04): the brief and the research a Deck Maker
+  document carries, as the Deck engine takes them: `{data: {upstream: {<brief
+  id>: {...}, <research id>: {campaign: {name}}}}, members: {facts, findings,
+  sources, decisions}}`, the two arguments of the engine's
+  `inputs.from_upstream`, printed by `clan_sdk::extract::deck_inputs`
+  (`docs/contracts/clan-extract.md` §12) from the document's own bytes. Only
+  an allowlist of the brief is printed (its eleven fields, its open questions
+  and its how-to-win points), only the research's name and its pin, finding
+  and source rows, and of the decision chain only the verdicts (which keep a
+  rejected pin or finding rejected). A value marked `model: false` is left out
+  of the field or row that holds it and reads `[Marked confidential]` wherever
+  that exact value appears in another; a mark on the whole brief or research
+  leaves it out. What was left out is named in `deck_inputs_skipped`,
+  `[{what, why}]` (an id or path and a fixed reason, never a value), present
+  only when something was. Never a halt.
+  - **When.** Sent when the document's pipeline declares `build_deck` or it is a
+    Deck Maker document, and it carries a brief or research (a `data.upstream`
+    copy); absent otherwise. It rides every request on such a document;
+    `build_deck` reads it (§12), any other task ignores it. Built at the call and
+    never stored, logged or cached by the host.
 - **Task → handler.** `payload.task` is resolved against `clan.pipeline.tasks.<task>.handler`
   (`name@major`). When the document carries no pipeline, the middleware's
   declared built-in map is used (`extract_ask@1`, `research_lens@1`,
@@ -1676,8 +1696,10 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
 `request_kind: middleware`: the host settles a reply's change only for that kind (`ops/middleware.rs`, `REQUEST_KIND`).
 
 - **Input.** `input` is empty: the job reads the document. The engine is sent `inputs.prompt` (`text`, `client`, `project`, `agency`),
-  `inputs.kind` (`agency` or `investor`), `inputs.format` and `run.approvals`, which the person wrote, and the process-wide
-  `NAPKIN_DECK_RENDER` (`0`: the last segment stops at the deck and writes no files, so no LibreOffice is needed).
+  `inputs.kind` (`agency` or `investor`), `inputs.format` and `run.approvals`, which the person wrote, `clan.deck_inputs` when the
+  document carries a brief or research (§1; a deck that carries one needs no typed prompt), and the process-wide
+  `NAPKIN_DECK_RENDER` (`0`: the last segment stops at the deck and writes no files, so no LibreOffice is needed). What the host
+  left out of the carried brief and research is shown in the job's `result.left_out`.
 - **A segment, not a run.** The job is `long` with one stage, `build`. It runs the engine up to the next gate, or on to the finished deck
   once the last gate is approved, then ends `done`. A gate is a finished segment with `run.state: gate`; nothing waits across it, so a
   restart of the middleware loses nothing. A gate goes on only when its approval is in `run.approvals` **and** the stage output it covers
@@ -1704,7 +1726,6 @@ deck engine (`engine/deck/server.py`) and writes what the engine reports into th
   stay in the engine's cache.
 - **Cost.** `run.cost_usd` is the engine's own figure (live runs only; replay and recorded stages show none). `trace.usage` reports
   zeros: the engine's model calls are its own, capped there (`NAPKIN_DECK_MAX_USD`), not metered by this middleware.
-- **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the document's brief and
-  research as inputs, the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
+- **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
   restart of the middleware (an in-memory job store, as everywhere here: the next `build_deck` resumes from the engine's cache).
 

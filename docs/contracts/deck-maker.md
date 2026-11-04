@@ -300,6 +300,16 @@ Each live stage records `usd`: the transport's figure, else tokens at `spec.PRIC
 `report.json` `usd_total` includes recorded stages priced the same way and `usd_basis` says it is an estimate. A reply that
 is not JSON gets one repair call. Bench cost ranges are assumptions, plus or minus 30% (ADR 0032, proposed).
 
+## A deck spun off from a Brief or Research
+
+The Deck declares `app.spinoff` accepting the Brief Maker and the Research Tool with `upstream: true`, so either offers *Continue in
+Deck Maker*. The new document holds the source frozen at `data.upstream.<id>` (Contract 4 section 5) and its pins and findings merged
+into its own members. The host prints what the engine reads from them (`clan.deck_inputs`, middleware-api.md section 1, clan-extract.md
+section 12: an allowlist of the brief, the research's rows, the verdicts, the `model: false` marks honoured) and `build_deck` hands it
+to the engine, which reads it with `run_deck --document` (`inputs.from_upstream`). A deck that carries a brief or research needs no
+typed prompt; the Start screen shows what it was built from, and the Evidence tab resolves `brief:` and finding refs from the source.
+What the printer left out (a mark, a cap) is named in the job's `result.left_out`, never as a value.
+
 ## The landing page and the read
 
 A **fresh** document (no prompt, no files, no upstream brief or research, no intake questions, no run) opens on one input bar:

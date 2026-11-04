@@ -19,6 +19,7 @@ tasks:
     stages: [build]
     reads:
       - inputs.prompt (client, project, agency, text), inputs.kind and inputs.format
+      - clan.deck_inputs, when the deck carries a brief or research (the host prints it with the model: false marks honoured; a spun-off deck needs no typed prompt)
       - run.approvals, which the person wrote: a gate goes on only when its approval is there and the stage output it covers already existed
     never:
       - writes run.approvals, run.decisions or run.gate_requests (the person's)

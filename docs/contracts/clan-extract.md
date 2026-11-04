@@ -4235,3 +4235,27 @@ owner decision (§0.2).
 | X7 | The shape of the call | Superseded by OD11: the engine's own calls, given rows | 11.1 |
 | X8 | When to drop the note | The summary rule | 3.3 |
 | X9 | The Judge's notes and fixes | In the state record only | 3.4, 4.6 |
+
+## 12. The Deck's inputs: `deck_inputs`
+
+*Added 2026-11-04* (`features/deck-maker-spinoff-inputs.clan`). A second printer beside `upstream` (§1.1, §11): the brief and the research
+a spun-off **Deck Maker** document carries, as the Deck engine's `inputs.from_upstream(data, members)` takes them. It is the agent
+version, like `upstream`: `model: false` marks are honoured, with the same rules (§5.4, §10.5).
+
+- **Signature.** `clan_sdk::extract::deck_inputs(clan) -> Option<DeckInputs>`; `None` when the document carries neither a brief nor
+  research. `DeckInputs {payload, skipped}`.
+- **The brief.** The first `data.upstream.<id>` copy that holds a brief's keys. Only `DECK_BRIEF_KEYS` are printed (`background`,
+  `objectives`, `audience`, `competitor_context`, `insight`, `single_minded_proposition`, `reasons_to_believe`, `desired_response`,
+  `tone_and_world`, `budget_and_scope`, `mandatories`, `open_questions`) and `capture.how_to_win`; any other key never leaves. A field
+  marked `model: false` (`<brief id>#<field>`) is left out; a mark on the brief as a whole leaves all of it out.
+- **The research.** The carried research (`carried_research`, as §1.1): its name as a plain string (the campaign field's envelope
+  unwrapped), and its pin, finding and source rows, each with its strings redacted. A row marked `model: false`, or a pin whose value
+  is hidden, is left out; a mark on the research as a whole leaves it out.
+- **The chain.** Only the verdicts, as `{id, kind, polarity, targets, reason}` (the reason is the decision's rationale, the person's
+  words): what the engine reads to keep a rejected pin or finding rejected. No classify decision, edit, spin-off marker or other text
+  is printed.
+- **Redaction.** Every exact occurrence of a hidden value (a hidden field, pin value, finding statement or decision rationale) in any
+  printed string or number reads `[Marked confidential]`.
+- **Never a halt.** What could not be printed is named in `skipped` (`{what, why}`, never a value) and the rest is printed.
+- **Pure.** No clock, no randomness, no network, no model: the same bytes give the same JSON.
+
