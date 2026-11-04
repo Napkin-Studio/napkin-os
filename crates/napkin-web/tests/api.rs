@@ -2174,6 +2174,29 @@ async fn a_tenant_with_no_clients_has_an_empty_list_not_an_error() {
 }
 
 #[tokio::test]
+async fn an_empty_client_id_is_no_client_as_on_the_other_hosts() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let r = new_doc(&s, &b, "ie.napkin.test", "Plain brief", Some("")).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    let r = new_doc(
+        &s,
+        &b,
+        "ie.napkin.brief-maker",
+        "Odd brief",
+        Some("cli_00000000"),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn a_client_is_made_listed_renamed_archived_and_restored() {
     let s = server(40);
     let b = browser(&s).await;

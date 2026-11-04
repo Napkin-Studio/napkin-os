@@ -276,6 +276,16 @@ pub fn get(store: &dyn DocStore, id: &str) -> HostResult<ClientRecord> {
         .ok_or_else(|| HostError::not_found(format!("no such client: {id}")))
 }
 
+/// The client a request names, when it names one. An absent id and an empty
+/// one both mean "no client"; an unknown id is a `404`. Every host reads a
+/// request's optional `client_id` through this, so they cannot drift apart.
+pub fn get_named(store: &dyn DocStore, id: Option<&str>) -> HostResult<Option<ClientRecord>> {
+    match id.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(id) => get(store, id).map(Some),
+        None => Ok(None),
+    }
+}
+
 /// Open a client. A name already in the registry (whatever its case or
 /// spacing, archived or not) is a `409`.
 pub fn create_client(

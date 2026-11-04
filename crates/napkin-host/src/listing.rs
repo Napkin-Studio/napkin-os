@@ -85,6 +85,10 @@ pub struct LibraryListing {
     /// Documents with no client at all, whatever the filter: what "Adopt
     /// clients" would be about.
     pub clients_unassigned: usize,
+    /// Set when the client registry could not be read: the items then carry the
+    /// client names their own documents hold, and `/clients` will say why. Absent when all is well.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registry_error: Option<String>,
 }
 
 /// What one scan worked out about one document.
@@ -130,11 +134,11 @@ pub fn scan_library(
     cache: &LibraryCache,
     filter: &LibraryFilter,
 ) -> LibraryListing {
-    let registry: HashMap<String, ClientRecord> = clients::list(store, true)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|c| (c.id.clone(), c))
-        .collect();
+    let (registry, registry_error): (HashMap<String, ClientRecord>, Option<String>) =
+        match clients::list(store, true) {
+            Ok(list) => (list.into_iter().map(|c| (c.id.clone(), c)).collect(), None),
+            Err(e) => (HashMap::new(), Some(e.to_string())),
+        };
 
     let docs = store.documents();
     let mut items = Vec::new();
@@ -152,7 +156,7 @@ pub fn scan_library(
             let cached = cache
                 .seen
                 .lock()
-                .unwrap()
+                .unwrap_or_else(|e| e.into_inner())
                 .get(&id)
                 .filter(|(k, _)| *k == key)
                 .map(|(_, c)| c.clone());
@@ -167,7 +171,7 @@ pub fn scan_library(
                     cache
                         .seen
                         .lock()
-                        .unwrap()
+                        .unwrap_or_else(|e| e.into_inner())
                         .insert(id.clone(), (key, c.clone()));
                     c
                 }
@@ -206,7 +210,11 @@ pub fn scan_library(
         });
     }
     // A document that is gone must not be remembered.
-    cache.seen.lock().unwrap().retain(|k, _| live.contains(k));
+    cache
+        .seen
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|k, _| live.contains(k));
     items.sort_by(|a, b| {
         b.updated_at
             .cmp(&a.updated_at)
@@ -215,6 +223,7 @@ pub fn scan_library(
     LibraryListing {
         items,
         clients_unassigned: unassigned,
+        registry_error,
     }
 }
 

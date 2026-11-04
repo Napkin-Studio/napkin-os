@@ -413,11 +413,7 @@ async fn new_document(
     Json(body): Json<NewDocument>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
-    let client = body
-        .client_id
-        .as_deref()
-        .map(|id| clients::get(&*ws.store, id))
-        .transpose()?;
+    let client = clients::get_named(&*ws.store, body.client_id.as_deref())?;
     let doc = library::create_instance_for(&*ws.store, &body.app_id, body.title, client.as_ref())?;
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }

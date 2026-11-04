@@ -541,3 +541,39 @@ fn filters_come_from_the_query_string() {
         }
     );
 }
+
+#[test]
+fn an_empty_or_absent_client_id_is_no_client_and_an_unknown_one_is_404() {
+    let s = store_with_apps();
+    let a = clients::create_client(&s, &ctx(), "Client A", None).unwrap();
+    assert!(clients::get_named(&s, None).unwrap().is_none());
+    assert!(clients::get_named(&s, Some("")).unwrap().is_none());
+    assert!(clients::get_named(&s, Some("  ")).unwrap().is_none());
+    assert_eq!(
+        clients::get_named(&s, Some(&a.id)).unwrap().unwrap().id,
+        a.id
+    );
+    assert_eq!(
+        clients::get_named(&s, Some("cli_00000000"))
+            .unwrap_err()
+            .status,
+        404
+    );
+}
+
+#[test]
+fn an_unreadable_registry_is_said_in_the_listing_and_not_taken_for_empty() {
+    let s = store_with_apps();
+    let a = clients::create_client(&s, &ctx(), "Client A", None).unwrap();
+    work(&s, BRIEF, "Spring brief", Some(&a));
+    let ok = list(&s, &LibraryFilter::default());
+    assert!(ok.registry_error.is_none());
+    // Overwrite the registry with something that is not a clan.
+    s.files
+        .lock()
+        .unwrap()
+        .insert("home-clients-v1.clan".into(), b"not a clan".to_vec());
+    let bad = list(&s, &LibraryFilter::default());
+    assert!(bad.registry_error.is_some());
+    assert_eq!(bad.items.len(), 1, "the work is still listed");
+}

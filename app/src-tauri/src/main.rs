@@ -167,11 +167,7 @@ fn new_document_from_app(
 ) -> Result<OpenResult, String> {
     let ctx = host(&app);
     let store = &**ctx.session.store();
-    let client = client_id
-        .filter(|c| !c.is_empty())
-        .map(|id| clients::get(store, &id))
-        .transpose()
-        .map_err(String::from)?;
+    let client = clients::get_named(store, client_id.as_deref()).map_err(String::from)?;
     let id = library::create_instance_for(store, &app_id, title, client.as_ref())
         .map_err(String::from)?;
     ctx.session.open(id).map_err(String::from)

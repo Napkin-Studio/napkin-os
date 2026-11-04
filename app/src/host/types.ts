@@ -174,6 +174,8 @@ export interface LibraryListing {
   items: LibraryItem[]
   /** Documents with no client, whatever the filter. */
   clients_unassigned: number
+  /** Set when the client registry could not be read; the names shown are then the documents' own. */
+  registry_error?: string
 }
 
 export interface LibraryFilter {

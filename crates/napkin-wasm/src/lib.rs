@@ -168,11 +168,7 @@ impl NapkinHost {
         title: Option<String>,
         client_id: Option<String>,
     ) -> Result<JsValue, JsValue> {
-        let client = client_id
-            .filter(|c| !c.is_empty())
-            .map(|id| clients::get(&*self.store, &id))
-            .transpose()
-            .map_err(err)?;
+        let client = clients::get_named(&*self.store, client_id.as_deref()).map_err(err)?;
         let id = library::create_instance_for(&*self.store, app_id, title, client.as_ref())
             .map_err(err)?;
         self.session.open(id).map(|o| to_js(&o)).map_err(err)
