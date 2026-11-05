@@ -19,8 +19,8 @@ const ctx = await browser.newContext({ viewport: null })
 const page = await ctx.newPage()
 await page.goto(base)
 if (!empty) {
-  const { tenant } = await (await page.request.get('/api/session')).json()
-  const api = `/api/t/${tenant}`
+  const { tenant } = await (await page.request.get(`${base}/api/session`)).json()
+  const api = `${base}/api/t/${tenant}`
   const ids = []
   for (let i = 0; i < n; i++) {
     const r = await page.request.post(`${api}/clients`, { data: { name: `Client ${i < 26 ? String.fromCharCode(65 + i) : `A${i - 25}`}` } })
@@ -28,7 +28,7 @@ if (!empty) {
   }
   const work = async (app, title, c, patch) => {
     const r = await page.request.post(`${api}/documents`, { data: { app_id: app, title, ...(c ? { client_id: c } : {}) } })
-    if (patch) await page.request.post(`/s/${(await r.json()).token}/patch-data`, { data: { patch } })
+    if (patch) await page.request.post(`${base}/s/${(await r.json()).token}/patch-data`, { data: { patch } })
   }
   if (ids[0]) { await work(BRIEF, 'Spring brief', ids[0], CONTEST); await work(BRIEF, 'Autumn brief', ids[0]); await work(DECK, 'Pitch deck', ids[0], { run: { state: 'building', stage: 'Layout' } }) }
   if (ids[1]) await work(BRIEF, 'Launch brief', ids[1])
