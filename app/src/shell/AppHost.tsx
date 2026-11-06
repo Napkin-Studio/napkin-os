@@ -36,6 +36,8 @@ interface Props {
   banner?: ReactNode
   onExport: (kind: 'html' | 'pdf') => void
   onSpinoff: (appId: string) => void
+  /** Where the document sits (Agency > Client > Tool), drawn in the bar before the title; absent for a document with no client. */
+  trail?: ReactNode
   /** Each change is kept as it is made, so the bar may say "Saved" (Toolbar). */
   saved?: boolean
   /** Open another document of the store (the sidebar's "Made from" link). */
@@ -43,7 +45,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   // Edit mode is the OS's: the app's fields become editable while it is on.
@@ -256,6 +258,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         docPath={open.path}
         onSpinoff={onSpinoff}
         loading={false}
+        trail={trail}
         validation={open.validation}
         saved={saved}
         editMode={editMode}

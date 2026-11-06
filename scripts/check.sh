@@ -10,6 +10,9 @@
 #   scripts/check.sh --list            say which suites would run, run nothing
 #
 # Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool
+# `e2e` (the Playwright smoke in app/e2e against a seeded local stack) runs only when named
+# (`--only e2e`): it needs a browser (`cd app && npx playwright install chromium`) and a cold run
+# builds the shell and napkin-web first.
 # `desktop` (cargo check of app/src-tauri) runs only when that path changes or is named:
 # the full .deb bundle stays in CI.
 set -uo pipefail
@@ -23,6 +26,8 @@ for b in chromium chromium-browser google-chrome-stable google-chrome; do
   command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
 done
 ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool)
+# Suites that only run when named; never part of --all or of what a change reaches.
+OPTIONAL=(e2e)
 
 base="" range="" only="" list=0 all=0
 while [[ $# -gt 0 ]]; do
@@ -107,8 +112,9 @@ fi
 run_list=()
 for s in "${ALL[@]}"; do [[ -n "${want[$s]:-}" ]] && run_list+=("$s"); done
 for s in "${!want[@]}"; do
-  [[ " ${ALL[*]} " == *" $s "* ]] || { echo "check.sh: unknown suite '$s' (have: ${ALL[*]})" >&2; exit 2; }
+  [[ " ${ALL[*]} ${OPTIONAL[*]} " == *" $s "* ]] || { echo "check.sh: unknown suite '$s' (have: ${ALL[*]} ${OPTIONAL[*]})" >&2; exit 2; }
 done
+for s in "${OPTIONAL[@]}"; do [[ -n "${want[$s]:-}" ]] && run_list+=("$s"); done
 
 if [[ ${#run_list[@]} -eq 0 ]]; then
   echo "check.sh: nothing in the change reaches a CI suite"
@@ -182,6 +188,12 @@ suite_production-tool() {
       { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
       npm run -s lint && npm test && npm run -s build:web )
   fi
+}
+
+suite_e2e() {
+  ( cd app &&
+    { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
+    npx playwright test -c e2e/playwright.config.ts )
 }
 
 logdir="$(mktemp -d "${TMPDIR:-/tmp}/napkin-check.XXXXXX")"

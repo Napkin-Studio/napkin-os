@@ -1517,3 +1517,226 @@ Checked against the nine questions in `campaign-flow-usecases.clan`.
 
 Amended by this contract: W1-C1, W1-C3, W1-C4, W1P-I5, W2-A3, W2-A4, W2-A5,
 W2-C4, W2-C6, W2-D1, W3-J3, W4-V1, W4-V2, W5-Z1.
+
+---
+
+## 12. Clients, the library listing and the landing
+
+Feature `landing-circles`. Agencies work by client; before this, "client" was
+free text inside three tools. This section gives a client an identity the OS
+owns, and gives the shell one read that answers "what is open, for whom, and
+what needs me". Everything below is additive: an older shell on a newer host,
+and a newer shell on an older host, both keep working (the shell falls back to
+the Launcher when `/library` answers 404).
+
+### 12.1 The client registry
+
+One CLAN document per tenant (desktop: per data directory, browser: per tab),
+`document_type: client-registry`, whose `shared/data.yaml` holds
+`clients: [ClientRecord]`. It lives beside the home app (`Library::home("clients-v1")`),
+never in `Library::documents()`, so it is not work and never appears in the
+recent list or the library. It is created by the first write; a tenant with no
+registry has an empty list. Every write is a `Change` through
+`PartStore::apply`, based on the version just read (a lost race is a `409`,
+never an overwrite). Code: `crates/napkin-host/src/clients.rs`, which uses only
+the store traits, so it is the same on `FsStore`, `TenantStore` and the
+browser's `MemStore`.
+
+```
+ClientRecord {
+  id:          "cli_" + 8 lowercase hex   minted by the host, never from a name
+  name:        1..60 chars, whitespace collapsed, no control characters
+  initials:    1..3 chars; derived from the name unless set by hand
+  material:    pearl | ceramic | stone | graphite   (a look, not a permission)
+  owner:       the actor who opened it ("human:name@agency"); informational
+  created_at:  RFC 3339
+  archived_at: RFC 3339, absent while live
+}
+```
+
+Rules. Names are unique per tenant ignoring case and spacing, archived ones
+included (`409`). A rename changes the registry only; initials follow the name
+unless hand-set. Archive hides a client from the circles and keeps every
+document linked to it; archive and restore are idempotent; an archived client
+takes no new work (`409`). Every person in a tenant sees every client: there
+are no per-client permissions in this feature.
+
+### 12.2 `manifest.client`
+
+An optional manifest block `client: {id, name}` (spec/CLAN-SPEC.md section 5;
+`clan_sdk::ClientRef`). `id` is the link. `name` is the name when the document
+was attached; the registry is the truth and the library always answers with the
+registry's current name (a rename never rewrites documents). Absent on every
+earlier file; the field is not written when empty, and a reader that does not
+know it ignores it. Every write carries it, and a spin-off takes its source's
+client. `clan_sdk::with_client` is the one function that sets it on existing
+bytes (new revision id; `updated_at` unchanged, because attaching a document to
+a client is not work done in it).
+
+`POST /documents` takes an optional `client_id`. An id this tenant's registry
+does not hold is `404` (so another tenant's id is a `404`, never a link). A
+blank document is reused only for the same client (or for none): a blank made
+for one client is never handed to another.
+
+### 12.3 Routes (napkin-web, tenant-addressed under `/api/t/{tenant}`)
+
+Errors keep the existing `{ok:false, error:"message"}` shape.
+
+| Route | Does |
+|---|---|
+| `GET /clients[?archived=1]` | The clients in the order made; archived ones only with the flag. |
+| `POST /clients {name, material?}` | `201` + the record. `400` bad name or material, `409` duplicate. |
+| `PATCH /clients/{id} {name?, initials?, material?}` | The record. `404`, `409` (name clash), `400`. |
+| `POST /clients/{id}/archive`, `/restore` | The record. Idempotent. `404`. |
+| `GET /clients/legacy` | `[{name, documents}]`: the free-text client names (Brief and Advertising `client`, Research `campaign.brand`, `client_org`) that documents without a client carry and no client has yet, most documents first. Reads every document, so the shell asks when the clients page opens and after a change, never on its poll. Tauri `legacy_client_names`, wasm `legacyClientNames`. |
+| `POST /clients/adopt {names[]}` | `{created: [record], linked: n}`. Makes a client for each chosen free-text name (reusing one that exists) and links the documents with no client whose own data names it (`client`, `client_org`, `campaign.client_org`, `campaign.brand`). Nothing is guessed: only the names sent are adopted. |
+| `GET /library[?client=<id>][&app=<app_id>]` | `{items: [LibraryItem], clients_unassigned: n}`; below. |
+
+`LibraryItem` is `{path, app_id, title, updated_at, client: {id,name}|null,
+state: {needs_you, locked}|null, run: {state, label, stage?, since?}|null}`, newest
+first, uncapped. It leaves out documents nobody has worked in and installed
+templates. `needs_you`/`locked` are `recent_state`, exactly what `/recent`
+reports. `run` is, first, what the host has heard of a middleware job on that
+document (below), else the document's own `data.run` (Deck Maker: `building`
+is `working`, `gate` is `waiting`, `failed`, `done`, `draft` is `idle`; anything
+else is none). `stage` is the stage the run names; the shell turns it into the
+ring's verb.
+`clients_unassigned` counts documents with no client whatever the filter.
+`/recent` is unchanged (capped at 12, same fields).
+
+Cost. The listing opens every document, so `napkin_host::LibraryCache` (one per
+tenant workspace) keeps what a scan worked out per document, keyed on the
+document's id, `updated_at` and size. Every write mints a new revision, so a
+changed document is a different key and no invalidation hook is needed. The
+client's name is resolved from the registry on every call, never cached.
+
+#### Looking after the registry from the shell (P5)
+
+Only the shell's landing writes the registry (never a document's app, which
+reaches the host through `clan://` and has no route to it). The clients page
+shows **Adopt clients (n)** when `GET /clients/legacy` offers n names: a panel
+of ticked names with their document counts; the chosen ones go to
+`POST /clients/adopt`, which says `Added x clients, linked y documents.`
+Nothing is guessed: a name left unticked changes nothing. A client's page has
+**Rename** (`PATCH`; a name in use is refused with the host's words, and its
+work keeps its link because documents follow the id) and **Archive** (asks
+first; the work is kept and the client leaves the circles). **Archived clients**
+on the clients page lists them with **Restore**. A `registry_error` on the
+library listing is shown as a banner. Escape closes whichever of these is open
+before it goes up a level. Adopt rewrites each linked document's manifest; a
+host session that holds one of those documents open can write its older
+snapshot over the link (open question on the record).
+
+#### Running, from the middleware's replies (`napkin_host::RunTracker`)
+
+Brief and Research jobs live in the middleware's memory; the host sees them only
+in `settle_middleware`, where every `napkin.middleware/1` reply carries
+`job {id, state, stage?, progress?, started_at?}` (middleware-api.md section 2).
+A `RunTracker` held beside the tenant's `LibraryCache` and fed by that function
+keeps the last word per document and job id: `queued`/`running` is `working`
+(label `Working: <stage> (<done> of <total>)`), `needs_input` is `waiting` ("Waiting
+for you"), `failed` is `failed`, `done` drops the job. A new job on a document clears
+its old failure. It never starts, polls or cancels anything, restarts empty, and
+adds no middleware route. Two limits, on purpose: a job nobody has polled for 10
+minutes (the document was closed) is not reported, and a failure is reported for a
+day. The contract has no `cancelled` state, so there is none here. `Session::with_runs`
+connects a session to the tracker; napkin-web, the Tauri host and napkin-wasm all do.
+
+The shell reads this one listing for Needs you (document `needs_you`, or a run
+`waiting`), Running and Failed, per client and for the studio, and rings each
+circle with the strongest of: needs you, failed, working, thinking, reading,
+checking, idle (`app/src/shell/landing/model.ts`). The verb comes from the run's
+stage (`extract`/`research` read, `select`/`synthesise`/`report` think, a check or gate
+checks, anything else works). Every state is also said in words. The landing re-reads
+on focus and every 5 s while it is the screen.
+
+### 12.4 The three hosts
+
+The shell reads and writes through `Host` only (`app/src/host/types.ts`):
+`listLibrary(filter?)`, `clients.{list, create, update, archive, restore, adopt}`,
+and `newDocumentFromApp(appId, title, clientId?)`. They are implemented in
+`http.ts` (the routes above), `tauri.ts` (Tauri commands `list_library`,
+`list_clients`, `create_client`, `update_client`, `set_client_archived`,
+`adopt_clients`; `new_document_from_app` takes `client_id`) and `wasm.ts`
+(`NapkinHost.listLibrary`, `listClients`, `createClient`, `updateClient`,
+`setClientArchived`, `adoptClients`, `newDocument(.., clientId)`). All three call the same
+`napkin_host::{clients, scan_library}` code. The client writes are deliberately
+not `clan://` routes: those are reachable by the app inside a document, and an
+app must not be able to open or archive the studio's clients.
+
+### 12.5 The shell route (read by the shell only)
+
+`#agency` (the landing), `#clients`, `#client-<id>`, `#tool-<id>-<tool>`, where
+`<id>` is a client id (`cli_` + 8 hex, ASCII) and `<tool>` is `brief | research |
+idea | deck | prod | ads`. Anything else falls back to `#agency`. Written from
+the shell's screen state, never the other way round: `hashchange` only reads.
+Parsed and formatted in `app/src/shell/route.ts` (pure, table-tested).
+The shell serves all four levels:
+
+- `#client-<id>`: the client's six tools round it, in fixed places (a hexagon, Brief
+  at the top, then Research, Idea, Deck, Prod, Ads clockwise). Idea and Prod, and any
+  tool whose app is not installed, are dimmed "Soon" and go nowhere.
+- `#tool-<id>-<tool>`: that tool for that client: the client's documents of the tool
+  (from `GET /library`, the same listing the counts come from) and "New", which is
+  `POST /documents {app_id, client_id}`, so the document is the client's from birth
+  (`manifest.client`). A document opened from here runs the app as before.
+- Corrections, so the page, the trail and the URL agree: a client that is not here
+  (archived, another studio's, mistyped) is `#clients`; a tool that is not live is its
+  client's page (`correctRoute` in `route.ts`).
+- Escape goes up one level (`up`); the browser's Back and Forward walk the levels; a
+  document takes one history entry of its own, so Back from it lands where it was
+  opened from.
+- The trail (Agency > Clients > Client > Tool) is drawn in the OS bar while a landing
+  screen shows, and **in an open document's bar** in place of the studio-home button,
+  before the title (the app's own tabs and buttons follow it unchanged, appBar.ts). In
+  a document the trail comes from the document itself (`manifest.client`, and the tool
+  its `app_id` is in the tool table), not from the route, so it is right for a document
+  opened from a strip and after a spin-off, which carries `manifest.client`. A document
+  with no client keeps the plain home button.
+- Keyboard: the six tools are one tab stop (roving tabindex); arrows, Home and End
+  move, `1` to `6` pick a tool, Enter opens it; a live region says each level on
+  arrival and "coming soon" for a Soon tool (`app/src/shell/landing/keys.ts`).
+
+### 12.6 The circles in 3D: the Orbs module (read by the shell; later by the templates)
+
+Feature `landing-circles`, phase 4. **Not final until Shrey signs off** (open questions
+in the feature record). The sphere + ring shader is Shrey's and is not changed here.
+
+`app/src/orbs/` is the shell's source of truth for the engine that the Deck Maker
+template also carries inline (its `Orbs` block). The template keeps its own copy,
+because a sandboxed single file cannot import a shell module; `app/tests/orbsDrift.test.ts`
+reads the template's block and fails on any difference in the shader, the tables or the
+pose maths that is not marked `PORT` on the shell's side.
+
+- `engine.ts`: `createOrbs()` (and `shared()`, the shell's one). `attach({wrap, canvas}, spec)`
+  returns a handle (`update`, `kick`, `press`, `detach`) or `null` when the circle must stay
+  flat; `scan(root, stateFor)` does the same for every `[data-orb-host]` under a root;
+  `kick(el)` is the keyboard press. One WebGL context for the page: circles are drawn into
+  one atlas and each cell copied to the circle's own 2D canvas. The circle's markup is the
+  caller's (React): the flat `<svg>` is the fallback and stays; the engine never moves a node.
+- A circle's state is kept by **slot** (where it lives, never its size), so a re-render or a
+  new size does not reset its ring or turn. Two live circles never share a slot.
+- **Flat SVG stays** whenever: no WebGL, a shader that will not compile, reduced data
+  (`prefers-reduced-data`, `saveData`), the context is lost (3D returns on restore), an
+  unknown material, more than `MAX_LIVE` (40) circles, or the person's "Flat circles"
+  (`prefs.ts`, kept in this browser only). `<html data-orbs="gl|flat" data-orbs-gl="1|0"
+  data-orbs-why="...">` says which, for people and the smoke test.
+- **Client, tool and studio circles are pseudo-agents** (`agents.ts`): a blank sphere in one
+  of the materials in `tables.ts` (the client's `material`, stored on its record), no arcs and
+  no emblem circles, the initials as DOM text over it. The clan's agents are not changed.
+- **The ring** is the shader's travelling arc, in the landing's `--lc-ring-*` tokens read from
+  the circle's own element (light and dark follow the page). Length says activity, not
+  progress the shell does not have: needs you a quarter, failed 0.62 with a broken end,
+  working/thinking/reading/checking a fixed 0.34 arc (several jobs or none reporting steps),
+  idle a whole thin still ring. Priority across a client's work is the shell's `strongest`
+  (needs you, failed, working, thinking, reading, checking, idle).
+- **Budget:** only visible circles draw (IntersectionObserver); idle, untouched ones redraw about
+  15 times a second; a software renderer (SwiftShader, llvmpipe) draws at 1 pixel per CSS pixel,
+  any other at the device ratio capped at 2 and eased down when frames run long.
+- **Pointer:** every 3D circle leans toward the pointer across the whole window, with no click
+  and no distance limit. A press squishes and ripples; the click that goes on follows about
+  250 ms after the press (at least 100 ms after a release, so press, drag and release is play)
+  (`gate.ts`). Enter and Space go straight on with the ripple. Flat circles, no WebGL and
+  reduced motion get the plain click.
+- **Reduced motion:** the sphere and ring are still pictures (no turn, wobble or breath), redrawn
+  only when something changes; the flat-to-3D cross-fade is the only motion.

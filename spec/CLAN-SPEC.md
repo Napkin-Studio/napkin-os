@@ -155,6 +155,15 @@ lineage:
   parent_sha256: "sha256:a3f4b2c1..."  # SHA-256 of the parent .clan file (ZIP bytes)
   delta: "Corrected vendor name, re-extracted line items"  # semantic description
 
+# Optional: the client this document is for (Napkin Studio OS client registry).
+# Additive: absent on every earlier file, and a reader that does not know the
+# key ignores it. `id` is the registry's id (cli_ and eight lowercase hex digits)
+# and is the link; `name` is the name when this was last written. Every write
+# carries it verbatim, and a spin-off takes its source's.
+client:
+  id: "cli_0a1b2c3d"
+  name: "Client A"
+
 # Optional: external persistent store references
 external:
   - id: "context-store"                # stable ID for internal reference
