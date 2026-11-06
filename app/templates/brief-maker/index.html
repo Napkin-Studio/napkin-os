@@ -591,6 +591,8 @@
         <button class="save-as" id="saveBtn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5A1 1 0 0 1 4 2.5h6.3L13 5.2V12.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Save as…</button>
         <button class="save-as" id="exHtml" title="Export a clean standalone HTML report"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>HTML</button>
         <button class="save-as" id="exPdf" title="Export a print-ready PDF"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>PDF</button>
+        <button class="save-as" id="exHtmlPlain" title="Export the plain layout, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain HTML</button>
+        <button class="save-as" id="exPdfPlain" title="Export the plain layout as a PDF, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain PDF</button>
         <span class="muted" id="lockedBadge" style="display:none;color:var(--ok)">Locked for handoff</span>
         <span class="muted status" id="status" role="status"></span>
         <div class="locklist" id="lockList" hidden></div>
@@ -640,7 +642,9 @@
   var FIELDS=[
     {sec:'Identity',key:'project_name',label:'Project name',type:'text'},
     {sec:'Identity',key:'client',label:'Client / brand',type:'text'},
+    {sec:'The brief',key:'job',label:'The job',type:'text'},
     {sec:'The brief',key:'background',label:'Background',type:'text'},
+    {sec:'The brief',key:'barrier',label:'The barrier',type:'text'},
     {sec:'Objectives',key:'objectives.commercial',label:'Commercial',type:'text'},
     {sec:'Objectives',key:'objectives.behavioural',label:'Behavioural',type:'text'},
     {sec:'Objectives',key:'objectives.attitudinal',label:'Attitudinal',type:'text'},
@@ -648,6 +652,7 @@
     {sec:'Strategy',key:'competitor_context',label:'Competitor context',type:'text'},
     {sec:'Strategy',key:'insight',label:'The insight',type:'text'},
     {sec:'Strategy',key:'single_minded_proposition',label:'Single-minded proposition',type:'text',hero:true},
+    {sec:'Strategy',key:'objection',label:'The objection to beat',type:'text'},
     {sec:'Strategy',key:'reasons_to_believe',label:'Reasons to believe',type:'list'},
     {sec:'Desired response',key:'desired_response.think',label:'Think',type:'text'},
     {sec:'Desired response',key:'desired_response.feel',label:'Feel',type:'text'},
@@ -700,7 +705,9 @@
   var PART_ALIASES={
     project_name:'project name, project, working title',
     client:'client, brand',
+    job:'job, the job, task',
     background:'background, context, situation',
+    barrier:'barrier, the barrier, blocker',
     'objectives.commercial':'commercial objective, commercial, sales, revenue',
     'objectives.behavioural':'behavioural objective, behavioural, behaviour',
     'objectives.attitudinal':'attitudinal objective, attitudinal, attitude, perception',
@@ -708,6 +715,7 @@
     competitor_context:'competitor context, competitors, competitor, competition',
     insight:'insight, truth',
     single_minded_proposition:'proposition, line, idea, smp',
+    objection:'objection, the objection, doubt',
     reasons_to_believe:'reasons to believe, reasons, rtb, rtbs, proof points',
     'desired_response.think':'what they should think',
     'desired_response.feel':'what they should feel',
@@ -1107,11 +1115,216 @@
     return {marks:marks, notes:order.map(function(g){ return {n:g.n, name:g.name, items:g.items.map(function(x){ return {text:x.text, uri:x.uri}; })}; })};
   }
   function exportMarkHtml(nums){ return arr(nums).length?'<sup class="fn">'+arr(nums).join(',')+'</sup>':''; }
-  function exportSourcesHtml(cit){
+  function exportSourcesList(cit){
     var ns=arr(cit&&cit.notes); if(!ns.length) return '';
-    return '<section class="srcs"><h2>Sources</h2><ol>'+ns.map(function(g){
+    return '<ol>'+ns.map(function(g){
       var its=g.items.map(function(x){ return (x.text?esc(x.text):'')+(x.uri?(x.text?' — ':'')+'<a href="'+esc(x.uri)+'">'+esc(x.uri)+'</a>':''); }).filter(Boolean);
-      return '<li value="'+g.n+'"><b>'+esc(g.name)+'</b>'+(its.length?': '+its.join('; '):'')+'</li>'; }).join('')+'</ol></section>';
+      return '<li value="'+g.n+'"><b>'+esc(g.name)+'</b>'+(its.length?': '+its.join('; '):'')+'</li>'; }).join('')+'</ol>';
+  }
+  function exportSourcesHtml(cit){
+    var l=exportSourcesList(cit); return l?'<section class="srcs"><h2>Sources</h2>'+l+'</section>':'';
+  }
+  // ---- The grid export (feature brief-grid-template). Pure: it reads only what it is given. ----
+  // Which part sits in which box on which sheet is this list, so the page rule (how many sheets) changes the
+  // list, not the code. kind: text, list, quote (the insight, large), hero (the single thought, large on black,
+  // with the objection it has to beat), new (a part the brief does not draft yet: printed 'to be written'
+  // while it is empty), sources (the numbered Sources list).
+  function gridSheets(){
+    function T(num,label,key,kind,big){ return {num:num, label:label, key:key, kind:kind||'text', big:!!big}; }
+    return [
+      {rows:[
+        [T('01','The job','job','new',true)],
+        [T('02','Where we are','background'), T('03','The barrier','barrier','new')],
+        [T('04','Who we are talking to','audience')],
+        [T('05','Objective. Commercial','objectives.commercial'), T('05','Objective. Behavioural','objectives.behavioural'), T('05','Objective. Attitudinal','objectives.attitudinal')],
+        [T('06','Budget and scope','budget_and_scope')]]},
+      {rows:[
+        [T('07','The insight','insight','quote')],
+        [T('08','The single thought','single_minded_proposition','hero')],
+        [T('09','Why they should believe it','reasons_to_believe','list'), T('10','Competitor context','competitor_context')],
+        [T('11','Desired response. Think','desired_response.think'), T('11','Desired response. Feel','desired_response.feel'), T('11','Desired response. Do','desired_response.do')],
+        [T('12','Tone and world','tone_and_world','list'), T('13','Mandatories','mandatories','list')]]},
+      {appendix:true, title:'Appendix. Sources and questions to settle.', rows:[
+        [T('A','Evidence and sources','sources','sources'), T('B','Questions to settle','open_questions','list')]]}
+    ];
+  }
+  // The keys the grid prints, in print order (what the footnote numbers follow).
+  function gridKeys(){
+    var out=[]; gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){ if(c.kind!=='sources'&&out.indexOf(c.key)===-1) out.push(c.key); }); }); });
+    return out.concat(['objection']);
+  }
+  // A box's size: the word limits the brief's schema sets for each part (server/napkin/brief/golden_brief.schema.json).
+  function gridLimit(key){
+    var L={background:70, audience:80, budget_and_scope:50, competitor_context:70, insight:50, single_minded_proposition:20, tone_and_world:60, mandatories:80};
+    return L[key]||0;
+  }
+  // What a part prints as: text and numbers only. An object, a boolean or nothing is not text, so it counts as empty
+  // (the export writes it again) instead of printing as "[object Object]".
+  function gridText(v){
+    if(v==null) return '';
+    if(Array.isArray(v)) return v.map(gridText).filter(Boolean).join('; ');
+    if(typeof v==='number'&&isFinite(v)) return String(v);
+    return typeof v==='string'?v.trim().replace(/^\s*to confirm:\s*/i,''):'';
+  }
+  // "To confirm:" is how the draft says a part is an assumption. The sheet shows it as a small tag in the box's corner, not in the sentence.
+  function gridFlag(v){
+    if(Array.isArray(v)) return v.some(gridFlag);
+    return typeof v==='string'&&/^\s*to confirm:/i.test(v);
+  }
+  function gridItems(v){ return (Array.isArray(v)?v:[v]).map(gridText).filter(Boolean); }
+  function gridHas(v){ return gridText(v)!==''; }
+  function gridWords(v){
+    var m=gridText(v).match(/\S+/g);
+    return m?m.length:0;
+  }
+  // How far a part's type steps down in its own box when it runs over its limit: 0 none, 3 the floor.
+  function gridStep(words, limit){
+    if(!limit||words<=limit) return 0;
+    var r=words/limit; return r<=1.25?1:r<=1.6?2:3;
+  }
+  function gridCell(c, ctx){
+    var v=ctx.get(c.key), has=gridHas(v), mk=exportMarkHtml((ctx.cit.marks||{})[c.key]);
+    var step=gridStep(gridWords(v), gridLimit(c.key)), cls='box'+(c.kind==='hero'?' dark':'')+(step?' fit'+step:'');
+    var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+'</div>', body, missing='<p class="todo">Missing: ask Dara to write this part.</p>';
+    if(c.kind==='sources'){
+      var l=exportSourcesList({notes:c.notes||arr(ctx.cit&&ctx.cit.notes)});
+      body=l?'<div class="src">'+l+'</div>':(c.done?'<p>All listed on the previous sheet.</p>':'<p>No outside sources were cited. Every claim rests on the client’s brief and on proposals marked to confirm.</p>');
+    } else if(c.kind==='list'){
+      var its=c.items||gridItems(v);
+      body=its.length?'<ul>'+its.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'+(mk?'<p class="mk">'+mk+'</p>':'')
+        :c.done?'<p>All listed on the previous sheet.</p>':c.key==='open_questions'?'<p>No open questions: the brief holds what it needs.</p>':missing;
+    } else if(!has){
+      body=missing;
+    } else if(c.kind==='hero'){
+      var ob=ctx.get('objection');
+      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
+    } else {
+      body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(gridText(v))+mk+'</p>';
+    }
+    var flag=has&&c.kind!=='sources'&&gridFlag(v);
+    return '<div class="'+cls+'">'+tab+(flag?'<span class="tc">to confirm</span>':'')+'<div class="bd">'+body+'</div></div>';
+  }
+  // The client's name without the descriptor a brief often carries ("Ballymaloe Relish, an Irish family relish brand").
+  function gridClientName(c){ return String(c||'').split(/[,(]/)[0].trim(); }
+  // The parts of the grid with nothing in them. A brief leaves Napkin with none: the export writes these first.
+  function gridGaps(ctx){
+    var out=[], seen={};
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      if(c.kind==='sources'||c.key==='open_questions'||seen[c.key]) return; seen[c.key]=1;
+      if(!gridHas(ctx.get(c.key))) out.push({key:c.key, label:c.label}); }); }); });
+    if(!gridHas(ctx.get('objection'))&&!seen.objection) out.push({key:'objection', label:'The objection to beat'});
+    return out;
+  }
+  // How many parts the brief holds, as gridGaps counts them.
+  function gridHeld(ctx){
+    var total=gridGaps({get:function(){ return ''; }}).length;  // every part, as gridGaps counts them
+    return total-gridGaps(ctx).length;
+  }
+  // How many held parts are not a guess. A stored part carries its mark and not its basis, so a text part without
+  // the "To confirm:" mark counts (client, research, library or person). A list is never marked, so it proves nothing.
+  function gridGrounded(ctx){
+    var n=0, seen={};
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      if(c.kind==='sources'||c.kind==='list'||seen[c.key]) return; seen[c.key]=1;
+      var v=ctx.get(c.key); if(gridHas(v)&&!gridFlag(v)) n++; }); }); });
+    return n;
+  }
+  // A brief with next to nothing written is not worth a sheet: Dara would invent the lot. Under four parts held, or
+  // under three that are not a guess (a one-word brief comes back whole and all marked), the export stops.
+  function gridHollow(ctx){ return gridHeld(ctx)<4||gridGrounded(ctx)<3; }
+  // The info grid: every cell holds a value, a suggestion marked as one, or a prompt for what only a person knows.
+  function gridHeaderInfo(e){
+    var client=String(e.client||'').trim(), who=String(e.me||'').trim()||'Napkin Studio';
+    var initials=gridClientName(client).replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase()||'NAP';
+    var d=e.today||new Date(), yymmdd=String(d.getFullYear()).slice(2)+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2);
+    return [['Client',client||'[client, to confirm]'],['Project',e.project||'[project, to confirm]'],['Version',e.version||'1'],['Date',e.date],
+      ['Reference',initials+'-'+yymmdd+' (suggested)'],['Prepared by',who],['Agency lead',who],['Client lead','[client lead, to confirm]']];
+  }
+  function gridInfo(info){
+    return '<div class="info">'+arr(info).map(function(p){
+      return '<div><small>'+esc(p[0])+'</small>'+(String(p[1]||'').trim()?esc(p[1]):'<span class="none">—</span>')+'</div>'; }).join('')+'</div>';
+  }
+  // n of total is the page number (the footer counts every page); tag is the header label: content sheets read
+  // SHEET 1/2, appendix sheets read APPENDIX 1/1, so the appendix is outside the two-sheet count.
+  function gridSheet(n, total, sh, ctx, tag){
+    var sub=sh.title||('Creative brief. '+(ctx.project||'Untitled brief'));
+    return '<div class="sheet"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
+      +'<div class="shn">'+tag+'</div></div>'
+      +(n===1?gridInfo(ctx.info):'')
+      +sh.rows.map(function(r){ return '<div class="row c'+r.length+'">'+r.map(function(c){ return gridCell(c, ctx); }).join('')+'</div>'; }).join('')
+      +'<div class="foot"><span>'+esc(['Napkin', gridClientName(ctx.client), ctx.project, 'Creative brief'+(ctx.version?' '+ctx.version:''), 'Confidential'].filter(Boolean).join(' / '))+'</span><span>'+n+' of '+total+'</span></div></div>';
+  }
+  // -> {html, sheets, warnings}: warnings name each part that ran over its box and was printed smaller.
+  // Evidence and questions run on over as many appendix sheets as they need, so nothing is cut: a box holds about 38 lines.
+  function gridChunks(items, cost, budget){
+    var out=[[]], used=0;
+    items.forEach(function(it){ var c=cost(it); if(used+c>budget&&out[out.length-1].length){ out.push([]); used=0; } out[out.length-1].push(it); used+=c; });
+    return out;
+  }
+  function gridAppendix(ctx){
+    var notes=arr(ctx.cit&&ctx.cit.notes), qs=gridItems(ctx.get('open_questions'));
+    var sc=gridChunks(notes, function(g){ var t=String(g.name).length; arr(g.items).forEach(function(x){ t+=String(x.text||'').length+String(x.uri||'').length; }); return Math.ceil(t/46)+1; }, 38);
+    var qc=gridChunks(qs, function(q){ return Math.ceil(q.length/50)+1; }, 38);
+    var n=Math.max(sc.length, qc.length), out=[];
+    for(var i=0;i<n;i++){
+      var more=i?' (continued)':'';
+      out.push({appendix:true, title:'Appendix'+more+'. Sources and questions to settle.', rows:[[
+        {num:'A', label:'Evidence and sources'+more, key:'sources', kind:'sources', big:false, notes:sc[i]||[], done:i>0&&!(sc[i]||[]).length},
+        {num:'B', label:'Questions to settle'+more, key:'open_questions', kind:'list', big:false, items:qc[i]||[], done:i>0&&!(qc[i]||[]).length}]]});
+    }
+    return out;
+  }
+  // The page rule (Sai, 2026-10-29, option A): a brief is two content sheets, and the appendix (sources and
+  // questions) runs on after them and is not counted. Content that does not fit steps down inside its box and
+  // is reported in warnings; it never spills onto a third content sheet. Laurence still has to confirm the rule.
+  function gridContentSheets(){ return 2; }
+  // -> {html, sheets (all pages), contentSheets, appendixSheets, warnings}
+  function gridBody(ctx){
+    var body=gridSheets().filter(function(s){ return !s.appendix; }), app=gridAppendix(ctx), sheets=body.concat(app);
+    if(body.length>gridContentSheets()) throw new Error('The grid has '+body.length+' content sheets; the page rule allows '+gridContentSheets()+'.');
+    var warnings=[];
+    gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
+      var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
+      if(st) warnings.push({key:c.key, label:c.label, words:w, limit:lim, step:st}); }); }); });
+    return {html:sheets.map(function(s,i){
+        var tag=s.appendix?'APPENDIX<b>'+(i-body.length+1)+'/'+app.length+'</b>':'SHEET<b>'+(i+1)+'/'+body.length+'</b>';
+        return gridSheet(i+1, sheets.length, s, ctx, tag); }).join(''),
+      sheets:sheets.length, contentSheets:body.length, appendixSheets:app.length, warnings:warnings};
+  }
+  function gridCss(){
+    return "*{box-sizing:border-box;margin:0;padding:0}"
+      +"@page{size:A4;margin:0}"
+      +"body{background:#cfcfcf;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#000;-webkit-font-smoothing:antialiased}"
+      +".sheet{width:210mm;height:297mm;background:#fff;margin:18px auto;padding:10mm 11.5mm 0;position:relative;overflow:hidden;page-break-after:always;break-after:page}"
+      +".hd{display:flex;align-items:stretch;background:#000;color:#fff;height:16mm}"
+      +".logo{padding:0 6mm 0 5mm;font-weight:900;font-size:31px;letter-spacing:-.045em;display:flex;align-items:center;border-right:3px solid #fff}"
+      +".ttl{flex:1;padding:0 0 0 14px;display:flex;flex-direction:column;justify-content:center;border-right:3px solid #fff}"
+      +".ttl b{font-size:19px;font-weight:800;letter-spacing:-.02em}.ttl span{font-size:10px;color:#d8d8d8;margin-top:3px}"
+      +".shn{width:26mm;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:8px;letter-spacing:.16em}.shn b{font-size:23px;letter-spacing:-.02em;margin-top:2px}"
+      +".info{display:grid;grid-template-columns:repeat(4,1fr);border:2px solid #000;border-top:0}"
+      +".info div{padding:6px 9px 8px;font-size:10.5px;line-height:1.3;border-left:1px solid #000;border-top:1px solid #000}"
+      +".info div:nth-child(4n+1){border-left:0}.info div:nth-child(-n+4){border-top:0}"
+      +".info small{display:block;font-size:7.5px;letter-spacing:.16em;font-weight:800;margin-bottom:3px;text-transform:uppercase}.none{color:#8a8a8a}"
+      +".row{display:grid;border:2.5px solid #000;margin-top:-2.5px}"
+      +".c1{grid-template-columns:1fr}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}"
+      +".row>.box+.box{border-left:2.5px solid #000}"
+      +".lab{display:inline-flex;align-items:baseline;gap:7px;background:#000;color:#fff;font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;padding:5px 11px 5px 6px;font-weight:700}"
+      +".lab b{font-weight:900;font-size:11px;letter-spacing:0}"
+      +".bd{padding:11px 13px 14px;font-size:11.2px;line-height:1.46;overflow-wrap:anywhere}"
+      +".bd p+p{margin-top:7px}.bd ul{padding-left:16px}.bd li{margin:3px 0}"
+      +".job{font-size:23px;line-height:1.18;font-weight:800;letter-spacing:-.022em}"
+      +".big{font-size:21px;line-height:1.2;font-weight:800;letter-spacing:-.02em}"
+      +".dark{background:#000;color:#fff}.dark .lab{background:#fff;color:#000}.dark .big{font-size:30px;line-height:1.12}"
+      +".obj{font-size:10px;color:#bbb}"
+      +".fit1 .bd{font-size:10.8px}.fit2 .bd{font-size:10.4px}.fit3 .bd{font-size:10px}"
+      +".fit1 .big{font-size:19px}.fit2 .big{font-size:17px}.fit3 .big{font-size:15px}"
+      +".dark.fit1 .big{font-size:26px}.dark.fit2 .big{font-size:22px}.dark.fit3 .big{font-size:19px}"
+      +"sup{font-size:7.5px;font-weight:800;margin-left:1px;vertical-align:super}.mk{margin-top:3px}"
+      +".box{position:relative}.tc{position:absolute;bottom:4px;right:7px;font-size:6.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b}.dark .tc{color:#bdbdbd}"
+      +".todo{color:#7c7c7c;font-style:italic;border:1.5px dashed #9a9a9a;padding:8px 10px;font-size:10.5px}"
+      +".src ol{padding-left:16px;font-size:9.6px;line-height:1.5}.src a{color:#000;word-break:break-all}"
+      +".foot{position:absolute;left:11.5mm;right:11.5mm;bottom:7mm;display:flex;justify-content:space-between;gap:12px;font-size:8px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}.foot span:last-child{white-space:nowrap}"
+      +"@media print{body{background:#fff}.sheet{margin:0;box-shadow:none}}";
   }
   function verdictHtml(v){
     var d=v.d, r=hasReasoning(d)?d.reasoning:null, look=r?plainJudge(r.attention,1):'';
@@ -2188,9 +2401,9 @@
   // Redraft one field: a regenerate_field job (middleware-api §10.10) — one
   // Drafter, then the Judge. The host writes what passes; a field a person
   // holds comes back as a proposal.
-  function regenField(f,guidance,resumeId){
-    if(!window.clan) return;
-    if(noMiddleware()){ setStatus(esc(NO_MW)); return; }
+  function regenField(f,guidance,resumeId,done){
+    if(!window.clan){ if(done) done(); return; }
+    if(noMiddleware()){ setStatus(esc(NO_MW)); if(done) done(); return; }
     var j=REGEN[f.key]={task:'regenerate_field', field:f.key, fields:{}, onUpdate:function(){ if(phase==='doc') renderRegen(f); },
       onEnd:function(j){
         delete REGEN[f.key];
@@ -2201,6 +2414,7 @@
         else if(fs.state==='proposed') setStatus(esc(DARA+' suggests a new '+f.label.toLowerCase()+': you hold that part, so it wasn’t changed.'));
         else setStatus('');
         if(phase==='doc') renderStructured();
+        if(done) done(j);
       }};
     setStatus('');
     if(phase==='doc') renderStructured();
@@ -2337,12 +2551,18 @@
       .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
       .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; });
   }
-  // What each printed part cites, in the order the export prints the parts.
-  function exportParts(){
-    var secs={}, order=[];
-    FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client'||!hasVal(get(f.key))) return;
-      if(!secs[f.sec]){ secs[f.sec]=[]; order.push(f.sec); } secs[f.sec].push(f); });
-    return [].concat.apply([],order.map(function(s){ return secs[s]; })).map(function(f){
+  // What each printed part cites, in the order the export prints the parts (the plain export's, or `keys` when
+  // the grid names its own order).
+  function exportParts(keys){
+    var fs;
+    if(keys){ fs=keys.map(function(k){ return FIELDS.filter(function(f){ return f.key===k; })[0]; }).filter(function(f){ return f&&hasVal(get(f.key)); }); }
+    else {
+      var secs={}, order=[];
+      FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client'||!hasVal(get(f.key))) return;
+        if(!secs[f.sec]){ secs[f.sec]=[]; order.push(f.sec); } secs[f.sec].push(f); });
+      fs=[].concat.apply([],order.map(function(s){ return secs[s]; }));
+    }
+    return fs.map(function(f){
       var d=decisionsFor(f.key)[0], cd=claimDecision(d);
       return {key:f.key, ids:citesOf([d, cd]).filter(function(id){ return !wrongPin(id); })};
     });
@@ -2353,7 +2573,7 @@
     var l=[0,2,4].map(function(i){ var v=parseInt(h.substr(i,2),16)/255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); });
     return 1.05/(.2126*l[0]+.7152*l[1]+.0722*l[2]+.05)>=3;
   }
-  function buildExportHTML(){
+  function buildPlainExportHTML(){
     return Promise.all([inlineImages(), chainForExport()]).then(function(got){
       var images=got[0];
       var pr=get('projection')||{};
@@ -2402,17 +2622,139 @@
         +'<\/body><\/html>';
     });
   }
-  function doExport(kind){
+  // Which sheets run past their footer once drawn. Measured in a hidden frame, so the app's own styles stay as they are.
+  // A frame that cannot be measured within `wait` ms reports null, never an empty list: an unchecked sheet is not a fitting one.
+  function gridOverflow(doc, wait){
+    return new Promise(function(res){
+      var f=document.createElement('iframe'), done=false;
+      f.setAttribute('aria-hidden','true'); f.style.cssText='position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0;visibility:hidden';
+      function end(bad){ if(done) return; done=true; try{ document.body.removeChild(f); }catch(e){} res(bad); }
+      f.onload=function(){ try{
+        var bad=[];
+        [].forEach.call(f.contentDocument.querySelectorAll('.sheet'),function(sh,i){
+          var rows=sh.querySelectorAll('.row'), ft=sh.querySelector('.foot');
+          var wide=[].some.call(sh.querySelectorAll('.box'),function(b){ return b.scrollWidth>b.clientWidth+1; });
+          if(wide||(rows.length&&ft&&rows[rows.length-1].getBoundingClientRect().bottom>ft.getBoundingClientRect().top)) bad.push(i+1); });
+        end(bad); }catch(e){ end(null); } };
+      f.srcdoc=doc; document.body.appendChild(f);
+      setTimeout(function(){ end(null); },wait);
+    });
+  }
+  // Measure once; a slow browser gets one more go with a longer wait. Still null means the sheets could not be checked.
+  function measureGrid(doc){
+    return gridOverflow(doc,4000).then(function(bad){ return bad||gridOverflow(doc,8000); });
+  }
+  // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
+  var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
+  function buildGridExportHTML(){
+    return chainForExport().then(function(){
+      var pr=get('projection')||{}, m=(window.__CLAN__||{}).manifest||{};
+      var cit=CHAIN.state==='ok'?exportCitations(exportParts(gridKeys()), {pins:pr.pins, findings:pr.findings, sources:pr.sources,
+        passages:get('passages'), capture:get('capture'), materials:get('materials')}):{marks:{}, notes:[]};
+      var project=workingTitle()||m.title||'Untitled brief', client=String(get('client')||'').trim();
+      var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+      var me=((window.__CLAN__||{}).me||{}).name;
+      var info=gridHeaderInfo({client:client, project:project, version:m.version, date:date, me:me});
+      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version});
+      LAST_GRID_WARNINGS=g.warnings;
+      // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
+      var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
+        +g.html+(CHAIN.state==='unavailable'?'<p style="text-align:center;font:9px sans-serif;color:#767676;margin:6px">Sources could not be read for this export.</p>':'')+'<\/body><\/html>';
+      return measureGrid(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
+    });
+  }
+  function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
+  // A part Jude rejected is written, not approved. Its stored value says so, the way the draft marks an assumption:
+  // "To confirm:" in front (a list marks its first line), which the sheet draws as the box's corner tag.
+  function confirmMarked(v){
+    if(Array.isArray(v)) return v.length?[confirmMarked(v[0])].concat(v.slice(1)):v;
+    var t=String(v==null?'':v).trim();
+    return !t||/^to confirm:/i.test(t)?v:'To confirm: '+t;
+  }
+  function notApprovedWords(labels){
+    return labels.length?'Written, not approved by '+JUDE+': '+listWords(labels.map(function(l){ return l.toLowerCase(); }))+'.':'';
+  }
+  // Write the named parts, one at a time (the middleware takes one job at a time on a brief).
+  // -> the labels of the parts Jude rejected, each now marked "To confirm:".
+  function fillParts(keys, guidanceFor){
+    var rejected=[];
+    return keys.reduce(function(p,k){ return p.then(function(){ return new Promise(function(res){
+      var f=FIELDS.filter(function(x){ return x.key===k; })[0]; if(!f) return res();
+      regenField(f,guidanceFor?guidanceFor(k):null,null,function(j){
+        var fs=((j&&j.fields)||{})[k]||{}, v=get(k), m=confirmMarked(v);
+        if(fs.state!=='failed'||!hasVal(v)) return res();
+        rejected.push(f.label);
+        if(m===v) return res();
+        Promise.resolve(patch(k,m,{actor:'human',pinned:false,action:'mark '+k+' to confirm',rationale:JUDE+' rejected the part the export wrote, so it is marked to confirm.'})).then(function(){ res(); },function(){ res(); }); }); }); }); }, Promise.resolve())
+      .then(function(){ return rejected; });
+  }
+  // The parts with the most words, longest first: what the export tightens when no part has a limit to break.
+  function gridLongest(n){
+    return gridKeys().map(function(k){ var f=FIELDS.filter(function(x){ return x.key===k; })[0];
+      return {key:k, label:f?f.label:k, words:gridWords(get(k))}; })
+      .filter(function(w){ return w.words>0&&FIELDS.some(function(x){ return x.key===w.key; }); })
+      .sort(function(a,b){ return b.words-a.words; }).slice(0,n);
+  }
+  // A brief that leaves Napkin has nothing empty: the grid export first has Dara write any part still missing.
+  var EXPORTING=false;
+  function doExport(kind, style){
+    if(EXPORTING){ toast('An export is already running.'); return; }
+    EXPORTING=true;
+    return Promise.resolve(exportOnce(kind, style)).catch(function(e){ toast('Export failed: '+e); }).then(function(){ EXPORTING=false; });
+  }
+  function exportOnce(kind, style){
     if(!(window.clan&&window.clan.exportDoc)){ toast('Export needs the Napkin host.'); return; }
+    if(style==='plain') return runExport(kind, style);
+    var ctx={get:get, hasVal:hasVal}, gaps=gridGaps(ctx);
+    if(gridHollow(ctx)){
+      toast(gridHeld(ctx)<4?'Not exported: there is hardly anything in this brief yet. Tell '+DARA+' about the client, the audience and the budget, then export.'
+        :'Not exported: almost everything here is a guess. Tell '+DARA+' what the client, the research or you know, or choose Plain PDF or Plain HTML.');
+      return;
+    }
+    if(!gaps.length) return runExport(kind, style);
+    var names=listWords(gaps.map(function(g){ return g.label.toLowerCase(); }));
+    if(docLocked()||noMiddleware()){ toast('Still empty and not written here: '+names+'. Fill them in, then export.'); return; }
+    toast(DARA+' is writing '+names+' before the export…');
+    return fillParts(gaps.map(function(g){ return g.key; })).then(function(rejected){
+      var left=gridGaps(ctx);
+      if(left.length){ toast('Not exported: '+listWords(left.map(function(g){ return g.label.toLowerCase(); }))+' still needs writing. Ask '+DARA+' again from its row.'); return; }
+      return runExport(kind, style, false, rejected);
+    });
+  }
+  // A brief never leaves with a sheet clipped: one that runs past its footer has Dara tighten the longest parts, once;
+  // if it still does not fit, the export stops and says which sheet.
+  function runExport(kind, style, retried, rejected){
+    rejected=rejected||[];
     toast('Preparing '+kind.toUpperCase()+'…');
-    buildExportHTML().then(function(html){
+    return buildExportHTML(style).then(function(html){
+      // Fail closed: sheets that could not be measured are not printed.
+      if(style!=='plain'&&LAST_GRID_OVERFLOW===null){
+        toast('Not exported: this browser could not check that every sheet fits. Try again, or use Plain PDF or Plain HTML.');
+        return null;
+      }
+      if(style!=='plain'&&LAST_GRID_OVERFLOW.length){
+        var long=LAST_GRID_WARNINGS.slice().sort(function(a,b){ return b.words/b.limit-a.words/a.limit; });
+        if(!long.length) long=gridLongest(2);  // nothing over its limit: the longest parts have no limit, so they go first
+        var names=listWords(long.map(function(w){ return w.label.toLowerCase(); }));
+        if(!retried&&long.length&&!docLocked()&&!noMiddleware()){
+          toast(DARA+' is tightening '+names+' to fit the sheet…');
+          return fillParts(long.map(function(w){ return w.key; }), function(k){ return gridLimit(k)?'Rewrite this part in at most '+gridLimit(k)+' words, keeping what matters most.':'Rewrite this part about a third shorter, keeping what matters most.'; })
+            .then(function(more){ return runExport(kind, style, true, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
+        }
+        toast('Not exported: sheet '+LAST_GRID_OVERFLOW[0]+' is too full. Shorten '+(names||'its parts')+' and export again.');
+        return null;
+      }
+      if(style!=='plain'&&LAST_GRID_WARNINGS.length) toast('Printed smaller to fit its box: '+LAST_GRID_WARNINGS.map(function(w){ return w.label.toLowerCase(); }).join(', ')+'.');
       var base=(get('project_name')||'brief').replace(/[^\w.-]+/g,'-');
-      return window.clan.exportDoc(kind,base,html);
-    }).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); })
-      .catch(function(e){ toast('Export failed: '+e); });
+      return window.clan.exportDoc(kind,base,html).then(function(res){
+        if(res&&res.ok===false) toast('Could not start export.');
+        else if(rejected.length) toast(notApprovedWords(rejected)); });
+    }).catch(function(e){ toast('Export failed: '+e); });
   }
   $('exHtml').addEventListener('click',function(){ doExport('html'); });
   $('exPdf').addEventListener('click',function(){ doExport('pdf'); });
+  $('exHtmlPlain').addEventListener('click',function(){ doExport('html','plain'); });
+  $('exPdfPlain').addEventListener('click',function(){ doExport('pdf','plain'); });
 
   // The shell's Export offers us the job before composing one from our markup —
   // which, since this view renders from data at runtime, would be the empty

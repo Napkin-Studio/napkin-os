@@ -20,6 +20,9 @@
     "competitor_context": { "type": "string" },
     "insight": { "type": "string" },
     "single_minded_proposition": { "type": "string" },
+    "job": { "type": "string" },
+    "barrier": { "type": "string" },
+    "objection": { "type": "string" },
     "reasons_to_believe": { "type": "array", "items": { "type": "string" } },
     "desired_response": {
       "type": "object",

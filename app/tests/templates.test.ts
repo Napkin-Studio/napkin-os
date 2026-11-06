@@ -958,7 +958,7 @@ test('the brief maker’s proposal is answered by the write that cites it', () =
 test('the brief’s export cites its sources: one number a publisher, links only for open web sources', () => {
   type Cit = { marks: Record<string, number[]>; notes: { n: number; name: string; items: { text: string; uri: string | null }[] }[] }
   type F = { exportCitations(parts: unknown[], env: unknown): Cit; exportMarkHtml(n?: number[]): string; exportSourcesHtml(c: Cit | null): string }
-  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesHtml'], { arr, esc })
+  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesList', 'exportSourcesHtml'], { arr, esc })
   const think = 'https://www.thinkbusiness.ie/articles/ballymaloe-foods-new-generation'
   const env = {
     sources: {
@@ -1014,12 +1014,362 @@ test('the brief’s export cites its sources: one number a publisher, links only
   assert.equal(f.exportMarkHtml([1, 3]), '<sup class="fn">1,3</sup>')
 })
 
-test('the brief’s export waits for the decision chain and says so when it cannot read it', () => {
+test('the brief’s exports wait for the decision chain and say so when it cannot read it', () => {
   const src = fn(BM, 'chainForExport')
   assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
   assert.match(src, /CHAIN=\{state:'unavailable'/)
-  const build = fn(BM, 'buildExportHTML')
-  assert.match(build, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
-  assert.match(build, /Sources could not be read for this export\./)
-  assert.match(build, /CHAIN\.state==='ok'\?exportCitations/)
+  const plain = fn(BM, 'buildPlainExportHTML')
+  assert.match(plain, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
+  assert.match(plain, /Sources could not be read for this export\./)
+  assert.match(plain, /CHAIN\.state==='ok'\?exportCitations/)
+  const grid = fn(BM, 'buildGridExportHTML')
+  assert.match(grid, /return chainForExport\(\)\.then/)
+  assert.match(grid, /Sources could not be read for this export\./)
+  assert.match(grid, /CHAIN\.state==='ok'\?exportCitations\(exportParts\(gridKeys\(\)\)/)
+})
+
+// ── the grid export ────────────────────────────────────────────────────────
+
+type GridCell = { num: string; label: string; key: string; kind: string; big: boolean }
+type Grid = {
+  gridSheets(): { appendix?: boolean; title?: string; rows: GridCell[][] }[]
+  gridKeys(): string[]
+  gridLimit(key: string): number
+  gridWords(v: unknown): number
+  gridText(v: unknown): string
+  gridItems(v: unknown): string[]
+  gridHas(v: unknown): boolean
+  gridStep(words: number, limit: number): number
+  gridGaps(ctx: unknown): { key: string; label: string }[]
+  gridHeld(ctx: unknown): number
+  gridGrounded(ctx: unknown): number
+  gridHollow(ctx: unknown): boolean
+  gridFlag(v: unknown): boolean
+  gridHeaderInfo(e: unknown): string[][]
+  gridBody(ctx: unknown): { html: string; sheets: number; contentSheets: number; appendixSheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
+  gridContentSheets(): number
+  gridCss(): string
+}
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeld', 'gridGrounded', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
+const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
+const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
+const ctxOf = (vals: Record<string, unknown>, cit: unknown = { marks: {}, notes: [] }) => ({
+  get: (k: string) => vals[k], hasVal, cit, project: 'Better With Ballymaloe', client: 'Ballymaloe Relish', version: '1.2',
+  info: [['Client', 'Ballymaloe Relish'], ['Project', 'Better With Ballymaloe'], ['Version', '1.2'], ['Date', '29 October 2026'], ['Reference', ''], ['Prepared by', ''], ['Agency lead', ''], ['Client lead', '']],
+})
+
+test('the grid numbers its sections once, in one sequence, and starts with the job', () => {
+  const g = grid()
+  const nums = g.gridSheets().flatMap(s => s.rows.flat()).map(c => c.num).filter(n => /^\d+$/.test(n))
+  assert.deepEqual([...new Set(nums)], ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13'])
+  assert.deepEqual(nums.filter(n => n === '05').length, 3, 'the three objectives share one number')
+  assert.equal(g.gridKeys()[0], 'job')
+  assert.ok(g.gridKeys().includes('objection') && !g.gridKeys().includes('sources'))
+  assert.equal(g.gridSheets().at(-1)?.appendix, true, 'the evidence and the questions sit on an appendix sheet')
+})
+
+test('a box’s word limit is the brief schema’s, and a long part steps its own type down', () => {
+  const g = grid()
+  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; max_words?: number }[] }
+  const key: Record<string, string> = { background: 'background', audience: 'audience', budget_scope: 'budget_and_scope', competitor_context: 'competitor_context',
+    insight: 'insight', smp: 'single_minded_proposition', tone_world_assets: 'tone_and_world', mandatories: 'mandatories' }
+  for (const f of schema.fields) if (key[f.id]) assert.equal(g.gridLimit(key[f.id]), f.max_words, `${f.id} keeps the schema's limit`)
+  assert.equal(g.gridLimit('job'), 0, 'a part with no limit is never stepped down')
+  assert.equal(g.gridWords(words(7)), 7)
+  assert.equal(g.gridWords(['a b', 'c']), 3)
+  assert.equal(g.gridWords(null), 0)
+  assert.deepEqual([[70, 70], [71, 70], [88, 70], [112, 70], [120, 70], [9, 0]].map(([w, l]) => g.gridStep(w, l)), [0, 1, 2, 2, 3, 0])
+})
+
+test('the grid prints a header, an info grid and a footer as the sheets need them, and places each part in its box', () => {
+  const g = grid()
+  const vals = { job: 'Make an ordinary person ring.', background: 'Where we are.', audience: 'Who.', 'objectives.commercial': 'C', 'objectives.behavioural': 'B', 'objectives.attitudinal': 'A',
+    budget_and_scope: 'Budget.', insight: 'The insight.', single_minded_proposition: 'One thought.', reasons_to_believe: ['r1', 'r2'], competitor_context: 'Rivals.',
+    'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['warm'], mandatories: ['logo'], open_questions: ['What is the budget?'] }
+  const out = g.gridBody(ctxOf(vals, { marks: { single_minded_proposition: [1] }, notes }))
+  // The page rule: two content sheets, and the appendix is outside that count. The footer still numbers every page.
+  assert.equal(out.sheets, 3)
+  assert.equal(out.contentSheets, 2)
+  assert.equal(out.appendixSheets, 1)
+  for (const n of [1, 2]) assert.match(out.html, new RegExp(`SHEET<b>${n}/2</b>`))
+  assert.match(out.html, /APPENDIX<b>1\/1<\/b>/)
+  assert.doesNotMatch(out.html, /SHEET<b>3\//, 'the appendix is not a third sheet')
+  for (const n of [1, 2, 3]) assert.match(out.html, new RegExp(`<span>${n} of 3</span>`))
+  assert.equal((out.html.match(/class="hd"/g) || []).length, 3, 'a header on every sheet')
+  assert.equal((out.html.match(/class="info"/g) || []).length, 1, 'the info grid on the first sheet only')
+  assert.equal((out.html.match(/class="foot"/g) || []).length, 3, 'a footer on every sheet')
+  assert.match(out.html, /Napkin \/ Ballymaloe Relish \/ Better With Ballymaloe \/ Creative brief 1\.2 \/ Confidential/)
+  assert.match(out.html, /<b>01<\/b>The job<\/div><div class="bd"><p class="job">Make an ordinary person ring\.<\/p>/)
+  assert.match(out.html, /<div class="box dark"><div class="lab"><b>08<\/b>The single thought<\/div><div class="bd"><p class="big">One thought\.<sup class="fn">1<\/sup><\/p>/)
+  assert.match(out.html, /<b>09<\/b>Why they should believe it<\/div><div class="bd"><ul><li>r1<\/li><li>r2<\/li><\/ul>/)
+  assert.match(out.html, /<div class="src"><ol><li value="1"><b>ThinkBusiness<\/b>: A title · 2024 — <a href="https:\/\/example\.com\/a">/)
+  assert.deepEqual(out.warnings, [])
+  // A part nobody has written reads as missing, never as a quiet blank (the export writes it before it prints).
+  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">Missing: ask Dara to write this part\.<\/p>/)
+  assert.match(out.html, /The objection it has to beat: <i>missing: ask Dara to write it<\/i>/)
+  assert.doesNotMatch(out.html, /To be written|Not written yet/)
+})
+
+test('the grid names a part that ran over its box, drops an appendix with nothing in it, and escapes what it prints', () => {
+  const g = grid()
+  const vals = { single_minded_proposition: words(30), audience: '<script>alert(1)</script>', background: words(120) }
+  const out = g.gridBody(ctxOf(vals))
+  assert.equal(out.sheets, 3, 'the appendix is always there, and says so when it has nothing to list')
+  assert.match(out.html, /No outside sources were cited\. Every claim rests on the client’s brief and on proposals marked to confirm\./)
+  assert.match(out.html, /<p>No open questions: the brief holds what it needs\.<\/p>/)
+  assert.deepEqual(out.warnings.map(w => [w.key, w.step]).sort(), [['background', 3], ['single_minded_proposition', 2]])
+  assert.match(out.html, /class="box dark fit2"/, 'the single thought steps down inside its own box')
+  assert.match(out.html, /class="box fit3"/)
+  assert.doesNotMatch(out.html, /<script>/)
+  assert.match(out.html, /&#60;script&#62;alert\(1\)&#60;\/script&#62;/)
+  assert.match(out.html, /<p class="todo">Missing: ask Dara to write this part\.<\/p>/, 'a part nobody has written yet is not left blank')
+})
+
+test('a brief leaves with nothing empty: the gate names every empty part, the header holds suggestions, and Dara writes first', () => {
+  const g = grid()
+  const all = { job: 'J.', background: 'B.', barrier: 'Ba.', audience: 'A.', 'objectives.commercial': 'c', 'objectives.behavioural': 'b', 'objectives.attitudinal': 'a',
+    budget_and_scope: 'x', insight: 'I.', single_minded_proposition: 'S.', objection: 'O.', reasons_to_believe: ['r'], competitor_context: 'k',
+    'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['w'], mandatories: ['m'] }
+  assert.deepEqual(g.gridGaps({ get: (k: string) => (all as Record<string, unknown>)[k], hasVal }), [], 'a complete brief has no gap')
+  const thin = { ...all, job: '', barrier: undefined, objection: ' ', mandatories: [] }
+  assert.deepEqual(g.gridGaps({ get: (k: string) => (thin as Record<string, unknown>)[k], hasVal }).map(x => x.key), ['job', 'barrier', 'mandatories', 'objection'])
+  const at = (o: object) => ({ get: (k: string) => (o as Record<string, unknown>)[k], hasVal })
+  assert.equal(g.gridHollow(at(all)), false)
+  assert.equal(g.gridHollow(at(thin)), false, 'a brief missing four parts is still a brief')
+  assert.equal(g.gridHollow(at({})), true, 'an empty brief is not exported')
+  assert.equal(g.gridHollow(at({ single_minded_proposition: 'Just one thing.' })), true)
+  assert.equal(g.gridHollow(at({ job: 'J.', background: 'B.', audience: 'A.', insight: 'I.' })), false)
+  assert.match(BM, /Not exported: there is hardly anything/)
+  assert.match(BM, /Not exported: almost everything here is a guess/)
+  // A one-word brief: every part comes back, every text part marked, the lists invented. Complete-looking and hollow.
+  const guess = Object.fromEntries(Object.keys(all).map(k => [k, Array.isArray((all as Record<string, unknown>)[k]) ? ['x'] : 'To confirm: A guess.']))
+  assert.deepEqual(g.gridGaps(at(guess)), [], 'nothing is empty')
+  assert.equal(g.gridGrounded(at(guess)), 0)
+  assert.equal(g.gridHollow(at(guess)), true, 'a brief of guesses is not exported as a grid')
+  // Ballymaloe: the client's own words in several parts, the rest proposed.
+  const rooted = { ...guess, job: 'Make an ordinary person ring.', audience: 'Families who cook.', budget_and_scope: '40k, Irish retail.' }
+  assert.equal(g.gridHollow(at(rooted)), false)
+  assert.equal(g.gridHollow(at({ ...rooted, audience: 'To confirm: A.' })), true, 'two grounded parts are not enough')
+  assert.equal(g.gridHollow(at({ goal: 'make me a brief' })), true)
+  // The header: a value, a suggestion marked as one, or a prompt for what only a person knows. Never a blank.
+  const info = g.gridHeaderInfo({ client: 'Ballymaloe Relish, an Irish family relish brand.', project: 'Better With Ballymaloe', version: '1.2', date: '29 October 2026',
+    me: 'Sai', today: new Date(2026, 9, 29) })
+  assert.deepEqual(info.map(p => p[0]), ['Client', 'Project', 'Version', 'Date', 'Reference', 'Prepared by', 'Agency lead', 'Client lead'])
+  assert.equal(info.find(p => p[0] === 'Reference')?.[1], 'BAL-261029 (suggested)')
+  assert.deepEqual([info[5][1], info[6][1], info[7][1]], ['Sai', 'Sai', '[client lead, to confirm]'])
+  const blank = g.gridHeaderInfo({ date: '29 October 2026', today: new Date(2026, 9, 29) })
+  assert.ok(blank.every(p => String(p[1]).trim() !== ''), 'even a brief with no client, project or signed-in person has no empty cell')
+  assert.equal(blank.find(p => p[0] === 'Prepared by')?.[1], 'Napkin Studio')
+  // The export: the grid asks Dara for what is missing and stops, saying so, if it is still missing; the plain export never waits.
+  const ex = fn(BM, 'exportOnce')
+  assert.match(ex, /style==='plain'\)\s*return runExport\(kind, style\)/)
+  assert.match(ex, /gridGaps\(ctx\)/)
+  assert.match(ex, /fillParts\(gaps\.map/)
+  assert.match(ex, /Not exported: /)
+  assert.match(fn(BM, 'fillParts'), /regenField\(f,guidanceFor\?guidanceFor\(k\):null,null,function\(j\)\{/)
+  assert.match(fn(BM, 'regenField'), /if\(done\) done\(j\)/)
+  // A fill that cannot start still finishes, so an export waiting on it never hangs; one export runs at a time.
+  assert.match(fn(BM, 'regenField'), /if\(!window\.clan\)\{ if\(done\) done\(\); return; \}/)
+  assert.match(fn(BM, 'regenField'), /setStatus\(esc\(NO_MW\)\); if\(done\) done\(\); return;/)
+  assert.match(fn(BM, 'doExport'), /if\(EXPORTING\)\{ toast\('An export is already running\.'\); return; \}/)
+  assert.match(fn(BM, 'doExport'), /EXPORTING=false/)
+  // Sideways overflow counts, and when no part is over a limit the longest parts are the ones tightened.
+  assert.match(fn(BM, 'gridOverflow'), /scrollWidth>b\.clientWidth/)
+  assert.match(fn(BM, 'runExport'), /if\(!long\.length\) long=gridLongest\(2\)/)
+  assert.match(BM, /overflow-wrap:anywhere/)
+  // The three new parts are on the form beside the others, and the page can find them by the words a person uses.
+  assert.match(BM, /key:'job',label:'The job'[\s\S]*key:'background'[\s\S]*key:'barrier',label:'The barrier'/)
+  assert.match(BM, /key:'single_minded_proposition'[\s\S]*key:'objection',label:'The objection to beat'/)
+  assert.match(BM, /job:'job, the job, task'/)
+  assert.match(BM, /objection:'objection, the objection, doubt'/)
+})
+
+test('bad data never prints as junk: text and numbers print, anything else counts as empty', () => {
+  const g = grid()
+  assert.equal(g.gridText({ a: 1 }), '')
+  assert.equal(g.gridText(true), '')
+  assert.equal(g.gridText(null), '')
+  assert.equal(g.gridText(42), '42')
+  assert.equal(g.gridText('  hi  '), 'hi')
+  assert.equal(g.gridText(['a', { b: 1 }, ' ', 'c']), 'a; c')
+  assert.deepEqual(g.gridItems('one'), ['one'])
+  assert.deepEqual(g.gridItems(['a', null, { x: 1 }, 'b']), ['a', 'b'])
+  assert.equal(g.gridHas({}), false)
+  assert.equal(g.gridHas('   '), false)
+  const bad = { job: { nested: 'object' }, background: true, audience: [['a', 'b'], 'c'], insight: 12345, reasons_to_believe: 'a string, not a list', mandatories: 7 }
+  const out = g.gridBody({ ...ctxOf(bad), project: undefined, client: undefined })
+  assert.doesNotMatch(out.html, /\[object Object\]|undefined|>null<|>true<|>false</)
+  assert.match(out.html, /Creative brief\. Untitled brief/, 'a brief with no project name is not called undefined')
+  const gaps = g.gridGaps({ get: (k: string) => (bad as Record<string, unknown>)[k], hasVal }).map(x => x.key)
+  assert.ok(gaps.includes('job') && gaps.includes('background'), 'an object or a boolean is empty, so the export writes it')
+  assert.ok(!gaps.includes('insight') && !gaps.includes('mandatories'), 'a number is text')
+})
+
+test('the appendix runs on over as many sheets as it needs, and nothing in it is cut or repeated', () => {
+  const g = grid()
+  const many = Array.from({ length: 25 }, (_, i) => ({ n: i + 1, name: `Publisher ${i + 1}`, items: [{ text: `Article title number ${i + 1} · 2025`, uri: `https://example.com/a-${i + 1}/with/a/long/path/to/read` }] }))
+  const qs = Array.from({ length: 40 }, (_, i) => `Question ${i} about something only the client knows, in a sentence of a fair length?`)
+  const out = g.gridBody(ctxOf({ open_questions: qs }, { marks: {}, notes: many }))
+  const sheets = g.gridSheets().filter(s => !s.appendix).length
+  assert.ok(out.sheets > sheets + 1, 'more than one appendix sheet')
+  for (let i = 0; i < qs.length; i++) assert.equal((out.html.match(new RegExp(`Question ${i} about`, 'g')) || []).length, 1, `question ${i} printed once`)
+  for (let i = 1; i <= 25; i++) assert.equal((out.html.match(new RegExp(`<b>Publisher ${i}</b>`, 'g')) || []).length, 1, `source ${i} printed once`)
+  assert.match(out.html, /Appendix \(continued\)\. Sources and questions to settle\./)
+  assert.match(out.html, new RegExp(`APPENDIX<b>${out.appendixSheets}/${out.appendixSheets}</b>`))
+  assert.equal(out.contentSheets, 2, 'a long appendix never adds a content sheet')
+  // The same numbers a footnote carries, in order, across the sheets.
+  const nums = [...out.html.matchAll(/<li value="(\d+)"><b>Publisher/g)].map(m => +m[1])
+  assert.deepEqual(nums, Array.from({ length: 25 }, (_, i) => i + 1))
+  // A short list beside a long one says so, instead of an empty box.
+  const lopsided = g.gridBody(ctxOf({ open_questions: qs }, { marks: {}, notes: many.slice(0, 2) }))
+  assert.match(lopsided.html, /All listed on the previous sheet\./)
+  // A brief with nothing to list still has its appendix, saying so.
+  const none = g.gridBody(ctxOf({}))
+  assert.equal(none.sheets, sheets + 1)
+  assert.match(none.html, /No outside sources were cited\./)
+})
+
+test('the page rule: a brief is two content sheets however long its parts run, and the appendix is outside the count', () => {
+  const g = grid()
+  assert.equal(g.gridContentSheets(), 2)
+  assert.ok(g.gridSheets().filter(s => !s.appendix).length <= g.gridContentSheets(), 'the sheet list holds at most two content sheets')
+  // Every part three times past its box, a long reasons list and a long appendix: the content stays on two sheets.
+  const long: Record<string, unknown> = {}
+  for (const s of g.gridSheets()) for (const r of s.rows) for (const c of r) long[c.key] = (g.gridLimit(c.key) ? words(g.gridLimit(c.key) * 3) : words(60))
+  long.reasons_to_believe = Array.from({ length: 12 }, (_, i) => `Reason ${i} ${words(25)}`)
+  long.open_questions = Array.from({ length: 40 }, (_, i) => `Question ${i} about something only the client knows, in a sentence of a fair length?`)
+  const out = g.gridBody(ctxOf(long, { marks: {}, notes }))
+  assert.equal(out.contentSheets, 2, 'long content never becomes a third content sheet')
+  assert.ok(out.warnings.length > 0, 'a part that ran over its box is named, not spilled')
+  assert.doesNotMatch(out.html, /SHEET<b>[3-9]\//)
+  // The appendix may run to several sheets, each labelled as appendix and numbered after the content sheets.
+  assert.equal(out.sheets, out.contentSheets + out.appendixSheets)
+  for (let n = 1; n <= out.appendixSheets; n++) assert.match(out.html, new RegExp(`APPENDIX<b>${n}/${out.appendixSheets}</b>`))
+})
+
+test('an export never prints a clipped sheet: it is measured, Dara tightens the long parts once, and otherwise it stops', () => {
+  assert.match(fn(BM, 'gridOverflow'), /createElement\('iframe'\)/)
+  assert.match(fn(BM, 'gridOverflow'), /rows\[rows\.length-1\]\.getBoundingClientRect\(\)\.bottom>ft\.getBoundingClientRect\(\)\.top/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)\.then\(function\(bad\)\{ LAST_GRID_OVERFLOW=bad; return doc; \}\)/)
+  const run = fn(BM, 'runExport')
+  assert.match(run, /LAST_GRID_OVERFLOW\.length/)
+  assert.match(run, /Rewrite this part in at most '\+gridLimit\(k\)\+' words/)
+  assert.match(run, /!retried&&long\.length/)
+  assert.match(run, /Not exported: sheet '\+LAST_GRID_OVERFLOW\[0\]\+' is too full\./)
+  // the guard returns before exportDoc is called
+  assert.ok(run.indexOf('Not exported: sheet') < run.indexOf('window.clan.exportDoc'))
+})
+
+test('a sheet that cannot be measured is never exported: one retry with a longer wait, then the plain buttons are offered', async () => {
+  assert.match(fn(BM, 'gridOverflow'), /setTimeout\(function\(\)\{ end\(null\); \},wait\)/)
+  assert.match(fn(BM, 'measureGrid'), /gridOverflow\(doc,4000\)[\s\S]*gridOverflow\(doc,8000\)/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)/)
+  const run = fn(BM, 'runExport')
+  assert.ok(run.indexOf('LAST_GRID_OVERFLOW===null') < run.indexOf('LAST_GRID_OVERFLOW.length'), 'null is read before the length')
+  assert.match(run, /Try again, or use Plain PDF or Plain HTML/)
+  // run it: a frame that never loads must not reach exportDoc, and the wait doubles once
+  const waits: number[] = []
+  const timers: Array<() => void> = []
+  const doc = { createElement: () => ({ setAttribute() {}, style: {} }), body: { appendChild() {}, removeChild() {} } }
+  const g = lift<{ gridOverflow: (d: string, w: number) => Promise<unknown>; measureGrid: (d: string) => Promise<unknown> }>(
+    BM, ['gridOverflow', 'measureGrid'],
+    { document: doc, setTimeout: (cb: () => void, ms: number) => { waits.push(ms); timers.push(cb) } })
+  const p = g.measureGrid('<html>')
+  timers[0]()
+  await new Promise(r => setImmediate(r))
+  timers[1]()
+  assert.equal(await p, null)
+  assert.deepEqual(waits, [4000, 8000])
+  let printed = 0, said = ''
+  const env = {
+    LAST_GRID_OVERFLOW: null, LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m },
+    buildExportHTML: () => Promise.resolve('<html>'), listWords: (a: string[]) => a.join(', '), gridLongest: () => [],
+    docLocked: () => false, noMiddleware: () => false, DARA: 'Dara', fillParts: () => Promise.resolve(), gridLimit: () => 0,
+    get: () => 'x', window: { clan: { exportDoc: () => { printed++; return Promise.resolve({ ok: true }) } } },
+  }
+  const r = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], env)
+  await r.runExport('pdf')
+  assert.equal(printed, 0, 'an unmeasured sheet never reaches print')
+  assert.match(said, /^Not exported: .*Plain PDF or Plain HTML/)
+  await r.runExport('pdf', 'plain')
+  assert.equal(printed, 1, 'the plain export is unaffected')
+})
+
+test('a part Jude rejected is exported as to confirm, and the export says it was written, not approved', async () => {
+  const mark = lift<{ confirmMarked(v: unknown): unknown }>(BM, ['confirmMarked'], {}).confirmMarked
+  assert.equal(mark('Families who cook.'), 'To confirm: Families who cook.')
+  assert.equal(mark('To confirm: Families.'), 'To confirm: Families.', 'a part already marked is left alone')
+  assert.deepEqual(mark(['a', 'b']), ['To confirm: a', 'b'], 'a list marks its first line')
+  assert.equal(mark(''), '')
+  // fillParts: Jude passes one part and rejects the other. Only the rejected one is marked in the brief.
+  const data: Record<string, unknown> = { audience: 'Families who cook.', insight: 'People skip dinner.' }
+  const patched: Array<[string, unknown]> = []
+  const FIELDS = [{ key: 'audience', label: 'Audience' }, { key: 'insight', label: 'The insight' }]
+  const state: Record<string, string> = { audience: 'done', insight: 'failed' }
+  const env = {
+    FIELDS, JUDE: 'Jude', hasVal, confirmMarked: mark, get: (k: string) => data[k],
+    patch: (k: string, v: unknown) => { patched.push([k, v]); data[k] = v; return Promise.resolve({ ok: true }) },
+    regenField: (f: { key: string }, _g: unknown, _r: unknown, done: (j: unknown) => void) => done({ fields: { [f.key]: { state: state[f.key] } } }),
+  }
+  const fill = lift<{ fillParts(keys: string[]): Promise<string[]> }>(BM, ['fillParts'], env)
+  assert.deepEqual(await fill.fillParts(['audience', 'insight']), ['The insight'])
+  assert.deepEqual(patched, [['insight', 'To confirm: People skip dinner.']])
+  // what prints: the sheet draws the mark as the box's corner tag, and the sentence reads clean
+  const g = grid()
+  const out = g.gridBody(ctxOf({ audience: data.audience, insight: data.insight }))
+  assert.equal((out.html.match(/<span class="tc">to confirm<\/span>/g) || []).length, 1, 'only the rejected part carries the tag')
+  assert.match(out.html, /People skip dinner\./)
+  assert.doesNotMatch(out.html, /To confirm: People/)
+  // the toast names it
+  const words = lift<{ notApprovedWords(l: string[]): string }>(BM, ['notApprovedWords'], { JUDE: 'Jude', listWords: listJoin }).notApprovedWords
+  assert.equal(words(['The insight', 'Audience']), 'Written, not approved by Jude: the insight and audience.')
+  assert.equal(words([]), '')
+  // the export passes them on and says so once the export has started
+  let said = ''
+  const run = lift<{ runExport(k: string, s: string, r?: boolean, rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
+    LAST_GRID_OVERFLOW: [], LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m }, buildExportHTML: () => Promise.resolve('<html>'),
+    get: () => 'x', notApprovedWords: words, window: { clan: { exportDoc: () => Promise.resolve({ ok: true }) } },
+  })
+  await run.runExport('pdf', 'grid', false, ['The insight'])
+  assert.equal(said, 'Written, not approved by Jude: the insight.')
+  await run.runExport('pdf', 'grid', false, [])
+  assert.equal(said, 'Preparing PDF…', 'nothing rejected: nothing extra is said')
+  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, rejected\)/)
+})
+
+test('the footer names the client, not its descriptor, and the page count never wraps', () => {
+  const g = grid()
+  const ctx = { ...ctxOf({ audience: 'Who.' }), client: 'Ballymaloe Relish, an Irish family relish brand.' }
+  const out = g.gridBody(ctx)
+  assert.match(out.html, /Napkin \/ Ballymaloe Relish \/ Better With Ballymaloe \/ Creative brief 1\.2 \/ Confidential/)
+  assert.doesNotMatch(out.html, /class="foot"><span>[^<]*an Irish/)
+  assert.match(g.gridCss(), /\.foot span:last-child\{white-space:nowrap\}/)
+  assert.match(g.gridCss(), /\.fit3 \.bd\{font-size:10px\}/, 'the smallest step stays readable')
+})
+
+test('the grid prints on A4 sheets that break cleanly, and is the default export beside a plain one', () => {
+  const css = grid().gridCss()
+  assert.match(css, /@page\{size:A4;margin:0\}/)
+  assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
+  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(\)/)
+  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
+  assert.match(BM, /id="exHtml"[\s\S]*id="exPdf"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
+  assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
+  assert.match(BM, /doExport\('html'\); \}\);\s*\$\('exPdf'\)/, 'the shell’s Export and the two main buttons are the grid')
+})
+
+
+test('a part the draft marks "To confirm:" prints a corner tag, not the words in the sentence', () => {
+  const g = grid()
+  assert.equal(g.gridText('To confirm: Easy.'), 'Easy.')
+  assert.equal(g.gridText(['To confirm: a', 'b']), 'a; b')
+  assert.equal(g.gridFlag('To confirm: Easy.'), true)
+  assert.equal(g.gridFlag(['x', 'to confirm: y']), true)
+  assert.equal(g.gridFlag('Easy. To confirm: later'), false, 'only a leading mark counts')
+  const ctx = (v: Record<string, unknown>) => ({ get: (k: string) => v[k], hasVal, cit: { marks: {}, notes: [] }, info: [], project: 'P', client: 'C', version: '1' })
+  const marked = g.gridBody(ctx({ insight: 'To confirm: Tension here.', background: 'Plain fact.' })).html
+  assert.match(marked, /class="tc">to confirm</)
+  assert.doesNotMatch(marked, /To confirm: Tension/)
+  assert.equal((marked.match(/class="tc"/g) || []).length, 1, 'one tag, only on the marked box')
 })

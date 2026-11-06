@@ -1,4 +1,4 @@
-"""Brief Maker's document shape (middleware-api.md §10.4–§10.5): the eighteen
+"""Brief Maker's document shape (middleware-api.md §10.4–§10.5): the twenty-one
 fields, the field map, locks, who holds a field, and the patch paths a staged
 change is judged by.
 
@@ -16,8 +16,8 @@ import re
 from pathlib import Path
 
 KEYS = [
-    "project_name", "client", "background", "objectives.commercial", "objectives.behavioural",
-    "objectives.attitudinal", "audience", "competitor_context", "insight", "single_minded_proposition",
+    "project_name", "client", "job", "background", "barrier", "objectives.commercial", "objectives.behavioural",
+    "objectives.attitudinal", "audience", "competitor_context", "insight", "single_minded_proposition", "objection",
     "reasons_to_believe", "desired_response.think", "desired_response.feel", "desired_response.do",
     "tone_and_world", "budget_and_scope", "mandatories", "open_questions",
 ]
@@ -28,6 +28,8 @@ BUILTIN_FIELD_MAP = {
     "project_name": {"class": "captured"},
     "client": {"class": "captured"},
     "background": {"class": "captured", "rubric": "background"},
+    "job": {"class": "drafted", "rubric": "job", "loop": "loop3_problem"},
+    "barrier": {"class": "drafted", "rubric": "barrier", "loop": "loop3_problem"},
     "objectives.commercial": {"class": "captured", "rubric": "objectives"},
     "objectives.behavioural": {"class": "captured", "rubric": "objectives"},
     "objectives.attitudinal": {"class": "captured", "rubric": "objectives"},
@@ -38,6 +40,7 @@ BUILTIN_FIELD_MAP = {
     "tone_and_world": {"class": "captured", "rubric": "tone_world_assets"},
     "insight": {"class": "drafted", "rubric": "insight", "loop": "loop4_insight"},
     "single_minded_proposition": {"class": "drafted", "rubric": "smp", "loop": "loop5_proposition"},
+    "objection": {"class": "drafted", "rubric": "objection", "loop": "loop5_objection"},
     "reasons_to_believe": {"class": "drafted", "rubric": "reasons_to_believe", "loop": "loop6_substantiation"},
     "desired_response.think": {"class": "drafted", "rubric": "desired_response", "loop": "loop5_proposition",
                                "drafter": "desired_response"},
@@ -50,6 +53,7 @@ BUILTIN_FIELD_MAP = {
 
 LABELS = {
     "project_name": "project name", "client": "client", "background": "background",
+    "job": "the job", "barrier": "the barrier", "objection": "the objection to beat",
     "objectives.commercial": "commercial objective", "objectives.behavioural": "behavioural objective",
     "objectives.attitudinal": "attitudinal objective", "audience": "audience",
     "competitor_context": "competitor context", "insight": "insight",

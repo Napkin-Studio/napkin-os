@@ -42,7 +42,8 @@ def test_the_loop_is_recorded_as_it_happened(tmp_path):
     assert sent["id"] in final["cites"]
     assert {"point": "Jude's note: add a measure", "cites": [sent["id"]]} in final["reasoning"]["because"]
     # the rewrite is what the brief holds and what wrote the part; the first draft is history
-    assert host.data["objectives"]["commercial"].startswith("Grow under-30 visits")
+    # a rewritten assumption says it is one (feature brief-first-draft-checks)
+    assert host.data["objectives"]["commercial"].startswith("To confirm: Grow under-30 visits")
     assert last_writer(DOC, host.chain, K) == final["id"]
     # Jude still notes the objectives in his second review, so no pass is recorded on the part
     assert not any(d["kind"] == "verdict" and d["polarity"] == "good" and ADDR in d["targets"] for d in host.chain)

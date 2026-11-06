@@ -67,7 +67,9 @@ tasks:
 fields:                      # app key -> how it is filled; the handler reads this map
   project_name:              { class: captured }
   client:                    { class: captured }
+  job:                       { class: drafted, rubric: job, loop: loop3_problem }
   background:                { class: captured, rubric: background }
+  barrier:                   { class: drafted, rubric: barrier, loop: loop3_problem }
   objectives.commercial:     { class: captured, rubric: objectives }
   objectives.behavioural:    { class: captured, rubric: objectives }
   objectives.attitudinal:    { class: captured, rubric: objectives }
@@ -78,6 +80,7 @@ fields:                      # app key -> how it is filled; the handler reads th
   tone_and_world:            { class: captured, rubric: tone_world_assets }
   insight:                   { class: drafted, rubric: insight, loop: loop4_insight }
   single_minded_proposition: { class: drafted, rubric: smp, loop: loop5_proposition }
+  objection:                 { class: drafted, rubric: objection, loop: loop5_objection }
   reasons_to_believe:        { class: drafted, rubric: reasons_to_believe, loop: loop6_substantiation }
   desired_response.think:    { class: drafted, rubric: desired_response, loop: loop5_proposition, drafter: desired_response }
   desired_response.feel:     { class: drafted, rubric: desired_response, loop: loop5_proposition, drafter: desired_response }
@@ -100,6 +103,6 @@ merge_policies:
 # capture or the review (middleware-api.md §10.7: each one writes an agent
 # field). Indexing a material alone may omit it.
 reasoning:
-  edits: [project_name, client, background, objectives, audience, competitor_context,
-          budget_and_scope, mandatories, tone_and_world, insight, single_minded_proposition,
+  edits: [project_name, client, job, background, barrier, objectives, audience, competitor_context,
+          budget_and_scope, mandatories, tone_and_world, insight, single_minded_proposition, objection,
           reasons_to_believe, desired_response, open_questions, capture, review]
