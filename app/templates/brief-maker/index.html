@@ -659,6 +659,8 @@
     {sec:'Desired response',key:'desired_response.do',label:'Do',type:'text'},
     {sec:'Execution',key:'tone_and_world',label:'Tone & world',type:'list'},
     {sec:'Execution',key:'budget_and_scope',label:'Budget & scope',type:'text'},
+    {sec:'Execution',key:'media_roles',label:'Role of each medium',type:'list'},
+    {sec:'Execution',key:'measurement',label:'How we will know it worked',type:'list'},
     {sec:'Execution',key:'mandatories',label:'Mandatories',type:'list'},
     {sec:'Execution',key:'open_questions',label:'Open questions',type:'list'}
   ];
@@ -722,6 +724,8 @@
     'desired_response.do':'what they should do, call to action',
     tone_and_world:'tone, voice, feel',
     budget_and_scope:'budget, cost, spend, scope',
+    media_roles:'media, channels, role of each medium, media plan',
+    measurement:'measurement, how we will know it worked, kpis, tracking, success measures',
     mandatories:'mandatories, mandatory, must include',
     open_questions:'open questions, questions'
   };
@@ -1125,25 +1129,32 @@
     var l=exportSourcesList(cit); return l?'<section class="srcs"><h2>Sources</h2>'+l+'</section>':'';
   }
   // ---- The grid export (feature brief-grid-template). Pure: it reads only what it is given. ----
+  // The role-of-each-medium and measurement row on sheet 1 (feature brief-media-measure). The parts are drafted, judged and
+  // on the form already; the row stays off, so the printed brief is as it was, until Laurence confirms the page rule.
+  var GRID_MEDIA_ROW=false;
   // Which part sits in which box on which sheet is this list, so the page rule (how many sheets) changes the
   // list, not the code. kind: text, list, quote (the insight, large), hero (the single thought, large on black,
   // with the objection it has to beat), new (a part the brief does not draft yet: printed 'to be written'
   // while it is empty), sources (the numbered Sources list).
   function gridSheets(){
     function T(num,label,key,kind,big){ return {num:num, label:label, key:key, kind:kind||'text', big:!!big}; }
+    // Switched on, the media row takes numbers 07 and 08 and the boxes after it run on from 09; off, they are 07 to 13 as they were.
+    var by=GRID_MEDIA_ROW?2:0;
+    function N(n){ return (n+by<10?'0':'')+(n+by); }
+    var media=GRID_MEDIA_ROW?[[T('07','Role of each medium','media_roles','list'), T('08','How we will know it worked','measurement','list')]]:[];
     return [
       {rows:[
         [T('01','The job','job','new',true)],
         [T('02','Where we are','background'), T('03','The barrier','barrier','new')],
         [T('04','Who we are talking to','audience')],
         [T('05','Objective. Commercial','objectives.commercial'), T('05','Objective. Behavioural','objectives.behavioural'), T('05','Objective. Attitudinal','objectives.attitudinal')],
-        [T('06','Budget and scope','budget_and_scope')]]},
+        [T('06','Budget and scope','budget_and_scope')]].concat(media)},
       {rows:[
-        [T('07','The insight','insight','quote')],
-        [T('08','The single thought','single_minded_proposition','hero')],
-        [T('09','Why they should believe it','reasons_to_believe','list'), T('10','Competitor context','competitor_context')],
-        [T('11','Desired response. Think','desired_response.think'), T('11','Desired response. Feel','desired_response.feel'), T('11','Desired response. Do','desired_response.do')],
-        [T('12','Tone and world','tone_and_world','list'), T('13','Mandatories','mandatories','list')]]},
+        [T(N(7),'The insight','insight','quote')],
+        [T(N(8),'The single thought','single_minded_proposition','hero')],
+        [T(N(9),'Why they should believe it','reasons_to_believe','list'), T(N(10),'Competitor context','competitor_context')],
+        [T(N(11),'Desired response. Think','desired_response.think'), T(N(11),'Desired response. Feel','desired_response.feel'), T(N(11),'Desired response. Do','desired_response.do')],
+        [T(N(12),'Tone and world','tone_and_world','list'), T(N(13),'Mandatories','mandatories','list')]]},
       {appendix:true, title:'Appendix. Sources and questions to settle.', rows:[
         [T('A','Evidence and sources','sources','sources'), T('B','Questions to settle','open_questions','list')]]}
     ];
@@ -1155,7 +1166,8 @@
   }
   // A box's size: the word limits the brief's schema sets for each part (server/napkin/brief/golden_brief.schema.json).
   function gridLimit(key){
-    var L={background:70, audience:80, budget_and_scope:50, competitor_context:70, insight:50, single_minded_proposition:20, tone_and_world:60, mandatories:80};
+    var L={job:30, background:70, barrier:60, audience:80, budget_and_scope:50, media_roles:55, measurement:70, competitor_context:70, insight:50,
+      single_minded_proposition:20, objection:30, tone_and_world:60, mandatories:80};
     return L[key]||0;
   }
   // What a part prints as: text and numbers only. An object, a boolean or nothing is not text, so it counts as empty
@@ -1197,7 +1209,8 @@
       body=missing;
     } else if(c.kind==='hero'){
       var ob=ctx.get('objection');
-      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
+      var os=gridStep(gridWords(ob), gridLimit('objection'));
+      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj'+(os?' o'+os:'')+'">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask Dara to write it</i>')+'</p>';
     } else {
       body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(gridText(v))+mk+'</p>';
     }
@@ -1248,7 +1261,7 @@
   // SHEET 1/2, appendix sheets read APPENDIX 1/1, so the appendix is outside the two-sheet count.
   function gridSheet(n, total, sh, ctx, tag){
     var sub=sh.title||('Creative brief. '+(ctx.project||'Untitled brief'));
-    return '<div class="sheet"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
+    return '<div class="sheet'+(arr(ctx.tight).indexOf(n)!==-1?' tight':'')+'"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
       +'<div class="shn">'+tag+'</div></div>'
       +(n===1?gridInfo(ctx.info):'')
       +sh.rows.map(function(r){ return '<div class="row c'+r.length+'">'+r.map(function(c){ return gridCell(c, ctx); }).join('')+'</div>'; }).join('')
@@ -1286,6 +1299,9 @@
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
       if(st) warnings.push({key:c.key, label:c.label, words:w, limit:lim, step:st}); }); }); });
+    // The objection prints inside the single thought's box, so it is no box of its own: it steps down in its own line.
+    var ow=gridWords(ctx.get('objection')), ost=gridStep(ow, gridLimit('objection'));
+    if(ost&&gridHas(ctx.get('single_minded_proposition'))) warnings.push({key:'objection', label:'The objection to beat', words:ow, limit:gridLimit('objection'), step:ost});
     return {html:sheets.map(function(s,i){
         var tag=s.appendix?'APPENDIX<b>'+(i-body.length+1)+'/'+app.length+'</b>':'SHEET<b>'+(i+1)+'/'+body.length+'</b>';
         return gridSheet(i+1, sheets.length, s, ctx, tag); }).join(''),
@@ -1316,9 +1332,12 @@
       +".big{font-size:21px;line-height:1.2;font-weight:800;letter-spacing:-.02em}"
       +".dark{background:#000;color:#fff}.dark .lab{background:#fff;color:#000}.dark .big{font-size:30px;line-height:1.12}"
       +".obj{font-size:10px;color:#bbb}"
+      +".tight .bd{font-size:10.6px;line-height:1.38}.tight .job{font-size:21px}.tight .big{font-size:19px}.tight .dark .big{font-size:27px}.tight .obj{font-size:9.6px}"
       +".fit1 .bd{font-size:10.8px}.fit2 .bd{font-size:10.4px}.fit3 .bd{font-size:10px}"
+      +".fit1 .job{font-size:21px}.fit2 .job{font-size:19px}.fit3 .job{font-size:17px}"
       +".fit1 .big{font-size:19px}.fit2 .big{font-size:17px}.fit3 .big{font-size:15px}"
       +".dark.fit1 .big{font-size:26px}.dark.fit2 .big{font-size:22px}.dark.fit3 .big{font-size:19px}"
+      +".obj.o1{font-size:9.6px}.obj.o2{font-size:9.2px}.obj.o3{font-size:8.8px}"
       +"sup{font-size:7.5px;font-weight:800;margin-left:1px;vertical-align:super}.mk{margin-top:3px}"
       +".box{position:relative}.tc{position:absolute;bottom:4px;right:7px;font-size:6.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b}.dark .tc{color:#bdbdbd}"
       +".todo{color:#7c7c7c;font-style:italic;border:1.5px dashed #9a9a9a;padding:8px 10px;font-size:10.5px}"
@@ -2646,7 +2665,8 @@
   }
   // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
   var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
-  function buildGridExportHTML(){
+  // tight: the sheets (numbered from 1) to print one step smaller, when they are too full with no part over its limit.
+  function buildGridExportHTML(tight){
     return chainForExport().then(function(){
       var pr=get('projection')||{}, m=(window.__CLAN__||{}).manifest||{};
       var cit=CHAIN.state==='ok'?exportCitations(exportParts(gridKeys()), {pins:pr.pins, findings:pr.findings, sources:pr.sources,
@@ -2655,7 +2675,7 @@
       var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
       var me=((window.__CLAN__||{}).me||{}).name;
       var info=gridHeaderInfo({client:client, project:project, version:m.version, date:date, me:me});
-      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version});
+      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version, tight:tight});
       LAST_GRID_WARNINGS=g.warnings;
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
       var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
@@ -2663,7 +2683,7 @@
       return measureGrid(doc).then(function(bad){ LAST_GRID_OVERFLOW=bad; return doc; });
     });
   }
-  function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(); }
+  function buildExportHTML(style, tight){ return style==='plain'?buildPlainExportHTML():buildGridExportHTML(tight); }
   // A part Jude rejected is written, not approved. Its stored value says so, the way the draft marks an assumption:
   // "To confirm:" in front (a list marks its first line), which the sheet draws as the box's corner tag.
   function confirmMarked(v){
@@ -2718,28 +2738,30 @@
     return fillParts(gaps.map(function(g){ return g.key; })).then(function(rejected){
       var left=gridGaps(ctx);
       if(left.length){ toast('Not exported: '+listWords(left.map(function(g){ return g.label.toLowerCase(); }))+' still needs writing. Ask '+DARA+' again from its row.'); return; }
-      return runExport(kind, style, false, rejected);
+      return runExport(kind, style, false, undefined, rejected);
     });
   }
-  // A brief never leaves with a sheet clipped: one that runs past its footer has Dara tighten the longest parts, once;
-  // if it still does not fit, the export stops and says which sheet.
-  function runExport(kind, style, retried, rejected){
+  // A brief never leaves with a sheet clipped: one that runs past its footer has Dara tighten the longest parts, once
+  // (a sheet with no part over its limit first prints one step smaller); if it still does not fit, the export stops and says which sheet.
+  function runExport(kind, style, retried, tight, rejected){
     rejected=rejected||[];
     toast('Preparing '+kind.toUpperCase()+'…');
-    return buildExportHTML(style).then(function(html){
+    return buildExportHTML(style, tight).then(function(html){
       // Fail closed: sheets that could not be measured are not printed.
       if(style!=='plain'&&LAST_GRID_OVERFLOW===null){
         toast('Not exported: this browser could not check that every sheet fits. Try again, or use Plain PDF or Plain HTML.');
         return null;
       }
       if(style!=='plain'&&LAST_GRID_OVERFLOW.length){
+        // Too full with no part over its limit: the sheet steps its type down once, before anyone is asked to rewrite.
+        if(!tight&&!LAST_GRID_WARNINGS.length) return runExport(kind, style, retried, LAST_GRID_OVERFLOW.slice(), rejected);
         var long=LAST_GRID_WARNINGS.slice().sort(function(a,b){ return b.words/b.limit-a.words/a.limit; });
         if(!long.length) long=gridLongest(2);  // nothing over its limit: the longest parts have no limit, so they go first
         var names=listWords(long.map(function(w){ return w.label.toLowerCase(); }));
         if(!retried&&long.length&&!docLocked()&&!noMiddleware()){
           toast(DARA+' is tightening '+names+' to fit the sheet…');
           return fillParts(long.map(function(w){ return w.key; }), function(k){ return gridLimit(k)?'Rewrite this part in at most '+gridLimit(k)+' words, keeping what matters most.':'Rewrite this part about a third shorter, keeping what matters most.'; })
-            .then(function(more){ return runExport(kind, style, true, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
+            .then(function(more){ return runExport(kind, style, true, tight, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
         }
         toast('Not exported: sheet '+LAST_GRID_OVERFLOW[0]+' is too full. Shorten '+(names||'its parts')+' and export again.');
         return null;

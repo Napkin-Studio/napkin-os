@@ -35,7 +35,7 @@ def test_only_what_code_can_measure_is_sent_back_and_a_few_words_over_is_not():
     assert checks.revisions({"single_minded_proposition": e("Guinness")}) == []
 
 
-def test_the_skills_tests_go_to_jude_for_the_five_parts_only():
+def test_the_skills_tests_go_to_jude_for_the_tested_parts_only():
     t = checks.tests(["insight", "single_minded_proposition", "job", "barrier", "objection", "audience", "background"])
     assert set(t) == {"insight", "single_minded_proposition", "job", "barrier", "objection"}
     assert "rings_true" in t["insight"] and "fresh" in t["insight"] and "single_minded" in t["single_minded_proposition"]
@@ -90,7 +90,9 @@ def test_the_first_draft_goes_to_jude_with_the_tests_and_what_code_measured_and_
     first = seen["reviews"][0]
     assert first["part_checks"]["single_minded_proposition"]["words"] > 20
     assert first["part_checks"]["job"]["sentences"] == 2
-    assert set(first["tests"]) == {"insight", "single_minded_proposition", "job", "barrier", "objection"}
+    assert set(first["tests"]) == set(checks.TESTED), "the seven parts the draft wrote carry their tests"
+    assert first["part_checks"]["media_roles"] == {"items": 1, "max_items": 4, "words": 2, "limit": 55}
+    assert first["part_checks"]["measurement"]["max_items"] == 5
     # what code can measure went back with Jude's own list, once, with the instruction that says why
     told = seen["rewrite"]["rewrite"]
     assert "single_minded_proposition" in told and "at most 20 words" in told["single_minded_proposition"]
@@ -147,3 +149,91 @@ def test_a_part_provenance_downgraded_to_an_assumption_says_so_unless_it_carries
            "budget_and_scope": {"value": "Fine.", "basis": "assumption"}}
     assert checks.mark_downgraded(out) == ["audience"]
     assert out["audience"]["value"].startswith("To confirm:") and out["background"]["value"] == "Sales fell 12% last year."
+
+
+# -- the role of each medium and how we will know it worked (feature brief-media-measure) -------------------
+
+LISTS = {"media_roles": (4, 55), "measurement": (5, 70)}
+
+
+def test_code_measures_the_words_and_items_of_both_new_parts():
+    f = checks.facts({"media_roles": e(["Radio: reaches them in the car", "Social: cheap repeats"]),
+                      "measurement": e(["Judged by: sales", "Attribution: two regions held back", "The lag: after"])})
+    assert f["media_roles"] == {"items": 2, "max_items": 4, "words": 9, "limit": 55}
+    assert f["measurement"] == {"items": 3, "max_items": 5, "words": 11, "limit": 70}
+    assert "sentences" not in f["media_roles"], "a list is judged by its items, not its sentences"
+
+
+def test_a_part_over_its_words_or_its_item_cap_goes_back_with_a_message_from_its_own_rule():
+    for k, (items, words) in LISTS.items():
+        assert checks.revisions({k: e([W(words // items)] * items)}) == [], f"{k} at its limit is not sent back"
+        # 16 percent over the words goes back, 14 percent does not
+        assert checks.revisions({k: e([W(int(words * 1.14))])}) == []
+        long = checks.revisions({k: e([W(int(words * 1.16) + 1)])})
+        assert [x["part"] for x in long] == [k] and f"the limit is {words}" in long[0]["instruction"]
+        many = checks.revisions({k: e(["a"] * (items + 1))})
+        assert [x["part"] for x in many] == [k]
+        ins = many[0]["instruction"].lower()
+        assert f"it has {items + 1} items" in ins and f"keep the {items} strongest" in ins
+        assert "two or three that matter" not in ins, "not the reasons-to-believe sentence"
+    assert "no more than four media" in checks.revisions({"media_roles": e(["a"] * 5)})[0]["instruction"].lower()
+    assert "no more than five lines" in checks.revisions({"measurement": e(["a"] * 6)})[0]["instruction"].lower()
+    assert "two or three that actually matter" in checks.revisions({"reasons_to_believe": e(["a"] * 4)})[0]["instruction"].lower()
+
+
+def test_both_parts_carry_the_skills_tests_and_the_schema_declares_them_required_with_limits():
+    t = checks.tests(["media_roles", "measurement", "budget_and_scope"])
+    assert set(t) == {"media_roles", "measurement"}
+    assert {"reason_in_a_line", "from_the_job", "fits_the_audience", "fits_the_budget", "no_invented_numbers", "plain_words"} == set(t["media_roles"])
+    assert {"ties_to_objectives", "can_attribute", "starts_before_launch", "says_the_lag", "no_invented_targets", "fits_the_budget"} <= set(t["measurement"])
+    for k, (items, words) in LISTS.items():
+        f = RUBRIC_FIELDS[k]
+        assert f["required"] and f["type"] == "list" and (f["max_items"], f["max_words"]) == (items, words)
+        assert f["prompt"] and f["good_example"] and f["bad_example"]
+        assert len(f["good_example"].replace("·", " ").split()) <= words, "its own good example fits its limit"
+        assert len(f["good_example"].split(" · ")) <= items
+    hard = {c["id"] for k in LISTS for c in RUBRIC_FIELDS[k]["rubric"] if c.get("tolerance") == "hard"}
+    assert {"fits_the_audience", "can_attribute", "says_the_lag"} == hard
+
+
+def test_the_mark_comes_off_every_item_of_a_list_before_it_is_counted():
+    five = ["To confirm: Judged by: sales", "Attribution: a holdout region", "To confirm: Before and after: wave one", "The lag: eight weeks", "To confirm: Tracker: monthly"]
+    assert checks._spoken(five) == "Judged by: sales; Attribution: a holdout region; Before and after: wave one; The lag: eight weeks; Tracker: monthly"
+    assert checks.facts({"measurement": e(five)})["measurement"]["words"] == 18, "the three marks (6 words) are not counted"
+    assert checks._spoken("To confirm: One thing.") == "One thing." and checks._spoken(["a", "b"]) == "a; b"
+
+
+def test_a_figure_left_unmarked_is_asked_of_the_client():
+    down = {"media_roles": {**e(["Radio: 60% listen"]), "downgraded": True}, "measurement": {**e(["Attribution: a holdout"]), "downgraded": True},
+            "audience": e("Shoppers over 40")}
+    assert checks.figure_questions(down, lambda k: {"media_roles": "Role of each medium"}.get(k, k)) == [
+        "Which figure in role of each medium can you stand behind (60%), and where does it come from?"]
+    assert checks.figure_questions({"media_roles": {**e(["To confirm: Radio: 60%"]), "downgraded": True}}) == [], "a marked part is already to confirm"
+
+
+def test_an_assumed_list_part_marks_its_first_item_and_other_lists_stay_as_they_are():
+    out = {"media_roles": e(["Radio: the car", "Social: repeats"]), "measurement": e(["Judged by: sales"], "client"),
+           "reasons_to_believe": e(["a proof"]), "tone_and_world": e(["warm"])}
+    assert checks.mark_assumptions(out) == ["media_roles"]
+    assert out["media_roles"]["value"] == ["To confirm: Radio: the car", "Social: repeats"]
+    assert out["measurement"]["value"] == ["Judged by: sales"], "the client's own words are theirs"
+    assert out["reasons_to_believe"]["value"] == ["a proof"] and out["tone_and_world"]["value"] == ["warm"]
+    assert checks.mark_assumptions(out) == [], "idempotent"
+    # the mark is not counted as words said
+    assert checks.facts(out)["media_roles"]["words"] == 5
+    # a part provenance moved to assumption says so too, unless it holds a figure
+    down = {"measurement": {**e(["Attribution: a holdout"]), "downgraded": True},
+            "media_roles": {**e(["Radio: 60% listen"]), "downgraded": True}}
+    assert checks.mark_downgraded(down) == ["measurement"]
+    assert down["measurement"]["value"][0].startswith("To confirm: ") and down["media_roles"]["value"] == ["Radio: 60% listen"]
+
+
+def test_jude_is_told_to_judge_both_parts_and_the_measurement_part_is_what_evaluation_criteria_reads():
+    from napkin.brief.planned import REVIEW_SYSTEM
+    assert "@TESTED@" not in REVIEW_SYSTEM
+    item8 = REVIEW_SYSTEM.split("8. part tests:")[1].split("9. anti-patterns")[0]
+    for words in checks.TESTED_WORDS.values():
+        assert words in item8, f"item 8 names {words}"
+    assert "how we will know it worked: the\n   measurement part" in REVIEW_SYSTEM
+    assert "items against the item cap" in item8
+    assert set(checks.TESTED_WORDS) == set(checks.TESTED) and set(checks.TESTED) <= set(checks.APP_RUBRIC)
