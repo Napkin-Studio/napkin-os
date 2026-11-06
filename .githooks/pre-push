@@ -66,7 +66,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # 1. checks
   if [[ "${NAPKIN_SKIP_CHECKS:-}" == 1 ]]; then
     echo "pre-push: checks skipped (NAPKIN_SKIP_CHECKS=1)"
-  elif ! scripts/check.sh --range "$range"; then
+  elif ! scripts/check.sh --reuse --range "$range"; then   # --reuse: skip suites you just passed by hand
     status=1
   fi
 

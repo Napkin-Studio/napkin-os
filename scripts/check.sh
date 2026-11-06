@@ -8,6 +8,13 @@
 #   scripts/check.sh --all             every suite
 #   scripts/check.sh --only rust,wasm  just these suites
 #   scripts/check.sh --list            say which suites would run, run nothing
+#   scripts/check.sh --reuse           skip a suite that already passed on this exact working tree
+#
+# A passing suite is remembered (in the git dir, keyed by the working tree it ran on), so the
+# pre-push hook, which passes --reuse, does not run again what you just ran by hand. Any edit to
+# the code, tracked or not, is a new tree and runs everything again. NAPKIN_RECHECK=1 turns reuse
+# off. `licences` and `image` are never reused: the first's scope depends on the range, the second
+# passes without running when docker is missing.
 #
 # Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image licences
 # `image` (docker build --target runtime) runs when the Dockerfile, .dockerignore or the parts of
@@ -27,15 +34,16 @@ for b in chromium chromium-browser google-chrome-stable google-chrome; do
 done
 ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image licences)
 
-base="" range="" only="" list=0 all=0
+base="" range="" only="" list=0 all=0 reuse=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --reuse) reuse=1; shift ;;
     --base)  base="$2"; shift 2 ;;
     --range) range="$2"; shift 2 ;;
     --only)  only="$2"; shift 2 ;;
     --all)   all=1; shift ;;
     --list)  list=1; shift ;;
-    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "check.sh: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -247,19 +255,55 @@ suite_licences() {
   uv run -q --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
 }
 
+# --- remembering what passed, so the same code is not tested twice ------------
+# The fingerprint is everything the suites read: the files at HEAD, edits to them, and untracked
+# files, all through git so no other tool is needed. The features/*.clan records are left out: no
+# suite reads them, and `scripts/feature checked` rewrites one between a check and the push.
+tree_fingerprint() {
+  local ex=(':(exclude,glob)features/*.clan')
+  {
+    git ls-tree -r HEAD | grep -vE $'\tfeatures/[^/]+\\.clan$'
+    git diff HEAD --binary -- . "${ex[@]}"
+    git ls-files --others --exclude-standard -- . "${ex[@]}"
+    git ls-files --others --exclude-standard -- . "${ex[@]}" | git hash-object --stdin-paths 2>/dev/null
+  } | git hash-object --stdin
+}
+NOSTAMP=" licences image "
+stamp_dir="$(git rev-parse --git-common-dir)/napkin-checks"
+passed_before=" "
+if [[ $reuse -eq 1 && "${NAPKIN_RECHECK:-}" != 1 && -f "$stamp_dir/$(tree_fingerprint)" ]]; then
+  passed_before=" $(tr '\n' ' ' <"$stamp_dir/$(tree_fingerprint)") "
+fi
+passed_now=()
+
 logdir="$(mktemp -d "${TMPDIR:-/tmp}/napkin-check.XXXXXX")"
 declare -A result=()
 failed=0
 for s in "${run_list[@]}"; do
   printf '── %-13s ' "$s"
+  if [[ "$passed_before" == *" $s "* && "$NOSTAMP" != *" $s "* ]]; then
+    result[$s]=pass; passed_now+=("$s"); echo 'pass  (already passed on this exact code; NAPKIN_RECHECK=1 runs it again)'
+    continue
+  fi
   start=$SECONDS
   if "suite_$s" >"$logdir/$s.log" 2>&1; then
     result[$s]=pass; printf 'pass  (%ss)\n' $((SECONDS - start))
+    [[ "$NOSTAMP" == *" $s "* ]] || passed_now+=("$s")
   else
     result[$s]=FAIL; failed=1; printf 'FAIL  (%ss)  log: %s\n' $((SECONDS - start)) "$logdir/$s.log"
     tail -n 25 "$logdir/$s.log" | sed 's/^/   │ /'
   fi
 done
+
+# Remember what passed, against the tree as the suites left it (test caches included), merged
+# with what was already remembered for that tree. Keep the newest twenty.
+if [[ ${#passed_now[@]} -gt 0 && $list -eq 0 ]]; then
+  mkdir -p "$stamp_dir"
+  fp="$(tree_fingerprint)"
+  { [[ -f "$stamp_dir/$fp" ]] && cat "$stamp_dir/$fp"; printf '%s\n' "${passed_now[@]}"; } | sort -u >"$stamp_dir/$fp.tmp" &&
+    mv "$stamp_dir/$fp.tmp" "$stamp_dir/$fp"
+  ls -t "$stamp_dir" 2>/dev/null | tail -n +21 | while read -r old; do rm -f "$stamp_dir/$old"; done
+fi
 
 if [[ $failed -eq 0 ]]; then
   echo "all checks passed: ${run_list[*]}"

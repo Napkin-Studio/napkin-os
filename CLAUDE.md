@@ -57,6 +57,11 @@ Details: `features/README.md`. Schema: `features/feature.schema.json`.
 and runs only those. Use `--all` for everything, `--only rust,wasm` to pick
 suites, and `--list` to see what would run.
 
+A suite runs once per state of the code. A pass is remembered against the exact
+working tree it ran on, and the pre-push hook (`--reuse`) skips what you just
+passed by hand. Any edit makes a new tree and everything runs again;
+`NAPKIN_RECHECK=1` forces a rerun. `licences` and `image` always run.
+
 | Suite | Runs | Triggered by |
 |---|---|---|
 | rust | fmt, clippy, test on clan-sdk, clan-cli, napkin-host, napkin-web | `crates/`, `Cargo.*`, `spec/` |
