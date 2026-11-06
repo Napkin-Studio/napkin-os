@@ -43,6 +43,20 @@ def test_contract_file_parses_and_names_its_version():
     assert re.match(r"^\d+\.\d+\.\d+$", SCHEMA.version), "semver, so a reader can compare"
 
 
+def test_v1_4_adds_the_awardlib_source_and_nothing_else():
+    """1.4.0 is additive: one new `source` value, no new field, so nothing is backfilled and
+    chunks written under 1.3.0 stay valid. The award case library chunk validates."""
+    assert tuple(SCHEMA.enum_values("source")) == ("ipa", "cannes", "dandad", "effie", "playbook", "template",
+                                                  "dossier", "awardlib")
+    assert tuple(int(x) for x in SCHEMA.version.split(".")) >= (1, 4, 0)
+    old = contract.apply_defaults({"source": "ipa", "doc_id": "ipa_0001", "level": "parent", "bucket": "exemplars",
+                                   "as_of": "2024-01-01", "schema_version": "1.3.0"})
+    assert contract.validate(old) == []                                   # a 1.3.0 chunk is still valid
+    lib = contract.apply_defaults({"source": "awardlib", "doc_id": "lib_abc", "level": "parent", "bucket": "exemplars",
+                                   "as_of": "2024-01-01", "category": "technology", "award_tier": "gold"})
+    assert contract.validate(lib) == []
+
+
 def test_every_field_and_enum_value_is_lower_snake_case():
     """Every field name and every enum value in the contract is lower snake_case, so
     `FMCG` and `fmcg` can never diverge."""

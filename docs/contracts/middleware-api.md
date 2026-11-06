@@ -217,6 +217,10 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
 - A job belongs to the tenant (from auth) and the document it was started on.
   Polling it from another tenant or another `clan.id` is `404`, the same as an
   id that never existed.
+- The host also reads `job` for the landing's Running and Needs you: `queued` and
+  `running` are working, `needs_input` is waiting on a person, `failed` is failed,
+  `done` is finished (os-layer.md section 12.3, `RunTracker`). It adds no route and
+  no field here; there is no `cancelled` state to report.
 - `failed` carries `job.error: { type, message }`. For the tasks that send no
   staged changes it carries no change; a failed `start_campaign` carries the
   change for any stages finished since the previous reply, plus an agent

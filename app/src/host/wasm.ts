@@ -18,7 +18,11 @@
 import init, { NapkinHost } from '../wasm/napkin_wasm'
 import { prepareFrameHtml } from './wasmFrame'
 import type {
+  Adopted,
+  LegacyName,
   ClientConfirmReply,
+  ClientRecord,
+  LibraryListing,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
@@ -231,8 +235,8 @@ export const wasmHost: Host = {
   whoAmI: async () => ({ actor: 'human:local', id: 'local', name: null }),
   openClan: async path => (await boot()).open(path) as OpenResult,
   openHome: async () => (await boot()).openHome() as OpenResult,
-  newDocumentFromApp: async (appId, title) =>
-    (await boot()).newDocument(appId, title) as OpenResult,
+  newDocumentFromApp: async (appId, title, clientId) =>
+    (await boot()).newDocument(appId, title ?? undefined, clientId ?? undefined) as OpenResult,
 
   // A shared link cannot carry a document, because there is no server holding
   // one. Nothing to take.
@@ -313,6 +317,18 @@ export const wasmHost: Host = {
   },
 
   listRecent: async () => (await boot()).listRecent() as RecentDoc[],
+
+  listLibrary: async filter =>
+    (await boot()).listLibrary(filter?.client ?? undefined, filter?.app ?? undefined) as LibraryListing,
+  clients: {
+    list: async (includeArchived = false) => (await boot()).listClients(includeArchived) as ClientRecord[],
+    create: async (name, material) => (await boot()).createClient(name, material ?? undefined) as ClientRecord,
+    update: async (id, patch) => (await boot()).updateClient(id, JSON.stringify(patch)) as ClientRecord,
+    archive: async id => (await boot()).setClientArchived(id, true) as ClientRecord,
+    restore: async id => (await boot()).setClientArchived(id, false) as ClientRecord,
+    legacy: async () => (await boot()).legacyClientNames() as LegacyName[],
+    adopt: async names => (await boot()).adoptClients(JSON.stringify(names)) as Adopted,
+  },
 
   spinoffTargets: async () => (await boot()).spinoffTargets() as SpinoffTarget[],
   spinoffDocument: async (appId, title, map) =>

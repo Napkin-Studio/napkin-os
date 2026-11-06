@@ -55,6 +55,7 @@ pub fn describe(doc: &Document) -> OpenResult {
             version: a.version.clone(),
             icon: a.icon.clone(),
         }),
+        client: manifest.client.clone(),
     };
 
     OpenResult {

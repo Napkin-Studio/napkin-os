@@ -8,6 +8,7 @@ import type { ClientAnswerKind, ClientPartRef, ManifestInfo } from '../host'
 import { partsFrom } from './clientReview/review'
 import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
+import { barFrom, type BarItem } from './appBar'
 import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
 import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
 import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
@@ -40,6 +41,8 @@ interface Props {
    * how much of it they cover (`clan:insets`) so it can keep its content clear.
    */
   onChrome?: (mode: 'glass' | 'solid', tint: string | null) => void
+  /** What the app asks the OS bar to show (`clan:bar`): its whole list, each time. */
+  onBar?: (items: BarItem[]) => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
 }
@@ -52,7 +55,7 @@ interface Props {
  */
 export default function AppRuntime({
   htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, insets,
+  onChrome, onBar, insets,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -157,8 +160,8 @@ export default function AppRuntime({
   // What the app says about its parts. Its contentWindow is the frame's for
   // the frame's whole life, loads included, so nothing it posts before its
   // load event is missed. Only our own frame is heard.
-  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome })
-  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome } })
+  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar })
+  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar } })
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const frame = iframeRef.current?.contentWindow
@@ -173,6 +176,7 @@ export default function AppRuntime({
         const { kind, name } = m as { kind?: unknown; name?: unknown }
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
+      else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',
@@ -296,6 +300,8 @@ export default function AppRuntime({
         postInsets()
         // An app that declared its parts before the shell heard says them again.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:parts?' }, '*')
+        // Likewise the tabs and buttons it wants in the OS bar.
+        iframeRef.current?.contentWindow?.postMessage({ type: 'clan:bar?' }, '*')
         setExportFrame(iframeRef.current?.contentWindow ?? null)
       }}
     />

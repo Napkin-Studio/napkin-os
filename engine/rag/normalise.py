@@ -231,15 +231,24 @@ def category_from_sector(sector) -> str | None:
 # ---- award tier ------------------------------------------------------------
 _TIER_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"grand\s*prix"), "grand_prix"),
-    (re.compile(r"\bgold\b"), "gold"),
-    (re.compile(r"\bsilver\b"), "silver"),
-    (re.compile(r"\bbronze\b"), "bronze"),
+    # Each body's own name for its top prize (award library, 2026-10-22: Grand Award 34, Global
+    # Grand Effie 14, Grand LIA 5, Grande Lotus 3, Grand Effie 2 — the library agrees on every one).
+    (re.compile(r"\bgrand (award|effie|lia|winning)\b|\bgrande\b"), "grand_prix"),
+    (re.compile(r"\bgold\b|\boro\b|^or$"), "gold"),                 # Spanish and French gold
+    (re.compile(r"\bsilver\b|\bplata\b"), "silver"),
+    (re.compile(r"\bbronze\b|\bbronce\b"), "bronze"),
     (re.compile(r"\bblack\b.*pencil|pencil.*\bblack\b"), "black_pencil"),
     (re.compile(r"\bwhite\b.*pencil|pencil.*\bwhite\b"), "white_pencil"),
     (re.compile(r"\byellow\b.*pencil|pencil.*\byellow\b"), "yellow_pencil"),
     (re.compile(r"\bgraphite\b.*pencil|pencil.*\bgraphite\b"), "graphite_pencil"),
     (re.compile(r"\bwood\b.*pencil|pencil.*\bwood\b"), "wood_pencil"),
-    (re.compile(r"shortlist"), "shortlist"),
+    # D&AD pencils written without the word "pencil" (the whole label, so nothing else matches).
+    (re.compile(r"^black$"), "black_pencil"),
+    (re.compile(r"^white$"), "white_pencil"),
+    (re.compile(r"^yellow$"), "yellow_pencil"),
+    (re.compile(r"^graphite$"), "graphite_pencil"),
+    (re.compile(r"^wood$"), "wood_pencil"),
+    (re.compile(r"short\s*list"), "shortlist"),
 ]
 
 
@@ -386,7 +395,8 @@ _ROLE_BUCKET = {
     "template_section": "instructions", "criteria": "instructions",
 }
 _SOURCE_BUCKET = {"ipa": "exemplars", "effie": "exemplars", "cannes": "exemplars", "dandad": "exemplars",
-                  "dossier": "exemplars", "playbook": "craft", "template": "instructions"}
+                  "dossier": "exemplars", "awardlib": "exemplars", "playbook": "craft",
+                  "template": "instructions"}
 
 # Playbook sections that carry no retrievable lesson. Kept as parent payload, not embedded.
 NOT_EMBEDDED_ROLES = frozenset({"identity_card", "bibliography"})

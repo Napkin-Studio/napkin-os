@@ -14,7 +14,8 @@ import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
-import { refreshApp } from './appExport'
+import { barAction, refreshApp } from './appExport'
+import type { BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp } from '../host'
 import { PoweredByClan } from '../brand/PoweredByClan'
@@ -35,6 +36,8 @@ interface Props {
   banner?: ReactNode
   onExport: (kind: 'html' | 'pdf') => void
   onSpinoff: (appId: string) => void
+  /** Where the document sits (Agency > Client > Tool), drawn in the bar before the title; absent for a document with no client. */
+  trail?: ReactNode
   /** Each change is kept as it is made, so the bar may say "Saved" (Toolbar). */
   saved?: boolean
   /** Open another document of the store (the sidebar's "Made from" link). */
@@ -42,7 +45,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   // Edit mode is the OS's: the app's fields become editable while it is on.
@@ -188,6 +191,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const onChrome = useCallback((mode: 'glass' | 'solid', tint: string | null) => {
     setChrome({ doc: docRef.current, mode, tint: tint && readsWithChromeInk(tint) ? tint : null })
   }, [])
+  // What the open document asked the OS bar to show (`clan:bar`), kept with the
+  // document that asked like the chrome above: the next document starts with an
+  // empty bar until it sends its own. Client review keeps the bar to itself.
+  const [barState, setBarState] = useState<{ doc: string | null; items: BarItem[] }>({ doc: null, items: [] })
+  const onBar = useCallback((items: BarItem[]) => setBarState({ doc: docRef.current, items }), [])
+  const barItems = barState.doc === docPath && !clientOn ? barState.items : []
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null
@@ -233,6 +242,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <div className="ch-strip" />
       <Toolbar
         title={barTitle}
+        bar={barItems}
+        onBarAction={barAction}
         tool={brand}
         isTemplate={open.is_template}
         trusted={open.trusted}
@@ -247,6 +258,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         docPath={open.path}
         onSpinoff={onSpinoff}
         loading={false}
+        trail={trail}
         validation={open.validation}
         saved={saved}
         editMode={editMode}
@@ -281,6 +293,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onPartMark={onPartMark}
             onEditRequest={onEditRequest}
             onChrome={onChrome}
+            onBar={onBar}
             insets={shown}
           />
         </main>

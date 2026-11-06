@@ -175,10 +175,23 @@ ids against what was retrieved — string matching, no model.
 
 Chunker v2 follows document shape: IPA and Cannes get a parent per case and a child per
 section or entry-form answer; playbooks a chunk per section; D&AD is grouped by
-discipline and year and marked `stage=production`; templates keep tables whole.
-`contract.py` reads `../schema/rag_metadata.v1.json` (v1.3.0, locked) and defines nothing
+discipline and year and marked `stage=production`; templates keep tables whole; the award
+case library (`awardlib`) is one short parent chunk per case.
+`contract.py` reads `../schema/rag_metadata.v1.json` (v1.4.0, locked) and defines nothing
 itself. `normalise.py` holds every spelling table and returns a contract value or None —
 it never guesses.
+
+### Award case library — `../ingest_awardlib.py`, `RAG_AWARDLIB`
+
+A workbook of short award cases with Napkin-reconstructed strategy, entrant-reported results
+and public-facts-only rights. `python3 ../ingest_awardlib.py` turns the effectiveness-and-results
+slice into one markdown file per case (`reference/rag/awardlib/lib_<hash>.md` and a
+`_manifest.json` with the input's sha256 and every skip), deterministic and idempotent;
+`build_rag.sh` indexes them as `source=awardlib`. They stay **hidden from retrieval** until
+`RAG_AWARDLIB` admits them: `off` (default), `thin` (only where the brief's category has
+fewer than `RAG_AWARDLIB_THIN_MAX` cases of its own in the index) or `on`. Measurements,
+the gate and what is undecided (rights, the threshold) are in
+[ADR 0033](docs/adr/0033-award-library-gated-fill.md) and `features/award-data-fit.clan`.
 
 ### Stores — `store_base.py`, `store_local.py`, `store_qdrant.py`
 
@@ -307,7 +320,7 @@ python3 judge.py check --backends jev,local --deadline 5
 | `admit(hit_metadata, text, *, exclude_doc_ids=frozenset(), recency_years=None, as_of=None, max_chars=MAX_PASSAGE_CHARS)` | `None` or a reason | `None` = admitted. Checks run in the order excluded, oversized, too_old; the first that fires is reported |
 | `REFUSAL_REASONS` | `("excluded", "too_old", "oversized")` | Closed, so the trace can be grouped by reason |
 | `MAX_PASSAGE_CHARS` | `12_000` | Measured on `_index_v3`: admits 7,310 of 7,315 chunks (99.93%). Refuses only five playbook sections from `91-pestle-steep-analysis.md` and `26-aaker-brand-equity-model.md` |
-| `RECENCY_SOURCES` | `{ipa, effie, cannes, dandad}` | Sources whose `year` is the award year; kept equal to `chunking._CASE_SOURCES` by a test |
+| `RECENCY_SOURCES` | `{ipa, effie, cannes, dandad, awardlib}` | Sources whose `year` is the award year; kept equal to `chunking._CASE_SOURCES` by a test |
 | `parse_year(value)` | `int` or `None` | Only an int or an exactly four-digit string counts |
 
 **Rules.**
@@ -529,6 +542,8 @@ Only `nemotron` and `local` take a Platt fit (`PLATT_BACKENDS`): jev is vendor-c
 | `RAG_VALIDATOR` | unset: `jev` on the brief path (Sai, 2026-09-26), off for `rag_io` callers | Validation chain in priority order, e.g. `jev,nemotron`; `none` switches it off on the brief path |
 | `PAIRWISE_MODEL` / `PAIRWISE_SAMPLES` / `PAIRWISE_WORKERS` | `claude-sonnet-5` / `3` / `2` | the head-to-head judge (`pairwise.py`, opt-in via `checkpoint_run.py --pairwise` or `e2e_eval.py --pairwise`): model, rounds (each asked in both orders), calls in parallel (the Claude Code login rate-limits more) |
 | `RAG_STORE_MEMO` | `1` | `0` opens a fresh local store on every `get_store()` call instead of one per process (ADR 0010) |
+| `RAG_AWARDLIB` | `off` | The award case library: `off` hides every `source=awardlib` chunk, `thin` adds library cases only where the brief's category has fewer than `RAG_AWARDLIB_THIN_MAX` cases of its own (one extra exemplars search, merged before the validator), `on` lets them compete everywhere. An unknown value raises. ADR 0033 |
+| `RAG_AWARDLIB_THIN_MAX` | `30` | A category is thin when the index holds fewer cases than this (counted from the store at run time). A positive integer |
 | `RAG_VALIDATOR_DEADLINE_S` | `3.0` | Per-call deadline for backends that declare none |
 | `RAG_LOCAL_RERANKER`, `RAG_LOCAL_DEVICE` | `BAAI/bge-reranker-v2-m3`, mps/cpu | Local cross-encoder |
 | `RAG_NEMOTRON_CHARS`, `RAG_NEMOTRON_QUERY_CHARS` | `1500`, `1000` | Nemotron input clipping (a calibration file refuses a mismatch) |
@@ -563,6 +578,7 @@ rejected, consequences.
 | [0012](docs/adr/0012-engine-code-structure.md) | Engine code structure: parse_brief split into brief_llm / brief_ingest / brief_render, one .env loader, dead code out |
 | [0013](docs/adr/0013-measurement-noise-and-grounding.md) | Checkpoint reports: brief lists, the noise line from repeat pairs, the grounding count, a runner that checks before it spends |
 | [0014](docs/adr/0014-research-facts.md) | Verified research facts in the brief: current fact rows as cited lines for every hero writer, allowed for the figure check, never in the Loop 1 capture; the CLAN shows sources and settles disagreements |
+| [0033](docs/adr/0033-award-library-gated-fill.md) | The award case library: a gated fill for thin categories, off by default; measured on blind-reviewed A/Bs |
 
 ## Plans
 

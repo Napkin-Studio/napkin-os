@@ -350,6 +350,18 @@ def count() -> int:
         return 0
 
 
+def count_where(where: dict | None) -> int:
+    """Exact number of points passing the metadata filter. Unlike count(), a failure RAISES
+    (RuntimeError): the award-library gate sizes a category with this and must fail closed
+    when it cannot, which a silent 0 would turn into "every category is thin"."""
+    body: dict = {"exact": True}
+    flt = filters.to_qdrant(where)
+    if flt:
+        body["filter"] = flt
+    r = _req("POST", f"/collections/{collection_name()}/points/count", body)
+    return int((r.get("result") or {}).get("count") or 0)
+
+
 def scroll(batch: int = 512) -> Iterator[dict]:
     """Yield every payload with its vector (for migrate / store-check)."""
     name = collection_name()
@@ -413,6 +425,10 @@ class QdrantStore(VectorStore):
     def search_lexical(self, qtext, k=5, where=None):
         """Keyword-only fallback. See search_lexical()."""
         return search_lexical(qtext, k=k, where=where)
+
+    def count_where(self, where):
+        """Exact points passing a filter; raises RuntimeError when Qdrant cannot answer. See count_where()."""
+        return count_where(where)
 
     def search_hybrid(self, qvec, qtext, k=5, where=None, n=50, rrf_k=10, weights=(1.0, 1.0)):
         """Dense + BM25 fused by RRF, with the same defaults as the local store. See

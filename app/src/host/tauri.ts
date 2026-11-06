@@ -13,9 +13,13 @@ import { listen } from '@tauri-apps/api/event'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 
 import type {
+  Adopted,
+  LegacyName,
+  ClientRecord,
   Host,
   HostEvents,
   InstalledApp,
+  LibraryListing,
   OpenResult,
   RecentDoc,
   SpinoffTarget,
@@ -38,8 +42,8 @@ export const tauriHost: Host = {
   whoAmI: async () => ({ actor: 'human:local', id: 'local', name: null }),
   openClan: path => invoke<OpenResult>('open_clan', { path }),
   openHome: () => invoke<OpenResult>('open_home'),
-  newDocumentFromApp: (appId, title) =>
-    invoke<OpenResult>('new_document_from_app', { appId, title }),
+  newDocumentFromApp: (appId, title, clientId) =>
+    invoke<OpenResult>('new_document_from_app', { appId, title, clientId: clientId ?? null }),
   takeLaunchFile: () => invoke<string | null>('take_launch_file'),
 
   getHumanHtml: () => invoke<string>('get_human_html'),
@@ -71,6 +75,18 @@ export const tauriHost: Host = {
     const resp = await fetch(`${clanScheme()}/recent`)
     if (!resp.ok) throw new Error(`recent: ${resp.status}`)
     return resp.json() as Promise<RecentDoc[]>
+  },
+
+  listLibrary: filter =>
+    invoke<LibraryListing>('list_library', { client: filter?.client ?? null, appId: filter?.app ?? null }),
+  clients: {
+    list: (includeArchived = false) => invoke<ClientRecord[]>('list_clients', { includeArchived }),
+    create: (name, material) => invoke<ClientRecord>('create_client', { name, material: material ?? null }),
+    update: (id, patch) => invoke<ClientRecord>('update_client', { id, patch }),
+    archive: id => invoke<ClientRecord>('set_client_archived', { id, archived: true }),
+    restore: id => invoke<ClientRecord>('set_client_archived', { id, archived: false }),
+    legacy: () => invoke<LegacyName[]>('legacy_client_names'),
+    adopt: names => invoke<Adopted>('adopt_clients', { names }),
   },
 
   spinoffTargets: () => invoke<SpinoffTarget[]>('spinoff_targets'),

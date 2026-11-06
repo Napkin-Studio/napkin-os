@@ -52,7 +52,7 @@ Recency rule — and why it is narrower than "compare `year` with the cap":
     absent or unparseable year ADMITS. The alternative, refusing what cannot be dated,
     would silently drop the whole template bucket (no year at all) for no evidence.
   * Only sources whose `year` is the AWARD year are capped (RECENCY_SOURCES: ipa, effie,
-    cannes, dandad — the same set chunking._CASE_SOURCES uses to derive `as_of`, and a
+    cannes, dandad, awardlib — the same set chunking._CASE_SOURCES uses to derive `as_of`, and a
     test keeps the two from drifting). A playbook's `year` is when the FRAMEWORK was
     invented (FCB Grid 1980, DAGMAR 1961); 647 playbook chunks carry such a clean year,
     and a five-year cap applied to them would refuse most of the craft bucket for being
@@ -82,7 +82,7 @@ MAX_PASSAGE_CHARS = 12_000
 
 # Sources whose `year` is the award year, i.e. when the lesson was judged true. Mirrors
 # chunking._CASE_SOURCES (guarded by test_recency_sources_match_chunking).
-RECENCY_SOURCES = frozenset({"ipa", "effie", "cannes", "dandad"})
+RECENCY_SOURCES = frozenset({"ipa", "effie", "cannes", "dandad", "awardlib"})
 
 _YEAR_RE = re.compile(r"\s*(\d{4})\s*")
 _SPACE_RE = re.compile(r"\s+")

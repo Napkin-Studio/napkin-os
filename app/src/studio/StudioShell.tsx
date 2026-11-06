@@ -14,16 +14,19 @@ interface Props {
   children: ReactNode
   /** Extra controls at the start of the tools, e.g. the Offline section. */
   tools?: ReactNode
+  /** Where you are, as a trail of circles; replaces nothing, sits after the brand. */
+  trail?: ReactNode
 }
 
 /** The studio frame: frosted top bar with the brand and the tools. */
-export default function StudioShell({ children, tools }: Props) {
+export default function StudioShell({ children, tools, trail }: Props) {
   // the dogfood build records where people go (a no-op elsewhere)
   useEffect(() => { setScreen({ screen: 'home' }) }, [])
   return (
     <div className="studio">
       <header className="studio-top">
         <StudioLogo size={15} />
+        {trail}
         <div className="studio-tools">
           {tools}
           <DogfoodBadge />
