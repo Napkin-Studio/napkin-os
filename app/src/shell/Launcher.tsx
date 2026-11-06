@@ -11,6 +11,7 @@ import { AgentFigure } from '../studio/AgentFigure'
 import { AGENTS, type AgentKey } from '../studio/model'
 import type { InstalledApp } from './types'
 import { docTitle } from './docTitle'
+import { greeting, lastTouched } from './when'
 import { upcoming } from './comingSoon'
 import { SoonCard } from './SoonCard'
 import { signedInUser } from '../host/http'
@@ -25,6 +26,8 @@ interface Props {
   onOpenFile: () => void
   /** Open a document already in the store: one of the recent ones. */
   onOpenDocument: (path: string) => void
+  /** Back to the landing, when the host can list the library and the person came here from it. */
+  onLanding?: () => void
 }
 
 // Every word and colour on a card comes from the app's own manifest
@@ -40,27 +43,6 @@ const RECENT_SHOWN = 6
 
 /** A filter by tool once the list is long enough to need one. */
 const FILTER_FROM = 5
-
-/** The greeting, by the local time of day. */
-function greeting(now = new Date()): string {
-  const h = now.getHours()
-  return h < 12 ? 'Good morning.' : h < 18 ? 'Good afternoon.' : 'Good evening.'
-}
-
-/** When a document was last worked on, as a person would say it. */
-function lastTouched(iso: string, now = new Date()): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
-  const days = Math.round((day(now) - day(d)) / 86_400_000)
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-  if (days <= 0) return `Today, ${time}`
-  if (days === 1) return `Yesterday, ${time}`
-  if (days < 7) return d.toLocaleDateString(undefined, { weekday: 'long' })
-  return d.toLocaleDateString(undefined, {
-    day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  })
-}
 
 /** The crew the OS can draw: known figure keys only, at most six. */
 function crewOf(home?: AppHome | null): AgentKey[] {
@@ -177,7 +159,7 @@ function Chip({ state }: { state?: RecentState | null }) {
 }
 
 /** The OS home: a greeting, a card per tool, and the work left open. */
-export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, onOpenDocument }: Props) {
+export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, onOpenDocument, onLanding }: Props) {
   // null while the list is on its way, so the section waits instead of flashing empty.
   const [recent, setRecent] = useState<RecentDoc[] | null>(null)
   const [recentFailed, setRecentFailed] = useState(false)
@@ -227,6 +209,9 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
 
   return (
     <div className="ln">
+      {onLanding && (
+        <button className="ln-more ln-back" onClick={onLanding}>← Back to the studio</button>
+      )}
       <div className="ln-hello">
         <h1 className="ln-banner">{greeting()} What shall we work on?</h1>
       </div>

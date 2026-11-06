@@ -40,11 +40,13 @@ pub use error::{Error, Result};
 pub use export::{export_html, ExportOptions};
 pub use inject::{assemble, AgentContext, InjectOptions};
 pub use instantiate::{
-    instantiate, make_template, spinoff, InstantiateOptions, MakeTemplateOptions, SpinoffOptions,
+    instantiate, make_template, spinoff, with_client, InstantiateOptions, MakeTemplateOptions,
+    SpinoffOptions,
 };
 pub use manifest::{
-    AppHome, AppInfo, Carried, ExternalRef, FileEntry, ForkInfo, Lineage, Manifest, MergePolicies,
-    ParentRef, Signature, SpinoffSpec, ViewState, CLAN_VERSION, CLAN_VERSION_MINOR,
+    is_client_id, new_client_id, AppHome, AppInfo, Carried, ClientRef, ExternalRef, FileEntry,
+    ForkInfo, Lineage, Manifest, MergePolicies, ParentRef, Signature, SpinoffSpec, ViewState,
+    CLAN_VERSION, CLAN_VERSION_MINOR,
 };
 pub use merge::{
     fork, fork_with_contexts, merge, ConflictValue, MergeConflict, MergeOptions, MergeOutcome,

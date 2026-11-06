@@ -15,8 +15,8 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use napkin_host::{
-    export, library, proxy, session::Session, Ctx, DocId, FsConfig, FsStore, HostRequest,
-    HostResponse, InstalledApp, OpenResult,
+    clients, export, library, proxy, session::Session, Ctx, DocId, FsConfig, FsStore, HostRequest,
+    HostResponse, InstalledApp, LibraryCache, LibraryFilter, LibraryListing, OpenResult,
 };
 use serde_json::Value;
 use tauri::{Emitter, Manager, State};
@@ -26,6 +26,8 @@ use tauri::{Emitter, Manager, State};
 struct HostCtx {
     session: Session,
     config: FsConfig,
+    /// What the library listing worked out per document.
+    library: LibraryCache,
 }
 
 struct AppState {
@@ -47,10 +49,13 @@ impl AppState {
         self.host.get_or_init(|| {
             let data_dir = app.path().app_data_dir().unwrap_or_default();
             let config_dir = app.path().app_config_dir().unwrap_or_default();
+            let library = LibraryCache::new();
             HostCtx {
                 // One person on their own machine: every write is theirs.
-                session: Session::with_ctx(Arc::new(FsStore::new(data_dir)), Ctx::local()),
+                session: Session::with_ctx(Arc::new(FsStore::new(data_dir)), Ctx::local())
+                    .with_runs(library.runs()),
                 config: FsConfig::new(config_dir),
+                library,
             }
         })
     }
@@ -160,11 +165,87 @@ fn new_document_from_app(
     app: tauri::AppHandle,
     app_id: String,
     title: Option<String>,
+    client_id: Option<String>,
 ) -> Result<OpenResult, String> {
     let ctx = host(&app);
-    let id =
-        library::create_instance(&**ctx.session.store(), &app_id, title).map_err(String::from)?;
+    let store = &**ctx.session.store();
+    let client = clients::get_named(store, client_id.as_deref()).map_err(String::from)?;
+    let id = library::create_instance_for(store, &app_id, title, client.as_ref())
+        .map_err(String::from)?;
     ctx.session.open(id).map_err(String::from)
+}
+
+/// Every piece of work on this machine, by client (the landing's one read).
+#[tauri::command]
+fn list_library(
+    app: tauri::AppHandle,
+    client: Option<String>,
+    app_id: Option<String>,
+) -> LibraryListing {
+    let ctx = host(&app);
+    let filter = LibraryFilter {
+        client: client.filter(|c| !c.is_empty()),
+        app: app_id.filter(|a| !a.is_empty()),
+    };
+    napkin_host::scan_library(&**ctx.session.store(), &ctx.library, &filter)
+}
+
+#[tauri::command]
+fn list_clients(
+    app: tauri::AppHandle,
+    include_archived: bool,
+) -> Result<Vec<clients::ClientRecord>, String> {
+    clients::list(&**host(&app).session.store(), include_archived).map_err(String::from)
+}
+
+#[tauri::command]
+fn create_client(
+    app: tauri::AppHandle,
+    name: String,
+    material: Option<String>,
+) -> Result<clients::ClientRecord, String> {
+    let ctx = host(&app);
+    clients::create_client(
+        &**ctx.session.store(),
+        ctx.session.ctx(),
+        &name,
+        material.as_deref(),
+    )
+    .map_err(String::from)
+}
+
+#[tauri::command]
+fn update_client(
+    app: tauri::AppHandle,
+    id: String,
+    patch: clients::ClientPatch,
+) -> Result<clients::ClientRecord, String> {
+    let ctx = host(&app);
+    clients::update_client(&**ctx.session.store(), ctx.session.ctx(), &id, patch)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+fn set_client_archived(
+    app: tauri::AppHandle,
+    id: String,
+    archived: bool,
+) -> Result<clients::ClientRecord, String> {
+    let ctx = host(&app);
+    clients::set_archived(&**ctx.session.store(), ctx.session.ctx(), &id, archived)
+        .map_err(String::from)
+}
+
+#[tauri::command]
+fn legacy_client_names(app: tauri::AppHandle) -> Result<Vec<clients::LegacyName>, String> {
+    let ctx = host(&app);
+    clients::legacy_offer(&**ctx.session.store()).map_err(String::from)
+}
+
+#[tauri::command]
+fn adopt_clients(app: tauri::AppHandle, names: Vec<String>) -> Result<clients::Adopted, String> {
+    let ctx = host(&app);
+    clients::adopt(&**ctx.session.store(), ctx.session.ctx(), &names).map_err(String::from)
 }
 
 /// Which installed apps will take the open document as a spin-off source.
@@ -348,6 +429,13 @@ fn main() {
             list_apps,
             install_app,
             new_document_from_app,
+            list_library,
+            list_clients,
+            create_client,
+            update_client,
+            set_client_archived,
+            adopt_clients,
+            legacy_client_names,
             spinoff_targets,
             spinoff_document,
             agent_prompt,

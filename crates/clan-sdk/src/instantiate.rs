@@ -25,7 +25,9 @@ use crate::container::{ClanBuilder, ClanFile, MANIFEST_PATH};
 use crate::decision::{Certainty, Decision, DecisionChain, ReasonPoint, Reasoning};
 use crate::error::{Error, Result};
 use crate::hash::sha256_prefixed;
-use crate::manifest::{AppInfo, Carried, FileEntry, Lineage, Manifest, ParentRef, ViewState};
+use crate::manifest::{
+    AppInfo, Carried, ClientRef, FileEntry, Lineage, Manifest, ParentRef, ViewState,
+};
 use crate::merge::MERGE_REPORT_PATH;
 
 const DATA_PATH: &str = "shared/data.yaml";
@@ -279,6 +281,23 @@ pub struct SpinoffOptions {
     pub source_uri: Option<String>,
 }
 
+/// `clan`'s bytes with `manifest.client` set to `client` (or cleared with
+/// `None`), and every other entry untouched. The revision id changes, as on
+/// any write; `updated_at` does not, because attaching a document to a client
+/// is not work done in it and must not reorder the recent list.
+pub fn with_client(clan: &ClanFile, client: Option<ClientRef>) -> Result<Vec<u8>> {
+    let mut manifest = clan.manifest().clone();
+    manifest.next_revision();
+    manifest.client = client;
+    let mut b = ClanBuilder::new(manifest);
+    for (path, bytes) in clan.read_all_entries()? {
+        if path != MANIFEST_PATH {
+            b.add_entry(path, bytes);
+        }
+    }
+    b.build()
+}
+
 /// Branch a finished document into a new document of a different app, carrying
 /// its data and its decisions across.
 ///
@@ -508,6 +527,8 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
     manifest.document_type = Some("document".to_string());
     manifest.app = Some(app.clone());
     manifest.fork = None;
+    // Who the source was for, this is for: a spin-off stays with its client.
+    manifest.client = src_manifest.client.clone();
     manifest.lineage = Some(Lineage {
         // The source document is the substantive parent — it is where the
         // content came from. The template is recorded alongside it.
@@ -1176,6 +1197,41 @@ mod tests {
             "ie.napkin.film"
         );
         assert_eq!(clan.manifest().document_type.as_deref(), Some("document"));
+    }
+
+    #[test]
+    fn spinoff_carries_the_sources_client_and_adds_none_when_it_had_none() {
+        let template = film_template(Some(spec_for_film()));
+
+        // A source with no client: the spin-off has none, and its manifest
+        // text does not mention the field at all (older readers see no change).
+        let plain = filled_source("ie.napkin.brief");
+        let out =
+            ClanFile::from_bytes(spinoff(&template, &plain, SpinoffOptions::default()).unwrap())
+                .unwrap();
+        assert!(out.manifest().client.is_none());
+        assert!(!String::from_utf8(out.read_entry("manifest.yaml").unwrap())
+            .unwrap()
+            .contains("client:"));
+
+        // A source for Client A: the spin-off is for Client A.
+        let mut b = crate::container::ClanBuilder::new(plain.manifest().clone());
+        b.manifest_mut().client = Some(crate::manifest::ClientRef {
+            id: "cli_0a1b2c3d".into(),
+            name: "Client A".into(),
+        });
+        for (p, bytes) in plain.read_all_entries().unwrap() {
+            if p != "manifest.yaml" {
+                b.add_entry(p, bytes);
+            }
+        }
+        let source = ClanFile::from_bytes(b.build().unwrap()).unwrap();
+        let out =
+            ClanFile::from_bytes(spinoff(&template, &source, SpinoffOptions::default()).unwrap())
+                .unwrap();
+        let client = out.manifest().client.as_ref().expect("client carried");
+        assert_eq!(client.id, "cli_0a1b2c3d");
+        assert_eq!(client.name, "Client A");
     }
 
     #[test]

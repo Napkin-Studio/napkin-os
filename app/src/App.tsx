@@ -14,6 +14,12 @@ import { useFileDrop } from './offline/useFileDrop'
 import { applyUpdate, onLaunchFiles, useUpdateReady } from './pwa/pwa'
 import { askAppToExport } from './shell/appExport'
 import Launcher from './shell/Launcher'
+import { LandingHome } from './shell/landing/LandingHome'
+import { Trail } from './shell/landing/Trail'
+import { useLanding } from './shell/landing/useLanding'
+import { initialsOf, routeOfDocument, whoIs } from './shell/landing/model'
+import { useRoute } from './shell/useRoute'
+import { type Route } from './shell/route'
 import AppHost from './shell/AppHost'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
@@ -43,8 +49,18 @@ function resetTheme() {
   for (const v of Object.values(THEME_VARS)) root.style.removeProperty(v)
 }
 
+/** The history entry an open document stands on, so Back leaves it and lands where it was opened. */
+const DOC_ENTRY = { napkinDoc: true }
+const isDocEntry = () => (window.history.state as { napkinDoc?: boolean } | null)?.napkinDoc === true
+/** The document's entry becomes the page it leaves to: no stale entry left to Back into. */
+const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(null, '', window.location.href) }
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
+  // Where the landing is (the URL hash), and whether the person asked for the
+  // plain list of tools instead of it.
+  const [route, go] = useRoute()
+  const [allTools, setAllTools] = useState(false)
   const [running, setRunning] = useState<RunningApp | null>(null)
   const [installed, setInstalled] = useState<InstalledApp[]>([])
   const [pendingLaunch, setPendingLaunch] = useState<OpenResult | null>(null)
@@ -64,6 +80,8 @@ export default function App() {
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
   const updateReady = useUpdateReady()
+  // The landing's data, read through the host. Not on the device's own home.
+  const landing = useLanding(host, screen === 'home' && !allTools, !(device && !serverless))
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
     setToast({ title, body })
@@ -128,6 +146,9 @@ export default function App() {
     resetTheme() // clear any prior app's theme before this one (re)applies its own
     setRunning({ artifactPath: open.path, open, htmlContent: html, editMode: false, source })
     setScreen('app')
+    // The browser's Back leaves the document for where it was opened from: the
+    // document takes one history entry of its own (once, however many it opens).
+    if (!isDocEntry()) window.history.pushState(DOC_ENTRY, '', window.location.href)
   }, [])
 
   // A .clan from this device — dropped, chosen, handed over by the OS, or an
@@ -198,11 +219,11 @@ export default function App() {
     if (selected) await openPath(selected)
   }, [openPath, chooseDeviceFile])
 
-  const launchApp = useCallback(async (appId: string) => {
+  const launchApp = useCallback(async (appId: string, clientId?: string) => {
     const n = nextOpen()
     setLoading(true); setError(null)
     try {
-      const result = await host.newDocumentFromApp(appId, null)
+      const result = await host.newDocumentFromApp(appId, null, clientId)
       await runArtifact(n, result)
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
@@ -319,7 +340,25 @@ export default function App() {
     return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
   }, [device, openPath, handleOpenFile, saveCurrent])
 
-  const goHome = useCallback(() => { openHome() }, [openHome])
+  const goHome = useCallback(() => { retireDocEntry(); setAllTools(false); openHome() }, [openHome])
+
+  // A level of the trail, chosen from inside a document: leave the document for it.
+  const leaveTo = useCallback((r: Route) => {
+    retireDocEntry()
+    go(r, true)
+    setAllTools(false)
+    openHome()
+  }, [go, openHome])
+
+  // The browser's Back (or a pasted link) while a document is open leaves it.
+  const screenRef = useRef(screen)
+  useEffect(() => { screenRef.current = screen }, [screen])
+  useEffect(() => {
+    const leave = () => { if (screenRef.current === 'app' && !isDocEntry()) { setAllTools(false); openHome() } }
+    window.addEventListener('popstate', leave)
+    window.addEventListener('hashchange', leave)
+    return () => { window.removeEventListener('popstate', leave); window.removeEventListener('hashchange', leave) }
+  }, [openHome])
 
   const onInstall = useCallback(async () => {
     if (!pendingLaunch) return
@@ -355,15 +394,56 @@ export default function App() {
     />
   ) : !booted ? (
     <LogoSpinnerFill label="Opening the studio…" />
+  ) : landing.state === 'ready' && landing.data && !allTools ? (
+    <LandingHome
+      route={route}
+      data={landing.data}
+      go={go}
+      onAdd={name => landing.add(name)}
+      manage={landing.manage}
+      onStart={launchApp}
+      onOpenDocument={openPath}
+      onAllTools={() => setAllTools(true)}
+      onRefresh={landing.reload}
+    />
+  ) : landing.state === 'loading' && !allTools ? (
+    <LogoSpinnerFill label="Opening the studio…" />
   ) : (
+    // Where the host cannot list the library, the Launcher is the home as it was.
     <Launcher
       installed={installed}
       loading={loading}
       onLaunchApp={launchApp}
       onOpenFile={handleOpenFile}
       onOpenDocument={openPath}
+      onLanding={landing.state === 'ready' ? () => setAllTools(false) : undefined}
     />
   )
+
+  // The trail of circles, while the studio shows one of its landing screens.
+  const onLanding = landing.state === 'ready' && landing.data && !allTools && !(device && !serverless)
+  const trailClient = landing.data && (route.level === 'client' || route.level === 'tool')
+    ? landing.data.clients.find(c => c.id === route.client) ?? null
+    : null
+  const trail = onLanding && landing.data ? (
+    <Trail
+      route={route}
+      agency={whoIs(landing.data.person).agency}
+      client={trailClient}
+      onGo={go}
+    />
+  ) : undefined
+
+  // The same trail in the bar of an open document, from the document's own client
+  // and tool (so it is right for a document opened from a strip, and after a spin-off).
+  const docRoute = running && !device ? routeOfDocument(running.open.manifest) : null
+  const docClient = docRoute && running?.open.manifest.client
+    ? landing.data?.clients.find(c => c.id === running.open.manifest.client!.id)
+      ?? { name: running.open.manifest.client.name, initials: initialsOf(running.open.manifest.client.name), material: 'pearl' }
+    : null
+  const docTrail = docRoute && landing.state === 'ready' && landing.data ? (
+    <Trail route={docRoute} agency={whoIs(landing.data.person).agency} client={docClient} inDocument onGo={leaveTo} />
+  ) : undefined
 
   return (
     <>
@@ -381,6 +461,7 @@ export default function App() {
           tool={installed.find(a => a.app_id === running.open.manifest.app?.app_id) ?? null}
           onOpenDocument={openPath}
           onHome={goHome}
+          trail={docTrail}
           onOpenFile={handleOpenFile}
           onSave={saveCurrent}
           onKeepOffline={!device && hasServer && !running.open.is_template ? keepCurrentOffline : undefined}
@@ -398,6 +479,7 @@ export default function App() {
         />
       ) : (
         <StudioShell
+          trail={trail}
           tools={hasServer && !device ? (
             <button className="ch-btn" onClick={() => setOfflineOpen(true)} title="Documents kept on this device">
               Offline

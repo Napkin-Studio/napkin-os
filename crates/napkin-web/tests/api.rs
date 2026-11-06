@@ -2084,3 +2084,745 @@ async fn two_tabs_of_one_agency_do_not_take_each_others_export() {
     assert_eq!(mine.status, StatusCode::OK, "the asking tab still gets it");
     assert!(String::from_utf8_lossy(&mine.body).contains("Probe"));
 }
+
+// ── Clients and the library listing (feature landing-circles) ────────────────
+
+async fn send_json(s: &Server, method: &str, uri: &str, cookie: &str, body: Value) -> Reply {
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(header::COOKIE, cookie)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    send(s, req).await
+}
+
+/// Install a template app for `b`'s tenant, as the launcher's loop does.
+async fn install_app(s: &Server, b: &Browser, app_id: &str, name: &str) {
+    let up = post(
+        s,
+        &format!("/api/t/{}/documents/upload", b.tenant),
+        &b.cookie,
+        a_template(app_id, name),
+    )
+    .await;
+    let doc = up.json()["path"].as_str().unwrap().to_string();
+    let r = post(
+        s,
+        &format!("/api/t/{}/apps/from/{}", b.tenant, doc),
+        &b.cookie,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+}
+
+async fn add_client(s: &Server, b: &Browser, name: &str) -> Value {
+    let r = post_json(
+        s,
+        &format!("/api/t/{}/clients", b.tenant),
+        &b.cookie,
+        serde_json::json!({ "name": name }),
+    )
+    .await;
+    assert_eq!(
+        r.status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    r.json()
+}
+
+/// A worked document (it has its own title, so it is not blank).
+async fn new_doc(s: &Server, b: &Browser, app: &str, title: &str, client: Option<&str>) -> Reply {
+    let mut body = serde_json::json!({ "app_id": app, "title": title });
+    if let Some(c) = client {
+        body["client_id"] = c.into();
+    }
+    post_json(
+        s,
+        &format!("/api/t/{}/documents", b.tenant),
+        &b.cookie,
+        body,
+    )
+    .await
+}
+
+async fn library(s: &Server, b: &Browser, query: &str) -> Value {
+    let r = get(
+        s,
+        &format!("/api/t/{}/library{query}", b.tenant),
+        Some(&b.cookie),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    r.json()
+}
+
+#[tokio::test]
+async fn a_tenant_with_no_clients_has_an_empty_list_not_an_error() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let r = get(&s, &format!("/api/t/{}/clients", b.tenant), Some(&b.cookie)).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json(), serde_json::json!([]));
+    let lib = library(&s, &b, "").await;
+    assert_eq!(lib["items"], serde_json::json!([]));
+    assert_eq!(lib["clients_unassigned"], 0);
+}
+
+#[tokio::test]
+async fn an_empty_client_id_is_no_client_as_on_the_other_hosts() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let r = new_doc(&s, &b, "ie.napkin.test", "Plain brief", Some("")).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    let r = new_doc(
+        &s,
+        &b,
+        "ie.napkin.brief-maker",
+        "Odd brief",
+        Some("cli_00000000"),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_client_is_made_listed_renamed_archived_and_restored() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let t = &b.tenant;
+
+    let a = add_client(&s, &b, "  Client   A ").await;
+    assert_eq!(a["name"], "Client A", "spacing is collapsed");
+    let id = a["id"].as_str().unwrap().to_string();
+    assert!(clan_sdk::is_client_id(&id), "{id}");
+    assert_eq!(a["initials"], "CA");
+    assert!(a["owner"].as_str().unwrap().starts_with("human:"));
+    assert!(a.get("archived_at").is_none());
+    let bb = add_client(&s, &b, "Client B").await;
+    assert_ne!(
+        a["material"], bb["material"],
+        "neighbours take different materials"
+    );
+
+    // It is there on the next read, in the order made.
+    let list = get(&s, &format!("/api/t/{t}/clients"), Some(&b.cookie)).await;
+    let names: Vec<Value> = list
+        .json()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["name"].clone())
+        .collect();
+    assert_eq!(names, ["Client A", "Client B"]);
+
+    // The same name again, whatever its case, is a 409 and no second record.
+    let dup = post_json(
+        &s,
+        &format!("/api/t/{t}/clients"),
+        &b.cookie,
+        serde_json::json!({ "name": "client a" }),
+    )
+    .await;
+    assert_eq!(dup.status, StatusCode::CONFLICT);
+    assert!(dup.json()["error"].as_str().unwrap().contains("already"));
+    for bad in ["", "   ", &"x".repeat(61)] {
+        let r = post_json(
+            &s,
+            &format!("/api/t/{t}/clients"),
+            &b.cookie,
+            serde_json::json!({ "name": bad }),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::BAD_REQUEST, "{bad:?}");
+    }
+    let m = post_json(
+        &s,
+        &format!("/api/t/{t}/clients"),
+        &b.cookie,
+        serde_json::json!({ "name": "Client C", "material": "wood" }),
+    )
+    .await;
+    assert_eq!(m.status, StatusCode::BAD_REQUEST, "an unknown material");
+
+    // Rename: the initials follow, and a rename onto another client is a 409.
+    let r = send_json(
+        &s,
+        "PATCH",
+        &format!("/api/t/{t}/clients/{id}"),
+        &b.cookie,
+        serde_json::json!({ "name": "Jordan Works" }),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json()["name"], "Jordan Works");
+    assert_eq!(r.json()["initials"], "JW");
+    assert_eq!(r.json()["id"], id.as_str(), "a rename never changes the id");
+    let clash = send_json(
+        &s,
+        "PATCH",
+        &format!("/api/t/{t}/clients/{id}"),
+        &b.cookie,
+        serde_json::json!({ "name": "client b" }),
+    )
+    .await;
+    assert_eq!(clash.status, StatusCode::CONFLICT);
+    let missing = send_json(
+        &s,
+        "PATCH",
+        &format!("/api/t/{t}/clients/cli_00000000"),
+        &b.cookie,
+        serde_json::json!({ "name": "Nobody" }),
+    )
+    .await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+
+    // Archive hides it from the circles; ?archived=1 still shows it; twice is fine.
+    for _ in 0..2 {
+        let r = post(
+            &s,
+            &format!("/api/t/{t}/clients/{id}/archive"),
+            &b.cookie,
+            Body::empty(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert!(r.json()["archived_at"].is_string());
+    }
+    let live = get(&s, &format!("/api/t/{t}/clients"), Some(&b.cookie)).await;
+    assert_eq!(live.json().as_array().unwrap().len(), 1);
+    let all = get(
+        &s,
+        &format!("/api/t/{t}/clients?archived=1"),
+        Some(&b.cookie),
+    )
+    .await;
+    assert_eq!(all.json().as_array().unwrap().len(), 2);
+    let back = post(
+        &s,
+        &format!("/api/t/{t}/clients/{id}/restore"),
+        &b.cookie,
+        Body::empty(),
+    )
+    .await;
+    assert!(back.json().get("archived_at").is_none());
+    let live = get(&s, &format!("/api/t/{t}/clients"), Some(&b.cookie)).await;
+    assert_eq!(live.json().as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn the_registry_is_a_document_that_is_not_work() {
+    let s = server(40);
+    let b = browser(&s).await;
+    add_client(&s, &b, "Client A").await;
+    // It is not a recent document, and not in the library.
+    let recent = get(&s, &format!("/api/t/{}/recent", b.tenant), Some(&b.cookie)).await;
+    assert_eq!(recent.json(), serde_json::json!([]));
+    assert_eq!(library(&s, &b, "").await["items"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn clients_and_the_library_are_one_tenants_own() {
+    let s = server(40);
+    let a = browser(&s).await;
+    let m = browser(&s).await;
+    install_app(&s, &a, "ie.napkin.test", "Test App").await;
+    install_app(&s, &m, "ie.napkin.test", "Test App").await;
+    let client = add_client(&s, &a, "Client A").await;
+    let id = client["id"].as_str().unwrap();
+    assert_eq!(
+        new_doc(&s, &a, "ie.napkin.test", "A's work", Some(id))
+            .await
+            .status,
+        StatusCode::OK
+    );
+
+    // The other tenant sees no client and no document.
+    let theirs = get(&s, &format!("/api/t/{}/clients", m.tenant), Some(&m.cookie)).await;
+    assert_eq!(theirs.json(), serde_json::json!([]));
+    assert_eq!(library(&s, &m, "").await["items"], serde_json::json!([]));
+    // And cannot attach work to a client that is not in its registry.
+    let r = new_doc(&s, &m, "ie.napkin.test", "Stolen", Some(id)).await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    // Nor reach into the first tenant's registry through the path.
+    let r = get(&s, &format!("/api/t/{}/clients", a.tenant), Some(&m.cookie)).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    let r = get(&s, &format!("/api/t/{}/library", a.tenant), Some(&m.cookie)).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_new_document_is_born_for_its_client_and_the_library_says_so() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    install_app(&s, &b, "ie.napkin.other", "Other App").await;
+    let ca = add_client(&s, &b, "Client A").await;
+    let cb = add_client(&s, &b, "Client B").await;
+    let (ida, idb) = (ca["id"].as_str().unwrap(), cb["id"].as_str().unwrap());
+
+    let r = new_doc(&s, &b, "ie.napkin.test", "Brief for A", Some(ida)).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    assert_eq!(r.json()["manifest"]["client"]["id"], ida);
+    assert_eq!(r.json()["manifest"]["client"]["name"], "Client A");
+    new_doc(&s, &b, "ie.napkin.other", "Other for A", Some(ida)).await;
+    new_doc(&s, &b, "ie.napkin.test", "Brief for B", Some(idb)).await;
+    new_doc(&s, &b, "ie.napkin.test", "Brief for nobody", None).await;
+
+    let all = library(&s, &b, "").await;
+    assert_eq!(all["items"].as_array().unwrap().len(), 4);
+    assert_eq!(all["clients_unassigned"], 1);
+    let only_a = library(&s, &b, &format!("?client={ida}")).await;
+    let titles: Vec<&str> = only_a["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles.len(), 2);
+    assert!(titles.contains(&"Brief for A") && titles.contains(&"Other for A"));
+    assert_eq!(
+        only_a["clients_unassigned"], 1,
+        "the unassigned count ignores the filter"
+    );
+    let a_brief = library(&s, &b, &format!("?client={ida}&app=ie.napkin.test")).await;
+    assert_eq!(a_brief["items"].as_array().unwrap().len(), 1);
+    assert_eq!(a_brief["items"][0]["client"]["name"], "Client A");
+    assert_eq!(a_brief["items"][0]["app_id"], "ie.napkin.test");
+    let none = library(&s, &b, "?client=cli_00000000").await;
+    assert_eq!(none["items"], serde_json::json!([]));
+
+    // A rename reaches the library at once; the id is the link.
+    send_json(
+        &s,
+        "PATCH",
+        &format!("/api/t/{}/clients/{ida}", b.tenant),
+        &b.cookie,
+        serde_json::json!({ "name": "Client Alpha" }),
+    )
+    .await;
+    let again = library(&s, &b, &format!("?client={ida}&app=ie.napkin.test")).await;
+    assert_eq!(again["items"][0]["client"]["name"], "Client Alpha");
+    // Archiving hides the circle but not its documents.
+    post(
+        &s,
+        &format!("/api/t/{}/clients/{ida}/archive", b.tenant),
+        &b.cookie,
+        Body::empty(),
+    )
+    .await;
+    let still = library(&s, &b, &format!("?client={ida}")).await;
+    assert_eq!(still["items"].as_array().unwrap().len(), 2);
+    // But an archived client takes no new work.
+    let r = new_doc(&s, &b, "ie.napkin.test", "More for A", Some(ida)).await;
+    assert_eq!(r.status, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn a_blank_document_is_not_work_and_is_never_reused_across_clients() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let ca = add_client(&s, &b, "Client A").await;
+    let cb = add_client(&s, &b, "Client B").await;
+    let (ida, idb) = (ca["id"].as_str().unwrap(), cb["id"].as_str().unwrap());
+    let t = &b.tenant;
+    let blank = |client: Option<&str>| {
+        let mut body = serde_json::json!({ "app_id": "ie.napkin.test" });
+        if let Some(c) = client {
+            body["client_id"] = c.into();
+        }
+        body
+    };
+    let path = |r: &Reply| r.json()["path"].as_str().unwrap().to_string();
+
+    let for_a = post_json(
+        &s,
+        &format!("/api/t/{t}/documents"),
+        &b.cookie,
+        blank(Some(ida)),
+    )
+    .await;
+    let again = post_json(
+        &s,
+        &format!("/api/t/{t}/documents"),
+        &b.cookie,
+        blank(Some(ida)),
+    )
+    .await;
+    assert_eq!(path(&for_a), path(&again), "A's blank is opened again");
+    let for_b = post_json(
+        &s,
+        &format!("/api/t/{t}/documents"),
+        &b.cookie,
+        blank(Some(idb)),
+    )
+    .await;
+    assert_ne!(path(&for_a), path(&for_b), "A's blank is not handed to B");
+    let plain = post_json(&s, &format!("/api/t/{t}/documents"), &b.cookie, blank(None)).await;
+    assert_ne!(path(&plain), path(&for_a), "nor to nobody");
+    assert_eq!(library(&s, &b, "").await["items"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn recent_is_unchanged_and_still_capped_at_twelve() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let c = add_client(&s, &b, "Client A").await;
+    for i in 0..15 {
+        let r = new_doc(
+            &s,
+            &b,
+            "ie.napkin.test",
+            &format!("Doc {i:02}"),
+            c["id"].as_str(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+    }
+    let recent = get(&s, &format!("/api/t/{}/recent", b.tenant), Some(&b.cookie)).await;
+    let recent = recent.json();
+    assert_eq!(recent.as_array().unwrap().len(), 12);
+    let keys: std::collections::BTreeSet<&str> = recent[0]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        keys,
+        ["app_id", "path", "state", "title", "updated_at"]
+            .into_iter()
+            .collect(),
+        "/recent keeps exactly the fields it had"
+    );
+    assert_eq!(
+        library(&s, &b, "").await["items"].as_array().unwrap().len(),
+        15
+    );
+}
+
+#[tokio::test]
+async fn a_big_library_is_listed_whole_and_the_second_read_is_cached() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let c = add_client(&s, &b, "Client A").await;
+    let n = 200;
+    for i in 0..n {
+        let client = (i % 2 == 0).then(|| c["id"].as_str().unwrap());
+        let r = new_doc(&s, &b, "ie.napkin.test", &format!("Doc {i:03}"), client).await;
+        assert_eq!(r.status, StatusCode::OK);
+    }
+    let tenant = napkin_web::tenant::TenantId::parse(&b.tenant).unwrap();
+    let ws = s.ctx.workspace(&tenant);
+
+    let first = std::time::Instant::now();
+    let a = library(&s, &b, "").await;
+    let first = first.elapsed();
+    assert_eq!(a["items"].as_array().unwrap().len(), n);
+    assert_eq!(a["clients_unassigned"], n / 2);
+    let (hits0, misses0) = ws.library.stats();
+    // Every document on disk, the uploaded template included (it is not work,
+    // and remembering that is part of the cache).
+    let on_disk = n + 1;
+    assert_eq!(
+        misses0, on_disk,
+        "the first read works every document out once"
+    );
+    assert_eq!(hits0, 0);
+
+    let second = std::time::Instant::now();
+    let again = library(&s, &b, "").await;
+    let second = second.elapsed();
+    assert_eq!(again, a, "the cache changes nothing about the answer");
+    let (hits1, misses1) = ws.library.stats();
+    assert_eq!(misses1, on_disk, "no document was worked out twice");
+    assert_eq!(hits1, on_disk);
+    eprintln!("library of {n}: first {first:?}, cached {second:?}");
+
+    // A write makes that one document a miss, and only that one.
+    new_doc(&s, &b, "ie.napkin.test", "Doc 999", None).await;
+    library(&s, &b, "").await;
+    let (_, misses2) = ws.library.stats();
+    assert_eq!(misses2, on_disk + 1);
+}
+
+#[tokio::test]
+async fn adopting_names_makes_clients_and_links_only_what_was_chosen() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let t = &b.tenant;
+    // A document whose own data names its client as free text.
+    let r = new_doc(&s, &b, "ie.napkin.test", "Legacy brief", None).await;
+    let doc = r.json()["path"].as_str().unwrap().to_string();
+    let _ = (doc, t);
+    // Adopting a name nothing carries still makes the client, and links nothing.
+    let out = post_json(
+        &s,
+        &format!("/api/t/{t}/clients/adopt"),
+        &b.cookie,
+        serde_json::json!({ "names": ["Client A", "client  a", "", "Client B"] }),
+    )
+    .await;
+    assert_eq!(
+        out.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&out.body)
+    );
+    let v = out.json();
+    assert_eq!(v["created"].as_array().unwrap().len(), 2, "A once, and B");
+    assert_eq!(v["linked"], 0);
+    // Again: nothing new is made.
+    let out = post_json(
+        &s,
+        &format!("/api/t/{t}/clients/adopt"),
+        &b.cookie,
+        serde_json::json!({ "names": ["CLIENT A"] }),
+    )
+    .await;
+    assert_eq!(out.json()["created"].as_array().unwrap().len(), 0);
+}
+
+// "Adopt clients" asks for the free-text names on offer. A studio with none
+// (documents that carry no name, or only names it already has as clients) is
+// offered an empty list, and the route is the tenant's own and needs a session.
+#[tokio::test]
+async fn the_adopt_offer_is_a_list_and_is_empty_when_nothing_names_a_client() {
+    let s = server(40);
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    new_doc(&s, &b, "ie.napkin.test", "No name here", None).await;
+    let t = &b.tenant;
+    let out = get(&s, &format!("/api/t/{t}/clients/legacy"), Some(&b.cookie)).await;
+    assert_eq!(out.status, StatusCode::OK);
+    assert_eq!(out.json(), serde_json::json!([]));
+    let anon = get(&s, &format!("/api/t/{t}/clients/legacy"), None).await;
+    assert_ne!(anon.status, StatusCode::OK, "needs a session");
+}
+
+// A client's document, branched into another tool, is still that client's: the
+// tool's list for the client (`/library?client=&app=`) shows the child, and the
+// client's other tools do not change. The shell reads this to keep the trail.
+#[tokio::test]
+async fn a_spinoff_of_a_clients_document_is_that_clients_in_the_library() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let t = |p: &str| format!("/api/t/{}{p}", b.tenant);
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let up = post(
+        &s,
+        &t("/documents/upload"),
+        &b.cookie,
+        a_template_with(
+            "ie.napkin.child",
+            "Child",
+            Some(clan_sdk::SpinoffSpec {
+                upstream: true,
+                ..Default::default()
+            }),
+        ),
+    )
+    .await;
+    let template = up.json()["path"].as_str().unwrap().to_string();
+    let installed = post(
+        &s,
+        &t(&format!("/apps/from/{template}")),
+        &b.cookie,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(installed.status, StatusCode::OK);
+
+    let ca = add_client(&s, &b, "Client A").await;
+    let cb = add_client(&s, &b, "Client B").await;
+    let (ida, idb) = (ca["id"].as_str().unwrap(), cb["id"].as_str().unwrap());
+    let parent = new_doc(&s, &b, "ie.napkin.test", "Brief for A", Some(ida)).await;
+    new_doc(&s, &b, "ie.napkin.test", "Brief for B", Some(idb)).await;
+    let parent_path = parent.json()["path"].as_str().unwrap().to_string();
+
+    let child = post_json(
+        &s,
+        &t(&format!("/d/{parent_path}/spinoff")),
+        &b.cookie,
+        serde_json::json!({ "app_id": "ie.napkin.child" }),
+    )
+    .await;
+    assert_eq!(
+        child.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&child.body)
+    );
+    assert_eq!(child.json()["manifest"]["client"]["id"], ida);
+    assert_eq!(child.json()["manifest"]["client"]["name"], "Client A");
+
+    // Spin-off documents are blank until worked on; give the child a title of its own
+    // so the library counts it, then ask for A's list per tool.
+    let child_token = child.json()["token"].as_str().unwrap().to_string();
+    clan_ok(
+        &s,
+        &child_token,
+        "/patch-data",
+        serde_json::json!({ "agent": "human", "rationale": "work", "patch": { "tone": "Warm" } }),
+    )
+    .await;
+    let child_list = library(&s, &b, &format!("?client={ida}&app=ie.napkin.child")).await;
+    assert_eq!(child_list["items"].as_array().unwrap().len(), 1);
+    assert_eq!(child_list["items"][0]["client"]["id"], ida);
+    let parent_list = library(&s, &b, &format!("?client={ida}&app=ie.napkin.test")).await;
+    assert_eq!(parent_list["items"].as_array().unwrap().len(), 1);
+    let b_child = library(&s, &b, &format!("?client={idb}&app=ie.napkin.child")).await;
+    assert_eq!(b_child["items"], serde_json::json!([]));
+}
+
+// ── What is running (feature landing-circles, phase 3) ───────────────────────
+
+/// A middleware whose one job says whatever the test last set: `(state, stage)`.
+async fn jobbed_middleware() -> (String, Arc<std::sync::Mutex<(String, String)>>) {
+    let now = Arc::new(std::sync::Mutex::new((
+        "queued".to_string(),
+        "extract".to_string(),
+    )));
+    let seen = now.clone();
+    let app = Router::new().route(
+        "/v1/tasks",
+        axum::routing::post(move || {
+            let seen = seen.clone();
+            async move {
+                let (state, stage) = seen.lock().unwrap().clone();
+                axum::Json(serde_json::json!({
+                    "api": "napkin.middleware/1", "task": "start_campaign",
+                    "handler": "start_campaign@1.0",
+                    "job": {"id": "job_0123abcd", "state": state, "stage": stage,
+                            "progress": {"done": 1, "total": 6},
+                            "started_at": "2026-11-04T09:00:00Z"},
+                    "result": {"summary": "x"}, "change": null, "trace": {},
+                }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1/tasks", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (url, now)
+}
+
+#[tokio::test]
+async fn a_job_the_middleware_reports_is_the_documents_run_in_the_library() {
+    let (url, now) = jobbed_middleware().await;
+    let s = server_with(Arc::new(WithMiddleware(url)));
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let ca = add_client(&s, &b, "Client A").await;
+    let ida = ca["id"].as_str().unwrap();
+    let working = new_doc(&s, &b, "ie.napkin.test", "Working brief", Some(ida))
+        .await
+        .json();
+    let idle = new_doc(&s, &b, "ie.napkin.test", "Idle brief", Some(ida))
+        .await
+        .json();
+    assert!(idle["token"].is_string(), "{idle}");
+    let run_of = |lib: &Value, title: &str| {
+        lib["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["title"] == title)
+            .unwrap_or_else(|| panic!("{title} in {lib}"))["run"]
+            .clone()
+    };
+    let proxy = format!("/s/{}/api-proxy", working["token"].as_str().unwrap());
+    let ask = || middleware_task("start_campaign");
+
+    // Nothing has been asked: no run anywhere.
+    let lib = library(&s, &b, "").await;
+    assert_eq!(run_of(&lib, "Working brief"), Value::Null);
+
+    // queued -> running: working, with the stage and progress the reply carried.
+    for (state, stage) in [("queued", "extract"), ("running", "research")] {
+        *now.lock().unwrap() = (state.into(), stage.into());
+        let r = post(&s, &proxy, &b.cookie, ask()).await;
+        assert_eq!(
+            r.status,
+            StatusCode::OK,
+            "{}",
+            String::from_utf8_lossy(&r.body)
+        );
+        let lib = library(&s, &b, "").await;
+        let run = run_of(&lib, "Working brief");
+        assert_eq!(run["state"], "working", "{state}: {run}");
+        assert_eq!(run["stage"], stage);
+        assert_eq!(run["label"], format!("Working: {stage} (1 of 6)"));
+        assert_eq!(run_of(&lib, "Idle brief"), Value::Null);
+    }
+    // A client filter keeps the run on the item.
+    let lib = library(&s, &b, &format!("?client={ida}")).await;
+    assert_eq!(run_of(&lib, "Working brief")["state"], "working");
+
+    // needs_input is waiting on a person.
+    *now.lock().unwrap() = ("needs_input".into(), "select".into());
+    post(&s, &proxy, &b.cookie, ask()).await;
+    assert_eq!(
+        run_of(&library(&s, &b, "").await, "Working brief")["state"],
+        "waiting"
+    );
+
+    // failed, then done on a new job: the listing follows.
+    *now.lock().unwrap() = ("failed".into(), "research".into());
+    post(&s, &proxy, &b.cookie, ask()).await;
+    assert_eq!(
+        run_of(&library(&s, &b, "").await, "Working brief")["state"],
+        "failed"
+    );
+    *now.lock().unwrap() = ("done".into(), "report".into());
+    post(&s, &proxy, &b.cookie, ask()).await;
+    assert_eq!(
+        run_of(&library(&s, &b, "").await, "Working brief"),
+        Value::Null
+    );
+}
+
+#[tokio::test]
+async fn one_tenants_job_is_never_another_tenants_run() {
+    let (url, _) = jobbed_middleware().await;
+    let s = server_with(Arc::new(WithMiddleware(url)));
+    let a = browser(&s).await;
+    let m = browser(&s).await;
+    install_app(&s, &a, "ie.napkin.test", "Test App").await;
+    install_app(&s, &m, "ie.napkin.test", "Test App").await;
+    let da = new_doc(&s, &a, "ie.napkin.test", "Same title", None)
+        .await
+        .json();
+    new_doc(&s, &m, "ie.napkin.test", "Same title", None).await;
+    post(
+        &s,
+        &format!("/s/{}/api-proxy", da["token"].as_str().unwrap()),
+        &a.cookie,
+        middleware_task("start_campaign"),
+    )
+    .await;
+    assert_eq!(
+        library(&s, &a, "").await["items"][0]["run"]["state"],
+        "working"
+    );
+    assert_eq!(library(&s, &m, "").await["items"][0]["run"], Value::Null);
+}

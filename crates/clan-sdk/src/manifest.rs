@@ -64,6 +64,15 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app: Option<AppInfo>,
 
+    /// The studio's client this document is for (Napkin Studio OS client
+    /// registry). `id` is the registry's `cli_<8 hex>` id and the link that
+    /// matters; `name` is the name as the registry had it when this was last
+    /// written, kept so the file still says who it is for when it travels.
+    /// Absent on every earlier file, so older readers ignore it. Carried
+    /// verbatim by every write and by a spin-off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<ClientRef>,
+
     /// Publisher signature over the app's code (the trust gate for granting an
     /// app direct host access). Asymmetric (ed25519): signed with the
     /// publisher's private key, verified against the viewer's embedded public
@@ -76,6 +85,30 @@ pub struct Manifest {
     pub external: Vec<ExternalRef>,
 
     pub files: Vec<FileEntry>,
+}
+
+/// Who a document is for: a client of the studio (see [`Manifest::client`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClientRef {
+    /// The registry's id, `cli_` and eight lowercase hex digits.
+    pub id: String,
+    /// The client's name when this document was last written.
+    pub name: String,
+}
+
+/// A fresh client id: `cli_` and eight lowercase hex digits. Minted by the
+/// host, never derived from a name, so a rename never breaks a link.
+pub fn new_client_id() -> String {
+    format!("cli_{}", &uuid::Uuid::new_v4().simple().to_string()[..8])
+}
+
+/// Whether `id` has the shape [`new_client_id`] makes.
+pub fn is_client_id(id: &str) -> bool {
+    id.strip_prefix("cli_").is_some_and(|h| {
+        h.len() == 8
+            && h.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
 }
 
 /// An ed25519 signature over an app's code entries + identity (spec §29, v1.2).
@@ -614,6 +647,7 @@ mod tests {
             fork: None,
             merge_policies: None,
             app: None,
+            client: None,
             signature: None,
             external: vec![],
             files: vec![FileEntry {
@@ -630,5 +664,42 @@ mod tests {
         assert_eq!(back.id, m.id);
         assert_eq!(back.files[0].content_type, "application/yaml");
         assert!(m.validate().is_ok());
+        // Absent client: the field is not written, so older readers see the
+        // same manifest they always did.
+        assert!(!String::from_utf8(bytes).unwrap().contains("client"));
+    }
+
+    #[test]
+    fn a_client_survives_a_round_trip_and_an_old_manifest_reads_without_one() {
+        let yaml =
+            "clan_version: 1\nclan_version_minor: 2\nid: 550e8400-e29b-41d4-a716-446655440000\n\
+                    title: T\ncreated_at: a\nupdated_at: b\nfiles: []\n";
+        let old = Manifest::from_yaml(yaml.as_bytes()).unwrap();
+        assert!(old.client.is_none());
+
+        let mut m = old.clone();
+        m.client = Some(ClientRef {
+            id: "cli_deadbeef".into(),
+            name: "Client A".into(),
+        });
+        let back = Manifest::from_yaml(&m.to_yaml().unwrap()).unwrap();
+        assert_eq!(back.client, m.client);
+        // Unknown keys are ignored, which is how an older reader treats this one.
+        let extra = format!("{yaml}client:\n  id: cli_deadbeef\n  name: Client A\nfuture: 1\n");
+        assert_eq!(
+            Manifest::from_yaml(extra.as_bytes()).unwrap().client,
+            m.client
+        );
+    }
+
+    #[test]
+    fn client_ids_have_one_shape() {
+        let id = new_client_id();
+        assert!(is_client_id(&id), "{id}");
+        assert_ne!(id, new_client_id());
+        assert!(!is_client_id("Client A"));
+        assert!(!is_client_id("cli_DEADBEEF"));
+        assert!(!is_client_id("cli_dead"));
+        assert!(!is_client_id("cli_deadbeef0"));
     }
 }

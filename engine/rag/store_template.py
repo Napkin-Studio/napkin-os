@@ -94,6 +94,11 @@ class TemplateStore(VectorStore):
         just wrote."""
         raise NotImplementedError
 
+    # OPTIONAL: def count_where(self, where: dict | None) -> int
+    # Rows passing a metadata filter (same filter language as search). The award-library
+    # gate (RAG_AWARDLIB=thin) uses it to find thin categories; a store without it makes
+    # the gate withhold the library rather than guess, so leaving it out is safe.
+
     def describe(self) -> dict:
         """Identity for run metadata: {"store": name, "label": ...}. The label lands in
         run records and logs, so keep secrets out of it; the DSN used here is only safe if

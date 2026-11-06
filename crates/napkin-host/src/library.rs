@@ -75,7 +75,7 @@ pub struct RecentDoc {
 }
 
 /// A recent document's state, as its decisions have it.
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct RecentState {
     /// Things a person must check before the lock, one per place: the same
     /// count as the document's "Needs you".
@@ -85,7 +85,7 @@ pub struct RecentState {
 }
 
 /// A document's [`RecentState`], or `None` when its decisions can't be read.
-fn recent_state(id: DocId, bytes: Vec<u8>) -> Option<RecentState> {
+pub(crate) fn recent_state(id: DocId, bytes: Vec<u8>) -> Option<RecentState> {
     let doc = Document::from_bytes(id, bytes).ok()?;
     let view = crate::ops::decisions::decisions(&doc).ok()?;
     if view.problem.is_some() {
@@ -326,9 +326,19 @@ fn is_blank_with(clan: &ClanFile, looks: &std::collections::BTreeSet<String>) ->
     }
 }
 
-/// The newest blank document of `app_id`, to open again instead of making
-/// another each time the tool is opened and left.
+/// The newest blank document of `app_id` that belongs to no client, to open
+/// again instead of making another each time the tool is opened and left.
 pub fn blank_instance(store: &dyn DocStore, app_id: &str) -> Option<DocId> {
+    blank_instance_for(store, app_id, None)
+}
+
+/// [`blank_instance`] for the blank documents of `client_id` (or of no client
+/// at all): a blank made for one client is never handed to another.
+pub fn blank_instance_for(
+    store: &dyn DocStore,
+    app_id: &str,
+    client_id: Option<&str>,
+) -> Option<DocId> {
     let mut best: Option<(String, DocId)> = None;
     for id in store.documents() {
         let Ok(bytes) = store.read(&id) else { continue };
@@ -336,7 +346,10 @@ pub fn blank_instance(store: &dyn DocStore, app_id: &str) -> Option<DocId> {
             continue;
         };
         let m = clan.manifest();
-        if m.app.as_ref().map(|a| a.app_id.as_str()) != Some(app_id) || !is_blank_in(store, &clan) {
+        if m.app.as_ref().map(|a| a.app_id.as_str()) != Some(app_id)
+            || m.client.as_ref().map(|c| c.id.as_str()) != client_id
+            || !is_blank_in(store, &clan)
+        {
             continue;
         }
         if best.as_ref().is_none_or(|(at, _)| m.created_at > *at) {
@@ -355,12 +368,32 @@ pub fn create_instance(
     app_id: &str,
     title: Option<String>,
 ) -> HostResult<DocId> {
+    create_instance_for(store, app_id, title, None)
+}
+
+/// [`create_instance`] for a client: the new document is born with
+/// `manifest.client`, and only a blank document of that same client is reused.
+/// An archived client takes no new work (`409`).
+pub fn create_instance_for(
+    store: &dyn DocStore,
+    app_id: &str,
+    title: Option<String>,
+    client: Option<&crate::clients::ClientRecord>,
+) -> HostResult<DocId> {
+    if let Some(c) = client {
+        if c.is_archived() {
+            return Err(HostError::conflict(format!(
+                "\"{}\" is archived; restore it to start new work",
+                c.name
+            )));
+        }
+    }
     if title.as_deref().is_none_or(|t| t.trim().is_empty()) {
-        if let Some(id) = blank_instance(store, app_id) {
+        if let Some(id) = blank_instance_for(store, app_id, client.map(|c| c.id.as_str())) {
             return Ok(id);
         }
     }
-    let change = instance_change(store, app_id, title)?;
+    let change = instance_change_for(store, app_id, title, client)?;
     store.apply(&change)?;
     Ok(change.doc)
 }
@@ -371,8 +404,18 @@ pub fn instance_change(
     app_id: &str,
     title: Option<String>,
 ) -> HostResult<Change> {
+    instance_change_for(store, app_id, title, None)
+}
+
+/// [`instance_change`] for a client.
+pub fn instance_change_for(
+    store: &dyn DocStore,
+    app_id: &str,
+    title: Option<String>,
+    client: Option<&crate::clients::ClientRecord>,
+) -> HostResult<Change> {
     let template = load_template(store, app_id)?;
-    let bytes = instantiate(
+    let mut bytes = instantiate(
         &template,
         InstantiateOptions {
             title: title.unwrap_or_default(),
@@ -381,6 +424,9 @@ pub fn instance_change(
             instance_id: None,
         },
     )?;
+    if let Some(c) = client {
+        bytes = clan_sdk::with_client(&ClanFile::from_bytes(bytes)?, Some(c.as_ref()))?;
+    }
     let out = allocate(store, app_id, &bytes)?;
     Ok(Change::create(out, bytes))
 }

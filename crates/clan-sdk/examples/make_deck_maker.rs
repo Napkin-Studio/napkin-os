@@ -19,7 +19,7 @@
 
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
+    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
     MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
@@ -117,7 +117,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let template_bytes = make_template(
         &clan,
         AppInfo {
-            home: None,
+            // "Napkin Studio Deck" in the OS bar, the tool's name in its own blue (its --tool colour).
+            home: Some(AppHome {
+                colour: Some("#2F64F5".into()),
+                brand: Some("Deck".into()),
+                ..Default::default()
+            }),
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
             version: "0.2.0".into(),
