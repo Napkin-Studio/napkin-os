@@ -238,6 +238,20 @@
   .mate .pbar{display:block;height:7px;border-radius:6px;background:var(--tint-2);box-shadow:inset 0 1px 2px rgba(70,50,20,.2);overflow:hidden}
   .mate .pbar i{display:block;height:100%;background:var(--go);border-radius:6px;transition:width .4s var(--ease)}
   .mate.next{opacity:.75}
+  /* intake: a few questions before the plan, each one skippable */
+  .ask{width:min(720px,100%);display:flex;flex-direction:column;gap:14px;padding:18px 20px 16px;border:1px solid var(--line);border-radius:14px;background:var(--grain),linear-gradient(180deg,var(--paper),var(--card));box-shadow:var(--edge-hi),var(--lift-sm)}
+  .ask[hidden]{display:none}
+  .ask h3{margin:0;font-size:17px;letter-spacing:-.01em}
+  .ask .asklede{margin:0;font-size:14px;color:var(--muted)}
+  .ask .q{display:flex;flex-direction:column;gap:6px}
+  .ask .q label{font-size:15px;font-weight:600}
+  .ask .q .why{font-size:13px;color:var(--muted)}
+  .ask .q textarea{min-height:56px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font-size:15px;line-height:1.4}
+  .ask .q textarea:focus{outline:2px solid color-mix(in srgb,var(--go) 45%,var(--line));outline-offset:1px}
+  .ask .q.skipped textarea{opacity:.5}
+  .ask .q .skip{align-self:flex-start;min-height:44px;padding:0 4px;border:none;background:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline}
+  .ask .q .skip:hover{color:var(--text)}
+  .ask .asks{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
   .procActs{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
   .procActs:empty{display:none}
   .procActs .stopq{flex-basis:100%;text-align:center;font-size:15px;color:var(--ink2)}
@@ -560,6 +574,7 @@
       <p class="lede procS" id="procS"></p>
     </div>
     <div class="meet" id="meet"></div>
+    <div class="ask" id="ask" hidden></div>
     <div class="procActs" id="procActs"></div>
     <details class="parts"><summary>See each part as it’s written</summary><div class="tiles" id="tiles"></div></details>
     <p class="later">You’ll see these names in every tool. The same crew works everywhere, and every part of the brief says who wrote it.</p>
@@ -1769,6 +1784,9 @@
     if(b.job&&typeof b.job==='object'){
       j.id=b.job.id||j.id; j.state=b.job.state||j.state; j.stage=b.job.stage||j.stage; j.progress=b.job.progress||j.progress;
       if(b.job.error) j.error=b.job.error.message||b.job.error.type||String(b.job.error);
+      // intake: the questions the job waits on while it is needs_input (middleware-api §10.6)
+      j.questions=j.state==='needs_input'&&Array.isArray(b.job.questions)?b.job.questions:null;
+      j.questions_id=j.questions?b.job.questions_id:null;
     }
     if(b.result&&typeof b.result==='object'){
       if(b.result.summary) j.summary=b.result.summary;
@@ -1776,8 +1794,8 @@
       if(Array.isArray(b.result.proposals)){ j.proposals=b.result.proposals; LAST_PROPOSALS=b.result.proposals; }
     }
     if(b.change&&typeof b.change==='object'){ j.applied=b.change.applied; j.reason=b.change.reason; if(b.change.applied) loadChain(); }
-    if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running')?j.id:null);
-    if(j.state==='queued'||j.state==='running'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
+    if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running'||j.state==='needs_input')?j.id:null);
+    if(j.state==='queued'||j.state==='running'||j.state==='needs_input'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
     else endJob(j);
   }
   function pollJob(j){
@@ -1785,6 +1803,19 @@
   }
   function unreachable(j, e){ j.error='The middleware could not be reached: '+(e&&e.message||e); j.state=j.state==='sending'?'unsent':'stalled'; endJob(j); }
   function endJob(j){ store(jobKey(j.task,j.field), null); loadChain(); j.onEnd(j); }
+  // The planner's answers to intake's questions ({question id: text, or null to skip}; {} skips them all).
+  // The reply is the job's, as a poll's. A refusal (the wait ran out, the job went on) is not the job's
+  // end: say so and keep polling.
+  function answerJob(j, answers){
+    if(!j||!j.id||!j.questions_id||j.answering) return;
+    j.answering=true; j.onUpdate(j);
+    window.clan.apiProxy('middleware', {task:'answer_question', input:{job_id:j.id, questions_id:j.questions_id, answers:answers}}).then(function(r){
+      j.answering=false;
+      var err=hostErr(r);
+      if(err){ toast('Not sent: '+err); clearTimeout(j.t); pollJob(j); return; }
+      clearTimeout(j.t); onJobReply(j, r);
+    }, function(e){ j.answering=false; j.onUpdate(j); toast('Not sent: the middleware could not be reached ('+(e&&e.message||e)+').'); });
+  }
   // A person stops a job: the reply is the job's own, as a poll's.
   function cancelJob(j){
     if(!j||!j.id||j.stopping) return;
@@ -1829,7 +1860,7 @@
     var fs=j.fields||{}, busy={extract:[], synthesis:[], drafter:[], judge:[]}, failed=0, passed=0;
     FIELDS.forEach(function(f){ var x=fs[f.key]||{}; if(BUSY[x.state]&&busy[x.by]) busy[x.by].push(f.key); if(x.state==='failed') failed++; if(x.state==='done') passed++; });
     var at=STAGES.indexOf(j.stage), end=j.state==='done';
-    function st(k, i){ return busy[k].length?'working':(end||at>i)?'done':at===i&&(j.state==='queued'||j.state==='running')?'working':'idle'; }
+    function st(k, i){ return busy[k].length?'working':(end||at>i)?'done':at===i&&(j.state==='queued'||j.state==='running'||j.state==='needs_input')?'working':'idle'; }
     var label=function(k){ var f=FIELDS.filter(function(x){ return x.key===k; })[0]; return f?(f.sec==='Desired response'?'“'+f.label.toLowerCase()+'”':f.label.toLowerCase()):k; };
     return {
       states:{extract:st('extract',0), synthesis:st('synthesis',1), drafter:st('drafter',2), judge:end&&failed?'needs-you':st('judge',3)},
@@ -1878,12 +1909,13 @@
     var j=DRAFT; if(!j) return;
     track(j);
     var c=crewStates(j), fs=j.fields||{}, at=STAGES.indexOf(j.stage);
-    var live=j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking';
+    var asking=j.state==='needs_input';
+    var live=j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||asking;
     var stopAt=!live&&j.state!=='done'?Math.max(at,0):-1;
     var H={done:'Your brief is ready', failed:'We had to stop', unsent:'We couldn’t start', stalled:'We lost touch with the work', cancelled:'You stopped the draft'};
     $('procH').textContent=H[j.state]||'Meet your crew';
     var MEET=meetOf(j);
-    $('procS').textContent=j.error?j.error:j.state==='done'?'Opening it now…':j.state==='cancelled'?'What the crew had written before you stopped it stays in the brief.':(MEET.length===4?'Four':'Three')+' of us are on your brief. We’ll tell you what we’re doing as we go.';
+    $('procS').textContent=j.error?j.error:j.state==='done'?'Opening it now…':j.state==='cancelled'?'What the crew had written before you stopped it stays in the brief.':asking?'A few quick questions first, so '+DARA+' isn’t guessing. Answer what you can, or skip them.':(MEET.length===4?'Four':'Three')+' of us are on your brief. We’ll tell you what we’re doing as we go.';
     $('procS').classList.toggle('err', !!j.error);
     var d=daraCount(j), eN=Object.keys(j.eDone).length, failed=FIELDS.filter(function(f){ return (fs[f.key]||{}).state==='failed'; }).length;
     var busyDraft=FIELDS.filter(function(f){ var x=fs[f.key]||{}; return x.by==='drafter'&&BUSY[x.state]; });
@@ -1909,6 +1941,7 @@
         intro:'<b>I’m '+esc(SAM)+'.</b> '+(st.synthesis==='done'?'I planned the whole brief and looked up what it needed.'
           :'I plan the whole brief first, so every part serves one idea, and I look up what it needs.'),
         st:st.synthesis==='done'?['ok','✓ Done. The plan is with '+esc(DARA)+'.']
+          :st.synthesis==='working'&&asking?['', 'Looking things up while you answer…']
           :st.synthesis==='working'?['', 'Planning, then researching what the plan needs…']
           :['', 'Waiting for '+esc(ELLIS)]},
       judge:{
@@ -1933,6 +1966,7 @@
       m.querySelector('.say').className='say up'+(warn?' warn':now?' now':'');
       m.querySelector('.say').innerHTML='<span class="sayer">'+esc(sayer(k))+'</span>'+M[k].intro+'<span class="st'+(line[0]?' '+line[0]:'')+'">'+line[1]+'</span>';
     });
+    renderAsk(j);
     $('tiles').innerHTML=FIELDS.map(function(f){ return tileHtml(f, fs[f.key]||{state:isLocked(f.key)?'kept':'waiting', by:null}); }).join('');
     var acts=$('procActs');
     // Stop the draft: a person may cancel it at any stage (cancel_job). What
@@ -1947,6 +1981,38 @@
     var see=$('procSee'); if(see) see.addEventListener('click',function(){ DRAFT=null; forceIntake=false; setPhase('doc'); render(); });
     var back=$('procBack'); if(back) back.addEventListener('click',function(){ DRAFT=null; forceIntake=true; setPhase('intake'); render(); });
   }
+  // The questions panel's markup: Skip on each skippable question, "Skip, just draft" for all.
+  function askHtml(qs){
+    return '<h3>Before '+esc(SAM)+' plans</h3><p class="asklede">One line each is plenty. What you skip, '+esc(DARA)+' proposes and marks for you to confirm.</p>'
+      +qs.map(function(q){ return '<div class="q" data-q="'+esc(q.id)+'"><label for="ask_'+esc(q.id)+'">'+esc(q.text)+'</label>'
+        +(q.why?'<div class="why">'+esc(q.why)+'</div>':'')+'<textarea id="ask_'+esc(q.id)+'" rows="2"></textarea>'
+        +(q.skippable===false?'':'<button type="button" class="skip" data-skip="'+esc(q.id)+'">Skip this one</button>')+'</div>'; }).join('')
+      +'<div class="asks"><button type="button" class="ghost big" id="askSkipAll">Skip, just draft</button><button type="button" class="go" id="askSend">Send answers</button></div>';
+  }
+  // Intake's questions (§10.1 input.intake, §10.6 job.questions): drawn once per set so what is typed
+  // survives the next poll; Skip drops one question, "Skip, just draft" sends none.
+  function renderAsk(j){
+    var box=$('ask'), qs=j.state==='needs_input'&&j.questions&&j.questions.length?j.questions:null;
+    if(!qs){ if(!box.hidden){ box.hidden=true; box.innerHTML=''; } box.removeAttribute('data-qs'); return; }
+    if(box.getAttribute('data-qs')!==j.questions_id){
+      box.setAttribute('data-qs', j.questions_id); j.skipped={};
+      box.innerHTML=askHtml(qs);
+      qs.forEach(function(q){
+        var row=box.querySelector('.q[data-q="'+q.id+'"]'), ta=row.querySelector('textarea'), sk=row.querySelector('.skip');
+        if(sk) sk.addEventListener('click',function(){
+          var off=!j.skipped[q.id]; j.skipped[q.id]=off; row.classList.toggle('skipped',off); ta.disabled=off; if(off) ta.value='';
+          sk.textContent=off?'Skipped. Answer it after all':'Skip this one'; if(!off) ta.focus();
+        });
+      });
+      box.querySelector('#askSkipAll').addEventListener('click',function(){ answerJob(j, {}); });
+      box.querySelector('#askSend').addEventListener('click',function(){
+        var out={}; qs.forEach(function(q){ var v=j.skipped[q.id]?'':String(box.querySelector('#ask_'+q.id).value||'').trim(); out[q.id]=v||null; });
+        answerJob(j, out);
+      });
+      box.hidden=false;
+    }
+    box.querySelectorAll('button,textarea').forEach(function(el){ if(el.tagName==='BUTTON') el.disabled=!!j.answering; });
+  }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
       renderProc();
@@ -1955,7 +2021,7 @@
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
     setPhase('proc'); window.scrollTo(0,0);
     if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; renderProc(); pollJob(j); return; }
-    runJob(j, {prompt:prompt, attachments:atts});
+    runJob(j, {prompt:prompt, attachments:atts, intake:true});  // the planner is here to answer: ask first (§10.1)
     renderProc();
   }
 
