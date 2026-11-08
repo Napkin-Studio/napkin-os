@@ -1400,26 +1400,26 @@ const carriedPin = {
 test('the source card says where a fact came from, its latest verdict, and folds the rest under Record', () => {
   const { cardHTML } = cardKit()
   const h = cardHTML(carriedPin)
-  assert.match(h, /^<div class="clf-card" data-card="f_01JA0B3P4Q" data-origin="research">/)
-  assert.match(h, /<span class="clf-card-k o-research">Research<\/span>/)
-  assert.match(h, /<span class="clf-card-r v-rejected">Marked wrong by You · on 2026-11-08<\/span>/)
-  assert.match(h, /<span class="clf-card-v">23%<\/span><p class="clf-card-t">Orchard Hill · share<\/p>/)
+  assert.match(h, /^<div class="clf-sc" data-card="f_01JA0B3P4Q" data-origin="research">/)
+  assert.match(h, /<span class="clf-sc-k o-research">Research<\/span>/)
+  assert.match(h, /<span class="clf-sc-r v-rejected">Marked wrong by You · on 2026-11-08<\/span>/)
+  assert.match(h, /<span class="clf-sc-v">23%<\/span><p class="clf-sc-t">Orchard Hill · share<\/p>/)
   assert.match(h, /From <b>Lúnasa launch<\/b><small>campaign research<\/small>/)
   // The history is folded, newest first, the replaced one marked.
-  const rec = h.slice(h.indexOf('<details class="clf-more clf-card-rec"><summary>Record</summary>'))
+  const rec = h.slice(h.indexOf('<details class="clf-more clf-sc-rec"><summary>Record</summary>'))
   assert.ok(rec.indexOf('Marked wrong by You') < rec.indexOf('Verified by mary'), rec)
   assert.match(rec, /Verified by mary · on 2026-11-01 · replaced/)
-  assert.match(h, /data-clf-card="open" data-ref="f_01JA0B3P4Q">Where this came from/)
-  assert.match(h, /data-clf-card="from" data-path="docs\/r1\.clan">Open Lúnasa launch/)
+  assert.match(h, /data-clf-sc="open" data-ref="f_01JA0B3P4Q">Where this came from/)
+  assert.match(h, /data-clf-sc="from" data-path="docs\/r1\.clan">Open Lúnasa launch/)
 
   // Every origin has its words; one the host never sends is this document.
-  const o = (origin: string) => /clf-card-k o-[a-z]+">([^<]+)</.exec(cardHTML({ ...carriedPin, origin }))?.[1]
+  const o = (origin: string) => /clf-sc-k o-[a-z]+">([^<]+)</.exec(cardHTML({ ...carriedPin, origin }))?.[1]
   assert.deepEqual(['research', 'client', 'brand', 'layer', 'person', 'document', 'rumour'].map(o),
     ['Research', 'Client upload', 'Brand Clan', 'Knowledge layer', 'A person', 'This document', 'This document'])
 
   // Unreviewed: no verdict, no Record. Hostile words are escaped.
   const bare = cardHTML({ ref: 'fi_1', kind: 'finding', label: '<img src=x onerror=alert(1)>', origin: 'document' })
-  assert.doesNotMatch(bare, /clf-card-r|Record|<img/)
+  assert.doesNotMatch(bare, /clf-sc-r|Record|<img/)
   assert.match(bare, /&#60;img src=x onerror=alert\(1\)&#62;/)
   // Gone from the document: said so.
   assert.match(cardHTML({ ref: 'f_X', kind: 'unknown', label: 'f_X', origin: 'document' }), /not in the document any more/)
@@ -1428,9 +1428,9 @@ test('the source card says where a fact came from, its latest verdict, and folds
 test('the drawer shows the same card, compact, from the same renderer', () => {
   const { cardHTML } = cardKit()
   const c = cardHTML(carriedPin, true)
-  assert.match(c, /^<div class="clf-card compact" data-card="f_01JA0B3P4Q" data-origin="research">/)
+  assert.match(c, /^<div class="clf-sc compact" data-card="f_01JA0B3P4Q" data-origin="research">/)
   // The drawer shows the value and words itself; the provenance is the card's.
-  assert.doesNotMatch(c, /clf-card-v|clf-card-t|data-clf-card="open"/)
+  assert.doesNotMatch(c, /clf-sc-v|clf-sc-t|data-clf-sc="open"/)
   const head = (x: string) => x.slice(0, x.indexOf('</div>'))
   assert.equal(head(c).replace(' compact', ''), head(cardHTML(carriedPin)))
   assert.match(c, /<summary>Record<\/summary>/)
