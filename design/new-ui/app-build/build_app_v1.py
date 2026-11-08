@@ -844,5 +844,7 @@ exec(open(pathlib.Path(__file__).with_name('phase34.py')).read())
 
 exec(open(pathlib.Path(__file__).with_name('phase35.py')).read())
 
+exec(open(pathlib.Path(__file__).with_name('phase36.py')).read())
+
 OUT.write_text(s, encoding="utf-8")
 print("wrote", OUT, len(s), "bytes")
