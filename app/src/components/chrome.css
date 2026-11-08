@@ -720,7 +720,11 @@
   .ch-bar-c { flex: 1 1 100%; order: 5; justify-content: flex-start; }
   .ch-bar-l { flex: 1 1 auto; }
   .ch-bar-r { flex: 0 1 auto; flex-wrap: wrap; }
-  .ch-slot { flex: 1 1 100%; }
+  /* The slot now holds Continue in, Share and More as well as the name and its
+     lineage: on a phone it wraps them onto a second row instead of running
+     off the side of the screen. */
+  .ch-slot { flex: 1 1 100%; flex-wrap: wrap; height: auto; min-height: 38px; row-gap: 6px; padding: 4px 4px 4px 12px; border-radius: 19px; }
+  .ch-slot-title { flex: 1 1 120px; }
   .ch-crumbs { flex: 1 1 100%; order: 4; max-width: none; }
   .ch-agency-os { display: none; }
   .ch-bar .ch-btn { height: 28px; padding: 0 11px; font-size: 12px; }
