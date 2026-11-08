@@ -152,7 +152,7 @@ export default function DecisionPanel({ decisions, open: given, onOpenChange, as
         {view && !view.problem && (
           <>
             <section aria-label="Needs your call" data-testid="call-card">
-              <h3 className="dp-sec">Needs your call <span className="dp-n">{calls.open.length}</span></h3>
+              <h3 className="dp-sec">Needs your call <span className={calls.open.length ? 'dp-n' : 'dp-n dp-n-quiet'}>{calls.open.length}</span></h3>
               {calls.open.length === 0 && <div className="dp-done">{calls.aside.length ? 'Nothing else waits on you.' : 'Nothing is waiting on you.'}</div>}
               {calls.open.map(item => (
                 <NeedsCard key={needKey(item)} item={item} actions={actionsFor(item, false)}
