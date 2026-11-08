@@ -71,8 +71,16 @@ test('landing, clients, add a client, reload, open a client, start work', async 
   await expect(page).toHaveURL(/#clients$/)
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
 
-  // Open a client: its tools around it, Idea and Prod Soon, its work listed.
+  // A client's circle opens the dial in place: four apps and More tools; the URL stays.
   await page.getByRole('button', { name: /^Client A,/ }).click()
+  await expect(page.getByTestId('dial-open-client')).toBeVisible()
+  await expect(page).toHaveURL(/#clients$/)
+  for (const t of ['brief', 'research', 'deck', 'prod', 'more']) await expect(page.getByTestId(`dial-${t}`)).toBeVisible()
+  await expect(page.getByTestId('dial-prod')).toHaveAttribute('aria-disabled', 'true')
+  await page.getByTestId('dial-more').click()
+  for (const t of ['idea', 'ads', 'prod']) await expect(page.getByTestId(`dial-more-${t}`)).toBeVisible()
+  // Open a client: its tools around it, Idea and Prod Soon, its work listed.
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
   const client = page.getByTestId('client-page')
   await expect(client.getByRole('heading', { name: 'Client A' })).toBeVisible()
@@ -102,7 +110,7 @@ test('landing, clients, add a client, reload, open a client, start work', async 
 
   // Start work for a client: the tool's page, then a document that is already theirs.
   await page.getByRole('button', { name: /^Client C,/ }).click()
-  await page.getByTestId('tool-brief').click()
+  await page.getByTestId('dial-brief').click() // straight from the dial to the tool
   await expect(page.getByTestId('tool-page')).toBeVisible()
   await page.getByTestId('new-doc').click()
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
@@ -171,7 +179,17 @@ test('the keyboard reaches the circles and Enter opens one', async ({ page }) =>
   await expect(page).toHaveURL(/#clients$/)
   await page.getByTestId('client-circle').first().focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByTestId('client-page')).toBeVisible()
+  // Enter opens the dial with the focus on its first petal; Escape closes it and gives the focus back.
+  await expect(page.getByTestId('dial-brief')).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByTestId('dial-research')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('dial')).toHaveCount(0)
+  await expect(page.getByTestId('client-circle').first()).toBeFocused()
+  await expect(page).toHaveURL(/#clients$/)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('1') // the number keys pick a petal: Brief
+  await expect(page.getByTestId('tool-page')).toBeVisible()
 })
 
 // Phase 4 (3D circles): reduced motion alone no longer means flat (the approved mock shows still

@@ -76,6 +76,8 @@ test('what needs you and what is running come from the documents', async ({ page
   await shot(page, 'p1-02-clients')
 
   await page.getByRole('button', { name: /^Client A,/ }).click()
+  await shot(page, 'p1-02b-dial')
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page.getByTestId('work-item')).toHaveCount(2)
   await expect(page.getByTestId('work-item').first()).toContainText(/brief/i)
   await expect(page.getByTestId('tool-brief')).toHaveAccessibleName(/Brief Maker for Client A, 2 open, needs you/)
@@ -114,6 +116,7 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await page.goto('/#clients'); await page.reload()
   await shot(page, 'p1-10-phone-clients')
   await page.getByRole('button', { name: /^Client B,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await shot(page, 'p1-11-phone-client')
 
   await page.setViewportSize({ width: 1280, height: 900 })
@@ -123,6 +126,7 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await page.goto('/#clients'); await page.reload()
   await shot(page, 'p1-13-dark-clients')
   await page.getByRole('button', { name: /^Client B,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await shot(page, 'p1-14-dark-client')
 })
 

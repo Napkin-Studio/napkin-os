@@ -2,15 +2,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// One client: its circle, its six tools around it, and its work. Idea and Prod
-// are dimmed "Soon". A live tool starts a document that is already the client's.
+// One client's page (features/new-ui-shell.clan): its circle with its six
+// tools around it (the keys and the wheel as before), what needs you, its
+// documents grouped by tool with New for each, and its Brand Clan card. Idea
+// and Prod are dimmed "Soon". A live tool starts a document that is already
+// the client's.
 
 import { useEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
 import { Circle } from './Circle'
-import { ACTIVITY_WORD, activityOf, initialsOf, needsYou, type ClientSummary } from './model'
-import { lastTouched } from '../when'
+import { ACTIVITY_WORD, activityOf, initialsOf, needsReason, needsYou, type ClientSummary } from './model'
 import { TOOLS, toolOfApp, type Tool } from './tools'
+import { DocList } from './DocList'
+import { BrandClanCard, BRAND_APP } from './BrandClanCard'
 import { isTyping, wheelKey } from './keys'
 
 interface Props {
@@ -24,6 +28,8 @@ interface Props {
   /** A tool that is not here yet was chosen (Idea, Prod): say so, go nowhere. */
   onSoon: (tool: Tool) => void
   onOpenItem: (path: string) => void
+  /** Start a document of a live tool for this client, from its group's New. */
+  onNew?: (tool: Tool) => void
   /** Rename and archive, when the host lets this screen look after the registry. */
   actions?: React.ReactNode
 }
@@ -42,7 +48,7 @@ function count(summary: ClientSummary, t: Tool, live: boolean): { small: string;
   return { small: act === 'idle' ? `${n} open` : `${n} open · ${ACTIVITY_WORD[act]}`, say }
 }
 
-export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenItem, actions }: Props) {
+export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenItem, onNew, actions }: Props) {
   const c = summary.client
   // One tab stop for the six tools (roving tabindex): the arrows move it.
   const [at, setAt] = useState(0)
@@ -115,29 +121,52 @@ export function ClientPage({ summary, items, live, onOpenTool, onSoon, onOpenIte
         })}
       </div>
 
-      <section className="lc-work" aria-label={`Work for ${c.name}`}>
-        <h2 className="lc-strip-h">Work{items.length > 0 && <span className="lc-n">{items.length}</span>}</h2>
-        {items.length === 0 ? (
-          <p className="lc-nothing">Nothing yet. Pick a tool above to start the first piece of work for {c.name}.</p>
-        ) : (
-          <ul className="lc-cards">
-            {items.map(i => {
-              const tool = toolOfApp(i.app_id)
-              return (
-                <li key={i.path}>
-                  <button className="lc-card" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
-                    <span className="lc-card-t">{i.title || 'Untitled'}</span>
-                    {needsYou(i) && <span className="lc-tag lc-tag-need">Needs you</span>}
-                    {!needsYou(i) && i.run?.state === 'working' && <span className="lc-tag lc-tag-run">{i.run.label}</span>}
-                    {!needsYou(i) && i.run?.state === 'failed' && <span className="lc-tag lc-tag-fail">Failed</span>}
-                    <span className="lc-card-m">{tool?.full ?? 'Other'} · {lastTouched(i.updated_at)}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
+      {(() => {
+        const work = items.filter(i => i.app_id !== BRAND_APP)
+        const needing = work.filter(needsYou)
+        const groups = [
+          ...TOOLS.map(t => ({ key: t.id as string, tool: t as Tool | null, label: t.full, docs: work.filter(i => toolOfApp(i.app_id)?.id === t.id) })),
+          { key: 'other', tool: null as Tool | null, label: 'Other', docs: work.filter(i => !toolOfApp(i.app_id)) },
+        ].filter(g => g.docs.length > 0)
+        return (
+          <>
+            {needing.length > 0 && (
+              <section className="lc-work lc-needs" aria-label={`Needs you for ${c.name}`} data-testid="client-needs">
+                <h2 className="lc-strip-h">Needs you<span className="lc-n">{needing.length}</span></h2>
+                <ul className="lc-needs-list">
+                  {needing.map(i => (
+                    <li key={i.path}>
+                      <button className="lc-need" data-testid="needs-item" onClick={() => onOpenItem(i.path)}>
+                        <b>{i.title || 'Untitled'}</b>
+                        <span>{toolOfApp(i.app_id)?.full ?? 'Other'} · {needsReason(i)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <section className="lc-work" aria-label={`Work for ${c.name}`}>
+              <h2 className="lc-strip-h">Work{work.length > 0 && <span className="lc-n">{work.length}</span>}</h2>
+              {work.length === 0 ? (
+                <p className="lc-nothing">Nothing yet. Pick a tool above to start the first piece of work for {c.name}.</p>
+              ) : groups.map(g => (
+                <div className="lc-group" key={g.key} data-testid={`group-${g.key}`}>
+                  <div className="lc-group-h">
+                    <h3>{g.label}<span className="lc-n">{g.docs.length}</span></h3>
+                    {g.tool && onNew && live.has(g.tool.id) && (
+                      <button className="ch-btn" data-testid={`new-${g.key}`} onClick={() => onNew(g.tool!)}>New {g.tool.noun[0]}</button>
+                    )}
+                  </div>
+                  <DocList items={g.docs} onOpenItem={onOpenItem} />
+                </div>
+              ))}
+            </section>
+
+            <BrandClanCard client={c.name} docs={items.filter(i => i.app_id === BRAND_APP)} onOpenItem={onOpenItem} />
+          </>
+        )
+      })()}
     </div>
   )
 }

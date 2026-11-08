@@ -101,6 +101,7 @@ test('Escape goes up one level, and Back and Forward walk the same levels', asyn
   await page.reload()
   await page.getByTestId('agency-circle').click()
   await page.getByRole('button', { name: /^Client A,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await page.getByTestId('tool-brief').click()
   await expect(page.getByTestId('tool-page')).toBeVisible()
 

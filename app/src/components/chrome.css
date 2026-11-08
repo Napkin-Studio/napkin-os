@@ -654,6 +654,7 @@
   .ch-bar-title { flex: 1 1 120px; }
   .ch-bar.ch-bar-os { height: auto; padding: 8px 12px; }
   .ch-slot { flex: 1 1 100%; order: 5; }
+  .ch-crumbs { flex: 1 1 100%; order: 4; }
   .ch-agency-os { display: none; }
   .ch-bar .ch-btn { height: 28px; padding: 0 11px; font-size: 12px; }
   .ch-bar .ch-btn-icon { width: 28px; padding: 0; }
