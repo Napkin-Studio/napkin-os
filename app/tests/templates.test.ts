@@ -1471,3 +1471,109 @@ test('cards a page asks for in one tick are one POST /cite, kept until the docum
   await cardsFor(['f_1'])
   assert.deepEqual(asked.at(-1), ['f_1'])
 })
+
+// ── the Research Tool on the new UI (features/research-new-ui.clan) ─────────
+
+test('research: every action the old header and Jude’s bar held is in the inspector, and the sections stay', () => {
+  const at = RT.indexOf('<aside class="insp'), end = RT.indexOf('</aside>', at)
+  assert.ok(at > 0 && end > at, 'the inspector is in the page')
+  const insp = RT.slice(at, end)
+  assert.doesNotMatch(RT, /<header class="top/, 'the header bar is gone')
+  // The buttons keep their ids, so their handlers are the ones they had.
+  for (const [id, label] of [['whoBtn', 'change'], ['extractBtn', 'Read the ask again'], ['researchBtn', 'Run research'],
+    ['synthBtn', 'Find the points'], ['exportBtn', 'Save · PDF'], ['lockBtn', 'Lock and accept']]) {
+    assert.match(insp, new RegExp(`id="${id}"[^>]*>${label}<`), `${id} is in the inspector`)
+    assert.match(RT, new RegExp(`\\$\\('${id}'\\)\\.addEventListener\\('click'`), `${id} is wired`)
+  }
+  for (const id of ['judge', 'viewsw', 'mapview', 'rbox', 'rbox-refresh', 'insp-ask', 'insp-sel', 'nav-report-a', 'nav-start-a', 'nav-ask', 'nav-facts', 'nav-findings'])
+    assert.match(insp, new RegExp(`id="${id}"`), `${id} is in the inspector`)
+  for (const href of ['#report', '#start', '#ask', '#facts', '#findings', '#selection']) assert.ok(insp.includes(`href="${href}"`), href)
+  assert.match(insp, /data-view="report"[^>]*>Report</)
+  assert.match(insp, /data-view="map"[^>]*>Evidence map</)
+  // The report's own parts are where they were.
+  const doc = RT.slice(RT.indexOf('<main id="doc">'), RT.indexOf('</main>'))
+  for (const id of ['report', 'start', 'gates', 'jobs', 'walker', 'records', 'ask', 'legend', 'facts', 'findings', 'selection', 'docfoot'])
+    assert.match(doc, new RegExp(`id="${id}"`), `${id} is in the document`)
+  // Refresh, How it ran and Ask the research are the inspector's, each still a button.
+  assert.match(fn(RT, 'renderInspector'), /refreshBtn\(stale/)
+  assert.match(fn(RT, 'renderInspector'), /data-act="show-run"/)
+  assert.match(fn(RT, 'renderAsks'), /askBoxHtml\('_new', 'Ask the research'\)/)
+  // Owner removals stay removed.
+  for (const gone of ['show-findings', 'source-mix', 'rb-outline', 'answer formed']) assert.ok(!RT.includes(gone), gone)
+})
+
+type MapNode = { id: string; col: string; kind: string; used: boolean; out?: boolean; order: number; label: string; meta?: string }
+type MapModel = { nodes: Record<string, MapNode>; edges: { from: string; to: string; kind: string }[]; cols: Record<string, MapNode[]>; gaps: MapNode[] }
+const mapModel = (r: unknown, p: unknown, s: unknown) => lift<{ mapModel(r: unknown, p: unknown, s: unknown): MapModel }>(RT, ['mapModel'], { arr, isObj }).mapModel(r, p, s)
+const pin = (sources?: string[]) => ({ key: 'k', value: 1, unit: 'count', confidence: 'high', ...(sources ? { sources } : {}) })
+
+test('research: the evidence map draws only the edges the document carries, left to right', () => {
+  const P = {
+    sources: { src_aaaa: { publisher: 'Kantar' }, src_bbbb: { publisher: 'CSO' }, src_unus: { publisher: 'Nobody cites' } },
+    pins: { f_000001: pin(['src_aaaa']), f_000002: pin(['src_bbbb', 'src_gone']), f_000003: pin(), f_000004: pin(['src_aaaa']), f_000005: pin(['src_aaaa']) },
+    findings: { fi_A: { statement: 'A', status: 'verified', cites: ['f_000001', 'f_000002'] }, fi_R: { statement: 'R', status: 'rejected', cites: ['f_000004'] },
+      fi_M: { statement: 'M', status: 'proposed', cites: ['f_MISSING'] } },
+  }
+  const S = { contested: [{ id: 'ct_1', status: 'resolved', chosen: 'f_000001', values: [{ fact_id: 'f_000001' }, { fact_id: 'f_000005' }] }] }
+  const r = { summary: [{ text: 'One', cites: ['fi_A', 'f_000003'] }, { text: 'Two', cites: ['fi_GONE'] }] }
+  const M = mapModel(r, P, S)
+  const has = (a: string, b: string) => M.edges.find(e => e.from === a && e.to === b)
+  // sources → pins → findings → summary
+  assert.ok(has('src_aaaa', 'f_000001') && has('f_000001', 'fi_A') && has('fi_A', 'sum:0') && has('f_000003', 'sum:0'))
+  assert.equal(M.edges.filter(e => M.nodes[e.from].col === 'summary').length, 0, 'nothing comes out of the summary')
+  // Links to what the document lacks are gaps, never guessed.
+  assert.equal(has('gap:src_gone', 'f_000002')?.kind, 'feeds')
+  assert.equal(has('gap:f_MISSING', 'fi_M')?.kind, 'gap')
+  assert.equal(has('gap:fi_GONE', 'sum:1')?.kind, 'gap')
+  assert.equal(M.nodes['gap:nosource'].label, '1 pin with no source record')
+  assert.equal(has('gap:nosource', 'f_000003')?.kind, 'gap')
+  assert.deepEqual(M.gaps.map(g => g.col).sort(), ['finding', 'pin', 'source', 'source'])
+  // A rejected finding and a value not chosen are considered, not chosen; what feeds only them is not used.
+  assert.ok(M.nodes.fi_R.out && M.nodes.f_000005.out)
+  assert.equal(has('f_000004', 'fi_R')?.kind, 'out')
+  assert.equal(M.nodes.f_000004.used, false)
+  assert.equal(M.nodes.src_unus.used, false)
+  assert.equal(M.nodes.fi_M.used, false, 'a finding no summary line cites is not used')
+  assert.ok(M.nodes.f_000001.used && M.nodes.src_aaaa.used && M.nodes.fi_A.used)
+  // Each column is ordered by what it feeds: the used before the rest.
+  assert.deepEqual(M.cols.summary.map(n => n.id), ['sum:0', 'sum:1'])
+  assert.equal(M.cols.finding[0].id, 'fi_A')
+  assert.deepEqual(M.cols.pin.slice(0, 3).map(n => n.id).sort(), ['f_000001', 'f_000002', 'f_000003'])
+})
+
+test('research: the evidence map draws an empty or partial document without breaking', () => {
+  const empty = mapModel(null, null, null)
+  assert.deepEqual(Object.keys(empty.nodes), [])
+  assert.deepEqual(empty.edges, [])
+  const noReport = mapModel(undefined, { pins: { f_000001: pin() }, findings: {} }, {})
+  assert.equal(noReport.nodes.f_000001.used, false)
+  assert.equal(noReport.cols.summary.length, 0)
+  // The example document: every summary cite resolves, and the pins carry no source record yet.
+  const ex = mapModel({ summary: [{ text: 'x', cites: ['f_000001'] }] }, { pins: { f_000001: pin() }, findings: {} }, {})
+  assert.equal(ex.nodes['gap:nosource'].meta, 'pinned before sources travelled')
+})
+
+test('research: the report box and the OS bar say the report’s state in the same words', () => {
+  type F = { reportStatus(r: unknown, locked: boolean, stale: boolean, open: number): { label: string; tone: string | null; locked: boolean }
+    barItems(st: unknown, has: boolean, lk: boolean): { kind: string; id?: string; label: string; disabled?: boolean; primary?: boolean }[] }
+  const f = lift<F>(RT, ['reportStatus', 'barItems'], { isObj, CHAT: { reportBusy: false } })
+  assert.equal(f.reportStatus(null, false, false, 0).label, 'No report yet')
+  assert.deepEqual(f.reportStatus({}, true, true, 3), { label: 'Locked', tone: 'ok', locked: true })
+  assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
+  assert.equal(f.reportStatus({}, false, false, 2).label, 'Draft')
+  assert.equal(f.reportStatus({}, false, false, 0).label, 'Ready to lock')
+  const st = f.reportStatus({}, false, false, 1)
+  const items = f.barItems(st, true, false)
+  assert.deepEqual(items.map(i => i.kind === 'status' ? `status:${i.label}` : i.id), ['status:Draft', 'refresh', 'lock', 'export'])
+  assert.ok(items.every(i => i.label.length <= 28))
+  // Locked: nothing to refresh or lock.
+  const lk = f.barItems(f.reportStatus({}, true, false, 0), true, true)
+  assert.ok(lk.filter(i => i.id === 'refresh' || i.id === 'lock').every(i => i.disabled))
+  // The bar's buttons do what the page's do.
+  const onBar = fn(RT, 'onBarAction')
+  assert.match(onBar, /'refresh'\) doRefreshReport\(\)/)
+  assert.match(onBar, /'lock'\) doLock\(\)/)
+  assert.match(onBar, /'export'\) doExport\('pdf'\)/)
+  assert.match(RT, /m\.type==='clan:bar-action'\)\{ onBarAction/)
+  assert.match(RT, /m\.type==='clan:bar\?'\)\{ BAR\.last=''/)
+})
