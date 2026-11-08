@@ -77,6 +77,51 @@
         }
       }
     },
+    "layout": {
+      "x-clan-appearance": true,
+      "description": "How the brief sits on its A4 sheet (features/brief-new-ui.clan): the frame, the headings, and each part's cell on a 12-column grid. Written by a person only; the crew never writes it, so a redraft keeps it. A part with no entry sits at its default place.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "frame": { "type": "string", "enum": ["open", "boxed"] },
+        "headings": { "type": "string", "enum": ["label", "tab"] },
+        "parts": {
+          "description": "Keyed by the part's data path (e.g. objectives.commercial).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "col": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "row": { "type": "integer", "minimum": 1 },
+              "w": { "type": "integer", "minimum": 1, "maximum": 12 },
+              "h": { "type": "integer", "minimum": 1 },
+              "order": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "logos": {
+      "x-clan-appearance": true,
+      "description": "The logos on the brief's sheet and its exports. ref is {asset} for a picture uploaded to this document, or {brand, asset} for one in an attached Brand Clan (an agency kit is another brand document).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["slot", "ref"],
+        "properties": {
+          "slot": { "type": "string", "enum": ["client", "agency", "partner"] },
+          "ref": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["asset"],
+            "properties": { "asset": { "type": "string" }, "brand": { "type": "string" } }
+          },
+          "label": { "type": "string" }
+        }
+      }
+    },
     "locked_fields": { "type": "array", "items": { "type": "string" } },
     "locked": { "type": "boolean", "$comment": "kept for older briefs: the lock is an approve on this document (middleware-api.md §10.5, os-layer.md §7.1), not this flag" },
     "materials": { "$ref": "#/definitions/materials", "$comment": "written only by the middleware (middleware-api.md §10.4)" },

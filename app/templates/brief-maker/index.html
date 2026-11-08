@@ -525,6 +525,129 @@
     .lkitem{flex:1 1 100%}
   }
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}.tile.work .tv::after{animation:none;content:"…"}}
+
+  /* ---------- the brief on the new UI (features/brief-new-ui.clan) ----------
+     The brief is an A4 sheet of paper; its controls are in the side tab
+     beside it. The parts sit on a 12-column grid: each part's width and place
+     are data (layout.parts.<key> {col,row,w,h,order}), so a redraft and the
+     export keep them. A part tints on hover, selects on a click, edits on a
+     double-click, moves by its grip and widens or narrows by its right edge. */
+  .app.wide{max-width:1260px}
+  .bdesk{display:grid;grid-template-columns:minmax(0,794px) minmax(300px,360px);gap:28px;justify-content:center;align-items:start;margin-top:8px}
+  .sheetcol{position:relative;min-width:0}
+  .sheet.a4{width:100%;max-width:794px;margin:0;min-height:1123px;padding:56px 64px 64px;--brief-accent:var(--sec)}
+  /* Where an A4 page ends on screen: a faint rule every 297mm of sheet. */
+  .sheet.a4::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(1123px - 1px),color-mix(in srgb,var(--line) 80%,transparent) calc(1123px - 1px),color-mix(in srgb,var(--line) 80%,transparent) 1123px)}
+  .sheettab{position:absolute;left:24px;top:-22px;height:22px;padding:4px 12px 0;border:1px solid var(--folder-edge);border-bottom:0;border-radius:4px 4px 0 0;background:var(--folder);color:var(--folder-ink);font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;max-width:60%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .sheettab:empty{display:none}
+  .shead{display:flex;align-items:center;gap:14px;padding-bottom:22px;border-bottom:1px solid var(--rule)}
+  .slogos{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+  .slogos img{height:36px;max-width:120px;object-fit:contain;display:block}
+  .slogos .sep{width:1px;height:28px;background:var(--line)}
+  .slogos .names{font-weight:700;font-size:15.5px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sident .ident{color:var(--ink2);font-size:11px}
+  .sident .ident svg{width:18px;height:18px}
+  .stitle{padding:22px 0 18px}
+  .skick{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+  .stitle .proj{display:block;background:none;border:0;box-shadow:none;padding:0;margin-top:6px;font-family:var(--fieldFont);font-weight:600;letter-spacing:-.02em;font-size:clamp(28px,4vw,38px);max-width:none}
+  .stitle .cli{color:var(--ink2)}
+  /* the grid */
+  .pgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:22px;align-items:start;grid-auto-flow:row}
+  .pgrid > .sechead{grid-column:1 / -1}
+  .pgrid > .row{grid-column:span var(--w,12);min-width:0;border-radius:2px;padding:16px 0 18px;transition:background-color .15s var(--ease),box-shadow .15s var(--ease)}
+  .pgrid > .row .ctrls{background:var(--paper);border-radius:999px;padding:2px;box-shadow:0 0 0 4px var(--paper)}
+  .pgrid > .row .ctrls{position:absolute;right:0;top:14px}
+  .pgrid > .row .lab > span:first-child{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brief-accent)}
+  .pgrid > .row.afterhead{border-top-color:transparent}
+  .pgrid > .row:hover{--tint-on:color-mix(in srgb,var(--brief-accent) 4%,transparent);background:var(--tint-on);box-shadow:0 0 0 6px var(--tint-on)}
+  .pgrid > .row.sel{--tint-on:color-mix(in srgb,var(--brief-accent) 6%,transparent);background:var(--tint-on);box-shadow:0 0 0 6px var(--tint-on),0 0 0 7px color-mix(in srgb,var(--brief-accent) 45%,transparent)}
+  .pgrid > .row.drop-before{box-shadow:-9px 0 0 -6px var(--brief-accent)}
+  .pgrid > .row.drop-after{box-shadow:9px 0 0 -6px var(--brief-accent)}
+  .pgrid > .row.dragging{opacity:.45}
+  .grip{position:absolute;left:-22px;top:16px;width:14px;height:24px;border:0;background:none;color:var(--ink3);cursor:grab;opacity:0;touch-action:none;padding:0;display:flex;align-items:center;justify-content:center;border-radius:3px}
+  .grip:active{cursor:grabbing}
+  .redge{position:absolute;right:-13px;top:10px;bottom:10px;width:8px;cursor:ew-resize;opacity:0;touch-action:none;border:0;background:none;padding:0}
+  .redge::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;border-radius:1px;background:var(--brief-accent)}
+  .row:hover > .grip,.row.sel > .grip,.row:hover > .redge,.row.sel > .redge,.grip:focus-visible,.redge:focus-visible{opacity:1}
+  .row.resizing{box-shadow:inset 0 0 0 1.5px var(--brief-accent)}
+  .wtag{position:absolute;right:8px;top:6px;font-family:var(--mono);font-size:10px;color:var(--brief-accent)}
+  /* Frame: open (rules between parts) or boxed (each part on its own card) */
+  .sheet.frame-boxed .pgrid{row-gap:12px}
+  .sheet.frame-boxed .pgrid > .row{border:1px solid var(--line);border-top:1px solid var(--line);padding:14px 14px 16px}
+  .sheet.frame-boxed .pgrid > .row .ctrls{right:10px}
+  .sheet.frame-boxed .sechead{border-top:0}
+  /* Headings: a label above the words, or a tab on the part's top edge */
+  .sheet.head-tab .pgrid > .row .lab > span:first-child{background:var(--brief-accent);color:var(--paper);padding:2px 8px;border-radius:3px 3px 0 0}
+  /* the side tab */
+  .stab{position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow:auto;display:grid;gap:16px;align-content:start;padding:18px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--grain),var(--card);box-shadow:var(--edge-hi),var(--lift);font-size:13.5px}
+  .stab .upnote{margin:0}
+  .splitbtn{position:relative;display:flex;gap:2px}
+  .sb-main{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;border:1px solid var(--go-2);border-radius:8px 0 0 8px;background:var(--go);color:var(--goText);font-weight:600;cursor:pointer}
+  .sb-more{width:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--go-2);border-radius:0 8px 8px 0;background:var(--go);color:var(--goText);cursor:pointer}
+  .smenu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:220px;display:grid;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:var(--lift)}
+  .smi{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 10px;border:0;border-radius:6px;background:none;text-align:left;cursor:pointer}
+  .smi:hover,.smi:focus-visible{background:var(--tint)}
+  .tabacts{display:flex;gap:16px;flex-wrap:wrap}
+  .tlink{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0;border:0;background:none;color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .tlink.armed{color:var(--create-ink)}
+  .tsec{display:grid;gap:10px;padding-top:14px;border-top:1px solid var(--rule)}
+  .trow{display:flex;align-items:center;gap:10px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:2px 10px;border-radius:var(--r-pill);background:var(--amber-soft);color:var(--amber-ink)}
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .pill.ok{background:var(--green-soft);color:var(--green-ink)}
+  .pill.warn{background:var(--create-soft);color:var(--create-ink)}
+  .stab .lock{width:100%;justify-content:center;margin:0}
+  .stab .locklist{margin-top:0}
+  .reolist{display:grid;gap:8px;margin-top:8px}
+  .reolist p{color:var(--ink2);font-size:13px}
+  .stab .bcrew .pair{flex-basis:100%;max-width:none}
+  .stab .bcrew .agent-figure{width:30px;height:40px}
+  .stab .bcrew .say{font-size:13.5px}
+  .stab .madefrom{margin:0}
+  .brandline{font-size:13px}
+  .selpart{border:1.5px solid color-mix(in srgb,var(--create) 50%,var(--line));border-radius:10px;padding:14px}
+  .selpart .tk{margin:0}
+  .selpart .sp-name{font-weight:700;font-size:15px}
+  .sp-acts{display:flex;flex-wrap:wrap;gap:6px}
+  .sp-acts button{min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-weight:600;font-size:13px;cursor:pointer}
+  .sp-acts button[aria-pressed="true"]{background:var(--amber-soft);color:var(--amber-ink);border-color:transparent}
+  .sp-acts button:disabled{opacity:.5;cursor:default}
+  .selpart details{border-top:1px solid var(--rule);padding-top:8px}
+  .selpart summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);min-height:28px;display:flex;align-items:center}
+  .sp-built{display:grid;gap:8px}
+  .tk{font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);margin-top:6px}
+  .tk2{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+  .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{flex:1;min-height:36px;border:0;background:var(--card);cursor:pointer;font-size:13px}
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);font-weight:600}
+  .swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .swatch{width:28px;height:28px;border-radius:50%;border:2px solid var(--card);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+  .swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+  .swatch.none{background:conic-gradient(var(--sec) 0 50%,var(--paper) 0)}
+  .swatch.custom{position:relative;overflow:hidden;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
+  .swatch.custom input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .logos{display:flex;flex-wrap:wrap;gap:8px}
+  .logo{position:relative;width:76px;display:grid;gap:4px;justify-items:center;padding:8px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-size:11px}
+  .logo img{height:34px;max-width:62px;object-fit:contain}
+  .logo select{width:100%;font-size:11px;border:1px solid var(--line);border-radius:4px;background:var(--card)}
+  .logo .x{position:absolute;right:2px;top:0;border:0;background:none;color:var(--ink3);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px}
+  .logo.add{border-style:dashed;cursor:pointer;color:var(--ink2);justify-content:center;align-content:center;min-height:76px}
+  .logo.add .ic{width:18px;height:18px}
+  .logo.kit{border-style:dotted}
+  @media (max-width:1100px){
+    .bdesk{grid-template-columns:minmax(0,1fr)}
+    .stab{position:static;max-height:none}
+  }
+  @media (max-width:640px){
+    .sheet.a4{padding:28px 18px 32px;min-height:0}
+    .sheet.a4::after{display:none}
+    .pgrid{column-gap:0}
+    .pgrid > .row,.pgrid > .sechead{grid-column:1 / -1!important;grid-row:auto!important}
+    .grip,.redge{display:none}
+  }
+  @media (hover:none) and (pointer:coarse){ .grip,.redge{opacity:1} }
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -565,38 +688,78 @@
     <p class="later">You’ll see these names in every tool. The same crew works everywhere, and every part of the brief says who wrote it.</p>
   </section>
 
-  <!-- PHASE 3 — THE BRIEF -->
+  <!-- PHASE 3 — THE BRIEF: an A4 sheet, and the side tab beside it (features/brief-new-ui.clan) -->
   <section id="structured">
-    <header class="band docband">
-      <div class="dtop">
-        <div><div class="ident" id="docIdent"></div><div class="proj" id="hProj"></div><div class="dtitle" id="hDerived" hidden></div><div class="cli" id="hCli"></div><div class="madefrom" id="madeFrom" hidden></div></div>
-        <span class="spacer"></span>
-        <button type="button" class="bghost" id="redraft" title="Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them."><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5"/></svg>Draft it again</button>
-        <button type="button" class="bghost" id="newDraft" title="Start again from a new brief"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>New brief</button>
+    <div class="bdesk">
+      <div class="sheetcol">
+        <div class="sheettab" id="sheetTab" aria-hidden="true"></div>
+        <article class="sheet a4" id="sheet" aria-label="The brief">
+          <header class="shead">
+            <div class="slogos" id="sheetLogos"></div>
+            <div class="sident"><div class="ident" id="docIdent"></div></div>
+          </header>
+          <div class="stitle">
+            <div class="skick">Creative brief</div>
+            <div class="proj" id="hProj"></div><div class="dtitle" id="hDerived" hidden></div><div class="cli" id="hCli"></div>
+          </div>
+          <div id="fields" class="pgrid"></div>
+
+          <div class="sechead" id="boardsHead" style="display:none">Your pictures</div>
+          <p class="pnote" id="boardsNote" hidden>From what you sent. Tap + to add more, or tap one to take it out.</p>
+          <div class="boards" id="boards"></div>
+        </article>
       </div>
-      <div class="bcrew" id="crewline" aria-live="polite"></div>
-    </header>
 
-    <div class="sheet">
-      <div class="upnote" id="upNote" role="status" hidden></div>
-      <div id="fields"></div>
-      <div class="review" id="review" hidden></div>
+      <aside class="stab" id="stab" aria-label="The brief’s controls">
+        <div class="upnote" id="upNote" role="status" hidden></div>
+        <div class="splitbtn" id="saveSplit">
+          <button class="sb-main" data-act="pdf" id="exPdf" title="Export a print-ready PDF"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg><span>Save · PDF</span></button>
+          <button type="button" class="sb-more" id="saveMore" aria-haspopup="menu" aria-expanded="false" aria-controls="saveMenu" title="More ways to save"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg><span class="sr">More ways to save</span></button>
+          <div class="smenu" id="saveMenu" role="menu" hidden>
+            <button class="smi" role="menuitem" id="exHtml" title="Export a clean standalone HTML report"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>HTML</button>
+            <button class="smi" role="menuitem" id="exHtmlPlain" title="Export the plain layout, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain HTML</button>
+            <button class="smi" role="menuitem" id="exPdfPlain" title="Export the plain layout as a PDF, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain PDF</button>
+            <button class="smi" role="menuitem" id="saveBtn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5A1 1 0 0 1 4 2.5h6.3L13 5.2V12.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Save as…</button>
+          </div>
+        </div>
+        <div class="tabacts">
+          <button type="button" class="tlink" data-act="redraft" id="redraft" title="Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them."><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5"/></svg>Draft it again</button>
+          <button type="button" class="tlink" id="newDraft" title="Start again from a new brief"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>New brief</button>
+        </div>
 
-      <div class="sechead" id="boardsHead" style="display:none">Your pictures</div>
-      <p class="pnote" id="boardsNote" hidden>From what you sent. Tap + to add more, or tap one to take it out.</p>
-      <div class="boards" id="boards"></div>
+        <div class="tsec tstate">
+          <div class="trow"><b>Brief</b><span class="pill" id="statusPill" role="status"></span></div>
+          <button class="lock" id="lockBtn" data-act="lock">Lock the brief</button>
+          <span class="muted" id="lockedBadge" style="display:none;color:var(--ok)">Locked for handoff</span>
+          <div class="locklist" id="lockList" hidden></div>
+          <div class="reopen" id="reopenBox" hidden>
+            <button type="button" class="ghost" id="reopenBtn" data-act="reopen" aria-expanded="false" aria-controls="reopenList">Reopen a part…</button>
+            <div class="reolist" id="reopenList" hidden></div>
+          </div>
+          <span class="muted status" id="status" role="status"></span>
+        </div>
 
-      <div class="footer">
-        <button class="lock" id="lockBtn">Lock brief</button>
-        <button class="save-as" id="saveBtn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5A1 1 0 0 1 4 2.5h6.3L13 5.2V12.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Save as…</button>
-        <button class="save-as" id="exHtml" title="Export a clean standalone HTML report"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>HTML</button>
-        <button class="save-as" id="exPdf" title="Export a print-ready PDF"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>PDF</button>
-        <button class="save-as" id="exHtmlPlain" title="Export the plain layout, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain HTML</button>
-        <button class="save-as" id="exPdfPlain" title="Export the plain layout as a PDF, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain PDF</button>
-        <span class="muted" id="lockedBadge" style="display:none;color:var(--ok)">Locked for handoff</span>
-        <span class="muted status" id="status" role="status"></span>
-        <div class="locklist" id="lockList" hidden></div>
-      </div>
+        <div class="tsec brandline" id="brandLine" hidden></div>
+        <div class="madefrom" id="madeFrom" hidden></div>
+        <div class="bcrew" id="crewline" aria-live="polite"></div>
+
+        <section class="tsec selpart" id="selPart" hidden aria-label="Selected part"></section>
+
+        <div class="review" id="review" hidden></div>
+
+        <section class="tsec look" aria-label="How the brief looks">
+          <h3 class="tk">Layout</h3>
+          <div class="lgrid">
+            <div><div class="tk2" id="lkFrame">Frame</div><div class="seg" role="group" aria-labelledby="lkFrame" data-look="frame"><button type="button" data-v="open">Open</button><button type="button" data-v="boxed">Boxed</button></div></div>
+            <div><div class="tk2" id="lkHead">Headings</div><div class="seg" role="group" aria-labelledby="lkHead" data-look="headings"><button type="button" data-v="label">Label</button><button type="button" data-v="tab">Tab</button></div></div>
+          </div>
+          <h3 class="tk">Colour</h3>
+          <div class="swatches" id="swatches" role="group" aria-label="The brief’s colour"></div>
+          <h3 class="tk">Logos</h3>
+          <div class="logos" id="logoList"></div>
+          <button type="button" class="tlink" id="resetLook">Reset look</button>
+        </section>
+      </aside>
     </div>
   </section>
 
@@ -1248,7 +1411,9 @@
   // SHEET 1/2, appendix sheets read APPENDIX 1/1, so the appendix is outside the two-sheet count.
   function gridSheet(n, total, sh, ctx, tag){
     var sub=sh.title||('Creative brief. '+(ctx.project||'Untitled brief'));
-    return '<div class="sheet"><div class="hd"><div class="logo">NAPKIN</div><div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
+    // The brief's own logos (data.logos, inlined as ctx.logos); none, and the header has no logo cell.
+    var logos=arr(ctx.logos).filter(function(l){ return l&&/^data:image\/(png|jpeg|svg\+xml|webp)[;,]/.test(String(l.src||'')); });
+    return '<div class="sheet"><div class="hd">'+(logos.length?'<div class="logo">'+logos.map(function(l){ return '<img src="'+esc(l.src)+'" alt="'+esc(l.alt||'Logo')+'">'; }).join('')+'</div>':'')+'<div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
       +'<div class="shn">'+tag+'</div></div>'
       +(n===1?gridInfo(ctx.info):'')
       +sh.rows.map(function(r){ return '<div class="row c'+r.length+'">'+r.map(function(c){ return gridCell(c, ctx); }).join('')+'</div>'; }).join('')
@@ -1297,7 +1462,7 @@
       +"body{background:#cfcfcf;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#000;-webkit-font-smoothing:antialiased}"
       +".sheet{width:210mm;height:297mm;background:#fff;margin:18px auto;padding:10mm 11.5mm 0;position:relative;overflow:hidden;page-break-after:always;break-after:page}"
       +".hd{display:flex;align-items:stretch;background:#000;color:#fff;height:16mm}"
-      +".logo{padding:0 6mm 0 5mm;font-weight:900;font-size:31px;letter-spacing:-.045em;display:flex;align-items:center;border-right:3px solid #fff}"
+      +".logo{padding:0 4mm;display:flex;align-items:center;gap:3mm;background:#fff;border:2px solid #000;border-right:3px solid #000}.logo img{height:10mm;max-width:34mm;object-fit:contain;display:block}"
       +".ttl{flex:1;padding:0 0 0 14px;display:flex;flex-direction:column;justify-content:center;border-right:3px solid #fff}"
       +".ttl b{font-size:19px;font-weight:800;letter-spacing:-.02em}.ttl span{font-size:10px;color:#d8d8d8;margin-top:3px}"
       +".shn{width:26mm;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:8px;letter-spacing:.16em}.shn b{font-size:23px;letter-spacing:-.02em;margin-top:2px}"
@@ -1649,6 +1814,9 @@
     $('intake').style.display = p==='intake'?'flex':'none';
     $('proc').classList.toggle('on', p==='proc');
     $('structured').style.display = p==='doc'?'block':'none';
+    document.querySelector('.app').classList.toggle('wide', p==='doc');
+    if(p!=='doc') SEL=null;
+    sendBar();
   }
   function render(){
     if(phase!=='proc'){
@@ -2206,12 +2374,16 @@
     syncKind();
     // While the shell records a client's answer, the parts stay as they are:
     // the fields snippet has put its marks under them.
-    var host=$('fields'), keep=CLIENT.on&&host.childNodes.length, sec=null;
+    var host=$('fields'), keep=CLIENT.on&&host.childNodes.length;
     if(!keep){
       host.innerHTML='';
-      FIELDS.forEach(function(f,i){
-        if(f.sec!==sec){ sec=f.sec; var h=document.createElement('div'); h.className='sechead'; h.textContent=f.sec; host.appendChild(h); }
-        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); host.appendChild(row);   // Studio tints the parts in turn
+      // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
+      var headRow=0;
+      layoutPack(layoutItems()).forEach(function(p){
+        if(p.head){ var h=document.createElement('div'); h.className='sechead'; h.textContent=p.head; h.style.gridRow=String(p.row); host.appendChild(h); headRow=p.row; return; }
+        var i=fieldIndex(p.key), f=FIELDS[i];
+        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); placeRow(row,f,p); host.appendChild(row);   // Studio tints the parts in turn
+        if(p.row===headRow+1) row.classList.add('afterhead');   // the heading's rule is the first row's
       });
     }
     // The pictures, sound and video the person sent, when there are any.
@@ -2223,6 +2395,7 @@
     $('newDraft').hidden=approveLocked();
     renderLock(); renderUpNote($('upNote'));
     renderCrewline(); renderReview();
+    renderLook(); renderSelPart();
     LOCK_SIG=lockSig();
     // The clan-fields inside the rows render, and the snippet finds the
     // parts again (and puts back what it shows under them).
@@ -2574,8 +2747,8 @@
     return 1.05/(.2126*l[0]+.7152*l[1]+.0722*l[2]+.05)>=3;
   }
   function buildPlainExportHTML(){
-    return Promise.all([inlineImages(), chainForExport()]).then(function(got){
-      var images=got[0];
+    return Promise.all([inlineImages(), chainForExport(), inlineLogos()]).then(function(got){
+      var images=got[0], logos=got[2];
       var pr=get('projection')||{};
       var cit=CHAIN.state==='ok'?exportCitations(exportParts(), {pins:pr.pins, findings:pr.findings, sources:pr.sources,
         passages:get('passages'), capture:get('capture'), materials:get('materials')}):{marks:{}, notes:[]};
@@ -2616,7 +2789,7 @@
       // bridge/style injectors can never mistake these literals for the
       // document's real closing tags.
       return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+proj+'</title><style>'+css+'</style><\/head><body>'
-        +'<header><div class="ey">Creative brief</div><h1>'+proj+'</h1>'+(client?'<div class="cli">'+client+'</div>':'')+'</header>'
+        +'<header>'+(logos.length?'<div class="logos" style="display:flex;gap:14px;align-items:center;margin-bottom:14px">'+logos.map(function(l){ return '<img src="'+esc(l.src)+'" alt="'+esc(l.alt)+'" style="height:34px;max-width:140px;object-fit:contain">'; }).join('')+'</div>':'')+'<div class="ey">Creative brief</div><h1>'+proj+'</h1>'+(client?'<div class="cli">'+client+'</div>':'')+'</header>'
         +body+boards
         +'<footer>'+(CHAIN.state==='unavailable'?'Sources could not be read for this export. ':'')+'Generated with Napkin · powered by CLAN · '+esc(date)+'</footer>'
         +'<\/body><\/html>';
@@ -2647,7 +2820,8 @@
   // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
   var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
   function buildGridExportHTML(){
-    return chainForExport().then(function(){
+    var logos=[];
+    return inlineLogos().then(function(l){ logos=l; return chainForExport(); }).then(function(){
       var pr=get('projection')||{}, m=(window.__CLAN__||{}).manifest||{};
       var cit=CHAIN.state==='ok'?exportCitations(exportParts(gridKeys()), {pins:pr.pins, findings:pr.findings, sources:pr.sources,
         passages:get('passages'), capture:get('capture'), materials:get('materials')}):{marks:{}, notes:[]};
@@ -2655,7 +2829,7 @@
       var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
       var me=((window.__CLAN__||{}).me||{}).name;
       var info=gridHeaderInfo({client:client, project:project, version:m.version, date:date, me:me});
-      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version});
+      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version, logos:logos});
       LAST_GRID_WARNINGS=g.warnings;
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
       var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
@@ -2752,7 +2926,6 @@
     }).catch(function(e){ toast('Export failed: '+e); });
   }
   $('exHtml').addEventListener('click',function(){ doExport('html'); });
-  $('exPdf').addEventListener('click',function(){ doExport('pdf'); });
   $('exHtmlPlain').addEventListener('click',function(){ doExport('html','plain'); });
   $('exPdfPlain').addEventListener('click',function(){ doExport('pdf','plain'); });
 
@@ -2767,16 +2940,7 @@
   // ---------- footer actions ----------
   $('newDraft').addEventListener('click',function(){ forceIntake=true; handWrite=false; render(); });
   // Draft it again: the whole crew on the same ask and the same files. One click arms it, a second runs it,
-  // so a stray click never redrafts a brief.
-  (function(){
-    var b=$('redraft'), armed=null, label=b.innerHTML;
-    b.addEventListener('click',function(){
-      if(!armed){ b.innerHTML=label.replace('Draft it again','Click again to redraft'); b.classList.add('armed');
-        armed=setTimeout(function(){ armed=null; b.innerHTML=label; b.classList.remove('armed'); }, 4000); return; }
-      clearTimeout(armed); armed=null; b.innerHTML=label; b.classList.remove('armed');
-      draftNow('');
-    });
-  })();
+  // so a stray click never redrafts a brief (redraftClick, the side tab's and the OS bar's).
   // "Made from" the research this brief started from, with a way back to it.
   function renderMadeFrom(){
     var el=$('madeFrom'); if(!el) return;
@@ -2835,7 +2999,8 @@
     return fig('judge',{state:'needs-you',decorative:true})+'<div class="lb"><div><b>'+esc(JUDE)+':</b> '+esc(lead)+'</div>'
       +'<div class="lkitems">'+items.slice(0,8).map(lkItemHtml).join('')+'</div>'+(more?'<span class="muted">and '+more+' more, in the decision panel</span>':'')+'</div>';
   }
-  function renderLock(){
+  function renderLock(){ renderLockBtn(); renderPill(); renderReopen(); sendBar(); }
+  function renderLockBtn(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
     var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
     $('lockedBadge').style.display=L&&!again?'inline':'none';
@@ -2843,13 +3008,13 @@
     if(again){ lb.disabled=wait; lb.innerHTML='Lock the brief again'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
     else if(A){ lb.disabled=true; lb.textContent='✓ Locked'; lb.title='Locked. A change from here makes a new version.'; }
     else if(L){ lb.disabled=false; lb.textContent='✓ Locked'; lb.title='Unlock this brief'; }   // a brief locked before /approve
-    else { lb.disabled=wait; lb.innerHTML='Lock brief'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
+    else { lb.disabled=wait; lb.innerHTML='Lock the brief'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
     var el=$('lockList'), show=(!L||again)&&n>0;
     el.hidden=!show; if(!show){ el.innerHTML=''; return; }
     el.innerHTML=lockListHtml(items, 'Before the brief can lock, '+(n===1?'this needs':'these need')+' you. Tap one to settle it.');
     bindLkItems(el);
   }
-  $('lockBtn').addEventListener('click',function(){
+  function lockClick(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked();
     // A brief locked by its old flag unlocks as it always did.
     if(legacyLocked()){ patch('locked',false,{actor:'human',pinned:true,action:'unlock brief',rationale:'Brief unlocked'}); return; }
@@ -2864,7 +3029,7 @@
       if(window.clan&&window.clan.requestSave) window.clan.requestSave();
       toast('Locked & saved as "'+(get('project_name')||'brief')+'.clan"');
     },function(){ lb.disabled=false; toast('That did not go through. Check your connection and try again.'); });
-  });
+  }
 
   // ---------- the title: the working title, where the recent list and the top bar read it ----------
   // The project name, else the working title from the client and the
@@ -2893,6 +3058,9 @@
   window.addEventListener('message', function(e){
     var m=e.data; if(e.source!==window.parent||!m||typeof m!=='object') return;
     if(m.type==='clan:can-run?'){ announce(); return; }
+    // The OS bar: draw the brief's buttons and pill again, or run a pressed button as the side tab's control runs it.
+    if(m.type==='clan:bar?'){ sendBar(true); return; }
+    if(m.type==='clan:bar-action'){ if(phase==='doc'&&ACTIONS.hasOwnProperty(m.id)) ACTIONS[m.id](); return; }
     // Client review is the shell's mode; the fields snippet draws it. The
     // brief only holds its parts still while it is on, and catches up after.
     if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; if(was&&!CLIENT.on&&phase==='doc') render(); return; }
@@ -2920,6 +3088,367 @@
     if(phase==='doc'){ if(lockSig()!==LOCK_SIG) renderStructured(); else { renderLock(); renderCrewline(); } }
     else if(phase==='intake') renderFromUp();
   });
+
+  // ---------- the sheet and its side tab (features/brief-new-ui.clan) ----------
+  // The parts sit on a 12-column grid in reading order. A part's width and
+  // place are data: layout.parts.<key> {col,row,w,h,order} beside the look's
+  // frame and headings (layout is an appearance key, like theme: the crew
+  // never writes it, so a redraft keeps it). A brief with no layout reads as
+  // the defaults below, in the schema's order.
+  var GRID_COLS=12, MIN_W=3;
+  var DEFAULT_W={project_name:6, client:6, background:6, barrier:6,
+    'objectives.commercial':4, 'objectives.behavioural':4, 'objectives.attitudinal':4,
+    audience:6, competitor_context:6, objection:6, reasons_to_believe:6,
+    'desired_response.think':4, 'desired_response.feel':4, 'desired_response.do':4,
+    tone_and_world:6, budget_and_scope:6, mandatories:6, open_questions:6};
+  function clampW(w){ w=Math.round(+w); return isFinite(w)?Math.max(MIN_W,Math.min(GRID_COLS,w)):GRID_COLS; }
+  // -> [{key, sec, w}] in reading order: a stored place by its order, a part with none where the schema puts it.
+  function layoutOrder(fields, stored){
+    stored=stored&&typeof stored==='object'&&!Array.isArray(stored)?stored:{};
+    return fields.map(function(f,i){
+      var s=stored[f.key], has=!!s&&typeof s==='object', o=has?Number(s.order):NaN;
+      return {key:f.key, sec:f.sec, w:clampW(has&&s.w!=null?s.w:(DEFAULT_W[f.key]||GRID_COLS)), o:isFinite(o)?o:i, i:i};
+    }).sort(function(a,b){ return a.o-b.o||a.i-b.i; }).map(function(x){ return {key:x.key, sec:x.sec, w:x.w}; });
+  }
+  // Each part's cell on the grid, in reading order; a section heading takes a
+  // row of its own wherever the section changes, and a part too wide for
+  // what is left of a row starts the next. -> [{key|head, col, row, w, h, order}]
+  function layoutPack(items){
+    var row=1, col=1, prev=null, out=[];
+    items.forEach(function(it, n){
+      if(it.sec!==prev){ if(col>1){ row++; col=1; } out.push({head:it.sec, col:1, row:row, w:GRID_COLS, h:1}); row++; prev=it.sec; }
+      if(col+it.w-1>GRID_COLS){ row++; col=1; }
+      out.push({key:it.key, sec:it.sec, col:col, row:row, w:it.w, h:1, order:n});
+      col+=it.w; if(col>GRID_COLS){ row++; col=1; }
+    });
+    return out;
+  }
+  // What layout.parts holds for these items: every part, so a later read needs nothing else.
+  function layoutParts(items){
+    var parts={};
+    layoutPack(items).forEach(function(p){ if(p.key) parts[p.key]={col:p.col, row:p.row, w:p.w, h:p.h, order:p.order}; });
+    return parts;
+  }
+  function layoutIndex(items, key){ for(var i=0;i<items.length;i++) if(items[i].key===key) return i; return -1; }
+  // Move `key` before (or after) `target`; the others keep their order.
+  function layoutMove(items, key, target, after){
+    var from=layoutIndex(items,key); if(from<0||key===target) return items.slice();
+    var list=items.slice(), it=list.splice(from,1)[0], to=layoutIndex(list,target);
+    if(to<0) return items.slice();
+    list.splice(after?to+1:to, 0, it);
+    return list;
+  }
+  // One step earlier or later in reading order (the keyboard's move, and the panel's).
+  function layoutStep(items, key, d){
+    var i=layoutIndex(items,key), j=i+d; if(i<0||j<0||j>=items.length) return items.slice();
+    return layoutMove(items, key, items[j].key, d>0);
+  }
+  function layoutResize(items, key, w){
+    return items.map(function(it){ return it.key===key?{key:it.key, sec:it.sec, w:clampW(w)}:it; });
+  }
+  function layoutData(){ var l=get('layout'); return l&&typeof l==='object'&&!Array.isArray(l)?l:{}; }
+  function layoutItems(){ return layoutOrder(FIELDS, layoutData().parts); }
+  function fieldIndex(key){ for(var i=0;i<FIELDS.length;i++) if(FIELDS[i].key===key) return i; return -1; }
+  function fieldOf(key){ return FIELDS[fieldIndex(key)]||null; }
+  function rowOf(key){ return document.querySelector('#fields .row[data-i="'+fieldIndex(key)+'"]'); }
+  function saveLayout(items, what){
+    var l=layoutData(), n={}; for(var k in l) n[k]=l[k];
+    n.parts=layoutParts(items);
+    return patch('layout', n, {actor:'human', pinned:false, action:what||'lay out the brief'});
+  }
+  function lookSet(k, v){
+    var l=layoutData(), n={}; for(var x in l) n[x]=l[x];
+    n[k]=v; if(!n.parts) n.parts=layoutParts(layoutItems());
+    patch('layout', n, {actor:'human', pinned:false, action:'set the brief’s '+k});
+  }
+
+  // The part the side tab is showing (a click selects it; Escape or Done lets go).
+  var SEL=null;
+  function select(key){
+    SEL=key||null;
+    document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
+    var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
+    renderSelPart();
+  }
+  // A part's place on the sheet, and the handles that move and size it.
+  function placeRow(row, f, p){
+    row.style.setProperty('--w', String(p.w));
+    row.style.gridColumn=p.col+' / span '+p.w; row.style.gridRow=String(p.row);
+    row.setAttribute('data-w', String(p.w));
+    if(SEL===f.key) row.classList.add('sel');
+    if(!docLocked()){
+      var g=document.createElement('button'); g.type='button'; g.className='grip';
+      g.title='Drag to move. Arrow keys move it too.'; g.setAttribute('aria-label','Move '+partLabel(f));
+      g.innerHTML='<svg class="ic" viewBox="0 0 8 16" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="4" r="1.1"/><circle cx="6" cy="4" r="1.1"/><circle cx="2" cy="8" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/></g></svg>';
+      g.addEventListener('pointerdown', function(e){ startDrag(e, row, f, g); });
+      g.addEventListener('keydown', function(e){
+        var d=e.key==='ArrowUp'||e.key==='ArrowLeft'?-1:e.key==='ArrowDown'||e.key==='ArrowRight'?1:0;
+        if(!d) return; e.preventDefault(); saveLayout(layoutStep(layoutItems(), f.key, d), 'move '+partName(f));
+      });
+      var r=document.createElement('button'); r.type='button'; r.className='redge';
+      r.title='Drag to make it wider or narrower. Arrow keys too.'; r.setAttribute('aria-label','Width of '+partLabel(f)+': '+p.w+' of '+GRID_COLS+' columns');
+      r.addEventListener('pointerdown', function(e){ startResize(e, row, f, p, r); });
+      r.addEventListener('keydown', function(e){
+        var d=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;
+        if(!d) return; e.preventDefault(); saveLayout(layoutResize(layoutItems(), f.key, p.w+d), 'resize '+partName(f));
+      });
+      row.appendChild(g); row.appendChild(r);
+    }
+    row.addEventListener('click', function(e){
+      if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov')) return;
+      if(SEL!==f.key) select(f.key);
+    });
+    // A double-click edits the part in the brief's own editor, as its pencil does
+    // (in the OS's edit mode a text part's clan-field takes the tap itself).
+    row.addEventListener('dblclick', function(e){
+      if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov,button')) return;
+      if(!canWrite(f.key)||(EDIT_MODE&&f.type!=='list')) return;
+      if(window.getSelection) try{ window.getSelection().removeAllRanges(); }catch(x){}
+      startEdit(row, f);
+    });
+  }
+  function clearDrop(){ document.querySelectorAll('#fields .drop-before,#fields .drop-after').forEach(function(r){ r.classList.remove('drop-before','drop-after'); }); }
+  function startDrag(e, row, f, g){
+    if(e.button>0) return; e.preventDefault(); e.stopPropagation();
+    try{ g.setPointerCapture(e.pointerId); }catch(x){}
+    var over=null, after=false, moved=false, x0=e.clientX, y0=e.clientY;
+    function mv(ev){
+      if(!moved&&Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)<4) return;
+      moved=true; row.classList.add('dragging'); clearDrop();
+      var el=document.elementFromPoint(ev.clientX, ev.clientY), r=el&&el.closest?el.closest('#fields .row'):null;
+      if(!r||r===row){ over=null; return; }
+      var b=r.getBoundingClientRect(); after=ev.clientX>b.left+b.width/2; over=r;
+      r.classList.add(after?'drop-after':'drop-before');
+    }
+    function up(){
+      g.removeEventListener('pointermove', mv); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
+      row.classList.remove('dragging'); clearDrop();
+      var t=over&&FIELDS[+over.getAttribute('data-i')];
+      if(moved&&t) saveLayout(layoutMove(layoutItems(), f.key, t.key, after), 'move '+partName(f));
+    }
+    g.addEventListener('pointermove', mv); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  }
+  function startResize(e, row, f, p, h){
+    if(e.button>0) return; e.preventDefault(); e.stopPropagation();
+    try{ h.setPointerCapture(e.pointerId); }catch(x){}
+    var grid=$('fields'), gb=grid.getBoundingClientRect(), gap=parseFloat(getComputedStyle(grid).columnGap)||0;
+    var step=(gb.width+gap)/GRID_COLS, left=gb.left+(p.col-1)*step, w=p.w;
+    var tag=document.createElement('span'); tag.className='wtag'; row.appendChild(tag); row.classList.add('resizing');
+    function mv(ev){
+      w=Math.max(MIN_W, Math.min(GRID_COLS-p.col+1, Math.round((ev.clientX-left+gap)/step)));
+      row.style.gridColumn=p.col+' / span '+w; tag.textContent=w+'/'+GRID_COLS;
+    }
+    function up(){
+      h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+      row.classList.remove('resizing'); tag.remove();
+      if(w!==p.w) saveLayout(layoutResize(layoutItems(), f.key, w), 'resize '+partName(f));
+    }
+    h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  }
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&SEL&&!document.querySelector('#fields .edit')) select(null); });
+
+  // The selected part: what can be done to it, what it was built from, why it says it, and its place.
+  var WIDTHS=[[4,'Third'],[6,'Half'],[8,'Two-thirds'],[12,'Full']];
+  function renderSelPart(){
+    var el=$('selPart'), f=SEL?fieldOf(SEL):null;
+    if(!el) return;
+    if(!f||phase!=='doc'){ el.hidden=true; el.innerHTML=''; return; }
+    var A=approveLocked(), kept=isLocked(f.key), wr=canWrite(f.key), items=layoutItems(), at=layoutIndex(items,f.key), w=at>=0?items[at].w:GRID_COLS;
+    var notes=notesHtml(f);
+    el.hidden=false;
+    el.innerHTML='<div class="trow"><h3 class="tk">Selected part</h3><span class="spacer"></span><button type="button" class="tlink" data-sp="done">Done</button></div>'
+      +'<div class="sp-name">'+esc(partLabel(f))+'</div>'
+      +'<div class="sp-acts">'
+      +(wr?'<button type="button" data-sp="edit">Edit</button>':'')
+      +(!A?'<button type="button" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
+      +(!A?'<button type="button" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the crew change this again':'Keep this as it is')+'">'+(kept?'Kept as is':'Keep as is')+'</button>':'')
+      +'</div>'
+      +(notes?'<div class="sp-call"><h3 class="tk">Your call</h3><div class="notes">'+notes+'</div></div>':'')
+      +'<details class="sp-b" open><summary>Built from</summary><div class="sp-built" id="spBuilt"></div></details>'
+      +'<details class="sp-w"'+(OPEN_WHY['sp:'+f.key]?' open':'')+'><summary>Why it says this</summary><div class="why">'+whyHtml(f)+'</div></details>'
+      +(!docLocked()?'<details class="sp-l"><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
+        +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
+        +'<div class="sp-acts" style="margin-top:8px"><button type="button" data-sp="up"'+(at<=0?' disabled':'')+'>Move earlier</button><button type="button" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>Move later</button></div></details>':'');
+    var row=rowOf(f.key);
+    el.querySelectorAll('[data-sp]').forEach(function(b){ b.addEventListener('click', function(){
+      var a=b.getAttribute('data-sp');
+      if(a==='done') select(null);
+      else if(a==='edit'&&row){ startEdit(row,f); row.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
+      else if(a==='regen'&&row){ startRegen(row,f); row.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
+      else if(a==='keep') toggleLock(f);
+      else if(a==='up'||a==='down') saveLayout(layoutStep(layoutItems(), f.key, a==='up'?-1:1), 'move '+partName(f));
+    }); });
+    el.querySelectorAll('.sp-l [data-w]').forEach(function(b){ b.addEventListener('click', function(){ saveLayout(layoutResize(layoutItems(), f.key, +b.getAttribute('data-w')), 'resize '+partName(f)); }); });
+    var wd=el.querySelector('.sp-w'); if(wd) wd.addEventListener('toggle', function(){ OPEN_WHY['sp:'+f.key]=wd.open; if(wd.open&&CHAIN.state!=='ok') loadChain(); });
+    var n=el.querySelector('.sp-call .notes'); if(n) bindNotes(n, f);
+    // Built from: the OS's one source card for this part (os-source-card, ClanFields.card).
+    var b=$('spBuilt'), F=OSF();
+    if(!hasVal(get(f.key))) b.innerHTML='<p class="muted">Nothing is written here yet.</p>';
+    else if(F&&F.card&&docId()) F.card(docId()+'#'+f.key, b);
+    else b.innerHTML='<p class="muted">Where this came from shows in the Napkin host.</p>';
+  }
+
+  // ---------- the state: one pill, in the side tab and the OS bar ----------
+  // s: {locked, reopened, needs, canLock} -> {label, tone, locked}
+  function briefStatus(s){
+    if(s.locked&&s.reopened) return {label:'Reopened', tone:'warn', locked:false};
+    if(s.locked) return {label:'Locked', tone:'ok', locked:true};
+    if(s.needs>0) return {label:'Needs you ('+s.needs+')', tone:'warn', locked:false};
+    if(s.canLock) return {label:'Ready to lock', tone:'ok', locked:false};
+    return {label:'Draft', tone:null, locked:false};
+  }
+  function statusNow(){
+    var l=lockState();
+    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:lockItems().length, canLock:!!(l&&l.can_lock)});
+  }
+  function renderPill(){
+    var p=$('statusPill'); if(!p) return; var s=statusNow();
+    p.textContent=s.label; p.className='pill'+(s.tone?' '+s.tone:'');
+  }
+
+  // ---------- one handler per action: the side tab's controls and the OS bar's buttons ----------
+  var REDRAFT_ARMED=null;
+  function redraftClick(){
+    var b=$('redraft');
+    if(!REDRAFT_ARMED){
+      b.classList.add('armed'); b.lastChild.textContent='Click again to redraft';
+      REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; b.classList.remove('armed'); b.lastChild.textContent='Draft it again'; sendBar(); }, 4000);
+      sendBar(); return;
+    }
+    clearTimeout(REDRAFT_ARMED); REDRAFT_ARMED=null; b.classList.remove('armed'); b.lastChild.textContent='Draft it again';
+    sendBar();
+    draftNow('');
+  }
+  var ACTIONS={
+    pdf:function(){ doExport('pdf'); },
+    redraft:redraftClick,
+    lock:function(){ lockClick(); },
+    reopen:function(){ toggleReopen(); }
+  };
+  // What the OS bar shows for the brief (clan:bar, docs/contracts/clan-fields.md):
+  // its buttons are the side tab's, by the same ids, and the pill is the state.
+  function barItems(){
+    if(phase!=='doc') return [];
+    var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, st=statusNow(), lb=$('lockBtn');
+    var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
+    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});
+    if(A&&!re) items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'});
+    else items.push({kind:'button', id:'lock', label:re?'Lock the brief again':'Lock the brief', disabled:!!(lb&&lb.disabled)});
+    items.push({kind:'status', label:st.label, tone:st.tone, locked:st.locked});
+    return items;
+  }
+  var BAR_LAST=null;
+  function sendBar(force){
+    if(window.parent===window) return;
+    var items=barItems(), k=JSON.stringify(items);
+    if(!force&&k===BAR_LAST) return; BAR_LAST=k;
+    try{ window.parent.postMessage({type:'clan:bar', v:1, items:items}, '*'); }catch(e){}
+  }
+
+  // ---------- Reopen a part…: there is no unlocking a lock; a client's change reopens one part (os-layer §7.5.6) ----------
+  var REOPEN_OPEN=false;
+  function reopenable(){ return clientOpenParts().filter(function(p){ return p&&!p.reopened&&p.decision&&(p.state==='rejected'||p.state==='accepted_with_changes'); }); }
+  function toggleReopen(on){ REOPEN_OPEN=on==null?!REOPEN_OPEN:!!on; renderReopen(); if(REOPEN_OPEN){ var b=$('reopenBox'); if(b) b.scrollIntoView({block:'nearest'}); } }
+  function renderReopen(){
+    var box=$('reopenBox'), A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0;
+    box.hidden=!(A&&!re);
+    if(box.hidden){ REOPEN_OPEN=false; return; }
+    var btn=$('reopenBtn'), list=$('reopenList'), ps=reopenable();
+    btn.setAttribute('aria-expanded', String(REOPEN_OPEN)); list.hidden=!REOPEN_OPEN;
+    if(!REOPEN_OPEN){ list.innerHTML=''; return; }
+    list.innerHTML=ps.length
+      ? ps.map(function(p,i){ return '<button type="button" class="lkitem" data-n="'+i+'"><span class="k">'+esc(p.state==='rejected'?'The client said no':'The client asked for a change')+'</span><span class="x">'+esc(addrLabel(p))+'</span></button>'; }).join('')
+        +'<p>Reopening a part lets you make that change. Lock the brief again when it’s done.</p>'
+      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Client said… in the OS bar), then reopen the part they mean here.</p>';
+    list.querySelectorAll('[data-n]').forEach(function(b){ b.addEventListener('click', function(){
+      var p=ps[+b.getAttribute('data-n')]; b.disabled=true;
+      hostPost('/client-review/reopen', {answer:p.decision}).then(function(res){
+        if(!(res&&res.ok)){ b.disabled=false; toast(hostErrText(res)); return; }
+        REOPEN_OPEN=false; var F=OSF(); if(F) F.reload();
+        toast(addrLabel(p)+' is open for the client’s change.');
+      }, function(){ b.disabled=false; toast('That did not go through. Check your connection and try again.'); });
+    }); });
+  }
+
+  // ---------- the look: frame, headings, colour, logos (appearance keys) ----------
+  var SWATCHES=[['','The brief’s own'],['#C9462A','Stamp red'],['#221D15','Ink'],['#1F3FBF','Blue'],['#3D5A1E','Green'],['#B07A12','Ochre']];
+  function logosOf(){ return arr(get('logos')).filter(function(l){ return l&&typeof l==='object'&&l.ref&&typeof l.ref==='object'; }); }
+  var LOGO_SLOTS=[['client','Client'],['agency','Agency'],['partner','Partner']];
+  function logoSrc(l){ var r=l.ref||{}; return r.asset&&!r.brand?assetUrl(r.asset):''; }
+  function slotRank(s){ for(var i=0;i<LOGO_SLOTS.length;i++) if(LOGO_SLOTS[i][0]===s) return i; return LOGO_SLOTS.length; }
+  function sheetLogos(){ return logosOf().map(function(l,i){ return {l:l, i:i}; }).sort(function(a,b){ return slotRank(a.l.slot)-slotRank(b.l.slot)||a.i-b.i; }).map(function(x){ return x.l; }); }
+  function renderLook(){
+    var sh=$('sheet'), l=layoutData(), frame=l.frame==='boxed'?'boxed':'open', head=l.headings==='tab'?'tab':'label';
+    sh.classList.toggle('frame-boxed', frame==='boxed'); sh.classList.toggle('head-tab', head==='tab');
+    document.querySelectorAll('#stab .seg[data-look]').forEach(function(s){
+      var cur=s.getAttribute('data-look')==='frame'?frame:head;
+      s.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-v')===cur)); });
+    });
+    var acc=String(get('theme.accent')||'');
+    if(/^#[0-9a-f]{6}$/i.test(acc)) sh.style.setProperty('--brief-accent', acc); else sh.style.removeProperty('--brief-accent');
+    var sw=$('swatches'), known=SWATCHES.some(function(x){ return x[0].toLowerCase()===acc.toLowerCase(); });
+    sw.innerHTML=SWATCHES.map(function(x){ return '<button type="button" class="swatch'+(x[0]?'':' none')+'" data-c="'+x[0]+'"'+(x[0]?' style="background:'+x[0]+'"':'')+' aria-pressed="'+(x[0].toLowerCase()===acc.toLowerCase())+'" title="'+esc(x[1])+'"><span class="sr">'+esc(x[1])+'</span></button>'; }).join('')
+      +'<label class="swatch custom" title="Another colour" aria-pressed="'+(!!acc&&!known)+'"><span class="sr">Another colour</span><input type="color" value="'+(/^#[0-9a-f]{6}$/i.test(acc)?acc:'#c9462a')+'" /></label>';
+    sw.querySelectorAll('[data-c]').forEach(function(b){ b.addEventListener('click', function(){ var c=b.getAttribute('data-c'); patch('theme.accent', c||null, {actor:'human', pinned:false, action:'set the brief’s colour'}); }); });
+    sw.querySelector('input').addEventListener('change', function(){ patch('theme.accent', this.value, {actor:'human', pinned:false, action:'set the brief’s colour'}); });
+    renderLogos();
+    var tab=$('sheetTab'), pn=String(get('project_name')||'').trim()||derivedTitle(); tab.textContent=pn;
+  }
+  function renderLogos(){
+    var ls=logosOf(), box=$('logoList'), head=$('sheetLogos'), cli=String(get('client')||'').trim();
+    var shown=sheetLogos().filter(logoSrc);
+    head.innerHTML=shown.map(function(l,i){ return (i?'':'')+'<img src="'+esc(logoSrc(l))+'" alt="'+esc(l.label||l.slot||'Logo')+'" />'; }).join('')
+      +(cli?(shown.length?'<span class="sep"></span>':'')+'<span class="names">'+esc(cli)+'</span>':'');
+    box.innerHTML=ls.map(function(l,i){
+      var src=logoSrc(l);
+      return '<div class="logo'+(l.ref.brand?' kit':'')+'">'+(src?'<img src="'+esc(src)+'" alt="" />':'<span class="muted">Brand Clan</span>')
+        +'<select aria-label="Whose logo is '+esc(l.label||'this')+'" data-n="'+i+'">'+LOGO_SLOTS.map(function(s){ return '<option value="'+s[0]+'"'+(l.slot===s[0]?' selected':'')+'>'+s[1]+'</option>'; }).join('')+'</select>'
+        +'<button type="button" class="x" data-n="'+i+'" aria-label="Take off '+esc(l.label||'this logo')+'">×</button></div>';
+    }).join('')+'<label class="logo add" title="Add a logo (PNG, JPG, SVG or WebP)">'+IC.plus+'<span>Add logo</span><input type="file" class="sr" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>';
+    box.querySelectorAll('select[data-n]').forEach(function(s){ s.addEventListener('change', function(){
+      var n=logosOf().slice(), i=+s.getAttribute('data-n'); n[i]=Object.assign({}, n[i], {slot:s.value});
+      patch('logos', n, {actor:'human', pinned:false, action:'set whose logo it is'}); }); });
+    box.querySelectorAll('.x[data-n]').forEach(function(b){ b.addEventListener('click', function(){
+      var n=logosOf().slice(); n.splice(+b.getAttribute('data-n'),1);
+      patch('logos', n, {actor:'human', pinned:false, action:'take a logo off'}); }); });
+    box.querySelector('.add input').addEventListener('change', function(){ var f=this.files&&this.files[0]; this.value=''; if(f) addLogo(f); });
+  }
+  // The next slot nobody has: the client's logo first, then the agency's, then a partner's.
+  function nextSlot(ls){ var have={}; ls.forEach(function(l){ have[l.slot]=1; }); return have.client?have.agency?'partner':'agency':'client'; }
+  function addLogo(file){
+    if(!/^image\/(png|jpeg|svg\+xml|webp)$/.test(file.type||'')){ toast('A logo is a PNG, JPG, SVG or WebP picture.'); return; }
+    if(!window.clan){ toast('Adding a logo needs the Napkin host.'); return; }
+    var ext=(file.name.split('.').pop()||'png').replace(/[^a-zA-Z0-9]/g,'').toLowerCase(), name='logo-'+Date.now()+'.'+ext;
+    file.arrayBuffer().then(function(buf){
+      return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf}).then(function(r){ return r.json(); });
+    }).then(function(res){
+      if(!(res&&res.internal_path)){ toast(hostErrText(res)||'The logo could not be added.'); return; }
+      var n=logosOf().slice(); n.push({slot:nextSlot(n), ref:{asset:name}, label:file.name});
+      patch('logos', n, {actor:'human', pinned:false, action:'add a logo'});
+    }).catch(function(){ toast('The logo could not be added. Try again in a moment.'); });
+  }
+  // The logos as data, for an export that has to stand on its own.
+  function inlineLogos(){
+    return Promise.all(sheetLogos().filter(logoSrc).map(function(l){
+      return fetch(logoSrc(l)).then(function(r){ return r.blob(); }).then(function(b){
+        return new Promise(function(res){ var fr=new FileReader(); fr.onload=function(){ res({src:fr.result, alt:l.label||l.slot||'Logo'}); }; fr.onerror=function(){ res(null); }; fr.readAsDataURL(b); });
+      }).catch(function(){ return null; });
+    })).then(function(a){ return a.filter(Boolean); });
+  }
+  function resetLook(){ patch({theme:null, layout:null, logos:null}, {actor:'human', pinned:false, action:'reset the brief’s look'}); }
+  document.querySelectorAll('#stab .seg[data-look] button').forEach(function(b){ b.addEventListener('click', function(){
+    lookSet(b.parentNode.getAttribute('data-look'), b.getAttribute('data-v')); }); });
+  $('resetLook').addEventListener('click', resetLook);
+  // Save · PDF's other ways to save, in its menu.
+  (function(){
+    var more=$('saveMore'), menu=$('saveMenu');
+    function show(on){ menu.hidden=!on; more.setAttribute('aria-expanded', String(on)); if(on){ var f=menu.querySelector('.smi'); if(f) f.focus(); } }
+    more.addEventListener('click', function(e){ e.stopPropagation(); show(menu.hidden); });
+    menu.addEventListener('click', function(){ show(false); });
+    menu.addEventListener('keydown', function(e){ if(e.key==='Escape'){ show(false); more.focus(); } });
+    document.addEventListener('click', function(e){ if(!menu.hidden&&!menu.contains(e.target)) show(false); });
+  })();
+  document.querySelectorAll('#stab [data-act]').forEach(function(b){ var a=b.getAttribute('data-act'); if(ACTIONS[a]) b.addEventListener('click', function(){ ACTIONS[a](); }); });
 
   // ---------- boot ----------
   render();
