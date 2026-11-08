@@ -489,6 +489,15 @@ pub struct Lineage {
     pub carried: Option<Carried>,
 }
 
+pub struct AttachSpec {                       // §5.7
+    pub accepts: Vec<String>,
+    pub lift: BTreeMap<String, String>,
+    pub many: Vec<String>,
+}
+// AppInfo gains `attach: Option<AttachSpec>`; SpinoffSpec gains
+// `by_source: BTreeMap<String, SourceCarry {map, lift, upstream}>`; Lineage
+// gains `attached: Vec<Attached>`, copied by every rewrite as `carried` is.
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Carried {
     pub document_id: String,
@@ -518,6 +527,62 @@ record for an upstream `spinoff()`. `Lineage` in `pack.rs`, `render.rs` and
 a document keeps the record of its hop on every later write, or the first
 edit would erase it and `GET /upstream` and backrefs (§7.4) would have
 nothing to compare or address.
+
+### 5.7 Linking an existing document (attach)
+
+*Added 2026-11-09 (features/spinoff-and-links.clan).* A spin-off makes a new
+document; a **link** carries a document into one that already exists, beside
+its own work: a research into a brief, a brief into a research, either into a
+deck or a production. It is the same carry (§5.2) applied to an existing
+document, so the rules of this section hold for it, and it is the mechanism
+the Brand Clan uses (`docs/contracts/brand-clan.md` on feat/brand-clan); the
+names and shapes below are that branch's, so it merges onto them.
+
+1. **Opting in: `app.attach`**, declared by the *target* app:
+   `{accepts: [app_id…], lift: {from: to}, many: [app_id…]}`. `accepts` names
+   the source apps; empty takes nothing. `many` names the apps a document may
+   hold several of at once (several research in one brief, owner
+   2026-11-09); any other app is one at a time and linking another of it
+   **replaces** the first. One research may feed many briefs: nothing limits
+   how many documents link the same source. `lift` seeds a field only where
+   it is empty, or still holds what the previous copy seeded.
+2. **What lands** (`clan_sdk::attach`): the source's data frozen at
+   `data.upstream.<source document_id>` (less `projection`; its own
+   `upstream` hoisted beside it), its pins, findings and sources merged by id
+   into the document's own, its assets and branches copied, its decisions
+   carried pinned after a boundary entry, and one record in
+   `lineage.attached[]`: `{app_id, version?, at, title, revision, taken,
+   document_id, data_sha256, facts_sha256?, findings_sha256?,
+   sources_sha256?, last_decision?}`. `revision` is the source's revision
+   taken — the version kept — and `taken` counts how many times this document
+   took it (1 on link, one more on each update); `version` is the source's
+   `kit.version` when it declares one, else `taken`.
+3. **Versions and the update notice.** The frozen copy never moves by
+   itself. `GET /upstream` lists each linked document with `how: linked` and
+   `status: current | changed`, compared as for the direct parent (§8.1 item
+   6); the shell shows the notice and offers **Update**, which takes the
+   newer version (`POST /attach/update`, or `POST /upstream/update
+   {document_id}`). An update replaces the frozen copy and adds only what the
+   document does not hold yet.
+4. **Decisions on both sides.** The document gets one decision per hop,
+   `action: attach | update_from_<source noun> | replace | detach`, kind
+   `edit`, as the person in `Ctx`, targeting `<this id>#upstream.<source
+   id>`. The source gets a backref (§7.4): `linked` (on link and update) or
+   `unlinked` (on detach), targeting the source's id, `from` naming the
+   document and its decision.
+5. **Refused**: a context that is not a person (`403`), a locked document
+   (`409`, with the reason: a locked version keeps what it holds), another
+   workspace's source (`403`), a source app not in `accepts` (`422`),
+   linking what is linked already or updating what has not moved (`409`).
+6. **Detach** lets go of one source: its frozen copy, its record and the
+   seeds still holding the seeded value go; pins, findings and assets already
+   merged stay as the document's own.
+7. **A spin-off target may carry one source app its own way**
+   (`app.spinoff.by_source: {<app_id>: {map?, lift, upstream}}`). Advertising
+   Studio grafts a brief at `brief` and carries a research whole under
+   `upstream` with `campaign.name.value → project.name` and
+   `campaign.client_org.value → project.client` (owner, 2026-11-09: research
+   to production is upstream + lift). Each `by_source` key is accepted.
 
 ---
 
@@ -703,13 +768,15 @@ else: a `backref` is the only thing a child ever writes to a parent.
    | `/approve` | every document in `data.upstream` | `used` | `["<parent id>"]` |
    | `/resolve` of a carried contest | the document the contest is on | `resolved` | `["<parent id>#selection.contested[<ct>]"]` |
    | `/verify` of a finding the direct parent holds | the direct parent | `verified` | `["<parent id>#findings[<fi>]"]` |
+   | `/attach`, `/attach/update` (§5.7) | the linked document | `linked` | `["<source id>"]` |
+   | `/attach/detach` (§5.7) | the unlinked document | `unlinked` | `["<source id>"]` |
 
 2. **Shape.**
 
    ```yaml
    - id: d_…
      kind: backref
-     action: used | resolved | verified
+     action: used | resolved | verified | linked | unlinked
      agent: napkin-host
      actor: human:<id>             # the person in the child's Ctx
      targets: [ … as above … ]
@@ -1361,6 +1428,29 @@ body or reply changes meaning.
 
    - Reply: `{ok, decision, action, document_id, version, decisions_taken,
      clan}`. No backref (the parent is not changed).
+   - *Added 2026-11-09:* with `{document_id}` naming a document linked to
+     this one (§5.7), it takes that one's newer version instead: the reply
+     and refusals of `/attach/update`.
+9. **Links** (§5.7, *added 2026-11-09*). Writes as the person in `Ctx`; the
+   reply carries `clan` and `backrefs` as the review routes do.
+   - `GET /attach-targets` — `[{app_id, app_name, document_id, title,
+     version, path, updated_at, attached, many, locked}]`, by title: this
+     tenant's documents the open document's app accepts, never a fork, a
+     template, itself or what it was made from. `locked` says a link would be
+     refused, so the shell says why instead of offering it.
+   - `POST /attach {document_id}` — link it. Reply `{ok, verb: attached |
+     replaced, decision, action, document_id, attached: <record>, seeded,
+     kept, carried_decisions, backrefs, clan}`.
+   - `POST /attach/update {document_id}` — take its newer version; `verb:
+     updated`, `action: update_from_<noun>`.
+   - `POST /attach/detach {document_id}` (or `{app_id}` naming the one source
+     of that app) — let go. Reply `{ok, decision, action: detach,
+     document_id, detached, unseeded, backrefs, clan}`.
+   - `GET /related` — `{document_id, upstream: [{document_id, title, app_id,
+     path, how: made_from | linked, version, taken, status}], downstream:
+     [{document_id, title, app_id, noun, path, how: made_into | linked_in,
+     updated_at}]}`, downstream newest first. A read of the store's
+     manifests; the shell's lineage chips draw it.
 
 ### 8.2 Client review routes
 

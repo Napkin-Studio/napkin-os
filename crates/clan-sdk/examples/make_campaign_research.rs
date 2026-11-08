@@ -27,8 +27,8 @@
 use clan_sdk::hash::sha256_prefixed;
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions, SpinoffSpec,
+    AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.2: the Plan-zone identity; figures from the shared snippet.
             // 0.4: its card on the OS home (app.home).
             // 0.5: a brief can start a research, carried whole (app.spinoff).
-            version: "0.5.0".into(),
+            version: "0.5.1".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -235,6 +235,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 untitled: Some("Untitled research".into()),
                 // "Napkin Studio Research" in the OS bar; it shares the OS's face (Geist).
                 brand: Some("Research".into()),
+                ..Default::default()
+            }),
+            // Link an existing brief into a research that exists: one
+            // research feeds many briefs, and a research may read several.
+            attach: Some(AttachSpec {
+                accepts: vec![BRIEF_APP_ID.into()],
+                many: vec![BRIEF_APP_ID.into()],
                 ..Default::default()
             }),
         },

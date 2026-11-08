@@ -696,42 +696,82 @@ pub fn upstream_index(clan: &ClanFile, upstream: &Value) -> Value {
 pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>) -> Value {
     let clan = doc.clan();
     let here = clan.document_id();
-    let Some(carried) = clan.manifest().carried() else {
+    let carried = clan.manifest().carried();
+    let attached = clan.manifest().attached();
+    if carried.is_none() && attached.is_empty() {
         return json!({ "document_id": here, "carried": null, "upstream": [] });
-    };
+    }
     let data = data_json(doc);
     let mut ids: Vec<String> = data
         .get(UPSTREAM_KEY)
         .and_then(Value::as_object)
         .map(|o| o.keys().cloned().collect())
         .unwrap_or_default();
-    if !ids.contains(&carried.document_id) {
-        ids.push(carried.document_id.clone());
+    for id in carried
+        .map(|c| c.document_id.clone())
+        .into_iter()
+        .chain(attached.iter().map(|a| a.carried.document_id.clone()))
+    {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
     }
-    // Direct first; the rest keep key order.
-    ids.sort_by_key(|id| *id != carried.document_id);
+    let direct_id = carried.map(|c| c.document_id.as_str());
+    let linked = |id: &str| attached.iter().find(|a| a.carried.document_id == id);
+    // Direct first, then what is linked; the rest keep key order.
+    ids.sort_by_key(|id| {
+        if Some(id.as_str()) == direct_id {
+            0
+        } else if linked(id).is_some() {
+            1
+        } else {
+            2
+        }
+    });
 
     let upstream: Vec<Value> = ids
         .iter()
         .map(|id| {
-            let direct = *id == carried.document_id;
+            let direct = Some(id.as_str()) == direct_id;
+            let link = (!direct).then(|| linked(id)).flatten();
+            let how = if direct {
+                "made_from"
+            } else if link.is_some() {
+                "linked"
+            } else {
+                "carried"
+            };
             let Some(p) = parent(id) else {
-                return json!({ "document_id": id, "direct": direct, "in_store": false, "status": "unknown" });
+                let mut out = json!({ "document_id": id, "direct": direct, "in_store": false, "status": "unknown", "how": how });
+                if let Some(a) = link {
+                    out["title"] = json!(a.title);
+                    out["app_id"] = json!(a.app_id);
+                    out["taken"] = json!(a.taken);
+                }
+                return out;
             };
             let pm = p.clan().manifest();
             let app_id = pm.app.as_ref().map(|a| a.app_id.clone());
             // where the shell opens it (`POST /open {path}`): the store's own id for it
             let path = p.id().to_string();
-            if !direct {
-                return json!({
-                    "document_id": id, "direct": false, "in_store": true,
-                    "title": pm.title, "app_id": app_id, "status": "not_compared", "path": path,
-                });
-            }
-            let mut entry = compare(doc, &data, carried, &p);
+            let mut entry = match (direct, link) {
+                (true, _) => compare(doc, &data, carried.expect("direct"), &p),
+                (false, Some(a)) => {
+                    let mut e = compare(doc, &data, &a.carried, &p);
+                    e["direct"] = false.into();
+                    e["taken"] = json!(a.taken);
+                    e["kit_version"] = json!(a.version);
+                    e["linked_at"] = json!(a.at);
+                    e
+                }
+                (false, None) => json!({
+                    "document_id": id, "direct": false, "in_store": true, "status": "not_compared",
+                }),
+            };
             entry["title"] = pm.title.clone().into();
             entry["app_id"] = json!(app_id);
             entry["path"] = path.into();
+            entry["how"] = how.into();
             entry
         })
         .collect();
@@ -1014,6 +1054,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         }
     }
 

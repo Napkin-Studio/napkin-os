@@ -368,6 +368,7 @@ fn spinoff_offers_a_target_then_branches_into_it() {
                 map: Some("brief".into()),
                 ..Default::default()
             }),
+            attach: None,
         },
         clan_sdk::MakeTemplateOptions::default(),
     )
@@ -546,6 +547,7 @@ mod upstream {
                 prompt_templates: vec![],
                 data_seed: None,
                 spinoff,
+                attach: None,
             },
             clan_sdk::MakeTemplateOptions::default(),
         )
@@ -1092,7 +1094,7 @@ mod upstream {
         let up = brief.get("/upstream");
         assert_eq!(
             up["upstream"][0],
-            json!({ "document_id": research.doc, "direct": true, "in_store": false, "status": "unknown" })
+            json!({ "document_id": research.doc, "direct": true, "in_store": false, "status": "unknown", "how": "made_from" })
         );
         let reply = resolve(&brief, "f_01JA0B9Z9Z");
         assert_eq!(reply["backrefs"], json!([]));
@@ -1295,6 +1297,176 @@ mod upstream {
         let (status, body) = refused(&brief, "/upstream/update");
         assert_eq!(status, 409);
         assert!(body.contains("locked"), "{body}");
+    }
+
+    /// Brief Maker as it declares links: research, many at once.
+    fn install_linking_brief(store: &dyn DocStore) {
+        let base = ClanFile::from_bytes(
+            clan_sdk::create(clan_sdk::CreateOptions {
+                title: "Brief Maker".into(),
+                brief: "fixture".into(),
+                document_type: None,
+                no_render: false,
+                schema: None,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let tpl = clan_sdk::make_template(
+            &base,
+            clan_sdk::AppInfo {
+                home: Some(clan_sdk::AppHome {
+                    noun: vec!["brief".into(), "briefs".into()],
+                    ..Default::default()
+                }),
+                name: "Brief Maker".into(),
+                app_id: BRIEF.into(),
+                version: "0.6.0".into(),
+                icon: None,
+                entry: "human/index.html".into(),
+                schema: Some("agent/output-schema.json".into()),
+                prompt_templates: vec![],
+                data_seed: None,
+                spinoff: Some(carries(RESEARCH)),
+                attach: Some(clan_sdk::AttachSpec {
+                    accepts: vec![RESEARCH.into()],
+                    many: vec![RESEARCH.into()],
+                    ..Default::default()
+                }),
+            },
+            clan_sdk::MakeTemplateOptions::default(),
+        )
+        .unwrap();
+        library::install_app(store, tpl).unwrap();
+    }
+
+    fn post_err(d: &Doc, path: &str, body: &str) -> (u16, String) {
+        let resp = d.call(d.session.ctx(), path, body);
+        (
+            resp.status,
+            String::from_utf8_lossy(&resp.body).into_owned(),
+        )
+    }
+
+    // Linking an existing research into an existing brief (os-layer §5.7):
+    // offered by /attach-targets, one decision on the brief and a `linked`
+    // backref on the research, shown by /upstream and /related, updated when
+    // the research moves on, and let go of by /attach/detach.
+    #[test]
+    fn a_research_links_into_an_existing_brief_and_is_kept_up_to_date() {
+        let store = Arc::new(MemStore::default());
+        let research = research(&store);
+        install_linking_brief(&*store);
+        let id = library::create_instance(&*store, BRIEF, Some("Spring brief".into())).unwrap();
+        let brief = Doc::open(&store, id);
+
+        let targets = brief.get("/attach-targets");
+        let t = targets
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["document_id"] == research.doc)
+            .cloned()
+            .expect("the research is offered");
+        assert_eq!(t["attached"], false);
+        assert_eq!(t["many"], true);
+        assert_eq!(t["locked"], false);
+        assert_eq!(post_err(&brief, "/attach", "{}").0, 400);
+
+        let body = json!({ "document_id": research.doc }).to_string();
+        let reply = brief.post("/attach", &body);
+        assert_eq!(reply["verb"], "attached", "{reply}");
+        assert_eq!(reply["action"], "attach");
+        assert_eq!(reply["backrefs"].as_array().unwrap().len(), 1, "{reply}");
+        let c = chain(&brief.stored(&store));
+        assert_eq!(c.decisions[0].action, "attach");
+        assert_eq!(c.decisions[0].actor.as_deref(), Some("human:local"));
+        // The other side: the research says where it is used.
+        let rc = chain(&research.stored(&store));
+        assert_eq!(rc.decisions[0].action, "linked");
+        assert_eq!(rc.decisions[0].kind.as_deref(), Some("backref"));
+        assert!(rc.decisions[0].rationale.contains("Spring brief"));
+        assert_eq!(brief.get("/attach-targets")[0]["attached"], true);
+        let (status, msg) = post_err(&brief, "/attach", &body);
+        assert_eq!(status, 409, "{msg}");
+
+        let up = brief.get("/upstream");
+        let e = &up["upstream"][0];
+        assert_eq!(e["how"], "linked", "{up}");
+        assert_eq!(e["direct"], false);
+        assert_eq!(e["status"], "current");
+        assert_eq!(e["taken"], 1);
+        assert_eq!(e["title"], "Lúnasa 0.0 launch");
+
+        let rel = brief.get("/related");
+        assert_eq!(rel["upstream"][0]["how"], "linked");
+        let rel = research.get("/related");
+        assert_eq!(rel["downstream"][0]["how"], "linked_in", "{rel}");
+        assert_eq!(rel["downstream"][0]["title"], "Spring brief");
+        assert_eq!(rel["downstream"][0]["noun"], "brief");
+
+        // Not moved yet: an update is refused plainly.
+        let (status, msg) = post_err(&brief, "/attach/update", &body);
+        assert_eq!(status, 409);
+        assert!(msg.contains("has not changed"), "{msg}");
+        // The research moves on: the brief sees it, and takes it.
+        resolve(&research, "f_01JA0B9Z9Z");
+        assert_eq!(brief.get("/upstream")["upstream"][0]["status"], "changed");
+        let reply = brief.post("/upstream/update", &body);
+        assert_eq!(reply["verb"], "updated", "{reply}");
+        assert_eq!(reply["action"], "update_from_campaign_research");
+        assert_eq!(reply["attached"]["taken"], 2);
+        let up = brief.get("/upstream");
+        assert_eq!(up["upstream"][0]["status"], "current");
+        assert_eq!(up["upstream"][0]["taken"], 2);
+
+        // A second research: both held.
+        let id2 =
+            library::create_instance(&*store, RESEARCH, Some("Audience study".into())).unwrap();
+        let second = Doc::open(&store, id2);
+        second.post("/patch-data", r#"{"patch":{"note":"x"},"agent":"human"}"#);
+        brief.post("/attach", &json!({ "document_id": second.doc }).to_string());
+        assert_eq!(
+            brief.get("/upstream")["upstream"].as_array().unwrap().len(),
+            2
+        );
+        assert_eq!(brief.stored(&store).manifest().attached().len(), 2);
+
+        // Let go of the second only.
+        let reply = brief.post(
+            "/attach/detach",
+            &json!({ "document_id": second.doc }).to_string(),
+        );
+        assert_eq!(reply["action"], "detach");
+        assert_eq!(chain(&brief.stored(&store)).decisions[0].action, "detach");
+        assert_eq!(
+            chain(&second.stored(&store)).decisions[0].action,
+            "unlinked"
+        );
+        let left = brief.stored(&store);
+        assert_eq!(left.manifest().attached().len(), 1);
+        assert_eq!(
+            left.manifest().attached()[0].carried.document_id,
+            research.doc
+        );
+    }
+
+    #[test]
+    fn a_locked_brief_refuses_a_link_with_a_reason() {
+        let store = Arc::new(MemStore::default());
+        let research = research(&store);
+        install_linking_brief(&*store);
+        let id = library::create_instance(&*store, BRIEF, Some("Spring brief".into())).unwrap();
+        let brief = Doc::open(&store, id);
+        brief.post("/approve", "{}");
+        assert_eq!(brief.get("/attach-targets")[0]["locked"], true);
+        let (status, msg) = post_err(
+            &brief,
+            "/attach",
+            &json!({ "document_id": research.doc }).to_string(),
+        );
+        assert_eq!(status, 409);
+        assert!(msg.contains("locked"), "{msg}");
     }
 }
 

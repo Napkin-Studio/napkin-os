@@ -109,6 +109,7 @@ fn template(app_id: &str, name: &str, spinoff: Option<SpinoffSpec>) -> Vec<u8> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )

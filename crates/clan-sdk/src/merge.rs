@@ -181,6 +181,7 @@ pub fn fork_with_contexts(
             parents: Vec::new(),
             merge: false,
             carried: parent_manifest.carried().cloned(),
+            attached: parent_manifest.attached().to_vec(),
         });
         manifest.fork = Some(ForkInfo {
             agent_id: agent_id.clone(),
@@ -511,6 +512,7 @@ pub fn merge(branches: &[ClanFile], opts: MergeOptions) -> Result<MergeOutcome> 
             .collect(),
         merge: true,
         carried: base_manifest.carried().cloned(),
+        attached: base_manifest.attached().to_vec(),
     });
     // The carried-over view (if any) predates the fold.
     if let Some(view) = &mut manifest.view {

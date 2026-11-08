@@ -984,6 +984,7 @@ fn spun_off(entries: &[(&str, &str)]) -> Document {
             sources_sha256: None,
             last_decision: None,
         }),
+        attached: Vec::new(),
     });
     let mut b = ClanBuilder::new(manifest);
     for (path, bytes) in clan.read_all_entries().unwrap() {

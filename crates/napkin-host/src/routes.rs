@@ -498,11 +498,101 @@ pub fn dispatch(
         // Take the direct parent's newer version into this spin-off (Contract 4
         // §5.5, reversed for spin-offs 2026-11-09; §8.1 item 8). One
         // decision, `update_from_<noun>`; refused on a locked document.
+        // With `{document_id}` naming a linked document, its newer version
+        // instead (the same carry as `/attach/update`).
         "/upstream/update" => {
             let store = session.store().clone();
-            review(session, ctx, |c, d| {
-                crate::library::update_from_upstream(&*store, c, d)
-            })
+            let id = req
+                .body_json()
+                .get("document_id")
+                .and_then(|x| x.as_str())
+                .filter(|s| !s.is_empty())
+                .map(String::from);
+            review_then(
+                session,
+                ctx,
+                |c, d| crate::library::update_from_upstream_of(&*store, c, d, id.as_deref()),
+                |reply| {
+                    if reply["verb"] == "updated" {
+                        let source = reply["document_id"].as_str().unwrap_or("").to_string();
+                        with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                    }
+                },
+            )
+        }
+
+        // Links (os-layer §5.7): carry another existing document in beside
+        // this one's own work. A person's write like the review routes, so it
+        // is refused on a locked document and for a process. Each writes one
+        // decision here and a `linked`/`unlinked` backref on the source.
+        "/attach-targets" => {
+            let store = session.store().clone();
+            match session.read(|d| Ok(crate::library::attach_targets(&*store, ctx, d))) {
+                Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+                Err(e) => e.into(),
+            }
+        }
+        "/attach" | "/attach/update" => {
+            let id = req
+                .body_json()
+                .get("document_id")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            if id.is_empty() {
+                return HostResponse::error(400, "missing document_id");
+            }
+            let mode = if path == "/attach" {
+                crate::library::AttachMode::Attach
+            } else {
+                crate::library::AttachMode::Update
+            };
+            let store = session.store().clone();
+            review_then(
+                session,
+                ctx,
+                |c, d| {
+                    let (change, reply) = crate::library::attach_change(&*store, c, d, &id, mode)?;
+                    Ok(crate::ops::Outcome::changed(reply, change))
+                },
+                |reply| {
+                    let source = id.clone();
+                    with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                },
+            )
+        }
+        "/attach/detach" => {
+            let body = req.body_json();
+            let which = body
+                .get("document_id")
+                .or_else(|| body.get("app_id"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            if which.is_empty() {
+                return HostResponse::error(400, "missing document_id");
+            }
+            review_then(
+                session,
+                ctx,
+                |c, d| {
+                    let (change, reply) = crate::library::detach_change(c, d, &which)?;
+                    Ok(crate::ops::Outcome::changed(reply, change))
+                },
+                |reply| {
+                    let source = reply["document_id"].as_str().unwrap_or("").to_string();
+                    with_backrefs(session, ctx, reply, &Backref::Unlinked { source });
+                },
+            )
+        }
+        // What it was made from and what is linked into it, and what was made
+        // from it or links it (os-layer §8.1 item 9). A read.
+        "/related" => {
+            let store = session.store().clone();
+            match session.read(|d| Ok(crate::library::related(&*store, ctx, d))) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
         }
 
         // The decision view the shell's OS layer renders: every decision,

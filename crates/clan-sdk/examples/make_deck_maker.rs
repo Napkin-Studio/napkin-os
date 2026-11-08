@@ -19,8 +19,8 @@
 
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions, SpinoffSpec,
+    AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
-            version: "0.2.0".into(),
+            version: "0.2.1".into(),
             icon: Some(ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -134,6 +134,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             spinoff: Some(SpinoffSpec {
                 accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
                 upstream: true,
+                ..Default::default()
+            }),
+            // Link an existing brief (one) or research (several) into a deck.
+            attach: Some(AttachSpec {
+                accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
+                many: vec![RESEARCH_APP_ID.into()],
                 ..Default::default()
             }),
         },
@@ -148,7 +154,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The spin-off contract and version are asserted, not assumed: a regression
     // here must fail the packer (and the spinoff.rs test that runs it).
     let app_block = template.manifest().app.as_ref().expect("app block");
-    assert_eq!(app_block.version, "0.2.0", "the Deck template version");
+    assert_eq!(app_block.version, "0.2.1", "the Deck template version");
     let spin = app_block.spinoff.as_ref().expect("app.spinoff is declared");
     assert_eq!(
         spin.accepts,

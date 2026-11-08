@@ -720,6 +720,7 @@ fn a_template_with(app_id: &str, name: &str, spinoff: Option<clan_sdk::SpinoffSp
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         },
         clan_sdk::MakeTemplateOptions::default(),
     )

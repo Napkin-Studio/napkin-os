@@ -1350,6 +1350,7 @@ fn spun_off(f: Fixture, parent: &Fixture, extra: &[(&str, &str)]) -> Fixture {
             sources_sha256: None,
             last_decision: None,
         }),
+        attached: Vec::new(),
     });
     let mut b = clan_sdk::ClanBuilder::new(manifest);
     for (path, bytes) in clan.read_all_entries().unwrap() {
