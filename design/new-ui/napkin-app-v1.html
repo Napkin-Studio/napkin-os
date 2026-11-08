@@ -3843,6 +3843,22 @@ html[data-theme="dark"] .tba-gate, html[data-theme="dark"] .p33-stale { color: #
 #mock-panel.collapsed .mock-head { padding: 4px 7px; font-size: 9px; gap: 5px; }
 #mock-panel.collapsed .mock-head small { display: none; }
 
+/* ═══ Phase 35: one needs indicator ═══ */
+#tb-needs { display: none !important; }
+#bar-status.p33-idle { display: none !important; }
+.tb-decisions-btn.has-needs { border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 12%, var(--paper)); }
+.tb-decisions-btn.has-needs .cnt { background: var(--warn) !important; color: #fff !important; }
+.dc-rows .pp-row { padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--warn) 18%, transparent); }
+.dc-rows .pp-row:first-child { border-top: 0; }
+.dc-rows .pp-h { margin-top: 8px; }
+.dc-rows hr { border: 0; border-top: 1px dashed var(--line); margin: 8px 0; }
+.dc-rows [data-np-open] { all: unset; cursor: pointer; display: block; }
+.dc-rows [data-np-open]:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.sp-conf.on { background: #2A2620; color: #FFFDF8; border-color: #2A2620; }
+html[data-theme="dark"] .sp-conf.on { background: var(--ink); color: #151412; }
+#brief-page .gi.is-conf { background-image: repeating-linear-gradient(135deg, transparent 0 7px, rgba(42,38,32,.05) 7px 8px); }
+#brief-page .gi.is-conf .gi-head h3::after { content: "Confidential"; margin-left: 8px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; font: 700 9px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; vertical-align: 1px; opacity: .8; }
+@media print { #brief-page.client-copy .gi.is-conf { display: none !important; } }
 </style>
 </head>
 <body>
@@ -7906,6 +7922,10 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
       const circ = document.querySelector('.cl-circle[data-client="mcd"]');
       if (circ) { const b = circ.querySelector('.cl-badge'); if (b) { b.textContent = String(nA); b.hidden = !nA; } const l = circ.querySelector('.cl-line'); if (l) l.textContent = 'Summer McFlurry · ' + (nA ? nA + ' need you' : 'all settled'); }
       renderNeedsPill(); syncCallCard();
+      const act = all.filter(x => !setAside.has(x.id)).length;
+      $('tb-decisions-cnt').textContent = String(act || n); $('tb-decisions-cnt').hidden = !n;
+      $('tb-decisions-btn').classList.toggle('has-needs', act > 0);
+      $('tb-decisions-btn').title = act ? act + ' need your call' : n ? n + ' set aside' : 'Decisions';
     };
     window.napkinResolveNeed = () => syncNeeds();
     function needsPopHtml() {
@@ -7934,9 +7954,9 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
       e.stopPropagation();
       const id = (o || ok || as).dataset.npOpen || (o || ok || as).dataset.npOk || (o || ok || as).dataset.npAside;
       const x = needItems().find(y => y.id === id); if (!x) return;
-      if (o) openItem(x);
-      else if (ok) { resolveItem(x, 'list'); setAside.delete(id); syncNeeds(); if (needItems().length) POP.innerHTML = needsPopHtml(); else closePop(); }
-      else { setAside.has(id) ? setAside.delete(id) : setAside.add(id); syncNeeds(); POP.innerHTML = needsPopHtml(); showToast(setAside.has(id) ? 'Set aside. It still needs you; find it under Set aside.' : 'Brought back.'); }
+      if (o) { if (typeof setDecisionTreeOpen === 'function') setDecisionTreeOpen(false); openItem(x); }
+      else if (ok) { resolveItem(x, 'list'); setAside.delete(id); syncNeeds(); syncCallCard(); if (!POP.hidden) { if (needItems().length) POP.innerHTML = needsPopHtml(); else closePop(); } }
+      else { setAside.has(id) ? setAside.delete(id) : setAside.add(id); syncNeeds(); if (!POP.hidden) POP.innerHTML = needsPopHtml(); showToast(setAside.has(id) ? 'Set aside. It still needs you; find it under Set aside.' : 'Brought back.'); }
     }, true);
 
     // ── brief: answers, lock, keep, review ──
@@ -8010,6 +8030,7 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
       $$('.gi[data-idx]', pg).forEach(gi => {
         const idx = +gi.dataset.idx, p = d.parts[idx]; if (!p) return;
         gi.classList.toggle('kept', !!p.keep);
+        gi.classList.toggle('is-conf', !!p.conf);
         if (!gi.querySelector('.gi-kept')) gi.insertAdjacentHTML('afterbegin', `<span class="gi-kept" title="Kept as it is">${LOCK}</span>`);
         if (briefLocked) { $$('[contenteditable]', gi).forEach(x => x.removeAttribute('contenteditable')); const gr = gi.querySelector('.gi-grip'); if (gr) gr.draggable = false; }
         const body = gi.querySelector('.gi-body'); if (!body) return;
@@ -8113,6 +8134,7 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
         const p = data.parts[selIdx]; if (!p) return;
         const acts = host.querySelector('.sp-acts');
         if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type="button" class="sp-btn sp-keep ${p.keep ? 'on' : ''}" data-p33-keep aria-pressed="${!!p.keep}" title="${p.keep ? 'Kept as it is. Click to let it change.' : 'Keep this part as it is when the brief is drafted again'}">${LOCK}${p.keep ? 'Kept' : 'Keep as is'}</button>`);
+        if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type="button" class="sp-btn sp-conf ${p.conf ? 'on' : ''}" data-p35-conf aria-pressed="${!!p.conf}" title="${p.conf ? 'Confidential: left out of the client copy. Click to share it.' : 'Mark confidential: kept in the agency copy, left out of the client copy'}">${p.conf ? '● Confidential' : 'Confidential'}</button>`);
         const why = briefLocked ? LOCKED_WHY : p.keep ? 'Kept as it is. Click "Kept" to let it change.' : '';
         if (acts) {
           $$('[data-sp-act="edit"], [data-sp-act="redraft"]', acts).forEach(b => { if (why) { b.setAttribute('aria-disabled', 'true'); b.title = why; } });
@@ -8805,7 +8827,7 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
       $('dtree-call-title').style.color = n ? '' : 'var(--ok)';
       $('dtree-call-title').textContent = n ? n + ' open call' + (n === 1 ? ' needs' : 's need') + ' your sign-off' : 'Nothing waits for your sign-off';
       $('dtree-call-badge').className = 'badge-pill ' + (n ? 'proposed' : 'verified'); $('dtree-call-badge').textContent = n ? 'Needs you' : 'Done';
-      $('dtree-call-desc').innerHTML = n ? all.map((x, k) => `${k + 1}. <b>${esc(x.title)}</b> <span style="color:var(--muted)">· ${esc(x.sub)}</span>`).join('<br>') : 'Every call is answered and on the record.';
+      $('dtree-call-desc').innerHTML = all.length || setAside.size ? `<div class="dc-rows">${needsPopHtml().replace(/<div class="pp-h">Needs your call · \d+<\/div>/, '')}</div>` : 'Every call is answered and on the record.';
       $('dtree-call-actions').hidden = !n;
       $('dtree-approve-all').textContent = n > 1 ? 'Approve all and lock the brief' : 'Approve and lock the brief';
     }
@@ -8921,6 +8943,14 @@ Specifically: check whether out-of-home treat occasions are planned or spontaneo
     syncNavigation = function () { _sync34(); try { if (window.napkinResolveNeed) window.napkinResolveNeed(); if (!drawer.hidden) dtreeScope(); } catch (err) { console.error('phase34 nav', err); } };
   })();
 
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-p35-conf]'); if (!b || selIdx === null) return;
+    e.stopPropagation();
+    const p = BRIEF_DATA[curBriefKey].parts[selIdx];
+    if (briefLocked) { showToast('The brief is locked. Reopen a part to change it.'); return; }
+    p.conf = !p.conf; renderBriefPage();
+    showToast(p.conf ? '“' + p.n + '” is confidential: it stays in the agency copy and is left out of the client copy.' : '“' + p.n + '” is shared again.');
+  }, true);
   renderBriefPage();
   syncNavigation();
   const urlBrand = params.get('brand');
