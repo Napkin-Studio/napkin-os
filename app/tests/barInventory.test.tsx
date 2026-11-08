@@ -16,7 +16,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import Toolbar from '../src/components/Toolbar.tsx'
-import { continueItems, deskItems, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
+import { continueItems, deskItems, linksOf, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 import { Trail } from '../src/shell/landing/Trail.tsx'
@@ -81,7 +81,7 @@ test('a document: the slot holds the tool, the title, the state, Continue in, Sh
   assert.ok(!more.some(l => l.startsWith('Continue in')), 'Continue in is not in More')
   const cont = continueItems(doc())
   assert.deepEqual(labels(cont.spin), ['Continue in Deck Maker'])
-  assert.deepEqual(cont.link, [], 'the Link group waits for the general attach (feat/brand-clan)')
+  assert.deepEqual(cont.link, [], 'nothing to link: the group says so')
   assert.deepEqual(cont.update, [], 'made from nothing: nothing to update from')
 })
 
@@ -203,6 +203,53 @@ test('lineage chips beside the name, and the crew before Decisions with an agent
   const idle = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: null } }) })
   assert.doesNotMatch(idle, /agent-working/, 'no agent works: no status dot')
   assert.doesNotMatch(bar({ doc: doc() }), /ch-lineage/, 'made from nothing: no chips')
+})
+
+test('Link to an existing one: each document it could link, then Update and Unlink for what is linked', () => {
+  const ran: string[] = []
+  const target = (id: string, title: string, over = {}) => ({
+    app_id: 'ie.napkin.campaign-research', app_name: 'Research Tool', document_id: id, title,
+    path: `store/${id}`, updated_at: '2026-11-09T10:00:00Z', attached: false, many: true, locked: false, ...over,
+  })
+  const cont = continueItems(doc({
+    linkTargets: [target('r1', 'Irish summer treats'), target('r2', 'Oat milk', { attached: true })],
+    onLink: id => { ran.push(`link:${id}`) },
+    linked: [{ documentId: 'r2', title: 'Oat milk', dir: 'in', changed: true, taken: 1 }, { documentId: 'd9', title: 'Q3 deck', dir: 'out' }],
+    onUpdateLinked: id => { ran.push(`update:${id}`) },
+    onUnlink: id => { ran.push(`unlink:${id}`) },
+  }))
+  assert.deepEqual(labels(cont.link), ['↔ Irish summer treats', 'Update Oat milk', 'Unlink Oat milk'], 'linked already: not offered again; linked into another: not here')
+  assert.match(cont.link[0].hint ?? '', /Each keeps its own version/)
+  assert.match(cont.link[1].hint ?? '', /\(v1\)/)
+  assert.ok(cont.link[1].apart, 'what is linked sits apart from what could be')
+  cont.link.forEach(i => i.run())
+  assert.deepEqual(ran, ['link:r1', 'update:r2', 'unlink:r2'])
+  // Locked: offered, disabled, saying why; no Update or Unlink.
+  const locked = continueItems(doc({ linkTargets: [target('r1', 'Irish summer treats', { locked: true })], onLink: noop }))
+  assert.equal(locked.link[0].disabled, true)
+  assert.match(locked.link[0].hint ?? '', /locked/)
+})
+
+test('linksOf reads /related into the lineage chips, both ways, and what was made from it', () => {
+  assert.deepEqual(linksOf(null), { linked: [], madeInto: null })
+  const view = {
+    document_id: 'b1',
+    upstream: [
+      { document_id: 'r0', title: 'Lúnasa research', how: 'made_from' as const, status: 'current' as const },
+      { document_id: 'r1', title: 'Oat milk', path: 'store/r1', how: 'linked' as const, status: 'changed' as const, taken: 3 },
+    ],
+    downstream: [
+      { document_id: 'd1', title: 'Q3 deck', path: 'store/d1', how: 'made_into' as const, noun: 'deck' },
+      { document_id: 'd2', title: 'Q4 deck', path: 'store/d2', how: 'made_into' as const, noun: 'deck' },
+      { document_id: 'p1', title: 'Spring film', path: 'store/p1', how: 'linked_in' as const, noun: 'production' },
+    ],
+  }
+  const { linked, madeInto } = linksOf(view)
+  assert.deepEqual(madeInto, { count: 2, noun: 'deck', path: 'store/d1' })
+  assert.deepEqual(linked.map(l => [l.documentId, l.dir, !!l.changed]), [['r1', 'in', true], ['p1', 'out', false]])
+  const html = bar({ doc: doc({ linked, madeInto, onOpenDocument: noop }) })
+  assert.match(html, /data-testid="lineage-linked"[^>]*>↔ <b>Oat milk<\/b><small class="ch-line-v"> v3<\/small><i class="ch-line-dot"/)
+  assert.match(html, /data-testid="lineage-linked-in"[^>]*>↔ in <b>Spring film<\/b>/)
 })
 
 test('the bar is three groups: who and where, the document, the tools', () => {

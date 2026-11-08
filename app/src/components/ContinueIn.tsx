@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { host } from '../host'
-import type { SpinoffTarget, UpstreamView } from '../host'
+import type { AttachTarget, RelatedView, SpinoffTarget, UpstreamView } from '../host'
 import { madeFromOf } from './barMenus'
 
 /**
@@ -62,4 +62,41 @@ export function useMadeFrom(docPath: string, onTaken: () => void, onError: (mess
   }, [onTaken, onError])
 
   return { madeFrom, update }
+}
+
+/**
+ * Links (os-layer §5.7): the documents the open one could link
+ * (`GET /attach-targets`), what is linked and related now (`GET /related`),
+ * and linking, updating and unlinking. `onChanged` runs after each write, so
+ * the app's fields and the decisions read it again; `onError` gets the host's
+ * own words for a refusal (a locked document says why).
+ */
+export function useLinks(docPath: string, onChanged: () => void, onError: (message: string) => void) {
+  const [got, setGot] = useState<{ docPath: string; targets: AttachTarget[]; related: RelatedView | null } | null>(null)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    let live = true
+    // Chrome, never the document: a host that cannot answer offers nothing.
+    Promise.all([
+      host.attachTargets().catch(() => [] as AttachTarget[]),
+      host.related().catch(() => null),
+    ]).then(([targets, related]) => { if (live) setGot({ docPath, targets, related }) })
+    return () => { live = false }
+  }, [docPath, tick])
+
+  const run = useCallback((write: () => Promise<unknown>, then?: (reply: unknown) => void) => {
+    write()
+      .then(reply => { setTick(t => t + 1); onChanged(); then?.(reply) })
+      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+  }, [onChanged, onError])
+
+  const mine = got?.docPath === docPath ? got : null
+  return {
+    targets: mine?.targets ?? [],
+    related: mine?.related ?? null,
+    link: (id: string, then?: () => void) => run(() => host.attach(id), then),
+    update: (id: string) => run(() => host.updateLinked(id)),
+    unlink: (id: string) => run(() => host.detach(id)),
+  }
 }
