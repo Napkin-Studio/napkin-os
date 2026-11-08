@@ -177,22 +177,27 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
 
 - `clan:bar {v: 1, items}` (app → shell, also on `clan:bar?`) — the whole list,
   each time it changes; the shell draws it and keeps nothing else. An item is
-  `{kind: 'tab', id, label, current?, disabled?}` (one screen or section, at
-  most one current), `{kind: 'button', id, label, primary?, disabled?, title?}`
-  or `{kind: 'chip', label, tone?: 'ok' | 'warn', title?}` (a read-only fact).
-  Text only, never markup; a label is at most 28 characters; at most 6 tabs, 6
-  buttons and 4 chips; ids are unique strings. An item the bar would refuse, or
-  a kind it does not know, is left out and the rest are drawn, so a kind added
-  later does not break an older shell. The bar draws the first two buttons and
-  puts any more in More. The list belongs to the document that sent it and is
-  dropped when another opens.
+  `{kind: 'button', id, label, primary?, disabled?, title?}`,
+  `{kind: 'chip', label, tone?: 'ok' | 'warn', title?}` (a read-only fact) or
+  `{kind: 'status', label, tone?: 'ok' | 'warn', locked?}` (the document's
+  state in the app's own words: "Draft", "Ready to lock"; the OS bar's app slot
+  shows it in its pill, in place of the one the shell words from the lock).
+  Text only, never markup; a label is at most 28 characters; at most 6
+  buttons, 4 chips and 1 status; ids are unique strings. An item the bar would
+  refuse, or a kind it does not know, is left out and the rest are drawn, so a
+  kind added later does not break an older shell. The bar draws the first two
+  buttons and puts any more in the slot's More. The list belongs to the
+  document that sent it and is dropped when another opens.
+  The `tab` kind is retired (owner removal of top tabs, features/new-ui-shell.clan,
+  2026-11-09): the shell drops a tab like any unknown kind, and an app keeps its
+  steps or sections in its own page.
 - `clan:bar?` (shell → app, on every frame load) — send it again.
-- `clan:bar-action {id}` (shell → app) — a tab or button was pressed. The app
+- `clan:bar-action {id}` (shell → app) — a button was pressed. The app
   does what its own button did; the shell runs nothing.
 
-An app in the shell (its frame has a parent) draws no bar of its own; on its
-own it keeps one. Deck Maker is the first to use this; Research and Brief Maker
-keep their bars until they adopt it.
+An app in the shell (its frame has a parent) draws no second bar of its own;
+on its own it keeps one. Deck Maker sends its chips and keeps its steps at the
+top of its page; Research and Brief Maker keep their bars until they adopt it.
 
 Judging a value is the drawer's; who did what and why is the panel's. The
 panel's "Needs you" only points at where to settle an item.

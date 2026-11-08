@@ -43,7 +43,7 @@ test('a tool for a client: its page lists that client’s documents only, and Ne
   await expect(tool).toContainText('Client: Client A')
   await expect(page.getByTestId('work-item')).toHaveCount(2)
   await expect(tool).not.toContainText('Client B')
-  await expect(trail(page).getByRole('button')).toHaveCount(4)
+  await expect(trail(page).getByRole('button')).toHaveCount(3) // the agency is the bar's pill now
   await expect(trail(page).getByRole('button', { name: 'Brief Maker' })).toHaveAttribute('aria-current', 'page')
   // The filled button is readable: its text is not its own ground.
   const [fg, bg] = await page.getByTestId('new-doc').evaluate(el => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor])
@@ -53,13 +53,14 @@ test('a tool for a client: its page lists that client’s documents only, and Ne
   const listed = await (await page.request.get(`${api}/library?client=${a}&app=ie.napkin.brief-maker`)).json() as { items: { title: string }[] }
   expect(listed.items.map(i => i.title).sort()).toEqual(['Autumn brief for Client A', 'Spring brief for Client A'])
 
-  // Open one: the app runs, and the bar carries the trail in place of the home button.
+  // Open one: the app runs, and the one OS bar carries the trail after the agency's pill.
   await page.getByTestId('work-item').first().click()
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
   const bar = trail(page)
-  await expect(bar.getByRole('button')).toHaveCount(4)
+  await expect(bar.getByRole('button')).toHaveCount(3)
   for (const n of ['Clients', 'Client A', 'Brief Maker']) await expect(bar.getByRole('button', { name: n })).toBeVisible()
-  await expect(page.getByTitle('Back to the studio')).toHaveCount(1) // the agency circle
+  await expect(page.getByTestId('medallion')).toHaveCount(1) // the way home
+  await expect(page.getByTestId('agency-pill')).toBeVisible()
 
   // Back leaves the document for the tool page it was opened from.
   await page.goBack()
@@ -217,7 +218,8 @@ test('a spin-off of a client’s document stays that client’s and the trail fo
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
   await expect(trail(page).getByRole('button', { name: 'Brief Maker' })).toBeVisible()
 
-  await page.getByRole('button', { name: /^More/ }).click()
+  // Continue in ▾ is in the app slot now, not in More.
+  await page.getByRole('button', { name: /^Continue in/ }).click()
   await page.getByRole('menuitem', { name: /^Continue in Deck Maker/ }).click()
   await expect(trail(page).getByRole('button', { name: 'Deck Maker' })).toBeVisible({ timeout: 30_000 })
   await expect(trail(page).getByRole('button', { name: 'Client A' })).toBeVisible()

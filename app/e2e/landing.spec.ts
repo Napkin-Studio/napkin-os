@@ -83,9 +83,9 @@ test('landing, clients, add a client, reload, open a client, start work', async 
   await expect(page.getByTestId('work-item')).toHaveCount(1)
   await expect(page.getByTestId('work-item')).toContainText('Spring brief for Client A')
 
-  // The trail shows where we are, and goes back.
+  // The trail shows where we are below the agency's pill, and goes back.
   const trail = page.getByRole('navigation', { name: 'Where you are' })
-  await expect(trail.getByRole('button')).toHaveCount(3)
+  await expect(trail.getByRole('button')).toHaveCount(2)
   await expect(trail.getByRole('button', { name: 'Client A' })).toHaveAttribute('aria-current', 'page')
 
   // Reload and back/forward land in the same place.
@@ -204,7 +204,7 @@ test('on a phone every crumb has a name and a 44px target', async ({ page }) => 
   await page.goto(`/#client-${a}`)
   await page.reload()
   const trail = page.getByRole('navigation', { name: 'Where you are' })
-  await expect(trail.getByRole('button')).toHaveCount(3)
+  await expect(trail.getByRole('button')).toHaveCount(2)
   for (const name of ['Clients', 'Client A']) await expect(trail.getByRole('button', { name })).toBeVisible()
   for (const b of await trail.getByRole('button').all()) {
     const box = (await b.boundingBox())!

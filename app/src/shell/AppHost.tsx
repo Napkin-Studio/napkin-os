@@ -4,18 +4,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Toolbar, { type ToolBrand } from '../components/Toolbar'
+import SaveStatus from '../components/SaveStatus'
+import { useSpinoffTargets } from '../components/ContinueIn'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import WorkspaceView from './WorkspaceView'
 import DecisionPanel from './decisions/DecisionPanel'
 import { setScreen } from '../dogfood/recorder'
-import { useDecisions } from './decisions/useDecisions'
+import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import type { BarItem } from './appBar'
+import { statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp } from '../host'
 import { PoweredByClan } from '../brand/PoweredByClan'
@@ -36,8 +38,14 @@ interface Props {
   banner?: ReactNode
   onExport: (kind: 'html' | 'pdf') => void
   onSpinoff: (appId: string) => void
-  /** Where the document sits (Agency > Client > Tool), drawn in the bar before the title; absent for a document with no client. */
+  /** Where the document sits below the agency (Clients > Client > Tool); absent for a document with no client. */
   trail?: ReactNode
+  /** The signed-in agency, on the bar's pill, and its page. */
+  agency: string
+  onAgency: () => void
+  /** Who is signed in, and the way out (the slot's More menu). */
+  user?: string | null
+  onSignOut?: () => void
   /** Each change is kept as it is made, so the bar may say "Saved" (Toolbar). */
   saved?: boolean
   /** Open another document of the store (the sidebar's "Made from" link). */
@@ -45,7 +53,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   // Edit mode is the OS's: the app's fields become editable while it is on.
@@ -55,6 +63,18 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // The host's view of the document, read once: the panel renders it, and
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
+  // The needs-your-call count, from the one selector the drawer lists from.
+  const needs = useMemo(() => needsOf(decisions.view).length, [decisions.view])
+  // The Decisions drawer, opened from the bar. Kept with the document it was opened on.
+  const [drawer, setDrawer] = useState<{ docPath: string; open: boolean }>({ docPath, open: false })
+  const decisionsOpen = drawer.docPath === docPath && drawer.open
+  const setDecisionsOpen = useCallback((o: boolean | ((was: boolean) => boolean)) => {
+    setDrawer(d => {
+      const was = d.docPath === docPath && d.open
+      return { docPath, open: typeof o === 'function' ? o(was) : o }
+    })
+  }, [docPath])
+  const targets = useSpinoffTargets(docPath)
   const noun = nounOf(open.manifest.app?.app_id)
   // The tool, as its manifest names it (app.home.brand, else its name); a
   // document made before tools named themselves still finds its tool.
@@ -197,6 +217,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const [barState, setBarState] = useState<{ doc: string | null; items: BarItem[] }>({ doc: null, items: [] })
   const onBar = useCallback((items: BarItem[]) => setBarState({ doc: docRef.current, items }), [])
   const barItems = barState.doc === docPath && !clientOn ? barState.items : []
+  // The app's own word for its state wins over the shell's, where it sends one.
+  const appStatus = statusOf(barItems)
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null
@@ -241,33 +263,45 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       {/* Accent strip — recolors with a trusted app's theme (clan://set-theme). */}
       <div className="ch-strip" />
       <Toolbar
-        title={barTitle}
-        bar={barItems}
-        onBarAction={barAction}
-        tool={brand}
-        isTemplate={open.is_template}
-        trusted={open.trusted}
+        agency={agency}
+        onAgency={onAgency}
         onHome={onHome}
-        onOpenFile={onOpenFile}
-        onToggleSidebar={() => setSidebarOpen(o => !o)}
-        sidebarOpen={sidebarOpen}
-        onWorkspace={() => setWorkspaceOpen(true)}
-        onSave={onSave}
-        onKeepOffline={onKeepOffline}
-        onExport={onExport}
-        docPath={open.path}
-        onSpinoff={onSpinoff}
-        loading={false}
-        trail={trail}
-        validation={open.validation}
-        saved={saved}
-        editMode={editMode}
-        // A locked document with nothing reopened takes no edit: Client
-        // review stands where Edit was.
-        onToggleEdit={authored && (editMode || !reviewable) ? () => setEditMode(e => !e) : undefined}
-        onClientReview={reviewable && !open.is_template ? startReview : undefined}
-        clientAnswered={!!decisions.view?.client?.answer?.current}
-        clientMode={clientOn ? { onCancel: endReview, busy: saving !== 'no' } : undefined}
+        crumbs={trail}
+        // The medallion lights only for the document the person is IN (owner, 9 Nov 2026).
+        attention={needs > 0}
+        needs={needs}
+        onDecisions={clientOn ? undefined : () => setDecisionsOpen(o => !o)}
+        decisionsOpen={decisionsOpen && !clientOn}
+        user={user}
+        onSignOut={onSignOut}
+        doc={{
+          title: barTitle,
+          tool: brand,
+          state: appStatus ?? docStateOf(decisions.view),
+          bar: barItems,
+          onBarAction: barAction,
+          isTemplate: open.is_template,
+          trusted: open.trusted,
+          validation: open.validation,
+          onOpenFile,
+          onToggleSidebar: () => setSidebarOpen(o => !o),
+          sidebarOpen,
+          onWorkspace: () => setWorkspaceOpen(true),
+          onSave,
+          onKeepOffline,
+          onExport,
+          targets,
+          onSpinoff,
+          loading: false,
+          saved: saved ? <SaveStatus docPath={docPath} /> : undefined,
+          editMode,
+          // A locked document with nothing reopened takes no edit: Client
+          // review stands where Edit was.
+          onToggleEdit: authored && (editMode || !reviewable) ? () => setEditMode(e => !e) : undefined,
+          onClientReview: reviewable && !open.is_template ? startReview : undefined,
+          clientAnswered: !!decisions.view?.client?.answer?.current,
+          clientMode: clientOn ? { onCancel: endReview, busy: saving !== 'no' } : undefined,
+        }}
       />
       {banner}
       </div>
@@ -310,7 +344,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onSave={save}
           />
         ) : (
-          <DecisionPanel decisions={decisions} />
+          <DecisionPanel decisions={decisions} open={decisionsOpen} onOpenChange={setDecisionsOpen} />
         )}
       </div>
       <footer className="ch-footer" ref={footRef}>

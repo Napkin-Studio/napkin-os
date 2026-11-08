@@ -61,8 +61,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--create);outline
 
 /* bar */
 :root{--barh:48px}
-/* In the OS the tabs and chips are in its bar (clan:bar), so this one is not drawn. */
-.in-shell{--barh:0px}
+/* In the OS the chips are in its bar (clan:bar) and the steps stand alone at the top (.shell-steps), same height. */
+.shell-steps{position:sticky;top:0;z-index:10;height:48px;display:flex;align-items:center;justify-content:center;padding:0 20px;background:var(--frost);
+  -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line-soft)}
 .bar{position:sticky;top:0;z-index:10;height:48px;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--frost);
   -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line-soft)}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
@@ -1497,8 +1498,16 @@ var DeckLogic = (function () {
     return out;
   }
 
+  // The deck's steps, as its own buttons (data-go). In the OS the bar is the OS's and has no tabs (owner removal,
+  // features/new-ui-shell.clan), so the steps stand at the top of the page instead: no step loses its home.
+  function stepsNav(scr) {
+    return '<nav class="steps" aria-label="Deck steps">' + STEPS.map(function (st) {
+      return '<button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : '') + '>' + st[1] + '</button>';
+    }).join('') + '</nav>';
+  }
+
   function bar(s, scr) {
-    if (inShell) return '';
+    if (inShell) return '<div class="shell-steps">' + stepsNav(scr) + '</div>';
     var p = s.inputs.prompt;
     var title = (p.client && p.project) ? esc(p.client) + ' · ' + esc(p.project) : 'New deck';
     var chips = barChips(s, scr);
@@ -1506,18 +1515,15 @@ var DeckLogic = (function () {
     var first = spans(chips.filter(function (c) { return c.cls !== 'chip cost'; })), cost = spans(chips.filter(function (c) { return c.cls === 'chip cost'; }));
     return '<header class="bar"><span class="crumb">' + title + '</span>' + first +
       '<div class="spacer"></div>' + cost +
-      '<nav class="steps" aria-label="Deck steps">' + STEPS.map(function (st) {
-        return '<button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : '') + '>' + st[1] + '</button>';
-      }).join('') + '</nav></header>';
+      stepsNav(scr) + '</header>';
   }
 
-  // What the OS bar is asked to show (clan:bar): the steps, then the chips. The whole list each time, sent only when it
-  // changes, and again when the OS asks (clan:bar?).
+  // What the OS bar is asked to show (clan:bar): the chips (the steps are the page's own, above). The whole list each
+  // time, sent only when it changes, and again when the OS asks (clan:bar?).
   var lastBar = null;
   function sendBar(s, scr) {
     if (!inShell) return;
-    var items = STEPS.map(function (st) { return { kind: 'tab', id: st[0], label: st[1], current: scr === st[0] }; })
-      .concat(barChips(s, scr).map(function (c) { return { kind: 'chip', label: c.text, tone: c.tone }; }));
+    var items = barChips(s, scr).map(function (c) { return { kind: 'chip', label: c.text, tone: c.tone }; });
     var sig = JSON.stringify(items);
     if (sig === lastBar) return;
     lastBar = sig;

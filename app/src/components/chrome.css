@@ -160,26 +160,172 @@
   white-space: nowrap;
 }
 .ch-bar-sep { width: 1px; height: 18px; background: var(--line-soft); margin: 0 2px; }
-/* The open app's own tabs (clan:bar): one is current. A pill group like the
-   app's old second bar, in the OS's tokens. */
-.ch-bar-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--soft); }
-.ch-bar-tab {
-  height: 26px;
-  padding: 0 13px;
-  border: 0;
+/* ── the one OS bar (features/new-ui-shell.clan) ─────────────────────────── */
+
+/* The same bar on the desk and in a document: a little taller than the old
+   document bar, so the medallion can sit proud of it. */
+.ch-bar.ch-bar-os { height: 56px; gap: 10px; padding: 0 16px 0 12px; }
+.ch-bar-spacer { flex: 1; min-width: 4px; }
+
+/* The medallion and the agency's pill, docked: the pill tucks under the circle. */
+.ch-dock { display: inline-flex; align-items: center; flex-shrink: 0; }
+.ch-medallion {
+  position: relative;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 8px 18px -8px rgba(16, 17, 20, 0.28), 0 2px 5px rgba(16, 17, 20, 0.08);
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.ch-medallion:hover { transform: scale(1.04); }
+.ch-medallion:focus-visible { outline: 3px solid var(--agency); outline-offset: 2px; }
+/* The app you are IN needs you: a ring in the needs-you colour, said in the label too. */
+.ch-medallion[data-attention] { box-shadow: 0 0 0 3px var(--status-red), 0 8px 18px -8px rgba(16, 17, 20, 0.28); }
+.ch-medallion[data-attention]::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid var(--status-red);
+  animation: ch-medal-pulse 1.8s var(--ease) infinite;
+}
+@keyframes ch-medal-pulse { from { opacity: 0.7; transform: scale(1); } to { opacity: 0; transform: scale(1.35); } }
+@media (prefers-reduced-motion: reduce) { .ch-medallion[data-attention]::after { animation: none; opacity: 0; } }
+
+.ch-agency {
+  position: relative;
+  z-index: 1;
+  height: 36px;
+  margin-left: -16px;
+  padding: 0 14px 0 24px;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  border: 1px solid color-mix(in srgb, var(--agency-fg) 14%, transparent);
   border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--ink2);
+  background: var(--agency);
+  color: var(--agency-fg);
   font: inherit;
-  font-size: 12px;
+  line-height: 1.05;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ch-agency:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.ch-agency-name { font-family: var(--f-display); font-size: 13.5px; font-weight: 800; letter-spacing: -0.025em; }
+.ch-agency-os {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--f-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.ch-agency-os i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+/* Where you are below the agency: Clients › client › tool. */
+.ch-crumbs { display: inline-flex; min-width: 0; flex: 0 1 auto; }
+.ch-crumbs .lc-trail { flex: 0 1 auto; }
+.ch-crumbs .lc-crumb { font-size: 13px; }
+
+/* The OS app slot: the tool, the document's name, its state, Continue in and More. */
+.ch-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: 38px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  background: var(--card);
+}
+.ch-slot-tool {
+  font-family: var(--f-display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--tool, var(--ink)) 78%, var(--ink));
+}
+.ch-slot-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.ch-slot-tool + .ch-slot-title { padding-left: 8px; border-left: 1px solid var(--line); }
+.ch-btn.ch-btn-slot { height: 28px; padding: 0 10px; border-color: transparent; background: var(--soft); font-size: 12px; }
+.ch-btn.ch-btn-slot:hover { background: var(--agency-soft); }
+.ch-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--soft);
+  color: var(--ink2);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ch-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink3); }
+.ch-state-ok { background: var(--ok-bg); color: var(--ok-fg); }
+.ch-state-ok i { background: var(--status-green); }
+.ch-state-warn { background: var(--warn-bg); color: var(--warn); }
+.ch-state-warn i { background: var(--status-amber); }
+.ch-menu-group { padding: 6px 10px 2px; font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); }
+.ch-menu-empty { padding: 4px 10px 6px; font-size: 12px; color: var(--ink3); }
+
+/* Decisions, with the needs-your-call count. */
+.ch-decisions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 6px 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
-.ch-bar-tab:hover:not(:disabled):not([aria-current]) { color: var(--ink); }
-.ch-bar-tab[aria-current] { background: var(--card, var(--paper)); color: var(--ink); box-shadow: 0 1px 3px rgba(20, 22, 27, 0.1); }
-.ch-bar-tab:disabled { opacity: 0.45; cursor: default; }
-.ch-bar-tab:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.ch-decisions:hover:not(:disabled) { background: var(--agency-soft); }
+.ch-decisions[aria-expanded='true'] { background: var(--agency); color: var(--agency-fg); border-color: transparent; }
+.ch-decisions:disabled { cursor: default; opacity: 0.7; }
+.ch-decisions:focus-visible { outline: 3px solid var(--agency); outline-offset: 2px; }
+.ch-decisions-n {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--status-red);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ch-decisions-n.ch-decisions-n-zero { background: var(--soft); color: var(--ink3); }
 
 /* "Saved": a quiet status, not a button. The green dot is the design's ok. */
 .ch-saved {
@@ -506,6 +652,9 @@
   }
   .ch-bar-sep { display: none; }
   .ch-bar-title { flex: 1 1 120px; }
+  .ch-bar.ch-bar-os { height: auto; padding: 8px 12px; }
+  .ch-slot { flex: 1 1 100%; order: 5; }
+  .ch-agency-os { display: none; }
   .ch-bar .ch-btn { height: 28px; padding: 0 11px; font-size: 12px; }
   .ch-bar .ch-btn-icon { width: 28px; padding: 0; }
   /* More may wrap to the left of the second row: hang its menu from the bar,
