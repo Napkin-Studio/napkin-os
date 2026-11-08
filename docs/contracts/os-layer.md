@@ -1137,8 +1137,8 @@ freely, never redefine.
   decision. The actor always comes from `Ctx`.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
   `/verify`, `/approve`, `/history`, `/timeline`, `/open`, `/stale`,
-  `/upstream` (§8.1), and `/client-review`, `/client-review/confirm` and
-  `/client-review/reopen` (§8.2).
+  `/upstream` (§8.1), `/client-review`, `/client-review/confirm` and
+  `/client-review/reopen` (§8.2), and `/cite` (§8.3).
 - Landed (2026-09-28), each a person's decision — a process is refused `403` —
   recording one decision as the person in `Ctx` with what it changes, in one
   generation; refused `409` once the document is locked (a reopened part's
@@ -1471,6 +1471,45 @@ process), records as the person in `Ctx`, and writes one change.
    - The §7.5.4 items are in `attention` with their codes, `address` the
      part's, `decision` the answer's; an open suggestion's item names the
      suggestion.
+
+### 8.3 The source card: `/cite`
+
+One answer to "where did this come from?" for any ref a page shows, whichever
+app shows it (feature `os-source-card`, 2026-11-09). A read, for any actor,
+locked or not; every host answers it from the same routing table.
+
+- `GET /cite?ref=<ref>` — one card. `400` without a ref; `404` when the
+  document holds nothing by that ref.
+- `POST /cite {refs: [<ref>, ...]}` — `{cites: {<ref>: card}}`, at most 500
+  refs a call (`400` beyond). A ref the document does not hold is in the map
+  with `kind: unknown`. A page asks for a section's cards in one call.
+
+A ref is anything `/decisions` resolves in `cites`: a pin, finding or source
+id, a material, passage or capture id, a decision id, `human:<id>`, or an
+address. A card is that `Cite` — the same resolver, so the same words — with:
+
+- `ref` — as asked.
+- `origin` — `research`, `client`, `brand`, `layer`, `person` or `document`.
+  The writer's marker is `origin_kind` on the member entry (a pin, finding,
+  source, material, capture item or passage); `origin` itself is already
+  taken (a pin's layer row `fact://…`, Contract campaign-clan §4; a field
+  envelope's `extracted|proposed|confirmed|stated`). Without a marker only
+  what the kind settles is said — a client's material or what was read from
+  it is `client` (a typed prompt is `person`), a library passage is `layer`,
+  `human:` is `person` — and anything else is `document`, never a guess. No
+  writer sets `origin_kind` yet.
+- `from {document_id, title?, app_id?, version?, path?}` — for something
+  carried from an ancestor: a pin or finding a carried decision names on that
+  ancestor, material or a passage found only in a frozen copy, an address on
+  an ancestor. `title` and `app_id` come from the store's copy when it holds
+  one (else the frozen copy's name); `version` is the revision carried, for
+  the direct parent; `path` is what `POST /open` takes.
+- `review {verdict, by, actor?, at?, decision?, note?}` — the newest review
+  verdict that still stands: `verified` (a `verify`, a good `verdict`),
+  `rejected` (a bad `verdict`) or `set_aside`. `history` holds every one,
+  newest first, each `superseded` when replaced; with none in the chain, the
+  record's own `review`, `verification` or `rejection`. "Looks right" is not
+  a review of a fact.
 
 ---
 

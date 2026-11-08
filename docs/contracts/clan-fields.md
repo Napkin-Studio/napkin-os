@@ -110,6 +110,19 @@ The layout vocabulary: `cl-report` (the page), `cl-head` (`compact`),
 re-renders every element from the record; `.reload()` re-reads the decision
 view first; `.open(ref)` opens the drawer; `.format(pin)`, `.label(pin)`.
 
+The source card (Contract 4 §8.3): `.card(ref, el)` renders the card for
+`ref` into `el` and resolves with what the host said (null when it could not
+be asked); `.cards(refs)` is the same lookup without the markup. Every ref
+asked for in one tick goes in one `POST /cite`, and a card is kept per ref
+until the document's version changes. The card shows the kind, the origin,
+the latest review verdict, the value and words, where it was carried from,
+the source's link, publisher, date and tier, and every review under
+**Record**; its buttons open the drawer and, for a carried item, the original
+document (`POST /open`). The drawer shows the same card, compact (no value or
+words, which it shows itself), at its top: one renderer. `.stack()` is the
+drawer's trail, oldest first, as `[{ref, label}]`, for an inspector's
+breadcrumbs.
+
 ## 6. Edit mode
 
 The shell's **Edit** button (every authored app) turns edit mode on; the edit

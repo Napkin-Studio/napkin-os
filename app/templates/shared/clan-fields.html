@@ -309,6 +309,31 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .cl-list > li::before{counter-increment:m;content:counter(m);font-family:var(--clf-mono);font-size:12px;color:var(--clf-ink3);padding-top:2px}
 .cl-foot{padding:32px clamp(20px,5vw,64px) 40px;border-top:1px solid var(--clf-line2);background:var(--clf-soft)}
 @media (max-width:860px){.cl-cols,.cl-split,.cl-grid{grid-template-columns:minmax(0,1fr)}.cl-grid > * + *{border-left:0;border-top:1px solid var(--clf-line2)}}
+/* The source card (ClanFields.card): one card for a fact from any origin,
+   the same markup inline in any app and at the top of the drawer. */
+.clf-card{display:grid;gap:8px;border:1px solid var(--clf-line);border-radius:10px;padding:14px 16px;background:var(--clf-paper);color:var(--clf-ink);font-size:13.5px;line-height:1.45;min-width:0}
+.clf-card.compact{border:0;border-radius:0;padding:0 0 12px;border-bottom:1px solid var(--clf-line2);background:none}
+.clf-card-h{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.clf-card-k,.clf-card-r{font-family:var(--clf-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.clf-card-k{border:1px solid var(--clf-line);color:var(--clf-ink2)}
+.clf-card-r.v-verified{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf-card-r.v-rejected{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf-card-r.v-set_aside{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf-card-v{font-size:22px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.clf-card-t{margin:0;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.clf-card-d{margin:0;color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-card-from{display:flex;gap:6px;align-items:baseline;padding:7px 10px;border-radius:8px;background:var(--clf-soft);color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-card-from b{color:var(--clf-ink);font-weight:600}
+.clf-card .clf-q{font-size:14px;padding:10px 12px 10px 14px}
+.clf-card-g{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:0}
+.clf-card-g dt{font-family:var(--clf-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-card-g dd{margin:1px 0 0;overflow-wrap:anywhere}
+.clf-card-g a{color:var(--clf-chart);text-decoration:none}
+.clf-card-f{display:flex;flex-wrap:wrap;gap:8px}
+.clf-card-f button{all:unset;cursor:pointer;font-size:13px;font-weight:500;color:var(--clf-ink);border:1px solid var(--clf-line);border-radius:999px;padding:4px 12px}
+.clf-card-f button:hover{border-color:var(--clf-ink3)}
+.clf-card-f button:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-card.loading{color:var(--clf-ink3)}
 /* On a phone a long publisher breaks rather than push the column past the card. */
 @media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
   .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
@@ -886,6 +911,76 @@ var ClanFields=(function(){
     el.innerHTML='<section class="clf-sources"><h2>'+esc(el.getAttribute('title')||'Sources')+' ('+order.length+')</h2><ol>'+rows.join('')+'</ol></section>';
   }
 
+
+  // ── the source card (OS-layer contract §8.3) ────────────────────────
+  // One card for a fact from any origin, whatever app shows it: the host
+  // resolves it (`POST /cite`, every ref a page asks for in the same tick in
+  // one call), and the card is kept per ref until the document changes.
+  var ORIGIN_WORD={research:'Research',client:'Client upload',brand:'Brand Clan',layer:'Knowledge layer',person:'A person',document:'This document'};
+  var VERDICT_WORD={verified:'Verified',rejected:'Marked wrong',set_aside:'Set aside'};
+  var CARD_KIND={fact:'Fact',finding:'Finding',source:'Source',material:'Material',passage:'Library passage',capture:'From material',decision:'Decision',person:'Person',address:'Field',unknown:'Not found'};
+  var CARDS={}, CARDS_AT=null, CARD_BATCH=null, CITE_MAX=500;
+  function cardVer(){ return VIEW&&VIEW.version||''; }
+  function fetchCites(refs){
+    var parts=[]; for(var i=0;i<refs.length;i+=CITE_MAX) parts.push(refs.slice(i,i+CITE_MAX));
+    return Promise.all(parts.map(function(rs){
+      return fetch(SCHEME+'/cite',{method:'POST',body:JSON.stringify({refs:rs})}).then(function(r){ return r.ok?r.json():null; }).then(function(v){ return v&&v.cites?v.cites:null; }).catch(function(){ return null; });
+    })).then(function(ms){ var out={}; ms.forEach(function(m){ if(!m) return; for(var k in m) out[k]=m[k]; }); return out; });
+  }
+  // The cards for `refs`, by ref; a ref the host could not be asked about
+  // is null and asked again next time.
+  function cardsFor(refs){
+    refs=uniq(arr(refs).map(String).filter(Boolean));
+    var v=cardVer(); if(v!==CARDS_AT){ CARDS={}; CARDS_AT=v; }
+    var need=refs.filter(function(r){ return !CARDS[r]; });
+    if(need.length){
+      if(!CARD_BATCH){ var b={refs:[]}; CARD_BATCH=b;
+        b.done=new Promise(function(ok){ setTimeout(function(){ if(CARD_BATCH===b) CARD_BATCH=null; ok(fetchCites(b.refs)); },0); }); }
+      var batch=CARD_BATCH, at=CARDS;
+      need.forEach(function(r){ batch.refs.push(r);
+        at[r]=batch.done.then(function(m){ var c=m[r]||null; if(!c&&at[r]&&CARDS===at) delete at[r]; return c; }); });
+    }
+    return Promise.all(refs.map(function(r){ return CARDS[r]; })).then(function(list){ var o={}; refs.forEach(function(r,i){ o[r]=list[i]; }); return o; });
+  }
+  function reviewLine(r){ return esc(VERDICT_WORD[r.verdict]||r.verdict)+(r.by?' by '+esc(r.by):'')+(r.at?' · '+esc(plainDate(r.at)):''); }
+  // The card's markup, from what the host said of `ref`. `compact` is the
+  // drawer's: the drawer shows the value and the words below it already.
+  function cardHTML(c,compact){
+    c=obj(c); var ref=String(c.ref||''), o=ORIGIN_WORD[c.origin]?c.origin:'document', rv=c.review, hs=arr(c.history), f=c.from, h='';
+    h+='<div class="clf-card-h"><span class="clf-card-k">'+esc(CARD_KIND[c.kind]||CARD_KIND.unknown)+'</span><span class="clf-card-k o-'+o+'">'+esc(ORIGIN_WORD[o])+'</span>'
+      +(rv&&VERDICT_WORD[rv.verdict]?'<span class="clf-card-r v-'+esc(rv.verdict)+'">'+reviewLine(rv)+'</span>':'')+'</div>';
+    if(!compact){
+      if(c.kind==='unknown') return '<div class="clf-card" data-card="'+esc(ref)+'" data-origin="'+o+'">'+h+'<p class="clf-card-d">This is not in the document any more.</p></div>';
+      if(c.value) h+='<span class="clf-card-v">'+esc(c.value)+'</span>';
+      h+='<p class="clf-card-t">'+esc(c.title&&c.kind!=='source'?c.title:c.label)+'</p>';
+      if(c.detail) h+='<p class="clf-card-d">'+esc(c.detail)+'</p>';
+      if(c.quote) h+='<blockquote class="clf-q said">'+esc(c.quote)+'</blockquote>';
+    }
+    if(f&&f.document_id) h+='<p class="clf-card-from">From <b>'+esc(f.title||'another document')+'</b>'+(f.app_id?'<small>'+esc(String(f.app_id).split('.').pop().replace(/-/g,' '))+'</small>':'')+'</p>';
+    var g=[['Link',c.uri&&/^https?:[/][/]/.test(c.uri)?'<a href="'+esc(c.uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clip(String(c.uri).replace(/^https?:[/][/]/,''),60))+' ↗</a>':''],['Publisher',esc(c.publisher||'')],['Published',c.published_at?esc(plainDate(c.published_at)):''],['Tier',c.tier?esc(tierWord(c.tier)):'']].filter(function(x){ return x[1]; });
+    if(g.length&&!compact) h+='<dl class="clf-card-g">'+g.map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+x[1]+'</dd></div>'; }).join('')+'</dl>';
+    if(hs.length) h+='<details class="clf-more clf-card-rec"><summary>Record</summary><ul class="clf-hist">'+hs.map(function(r){ return '<li><span>'+reviewLine(r)+(r.superseded?' · replaced':'')+(r.note?' — “'+esc(r.note)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
+    var acts=(!compact?'<button type="button" data-clf-card="open" data-ref="'+esc(ref)+'">Where this came from</button>':'')
+      +(f&&f.path?'<button type="button" data-clf-card="from" data-path="'+esc(f.path)+'">Open '+esc(clip(f.title||'the original',40))+'</button>':'');
+    if(acts) h+='<div class="clf-card-f">'+acts+'</div>';
+    return '<div class="clf-card'+(compact?' compact':'')+'" data-card="'+esc(ref)+'" data-origin="'+o+'">'+h+'</div>';
+  }
+  // What the host calls a ref the drawer shows: a data path is an address on
+  // this document; a contest, a gap or a list of cites has no card.
+  function cardRef(ref,k){ return !ref?'':k==='path'?docId()+'#'+ref:/^(?:pin|finding|source|passage|capture|material)$/.test(k||'')?ref:''; }
+  // Render the source card for `ref` into `el`; resolves when it is shown.
+  function card(ref,el,compact){
+    if(!el) return Promise.resolve(null);
+    el.innerHTML='<div class="clf-card loading'+(compact?' compact':'')+'" aria-busy="true">Finding where this came from…</div>';
+    return cardsFor([ref]).then(function(m){ var c=m[ref];
+      if(el.isConnected===false) return c;
+      el.innerHTML=c?cardHTML(c,compact):'<div class="clf-card'+(compact?' compact':'')+'"><p class="clf-card-d">Where this came from could not be read. Try again in a moment.</p></div>';
+      return c; });
+  }
+  // The drawer's trail, oldest first: what the research inspector shows as
+  // breadcrumbs.
+  function stack(){ return STACK.map(function(s){ return {ref:s.ref, label:named(s.ref)||s.ref}; }); }
+
   // ── the tray ────────────────────────────────────────────────────────
   function refOfAddress(a){
     var p=String(a||'').split('#')[1]||'', m=p.match(/^(?:findings|facts|materials)\[([^\]]+)\]$/)||p.match(/^selection\.contested\[([^\]]+)\]$/);
@@ -1249,6 +1344,7 @@ var ClanFields=(function(){
     if((ca.length||sa)&&(!k||(k==='path'&&valueAt(ref)==null))){
       DRAWER.crumb.textContent='Carried over'; DRAWER.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
     if(t.note) b+='<p class="clf-err" style="background:var(--clf-soft);color:var(--clf-ink2)">'+esc(t.note)+'</p>';
+    var cref=cardRef(ref,k); if(cref) b+='<div class="clf-card-slot"></div>';
     if(k==='pin'){
       var p=pins()[ref];
       if(!p){ b+=gone(); }
@@ -1363,6 +1459,9 @@ var ClanFields=(function(){
     }
     if(k&&k!=='source'&&k!=='cite') b+=wrote(ref);
     DRAWER.crumb.textContent=crumb; DRAWER.body.innerHTML=b;
+    // The source card's provenance at the top: the same renderer as inline.
+    var slot=cref&&DRAWER.body.querySelector('.clf-card-slot');
+    if(slot) card(cref,slot,true).then(function(c){ if(!c||c.kind==='unknown') slot.innerHTML=''; });
   }
   function showError(form,msg){ var e=form&&form.querySelector('.clf-err'); if(e){ e.textContent=msg; e.hidden=false; } else toast(msg); }
   function act(route,body,form,done){
@@ -1837,6 +1936,11 @@ var ClanFields=(function(){
   }
   document.addEventListener('click',function(e){
     var cr=e.target.closest&&e.target.closest('[data-clf-cr]'); if(cr&&onClientClick(cr)){ e.preventDefault(); return; }
+    var cb=e.target.closest&&e.target.closest('[data-clf-card]');
+    if(cb){ e.preventDefault();
+      if(cb.getAttribute('data-clf-card')==='from') post('/open',{path:cb.getAttribute('data-path')});
+      else open(cb.getAttribute('data-ref'),!!(DRAWER&&DRAWER.el.contains(cb)&&STACK.length));
+      return; }
     if(DRAWER&&DRAWER.el.contains(e.target)) return;
     if(e.target.closest('.clf-part')) return; // a part's own controls
     if(EDIT&&!locked()){
@@ -1911,6 +2015,10 @@ var ClanFields=(function(){
           format:fmt, label:label, kindOf:kindOf, stateOf:stateOf,
           // The host's decision view as last read (null until it is), and the lock.
           view:function(){ return VIEW; }, locked:lockDecision,
+          // The source card (OS-layer contract §8.3): card(ref, el) renders it
+          // into el; cards(refs) is the same lookup without the markup; the
+          // drawer's trail of refs, oldest first, is stack().
+          card:function(ref,el){ return card(ref,el,false); }, cards:cardsFor, stack:stack,
           // The parts this page declares for client review, as sent to the shell.
           parts:function(){ return declaredParts().map(partRef); }};
 })();

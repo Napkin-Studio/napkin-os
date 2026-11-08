@@ -1373,3 +1373,101 @@ test('a part the draft marks "To confirm:" prints a corner tag, not the words in
   assert.doesNotMatch(marked, /To confirm: Tension/)
   assert.equal((marked.match(/class="tc"/g) || []).length, 1, 'one tag, only on the marked box')
 })
+
+// ── the shared fields snippet: the source card (OS-layer contract §8.3) ─────
+
+/** The card's renderer, lifted with the page's own helpers and words. */
+function cardKit() {
+  // The page's esc holds a quote in a regex the lifter cannot read past; the
+  // stand-in escapes the same characters.
+  const names = ['obj', 'arr', 'clip', 'tierWord', 'reviewLine', 'cardHTML']
+  const vars = ['ORIGIN_WORD', 'VERDICT_WORD', 'CARD_KIND'].map(n => obj(CLF, n)).join('\n')
+  const body = `${vars}\n${names.map(n => fn(CLF, n)).join('\n')}\nreturn {cardHTML};`
+  const plainDate = (d: string) => `on ${String(d).slice(0, 10)}`
+  return new Function('plainDate', 'esc', body)(plainDate, esc) as { cardHTML(c: unknown, compact?: boolean): string }
+}
+
+const carriedPin = {
+  ref: 'f_01JA0B3P4Q', kind: 'fact', label: 'Orchard Hill · share', value: '23%', detail: 'Bord Bia · high confidence',
+  origin: 'research', from: { document_id: 'r1', title: 'Lúnasa launch', app_id: 'ie.napkin.campaign-research', path: 'docs/r1.clan' },
+  review: { verdict: 'rejected', by: 'You', at: '2026-11-08T10:00:00Z', note: 'The panel was revised' },
+  history: [
+    { verdict: 'rejected', by: 'You', at: '2026-11-08T10:00:00Z', note: 'The panel was revised' },
+    { verdict: 'verified', by: 'mary', at: '2026-11-01T10:00:00Z', superseded: true },
+  ],
+}
+
+test('the source card says where a fact came from, its latest verdict, and folds the rest under Record', () => {
+  const { cardHTML } = cardKit()
+  const h = cardHTML(carriedPin)
+  assert.match(h, /^<div class="clf-card" data-card="f_01JA0B3P4Q" data-origin="research">/)
+  assert.match(h, /<span class="clf-card-k o-research">Research<\/span>/)
+  assert.match(h, /<span class="clf-card-r v-rejected">Marked wrong by You · on 2026-11-08<\/span>/)
+  assert.match(h, /<span class="clf-card-v">23%<\/span><p class="clf-card-t">Orchard Hill · share<\/p>/)
+  assert.match(h, /From <b>Lúnasa launch<\/b><small>campaign research<\/small>/)
+  // The history is folded, newest first, the replaced one marked.
+  const rec = h.slice(h.indexOf('<details class="clf-more clf-card-rec"><summary>Record</summary>'))
+  assert.ok(rec.indexOf('Marked wrong by You') < rec.indexOf('Verified by mary'), rec)
+  assert.match(rec, /Verified by mary · on 2026-11-01 · replaced/)
+  assert.match(h, /data-clf-card="open" data-ref="f_01JA0B3P4Q">Where this came from/)
+  assert.match(h, /data-clf-card="from" data-path="docs\/r1\.clan">Open Lúnasa launch/)
+
+  // Every origin has its words; one the host never sends is this document.
+  const o = (origin: string) => /clf-card-k o-[a-z]+">([^<]+)</.exec(cardHTML({ ...carriedPin, origin }))?.[1]
+  assert.deepEqual(['research', 'client', 'brand', 'layer', 'person', 'document', 'rumour'].map(o),
+    ['Research', 'Client upload', 'Brand Clan', 'Knowledge layer', 'A person', 'This document', 'This document'])
+
+  // Unreviewed: no verdict, no Record. Hostile words are escaped.
+  const bare = cardHTML({ ref: 'fi_1', kind: 'finding', label: '<img src=x onerror=alert(1)>', origin: 'document' })
+  assert.doesNotMatch(bare, /clf-card-r|Record|<img/)
+  assert.match(bare, /&#60;img src=x onerror=alert\(1\)&#62;/)
+  // Gone from the document: said so.
+  assert.match(cardHTML({ ref: 'f_X', kind: 'unknown', label: 'f_X', origin: 'document' }), /not in the document any more/)
+})
+
+test('the drawer shows the same card, compact, from the same renderer', () => {
+  const { cardHTML } = cardKit()
+  const c = cardHTML(carriedPin, true)
+  assert.match(c, /^<div class="clf-card compact" data-card="f_01JA0B3P4Q" data-origin="research">/)
+  // The drawer shows the value and words itself; the provenance is the card's.
+  assert.doesNotMatch(c, /clf-card-v|clf-card-t|data-clf-card="open"/)
+  const head = (x: string) => x.slice(0, x.indexOf('</div>'))
+  assert.equal(head(c).replace(' compact', ''), head(cardHTML(carriedPin)))
+  assert.match(c, /<summary>Record<\/summary>/)
+  // One renderer: the drawer and ClanFields.card both go through card(), which
+  // is the only caller of cardHTML.
+  assert.match(fn(CLF, 'draw'), /card\(cref,slot,true\)/)
+  assert.match(CLF, /card:function\(ref,el\)\{ return card\(ref,el,false\); \}/)
+  assert.equal(CLF.split('cardHTML(').length - 1, 2) // its definition and card()'s call
+  assert.match(CLF, /stack:stack/)
+})
+
+test('cards a page asks for in one tick are one POST /cite, kept until the document changes', async () => {
+  const asked: string[][] = []
+  let version = 'v1'
+  let missing = new Set<string>(['f_GONE'])
+  const fetchCites = (refs: string[]) => {
+    asked.push(refs)
+    return Promise.resolve(Object.fromEntries(refs.filter(r => !missing.has(r)).map(r => [r, { ref: r, kind: 'fact' }])))
+  }
+  const uniqFn = new Function(`${fn(CLF, 'uniq')}; return uniq;`)()
+  const body = `${fn(CLF, 'cardsFor')}\nreturn {cardsFor};`
+  const { cardsFor } = new Function('CARDS', 'CARDS_AT', 'CARD_BATCH', 'cardVer', 'fetchCites', 'uniq', 'arr', body)(
+    {}, null, null, () => version, fetchCites, uniqFn, arr) as { cardsFor(refs: string[]): Promise<Record<string, unknown>> }
+
+  const [a, b] = await Promise.all([cardsFor(['f_1', 'fi_2']), cardsFor(['f_1', 'f_GONE'])])
+  assert.deepEqual(asked, [['f_1', 'fi_2', 'f_GONE']])
+  assert.deepEqual(Object.keys(a), ['f_1', 'fi_2'])
+  assert.equal(b.f_GONE, null)
+  // Kept: asking again asks nothing — except what came back empty.
+  await cardsFor(['f_1', 'fi_2'])
+  assert.equal(asked.length, 1)
+  missing = new Set()
+  const again = await cardsFor(['f_GONE'])
+  assert.deepEqual(asked.at(-1), ['f_GONE'])
+  assert.deepEqual(again.f_GONE, { ref: 'f_GONE', kind: 'fact' })
+  // The document changed: asked afresh.
+  version = 'v2'
+  await cardsFor(['f_1'])
+  assert.deepEqual(asked.at(-1), ['f_1'])
+})
