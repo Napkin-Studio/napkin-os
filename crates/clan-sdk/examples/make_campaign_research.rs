@@ -28,7 +28,7 @@ use clan_sdk::hash::sha256_prefixed;
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
     AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions,
+    MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -37,6 +37,9 @@ use std::path::{Path, PathBuf};
 mod app_ui;
 
 const APP_ID: &str = "ie.napkin.campaign-research";
+/// A brief can start a research: carried whole under `upstream.<brief id>`,
+/// so extract_ask proposes the ask from it (features/spinoff-and-links.clan).
+const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const FACTS_PATH: &str = "shared/facts.yaml";
 const FINDINGS_PATH: &str = "shared/findings.yaml";
@@ -204,13 +207,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             app_id: APP_ID.into(),
             // 0.2: the Plan-zone identity; figures from the shared snippet.
             // 0.4: its card on the OS home (app.home).
-            version: "0.4.16".into(),
+            // 0.5: a brief can start a research, carried whole (app.spinoff).
+            version: "0.5.0".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
-            spinoff: None,
+            // Carried whole under upstream.<brief id>, so no map; and no lift:
+            // extract_ask proposes the ask from the brief, and a person
+            // confirms it (pipeline.yaml, extract_ask reads).
+            spinoff: Some(SpinoffSpec {
+                accepts: vec![BRIEF_APP_ID.into()],
+                upstream: true,
+                ..Default::default()
+            }),
             // The card on the OS home, in the app's own words.
             home: Some(AppHome {
                 colour: Some("#0F9488".into()),

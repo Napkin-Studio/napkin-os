@@ -495,6 +495,11 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "edits": members::edits_map(clan),
         "pipeline": pipeline,
     });
+    // A research started from a brief is told the brief's ask, and only
+    // that: extract_ask proposes from it (features/spinoff-and-links.clan).
+    if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
+        context["upstream_ask"] = ask;
+    }
     if runs_brief_tasks(doc, &context["pipeline"]) {
         if let Some(up) = upstream_payload(doc) {
             context["upstream_payload"] = up.payload;
@@ -516,6 +521,75 @@ pub const BRIEF_TASKS: &[&str] = &["draft_brief", "regenerate_field"];
 /// Brief Maker's app id: its documents run the brief tasks whether or not
 /// they carry a pipeline (the middleware's built-in map, §1).
 pub const BRIEF_APP: &str = "ie.napkin.brief-maker";
+
+/// The paths of a brief's ask that a research may be told: the client, who
+/// it is for, the background and the objectives. Nothing the brief's agents
+/// drafted (insight, proposition, reasons to believe) — research must not
+/// echo the brief's guesses back as findings.
+pub const BRIEF_ASK_PATHS: &[&str] = &[
+    "project_name",
+    "client",
+    "audience",
+    "background",
+    "objectives.commercial",
+    "objectives.behavioural",
+    "objectives.attitudinal",
+];
+
+/// For a document whose pipeline declares `extract_ask`, the ask of the brief
+/// it carries (`napkin.middleware/1` §1, `upstream_ask`): the direct parent
+/// when it is a brief, else the first carried brief in key order. A frozen
+/// copy is a brief when it holds no `campaign` and at least one ask path. Each
+/// value is the field's text, or its `value` when the brief holds it as an
+/// envelope; an empty one is left out. `None` when nothing is carried.
+pub fn upstream_ask(clan: &ClanFile, pipeline: &Value) -> Option<Value> {
+    let reads_ask = pipeline
+        .get("tasks")
+        .and_then(Value::as_object)
+        .is_some_and(|t| t.contains_key("extract_ask"));
+    if !reads_ask {
+        return None;
+    }
+    let data: Value = clan
+        .read_entry("shared/data.yaml")
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+        .and_then(|y| serde_json::to_value(y).ok())?;
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let text = |v: &Value| -> Option<String> {
+        let s = v
+            .as_str()
+            .or_else(|| v.get("value").and_then(Value::as_str))?;
+        let s = s.trim();
+        (!s.is_empty()).then(|| s.to_string())
+    };
+    let fields_of = |copy: &Value| -> serde_json::Map<String, Value> {
+        let mut out = serde_json::Map::new();
+        if copy.get("campaign").is_some() {
+            return out;
+        }
+        for path in BRIEF_ASK_PATHS {
+            let v = path.split('.').try_fold(copy, |v, k| v.get(k));
+            if let Some(t) = v.and_then(text) {
+                out.insert(path.to_string(), Value::String(t));
+            }
+        }
+        out
+    };
+    let direct = clan.manifest().carried().map(|c| c.document_id.clone());
+    let mut ids: Vec<&String> = up.keys().collect();
+    ids.sort_by_key(|id| (Some(id.as_str()) != direct.as_deref(), id.as_str()));
+    ids.into_iter().find_map(|id| {
+        let fields = fields_of(&up[id]);
+        (!fields.is_empty()).then(|| {
+            json!({
+                "document_id": id,
+                "direct": Some(id.as_str()) == direct.as_deref(),
+                "fields": fields,
+            })
+        })
+    })
+}
 
 /// Whether the brief tasks run on `doc`: its pipeline declares one, or it is
 /// a Brief Maker document.
@@ -1131,6 +1205,81 @@ mod tests {
             "it does carry the research"
         );
         assert!(ctx.get("upstream_payload").is_none());
+    }
+
+    /// A brief as a person leaves it, then a research spun off from it.
+    fn research_from_brief() -> Document {
+        const B: &str = "3f2a6b1c-1d2e-4f3a-8b4c-5d6e7f8a9b0c";
+        let brief = doc(
+            "Lúnasa brief",
+            app("Brief Maker", BRIEF_APP, None),
+            Some(B),
+            &[(
+                "shared/data.yaml",
+                "client: Orchard Hill Cider\naudience: { value: Irish adults who skip alcohol on weeknights }\n\
+                 background: Sales of 0.0 grew, but Lúnasa is unknown.\nobjectives: { commercial: '', behavioural: Try it at a barbecue }\n\
+                 single_minded_proposition: The drafted SMP\ninsight: A drafted insight\n"
+                    .as_bytes(),
+                None,
+            )],
+        );
+        let scaffold = doc(
+            "Research Tool",
+            app("Research Tool", "ie.napkin.campaign-research", None),
+            None,
+            &[("app/pipeline.yaml", RESEARCH_PIPELINE, None)],
+        );
+        let spec = SpinoffSpec {
+            accepts: vec![BRIEF_APP.into()],
+            upstream: true,
+            ..Default::default()
+        };
+        let tpl = ClanFile::from_bytes(
+            make_template(
+                &scaffold,
+                app("Research Tool", "ie.napkin.campaign-research", Some(spec)),
+                MakeTemplateOptions::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let bytes = spinoff(&tpl, &brief, SpinoffOptions::default()).unwrap();
+        Document::from_bytes(DocId::new("research.clan"), bytes).unwrap()
+    }
+
+    #[test]
+    fn a_research_from_a_brief_is_told_the_briefs_ask_and_nothing_drafted() {
+        let r = research_from_brief();
+        let ask = &clan_context_for_agent(&r)["upstream_ask"];
+        assert_eq!(ask["document_id"], "3f2a6b1c-1d2e-4f3a-8b4c-5d6e7f8a9b0c");
+        assert_eq!(ask["direct"], true);
+        assert_eq!(
+            ask["fields"],
+            serde_json::json!({
+                "client": "Orchard Hill Cider",
+                "audience": "Irish adults who skip alcohol on weeknights",
+                "background": "Sales of 0.0 grew, but Lúnasa is unknown.",
+                "objectives.behavioural": "Try it at a barbecue",
+            }),
+            "the ask only: no empty field, nothing the brief's agents drafted"
+        );
+        // The frozen copy itself still travels as the index only.
+        assert!(clan_context_for_agent(&r)["data"]["upstream"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|v| v.get("client").is_none()));
+    }
+
+    #[test]
+    fn a_brief_from_research_and_the_research_itself_get_no_ask() {
+        // A brief runs no extract_ask; the research carries nothing.
+        assert!(clan_context_for_agent(&brief())
+            .get("upstream_ask")
+            .is_none());
+        assert!(clan_context_for_agent(&open(&research()))
+            .get("upstream_ask")
+            .is_none());
     }
 
     #[test]

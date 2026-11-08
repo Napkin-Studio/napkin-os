@@ -37,7 +37,7 @@ name the stand-in, its port, or branch on which implementation answered.
             "app": { "app_id": "...", "version": "..." },
             "schema": {}, "data": {}, "facts": [], "findings": [], "pipeline": {},
             "decision_chain": {}, "context": "...", "lineage": {},
-            "upstream_payload"?: {}, "upstream_skipped"?: [] }
+            "upstream_payload"?: {}, "upstream_skipped"?: [], "upstream_ask"?: {} }
 }
 ```
 
@@ -70,6 +70,18 @@ name the stand-in, its port, or branch on which implementation answered.
   document's own members and arrive in `clan.facts` and `clan.findings`. The
   frozen data reaches a model only as §10.13 says. `upstream` is read-only:
   a `data_patch` that names it is refused (Contract 4 §8.1).
+- **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
+  whose pipeline declares `extract_ask`, the ask of the brief it carries:
+  `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
+  `project_name`, `client`, `audience`, `background` and
+  `objectives.{commercial,behavioural,attitudinal}` (a field's text, or its
+  `value`; empty ones left out). Nothing the brief's agents drafted (insight,
+  proposition, reasons to believe) is sent. `extract_ask@1` proposes
+  `client_org`, `audience_stated`, `problem` and `objective` from it where
+  the material and the roster gave nothing: origin `proposed`, citing
+  `upstream_refs: ["<brief id>#<path>"]`, never over a `stated`, `confirmed`
+  or `extracted` field. With no prompt or attachment, the brief is read
+  alone and no model is called.
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the

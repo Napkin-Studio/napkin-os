@@ -12,6 +12,13 @@
    dates; nothing is written over a confirmed / stated field or one under an
    unanswered bad verdict. What is not supported is absent and listed as
    abstained.
+4. A research started from a brief (Contract 4 §5, features/spinoff-and-links)
+   is told the brief's ask (`clan.upstream_ask`). The client, who it is for,
+   the background and an objective are proposed from it where the material
+   gave nothing: origin proposed, citing `<brief id>#<path>` in
+   `upstream_refs`, behind the same confirm step. Nothing the brief's agents
+   drafted reaches the research, and a stated or confirmed field is never
+   written.
 """
 
 from __future__ import annotations
@@ -266,6 +273,39 @@ def roster_proposals(facts: list, subject_ref: str | None) -> dict:
     return out
 
 
+# brief ask path -> campaign field, first non-empty wins (objective).
+UPSTREAM_ASK = [
+    ("client", "client_org"),
+    ("audience", "audience_stated"),
+    ("background", "problem"),
+    ("objectives.commercial", "objective"),
+    ("objectives.behavioural", "objective"),
+    ("objectives.attitudinal", "objective"),
+]
+
+
+def upstream_proposals(clan: dict) -> dict:
+    """Step 0: the carried brief's ask -> proposed campaign fields, each
+    citing the brief's path (`upstream_refs`). Empty without one."""
+    ask = clan.get("upstream_ask") if isinstance(clan.get("upstream_ask"), dict) else {}
+    brief, fields = ask.get("document_id"), ask.get("fields")
+    if not isinstance(brief, str) or not isinstance(fields, dict):
+        return {}
+    out = {}
+    for path, fname in UPSTREAM_ASK:
+        v = fields.get(path)
+        if fname in out or not isinstance(v, str) or not v.strip():
+            continue
+        v = v.strip()
+        if fname == "client_org":
+            ref = slug(v)
+            if not ref:
+                continue
+            v = {"ref": f"org/{ref}", "name": v}
+        out[fname] = {"value": v, "upstream_refs": [f"{brief}#{path}"]}
+    return out
+
+
 def material_payload(mats) -> list:
     return [{"material_id": m.id, "name": m.name, "kind": m.kind, "text": m.text} for m in mats]
 
@@ -281,9 +321,11 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
     facts = ctx_facts(clan)
     decisions = ctx_decisions(clan)
     mats, unread = build_materials(inp, data)
-    if not mats:
+    from_brief = {k: v for k, v in upstream_proposals(clan).items() if k not in skip}
+    if not mats and not from_brief:
         raise bad("nothing to read: input.prompt is empty and no attachment carries text")
-    did = did or uid("d_", doc, base, "extract", [m.sha for m in mats])
+    did = did or uid("d_", doc, base, "extract", [m.sha for m in mats],
+                     sorted(r for p in from_brief.values() for r in p["upstream_refs"]))
     subject = field_value(data, "brand")
     subject_name = subject.get("name") if isinstance(subject, dict) else None
     subject_ref = subject.get("ref") if isinstance(subject, dict) else None
@@ -291,11 +333,12 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
     proposed = {k: v for k, v in roster_proposals(facts, subject_ref).items() if k not in skip}
     wanted = [f for f in CAMPAIGN_FIELDS if f not in NOT_EXTRACTED and f not in skip and f not in proposed
               and f != "categories"]
+    # A research started from a brief with nothing else to read makes no model call.
     raw = caps.model.structured(
         "extract", SYSTEM,
         {"materials": material_payload(mats), "subject_brand": subject_name,
          "fields": {f: FIELD_GUIDE[f if f != "budget_band" else "budget"] for f in wanted}},
-        SCHEMA, max_tokens=8000)
+        SCHEMA, max_tokens=8000) if mats else {}
     cands, notes = verify(raw, mats, subject_name)
     ext_client = cands.get("client_org")
     if "client_org" in proposed and ext_client and ext_client["value"]["ref"] == proposed["client_org"]["value"]["ref"]:
@@ -303,6 +346,13 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
     for f in list(cands):
         if f in skip or f in proposed or f not in wanted:
             cands.pop(f)
+    # The brief proposes only what the material and the roster left open, and
+    # never over a value read from the client's own material.
+    existing_now = data.get("campaign") or {}
+    for f, p in from_brief.items():
+        old_origin = (existing_now.get(f) or {}).get("origin") if isinstance(existing_now.get(f), dict) else None
+        if f not in cands and f not in proposed and old_origin != "extracted":
+            proposed[f] = p
 
     campaign_patch, written, withheld = {}, [], {}
     existing = data.get("campaign") or {}
@@ -314,7 +364,10 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
         env = {"gate": GATES[fname], "decision": did}
         if fname in proposed:
             p = proposed[fname]
-            env.update(value=p["value"], origin="proposed", fact_ids=p["fact_ids"])
+            env.update(value=p["value"], origin="proposed")
+            for k in ("fact_ids", "upstream_refs"):
+                if p.get(k):
+                    env[k] = p[k]
         else:
             c = cands[fname]
             env.update(value=c["value"], origin="extracted")
@@ -333,7 +386,8 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
         if old and old.get("value") == env["value"] and old.get("origin") == env["origin"]:
             continue
         campaign_patch[fname] = {k: env[k] for k in
-                                 ["value", "origin", "gate", "source", "fact_ids", "decision", "item_provenance"]
+                                 ["value", "origin", "gate", "source", "fact_ids", "upstream_refs", "decision",
+                                  "item_provenance"]
                                  if k in env}
         written.append(fname)
 
@@ -345,9 +399,13 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
                 for m in mats if not m.known}
     if new_mats:
         patch["materials"] = new_mats
-    cites = [m.id for m in mats] + [fid for p in proposed.values() for fid in p["fact_ids"]]
-    rationale = (f"Read {len(mats)} material(s) with one structured-output call; filled {len(written)} field(s) "
-                 f"from verified spans{' and layer pins' if proposed else ''}; abstained on {len(abstained)}"
+    brief_refs = [r for f in written for r in campaign_patch[f].get("upstream_refs", [])]
+    cites = ([m.id for m in mats] + [fid for p in proposed.values() for fid in p.get("fact_ids", [])]
+             + brief_refs)
+    sources = (["verified spans"] if mats else []) + (["layer pins"] if any(p.get("fact_ids") for p in proposed.values()) else []) \
+        + (["the brief it started from"] if brief_refs else [])
+    rationale = (f"Read {len(mats)} material(s)" + (" with one structured-output call" if mats else "")
+                 + f"; filled {len(written)} field(s) from {' and '.join(sources) or 'nothing'}; abstained on {len(abstained)}"
                  + (f"; held back {len(withheld)} human-owned" if withheld else "") + ".")
     reasoning, why_notes = extract_reasoning(raw.get("grounds"), mats, facts, proposed, campaign_patch, written,
                                              abstained, withheld, notes)
@@ -362,7 +420,7 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
               "facts_append": [], "findings_append": [], "decisions": [dec]}
     fact_by_id = {f.get("id"): f for f in facts}
     hits = [{"id": fid, "scope": fact_by_id[fid].get("layer", "brand"), "source": fact_by_id[fid].get("origin", "")}
-            for p in proposed.values() for fid in p["fact_ids"] if fid in fact_by_id]
+            for p in proposed.values() for fid in p.get("fact_ids", []) if fid in fact_by_id]
     result = {"summary": rationale, "fields": written, "abstained": abstained, "withheld": withheld,
               "notes": notes, "materials_read": [m.id for m in mats], "materials_unread": unread,
               "materials_new": sorted(new_mats)}
@@ -380,18 +438,22 @@ def extract_reasoning(raw, mats, facts, proposed, campaign_patch, written, absta
     did not verify."""
     fact_by = {f.get("id"): f for f in facts}
     mat_name = {m.id: m.name for m in mats}
-    known = set(mat_name) | {fid for p in proposed.values() for fid in p["fact_ids"]}
+    known = (set(mat_name) | {fid for p in proposed.values() for fid in p.get("fact_ids", [])}
+             | {r for p in proposed.values() for r in p.get("upstream_refs", [])})
     fallback = []
     for f in written:
         env = campaign_patch[f]
-        if env.get("origin") == "proposed":
+        if env.get("origin") == "proposed" and env.get("upstream_refs"):
+            fallback.append(rsn.point(f"{_label(f)} is proposed from the brief this research started from; "
+                                      "a person confirms it", env["upstream_refs"]))
+        elif env.get("origin") == "proposed":
             fallback.append(rsn.point(f"{_label(f)} comes from the brand's roster pins in the layer", env["fact_ids"]))
         else:
             mid = (env.get("source") or {}).get("material_id")
             fallback.append(rsn.point(f"{_label(f)} is read verbatim from {mat_name.get(mid, 'the material')}", mid))
     if not fallback:
         fallback = [rsn.point("Nothing in the material verified against a field", [m.id for m in mats])]
-    pin_levels = [fact_by.get(fid, {}).get("confidence") for p in proposed.values() for fid in p["fact_ids"]]
+    pin_levels = [fact_by.get(fid, {}).get("confidence") for p in proposed.values() for fid in p.get("fact_ids", [])]
     if not written:
         level, basis = "low", "nothing the material says could be written to a field"
     elif notes:
@@ -414,8 +476,11 @@ def extract_reasoning(raw, mats, facts, proposed, campaign_patch, written, absta
         attention.append(f"The rules dropped {len(notes)} value(s) the model read: {'; '.join(notes[:3])}.")
     if withheld:
         attention.append(f"Held back {', '.join(_label(f) for f in withheld)}: a person owns them.")
-    decided = (f"Filled {', '.join(_label(f) for f in written)} from the material." if written
-               else "Filled no field from the material.")
+    from_brief = [f for f in written if campaign_patch[f].get("upstream_refs")]
+    from_rest = [f for f in written if f not in from_brief]
+    said = ([f"{', '.join(_label(f) for f in from_rest)} from the material"] if from_rest else []) \
+        + ([f"proposed {', '.join(_label(f) for f in from_brief)} from the brief it started from"] if from_brief else [])
+    decided = (f"Filled {'; '.join(said)}." if written else "Filled no field from the material.")
     return rsn.from_model(
         raw, decided=decided, known=known, certainty_=rsn.certainty(level, basis), fallback=fallback,
         would_change_if="the client's material says otherwise, or a person confirms a different value",

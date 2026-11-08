@@ -1451,6 +1451,45 @@ mod tests {
     }
 
     #[test]
+    fn a_brief_offers_research_and_research_offers_a_brief() {
+        // Both directions, as the packers declare them (features/spinoff-and-links).
+        let store = MemStore::default();
+        let carries = |from: &str| SpinoffSpec {
+            accepts: vec![from.into()],
+            upstream: true,
+            ..Default::default()
+        };
+        install_template_app(
+            &store,
+            "Research Tool",
+            "ie.napkin.campaign-research",
+            Some(carries("ie.napkin.brief-maker")),
+        );
+        install_template_app(
+            &store,
+            "Brief Maker",
+            "ie.napkin.brief-maker",
+            Some(carries("ie.napkin.campaign-research")),
+        );
+        let ids = |source: &str| -> Vec<String> {
+            spinoff_targets(&store, Some(source))
+                .into_iter()
+                .map(|t| t.app_id)
+                .collect()
+        };
+        assert_eq!(
+            ids("ie.napkin.brief-maker"),
+            ["ie.napkin.campaign-research"]
+        );
+        assert_eq!(
+            ids("ie.napkin.campaign-research"),
+            ["ie.napkin.brief-maker"]
+        );
+        let research = spinoff_targets(&store, Some("ie.napkin.brief-maker"));
+        assert!(research[0].upstream && research[0].map.is_none());
+    }
+
+    #[test]
     fn spinoff_targets_lists_a_deck_for_brief_and_research_sources() {
         let store = MemStore::default();
         install_template_app(

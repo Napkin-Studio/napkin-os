@@ -937,3 +937,70 @@ fn taking_upstream_refuses_a_document_with_no_parent_or_the_wrong_one() {
     let err = clan_sdk::take_upstream(&brief, &doc("Someone else"), update_marker()).unwrap_err();
     assert!(err.to_string().contains("carries"), "{err}");
 }
+
+/// The Research Tool's contract: a brief starts a research, carried whole
+/// (features/spinoff-and-links.clan), and the spun-off research validates
+/// against the research's own schema with the brief frozen under upstream.
+#[test]
+fn the_packed_research_tool_takes_a_brief_carried_whole() {
+    let out = std::env::temp_dir().join(format!("research-pack-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    let app_path = out.join("campaign-research.app.clan");
+    let example_path = out.join("campaign-research.example.clan");
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let run = std::process::Command::new(cargo)
+        .args([
+            "run",
+            "-q",
+            "--locked",
+            "-p",
+            "clan-sdk",
+            "--example",
+            "make_campaign_research",
+            "--",
+        ])
+        .arg(&app_path)
+        .arg(&example_path)
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "packer failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let packed = open(std::fs::read(&app_path).unwrap());
+    let _ = std::fs::remove_dir_all(&out);
+    let app = packed.manifest().app.as_ref().expect("app block").clone();
+    assert_eq!(app.app_id, RESEARCH_APP);
+    assert_eq!(app.version, "0.5.0");
+    let spec = app.spinoff.as_ref().expect("app.spinoff");
+    assert_eq!(spec.accepts, vec![BRIEF_APP.to_string()]);
+    assert!(spec.upstream && spec.map.is_none() && spec.lift.is_empty());
+
+    let brief = with(
+        &doc("Lúnasa brief"),
+        Some(app_info_brief()),
+        &[(
+            DATA,
+            b"client: Orchard Hill Cider\naudience: Irish adults\nsingle_minded_proposition: Drafted\n",
+            None,
+        )],
+    );
+    let research = spin(&packed, &brief);
+    let data = yaml(&research, DATA);
+    let brief_id = brief.manifest().document_id().to_string();
+    assert_eq!(
+        data["upstream"][brief_id.as_str()]["client"],
+        Value::from("Orchard Hill Cider")
+    );
+    assert!(
+        data.get("campaign").is_none(),
+        "no lift: extract_ask proposes"
+    );
+    let report = validate(&research);
+    assert!(report.is_valid(), "{}", report.display());
+}
+
+fn app_info_brief() -> AppInfo {
+    app("Brief Maker", BRIEF_APP, None)
+}
