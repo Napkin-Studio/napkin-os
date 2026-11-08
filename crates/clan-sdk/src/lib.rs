@@ -40,8 +40,8 @@ pub use error::{Error, Result};
 pub use export::{export_html, ExportOptions};
 pub use inject::{assemble, AgentContext, InjectOptions};
 pub use instantiate::{
-    instantiate, make_template, spinoff, with_client, InstantiateOptions, MakeTemplateOptions,
-    SpinoffOptions,
+    instantiate, make_template, spinoff, take_upstream, with_client, InstantiateOptions,
+    MakeTemplateOptions, SpinoffOptions, TakenUpstream,
 };
 pub use manifest::{
     is_client_id, new_client_id, AppHome, AppInfo, Carried, ClientRef, ExternalRef, FileEntry,

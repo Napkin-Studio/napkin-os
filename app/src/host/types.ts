@@ -556,6 +556,19 @@ export interface UpstreamView {
   upstream: UpstreamEntry[]
 }
 
+/** `POST /upstream/update`: the parent's newer version, taken (Contract 4 §5.5, §8.1 item 8). */
+export interface UpstreamUpdateReply {
+  ok: true
+  /** The one decision written: `update_from_<noun>`. */
+  decision: string
+  action: string
+  /** The parent taken from, and the version taken. */
+  document_id: string
+  version: string
+  /** How many of the parent's decisions were new here. */
+  decisions_taken: number
+}
+
 /**
  * Events the host pushes at the shell. The names are the host's own
  * (`napkin_host::event::HostEvent::name`), so this map and the Rust route
@@ -616,6 +629,12 @@ export interface Host {
   acknowledge(decision: string): Promise<void>
   /** What changed upstream since this document was spun off (`GET /upstream`). */
   upstream(): Promise<UpstreamView>
+  /**
+   * Take the direct parent's newer version into this spin-off
+   * (`POST /upstream/update`). Refused on a locked document, and when the
+   * parent has not changed.
+   */
+  updateFromUpstream(): Promise<UpstreamUpdateReply>
   /** The source card for each ref, in one call (`POST /cite`). */
   cites(refs: string[]): Promise<Record<string, SourceCard>>
 

@@ -495,6 +495,15 @@ pub fn dispatch(
             Ok(v) => HostResponse::json(200, &v),
             Err(e) => e.into(),
         },
+        // Take the direct parent's newer version into this spin-off (Contract 4
+        // §5.5, reversed for spin-offs 2026-11-09; §8.1 item 8). One
+        // decision, `update_from_<noun>`; refused on a locked document.
+        "/upstream/update" => {
+            let store = session.store().clone();
+            review(session, ctx, |c, d| {
+                crate::library::update_from_upstream(&*store, c, d)
+            })
+        }
 
         // The decision view the shell's OS layer renders: every decision,
         // newest first, with what needs a person — derived here, not by the app.

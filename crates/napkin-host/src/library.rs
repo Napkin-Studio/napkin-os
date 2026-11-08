@@ -912,6 +912,114 @@ pub fn upstream_status(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value
     crate::ops::read::upstream_status(doc, |id| find_upstream(store, ctx, doc, id))
 }
 
+/// `POST /upstream/update` for `doc`: take the direct parent's newer version
+/// into this spin-off (Contract 4 §5.5, reversed for spin-offs 2026-11-09;
+/// §8.1 item 8). One decision, `update_from_<parent noun>`, as the person in
+/// `ctx`, targets the frozen copy and cites the parent at the version taken.
+///
+/// Refused `409` when `doc` was not spun off with `upstream`, when it is
+/// locked (a locked version never changes; a new version takes the update),
+/// or when the parent has not moved on; `404` when the store does not hold
+/// the parent for `ctx`.
+pub fn update_from_upstream(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+) -> HostResult<crate::ops::Outcome> {
+    let clan = doc.clan();
+    let here = clan.document_id().to_string();
+    let Some(carried) = clan.manifest().carried().cloned() else {
+        return Err(HostError::conflict(
+            "this document was not made from another one, so there is nothing to update from",
+        ));
+    };
+    if let Some(lock) = crate::ops::review::lock_of(&chain_of(clan), &here) {
+        return Err(HostError::conflict(format!(
+            "the document was locked by {} at {}; a locked version keeps what it was made from",
+            lock.actor.as_deref().unwrap_or(&lock.agent),
+            lock.timestamp
+        )));
+    }
+    let Some(parent) = find_upstream(store, ctx, doc, &carried.document_id) else {
+        return Err(HostError::not_found(
+            "the document this was made from is not in this workspace",
+        ));
+    };
+    let status = upstream_status(store, ctx, doc);
+    let direct = status["upstream"]
+        .as_array()
+        .and_then(|a| a.iter().find(|u| u["direct"] == true))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if direct["status"] != "changed" {
+        return Err(HostError::conflict(format!(
+            "\"{}\" has not changed since this was made from it",
+            parent.clan().manifest().title
+        )));
+    }
+
+    let pm = parent.clan().manifest();
+    let noun = pm
+        .app
+        .as_ref()
+        .and_then(|a| a.home.as_ref())
+        .and_then(|h| h.noun.first().cloned())
+        // An app with no card on the home is named by its name.
+        .or_else(|| pm.app.as_ref().map(|a| a.name.clone()))
+        .unwrap_or_else(|| "document".into());
+    let action = format!(
+        "update_from_{}",
+        noun.trim()
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect::<String>()
+    );
+    let version = parent.version().as_str().to_string();
+    let mut d = attributed(ctx, "", "edit");
+    let id = new_decision_id();
+    d.id = Some(id.clone());
+    d.agent = "napkin-host".into();
+    d.action = action.clone();
+    d.version = Some(version.clone());
+    d.targets = vec![format!("{here}#{UPSTREAM_KEY}.{}", carried.document_id)];
+    // What it rests on: the parent's newest decision, the state taken.
+    d.cites = chain_of(parent.clan())
+        .decisions
+        .iter()
+        .find_map(|x| x.id.clone())
+        .into_iter()
+        .collect();
+    d.rationale = format!(
+        "Took the newer {noun} \"{}\" ({version}): {} decision(s) since this was made from it.",
+        pm.title,
+        direct["decisions_since"]
+            .as_u64()
+            .map_or("some".into(), |n| n.to_string())
+    );
+    d.timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let mut was = serde_yaml::Mapping::new();
+    was.insert("data_sha256".into(), carried.data_sha256.clone().into());
+    if let Some(last) = &carried.last_decision {
+        was.insert("last_decision".into(), last.clone().into());
+    }
+    d.extra
+        .insert("was".into(), serde_yaml::Value::Mapping(was));
+
+    let taken = clan_sdk::take_upstream(clan, parent.clan(), d)?;
+    let bytes = with_projection(taken.bytes)?;
+    let change = doc.change(bytes)?;
+    let reply = serde_json::json!({
+        "ok": true,
+        "decision": id,
+        "action": action,
+        "document_id": carried.document_id,
+        "version": version,
+        "decisions_taken": taken.decisions_taken,
+    });
+    Ok(crate::ops::Outcome::changed(reply, change))
+}
+
 /// `/cite` for `doc`: the source card for each of `refs` (OS-layer contract
 /// §8.3), an upstream document's title and app as the store holds it for
 /// `ctx`. A read: nothing is written.

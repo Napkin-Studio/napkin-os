@@ -6,7 +6,7 @@
 // inventory test (tests/barInventory.test.tsx) can read every item with no DOM.
 
 import type { ReactNode } from 'react'
-import type { SpinoffTarget } from '../host/types'
+import type { SpinoffTarget, UpstreamView } from '../host/types'
 import { overflowButtons, type BarItem, type BarStatus } from '../shell/appBar'
 
 /** A tool as the bar names it: its own name, colour and face (its app.home). */
@@ -44,6 +44,10 @@ export interface DocBar {
   /** "Continue in ▾": the apps that take this document as a spin-off source (host.spinoffTargets()). */
   targets: SpinoffTarget[]
   onSpinoff: (appId: string) => void
+  /** What it was made from (`GET /upstream`); absent when it was made from nothing the host holds. */
+  madeFrom?: MadeFrom | null
+  /** Take the newer version of what it was made from (`POST /upstream/update`). Absent on a locked document. */
+  onUpdateFromUpstream?: () => void
   /** Edit mode, for every app: its fields become editable, each change a person's pinned decision. */
   editMode?: boolean
   onToggleEdit?: () => void
@@ -58,6 +62,26 @@ export interface DocBar {
   saved?: ReactNode
 }
 
+/** The document this one was made from, as the Continue in ▾ menu says it. */
+export interface MadeFrom {
+  title: string
+  /** The parent moved on since this was made from it (`GET /upstream` status). */
+  changed: boolean
+  /** How many of its decisions are new here; null when the host cannot say. */
+  decisionsSince?: number | null
+}
+
+/** The direct parent of `view`, if the host holds it. */
+export function madeFromOf(view: UpstreamView | null): MadeFrom | null {
+  const direct = view?.upstream.find(u => u.direct && u.in_store)
+  if (!direct) return null
+  return {
+    title: direct.title || 'what it was made from',
+    changed: direct.status === 'changed',
+    decisionsSince: direct.decisions_since ?? null,
+  }
+}
+
 /** One thing a bar menu can do. */
 export interface MenuItem {
   label: string
@@ -67,16 +91,29 @@ export interface MenuItem {
   apart?: boolean
 }
 
-/** "Continue in ▾": spin it off into another app, then link it (spinoff-and-links fills that group). */
-export function continueItems(doc: Pick<DocBar, 'targets' | 'onSpinoff'>): { spin: MenuItem[]; link: MenuItem[] } {
+/** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
+export function continueItems(
+  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream'>,
+): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[] } {
+  const from = doc.madeFrom
+  const since = from?.decisionsSince
   return {
     spin: doc.targets.map(t => ({
       label: `Continue in ${t.name}`,
       hint: t.map ? `Takes this along, into ${t.map}` : 'Takes its data and decisions along',
       run: () => doc.onSpinoff(t.app_id),
     })),
-    // Linking needs its backend (features/spinoff-and-links.clan); the group keeps its place until then.
+    // Linking an existing document needs the general attach (feat/brand-clan,
+    // features/spinoff-and-links.clan); the group keeps its place until then.
     link: [],
+    // A spin-off may take its parent's newer version (owner, 2026-11-09).
+    update: from?.changed && doc.onUpdateFromUpstream
+      ? [{
+          label: `Update from ${from.title}`,
+          hint: `It changed since this was made from it${since ? ` (${since} new decision${since === 1 ? '' : 's'})` : ''}. Takes the newer version; your own work here stays.`,
+          run: doc.onUpdateFromUpstream,
+        }]
+      : [],
   }
 }
 

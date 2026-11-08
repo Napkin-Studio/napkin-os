@@ -1185,6 +1185,117 @@ mod upstream {
         assert_eq!(targets[0]["upstream"], true);
         assert_eq!(targets[0]["map"], Value::Null);
     }
+
+    fn refused(d: &Doc, path: &str) -> (u16, String) {
+        let resp = d.call(d.session.ctx(), path, "{}");
+        (
+            resp.status,
+            String::from_utf8_lossy(&resp.body).into_owned(),
+        )
+    }
+
+    // The owner reversed §5.5 for spin-offs (2026-11-09): a brief takes the
+    // research's newer version on request, with one decision, its own fields
+    // untouched, and is current again afterwards.
+    #[test]
+    fn a_spun_off_brief_takes_the_newer_research_on_request() {
+        let (store, research, brief) = setup();
+        brief.post(
+            "/patch-data",
+            r#"{"patch":{"project_name":"Lúnasa"},"agent":"human"}"#,
+        );
+        // Nothing moved yet: refused, plainly.
+        let (status, body) = refused(&brief, "/upstream/update");
+        assert_eq!(status, 409, "{body}");
+        assert!(body.contains("has not changed"), "{body}");
+
+        // The brief verifies one finding itself; the research then rejects
+        // both.
+        brief.post(
+            "/verify",
+            r#"{"finding":"fi_01JA0F3C","rationale":"Our panel agrees"}"#,
+        );
+        resolve(&research, "f_01JA0B9Z9Z");
+        for fi in ["fi_01JA0F2B", "fi_01JA0F3C"] {
+            research.post(
+                "/verdict",
+                &json!({ "target": format!("findings[{fi}]"), "polarity": "bad", "rationale": "Share is flat" })
+                    .to_string(),
+            );
+        }
+        assert_eq!(brief.get("/upstream")["upstream"][0]["status"], "changed");
+        let before = chain(&brief.stored(&store)).decisions.len();
+
+        let reply = brief.post("/upstream/update", "{}");
+        // The test app has no card on the home, so its name stands for its noun.
+        assert_eq!(reply["action"], "update_from_campaign_research", "{reply}");
+        assert_eq!(reply["document_id"], research.doc);
+        assert_eq!(reply["decisions_taken"], 3, "{reply}");
+
+        let now = brief.stored(&store);
+        let c = chain(&now);
+        assert_eq!(c.decisions.len(), before + 4);
+        let d = &c.decisions[0];
+        assert_eq!(d.id.as_deref(), reply["decision"].as_str());
+        assert_eq!(d.kind.as_deref(), Some("edit"));
+        assert_eq!(d.actor.as_deref(), Some("human:local"));
+        assert_eq!(
+            d.targets,
+            vec![format!("{}#upstream.{}", brief.doc, research.doc)]
+        );
+        assert!(
+            d.rationale
+                .starts_with("Took the newer Campaign Research \"Lúnasa 0.0 launch\""),
+            "{}",
+            d.rationale
+        );
+        assert!(c.decisions[1].pinned && c.decisions[2].pinned);
+
+        let data = brief
+            .session
+            .read(|d| Ok(napkin_host::ops::read::data_json(d)))
+            .unwrap();
+        assert_eq!(data["project_name"], "Lúnasa");
+        assert_eq!(
+            data["upstream"][&research.doc]["selection"]["contested"][0]["status"],
+            "resolved"
+        );
+        // The newer pin is in the brief's members and its projection.
+        assert!(
+            data["projection"]["pins"].get("f_01JA0B9Z9Z").is_some(),
+            "{}",
+            data["projection"]
+        );
+        // The brief never reviewed that finding, so it takes the rejection.
+        assert_eq!(
+            data["projection"]["findings"]["fi_01JA0F2B"]["status"],
+            "rejected"
+        );
+        // The one it verified itself keeps the brief's word.
+        assert_eq!(
+            data["projection"]["findings"]["fi_01JA0F3C"]["status"],
+            "verified"
+        );
+        // Current again; nothing more to take.
+        assert_eq!(brief.get("/upstream")["upstream"][0]["status"], "current");
+        assert_eq!(refused(&brief, "/upstream/update").0, 409);
+    }
+
+    #[test]
+    fn a_locked_brief_or_one_made_from_nothing_takes_no_update() {
+        let (_store, research, brief) = setup();
+        let (status, body) = refused(&research, "/upstream/update");
+        assert_eq!(status, 409);
+        assert!(body.contains("not made from another"), "{body}");
+
+        resolve(&brief, "f_01JA0B9Z9Z");
+        reject_findings(&brief);
+        brief.post("/approve", "{}");
+        resolve(&research, "f_01JA0B9Z9Z");
+        let (status, body) = refused(&brief, "/upstream/update");
+        assert_eq!(status, 409);
+        assert!(body.contains("locked"), "{body}");
+    }
 }
 
 // A document nobody spun off has nothing upstream, and says so plainly.

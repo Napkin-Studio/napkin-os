@@ -456,12 +456,15 @@ on append-only rows, and `GET /upstream` (§8) compares them with the parent.
 - Open items travel open. They show at the field if the target app shows that
   address, otherwise in the decision tree under **open items carried from
   upstream**, and they are on the target's lock list (§7).
-- **When the parent changes, the carried copy stays frozen.** The child shows
-  "The research has changed since this brief started" (each app in its own
-  nouns) and lists what changed — pins, findings, contests, and findings
-  rejected upstream — from `GET /upstream`. Taking the newer upstream is an
-  explicit, later action; it is not built. (Owner default, 2026-09-29; may be
-  reversed.)
+- **When the parent changes, the carried copy stays frozen until a person
+  takes the newer one.** The child shows "The research has changed since
+  this brief started" (each app in its own nouns) and lists what changed —
+  pins, findings, contests, and findings rejected upstream — from
+  `GET /upstream`. *Changed 2026-11-09 (owner, reversing the 2026-09-29
+  default for spin-offs):* taking the newer upstream is an explicit action,
+  `POST /upstream/update` (§8.1, item 8), offered in Continue in ▾ under
+  **Made from**. It is refused on a locked document: a locked version keeps
+  what it was made from.
 - No address is ever remapped: a carried decision on
   `<campaign>#selection.contested[ct_…]` means the same contest in the brief
   and in the deck.
@@ -629,7 +632,7 @@ child holds has nothing for `/resolve` to take.
 | A contest carried open in a frozen copy, none of whose values is a pin this document holds or carries a frozen `pin` (*added 2026-09-30*) | 1 | `<id>#selection.contested[<ct>]` |
 
 1. Each is merged or revised in the document it came from, and reaches the
-   child only when it takes the newer upstream (§5.5, not built). Until then
+   child only when it takes the newer upstream (§5.5, §8.1 item 8). Until then
    a person may **set it aside with a written reason**:
    `/acknowledge {target, rationale}` (§8.1, item 7). `/decisions` marks each
    such item `can_set_aside: true`, with its address.
@@ -1324,6 +1327,40 @@ body or reply changes meaning.
      when false), and a target `kind` gains `branch` (`<id>#agents[…]`); a
      merge conflict's address is labelled `Merge conflict · <key>`, kind
      `contest`.
+8. **`POST /upstream/update`** — take the direct parent's newer version
+   (§5.5, *added 2026-11-09*). Body ignored; any actor that may write.
+   - `409` when the document has no `lineage.carried` ("not made from another
+     one"), when it is locked (an `approve` not superseded targets it: a
+     locked version keeps what it was made from; a new version takes the
+     update), or when `GET /upstream` says the direct parent is `current`.
+   - `404` when the store does not hold the parent for `Ctx`.
+   - Otherwise one write (`clan_sdk::take_upstream`): `data.upstream.<parent>`
+     is the parent's data now (less `projection` and `upstream`; the
+     parent's own upstream entries replace the hoisted siblings it holds);
+     the parent's facts, findings and sources replace the child's copies by
+     id, **except an entry the child reviewed itself** (a decision of its own
+     targets `<this id>#facts[…]`, `#findings[…]` or `#sources[…]`) and the
+     child's own entries, which stay; the parent's decisions above
+     `carried.last_decision` that the child does not hold are carried,
+     pinned; new branches, merge reports and assets are copied;
+     `lineage.carried` moves on to what was taken; the projection is rebuilt.
+     The child's own fields are not touched and no address is remapped.
+   - The decision, newest of all, as the person in `Ctx`:
+
+     ```yaml
+     - id: d_…
+       kind: edit
+       agent: napkin-host
+       action: update_from_<parent noun>   # app.home.noun[0], else the app's name, snake_case
+       version: <the parent's version taken>
+       targets: ["<this id>#upstream.<parent id>"]
+       cites: [<the parent's newest decision id>]
+       rationale: Took the newer research "<title>" (<version>): N decision(s) since this was made from it.
+       was: { data_sha256: <carried before>, last_decision: <carried before> }
+     ```
+
+   - Reply: `{ok, decision, action, document_id, version, decisions_taken,
+     clan}`. No backref (the parent is not changed).
 
 ### 8.2 Client review routes
 

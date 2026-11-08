@@ -821,3 +821,119 @@ fn the_packed_deck_maker_declares_its_spinoff_contract() {
     );
     assert!(spec.upstream);
 }
+
+// ── Taking the parent's newer version (§5.5, reversed for spin-offs) ─────────
+
+/// The research moved on after the brief was spun off: a field changed, one
+/// more pin, one more decision.
+fn research_moved_on(research: &ClanFile) -> ClanFile {
+    let mut data = yaml(research, DATA);
+    data["report"] = serde_yaml::from_str("headline: the newer answer").unwrap();
+    let mut facts = yaml(research, FACTS);
+    facts["facts"].as_sequence_mut().unwrap().push(
+        serde_yaml::from_str(
+            "id: f_01NEWPIN01\nentity: brand/lunasa\nkey: price.rrp\nvalue: 2.5\nstatus: active",
+        )
+        .unwrap(),
+    );
+    let chain_text = String::from_utf8(research.read_entry(CHAIN).unwrap()).unwrap();
+    let chain_text = chain_text.replacen(
+        "decisions:\n",
+        "decisions:\n  - id: d_01NEWDEC01\n    kind: edit\n    agent: drafter\n    action: redraft the report\n    rationale: The newer answer.\n    timestamp: 2026-11-01T10:00:00Z\n",
+        1,
+    );
+    let mut manifest = research.manifest().clone();
+    manifest.next_revision();
+    let next = open({
+        let mut b = ClanBuilder::new(manifest);
+        for (p, v) in research.read_all_entries().unwrap() {
+            if p != MANIFEST_PATH && p != DATA && p != FACTS && p != CHAIN {
+                b.add_entry(p, v);
+            }
+        }
+        b.add_entry(DATA, serde_yaml::to_string(&data).unwrap().into_bytes());
+        b.add_entry(FACTS, serde_yaml::to_string(&facts).unwrap().into_bytes());
+        b.add_entry(CHAIN, chain_text.into_bytes());
+        b.build().unwrap()
+    });
+    assert!(chain(&next).decisions[0].id.as_deref() == Some("d_01NEWDEC01"));
+    next
+}
+
+fn update_marker() -> clan_sdk::Decision {
+    let mut d = clan_sdk::Decision::new(
+        "napkin-host",
+        "update_from_research",
+        "Took the newer research.",
+        "2026-11-09T10:00:00Z",
+    );
+    d.id = Some("d_01UPDATE001".into());
+    d
+}
+
+#[test]
+fn taking_the_newer_parent_replaces_the_frozen_copy_and_keeps_the_childs_own() {
+    let research = research();
+    let brief = spin(&brief_maker(), &research);
+    let brief = open(patch_data(&brief, &json!({ "project_name": "Lúnasa" }), None).unwrap());
+    let before = chain(&brief).decisions.len();
+    let newer = research_moved_on(&research);
+
+    let taken = clan_sdk::take_upstream(&brief, &newer, update_marker()).unwrap();
+    assert_eq!(taken.decisions_taken, 1);
+    let next = open(taken.bytes);
+
+    // The child's own field stays; the frozen copy is the parent now.
+    let data = yaml(&next, DATA);
+    assert_eq!(data["project_name"], Value::from("Lúnasa"));
+    assert_eq!(data["upstream"][RESEARCH_DOC], frozen(&newer));
+    // The same document, its next revision.
+    assert_eq!(
+        next.manifest().document_id(),
+        brief.manifest().document_id()
+    );
+    assert_ne!(next.manifest().id, brief.manifest().id);
+
+    // Marker on top, then the one new parent decision, pinned, then the rest.
+    let c = chain(&next);
+    assert_eq!(c.decisions.len(), before + 2);
+    assert_eq!(c.decisions[0].action, "update_from_research");
+    assert_eq!(c.decisions[1].id.as_deref(), Some("d_01NEWDEC01"));
+    assert!(c.decisions[1].pinned);
+
+    // The new pin is merged in; carried moved on to what was taken.
+    let facts = yaml(&next, FACTS);
+    assert!(facts["facts"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .any(|f| f["id"] == Value::from("f_01NEWPIN01")));
+    let carried = next.manifest().carried().unwrap();
+    assert_eq!(
+        carried.data_sha256,
+        sha256_prefixed(&newer.read_entry(DATA).unwrap())
+    );
+    assert_eq!(
+        carried.facts_sha256.as_deref(),
+        Some(sha256_prefixed(&newer.read_entry(FACTS).unwrap()).as_str())
+    );
+    assert_eq!(carried.last_decision.as_deref(), Some("d_01NEWDEC01"));
+    let report = validate(&next);
+    assert!(report.is_valid(), "{}", report.display());
+
+    // Taking it again finds nothing new to carry.
+    let again = clan_sdk::take_upstream(&next, &newer, update_marker()).unwrap();
+    assert_eq!(again.decisions_taken, 0);
+}
+
+#[test]
+fn taking_upstream_refuses_a_document_with_no_parent_or_the_wrong_one() {
+    let research = research();
+    let plain = doc("Not a spin-off");
+    let err = clan_sdk::take_upstream(&plain, &research, update_marker()).unwrap_err();
+    assert!(err.to_string().contains("not spun off"), "{err}");
+
+    let brief = spin(&brief_maker(), &research);
+    let err = clan_sdk::take_upstream(&brief, &doc("Someone else"), update_marker()).unwrap_err();
+    assert!(err.to_string().contains("carries"), "{err}");
+}

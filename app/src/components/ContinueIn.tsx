@@ -2,10 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { host } from '../host'
-import type { SpinoffTarget } from '../host'
+import type { SpinoffTarget, UpstreamView } from '../host'
+import { madeFromOf } from './barMenus'
 
 /**
  * "Continue in…": the apps that have declared they will take the open document
@@ -31,4 +32,34 @@ export function useSpinoffTargets(docPath: string): SpinoffTarget[] {
   }, [docPath])
 
   return got?.docPath === docPath ? got.targets : []
+}
+
+/**
+ * What the open document was made from (`GET /upstream`), and the way to take
+ * its newer version (`POST /upstream/update`, Contract 4 §5.5 as reversed for
+ * spin-offs on 2026-11-09). `onTaken` runs after the update is written, so the
+ * app's fields and the decisions read it again.
+ */
+export function useMadeFrom(docPath: string, onTaken: () => void, onError: (message: string) => void) {
+  const [got, setGot] = useState<{ docPath: string; view: UpstreamView | null; tick: number } | null>(null)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    let live = true
+    host.upstream()
+      .then(view => { if (live) setGot({ docPath, view, tick }) })
+      // The desktop has no /upstream yet, and a host that cannot answer
+      // offers nothing: chrome, never the document.
+      .catch(() => { if (live) setGot({ docPath, view: null, tick }) })
+    return () => { live = false }
+  }, [docPath, tick])
+
+  const madeFrom = got?.docPath === docPath ? madeFromOf(got.view) : null
+  const update = useCallback(() => {
+    host.updateFromUpstream()
+      .then(() => { setTick(t => t + 1); onTaken() })
+      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
+  }, [onTaken, onError])
+
+  return { madeFrom, update }
 }
