@@ -1019,11 +1019,11 @@ test('the brief’s exports wait for the decision chain and say so when it canno
   assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
   assert.match(src, /CHAIN=\{state:'unavailable'/)
   const plain = fn(BM, 'buildPlainExportHTML')
-  assert.match(plain, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
+  assert.match(plain, /Promise\.all\(\[inlineImages\(\), chainForExport\(\), inlineLogos\(\)\]\)/)
   assert.match(plain, /Sources could not be read for this export\./)
   assert.match(plain, /CHAIN\.state==='ok'\?exportCitations/)
   const grid = fn(BM, 'buildGridExportHTML')
-  assert.match(grid, /return chainForExport\(\)\.then/)
+  assert.match(grid, /return inlineLogos\(\)\.then\(function\(l\)\{ logos=l; return chainForExport\(\); \}\)\.then/)
   assert.match(grid, /Sources could not be read for this export\./)
   assert.match(grid, /CHAIN\.state==='ok'\?exportCitations\(exportParts\(gridKeys\(\)\)/)
 })
@@ -1354,9 +1354,11 @@ test('the grid prints on A4 sheets that break cleanly, and is the default export
   assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
   assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(\)/)
   assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
-  assert.match(BM, /id="exHtml"[\s\S]*id="exPdf"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
+  // Save · PDF is the side tab's main button; the others are in its menu (features/brief-new-ui.clan).
+  assert.match(BM, /id="exPdf"[\s\S]*id="exHtml"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
   assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
-  assert.match(BM, /doExport\('html'\); \}\);\s*\$\('exPdf'\)/, 'the shell’s Export and the two main buttons are the grid')
+  assert.match(BM, /\$\('exHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html'\); \}\);/, 'the HTML button is the grid')
+  assert.match(BM, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the side tab and the OS bar, is the grid')
 })
 
 
@@ -1470,4 +1472,177 @@ test('cards a page asks for in one tick are one POST /cite, kept until the docum
   version = 'v2'
   await cardsFor(['f_1'])
   assert.deepEqual(asked.at(-1), ['f_1'])
+})
+
+
+// ── Brief Maker on the new UI (features/brief-new-ui.clan) ──────────────────
+
+type Item = { key: string; sec: string; w: number }
+type Cell = { key?: string; head?: string; col: number; row: number; w: number; h: number; order?: number }
+type Lay = {
+  layoutOrder(fields: { key: string; sec: string }[], stored: unknown): Item[]
+  layoutPack(items: Item[]): Cell[]
+  layoutParts(items: Item[]): Record<string, { col: number; row: number; w: number; h: number; order: number }>
+  layoutMove(items: Item[], key: string, target: string, after: boolean): Item[]
+  layoutStep(items: Item[], key: string, d: number): Item[]
+  layoutResize(items: Item[], key: string, w: number): Item[]
+}
+const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
+const lay = () => lift<Lay>(BM, ['clampW', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize'],
+  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)() })
+const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
+
+test('a brief with no layout sits in the schema’s order at the default widths', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  assert.deepEqual(keysOf(items), BM_FIELDS.map(f => f.key), 'every part, in the schema’s order')
+  const cells = L.layoutPack(items)
+  const at = (k: string) => cells.find(c => c.key === k)!
+  // The job is a full row; background and barrier share one; the three objectives share one.
+  assert.deepEqual([at('job').col, at('job').w], [1, 12])
+  assert.equal(at('background').row, at('barrier').row)
+  assert.deepEqual([at('background').col, at('barrier').col], [1, 7])
+  assert.deepEqual(['objectives.commercial', 'objectives.behavioural', 'objectives.attitudinal'].map(k => at(k).col), [1, 5, 9])
+  // A section heading takes a row of its own where the section changes, and nothing shares a cell.
+  const heads = cells.filter(c => c.head).map(c => c.head)
+  assert.deepEqual(heads, ['Identity', 'The brief', 'Objectives', 'Strategy', 'Desired response', 'Execution'])
+  const taken = new Set<string>()
+  for (const c of cells) for (let x = c.col; x < c.col + c.w; x++) {
+    const k = `${c.row}:${x}`; assert.ok(!taken.has(k), `cell ${k} is used once`); taken.add(k)
+    assert.ok(x >= 1 && x <= 12)
+  }
+})
+
+test('a part moved or resized keeps its place in data, and the rest keep theirs', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, {})
+  // Move the insight after the audience: only the insight changes place.
+  const moved = L.layoutMove(items, 'insight', 'audience', true)
+  const k = keysOf(moved)
+  assert.equal(k.indexOf('insight'), k.indexOf('audience') + 1)
+  assert.deepEqual(k.filter(x => x !== 'insight'), keysOf(items).filter(x => x !== 'insight'))
+  // Stored, read back: the same order and widths, every part written.
+  const parts = L.layoutParts(L.layoutResize(moved, 'barrier', 4))
+  assert.equal(Object.keys(parts).length, BM_FIELDS.length)
+  assert.deepEqual(parts.barrier, { col: 7, row: parts.background.row, w: 4, h: 1, order: k.indexOf('barrier') })
+  const again = L.layoutOrder(BM_FIELDS, parts)
+  assert.deepEqual(keysOf(again), k)
+  assert.equal(again.find(x => x.key === 'barrier')!.w, 4)
+  // Widths stay on the grid: never under three columns, never over twelve, never fractional.
+  assert.equal(L.layoutResize(items, 'job', 1).find(x => x.key === 'job')!.w, 3)
+  assert.equal(L.layoutResize(items, 'job', 40).find(x => x.key === 'job')!.w, 12)
+  assert.equal(L.layoutResize(items, 'job', 6.4).find(x => x.key === 'job')!.w, 6)
+  // A part too wide for what is left of a row starts the next one.
+  const wide = L.layoutPack(L.layoutResize(items, 'barrier', 8))
+  const bg = wide.find(c => c.key === 'background')!, br = wide.find(c => c.key === 'barrier')!
+  assert.deepEqual([br.row, br.col], [bg.row + 1, 1])
+  // The keyboard's step: one place earlier or later; nothing moves past either end.
+  assert.deepEqual(keysOf(L.layoutStep(items, 'client', -1)).slice(0, 2), ['client', 'project_name'])
+  assert.deepEqual(keysOf(L.layoutStep(items, 'project_name', -1)), keysOf(items))
+  assert.deepEqual(keysOf(L.layoutStep(items, 'open_questions', 1)), keysOf(items))
+  // An older brief's layout naming a part only by width keeps its schema place; a stray entry is ignored.
+  const partial = L.layoutOrder(BM_FIELDS, { audience: { w: 12 }, nonsense: { order: 0 } })
+  assert.deepEqual(keysOf(partial), keysOf(items))
+  assert.equal(partial.find(x => x.key === 'audience')!.w, 12)
+})
+
+test('the brief’s state pill says Draft, Needs you, Ready to lock, Locked or Reopened', () => {
+  const { briefStatus } = lift<{ briefStatus(s: unknown): { label: string; tone: string | null; locked: boolean } }>(BM, ['briefStatus'], {})
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 0, canLock: false }), { label: 'Draft', tone: null, locked: false })
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 2, canLock: false }), { label: 'Needs you (2)', tone: 'warn', locked: false })
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 0, canLock: true }), { label: 'Ready to lock', tone: 'ok', locked: false })
+  assert.deepEqual(briefStatus({ locked: true, reopened: false, needs: 0, canLock: false }), { label: 'Locked', tone: 'ok', locked: true })
+  assert.deepEqual(briefStatus({ locked: true, reopened: true, needs: 1, canLock: false }), { label: 'Reopened', tone: 'warn', locked: false })
+  for (const s of ['Draft', 'Needs you (12)', 'Ready to lock', 'Locked', 'Reopened']) assert.ok(s.length <= 28, 'a bar label is at most 28 characters')
+})
+
+test('each OS bar button runs the same handler as its side-tab control', () => {
+  const ACTIONS = obj(BM, 'ACTIONS')
+  const actionIds = [...ACTIONS.matchAll(/^\s*(\w+):/gm)].map(m => m[1])
+  assert.deepEqual(actionIds.sort(), ['lock', 'pdf', 'redraft', 'reopen'])
+  // Every control in the side tab that names an action has one, and is bound through the table.
+  const tab = BM.slice(BM.indexOf('<aside class="stab"'), BM.indexOf('</aside>'))
+  const acts = [...tab.matchAll(/data-act="([^"]+)"/g)].map(m => m[1])
+  assert.deepEqual([...new Set(acts)].sort(), ['lock', 'pdf', 'redraft', 'reopen'])
+  assert.match(BM, /document\.querySelectorAll\('#stab \[data-act\]'\)\.forEach\(function\(b\)\{ var a=b\.getAttribute\('data-act'\); if\(ACTIONS\[a\]\) b\.addEventListener\('click', function\(\)\{ ACTIONS\[a\]\(\); \}\); \}\);/)
+  assert.match(BM, /if\(m\.type==='clan:bar-action'\)\{ if\(phase==='doc'&&ACTIONS\.hasOwnProperty\(m\.id\)\) ACTIONS\[m\.id\]\(\); return; \}/)
+  assert.match(BM, /if\(m\.type==='clan:bar\?'\)\{ sendBar\(true\); return; \}/)
+  // The bar's list: only ids the table has, at most six buttons and one status, labels the bar takes.
+  type BarI = { kind: string; id?: string; label: string; disabled?: boolean }
+  const el = (disabled = false) => ({ disabled })
+  const items = (o: { phase?: string; A?: boolean; reopened?: string[]; armed?: boolean; st?: unknown }) => lift<{ barItems(): BarI[] }>(BM, ['barItems'], {
+    phase: o.phase ?? 'doc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
+    statusNow: () => o.st ?? { label: 'Draft', tone: null, locked: false }, $: () => el(), REDRAFT_ARMED: o.armed ? 1 : null,
+  }).barItems()
+  assert.deepEqual(items({ phase: 'intake' }), [], 'nothing in the bar before there is a brief')
+  const draft = items({})
+  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
+  assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
+  const locked = items({ A: true })
+  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'reopen', 'status'], 'a locked brief offers Reopen a part…, not a redraft')
+  assert.equal(locked.find(i => i.id === 'reopen')!.label, 'Reopen a part…')
+  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', 'lock', 'status'])
+  for (const list of [draft, locked]) for (const i of list) {
+    assert.ok(i.label.length <= 28, i.label)
+    if (i.kind === 'button') assert.ok(actionIds.includes(i.id!), `bar button ${i.id} has a handler`)
+  }
+})
+
+test('a locked brief reopens one part for a client’s change, through /client-review/reopen', () => {
+  const src = fn(BM, 'renderReopen')
+  assert.match(src, /hostPost\('\/client-review\/reopen', \{answer:p\.decision\}\)/)
+  assert.match(fn(BM, 'reopenable'), /!p\.reopened&&p\.decision&&\(p\.state==='rejected'\|\|p\.state==='accepted_with_changes'\)/)
+  assert.match(BM, />Reopen a part…<\/button>/)
+})
+
+test('the grid export’s header carries the brief’s logos, never a hard-coded NAPKIN', () => {
+  const g = grid()
+  const none = g.gridBody(ctxOf({ job: 'J' })).html
+  assert.doesNotMatch(none, /NAPKIN/)
+  assert.doesNotMatch(none, /class="logo"/, 'no logos, no logo cell')
+  const png = 'data:image/png;base64,iVBORw0KGgo='
+  const svg = 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+  const withLogos = g.gridBody({ ...ctxOf({ job: 'J' }), logos: [{ src: png, alt: 'Client' }, { src: svg, alt: 'Agency' }, { src: 'javascript:alert(1)', alt: 'x' }, { src: 'https://x.test/a.png', alt: 'y' }] }).html
+  assert.equal((withLogos.match(/<div class="logo">/g) || []).length, 3, 'on every sheet')
+  assert.match(withLogos, new RegExp(`<div class="logo"><img src="${png.replace(/[+/]/g, '\\$&')}" alt="Client"><img src="${svg.replace(/[+/]/g, '\\$&')}" alt="Agency"></div>`))
+  assert.doesNotMatch(withLogos, /javascript:|x\.test/, 'only inlined pictures print')
+  assert.doesNotMatch(BM, /class="logo">NAPKIN/)
+})
+
+test('logos come from uploads now and a Brand Clan later, ordered client, agency, partner', () => {
+  const L = lift<{ logoSrc(l: unknown): string; nextSlot(ls: unknown[]): string; sheetLogos(): { slot: string }[] }>(BM, ['logoSrc', 'slotRank', 'sheetLogos', 'nextSlot', 'logosOf'], {
+    LOGO_SLOTS: [['client', 'Client'], ['agency', 'Agency'], ['partner', 'Partner']], arr, assetUrl: (n: string) => `clan://localhost/assets/${n}`,
+    get: () => [{ slot: 'partner', ref: { asset: 'p.png' } }, { slot: 'client', ref: { asset: 'c.png' } }, { slot: 'agency', ref: { brand: 'brand-wk', asset: 'logo-primary' } }, { slot: 'client' }],
+  })
+  assert.equal(L.logoSrc({ ref: { asset: 'c.png' } }), 'clan://localhost/assets/c.png')
+  assert.equal(L.logoSrc({ ref: { brand: 'b', asset: 'x' } }), '', 'a Brand Clan logo is not this document’s asset')
+  assert.deepEqual(L.sheetLogos().map(l => l.slot), ['client', 'agency', 'partner'], 'a logo with no ref is left out')
+  assert.equal(L.nextSlot([]), 'client')
+  assert.equal(L.nextSlot([{ slot: 'client' }]), 'agency')
+  assert.equal(L.nextSlot([{ slot: 'client' }, { slot: 'agency' }]), 'partner')
+})
+
+test('the look is appearance: layout and logos are schema appearance keys, and Reset look clears them with the theme', () => {
+  const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: Record<string, { 'x-clan-appearance'?: boolean }> }
+  for (const k of ['theme', 'layout', 'logos']) assert.equal(schema.properties[k]['x-clan-appearance'], true, k)
+  assert.match(fn(BM, 'resetLook'), /patch\(\{theme:null, layout:null, logos:null\}/)
+})
+
+test('nothing the brief did before is gone: every control is still on the page', () => {
+  // Owner rule: no feature that exists today is removed or hidden by the new UI.
+  for (const id of ['prompt', 'addAny', 'genBtn', 'chips', 'intakeStatus', 'dropveil', 'fromUp', 'proc', 'meet', 'procActs', 'tiles',
+    'fields', 'review', 'crewline', 'upNote', 'madeFrom', 'boards', 'redraft', 'newDraft', 'lockBtn', 'lockList', 'lockedBadge', 'status',
+    'saveBtn', 'exHtml', 'exPdf', 'exHtmlPlain', 'exPdfPlain', 'toast', 'walker', 'docIdent', 'hProj', 'hCli'])
+    assert.match(BM, new RegExp(`id="${id}"`), `#${id} is on the page`)
+  assert.match(BM, /See each part as it’s written/)
+  // Per-part controls: edit, write again, keep as is (locked_fields), and the way into why.
+  const row = fn(BM, 'fieldRow')
+  for (const c of ['act-edit', 'act-regen', 'act-lock', 'prov']) assert.match(row + fn(BM, 'provHtml'), new RegExp(c))
+  // The selected part offers the same, through the same functions.
+  const sel = fn(BM, 'renderSelPart')
+  assert.match(sel, /startEdit\(row,f\)/)
+  assert.match(sel, /startRegen\(row,f\)/)
+  assert.match(sel, /toggleLock\(f\)/)
+  assert.match(sel, /F\.card\(docId\(\)\+'#'\+f\.key, b\)/, 'Built from is the OS’s source card')
+  assert.match(sel, /whyHtml\(f\)/)
 })
