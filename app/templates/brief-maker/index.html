@@ -3328,7 +3328,7 @@
       +(notes?'<div class="sp-call"><h3 class="tk">Your call</h3><div class="notes">'+notes+'</div></div>':'')
       +'<details class="sp-b" open><summary>Built from</summary><div class="sp-built" id="spBuilt"></div></details>'
       +'<details class="sp-w"'+(OPEN_WHY['sp:'+f.key]?' open':'')+'><summary>Why it says this</summary><div class="why">'+whyHtml(f)+'</div></details>'
-      +(!docLocked()?'<details class="sp-l"><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
+      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
         +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
         +'<div class="sp-acts" style="margin-top:8px"><button type="button" data-sp="up"'+(at<=0?' disabled':'')+'>Move earlier</button><button type="button" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>Move later</button></div></details>':'');
     var row=rowOf(f.key);
@@ -3342,6 +3342,8 @@
       else if(a==='up'||a==='down') saveLayout(layoutStep(layoutItems(), f.key, a==='up'?-1:1), 'move '+partName(f));
     }); });
     el.querySelectorAll('.sp-l [data-w]').forEach(function(b){ b.addEventListener('click', function(){ saveLayout(layoutResize(layoutItems(), f.key, +b.getAttribute('data-w')), 'resize '+partName(f)); }); });
+    // Place on page stays open while its buttons rewrite the panel.
+    var ld=el.querySelector('.sp-l'); if(ld) ld.addEventListener('toggle', function(){ OPEN_WHY['spl:'+f.key]=ld.open; });
     var wd=el.querySelector('.sp-w'); if(wd) wd.addEventListener('toggle', function(){ OPEN_WHY['sp:'+f.key]=wd.open; if(wd.open&&CHAIN.state!=='ok') loadChain(); });
     var n=el.querySelector('.sp-call .notes'); if(n) bindNotes(n, f);
     renderBuilt();
@@ -3670,6 +3672,7 @@
     +"@media print{.sheet.a4.page{margin:0}}";
   var SHEET_PRINT_CSS=".sheet.a4.page{width:794px;max-width:none;margin:0 auto;height:1123px;min-height:0;overflow:hidden;box-shadow:none;border-radius:0;border:0;position:relative;background:var(--paper);break-after:page;page-break-after:always}"
     +".flow .sheet.a4.page{height:auto;overflow:visible}"
+    +".sheet.a4.page:last-child{break-after:auto;page-break-after:auto}"
     +".sheet.a4.page::after{display:none}"
     +".sheet.a4.page .pgrid > .row:hover{background:none;box-shadow:none}"
     +".sheet.a4.page.appx .srcs ol{padding-left:22px;font-size:12px;line-height:1.55;color:var(--ink2)}.sheet.a4.page.appx .srcs li{margin:5px 0}.sheet.a4.page.appx .srcs a{color:var(--ink);word-break:break-all}"
