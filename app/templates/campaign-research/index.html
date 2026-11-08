@@ -107,7 +107,8 @@ main{max-width:1180px;margin:0 auto;padding:36px 24px 120px;min-width:0}
 /* ---------- the workspace: the report, and the 440px inspector beside it ---------- */
 .ws{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:28px;max-width:1500px;margin:0 auto;padding:0 24px;align-items:start}
 .ws > main{max-width:none;width:100%;margin:0;padding-left:0;padding-right:0}
-.ws.ws-map{grid-template-columns:minmax(0,1fr) minmax(440px,58%)}
+/* The map widens the inspector; the report stays beside it, never hidden. */
+.ws.ws-map{grid-template-columns:minmax(360px,1fr) minmax(440px,52%)}
 body.fresh .ws{display:block;max-width:1180px;padding:0}
 body.fresh .ws > main{padding:36px 24px 120px}
 body.fresh .insp{display:none}
@@ -327,7 +328,8 @@ table.facts .by{font-size:11.5px;color:var(--ink3)}
 @media (max-width:760px){table.facts{min-width:760px}}
 
 /* findings */
-.cards{display:grid;gap:12px}
+.cards{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.card .fh{flex-wrap:wrap}.card .path,.card .lab.mono{overflow-wrap:anywhere;min-width:0}
 .card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px 18px 12px;box-shadow:var(--shadow)}
 .card:target{box-shadow:0 0 0 3px var(--create-soft),var(--shadow-lg)}
 .card.s-proposed{border-style:dashed;border-color:var(--ink3)}
@@ -365,7 +367,7 @@ table.mx td.merged{border-left:1px solid var(--line-soft);background:color-mix(i
 .runst.err{color:var(--create-ink)}
 .runst.ok{color:var(--green-ink)}
 .contest{display:grid;gap:10px}
-.cvals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.cvals{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:10px}
 .cval{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:4px}
 .cval .v{font-size:20px;font-weight:700;letter-spacing:-.02em}
 .cval.chosen{border-color:var(--green);box-shadow:0 0 0 2px var(--green-soft)}
@@ -801,6 +803,150 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 .blk-card a.path:hover{color:var(--ink);text-decoration:underline}
 .blk-card .cvals{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .blk-card .cval .v{font-size:17px}
+/* ---------- the report body, as the mock draws it (features/research-new-ui.clan) ---------- */
+:root{--rs-hl:#F6E36B;--band:#14161B;--band-fg:#FFFFFF;--band-2:rgba(255,255,255,.66)}
+.rep{padding:0 0 24px;gap:0;overflow:hidden;border-radius:10px;background:var(--paper)}
+#rp-pre > *,#rp-body > *,#rp-post > *,#rep-bar > *{margin-left:clamp(16px,4vw,44px);margin-right:clamp(16px,4vw,44px)}
+.rep #rp-pre > .rp-band{margin:0}
+.rp-band{position:relative;background:var(--band);color:var(--band-fg);padding:26px clamp(16px,4vw,44px) 28px;box-shadow:inset 0 -6px 0 var(--rs-hl)}
+.rp-band .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--band-2)}
+.rp-q{margin:12px 0 10px;font-size:clamp(24px,3vw,36px);line-height:1.12;letter-spacing:-.03em;font-weight:700;text-wrap:balance;max-width:26ch;overflow-wrap:anywhere}
+.rp-meta{margin:0;font-size:13.5px;color:var(--band-2)}
+.rp-lock{position:absolute;top:22px;right:clamp(16px,4vw,44px);padding:3px 10px;border:1.5px solid var(--rs-hl);border-radius:999px;font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--rs-hl)}
+.rp-stats{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0;padding:18px 0 14px;border-bottom:1px solid var(--line-soft);font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.rp-stats > *{padding:0 12px;border-left:1px solid var(--line)}
+.rp-stats > :first-child{padding-left:0;border-left:0}
+.rp-need{border:0;border-left:1px solid var(--line);background:none;font:inherit;color:var(--create-ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.rp-ok{color:var(--green-ink)}
+#rp-pre > .rep-stale,#rp-pre > .flag{margin-top:14px}
+.rp-sec{padding-top:30px;display:grid;gap:12px;min-width:0}
+.rs-h{display:grid;gap:4px}
+.rs-h > span{font:700 10.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.rs-h h3{margin:0;font-size:20px;line-height:1.25;letter-spacing:-.015em;font-weight:600}
+.rp-askgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.rp-af{display:grid;gap:4px;align-content:start;text-align:left;border:0;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);background:var(--paper);color:var(--ink);padding:10px 12px;font:inherit;cursor:pointer;min-width:0}
+.rp-af:hover{background:var(--soft)}
+.rp-af > span{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.rp-af > span i{font-style:normal;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink3)}
+.rp-af > span i.o-extracted,.rp-af > span i.o-stated,.rp-af > span i.o-confirmed{color:var(--green-ink)}
+.rp-af b{font-weight:500;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.rp-af b.none{color:var(--ink3);font-weight:400}
+.rp-af.wide{grid-column:1/-1;background:color-mix(in srgb,var(--rs-hl) 12%,var(--paper))}
+.rp-src{margin:0;font-family:var(--mono);font-size:11.5px;color:var(--ink2)}
+.rp-src .linkbtn{font-family:inherit}
+.rp-gates{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0}
+.rp-gates .g{font:600 11px var(--mono);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.rp-gates .g.ok{border-color:var(--green);color:var(--green-ink)}
+.rp-gates .g.warn{border-color:var(--amber);color:var(--amber-ink);background:var(--amber-soft)}
+.rp-gates .g-sep{width:18px;height:1px;background:var(--line)}
+.rp-gates small{margin-left:12px;font-size:12px;color:var(--ink2)}
+.rp-more{margin:0;display:flex;flex-wrap:wrap;gap:6px 20px;border-top:1px dashed var(--line);padding-top:10px}
+.rp-more .linkbtn{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;text-decoration:none;color:var(--ink2)}
+.rp-more .linkbtn::before{content:"\25B8  "}
+.rp-more .linkbtn:hover{color:var(--ink)}
+.rep h2.headline{margin:0;font-size:clamp(21px,2.4vw,28px);line-height:1.25;letter-spacing:-.02em;font-weight:600;max-width:46ch;text-wrap:pretty}
+.rep h2.headline .rp-cites{font-size:13px;font-weight:400;letter-spacing:0}
+.rep-sum{gap:8px}
+.rep-sum li{font-size:16px}
+.rep-sum li::before{background:var(--ink)}
+.rp-cites{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;vertical-align:middle;margin-left:4px}
+.rp-n{font:11px var(--mono);color:var(--ink3)}
+.rp-f{border:1px solid var(--line);background:var(--paper);color:var(--ink2);border-radius:999px;padding:0 7px;font:600 11px var(--mono);cursor:pointer;min-height:22px}
+.rp-f:hover{border-color:var(--ink);color:var(--ink)}
+.rp-p{margin:0;font-size:15.5px;line-height:1.6;max-width:72ch}
+.rp-k{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.rp-pins{margin:0;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+.rp-pin{display:inline-flex;gap:6px;align-items:baseline}
+.rp-pin small{font:11px var(--mono);color:var(--ink3)}
+.rp-fp{margin:0;font-size:15.5px;line-height:1.55;max-width:72ch}
+.rp-fs{border:0;background:none;padding:0 2px;font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:3px}
+.rp-fp.s-verified .rp-fs{background:var(--green-soft);box-shadow:inset 0 -2px 0 var(--green)}
+.rp-fp.s-proposed .rp-fs{background:color-mix(in srgb,var(--rs-hl) 45%,transparent)}
+.rp-fp.s-rejected .rp-fs,.rp-fp.s-superseded .rp-fs{text-decoration:line-through;color:var(--ink2)}
+.rp-fs:hover{outline:1px solid var(--ink3)}
+.tag{display:inline-block;font:700 9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:var(--soft);color:var(--ink2);vertical-align:middle;white-space:nowrap}
+.rp-fp.s-verified .tag{background:var(--green-soft);color:var(--green-ink)}
+.rp-fp.s-proposed .tag,.tag.warn{background:var(--create);color:#fff}
+.rp-gap{display:flex;gap:10px;align-items:baseline;border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:14px;max-width:72ch}
+.gap-k{font:700 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--create-ink);flex:none}
+.rp-confirm{margin:0}
+.rp-notr{display:flex;flex-direction:column;gap:6px;font-size:14px}
+.rp-notr > span{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.sq{display:inline-block;width:12px;height:12px;flex:none;border:1.5px solid var(--ink);border-radius:2px;vertical-align:middle}
+.sq.filled{background:var(--ink)}
+.sq.thin{background:var(--rs-hl)}
+.sq.empty{border-style:dashed;border-color:var(--ink3)}
+.sq.none,.sq.n{border:1px dashed var(--line)}
+.rp-ct{border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:12px}
+.rp-ct-top{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.rp-vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.rp-side{display:grid;gap:4px;font-size:13px;min-width:0}
+.rp-side .v{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.rp-side.won .v{background:linear-gradient(transparent 40%,var(--rs-hl) 40%,var(--rs-hl) 88%,transparent 88%);justify-self:start;color:#14161B;padding:0 3px}
+.rp-side.lost .v{text-decoration:line-through;color:var(--ink3)}
+.rp-scale{grid-column:1/-1;position:relative;height:24px;border-bottom:1px solid var(--ink);margin:4px 8px 0}
+.rp-scale .tick{position:absolute;bottom:-18px;transform:translateX(-50%);font:10px var(--mono);font-style:normal;color:var(--ink3)}
+.rp-scale .mk{position:absolute;bottom:-5px;width:10px;height:10px;border-radius:50%;transform:translateX(-50%);background:var(--paper);border:1.5px solid var(--ink3)}
+.rp-scale .mk.won{background:var(--ink);border-color:var(--ink);box-shadow:0 0 0 3px var(--rs-hl)}
+.rp-ct-why{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;font-size:13px;color:var(--ink2);padding-top:12px;border-top:1px dashed var(--line)}
+.rp-ct-why > span{flex:1 1 280px}
+.rp-gaps{display:grid;gap:10px}
+.rp-gp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:14px}
+.rp-gp .sq{margin-top:4px}
+.rp-gp-k{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.rp-gp-d{margin-top:6px;font:11.5px/1.6 var(--mono);color:var(--ink2)}
+.rp-facts{width:100%;border-collapse:collapse;font-size:13px}
+.rp-facts th{text-align:left;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:8px 8px;border-bottom:1.5px solid var(--ink)}
+.rp-facts td{padding:9px 8px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.rp-facts td b{display:block;font-weight:600}
+.rp-facts td small{display:block;color:var(--ink3);font-size:12px}
+.rp-facts td.v{font-weight:600;white-space:nowrap}
+.rp-pid{border:0;background:none;padding:0;font:11.5px var(--mono);color:var(--ink2);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.rp-cov{border-collapse:collapse;font-size:13px}
+.rp-cov th,.rp-cov td{padding:6px 12px;text-align:center;border-bottom:1px solid var(--line-soft)}
+.rp-cov th[scope="row"],.rp-cov .l{text-align:left}
+.rp-cov thead th{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);border-bottom:1.5px solid var(--ink)}
+.rp-cov th[scope="row"]{font-weight:500}
+.rp-key{margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:11.5px var(--mono);color:var(--ink2)}
+.rp-excl{display:grid;gap:8px}
+.rp-ex{display:grid;grid-template-columns:minmax(150px,auto) minmax(0,1fr) auto;gap:12px;align-items:baseline;border:1px solid var(--line-soft);border-radius:6px;padding:10px 12px;font-size:13.5px}
+.rp-ex-k{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.rp-ex small{font-size:12px;color:var(--ink3)}
+.rp-run{margin:0;padding:0;list-style:none;display:grid;gap:0;counter-reset:run}
+.rp-run li{counter-increment:run;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:14px}
+.rp-run li::before{content:counter(run);width:24px;height:24px;border-radius:50%;border:1.5px solid var(--ink);display:grid;place-items:center;font:600 11px var(--mono)}
+.rp-run small{display:block;font:11px var(--mono);color:var(--ink3);margin-top:3px;overflow-wrap:anywhere}
+.rp-run .t{font:11.5px var(--mono);color:var(--ink3);white-space:nowrap}
+.rp-recf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:11.5px var(--mono);color:var(--ink2)}
+.rp-recf button{border:1px solid var(--line);background:var(--paper);color:var(--ink2);border-radius:999px;padding:2px 9px;font:inherit;cursor:pointer}
+.rp-recf button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.rp-recf .sp{flex:1}
+.rp-decs{display:grid;border-top:1px solid var(--line-soft)}
+.rp-dec{border-bottom:1px solid var(--line-soft);padding:0 0 0 2px;font-size:13.5px}
+.rp-dec > summary{display:grid;grid-template-columns:110px auto minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:9px 0;cursor:pointer;list-style:none}
+.rp-dec > summary::-webkit-details-marker{display:none}
+.rp-dec > summary .t,.rp-dec > summary .mono{font:11px var(--mono);color:var(--ink3)}
+.rp-dec[open]{padding-bottom:10px}
+@media (max-width:640px){.rp-dec > summary{grid-template-columns:auto minmax(0,1fr)}.rp-dec > summary .mono{display:none}}
+.rep .rep-foot{margin-top:28px}
+.save-more{position:relative}
+.save-more > summary{list-style:none;height:100%;border-radius:8px;padding:10px 12px}
+.save-more > summary::-webkit-details-marker{display:none}
+.save-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:5;display:grid;min-width:150px;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:4px}
+.save-menu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.save-menu button:hover{background:var(--soft)}
+.rq-about{display:flex;gap:8px;align-items:center;font-size:12.5px!important;font-weight:500!important;color:var(--ink2)!important}
+.rq-about select{font:inherit;border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:var(--paper);color:var(--ink);min-width:0;max-width:100%}
+.jb-hint{font-size:13px;color:var(--ink2)}
+@media (max-width:640px){
+  .rp-gp{grid-template-columns:auto minmax(0,1fr)}
+  .rp-gp > .linkbtn{grid-column:2}
+  .rp-ex{grid-template-columns:1fr}
+  .rp-stats > *{padding:0 8px}
+  .rp-run li{grid-template-columns:28px minmax(0,1fr)}
+  .rp-run .t{grid-column:2}
+}
+@media print{.rp-band{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .confirm-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .confirm-list li{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line-soft);border-radius:12px}
 .confirm-list li .t{flex:1;min-width:18ch;display:grid;gap:2px}
@@ -904,7 +1050,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     <section class="insp-map" id="mapview" aria-label="Evidence map" hidden></section>
     <div class="insp-save">
       <button type="button" class="btn primary" id="exportBtn">Save · PDF</button>
-      <button type="button" class="btn" data-act="export-html" title="Save the report as one HTML file">HTML</button>
+      <details class="save-more"><summary class="btn" aria-label="More ways to save" title="More ways to save"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></summary>
+        <div class="save-menu" role="menu"><button type="button" role="menuitem" data-act="export-html" title="Save the report as one HTML file">HTML file</button><button type="button" role="menuitem" data-act="export-pdf">PDF</button></div></details>
     </div>
     <div class="judgebar" id="judge" role="region" aria-label="Your call" hidden></div>
     <section class="insp-box" id="rbox" aria-labelledby="rbox-h">
@@ -2977,57 +3124,6 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   // ── the report (Contract 3 §17) — middleware-written, rendered read-only ───
   // A figure reads inline in a sentence; a pin whose value is words stays a chip.
   function inlineFig(id){ var p=pins()[id]; return !!(window.ClanFields&&p&&(typeof p.value==='number'||String(p.value).length<=24)); }
-  function citeChips(ids){
-    ids=arr(ids); if(!ids.length) return '<span class="pill alert" title="Every claim must cite a pin or a finding">no cite</span>';
-    return '<span class="cites">'+ids.map(function(id){ return /^fi_/.test(id)?findingChip(id):inlineFig(id)?'<clan-field ref="'+esc(id)+'"></clan-field>':pinChip(id); }).join('')+'</span>';
-  }
-  function pinCard(id){
-    var p=pins()[id];
-    if(!p) return '<a class="pin-card missing" href="#facts"><span class="k">'+esc(id)+'</span><span>not in the projection</span></a>';
-    var v=fmtPinValue(p), txt=typeof p.value==='string'&&v.length>18;
-    return '<a class="pin-card'+(p.stale?' stale':'')+'" href="#fact-'+esc(id)+'" title="'+esc(id+' · '+p.entity+' · '+p.key)+'">'
-      +'<span class="v'+(txt?' text':'')+'">'+esc(v)+'</span><span class="k">'+esc(p.key)+'</span><span class="k" style="color:var(--ink3)">'+esc(p.entity)+'</span>'
-      +'<span class="m">'+(p.market?'<span class="pill">'+esc(p.market)+'</span>':'<span class="pill">all markets</span>')+'<span class="pill">as of '+esc(p.as_of)+'</span>'
-      +'<span class="pill'+(p.confidence==='high'?' ok':p.confidence==='low'?' alert':'')+'">'+esc(p.confidence)+'</span>'
-      +(p.stale?'<span class="pill warn"><span class="d"></span>stale</span>':'')+'</span></a>';
-  }
-  function findingBlock(id){
-    var f=fnds()[id];
-    if(!f) return '<div class="blk-card"><span class="pill dash">'+esc(id)+' · not in the projection</span></div>';
-    var st=f.status;
-    return '<div class="blk-card '+esc(st)+'" data-anchor="'+esc(id)+'"><div class="h">'
-      +(st==='verified'?'<span class="pill ok"><span class="d"></span>verified by a person</span>':'<span class="derived">'+ICON.agent+'Worked out by '+esc(given('synthesis'))+'</span>'+(st==='rejected'?'<span class="pill alert"><span class="d"></span>rejected</span>':st==='superseded'?'<span class="pill">replaced after a review</span>':'<span class="pill dash">not yet verified</span>'))
-      +'<span class="sp"></span><a class="path" href="#finding-'+esc(id)+'">'+esc(id)+'</a></div>'
-      +'<div class="st">'+esc(f.statement)+'</div>'+pinChips(f.cites)
-      +(replacedBy(id)?'<a class="muted" style="font-size:13px" href="#finding-'+esc(replacedBy(id))+'">Replaced by '+esc(replacedBy(id))+' →</a>':'')+'</div>';
-  }
-  function gapBlock(gid){
-    var g=arr(sel().gaps).filter(function(x){ return x.id===gid; })[0];
-    if(!g) return '<div class="blk-card gap"><span class="pill dash">gap '+esc(gid)+' · not in selection</span></div>';
-    return '<div class="blk-card gap"><div class="h"><span class="pill warn"><span class="d"></span>'+(notRun(g)?'not looked up':'looked for, not found')+'</span>'+(g.lens?'<span class="pill">'+esc((LENS[g.lens]||{}).l||g.lens)+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')
-      +'<span class="sp"></span><a class="path" href="#gap-'+esc(g.id)+'">'+esc(g.id)+'</a></div><div class="st">'+esc(g.searched)+'</div>'+(g.note?'<div class="muted" style="font-size:13px">'+esc(g.note)+'</div>':'')+'</div>';
-  }
-  function contestBlock(cid){
-    var c=arr(sel().contested).filter(function(x){ return x.id===cid; })[0];
-    if(!c) return '<div class="blk-card"><span class="pill dash">contest '+esc(cid)+' · not in selection</span></div>';
-    var open=c.status==='open';
-    return '<div class="blk-card" data-anchor="'+esc(c.id)+'"><div class="h">'+(open?'<span class="pill alert"><span class="d"></span>sources disagree · nothing picked</span>':'<span class="pill ok"><span class="d"></span>disagreement resolved</span>')
-      +'<span class="mono" style="font-size:12px">'+esc(c.key)+'</span><span class="sp"></span><a class="path" href="#contest-'+esc(c.id)+'">'+esc(c.id)+'</a></div>'
-      +'<div class="cvals">'+arr(c.values).map(function(v){ var ch=!open&&c.chosen===v.fact_id;
-        return '<div class="cval'+(ch?' chosen':!open?' loser':'')+'"><div class="eyebrow">'+(ch?'chosen':!open?'not chosen':'value')+'</div><div class="v">'+esc(fmtPinValue({value:v.value, unit:v.unit}))+'</div><div class="srcline">from '+esc(v.from)+' · '+esc(v.fact_id)+'</div></div>'; }).join('')+'</div>'
-      +(!open&&c.reason?'<div class="wholine"><b>Why:</b> '+esc(c.reason)+'</div>':'')+'</div>';
-  }
-  function blockHtml(b){
-    if(!isObj(b)) return '';
-    switch(b.kind){
-      case 'claim': return '<p class="blk-claim">'+esc(b.text)+' '+citeChips(b.cites)+'</p>';
-      case 'pins': return '<div class="blk-pins">'+arr(b.fact_ids).map(pinCard).join('')+'</div>';
-      case 'finding': return findingBlock(b.finding_id);
-      case 'gap': return gapBlock(b.gap_id);
-      case 'contest': return contestBlock(b.contest_id);
-    }
-    return '<div class="blk-card"><span class="pill dash">unknown block '+esc(b.kind)+'</span></div>';
-  }
   function touchesAsk(d){
     var re=/^(campaign|selection)(\.|\[|$)/;
     if(arr(d.targets).length) return arr(d.targets).some(function(a){ return re.test(pathOf(a)); });
@@ -3080,57 +3176,360 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function refreshBtn(stale, title){
     var lk=reportLocked(), off=CHAT.reportBusy||lk;
     return '<button type="button" class="btn sm'+(stale.length&&!lk?' primary':'')+'" data-act="report-refresh"'+(off?' disabled':'')
-      +((lk||title)?' title="'+esc(lk?'The report is locked: this version is the one agreed to.':title)+'"':'')+'>'+(CHAT.reportBusy?'Refreshing…':'Refresh report')+'</button>';
+      +((lk||title)?' title="'+esc(lk?'The report is locked: this version is the one agreed to.':title)+'"':'')+'>'+(CHAT.reportBusy?'Refreshing…':'Refresh')+'</button>';
   }
+  // ── the report, as the mock draws it (features/research-new-ui.clan) ────
+  // A dark title band and the stat row; 00 the ask; the headline and the
+  // summary, whose figures are the OS's fields inline; one numbered section
+  // per lens × market (claims with value fields, finding sentences with their
+  // status, contest fields, gap notes); Confirm before the brief and Not
+  // researched; then the record drawn as report sections: contests, gaps,
+  // pinned facts, coverage, read-not-pinned, how it ran and on the record.
+  // Everything recorded (details#records) stays below, as it was.
+  function lensName(l){ return (LENS[l]||{}).l||String(l||''); }
+  function fno(id){ var i=Object.keys(fnds()).indexOf(id); return i<0?'?':String(i+1); }
+  function pad2(n){ return (n<10?'0':'')+n; }
+  function rpHead(n, eyebrow, title, hid){
+    return '<div class="rs-h"><span>'+pad2(n)+' — '+esc(eyebrow)+'</span>'+(title?'<h3'+(hid?' id="'+hid+'"':'')+'>'+esc(title)+'</h3>':'')+'</div>';
+  }
+  function sourceIds(){
+    var o={}; Object.keys(srcRecs()).forEach(function(k){ o[k]=1; });
+    Object.keys(pins()).forEach(function(id){ arr(pins()[id].sources).forEach(function(s){ if(/^src_/.test(s)) o[s]=1; }); });
+    return Object.keys(o);
+  }
+  // Every id the report itself cites, from the headline down.
+  function reportCites(r){
+    var o={}, add=function(ids){ arr(ids).forEach(function(c){ o[c]=1; }); };
+    if(!isObj(r)) return o;
+    add(isObj(r.headline)&&r.headline.cites);
+    arr(r.summary).forEach(function(s){ add(s&&s.cites); });
+    arr(r.sections).forEach(function(s){ arr(s&&s.blocks).forEach(function(b){ if(!isObj(b)) return; add(b.cites); add(b.fact_ids); if(b.finding_id) o[b.finding_id]=1; }); });
+    return o;
+  }
+  // A figure the sentence states is drawn as its field, where it stands; the
+  // rest of what the sentence cites follows it.
+  function inlineCited(text, cites){
+    var t=String(text||''), slots=[], left=[];
+    arr(cites).forEach(function(id){
+      if(!/^f_/.test(id)||!inlineFig(id)){ left.push(id); return; }
+      var v=fmtAny(pins()[id]), at=v?t.indexOf(v):-1;
+      var before=at>0?t.charAt(at-1):'', after=t.charAt(at+v.length);
+      if(at<0||/[A-Za-z0-9.]/.test(before)||/[A-Za-z0-9]/.test(after)){ left.push(id); return; }
+      t=t.slice(0, at)+'\u0000'+slots.length+'\u0000'+t.slice(at+v.length); slots.push(id);
+    });
+    var h=esc(t).replace(/\u0000(\d+)\u0000/g, function(_, i){ return '<clan-field ref="'+esc(slots[+i])+'"></clan-field>'; });
+    return {html:h, left:left, inlined:slots};
+  }
+  function restCites(left, all){
+    all=arr(all); if(!all.length) return '<span class="pill alert" title="Every claim must cite a pin or a finding">no cite</span>';
+    var n=all.filter(function(c){ return /^f_/.test(c); }).length, h='';
+    left.forEach(function(id){
+      if(/^fi_/.test(id)){ var f=fnds()[id]; h+='<button type="button" class="rp-f" data-rsel="'+esc(id)+'" title="'+esc(f?f.statement:'Not in the projection')+'">F'+esc(fno(id))+'</button>'; }
+      else h+=inlineFig(id)?'<clan-field ref="'+esc(id)+'"></clan-field>':pinChip(id);
+    });
+    return '<span class="rp-cites">'+h+(n?'<span class="rp-n">'+n+' pin'+(n===1?'':'s')+'</span>':'')+'</span>';
+  }
+  function claimHtml(text, cites){ var x=inlineCited(text, cites); return x.html+' '+restCites(x.left, cites); }
+  function rpFinding(id){
+    var f=fnds()[id];
+    if(!f) return '<p class="rp-fp"><span class="tag">'+esc(id)+' · not in the projection</span></p>';
+    var st=f.status, tag=st==='verified'?'verified':st==='rejected'?'rejected':st==='superseded'?'replaced after a review':'needs your call', to=replacedBy(id);
+    return '<p class="rp-fp s-'+esc(st)+'" data-anchor="'+esc(id)+'"><button type="button" class="rp-fs" data-rsel="'+esc(id)+'" title="'+esc('Worked out by '+(given('synthesis')||'the crew')+' from '+arr(f.cites).length+' pin'+(arr(f.cites).length===1?'':'s'))+'">'+esc(f.statement)+'</button> '
+      +'<span class="tag">Finding '+esc(fno(id))+' · '+esc(tag)+'</span>'+(to?' <button type="button" class="rp-f" data-rsel="'+esc(to)+'">Replaced by F'+esc(fno(to))+'</button>':'')+'</p>';
+  }
+  function keyWords(k){ var s=String(k||''), m=/^([^:]+):(.+?)(@.+)?$/.exec(s); return m?m[2].replace(/[._]/g,' ')+' · '+m[1].split('/').pop()+(m[3]?' '+m[3].slice(1):''):s; }
+  function rpContestLine(cid){
+    var c=contestById(cid);
+    if(!c) return '<p class="rp-p"><span class="tag">contest '+esc(cid)+' · not in selection</span></p>';
+    var open=c.status==='open';
+    return '<p class="rp-p rp-ctl" data-anchor="'+esc(c.id)+'"><span class="rp-k">'+esc(keyWords(c.key))+'</span> <clan-field ref="'+esc(c.id)+'"></clan-field>'+(open?'':' <span class="tag">contest · resolved</span>')+'</p>';
+  }
+  function gapById(id){ return arr(sel().gaps).filter(function(g){ return g&&g.id===id; })[0]||null; }
+  function rpGapNote(gid){
+    var g=gapById(gid);
+    if(!g) return '<div class="rp-gap"><span class="gap-k">Gap</span><span>'+esc(gid)+' · not in selection</span></div>';
+    return '<div class="rp-gap" id="rgap-'+esc(slug(g.id))+'"><span class="gap-k">Gap</span><span>'+esc(g.searched)+(g.note?' <span class="muted">'+esc(g.note)+'</span>':'')+'</span></div>';
+  }
+  function rpPins(ids){
+    return '<p class="rp-pins">'+arr(ids).map(function(id){ var p=pins()[id];
+      if(!p||!inlineFig(id)) return pinChip(id);
+      return '<span class="rp-pin"><small>'+esc(String(p.key||'').split('.').slice(-2).join(' ').replace(/_/g,' '))+(p.market?' · '+esc(p.market):'')+'</small><clan-field ref="'+esc(id)+'"></clan-field></span>'; }).join('')+'</p>';
+  }
+  function rpBlock(b){
+    if(!isObj(b)) return '';
+    switch(b.kind){
+      case 'claim': return '<p class="rp-p blk-claim">'+claimHtml(b.text, b.cites)+'</p>';
+      case 'pins': return rpPins(b.fact_ids);
+      case 'finding': return rpFinding(b.finding_id);
+      case 'gap': return rpGapNote(b.gap_id);
+      case 'contest': return rpContestLine(b.contest_id);
+    }
+    return '<p class="rp-p"><span class="pill dash">unknown block '+esc(b.kind)+'</span></p>';
+  }
+
+  // The band: what this is, for whom, and how much stands behind it.
+  function rpBand(r, lk){
+    var c=camp(), name=c.name&&c.name.value, org=c.client_org&&c.client_org.value&&c.client_org.value.name, brand=c.brand&&c.brand.value&&c.brand.value.name;
+    var nd=CHAIN.state==='ok'?decs().length:0, src=sourceIds().length, np=Object.keys(pins()).length;
+    var meta=['Written '+(fmtWhen(r.built_at)||'—')+' by '+(given('drafter')||'the crew')];
+    if(src) meta.push(src+' source'+(src===1?'':'s')+' read');
+    meta.push(np+' fact'+(np===1?'':'s')+' pinned');
+    if(nd) meta.push(nd+' decision'+(nd===1?'':'s')+' on the record');
+    return '<header class="rp-band'+(lk?' locked':'')+'"><div class="eyebrow">Research'+(org?' · '+esc(org):brand?' · '+esc(brand):'')+(c.id?' · '+esc(c.id.value):'')+'</div>'
+      +'<h1 class="rp-q">'+(name?esc(name):'Campaign research')+'</h1>'
+      +'<p class="rp-meta">'+esc(meta.join(' · '))+'</p>'+(lk?'<span class="rp-lock">Locked</span>':'')+'</header>';
+  }
+  function rpStats(){
+    var S=sel(), np=Object.keys(pins()).length, nf=Object.keys(fnds()).length, src=sourceIds().length, open=openChecks();
+    var it=[(src||!np)?src+' source'+(src===1?'':'s'):'no source records', np+' pin'+(np===1?'':'s'), nf+' finding'+(nf===1?'':'s'),
+      arr(S.contested).length+' contest'+(arr(S.contested).length===1?'':'s'), arr(S.gaps).length+' gap'+(arr(S.gaps).length===1?'':'s'), arr(S.excluded).length+' excluded'];
+    return '<div class="rp-stats">'+it.map(function(t){ return '<span>'+esc(t)+'</span>'; }).join('')
+      +(open&&!reportLocked()?'<button type="button" class="rp-need" data-act="chk-next">'+open+' need'+(open===1?'s':'')+' your call</button>':'<span class="rp-ok">nothing needs your call</span>')+'</div>';
+  }
+  // 00 — the ask, as a grid of what the client asked; the full 19 fields
+  // stay in Everything recorded, one click away.
+  var ASK_GRID=[['client_org','Client'],['brand','Brand'],['markets','Markets'],['audience_stated','Audience'],['in_market','In market'],['objective','Objective'],['constraints','Constraints']];
+  function monthOf(s){ var d=new Date(s); if(!s||isNaN(d)) return String(s||''); try{ return d.toLocaleDateString('en-GB',{month:'short', year:'numeric'}); }catch(e){ return String(s).slice(0,7); } }
+  function askText(k){
+    var e=camp()[k]; if(!isObj(e)) return '';
+    var v=e.value;
+    if(k==='markets') return listJoin(marketNames());
+    if(k==='in_market'&&isObj(v)) return monthOf(v.from)+' – '+monthOf(v.to);
+    if(k==='budget_band') return BANDS[v]||String(v);
+    if(typeof v==='string') return v;
+    if(Array.isArray(v)) return v.map(function(x){ return typeof x==='string'?x:isObj(x)?(x.name||x.text||x.ref||''):''; }).filter(Boolean).join('; ');
+    if(isObj(v)) return v.name||v.definition||v.text||'';
+    return String(v);
+  }
+  var ORIGIN_WORD={extracted:'You said', proposed:'We inferred', confirmed:'Confirmed', stated:'Stated'};
+  function askCell(k, label, wide){
+    var e=camp()[k], t=askText(k), o=isObj(e)?e.origin:'';
+    return '<button type="button" class="rp-af'+(wide?' wide':'')+'" data-act="goto-field" data-field="'+esc(k)+'" title="'+esc(label+(o?' · '+(ORIGIN_WORD[o]||o):'')+' · open it in Everything recorded')+'">'
+      +'<span>'+esc(label)+(o?'<i class="o-'+esc(o)+'">'+esc(ORIGIN_WORD[o]||o)+'</i>':'')+'</span>'
+      +(t?'<b>'+esc(clipT(t, wide?260:72))+'</b>':'<b class="none">not given</b>')+'</button>';
+  }
+  function rpAsk(n){
+    var c=camp(), filled=FIELDS.filter(function(f){ return isObj(c[f.k]); }).length;
+    var from=Object.keys(mats()).map(function(id){ return mats()[id]; }).filter(function(m){ return m&&m.kind!=='prompt'; }).map(function(m){ return m.name||m.kind; });
+    var h='<section class="rp-sec rp-ask" id="rp-ask">'+rpHead(n, 'The ask', 'What the client asked')
+      +'<div class="rp-askgrid">'+ASK_GRID.map(function(x){ return askCell(x[0], x[1]); }).join('')+askCell('problem', 'The problem', true)+'</div>'
+      +'<p class="rp-src">'+(from.length?'Read from '+esc(listJoin(from))+' · ':'')+filled+' of '+FIELDS.length+' fields filled · <button type="button" class="linkbtn no-print" data-act="extract" title="'+esc('Ask '+(given('extract')||'the crew')+' to read the ask again')+'">Read the ask again</button></p>';
+    // The gates, as a strip: what the document has reached, and what the brief still waits on.
+    var prev=true, miss=[];
+    h+='<div class="rp-gates" role="list" aria-label="Gates">'+GATES.map(function(G, i){
+      var m=missingFor(G.g), ok=!m.length&&prev; if(!ok&&!miss.length) miss=m; prev=ok;
+      return (i?'<span class="g-sep" aria-hidden="true"></span>':'')+'<span role="listitem" class="g '+(ok?'ok':'warn')+'" title="'+esc(G.p)+'">'+(ok?'✓ ':'')+esc(G.n+' '+G.h)+'</span>';
+    }).join('');
+    var open=openChecks(), still=[];
+    if(miss.length) still.push(miss.map(function(f){ return f.label; }).join(', '));
+    if(open) still.push(open+' call'+(open===1?'':'s'));
+    if(!reportLocked()) still.push('the lock');
+    h+=(still.length?'<small>Still missing: '+esc(listJoin(still))+'.</small>':'')+'</div>';
+    h+='<p class="rp-more no-print"><button type="button" class="linkbtn" data-act="goto-records" data-to="ask">All '+FIELDS.length+' fields · '+filled+' filled</button>'
+      +'<button type="button" class="linkbtn" data-act="show-run">Your request and answers</button></p></section>';
+    return h;
+  }
+  // 06 and 07: what to confirm before a brief, and what was not researched.
+  function rpConfirm(r, n){
+    var conf=arr(r.confirm); if(!conf.length) return '';
+    return '<section class="rp-sec" id="rp-confirm">'+rpHead(n, 'Before the brief', 'Confirm')+'<ul class="confirm-list rp-confirm">'+conf.map(function(c){
+      var k=(/#campaign\.([a-z_]+)$/.exec(String(c&&c.address||''))||[])[1], env=k?camp()[k]:null;
+      var can=isObj(env)&&(env.origin==='extracted'||env.origin==='proposed');
+      return '<li class="'+(can?'':'done')+'"><div class="t">'+(k&&FIELD[k]?'<a href="#field-'+esc(k)+'" data-act="goto-confirm" data-field="'+esc(k)+'">'+esc(c.label)+'</a>':'<b>'+esc(c.label)+'</b>')+'<span>'+esc(c.why)+'</span></div>'
+        +(isObj(env)?originBadge(env.origin):'<span class="pill">not filled</span>')
+        +(can?'<button type="button" class="btn sm live no-print" data-act="confirm" data-field="'+esc(k)+'">'+ICON.check.replace('<svg','<svg style="width:12px;height:12px"')+'Confirm…</button>':'')+'</li>';
+    }).join('')+'</ul></section>';
+  }
+  function rpNotResearched(r, n){
+    var nr=arr(r.not_researched); if(!nr.length) return '';
+    return '<section class="rp-sec" id="rp-notr">'+rpHead(n, 'Scope', 'Not researched')+'<div class="rp-notr">'+nr.map(function(x){
+      return '<span><i class="sq none" aria-hidden="true"></i><b>'+esc(lensName(x.lens))+'</b>'+(x.market?' · '+esc(x.market):' · every market')+' <span class="muted">'+esc(x.reason)+'</span></span>'; }).join('')+'</div></section>';
+  }
+  // 08 — where sources disagree: each value, which was picked and why.
+  function rpContest(c){
+    var A=addr('selection.contested['+c.id+']'), open=c.status==='open', dec=c.decided_by?decById(c.decided_by):null;
+    var vals=arr(c.values), nums=vals.every(function(v){ return typeof v.value==='number'; }), max=nums?Math.max.apply(null, vals.map(function(v){ return Math.abs(v.value); }).concat([0])):0;
+    var won=vals.filter(function(v){ return !open&&c.chosen===v.fact_id; })[0];
+    var h='<div class="rp-ct" id="rct-'+esc(slug(c.id))+'" data-anchor="'+esc(c.id)+'" data-address="'+esc(A)+'"><div class="rp-ct-top"><b>'+esc(keyWords(c.key))+'</b>'
+      +'<span class="pill '+(open?'alert':'ok')+'"><span class="d"></span>'+(open?'open · nothing picked':'resolved'+(won?' · '+esc(won.from)+' chosen':''))+'</span></div><div class="rp-vs">';
+    vals.forEach(function(v){ var ch=!open&&c.chosen===v.fact_id, lo=!open&&!ch;
+      h+='<div class="rp-side'+(ch?' won':lo?' lost':'')+'"><span class="tag">'+(ch?'Chosen':lo?'Not chosen · kept':'Value')+'</span><span class="v">'+esc(fmtPinValue({value:v.value, unit:v.unit}))+'</span>'
+        +'<span>'+(pins()[v.fact_id]?pinChip(v.fact_id):'<span class="mono">'+esc(v.fact_id)+'</span> · layer row, not pinned')+'</span><span class="muted">from '+esc(v.from)+(arr(v.sources).length?' · '+esc(arr(v.sources).join(', ')):'')+'</span></div>'; });
+    if(nums&&max>0) h+='<div class="rp-scale" aria-hidden="true"><i class="tick" style="left:0">0</i><i class="tick" style="left:100%">'+esc(fmtPinValue({value:Math.round(max*1.15*1000)/1000, unit:vals[0].unit}))+'</i>'
+      +vals.map(function(v){ return '<i class="mk'+(!open&&c.chosen===v.fact_id?' won':'')+'" style="left:'+(Math.abs(v.value)/(max*1.15)*100).toFixed(1)+'%"></i>'; }).join('')+'</div>';
+    h+='</div><div class="rp-ct-why">'+(!open&&c.reason?'<span><b>Why</b> · '+esc(c.reason)+(dec?' · '+esc(human(dec.actor||dec.agent))+' · '+esc(fmtWhen(dec.timestamp)):'')+'</span>':'<span class="muted">Two sources give different values. Nothing is picked until a person does.</span>')
+      +'<button type="button" class="linkbtn no-print" data-act="resolve" data-contest="'+esc(c.id)+'" data-address="'+esc(A)+'">'+(open?'Resolve…':'Change the pick…')+'</button>'
+      +'<button type="button" class="linkbtn no-print" data-act="why" data-path="selection.contested['+esc(c.id)+']" data-address="'+esc(A)+'">Why is this here?</button></div></div>';
+    return h;
+  }
+  function rpContests(n){
+    var ct=arr(sel().contested); if(!ct.length) return '';
+    var open=ct.filter(function(c){ return c.status==='open'; }).length, N=ct.length<NUM.length?NUM[ct.length]:String(ct.length);
+    var t=N+' contest'+(ct.length===1?'':'s')+(open?', '+open+' open':ct.length===1?', resolved':', all resolved');
+    return '<section class="rp-sec" id="rp-contests">'+rpHead(n, 'Where sources disagree', t)+ct.map(rpContest).join('')+'</section>';
+  }
+  // 09 — gaps: what was looked for and not found, or not looked up at all.
+  function rpGaps(n){
+    var gaps=arr(sel().gaps); if(!gaps.length) return '';
+    return '<section class="rp-sec" id="rp-gaps">'+rpHead(n, 'Not found / not researched', 'Gaps')+'<div class="rp-gaps">'+gaps.map(function(g){
+      var nr=notRun(g);
+      return '<div class="rp-gp" id="gapr-'+esc(slug(g.id))+'"><i class="sq '+(nr?'none':'empty')+'" aria-hidden="true"></i><div><div class="rp-gp-k"><b>'+(nr?'Not looked up':'Not found')+'</b>'
+        +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div>'+esc(g.searched)
+        +'<div class="rp-gp-d">'+(arr(g.sources_tried).length?'Sources tried: '+esc(arr(g.sources_tried).join(', '))+'<br>':'')+(g.note?esc(g.note):'')+'</div></div>'
+        +'<button type="button" class="linkbtn no-print" data-act="gap-ask" data-gap="'+esc(g.id)+'" title="Put this in Ask the research; nothing runs until you press Ask">Research this</button></div>';
+    }).join('')+'</div></section>';
+  }
+  // 10 — every pinned figure with its source, and what became of it.
+  function pinState(id, used){
+    var p=pins()[id], out=[], ex=excludedIds();
+    if(p.stale) out.push(['warn','stale']);
+    arr(sel().contested).forEach(function(c){ arr(c.values).forEach(function(v){ if(v.fact_id!==id) return;
+      out.push(c.status==='open'?['alert','contested']:c.chosen===id?['ok','chosen']:['','not chosen']); }); });
+    if(ex[id]) out.push(['','excluded']);
+    var inF=Object.keys(fnds()).filter(function(f){ return arr(fnds()[f].cites).indexOf(id)!==-1; });
+    if(inF.length) out.push(['ok','in '+inF.map(function(f){ return 'F'+fno(f); }).join(', ')]);
+    else if(used[id]) out.push(['','in the report']);
+    else if(!out.length) out.push(['','context only']);
+    return out.map(function(x){ return '<span class="pill '+x[0]+'">'+esc(x[1])+'</span>'; }).join(' ');
+  }
+  function rpPinned(r, n){
+    var P=pins(), ids=Object.keys(P); if(!ids.length) return '';
+    var used=reportCites(r);
+    return '<section class="rp-sec" id="rp-pins">'+rpHead(n, 'Pinned facts', 'Every figure, with its source')+'<div class="tablewrap"><table class="rp-facts"><thead><tr><th scope="col">Pin</th><th scope="col">Fact · source · as of</th><th scope="col">Value</th><th scope="col">Conf.</th><th scope="col">Status</th></tr></thead><tbody>'
+      +ids.map(function(id){ var p=P[id], src=pinSource(id);
+        return '<tr><td><button type="button" class="rp-pid" data-rsel="'+esc(id)+'">'+esc(id)+'</button></td><td><b>'+esc(String(p.key||'').replace(/[._]/g,' '))+'</b><small>'+esc(p.entity)+(src?' · '+esc(src):'')+' · as of '+esc(p.as_of)+(p.market?' · '+esc(p.market):'')+'</small></td>'
+          +'<td class="v">'+(inlineFig(id)?'<clan-field ref="'+esc(id)+'"></clan-field>':esc(clipT(fmtPinValue(p), 40)))+'</td><td><span class="pill'+(p.confidence==='high'?' ok':p.confidence==='low'?' alert':'')+'">'+esc(p.confidence)+'</span></td><td>'+pinState(id, used)+'</td></tr>';
+      }).join('')+'</tbody></table></div></section>';
+  }
+  // 11 — lens × market: what ran, and what it gave.
+  function rpCoverage(n){
+    var S=sel(), ms=marketsAll(), runs=arr(S.lenses_run), cbm=isObj(S.coverage_by_market)?S.coverage_by_market:{}, cov=isObj(S.coverage)?S.coverage:{};
+    if(!ms.length&&!runs.length) return '';
+    var word={filled:'filled — corroborated', thin:'thin — single source', empty:'searched, nothing found'};
+    var sq=function(v, t){ return '<i class="sq '+esc(v||'n')+'" title="'+esc(t+' · '+(word[v]||'no run recorded'))+'"></i>'; };
+    var h='<section class="rp-sec" id="rp-cov">'+rpHead(n, 'Coverage', 'Lens × market')+'<div class="tablewrap"><table class="rp-cov"><thead><tr><th scope="col">Lens</th>'+ms.map(function(m){ return '<th scope="col">'+esc(m)+'</th>'; }).join('')+'<th scope="col">Merged</th><th scope="col" class="l">What it gave</th></tr></thead><tbody>';
+    LENSES.forEach(function(L){
+      var g=arr(S.gaps).filter(function(x){ return x.lens===L.k; }).length, sk=arr(S.lenses_skipped).filter(function(x){ return x.lens===L.k; });
+      var note=[]; ms.forEach(function(m){ var v=cbm[m]&&cbm[m][L.k]; if(v) note.push(m+' '+v); });
+      if(g) note.push(g+' gap'+(g===1?'':'s')); if(sk.length) note.push('skipped in '+sk.map(function(x){ return x.market||'every market'; }).join(', '));
+      h+='<tr><th scope="row">'+esc(L.l)+'</th>'+ms.map(function(m){ var run=runs.filter(function(x){ return x.lens===L.k&&x.market===m; })[0];
+        return '<td>'+sq(cbm[m]&&cbm[m][L.k], L.l+' · '+m+(run?' · ran '+fmtWhen(run.ran_at)+' · '+run.handler:''))+'</td>'; }).join('')
+        +'<td>'+sq(cov[L.k], L.l+' · merged')+'</td><td class="l muted">'+esc(note.join(' · ')||'not run')+'</td></tr>';
+    });
+    h+='</tbody></table></div><p class="rp-key"><i class="sq filled"></i> filled <i class="sq thin"></i> thin <i class="sq empty"></i> searched, nothing found <i class="sq n"></i> no run recorded'+(runs.length?' · '+runs.length+' of '+(LENSES.length*ms.length)+' lens × market runs':'')+'</p></section>';
+    return h;
+  }
+  // 12 — read, not pinned: what was left out on purpose, and pins nothing rests on.
+  function rpExcluded(r, n){
+    var ex=arr(sel().excluded), used=reportCites(r), losers={};
+    arr(sel().contested).forEach(function(c){ arr(c.values).forEach(function(v){ losers[v.fact_id]=1; }); });
+    var ctx=Object.keys(pins()).filter(function(id){ return !losers[id]&&!used[id]&&!Object.keys(fnds()).some(function(f){ return arr(fnds()[f].cites).indexOf(id)!==-1; }); });
+    if(!ex.length&&!ctx.length) return '';
+    return '<section class="rp-sec" id="rp-excl">'+rpHead(n, 'Excluded', 'Read, not pinned')+'<div class="rp-excl">'
+      +ex.map(function(e){ var d=e.decision?decById(e.decision):null;
+        return '<div class="rp-ex"><span class="rp-ex-k">excluded · not pinned</span><span><b>'+esc(e.fact_id)+'</b> · '+esc(e.reason)+'</span><small>'+(d?esc(human(d.actor||d.agent))+' · '+esc(fmtWhen(d.timestamp)):'')+(e.decision?' · <span class="mono">'+esc(e.decision)+'</span>':'')+'</small></div>'; }).join('')
+      +ctx.map(function(id){ var p=pins()[id];
+        return '<div class="rp-ex"><span class="rp-ex-k">pinned · context only</span><span><button type="button" class="rp-pid" data-rsel="'+esc(id)+'">'+esc(id)+'</button> · '+esc(String(p.key||'').replace(/[._]/g,' '))+' '+esc(clipT(fmtPinValue(p), 40))+'. Neither a finding nor the report cites it.</span><small></small></div>'; }).join('')
+      +'</div></section>';
+  }
+  // 13 — how it ran: the crew's steps, oldest first, from the chain.
+  var RUN_STAGE={extract:'extract', identify:'identify', answer_question:'', lookup:'research', merge_research:'research', research_run:'research', research_merge:'research', contest:'research', open_contest:'research',
+    select:'select', synthesise:'synthesise', synthesise_finding:'synthesise', propose_audience:'synthesise', report:'report', compose_report:'report'};
+  var RUN_VERB={extract:'read the ask', identify:'worked out the brand and markets', select:'picked the lenses', research:'looked things up and pinned facts', synthesise:'worked out the points', report:'wrote the report'};
+  function runSteps(){
+    var out=[];
+    decs().slice().reverse().forEach(function(d){
+      if(/^human:/.test(actorOf(d))) return;
+      var k=RUN_STAGE[d.action]; if(k===undefined) k=d.action==='mark_stale'?'':'other'; if(!k) return;
+      var last=out[out.length-1];
+      if(last&&last.k===k) last.ds.push(d); else out.push({k:k, ds:[d]});
+    });
+    return out;
+  }
+  function rpHowRan(n){
+    var steps=runSteps(), runs=arr(sel().lenses_run).length, src=sourceIds().length, who={};
+    steps.forEach(function(s){ who[s.k]=1; });
+    var na=Object.keys(who).length;
+    var t=(na?(na<NUM.length?NUM[na]:String(na))+' step'+(na===1?'':'s'):'The run')+(runs?', '+runs+' lens run'+(runs===1?'':'s'):'')+(src?', '+src+' source'+(src===1?'':'s'):'');
+    var h='<section class="rp-sec" id="rp-ran">'+rpHead(n, 'How it ran', t);
+    if(!steps.length) h+='<p class="muted">'+(CHAIN.state==='ok'?'No steps by the crew are on the record.':'The record is not available here.')+'</p>';
+    else h+='<ol class="rp-run">'+steps.map(function(s){
+      var a=s.ds[0], z=s.ds[s.ds.length-1], hs=[];
+      s.ds.forEach(function(d){ var x=d.handler||d.agent; if(x&&hs.indexOf(x)===-1) hs.push(x); });
+      var nm=s.k==='other'?'The crew':s.k==='research'?'The researchers':stageWho(s.k);
+      var t1=fmtWhen(a.timestamp), t2=fmtWhen(z.timestamp);
+      return '<li><div><b>'+esc(nm)+'</b> '+esc(RUN_VERB[s.k]||s.ds.map(function(d){ return d.action; }).join(', '))+'<small>'+esc(hs.join(', '))+(hs.length?' · ':'')+s.ds.map(function(d){ return d.id?'<span class="mono">'+esc(d.id)+'</span>':''; }).filter(Boolean).join(' ')+'</small></div><span class="t">'+esc(t1===t2?t1:t1+' – '+t2)+'</span></li>';
+    }).join('')+'</ol>';
+    return h+'<p class="no-print"><button type="button" class="linkbtn" data-act="show-run">'+(document.body.classList.contains('show-run')?'Hide the run':'Show the run: your request, each stage and your answers')+'</button></p></section>';
+  }
+  // 14 — on the record: every decision, newest first, by kind and by who.
+  var REC={kind:'', who:''};
+  // One decision, one line; its reasons and what it touched open under it.
+  function recRow(d){
+    var k=kindOf(d), a=actorOf(d), hu=/^human:/.test(a), body=hasReasoning(d)?reasoningBlock(d.reasoning):d.rationale?'<p class="tlr">'+esc(d.rationale)+'</p>':'';
+    var tg=arr(d.targets).map(function(x){ return '<code title="target">→ '+esc(pathOf(x))+'</code>'; }).join('')+arr(d.cites).map(function(c){ return '<code title="cites">'+esc(c)+'</code>'; }).join('')
+      +(!d.targets?arr(d.fields_changed).map(function(c){ return '<code title="fields changed">'+esc(c)+'</code>'; }).join(''):'');
+    return '<details class="rp-dec k-'+esc(k)+'"><summary><span class="t">'+esc(fmtWhen(d.timestamp))+'</span><span class="pill'+(k==='verdict'&&d.polarity==='bad'||k==='contest'?' alert':k==='verify'||k==='resolve'||(k==='verdict'&&d.polarity==='good')?' ok':'')+'">'+esc(k)+(d.polarity?' · '+esc(d.polarity):'')+'</span>'
+      +'<span><b>'+esc(hu?human(a):a)+'</b> '+esc(d.action||'')+'</span><span class="mono">'+esc(d.id||'')+'</span></summary>'+body+(tg?'<div class="tlt">'+tg+'</div>':'')+'</details>';
+  }
+  function rpRecord(n){
+    if(CHAIN.state!=='ok') return '<section class="rp-sec" id="rp-rec">'+rpHead(n, 'On the record', CHAIN.state==='loading'?'Reading the record…':'The record is not available here')+'</section>';
+    var all=decs(), kinds=[];
+    all.forEach(function(d){ if(kinds.indexOf(kindOf(d))===-1) kinds.push(kindOf(d)); });
+    if(REC.kind&&kinds.indexOf(REC.kind)===-1) REC.kind='';
+    var shown=all.filter(function(d){ var hu=/^human:/.test(actorOf(d)); return (!REC.kind||kindOf(d)===REC.kind)&&(!REC.who||(REC.who==='people')===hu); });
+    var b=function(attr, v, on, label){ return '<button type="button" data-act="rec-filter" data-'+attr+'="'+esc(v)+'" aria-pressed="'+on+'">'+esc(label)+'</button>'; };
+    return '<section class="rp-sec" id="rp-rec">'+rpHead(n, 'On the record', all.length+' decision'+(all.length===1?'':'s'))
+      +'<div class="rp-recf no-print">Kind '+b('kind', '', !REC.kind, 'all')+kinds.sort().map(function(k){ return b('kind', k, REC.kind===k, k); }).join('')
+      +'<span class="sp"></span>Who '+b('who', '', !REC.who, 'all')+b('who', 'agents', REC.who==='agents', 'agents')+b('who', 'people', REC.who==='people', 'people')+'<span class="muted">'+shown.length+' shown</span></div>'
+      +'<div class="rp-decs">'+shown.map(recRow).join('')+'</div></section>';
+  }
+
   var MOUNTED=null;
   function renderReport(){
     var el=$('report'), r=D().report;
     $('nav-report-a').hidden=!isObj(r);
     if(!isObj(r)){ el.hidden=true; el.innerHTML=''; MOUNTED=null; return; }
     el.hidden=false;
-    if(typeof r.layout==='string'&&window.ClanFields){
+    var lk=reportLocked(), stale=reportStale(r), layout=typeof r.layout==='string'&&!!window.ClanFields, n=0;
+    if(!$('rp-pre')||(layout?!$('rep-layout'):!$('rp-body'))){
+      el.innerHTML='<article class="rep" aria-labelledby="h-report"><div id="rp-pre"></div>'+(layout?'<div id="rep-bar"></div><div class="cl-report rep-layout" id="rep-layout" aria-label="Report"></div>':'<div id="rp-body"></div>')+'<div id="rp-post"></div></article>';
+      MOUNTED=null;
+    }
+    var pre=rpBand(r, lk)+rpStats();
+    if(stale.length) pre+='<div class="rep-stale" role="status"><div><b>Out of date.</b> '+esc(staleText(stale))+' Refresh the report (in the Report box) to include it.</div></div>';
+    if(CHAT.reportErr) pre+='<div class="flag" role="alert"><div>'+esc(CHAT.reportErr)+'</div></div>';
+    pre+=rpAsk(0);
+    var hl=isObj(r.headline)?r.headline:{};
+    pre+='<section class="rp-sec rp-top" aria-label="Headline and summary"><div class="rs-h"><span>Headline</span></div><h2 class="headline" id="h-report">'+claimHtml(hl.text, hl.cites)+'</h2>';
+    if(arr(r.summary).length) pre+='<div class="rs-h"><span>Summary</span></div><ul class="rep-sum">'+arr(r.summary).map(function(s, i){ return '<li data-sum="'+i+'"><span>'+claimHtml(s&&s.text, s&&s.cites)+'</span></li>'; }).join('')+'</ul>';
+    pre+='</section>';
+    $('rp-pre').innerHTML=pre;
+    if(layout){
       // The agent's layout, over the record: the OS renders every figure in it.
-      var stale=reportStale(r);
-      var bar='<div class="rep-bar no-print"><span class="derived">'+ICON.agent+(r.layout_by==='agent'?'laid out by '+esc(given('drafter')):'laid out from the report')+'</span><span>written '+esc(fmtWhen(r.built_at))+'</span><span class="sp"></span>'
-        +(stale.length?'<span style="color:var(--create-ink)">'+esc(staleText(stale))+' Refresh it from the Report box.</span>':'')+'</div>'
-        +(CHAT.reportErr?'<div class="flag" role="alert"><div>'+esc(CHAT.reportErr)+'</div></div>':'');
+      $('rep-bar').innerHTML='<div class="rep-bar no-print"><span class="derived">'+ICON.agent+(r.layout_by==='agent'?'laid out by '+esc(given('drafter')):'laid out from the report')+'</span><span>written '+esc(fmtWhen(r.built_at))+'</span><span class="sp"></span>'
+        +(stale.length?'<span style="color:var(--create-ink)">'+esc(staleText(stale))+' Refresh it from the Report box.</span>':'')+'</div>';
       var key=r.built_at+'|'+r.layout.length;
-      if(MOUNTED!==key){
-        el.innerHTML='<div id="rep-bar"></div><article class="cl-report rep-layout" id="rep-layout" aria-label="Report"></article>';
-        ClanFields.mount($('rep-layout'), r.layout); MOUNTED=key;
-      } else ClanFields.refresh();
-      $('rep-bar').innerHTML=bar;
-      renderAsks();
-      return;
+      if(MOUNTED!==key){ ClanFields.mount($('rep-layout'), r.layout); MOUNTED=key; }
+    } else {
+      MOUNTED=null;
+      var ms=arr(camp().markets&&camp().markets.value).join(' · ');
+      $('rp-body').innerHTML=arr(r.sections).map(function(s){
+        if(!isObj(s)) return '';
+        n++;
+        return '<section class="rp-sec rep-sec" id="rs-'+esc(slug(s.id||''))+'"'+(s.lens?' data-lens="'+esc(s.lens)+'"':'')+'>'+rpHead(n, (s.lens?lensName(s.lens):'Section')+' · '+(s.market||ms||'every market'), s.title)+arr(s.blocks).map(rpBlock).join('')+'</section>';
+      }).join('');
     }
-    MOUNTED=null;
-    var stale=reportStale(r), hl=isObj(r.headline)?r.headline:{};
-    var h='<div class="rep"><div class="rep-top"><span class="eyebrow">Report</span><span class="derived">'+ICON.agent+'written by '+esc(given('drafter'))+'</span><span class="sp"></span>'
-      +'<span class="srcline">'+esc(fmtWhen(r.built_at))+'</span></div>';
-    if(stale.length) h+='<div class="rep-stale" role="status"><div><b>Out of date.</b> '+esc(staleText(stale))+' Refresh the report (in the Report box) to include it.</div></div>';
-    if(CHAT.reportErr) h+='<div class="flag" role="alert"><div>'+esc(CHAT.reportErr)+'</div></div>';
-    h+='<div class="rep-hl"><h2 class="headline" id="h-report">'+esc(hl.text)+'</h2>'+citeChips(hl.cites)+'</div>';
-    if(arr(r.summary).length) h+='<ul class="rep-sum">'+arr(r.summary).map(function(s){ return '<li><span>'+esc(s&&s.text)+' '+citeChips(s&&s.cites)+'</span></li>'; }).join('')+'</ul>';
-    arr(r.sections).forEach(function(s){
-      if(!isObj(s)) return;
-      h+='<div class="rep-sec" id="rs-'+esc(slug(s.id||''))+'"'+(s.lens?' data-lens="'+esc(s.lens)+'"':'')+'><h3>'+esc(s.title)+(s.lens?'<span class="pill">'+esc((LENS[s.lens]||{}).l||s.lens)+'</span>':'')+(s.market?'<span class="pill">'+esc(s.market)+'</span>':'')+'</h3>'+arr(s.blocks).map(blockHtml).join('')+'</div>';
-    });
-    var conf=arr(r.confirm);
-    if(conf.length){
-      h+='<div class="rep-sec"><h3>Confirm before the brief <span class="pill">'+conf.length+'</span></h3><ul class="confirm-list">'+conf.map(function(c){
-        var k=(/#campaign\.([a-z_]+)$/.exec(String(c&&c.address||''))||[])[1], env=k?camp()[k]:null;
-        var can=isObj(env)&&(env.origin==='extracted'||env.origin==='proposed');
-        return '<li class="'+(can?'':'done')+'"><div class="t">'+(k&&FIELD[k]?'<a href="#field-'+esc(k)+'" data-act="goto-confirm" data-field="'+esc(k)+'">'+esc(c.label)+'</a>':'<b>'+esc(c.label)+'</b>')+'<span>'+esc(c.why)+'</span></div>'
-          +(isObj(env)?originBadge(env.origin):'<span class="pill">not filled</span>')
-          +(can?'<button type="button" class="btn sm live no-print" data-act="confirm" data-field="'+esc(k)+'">'+ICON.check.replace('<svg','<svg style="width:12px;height:12px"')+'Confirm…</button>':'')+'</li>';
-      }).join('')+'</ul></div>';
-    }
-    var nr=arr(r.not_researched);
-    if(nr.length) h+='<div class="rep-sec"><h3>Not researched <span class="pill">'+nr.length+'</span></h3><ul class="nr-list">'+nr.map(function(n){
-      return '<li><span class="pill">'+esc((LENS[n.lens]||{}).l||n.lens)+'</span>'+(n.market?'<span class="pill">'+esc(n.market)+'</span>':'<span class="pill">every market</span>')+'<span>'+esc(n.reason)+'</span></li>'; }).join('')+'</ul></div>';
+    var post='';
+    var c1=rpConfirm(r, n+1); if(c1){ n++; post+=c1; }
+    var c2=rpNotResearched(r, n+1); if(c2){ n++; post+=c2; }
+    post+='<div class="rp-asks-at"></div>';
+    [function(k){ return rpContests(k); }, function(k){ return rpGaps(k); }, function(k){ return rpPinned(r, k); }, function(k){ return rpCoverage(k); },
+     function(k){ return rpExcluded(r, k); }, function(k){ return rpHowRan(k); }, function(k){ return rpRecord(k); }].forEach(function(f){ var x=f(n+1); if(x){ n++; post+=x; } });
     var bo=isObj(r.based_on)?r.based_on:{};
-    h+='<div class="rep-foot"><span>'+esc(r.handler)+'</span><span title="'+esc(bo.version)+'">composed from version '+esc(String(bo.version||'?').slice(7,19))+'</span><span title="'+esc(bo.facts_sha256)+'">facts '+esc(String(bo.facts_sha256||'?').slice(7,19))+'</span><span title="'+esc(bo.findings_sha256)+'">findings '+esc(String(bo.findings_sha256||'?').slice(7,19))+'</span><span>every claim cites a pin or a finding below</span></div></div>';
-    el.innerHTML=h;
+    post+='<div class="rep-foot"><span>'+esc(r.handler)+'</span><span title="'+esc(bo.version)+'">composed from version '+esc(String(bo.version||'?').slice(7,19))+'</span><span title="'+esc(bo.facts_sha256)+'">facts '+esc(String(bo.facts_sha256||'?').slice(7,19))+'</span><span title="'+esc(bo.findings_sha256)+'">findings '+esc(String(bo.findings_sha256||'?').slice(7,19))+'</span><span>every claim cites a pin or a finding</span></div>';
+    $('rp-post').innerHTML=post;
+    if(layout) ClanFields.refresh();
     renderAsks();
   }
   function doRefreshReport(){
@@ -3149,8 +3548,26 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       render();
     }, function(e){ CHAT.reportBusy=false; CHAT.reportErr='Not refreshed: the middleware could not be reached ('+(e&&e.message||e)+').'; render(); });
   }
+  // Everything recorded, opened (as the person would) and scrolled to a part of it.
+  function openRecords(to){
+    var rec=$('records'); if(!rec) return;
+    if(!rec.open){ rec.dataset.touched='1'; rec.open=true; document.body.classList.add('records-open'); }
+    var el=to&&$(to); if(el) el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
+  }
+  function gotoField(k){ openRecords(); gotoConfirm(k); }
+  // A gap's Research this: the gap goes into Ask the research, about its lens;
+  // nothing runs (and nothing is spent) until the person presses Ask.
+  function gapAsk(gid){
+    var g=gapById(gid); if(!g) return;
+    if(!$('rqin-_new')){ toast(reportLocked()?'The report is locked: ask on a new version.':'Asking runs through the host.'); return; }
+    ASK.ui['_new']={open:true, draft:'Look again: '+String(g.searched||'')+(g.market?' ('+g.market+')':''), lens:g.lens&&LENS[g.lens]?g.lens:''};
+    renderAsks();
+    if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
+    var i=$('rqin-_new'); if(i){ i.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); try{ i.focus({preventScroll:true}); i.setSelectionRange(i.value.length, i.value.length); }catch(e){} }
+  }
   function gotoConfirm(k){
-    var f=$('field-'+k); if(!f) return;
+    var rec=$('records'), f=$('field-'+k); if(!f) return;
+    if(rec&&rec.contains(f)&&!rec.open){ rec.dataset.touched='1'; rec.open=true; }
     f.scrollIntoView({block:'center', behavior:'smooth'});
     f.classList.remove('flash'); void f.offsetWidth; f.classList.add('flash');
     var b=f.querySelector('[data-act=confirm]')||f.querySelector('button');
@@ -3185,19 +3602,18 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       return '<li>'+(k&&FIELD[k]?'<a href="#field-'+esc(k)+'" data-act="goto-confirm" data-field="'+esc(k)+'">'+esc(c.label)+'</a>':'<b>'+esc(c&&c.label)+'</b>')+(c&&c.why?' — '+esc(c.why):'')+'</li>'; }).join('')+'</ul></details>';
     more+='<details><summary>How it ran</summary><p style="margin:8px 0 0">The request, each stage and your answers.'+(has&&r.handler?' Written by '+esc(r.handler)+'.':'')+'</p><p style="margin:6px 0 0"><button type="button" class="linkbtn" data-act="show-run">'+(document.body.classList.contains('show-run')?'Hide the run':'Show the run')+'</button></p></details>';
     $('rbox-more').innerHTML=more;
+    // Under the ask in the report once there is one (the mock); here until then.
+    $('extractBtn').hidden=has;
     $('insp-peek').textContent=st.label+(open&&!lk?' · '+open+' need'+(open===1?'s':'')+' your call':'');
     sendBar(st, has, lk);
     if(VIEW.v==='map') renderMap();
     renderSel();
   }
-  // What the OS bar shows (clan:bar, app/src/shell/appBar.ts): the state, and
-  // Refresh, Lock and accept and Export, each doing what its button here does.
+  // What the OS bar shows (clan:bar, app/src/shell/appBar.ts): the report's
+  // state. Continue in, Share and Export are the bar's own; Refresh, Lock and
+  // accept and Run research are the Report box's (decision, 9 Nov).
   function barItems(st, has, lk){
-    var items=[{kind:'status', label:st.label, tone:st.tone, locked:st.locked}];
-    if(has) items.push({kind:'button', id:'refresh', label:'Refresh', primary:false, disabled:lk||!!CHAT.reportBusy, title:lk?'The report is locked: this version is the one agreed to.':'Write the report again from the document as it stands'});
-    items.push({kind:'button', id:'lock', label:'Lock and accept', primary:true, disabled:lk, title:lk?'Locked':'Lock and accept this version'});
-    items.push({kind:'button', id:'export', label:'Export', primary:false, disabled:false, title:'Save the report as a PDF'});
-    return items;
+    return [{kind:'status', label:st.label, tone:st.tone, locked:st.locked}];
   }
   function sendBar(st, has, lk){
     var items=barItems(st, has, lk), k=JSON.stringify(items);
@@ -3541,34 +3957,6 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(!named.length) return u.length===1?'Used in a locked brief.':'Used in '+u.length+' locked briefs.';
     return 'Used in brief'+(named.length===1?' ':'s ')+listJoin(named)+(u.length>named.length?' and '+(u.length-named.length)+' more':'')+'.';
   }
-  // ── a brief from this report: the host's own spin-off (Contract 4 §8.1) ──
-  // The same route as the shell's "Continue in…", asked from here once the
-  // report is locked; the host opens the new brief in the shell. Offered only
-  // when an app that takes this report whole is installed.
-  var SPIN={targets:null, asking:false, busy:false};
-  function briefTarget(){
-    var t=arr(SPIN.targets);
-    return t.filter(function(x){ return x&&x.app_id==='ie.napkin.brief-maker'; })[0]||t.filter(function(x){ return x&&x.upstream; })[0]||null;
-  }
-  function askTargets(){
-    if(SPIN.targets||SPIN.asking||!hasHost()) return;
-    SPIN.asking=true;
-    fetch(clanScheme+'/spinoff-targets').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
-      .then(function(t){ SPIN.targets=arr(t); }, function(){ SPIN.targets=[]; })
-      .then(function(){ SPIN.asking=false; renderChecks(); });
-  }
-  function doSpinBrief(){
-    var t=briefTarget(); if(!t||SPIN.busy) return;
-    SPIN.busy=true; renderChecks();
-    fetch(clanScheme+'/spinoff', {method:'POST', body:JSON.stringify({app_id:t.app_id})})
-      .then(function(r){ return r.json().catch(function(){ return {ok:false, error:'status '+r.status}; }); })
-      .then(function(res){
-        SPIN.busy=false; renderChecks();
-        if(res&&res.ok) toast('Brief started. It opens with this report in it.');
-        else toast('Not started: '+((res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused'));
-      }, function(e){ SPIN.busy=false; renderChecks(); toast('Not started: '+(e&&e.message||e)); });
-  }
-
   var NUM=['No','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve'];
   function judgeBarHtml(all){
     var N=all.length, open=all.filter(function(c){ return c.open; }).length, jn=given('judge');
@@ -3595,11 +3983,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       return h+'<p class="jb-text"><b>'+esc(jn)+' here: '+esc(cn+what)+'.</b> '+esc(op.length?(op.length===1?'It’s':'Each is')+' marked on the report. ':'')+'A brief can start from it once it is changed and locked again.'+usedP+'</p></div>';
     }
     if(L){
-      var by=L.who&&L.who.you?'You':(L.who&&L.who.name)||'A person', bt;
-      askTargets(); bt=briefTarget();
+      var by=L.who&&L.who.you?'You':(L.who&&L.who.name)||'A person';
       return h+'<p class="jb-text"><b>'+esc(jn)+' here: this report is locked.</b> '+esc(by)+' agreed to it'+(L.decision&&L.decision.timestamp?' on '+esc(fmtWhen(L.decision.timestamp)||String(L.decision.timestamp).slice(0,10)):'')+'. A change from here makes a new version.'+usedP+'</p>'
         +'<div class="jb-count"><span class="jb-done">✓ Locked</span>'
-        +(bt?'<button type="button" class="jb-btn go" data-act="spin-brief" title="'+esc('Opens a new brief'+(bt.name?' in '+bt.name:'')+', carrying this report, its facts and its checks')+'"'+(SPIN.busy?' disabled':'')+'>'+(SPIN.busy?'Starting…':'Start a brief from this')+'</button>':'')
+        +'<span class="jb-hint">A brief starts from it with <b>Continue in ▾</b> in the bar above.</span>'
         +'</div></div>';
     }
     if(!N) return h+'<p class="jb-text"><b>'+esc(jn)+' here: your report is ready.</b> Nothing in it needs a person to check.'+usedP+'</p><div class="jb-count">'+lockBtn+'</div></div>';
@@ -3732,7 +4119,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   }
   function askCite(ids){
     ids=arr(ids); if(!ids.length) return '';
-    return window.ClanFields?' <clan-cite refs="'+esc(ids.join(' '))+'"></clan-cite>':' '+citeChips(ids);
+    return window.ClanFields?' <clan-cite refs="'+esc(ids.join(' '))+'"></clan-cite>':' '+restCites(ids, ids);
   }
   function askAnswerHtml(a){
     var n=arr(a.new_facts).length, s=arr(a.answer);
@@ -3772,6 +4159,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return '<div class="rq-box no-print'+(key==='_new'?' rq-new':'')+'" id="rqbox-'+esc(slug(key))+'"><label for="'+id+'">'+esc(label)+'</label><div class="r">'
       +'<input type="text" id="'+id+'" data-k="'+esc(key)+'" value="'+esc(ui.draft||'')+'" maxlength="1000" autocomplete="off" placeholder="'+esc(key==='_new'?'What should the research look into?':'What do you want to know?')+'">'
       +'<button type="button" class="ans primary" data-act="rq-send" data-k="'+esc(key)+'">Ask</button></div>'
+      +(key==='_new'?'<label class="rq-about">About <select id="rqlens-_new" data-k="_new"><option value="">anything</option>'+LENSES.map(function(L){ return '<option value="'+esc(L.k)+'"'+(ui.lens===L.k?' selected':'')+'>'+esc(L.l)+'</option>'; }).join('')+'</select></label>':'')
       +(key==='_new'?'<p class="rq-hint">A new question gets a section of its own. The crew answers from what the research found, and looks further only if that isn’t enough.</p>':'')+'</div>';
   }
   function renderAsks(){
@@ -3785,7 +4173,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     LENSES.forEach(function(L){
       var mine=all.filter(function(a){ return a.in_section&&a.lens===L.k; }), jobs=ASK.jobs.filter(function(j){ return j.lens===L.k; }), el=secs[L.k];
       if(!el){ own=own.concat(mine); ownJobs=ownJobs.concat(jobs); return; }
-      var h=mine.map(askAnswerHtml).join('')+jobs.map(askPendingHtml).join('')+(can?askBoxHtml(L.k, 'Ask about '+L.l.toLowerCase()):'');
+      // One Ask the research box (the inspector's): a question about this lens is asked there, with About set to it.
+      var h=mine.map(askAnswerHtml).join('')+jobs.map(askPendingHtml).join('');
       if(h) put(el, h, 'afterend');
     });
     own=all.filter(function(a){ return !a.in_section; }).concat(own);
@@ -3796,7 +4185,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var box=can?askBoxHtml('_new', 'Ask the research'):'';
     if(box&&side) put(side, box, 'beforeend'); else tail+=box;
     if(tail){
-      var lay=askBox(), foot=lay?lay.querySelector(':scope > footer, :scope > .cl-foot'):root.querySelector('.rep-foot');
+      var at=root.querySelector('.rp-asks-at'), lay=askBox(), foot=at||(lay?lay.querySelector(':scope > footer, :scope > .cl-foot'):root.querySelector('.rep-foot'));
       if(foot) put(foot, tail, 'beforebegin'); else put(lay||root.querySelector('.rep')||root, tail, 'beforeend');
     }
     if(cites&&window.ClanFields) ClanFields.refresh();
@@ -3812,7 +4201,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var box=$('rqin-'+slug(key)), ui=ASK.ui[key]||{}, q=String((box&&box.value)||ui.draft||'').trim();
     if(!q){ toast('Type a question first.'); var i=$('rqin-'+slug(key)); if(i) i.focus(); return; }
     if(!(window.clan&&window.clan.apiProxy)){ toast('Asking runs through the host.'); return; }
-    var j={lens:key==='_new'?null:key, question:q, state:'sending'};
+    var ls=$('rqlens-'+slug(key)), lens=key==='_new'?((ls&&ls.value)||ui.lens||null):key;
+    var j={lens:lens&&LENS[lens]?lens:null, question:q, state:'sending'};
     ASK.jobs.push(j); ASK.ui[key]={open:false, draft:''}; renderAsks();
     sendAsk(j);
   }
@@ -3921,6 +4311,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     else if(id&&id.indexOf('qtext-')===0) CHAT.qdraft[t.getAttribute('data-q')]=t.value;
     else if(id&&id.indexOf('chkwhy-')===0){ var ui=CHK.ui[t.getAttribute('data-ref')]; if(ui) ui.why=t.value; }
     else if(id&&id.indexOf('rqin-')===0){ var ak=t.getAttribute('data-k'); (ASK.ui[ak]||(ASK.ui[ak]={})).draft=t.value; }
+    else if(id&&id.indexOf('rqlens-')===0){ var lk2=t.getAttribute('data-k'); (ASK.ui[lk2]||(ASK.ui[lk2]={})).lens=t.value; }
   });
   document.addEventListener('keydown', function(e){
     var t=e.target; if(e.key!=='Enter'||e.isComposing||!t||!t.id) return;
@@ -4022,9 +4413,14 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
         onCheck(act, b); break;
       case 'chk-next': nextCheck(); break;
       case 'lock': doLock(); break;
-      case 'spin-brief': doSpinBrief(); break;
+      case 'goto-field': gotoField(b.getAttribute('data-field')); break;
+      case 'goto-records': openRecords(b.getAttribute('data-to')); break;
+      case 'extract': doExtract(); break;
+      case 'gap-ask': gapAsk(b.getAttribute('data-gap')); break;
+      case 'rec-filter': if(b.hasAttribute('data-kind')) REC.kind=b.getAttribute('data-kind'); if(b.hasAttribute('data-who')) REC.who=b.getAttribute('data-who'); renderReport(); renderChecks(); break;
       case 'rq-open': case 'rq-cancel': case 'rq-send': case 'rq-retry': case 'rq-drop': onAskAct(act, b); break;
-      case 'export-html': doExport('html'); break;
+      case 'export-html': doExport('html'); var sm=b.closest('details'); if(sm) sm.open=false; break;
+      case 'export-pdf': doExport('pdf'); var sm2=b.closest('details'); if(sm2) sm2.open=false; break;
       case 'rq-jump': var bx=$('rqbox-_new'), bi=$('rqin-_new'); if(bx){ bx.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); if(bi) setTimeout(function(){ try{ bi.focus({preventScroll:true}); }catch(x){} }, calm()?0:350); } else toast('Asking needs a report first.'); break;
     }
   });
@@ -4060,6 +4456,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     e.preventDefault(); e.stopImmediatePropagation();
     select(ref, false);
   }, true);
+  $('report').addEventListener('click', function(e){
+    var t=e.target.closest&&e.target.closest('[data-rsel]'); if(!t) return;
+    e.preventDefault(); select(t.getAttribute('data-rsel'), false);
+  });
   try{ if(sessionStorage.getItem('clan.research.view.'+docId())==='map') setView('map'); }catch(e){}
 
   window.addEventListener('clan:dataupdated', render);
