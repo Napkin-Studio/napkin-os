@@ -285,6 +285,8 @@ export const httpHost: Host = {
     if (!resp.ok) throw new Error(((await resp.json().catch(() => null)) as { error?: string } | null)?.error ?? `acknowledge: ${resp.status}`)
   },
 
+  verify: async (finding, rationale) => { await clanPost<unknown>('/verify', { finding, rationale }) },
+
   upstream: () => clanCall<UpstreamView>('/upstream'),
   updateFromUpstream: () => clanPost<UpstreamUpdateReply>('/upstream/update', {}),
   cites: async refs => (await clanPost<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,

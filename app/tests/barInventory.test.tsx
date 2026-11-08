@@ -16,7 +16,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import Toolbar from '../src/components/Toolbar.tsx'
-import { continueItems, deskItems, madeFromOf, moreItems, type DocBar } from '../src/components/barMenus.ts'
+import { continueItems, deskItems, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 import { Trail } from '../src/shell/landing/Trail.tsx'
@@ -54,19 +54,22 @@ test('the desk: medallion, agency pill, where you are, Offline, the theme, Decis
   assert.match(html, /aria-haspopup="menu"[^>]*>More /)
   assert.deepEqual(labels(deskItems('sam@studio-a', noop)), ['Sign out'])
   assert.deepEqual(deskItems(null, noop), [], 'no accounts, no Sign out')
+  // Open… (a .clan from this computer) sits in the desk's More too (open question answered 9 Nov 2026).
+  assert.deepEqual(labels(deskItems('sam@studio-a', noop, noop)), ['Open…', 'Sign out'])
+  assert.deepEqual(labels(deskItems(null, noop, noop)), ['Open…'])
   assert.doesNotMatch(html, /data-attention/, 'the desk never lights the medallion')
 })
 
-test('a document: the slot holds the tool, the title, the state, Continue in and More; Share, Saved and the chips are on the bar', () => {
+test('a document: the slot holds the tool, the title, the state, Continue in, Share and More; Saved and the chips are on the bar', () => {
   const items = barFrom({ v: 1, items: [
     { kind: 'button', id: 'a', label: 'Build', primary: true }, { kind: 'button', id: 'b', label: 'Check' }, { kind: 'button', id: 'c', label: 'Rerun' },
     { kind: 'chip', label: '0 errors', tone: 'ok' },
   ] })
   const html = bar({
     needs: 2, attention: true, decisionsOpen: true,
-    doc: doc({ bar: items, isTemplate: true, trusted: true, validation: 'bad header', state: { label: 'Needs you (2)', tone: 'warn', locked: false } }),
+    doc: doc({ bar: items, isTemplate: true, trusted: true, validation: 'bad header', state: { label: 'Draft', tone: null, locked: false } }),
   })
-  for (const want of ['>Brief<', '>Spring brief<', 'Needs you (2)', '>Continue in <', '>More <', '>Share<', '>Saved<',
+  for (const want of ['>Brief<', '>Spring brief<', 'Draft', '>Continue in <', '>More <', '>Share <', '>Saved<',
     '>Template<', '>Trusted<', 'Something’s wrong with this file', '>0 errors<', '>Build<', '>Check<']) {
     assert.ok(html.includes(want), `bar shows ${want}`)
   }
@@ -124,7 +127,7 @@ test('client review: the bar is the mode\'s, with the tag and Cancel', () => {
   assert.match(html, /data-where="client-review"/)
   assert.match(html, /Client review<\/span>/)
   assert.match(html, />Cancel</)
-  assert.ok(!html.includes('>Share<'), 'the document\'s other actions wait')
+  assert.ok(!html.includes('>Share <'), 'the document\'s other actions wait')
 })
 
 test('on the device: no Saved, and nothing breaks with no accounts', () => {
@@ -158,4 +161,53 @@ test('madeFromOf reads the direct parent the host holds, and nothing else', () =
   }
   assert.deepEqual(madeFromOf(view), { title: 'Lúnasa research', changed: true, decisionsSince: 3 })
   assert.equal(madeFromOf({ ...view, upstream: [{ ...view.upstream[0], in_store: false }] }), null)
+  assert.equal(madeFromOf({ ...view, upstream: [{ ...view.upstream[0], path: 'store/r' }] })?.path, 'store/r', 'the chip opens it where the store can say')
+})
+
+test('one needs indicator: Decisions is amber with the count; the state pill never repeats it', () => {
+  const html = bar({ needs: 2, attention: true, doc: doc({ state: { label: 'Draft', tone: null, locked: false } }) })
+  assert.match(html, /class="ch-decisions ch-decisions-needs"/)
+  assert.doesNotMatch(html, /Needs you \(/)
+  assert.doesNotMatch(bar({ needs: 0, doc: doc() }), /ch-decisions-needs/, 'nothing needs a call: not amber')
+  // The medallion reacts only for the open app, and never on the desk.
+  assert.match(html, /data-testid="medallion-mark" data-state="needs"/)
+  assert.match(bar({ needs: 0, doc: doc() }), /data-state="awake"/)
+  assert.match(bar({ needs: 5, attention: true }), /data-state="awake"/, 'the desk count never lights it')
+})
+
+test('Share ▾: Copy link where there is a server, Download a copy always; client copy and crew say what is not built', () => {
+  const on = shareItems({ onSave: noop, onCopyLink: noop, locked: false })
+  assert.deepEqual(labels(on), ['Copy link', 'Download a copy', 'Send the client copy', 'Invite to the crew'])
+  assert.match(on[2].hint ?? '', /Lock it first/)
+  assert.ok(on[2].disabled && on[3].disabled, 'shown, never faked')
+  assert.match(shareItems({ onSave: noop, locked: true })[1].hint ?? '', /confidential parts out is not built yet/)
+  assert.deepEqual(labels(shareItems({ onSave: noop })), ['Download a copy', 'Send the client copy', 'Invite to the crew'], 'no server: no link')
+  let saved = 0
+  shareItems({ onSave: () => { saved++ } })[0].run()
+  assert.equal(saved, 1, 'the old Share (download a copy) keeps its home')
+})
+
+test('lineage chips beside the name, and the crew before Decisions with an agent only while one works', () => {
+  const opened: string[] = []
+  const html = bar({ doc: doc({
+    madeFrom: { title: 'Lúnasa research', path: 'store/r1', changed: true },
+    madeInto: { count: 2, noun: 'deck' },
+    onOpenDocument: p => { opened.push(p) },
+    crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: 'writing' },
+  }) })
+  assert.match(html, /data-testid="lineage-from"[^>]*>from <b>Lúnasa research<\/b>/)
+  assert.match(html, /→ <b>2 decks<\/b>/)
+  assert.match(html, /aria-label="In this document: Sam \(you\); an agent is writing"/)
+  assert.match(html, /data-testid="agent-working"/)
+  assert.ok(html.indexOf('data-testid="crew"') < html.indexOf('data-testid="decisions"'), 'the crew sits before Decisions')
+  const idle = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: null } }) })
+  assert.doesNotMatch(idle, /agent-working/, 'no agent works: no status dot')
+  assert.doesNotMatch(bar({ doc: doc() }), /ch-lineage/, 'made from nothing: no chips')
+})
+
+test('the bar is three groups: who and where, the document, the tools', () => {
+  const html = bar({ doc: doc() })
+  const l = html.indexOf('ch-bar-l'), c = html.indexOf('ch-bar-c'), r = html.indexOf('ch-bar-r')
+  assert.ok(l > 0 && l < c && c < r)
+  assert.ok(html.indexOf('data-testid="medallion"') < c && html.indexOf('ch-slot') > c && html.indexOf('data-testid="decisions"') > r)
 })

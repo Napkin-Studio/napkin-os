@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Toolbar, { type ToolBrand } from '../components/Toolbar'
+import Toolbar, { type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
 import { useMadeFrom, useSpinoffTargets } from '../components/ContinueIn'
 import Sidebar from '../components/Sidebar'
@@ -12,6 +12,8 @@ import WorkspaceView from './WorkspaceView'
 import DecisionPanel from './decisions/DecisionPanel'
 import { setScreen } from '../dogfood/recorder'
 import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
+import { splitAside } from './decisions/needs'
+import { useSetAside } from './decisions/useSetAside'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
@@ -48,12 +50,18 @@ interface Props {
   onSignOut?: () => void
   /** Each change is kept as it is made, so the bar may say "Saved" (Toolbar). */
   saved?: boolean
-  /** Open another document of the store (the sidebar's "Made from" link). */
+  /** Open another document of the store (the sidebar's "Made from" link, the bar's lineage chips). */
   onOpenDocument?: (path: string) => void
+  /** The medallion's colours (the agency's base and accent). */
+  mark?: { base: string; accent: string }
+  /** Share ▾ "Copy link"; absent where there is no server to open a link from. */
+  onCopyLink?: () => void
+  /** Who is in the document (the bar's crew). */
+  crew?: Crew
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   // Edit mode is the OS's: the app's fields become editable while it is on.
@@ -63,8 +71,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // The host's view of the document, read once: the panel renders it, and
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
-  // The needs-your-call count, from the one selector the drawer lists from.
-  const needs = useMemo(() => needsOf(decisions.view).length, [decisions.view])
+  // The needs-your-call count, from the one selector the drawer lists from,
+  // less what this person set aside (it still blocks the lock).
+  const aside = useSetAside(docPath)
+  const needs = useMemo(() => splitAside(needsOf(decisions.view), aside.keys).open.length, [decisions.view, aside.keys])
   // The Decisions drawer, opened from the bar. Kept with the document it was opened on.
   const [drawer, setDrawer] = useState<{ docPath: string; open: boolean }>({ docPath, open: false })
   const decisionsOpen = drawer.docPath === docPath && drawer.open
@@ -271,6 +281,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <div className="ch-strip" />
       <Toolbar
         agency={agency}
+        mark={mark}
         onAgency={onAgency}
         onHome={onHome}
         crumbs={trail}
@@ -295,6 +306,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           sidebarOpen,
           onWorkspace: () => setWorkspaceOpen(true),
           onSave,
+          onCopyLink: open.is_template ? undefined : onCopyLink,
+          locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
+          onOpenDocument,
+          crew,
           onKeepOffline,
           onExport,
           targets,
@@ -361,7 +376,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onSave={save}
           />
         ) : (
-          <DecisionPanel decisions={decisions} open={decisionsOpen} onOpenChange={setDecisionsOpen} />
+          <DecisionPanel decisions={decisions} open={decisionsOpen} onOpenChange={setDecisionsOpen} aside={aside} />
         )}
       </div>
       <footer className="ch-footer" ref={footRef}>

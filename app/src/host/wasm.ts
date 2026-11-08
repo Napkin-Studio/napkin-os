@@ -258,6 +258,8 @@ export const wasmHost: Host = {
     dispatch(resp)
   },
 
+  verify: async (finding, rationale) => { await post<unknown>('/verify', { finding, rationale }) },
+
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
   updateFromUpstream: () => post<UpstreamUpdateReply>('/upstream/update', {}),
   cites: async refs => (await post<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,

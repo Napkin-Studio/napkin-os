@@ -3,26 +3,30 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // The one OS bar (features/new-ui-shell.clan): the same bar on the desk and in
-// a document. From the left: the medallion (the way home, and the one mark
-// that changes when the app you are IN needs you), the agency's pill in the
-// agency's colours, where you are (Clients › client › tool), the OS app slot
-// (the tool, the document's name, its state, Continue in ▾ and More ▾), the
-// app's own buttons and chips, then the needs-your-call count on the Decisions
-// button, the theme toggle and the beta badge.
+// a document, in three groups spread across its width (owner, 9 Nov 2026).
+// Left, who and where: the medallion (the way home, and the one mark that
+// changes when the app you are IN needs you), the agency's pill in the
+// agency's colours, and where you are (Clients › client › tool). Centre, the
+// document: the OS app slot (the tool, the document's name, what it was made
+// from and what was made from it, its state, Continue in ▾, Share ▾ and
+// More ▾). Right, the tools: the app's own chips and buttons, Saved, the beta
+// badge, the theme, the crew in the document, and Decisions, the bar's one
+// needs-your-call signal (amber with the count).
 //
 // Pure: everything it shows comes in as props (the spin-off targets, who is
 // signed in, the Saved status), so a test can draw every state with no host.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { StudioMark } from '../brand/StudioMark'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { continueItems, deskItems, moreItems, type DocBar, type DocState, type MenuItem, type ToolBrand } from './barMenus'
+import { continueItems, deskItems, moreItems, shareItems, type Crew, type DocBar, type DocState, type MenuItem, type ToolBrand } from './barMenus'
+import { MedallionMark } from './Medallion'
+import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { BarButtons, BarChips } from './AppBarItems'
 import './chrome.css'
 
-export type { DocBar, DocState, MenuItem, ToolBrand } from './barMenus'
+export type { Crew, DocBar, DocState, MenuItem, ToolBrand } from './barMenus'
 
 interface Props {
   /** The signed-in agency's name, on the pill. */
@@ -31,6 +35,10 @@ interface Props {
   onAgency: () => void
   /** The medallion: back to the studio. */
   onHome: () => void
+  /** The medallion's colours: the agency's base and accent (shell/agency/palette.ts), else Napkin's. */
+  mark?: { base: string; accent: string }
+  /** The desk's More ▾ "Open…": a .clan from this computer. */
+  onOpenFile?: () => void
   /**
    * The medallion's state: the app the person is IN needs them (the open
    * document has something blocking its lock). Never shown on the desk, and
@@ -39,9 +47,9 @@ interface Props {
   attention?: boolean
   /** Where you are below the agency: Clients › client › tool (Trail without its agency level). */
   crumbs?: ReactNode
-  /** The needs-your-call count beside Decisions. Desk: across all clients; document: needsOf(view). */
+  /** The needs-your-call count beside Decisions. Desk: across all clients; document: needsOf(view) less what was set aside. */
   needs: number
-  /** Decisions: the drawer in a document, the agency's needs-you list on the desk. */
+  /** Decisions: the drawer in a document; on the desk, the drawer of every document across clients that needs a call. */
   onDecisions?: () => void
   decisionsOpen?: boolean
   /** Desk-only tools at the end (Offline). */
@@ -140,9 +148,11 @@ function BarMenu({ id, label, groups, className }: { id: string; label: string; 
                   <button
                     className="ch-menu-item"
                     role="menuitem"
+                    aria-disabled={item.disabled || undefined}
                     data-dogfood={`menu: ${item.label}`}
                     tabIndex={-1}
-                    onClick={() => { close(true); item.run() }}
+                    // Shown so it can be found and its hint read; it does nothing yet.
+                    onClick={() => { if (item.disabled) return; close(true); item.run() }}
                   >
                     {item.label}
                     {item.hint && <small>{item.hint}</small>}
@@ -157,8 +167,8 @@ function BarMenu({ id, label, groups, className }: { id: string; label: string; 
   )
 }
 
-/** The medallion: the studio's mark in a raised circle; a ring when the app you are in needs you. */
-function Medallion({ onHome, attention }: { onHome: () => void; attention?: boolean }) {
+/** The medallion: the mock's satin mark in a raised circle; it warms and rings when the app you are in needs you. */
+function Medallion({ onHome, attention, mark }: { onHome: () => void; attention?: boolean; mark: { base: string; accent: string } }) {
   return (
     <button
       className="ch-medallion"
@@ -168,8 +178,55 @@ function Medallion({ onHome, attention }: { onHome: () => void; attention?: bool
       title={attention ? 'Back to the studio. This document needs you.' : 'Back to the studio'}
       aria-label={attention ? 'Back to the studio (this document needs you)' : 'Back to the studio'}
     >
-      <StudioMark size={26} />
+      <MedallionMark base={mark.base} accent={mark.accent} state={attention ? 'needs' : 'awake'} />
     </button>
+  )
+}
+
+/** Beside the document's name: what it was made from, what was made from it, and what is linked to it. */
+function Lineage({ doc }: { doc: DocBar }) {
+  const from = doc.madeFrom
+  const open = (path?: string) => (path && doc.onOpenDocument ? () => doc.onOpenDocument!(path) : undefined)
+  const chips: ReactNode[] = []
+  if (from) {
+    const go = open(from.path)
+    chips.push(
+      <button key="from" type="button" className="ch-line" onClick={go} disabled={!go} data-testid="lineage-from"
+        title={from.changed ? `Made from ${from.title}, which has changed since` : `Made from ${from.title}`}>
+        from <b>{from.title}</b>{from.changed && <i className="ch-line-dot" aria-label="changed since" />}
+      </button>,
+    )
+  }
+  if (doc.madeInto && doc.madeInto.count > 0) {
+    const n = doc.madeInto.count, noun = doc.madeInto.noun ?? 'document'
+    const go = open(doc.madeInto.path)
+    chips.push(
+      <button key="into" type="button" className="ch-line" onClick={go} disabled={!go} data-testid="lineage-into"
+        title={`${n} ${n === 1 ? noun : noun + 's'} made from this`}>
+        → <b>{n} {n === 1 ? noun : `${noun}s`}</b>
+      </button>,
+    )
+  }
+  for (const l of doc.linked ?? []) {
+    const go = open(l.path)
+    chips.push(
+      <button key={`l:${l.path ?? l.title}`} type="button" className="ch-line ch-line-link" onClick={go} disabled={!go} title={`Linked: ${l.title}`}>
+        ↔ <b>{l.title}</b>
+      </button>,
+    )
+  }
+  return chips.length ? <span className="ch-lineage">{chips}</span> : null
+}
+
+/** Who is in the document: the people, then an agent with a status dot only while one works. */
+function CrewHere({ crew }: { crew: Crew }) {
+  const names = crew.people.map(p => (p.you ? `${p.name} (you)` : p.name))
+  const said = `In this document: ${names.join(', ') || 'nobody yet'}${crew.working ? `; an agent is ${crew.working}` : ''}`
+  return (
+    <span className="ch-crew" role="group" aria-label={said} title={said} data-testid="crew">
+      {crew.people.map(p => <i key={p.name} className="ch-crew-p" aria-hidden>{p.initials}</i>)}
+      {crew.working && <i className="ch-crew-agent" data-testid="agent-working" aria-hidden />}
+    </span>
   )
 }
 
@@ -207,7 +264,7 @@ function DecisionsButton({ needs, onDecisions, open }: { needs: number; onDecisi
   const said = needs ? `${needs} need${needs === 1 ? 's' : ''} your call` : 'nothing needs your call'
   return (
     <button
-      className="ch-decisions"
+      className={needs ? 'ch-decisions ch-decisions-needs' : 'ch-decisions'}
       onClick={onDecisions}
       disabled={!onDecisions}
       aria-expanded={open}
@@ -222,30 +279,31 @@ function DecisionsButton({ needs, onDecisions, open }: { needs: number; onDecisi
 }
 
 export default function Toolbar({
-  agency, onAgency, onHome, attention, crumbs, needs, onDecisions, decisionsOpen, tools, user, onSignOut, doc,
+  agency, onAgency, onHome, mark = markOf(null), onOpenFile, attention, crumbs, needs, onDecisions, decisionsOpen, tools, user, onSignOut, doc,
 }: Props) {
   const lead = (
-    <>
+    <span className="ch-bar-l">
       <span className="ch-dock">
-        <Medallion onHome={onHome} attention={!!doc && attention} />
+        <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} />
         <AgencyPill agency={agency} onAgency={onAgency} />
       </span>
       {crumbs && <span className="ch-crumbs">{crumbs}</span>}
-    </>
+    </span>
   )
 
   // ── the desk: no document ─────────────────────────────────────────────────
   if (!doc) {
-    const desk = deskItems(user, onSignOut)
+    const desk = deskItems(user, onSignOut, onOpenFile)
     return (
       <div className="ch-bar ch-bar-os" data-testid="os-bar" data-where="desk">
         {lead}
-        <span className="ch-bar-spacer" />
-        {tools}
-        {desk.length > 0 && <BarMenu id="ch-desk-menu" label="More" groups={[{ items: desk }]} />}
-        <DogfoodBadge />
-        <ThemeToggle />
-        <DecisionsButton needs={needs} onDecisions={onDecisions} />
+        <span className="ch-bar-r">
+          {tools}
+          {desk.length > 0 && <BarMenu id="ch-desk-menu" label="More" groups={[{ items: desk }]} />}
+          <DogfoodBadge />
+          <ThemeToggle />
+          <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
+        </span>
       </div>
     )
   }
@@ -258,16 +316,19 @@ export default function Toolbar({
     return (
       <div className="ch-bar ch-bar-os ch-bar-mode" role="region" aria-label="Client review" data-testid="os-bar" data-where="client-review">
         {lead}
-        <span className="ch-slot">
-          {doc.tool && <ToolName tool={doc.tool} />}
-          <span className="ch-slot-title">{title}</span>
+        <span className="ch-bar-c">
+          <span className="ch-slot">
+            {doc.tool && <ToolName tool={doc.tool} />}
+            <span className="ch-slot-title">{title}</span>
+          </span>
+          <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
         </span>
-        <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
-        <span className="ch-bar-spacer" />
-        <button className="ch-btn" onClick={doc.clientMode.onCancel} disabled={doc.clientMode.busy} title="Leave client review. Nothing you have not saved is kept.">
-          Cancel
-        </button>
-        <ThemeToggle />
+        <span className="ch-bar-r">
+          <button className="ch-btn" onClick={doc.clientMode.onCancel} disabled={doc.clientMode.busy} title="Leave client review. Nothing you have not saved is kept.">
+            Cancel
+          </button>
+          <ThemeToggle />
+        </span>
       </div>
     )
   }
@@ -276,65 +337,68 @@ export default function Toolbar({
   return (
     <div className="ch-bar ch-bar-os" data-testid="os-bar" data-where="document">
       {lead}
-      <span className="ch-slot" role="group" aria-label="App">
-        {doc.tool && <ToolName tool={doc.tool} />}
-        <span className="ch-slot-title">{title}</span>
-        {doc.state && <StatePill state={doc.state} />}
-        <BarMenu
-          id="ch-continue-menu"
-          label="Continue in"
-          className="ch-btn ch-btn-slot"
-          groups={[
-            { label: 'Turn it into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
-            { label: 'Link to an existing one', items: cont.link, empty: 'Linking to other work is coming.' },
-            ...(doc.madeFrom
-              ? [{
-                  label: 'Made from',
-                  items: cont.update,
-                  empty: doc.madeFrom.changed
-                    ? `${doc.madeFrom.title} changed. A locked version keeps what it was made from.`
-                    : `Up to date with ${doc.madeFrom.title}.`,
-                }]
-              : []),
-          ]}
-        />
-        <BarMenu id="ch-more-menu" label="More" className="ch-btn ch-btn-slot" groups={[{ items: moreItems(doc, user, onSignOut) }]} />
+      <span className="ch-bar-c">
+        <span className="ch-slot" role="group" aria-label="App">
+          {doc.tool && <ToolName tool={doc.tool} />}
+          <span className="ch-slot-title">{title}</span>
+          <Lineage doc={doc} />
+          {doc.state && <StatePill state={doc.state} />}
+          <BarMenu
+            id="ch-continue-menu"
+            label="Continue in"
+            className="ch-btn ch-btn-slot"
+            groups={[
+              { label: 'Turn it into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
+              { label: 'Link to an existing one', items: cont.link, empty: 'Linking to other work is coming.' },
+              ...(doc.madeFrom
+                ? [{
+                    label: 'Made from',
+                    items: cont.update,
+                    empty: doc.madeFrom.changed
+                      ? `${doc.madeFrom.title} changed. A locked version keeps what it was made from.`
+                      : `Up to date with ${doc.madeFrom.title}.`,
+                  }]
+                : []),
+            ]}
+          />
+          <BarMenu id="ch-share-menu" label="Share" className="ch-btn ch-btn-slot" groups={[{ items: shareItems(doc) }]} />
+          <BarMenu id="ch-more-menu" label="More" className="ch-btn ch-btn-slot" groups={[{ items: moreItems(doc, user, onSignOut) }]} />
+        </span>
       </span>
-      {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
-      {doc.trusted && (
-        <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">
-          Trusted
-        </span>
-      )}
-      {invalid && (
-        <span className="ch-chip ch-chip-warn" title={doc.validation}>
-          <span className="ch-chip-dot" />Something’s wrong with this file
-        </span>
-      )}
-      <BarChips bar={doc.bar ?? []} />
-      <span className="ch-bar-spacer" />
-      <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} />
-      {doc.onClientReview && !doc.editMode && (
-        <button
-          className={doc.clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}
-          onClick={doc.onClientReview}
-          title={doc.clientAnswered ? 'Record another answer from the client about the locked version' : 'Record what the client said about the locked version'}
-        >
-          {doc.clientAnswered ? 'New client answer' : 'Client review'}
-        </button>
-      )}
-      {doc.onToggleEdit && doc.editMode && (
-        <button className="ch-btn ch-btn-editing" onClick={doc.onToggleEdit} aria-pressed title="Stop editing">
-          Done editing
-        </button>
-      )}
-      {doc.saved}
-      <button className="ch-btn" onClick={doc.onSave} title="Download a copy to send. It opens in Napkin with everything in it.">
-        Share
-      </button>
-      <DogfoodBadge />
-      <ThemeToggle />
-      <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
+      <span className="ch-bar-r">
+        {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
+        {doc.trusted && (
+          <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">
+            Trusted
+          </span>
+        )}
+        {invalid && (
+          <span className="ch-chip ch-chip-warn" title={doc.validation}>
+            <span className="ch-chip-dot" />Something’s wrong with this file
+          </span>
+        )}
+        <BarChips bar={doc.bar ?? []} />
+        <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} />
+        {doc.onClientReview && !doc.editMode && (
+          <button
+            className={doc.clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}
+            onClick={doc.onClientReview}
+            title={doc.clientAnswered ? 'Record another answer from the client about the locked version' : 'Record what the client said about the locked version'}
+          >
+            {doc.clientAnswered ? 'New client answer' : 'Client review'}
+          </button>
+        )}
+        {doc.onToggleEdit && doc.editMode && (
+          <button className="ch-btn ch-btn-editing" onClick={doc.onToggleEdit} aria-pressed title="Stop editing">
+            Done editing
+          </button>
+        )}
+        {doc.saved}
+        <DogfoodBadge />
+        <ThemeToggle />
+        {doc.crew && <CrewHere crew={doc.crew} />}
+        <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
+      </span>
     </div>
   )
 }

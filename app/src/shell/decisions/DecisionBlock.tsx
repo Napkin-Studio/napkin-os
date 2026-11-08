@@ -7,6 +7,7 @@
 // line is signed the way the crew signs in the apps: the figure, then the
 // name and the job ("Jude · checks"); a person's line is "You" or their name.
 
+import type { ReactNode } from 'react'
 import type { AttentionItem, DecisionBlock, DecisionsView } from '../../host'
 import { AgentFigure } from '../../studio/AgentFigure'
 import { ResultThumbs } from '../../dogfood/Dogfood'
@@ -45,11 +46,6 @@ const TITLE: Record<string, string> = {
   client_rejected_parts_unknown: 'The client turned it down. Which parts?',
 }
 
-/** The button that takes a person to where they answer it. */
-const GO: Record<string, string> = {
-  unverified_finding: 'Check it',
-  open_contest: 'Pick one',
-}
 
 const WHERE = (
   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -58,7 +54,11 @@ const WHERE = (
 )
 
 /** One thing that blocks the lock, and where it is settled. */
-export function NeedsCard({ item, block }: { item: AttentionItem; block?: DecisionBlock }) {
+/**
+ * One need on the call card. `actions` are the card's own (Looks right, Set
+ * aside or Bring back), after the way to where it is settled.
+ */
+export function NeedsCard({ item, block, actions, aside }: { item: AttentionItem; block?: DecisionBlock; actions?: ReactNode; aside?: boolean }) {
   const ref = refOfAddress(item.address)
   const path = String(item.address ?? '').split('#')[1]
   const who = block ? whoOf(block) : null
@@ -69,7 +69,7 @@ export function NeedsCard({ item, block }: { item: AttentionItem; block?: Decisi
     ? `${who!.name} ${block.decision.kind === 'finding' ? 'found this' : 'raised it'}${sureWord(block.decision.reasoning?.certainty?.level) === 'Unsure' ? ', and is unsure' : ''}`
     : null
   return (
-    <div className="dp-card">
+    <div className={aside ? 'dp-card dp-card-aside' : 'dp-card'} data-testid="need">
       <div className="dp-card-top">
         <Face block={block} size={40} needs />
         <div>
@@ -81,7 +81,7 @@ export function NeedsCard({ item, block }: { item: AttentionItem; block?: Decisi
       {statement && <div className="dp-stmt"><span className="dp-clip">{statement}</span></div>}
       {(item.code === 'flagged_field' || item.code === 'client_rejected' || item.code === 'client_rejected_parts_unknown') && <p className="dp-why">{item.text}</p>}
       <div className="dp-acts">
-        {item.address && <button className="dp-btn dp-btn-primary" onClick={() => openInApp(ref, path)}>{GO[item.code] ?? 'Open it'}</button>}
+        {item.address && <button className="dp-btn dp-btn-primary" onClick={() => openInApp(ref, path)}>Open</button>}
         {item.code === 'flagged_field' && /campaign\.audience/.test(path ?? '') && canRun('synthesise_findings') && (
           <button className="dp-btn" onClick={() => runInApp('synthesise_findings', { redo: 'audience' })}>Ask {AGENTS.synthesis.given} to redo it</button>
         )}
@@ -89,6 +89,7 @@ export function NeedsCard({ item, block }: { item: AttentionItem; block?: Decisi
           : item.code === 'unverified_finding' ? 'you’ll check it against its sources'
             : item.code === 'client_rejected' ? 'change it there, saying why'
               : item.code === 'client_rejected_parts_unknown' ? 'mark the parts above the document' : 'settle it there'}</span>
+        {actions}
       </div>
     </div>
   )
