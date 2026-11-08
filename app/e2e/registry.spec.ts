@@ -38,6 +38,7 @@ test('adopt clients from free-text names, then rename, archive and restore one',
 
   // Rename: a name in use is refused in the host's words; a free one lands.
   await page.getByRole('button', { name: /^Client D,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page.getByTestId('work-item')).toHaveCount(2)
   await page.getByRole('button', { name: 'Rename Client D' }).click()
   await page.getByLabel('New name').fill('client a')
@@ -63,6 +64,7 @@ test('adopt clients from free-text names, then rename, archive and restore one',
   await page.getByRole('button', { name: 'Restore Client F' }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(2)
   await page.getByRole('button', { name: /^Client F,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page.getByTestId('work-item')).toHaveCount(2)
 })
 
@@ -87,6 +89,7 @@ for (const width of [320, 390]) {
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('adopt-panel')).toHaveCount(0)
     await page.getByRole('button', { name: /^Client A,/ }).click()
+    await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
     await expect(page.getByRole('button', { name: 'Rename Client A' })).toBeVisible()
     await page.getByRole('button', { name: 'Archive Client A' }).click()
     expect(await noScroll(), 'archive confirm').toBe(true)

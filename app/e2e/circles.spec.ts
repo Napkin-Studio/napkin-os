@@ -53,6 +53,7 @@ test('every screen draws its circles in 3D through one context', async ({ page }
   await shot(page, 'p4-02-clients-3d')
 
   await page.getByRole('button', { name: /^Client A,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(/#client-/)
   await expect(page.getByTestId('tool-brief')).toBeVisible()
   await expect(page.locator(ON)).toHaveCount(7) // the client and six tools
@@ -113,7 +114,9 @@ test('a press is seen before the page moves on; a drag to play still goes on at 
   await page.waitForTimeout(700)
   await expect(page).toHaveURL(/#clients$/)
   await page.mouse.up()
-  await expect(page).toHaveURL(/#client-/, { timeout: 1500 })
+  // the press goes on at the release: the circle's dial opens in place
+  await expect(page.getByTestId('dial-open-client')).toBeVisible({ timeout: 1500 })
+  await expect(page).toHaveURL(/#clients$/)
 })
 
 test('the keyboard is never held up: Enter goes straight on', async ({ page }) => {
@@ -126,6 +129,9 @@ test('the keyboard is never held up: Enter goes straight on', async ({ page }) =
   await expect(page).toHaveURL(/#clients$/, { timeout: 120 })
   await page.getByTestId('client-circle').first().focus()
   await page.keyboard.press('Space')
+  await expect(page.getByTestId('dial-brief')).toBeFocused({ timeout: 120 })
+  await page.keyboard.press('Shift+Tab') // from the first petal back to the hub
+  await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/#client-/, { timeout: 120 })
 })
 

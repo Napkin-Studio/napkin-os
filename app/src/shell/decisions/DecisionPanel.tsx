@@ -23,8 +23,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { host } from '../../host'
-import type { AttentionItem, DecisionBlock, DecisionsView } from '../../host'
-import type { Decisions } from './useDecisions'
+import type { DecisionBlock, DecisionsView } from '../../host'
+import { needsOf, type Decisions } from './useDecisions'
 import { LogoSpinner } from '../../brand/LogoSpinner'
 import { onRunnable, openInApp } from '../appExport'
 import { HistoryLine, NeedsCard, QuietItem } from './DecisionBlock'
@@ -38,11 +38,21 @@ interface Props {
    * from nothing, so the old one's blocks never show against it.
    */
   decisions: Decisions
+  /**
+   * The drawer is opened from the OS bar's Decisions button (features/new-ui-shell.clan):
+   * given, the panel is controlled and draws no rail of its own while closed.
+   * Absent, it keeps its own rail as before.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export default function DecisionPanel({ decisions }: Props) {
+export default function DecisionPanel({ decisions, open: given, onOpenChange }: Props) {
   const { view, error, reload: load } = decisions
-  const [open, setOpen] = useState(false)
+  const [own, setOwn] = useState(false)
+  const controlled = given !== undefined
+  const open = controlled ? given : own
+  const setOpen = (o: boolean) => { if (controlled) onOpenChange?.(o); else setOwn(o) }
   const [by, setBy] = useState<'run' | 'section'>('run')
   const [quietOpen, setQuietOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -63,6 +73,7 @@ export default function DecisionPanel({ decisions }: Props) {
   }, [load])
 
   if (!open) {
+    if (controlled) return null
     return (
       <button
         type="button"
@@ -151,19 +162,6 @@ export default function DecisionPanel({ decisions }: Props) {
       </div>
     </aside>
   )
-}
-
-/** What blocks the lock, one item per place. */
-function needsOf(view: DecisionsView | null): AttentionItem[] {
-  if (!view) return []
-  const seen = new Set<string>()
-  return view.attention.filter(a => {
-    if (!a.blocks_lock) return false
-    const k = `${a.code}:${a.address ?? a.text}`
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
 }
 
 /**

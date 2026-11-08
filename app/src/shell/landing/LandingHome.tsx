@@ -44,6 +44,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
+  // The dial open on the desk: one client's apps, in place (view state, not a route).
+  const [dial, setDial] = useState<string | null>(null)
   const top = useRef<HTMLDivElement>(null)
 
   // What the registry can still be asked to do, read when the clients page opens and again after a change
@@ -168,6 +170,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenTool={t => go({ level: 'tool', client: client.id, tool: t.id })}
         onSoon={t => setSoon(p => ({ key, text: `${t.full} is coming soon. It keeps its place.`, n: (p?.n ?? 0) + 1 }))}
         onOpenItem={onOpenDocument}
+        onNew={t => { if (t.appId) onStart(t.appId, client.id) }}
         actions={manage && (
           <ClientActions
             client={client}
@@ -193,7 +196,12 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onQuery={setQuery}
         onShowAll={() => setShowAll(true)}
         onAdding={setAdding}
-        onOpenClient={id => go({ level: 'client', client: id })}
+        onOpenClient={id => { setDial(null); go({ level: 'client', client: id }) }}
+        dial={dial}
+        onDial={setDial}
+        live={live}
+        onOpenTool={(id, t) => { setDial(null); go({ level: 'tool', client: id, tool: t.id }) }}
+        onSoon={t => setSoon(p => ({ key, text: `${t.full} is coming soon. It keeps its place.`, n: (p?.n ?? 0) + 1 }))}
         onAdd={async name => {
           const refused = await onAdd(name)
           if (!refused) setAdding(false)

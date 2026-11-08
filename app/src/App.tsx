@@ -17,7 +17,11 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { Trail } from './shell/landing/Trail'
 import { useLanding } from './shell/landing/useLanding'
-import { initialsOf, routeOfDocument, whoIs } from './shell/landing/model'
+import { initialsOf, needsYou, routeOfDocument, whoIs } from './shell/landing/model'
+import Toolbar from './components/Toolbar'
+import { signedInUser } from './host/http'
+import { signOut } from './shell/signOut'
+import { applyAgency } from './shell/agency/palette'
 import { useRoute } from './shell/useRoute'
 import { type Route } from './shell/route'
 import AppHost from './shell/AppHost'
@@ -82,6 +86,14 @@ export default function App() {
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   const landing = useLanding(host, screen === 'home' && !allTools, !(device && !serverless))
+  // On a server with accounts: who is signed in, for the bar's way out.
+  const [user, setUser] = useState<string | null>(null)
+  // A read from the server: the state is set when it answers.
+  useEffect(() => { void signedInUser().then(u => setUser(u ? u.username : null)) }, [])
+  // The agency's admin-set colours on the chrome (shell/agency/palette.ts), or
+  // the neutral pair; a layer of its own that resetTheme never clears.
+  const personId = landing.data?.person?.id ?? null
+  useEffect(() => { applyAgency(personId) }, [personId])
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
     setToast({ title, body })
@@ -420,21 +432,17 @@ export default function App() {
     />
   )
 
-  // The trail of circles, while the studio shows one of its landing screens.
+  // Where you are, below the agency's pill, while the studio shows one of its landing screens.
   const onLanding = landing.state === 'ready' && landing.data && !allTools && !(device && !serverless)
+  const agency = whoIs(landing.data?.person ?? null).agency
   const trailClient = landing.data && (route.level === 'client' || route.level === 'tool')
     ? landing.data.clients.find(c => c.id === route.client) ?? null
     : null
   const trail = onLanding && landing.data ? (
-    <Trail
-      route={route}
-      agency={whoIs(landing.data.person).agency}
-      client={trailClient}
-      onGo={go}
-    />
+    <Trail route={route} agency={agency} client={trailClient} noAgency onGo={go} />
   ) : undefined
 
-  // The same trail in the bar of an open document, from the document's own client
+  // The same in the bar of an open document, from the document's own client
   // and tool (so it is right for a document opened from a strip, and after a spin-off).
   const docRoute = running && !device ? routeOfDocument(running.open.manifest) : null
   const docClient = docRoute && running?.open.manifest.client
@@ -442,8 +450,14 @@ export default function App() {
       ?? { name: running.open.manifest.client.name, initials: initialsOf(running.open.manifest.client.name), material: 'pearl' }
     : null
   const docTrail = docRoute && landing.state === 'ready' && landing.data ? (
-    <Trail route={docRoute} agency={whoIs(landing.data.person).agency} client={docClient} inDocument onGo={leaveTo} />
+    <Trail route={docRoute} agency={agency} client={docClient} inDocument noAgency onGo={leaveTo} />
   ) : undefined
+
+  // The desk's needs-your-call count: across all the agency's clients (owner,
+  // 9 Nov 2026). It never lights the medallion; only an open document does.
+  const deskNeeds = landing.data ? landing.data.items.filter(needsYou).length : 0
+  const toAgency = () => { setAllTools(false); go({ level: 'agency' }) }
+  const onSignOut = user ? () => { void signOut() } : undefined
 
   return (
     <>
@@ -462,6 +476,10 @@ export default function App() {
           onOpenDocument={openPath}
           onHome={goHome}
           trail={docTrail}
+          agency={agency}
+          onAgency={() => leaveTo({ level: 'agency' })}
+          user={user}
+          onSignOut={onSignOut}
           onOpenFile={handleOpenFile}
           onSave={saveCurrent}
           onKeepOffline={!device && hasServer && !running.open.is_template ? keepCurrentOffline : undefined}
@@ -479,12 +497,24 @@ export default function App() {
         />
       ) : (
         <StudioShell
-          trail={trail}
-          tools={hasServer && !device ? (
-            <button className="ch-btn" onClick={() => setOfflineOpen(true)} title="Documents kept on this device">
-              Offline
-            </button>
-          ) : undefined}
+          bar={(
+            <Toolbar
+              agency={agency}
+              onAgency={toAgency}
+              onHome={toAgency}
+              crumbs={trail}
+              needs={deskNeeds}
+              // On the desk, Decisions is the agency's needs-you list.
+              onDecisions={onLanding ? toAgency : undefined}
+              user={user}
+              onSignOut={onSignOut}
+              tools={hasServer && !device ? (
+                <button className="ch-btn" onClick={() => setOfflineOpen(true)} title="Documents kept on this device">
+                  Offline
+                </button>
+              ) : undefined}
+            />
+          )}
         >
           {apps}
         </StudioShell>

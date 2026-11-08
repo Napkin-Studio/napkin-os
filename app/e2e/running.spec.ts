@@ -66,6 +66,8 @@ test('a running job, a failure and a waiting question show on the landing and th
   await expect(page.getByTestId('client-circle').first().locator('svg')).toHaveAttribute('data-activity', 'read')
   await shot(page, 'p3-02-clients')
   await page.getByRole('button', { name: /^Client A,/ }).click()
+  await expect(page.getByTestId('dial-brief')).toHaveAttribute('data-activity', 'read') // the dial says it too
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page.getByTestId('tool-brief').locator('svg')).toHaveAttribute('data-activity', 'read')
   await shot(page, 'p3-03-client')
   await page.goto('/#agency')

@@ -159,6 +159,42 @@ test('a client page puts six tools round it; Idea and Prod are Soon and disabled
   assert.equal(count(html, /data-testid="work-item"/g), 2)
 })
 
+test('the client page: what needs you, the work grouped by tool with New, and the Brand Clan card', () => {
+  const a = client(0)
+  const items = [
+    item(a, BRIEF, { title: 'Spring brief', state: { needs_you: 2, locked: false } }),
+    item(a, BRIEF, { title: 'Autumn brief' }),
+    item(a, 'ie.napkin.deck-maker', { title: 'Pitch' }),
+    item(a, 'ie.napkin.other', { title: 'Odd one' }),
+  ]
+  const live = new Set(['brief', 'research', 'deck'])
+  const html = renderToStaticMarkup(createElement(ClientPage, {
+    summary: summarise(a, items), items, live, onOpenTool: noop, onSoon: noop, onOpenItem: noop, onNew: noop,
+  }))
+  assert.equal(count(html, /data-testid="needs-item"/g), 1)
+  assert.match(html, /Spring brief<\/b><span>Brief Maker · 2 things to check/)
+  for (const g of ['brief', 'deck', 'other']) assert.match(html, new RegExp(`data-testid="group-${g}"`))
+  assert.doesNotMatch(html, /data-testid="group-research"/, 'no empty groups')
+  assert.match(html, /data-testid="new-brief"[^>]*>New brief</)
+  assert.match(html, /data-testid="new-deck"[^>]*>New deck</)
+  assert.doesNotMatch(html, /data-testid="new-other"/)
+  assert.equal(count(html, /data-testid="work-item"/g), 4, 'each document once')
+  // Brand Clan: not built yet, so nothing invented; both ways in kept, disabled, with the reason
+  assert.match(html, /No Brand Clan yet/)
+  assert.match(html, /data-testid="brand-upload"[^>]*disabled|disabled[^>]*data-testid="brand-upload"/)
+  assert.match(html, /data-testid="brand-start"/)
+  assert.match(html, /arrives with the Brand Clan app/)
+})
+
+test('a client\'s Brand Clan document, once there is one, is listed on its card and not as work', () => {
+  const a = client(0)
+  const items = [item(a, 'ie.napkin.brand', { title: 'Client A brand' })]
+  const html = renderToStaticMarkup(createElement(ClientPage, { summary: summarise(a, items), items, live: new Set(), onOpenTool: noop, onSoon: noop, onOpenItem: noop }))
+  assert.match(html, /data-testid="brand-item"[^>]*>.*Client A brand/)
+  assert.doesNotMatch(html, /No Brand Clan yet/)
+  assert.doesNotMatch(html, /data-testid="work-item"/)
+})
+
 test('a client with no work says where to start', () => {
   const a = client(0)
   const html = renderToStaticMarkup(createElement(ClientPage, { summary: summarise(a, []), items: [], live: new Set(['brief']), onOpenTool: noop, onSoon: noop, onOpenItem: noop }))

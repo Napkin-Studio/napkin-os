@@ -87,7 +87,7 @@
 
 /* the clients page */
 .lc-stagewrap { border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--card); }
-.lc-row { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 28px 8px; min-height: 380px; padding: 28px 8px; }
+.lc-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 28px 8px; min-height: 380px; padding: 28px 8px; }
 .lc-client {
   appearance: none; position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
   width: calc(var(--box) + 14px); padding: 6px 2px 8px; background: none; border: 0; border-radius: var(--r-card); text-align: center; cursor: pointer;
@@ -199,14 +199,7 @@
   .lc-doorbtn:hover .lc-orb, .lc-doorbtn:focus-visible .lc-orb, .lc-client:hover .lc-orb, .lc-client:focus-visible .lc-orb, .lc-tool:hover .lc-orb { transform: none; }
 }
 
-/* the trail in an open document's bar: it stands before the title and gives it the room */
-.ch-bar .lc-trail { flex: 0 1 auto; max-width: 60%; }
-
-/* on a phone the studio bar has no room beside the brand and its buttons: the trail takes a row of its own, so the level you are on is never clipped */
-@media (max-width: 560px) {
-  .studio .studio-top { height: auto; min-height: var(--toolbar-h); flex-wrap: wrap; padding-top: 2px; padding-bottom: 2px; row-gap: 0; }
-  .studio .studio-top .lc-trail { order: 3; flex: 1 0 100%; }
-}
+/* In the one OS bar the trail sits after the agency's pill (chrome.css .ch-crumbs places it). */
 
 /* 3D circles: the flat svg is the fallback, a canvas goes over it once the engine has drawn into it.
    The initials stay as text on top of the blank sphere. Reduced motion gets this cross-fade and nothing else. */
@@ -237,3 +230,69 @@ html[data-orbs-gl='0'] .lc-flat-toggle { display: none; }
 .lc-banner { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--danger); border-radius: 10px; }
 @media (max-width: 560px) { .lc-add .ch-btn, .lc-add input { min-height: 44px; } .lc-phr .ch-btn { flex: 1 1 auto; min-height: 44px; } .lc-arch-row .ch-btn { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .lc-archived, .lc-adopt, .lc-manage { transition: none; animation: none; } }
+
+/* ── the dial: a client's apps, in place round its circle (features/new-ui-shell.clan) ── */
+.lc-client[aria-expanded='true'] .lc-orb { box-shadow: 0 0 0 3px var(--agency); border-radius: 50%; }
+.lc-dial { position: absolute; z-index: 20; width: 0; height: 0; pointer-events: none; }
+.lc-dial > * { pointer-events: auto; }
+.lc-dial::before {
+  content: ''; position: absolute; left: calc(-1 * var(--dial-r) - 40px); top: calc(-1 * var(--dial-r) - 40px);
+  width: calc(2 * var(--dial-r) + 80px); height: calc(2 * var(--dial-r) + 80px); border-radius: 50%;
+  background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-soft); border: 1px solid var(--line-soft); pointer-events: none;
+  animation: lc-dial-in 180ms var(--lc-ease, ease-out);
+}
+@keyframes lc-dial-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+.lc-dial-hub {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); max-width: 132px; min-height: 44px; padding: 6px 12px;
+  border: 0; border-radius: var(--r-pill); background: var(--agency); color: var(--agency-fg);
+  font: inherit; font-size: 12.5px; font-weight: 700; line-height: 1.15; cursor: pointer; box-shadow: 0 0 0 4px var(--card);
+}
+.lc-dial-hub:focus-visible, .lc-petal:focus-visible, .lc-dial-more button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.lc-petal {
+  appearance: none; position: absolute; left: calc(var(--x) * var(--dial-r)); top: calc(var(--y) * var(--dial-r));
+  transform: translate(-50%, -50%); width: 92px; min-height: 44px; display: grid; justify-items: center; gap: 3px;
+  padding: 0; border: 0; background: none; cursor: pointer; color: var(--ink);
+}
+.lc-petal-disc {
+  width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-pill);
+  font-family: var(--f-display); font-weight: 700; font-size: 17px;
+  transition: transform 160ms var(--lc-ease, ease-out), background 160ms;
+}
+.lc-petal:hover .lc-petal-disc { transform: scale(1.06); background: var(--agency-soft); }
+.lc-petal[data-activity='human'] .lc-petal-disc { box-shadow: 0 0 0 3px var(--lc-ring-human); }
+.lc-petal-l { display: grid; justify-items: center; line-height: 1.15; }
+.lc-petal-l b { font-size: 12.5px; }
+.lc-petal-l small { font-size: 11px; color: var(--ink2); }
+.lc-petal.lc-soon .lc-petal-disc { opacity: 0.55; }
+.lc-petal-more .lc-petal-disc { background: var(--soft); }
+.lc-dial-more {
+  position: absolute; left: 0; top: calc(var(--dial-r) + 56px); transform: translateX(-50%); z-index: 2;
+  min-width: 220px; list-style: none; padding: 6px; border-radius: var(--r-card);
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-soft);
+}
+.lc-dial-more button {
+  width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; text-align: left;
+}
+.lc-dial-more button:hover { background: var(--agency-soft); }
+.lc-dial-more small { color: var(--ink2); font-size: 11.5px; }
+.lc-dial-more .lc-soon { color: var(--ink2); }
+@media (prefers-reduced-motion: reduce) { .lc-dial::before { animation: none; } .lc-petal-disc { transition: none; } }
+@media (max-width: 560px) { .lc-petal { width: 76px; } .lc-petal-l small { display: none; } }
+
+/* ── the client page: needs you, work by tool, Brand Clan (features/new-ui-shell.clan) ── */
+.lc-needs-list { list-style: none; display: grid; gap: 8px; }
+.lc-need {
+  width: 100%; min-height: 44px; display: grid; gap: 2px; padding: 10px 14px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-left: 4px solid var(--lc-ring-human); border-radius: var(--r-card); background: var(--card); color: var(--ink); font: inherit;
+}
+.lc-need:hover { background: var(--agency-soft); }
+.lc-need span { font-size: 12.5px; color: var(--ink2); }
+.lc-group + .lc-group { margin-top: 18px; }
+.lc-group-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.lc-group-h h3 { font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.lc-brand-empty { display: grid; gap: 10px; padding: 14px; border: 1px dashed var(--line); border-radius: var(--r-card); background: var(--card); }
+.lc-brand-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.lc-brand .lc-mut { color: var(--ink2); font-size: 12.5px; }

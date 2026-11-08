@@ -2,104 +2,55 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { useEffect, useRef, useState } from 'react'
-import { StudioLogo } from '../brand/StudioMark'
+// The one OS bar (features/new-ui-shell.clan): the same bar on the desk and in
+// a document. From the left: the medallion (the way home, and the one mark
+// that changes when the app you are IN needs you), the agency's pill in the
+// agency's colours, where you are (Clients › client › tool), the OS app slot
+// (the tool, the document's name, its state, Continue in ▾ and More ▾), the
+// app's own buttons and chips, then the needs-your-call count on the Decisions
+// button, the theme toggle and the beta badge.
+//
+// Pure: everything it shows comes in as props (the spin-off targets, who is
+// signed in, the Saved status), so a test can draw every state with no host.
+
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { StudioMark } from '../brand/StudioMark'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { host } from '../host'
-import { useSpinoffTargets } from './ContinueIn'
+import { continueItems, deskItems, moreItems, type DocBar, type DocState, type MenuItem, type ToolBrand } from './barMenus'
 import ThemeToggle from './ThemeToggle'
 import { DogfoodBadge } from '../dogfood/Dogfood'
-import { signedInUser } from '../host/http'
-import { signOut } from '../shell/signOut'
-import { overflowButtons, type BarItem } from '../shell/appBar'
-import { BarButtons, BarChips, BarTabs } from './AppBarItems'
+import { BarButtons, BarChips } from './AppBarItems'
 import './chrome.css'
 
+export type { DocBar, DocState, MenuItem, ToolBrand } from './barMenus'
+
 interface Props {
-  /** The open document's tool: "Napkin Studio <name>" in the tool's colour and face. */
-  tool?: ToolBrand | null
-  title?: string
-  /** What the app asked the bar to show: its tabs, buttons and chips (shell/appBar.ts). */
-  bar?: BarItem[]
-  /** A tab or button of the app's was pressed: tell the app which. */
-  onBarAction?: (id: string) => void
-  isTemplate?: boolean
-  trusted?: boolean
+  /** The signed-in agency's name, on the pill. */
+  agency: string
+  /** The pill: the agency's own page. */
+  onAgency: () => void
+  /** The medallion: back to the studio. */
   onHome: () => void
-  onOpenFile: () => void
-  onToggleSidebar: () => void
-  onWorkspace: () => void
-  onSave: () => void
-  /** Keep a copy on this device for presenting offline. Absent where it makes no sense. */
-  onKeepOffline?: () => void
-  onExport: (kind: 'html' | 'pdf') => void
-  /** Identifies the open document, so "Continue in…" refetches when it changes. */
-  docPath: string
-  onSpinoff: (appId: string) => void
-  sidebarOpen: boolean
-  /** Edit mode, for every app: its fields become editable, each change a person's pinned decision. */
-  editMode?: boolean
-  onToggleEdit?: () => void
   /**
-   * Client review (OS-layer contract §7.5): given only while the document is
-   * locked with no part reopened — the bar then offers it where Edit is.
+   * The medallion's state: the app the person is IN needs them (the open
+   * document has something blocking its lock). Never shown on the desk, and
+   * never from another client's work: that is the Decisions count's job.
    */
-  onClientReview?: () => void
-  /**
-   * The client has answered this locked version already: the bar's button is
-   * quiet then ("New client answer"), so the band's next step leads.
-   */
-  clientAnswered?: boolean
-  /**
-   * Client review is on: the bar is tinted and says so, and Cancel leaves it,
-   * dropping whatever was not saved. The document's other actions wait.
-   */
-  clientMode?: { onCancel: () => void; busy?: boolean }
-  loading: boolean
-  /**
-   * Where the document sits, as a trail of circles (Agency > Client > Tool). It
-   * takes the place of the studio-home button and stands before the title; the
-   * agency circle is the way home.
-   */
-  trail?: React.ReactNode
-  validation?: string
-  /**
-   * The document lives in a store that keeps each change as it is made (the
-   * studio, the desktop's files), so "Saved" is true. False on the device,
-   * where changes stay in the tab.
-   */
-  saved?: boolean
-}
-
-/** One thing the More menu can do. */
-interface MenuItem {
-  label: string
-  hint?: string
-  run: () => void
-  /** A rule above this item. */
-  apart?: boolean
-}
-
-/**
- * "Saved", with the green dot. Only shown where it is true by construction
- * (see Props.saved); the time of the last change the host confirmed goes in
- * the tooltip. The shell is not told of a write that fails; the app is.
- */
-function SaveStatus({ docPath }: { docPath: string }) {
-  const [last, setLast] = useState<{ docPath: string; at: Date } | null>(null)
-  useEffect(() => {
-    const note = () => setLast({ docPath, at: new Date() })
-    const subs = [host.on('clan-data-changed', note), host.on('clan-patch-saved', note)]
-    subs.forEach(s => s.catch(() => {}))
-    return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
-  }, [docPath])
-  const at = last?.docPath === docPath ? last.at : null
-  const time = at?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-  return (
-    <span className="ch-saved" title={`Every change is kept as you make it.${time ? ` Last change kept at ${time}.` : ''}`}>
-      Saved
-    </span>
-  )
+  attention?: boolean
+  /** Where you are below the agency: Clients › client › tool (Trail without its agency level). */
+  crumbs?: ReactNode
+  /** The needs-your-call count beside Decisions. Desk: across all clients; document: needsOf(view). */
+  needs: number
+  /** Decisions: the drawer in a document, the agency's needs-you list on the desk. */
+  onDecisions?: () => void
+  decisionsOpen?: boolean
+  /** Desk-only tools at the end (Offline). */
+  tools?: ReactNode
+  /** Who is signed in, and the way out; absent where there are no accounts. */
+  user?: string | null
+  onSignOut?: () => void
+  /** The open document; absent on the desk. */
+  doc?: DocBar
 }
 
 /** The menu's items, in order, and focus on the i-th (wrapping round). */
@@ -110,13 +61,14 @@ function focusAt(menu: HTMLElement | null, i: number) {
   if (els.length) els[(i + els.length) % els.length].focus()
 }
 
+interface Group { label?: string; items: MenuItem[]; empty?: string }
+
 /**
- * "More ▾": everything the bar does that is not Share, in plain words. A menu
- * button: arrows move through it, Home and End jump, Escape or Tab or a click
- * anywhere else closes it. Clicks inside the app frame never reach this page,
- * so leaving the window (a click into the frame) closes it too.
+ * A menu button in the bar: arrows move through it, Home and End jump, Escape
+ * or Tab or a click anywhere else closes it. Clicks inside the app frame never
+ * reach this page, so leaving the window (a click into the frame) closes it too.
  */
-function MoreMenu({ items }: { items: MenuItem[] }) {
+function BarMenu({ id, label, groups, className }: { id: string; label: string; groups: Group[]; className?: string }) {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -168,29 +120,35 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
     <div className="ch-menu-anchor" ref={anchor}>
       <button
         ref={button}
-        className="ch-btn"
+        className={className ?? 'ch-btn'}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-controls={open ? 'ch-more-menu' : undefined}
+        aria-controls={open ? id : undefined}
         onClick={() => (open ? close(false) : openAt(0))}
         onKeyDown={onButtonKey}
       >
-        More <span aria-hidden>▾</span>
+        {label} <span aria-hidden>▾</span>
       </button>
       {open && (
-        <div className="ch-menu" role="menu" id="ch-more-menu" aria-label="More" ref={menu} onKeyDown={onMenuKey}>
-          {items.map(item => (
-            <div key={item.label} role="none" className={item.apart ? 'ch-menu-apart' : undefined}>
-              <button
-                className="ch-menu-item"
-                role="menuitem"
-                data-dogfood={`menu: ${item.label}`}
-                tabIndex={-1}
-                onClick={() => { close(true); item.run() }}
-              >
-                {item.label}
-                {item.hint && <small>{item.hint}</small>}
-              </button>
+        <div className="ch-menu" role="menu" id={id} aria-label={label} ref={menu} onKeyDown={onMenuKey}>
+          {groups.map((g, gi) => (
+            <div key={g.label ?? gi} role="none" className={gi > 0 ? 'ch-menu-apart' : undefined}>
+              {g.label && <div className="ch-menu-group" role="presentation">{g.label}</div>}
+              {g.items.length === 0 && g.empty && <div className="ch-menu-empty" role="presentation">{g.empty}</div>}
+              {g.items.map(item => (
+                <div key={item.label} role="none" className={item.apart ? 'ch-menu-apart' : undefined}>
+                  <button
+                    className="ch-menu-item"
+                    role="menuitem"
+                    data-dogfood={`menu: ${item.label}`}
+                    tabIndex={-1}
+                    onClick={() => { close(true); item.run() }}
+                  >
+                    {item.label}
+                    {item.hint && <small>{item.hint}</small>}
+                  </button>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -199,83 +157,114 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
   )
 }
 
-/**
- * The document bar: studio home, the title, and "Saved · Share · More". A
- * badge only when something is wrong with the file; "Done editing" in the bar
- * itself whenever edit mode is on, so it is never hidden while it is.
- */
-/** A tool as the bar names it: its own name, colour and face (its app.home). */
-export interface ToolBrand {
-  name: string
-  colour?: string | null
-  font?: string | null
+/** The medallion: the studio's mark in a raised circle; a ring when the app you are in needs you. */
+function Medallion({ onHome, attention }: { onHome: () => void; attention?: boolean }) {
+  return (
+    <button
+      className="ch-medallion"
+      data-attention={attention || undefined}
+      data-testid="medallion"
+      onClick={onHome}
+      title={attention ? 'Back to the studio. This document needs you.' : 'Back to the studio'}
+      aria-label={attention ? 'Back to the studio (this document needs you)' : 'Back to the studio'}
+    >
+      <StudioMark size={26} />
+    </button>
+  )
 }
 
-/** "Napkin Studio" in the OS's face, then the tool's name in the tool's own. */
-function BarBrand({ tool, compact }: { tool?: ToolBrand | null; compact?: boolean }) {
-  if (!tool) return <StudioLogo size={15} compact={compact} />
+/** The agency's name on its own colours (--agency, --agency-fg), "Napkin Studio" under it. */
+function AgencyPill({ agency, onAgency }: { agency: string; onAgency: () => void }) {
   return (
-    <span className="ch-brand">
-      <StudioLogo size={15} label="Napkin Studio" />
-      <span className="ch-brand-tool" style={{
-        ...(tool.colour ? { ['--tool' as string]: tool.colour } : {}),
-        ...(tool.font ? { fontFamily: tool.font } : {}),
-      }}>{tool.name}</span>
+    <button className="ch-agency" onClick={onAgency} title={`${agency}: its clients and what needs you`} data-testid="agency-pill">
+      <span className="ch-agency-name">{agency}</span>
+      <span className="ch-agency-os"><i aria-hidden />Napkin Studio</span>
+    </button>
+  )
+}
+
+/** The document's state, in words, with a dot; the tone is never the only signal. */
+function StatePill({ state }: { state: DocState }) {
+  return (
+    <span className={`ch-state${state.tone ? ` ch-state-${state.tone}` : ''}`} data-testid="state-pill">
+      <i aria-hidden />{state.label}
     </span>
   )
 }
 
+/** The tool's name in its own colour and face. */
+function ToolName({ tool }: { tool: ToolBrand }) {
+  return (
+    <span className="ch-slot-tool" style={{
+      ...(tool.colour ? { ['--tool' as string]: tool.colour } : {}),
+      ...(tool.font ? { fontFamily: tool.font } : {}),
+    }}>{tool.name}</span>
+  )
+}
+
+/** Decisions, with the needs-your-call count. */
+function DecisionsButton({ needs, onDecisions, open }: { needs: number; onDecisions?: () => void; open?: boolean }) {
+  const said = needs ? `${needs} need${needs === 1 ? 's' : ''} your call` : 'nothing needs your call'
+  return (
+    <button
+      className="ch-decisions"
+      onClick={onDecisions}
+      disabled={!onDecisions}
+      aria-expanded={open}
+      aria-label={`Decisions: ${said}`}
+      title={said}
+      data-testid="decisions"
+    >
+      <span>Decisions</span>
+      <span className={`ch-decisions-n${needs ? '' : ' ch-decisions-n-zero'}`} data-testid="needs-count">{needs}</span>
+    </button>
+  )
+}
+
 export default function Toolbar({
-  title, bar, onBarAction, tool, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
-  onClientReview, clientAnswered, clientMode, docPath, onSpinoff, sidebarOpen, loading, trail, validation, saved,
+  agency, onAgency, onHome, attention, crumbs, needs, onDecisions, decisionsOpen, tools, user, onSignOut, doc,
 }: Props) {
-  const invalid = !!validation && validation !== 'OK'
-  const targets = useSpinoffTargets(docPath)
-  // On a server with accounts: who is signed in, and a way out.
-  const [user, setUser] = useState<string | null>(null)
-  useEffect(() => { signedInUser().then(u => setUser(u ? u.username : null)) }, [])
+  const lead = (
+    <>
+      <span className="ch-dock">
+        <Medallion onHome={onHome} attention={!!doc && attention} />
+        <AgencyPill agency={agency} onAgency={onAgency} />
+      </span>
+      {crumbs && <span className="ch-crumbs">{crumbs}</span>}
+    </>
+  )
 
-  // The app's own buttons past the two the bar has room for are in More, at the top, in the app's order.
-  const overflow = overflowButtons(bar ?? [])
-
-  const items: MenuItem[] = [
-    ...overflow.map(b => ({ label: b.label, hint: b.title || undefined, run: () => onBarAction?.(b.id) })),
-    ...(onToggleEdit && !editMode
-      ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: onToggleEdit }]
-      : []),
-    { label: 'Open…', hint: 'Open another .clan file', run: onOpenFile },
-    { label: 'Save as…', hint: 'Keep a copy of this file', run: onSave },
-    ...(onKeepOffline
-      ? [{ label: 'Present offline', hint: 'Keep it on this device, to show with no internet', run: onKeepOffline }]
-      : []),
-    { label: 'Export', hint: 'Make a PDF of it', run: () => onExport('pdf') },
-    { label: 'Where it came from', hint: 'What it was made from, step by step', run: onWorkspace },
-    ...targets.map((t, i) => ({
-      label: `Continue in ${t.name}`,
-      hint: t.map ? `Takes this along, into ${t.map}` : 'Takes its data and decisions along',
-      run: () => onSpinoff(t.app_id),
-      apart: i === 0,
-    })),
-    {
-      label: sidebarOpen ? 'Hide the file’s details' : 'Show the file’s details',
-      run: onToggleSidebar,
-      apart: true,
-    },
-    ...(user ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: () => { void signOut() }, apart: true }] : []),
-  ]
-
-  if (clientMode) {
+  // ── the desk: no document ─────────────────────────────────────────────────
+  if (!doc) {
+    const desk = deskItems(user, onSignOut)
     return (
-      <div className="ch-bar ch-bar-mode" role="region" aria-label="Client review">
-  {trail ?? (
-          <button className="ch-bar-home" onClick={onHome} title="Back to the studio">
-            <BarBrand tool={tool} compact />
-          </button>
-        )}
-        <span className="ch-bar-title">{title ?? 'No file open'}</span>
+      <div className="ch-bar ch-bar-os" data-testid="os-bar" data-where="desk">
+        {lead}
+        <span className="ch-bar-spacer" />
+        {tools}
+        {desk.length > 0 && <BarMenu id="ch-desk-menu" label="More" groups={[{ items: desk }]} />}
+        <DogfoodBadge />
+        <ThemeToggle />
+        <DecisionsButton needs={needs} onDecisions={onDecisions} />
+      </div>
+    )
+  }
+
+  const invalid = !!doc.validation && doc.validation !== 'OK'
+  const title = doc.loading ? <LogoSpinner size="xs" label="Loading…" /> : (doc.title ?? 'No file open')
+
+  // ── client review: the bar is the mode's ──────────────────────────────────
+  if (doc.clientMode) {
+    return (
+      <div className="ch-bar ch-bar-os ch-bar-mode" role="region" aria-label="Client review" data-testid="os-bar" data-where="client-review">
+        {lead}
+        <span className="ch-slot">
+          {doc.tool && <ToolName tool={doc.tool} />}
+          <span className="ch-slot-title">{title}</span>
+        </span>
         <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
-        <span className="ch-bar-sep" />
-        <button className="ch-btn" onClick={clientMode.onCancel} disabled={clientMode.busy} title="Leave client review. Nothing you have not saved is kept.">
+        <span className="ch-bar-spacer" />
+        <button className="ch-btn" onClick={doc.clientMode.onCancel} disabled={doc.clientMode.busy} title="Leave client review. Nothing you have not saved is kept.">
           Cancel
         </button>
         <ThemeToggle />
@@ -283,55 +272,60 @@ export default function Toolbar({
     )
   }
 
+  const cont = continueItems(doc)
   return (
-    <div className="ch-bar">
-      {trail ?? (
-        <button className="ch-bar-home" onClick={onHome} title="Back to the studio">
-          <BarBrand tool={tool} compact />
-        </button>
-      )}
-      <span className="ch-bar-title">{loading ? <LogoSpinner size="xs" label="Loading…" /> : (title ?? 'No file open')}</span>
-      {isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
-      {trusted && (
+    <div className="ch-bar ch-bar-os" data-testid="os-bar" data-where="document">
+      {lead}
+      <span className="ch-slot" role="group" aria-label="App">
+        {doc.tool && <ToolName tool={doc.tool} />}
+        <span className="ch-slot-title">{title}</span>
+        {doc.state && <StatePill state={doc.state} />}
+        <BarMenu
+          id="ch-continue-menu"
+          label="Continue in"
+          className="ch-btn ch-btn-slot"
+          groups={[
+            { label: 'Spin off into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
+            { label: 'Link to…', items: cont.link, empty: 'Linking to other work is coming.' },
+          ]}
+        />
+        <BarMenu id="ch-more-menu" label="More" className="ch-btn ch-btn-slot" groups={[{ items: moreItems(doc, user, onSignOut) }]} />
+      </span>
+      {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
+      {doc.trusted && (
         <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">
           Trusted
         </span>
       )}
       {invalid && (
-        <span className="ch-chip ch-chip-warn" title={validation}>
+        <span className="ch-chip ch-chip-warn" title={doc.validation}>
           <span className="ch-chip-dot" />Something’s wrong with this file
         </span>
       )}
-      <BarChips bar={bar ?? []} />
-      <span className="ch-bar-sep" />
-      <BarTabs bar={bar ?? []} onAction={onBarAction} />
-      <BarButtons bar={bar ?? []} onAction={onBarAction} />
-      {onClientReview && !editMode && (
+      <BarChips bar={doc.bar ?? []} />
+      <span className="ch-bar-spacer" />
+      <BarButtons bar={doc.bar ?? []} onAction={doc.onBarAction} />
+      {doc.onClientReview && !doc.editMode && (
         <button
-          className={clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}
-          onClick={onClientReview}
-          title={clientAnswered ? 'Record another answer from the client about the locked version' : 'Record what the client said about the locked version'}
+          className={doc.clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}
+          onClick={doc.onClientReview}
+          title={doc.clientAnswered ? 'Record another answer from the client about the locked version' : 'Record what the client said about the locked version'}
         >
-          {clientAnswered ? 'New client answer' : 'Client review'}
+          {doc.clientAnswered ? 'New client answer' : 'Client review'}
         </button>
       )}
-      {onToggleEdit && editMode && (
-        <button
-          className="ch-btn ch-btn-editing"
-          onClick={onToggleEdit}
-          aria-pressed
-          title="Stop editing"
-        >
+      {doc.onToggleEdit && doc.editMode && (
+        <button className="ch-btn ch-btn-editing" onClick={doc.onToggleEdit} aria-pressed title="Stop editing">
           Done editing
         </button>
       )}
-      {saved && <SaveStatus docPath={docPath} />}
-      <button className="ch-btn" onClick={onSave} title="Download a copy to send. It opens in Napkin with everything in it.">
+      {doc.saved}
+      <button className="ch-btn" onClick={doc.onSave} title="Download a copy to send. It opens in Napkin with everything in it.">
         Share
       </button>
-      <MoreMenu items={items} />
       <DogfoodBadge />
       <ThemeToggle />
+      <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
     </div>
   )
 }

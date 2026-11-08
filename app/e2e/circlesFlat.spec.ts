@@ -33,6 +33,7 @@ test('without WebGL every screen is the flat circle and nothing waits', async ({
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
   await shot(page, 'p4-13-no-webgl-clients')
   await page.getByRole('button', { name: /^Client A,/ }).click()
+  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(/#client-/, { timeout: 150 })
   await expect(page.getByTestId('tool-deck')).toBeVisible()
   await shot(page, 'p4-14-no-webgl-client')

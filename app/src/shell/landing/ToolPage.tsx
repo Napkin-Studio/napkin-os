@@ -7,8 +7,7 @@
 // before the work. Given its data; it fetches nothing.
 
 import type { ClientRecord, LibraryItem } from '../../host'
-import { needsYou } from './model'
-import { lastTouched } from '../when'
+import { DocList } from './DocList'
 import type { Tool } from './tools'
 
 interface Props {
@@ -47,19 +46,7 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack }: Pro
         {items.length === 0 ? (
           <p className="lc-nothing">Nothing yet. Start the first {one} for {client.name}; it is attached to them from the start.</p>
         ) : (
-          <ul className="lc-cards">
-            {items.map(i => (
-              <li key={i.path}>
-                <button className="lc-card" data-testid="work-item" onClick={() => onOpenItem(i.path)}>
-                  <span className="lc-card-t">{i.title || 'Untitled'}</span>
-                  {needsYou(i) && <span className="lc-tag lc-tag-need">Needs you</span>}
-                  {!needsYou(i) && i.run?.state === 'working' && <span className="lc-tag lc-tag-run">{i.run.label}</span>}
-                  {!needsYou(i) && i.run?.state === 'failed' && <span className="lc-tag lc-tag-fail">Failed</span>}
-                  <span className="lc-card-m">{lastTouched(i.updated_at)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <DocList items={items} onOpenItem={onOpenItem} />
         )}
       </section>
 

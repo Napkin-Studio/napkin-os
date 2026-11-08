@@ -1907,27 +1907,18 @@ function pageIn(shell: boolean) {
   return { app, classes, posted, tell, parent }
 }
 
-test('in the OS, Deck Maker draws no bar and asks the OS bar for its steps', () => {
+test('in the OS, Deck Maker draws no second bar, keeps its steps in its page, and asks the OS bar for its chips only', () => {
   const p = pageIn(true)
   assert.ok(!p.app.innerHTML.includes('class="bar"'), 'no second bar')
   assert.deepEqual(p.classes, ['in-shell'])
+  // every step that was a tab in the OS bar has a control in the page (owner removal of bar tabs)
+  for (const id of ['start', 'build', 'review', 'present']) assert.ok(p.app.innerHTML.includes(`data-go="${id}"`), `step ${id} has a home`)
+  assert.match(p.app.innerHTML, /data-go="start" aria-current="step"/)
   assert.equal(p.posted.length, 1)
   const m = p.posted[0]
   assert.equal(m.type, 'clan:bar')
   assert.equal(m.v, 1)
-  const tabs = (m.items ?? []).filter(i => i.kind === 'tab')
-  assert.deepEqual(tabs.map(t => t.id), ['start', 'build', 'review', 'present'])
-  assert.deepEqual(tabs.filter(t => t.current).map(t => t.id), ['start'])
-})
-
-test('the OS bar presses a step: Deck Maker goes there and says so, and only the OS may press', () => {
-  const p = pageIn(true)
-  p.tell({ type: 'clan:bar-action', id: 'build' }, { postMessage() {} }) // another window
-  p.tell({ type: 'clan:bar-action', id: 'nowhere' }) // not a step
-  assert.equal(p.posted.length, 1, 'nothing moved')
-  p.tell({ type: 'clan:bar-action', id: 'build' })
-  assert.equal(p.posted.length, 2)
-  assert.deepEqual((p.posted[1].items ?? []).filter(i => i.current).map(i => i.id), ['build'])
+  assert.deepEqual((m.items ?? []).filter(i => i.kind !== 'chip'), [], 'chips only: no tabs')
 })
 
 test('the OS asking again gets the same list again, and an unchanged screen does not repeat it by itself', () => {
@@ -1935,6 +1926,8 @@ test('the OS asking again gets the same list again, and an unchanged screen does
   p.tell({ type: 'clan:bar?' })
   assert.equal(p.posted.length, 2)
   assert.deepEqual(p.posted[1], p.posted[0])
+  p.tell({ type: 'clan:bar-action', id: 'build' }, { postMessage() {} }) // another window
+  assert.ok(p.app.innerHTML.includes('data-go="start" aria-current="step"'), 'only the OS may press')
 })
 
 test('on its own, Deck Maker keeps its bar and sends nothing', () => {

@@ -3,36 +3,23 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useEffect, type ReactNode } from 'react'
-import { StudioLogo } from '../brand/StudioMark'
-import ThemeToggle from '../components/ThemeToggle'
-import { DogfoodBadge } from '../dogfood/Dogfood'
 import { setScreen } from '../dogfood/recorder'
 import './StudioShell.css'
 
 interface Props {
-  /** The home screen: the apps launcher. */
+  /** The home screen: the desk, or the apps launcher. */
   children: ReactNode
-  /** Extra controls at the start of the tools, e.g. the Offline section. */
-  tools?: ReactNode
-  /** Where you are, as a trail of circles; replaces nothing, sits after the brand. */
-  trail?: ReactNode
+  /** The one OS bar (components/Toolbar.tsx), in its desk state. */
+  bar: ReactNode
 }
 
-/** The studio frame: frosted top bar with the brand and the tools. */
-export default function StudioShell({ children, tools, trail }: Props) {
+/** The studio frame: the OS bar, and under it the home screen filling the rest. */
+export default function StudioShell({ children, bar }: Props) {
   // the dogfood build records where people go (a no-op elsewhere)
   useEffect(() => { setScreen({ screen: 'home' }) }, [])
   return (
     <div className="studio">
-      <header className="studio-top">
-        <StudioLogo size={15} />
-        {trail}
-        <div className="studio-tools">
-          {tools}
-          <DogfoodBadge />
-          <ThemeToggle />
-        </div>
-      </header>
+      <header className="studio-top">{bar}</header>
       <main className="studio-panel">
         {children}
       </main>
