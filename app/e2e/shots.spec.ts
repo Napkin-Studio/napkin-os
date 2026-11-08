@@ -157,7 +157,7 @@ test('phase 2 screens: the wheel, a tool page, the trail in a document', async (
   await page.goto(`/#tool-${a}-brief`); await page.reload()
   await page.getByTestId('work-item').first().click()
   await expect(page.locator('iframe').first()).toBeVisible({ timeout: 30_000 })
-  await expect(trail.getByRole('button')).toHaveCount(4)
+  await expect(trail.getByRole('button')).toHaveCount(3) // the agency is the bar's pill
   await page.waitForTimeout(800)
   await shot(page, 'p2-05-document-trail-in-bar')
 

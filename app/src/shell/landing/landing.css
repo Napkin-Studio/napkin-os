@@ -199,14 +199,7 @@
   .lc-doorbtn:hover .lc-orb, .lc-doorbtn:focus-visible .lc-orb, .lc-client:hover .lc-orb, .lc-client:focus-visible .lc-orb, .lc-tool:hover .lc-orb { transform: none; }
 }
 
-/* the trail in an open document's bar: it stands before the title and gives it the room */
-.ch-bar .lc-trail { flex: 0 1 auto; max-width: 60%; }
-
-/* on a phone the studio bar has no room beside the brand and its buttons: the trail takes a row of its own, so the level you are on is never clipped */
-@media (max-width: 560px) {
-  .studio .studio-top { height: auto; min-height: var(--toolbar-h); flex-wrap: wrap; padding-top: 2px; padding-bottom: 2px; row-gap: 0; }
-  .studio .studio-top .lc-trail { order: 3; flex: 1 0 100%; }
-}
+/* In the one OS bar the trail sits after the agency's pill (chrome.css .ch-crumbs places it). */
 
 /* 3D circles: the flat svg is the fallback, a canvas goes over it once the engine has drawn into it.
    The initials stay as text on top of the blank sphere. Reduced motion gets this cross-fade and nothing else. */

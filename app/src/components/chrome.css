@@ -233,8 +233,10 @@
 .ch-agency-os i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 
 /* Where you are below the agency: Clients › client › tool. */
-.ch-crumbs { display: inline-flex; min-width: 0; flex: 0 1 auto; }
-.ch-crumbs .lc-trail { flex: 0 1 auto; }
+.ch-crumbs { display: inline-flex; min-width: 0; flex: 0 1 auto; max-width: 42vw; }
+.ch-crumbs .lc-trail { flex: 0 1 auto; max-width: 100%; }
+/* in a document the slot's title leads: the trail gives way first */
+.ch-bar-os[data-where='document'] .ch-crumbs { max-width: 26vw; }
 .ch-crumbs .lc-crumb { font-size: 13px; }
 
 /* The OS app slot: the tool, the document's name, its state, Continue in and More. */
@@ -310,7 +312,8 @@
   white-space: nowrap;
 }
 .ch-decisions:hover:not(:disabled) { background: var(--agency-soft); }
-.ch-decisions[aria-expanded='true'] { background: var(--agency); color: var(--agency-fg); border-color: transparent; }
+.ch-decisions[aria-expanded='true'],
+.ch-decisions[aria-expanded='true']:hover:not(:disabled) { background: var(--agency); color: var(--agency-fg); border-color: transparent; }
 .ch-decisions:disabled { cursor: default; opacity: 0.7; }
 .ch-decisions:focus-visible { outline: 3px solid var(--agency); outline-offset: 2px; }
 .ch-decisions-n {
@@ -654,7 +657,7 @@
   .ch-bar-title { flex: 1 1 120px; }
   .ch-bar.ch-bar-os { height: auto; padding: 8px 12px; }
   .ch-slot { flex: 1 1 100%; order: 5; }
-  .ch-crumbs { flex: 1 1 100%; order: 4; }
+  .ch-crumbs { flex: 1 1 100%; order: 4; max-width: none; }
   .ch-agency-os { display: none; }
   .ch-bar .ch-btn { height: 28px; padding: 0 11px; font-size: 12px; }
   .ch-bar .ch-btn-icon { width: 28px; padding: 0; }
