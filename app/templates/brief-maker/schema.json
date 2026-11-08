@@ -123,6 +123,11 @@
       }
     },
     "locked_fields": { "type": "array", "items": { "type": "string" } },
+    "confidential_fields": {
+      "description": "Parts a person marked Confidential (features/brief-new-ui.clan): kept in the agency's copies with a hatch and a tag, left out of the client copy. Keyed by the part's data path. Written by a person only.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "locked": { "type": "boolean", "$comment": "kept for older briefs: the lock is an approve on this document (middleware-api.md §10.5, os-layer.md §7.1), not this flag" },
     "materials": { "$ref": "#/definitions/materials", "$comment": "written only by the middleware (middleware-api.md §10.4)" },
     "capture": { "$ref": "#/definitions/capture", "$comment": "written only by the middleware (middleware-api.md §10.4)" },

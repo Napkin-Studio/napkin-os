@@ -1,5 +1,6 @@
 """The brief's look (features/brief-new-ui.clan): layout, logos and theme are appearance keys only a person
-writes. Redrafting one part, and drafting the whole brief again, leave them exactly as they were."""
+writes, and so is confidential_fields (who may read a part). Redrafting one part, and drafting the whole brief
+again, leave them exactly as they were."""
 
 import copy
 
@@ -14,6 +15,7 @@ LOOK = {
     "logos": [{"slot": "client", "ref": {"asset": "logo-1.png"}, "label": "brewline.png"},
               {"slot": "agency", "ref": {"brand": "brand-wk", "asset": "logo-primary"}}],
     "theme": {"accent": "#1F3FBF"},
+    "confidential_fields": ["budget_and_scope", "objectives.commercial"],
 }
 
 
