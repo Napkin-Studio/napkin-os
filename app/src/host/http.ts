@@ -34,6 +34,7 @@ import type {
   SpinoffTarget,
   Unlisten,
   UploadedAsset,
+  UpstreamUpdateReply,
   UpstreamView,
   SourceCard,
 } from './types'
@@ -285,6 +286,7 @@ export const httpHost: Host = {
   },
 
   upstream: () => clanCall<UpstreamView>('/upstream'),
+  updateFromUpstream: () => clanPost<UpstreamUpdateReply>('/upstream/update', {}),
   cites: async refs => (await clanPost<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   clientReview: body => clanPost<ClientReviewReply>('/client-review', body),

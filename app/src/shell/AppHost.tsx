@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Toolbar, { type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
-import { useSpinoffTargets } from '../components/ContinueIn'
+import { useMadeFrom, useSpinoffTargets } from '../components/ContinueIn'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import WorkspaceView from './WorkspaceView'
@@ -157,6 +157,13 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     refreshApp()
   }, [reload])
 
+  // What it was made from, and taking that document's newer version (a
+  // spin-off may, owner 2026-11-09). A refusal is said where the bar is.
+  const [upError, setUpError] = useState<{ docPath: string; message: string } | null>(null)
+  const onUpError = useCallback((message: string) => setUpError({ docPath, message }), [docPath])
+  const onUpTaken = useCallback(() => { setUpError(null); changed() }, [changed])
+  const { madeFrom, update: updateFromUpstream } = useMadeFrom(docPath, onUpTaken, onUpError)
+
   const save = useCallback(async () => {
     if (!review || review.docPath !== docPath || problemOf(review.draft)) return
     const { draft, marks } = review
@@ -292,6 +299,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onExport,
           targets,
           onSpinoff,
+          madeFrom,
+          // A locked version keeps what it was made from; the host refuses it too.
+          onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
           saved: saved ? <SaveStatus docPath={docPath} /> : undefined,
           editMode,
@@ -304,6 +314,13 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         }}
       />
       {banner}
+      {upError?.docPath === docPath && (
+        <div className="ch-banner" role="alert">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Could not update from {madeFrom?.title ?? 'what it was made from'}.</strong>{upError.message}</span>
+          <button type="button" className="ch-link" onClick={() => setUpError(null)}>Dismiss</button>
+        </div>
+      )}
       </div>
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}

@@ -16,7 +16,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import Toolbar from '../src/components/Toolbar.tsx'
-import { continueItems, deskItems, moreItems, type DocBar } from '../src/components/barMenus.ts'
+import { continueItems, deskItems, madeFromOf, moreItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 import { Trail } from '../src/shell/landing/Trail.tsx'
@@ -78,7 +78,26 @@ test('a document: the slot holds the tool, the title, the state, Continue in and
   assert.ok(!more.some(l => l.startsWith('Continue in')), 'Continue in is not in More')
   const cont = continueItems(doc())
   assert.deepEqual(labels(cont.spin), ['Continue in Deck Maker'])
-  assert.deepEqual(cont.link, [], 'the Link to… group waits for spinoff-and-links')
+  assert.deepEqual(cont.link, [], 'the Link group waits for the general attach (feat/brand-clan)')
+  assert.deepEqual(cont.update, [], 'made from nothing: nothing to update from')
+})
+
+test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made from with Update when the parent changed', () => {
+  let updated = 0
+  const changed = doc({ madeFrom: { title: 'Lúnasa research', changed: true, decisionsSince: 2 }, onUpdateFromUpstream: () => { updated++ } })
+  const cont = continueItems(changed)
+  assert.deepEqual(labels(cont.update), ['Update from Lúnasa research'])
+  assert.match(cont.update[0].hint ?? '', /2 new decisions/)
+  cont.update[0].run()
+  assert.equal(updated, 1)
+  // Current, or locked (no update handler): nothing to run, and the group says why.
+  assert.deepEqual(continueItems(doc({ madeFrom: { title: 'Lúnasa research', changed: false }, onUpdateFromUpstream: noop })).update, [])
+  assert.deepEqual(continueItems(doc({ madeFrom: { title: 'Lúnasa research', changed: true } })).update, [])
+  // The menu itself is closed in static markup; its groups are in the source.
+  const src = readFileSync('src/components/Toolbar.tsx', 'utf8')
+  for (const want of ["'Turn it into'", "'Link to an existing one'", "'Made from'", 'Up to date with', 'A locked version keeps what it was made from']) {
+    assert.ok(src.includes(want), `Toolbar has ${want}`)
+  }
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {
@@ -125,4 +144,18 @@ test('what lives outside the bar keeps its home in App.tsx: device banner, updat
   for (const want of ['<DeviceBanner', 'dv-update', '<InstallPrompt', 'dv-drop', '<OfflineDialog', 'setOfflineOpen(true)', '<Launcher', '<DeviceHome', 'onAllTools']) {
     assert.ok(app.includes(want), `App.tsx still has ${want}`)
   }
+})
+
+test('madeFromOf reads the direct parent the host holds, and nothing else', () => {
+  assert.equal(madeFromOf(null), null)
+  assert.equal(madeFromOf({ document_id: 'd', carried: null, upstream: [] }), null)
+  const view = {
+    document_id: 'd', carried: null,
+    upstream: [
+      { document_id: 'r', direct: true, in_store: true, title: 'Lúnasa research', status: 'changed' as const, decisions_since: 3 },
+      { document_id: 'c', direct: false, in_store: true, title: 'Older', status: 'not_compared' as const },
+    ],
+  }
+  assert.deepEqual(madeFromOf(view), { title: 'Lúnasa research', changed: true, decisionsSince: 3 })
+  assert.equal(madeFromOf({ ...view, upstream: [{ ...view.upstream[0], in_store: false }] }), null)
 })

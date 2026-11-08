@@ -34,6 +34,7 @@ import type {
   SpinoffTarget,
   Unlisten,
   UploadedAsset,
+  UpstreamUpdateReply,
   UpstreamView,
   SourceCard,
 } from './types'
@@ -258,6 +259,7 @@ export const wasmHost: Host = {
   },
 
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
+  updateFromUpstream: () => post<UpstreamUpdateReply>('/upstream/update', {}),
   cites: async refs => (await post<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   // Answered by the route table in the page, as on every host: the parts

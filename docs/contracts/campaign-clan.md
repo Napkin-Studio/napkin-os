@@ -90,7 +90,8 @@ campaign:
 | `gate` | always | The field's gate. `const` in the schema: a writer cannot change it |
 | `decision` | always | Id of the chain entry that set the current value. The rest of the history is `GET /history?address=` |
 | `source` | required for `extracted` | The span: `{material_id, locator, quote?}` |
-| `fact_ids` | required for `proposed` | The pins it was derived from — ids in `shared/facts.yaml` |
+| `fact_ids` | required for `proposed`, or `upstream_refs` | The pins it was derived from — ids in `shared/facts.yaml` |
+| `upstream_refs` | for `proposed` from a carried brief | `<brief id>#<path>` in `data.upstream`: what a research started from a brief proposed it from (*added 2026-11-09*, middleware-api §1 `upstream_ask`) |
 | `finding_ids` | optional | Findings it rests on. A field citing a rejected finding is flagged (§6.3) |
 | `by` | required for `confirmed` and `stated` | The human, `human:<id>` |
 | `confirmed_from` | required for `confirmed` | What the human accepted: `extracted`, `proposed` or `stated`. The earlier `source` / `fact_ids` stay |
@@ -121,7 +122,7 @@ the fully merged data (`pack.rs`), so this matters.
 | Origin | Means | Must carry | The view says |
 |---|---|---|---|
 | `extracted` | Read from supplied material | `source` (the span) | "you said this" — show the quote |
-| `proposed` | Derived from layer facts | `fact_ids` (≥1) | "we inferred this" — show the pins |
+| `proposed` | Derived from layer facts, or from the brief a research started from | `fact_ids` (≥1) or `upstream_refs` (≥1) | "we inferred this" — show the pins, or the brief's part |
 | `confirmed` | A human accepted or corrected it | `by`, `confirmed_from` | who confirmed it, and from what |
 | `stated` | A human supplied it directly | `by` | who said it |
 

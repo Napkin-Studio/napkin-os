@@ -285,8 +285,17 @@ export default function Toolbar({
           label="Continue in"
           className="ch-btn ch-btn-slot"
           groups={[
-            { label: 'Spin off into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
-            { label: 'Link to…', items: cont.link, empty: 'Linking to other work is coming.' },
+            { label: 'Turn it into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
+            { label: 'Link to an existing one', items: cont.link, empty: 'Linking to other work is coming.' },
+            ...(doc.madeFrom
+              ? [{
+                  label: 'Made from',
+                  items: cont.update,
+                  empty: doc.madeFrom.changed
+                    ? `${doc.madeFrom.title} changed. A locked version keeps what it was made from.`
+                    : `Up to date with ${doc.madeFrom.title}.`,
+                }]
+              : []),
           ]}
         />
         <BarMenu id="ch-more-menu" label="More" className="ch-btn ch-btn-slot" groups={[{ items: moreItems(doc, user, onSignOut) }]} />
