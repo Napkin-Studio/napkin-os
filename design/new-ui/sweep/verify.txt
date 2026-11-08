@@ -1,0 +1,50 @@
+**Verdict: PASS.** I found no hard fail: nothing that existed before phase33 has been taken out or hidden. Six bugs remain, one of them a real usability bug (#1). Every feature in the parity list now has a home.
+
+**How I checked**
+- **Baseline:** all 11 tool/step views × brands wk and tbwa, at 1600 light and 1280 dark. That gave 0 page errors and no sideways scroll anywhere, and none of the click-through scripts below raised a page error either.
+- **Click-throughs (ports 9711–9719):**
+  - Brief: research-changed card, Save ▾, lock gate, Keep as is, Redraft presets, Offline server, Your pictures, answering the calls → Lock → Record the client's answer → Make the change.
+  - Research: Ask the research, Keep, Lock and accept, Evidence map, Run again, How it ran, the 19-field and request folds, pin f_009 "Take the newer value", Used-in chips.
+  - Loading: Stop / Keep going / Yes, stop it / Open what was written, the part tiles, the research question card, Skip.
+  - Desk, account menu, top bar and Decisions: search, Archive → Restore, desk ⋯, dial, account menu with All tools, Your crew and Sign out, Beta, the document-name menu (File details, Where it came from), Decisions By part / Show in document / Technical details, Continue in, the needs popover with Set aside.
+  - Client page: Spoon trial, Delivery desserts, the Ballymaloe client.
+- **Before/after diff:** I rebuilt the mock without phase33 in `/tmp/claude-1000/vf2/pre/` (originals untouched) and compared every button, summary, link, label and heading in each view.
+
+**Before/after diff**
+- **Text gone from the page:** only legacy labels.
+  - All / Verified / Needs review is the show-findings filter, an explicit owner removal.
+  - "keep as working hypothesis / cut finding / lock the report / approve both & lock brief / inspect in research" were renamed to Keep / Cut / Lock and accept / "Approve all and lock the brief" / "Open in Research".
+- **"Next step" ↘ round button (`#hero-cta-circle`):** it showed in the pre-phase33 deep links only because the step sync never ran on load. phase2 and phase10 hide it on purpose, and its two jobs live in "Write the brief" and "Skip to the finished result". Not a regression.
+- **Mock-control buttons (brands, mark state, Handoff now, Replay run):** they are now collapsed by default. All are still there when the panel is expanded (`mock-expanded.png`).
+
+**Remaining bugs** (screenshots in `/tmp/claude-1000/napkin-shots/verifier2/`)
+1. **The client-answer form hides one part.** Steps: answer both calls with Yes, Lock the brief, then Record the client's answer. The "Open questions & Mandatories" checkbox sits at y≈605 and is covered by the textarea (`elementFromPoint` returns TEXTAREA), so that part can't be picked. It is the part the client is most likely to flag. `lk_crform.png`
+2. **Counts drift apart.** Steps: open the needs popover, click Set aside on one item. The pill drops to "2 NEED YOUR CALL" but the Decisions badge stays at 3. The fixer said "one number everywhere". `tb_aside.png`
+3. **Another client's work shows McDonald's state.** Steps: go to `tool=client&client=bal` and open Better With Ballymaloe.
+   - The pill still says 3 needing a call, and Decisions opens on "McDonald's Ireland · Summer McFlurry". `fin_bal_dec.png`
+   - The toast reads "Loaded sample ask: Better With Ballymaloe", although no sample ask was loaded. `cl_balbrief.png`
+4. **The research question card doesn't connect to the report.** Answering "Yes, the whole island" is saved under "Your request and answers". But the report still says the market is Republic of Ireland and "Northern Ireland not researched". The card also says "The Strategy agent asks" while step 3 (Knowledge) is running and Strategy is already marked done. The MOCK CONTROLS chip covers the start of the "Or type your answer" field. `ld_rsq.png`
+5. **The lock toast and the gate list disagree.** Clicking Lock the brief with the gate open shows the toast "1 part needs your call…", while the list says "2 to settle before it can lock". `br_lock-try.png`
+6. **A locked report still allows changes.** After Keep and then Lock and accept, the header says "Nothing needs you" but "Confirm before the brief · 1" is still listed. Refresh and Run again… also stay enabled. `rs_runagain.png`, `rs_map.png`
+
+Minor: the collapsed MOCK CONTROLS chip covers brief text at the bottom left at 1600 (mock only).
+
+**Left as the fixer reported (still true)**
+- The open dial covers Ballymaloe and part of the "Pick up" heading. That follows the owner's in-place dial decision.
+- Sweep #25 (dial arc clipped top-left): I couldn't reproduce it. The arc in `dk_dial.png` looks like a partial progress ring, not a clip.
+- Delivery desserts has no report of its own.
+- The brief says "v1.3 · 12 facts attached" while Research says 8 pinned facts.
+
+**Parity list: every item has a home**
+- **Confirmed by clicking:**
+  - On the brief: per-part Keep as is (blocks Edit and Redraft, toast), Redraft presets, disabled Redraft when the server is offline, "Leave it, say why", Stop with confirm, part tiles, New brief for this client, the lock gate list, Your pictures, all five export formats plus Confidential and appendix, the research-changed card (Mark as seen works), Made from, the Review fold, the client answer plus Make the change (goes to v1.4 draft), Show all why, Cover Band.
+  - Across the app: Decisions Graph / By part / By time / Lineage with Show in document and Technical details, the document-name menu with File details and Where it came from, the account menu (All tools with Coming soon and templates, Your crew, Sign out to a sign-in screen), the Beta feedback popover, desk greeting / search / Archived and Restore / ⋯ / Pick up with Everyone–Me / Worth a look, client ⋯ Rename and Archive.
+  - In Research: Checks signed as, Run again… with lenses and markets, Find the points, the 01/02/03 gates, All 19 fields with You said / We inferred, Your request, the question card, Replay run and Activity, Take the newer value, Used-in chips, the needs popover's Looks right / Set aside / Open.
+- **Seen in menus but not clicked through:** Present offline, Open…, Save as…, the device-home setting, dropping a .clan file on the desk, Install the app, Change password.
+
+**Outside the mock:** the user also asked for a commit to a new branch and for the rework in the real app (`/home/batunii/Documents/Code/napkin-studio-new-ui`), including the missing backends such as spin-off from brief to research. None of that has started.
+
+**Files**
+- Scripts: `/tmp/claude-1000/vf2/*.mjs`
+- Rebuilt pre-phase33 mock: `/tmp/claude-1000/vf2/pre/napkin-app-v1.html`
+- Screenshots: `/tmp/claude-1000/napkin-shots/verifier2/`
