@@ -536,6 +536,17 @@
   .bdesk{display:grid;grid-template-columns:minmax(0,794px) minmax(300px,360px);gap:28px;justify-content:center;align-items:start;margin-top:8px}
   .sheetcol{position:relative;min-width:0}
   .sheet.a4{width:100%;max-width:794px;margin:0;min-height:1123px;padding:56px 64px 64px;--brief-accent:var(--sec)}
+  /* Documents stay paper (owner rule; the mock): in a dark room the desk and the side tab go dark and
+     the sheet stays the white stock it prints on. Its own tokens are the light ones. */
+  .sheet.a4{color-scheme:light;
+    --paper:#FBF7EE; --card:#FCF9F2; --soft:#F1EADC; --soft-2:#EAE1CF; --line:#D9CDB6; --line-soft:#E6DCCA;
+    --ink:#221D15; --ink2:#4A4236; --ink3:#71675A; --create:#C9462A; --create-ink:#9E321A; --create-soft:#F5E1D5;
+    --amber-soft:#F4E7C6; --amber-ink:#704C00; --green-soft:#E4EBD2; --green-ink:#3D5A1E;
+    --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .42  0 0 0 0 .33  0 0 0 0 .2  0 0 0 .085 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    --surface:var(--card); --border:var(--line); --text:var(--ink); --muted:var(--ink2); --faint:var(--ink3);
+    --tint:var(--soft); --tint-2:var(--soft-2); --rule:var(--line-soft); --sec:var(--create-ink); --accent:var(--create);
+    color:var(--ink);
+    background:var(--grain),radial-gradient(120% 90% at 18% 0%,color-mix(in srgb,var(--paper) 60%,white 40%),transparent 60%),linear-gradient(180deg,var(--paper),color-mix(in srgb,var(--paper) 94%,var(--soft-2)))!important}
   /* The sheet is A4 wide at every screen size above a phone, so its type does not follow the window. */
   .sheet.a4 .val.spp{font-size:28px}
   .sheet.a4 .stitle .proj{font-size:38px}

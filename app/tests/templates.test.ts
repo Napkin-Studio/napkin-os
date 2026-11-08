@@ -1765,6 +1765,8 @@ test('the screen and the PDF are one sheet: one builder, one measure, guides whe
   // No phone/PDF switch (owner removal), and the type on the sheet does not follow the window.
   assert.doesNotMatch(BM, /data-format=|Phone view|phone\/PDF/i)
   assert.match(BM, /\.sheet\.a4 \.val\.spp\{font-size:28px\}/)
+  // Documents stay paper: the sheet keeps the light stock in a dark room, as it prints.
+  assert.match(BM, /\.sheet\.a4\{color-scheme:light;\s*--paper:#FBF7EE;/)
   // The last page ends the document: no blank page after it.
   assert.match(BM, /\.sheet\.a4\.page:last-child\{break-after:auto;page-break-after:auto\}/)
   // Place on page stays open while its buttons rewrite the panel.
