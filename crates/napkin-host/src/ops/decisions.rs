@@ -308,44 +308,23 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
         problem: None,
     };
 
-    let chain = if clan.has_entry(CHAIN_PATH) {
-        match clan
-            .read_entry(CHAIN_PATH)
-            .map_err(|e| e.to_string())
-            .and_then(|b| DecisionChain::from_yaml(&b).map_err(|e| e.to_string()))
-        {
-            Ok(c) => c,
-            Err(e) => {
-                view.problem = Some(format!("the decision chain does not read: {e}"));
-                return Ok(view);
-            }
+    let chain = match read_chain(clan) {
+        Ok(c) => c,
+        Err(e) => {
+            view.problem = Some(format!("the decision chain does not read: {e}"));
+            return Ok(view);
         }
-    } else {
-        DecisionChain::default()
     };
 
     let data = read::data_json(doc);
-    let schema: Value = clan
-        .read_entry(SCHEMA_PATH)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(Value::Null);
-    let by_id = |m: members::Member| -> BTreeMap<String, Value> {
-        let Value::Array(items) = members::list_for_agent(clan, m) else {
-            return BTreeMap::new();
-        };
-        items
-            .into_iter()
-            .filter_map(|v| Some((v.get("id")?.as_str()?.to_string(), v)))
-            .collect()
-    };
+    let schema = read_schema(clan);
     let ctx = Lookup {
         doc_id: &doc_id,
         data: &data,
         schema: &schema,
-        facts: by_id(members::FACTS),
-        findings: by_id(members::FINDINGS),
-        sources: by_id(members::SOURCES),
+        facts: members_by_id(clan, members::FACTS),
+        findings: members_by_id(clan, members::FINDINGS),
+        sources: members_by_id(clan, members::SOURCES),
         chain: &chain,
     };
 
@@ -422,6 +401,34 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
     view.client = client.view;
     view.attention = attention;
     Ok(view)
+}
+
+/// The document's decision chain; empty when it has none.
+fn read_chain(clan: &clan_sdk::ClanFile) -> Result<DecisionChain, String> {
+    if !clan.has_entry(CHAIN_PATH) {
+        return Ok(DecisionChain::default());
+    }
+    clan.read_entry(CHAIN_PATH)
+        .map_err(|e| e.to_string())
+        .and_then(|b| DecisionChain::from_yaml(&b).map_err(|e| e.to_string()))
+}
+
+fn read_schema(clan: &clan_sdk::ClanFile) -> Value {
+    clan.read_entry(SCHEMA_PATH)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(Value::Null)
+}
+
+/// A list member's entries, by id.
+fn members_by_id(clan: &clan_sdk::ClanFile, m: members::Member) -> BTreeMap<String, Value> {
+    let Value::Array(items) = members::list_for_agent(clan, m) else {
+        return BTreeMap::new();
+    };
+    items
+        .into_iter()
+        .filter_map(|v| Some((v.get("id")?.as_str()?.to_string(), v)))
+        .collect()
 }
 
 /// What every derivation reads from the snapshot.
@@ -2270,6 +2277,9 @@ fn clip(s: &str, max: usize) -> String {
     out.push('…');
     out
 }
+
+mod card;
+pub use card::{source_cards, CarriedFrom, Review, SourceCard, ORIGINS};
 
 #[cfg(test)]
 mod tests;

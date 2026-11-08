@@ -912,6 +912,18 @@ pub fn upstream_status(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value
     crate::ops::read::upstream_status(doc, |id| find_upstream(store, ctx, doc, id))
 }
 
+/// `/cite` for `doc`: the source card for each of `refs` (OS-layer contract
+/// §8.3), an upstream document's title and app as the store holds it for
+/// `ctx`. A read: nothing is written.
+pub fn source_cards(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+    refs: &[String],
+) -> HostResult<std::collections::BTreeMap<String, crate::ops::decisions::SourceCard>> {
+    crate::ops::decisions::source_cards(doc, refs, |id| find_upstream(store, ctx, doc, id))
+}
+
 // ── The home page, as a CLAN file ───────────────────────────────────────────
 //
 // The launcher itself is an authored CLAN app rendered by the host like any

@@ -27,6 +27,10 @@ use crate::library::{
 use crate::proxy::api_proxy;
 use crate::session::{Applied, Session, TRUSTED_CAPABILITIES};
 
+/// The most refs one `POST /cite` resolves: a page's section, never the
+/// whole document a ref at a time.
+pub const MAX_CITE_REFS: usize = 500;
+
 pub struct HostRequest {
     pub path: String,
     pub query: String,
@@ -500,6 +504,45 @@ pub fn dispatch(
             Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
             Err(e) => e.into(),
         },
+
+        // The source card for one ref (`GET /cite?ref=`) or many at once
+        // (`POST /cite {refs}`), so a page renders a section's cards in one
+        // call (OS-layer contract §8.3). Any app, any actor: a read.
+        "/cite" => {
+            let body = req.body_json();
+            let batch = body.get("refs");
+            let refs: Vec<String> = match batch {
+                Some(Value::Array(rs)) => rs
+                    .iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect(),
+                Some(_) => return HostResponse::error(400, "refs must be a list of strings"),
+                None => match query_param(&req.query, "ref").filter(|r| !r.trim().is_empty()) {
+                    Some(r) => vec![r],
+                    None => return HostResponse::error(400, "missing ref"),
+                },
+            };
+            if refs.len() > MAX_CITE_REFS {
+                return HostResponse::error(
+                    400,
+                    &format!("at most {MAX_CITE_REFS} refs in one call"),
+                );
+            }
+            let store = session.store().clone();
+            match session.read(|d| crate::library::source_cards(&*store, ctx, d, &refs)) {
+                Ok(mut cards) if batch.is_none() => {
+                    let card = cards.pop_first().map(|(_, c)| c);
+                    match card {
+                        Some(c) if c.cite.kind != "unknown" => {
+                            HostResponse::json(200, &serde_json::json!(c))
+                        }
+                        _ => HostResponse::error(404, "this document holds nothing by that ref"),
+                    }
+                }
+                Ok(cards) => HostResponse::json(200, &serde_json::json!({ "cites": cards })),
+                Err(e) => e.into(),
+            }
+        }
 
         // Launcher routes — let a home CLAN app list and launch apps.
         "/apps" => HostResponse::json(200, &serde_json::json!(scan_apps(&**session.store()))),

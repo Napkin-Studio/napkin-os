@@ -22,6 +22,7 @@ import type {
   LibraryListing,
   OpenResult,
   RecentDoc,
+  SourceCard,
   SpinoffTarget,
   Unlisten,
 } from './types'
@@ -53,6 +54,12 @@ export const tauriHost: Host = {
   acknowledge: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   // Nor client review, which is read and answered from that view.
   upstream: () => Promise.reject(new Error('what changed upstream is not available on the desktop yet')),
+  // The clan:// route answers it, as for the frame.
+  cites: async refs => {
+    const resp = await fetch(`${clanScheme()}/cite`, { method: 'POST', body: JSON.stringify({ refs }) })
+    if (!resp.ok) throw new Error(`cite: ${resp.status}`)
+    return ((await resp.json()) as { cites: Record<string, SourceCard> }).cites
+  },
   clientReview: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewConfirm: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewReopen: () => Promise.reject(new Error('client review is not available on the desktop yet')),

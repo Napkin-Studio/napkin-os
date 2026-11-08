@@ -35,6 +35,7 @@ import type {
   Unlisten,
   UploadedAsset,
   UpstreamView,
+  SourceCard,
 } from './types'
 
 /** Bytes out of wasm arrive as an Array unless they already are a view. */
@@ -257,6 +258,7 @@ export const wasmHost: Host = {
   },
 
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
+  cites: async refs => (await post<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   // Answered by the route table in the page, as on every host: the parts
   // the client's words name are found by the host's own matcher, in the

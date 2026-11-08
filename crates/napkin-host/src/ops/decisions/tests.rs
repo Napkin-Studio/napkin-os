@@ -1294,3 +1294,122 @@ fn a_projection_built_without_its_sources_is_served_with_them() {
         data
     );
 }
+
+// ── the source card (`/cite`, OS-layer contract §8.3) ──────────────────────
+
+fn cards(doc: &Document, refs: &[&str]) -> BTreeMap<String, SourceCard> {
+    let refs: Vec<String> = refs.iter().map(|r| r.to_string()).collect();
+    source_cards(doc, &refs, |_| None).unwrap()
+}
+
+#[test]
+fn a_card_is_the_decision_views_cite_with_the_latest_review() {
+    let doc = example();
+    let view = decisions(&doc).unwrap();
+    let c = cards(
+        &doc,
+        &["fi_01JA0F5E", "fi_01JA0F1A", "fi_01JA0F2B", "f_NOPE"],
+    );
+
+    // The same resolver as the decision view: the same words.
+    let rej = &c["fi_01JA0F5E"];
+    assert_eq!(Some(&rej.cite), view.cites.get("fi_01JA0F5E"));
+    assert_eq!(rej.reference, "fi_01JA0F5E");
+    let r = rej.review.as_ref().unwrap();
+    assert_eq!(r.verdict, "rejected");
+    assert_eq!(r.decision.as_deref(), Some("d_01JA0D07REJ"));
+    assert_eq!(rej.history.len(), 1);
+
+    assert_eq!(
+        c["fi_01JA0F1A"].review.as_ref().unwrap().verdict,
+        "verified"
+    );
+    // Proposed: nobody has reviewed it.
+    assert!(c["fi_01JA0F2B"].review.is_none());
+    assert!(c["fi_01JA0F2B"].history.is_empty());
+
+    // Not in the document: said so, never guessed.
+    assert_eq!(c["f_NOPE"].cite.kind, "unknown");
+    assert_eq!(c["f_NOPE"].origin, "document");
+
+    // Nothing here is carried, and no pin says where it came from.
+    assert!(c
+        .values()
+        .all(|c| c.from.is_none() && c.origin == "document"));
+
+    // Serialised flat: the cite's fields beside ref, origin, review.
+    let v = serde_json::to_value(rej).unwrap();
+    assert_eq!(v["ref"], "fi_01JA0F5E");
+    assert_eq!(v["kind"], "finding");
+    assert_eq!(v["origin"], "document");
+    assert_eq!(v["review"]["verdict"], "rejected");
+}
+
+#[test]
+fn origin_is_what_the_record_says_or_what_its_kind_settles_never_a_guess() {
+    let facts = r#"facts:
+  - id: f_01BRAND1
+    entity: brand/acme
+    key: tone
+    value: warm
+    origin_kind: brand
+  - id: f_01LAYER1
+    entity: brand/acme
+    key: awareness
+    value: 0.4
+    origin: fact://brand/acme/awareness@3
+  - id: f_01ODD001
+    entity: brand/acme
+    key: odd
+    value: 1
+    origin_kind: rumour
+  - id: f_01RVW001
+    entity: brand/acme
+    key: share
+    value: 0.2
+    review: { verdict: verified, by: "human:mary", at: "2026-11-01T10:00:00Z", decision: d_X }
+"#;
+    let data = r#"materials:
+  mat_deck: { name: Client deck.pdf, kind: pdf }
+  mat_ask: { name: prompt, kind: prompt, text: "Make it warm" }
+capture:
+  items:
+    cap_1: { material_id: mat_deck, key: audience, value: "Young parents", status: fact, quote: "young parents" }
+    cap_2: { material_id: mat_ask, key: tone, value: "Warm", status: fact }
+passages:
+  psg_1: { citation: "Binet & Field, 2013", text: "Long and short", scope: house }
+"#;
+    let doc = doc_with(&[(members::FACTS_PATH, facts), ("shared/data.yaml", data)]);
+    let c = cards(
+        &doc,
+        &[
+            "f_01BRAND1",
+            "f_01LAYER1",
+            "f_01ODD001",
+            "f_01RVW001",
+            "mat_deck",
+            "mat_ask",
+            "cap_1",
+            "cap_2",
+            "psg_1",
+            "human:mary",
+        ],
+    );
+    let o = |r: &str| c[r].origin;
+    assert_eq!(o("f_01BRAND1"), "brand");
+    // A pin's `origin` is the layer row's address, not this marker.
+    assert_eq!(o("f_01LAYER1"), "document");
+    assert_eq!(o("f_01ODD001"), "document");
+    assert_eq!(o("mat_deck"), "client");
+    assert_eq!(o("mat_ask"), "person");
+    assert_eq!(o("cap_1"), "client");
+    assert_eq!(o("cap_2"), "person");
+    assert_eq!(o("psg_1"), "layer");
+    assert_eq!(o("human:mary"), "person");
+    assert_eq!(c["cap_1"].cite.kind, "capture");
+
+    // No review in the chain: the pin's own record of one.
+    let r = c["f_01RVW001"].review.as_ref().unwrap();
+    assert_eq!((r.verdict, r.by.as_str()), ("verified", "mary"));
+    assert_eq!(r.at.as_deref(), Some("2026-11-01T10:00:00Z"));
+}
