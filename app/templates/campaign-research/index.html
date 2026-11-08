@@ -77,13 +77,6 @@ a{color:inherit}
 .muted{color:var(--ink3)}
 
 /* ---------- top bar ---------- */
-.top{position:sticky;top:var(--clan-top,0px);z-index:40;background:var(--frost);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line-soft)}
-.top-in{max-width:1180px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.nav{display:flex;gap:2px;background:var(--soft);padding:3px;border-radius:999px;flex-wrap:wrap}
-.nav a{text-decoration:none;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:500;color:var(--ink2);transition:background .2s var(--ease),color .2s var(--ease)}
-.nav a:hover{background:var(--paper);color:var(--ink)}
-.nav a span{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-left:5px}
-.top-act{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 /* ---------- buttons & pills ---------- */
 .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:7px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;transition:transform .2s var(--ease),box-shadow .2s var(--ease),background .2s var(--ease),border-color .2s var(--ease)}
@@ -110,7 +103,94 @@ a{color:inherit}
 .pill.ok .d{background:var(--green)}.pill.warn .d{background:var(--amber)}.pill.alert .d{background:var(--create)}
 
 /* ---------- page ---------- */
-main{max-width:1180px;margin:0 auto;padding:36px 24px 120px}
+main{max-width:1180px;margin:0 auto;padding:36px 24px 120px;min-width:0}
+/* ---------- the workspace: the report, and the 440px inspector beside it ---------- */
+.ws{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:28px;max-width:1500px;margin:0 auto;padding:0 24px;align-items:start}
+.ws > main{max-width:none;width:100%;margin:0;padding-left:0;padding-right:0}
+.ws.ws-map{grid-template-columns:minmax(0,1fr) minmax(440px,58%)}
+body.fresh .ws{display:block;max-width:1180px;padding:0}
+body.fresh .ws > main{padding:36px 24px 120px}
+body.fresh .insp{display:none}
+.insp{position:sticky;top:calc(var(--clan-top,0px) + 20px);margin-top:28px;max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 40px);overflow:auto;overscroll-behavior:contain;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:30}
+.insp-grab{display:none}
+.insp-body{display:grid;gap:16px;padding:16px 18px 18px}
+.insp-sw{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--ink);border-radius:8px;overflow:hidden}
+.insp-sw button{border:0;background:var(--paper);padding:8px 10px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink2)}
+.insp-sw button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.insp-save{display:grid;grid-template-columns:1fr auto;gap:6px}
+.insp-save .btn{justify-content:center;border-radius:8px;padding:10px 14px}
+.insp-box{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:10px}
+.rbox-h{display:flex;align-items:center;gap:8px}
+.rbox-h b{font-size:15px}
+.rbox-h .sp{flex:1}
+.rbox-when{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.rbox-acts{display:flex;flex-wrap:wrap;gap:6px}
+.rbox-acts > span:empty{display:none}
+.insp-box details{font-size:13px;color:var(--ink2)}
+.insp-box summary{cursor:pointer;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.insp-box details ul{margin:8px 0 0;padding:0 0 0 16px;display:grid;gap:4px}
+.insp-ask:empty,.insp-sel:empty{display:none}
+.insp-ask .rq-box{margin:0}
+.insp-sel{border-top:1px solid var(--line-soft);padding-top:12px;display:grid;gap:10px}
+.insp-hint{margin:0;font-size:13px;color:var(--ink3)}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:12px;color:var(--ink3)}
+.crumbs button{border:0;background:none;padding:2px 4px;border-radius:4px;cursor:pointer;color:var(--ink2);max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumbs button[aria-current]{color:var(--ink);font-weight:600}
+.crumbs .back{border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin-right:6px}
+.insp-nav{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;border-top:1px solid var(--line-soft);padding-top:10px}
+.insp-nav a{text-decoration:none;color:var(--ink2)}
+.insp-nav a:hover{color:var(--ink);text-decoration:underline}
+.insp-nav a span{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-left:4px}
+.insp-who{margin:0;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--line-soft);padding-top:10px}
+.insp-who:has(#who-line:empty){display:none}
+.linkbtn{border:0;background:none;padding:0;font:inherit;color:var(--ink);text-decoration:underline;cursor:pointer}
+.linkbtn[hidden]{display:none}
+/* Jude's bar is the inspector's "Your call" box */
+.insp .judgebar{position:static;border:1px solid var(--amber);background:var(--amber-soft);border-radius:10px;box-shadow:none}
+.insp .jb-in{padding:12px 14px;gap:10px;max-width:none}
+.insp .jb-in > .agent-figure{width:26px;height:34px}
+.insp .jb-text{font-size:13.5px;min-width:0}
+.insp .jb-count{font-size:13px;width:100%}
+.insp .jb-btn{min-height:36px;padding:7px 14px;font-size:13px}
+/* the evidence map, in the widened panel */
+.insp-map{display:grid;gap:8px}
+.insp-map[hidden]{display:none}
+.map-h b{display:block;font-size:16px}
+.map-h span{font-size:12.5px;color:var(--ink3)}
+.map-leg{display:flex;flex-wrap:wrap;gap:12px;font-family:var(--mono);font-size:10.5px;color:var(--ink3)}
+.map-leg i{display:inline-block;width:18px;border-top:1.5px solid var(--ink2);vertical-align:middle;margin-right:5px}
+.map-leg i.r{border-top:1.5px dashed var(--create)}
+.map-leg i.g{border-top:1.5px dotted var(--amber)}
+.map-leg i.d{width:12px;height:10px;border:1px dashed var(--ink3)}
+.map-scroll{overflow:auto;border:1px solid var(--line-soft);border-radius:10px;background:var(--soft)}
+.map-svg{display:block}
+.map-svg .col{font-family:var(--mono);font-size:10px;letter-spacing:.1em;fill:var(--ink3);text-transform:uppercase}
+.map-svg .e{fill:none;stroke:var(--ink3);stroke-width:1.2}
+.map-svg .e.r{stroke:var(--create);stroke-dasharray:4 3}
+.map-svg .e.g{stroke:var(--amber);stroke-dasharray:2 3;stroke-width:1;opacity:.7}
+.map-svg .e.hl{stroke:var(--ink);stroke-width:2}
+.map-svg .n{cursor:pointer}
+.map-svg .n rect{fill:var(--paper);stroke:var(--ink);stroke-width:1.2;rx:4}
+.map-svg .n.unused rect{stroke-dasharray:3 3;stroke:var(--ink3)}
+.map-svg .n.out rect{stroke:var(--create);stroke-dasharray:4 3}
+.map-svg .n.gap rect{fill:var(--amber-soft);stroke:var(--amber);stroke-dasharray:3 3}
+.map-svg .n.sel rect,.map-svg .n:focus-visible rect{stroke-width:2.4;fill:var(--soft)}
+.map-svg .n:focus{outline:none}
+.map-svg .n .t{font-size:11.5px;font-weight:600;fill:var(--ink)}
+.map-svg .n .m{font-family:var(--mono);font-size:9.5px;fill:var(--ink3)}
+.map-svg .n.out .t{text-decoration:line-through}
+.map-empty{margin:0;padding:16px;font-size:13px;color:var(--ink3)}
+/* A phone: the inspector is a bottom sheet over the report */
+@media (max-width:900px){
+  .ws,.ws.ws-map{display:block;padding:0}
+  .ws > main{padding:24px 16px 140px}
+  .insp{position:fixed;left:0;right:0;top:auto;bottom:var(--clan-bottom,0px);margin:0;max-height:min(78vh,calc(100vh - var(--clan-top,0px) - 24px));border-radius:16px 16px 0 0;border-bottom:0;transform:translateY(calc(100% - 52px));transition:transform .28s var(--ease);z-index:85}
+  .insp.open{transform:none}
+  .insp-grab{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;border:0;background:var(--paper);padding:8px 16px 10px;cursor:pointer;position:sticky;top:0;z-index:1;border-bottom:1px solid var(--line-soft)}
+  .insp-handle{width:40px;height:4px;border-radius:2px;background:var(--line)}
+  .insp-peek{font-size:13px;font-weight:600;color:var(--ink)}
+  .insp-body{padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+}
 .notice{display:flex;gap:10px;align-items:flex-start;background:var(--amber-soft);color:var(--amber-ink);border-radius:12px;padding:10px 14px;font-size:13px;margin:0 0 12px}
 .notice.info{background:var(--soft);color:var(--ink2)}
 .notice b{font-weight:600}
@@ -353,10 +433,7 @@ details.preview pre{font-family:var(--mono);font-size:11px;background:var(--soft
 footer.doc-foot{margin-top:80px;padding-top:18px;border-top:1px solid var(--line-soft);font-family:var(--mono);font-size:11px;color:var(--ink3);display:flex;flex-wrap:wrap;gap:6px 18px}
 
 @media (max-width:640px){
-  .top{position:static}
-  .top-in{padding:10px 16px}
   main{padding:24px 16px 96px}
-  .top-act{margin-left:0}
 }
 /* ---------- agent figures: the shell's, from the shared snippet (see <head>) ---------- */
 .agent-figure{width:27px;height:36px}
@@ -590,17 +667,9 @@ section.report{margin-top:36px}
    question; no half-built document. Done: the report the agent laid out, what
    needs you at the top, and everything recorded behind one disclosure. */
 body.working #report,body.working #records,body.working #hero,body.working #gates,body.working #jobs,body.working #judge,body.working #docfoot,
-body.working .nav,body.working #extractBtn,body.working #researchBtn,body.working #synthBtn,body.working #lockBtn{display:none!important}
+body.working .insp-nav,body.working #extractBtn,body.working #researchBtn,body.working #synthBtn,body.working #lockBtn{display:none!important}
 body.fresh #judge,body.fresh #records{display:none!important}
-body.done #hero,body.done #gates,body.done #lockBtn{display:none!important}
-/* Under the OS's glass, the report needs two bars, the OS's and Jude's: this
-   one holds only the tool's name and Export there (the OS's More has Export),
-   so it goes. With the records open, or the run shown, it holds their links. */
-html.clan-glass body.done:not(.records-open):not(.show-run) .top{display:none}
-/* Whatever the state (the crew working, a job that stopped), a bar left with
-   nothing but the name and Export is the OS's bar again: it goes too. */
-html.clan-glass body.top-idle .top{display:none}
-body.done:not(.records-open) .nav,body.done:not(.records-open) #extractBtn,body.done:not(.records-open) #researchBtn,body.done:not(.records-open) #synthBtn{display:none!important}
+body.done #hero,body.done #gates{display:none!important}
 /* With no report yet (a job that stopped, or never started) the run is what
    there is to show, so it stays. */
 body.done:not(.show-run):not(.no-report) #start{display:none}
@@ -781,29 +850,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 <!-- @napkin:clan-fields -->
 </head>
 <body>
-<header class="top no-print" role="banner">
-  <div class="top-in">
-    <div class="ident"><svg viewBox="0 0 44 44" aria-hidden="true"><circle fill="currentColor" cx="22" cy="12" r="5"/><circle fill="currentColor" cx="12" cy="32" r="5"/><circle fill="currentColor" cx="32" cy="32" r="5"/><rect fill="currentColor" x="20.7" y="15" width="2.6" height="8"/><rect fill="currentColor" x="10.7" y="21.5" width="22.6" height="2.6"/><rect fill="currentColor" x="10.7" y="21.5" width="2.6" height="7"/><rect fill="currentColor" x="30.7" y="21.5" width="2.6" height="7"/></svg>Research Tool</div>
-    <nav class="nav" aria-label="Sections">
-      <a href="#report" id="nav-report-a" hidden>Report</a>
-      <a href="#start" id="nav-start-a" hidden>Request</a>
-      <a href="#ask">The ask<span id="nav-ask"></span></a>
-      <a href="#facts">Facts<span id="nav-facts"></span></a>
-      <a href="#findings">Findings<span id="nav-findings"></span></a>
-      <a href="#selection">Selection</a>
-    </nav>
-    <div class="top-act">
-      <button type="button" class="btn ghost sm" id="whoBtn" title="Change the name we put on your checks"></button>
-      <button type="button" class="btn sm" id="extractBtn">Read the ask again</button>
-      <button type="button" class="btn sm" id="researchBtn">Run research</button>
-      <button type="button" class="btn sm" id="synthBtn">Find the points</button>
-      <button type="button" class="btn sm" id="exportBtn">Export</button>
-      <button type="button" class="btn primary sm" id="lockBtn">Lock and accept</button>
-    </div>
-  </div>
-</header>
-
-<div class="judgebar no-print" id="judge" role="region" aria-label="What needs you" hidden></div>
+<div class="ws" id="ws">
 <main id="doc">
   <div id="notices"></div>
   <div class="hero band" id="hero"></div>
@@ -844,6 +891,47 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 
   <footer class="doc-foot" id="docfoot"></footer>
 </main>
+
+<!-- The inspector (features/research-new-ui.clan): everything the old header
+     and Jude's bar held, beside the report; a bottom sheet on a phone. -->
+<aside class="insp no-print" id="insp" aria-label="Inspector">
+  <button type="button" class="insp-grab" id="insp-grab" aria-expanded="false" aria-controls="insp-body"><span class="insp-handle" aria-hidden="true"></span><span class="insp-peek" id="insp-peek">Report and what needs you</span></button>
+  <div class="insp-body" id="insp-body">
+    <div class="insp-sw" id="viewsw" role="group" aria-label="View">
+      <button type="button" data-view="report" aria-pressed="true">Report</button>
+      <button type="button" data-view="map" aria-pressed="false">Evidence map</button>
+    </div>
+    <section class="insp-map" id="mapview" aria-label="Evidence map" hidden></section>
+    <div class="insp-save">
+      <button type="button" class="btn primary" id="exportBtn">Save · PDF</button>
+      <button type="button" class="btn" data-act="export-html" title="Save the report as one HTML file">HTML</button>
+    </div>
+    <div class="judgebar" id="judge" role="region" aria-label="Your call" hidden></div>
+    <section class="insp-box" id="rbox" aria-labelledby="rbox-h">
+      <div class="rbox-h"><b id="rbox-h">Report</b><span class="pill" id="rbox-status"></span><span class="sp"></span><span class="rbox-when" id="rbox-when"></span></div>
+      <div class="rbox-acts">
+        <span id="rbox-refresh"></span>
+        <button type="button" class="btn primary sm" id="lockBtn">Lock and accept</button>
+        <button type="button" class="btn sm" id="researchBtn">Run research</button>
+        <button type="button" class="btn sm" id="synthBtn">Find the points</button>
+        <button type="button" class="btn sm" id="extractBtn">Read the ask again</button>
+      </div>
+      <div id="rbox-more"></div>
+    </section>
+    <section class="insp-ask" id="insp-ask" aria-label="Ask the research"></section>
+    <section class="insp-sel" id="insp-sel" aria-live="polite"></section>
+    <nav class="insp-nav" aria-label="Sections">
+      <a href="#report" id="nav-report-a" hidden>Report</a>
+      <a href="#start" id="nav-start-a" hidden>Request</a>
+      <a href="#ask">The ask<span id="nav-ask"></span></a>
+      <a href="#facts">Facts<span id="nav-facts"></span></a>
+      <a href="#findings">Findings<span id="nav-findings"></span></a>
+      <a href="#selection">Selection</a>
+    </nav>
+    <p class="insp-who"><span id="who-line"></span> <button type="button" class="linkbtn" id="whoBtn" title="Change the name we put on your checks">change</button></p>
+  </div>
+</aside>
+</div>
 
 <dialog id="dlg" aria-labelledby="dlg-title"><form method="dialog" class="dlg" id="dlg-form"></form></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1618,8 +1706,9 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     lb.innerHTML='Lock and accept'+(b.length?' <span class="n" aria-label="'+b.length+' blockers">'+b.length+'</span>':'');
     lb.title=b.length?b.length+' items block the lock — open to see them':'Nothing blocks the lock';
     // Your name, once known, and a way to change it; asked for only when needed.
-    var wb=$('whoBtn'), nm=myName();
-    wb.hidden=!nm||!!WHO.shell; wb.textContent=nm?'You’re '+nm:'';
+    var nm=myName();
+    $('who-line').innerHTML=nm?'Checks signed as <b>'+esc(nm)+'</b>'+(WHO.shell?'':' ·'):'';
+    $('whoBtn').hidden=!nm||!!WHO.shell;
     var rb=$('researchBtn');
     var ok=gateReached('research');
     rb.setAttribute('aria-disabled', ok?'false':'true');
@@ -1647,23 +1736,13 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(rec&&!rec.dataset.touched&&rec.open!==auto){ rec.dataset.auto=String(auto); rec.open=auto; }
     document.body.classList.toggle('records-open', !!(rec&&rec.open));
     document.body.classList.toggle('no-report', !isObj(D().report));
-    // Under glass the bar stays only for what it holds beyond the name and Export
-    // (the OS's More has Export): a section link or a step to run. Each is read by
-    // its own style, so hiding the bar does not change the answer.
-    var bar=document.querySelector('.top'), nav=bar&&bar.querySelector('.nav');
-    var navOn=!!nav&&getComputedStyle(nav).display!=='none';
-    var acts=bar?Array.prototype.slice.call(bar.querySelectorAll('.nav a, .top-act button')).filter(function(el){
-      if(el.id==='exportBtn'||el.hidden||getComputedStyle(el).display==='none'||!String(el.textContent||'').trim()) return false;
-      return !el.closest('.nav')||navOn; }):[];
-    document.body.classList.toggle('top-idle', !acts.length);
-    var top=document.querySelector('.top'), pos=top?getComputedStyle(top).position:'';
-    if(top) document.documentElement.style.setProperty('--top-h', (pos==='sticky'||pos==='fixed'?top.offsetHeight:0)+'px');
   }
   function render(){
     try{
       renderNotices(); renderHero(); renderReport(); renderChat(); renderGates(); renderJobs(); renderAsk(); renderFacts(); renderFindings(); renderSelection(); renderHistory(); renderTop(); syncTitle(); mode();
       if(window.ClanFields) ClanFields.refresh();
       renderChecks();
+      renderInspector();
     }catch(e){
       console.error(e);
       $('notices').innerHTML='<div class="notice" role="alert"><b>The view could not render this document.</b> '+esc(e&&e.message)+'</div>';
@@ -2896,9 +2975,11 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   }
 
   // ── the report (Contract 3 §17) — middleware-written, rendered read-only ───
+  // A figure reads inline in a sentence; a pin whose value is words stays a chip.
+  function inlineFig(id){ var p=pins()[id]; return !!(window.ClanFields&&p&&(typeof p.value==='number'||String(p.value).length<=24)); }
   function citeChips(ids){
     ids=arr(ids); if(!ids.length) return '<span class="pill alert" title="Every claim must cite a pin or a finding">no cite</span>';
-    return '<span class="cites">'+ids.map(function(id){ return /^fi_/.test(id)?findingChip(id):pinChip(id); }).join('')+'</span>';
+    return '<span class="cites">'+ids.map(function(id){ return /^fi_/.test(id)?findingChip(id):inlineFig(id)?'<clan-field ref="'+esc(id)+'"></clan-field>':pinChip(id); }).join('')+'</span>';
   }
   function pinCard(id){
     var p=pins()[id];
@@ -3011,10 +3092,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       // The agent's layout, over the record: the OS renders every figure in it.
       var stale=reportStale(r);
       var bar='<div class="rep-bar no-print"><span class="derived">'+ICON.agent+(r.layout_by==='agent'?'laid out by '+esc(given('drafter')):'laid out from the report')+'</span><span>written '+esc(fmtWhen(r.built_at))+'</span><span class="sp"></span>'
-        +(stale.length?'<span style="color:var(--create-ink)">'+esc(staleText(stale))+' Refresh to include it.</span>':'')
-        +'<button type="button" class="btn sm" data-act="rq-jump">Ask the research</button>'
-        +'<button type="button" class="btn sm ghost" data-act="show-run">How it ran</button>'
-        +refreshBtn(stale, '')+'</div>'
+        +(stale.length?'<span style="color:var(--create-ink)">'+esc(staleText(stale))+' Refresh it from the Report box.</span>':'')+'</div>'
         +(CHAT.reportErr?'<div class="flag" role="alert"><div>'+esc(CHAT.reportErr)+'</div></div>':'');
       var key=r.built_at+'|'+r.layout.length;
       if(MOUNTED!==key){
@@ -3028,10 +3106,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     MOUNTED=null;
     var stale=reportStale(r), hl=isObj(r.headline)?r.headline:{};
     var h='<div class="rep"><div class="rep-top"><span class="eyebrow">Report</span><span class="derived">'+ICON.agent+'written by '+esc(given('drafter'))+'</span><span class="sp"></span>'
-      +'<span class="srcline">'+esc(fmtWhen(r.built_at))+'</span>'
-      +'<button type="button" class="btn sm no-print" data-act="rq-jump">Ask the research</button>'
-      +refreshBtn(stale, 'compose_report: re-compose from the document as it stands')+'</div>';
-    if(stale.length) h+='<div class="rep-stale" role="status"><div><b>Out of date.</b> '+esc(staleText(stale))+' Refresh the report to include it.</div></div>';
+      +'<span class="srcline">'+esc(fmtWhen(r.built_at))+'</span></div>';
+    if(stale.length) h+='<div class="rep-stale" role="status"><div><b>Out of date.</b> '+esc(staleText(stale))+' Refresh the report (in the Report box) to include it.</div></div>';
     if(CHAT.reportErr) h+='<div class="flag" role="alert"><div>'+esc(CHAT.reportErr)+'</div></div>';
     h+='<div class="rep-hl"><h2 class="headline" id="h-report">'+esc(hl.text)+'</h2>'+citeChips(hl.cites)+'</div>';
     if(arr(r.summary).length) h+='<ul class="rep-sum">'+arr(r.summary).map(function(s){ return '<li><span>'+esc(s&&s.text)+' '+citeChips(s&&s.cites)+'</span></li>'; }).join('')+'</ul>';
@@ -3080,6 +3156,209 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var b=f.querySelector('[data-act=confirm]')||f.querySelector('button');
     if(b) setTimeout(function(){ try{ b.focus({preventScroll:true}); }catch(e){} }, 350);
   }
+
+
+  // ════════════════════════════════════════════════════════════════════════
+  // the inspector (features/research-new-ui.clan): the Report box, the OS
+  // bar's list, the Report / Evidence map switch, and what is selected, with
+  // its trail. The trail has the shape of ClanFields.stack(), [{ref, label}].
+  // ════════════════════════════════════════════════════════════════════════
+  // The report's state, in the words of the Report box and the OS bar's pill.
+  function reportStatus(r, locked, stale, open){
+    if(!isObj(r)) return {label:'No report yet', tone:null, locked:false};
+    if(locked) return {label:'Locked', tone:'ok', locked:true};
+    if(stale) return {label:'Out of date', tone:'warn', locked:false};
+    if(open) return {label:'Draft', tone:'warn', locked:false};
+    return {label:'Ready to lock', tone:'ok', locked:false};
+  }
+  var BAR={last:''};
+  function openChecks(){ return checks().filter(function(c){ return c.open; }).length; }
+  function renderInspector(){
+    var r=D().report, has=isObj(r), lk=reportLocked(), stale=has?reportStale(r):[], open=has?openChecks():0;
+    var st=reportStatus(r, lk, stale.length>0, open);
+    var pill=$('rbox-status'); pill.textContent=st.label; pill.className='pill'+(st.tone==='ok'?' ok':st.tone==='warn'?' warn':'');
+    $('rbox-when').textContent=has&&r.built_at?'written '+fmtWhen(r.built_at):'';
+    $('rbox-refresh').innerHTML=has?refreshBtn(stale, stale.length?staleText(stale)+' compose_report re-composes it.':'compose_report: re-compose from the document as it stands'):'';
+    var more='', conf=has?arr(r.confirm):[];
+    if(conf.length) more+='<details><summary>Confirm before the brief · '+conf.length+'</summary><ul>'+conf.map(function(c){
+      var k=(/#campaign\.([a-z_]+)$/.exec(String(c&&c.address||''))||[])[1];
+      return '<li>'+(k&&FIELD[k]?'<a href="#field-'+esc(k)+'" data-act="goto-confirm" data-field="'+esc(k)+'">'+esc(c.label)+'</a>':'<b>'+esc(c&&c.label)+'</b>')+(c&&c.why?' — '+esc(c.why):'')+'</li>'; }).join('')+'</ul></details>';
+    more+='<details><summary>How it ran</summary><p style="margin:8px 0 0">The request, each stage and your answers.'+(has&&r.handler?' Written by '+esc(r.handler)+'.':'')+'</p><p style="margin:6px 0 0"><button type="button" class="linkbtn" data-act="show-run">'+(document.body.classList.contains('show-run')?'Hide the run':'Show the run')+'</button></p></details>';
+    $('rbox-more').innerHTML=more;
+    $('insp-peek').textContent=st.label+(open&&!lk?' · '+open+' need'+(open===1?'s':'')+' your call':'');
+    sendBar(st, has, lk);
+    if(VIEW.v==='map') renderMap();
+    renderSel();
+  }
+  // What the OS bar shows (clan:bar, app/src/shell/appBar.ts): the state, and
+  // Refresh, Lock and accept and Export, each doing what its button here does.
+  function barItems(st, has, lk){
+    var items=[{kind:'status', label:st.label, tone:st.tone, locked:st.locked}];
+    if(has) items.push({kind:'button', id:'refresh', label:'Refresh', primary:false, disabled:lk||!!CHAT.reportBusy, title:lk?'The report is locked: this version is the one agreed to.':'Write the report again from the document as it stands'});
+    items.push({kind:'button', id:'lock', label:'Lock and accept', primary:true, disabled:lk, title:lk?'Locked':'Lock and accept this version'});
+    items.push({kind:'button', id:'export', label:'Export', primary:false, disabled:false, title:'Save the report as a PDF'});
+    return items;
+  }
+  function sendBar(st, has, lk){
+    var items=barItems(st, has, lk), k=JSON.stringify(items);
+    if(k===BAR.last) return; BAR.last=k;
+    try{ window.parent.postMessage({type:'clan:bar', v:1, items:items}, '*'); }catch(e){}
+  }
+  function onBarAction(id){
+    if(id==='refresh') doRefreshReport();
+    else if(id==='lock') doLock();
+    else if(id==='export') doExport('pdf');
+  }
+
+  // ── the evidence map: sources → pins → findings → summary ───────────────
+  // Only the edges the document already carries: a pin's sources, a
+  // finding's cites and a summary line's cites. A link that names something
+  // the document does not hold is drawn as a gap, never guessed.
+  function mapModel(r, P, S){
+    P=isObj(P)?P:{}; S=isObj(S)?S:{};
+    var pinsM=isObj(P.pins)?P.pins:{}, finds=isObj(P.findings)?P.findings:{}, srcs=isObj(P.sources)?P.sources:{};
+    var nodes={}, edges=[], cols={source:[], pin:[], finding:[], summary:[]}, gaps=[];
+    function node(id, col, o){ if(nodes[id]) return nodes[id]; o.id=id; o.col=col; o.order=Infinity; nodes[id]=o; cols[col].push(o); return o; }
+    function edge(a, b, kind){ edges.push({from:a, to:b, kind:kind||'feeds'}); }
+    function gap(col, ref, why){ var id='gap:'+ref; var g=nodes[id]||node(id, col, {kind:'gap', ref:ref, label:ref, meta:why}); if(gaps.indexOf(g)<0) gaps.push(g); return g; }
+    var losers={}, excluded={};
+    arr(S.contested).forEach(function(c){ if(c&&c.status!=='open'&&c.chosen) arr(c.values).forEach(function(v){ if(v&&v.fact_id&&v.fact_id!==c.chosen) losers[v.fact_id]=1; }); });
+    arr(S.excluded).forEach(function(e){ if(e&&e.fact_id) excluded[e.fact_id]=1; });
+    arr(isObj(r)&&r.summary).forEach(function(l, i){
+      if(!isObj(l)) return;
+      node('sum:'+i, 'summary', {kind:'summary', ref:'sum:'+i, n:i+1, label:String(l.text||''), cites:arr(l.cites)});
+    });
+    Object.keys(finds).forEach(function(id){ var f=finds[id];
+      node(id, 'finding', {kind:'finding', ref:id, label:String(f.statement||''), status:f.status, confidence:f.confidence, out:f.status==='rejected'||f.status==='superseded'}); });
+    Object.keys(pinsM).forEach(function(id){ var p=pinsM[id];
+      node(id, 'pin', {kind:'pin', ref:id, pin:p, label:String(p.key||id), out:!!(losers[id]||excluded[id]), why:losers[id]?'not chosen':excluded[id]?'excluded':''}); });
+    var nosrc=[];
+    Object.keys(pinsM).forEach(function(id){
+      var ss=arr(pinsM[id].sources).filter(function(x){ return /^src_/.test(x); });
+      if(!ss.length){ nosrc.push(id); return; }
+      ss.forEach(function(sid){ var s=srcs[sid]||{};
+        if(!srcs[sid]) gap('source', sid, 'not in the document');
+        else node(sid, 'source', {kind:'source', ref:sid, src:s, label:String(s.publisher||s.title||s.domain||sid)});
+        edge(srcs[sid]?sid:'gap:'+sid, id); });
+    });
+    Object.keys(srcs).forEach(function(sid){ var s=srcs[sid]; node(sid, 'source', {kind:'source', ref:sid, src:s, label:String(s.publisher||s.title||s.domain||sid)}); });
+    if(nosrc.length){ var g=gap('source', 'nosource', 'pinned before sources travelled'); g.label=nosrc.length+' pin'+(nosrc.length===1?'':'s')+' with no source record'; nosrc.forEach(function(id){ edge(g.id, id, 'gap'); }); }
+    Object.keys(finds).forEach(function(fid){ arr(finds[fid].cites).forEach(function(c){
+      if(pinsM[c]) edge(c, fid); else if(/^f_/.test(c)) edge(gap('pin', c, 'not in the document').id, fid, 'gap'); }); });
+    cols.summary.forEach(function(sn){ sn.cites.forEach(function(c){
+      if(finds[c]||pinsM[c]) edge(c, sn.id);
+      else if(/^fi?_/.test(c)) edge(gap(/^fi_/.test(c)?'finding':'pin', c, 'not in the document').id, sn.id, 'gap'); }); });
+    // A node is used when something downstream of it reaches the summary; a
+    // finding a person rejected, a value not chosen and an excluded fact are
+    // considered, not chosen, and so is what feeds only them.
+    var down={}; edges.forEach(function(e){ (down[e.from]=down[e.from]||[]).push(e.to); });
+    var memo={};
+    function reaches(id){ if(id in memo) return memo[id]; memo[id]=false; var n=nodes[id];
+      var ok=!!n&&n.col==='summary'||(down[id]||[]).some(function(t){ return !nodes[t].out&&reaches(t); }); return (memo[id]=ok); }
+    Object.keys(nodes).forEach(function(id){ var n=nodes[id]; n.used=n.kind==='gap'||reaches(id); });
+    edges.forEach(function(e){ if(nodes[e.to].out||nodes[e.from].out) e.kind=e.kind==='gap'?'gap':'out'; });
+    // Order each column by what it feeds, so the lines cross as little as they can.
+    cols.summary.forEach(function(n, i){ n.order=i; });
+    ['finding','pin','source'].forEach(function(col){
+      cols[col].forEach(function(n){ var o=(down[n.id]||[]).map(function(t){ return nodes[t].order; }).filter(isFinite); n.order=o.length?Math.min.apply(null,o)+(n.out?.5:0):1e6+(n.out?1:0); });
+      cols[col].sort(function(a, b){ return a.order-b.order||(a.kind==='gap')-(b.kind==='gap'); });
+      cols[col].forEach(function(n, i){ n.order=i; });
+    });
+    return {nodes:nodes, edges:edges, cols:cols, gaps:gaps};
+  }
+  var MAP_COLS=[['source','Sources'],['pin','Pins'],['finding','Findings'],['summary','Summary']];
+  function clipT(t, n){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>n?t.slice(0,n-1)+'…':t; }
+  function mapLines(n){
+    if(n.kind==='summary') return [n.n+' · '+n.label, n.cites.length+' cite'+(n.cites.length===1?'':'s')];
+    if(n.kind==='finding') return [n.label, (n.status||'')+(n.confidence?' · '+n.confidence:'')];
+    if(n.kind==='pin'){ var v=fmtAny(n.pin); return [v+' · '+String(n.pin.key||'').split('.').pop(), (n.pin.confidence||'')+(n.why?' · '+n.why:n.used?'':' · not used')+(n.pin.stale?' · stale':'')]; }
+    if(n.kind==='source'){ var s=n.src||{}; return [n.label, [s.tier, s.published_at?String(s.published_at).slice(0,7):''].filter(Boolean).join(' · ')||n.ref]; }
+    return [n.label, n.meta||'gap'];
+  }
+  function mapSvg(M){
+    var NW=158, NH=40, GX=44, GY=8, TOP=26, PAD=8;
+    var tallest=Math.max.apply(null, MAP_COLS.map(function(c){ return M.cols[c[0]].length; }).concat([1]));
+    var H=TOP+tallest*(NH+GY)+PAD, W=PAD*2+MAP_COLS.length*NW+(MAP_COLS.length-1)*GX, pos={};
+    var h='';
+    MAP_COLS.forEach(function(c, ci){
+      var list=M.cols[c[0]], x=PAD+ci*(NW+GX), y0=TOP+(tallest-list.length)*(NH+GY)/2;
+      h+='<text class="col" x="'+x+'" y="14">'+esc(c[1])+' · '+list.filter(function(n){ return n.kind!=='gap'; }).length+'</text>';
+      list.forEach(function(n, i){ pos[n.id]={x:x, y:y0+i*(NH+GY)}; });
+    });
+    var e='';
+    M.edges.forEach(function(ed, i){ var a=pos[ed.from], b=pos[ed.to]; if(!a||!b) return;
+      var x1=a.x+NW, y1=a.y+NH/2, x2=b.x, y2=b.y+NH/2, mx=(x1+x2)/2;
+      e+='<path class="e'+(ed.kind==='out'?' r':ed.kind==='gap'?' g':'')+'" data-from="'+esc(ed.from)+'" data-to="'+esc(ed.to)+'" d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'"/>'; });
+    var nn='';
+    Object.keys(pos).forEach(function(id){ var n=M.nodes[id], p=pos[id], L=mapLines(n);
+      var cls='n'+(n.kind==='gap'?' gap':n.out?' out':!n.used?' unused':'')+(VIEW.sel===id?' sel':'');
+      nn+='<g class="'+cls+'" tabindex="0" role="button" data-map="'+esc(id)+'" transform="translate('+p.x+' '+p.y+')" aria-label="'+esc(L[0]+' — '+L[1])+'"><title>'+esc(n.label)+'</title>'
+        +'<rect width="'+NW+'" height="'+NH+'" rx="4"/><text class="t" x="8" y="16">'+esc(clipT(L[0], 24))+'</text><text class="m" x="8" y="31">'+esc(clipT(L[1], 30))+'</text></g>'; });
+    return '<svg class="map-svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="group" aria-label="Evidence map">'+h+e+nn+'</svg>';
+  }
+  function renderMap(){
+    var el=$('mapview'), r=D().report;
+    var head='<div class="map-h"><b>Evidence map</b><span>How this report was formed. Click any box to trace it; its details open below.</span></div>'
+      +'<div class="map-leg"><span><i></i>feeds</span><span><i class="r"></i>considered, not chosen</span><span><i class="g"></i>a gap</span><span><i class="d"></i>not used</span></div>';
+    if(!isObj(r)&&!proj()){ el.innerHTML=head+'<p class="map-empty">There is no report yet: the map draws once the research has pinned facts.</p>'; return; }
+    var M=mapModel(r, proj(), sel()); VIEW.model=M;
+    el.innerHTML=head+'<div class="map-scroll">'+mapSvg(M)+'</div>';
+    traceSel();
+  }
+  // Light up what the selected box rests on and what rests on it.
+  function traceSel(){
+    var M=VIEW.model, id=VIEW.sel, svg=document.querySelector('#mapview svg'); if(!svg||!M) return;
+    var on={}; if(id&&M.nodes[id]){ on[id]=1;
+      var walk=function(k, dir){ M.edges.forEach(function(e){ var a=dir?e.from:e.to, b=dir?e.to:e.from; if(a===k&&!on[b]){ on[b]=1; walk(b, dir); } }); };
+      walk(id, true); walk(id, false); }
+    Array.prototype.forEach.call(svg.querySelectorAll('path.e'), function(p){ p.classList.toggle('hl', !!(on[p.getAttribute('data-from')]&&on[p.getAttribute('data-to')])); });
+    Array.prototype.forEach.call(svg.querySelectorAll('g.n'), function(g){ g.classList.toggle('sel', g.getAttribute('data-map')===id); });
+  }
+  var VIEW={v:'report', sel:null, model:null, trail:[]};
+  function setView(v){
+    VIEW.v=v==='map'?'map':'report';
+    $('ws').classList.toggle('ws-map', VIEW.v==='map');
+    $('mapview').hidden=VIEW.v!=='map';
+    Array.prototype.forEach.call($('viewsw').querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-view')===VIEW.v)); });
+    if(VIEW.v==='map') renderMap();
+    try{ sessionStorage.setItem('clan.research.view.'+docId(), VIEW.v); }catch(e){}
+  }
+
+  // ── what is selected, with its trail and a way back ─────────────────────
+  var CARD_KINDS={pin:1, finding:1, source:1, material:1, passage:1, capture:1};
+  function selLabel(ref){
+    var M=VIEW.model, n=M&&M.nodes[ref];
+    if(n) return clipT(mapLines(n)[0], 40);
+    if(pins()[ref]) return clipT(fmtAny(pins()[ref])+' · '+pins()[ref].key, 40);
+    if(fnds()[ref]) return clipT(fnds()[ref].statement, 40);
+    return ref;
+  }
+  function select(ref, push){
+    if(!ref) return;
+    var t=VIEW.trail, at=-1; for(var i=0;i<t.length;i++) if(t[i].ref===ref) at=i;
+    if(at>=0) VIEW.trail=t.slice(0, at+1); else { if(!push) VIEW.trail=[]; VIEW.trail.push({ref:ref, label:selLabel(ref)}); }
+    VIEW.sel=ref; traceSel(); renderSel();
+    var ins=$('insp'); if(ins&&window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
+    var sl=$('insp-sel'); if(sl&&sl.scrollIntoView&&VIEW.v!=='map') sl.scrollIntoView({block:'nearest', behavior:calm()?'auto':'smooth'});
+  }
+  function back(){ VIEW.trail.pop(); var top=VIEW.trail[VIEW.trail.length-1]; VIEW.sel=top?top.ref:null; traceSel(); renderSel(); }
+  function selBody(ref){
+    var M=VIEW.model, n=M&&M.nodes[ref];
+    if(/^sum:/.test(ref)&&n) return '<p style="margin:0;font-size:14px">'+esc(n.label)+'</p><div class="crumbs">Rests on '+n.cites.map(function(c){ return '<button type="button" data-sel="'+esc(c)+'">'+esc(selLabel(c))+'</button>'; }).join('')+'</div>';
+    if(n&&n.kind==='gap') return '<p style="margin:0;font-size:13.5px"><b>A gap.</b> '+esc(n.label)+(n.meta?': '+esc(n.meta):'')+'. The map shows only links the document holds.</p>';
+    if(window.ClanFields&&CARD_KINDS[window.ClanFields.kindOf(ref)]) return '<div id="insp-card"></div>';
+    return '<p class="insp-hint">'+esc(ref)+'</p>';
+  }
+  function renderSel(){
+    var el=$('insp-sel'); if(!el) return;
+    if(!VIEW.sel){ el.innerHTML='<p class="insp-hint">Click a figure or a finding in the report, or any box on the evidence map. It opens here with everything behind it.</p>'; return; }
+    var t=VIEW.trail;
+    el.innerHTML='<div class="crumbs" aria-label="Trail">'+(t.length>1?'<button type="button" class="back" data-sel-back>← Back</button>':'<button type="button" class="back" data-sel-close>Close</button>')
+      +t.map(function(c, i){ return (i?'<span aria-hidden="true">›</span>':'')+'<button type="button" data-crumb="'+i+'"'+(i===t.length-1?' aria-current="true"':'')+' title="'+esc(c.label)+'">'+esc(c.label)+'</button>'; }).join('')+'</div>'
+      +selBody(VIEW.sel);
+    var cd=$('insp-card'); if(cd&&window.ClanFields&&ClanFields.card) ClanFields.card(VIEW.sel, cd);
+  }
+  function openSheet(on){ var i=$('insp'); if(!i) return; i.classList.toggle('open', on); $('insp-grab').setAttribute('aria-expanded', String(on)); }
 
   // ── the report's checks: each sits under the sentence it is about ─────────
   // What needs a person is the host's (clan://decisions, read by the OS's
@@ -3496,9 +3775,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       +(key==='_new'?'<p class="rq-hint">A new question gets a section of its own. The crew answers from what the research found, and looks further only if that isn’t enough.</p>':'')+'</div>';
   }
   function renderAsks(){
-    var root=$('report'); if(!root) return;
+    var root=$('report'), side=$('insp-ask'); if(!root) return;
     var ae=document.activeElement, keep=ae&&ae.id&&ae.closest&&ae.closest('.rq')?{id:ae.id, s:ae.selectionStart, e:ae.selectionEnd}:null;
     Array.prototype.forEach.call(root.querySelectorAll('.rq'), function(n){ n.remove(); });
+    if(side) side.innerHTML='';
     if(root.hidden||!isObj(D().report)) return;
     var can=hasHost()&&!reportLocked(), secs=askSections(), all=asks(), own=[], ownJobs=[], cites=false;
     function put(el, html, where){ var d=document.createElement('div'); d.className='rq'; d.innerHTML=html; el.insertAdjacentElement(where, d); cites=cites||/<clan-cite/.test(html); }
@@ -3511,7 +3791,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     own=all.filter(function(a){ return !a.in_section; }).concat(own);
     ownJobs=ASK.jobs.filter(function(j){ return !j.lens; }).concat(ownJobs);
     var tail=own.map(function(a){ return '<section class="rq-own"><h2>'+esc(a.topic||a.question)+'</h2>'+askAnswerHtml(a)+'</section>'; }).join('')
-      +ownJobs.map(askPendingHtml).join('')+(can?askBoxHtml('_new', 'Ask about something the research didn’t cover'):'');
+      +ownJobs.map(askPendingHtml).join('');
+    // The general question is asked from the inspector (ask_research@1, written to asks[<id>]); its answer gets a section here.
+    var box=can?askBoxHtml('_new', 'Ask the research'):'';
+    if(box&&side) put(side, box, 'beforeend'); else tail+=box;
     if(tail){
       var lay=askBox(), foot=lay?lay.querySelector(':scope > footer, :scope > .cl-foot'):root.querySelector('.rep-foot');
       if(foot) put(foot, tail, 'beforebegin'); else put(lay||root.querySelector('.rep')||root, tail, 'beforeend');
@@ -3741,6 +4024,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       case 'lock': doLock(); break;
       case 'spin-brief': doSpinBrief(); break;
       case 'rq-open': case 'rq-cancel': case 'rq-send': case 'rq-retry': case 'rq-drop': onAskAct(act, b); break;
+      case 'export-html': doExport('html'); break;
       case 'rq-jump': var bx=$('rqbox-_new'), bi=$('rqin-_new'); if(bx){ bx.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); if(bi) setTimeout(function(){ try{ bi.focus({preventScroll:true}); }catch(x){} }, calm()?0:350); } else toast('Asking needs a report first.'); break;
     }
   });
@@ -3753,6 +4037,30 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   $('researchBtn').addEventListener('click', doResearch);
   $('synthBtn').addEventListener('click', doSynthesise);
   $('exportBtn').addEventListener('click', function(){ doExport('pdf'); });
+  // the inspector
+  $('viewsw').addEventListener('click', function(e){ var b=e.target.closest('[data-view]'); if(b) setView(b.getAttribute('data-view')); });
+  function mapPick(e){ var g=e.target.closest&&e.target.closest('[data-map]'); if(!g) return; e.preventDefault(); select(g.getAttribute('data-map'), false); }
+  $('mapview').addEventListener('click', mapPick);
+  $('mapview').addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' ') mapPick(e); });
+  $('insp-sel').addEventListener('click', function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    if(b.hasAttribute('data-sel')) select(b.getAttribute('data-sel'), true);
+    else if(b.hasAttribute('data-sel-back')) back();
+    else if(b.hasAttribute('data-sel-close')){ VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel(); }
+    else if(b.hasAttribute('data-crumb')){ var c=VIEW.trail[+b.getAttribute('data-crumb')]; if(c) select(c.ref, true); }
+  });
+  $('insp-grab').addEventListener('click', function(){ openSheet(!$('insp').classList.contains('open')); });
+  // A figure or a finding in the report opens in the inspector, with its
+  // trail; its card's "Where this came from" opens the OS's drawer, as a
+  // click did before. While editing, a click is the editor's.
+  document.addEventListener('click', function(e){
+    var t=e.target.closest&&e.target.closest('#report [data-ref]'); if(!t||!window.ClanFields) return;
+    if(!t.closest('clan-field')||document.documentElement.classList.contains('clf-editing')||t.classList.contains('editable')) return;
+    var ref=t.getAttribute('data-ref'); if(!CARD_KINDS[ClanFields.kindOf(ref)]) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    select(ref, false);
+  }, true);
+  try{ if(sessionStorage.getItem('clan.research.view.'+docId())==='map') setView('map'); }catch(e){}
 
   window.addEventListener('clan:dataupdated', render);
   // The OS's fields have read what needs a person again (clan://decisions).
@@ -3772,6 +4080,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   window.addEventListener('message', function(e){
     var m=e.data; if(e.source!==window.parent||!m) return;
     if(m.type==='clan:can-run?'){ announce(); return; }
+    if(m.type==='clan:bar?'){ BAR.last=''; renderInspector(); return; }
+    if(m.type==='clan:bar-action'){ onBarAction(String(m.id||'')); return; }
     if(m.type==='clan:me'){ if(takeWho(m)) render(); return; }
     // The shell's client review (Contract 4 §7.5): the parts a client can
     // answer about are the ask's fields, kept in "Everything recorded". When
