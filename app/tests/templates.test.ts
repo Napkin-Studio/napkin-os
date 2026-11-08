@@ -1289,11 +1289,19 @@ test('a sheet that cannot be measured is never exported: one retry with a longer
     get: () => 'x', window: { clan: { exportDoc: () => { printed++; return Promise.resolve({ ok: true }) } } },
   }
   const r = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], env)
-  await r.runExport('pdf')
-  assert.equal(printed, 0, 'an unmeasured sheet never reaches print')
+  await r.runExport('pdf', 'grid')
+  assert.equal(printed, 0, 'an unmeasured grid never reaches print')
   assert.match(said, /^Not exported: .*Plain PDF or Plain HTML/)
   await r.runExport('pdf', 'plain')
   assert.equal(printed, 1, 'the plain export is unaffected')
+  // The sheet (Save · PDF): a sheet that could not be laid out on its pages comes back null and is not printed.
+  said = ''
+  const s2 = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], { ...env, buildExportHTML: () => Promise.resolve(null) })
+  await s2.runExport('pdf')
+  assert.equal(printed, 1, 'an unmeasured sheet never reaches print')
+  assert.match(said, /^Not exported: this browser could not lay the sheet out/)
+  await r.runExport('pdf')
+  assert.equal(printed, 2, 'a measured sheet prints, with no grid overflow rule')
 })
 
 test('a part Jude rejected is exported as to confirm, and the export says it was written, not approved', async () => {
@@ -1348,17 +1356,25 @@ test('the footer names the client, not its descriptor, and the page count never 
   assert.match(g.gridCss(), /\.fit3 \.bd\{font-size:10px\}/, 'the smallest step stays readable')
 })
 
-test('the grid prints on A4 sheets that break cleanly, and is the default export beside a plain one', () => {
+test('the grid prints on A4 sheets that break cleanly, and stays in the Save menu beside the sheet and a plain one', () => {
   const css = grid().gridCss()
   assert.match(css, /@page\{size:A4;margin:0\}/)
   assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
-  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):buildGridExportHTML\(\)/)
+  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):style==='grid'\?buildGridExportHTML\(\):buildSheetExportHTML\(style==='client'\?'client':'agency'\)/)
   assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
   // Save · PDF is the side tab's main button; the others are in its menu (features/brief-new-ui.clan).
-  assert.match(BM, /id="exPdf"[\s\S]*id="exHtml"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
+  assert.match(BM, /id="exPdf"[\s\S]*id="exClient"[\s\S]*id="exHtml"[\s\S]*id="exGridPdf"[\s\S]*id="exGridHtml"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
   assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
-  assert.match(BM, /\$\('exHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html'\); \}\);/, 'the HTML button is the grid')
-  assert.match(BM, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the side tab and the OS bar, is the grid')
+  assert.match(BM, /\$\('exHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html'\); \}\);/, 'the HTML button is the sheet')
+  assert.match(BM, /\$\('exGridPdf'\)\.addEventListener\('click',function\(\)\{ doExport\('pdf','grid'\); \}\);/, 'the grid template is still a PDF')
+  assert.match(BM, /\$\('exGridHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html','grid'\); \}\);/)
+  assert.match(BM, /\$\('exClient'\)\.addEventListener\('click',function\(\)\{ doExport\('pdf','client'\); \}\);/)
+  assert.match(BM, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the side tab and the OS bar, is the sheet')
+  // The grid's fit rules apply to the grid only; the sheet flows onto as many pages as it needs.
+  const run = fn(BM, 'runExport')
+  assert.match(run, /style==='grid'&&LAST_GRID_OVERFLOW===null/)
+  assert.match(run, /style==='grid'&&LAST_GRID_OVERFLOW\.length/)
+  assert.match(fn(BM, 'exportOnce'), /style==='client'&&!docLocked\(\)/, 'the client copy is of a locked brief')
 })
 
 
@@ -1610,16 +1626,34 @@ test('the grid export’s header carries the brief’s logos, never a hard-coded
 })
 
 test('logos come from uploads now and a Brand Clan later, ordered client, agency, partner', () => {
-  const L = lift<{ logoSrc(l: unknown): string; nextSlot(ls: unknown[]): string; sheetLogos(): { slot: string }[] }>(BM, ['logoSrc', 'slotRank', 'sheetLogos', 'nextSlot', 'logosOf'], {
-    LOGO_SLOTS: [['client', 'Client'], ['agency', 'Agency'], ['partner', 'Partner']], arr, assetUrl: (n: string) => `clan://localhost/assets/${n}`,
-    get: () => [{ slot: 'partner', ref: { asset: 'p.png' } }, { slot: 'client', ref: { asset: 'c.png' } }, { slot: 'agency', ref: { brand: 'brand-wk', asset: 'logo-primary' } }, { slot: 'client' }],
-  })
+  const LOGOS = [{ slot: 'partner', ref: { asset: 'p.png' } }, { slot: 'client', ref: { asset: 'c.png' } }, { slot: 'agency', ref: { brand: 'brand-wk', asset: 'logo-primary' } }, { slot: 'client' }]
+  const KIT = { brand: { name: { value: 'Lumen Water' } }, kit: { version: 5 }, visual: { logos: {
+    'lumen-primary': { name: 'Lumen mark', variants: { mono: { asset: 'assets/lumen-mono.svg', colour: 'mono', on: 'dark' }, 'full-light': { asset: 'assets/lumen-mark.svg', colour: 'full', on: 'light' } } },
+    wordmark: { name: 'Wordmark', variants: { a: { asset: 'assets/../../etc/passwd.png' } } },
+    nofile: { name: 'No file', variants: {} } } } }
+  const lifted = (vals: Record<string, unknown>) => lift<{ logoSrc(l: unknown): string; nextSlot(ls: unknown[]): string; sheetLogos(): { slot: string }[]; kitLogos(k: unknown): { id: string; asset: string }[]; brandAttached(): { id: string } | null; upKeys(): string[] }>(BM,
+    ['logoSrc', 'slotRank', 'sheetLogos', 'nextSlot', 'logosOf', 'items', 'brandAttached', 'kitLogos', 'isBrandKit', 'upKeys'], {
+      LOGO_SLOTS: [['client', 'Client'], ['agency', 'Agency'], ['partner', 'Partner']], arr, assetUrl: (n: string) => `clan://localhost/assets/${n}`,
+      get: (k: string) => vals[k],
+    })
+  const L = lifted({ logos: LOGOS })
   assert.equal(L.logoSrc({ ref: { asset: 'c.png' } }), 'clan://localhost/assets/c.png')
-  assert.equal(L.logoSrc({ ref: { brand: 'b', asset: 'x' } }), '', 'a Brand Clan logo is not this document’s asset')
+  assert.equal(L.logoSrc({ ref: { brand: 'b', asset: 'x' } }), '', 'a Brand Clan logo with no kit attached has no picture')
   assert.deepEqual(L.sheetLogos().map(l => l.slot), ['client', 'agency', 'partner'], 'a logo with no ref is left out')
   assert.equal(L.nextSlot([]), 'client')
   assert.equal(L.nextSlot([{ slot: 'client' }]), 'agency')
   assert.equal(L.nextSlot([{ slot: 'client' }, { slot: 'agency' }]), 'partner')
+  // A Brand Clan attached (data.upstream.<its id>, feat/brand-clan's carry): its logos are offered, a full-colour
+  // variant for light paper first; a logo pointing out of the assets folder, or with no picture, is not.
+  const K = lifted({ logos: LOGOS, upstream: { 'brand-wk': KIT, 'res-1': { findings: {} } } })
+  assert.deepEqual(K.brandAttached()!.id, 'brand-wk')
+  assert.deepEqual(K.kitLogos(KIT), [{ id: 'lumen-primary', name: 'Lumen mark', asset: 'lumen-mark.svg' }])
+  assert.equal(K.logoSrc({ ref: { brand: 'brand-wk', asset: 'lumen-primary' } }), 'clan://localhost/assets/lumen-mark.svg')
+  assert.equal(K.logoSrc({ ref: { brand: 'other', asset: 'lumen-primary' } }), '', 'only the kit that is attached')
+  assert.deepEqual(K.upKeys(), ['res-1'], 'a Brand Clan is not research')
+  assert.match(fn(BM, 'renderLogos'), /kitOffers\(\)/, 'the Logos box offers the kit’s logos')
+  assert.match(fn(BM, 'kitOffers'), /ref:\{brand:x\.brandId, asset:x\.id\}|brandId:b\.id/)
+  assert.match(fn(BM, 'renderLook'), /renderBrandLine\(\)/)
 })
 
 test('the look is appearance: layout and logos are schema appearance keys, and Reset look clears them with the theme', () => {
@@ -1643,8 +1677,100 @@ test('nothing the brief did before is gone: every control is still on the page',
   assert.match(sel, /startEdit\(row,f\)/)
   assert.match(sel, /startRegen\(row,f\)/)
   assert.match(sel, /toggleLock\(f\)/)
-  assert.match(sel, /F\.card\(docId\(\)\+'#'\+f\.key, b\)/, 'Built from is the OS’s source card')
+  assert.match(sel, /renderBuilt\(\)/, 'Built from is drawn by renderBuilt')
+  assert.match(fn(BM, 'renderBuilt'), /F\.card\(r, b\.querySelector/, 'one OS source card per ref')
   assert.match(sel, /whyHtml\(f\)/)
+})
+
+test('Built from: one source card per ref the part cites, asked for in one tick, each with the parts it is also used in', () => {
+  const src = fn(BM, 'renderBuilt')
+  // All cards are asked for in one synchronous loop, so ClanFields batches them into one /cite call.
+  assert.match(src, /refs\.forEach\(function\(r,i\)\{ F\.card\(r, b\.querySelector\('\.bf-card\[data-n="'\+i\+'"\]'\)\); \}\);/)
+  assert.match(src, /cites\.length\?cites:\[docId\(\)\+'#'\+f\.key\]/, 'a part that cites nothing shows its own card, as before')
+  assert.match(src, /data-go=/)
+  assert.match(fn(BM, 'goPart'), /select\(key\)/, 'a used-in chip selects that part')
+  const decisions: Record<string, { cites: string[] }> = { background: { cites: ['f_1', 'f_2'] }, audience: { cites: ['f_2'] }, insight: { cites: ['f_2', 'f_bad'] }, barrier: { cites: ['f_1'] } }
+  const vals: Record<string, unknown> = { background: 'B', audience: 'A', insight: 'I', barrier: '' }
+  const U = lift<{ partCites(k: string): string[]; usedIn(r: string, but: string): string[] }>(BM, ['partCites', 'usedIn'], {
+    decisionsFor: (k: string) => (decisions[k] ? [decisions[k]] : []), claimDecision: () => null,
+    citesOf: (ds: ({ cites: string[] } | null | undefined)[]) => [...new Set(ds.flatMap(d => (d ? d.cites : [])))],
+    wrongPin: (id: string) => id === 'f_bad', hasVal: (v: unknown) => !!v, get: (k: string) => vals[k],
+    layoutItems: () => ['background', 'barrier', 'audience', 'insight'].map(key => ({ key })),
+  })
+  assert.deepEqual(U.partCites('insight'), ['f_2'], 'a pin marked wrong is not something it was built from')
+  assert.deepEqual(U.usedIn('f_2', 'background'), ['audience', 'insight'], 'in reading order, never the part itself')
+  assert.deepEqual(U.usedIn('f_1', 'background'), [], 'an empty part is not using anything')
+})
+
+// ── per-part Confidential (owner, 9 Nov) ─────────────────────────────────────
+
+test('a part marked Confidential is hatched and tagged, kept in the agency copy and left out of the client copy', () => {
+  const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: Record<string, { type?: string; 'x-clan-appearance'?: boolean }> }
+  assert.equal(schema.properties.confidential_fields.type, 'array')
+  assert.equal(schema.properties.confidential_fields['x-clan-appearance'], undefined, 'who may read a part is not its look: Reset look keeps it')
+  const sel = fn(BM, 'renderSelPart')
+  assert.match(sel, /data-sp="keep"[\s\S]*data-sp="conf"/, 'beside Keep as is')
+  assert.match(sel, /else if\(a==='conf'\) toggleConf\(f\);/)
+  assert.match(fn(BM, 'toggleConf'), /patch\('confidential_fields', next/)
+  assert.match(fn(BM, 'toggleConf'), /if\(!canWrite\(f\.key\)\)/, 'a locked brief changes a reopened part only')
+  assert.match(fn(BM, 'fieldRow'), /row\.classList\.toggle\('conf', conf\)/)
+  assert.match(fn(BM, 'fieldRow'), /class="conftag"/)
+  assert.match(BM, /\.pgrid > \.row\.conf\{background-image:repeating-linear-gradient\(135deg/)
+  // The client copy prints no confidential part; the agency copy prints them hatched and tagged.
+  assert.match(fn(BM, 'sheetItems'), /copy!=='client'\|\|c\.indexOf\(it\.key\)===-1/)
+  const g = grid()
+  const out = g.gridBody({ ...ctxOf({ budget_and_scope: 'Secret money.' }), conf: ['budget_and_scope'] }).html
+  assert.match(out, /class="box conf"><div class="lab"><b>06<\/b>Budget and scope<span class="cf">Confidential<\/span>/)
+  assert.match(fn(BM, 'exportField'), /class="cf">Confidential</)
+})
+
+// ── the sheet as it prints ───────────────────────────────────────────────────
+
+type Block = { id: number | string; top: number; bottom: number; head: boolean }
+const sheet = () => lift<{ sheetPaginate(b: Block[], o?: unknown): (number | string)[][] }>(BM, ['sheetPaginate'], { arr, A4: { h: 1123, top: 56, bottom: 64 } })
+
+test('the sheet breaks into A4 pages between whole rows, a heading going with the row under it', () => {
+  const P = sheet().sheetPaginate
+  const b = (id: number | string, top: number, bottom: number, head = false): Block => ({ id, top, bottom, head })
+  // Everything fits on one page.
+  assert.deepEqual(P([b(1, 300, 330, true), b(2, 330, 600), b(3, 600, 1000)]), [[1, 2, 3]])
+  // Row 3 runs past the page's bottom margin (1123 - 64): it starts page 2, at the top margin.
+  const two = P([b(1, 300, 330, true), b(2, 330, 900), b(3, 900, 1100), b(4, 1100, 1500)])
+  assert.deepEqual(two, [[1, 2], [3, 4]], 'row 4 fits under row 3 once page 2 starts at row 3 (1500 - (900 - 56) < 1059)')
+  // A heading at the foot of a page moves on with its row.
+  assert.deepEqual(P([b(1, 300, 900), b(2, 900, 930, true), b(3, 930, 1200)]), [[1], [2, 3]])
+  // A row taller than a page gets a page to itself, and the next row starts the one after.
+  assert.deepEqual(P([b(1, 300, 400), b(2, 400, 2000), b(3, 2000, 2100)]), [[1], [2], [3]])
+  // The pictures follow the grid as one block.
+  assert.deepEqual(P([b(1, 300, 1000), b('boards', 1000, 1300)]), [[1], ['boards']])
+  assert.deepEqual(P([]), [])
+})
+
+test('the screen and the PDF are one sheet: one builder, one measure, guides where the pages break', () => {
+  // Save · PDF builds the sheet from the page's own styles, measures it at A4 width, and prints the pages it measured.
+  const build = fn(BM, 'buildSheetExportHTML')
+  assert.match(build, /sheetMeasure\(sheetDoc\(ctx, null\), 8000\)/)
+  assert.match(build, /LAST_SHEET_PAGES=sheetPaginate\(blocks\)/)
+  assert.match(build, /return sheetDoc\(ctx, LAST_SHEET_PAGES\)/)
+  assert.match(fn(BM, 'sheetCtx'), /css:pageCss\(\)/)
+  assert.match(fn(BM, 'sheetCtx'), /cells:layoutPack\(items\)/, 'the same grid the screen packs')
+  assert.match(fn(BM, 'sheetMeasure'), /width:794px;visibility:hidden/, 'measured A4 wide, in this page (a frame in a sandboxed app cannot be read)')
+  assert.doesNotMatch(fn(BM, 'sheetMeasure'), /iframe/)
+  // A phone's rules shape the screen's sheet only, never the printed one or its probe.
+  assert.match(BM, /#sheet \.pgrid > \.row,#sheet \.pgrid > \.sechead\{grid-column:1 \/ -1!important/)
+  // The screen measures the agency copy the same way, and draws a guide before each page's first row.
+  assert.match(fn(BM, 'scheduleBreaks'), /sheetMeasure\(sheetDoc\(ctx, null\), 6000\)[\s\S]*sheetPaginate\(blocks\)/)
+  assert.match(fn(BM, 'renderStructured'), /class(Name)?='pbreak'/)
+  assert.match(fn(BM, 'renderStructured'), /scheduleBreaks\(\)/)
+  // No phone/PDF switch (owner removal), and the type on the sheet does not follow the window.
+  assert.doesNotMatch(BM, /data-format=|Phone view|phone\/PDF/i)
+  assert.match(BM, /\.sheet\.a4 \.val\.spp\{font-size:28px\}/)
+  // Documents stay paper: the sheet keeps the light stock in a dark room, as it prints.
+  assert.match(BM, /\.sheet\.a4\{color-scheme:light;\s*--paper:#FBF7EE;/)
+  // The last page ends the document: no blank page after it.
+  assert.match(BM, /\.sheet\.a4\.page:last-child\{break-after:auto;page-break-after:auto\}/)
+  // Place on page stays open while its buttons rewrite the panel.
+  assert.match(fn(BM, 'renderSelPart'), /OPEN_WHY\['spl:'\+f\.key\]/)
 })
 
 // ── the Research Tool on the new UI (features/research-new-ui.clan) ─────────
