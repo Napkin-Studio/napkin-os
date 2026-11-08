@@ -291,7 +291,17 @@ export interface DecisionBlock {
 
 /** What a cite names, resolved by the host. */
 export interface CiteInfo {
-  kind: 'fact' | 'finding' | 'source' | 'material' | 'decision' | 'person' | 'address' | 'unknown'
+  kind:
+    | 'fact'
+    | 'finding'
+    | 'source'
+    | 'material'
+    | 'passage'
+    | 'capture'
+    | 'decision'
+    | 'person'
+    | 'address'
+    | 'unknown'
   label: string
   detail?: string
   quote?: string
@@ -304,6 +314,34 @@ export interface CiteInfo {
   title?: string
   published_at?: string
   tier?: string
+}
+
+/** Where a fact came from (OS-layer contract §8.3). `document` when nothing recorded it. */
+export type SourceOrigin = 'research' | 'client' | 'brand' | 'layer' | 'person' | 'document'
+
+/** One review verdict on a fact, finding or field. */
+export interface SourceReview {
+  verdict: 'verified' | 'rejected' | 'set_aside'
+  /** Who, as a person would say it. */
+  by: string
+  actor?: string
+  at?: string
+  decision?: string
+  note?: string
+  /** A later decision replaced it. */
+  superseded?: boolean
+}
+
+/** The source card for one ref (`GET /cite?ref=`, `POST /cite {refs}`). */
+export interface SourceCard extends CiteInfo {
+  ref: string
+  origin: SourceOrigin
+  /** Carried from an upstream document: which one. */
+  from?: { document_id: string; title?: string; app_id?: string; version?: string; path?: string }
+  /** The latest review that still stands. */
+  review?: SourceReview
+  /** Every review, newest first: what the card folds under Record. */
+  history?: SourceReview[]
 }
 
 export interface DecisionsView {
@@ -578,6 +616,8 @@ export interface Host {
   acknowledge(decision: string): Promise<void>
   /** What changed upstream since this document was spun off (`GET /upstream`). */
   upstream(): Promise<UpstreamView>
+  /** The source card for each ref, in one call (`POST /cite`). */
+  cites(refs: string[]): Promise<Record<string, SourceCard>>
 
   // ── Client review (OS-layer contract §7.5) ────────────────────────────────
   /**

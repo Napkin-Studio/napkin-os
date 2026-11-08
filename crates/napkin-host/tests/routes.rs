@@ -117,6 +117,49 @@ fn every_reachable_route_answers_with_cors_open() {
     }
 }
 
+// The source card answers one ref by query and many by body; it asks for a
+// ref, and a ref the document does not hold is a 404 on its own and `unknown`
+// in a batch.
+#[test]
+fn cite_answers_one_ref_or_a_batch() {
+    let f = fixture();
+    let one = |q: &str| {
+        handle(
+            &f.session,
+            &NoConfig,
+            HostRequest::new("/cite", q, Vec::new()),
+        )
+    };
+    assert_eq!(one("").status, 400);
+    assert_eq!(one("ref=f_NOPE").status, 404);
+    let person = one("ref=human%3Amary");
+    assert_eq!(person.status, 200);
+    assert!(person
+        .headers
+        .iter()
+        .any(|(k, v)| k == "Access-Control-Allow-Origin" && v == "*"));
+    let v = json(&person);
+    assert_eq!(v["ref"], "human:mary");
+    assert_eq!(v["kind"], "person");
+    assert_eq!(v["origin"], "person");
+
+    let v = json(&post(
+        &f,
+        "/cite",
+        r#"{"refs":["human:mary","f_NOPE","human:mary"]}"#,
+    ));
+    let cites = v["cites"].as_object().unwrap();
+    assert_eq!(cites.len(), 2, "{v}");
+    assert_eq!(cites["f_NOPE"]["kind"], "unknown");
+    assert_eq!(cites["f_NOPE"]["origin"], "document");
+    assert_eq!(post(&f, "/cite", r#"{"refs":"human:mary"}"#).status, 400);
+    let many: Vec<String> = (0..=napkin_host::routes::MAX_CITE_REFS)
+        .map(|i| format!("f_{i}"))
+        .collect();
+    let body = serde_json::json!({ "refs": many }).to_string();
+    assert_eq!(post(&f, "/cite", &body).status, 400);
+}
+
 // The decision view follows the chain: a person's patch-data is on top, and
 // it needs no attention.
 #[test]
@@ -734,6 +777,72 @@ mod upstream {
         for list in ["pins", "findings", "contests"] {
             assert_eq!(entry[list], json!([]), "{list}");
         }
+    }
+
+    // A pin and a finding carried from the research: the card names the
+    // research, says `document` (nothing recorded where the pin came from),
+    // and shows the newest review here with the earlier one under it.
+    #[test]
+    fn a_carried_pins_card_names_its_research_and_its_latest_review() {
+        let (_store, research, brief) = setup();
+        let cite = |q: &str| -> Value {
+            let resp = brief.call(brief.session.ctx(), "/cite", "");
+            assert_eq!(resp.status, 400);
+            let resp = dispatch(
+                brief.session.ctx(),
+                &brief.session,
+                &NoConfig,
+                HostRequest::new("/cite", q, Vec::new()),
+            );
+            assert_eq!(resp.status, 200, "{}", String::from_utf8_lossy(&resp.body));
+            serde_json::from_slice(&resp.body).unwrap()
+        };
+        let c = cite("ref=f_01JA0B3P4Q");
+        assert_eq!(c["kind"], "fact");
+        assert_eq!(
+            c["origin"], "document",
+            "a pin's fact:// origin is not the marker"
+        );
+        assert_eq!(c["from"]["document_id"], research.doc.as_str());
+        assert_eq!(c["from"]["title"], "Lúnasa 0.0 launch");
+        assert_eq!(c["from"]["app_id"], RESEARCH);
+        assert_eq!(c["from"]["path"], research.id.as_str());
+        assert!(c.get("review").is_none(), "{c}");
+
+        let mark = |polarity: &str, why: &str| {
+            brief.post(
+                "/verdict",
+                &json!({ "target": "facts[f_01JA0B3P4Q]", "polarity": polarity, "rationale": why })
+                    .to_string(),
+            );
+        };
+        mark("good", "Matches the panel");
+        mark("bad", "The panel was revised");
+        let c = cite("ref=f_01JA0B3P4Q");
+        assert_eq!(c["review"]["verdict"], "rejected", "{c}");
+        assert_eq!(c["review"]["by"], "You");
+        assert_eq!(c["review"]["note"], "The panel was revised");
+        let history: Vec<&str> = c["history"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["verdict"].as_str().unwrap())
+            .collect();
+        assert_eq!(history, ["rejected", "verified"]);
+
+        // In one call, with the finding carried beside it.
+        let v = brief.post(
+            "/cite",
+            &json!({ "refs": ["f_01JA0B3P4Q", "fi_01JA0F2B"] }).to_string(),
+        );
+        assert_eq!(v["cites"]["f_01JA0B3P4Q"], c);
+        let fi = &v["cites"]["fi_01JA0F2B"];
+        assert_eq!(fi["kind"], "finding");
+        assert_eq!(fi["from"]["document_id"], research.doc.as_str());
+        assert!(fi.get("review").is_none());
+        reject_findings(&brief);
+        let v = brief.post("/cite", &json!({ "refs": ["fi_01JA0F2B"] }).to_string());
+        assert_eq!(v["cites"]["fi_01JA0F2B"]["review"]["verdict"], "rejected");
     }
 
     #[test]

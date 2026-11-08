@@ -35,6 +35,7 @@ import type {
   Unlisten,
   UploadedAsset,
   UpstreamView,
+  SourceCard,
 } from './types'
 
 interface SessionInfo {
@@ -284,6 +285,7 @@ export const httpHost: Host = {
   },
 
   upstream: () => clanCall<UpstreamView>('/upstream'),
+  cites: async refs => (await clanPost<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   clientReview: body => clanPost<ClientReviewReply>('/client-review', body),
   clientReviewConfirm: body => clanPost<ClientConfirmReply>('/client-review/confirm', body),
