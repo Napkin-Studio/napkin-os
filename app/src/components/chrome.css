@@ -164,8 +164,15 @@
 
 /* The same bar on the desk and in a document: a little taller than the old
    document bar, so the medallion can sit proud of it. */
-.ch-bar.ch-bar-os { height: 56px; gap: 10px; padding: 0 16px 0 12px; }
+.ch-bar.ch-bar-os { height: 56px; gap: 16px; padding: 0 16px 0 12px; }
 .ch-bar-spacer { flex: 1; min-width: 4px; }
+/* Three groups across the width (owner, 9 Nov 2026): who and where on the
+   left, the document in the centre, the tools on the right. The two sides
+   share what the centre leaves, so the slot sits in the middle when it can. */
+.ch-bar-l, .ch-bar-c, .ch-bar-r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ch-bar-l { flex: 1 1 auto; gap: 10px; }
+.ch-bar-c { flex: 0 1 auto; justify-content: center; }
+.ch-bar-r { flex: 1 0 auto; justify-content: flex-end; }
 
 /* The medallion and the agency's pill, docked: the pill tucks under the circle. */
 .ch-dock { display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -176,6 +183,7 @@
   height: 44px;
   display: grid;
   place-items: center;
+  padding: 0;
   border-radius: 50%;
   border: 1px solid var(--line);
   background: var(--card);
@@ -185,18 +193,8 @@
 }
 .ch-medallion:hover { transform: scale(1.04); }
 .ch-medallion:focus-visible { outline: 3px solid var(--agency); outline-offset: 2px; }
-/* The app you are IN needs you: a ring in the needs-you colour, said in the label too. */
-.ch-medallion[data-attention] { box-shadow: 0 0 0 3px var(--status-red), 0 8px 18px -8px rgba(16, 17, 20, 0.28); }
-.ch-medallion[data-attention]::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 3px solid var(--status-red);
-  animation: ch-medal-pulse 1.8s var(--ease) infinite;
-}
-@keyframes ch-medal-pulse { from { opacity: 0.7; transform: scale(1); } to { opacity: 0; transform: scale(1.35); } }
-@media (prefers-reduced-motion: reduce) { .ch-medallion[data-attention]::after { animation: none; opacity: 0; } }
+/* The app you are IN needs you: the mark itself warms and closes its ring
+   (components/Medallion.tsx); the label says so too. */
 
 .ch-agency {
   position: relative;
@@ -329,6 +327,69 @@
   font-weight: 700;
 }
 .ch-decisions-n.ch-decisions-n-zero { background: var(--soft); color: var(--ink3); }
+/* The bar's one needs signal: amber with the count (owner, 9 Nov 2026). */
+.ch-decisions.ch-decisions-needs { border-color: color-mix(in srgb, var(--status-amber) 55%, var(--line)); background: color-mix(in srgb, var(--status-amber) 12%, var(--card)); }
+.ch-decisions-needs .ch-decisions-n { background: var(--status-amber); color: #241A00; }
+
+/* Beside the document's name: from <parent>, → N made from it, linked. */
+.ch-lineage { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.ch-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 190px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink3);
+  font: 600 11px var(--f-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.ch-line b { overflow: hidden; text-overflow: ellipsis; color: var(--ink2); font-weight: 700; }
+.ch-line:hover:not(:disabled) { background: var(--agency-soft); border-style: solid; }
+.ch-line:disabled { cursor: default; }
+.ch-line:focus-visible { outline: 2px solid var(--agency); outline-offset: 1px; }
+.ch-line-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
+
+/* The crew in the document: the people, then an agent while one works. */
+.ch-crew { display: inline-flex; align-items: center; }
+.ch-crew-p, .ch-crew-agent {
+  width: 26px;
+  height: 26px;
+  margin-left: -6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  font: 700 10px var(--f-display);
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+.ch-crew > :first-child { margin-left: 0; }
+.ch-crew-p { background: var(--agency); color: var(--agency-fg); }
+.ch-crew-agent { position: relative; background: radial-gradient(circle at 32% 28%, #FFFFFF, var(--agency) 60%, #0B0C10); }
+.ch-crew-agent::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  background: var(--status-green);
+  animation: ch-agent-dot 1.6s var(--ease) infinite alternate;
+}
+@keyframes ch-agent-dot { from { opacity: 1; } to { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .ch-crew-agent::after { animation: none; } }
+
+/* A menu item that is shown but cannot run yet: its hint says why. */
+.ch-menu-item[aria-disabled='true'] { opacity: 0.6; cursor: default; }
 
 /* "Saved": a quiet status, not a button. The green dot is the design's ok. */
 .ch-saved {
@@ -656,7 +717,10 @@
   .ch-bar-sep { display: none; }
   .ch-bar-title { flex: 1 1 120px; }
   .ch-bar.ch-bar-os { height: auto; padding: 8px 12px; }
-  .ch-slot { flex: 1 1 100%; order: 5; }
+  .ch-bar-c { flex: 1 1 100%; order: 5; justify-content: flex-start; }
+  .ch-bar-l { flex: 1 1 auto; }
+  .ch-bar-r { flex: 0 1 auto; flex-wrap: wrap; }
+  .ch-slot { flex: 1 1 100%; }
   .ch-crumbs { flex: 1 1 100%; order: 4; max-width: none; }
   .ch-agency-os { display: none; }
   .ch-bar .ch-btn { height: 28px; padding: 0 11px; font-size: 12px; }

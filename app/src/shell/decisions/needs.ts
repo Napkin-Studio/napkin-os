@@ -17,7 +17,7 @@ export function needsOf(view: DecisionsView | null): AttentionItem[] {
   const seen = new Set<string>()
   return view.attention.filter(a => {
     if (!a.blocks_lock) return false
-    const k = `${a.code}:${a.address ?? a.text}`
+    const k = needKey(a)
     if (seen.has(k)) return false
     seen.add(k)
     return true
@@ -28,7 +28,7 @@ export function needsOf(view: DecisionsView | null): AttentionItem[] {
 export interface DocStateWords { label: string; tone: BarTone; locked: boolean }
 
 /**
- * Draft / Needs you (n) / Ready to lock / Locked / Reopened, from the
+ * Draft / Ready to lock / Locked / Reopened, from the
  * decision view (DecisionsView.lock). An app's own `clan:bar` status wins over
  * this where it sends one. Null until the view is read, or when it has a problem.
  */
@@ -37,8 +37,36 @@ export function docStateOf(view: DecisionsView | null): DocStateWords | null {
   const { lock } = view
   if (lock.locked && lock.reopened?.length) return { label: 'Reopened', tone: 'warn', locked: false }
   if (lock.locked) return { label: 'Locked', tone: 'ok', locked: true }
-  const n = needsOf(view).length
-  if (n) return { label: `Needs you (${n})`, tone: 'warn', locked: false }
+  // What needs a call is counted once, on the Decisions button (owner, 9 Nov
+  // 2026: one needs indicator); the pill says only where the document is.
   if (lock.can_lock) return { label: 'Ready to lock', tone: 'ok', locked: false }
   return { label: 'Draft', tone: null, locked: false }
+}
+
+/** One need's key: the same place and reason is the same need, across reads. */
+export const needKey = (a: AttentionItem): string => `${a.code}:${a.address ?? a.text}`
+
+/**
+ * The needs a person has set aside for now, apart from the rest. Setting one
+ * aside is the person's own: it leaves the count (and calms the medallion) but
+ * still blocks the lock, and comes back with "Bring back" (owner, 9 Nov 2026).
+ * A key whose need has gone (settled since) is simply not matched.
+ */
+export function splitAside(needs: readonly AttentionItem[], aside: ReadonlySet<string>): { open: AttentionItem[]; aside: AttentionItem[] } {
+  const open: AttentionItem[] = [], away: AttentionItem[] = []
+  for (const n of needs) (aside.has(needKey(n)) ? away : open).push(n)
+  return { open, aside: away }
+}
+
+/**
+ * What "Looks right" records for a need, where one click is a true answer: an
+ * agent's finding nobody has checked is verified (`POST /verify`). Everything
+ * else that blocks the lock asks for more than a yes (pick one of a contest's
+ * values, revise a field that cites a rejected finding, merge a branch, act on
+ * a client's answer), so it has no "Looks right": it opens where it is settled.
+ */
+export function looksRightOf(a: AttentionItem): { finding: string } | null {
+  if (a.code !== 'unverified_finding') return null
+  const m = /#findings\[([^\]]+)\]$/.exec(a.address ?? '')
+  return m ? { finding: m[1] } : null
 }

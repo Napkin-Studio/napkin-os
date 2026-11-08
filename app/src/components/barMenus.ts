@@ -60,11 +60,32 @@ export interface DocBar {
   loading?: boolean
   /** "Saved", where each change is kept as it is made (SaveStatus); absent on the device. */
   saved?: ReactNode
+  /** Share ▾ "Copy link": a link people in the agency open it from (`?open=`); absent where there is no server to open it from. */
+  onCopyLink?: () => void
+  /** Locked (and nothing reopened): the version a client would see. */
+  locked?: boolean
+  /** Open another document of the store: the lineage chips' way there. */
+  onOpenDocument?: (path: string) => void
+  /** What was made from it (`GET /related`, features/spinoff-and-links.clan); absent until the host answers it. */
+  madeInto?: { count: number; noun?: string; path?: string } | null
+  /** Documents linked to it (the general attach); absent until linking lands. */
+  linked?: { title: string; path?: string }[]
+  /** Who is in the document: the people, and an agent while one works. */
+  crew?: Crew
+}
+
+/** The crew in the open document, beside Decisions. */
+export interface Crew {
+  people: { name: string; initials: string; you?: boolean }[]
+  /** What the agent working on it is doing, in words; null when none works. The status dot shows only then. */
+  working?: string | null
 }
 
 /** The document this one was made from, as the Continue in ▾ menu says it. */
 export interface MadeFrom {
   title: string
+  /** Where the shell opens it; absent when the store cannot say. */
+  path?: string
   /** The parent moved on since this was made from it (`GET /upstream` status). */
   changed: boolean
   /** How many of its decisions are new here; null when the host cannot say. */
@@ -77,6 +98,7 @@ export function madeFromOf(view: UpstreamView | null): MadeFrom | null {
   if (!direct) return null
   return {
     title: direct.title || 'what it was made from',
+    ...(direct.path ? { path: direct.path } : {}),
     changed: direct.status === 'changed',
     decisionsSince: direct.decisions_since ?? null,
   }
@@ -89,6 +111,8 @@ export interface MenuItem {
   run: () => void
   /** A rule above this item. */
   apart?: boolean
+  /** Shown, but it cannot run yet; the hint says why. */
+  disabled?: boolean
 }
 
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
@@ -141,9 +165,30 @@ export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => v
   ]
 }
 
-/** "More ▾" on the desk: the account. */
-export function deskItems(user?: string | null, onSignOut?: () => void): MenuItem[] {
-  return signOutItem(user, onSignOut)
+/**
+ * "Share ▾" in the slot (owner, 9 Nov 2026): a link for the agency, the
+ * client's copy, and the crew; with the download that was the bar's Share.
+ * What the studio cannot do yet is shown and says so, never faked.
+ */
+export function shareItems(doc: Pick<DocBar, 'onCopyLink' | 'onSave' | 'locked'>): MenuItem[] {
+  return [
+    ...(doc.onCopyLink
+      ? [{ label: 'Copy link', hint: 'People in your agency open it in Napkin Studio', run: doc.onCopyLink }]
+      : []),
+    { label: 'Download a copy', hint: 'A .clan to send. It opens in Napkin with everything in it.', run: doc.onSave },
+    doc.locked
+      ? { label: 'Send the client copy', hint: 'Leaving the confidential parts out is not built yet', run: () => {}, disabled: true, apart: true }
+      : { label: 'Send the client copy', hint: 'Lock it first: the client sees the version you lock', run: () => {}, disabled: true, apart: true },
+    { label: 'Invite to the crew', hint: 'Not built yet: the crew needs accounts that can be invited', run: () => {}, disabled: true },
+  ]
+}
+
+/** "More ▾" on the desk: open a file from this computer, and the account. */
+export function deskItems(user?: string | null, onSignOut?: () => void, onOpenFile?: () => void): MenuItem[] {
+  return [
+    ...(onOpenFile ? [{ label: 'Open…', hint: 'Open a .clan file from this computer', run: onOpenFile }] : []),
+    ...signOutItem(user, onSignOut),
+  ]
 }
 
 function signOutItem(user?: string | null, onSignOut?: () => void): MenuItem[] {

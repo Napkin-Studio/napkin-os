@@ -52,6 +52,7 @@ export const tauriHost: Host = {
   // The desktop viewer is parked; the web shell is where the panel lives.
   getDecisions: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   acknowledge: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
+  verify: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   // Nor client review, which is read and answered from that view.
   upstream: () => Promise.reject(new Error('what changed upstream is not available on the desktop yet')),
   updateFromUpstream: () => Promise.reject(new Error('updating from what it was made from is not available on the desktop yet')),

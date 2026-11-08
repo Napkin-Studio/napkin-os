@@ -133,3 +133,12 @@ export function applyAgency(personId: string | null | undefined, doc: Document =
   }
   if (el.textContent !== css) el.textContent = css
 }
+
+/** Napkin's own kit: the medallion's colours for an agency an admin has not coloured. */
+export const NAPKIN_COLOURS: AgencyColours = AGENCY_COLOURS.napkin
+
+/** The medallion's colours for a signed-in person: their agency's base and accent, else Napkin's. */
+export function markOf(personId: string | null | undefined): { base: string; accent: string } {
+  const c = coloursOf(agencyIdOf(personId)) ?? NAPKIN_COLOURS
+  return { base: c.base, accent: c.accent }
+}

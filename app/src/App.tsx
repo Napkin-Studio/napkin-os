@@ -17,11 +17,12 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { Trail } from './shell/landing/Trail'
 import { useLanding } from './shell/landing/useLanding'
-import { initialsOf, needsYou, routeOfDocument, whoIs } from './shell/landing/model'
+import { initialsOf, needsYou, routeOfDocument, runWords, whoIs } from './shell/landing/model'
 import Toolbar from './components/Toolbar'
 import { signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
-import { applyAgency } from './shell/agency/palette'
+import { applyAgency, markOf } from './shell/agency/palette'
+import DeskDecisions from './shell/decisions/DeskDecisions'
 import { useRoute } from './shell/useRoute'
 import { type Route } from './shell/route'
 import AppHost from './shell/AppHost'
@@ -85,7 +86,8 @@ export default function App() {
   const [offlineOpen, setOfflineOpen] = useState(false)
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
-  const landing = useLanding(host, screen === 'home' && !allTools, !(device && !serverless))
+  // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
+  const landing = useLanding(host, (screen === 'home' && !allTools) || screen === 'app', !(device && !serverless))
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
   // A read from the server: the state is set when it answers.
@@ -94,6 +96,10 @@ export default function App() {
   // the neutral pair; a layer of its own that resetTheme never clears.
   const personId = landing.data?.person?.id ?? null
   useEffect(() => { applyAgency(personId) }, [personId])
+  // The medallion in the agency's own base and accent, else Napkin's.
+  const mark = markOf(personId)
+  // Decisions on the desk: every document across clients that needs a call.
+  const [deskDecisions, setDeskDecisions] = useState(false)
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
     setToast({ title, body })
@@ -459,6 +465,26 @@ export default function App() {
   const toAgency = () => { setAllTools(false); go({ level: 'agency' }) }
   const onSignOut = user ? () => { void signOut() } : undefined
 
+  // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
+  const copyLink = useCallback(async () => {
+    const r = runningRef.current
+    if (!r) return
+    const url = `${window.location.origin}${window.location.pathname}?open=${encodeURIComponent(r.open.path)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      notify('Link copied', 'People in your agency open it in Napkin Studio.')
+    } catch {
+      notify('Could not copy the link', url, 9000)
+    }
+  }, [notify])
+
+  // Who is in the open document: the person signed in, and an agent while its run works.
+  const docItem = running && landing.data ? landing.data.items.find(i => i.path === running.open.path) ?? null : null
+  const crew = running && !device ? {
+    people: user ? [{ name: whoIs(landing.data?.person ?? null).first ?? user, initials: initialsOf(whoIs(landing.data?.person ?? null).first ?? user), you: true }] : [],
+    working: docItem?.run?.state === 'working' ? runWords(docItem).toLowerCase() : null,
+  } : undefined
+
   return (
     <>
       {error && (
@@ -477,7 +503,10 @@ export default function App() {
           onHome={goHome}
           trail={docTrail}
           agency={agency}
+          mark={mark}
           onAgency={() => leaveTo({ level: 'agency' })}
+          onCopyLink={hasServer && !device ? copyLink : undefined}
+          crew={crew}
           user={user}
           onSignOut={onSignOut}
           onOpenFile={handleOpenFile}
@@ -500,12 +529,15 @@ export default function App() {
           bar={(
             <Toolbar
               agency={agency}
+              mark={mark}
               onAgency={toAgency}
               onHome={toAgency}
+              onOpenFile={handleOpenFile}
               crumbs={trail}
               needs={deskNeeds}
-              // On the desk, Decisions is the agency's needs-you list.
-              onDecisions={onLanding ? toAgency : undefined}
+              // On the desk, Decisions opens the drawer of every document across clients that needs a call.
+              onDecisions={onLanding ? () => setDeskDecisions(o => !o) : undefined}
+              decisionsOpen={onLanding ? deskDecisions : undefined}
               user={user}
               onSignOut={onSignOut}
               tools={hasServer && !device ? (
@@ -517,6 +549,13 @@ export default function App() {
           )}
         >
           {apps}
+          {onLanding && deskDecisions && landing.data && (
+            <DeskDecisions
+              items={landing.data.items}
+              onOpen={path => { setDeskDecisions(false); void openPath(path) }}
+              onClose={() => setDeskDecisions(false)}
+            />
+          )}
         </StudioShell>
       )}
 

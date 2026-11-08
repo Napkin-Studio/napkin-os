@@ -627,6 +627,12 @@ export interface Host {
   getDecisions(): Promise<DecisionsView>
   /** A person accepts an agent's call ("Looks right"): `/acknowledge`. */
   acknowledge(decision: string): Promise<void>
+  /**
+   * A person checks an agent's finding and finds it right: `POST /verify`, the
+   * same verification the app's own Verify records ("Looks right" on the
+   * Decisions card).
+   */
+  verify(finding: string, rationale: string): Promise<void>
   /** What changed upstream since this document was spun off (`GET /upstream`). */
   upstream(): Promise<UpstreamView>
   /**

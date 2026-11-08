@@ -25,8 +25,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { host } from '../../host'
 import type { DecisionBlock, DecisionsView } from '../../host'
 import { needsOf, type Decisions } from './useDecisions'
+import { looksRightOf, needKey, splitAside } from './needs'
+import type { SetAside } from './useSetAside'
 import { LogoSpinner } from '../../brand/LogoSpinner'
-import { onRunnable, openInApp } from '../appExport'
+import { onRunnable, openInApp, refreshApp } from '../appExport'
 import { HistoryLine, NeedsCard, QuietItem } from './DecisionBlock'
 import { refOfAddress, runsOf, sectionsOf } from './words'
 import './DecisionPanel.css'
@@ -45,9 +47,14 @@ interface Props {
    */
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /**
+   * The needs this person set aside on the document (useSetAside): they leave
+   * the count but still block the lock. Absent, nothing can be set aside.
+   */
+  aside?: SetAside
 }
 
-export default function DecisionPanel({ decisions, open: given, onOpenChange }: Props) {
+export default function DecisionPanel({ decisions, open: given, onOpenChange, aside }: Props) {
   const { view, error, reload: load } = decisions
   const [own, setOwn] = useState(false)
   const controlled = given !== undefined
@@ -63,6 +70,8 @@ export default function DecisionPanel({ decisions, open: given, onOpenChange }: 
   useEffect(() => onRunnable(() => setRunnable(n => n + 1)), [])
 
   const needs = useMemo(() => needsOf(view), [view])
+  // The call card (owner, 9 Nov 2026): what needs a call, and apart, what this person set aside.
+  const calls = useMemo(() => splitAside(needs, aside?.keys ?? new Set()), [needs, aside?.keys])
   const quiet = useMemo(() => quietOf(view), [view])
   const blocks = useMemo(() => new Map((view?.decisions ?? []).map(b => [b.decision.id ?? '', b])), [view])
 
@@ -71,6 +80,34 @@ export default function DecisionPanel({ decisions, open: given, onOpenChange }: 
     host.acknowledge(id).then(load, e => setActError(String(e instanceof Error ? e.message : e)))
       .finally(() => setBusy(null))
   }, [load])
+
+  // "Looks right" on a finding nobody has checked: verified, as the app's own Verify records it.
+  const verify = useCallback((key: string, finding: string) => {
+    setBusy(key); setActError(null)
+    host.verify(finding, 'Looks right (from the Decisions card)')
+      .then(() => { load(); refreshApp() }, e => setActError(String(e instanceof Error ? e.message : e)))
+      .finally(() => setBusy(null))
+  }, [load])
+
+  const actionsFor = (item: (typeof needs)[number], isAside: boolean) => {
+    const key = needKey(item)
+    const lr = !view?.lock.locked ? looksRightOf(item) : null
+    return (
+      <>
+        {lr && (
+          <button className="dp-btn" disabled={busy === key} onClick={() => verify(key, lr.finding)} data-testid="looks-right">
+            {busy === key ? 'Recording…' : 'Looks right'}
+          </button>
+        )}
+        {aside && (
+          <button className="dp-link" onClick={() => aside.toggle(key)} data-testid={isAside ? 'bring-back' : 'set-aside'}
+            title={isAside ? 'Back into the count' : 'Out of the count for now. It still stops the lock.'}>
+            {isAside ? 'Bring back' : 'Set aside'}
+          </button>
+        )}
+      </>
+    )
+  }
 
   if (!open) {
     if (controlled) return null
@@ -95,7 +132,7 @@ export default function DecisionPanel({ decisions, open: given, onOpenChange }: 
       <div className="dp-head">
         <div className="dp-head-t">
           <h2 id="dp-title" className="dp-title">What happened</h2>
-          {view && <span className="dp-sum">{needs.length ? `${needs.length} need${needs.length === 1 ? 's' : ''} you` : 'nothing needs you'}</span>}
+          {view && <span className="dp-sum">{calls.open.length ? `${calls.open.length} need${calls.open.length === 1 ? 's' : ''} your call` : 'nothing needs your call'}</span>}
         </div>
         <button className="ch-btn ch-btn-icon ch-btn-quiet" onClick={() => setOpen(false)} aria-label="Close what happened">✕</button>
       </div>
@@ -114,14 +151,25 @@ export default function DecisionPanel({ decisions, open: given, onOpenChange }: 
         {actError && <div className="dp-err" role="alert">{actError}</div>}
         {view && !view.problem && (
           <>
-            <section aria-label="Needs you">
-              <h3 className="dp-sec">Needs you <span className="dp-n">{needs.length}</span></h3>
-              {needs.length === 0 && <div className="dp-done">Nothing is waiting on you.</div>}
-              {needs.map(item => (
-                <NeedsCard key={`${item.code}:${item.address ?? item.text}`} item={item}
+            <section aria-label="Needs your call" data-testid="call-card">
+              <h3 className="dp-sec">Needs your call <span className={calls.open.length ? 'dp-n' : 'dp-n dp-n-quiet'}>{calls.open.length}</span></h3>
+              {calls.open.length === 0 && <div className="dp-done">{calls.aside.length ? 'Nothing else waits on you.' : 'Nothing is waiting on you.'}</div>}
+              {calls.open.map(item => (
+                <NeedsCard key={needKey(item)} item={item} actions={actionsFor(item, false)}
                   block={item.decision ? blocks.get(item.decision) : undefined} />
               ))}
             </section>
+
+            {calls.aside.length > 0 && (
+              <section aria-label="Set aside" data-testid="set-aside-list">
+                <h3 className="dp-sec">Set aside <span className="dp-n dp-n-quiet">{calls.aside.length}</span></h3>
+                <p className="dp-hint dp-aside-hint">Out of the count for now. {calls.aside.length === 1 ? 'It still stops' : 'They still stop'} the lock.</p>
+                {calls.aside.map(item => (
+                  <NeedsCard key={needKey(item)} item={item} aside actions={actionsFor(item, true)}
+                    block={item.decision ? blocks.get(item.decision) : undefined} />
+                ))}
+              </section>
+            )}
 
             {quiet.length > 0 && (
               <section aria-label="Worth a look">
