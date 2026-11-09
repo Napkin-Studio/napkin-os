@@ -21,6 +21,9 @@
     brief: { name: 'Brief', job: 'writes the brief' },
     review: { name: 'Review', job: 'checks every claim' },
     deck: { name: 'Deck', job: 'builds the deck' },
+    idea: { name: 'Idea', job: 'opens directions' },
+    copy: { name: 'Copy', job: 'crafts words' },
+    approval: { name: 'Approval', job: 'asks for sign-off' },
     orchestrator: { name: 'Orchestrator', job: 'routes the work' }
   };
   var LENSES = ['market_structure', 'brands_positioning', 'consumer_culture', 'category_codes', 'rhythm_moments', 'media_spend',

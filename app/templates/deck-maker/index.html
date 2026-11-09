@@ -20,9 +20,6 @@
   --tool:#2F64F5; --tool-ink:color-mix(in oklab,var(--tool) 78%,var(--ink)); --tool-soft:color-mix(in oklab,var(--tool) 10%,transparent);
   --ok-bg:#e7f6ed; --ok-fg:#15803d; --warn-bg:#fdf3e3; --warn-fg:#b45309;
   --shadow-soft:0 10px 30px rgba(20,30,60,.08); --shadow-lift:0 12px 32px rgba(20,30,60,.16),0 2px 6px rgba(20,30,60,.08);
-  /* the agent circle's ring: one colour per activity, the state also said in words */
-  --ring-work:#FF4F2E; --ring-think:#7A5AF8; --ring-read:#B87100; --ring-check:#238A55; --ring-human:#E0560C; --ring-error:#16191D;
-  --ring-wait:#9EA3AB; --ring-track:#D3D6DC; --ring-edge:#D3D6DC;
   --f-display:'Geist','Helvetica Neue',Arial,sans-serif; --f-mono:'Geist Mono',ui-monospace,Menlo,monospace;
 }
 :root[data-color-scheme="dark"]{
@@ -32,8 +29,6 @@
   --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
   --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
   --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
-  --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
-  --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
@@ -43,8 +38,6 @@
     --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
     --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
     --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
-    --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
-    --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
   }
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -170,30 +163,39 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .check{display:flex;gap:10px;align-items:center;font-size:13px}
 .tick{width:16px;height:16px;border-radius:999px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tick.ok{background:var(--ok-bg);color:var(--ok-fg)} .tick.warn{background:var(--warn-bg);color:var(--warn-fg)}
-/* the agent circle: flat, its ring turns only while an agent works, and never when motion is reduced */
-.cir{display:block;flex:none;overflow:visible}
-.cir .act{transform-box:view-box;transform-origin:0 0}
+/* the agent circle is the one agent engine's sphere (NapkinRoles.tag): its still frame, live once hydrated. The row mark's arc turns only while motion is allowed */
+.cir{flex:none}
 @keyframes cir-turn{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:no-preference){
-  .cir[data-activity="work"] .act,.cir[data-activity="write"] .act,.cir[data-activity="handoff"] .act{animation:cir-turn 6s linear infinite}
-  .cir[data-activity="think"] .act{animation:cir-turn 9s linear infinite}
-  .cir[data-activity="read"] .act,.cir[data-activity="check"] .act{animation:cir-turn 4.5s linear infinite}
   .mk.now svg{animation:cir-turn 1.6s linear infinite}
 }
-/* the 3D circle (the engine in the page script): the flat svg stays under a canvas, as the fallback and for screen readers; its drawing is hidden only while the 3D one is on */
-.cir3d{position:relative;display:inline-block;flex:none;line-height:0;vertical-align:middle}
-.cir3d.big{touch-action:none}
-.cir3d>canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.cir3d:not(.on)>canvas{display:none}
-.cir3d.on>svg.cir>*{visibility:hidden}
-.cir3d.on .act{animation:none}
+/* the run's stage: the agent's sphere, centred, and under it what it asks or why it waits. An open gate is the agent
+   asking: nk-asking eases the sphere up and shrinks it (to about 45%) and the gate card shows under it, in view without
+   scrolling. render() turns nk-asking on or off only on a change (NapkinRoles.ask); reduced motion: no transition */
+.dkstage{display:flex;flex-direction:column}
+.dkstage .aglbox{height:var(--dk-sph,184px);display:flex;justify-content:center;transition:height .6s cubic-bezier(.2,.8,.2,1)}
+.dkstage.nk-asking .aglbox{height:calc(var(--dk-sph,184px) * .45)}
+.dkstage .orbb{appearance:none;display:block;height:100%;aspect-ratio:1;max-width:100%;border:0;background:none;padding:0;margin:0;border-radius:999px;line-height:0;cursor:pointer;touch-action:none}
+.dkstage .orbb>.nk-ag{width:100%;height:100%}
+.dkstage .say{margin:4px auto 0;min-height:40px;max-width:420px;text-align:center;font-size:13px;line-height:1.5;color:var(--ink3)}
+.dkstage .say.on{color:var(--ink)}
+.dkstage.nk-asking .say{display:none}
+.dkstage .dkask.enter{animation:dk-in .45s ease-out both}
+@keyframes dk-in{from{opacity:0;transform:translateY(14px)}}
+.dkstage.nk-asking .dkask h1.sm{font-size:26px}
+.dkstage.nk-asking .dkask>p.note{margin-bottom:12px!important}
+.dkstage.nk-asking .dex{padding:10px 20px}
+.dkstage.nk-asking .beat{padding:9px 20px}
+.dkstage .dex .mono{white-space:nowrap}
+.dkstage.nk-asking .gacts{gap:8px!important;margin-top:14px!important}
+.dkstage.nk-asking .gacts .btn.big{height:40px;padding:0 14px!important;font-size:13px!important}
+main.build:has(.dkstage.nk-asking){padding-bottom:16px}
+.dkstage.nk-asking .gbody{max-height:max(132px,calc(100vh - var(--barh) - var(--dk-sph,184px) * .45 - 330px));overflow:auto}
 /* the status card's circle: 60px in a row, enlarged in place (the page script animates the change) while an agent works or the run waits */
 .status .srow{display:flex;align-items:center;gap:14px}
 .status .slot{display:block;position:relative;flex:none;width:60px;height:60px}
 .status.hero .srow{flex-direction:column;text-align:center;gap:12px;padding-top:4px}
 .status.hero .slot{width:130px;height:130px}
-.status.hero.centre{max-width:none;margin:24px auto 0;background:transparent;border-color:transparent;box-shadow:none}
-.status.hero.centre .stext,.status.hero.centre .say,.status.hero.centre .note{max-width:420px;margin-left:auto;margin-right:auto}
 .status .orbb{appearance:none;display:block;border:0;background:none;padding:0;margin:0;border-radius:999px;line-height:0;cursor:pointer}
 .status .say{margin:10px auto 0;min-height:40px;max-width:260px;text-align:center;font-size:13px;line-height:1.5;color:var(--ink3)}
 .status .say.on{color:var(--ink)}
@@ -300,6 +302,9 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 <body>
 <div id="app"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- The one agent engine (app/templates/shared/agent-sphere), inlined here by make_deck_maker.rs: every circle is its sphere. -->
+<!-- @napkin:agent-sphere -->
 
 <!-- The pure part: what a screen decides, with no DOM. app/tests/deckMaker.test.ts runs this block alone. -->
 <script id="deck-logic">
@@ -956,31 +961,28 @@ var DeckLogic = (function () {
   }
 
   // ── the agent circle: who is working and what they are doing (features/deck-maker-circle-ui.clan) ──
-  // Geometry copied from the agent sphere + ring clan (agents.json), rounded to 3 decimals, for the eight agents this
-  // app shows. An arc is [cx, cy, radius, start angle, sweep, width, opacity]; a circle is [cx, cy, r, width, solid, opacity].
-  // The emblem sits in a unit circle; the ring goes round it. Colours of the ring are tokens (--ring-*), so the theme can
-  // set them; the materials are the agents' own fixed colours.
-  var AGENTS = {
-    brief: { n: 1, name: 'Brief', mat: 'pearl', role: 'Shapes the ask', arcs: [[0,0,0.794,0.558,1.257,0.094,1],[0,0,0.559,-2.549,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
-    research: { n: 2, name: 'Research', mat: 'glass', role: 'Finds evidence', arcs: [[0,0,0.794,1.797,1.484,0.094,1],[-0.001,0.009,0.412,-2.979,3.097,0.097,1]], circs: [[0.265,-0.176,0.118,0.047,0,1],[-0.382,-0.382,0.073,0,1,1]] },
-    strategy: { n: 3, name: 'Strategy', mat: 'graphite', role: 'Builds territories', arcs: [[0,0,0.794,3.037,1.71,0.094,1],[0.001,-0.001,0.471,0.945,2.876,0.073,1],[0.002,-0.004,0.265,-2.773,3.207,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
-    idea: { n: 7, name: 'Idea', mat: 'glass', role: 'Opens directions', arcs: [[0,0,0.794,1.711,1.483,0.094,1],[0,0,0.471,-0.383,2.878,0.073,1],[-0.002,-0.001,0.265,2.191,3.193,0.073,1]], circs: [[-0.382,-0.382,0.073,0,1,1]] },
-    copy: { n: 9, name: 'Copy', mat: 'paper', role: 'Crafts words', arcs: [[0,0,0.794,-2.095,1.938,0.094,1],[0,0,0.324,-1.571,1.065,0.044,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
-    deck: { n: 21, name: 'Deck', mat: 'paper', role: 'Builds pitches', arcs: [[0,0,0.794,0.209,1.257,0.094,1],[0,0,0.559,-2.897,0.838,0.047,0.4]], circs: [[0,0,0.235,0.059,0,1]] },
-    review: { n: 23, name: 'Review', mat: 'pearl', role: 'Checks the brief', arcs: [[0,0,0.794,2.688,1.711,0.094,1],[0,0,0.471,0.594,2.879,0.073,1],[0,-0.002,0.265,-3.114,3.191,0.073,1]], circs: [[0.382,0.294,0.088,0.035,0,1]] },
-    approval: { n: 24, name: 'Approval', mat: 'paper', role: 'Asks for sign-off', arcs: [[0,0,0.794,-2.356,1.938,0.094,1],[0.206,-0.147,0.294,-1.308,3.838,0.073,1],[0,0,0.324,-1.832,1.065,0.044,0.4]], circs: [[-0.206,0.147,0.235,0.059,0,1]] }
-  };
-
-  /** The flat materials: the body's colour and the emblem's ink. Fixed brand colours, the same in light and dark. */
-  var MATS = {
-    pearl: { base: '#EEECE7', ink: '#16191D' }, glass: { base: '#DCE6F2', ink: '#16191D' },
-    graphite: { base: '#242936', ink: '#EEF0F4' }, paper: { base: '#F7F7F5', ink: '#16191D' }
-  };
+  // Every circle is the one agent engine's sphere (app/templates/shared/agent-sphere, inlined at the page's
+  // agent-sphere marker): NapkinRoles draws it, names it and says its job. This app keeps only which agents it shows
+  // and what each is doing; the geometry, materials and drawing are the engine's.
+  var Roles = typeof NapkinRoles !== 'undefined' ? NapkinRoles : null;
+  var AGENT_KEYS = ['brief', 'research', 'strategy', 'idea', 'copy', 'deck', 'review', 'approval'];
+  function capital(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  /** The agents this app shows, by role key: { name ('Strategy agent'), the ('the Strategy agent'), role (its job) }. */
+  var AGENTS = {};
+  AGENT_KEYS.forEach(function (k) {
+    var n = capital(k) + ' agent';
+    AGENTS[k] = Roles ? { name: Roles.name(k), the: Roles.the(k), role: capital(Roles.job(k)) } : { name: n, the: 'the ' + n, role: '' };
+  });
 
   /** What each activity is called. The state is always words as well as a ring: never colour alone. */
   var ACTIVITY_WORD = {
     work: 'Working', write: 'Writing', think: 'Thinking', read: 'Reading', check: 'Checking', human: 'Needs you',
     error: 'Failed, retrying', complete: 'Done', waiting: 'Waiting', handoff: 'Handing off'
+  };
+  /** This app's activities as the engine's states (idle, working, handoff, needs, done). A failure needs a person too. */
+  var ENGINE_STATE = {
+    work: 'working', write: 'working', think: 'working', read: 'working', check: 'working', human: 'needs',
+    error: 'needs', complete: 'done', waiting: 'idle', handoff: 'handoff'
   };
 
   /** The agent each display stage belongs to and what it does there. */
@@ -990,8 +992,6 @@ var DeckLogic = (function () {
   };
   /** The agent shown at a gate when the run does not name one. */
   var GATE_AGENT = { storyline: 'strategy', territories: 'strategy', idea: 'idea' };
-
-  var CIRCLE_R = 1.04; // the ring's radius; the body is scaled to 0.82 inside it, and the viewBox reaches 1.15
 
   function own(o, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); }
   function num(v) { var r = Math.round(v * 1000) / 1000; return String(r === 0 ? 0 : r); }
@@ -1006,76 +1006,15 @@ var DeckLogic = (function () {
     return 'M' + pt(a0) + 'A' + num(rho) + ' ' + num(rho) + ' 0 ' + (Math.abs(sweep) > Math.PI ? 1 : 0) + ' ' + (sweep >= 0 ? 1 : 0) + ' ' + pt(a0 + sweep);
   }
 
-  /** The ring for one activity: an arc in that activity's look and token colour, drawn from the top. */
-  function ringOf(activity) {
-    var R = CIRCLE_R, top = -Math.PI / 2;
-    var stroke = function (d, tok, w, extra) {
-      return '<path d="' + d + '" fill="none" stroke="var(--ring-' + tok + ')" stroke-width="' + w + '" stroke-linecap="round"' + (extra || '') + '/>';
-    };
-    switch (activity) {
-      case 'work': case 'write': case 'handoff':
-        return stroke(arcPath(0, 0, R, top, 1.9), 'work', '.1');
-      case 'think':
-        return stroke(arcPath(0, 0, R, top, 4.2), 'think', '.11', ' stroke-dasharray=".001 .17"');
-      case 'read':
-        return [0, 1, 2, 3, 4, 5].map(function (i) {
-          var a = top + i * 0.3, c = Math.cos(a), s = Math.sin(a);
-          return '<line x1="' + num(0.97 * c) + '" y1="' + num(0.97 * s) + '" x2="' + num(1.11 * c) + '" y2="' + num(1.11 * s) + '" stroke="var(--ring-read)" stroke-width=".06" stroke-linecap="round" stroke-opacity="' + num(0.35 + i * 0.13) + '"/>';
-        }).join('');
-      case 'check':
-        return stroke(arcPath(0, 0, R, top, 0.45), 'check', '.09') + stroke(arcPath(0, 0, R, top + 0.8, 0.45), 'check', '.09');
-      case 'human':
-        return stroke(arcPath(0, 0, R, top, Math.PI / 2), 'human', '.14');
-      case 'error':
-        var end = top + 3.6 + 0.55;
-        return stroke(arcPath(0, 0, R, top, 3.6), 'error', '.1') +
-          '<circle cx="' + num(R * Math.cos(end)) + '" cy="' + num(R * Math.sin(end)) + '" r=".07" fill="var(--ring-error)"/>';
-      case 'complete':
-        return stroke(arcPath(0, 0, R, top, 2 * Math.PI), 'work', '.1');
-      default: // waiting: two short neutral arcs
-        return stroke(arcPath(0, 0, R, -2.3, 0.6), 'wait', '.09') + stroke(arcPath(0, 0, R, Math.PI - 2.3, 0.6), 'wait', '.09');
-    }
-  }
-
-  /** The agent's emblem in its material, inside the unit circle. An unknown agent is a plain neutral body. */
-  function emblemOf(a) {
-    if (!a) return '<circle r="1" fill="var(--soft-2)" stroke="var(--ring-edge)" stroke-width=".03"/>';
-    var m = MATS[a.mat] || MATS.pearl, out = '<circle r="1" fill="' + m.base + '" stroke="var(--ring-edge)" stroke-width=".03"/>';
-    out += '<g fill="none" stroke="' + m.ink + '" stroke-linecap="round">';
-    a.arcs.forEach(function (x) {
-      out += '<path d="' + arcPath(x[0], x[1], x[2], x[3], x[4]) + '" stroke-width="' + num(x[5]) + '"' + (x[6] < 1 ? ' stroke-opacity="' + num(x[6]) + '"' : '') + '/>';
-    });
-    a.circs.forEach(function (c) {
-      out += c[4] ? '<circle cx="' + num(c[0]) + '" cy="' + num(c[1]) + '" r="' + num(c[2]) + '" fill="' + m.ink + '" stroke="none"/>'
-        : '<circle cx="' + num(c[0]) + '" cy="' + num(c[1]) + '" r="' + num(c[2]) + '" stroke-width="' + num(c[3]) + '"/>';
-    });
-    return out + '</g>';
-  }
-
-  var blendSeq = 0; // each blend's clip ids are new, so two circles on one page never share one
-
   /**
-   * The hand-off: one body, two agents. A flat front (no gradient) at p, 0 to 1, from the bottom: below it the next agent
-   * (to), above it the one handing over (from), each in its own material and emblem. The clip ids are unique per call.
-   * An unknown agent is drawn as the neutral body. p outside 0 to 1, or not a number, is 0.5.
-   */
-  function blend(from, to, p) {
-    var a = own(AGENTS, from) ? AGENTS[from] : null, b = own(AGENTS, to) ? AGENTS[to] : null;
-    var q = typeof p === 'number' && p >= 0 && p <= 1 ? p : 0.5;
-    var y = 1 - 2 * q, id = 'dmho' + (++blendSeq);
-    return '<defs><clipPath id="' + id + 'a"><rect x="-1.2" y="-1.2" width="2.4" height="' + num(y + 1.2) + '"/></clipPath>' +
-      '<clipPath id="' + id + 'b"><rect x="-1.2" y="' + num(y) + '" width="2.4" height="' + num(1.2 - y) + '"/></clipPath></defs>' +
-      '<g clip-path="url(#' + id + 'a)">' + emblemOf(a) + '</g><g clip-path="url(#' + id + 'b)">' + emblemOf(b) + '</g>' +
-      '<line x1="-1" y1="' + num(y) + '" x2="1" y2="' + num(y) + '" stroke="var(--ring-edge)" stroke-width=".03"/>';
-  }
-
-  /**
-   * The agent circle as a flat SVG string: the agent's emblem in its material and the ring of what it is doing.
-   * { agent: key, activity, size (px, default 60), label (the name said, default the agent's), word (the state word said,
-   * default the activity's), to (with activity handoff: the agent taking over, drawn as a flat blend), p (the blend's front) }.
-   * role="img", and the aria-label says the name and the state word. Where the screen writes them beside the circle,
-   * `aria` says what the label still needs: 'name' (the word is beside it) labels it with the name only, 'hidden' (both
-   * are beside it) hides it from screen readers. An unknown agent or activity is a neutral waiting circle. Never throws.
+   * The agent circle: the engine's sphere placeholder (NapkinRoles.tag), its static frame now and a live view once
+   * NapkinRoles.auto() hydrates it. { agent: key, activity, size (px, default 60; 'fill' fills its box), label (the name
+   * said, default the agent's), word (the state word said, default the activity's), to (with activity handoff: the agent
+   * taking over), progress (0 to 1) }. The placeholder carries data-nk-agent and data-nk-state (the engine's state) and
+   * data-activity (this app's). role="img", and the aria-label says the name and the state word; where the screen writes
+   * them beside the circle, `aria` says what the label still needs: 'name' (the word is beside it) labels it with the
+   * name only, 'hidden' (both are beside it) hides it from screen readers. An unknown agent or activity is a waiting
+   * circle named "Agent". Never throws.
    */
   function circleSvg(opts) {
     var o = isObj(opts) ? opts : {};
@@ -1083,21 +1022,23 @@ var DeckLogic = (function () {
     var act = own(ACTIVITY_WORD, o.activity) ? o.activity : 'waiting';
     if (!a) act = 'waiting';
     var to = act === 'handoff' && own(AGENTS, o.to) && o.to !== o.agent ? o.to : null;
-    var size = typeof o.size === 'number' && o.size > 0 && o.size <= 512 ? Math.round(o.size) : 60;
+    var size = o.size === 'fill' ? 0 : typeof o.size === 'number' && o.size > 0 && o.size <= 512 ? Math.round(o.size) : 60;
     var name = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (a ? a.name + (to ? ' to ' + AGENTS[to].name : '') : 'Agent');
     var word = typeof o.word === 'string' && o.word.trim() ? o.word.trim() : ACTIVITY_WORD[act];
     var cls = 'cir' + (size === 60 || size === 32 ? ' s' + size : '');
-    var said = o.aria === 'hidden' ? 'aria-hidden="true"' : 'role="img" aria-label="' + escAttr(o.aria === 'name' ? name : name + ', ' + word) + '"';
-    return '<svg class="' + cls + '" width="' + size + '" height="' + size + '" viewBox="-1.15 -1.15 2.3 2.3" ' + said + ' data-agent="' + (a ? o.agent : 'none') + '"' + (to ? ' data-to="' + to + '"' : '') + ' data-activity="' + act + '">' +
-      '<circle r="' + CIRCLE_R + '" fill="none" stroke="var(--ring-track)" stroke-width=".05"/>' +
-      '<g class="act">' + ringOf(act) + '</g><g transform="scale(.82)">' + (to ? blend(o.agent, to, o.p) : emblemOf(a)) + '</g></svg>';
+    var label = o.aria === 'name' ? name : name + ', ' + word;
+    var pr = typeof o.progress === 'number' && o.progress >= 0 && o.progress <= 1 ? Math.round(o.progress * 1000) / 1000 : null;
+    var key = a ? o.agent : 'orchestrator', st = ENGINE_STATE[act];
+    var tag = Roles ? Roles.tag(key, { size: size, state: st, label: label, decorative: o.aria === 'hidden', progress: pr, cls: cls })
+      : '<span class="nk-ag ' + cls + '" data-nk-agent="' + key + '" data-nk-state="' + st + '"' + (o.aria === 'hidden' ? ' aria-hidden="true"' : ' role="img" aria-label="' + escAttr(label) + '"') + '></span>';
+    return tag.replace(/^<span /, '<span data-activity="' + act + '"' + (to ? ' data-to="' + to + '"' : '') + ' ');
   }
 
   /**
    * Who the circle shows and what they are doing, from the run: { agent, activity, word, role, step_index, step_total,
    * handoff }. run.agent (written by the server) names them when present; an open gate always needs a person, a failed
    * stage is an error, a finished run is done, and with no live feed nothing is running, so the stage's agent is shown
-   * waiting. A feed whose key this app does not know (dex: Dex is the voice, not a circle) counts as no feed, so the
+   * waiting. A feed whose key this app does not know (dex: the Deck agent's voice key, not a circle) counts as no feed, so the
    * gate, failure, done and stage rows still decide. Never throws.
    */
   function agentState(run) {
@@ -1172,13 +1113,13 @@ var DeckLogic = (function () {
    * who is agentState's answer. Always at least three lines; never throws.
    */
   function circleSays(who) {
-    var w = isObj(who) ? who : {}, a = own(AGENTS, w.agent) ? AGENTS[w.agent] : null, name = a ? a.name : 'This agent';
+    var w = isObj(who) ? who : {}, a = own(AGENTS, w.agent) ? AGENTS[w.agent] : null, name = a ? a.the : 'this agent';
     var act = typeof w.activity === 'string' ? w.activity : 'waiting';
     var doing = act === 'waiting' ? 'Nothing is running: the engine is not connected to this document yet, so I am waiting for it.'
-      : act === 'handoff' && own(AGENTS, w.to) ? name + ' is handing the work to ' + AGENTS[w.to].name + '.'
+      : act === 'handoff' && own(AGENTS, w.to) ? capital(name) + ' is handing the work to ' + AGENTS[w.to].the + '.'
       : 'I am ' + (own(ACTIVITY_WORD, act) ? ACTIVITY_WORD[act].toLowerCase() : 'working') + ' right now. I can not tell you how far along, only what is in the box.';
     return [
-      'I am ' + name + (a ? ', the agent that ' + a.role.charAt(0).toLowerCase() + a.role.slice(1) : '') + '.',
+      'I am ' + name + (a && a.role ? ', the one that ' + a.role.charAt(0).toLowerCase() + a.role.slice(1) : '') + '.',
       doing,
       'I grow while work goes on or the run waits, and shrink back when you are needed, when something fails and when it is done.'
     ];
@@ -1305,8 +1246,8 @@ var DeckLogic = (function () {
       if (who.handoff) {
         var to = AGENTS[who.to];
         view.title = 'Passing the work on';
-        view.lede = AGENTS[who.agent].name + ' hands the work to ' + to.name + ', who picks it up from here.';
-        view.head = 'Handed over to ' + to.name;
+        view.lede = capital(AGENTS[who.agent].the) + ' hands the work to ' + to.the + ', who picks it up from here.';
+        view.head = 'Handed over to ' + to.the;
         view.items = view.items.map(function (x) { x.n = ''; x.pill = x.status === 'done' ? 'Done' : x.status === 'now' ? 'Passing on' : 'Waiting'; return x; });
       }
       if (feed && feed.slow === true) view.lede = SLOW_LEDE;
@@ -1425,7 +1366,7 @@ var DeckLogic = (function () {
 
   return {
     appendixOf: appendixOf, deckApproval: deckApproval, approveDeck: approveDeck, exportRows: exportRows, reportLine: reportLine,
-    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, blend: blend, runView: runView,
+    AGENTS: AGENTS, ACTIVITY_WORD: ACTIVITY_WORD, circleSvg: circleSvg, agentState: agentState, circleSizeFor: circleSizeFor, circleCentreSize: circleCentreSize, circleSays: circleSays, arcPath: arcPath, runView: runView, ENGINE_STATE: ENGINE_STATE,
     upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
     canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
     DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
@@ -1443,6 +1384,7 @@ var DeckLogic = (function () {
 (function () {
   'use strict';
   var L = DeckLogic;
+  var Roles = typeof NapkinRoles !== 'undefined' ? NapkinRoles : null; // the one agent engine (the page's agent-sphere script)
 
   // ── host contract (same as the other apps) ────────────────────────────
   function data() { return (window.__CLAN__ && window.__CLAN__.data) || {}; }
@@ -1718,18 +1660,19 @@ var DeckLogic = (function () {
   }
 
   // ── 2 · Build, with gates ─────────────────────────────────────────────
-  // A gate is drawn from the registry (L.gateView): its head, Dex's note, its body (the storyline's beats, gate 2's
-  // territories, gate 3's idea) and its actions. Gate 1's markup is the same as before the registry, byte for byte.
+  // A gate is drawn from the registry (L.gateView): its head, the Deck agent's note, its body (the storyline's beats,
+  // gate 2's territories, gate 3's idea) and its actions. An open gate is the agent asking: its sphere rises and the gate
+  // card shows under it, on one screen (askStage).
   function gateHead(gv) {
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gv.n) + ' of ' + esc(gv.of) + '</span></div>' +
       '<h1 class="sm" style="margin-bottom:6px">' + esc(gv.title) + '</h1>' +
       '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">' + esc(gv.lede) + '</p>';
   }
 
-  /** Dex's note at the top of the gate card, beside the circle of the agent holding the work. Notes written for gates 2 and 3 are marked as proposed. */
-  function dexRow(gv, who) {
-    return '<div class="dex">' + L.circleSvg({ agent: who.agent, activity: 'human', size: 32 }) + '<span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gv.dex) + '</span>' +
-      (gv.dex_proposed && gv.dex ? '<span class="pill plain dexp" title="Dex\'s note here is our proposed wording, not yet agreed">Proposed</span>' : '') + '</div>';
+  /** The Deck agent's note at the top of the gate card, beside its sphere (it directs the run). Notes written for gates 2 and 3 are marked as proposed. */
+  function dexRow(gv) {
+    return '<div class="dex">' + L.circleSvg({ agent: 'deck', activity: 'waiting', size: 32, aria: 'hidden' }) + '<span class="mono" style="font-size:12px">Deck agent</span><span class="note">' + esc(gv.dex) + '</span>' +
+      (gv.dex_proposed && gv.dex ? '<span class="pill plain dexp" title="The Deck agent\'s note here is our proposed wording, not yet agreed">Proposed</span>' : '') + '</div>';
   }
 
   var BASES = { brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn'] };
@@ -1767,13 +1710,13 @@ var DeckLogic = (function () {
     return '<div class="crow pending"><span class="note">Nothing to show for this gate yet.</span></div>';
   }
 
-  /** Approve (or Pick), Edit and Ask Dex. Edit and Ask Dex record a request; once one waits, the gate says so. */
+  /** Approve (or Pick), Edit and Ask the Deck agent. Edit and Ask record a request; once one waits, the gate says so. */
   function gateActions(gv) {
     var none = gv.body === 'territories' && !gv.picked;
     var asked = gv.asked.length ? '<p class="note asked" role="status" data-asked>You asked ' + (gv.asked.indexOf('edit') >= 0 && gv.asked.indexOf('retry') >= 0 ? 'for an edit and a new try'
-      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'Dex to try again') + '. It waits for the engine, which is not connected yet; nothing has changed.</p>' : '';
-    return '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve"' + (none ? ' disabled' : '') + '>' + esc(gv.approve) + '</button>' +
-      '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="' + esc(gv.edit_key) + '">' + esc(gv.edit_label) + '</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="' + esc(gv.id) + '">Ask Dex to try again</button></div>' +
+      : gv.asked.indexOf('edit') >= 0 ? 'for an edit' : 'the Deck agent to try again') + '. It waits for the engine, which is not connected yet; nothing has changed.</p>' : '';
+    return '<div class="gacts" style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve"' + (none ? ' disabled' : '') + '>' + esc(gv.approve) + '</button>' +
+      '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="' + esc(gv.edit_key) + '">' + esc(gv.edit_label) + '</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="' + esc(gv.id) + '">Ask the Deck agent to try again</button></div>' +
       (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked;
   }
 
@@ -1784,20 +1727,21 @@ var DeckLogic = (function () {
       return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
     }).join('');
     var main, gv = gate ? L.gateView(run, view.pick) : null; // the gate registry: words and body for the open gate
-    if (gate) main = gateHead(gv) + '<div class="card" style="overflow:hidden">' + dexRow(gv, who) + gateBody(gv, gate) + '</div>' + gateActions(gv);
+    // An open gate: the agent asks. Its sphere rises and shrinks, and the gate card shows under it.
+    if (gate) main = askStage(who, true, gateHead(gv) + '<div class="card gcard" style="overflow:hidden">' + dexRow(gv) + '<div class="gbody">' + gateBody(gv, gate) + '</div></div>' + gateActions(gv));
     // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
     var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
     if (rv && !live) {
-      main = '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
+      main = askStage(who, false, '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
         '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>' +
-        waitingCard(who, true);
+        waitingCard());
     } else if (live) main = runBody(rv);
     // A gate's own checks when it wrote them (even none), else what the run has checked.
     var gateChecks = !!gate && Array.isArray(gate.checks), list = gateChecks ? gate.checks : run.checks;
     var checks = Array.isArray(list) && (gateChecks || list.length) ? checkedCard(list) : '';
     return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
       '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
-      (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
+      (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' +
         '<div><div style="font-size:14px;font-weight:600">Waiting for you</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(gv.hold) + '</div></div></div><div class="rule"></div>' +
         '<p class="note">' + esc(gv.next) + '</p></div>' : '')) +
       (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
@@ -1816,14 +1760,31 @@ var DeckLogic = (function () {
    * screen readers). Enlarged (circleSizeFor) it is a real button that says the agent and the state once, and pressing it
    * (data-orb) shows a few honest lines under it.
    */
-  function orbHtml(who, name, bigSize) {
-    var size = bigSize || L.circleSizeFor(who), svg = L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: size, aria: 'hidden' });
+  function orbHtml(who, name) {
+    var size = L.circleSizeFor(who), svg = L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: size, aria: 'hidden', progress: stepsDone(who) });
     if (size === 60) return '<span class="slot">' + svg + '</span>';
-    return '<span class="slot big"' + (bigSize ? ' style="width:' + size + 'px;height:' + size + 'px"' : '') + '><button type="button" class="orbb" data-orb aria-label="' + esc(name + ', ' + who.word + '. Press to ask what is happening.') + '">' + svg + '</button></span>';
+    return '<span class="slot big"><button type="button" class="orbb" data-orb aria-label="' + esc(name + ', ' + who.word + '. Press to ask what is happening.') + '">' + svg + '</button></span>';
   }
   function nameOf(who) {
     var A = L.AGENTS, a = A[who.agent], b = who.handoff ? A[who.to] : null;
     return { name: a ? a.name + (b ? ' → ' + b.name : '') : 'Agent', role: a ? a.role + (b ? ' → ' + b.role : '') : '' };
+  }
+  /** The steps finished, 0 to 1, when the feed says which step it is on; otherwise none (the sphere makes up nothing). */
+  function stepsDone(who) { return who.step_index && who.step_total ? (who.step_index - 1) / who.step_total : undefined; }
+
+  // ── the run's stage: the agent's sphere, centred, and under it what it asks (an open gate) or why it waits ──
+  // The page is drawn again on every change, so the stage is drawn as it was at the last render and render() eases it
+  // to what it is now (NapkinRoles.ask toggles nk-asking): the sphere rises and shrinks when a gate opens and comes back
+  // down once it is approved. A render that changes nothing replays nothing.
+  var askedLast = null, askWant = null; // nk-asking at the last render (null: no stage drawn) and now
+  function askStage(who, asking, inner) {
+    var n = nameOf(who), px = L.circleCentreSize(window.innerWidth, window.innerHeight);
+    var on = askedLast === null ? asking : askedLast, change = askedLast !== null && askedLast !== asking;
+    askWant = asking;
+    return '<div class="dkstage' + (on ? ' nk-asking' : '') + '" data-nk-stage style="--dk-sph:' + px + 'px">' +
+      '<div class="aglbox"><button type="button" class="orbb" data-orb aria-label="' + esc(n.name + ', ' + who.word + '. Press to ask what is happening.') + '">' +
+      L.circleSvg({ agent: who.agent, to: who.to, activity: who.activity, word: who.word, size: 'fill', aria: 'hidden', progress: stepsDone(who) }) + '</button></div>' +
+      '<p class="say" data-say aria-live="polite">' + HINT + '</p><div class="dkask' + (change ? ' enter' : '') + '">' + inner + '</div></div>';
   }
   function sayHtml(who) { return L.circleSizeFor(who) === 60 ? '' : '<p class="say" data-say aria-live="polite">' + HINT + '</p>'; }
 
@@ -1838,12 +1799,10 @@ var DeckLogic = (function () {
       '</div></div>' + sayHtml(who) + '</div>';
   }
 
-  /** The card while the engine is not connected: the same enlarged circle in its place, a short honest prompt, no time and no progress. */
-  function waitingCard(who, centre) {
-    var n = nameOf(who);
-    return '<div class="card status hero' + (centre ? ' centre' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name, centre ? L.circleCentreSize(window.innerWidth, window.innerHeight) : 0) +
-      '<div class="stext"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div></div></div>' +
-      sayHtml(who) + '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
+  /** Under the stage's sphere while the engine is not connected: a short honest prompt, no time and no progress. */
+  function waitingCard() {
+    return '<div class="card wait" style="padding:20px;margin-top:16px"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div>' +
+      '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
   }
 
   /** One mark for a content-box row: done, now (a small turning arc), still to come, failed, or to supply. */
@@ -2009,555 +1968,6 @@ var DeckLogic = (function () {
       '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></div></aside></main>';
   }
 
-  // ═══ Orbs: one WebGL context for every agent circle (the clan's sphere + ring shader, ported; see features/deck-maker-circle-ui.clan) ═══
-  var Orbs = (function () {
-// ── copied verbatim from the clan (final-mock.template.html) ──
-const rgb = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
-const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
-const ease = x => .5 - .5 * Math.cos(Math.PI * x);
-const angDiff = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
-const MATS = {
-  pearl:    { base: '#EEECE7', ink: '#16191D', gloss: .70, metal: 0,   glass: 0 },
-  graphite: { base: '#242936', ink: '#EEF0F4', gloss: .50, metal: .15, glass: 0 },
-  chrome:   { base: '#C9CED8', ink: '#16191D', gloss: 1,   metal: .95, glass: 0 },
-  glass:    { base: '#DCE6F2', ink: '#16191D', gloss: 1,   metal: 0,   glass: .85 },
-  ceramic:  { base: '#E4DCCF', ink: '#2A2622', gloss: .40, metal: 0,   glass: 0 },
-  stone:    { base: '#B9BCC3', ink: '#16191D', gloss: .25, metal: 0,   glass: 0 },
-  onyx:     { base: '#12141A', ink: '#F1F2F5', gloss: .95, metal: .25, glass: 0 },
-  paper:    { base: '#F7F7F5', ink: '#16191D', gloss: .15, metal: 0,   glass: 0 },
-};
-const TYPES = { scan: { wob: [0, .006, 0, .004], breath: .004 }, unfold: { wob: [.012, .014, .006, 0], breath: .022 }, sweep: { wob: [0, .008, .012, .006], breath: .006 },
-  hold: { wob: [.003, .002, 0, 0], breath: .004 }, align: { wob: [.005, 0, .005, 0], breath: .008 }, pulse: { wob: [.006, 0, .004, 0], breath: .028 } };
-const TYPE_OF = {};
-for (const n of ['Research', 'Competitor', 'Culture', 'Audience', 'Knowledge']) TYPE_OF[n] = 'scan';
-for (const n of ['Idea', 'Concept', 'Character', 'Strategy', 'Storyboard']) TYPE_OF[n] = 'unfold';
-for (const n of ['Video', 'Motion', 'Image', 'Edit', 'Upscale', 'Adapt']) TYPE_OF[n] = 'sweep';
-for (const n of ['Review', 'Compliance', 'Approval', 'Asset', 'Client']) TYPE_OF[n] = 'hold';
-for (const n of ['Orchestrator', 'Job', 'Performance', 'Art Director']) TYPE_OF[n] = 'align';
-for (const n of ['Brief', 'Copy', 'Deck', 'Voice', 'Music']) TYPE_OF[n] = 'pulse';
-const STYLE = {   // period, duty, breadth, scroll, glow, shimmer, beat, ticks-in, broken, turning speed (deg/s)
-  work:     [100, 1,   3.5, 0,  0, .35, 0, 0, 0, 70],
-  write:    [100, 1,   3.5, 0,  1, 0,   0, 0, 0, 90],
-  think:    [7,   .28, 3.2, 6,  0, 0,   0, 0, 0, 40],
-  search:   [14,  .57, 3.4, 10, 0, 0,   0, 0, 0, 110],
-  read:     [100, 1,   2.2, 0,  0, 0,   0, 1, 0, 60],
-  provider: [100, 1,   6.0, 0,  0, .5,  0, 0, 0, 55],
-  check:    [100, 1,   2.4, 0,  0, 0,   1, 0, 0, 120],
-  human:    [100, 1,   6.5, 0,  0, .6,  0, 0, 0, 25],
-  queue:    [24,  .55, 2.4, 4,  0, 0,   0, 0, 0, 18],
-  error:    [100, 1,   3.5, 0,  0, 0,   0, 0, 1, 0],
-  complete: [100, 1,   4.5, 0,  0, 0,   0, 0, 0, 0],
-};
-const PA = new Float32Array(28), PB = new Float32Array(28), CA = new Float32Array(12), CB = new Float32Array(12);
-const arc0 = new Float32Array(16), arc1 = new Float32Array(16), cir0 = new Float32Array(8), cir1 = new Float32Array(8);
-const v2 = new Float32Array(2), v3 = new Float32Array(3), v4 = new Float32Array(4), rip = new Float32Array(16), ringA = new Float32Array(4), pingV = new Float32Array(4);
-const rs = new Float32Array(4), rf = new Float32Array(4), rg = new Float32Array(4);
-const wobV = new Float32Array(4), accV = new Float32Array(3), ringCol = new Float32Array(3);
-function rotC(arr, o, x, y, ang) { const c = Math.cos(ang), s = Math.sin(ang); arr[o] = x * c - y * s; arr[o + 1] = x * s + y * c; }
-const POSE_SPAN = (a, t, outA, outC) => {                    // the agent's own idle motion, written into the scratch arrays
-  outA.set(a.arcF); outC.set(a.cirF);
-  const sp = a.sp;
-  for (let i = 0; i < a.na; i++) { const o = i * 7;
-    switch (a.type) {
-      case 'scan': outA[o + 3] += .6 * Math.sin(t * .7 * sp + i * 1.7) * (i % 2 ? -1 : 1); break;
-      case 'unfold': outA[o + 4] = Math.min(outA[o + 4] * (1 + .26 * Math.sin(t * .8 * sp + i * 1.1)), 6.2); outA[o + 3] += .14 * Math.sin(t * .4 * sp + i); break;
-      case 'sweep': outA[o + 3] += t * sp * (.5 + .35 * i) * (i % 2 ? -1 : 1); break;
-      case 'hold': outA[o + 3] += .04 * Math.sin(t * .6 * sp + i); break;
-      case 'align': outA[o + 3] += .55 * Math.sin(t * .45 * sp) * (1 - i * .3); break;
-      case 'pulse': outA[o + 5] *= 1 + .3 * Math.sin(t * 2.4 * sp + i); outA[o + 4] *= 1 + .08 * Math.sin(t * 2.4 * sp); break;
-    } }
-  for (let i = 0; i < a.nc; i++) { const o = i * 6, x = outC[o], y = outC[o + 1];
-    switch (a.type) {
-      case 'scan': rotC(outC, o, x, y, .5 * Math.sin(t * .6 * sp + i)); break;
-      case 'unfold': outC[o + 2] *= 1 + .3 * Math.sin(t * .9 * sp + i * 2); break;
-      case 'sweep': rotC(outC, o, x, y, t * sp * .6 * (i % 2 ? -1 : 1)); break;
-      case 'hold': outC[o + 1] = y + .01 * Math.sin(t * .7 * sp); break;
-      case 'align': rotC(outC, o, x, y, .4 * Math.sin(t * .45 * sp)); break;
-      case 'pulse': outC[o + 1] = y + .045 * Math.sin(t * 2.4 * sp + i); break;
-    } }
-};
-function writeStatic(A, C) {                                  // p = 0: no second pose, no blending
-  for (let i = 0; i < 4; i++) { const o = i * 7, q = i * 4; arc0[q] = A[o]; arc0[q + 1] = A[o + 1]; arc0[q + 2] = A[o + 2]; arc0[q + 3] = A[o + 3];
-    arc1[q] = i < 4 ? A[o + 4] : 0; arc1[q + 1] = A[o + 5]; arc1[q + 2] = A[o + 6]; arc1[q + 3] = 0; }
-  for (let i = 0; i < 2; i++) { const o = i * 6, q = i * 4; cir0[q] = C[o]; cir0[q + 1] = C[o + 1]; cir0[q + 2] = C[o + 2]; cir0[q + 3] = C[o + 3]; cir1[q] = C[o + 4]; cir1[q + 1] = C[o + 5]; cir1[q + 2] = 0; cir1[q + 3] = 0; }
-}
-function writeMix(a, na, b, nb, p, flow) {                    // the flow: staggered, arcs spin through, circles orbit
-  for (let i = 0; i < 4; i++) {
-    const ha = i < na, hb = i < nb, oa = i * 7, ob = i * 7;
-    const q = ease(clamp(p * 1.3 - i * .1, 0, 1)), spin = flow * Math.sin(Math.PI * q) * 2.2 * (i % 2 ? -1 : 1), k = i * 4;
-    const ax = ha ? PA[oa] : PB[ob], ay = ha ? PA[oa + 1] : PB[ob + 1], ar = ha ? PA[oa + 2] : PB[ob + 2], aa = ha ? PA[oa + 3] : PB[ob + 3];
-    const bx = hb ? PB[ob] : PA[oa], by = hb ? PB[ob + 1] : PA[oa + 1], br = hb ? PB[ob + 2] : PA[oa + 2], ba = hb ? PB[ob + 3] : PA[oa + 3];
-    const asw = ha ? PA[oa + 4] : 0, aw = ha ? PA[oa + 5] : 0, at = ha ? PA[oa + 6] : (hb ? PB[ob + 6] : 1);
-    const bsw = hb ? PB[ob + 4] : 0, bw = hb ? PB[ob + 5] : 0, bt = hb ? PB[ob + 6] : at;
-    arc0[k] = ax + (bx - ax) * q; arc0[k + 1] = ay + (by - ay) * q; arc0[k + 2] = ar + (br - ar) * q; arc0[k + 3] = aa + angDiff(aa, ba) * q + spin;
-    arc1[k] = asw + (bsw - asw) * q; arc1[k + 1] = (aw + (bw - aw) * q) * (1 - .25 * flow * Math.sin(Math.PI * q)); arc1[k + 2] = at + (bt - at) * q; arc1[k + 3] = 0;
-  }
-  for (let i = 0; i < 2; i++) {
-    const ha = i < a.nc, hb = i < b.nc, oa = i * 6, ob = i * 6, k = i * 4, q = ease(clamp(p * 1.3 - i * .15, 0, 1));
-    const ax = ha ? CA[oa] : CB[ob], ay = ha ? CA[oa + 1] : CB[ob + 1], bx = hb ? CB[ob] : CA[oa], by = hb ? CB[ob + 1] : CA[oa + 1];
-    const ra = Math.hypot(ax, ay), rb = Math.hypot(bx, by);
-    const ta = ra > .02 ? Math.atan2(ay, ax) : Math.atan2(by, bx), tb = rb > .02 ? Math.atan2(by, bx) : ta;
-    const th = ta + angDiff(ta, tb) * q + flow * Math.sin(Math.PI * q) * 1.6 * (i % 2 ? -1 : 1), rad = ra + (rb - ra) * q;
-    const aR = ha ? CA[oa + 2] : 0, bR = hb ? CB[ob + 2] : 0, aW = ha ? CA[oa + 3] : (hb ? CB[ob + 3] : 0), bW = hb ? CB[ob + 3] : aW;
-    const aS = ha ? CA[oa + 4] : (hb ? CB[ob + 4] : 0), bS = hb ? CB[ob + 4] : aS, aT = ha ? CA[oa + 5] : (hb ? CB[ob + 5] : 1), bT = hb ? CB[ob + 5] : aT;
-    cir0[k] = rad * Math.cos(th); cir0[k + 1] = rad * Math.sin(th); cir0[k + 2] = aR + (bR - aR) * q; cir0[k + 3] = aW + (bW - aW) * q;
-    cir1[k] = aS + (bS - aS) * q; cir1[k + 1] = aT + (bT - aT) * q; cir1[k + 2] = 0; cir1[k + 3] = 0;
-  }
-}
-const VERT = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }';
-const FRAG = `
-precision highp float;
-uniform vec2 uRes, uC, uRC, uDir, uLight; uniform vec4 uWob;
-uniform float uDpr, uTime, uR, uBreath, uP, uTw, uSlosh, uRingR, uRT, uSwell, uRipOn, uPingOn;
-uniform vec3 uBaseA, uInkA, uMatA, uBaseB, uInkB, uMatB, uAccent, uRingCol, uBg, uTrack;   // PORT: + uTrack
-uniform vec4 uArc0[4], uArc1[4], uCir0[2], uCir1[2], uRip[4], uRS, uRFx, uRG, uPing;
-
-float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-  return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + vec2(1., 1.)), f.x), f.y); }
-
-float ripH(vec2 p){
-  float h = 0.;
-  for (int i = 0; i < 4; i++) {
-    float age = uRip[i].z;
-    if (age >= 0. && uRip[i].w > .001) {
-      float d = length(p - uRip[i].xy), front = age * uR * 1.4, x = (d - front) / (uR * .55);
-      h += exp(-age * 1.7) * uRip[i].w * exp(-x * x) * cos((d - front) / (uR * .13));
-    }
-  }
-  return h;
-}
-float body(vec2 p){
-  vec2 q = p - uC;
-  float qd = dot(q, uDir), qp = dot(q, vec2(-uDir.y, uDir.x));
-  vec2 qq = vec2(qd / (1. + uSlosh), qp * (1. + uSlosh * .5));
-  float ang = atan(qq.y, qq.x);
-  float w = uWob.x * sin(2. * ang + uTime * .9) + uWob.y * sin(3. * ang - uTime * 1.3 + 1.) + uWob.z * sin(4. * ang + uTime * 1.7 + 2.) + uWob.w * sin(5. * ang - uTime * 2.1 + .5);
-  float d = length(qq) - uR * uBreath * (1. + w);
-  if (uRipOn > .5) d -= uR * .06 * ripH(p);
-  return d;
-}
-vec2 arcCov(vec2 u, vec4 A, vec4 B, float aa){
-  if (B.y < .001) return vec2(0.);
-  vec2 q = u - A.xy; float d = length(q);
-  float rel = mod(atan(q.y, q.x) - A.w, 6.2831853), w = B.y * .5, dist;
-  if (rel <= B.x) dist = abs(d - A.z);
-  else { vec2 e0 = A.xy + A.z * vec2(cos(A.w), sin(A.w)), e1 = A.xy + A.z * vec2(cos(A.w + B.x), sin(A.w + B.x)); dist = min(length(u - e0), length(u - e1)); }
-  float c = 1. - smoothstep(w - aa, w + aa, dist);
-  return B.z > 1.5 ? vec2(0., c) : vec2(c * B.z, 0.);
-}
-vec2 cirCov(vec2 u, vec4 C0, vec4 C1, float aa){
-  if (C0.z < .001) return vec2(0.);
-  float d = length(u - C0.xy);
-  float c = C1.x > .5 ? 1. - smoothstep(C0.z - aa, C0.z + aa, d) : 1. - smoothstep(C0.w * .5 - aa, C0.w * .5 + aa, abs(d - C0.z));
-  return C1.y > 1.5 ? vec2(0., c) : vec2(c * C1.y, 0.);
-}
-
-// The ring: a travelling arc. It turns (uRG.y is where its tail is), its LENGTH is how complete the run is (uRG.x, in turns),
-// and its look is a set of numbers that ease from step to step: texture (dash period and duty), breadth (thickness), colour.
-// uRS = (dash period px, duty 0-1, breadth px, scroll px/s). uRFx = (head glow, shimmer, two-beat, ticks flowing in). uRG = (length, tail, broken flag).
-vec4 ringLayer(vec2 p){
-  vec2 q = p - uRC; float r = length(q), rr = uRingR, band = abs(r - rr);
-  if (band > 16. && uPingOn < .5) return vec4(0.);
-  float t = fract((atan(q.y, q.x) + 1.5707963) / 6.2831853), circ = 6.2831853 * rr;
-  float aa = 1.1, th = uRS.z * .5 + .9 * uSwell;
-  vec3 neutral = uTrack;   // PORT: was vec3(.827, .839, .863), the light track; a uniform so the dark theme works
-  float track = 1. - smoothstep(.75, .75 + aa, band);
-  vec4 o = vec4(neutral * track, track);
-  float u = fract(t - uRG.y) * circ, Lpx = uRG.x * circ;                                           // u: distance along the ring from the arc's tail
-  float dEnd = u <= Lpx ? 0. : min(u - Lpx, circ - u);
-  float dArc = length(vec2(dEnd, band));                                                            // a capsule: round ends
-  float P = max(uRS.x, 1.), Lg = P * uRS.y, x = mod(u - uRT * uRS.w + P * .5, P) - P * .5;
-  float dDash = length(vec2(max(abs(x) - max(Lg * .5 - th, 0.), 0.), band));                        // the texture, flowing along the arc
-  float stroke = 1. - smoothstep(th, th + aa, max(dArc, dDash));
-  float f = clamp(u / max(Lpx, 1.), 0., 1.);                                                       // 0 at the tail, 1 at the head
-  stroke *= mix(1., .28 + .72 * f * f, uRFx.x);                                                    // writing: the head glows, the tail fades
-  stroke *= 1. - uRFx.y * (.5 - .5 * sin(u / 40. - uRT * 2.5)) * .6;                               // shimmer
-  float beat = max(exp(-pow((fract(uRT * .9) - .1) * 7., 2.)), exp(-pow((fract(uRT * .9) - .4) * 7., 2.)));
-  stroke *= mix(1., .28 + .72 * beat, uRFx.z);                                                     // checking: two ticks
-  float loc = mod(u, 9.) - 4.5, rd = r - rr, inArc = 1. - smoothstep(0., 2., dEnd);
-  float tick = (1. - smoothstep(.8, 1.7, abs(loc))) * step(-2., rd) * step(rd, 8.) * pow(1. - fract((rd + 2.) / 10. + uRT * .8), 3.) * inArc;
-  stroke = mix(stroke, max(tick, stroke * .3), uRFx.w);                                            // reading: ticks flowing in
-  float brk = 1. - smoothstep(1.6, 2.6, length(vec2(u - Lpx - 24., band)));
-  stroke = clamp(stroke + brk * uRG.z, 0., 1.);                                                    // error: a dot beyond the broken arc
-  o = vec4(uRingCol * stroke, stroke) + o * (1. - stroke);
-  if (uPingOn > .5) {                                                                                // search pings: rings that leave, one per query
-    for (int i = 0; i < 4; i++) {
-      float age = uPing[i];
-      if (age >= 0.) { float pa = (1. - smoothstep(.6, 1.6, abs(r - (rr + 6. + age * 55.)))) * exp(-age * 2.4) * .8; o = vec4(uRingCol * pa, pa) + o * (1. - pa); }
-    }
-  }
-  return o;
-}
-
-void main(){
-  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uDpr;
-  float sh = .10 * (1. - smoothstep(-uR * .05, uR * .32, length(p - uC - vec2(0., uR * .22)) - uR));   // a cheap circle shadow
-  vec4 acc = vec4(vec3(.08, .10, .20) * sh, sh);
-  vec4 rg = ringLayer(p); acc = rg + acc * (1. - rg.a);
-
-  float d = body(p);
-  if (d < 1.5) {
-    vec2 uv = (p - uC) / uR;
-    float t = clamp(-d / uR, 0., 1.);
-    vec2 g = vec2(body(p + vec2(1., 0.)) - body(p - vec2(1., 0.)), body(p + vec2(0., 1.)) - body(p - vec2(0., 1.)));
-    vec2 gd = g / max(length(g), 1e-4);
-    float rim = 1. - t;
-    vec3 n = normalize(vec3(gd * rim, sqrt(max(1. - rim * rim, .02))));
-    vec2 rgrad = vec2(0.);
-    if (uRipOn > .5) {
-      float re = uR * .017;
-      rgrad = vec2(ripH(p + vec2(re, 0.)) - ripH(p - vec2(re, 0.)), ripH(p + vec2(0., re)) - ripH(p - vec2(0., re)));
-      n = normalize(n + vec3(-rgrad * 2.8, 0.));
-    }
-    float s = dot(uv, uDir) * .5 + .5 + .55 * (vnoise(uv * 2.1 + vec2(uTime * .22, -uTime * .17)) - .5);
-    float f = -.7 + 2.4 * uP, m = 1. - smoothstep(f - .2, f + .2, s);
-    float edge = exp(-pow((s - f) / .07, 2.)) * sin(3.14159 * uP);
-    vec3 base = mix(uBaseA, uBaseB, m), inkc = mix(uInkA, uInkB, m), mat = mix(uMatA, uMatB, m);
-    float gloss = mat.x, metal = mat.y, glass = mat.z;
-    vec3 L = normalize(vec3(-.45 + uLight.x, -.62 + uLight.y, .64));
-    float diff = clamp(dot(n, L), 0., 1.);
-    vec3 H = normalize(L + vec3(0., 0., 1.));
-    float spec = pow(max(dot(n, H), 0.), mix(18., 110., gloss)) * mix(.25, 1.1, gloss), fres = pow(1. - n.z, 3.);
-    vec3 lit = base * (.50 + .62 * diff);
-    vec3 env = mix(vec3(.95, .97, 1.), vec3(.18, .20, .26), smoothstep(-.5, .6, n.y)); env += .25 * smoothstep(.3, 0., abs(n.x + .35));
-    lit = mix(lit, env * mix(base, vec3(1.), .35), metal * .75);
-    vec3 gl = mix(uBg, base, .35) + .2 * diff;
-    lit = mix(lit, gl, glass * (.35 + .4 * n.z));
-    lit = mix(lit, base * .75 + uAccent * .12, glass * fres * .8);
-    lit = mix(lit, lit * .84 + vec3(0., .02, .06), fres * .5);
-    lit += edge * .12;
-    float tw = uTw * (1. - smoothstep(0., 1.1, length(uv))), cs = cos(tw), sn = sin(tw);
-    vec2 ug = vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y) + rgrad * .22;
-    float aa = 1.5 / uR; vec2 cov = vec2(0.);
-    for (int i = 0; i < 4; i++) cov += arcCov(ug, uArc0[i], uArc1[i], aa);
-    for (int i = 0; i < 2; i++) cov += cirCov(ug, uCir0[i], uCir1[i], aa);
-    cov = clamp(cov, 0., 1.);
-    lit = mix(lit, inkc * (.88 + .2 * diff), cov.x * .95);
-    lit = mix(lit, uAccent, cov.y * .95);
-    lit += spec * (1. - .7 * max(cov.x, cov.y));
-    float aB = 1. - smoothstep(-.7, .7, d);
-    acc = vec4(lit * aB, aB) + acc * (1. - aB);
-  }
-  gl_FragColor = acc;
-}`;
-// ── end of the verbatim copy ──
-
-const L_MIN = .1, WOBK = [.7, .6, .5, .35], DIRV = [1, 0];   // as in the clan
-// Deck Maker's activity -> the clan's ring style. "waiting" (nothing running yet) uses the clan's queue look.
-const STYLE_OF = { work: 'work', write: 'write', think: 'think', read: 'read', check: 'check', human: 'human', error: 'error', complete: 'complete', waiting: 'queue', handoff: 'work' };
-// The clan's colours come from its --k-* tokens; ours are Deck Maker's --ring-* tokens (theme-aware).
-const TOKEN_OF = { work: '--ring-work', write: '--ring-work', complete: '--ring-work', think: '--ring-think', read: '--ring-read', check: '--ring-check',
-  human: '--ring-human', error: '--ring-error', queue: '--ring-wait', search: '--ring-work', provider: '--ring-work' };
-const GAP_K = 20 / 140;   // the clan's ring sits 20 px outside a ~140 px sphere; kept as a proportion so it scales
-const MAXW = 2048, MAXH = 1024;   // the atlas never grows past this; more circles than fit are drawn in batches
-const SOFT = /swiftshader|llvmpipe|softpipe|software/i;   // a software renderer: one pixel per CSS pixel
-
-const motion = { reduce: false };
-const ENG = { ok: false, frames: 0, skipped: 0, draws: 0, uploads: 0, flushes: 0, drawn: 0, px: 0, cpuMs: 0, avgMs: 16, fps: 0, scale: 1, lost: false, soft: false, reason: '', renderer: '' };
-const ALL = [], LIST = [];   // every upgraded circle; the ones drawn this frame (reused, never reallocated per frame)
-const SLOTS = new Map();     // slot id -> the circle's state, kept across re-renders so a ring never snaps and a pour never restarts
-const COLORS = {}; const bgV = new Float32Array(3), trackV = new Float32Array(3);   // accV is the clan's scratch buffer
-let gl = null, glcv = null, U = null, AW = 256, AH = 256, phase = 0;   // phase: 0 not started, 1 running, -1 flat for good
-
-// ── the agent table for the shader, built once per agent from Deck Maker's AGENTS (as the clan builds RAW) ──
-const G = {};
-function agentGL(key) {
-  if (G[key]) return G[key];
-  const src = Object.prototype.hasOwnProperty.call(L.AGENTS, key) ? L.AGENTS[key] : null; if (!src) return null;
-  const m = MATS[src.mat] || MATS.pearl, a = { key, n: src.n, name: src.name };
-  a.base = rgb(m.base); a.ink = rgb(m.ink); a.mat = [m.gloss, m.metal, m.glass];
-  a.type = TYPE_OF[src.name] || 'hold'; a.t = TYPES[a.type]; a.sp = .8 + ((a.n * 37) % 11) / 20;
-  const arcs = src.arcs.slice().sort((x, y) => y[2] - x[2]).slice(0, 4), circs = src.circs.slice().sort((x, y) => y[2] - x[2]).slice(0, 2);
-  a.na = arcs.length; a.nc = circs.length;
-  a.arcF = new Float32Array(28); arcs.forEach((r, i) => a.arcF.set(r.slice(0, 7), i * 7));
-  a.cirF = new Float32Array(12); circs.forEach((r, i) => a.cirF.set(r.slice(0, 6), i * 6));
-  return (G[key] = a);
-}
-
-// ── theme: ring colours, the surface behind glass, the track, all read from the page's CSS tokens ──
-function colour(v, fb) {
-  v = String(v || '').trim();
-  let m = /^#([0-9a-f]{6})$/i.exec(v); if (m) return rgb('#' + m[1]);
-  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v); if (m) return rgb('#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3]);
-  m = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(v); if (m) return [m[1] / 255, m[2] / 255, m[3] / 255];
-  return rgb(fb);
-}
-function readTheme() {
-  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n);
-  for (const k of Object.keys(STYLE)) COLORS[k] = colour(tok(TOKEN_OF[k] || '--ring-work'), '#FF4F2E');
-  accV.set(colour(tok('--ring-work'), '#FF4F2E')); bgV.set(colour(tok('--card'), '#FFFFFF')); trackV.set(colour(tok('--ring-track'), '#D3D6DC'));
-  wake();
-}
-
-// ── the one context ──
-function init() {
-  const reducedData = matchMedia('(prefers-reduced-data: reduce)').matches || !!(navigator.connection && navigator.connection.saveData);
-  if (reducedData) { ENG.reason = 'reduced data: flat SVG'; return false; }
-  glcv = document.createElement('canvas'); glcv.width = AW; glcv.height = AH;
-  glcv.addEventListener('webglcontextlost', e => { e.preventDefault(); ENG.ok = false; ENG.lost = true; for (const c of ALL) c.wrap.classList.remove('on'); });   // the flat SVG shows again
-  glcv.addEventListener('webglcontextrestored', () => { if (build()) { ENG.lost = false; for (const c of ALL) c.wrap.classList.add('on'); wake(); } });   // and the 3D comes back
-  return build();
-}
-function build() {
-  try {
-    gl = glcv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: false });
-    if (!gl) { ENG.reason = 'no WebGL: flat SVG'; return (ENG.ok = false); }
-    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
-    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(pr);
-    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
-    gl.useProgram(pr);
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    gl.clearColor(0, 0, 0, 0); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
-    // Uniform cache, as in the clan: a value that did not change is not sent again.
-    const locs = {}, last = {};
-    const UL = n => locs[n] ?? (locs[n] = gl.getUniformLocation(pr, n));
-    const same = (a, b) => { if (!b || a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
-    U = {
-      f1(n, v) { if (last[n] === v) return; last[n] = v; gl.uniform1f(UL(n), v); ENG.uploads++; },
-      v(n, size, arr) { const l = last[n]; if (same(arr, l)) return; last[n] = l && l.length === arr.length ? (l.set(arr), l) : Float32Array.from(arr);
-        (size === 2 ? gl.uniform2fv : size === 3 ? gl.uniform3fv : gl.uniform4fv).call(gl, UL(n), arr); ENG.uploads++; },
-    };
-    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-    ENG.renderer = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-    ENG.soft = SOFT.test(ENG.renderer);   // software rendering: pixel ratio 1, drawn at CSS size
-    return (ENG.ok = true);
-  } catch (e) { ENG.reason = 'shader failed: flat SVG (' + e.message + ')'; gl = null; return (ENG.ok = false); }
-}
-// Started by the first circle on the page, not at load; a page that never draws one never makes a context.
-function ensure() {
-  if (phase) return phase > 0;
-  phase = -1;
-  try {
-    if (typeof document === 'undefined' || typeof matchMedia !== 'function' || typeof requestAnimationFrame !== 'function' || typeof MutationObserver !== 'function') { ENG.reason = 'no browser: flat SVG'; return false; }
-    lastWall = performance.now() / 1000;
-    motion.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!init()) return false;
-    phase = 1;
-    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', e => { motion.reduce = e.matches; wake(); });
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
-    new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-color-scheme'] });
-    document.addEventListener('visibilitychange', () => { lastWall = performance.now() / 1000; lastFrame = 0; wake(); });
-    readTheme();
-    requestAnimationFrame(frame);
-    return true;
-  } catch (e) { ENG.reason = 'flat SVG (' + e.message + ')'; ENG.ok = false; return false; }
-}
-
-// ── a circle: the app's svg stays (its role and aria-label are the accessible name, and it is the fallback); a canvas goes on top ──
-const io = typeof IntersectionObserver === 'function' ? new IntersectionObserver(es => { for (const e of es) { const c = e.target.__orb; if (c) { c.vis = e.isIntersecting; if (c.vis) c.wakeUntil = performance.now() / 1000 + .5; } } }, { rootMargin: '40px' }) : null;
-function fresh(wrap, svg, cv, size, A, B, act, sig, now) {
-  const c = {
-    wrap, svg, cv, ctx: cv.getContext('2d'), size, k: clamp(size / 100, .4, 1), A, B: A, next: B, act, sig, steps: null, inAll: false,
-    phase: act === 'handoff' && B !== A ? 'hold' : 'run', ho: 0, holdT: 0, dir: [1, 0], arrive: -99,
-    mt: Math.random() * 30, energy: 1, vis: true, wakeUntil: now + 2.5, ax: 0, ay: 0, d: 0,
-    RING: { v: Float32Array.from(STYLE.work), c: new Float32Array(3), fill: -1, swell: 0, rt: 0, ringR: 0, len: L_MIN, ang: Math.random() },
-    I: { ox: 0, oy: 0, vx: 0, vy: 0, hov: 0, light: [0, 0], ptr: null, drag: null, rips: [], ripI: 0, R: 50, busy: false, ripOn: 0 },
-    rip: new Float32Array(16),
-  };
-  c.R0 = (size / 2 / c.k - 9) / (1 + GAP_K + .2);
-  return c;
-}
-function upgrade(svg, opt) {
-  opt = opt || {};
-  if (!ENG.ok || svg.__orb || svg.hasAttribute('data-flat') || !svg.parentNode) return null;
-  const A = agentGL(svg.getAttribute('data-agent')); if (!A) return null;          // an unknown agent stays the flat neutral circle
-  const size = +svg.getAttribute('width') || 60, act = svg.getAttribute('data-activity') || 'waiting';
-  const B = agentGL(svg.getAttribute('data-to')) || A, sig = A.key + '|' + B.key + '|' + act, now = performance.now() / 1000;
-  const wrap = document.createElement('span'); wrap.className = 'cir3d on' + (size >= 100 ? ' big' : ''); wrap.style.width = wrap.style.height = size + 'px';
-  svg.parentNode.insertBefore(wrap, svg); wrap.appendChild(svg);
-  const cv = document.createElement('canvas'); cv.setAttribute('aria-hidden', 'true'); wrap.appendChild(cv);
-  let c = opt.slot ? SLOTS.get(opt.slot) : null;
-  if (c) {
-    // the same place as before, at any size (the slot key has no size, so growing in place never resets the ring): keep the ring, the turn and a pour in progress; only a change of who or what restarts the clock
-    if (c.size !== size) { c.size = size; c.k = clamp(size / 100, .4, 1); c.R0 = (size / 2 / c.k - 9) / (1 + GAP_K + .2); }
-    c.wrap = wrap; c.svg = svg; c.cv = cv; c.ctx = cv.getContext('2d'); c.vis = true; c.wakeUntil = now + 2.5;
-    c.I.ptr = null; c.I.drag = null; c.I.rips.length = 0;
-    if (c.sig !== sig) { c.sig = sig; c.A = A; c.B = A; c.next = B; c.act = act; c.phase = act === 'handoff' && B !== A ? 'hold' : 'run'; c.ho = 0; c.holdT = 0; c.dir = [1, 0]; }
-  } else {
-    c = fresh(wrap, svg, cv, size, A, B, act, sig, now);
-    // start eased at the target look, so a first paint does not animate in from "work"
-    c.steps = opt.steps || null;
-    const s0 = styleName(c); c.RING.v.set(STYLE[s0]); c.RING.c.set(COLORS[s0]); c.RING.len = targetLen(c, 0);
-  }
-  c.steps = opt.steps || null;
-  if (opt.slot) SLOTS.set(opt.slot, c);
-  svg.__orb = c; wrap.__orb = c;
-  wrap.addEventListener('pointermove', e => { c.I.ptr = localPt(c, e); c.wakeUntil = performance.now() / 1000 + .3; });
-  wrap.addEventListener('pointerleave', () => { if (!c.I.drag) c.I.ptr = null; });
-  wrap.addEventListener('pointerdown', e => { const q = localPt(c, e); c.I.ptr = q; if (Math.hypot(q.x, q.y) >= c.I.R * 1.2) return; try { wrap.setPointerCapture(e.pointerId); } catch (x) { /* no capture */ } c.I.drag = { sx: q.x, sy: q.y }; addRipple(c, q.x, q.y, 1); });
-  const release = () => { if (c.I.drag) { c.I.drag = null; addRipple(c, c.I.ox * .3, c.I.oy * .3, .8); } };
-  wrap.addEventListener('pointerup', release); wrap.addEventListener('pointercancel', release);
-  if (io) io.observe(wrap);
-  if (!c.inAll) { c.inAll = true; ALL.push(c); }
-  return c;
-}
-function localPt(c, e) { const r = c.wrap.getBoundingClientRect(); return { x: (e.clientX - r.left - r.width / 2) / c.k, y: (e.clientY - r.top - r.height / 2) / c.k }; }
-function addRipple(c, x, y, amp) { c.I.rips[c.I.ripI++ % 4] = { x, y, t0: performance.now() / 1000, amp: amp * (motion.reduce ? .4 : 1) }; }
-/**
- * Upgrade every flat agent circle under `root` to the 3D one. `who` is agentState's answer: its steps (step_index - 1 done of
- * step_total) become the ring's length for the circle that shows that agent. Each circle's place on the screen (its slot) keeps
- * its ring and pour clock across a re-render. Returns the circles upgraded; none when the page must stay flat.
- */
-function scan(root, who) {
-  if (!root || typeof root.querySelectorAll !== 'function' || !ensure() || !ENG.ok) return [];
-  const out = [], used = new Set(), n = {}, svgs = root.querySelectorAll('svg.cir[data-agent]');
-  for (let i = 0; i < svgs.length; i++) {
-    const s = svgs[i], where = s.closest('.dex') ? 'dex' : s.closest('.dstat') ? 'dstat' : s.closest('[data-status]') || s.closest('aside.stack') ? 'status' : 'other';
-    // the slot is where the circle lives, never how big it is: the status circle grows and shrinks in place and keeps its ring
-    const base = where === 'other' ? where + ':' + (s.getAttribute('width') || '') : where, slot = base + ':' + (n[base] = (n[base] || 0) + 1);
-    const steps = who && who.step_index && who.step_total && who.agent === s.getAttribute('data-agent') ? [who.step_index - 1, who.step_total] : null;
-    const c = upgrade(s, { slot, steps }); if (c) { out.push(c); used.add(slot); }
-  }
-  for (const k of Array.from(SLOTS.keys())) if (!used.has(k)) SLOTS.delete(k);
-  return out;
-}
-
-function styleName(c) {
-  if (c.phase === 'handoff') return 'work';
-  if (c.phase === 'hold') return 'complete';
-  return STYLE_OF[c.act === 'handoff' ? 'work' : c.act] || 'queue';
-}
-function targetLen(c, p) {   // the clan's completion: steps finished / total; full when done; .62 on an error; shrinks through a hand-off
-  if (c.act === 'error') return .62;
-  if (c.phase === 'hold' || c.act === 'complete') return 1;
-  if (c.phase === 'handoff') return 1 + (L_MIN - 1) * p;
-  const s = c.steps; return s && s[1] > 0 ? Math.max(L_MIN, Math.min(s[0], s[1]) / s[1]) : L_MIN;
-}
-
-// ── the hand-off clock: the UI owns it (clan 13.3): hold 1.5 s with a full ring, then one 2.4 s pour ──
-function clock(c, dt, wall) {
-  if (c.act !== 'handoff' || c.next === c.A) return;
-  if (c.phase === 'hold') { c.holdT += dt; if (c.holdT >= 1.5) { c.phase = 'handoff'; c.ho = 0; c.B = c.next; const k = c.A.n * 2.399 + c.B.n * 1.7; c.dir = [Math.cos(k), Math.sin(k)]; } return; }
-  if (c.phase === 'handoff') {
-    c.ho += dt / 2.4;
-    if (c.ho >= 1) { c.A = c.B; c.ho = 0; c.arrive = wall; c.phase = 'run'; c.holdT = 0; }
-  }
-}
-// ── interaction, the clan's interact() per circle (pointer and ripples are relative to the circle's centre) ──
-function interact(c, dt, wall) {
-  const I = c.I, max = I.R * .22; let tx = 0, ty = 0;
-  if (I.drag && I.ptr && !motion.reduce) { tx = (I.ptr.x - I.drag.sx) * .6; ty = (I.ptr.y - I.drag.sy) * .6; const m = Math.hypot(tx, ty); if (m > max) { tx *= max / m; ty *= max / m; } }
-  I.vx += (-170 * (I.ox - tx) - 10 * I.vx) * dt; I.vy += (-170 * (I.oy - ty) - 10 * I.vy) * dt; I.ox += I.vx * dt; I.oy += I.vy * dt;
-  const near = I.ptr && Math.hypot(I.ptr.x, I.ptr.y) < I.R * 1.35; I.hov += ((near ? 1 : 0) - I.hov) * (1 - Math.exp(-dt * 8));
-  const hit = I.R * 1.35, lk = 1 - Math.exp(-dt * 6);
-  I.light[0] += ((near ? I.ptr.x / hit * .9 : 0) - I.light[0]) * lk; I.light[1] += ((near ? I.ptr.y / hit * .9 : 0) - I.light[1]) * lk;
-  let alive = 0; for (let i = 0; i < 4; i++) { const r = I.rips[i]; if (r && wall - r.t0 < 3.2) alive = 1; }
-  I.ripOn = alive;
-  I.busy = !!(I.drag || alive || Math.abs(I.vx) + Math.abs(I.vy) + Math.abs(I.ox) + Math.abs(I.oy) > .05 || I.hov > .01 && I.hov < .99 || near
-    || Math.abs(I.light[0]) + Math.abs(I.light[1]) > .002);
-}
-
-// ── one circle into its atlas cell: the clan's render(), with the stage replaced by the cell ──
-const wob = wobV;   // the clan's scratch buffers (v2, rs, rf, rg, pingV, accV) are reused as they are
-function renderOne(c, dt, wall, dpr) {
-  const rm = motion.reduce, flow = rm ? 0 : 1, I = c.I, RING = c.RING;
-  const A = c.A, B = c.B, handoff = c.phase === 'handoff', p = handoff ? ease(clamp(c.ho, 0, 1)) : 0, bump = Math.sin(Math.PI * p);
-  const complete = c.phase === 'hold' || c.act === 'complete', err = c.act === 'error' && c.phase === 'run';
-  const eT = (err || c.act === 'human') ? .3 : complete ? .25 : 1;
-  c.energy += (eT - c.energy) * Math.min(1, dt * 3); if (!rm) c.mt += dt * c.energy;
-  const mt = c.mt, uDpr = dpr * c.k, half = c.d / uDpr / 2;
-  const cx = c.ax / uDpr + half, cy = c.ay / uDpr + half;
-  const R = c.R0 * (1 + .035 * I.hov); I.R = R;
-
-  POSE_SPAN(A, rm ? 0 : mt, PA, CA);
-  if (p > 0) { POSE_SPAN(B, rm ? 0 : mt, PB, CB); writeMix(A, A.na, B, B.na, p, flow); } else writeStatic(PA, CA);
-
-  const atype = A.t.wob, btype = B.t.wob;
-  for (let i = 0; i < 4; i++) wob[i] = (atype[i] + (btype[i] - atype[i]) * p) * (rm ? 0 : 1) + flow * .05 * bump * WOBK[i];
-  const breath = 1 + (rm ? 0 : (A.t.breath + (B.t.breath - A.t.breath) * p) * Math.sin(mt * 2.4 * A.sp));
-  const settle = rm ? 0 : Math.exp(-(wall - c.arrive) * 1.8);
-  const off = Math.hypot(I.ox, I.oy), dragOn = off > 1 && p === 0;
-  if (dragOn) { DIRV[0] = I.ox / off; DIRV[1] = I.oy / off; } const dir = dragOn ? DIRV : c.dir;
-  const slosh = rm ? 0 : flow * .11 * bump * Math.sin(wall * 2.6) + .09 * settle * Math.sin((wall - c.arrive) * 8) + (dragOn ? off / (R * 1.6) : 0);
-  const tw = flow * 1.6 * bump * (1 + .35 * Math.sin(wall * .9));
-
-  const ek = 1 - Math.exp(-dt * 6), sName = err ? 'error' : styleName(c), T = STYLE[sName], tc = COLORS[sName];
-  for (let i = 0; i < 10; i++) RING.v[i] += (T[i] - RING.v[i]) * ek;
-  for (let i = 0; i < 3; i++) RING.c[i] += (tc[i] - RING.c[i]) * ek;
-  RING.swell += (bump - RING.swell) * ek;
-  RING.rt += dt * (rm ? 0 : 1 + 3 * RING.swell);
-  RING.len += (targetLen(c, p) - RING.len) * (1 - Math.exp(-dt * 3));
-  if (!rm) RING.ang += dt * (RING.v[9] + 180 * RING.swell) / 360;
-  const ringPad = R * (Math.abs(wob[0]) + Math.abs(wob[1]) + Math.abs(wob[2]) + Math.abs(wob[3]) + Math.abs(slosh) + Math.max(0, breath - 1));
-  RING.ringR = Math.min(R + GAP_K * R + ringPad, half - 8);   // PORT: clamped so the ring never leaves the circle's box
-
-  gl.viewport(c.ax, AH - c.ay - c.d, c.d, c.d);
-  v2[0] = AW; v2[1] = AH; U.v('uRes', 2, v2); U.f1('uDpr', uDpr);
-  v2[0] = cx + I.ox; v2[1] = cy + I.oy; U.v('uC', 2, v2); v2[0] = cx; v2[1] = cy; U.v('uRC', 2, v2);
-  U.f1('uR', R); v2[0] = dir[0]; v2[1] = dir[1]; U.v('uDir', 2, v2); U.v('uWob', 4, wob);
-  U.f1('uTime', mt); U.f1('uBreath', breath); U.f1('uP', p); U.f1('uTw', tw); U.f1('uSlosh', slosh);
-  U.f1('uRingR', RING.ringR); U.f1('uRT', RING.rt); U.f1('uSwell', RING.swell); U.f1('uPingOn', 0);
-  U.v('uBaseA', 3, A.base); U.v('uInkA', 3, A.ink); U.v('uMatA', 3, A.mat); U.v('uBaseB', 3, B.base); U.v('uInkB', 3, B.ink); U.v('uMatB', 3, B.mat);
-  U.v('uAccent', 3, accV); U.v('uRingCol', 3, RING.c); U.v('uBg', 3, bgV); U.v('uTrack', 3, trackV);
-  U.v('uArc0', 4, arc0); U.v('uArc1', 4, arc1); U.v('uCir0', 4, cir0); U.v('uCir1', 4, cir1);
-  const rip = c.rip;
-  for (let i = 0; i < 4; i++) { const r = I.rips[i], q = i * 4; if (r) { rip[q] = cx + r.x; rip[q + 1] = cy + r.y; rip[q + 2] = wall - r.t0; rip[q + 3] = r.amp; } else { rip[q] = 0; rip[q + 1] = 0; rip[q + 2] = -1; rip[q + 3] = 0; } }
-  U.v('uRip', 4, rip); U.f1('uRipOn', I.ripOn ? 1 : 0); v2[0] = I.light[0]; v2[1] = I.light[1]; U.v('uLight', 2, v2);
-  rs[0] = RING.v[0]; rs[1] = RING.v[1]; rs[2] = RING.v[2]; rs[3] = RING.v[3]; U.v('uRS', 4, rs); rf[0] = RING.v[4]; rf[1] = RING.v[5]; rf[2] = RING.v[6]; rf[3] = RING.v[7]; U.v('uRFx', 4, rf);
-  rg[0] = RING.len; rg[1] = RING.ang - Math.floor(RING.ang); rg[2] = RING.v[8]; U.v('uRG', 4, rg); pingV.fill(-1); U.v('uPing', 4, pingV);
-  gl.drawArrays(gl.TRIANGLES, 0, 3); ENG.draws++; ENG.px += c.d * c.d;
-}
-
-// ── the frame: pack the circles that need drawing into the atlas, draw each, copy each cell to its canvas ──
-let nBatch = 0; const BATCH = [];
-function flush() {
-  for (let i = 0; i < nBatch; i++) {
-    const c = BATCH[i];
-    if (c.cv.width !== c.d) { c.cv.width = c.cv.height = c.d; }
-    c.ctx.globalCompositeOperation = 'copy'; c.ctx.drawImage(glcv, c.ax, c.ay, c.d, c.d, 0, 0, c.d, c.d);
-  }
-  nBatch = 0; ENG.flushes++;
-}
-let lastWall = 0, lastFrame = 0, govN = 0, fpsT = 0, fpsN = 0, wakeAll = true;
-function frame(nowMs) {
-  requestAnimationFrame(frame);
-  if (!ENG.ok) return;
-  const wall = nowMs / 1000, dt = Math.max(0, Math.min(.05, wall - lastWall)); lastWall = wall;
-  const t0 = performance.now();
-  let n = 0;
-  for (let i = ALL.length - 1; i >= 0; i--) {
-    const c = ALL[i];
-    if (!c.wrap.isConnected) { if (io) io.unobserve(c.wrap); c.inAll = false; ALL.splice(i, 1); continue; }
-    clock(c, dt, wall); interact(c, dt, wall);
-    if (c.vis && (wakeAll || !motion.reduce || c.I.busy || c.phase !== 'run' || wall < c.wakeUntil)) LIST[n++] = c;
-  }
-  wakeAll = false;
-  if (!n) { ENG.skipped++; lastFrame = 0; return; }
-  if (lastFrame) { const ms = nowMs - lastFrame; ENG.avgMs += (ms - ENG.avgMs) * .05;
-    if (!ENG.soft && ++govN > 45) { govN = 0; if (ENG.avgMs > 26 && ENG.scale > .6) ENG.scale = Math.max(.6, ENG.scale - .15); else if (ENG.avgMs < 14 && ENG.scale < 1) ENG.scale = Math.min(1, ENG.scale + .1); } }
-  lastFrame = nowMs;
-  const dpr = ENG.soft ? 1 : Math.min(window.devicePixelRatio || 1, 2) * ENG.scale;   // a software renderer draws at CSS size
-  ENG.uploads = 0; ENG.draws = 0; ENG.flushes = 0; ENG.px = 0; ENG.drawn = n;
-  // the atlas is sized to what is drawn (a big idle buffer costs a full-buffer copy on software renderers)
-  let x = 0, y = 0, shelf = 0, needW = 0, needH = 0;
-  for (let i = n - 1; i >= 0; i--) { const d = Math.max(1, Math.round(LIST[i].size * dpr)); if (x + d > MAXW) { x = 0; y += shelf; shelf = 0; } x += d; if (x > needW) needW = x; if (d > shelf) shelf = d; }
-  needH = Math.min(MAXH, y + shelf);
-  if (needW > AW || needH > AH || needW < AW / 2 || needH < AH / 2) { AW = Math.max(64, needW); AH = Math.max(64, needH); glcv.width = AW; glcv.height = AH; }
-  x = 0; y = 0; shelf = 0;
-  for (let i = n - 1; i >= 0; i--) {
-    const c = LIST[i], d = Math.max(1, Math.round(c.size * dpr));
-    if (x + d > AW) { x = 0; y += shelf; shelf = 0; }
-    if (y + d > AH) { flush(); x = 0; y = 0; shelf = 0; }
-    c.ax = x; c.ay = y; c.d = d; renderOne(c, dt, wall, dpr); BATCH[nBatch++] = c;
-    x += d; if (d > shelf) shelf = d;
-  }
-  flush();
-  const cpu = performance.now() - t0; ENG.cpuMs += (cpu - ENG.cpuMs) * .1; ENG.frames++;
-  fpsN++; if (wall - fpsT >= .5) { ENG.fps = fpsN / (wall - fpsT); fpsN = 0; fpsT = wall; }
-}
-
-function wake() { wakeAll = true; for (const c of ALL) c.wakeUntil = performance.now() / 1000 + 2.5; }
-
-return {
-  scan, upgrade, ok: () => ENG.ok, stats: () => ({ ...ENG, circles: ALL.length, slots: SLOTS.size }), motion,
-  setReduce(v) { motion.reduce = !!v; wake(); },
-  // a press from the keyboard: the same ripple a pointer press makes
-  kick(svg) { const c = svg && svg.__orb; if (c) { addRipple(c, 0, 0, 1); c.wakeUntil = performance.now() / 1000 + 2.5; wakeAll = true; } },
-};
-})();
-
   // ── render and events ─────────────────────────────────────────────────
 
   // ── the status circle, enlarged in place ──
@@ -2569,9 +1979,9 @@ return {
   function statusEls() {
     var app = document.getElementById('app');
     if (!app || typeof app.querySelector !== 'function') return null;
-    var card = app.querySelector('main.build .card.status, main.build aside.stack > .card'), svg = card && card.querySelector('svg.cir');
-    if (!svg) return null;
-    return { card: card, svg: svg, circle: svg.closest('.cir3d') || svg, size: +svg.getAttribute('width') || 0 };
+    var card = app.querySelector('main.build .card.status'), circle = card && card.querySelector('.nk-ag');
+    if (!circle) return null;
+    return { card: card, circle: circle, size: +circle.getAttribute('data-nk-size') || 0 };
   }
   function cardBefore() {
     try {
@@ -2602,19 +2012,29 @@ return {
   }
 
   /** Pressing the enlarged circle: one honest line in turn (who it is, what it does, that it grows and shrinks); pressing too fast gets the shrug. */
-  function pressOrb(btn, fromKeyboard) {
-    var e = statusEls(); if (!e) return;
+  function pressOrb() {
+    var app = document.getElementById('app');
+    var host = app && typeof app.querySelector === 'function' ? app.querySelector('main.build [data-nk-stage]') || app.querySelector('main.build .card.status') : null;
+    var circle = host && host.querySelector('.nk-ag');
+    if (!circle) return;
     var who = L.agentState(d().run), lines = L.circleSays(who), now = Date.now();
     pressed.at = pressed.at.filter(function (t) { return now - t < 1100; }).concat(now);
-    var say = e.card.querySelector('[data-say]');
+    var say = host.querySelector('[data-say]');
     if (say) {
       if (pressed.at.length >= 4) { say.textContent = "Pressing faster won't start it sooner. Sorry."; pressed.at = []; }
       else { pressed.i = (pressed.i + 1) % lines.length; say.textContent = lines[pressed.i]; }
       say.classList.add('on');
     }
-    if (reducedMotion() || typeof e.circle.animate !== 'function') return;
-    if (fromKeyboard) Orbs.kick(e.svg); // a pointer press already makes its own ripple
-    e.circle.animate([{ transform: 'scale(1)' }, { transform: 'scale(.93)', offset: .25 }, { transform: 'scale(1.035)', offset: .65 }, { transform: 'scale(1)' }], { duration: 520, easing: 'ease-out' });
+    if (reducedMotion() || typeof circle.animate !== 'function') return;
+    circle.animate([{ transform: 'scale(1)' }, { transform: 'scale(.93)', offset: .25 }, { transform: 'scale(1.035)', offset: .65 }, { transform: 'scale(1)' }], { duration: 520, easing: 'ease-out' });
+  }
+  /** After a render: ease the stage to what it is now (drawn as it was), and remember it for the next render. */
+  function askAgain(app) {
+    var stage = askWant !== null && app && typeof app.querySelector === 'function' ? app.querySelector('[data-nk-stage]') : null;
+    if (!stage) { askedLast = null; return; }
+    if (askedLast !== null && askedLast !== askWant) void stage.offsetHeight; // the drawn state is laid out first, so the change eases
+    if (Roles) Roles.ask(stage, askWant);
+    askedLast = askWant;
   }
   function render() {
     var s = d(), scr = screenOf(s);
@@ -2623,10 +2043,12 @@ return {
     var focusSel = focusId ? '' : focusAgain(ae);
     stashDraft();
     var before = cardBefore();
+    askWant = null;
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
-    document.getElementById('app').innerHTML = bar(s, scr) + body;
+    var app = document.getElementById('app');
+    app.innerHTML = bar(s, scr) + body;
     sendBar(s, scr);
-    Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
+    askAgain(app); // the stage's sphere rises to ask, or comes back down, only when that changed
     growCard(before); // the status card's circle grows or shrinks in place when the state changes its size
     document.title = 'Deck Maker';
     restoreDrafts(s);
@@ -2695,7 +2117,7 @@ return {
   document.addEventListener('click', function (e) {
     var t = e.target.closest('button'); if (!t) return;
     var s = d(), a = t.dataset;
-    if (a.orb !== undefined) return pressOrb(t, e.detail === 0);
+    if (a.orb !== undefined) return pressOrb();
     if (a.go) { view.screen = a.go; return render(); }
     if (a.dtype || a.dtskip) {
       stashDraft();
@@ -2836,7 +2258,7 @@ return {
     // The centred circle follows the window's size.
     window.addEventListener('resize', function () {
       var app = document.getElementById('app');
-      if (app && typeof app.querySelector === 'function' && app.querySelector('.status.centre')) render();
+      if (app && typeof app.querySelector === 'function' && app.querySelector('[data-nk-stage]')) render();
     });
     // The OS asks for the bar again on load, and says which tab was pressed. Only the frame's parent may.
     window.addEventListener('message', function (e) {
@@ -2846,6 +2268,8 @@ return {
       else if (m.type === 'clan:bar-action' && STEPS.some(function (st) { return st[0] === m.id; })) { view.screen = m.id; render(); }
     });
   }
+  // Every circle on the page is the one agent engine's sphere: live where the browser can draw it, its still frame where not.
+  if (Roles) Roles.auto();
   render();
 })();
 </script>

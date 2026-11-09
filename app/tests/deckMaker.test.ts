@@ -17,11 +17,17 @@ const html = readFileSync(new URL('templates/deck-maker/index.html', root), 'utf
 
 const logicSrc = /<script id="deck-logic">([\s\S]*?)<\/script>/.exec(html)?.[1]
 assert.ok(logicSrc, 'the template has its pure block')
+// The one agent engine the page inlines at its agent-sphere marker (make_deck_maker.rs): the pure block draws every
+// circle with it (NapkinRoles.tag), so it runs first. scene.js is the page's WebGL and is left out: the circles stay
+// their still frames, as on a page without WebGL.
+const sphereDir = new URL('templates/shared/agent-sphere/', root)
+const engine = `(function (window) {\n${['finish.js', 'agent-view.js', 'extra.js', 'roles.js'].map(f => readFileSync(new URL(f, sphereDir), 'utf8')).join('\n')}\n})(globalThis);\n`
+const logicRun = engine + logicSrc
 type Stage = { id: string; name: string; sub: string; status: string }
 type Run = { state: string; stage: string; cost_usd: number; stages: Stage[]; gate: { id: string } | null; approvals: Record<string, unknown> }
 type Check = { ok: boolean; text: string }
 type Evidence = { ref: string; kind: string }
-const L = vm.runInNewContext(`${logicSrc}; DeckLogic`) as {
+const L = vm.runInNewContext(`${logicRun}; DeckLogic`) as {
   isPlaceholder(b: unknown): boolean
   evidenceFor(slide: unknown, evidence: unknown): Evidence[]
   statusOf(slide: unknown): string
@@ -304,7 +310,7 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
   }
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
   const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, fetch: fetchImpl, Promise, setTimeout, clearTimeout, Date })
-  vm.runInContext(logicSrc, ctx)
+  vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const click = (attrs: Record<string, string>, id = '') =>
     handlers.click.forEach(h => h({ target: { closest: () => ({ dataset: attrs, id }) } }))
@@ -424,7 +430,7 @@ test('a typed free-text answer survives a re-render caused by something else', (
   const win = { __CLAN__: { data }, clan: { patchData: () => Promise.resolve() }, addEventListener() {} }
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
   const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, Promise, setTimeout, clearTimeout, Date })
-  vm.runInContext(logicSrc, ctx)
+  vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   // The re-render redraws the inputs empty; the typed text must be put back.
   Object.defineProperty(app, 'innerHTML', { set() { els.qt_q2 = { value: '' } }, get: () => '' })
@@ -452,7 +458,7 @@ test('Attach keeps the files that went in when another fails, and names the one 
   }
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
   const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, Promise, setTimeout, clearTimeout, Date })
-  vm.runInContext(logicSrc, ctx)
+  vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const f = (name: string) => ({ name, arrayBuffer: () => Promise.resolve(new ArrayBuffer(1)) })
   const input = { id: 'attach', files: [f('a.pdf'), f('bad.pdf'), f('c.pdf')], value: 'x' }
@@ -745,44 +751,58 @@ test('Present lists the confirm items before Export and says what counts as sour
 const css = /<style>([\s\S]*?)<\/style>/.exec(html)![1]
 const used = { brief: 1, research: 2, strategy: 3, idea: 7, copy: 9, deck: 21, review: 23, approval: 24 }
 
-test('the circle carries the eight agents\' geometry, rounded to 3 decimals', () => {
+// The engine as the page has it: its geometry table (NapkinAgents.AG) and its roles (NapkinRoles).
+const eng = vm.runInNewContext(`${engine}; ({ AG: NapkinAgents.AG, ROLES: NapkinRoles.ROLES })`) as { AG: Record<string, { n: number; arcs: number[][]; circs: number[][] }>; ROLES: Record<string, { name: string; job: string }> }
+
+test('the eight agents this app shows are the engine\'s, each with its geometry, named and described by role', () => {
   assert.deepEqual(plain(Object.keys(L.AGENTS).sort()), Object.keys(used).sort())
   for (const [k, n] of Object.entries(used)) {
-    const a = L.AGENTS[k]
-    assert.equal(a.n, n, k)
-    assert.ok(a.arcs.length && a.circs.length, k)
-    for (const v of [...a.arcs, ...a.circs].flat()) assert.equal(Math.round(v * 1000) / 1000, v, `${k} ${v}`)
+    const g = eng.AG[k]
+    assert.ok(g, `the engine draws ${k}`)
+    assert.equal(g.n, n, k)
+    assert.ok(g.arcs.length && g.circs.length, k)
+    assert.equal(L.AGENTS[k].name, `${eng.ROLES[k].name} agent`, k)
+    assert.equal(L.AGENTS[k].role.toLowerCase(), eng.ROLES[k].job, k)
   }
+  assert.deepEqual(plain(['idea', 'copy', 'approval'].map(k => L.AGENTS[k].role)), ['Opens directions', 'Crafts words', 'Asks for sign-off'])
+  // no geometry, material or drawing of its own: the template keeps no agents table
+  assert.equal(/arcs:\s*\[\[|circs:\s*\[\[|MATS\s*=|function (emblemOf|ringOf|blend)\(/.test(html), false)
 })
 
-test('circleSvg: a flat SVG with role img, the name and state word, the size and data-activity', () => {
+test('circleSvg: the engine\'s sphere placeholder, with role img, the name and state word, the size, the engine state and data-activity', () => {
   const s = L.circleSvg({ agent: 'strategy', activity: 'human', size: 60 })
-  assert.match(s, /^<svg class="cir s60" width="60" height="60" viewBox="-1\.15 -1\.15 2\.3 2\.3" role="img"/)
-  assert.match(s, /aria-label="Strategy, Needs you"/)
-  assert.match(s, /data-activity="human"/)
-  assert.match(s, /data-agent="strategy"/)
+  assert.match(s, /^<span data-activity="human" class="nk-ag cir s60" data-nk-agent="strategy" data-nk-state="needs" data-nk-size="60" style="[^"]*width:60px;height:60px" role="img" aria-label="Strategy agent, Needs you"><svg class="nk-still"/)
   const small = L.circleSvg({ agent: 'idea', activity: 'think', size: 32 })
-  assert.match(small, /class="cir s32" width="32" height="32"/)
-  assert.match(small, /aria-label="Idea, Thinking"/)
+  assert.match(small, /class="nk-ag cir s32" data-nk-agent="idea" data-nk-state="working" data-nk-size="32"/)
+  assert.match(small, /aria-label="Idea agent, Thinking"/)
+  const want: Record<string, string> = { work: 'working', write: 'working', think: 'working', read: 'working', check: 'working', human: 'needs', error: 'needs', complete: 'done', waiting: 'idle', handoff: 'handoff' }
+  assert.deepEqual(plain(L.ACTIVITY_WORD && Object.keys(L.ACTIVITY_WORD).sort()), Object.keys(want).sort())
   for (const [act, word] of Object.entries(L.ACTIVITY_WORD)) {
     const x = L.circleSvg({ agent: 'copy', activity: act, size: 60 })
-    assert.ok(x.includes(`aria-label="Copy, ${word}"`), act)
+    assert.ok(x.includes(`aria-label="Copy agent, ${word}"`), act)
     assert.ok(x.includes(`data-activity="${act}"`), act)
+    assert.ok(x.includes(`data-nk-state="${want[act]}"`), act)
   }
-  assert.match(L.circleSvg({ agent: 'deck', activity: 'work', size: 60, label: 'Dex' }), /aria-label="Dex, Working"/)
+  assert.match(L.circleSvg({ agent: 'deck', activity: 'work', size: 60, label: 'The director' }), /aria-label="The director, Working"/)
   assert.equal(L.circleSvg({ agent: 'deck', activity: 'work', label: hostile }).includes('<img'), false)
+  // the steps done go to the engine's ring; 'fill' leaves the size to the page's box
+  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', progress: 0.25 }), /data-nk-progress="0\.25"/)
+  assert.equal(/data-nk-progress/.test(L.circleSvg({ agent: 'copy', activity: 'write', progress: 7 })), false)
+  const fill = L.circleSvg({ agent: 'copy', activity: 'write', size: 'fill' })
+  assert.equal(/data-nk-size|width:\d/.test(fill), false)
+  assert.match(fill, /<svg class="nk-still" viewBox="[^"]+" width="100%" height="100%"/)
 })
 
-test('circleSvg: an unknown agent or activity is a neutral waiting circle, and junk never throws', () => {
+test('circleSvg: an unknown agent or activity is a waiting sphere named Agent, and junk never throws', () => {
   for (const o of [{ agent: 'nobody', activity: 'work' }, { agent: '__proto__' }, { agent: 'constructor', activity: 'human' }, null, undefined, 5, 'x', { activity: 'toString', agent: 'deck', size: -3 }]) {
     const s = L.circleSvg(o)
-    assert.match(s, /^<svg class="cir/)
-    assert.match(s, /data-activity="waiting"/)
+    assert.match(s, /^<span data-activity="waiting" class="nk-ag cir/)
+    assert.match(s, /data-nk-state="idle"/)
     assert.match(s, /role="img"/)
   }
-  assert.match(L.circleSvg({ agent: 'nobody' }), /data-agent="none"[^>]*>/)
+  assert.match(L.circleSvg({ agent: 'nobody' }), /data-nk-agent="orchestrator"[^>]*>/)
   assert.match(L.circleSvg({ agent: 'nobody' }), /aria-label="Agent, Waiting"/)
-  assert.match(L.circleSvg({}), /width="60" height="60"/)
+  assert.match(L.circleSvg({}), /data-nk-size="60"/)
 })
 
 test('arcPath draws a partial arc with the right flags and a full turn as two halves', () => {
@@ -848,31 +868,35 @@ const gateRun = () => ({
   },
 })
 const buildData = (r: unknown) => ({ inputs: { prompt: { client: 'Lumen', project: 'P', text: 'x' } }, run: r })
-// The card while nothing runs and no gate holds: in the middle column, the circle at 184, not in the right one.
-const centreCard = (h: string) => /<section>[\s\S]*?<div class="card status hero centre" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
+// The run's stage in the middle column: the agent's sphere (its box), and under it what it asks or why it waits.
+const stageOf = (h: string) => /<section>(<div class="dkstage[^"]*" data-nk-stage[\s\S]*?)<\/section>/.exec(h)?.[1] ?? ''
 const statusCard = (h: string) => /<aside class="stack"><div class="card(?: status hero)?" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 
-test('gate 1: the status card shows the 60px circle with the same words, and Dex is a 32px circle', () => {
+test('gate 1 is the agent asking: its sphere rises in the stage with the gate under it, and the Deck agent\'s note has its sphere', () => {
   const h = mount(buildData(gateRun())).app.innerHTML
+  const st = stageOf(h)
+  assert.match(st, /^<div class="dkstage nk-asking" data-nk-stage style="--dk-sph:184px"><div class="aglbox"><button type="button" class="orbb" data-orb aria-label="Strategy agent, Needs you\. Press to ask what is happening\."><span data-activity="human" class="nk-ag cir" data-nk-agent="strategy" data-nk-state="needs"[^>]*aria-hidden="true">/)
+  // the gate card is under the sphere, in the same stage, and the first render plays no entrance
+  assert.match(st, /<div class="dkask">[\s\S]*Approve the storyline[\s\S]*<div class="card gcard"[\s\S]*<div class="gbody">[\s\S]*id="approve"/)
+  assert.match(st, /<div class="dex"><span data-activity="waiting" class="nk-ag cir s32" data-nk-agent="deck" data-nk-state="idle" data-nk-size="32"[^>]*aria-hidden="true">[\s\S]*?<\/span><span class="mono" style="font-size:12px">Deck agent<\/span>/)
   const card = statusCard(h)
-  assert.match(card, /<svg class="cir s60" width="60" height="60"[^>]*aria-label="Strategy, Needs you"[^>]*data-activity="human"/)
   assert.ok(card.includes('>Waiting for you<') && card.includes('>Nothing runs until you approve<'))
-  assert.match(h, /<div class="dex"><svg class="cir s32" width="32" height="32"[^>]*aria-label="Strategy, Needs you"[^>]*>[\s\S]*?<\/svg><span class="mono" style="font-size:12px">Dex · directs<\/span>/)
+  assert.equal(card.includes('nk-ag'), false, 'the sphere asks in the stage, not again in the right column')
   assert.equal(h.includes('class="av"'), false)
   assert.equal(/class="spin"|qspin/.test(h), false)
   // the gate keeps its controls
   for (const want of ['id="approve"', 'data-edit="beats"', 'data-retry="storyline"', 'Approve the storyline', 'Gate 1 of 3', '+ 4 more beats']) assert.ok(h.includes(want), want)
 })
 
-test('with no gate the status card shows the waiting circle and still says it waits for the engine', () => {
+test('with no gate the stage shows the waiting sphere, down, and still says it waits for the engine', () => {
   const m = mount(buildData(gateRun()))
   m.click({}, 'approve')
   const next = (m.writes[0].obj as { run: unknown }).run
+  const st = stageOf(mount(buildData(next)).app.innerHTML)
+  // nothing is running: the sphere is in the middle, larger, and is a button that says who and what once
+  assert.match(st, /^<div class="dkstage" data-nk-stage style="--dk-sph:184px"><div class="aglbox"><button type="button" class="orbb" data-orb aria-label="Idea agent, Waiting\. Press to ask what is happening\."><span data-activity="waiting" class="nk-ag cir" data-nk-agent="idea" data-nk-state="idle"[^>]*aria-hidden="true">/)
+  assert.ok(st.includes('>Waiting for the engine<') && st.includes('>Not connected to this document yet<'))
   const h = mount(buildData(next)).app.innerHTML
-  const card = centreCard(h)
-  // nothing is running: the circle is in the middle, larger, and is a button that says who and what once
-  assert.match(card, /<button type="button" class="orbb" data-orb aria-label="Idea, Waiting\. Press to ask what is happening\."><svg class="cir" width="184" height="184"[^>]*aria-hidden="true"[^>]*data-activity="waiting"/)
-  assert.ok(card.includes('>Waiting for the engine<') && card.includes('>Not connected to this document yet<'))
   assert.equal(h.includes('class="dex"'), false)
   assert.equal(/<aside class="stack">[\s\S]*Waiting for the engine/.test(h), false, 'the card is not also in the right column')
 })
@@ -884,27 +908,24 @@ test('the build screens show no percentage and no time range', () => {
     { state: 'building', stages: withNow('copy'), gate: null, approvals: {}, agent: { key: 'copy', activity: 'write', slow: true } }]
   for (const r of runs) {
     const h = mount(buildData(r)).app.innerHTML
-    assert.ok(/class="cir( s60)?" width="(60|130|184)"/.test(h))
-    assert.equal(/\d\s?%/.test(h), false)
-    assert.equal(/\d+\s?(min|sec|hours?)\b/.test(h), false)
+    assert.ok(/class="nk-ag cir( s60)?" data-nk-agent=/.test(h))
+    const text = h.replace(/<[^>]*>/g, ' ') // what the screen says, not its markup (a sphere's frame fills its box at 100%)
+    assert.equal(/\d\s?%/.test(text), false)
+    assert.equal(/\d+\s?(min|sec|hours?)\b/.test(text), false)
   }
 })
 
-test('the ring turns only when motion is allowed, and the spinner is gone', () => {
+test('the row mark turns only when motion is allowed, and the spinner is gone', () => {
   assert.equal(/MARK_SPIN|qspin|\.spin\{/.test(html), false)
-  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important/)
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important;transition:none!important/)
   const anims = [...css.matchAll(/animation:cir-turn/g)].map(m => m.index!)
   const block = /@media \(prefers-reduced-motion:no-preference\)\{[\s\S]*?\n\}/.exec(css)!
   assert.ok(anims.length > 0)
   for (const i of anims) assert.ok(i > block.index && i < block.index + block[0].length, 'every turn is inside the no-preference block')
-  assert.equal(/data-activity="human"\] \.act\{animation/.test(css), false)
 })
 
-test('the ring colours are tokens in light, dark and OS-dark', () => {
-  for (const tok of ['--ring-work', '--ring-think', '--ring-read', '--ring-check', '--ring-human', '--ring-error', '--ring-wait', '--ring-track', '--ring-edge']) {
-    assert.equal((css.match(new RegExp(`${tok}:`, 'g')) ?? []).length, 3, tok)
-    assert.ok(L.circleSvg({ agent: 'deck', activity: 'work' }).includes('var(--ring-track)'))
-  }
+test('the sphere\'s colours are the engine\'s: the template has no ring tokens of its own', () => {
+  assert.equal(/--ring-/.test(html), false)
 })
 
 // ── the running Build screen (phase 2): driven by the state fixtures in example/states/ ──────────
@@ -954,8 +975,8 @@ test('runView: slow says nothing is wrong, with no time; a hand-off names who ta
   const slow = L.runView(fixture('slow').run, null)
   assert.match(slow.lede, /longer than usual\. Nothing is wrong/)
   const ho = L.runView(fixture('handoff').run, null)
-  assert.deepEqual(plain([ho.title, ho.head]), ['Passing the work on', 'Handed over to Strategy'])
-  assert.match(ho.lede, /^Brief hands the work to Strategy/)
+  assert.deepEqual(plain([ho.title, ho.head]), ['Passing the work on', 'Handed over to the Strategy agent'])
+  assert.match(ho.lede, /^The Brief agent hands the work to the Strategy agent/)
   assert.equal(ho.items.at(-1)!.pill, 'Passing on')
 })
 
@@ -990,23 +1011,14 @@ test('agentState names who takes over at a hand-off, and only then', () => {
   assert.equal(L.agentState({ state: 'done', stages: [], agent: { key: 'copy', activity: 'complete', to: 'deck' } }).handoff, false)
 })
 
-test('the hand-off circle is a flat blend: both agents, unique clip ids, no gradient', () => {
+test('the hand-off sphere names both agents and carries who takes over', () => {
   const a = L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'handoff', size: 60 })
-  const b = L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'handoff', size: 60 })
-  assert.match(a, /aria-label="Brief to Strategy, Handing off"/)
-  assert.match(a, /data-agent="brief" data-to="strategy" data-activity="handoff"/)
-  assert.equal(/Gradient/.test(a), false)
-  const ids = (s: string) => [...s.matchAll(/<clipPath id="([^"]+)"/g)].map(m => m[1])
-  assert.equal(ids(a).length, 2)
-  assert.equal(new Set([...ids(a), ...ids(b)]).size, 4, 'two circles on one page never share a clip id')
-  for (const id of ids(a)) assert.ok(a.includes(`clip-path="url(#${id})"`))
-  assert.ok(a.includes('#242936') && a.includes('#EEECE7'), 'Strategy graphite below, Brief pearl above')
-  // the front sits at p; junk p is the middle; no "to", or the same agent, is the plain circle
-  assert.match(L.blend('brief', 'strategy', 1), /<clipPath id="[^"]+b"><rect x="-1.2" y="-1"/)
-  assert.match(L.blend('brief', 'strategy', 'x'), /<line x1="-1" y1="0"/)
-  assert.equal(/clipPath/.test(L.circleSvg({ agent: 'brief', activity: 'handoff' })), false)
-  assert.equal(/clipPath/.test(L.circleSvg({ agent: 'brief', to: 'brief', activity: 'handoff' })), false)
-  assert.equal(/clipPath/.test(L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'work' })), false)
+  assert.match(a, /aria-label="Brief agent to Strategy agent, Handing off"/)
+  assert.match(a, /^<span data-activity="handoff" data-to="strategy" class="nk-ag cir s60" data-nk-agent="brief" data-nk-state="handoff"/)
+  // no "to", or the same agent, or not handing off: no one takes over
+  assert.equal(/data-to=/.test(L.circleSvg({ agent: 'brief', activity: 'handoff' })), false)
+  assert.equal(/data-to=/.test(L.circleSvg({ agent: 'brief', to: 'brief', activity: 'handoff' })), false)
+  assert.equal(/data-to=/.test(L.circleSvg({ agent: 'brief', to: 'strategy', activity: 'work' })), false)
 })
 
 for (const n of RUNNING) {
@@ -1015,9 +1027,11 @@ for (const n of RUNNING) {
     const aside = rightAside(h)
     const px = L.circleSizeFor(who), cls = px === 60 ? 'cir s60' : 'cir'
     assert.ok(aside.startsWith('<div class="card status'), 'the status card is first')
-    // the card says the name and the word, so its circle is hidden from screen readers (said once, not twice)
-    assert.match(aside, new RegExp(`^<div class="card status${px === 60 ? '' : ' hero'}" style="padding:20px" data-status="${who.activity}"><div class="srow"><span class="slot[^"]*">(<button[^>]*>)?<svg class="${cls}" width="${px}" height="${px}"[^>]*aria-hidden="true"`))
-    assert.equal(new RegExp(`<svg class="${cls}"[^>]*(role="img"|aria-label=)`).test(aside), false)
+    // the card says the name and the word, so its sphere is hidden from screen readers (said once, not twice)
+    assert.match(aside, new RegExp(`^<div class="card status${px === 60 ? '' : ' hero'}" style="padding:20px" data-status="${who.activity}"><div class="srow"><span class="slot[^"]*">(<button[^>]*>)?<span data-activity="${who.activity}"( data-to="\\w+")? class="nk-ag ${cls}" data-nk-agent="${who.agent}" data-nk-state="${L.ENGINE_STATE[who.activity]}" data-nk-size="${px}"[^>]*aria-hidden="true"`))
+    assert.equal(new RegExp(`class="nk-ag ${cls}"[^>]*(role="img"|aria-label=)`).test(aside), false)
+    // the steps done (step_index - 1 of step_total) go to the sphere's ring
+    assert.ok(aside.includes(`data-nk-progress="${Math.round((f.run.agent.step_index - 1) / 7 * 1000) / 1000}"`), 'the ring shows the steps done')
     assert.equal(aside.includes('data-orb'), px !== 60, 'only the enlarged circle is a button')
     assert.ok(aside.includes(`<div class="sword">${who.word}</div>`), 'the state word is text, not colour alone')
     assert.ok(aside.includes(`Step ${f.run.agent.step_index} of 7`))
@@ -1027,7 +1041,7 @@ for (const n of RUNNING) {
     const items = f.run.stages.find((s: Fx) => s.status === 'now').items.filter((x: Fx) => !/^Appendix/.test(x.text))
     assert.equal((b[2].match(/class="(crow|cslide) /g) || []).length, items.length)
     assert.equal((b[2].match(/class="mk now"|class="cslide now"/g) || []).length, 1, 'one thing is being done now')
-    assert.equal(/\d\s?%/.test(h), false)
+    assert.equal(/\d\s?%/.test(h.replace(/<[^>]*>/g, ' ')), false)
     assert.equal(/\d+\s?(min|sec|hours?)\b/i.test(h), false)
     assert.equal(h.includes('Waiting for the engine'), false)
     assert.equal(h.includes('class="dex"'), false)
@@ -1052,7 +1066,7 @@ test('circleSizeFor: 130 while it works or waits, 60 when a person is needed, on
 test('the status card: 130px and a button while running or waiting; 60px and no button at a gate, on failure and when done', () => {
   for (const n of RUNNING) {
     const aside = rightAside(mount(fixture(n)).app.innerHTML)
-    assert.match(aside, /<span class="slot big"><button type="button" class="orbb" data-orb aria-label="[^"]+\. Press to ask what is happening\."><svg class="cir" width="130" height="130"/, n)
+    assert.match(aside, /<span class="slot big"><button type="button" class="orbb" data-orb aria-label="[^"]+\. Press to ask what is happening\."><span data-activity="\w+"( data-to="\w+")? class="nk-ag cir" data-nk-agent="\w+" data-nk-state="(working|handoff)" data-nk-size="130"/, n)
     assert.ok(aside.includes('data-say'), n)
   }
   for (const n of ['failed', 'done', 'gate1', 'gate2', 'gate3']) {
@@ -1060,43 +1074,40 @@ test('the status card: 130px and a button while running or waiting; 60px and no 
     if (n === 'done') m.click({ go: 'build' }) // a finished run opens on Review
     const h = m.app.innerHTML
     assert.equal(/data-orb|class="card status hero"/.test(rightAside(h)), false, n)
-    assert.match(rightAside(h), /<svg class="cir s60" width="60" height="60"/, n)
+    // failed and done: the 60px sphere in the card; at a gate the sphere asks in the stage instead
+    if (n.startsWith('gate')) assert.equal(rightAside(h).includes('nk-ag'), false, n)
+    else assert.match(rightAside(h), /class="nk-ag cir s60" data-nk-agent="\w+" data-nk-state="(needs|done)" data-nk-size="60"/, n)
   }
 })
 
 test('circle: the aria-label says the agent and the state once, and the svg inside the button says nothing', () => {
   const aside = rightAside(mount(fixture('copy')).app.innerHTML)
   assert.equal((aside.match(/aria-label=/g) ?? []).length, 1)
-  assert.match(aside, /aria-label="Copy, Writing\. Press to ask what is happening\."/)
-  assert.match(aside, /<svg class="cir"[^>]*aria-hidden="true"/)
+  assert.match(aside, /aria-label="Copy agent, Writing\. Press to ask what is happening\."/)
+  assert.match(aside, /<span data-activity="write" class="nk-ag cir"[^>]*aria-hidden="true"/)
   // Waiting for the engine: the same circle, a short prompt, no percentage and no time at all
   const w = mount(buildData({ state: 'building', stages: stg([['inputs', 'done'], ['storyline', 'now']]), gate: null, approvals: {} })).app.innerHTML
   assert.ok(w.includes('Waiting for the engine') && w.includes('Press the circle to ask what is happening.'))
-  assert.equal(/\d\s?%|\d+\s?(min|sec|hours?)\b/i.test(w), false)
+  assert.equal(/\d\s?%|\d+\s?(min|sec|hours?)\b/i.test(w.replace(/<[^>]*>/g, ' ')), false)
 })
 
 test('circleSays: who it is, what it is doing or why nothing runs, and that it grows and shrinks; honest, no figures', () => {
   const waiting = L.circleSays(L.agentState({ state: 'building', stages: stg([['inputs', 'done'], ['storyline', 'now']]), gate: null, approvals: {} }))
   assert.ok(waiting.length >= 3)
-  assert.match(waiting[0], /^I am Strategy, the agent that builds territories\.$/)
+  assert.match(waiting[0], /^I am the Strategy agent, the one that plans the work\.$/)
   assert.match(waiting[1], /Nothing is running: the engine is not connected to this document yet/)
   assert.match(waiting[2], /grow .* shrink back/)
   const writing = L.circleSays(L.agentState(fixture('copy').run))
   assert.match(writing[1], /I am writing right now\. I can not tell you how far along/)
-  assert.match(L.circleSays(L.agentState(fixture('handoff').run))[1], /Brief is handing the work to Strategy/)
+  assert.match(L.circleSays(L.agentState(fixture('handoff').run))[1], /^The Brief agent is handing the work to the Strategy agent\.$/)
   for (const w of [waiting, writing]) for (const l of w) assert.equal(/\d/.test(l), false, l)
   assert.ok(L.circleSays(null).length >= 3)
 })
 
-test('the circle keeps its ring when it grows: the slot key has no size, and the engine resizes the same circle', () => {
-  const scan = /function scan\(root, who\) \{[\s\S]*?\n\}\n/.exec(html)![0]
-  const key = /const base = [^\n]*/.exec(scan)![0]
-  assert.ok(key.includes("where === 'other' ?"), 'only an unnamed place is told apart by width')
-  assert.equal(/width/.test(key.replace(/where === 'other' \? where \+ ':' \+ \(s\.getAttribute\('width'\) \|\| ''\)/, '')), false, 'the status slot key carries no size')
-  assert.ok(scan.includes("s.closest('aside.stack') ? 'status'"), 'the gate card and the running card share one slot')
-  const up = /function upgrade\(svg, opt\) \{[\s\S]*?\n\}\n/.exec(html)![0]
-  assert.equal(up.includes('c.size === size'), false, 'a slot is reused at any size')
-  assert.ok(up.includes('if (c.size !== size) { c.size = size;'), 'and resized, not rebuilt')
+test('the status sphere keeps its ring when it grows: the engine follows the same placeholder at its new size', () => {
+  // hydrate re-sets a placeholder whose agent, state or progress changed; its size is read from data-nk-size
+  const g = /function statusEls\(\) \{[\s\S]*?\n {2}\}\n/.exec(html)![0]
+  assert.ok(g.includes("card.querySelector('.nk-ag')") && g.includes("getAttribute('data-nk-size')"))
 })
 
 test('the growth: 300 ms ease-out, no size animation under reduced motion (instant, cross-fade), and the circle is a real button', () => {
@@ -1106,23 +1117,24 @@ test('the growth: 300 ms ease-out, no size animation under reduced motion (insta
   assert.ok(reduced > 0 && sizeAnim > reduced, 'the reduced-motion branch returns before any size animation')
   assert.match(g.slice(reduced, sizeAnim), /opacity: 0 \}, \{ opacity: 1 \}[\s\S]*return;/)
   assert.ok(html.includes("window.matchMedia('(prefers-reduced-motion: reduce)')"))
-  // the press: keyboard and pointer both arrive as a click on the button, and the engine's kick is for the keyboard only
-  assert.ok(html.includes('if (a.orb !== undefined) return pressOrb(t, e.detail === 0);'))
+  // the press: keyboard and pointer both arrive as a click on the button
+  assert.ok(html.includes('if (a.orb !== undefined) return pressOrb();'))
   assert.match(css, /\.status\.hero \.slot\{width:130px;height:130px\}/)
   assert.match(css, /\.status \.orbb\{appearance:none;[^}]*border-radius:999px/)
-  // the circle's flat svg scales: circleSvg at 130 keeps its viewBox
-  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', size: 130 }), /width="130" height="130" viewBox="-1\.15 -1\.15 2\.3 2\.3"/)
+  assert.match(css, /\.dkstage \.orbb\{appearance:none;[^}]*border-radius:999px/)
+  // the sphere's still frame scales: at 130 it is drawn at 130
+  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', size: 130 }), /width:130px;height:130px[^>]*><svg class="nk-still" viewBox="-1\.25 -1\.25 2\.5 2\.5" width="130" height="130"/)
 })
 
 test('pressing the circle shows one honest line after another, and a flurry gets the shrug', () => {
   const lines: string[] = []
   const say = { textContent: '', classList: { add() {} } }
-  const card = { querySelector: (q: string) => (q === '[data-say]' ? say : q === 'svg.cir' ? svg : null), offsetHeight: 200 }
-  const svg = { getAttribute: () => '130', closest: () => null }
+  const card = { querySelector: (q: string) => (q === '[data-say]' ? say : q === '.nk-ag' ? sphere : null), offsetHeight: 200 }
+  const sphere = { getAttribute: () => '130', closest: () => null }
   const m = mount(fixture('copy'), undefined, {})
   ;(m.doc as Record<string, unknown>).getElementById = (id: string) => (id === 'app' ? { innerHTML: '', querySelector: () => card } : null)
   for (let i = 0; i < 3; i++) { m.click({ orb: '' }); lines.push(say.textContent) }
-  assert.match(lines[0], /^I am Copy, the agent that crafts words\.$/)
+  assert.match(lines[0], /^I am the Copy agent, the one that crafts words\.$/)
   assert.match(lines[1], /I am writing right now/)
   assert.match(lines[2], /grow while work goes on/)
   m.click({ orb: '' })
@@ -1132,8 +1144,8 @@ test('pressing the circle shows one honest line after another, and a flurry gets
 test('Build, hand-off: the card names both agents over one blended circle', () => {
   const h = mount(fixture('handoff')).app.innerHTML
   const aside = rightAside(h)
-  assert.ok(aside.includes('>Brief → Strategy<') && aside.includes('Shapes the ask → Builds territories'))
-  assert.match(aside, /<svg class="cir" width="130" height="130"[^>]*aria-hidden="true" data-agent="brief" data-to="strategy" data-activity="handoff"/)
+  assert.ok(aside.includes('>Brief agent → Strategy agent<') && aside.includes('Writes the brief → Plans the work'))
+  assert.match(aside, /<span data-activity="handoff" data-to="strategy" class="nk-ag cir" data-nk-agent="brief" data-nk-state="handoff" data-nk-size="130"[^>]*aria-hidden="true"/)
   assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Passing the work on</h1>'))
 })
 
@@ -1154,7 +1166,7 @@ test('Build, failed: a failed run opens on Build with the failure, the failed ro
   const f = fixture('failed'), m = mount(f), h = m.app.innerHTML
   assert.ok(h.includes('aria-current="step">Build<'), 'failed routes to Build, not Start')
   assert.ok(h.includes('>Something failed</h1>') && h.includes(f.run.error.message))
-  assert.match(rightAside(h), /data-status="error"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
+  assert.match(rightAside(h), /data-status="error"[\s\S]*data-nk-agent="review" data-nk-state="needs"[^>]*aria-hidden="true"[\s\S]*>Review agent</)
   assert.ok(rightAside(h).includes('<div class="sword err">Failed, retrying</div>'))
   const b = box(h)!
   assert.equal(b[1], 'failed')
@@ -1172,7 +1184,7 @@ test('Build, done: the deck is ready, what to supply is listed, and Open the dec
   m.click({ go: 'build' })
   const h = m.app.innerHTML
   assert.ok(h.includes('>The deck is ready for you</h1>'))
-  assert.match(rightAside(h), /data-status="complete"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
+  assert.match(rightAside(h), /data-status="complete"[\s\S]*data-nk-agent="review" data-nk-state="done"[^>]*aria-hidden="true"[\s\S]*>Review agent</)
   assert.ok(rightAside(h).includes('<div class="sword ok">Done</div>'))
   const b = box(h)!
   assert.equal(b[1], 'done')
@@ -1281,7 +1293,7 @@ test('gateRequest: an edit or a retry at the open gate is recorded, waiting, and
   assert.equal(L.gateView({ ...r, gate_requests: q.gate_requests })!.asked[0], 'edit')
 })
 
-test('Build, gate 2: three territory buttons, the first pick marked and pressed, Pick / Edit / Ask Dex', () => {
+test('Build, gate 2: three territory buttons, the first pick marked and pressed, Pick / Edit / Ask the Deck agent', () => {
   const h = mount(fixture('gate2')).app.innerHTML
   assert.equal(box(h), null, 'a gate, not a content box')
   assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Pick a territory</h1>') && h.includes('Gate 2 of 3'))
@@ -1291,14 +1303,15 @@ test('Build, gate 2: three territory buttons, the first pick marked and pressed,
   assert.equal((h.match(/Blind judge’s first pick/g) || []).length, 1)
   assert.ok(h.includes('<b>Why it fits:</b> it is the brief'))
   assert.match(h, /<button class="btn go big" id="approve">Pick this territory<\/button>/)
-  assert.ok(h.includes('data-edit="territories">Edit a territory<') && h.includes('data-retry="territories">Ask Dex to try again<'))
-  // Dex's note sits beside the Strategy circle and is marked as proposed
-  assert.match(h, /<div class="dex"><svg class="cir s32"[^>]*aria-label="Strategy, Needs you"[\s\S]*?<span class="pill plain dexp"[^>]*>Proposed<\/span><\/div>/)
+  assert.ok(h.includes('data-edit="territories">Edit a territory<') && h.includes('data-retry="territories">Ask the Deck agent to try again<'))
+  // the Deck agent's note sits beside its sphere and is marked as proposed; the Strategy agent asks above the card
+  assert.match(h, /<div class="dex"><span data-activity="waiting" class="nk-ag cir s32" data-nk-agent="deck"[^>]*aria-hidden="true">[\s\S]*?<span class="mono" style="font-size:12px">Deck agent<\/span>[\s\S]*?<span class="pill plain dexp" title="The Deck agent's note here is our proposed wording, not yet agreed">Proposed<\/span><\/div>/)
+  assert.match(h, /<div class="dkstage nk-asking" data-nk-stage[^>]*><div class="aglbox"><button type="button" class="orbb" data-orb aria-label="Strategy agent, Needs you\./)
   const aside = rightAside(h)
-  assert.match(aside, /aria-label="Strategy, Needs you"/)
+  assert.equal(aside.includes('nk-ag'), false, 'the sphere asks in the stage, not again here')
   assert.ok(aside.includes('>Waiting for you<') && aside.includes('>Nothing runs until you pick<') && aside.includes('developed from the territory you pick'))
   assert.ok(aside.includes('Checked so far') && aside.includes('All 3 mandatories are still to confirm'))
-  assert.equal(/\d\s?%/.test(h), false)
+  assert.equal(/\d\s?%/.test(h.replace(/<[^>]*>/g, ' ')), false)
   assert.equal(/\d+\s?(min|sec|hours?)\b/i.test(h), false)
 })
 
@@ -1334,7 +1347,7 @@ test('Build, gate 2: with no pick Pick this territory is off and says so', () =>
   assert.equal((m.writes[0].obj as Write).run.approvals.territories.picked, 't2')
 })
 
-test('Build, gate 3: the idea line, three executions, what it rests on, Approve / Edit the idea / Ask Dex', () => {
+test('Build, gate 3: the idea line, three executions, what it rests on, Approve / Edit the idea / Ask the Deck agent', () => {
   const m = mount(fixture('gate3')), h = m.app.innerHTML
   assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Approve the idea</h1>') && h.includes('Gate 3 of 3'))
   assert.ok(h.includes('from the territory you picked: The one small thing.'))
@@ -1343,17 +1356,18 @@ test('Build, gate 3: the idea line, three executions, what it rests on, Approve 
   assert.ok(h.includes('<span class="pill warn">To confirm</span>'))
   assert.ok(h.includes('<div class="rests"><div class="eyebrow">What the idea rests on</div>'))
   assert.equal((h.match(/<span class="chip (ok|warn)">/g) || []).length, 3)
-  assert.ok(h.includes('data-edit="idea">Edit the idea<') && h.includes('data-retry="idea">Ask Dex to try again<'))
+  assert.ok(h.includes('data-edit="idea">Edit the idea<') && h.includes('data-retry="idea">Ask the Deck agent to try again<'))
   assert.ok(h.includes('Every approve, edit or retry is recorded with who did it.'))
-  assert.match(h, /<div class="dex"><svg class="cir s32"[^>]*aria-label="Idea, Needs you"/)
-  assert.match(rightAside(h), /aria-label="Idea, Needs you"[\s\S]*>Nothing runs until you approve<[\s\S]*Copy, Deck and Review/)
+  assert.match(h, /data-orb aria-label="Idea agent, Needs you\. Press to ask what is happening\."><span data-activity="human" class="nk-ag cir" data-nk-agent="idea" data-nk-state="needs"/)
+  assert.match(h, /<div class="dex"><span data-activity="waiting" class="nk-ag cir s32" data-nk-agent="deck"/)
+  assert.match(rightAside(h), />Nothing runs until you approve<[\s\S]*Copy, Deck and Review/)
   m.click({}, 'approve')
   const w = (m.writes[0].obj as Write).run
   assert.equal(m.writes[0].action, 'approve idea')
   assert.deepEqual(plain([w.approvals.idea.decision, 'picked' in w.approvals.idea, w.stage, w.decisions.length]), ['approve', false, 'copy', 3])
 })
 
-test('Edit and Ask Dex at any gate record a request and say it waits; the gate then shows it', () => {
+test('Edit and Ask the Deck agent at any gate record a request and say it waits; the gate then shows it', () => {
   for (const [name, edit, gate] of [['gate1', 'beats', 'storyline'], ['gate2', 'territories', 'territories'], ['gate3', 'idea', 'idea']]) {
     const m = mount(fixture(name))
     m.click({ edit })
@@ -1512,14 +1526,14 @@ test('reportLine: errors from the checker, every number traced only at 0 errors,
 test('Review, ready: the Approval circle and Approve the deck in the head, its card and Checked so far under the rail', () => {
   const h = review('review-ready').app.innerHTML
   const hd = head(h)
-  assert.match(hd, /<span class="dstat" data-deck="open"><svg class="cir s32" width="32" height="32"[^>]*role="img" aria-label="Approval"[^>]*data-activity="human"/)
+  assert.match(hd, /<span class="dstat" data-deck="open"><span data-activity="human" class="nk-ag cir s32" data-nk-agent="approval" data-nk-state="needs" data-nk-size="32"[^>]*role="img" aria-label="Approval agent"/)
   assert.ok(hd.includes('<span class="dword">Needs you</span>'), 'the state is a word, not colour alone')
   assert.ok(hd.includes('<button class="btn go tall" id="approve-deck" data-approve="deck">Approve the deck</button>'))
   assert.ok(hd.indexOf('data-act="appendix"') < hd.indexOf('data-tab="evidence"') && hd.indexOf('data-tab="evidence"') < hd.indexOf('Approve the deck'))
   assert.equal(h.includes('data-approve-note'), false, 'nothing is open, so nothing to say')
   const lc = leftCol(h)
   assert.ok(lc.startsWith('<nav class="frost rail" aria-label="Slides">'), 'the rail comes first')
-  assert.match(lc, /<div class="card status" style="padding:16px" data-status="human" data-deck="open">[\s\S]*aria-hidden="true" data-agent="approval"[\s\S]*>Asks for sign-off<[\s\S]*<div class="sword">Needs you<\/div>[\s\S]*Step 7 of 7/)
+  assert.match(lc, /<div class="card status" style="padding:16px" data-status="human" data-deck="open">[\s\S]*data-nk-agent="approval" data-nk-state="needs"[^>]*aria-hidden="true"[\s\S]*>Asks for sign-off<[\s\S]*<div class="sword">Needs you<\/div>[\s\S]*Step 7 of 7/)
   assert.ok(lc.indexOf('Checked so far') > lc.indexOf('data-deck="open"'))
   assert.equal((lc.match(/class="tick ok"/g) || []).length, 3)
   // every fact supplied: the supply card answered, 0 to supply, every confirm item verified
@@ -1550,7 +1564,7 @@ test('Approve the deck writes the approval and the decision under run only, and 
   assert.equal(after.run.agent, undefined, 'the feed is cleared, as at a gate')
   const a = review(after)
   const h = a.app.innerHTML
-  assert.match(head(h), /<span class="dstat" data-deck="approved"><svg[^>]*aria-label="Approval"[^>]*data-activity="complete"[\s\S]*<span class="dword ok">Approved<\/span><\/span>$/)
+  assert.match(head(h), /<span class="dstat" data-deck="approved"><span data-activity="complete" class="nk-ag cir s32" data-nk-agent="approval" data-nk-state="done"[^>]*aria-label="Approval agent"[\s\S]*<span class="dword ok">Approved<\/span><\/span>$/)
   assert.equal(h.includes('id="approve-deck"'), false, 'approved once, no button')
   assert.ok(leftCol(h).includes('>Approved by You<'))
   a.click({ tab: 'who' })
@@ -1598,7 +1612,7 @@ test('Review with only an appendix count keeps the count as text, and an unfinis
 test('Present, exported: Approved in the Export head, the file rows, the report line, and the confirm list kept', () => {
   const h = present('export-ready').app.innerHTML
   const ex = exportCard(h)
-  assert.match(ex, /^<div style="display:flex;align-items:center;gap:10px"><span[^>]*>Export<\/span><div class="spacer"><\/div><span class="dstat" data-deck="approved"><svg class="cir s32"[^>]*role="img" aria-label="Approval"[^>]*data-agent="approval"/)
+  assert.match(ex, /^<div style="display:flex;align-items:center;gap:10px"><span[^>]*>Export<\/span><div class="spacer"><\/div><span class="dstat" data-deck="approved"><span data-activity="complete" class="nk-ag cir s32" data-nk-agent="approval"[^>]*role="img" aria-label="Approval agent"/)
   assert.equal(ex.includes('class="chip'), false)
   assert.ok(ex.includes('<div class="note" style="font-size:12px;overflow-wrap:anywhere">Ready to open</div></div><button class="btn sm" data-export="web" style="font-weight:600" aria-label="Open index.html">Open</button>'))
   assert.ok(ex.includes('>better-with-ballymaloe.pptx</div></div><button class="btn sm" data-export="pptx" style="font-weight:600" aria-label="Download better-with-ballymaloe.pptx">Download</button>'))
@@ -1610,7 +1624,7 @@ test('Present, exported: Approved in the Export head, the file rows, the report 
   assert.ok(h.indexOf('Confirm list') > -1 && h.indexOf('Confirm list') < h.indexOf('>Export<'), 'the confirm list stays on Present (open question)')
   const mid = middle(h)
   assert.ok(mid.includes('5 backup slides are hidden'))
-  assert.match(mid, /data-deck="approved"[\s\S]*aria-hidden="true" data-agent="approval"[\s\S]*<div class="sword ok">Approved<\/div>[\s\S]*>Approved by Sai<[\s\S]*Checked so far/)
+  assert.match(mid, /data-deck="approved"[\s\S]*data-nk-agent="approval" data-nk-state="done"[^>]*aria-hidden="true"[\s\S]*<div class="sword ok">Approved<\/div>[\s\S]*>Approved by Sai<[\s\S]*Checked so far/)
 })
 
 test('Present: with no files every row is Not built yet, and an unapproved deck points to Review', () => {
@@ -1619,7 +1633,7 @@ test('Present: with no files every row is Not built yet, and an unapproved deck 
   assert.equal((none.match(/data-export="\w+" disabled/g) || []).length, 4)
   assert.ok(none.includes('data-deck="approved"'))
   const m = present('review-ready'), ex = exportCard(m.app.innerHTML)
-  assert.match(ex, /<span class="dstat" data-deck="open"><svg class="cir s32"[^>]*aria-label="Approval"[^>]*>[\s\S]*<span class="dword">Needs you<\/span>/)
+  assert.match(ex, /<span class="dstat" data-deck="open"><span data-activity="human" class="nk-ag cir s32"[^>]*aria-label="Approval agent"[^>]*>[\s\S]*<span class="dword">Needs you<\/span>/)
   assert.ok(ex.includes('The deck is not approved yet.') && ex.includes('<button class="btn tall" data-go="review">Approve it on Review</button>'))
   m.click({ go: 'review' })
   assert.ok(m.app.innerHTML.includes('id="approve-deck"'))
@@ -1748,15 +1762,15 @@ test('a territory, the appendix toggle and Approve the deck keep the keyboard af
 })
 
 test('the circle says the name only, or nothing, where the screen writes the rest beside it', () => {
-  assert.match(L.circleSvg({ agent: 'approval', activity: 'human', aria: 'name' }), /role="img" aria-label="Approval" data-agent="approval"/)
+  assert.match(L.circleSvg({ agent: 'approval', activity: 'human', aria: 'name' }), /data-nk-agent="approval"[^>]*role="img" aria-label="Approval agent">/)
   const hid = L.circleSvg({ agent: 'copy', activity: 'write', aria: 'hidden' })
-  assert.match(hid, /aria-hidden="true" data-agent="copy"/)
+  assert.match(hid, /data-nk-agent="copy"[^>]*aria-hidden="true">/)
   assert.equal(/role=|aria-label=/.test(hid), false)
-  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', aria: 'junk' }), /role="img" aria-label="Copy, Writing"/)
-  // the Review head: the circle names Approval, the word beside it says Needs you; the card says both, its circle is hidden
+  assert.match(L.circleSvg({ agent: 'copy', activity: 'write', aria: 'junk' }), /role="img" aria-label="Copy agent, Writing"/)
+  // the Review head: the sphere names the Approval agent, the word beside it says Needs you; the card says both, its sphere is hidden
   const h = review('review-ready').app.innerHTML
-  assert.match(h, /<span class="dstat" data-deck="open"><svg class="cir s32"[^>]*role="img" aria-label="Approval" [^>]*>[\s\S]*?<\/svg><span class="dword">Needs you<\/span>/)
-  assert.match(leftCol(h), /<svg class="cir s60"[^>]*aria-hidden="true"[^>]*>[\s\S]*<div style="font-size:14px;font-weight:600">Approval<\/div>/)
+  assert.match(h, /<span class="dstat" data-deck="open"><span data-activity="human" class="nk-ag cir s32"[^>]*role="img" aria-label="Approval agent">[\s\S]*?<\/svg><\/span><span class="dword">Needs you<\/span>/)
+  assert.match(leftCol(h), /<span data-activity="human" class="nk-ag cir s60"[^>]*aria-hidden="true">[\s\S]*<div style="font-size:14px;font-weight:600">Approval agent<\/div>/)
 })
 
 test('the new targets are 44px, and the waiting words and pending rows meet 4.5:1 in every theme', () => {
@@ -1788,94 +1802,56 @@ test('the new targets are 44px, and the waiting words and pending rows meet 4.5:
   assert.ok(ratio(themes.light.ink3, themes.light.card) < 4.5, 'why --ink3 is not used for these words')
 })
 
-// ── the 3D circle: the engine is in the page script, the flat circle stays the fallback ──
+// ── one agent engine: every circle is its sphere, and the template draws none of its own ──
 const uiSrc = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
-const orbsSrc = /var Orbs = \(function \(\) \{[\s\S]*?\n\}\)\(\);\n/.exec(uiSrc)?.[0]
 
-test('the 3D engine lives in the page script, never in the pure block', () => {
-  assert.ok(orbsSrc, 'the page script holds the Orbs engine')
-  for (const word of ['Orbs', 'WebGL', 'getContext', 'FRAG', 'requestAnimationFrame', 'uTrack']) assert.equal(logicSrc.includes(word), false, word)
-  assert.match(orbsSrc!, /uniform vec3 [^;]*uTrack/)
-  assert.match(orbsSrc!, /vec3 neutral = uTrack;/)
-  assert.match(uiSrc, /Orbs\.scan\(document\.getElementById\('app'\), L\.agentState\(s\.run\)\)/)
-  assert.equal((orbsSrc!.match(/getContext\('webgl'/g) ?? []).length, 1, 'one WebGL context for every circle')
+test('the template has no sphere of its own: the engine is inlined at its marker, in the body, before the app scripts', () => {
+  for (const word of ['Orbs', 'WebGL', 'getContext', 'FRAG', 'gl_FragColor', 'uTrack', 'cir3d', 'emblemOf', 'ringOf']) assert.equal(html.includes(word), false, word)
+  assert.equal(html.split('<!-- @napkin:agent-sphere -->').length, 2, 'one marker')
+  const at = html.indexOf('<!-- @napkin:agent-sphere -->')
+  assert.ok(at > html.indexOf('<body>') && at < html.indexOf('<script id="deck-logic">'), 'in the body, before the pure block and the page script')
+  const packer = readFileSync(new URL('../crates/clan-sdk/examples/make_deck_maker.rs', root), 'utf8')
+  assert.match(packer, /#\[path = "shared\/app_ui\.rs"\]\s*mod app_ui;/)
+  assert.match(packer, /app_ui::inline_sphere\(/)
+  // the page hydrates every placeholder once, live where WebGL runs; without it the still frame stays
+  assert.equal((uiSrc.match(/Roles\.auto\(\)/g) ?? []).length, 1)
+  assert.match(L.circleSvg({ agent: 'deck', activity: 'work' }), /<svg class="nk-still"/)
 })
 
-test('the 3D circle is only added: the flat circle code the goldens pin is unchanged', () => {
-  for (const name of ['circleSvg', 'ringOf', 'emblemOf', 'blend', 'arcPath', 'agentState']) assert.match(logicSrc, new RegExp(`function ${name}\\(`), name)
-  assert.ok(L.circleSvg({ agent: 'deck', activity: 'work' }).startsWith('<svg class="cir'))
+test('an open gate is the agent asking on one screen: the sphere eases up and shrinks, the card under it; reduced motion has no transition', () => {
+  assert.match(css, /\.dkstage \.aglbox\{height:var\(--dk-sph,184px\);[^}]*transition:height \.6s/)
+  assert.match(css, /\.dkstage\.nk-asking \.aglbox\{height:calc\(var\(--dk-sph,184px\) \* \.45\)\}/)
+  assert.match(css, /\.dkstage\.nk-asking \.gbody\{max-height:[^}]*overflow:auto\}/, 'the gate body scrolls in its card, not the page')
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\*,\*::before,\*::after\{animation:none!important;transition:none!important\}\}/)
+  assert.match(uiSrc, /Roles\.ask\(stage, askWant\)/)
 })
 
-test('the flat circle stays whenever the 3D one cannot or should not run', () => {
-  for (const cond of ['prefers-reduced-data', 'saveData', 'no WebGL', 'shader failed', 'webglcontextlost', 'webglcontextrestored', 'swiftshader', 'an unknown agent stays the flat neutral circle'])
-    assert.ok(orbsSrc!.toLowerCase().includes(cond.toLowerCase()), cond)
-  assert.match(orbsSrc!, /ENG\.soft \? 1 :/, 'a software renderer draws at pixel ratio 1')
-  assert.match(orbsSrc!, /classList\.remove\('on'\)/, 'a lost context shows the flat circle')
-  assert.match(orbsSrc!, /classList\.add\('on'\)/, 'a restored one shows the 3D circle again')
-  assert.match(orbsSrc!, /IntersectionObserver/)
-  assert.match(orbsSrc!, /MutationObserver[\s\S]*data-color-scheme/)
-  assert.match(orbsSrc!, /--ring-track/)
-})
-
-test('the 3D circle honours reduced motion: still ring, no drift, weaker ripple', () => {
-  assert.match(orbsSrc!, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/)
-  assert.match(orbsSrc!, /const rm = motion\.reduce, flow = rm \? 0 : 1/)
-  assert.match(orbsSrc!, /if \(!rm\) c\.mt \+= dt \* c\.energy/)
-  assert.match(orbsSrc!, /if \(!rm\) RING\.ang \+=/)
-  assert.match(orbsSrc!, /motion\.reduce \? \.4 : 1/)
-})
-
-test('the 3D circle CSS has no colour of its own and touch-action only on the large circle', () => {
-  const rules = css.split('\n').filter(l => l.includes('.cir3d'))
-  assert.ok(rules.length >= 5)
-  for (const r of rules) assert.deepEqual(r.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(/g) ?? [], [], r)
-  assert.ok(css.includes('.cir3d.on .act{animation:none}'))
-  assert.ok(css.includes('.cir3d.big{touch-action:none}'))
-  assert.equal((css.match(/touch-action/g) ?? []).length, 1)
-})
-
-// A page with the engine and a pretend browser: what it does when WebGL is missing, refused or lost.
-function runOrbs(opts: { reducedData?: boolean }) {
-  const made: string[] = []
-  const wrapped: unknown[] = []
-  const el = (tag: string): Record<string, unknown> => ({
-    tag, style: {}, classList: { add() {}, remove() {} }, appendChild() {}, setAttribute() {}, addEventListener() {},
-    getContext: (kind: string) => { made.push(kind); return null },
-  })
-  const svg = {
-    __orb: undefined, parentNode: { insertBefore: (w: unknown) => wrapped.push(w) }, hasAttribute: () => false, closest: () => null,
-    getAttribute: (n: string) => ({ 'data-agent': 'strategy', width: '60', 'data-activity': 'work' } as Record<string, string>)[n] ?? null,
+test('the stage asks on a change only: drawn as it was, then eased; a render that changes nothing replays nothing', () => {
+  const seen: { drawn: boolean; final: boolean; read: boolean; enter: boolean }[] = []
+  const app: { innerHTML: string; querySelector: (q: string) => unknown } = {
+    innerHTML: '',
+    querySelector: (q: string) => {
+      if (q !== '[data-nk-stage]' || !app.innerHTML.includes('data-nk-stage')) return null
+      const drawn = /class="dkstage nk-asking"/.test(app.innerHTML), rec = { drawn, final: drawn, read: false, enter: app.innerHTML.includes('class="dkask enter"') }
+      seen.push(rec)
+      return {
+        get offsetHeight() { rec.read = true; return 1 },
+        classList: { contains: (c: string) => c === 'nk-asking' && rec.final, toggle: (c: string, on: boolean) => { if (c === 'nk-asking') rec.final = on } },
+      }
+    },
   }
-  const root = { querySelectorAll: () => [svg] }
-  const ctx = vm.createContext({
-    document: { createElement: el, documentElement: {}, addEventListener() {} },
-    matchMedia: (q: string) => ({ matches: !!opts.reducedData && q.includes('reduced-data'), addEventListener() {} }),
-    navigator: {}, requestAnimationFrame() {}, MutationObserver: class { observe() {} }, getComputedStyle: () => ({ getPropertyValue: () => '' }),
-    performance: { now: () => 0 }, Math, Float32Array, Object, Array, String, Set, Map, Error, parseInt, console,
-  })
-  vm.runInContext(`${logicSrc}; var L = DeckLogic; ${orbsSrc}; var scanned = Orbs.scan(__root, null); var okNow = Orbs.ok(); var why = Orbs.stats().reason`, Object.assign(ctx, { __root: root }))
-  return { made, wrapped, scanned: ctx.scanned as unknown[], ok: ctx.okNow as boolean, why: ctx.why as string }
-}
-
-test('without WebGL the page keeps the flat circle and wraps nothing', () => {
-  const r = runOrbs({})
-  assert.equal(r.ok, false)
-  assert.equal(r.scanned.length, 0)
-  assert.equal(r.wrapped.length, 0)
-  assert.match(r.why, /no WebGL/)
-})
-
-test('a browser that asks for less data never starts a WebGL context', () => {
-  const r = runOrbs({ reducedData: true })
-  assert.deepEqual(r.made, [])
-  assert.equal(r.scanned.length, 0)
-  assert.match(r.why, /reduced data/)
-})
-
-test('the engine does nothing where there is no browser (the pure tests, a host stub)', () => {
-  const ctx = vm.createContext({ Math, Float32Array, Object, Array, String, Set, Map, Error, parseInt })
-  vm.runInContext(`${logicSrc}; var L = DeckLogic; ${orbsSrc}; var r = Orbs.scan({ querySelectorAll: function () { return []; } }, null);`, ctx)
-  assert.equal((ctx.r as unknown[]).length, 0)
+  const f = fixture('gate1'), m = mount(f, undefined, { app })
+  m.click({ go: 'build' }) // drawn again, nothing changed
+  m.click({}, 'approve')
+  f.run = (m.writes[0].obj as { run: Fx }).run // the host writes it and says so
+  m.click({ go: 'build' })
+  m.click({ go: 'build' })
+  assert.deepEqual(seen.map(r => [r.drawn, r.final, r.read, r.enter]), [
+    [true, true, false, false], // first sight of the gate: already up, no transition
+    [true, true, false, false], // the same gate drawn again: nothing replays
+    [true, false, true, true], // approved: drawn up, laid out, then eased down; the words come in
+    [false, false, false, false], // and it stays down
+  ])
 })
 
 // ── the OS bar (features/app-bar-actions.clan) ────────────────────────────────
@@ -1901,7 +1877,7 @@ function pageIn(shell: boolean) {
   win.parent = shell ? parent : win
   const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).pop()!
   const ctx = vm.createContext({ window: win, document: doc, navigator: { userAgent: 'Mac' }, Promise, setTimeout, clearTimeout, Date })
-  vm.runInContext(logicSrc, ctx)
+  vm.runInContext(logicRun, ctx)
   vm.runInContext(src, ctx)
   const tell = (data: unknown, source: unknown = parent) => (handlers.message ?? []).forEach(h => h({ data, source }))
   return { app, classes, posted, tell, parent }
