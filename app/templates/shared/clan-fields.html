@@ -593,7 +593,11 @@ var ClanFields=(function(){
     if(v==null||v==='') return '';
     if(typeof v==='string'||typeof v==='number') return String(v);
     if(typeof v==='boolean') return v?'yes':'no';
-    if(Array.isArray(v)) return v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean).join(', ');
+    if(Array.isArray(v)){
+      var xs=v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean);
+      // A list of sentences reads as sentences ("… together. Made by …"), never "together., Made by".
+      return xs.join(xs.length&&xs.every(function(x){ return /[.!?\u2026][\u0022\u201d\u2019\u0029]?\s*$/.test(x); })?' ':', ');
+    }
     return v.name||v.definition||v.statement||v.label||'';
   }
   // What a person can type: a string, a number, a list of plain values, a named thing.
@@ -2005,7 +2009,11 @@ var ClanFields=(function(){
     var el=ref&&document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});
     // A data path no field on the page shows is the app's to show.
-    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)) open(ref);
+    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)){
+      open(ref);
+      // The app may follow along (the brief selects the part, so its panel shows it).
+      if(kindOf(ref)==='path') window.dispatchEvent(new CustomEvent('clan:opened',{detail:{path:ref}}));
+    }
     else window.dispatchEvent(new CustomEvent('clan:focus',{detail:{path:m.path||ref}}));
   });
   function start(){ watchParts(); loadView().then(refresh); }

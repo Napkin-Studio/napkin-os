@@ -570,6 +570,10 @@
   /* the grid */
   .pgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:22px;align-items:start;grid-auto-flow:row}
   .pgrid > .sechead{grid-column:1 / -1}
+  /* A narrow part (a third of the sheet, or less with the Decisions drawer open)
+     never lets its text run into the next one: words and the byline wrap. */
+  .pgrid > .row .clf.txt-f.blk{max-width:calc(100% + 8px);overflow-wrap:anywhere}
+  .pgrid > .row .org{white-space:normal}
   .pgrid > .row{grid-column:span var(--w,12);min-width:0;border-radius:2px;padding:16px 0 18px;transition:background-color .15s var(--ease),box-shadow .15s var(--ease)}
   .pgrid > .row .ctrls{background:var(--paper);border-radius:999px;padding:2px;box-shadow:0 0 0 4px var(--paper)}
   .pgrid > .row .ctrls{position:absolute;right:0;top:14px}
@@ -1010,7 +1014,9 @@
       fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
         .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
         .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-        .then(function(){ if(phase==='doc'){ refreshWhy(); renderBuilt(); } });
+        .then(function(){ if(phase!=='doc') return; refreshWhy();
+          // The selected part's calls follow the chain, unless someone is typing in the panel.
+          var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderBuilt(); else renderSelPart(); });
     }, 120);
   }
   function docId(){ var m=(window.__CLAN__&&window.__CLAN__.manifest)||{}; return m.document_id||m.id||''; }
@@ -1650,17 +1656,43 @@
   function gotoField(key){
     var i=-1; FIELDS.forEach(function(x,j){ if(x.key===key) i=j; });
     var row=document.querySelector('#fields .row[data-i="'+i+'"]'); if(!row) return;
+    // Going to a part (a needs chip, a call's Open) selects it, so the panel shows it.
+    if(SEL!==key) select(key);
     var t=row.querySelector('.note-v[data-cross]')||row.querySelector('.note-v,.note-p')||row;
     t.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
     t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
   }
   function bindNotes(el,f){
     el.querySelectorAll('.act-goto').forEach(function(g){ g.addEventListener('click',function(e){ e.preventDefault(); gotoField(g.getAttribute('data-k')); }); });
-    var o=el.querySelector('.act-override'); if(o) o.addEventListener('click',function(){ var F=OSF(); if(F) F.open(f.key); });
+    var o=el.querySelector('.act-override'); if(o) o.addEventListener('click',function(){ overrideHere(o, f); });
     el.querySelectorAll('.act-fix').forEach(function(b){ b.addEventListener('click',function(){ fixParts(b.getAttribute('data-v')); }); });
     var a=el.querySelector('.act-accept'), x=el.querySelector('.act-dismiss');
     if(a) a.addEventListener('click',function(){ acceptProposal(f); });
     if(x) x.addEventListener('click',function(){ dismissProposal(f); });
+  }
+  // "Keep it as it is, and say why", answered where it was asked: the reason
+  // box takes the button's place, and Save records the same reasoned good
+  // verdict the OS drawer's override does (POST /verdict, polarity good).
+  function overrideHere(btn, f){
+    var row=btn.closest('.editrow')||btn, box=document.createElement('div');
+    box.className='ovr'; box.setAttribute('aria-label','Why '+partName(f)+' is right as it is');
+    box.innerHTML='<label><span>Why is it right as it is? <span class="muted">(needed)</span></span><textarea class="rat" rows="3" required></textarea></label>'
+      +'<div class="note err" hidden></div><div class="editrow"><button type="button" class="save">Keep it as it is</button><button type="button" class="cancel">Cancel</button></div>';
+    row.replaceWith(box);
+    var ta=box.querySelector('textarea'), err=box.querySelector('.err'), go=box.querySelector('.save');
+    try{ ta.focus({preventScroll:true}); }catch(e){}
+    box.querySelector('.cancel').addEventListener('click',function(){ box.replaceWith(row); });
+    // An app frame has no allow-forms: a form never submits, so Save acts on its click.
+    go.addEventListener('click',function(){
+      var why=ta.value.trim();
+      if(!why){ err.textContent='Say why, in a few words.'; err.hidden=false; ta.focus(); return; }
+      go.disabled=true; err.hidden=true;
+      hostPost('/verdict',{target:f.key, polarity:'good', rationale:why}).then(function(res){
+        if(!(res&&res.ok!==false&&!res.error)){ go.disabled=false; err.textContent=hostErrText(res); err.hidden=false; return; }
+        toast('Saved. It stays as it is, with your reason.');
+        var F=OSF(); if(F&&F.reload) F.reload(); loadChain();
+      },function(){ go.disabled=false; err.textContent='That did not go through. Check your connection and try again.'; err.hidden=false; });
+    });
   }
   // Accepting is the person's write of the field, citing the proposal
   // (middleware-api §10.5). The host keeps a view's `reasoning` and drops a
@@ -3153,11 +3185,21 @@
     if(phase!=='doc'){ if(!hasContent()) return; forceIntake=false; render(); }
     gotoField(f.key);
   });
+  // The OS opened one of the brief's parts (a call card's Open): select it too.
+  window.addEventListener('clan:opened', function(e){
+    var p=String((e.detail&&e.detail.path)||''); if(p.indexOf('#')!==-1) p=pathOf(p)||'';
+    var f=FIELDS.filter(function(x){ return x.key===p||p.indexOf(x.key+'.')===0; })[0];
+    if(f&&phase==='doc'&&SEL!==f.key) select(f.key);
+  });
   // The fields snippet has read the host's decision view again: the lock and
   // what it waits for may have moved. A change to the lock redraws the parts
   // (their controls follow it); anything else only the lock and the crew.
+  // A new version (a call settled in the drawer or here) has a new chain too:
+  // read it, so a settled call leaves Your call and the part's notes.
+  var VIEW_VER=null;
   window.addEventListener('clan:viewloaded', function(){
-    if(phase==='doc'){ if(lockSig()!==LOCK_SIG) renderStructured(); else { renderLock(); renderCrewline(); } }
+    var ver=(osView()||{}).version||null, moved=VIEW_VER!==null&&ver!==VIEW_VER; VIEW_VER=ver;
+    if(phase==='doc'){ if(lockSig()!==LOCK_SIG) renderStructured(); else { renderLock(); renderCrewline(); if(moved) loadChain(); } }
     else if(phase==='intake') renderFromUp();
   });
 
@@ -3270,10 +3312,24 @@
       if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov')) return;
       if(SEL!==f.key) select(f.key);
     });
+    // A part's text is a clan-field button whose tap opens "Where this came
+    // from". A double-click is two taps, so that tap waits a moment: a second
+    // one makes it a double-click (it edits, below) and the drawer never opens.
+    // A tap from the keyboard (detail 0) goes straight through.
+    row.addEventListener('click', function(e){
+      var c=e.target.closest&&e.target.closest('.clf');
+      if(row.__clfPass||!e.detail||!c||!row.contains(c)||e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov')) return;
+      e.stopPropagation(); e.preventDefault();
+      if(SEL!==f.key) select(f.key);
+      clearTimeout(row.__clfT);
+      if(e.detail>1) return;
+      row.__clfT=setTimeout(function(){ if(!c.isConnected) return; row.__clfPass=true; try{ c.click(); } finally{ row.__clfPass=false; } }, 300);
+    }, true);
     // A double-click edits the part in the brief's own editor, as its pencil does
     // (in the OS's edit mode a text part's clan-field takes the tap itself).
     row.addEventListener('dblclick', function(e){
-      if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov,button')) return;
+      clearTimeout(row.__clfT);
+      if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov,button:not(.clf)')) return;
       if(!canWrite(f.key)||(EDIT_MODE&&f.type!=='list')) return;
       if(window.getSelection) try{ window.getSelection().removeAllRanges(); }catch(x){}
       startEdit(row, f);
@@ -3398,13 +3454,16 @@
   function briefStatus(s){
     if(s.locked&&s.reopened) return {label:'Reopened', tone:'warn', locked:false};
     if(s.locked) return {label:'Locked', tone:'ok', locked:true};
-    if(s.needs>0) return {label:'Needs you ('+s.needs+')', tone:'warn', locked:false};
-    if(s.canLock) return {label:'Ready to lock', tone:'ok', locked:false};
+    // What needs a call is counted once, on the OS's Decisions (owner, 9 Nov
+    // 2026: one needs indicator): the pill says only where the brief is.
+    if(s.canLock&&!s.needs) return {label:'Ready to lock', tone:'ok', locked:false};
     return {label:'Draft', tone:null, locked:false};
   }
   function statusNow(){
     var l=lockState();
-    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:lockItems().length, canLock:!!(l&&l.can_lock)});
+    // Nothing written yet, or the crew still writing it, is a draft whatever
+    // the host's lock says (it has nothing to block on yet).
+    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:lockItems().length, canLock:!!(l&&l.can_lock)&&!DRAFT&&hasContent()});
   }
   function renderPill(){
     var p=$('statusPill'); if(!p) return; var s=statusNow();
@@ -3433,7 +3492,9 @@
   // What the OS bar shows for the brief (clan:bar, docs/contracts/clan-fields.md):
   // its buttons are the side tab's, by the same ids, and the pill is the state.
   function barItems(){
-    if(phase!=='doc') return [];
+    // Before the sheet (the ask, the crew at work) the bar has no buttons, but
+    // still the brief's own word for its state, so the OS never guesses it.
+    if(phase!=='doc') return [{kind:'status', label:'Draft', tone:null, locked:false}];
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, st=statusNow(), lb=$('lockBtn');
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});
@@ -3464,7 +3525,7 @@
     list.innerHTML=ps.length
       ? ps.map(function(p,i){ return '<button type="button" class="lkitem" data-n="'+i+'"><span class="k">'+esc(p.state==='rejected'?'The client said no':'The client asked for a change')+'</span><span class="x">'+esc(addrLabel(p))+'</span></button>'; }).join('')
         +'<p>Reopening a part lets you make that change. Lock the brief again when it’s done.</p>'
-      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Client said… in the OS bar), then reopen the part they mean here.</p>';
+      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Client review in the OS bar), then reopen the part they mean here.</p>';
     list.querySelectorAll('[data-n]').forEach(function(b){ b.addEventListener('click', function(){
       var p=ps[+b.getAttribute('data-n')]; b.disabled=true;
       hostPost('/client-review/reopen', {answer:p.decision}).then(function(res){
@@ -3517,7 +3578,11 @@
       s.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-v')===cur)); });
     });
     var acc=String(get('theme.accent')||'');
-    if(/^#[0-9a-f]{6}$/i.test(acc)) sh.style.setProperty('--brief-accent', acc); else sh.style.removeProperty('--brief-accent');
+    // One accent across the sheet: the part labels and tabs (--brief-accent),
+    // the section heads (--sec) and the folder tab's name.
+    var tabEl=$('sheetTab');
+    if(/^#[0-9a-f]{6}$/i.test(acc)){ sh.style.setProperty('--brief-accent', acc); sh.style.setProperty('--sec', acc); tabEl.style.color=acc; }
+    else { sh.style.removeProperty('--brief-accent'); sh.style.removeProperty('--sec'); tabEl.style.removeProperty('color'); }
     var sw=$('swatches'), known=SWATCHES.some(function(x){ return x[0].toLowerCase()===acc.toLowerCase(); });
     sw.innerHTML=SWATCHES.map(function(x){ return '<button type="button" class="swatch'+(x[0]?'':' none')+'" data-c="'+x[0]+'"'+(x[0]?' style="background:'+x[0]+'"':'')+' aria-pressed="'+(x[0].toLowerCase()===acc.toLowerCase())+'" title="'+esc(x[1])+'"><span class="sr">'+esc(x[1])+'</span></button>'; }).join('')
       +'<label class="swatch custom" title="Another colour" aria-pressed="'+(!!acc&&!known)+'"><span class="sr">Another colour</span><input type="color" value="'+(/^#[0-9a-f]{6}$/i.test(acc)?acc:'#c9462a')+'" /></label>';

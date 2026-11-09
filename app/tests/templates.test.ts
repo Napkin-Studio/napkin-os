@@ -617,8 +617,13 @@ test('a part the Judge failed can be kept with a reason, empty or not', () => {
   assert.match(notes, /act-override/)
   assert.match(notes, /'Leave it empty, and say why'/)
   assert.match(notes, /'Keep it as it is, and say why'/)
-  // It opens the OS's drawer on the part, where the override is recorded.
-  assert.match(fn(BM, 'bindNotes'), /act-override'\); if\(o\) o\.addEventListener\('click',function\(\)\{ var F=OSF\(\); if\(F\) F\.open\(f\.key\); \}\)/)
+  // It is answered where it was asked: a reason box in place, recorded as the
+  // drawer's override is (a reasoned good verdict on the part), never the drawer.
+  assert.match(fn(BM, 'bindNotes'), /act-override'\); if\(o\) o\.addEventListener\('click',function\(\)\{ overrideHere\(o, f\); \}\)/)
+  const here = fn(BM, 'overrideHere')
+  assert.match(here, /hostPost\('\/verdict',\{target:f\.key, polarity:'good', rationale:why\}\)/)
+  assert.match(here, /if\(!why\)/, 'a reason is needed')
+  assert.doesNotMatch(here, /type="submit"/, 'an app frame has no allow-forms: Save acts on its click')
   // The drawer offers the override on a path whatever its value.
   const vb = fn(CLF, 'verdictBlock')
   assert.match(vb, /data-clf="override"/)
@@ -1607,14 +1612,15 @@ test('a part moved or resized keeps its place in data, and the rest keep theirs'
   assert.equal(partial.find(x => x.key === 'audience')!.w, 12)
 })
 
-test('the brief’s state pill says Draft, Needs you, Ready to lock, Locked or Reopened', () => {
+test('the brief’s state pill says Draft, Ready to lock, Locked or Reopened; what needs a call is counted on Decisions only', () => {
   const { briefStatus } = lift<{ briefStatus(s: unknown): { label: string; tone: string | null; locked: boolean } }>(BM, ['briefStatus'], {})
   assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 0, canLock: false }), { label: 'Draft', tone: null, locked: false })
-  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 2, canLock: false }), { label: 'Needs you (2)', tone: 'warn', locked: false })
+  // One needs indicator (owner, 9 Nov 2026): a count here disagreed with Decisions after Set aside.
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 2, canLock: false }), { label: 'Draft', tone: null, locked: false })
   assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 0, canLock: true }), { label: 'Ready to lock', tone: 'ok', locked: false })
   assert.deepEqual(briefStatus({ locked: true, reopened: false, needs: 0, canLock: false }), { label: 'Locked', tone: 'ok', locked: true })
   assert.deepEqual(briefStatus({ locked: true, reopened: true, needs: 1, canLock: false }), { label: 'Reopened', tone: 'warn', locked: false })
-  for (const s of ['Draft', 'Needs you (12)', 'Ready to lock', 'Locked', 'Reopened']) assert.ok(s.length <= 28, 'a bar label is at most 28 characters')
+  for (const s of ['Draft', 'Ready to lock', 'Locked', 'Reopened']) assert.ok(s.length <= 28, 'a bar label is at most 28 characters')
 })
 
 test('each OS bar button runs the same handler as its side-tab control', () => {
@@ -1635,7 +1641,8 @@ test('each OS bar button runs the same handler as its side-tab control', () => {
     phase: o.phase ?? 'doc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
     statusNow: () => o.st ?? { label: 'Draft', tone: null, locked: false }, $: () => el(), REDRAFT_ARMED: o.armed ? 1 : null,
   }).barItems()
-  assert.deepEqual(items({ phase: 'intake' }), [], 'nothing in the bar before there is a brief')
+  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: no buttons, and the state is Draft (never the host’s guess)')
+  assert.deepEqual(items({ phase: 'proc' }).map(i => i.label), ['Draft'], 'the crew at work: still a draft')
   const draft = items({})
   assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
@@ -1968,4 +1975,11 @@ test('research: the report box and the OS bar say the report’s state in the sa
   assert.match(onBar, /'export'\) doExport\('pdf'\)/)
   assert.match(RT, /m\.type==='clan:bar-action'\)\{ onBarAction/)
   assert.match(RT, /m\.type==='clan:bar\?'\)\{ BAR\.last=''/)
+})
+
+test('a list of sentences reads as sentences in the OS fields, a list of names with commas', () => {
+  const { textOf } = lift<{ textOf(v: unknown): string }>(CLF, ['textOf'], {})
+  assert.equal(textOf(['A €4 deal that gets you both.', 'To confirm: baked every morning.']), 'A €4 deal that gets you both. To confirm: baked every morning.')
+  assert.equal(textOf(['IE', 'GB']), 'IE, GB')
+  assert.equal(textOf([{ name: 'Lidl' }, { name: 'Tesco' }]), 'Lidl, Tesco')
 })
