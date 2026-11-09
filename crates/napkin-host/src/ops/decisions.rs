@@ -326,6 +326,7 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
         findings: members_by_id(clan, members::FINDINGS),
         sources: members_by_id(clan, members::SOURCES),
         chain: &chain,
+        carried: carried_home(clan, &chain),
     };
 
     // Newest first, as the chain is written. A stamp is shown, never used to
@@ -440,6 +441,22 @@ struct Lookup<'a> {
     findings: BTreeMap<String, Value>,
     sources: BTreeMap<String, Value>,
     chain: &'a DecisionChain,
+    /// A document spun off with its upstream carries the parent's chain under
+    /// its own: the parent's document id and the index of its newest decision
+    /// (`lineage.carried.last_decision`). A bare path on a decision from there
+    /// is the parent's, not this document's.
+    carried: Option<(String, usize)>,
+}
+
+/// Where the parent's decisions start in `chain`, for [`Lookup::carried`].
+fn carried_home(clan: &clan_sdk::ClanFile, chain: &DecisionChain) -> Option<(String, usize)> {
+    let c = clan.manifest().carried()?;
+    let last = c.last_decision.as_deref()?;
+    let at = chain
+        .decisions
+        .iter()
+        .position(|d| d.id.as_deref() == Some(last))?;
+    Some((c.document_id.clone(), at))
 }
 
 impl<'a> Lookup<'a> {
@@ -466,6 +483,38 @@ impl<'a> Lookup<'a> {
             None if self.data_for(address).is_some() => format!("{address}#"),
             None => format!("{}#{address}", self.doc_id),
         }
+    }
+
+    /// [`Self::qualify`], for an address decision `i` names: a bare path on a
+    /// decision carried from the parent is on the parent (its edit of
+    /// `mandatories` answered its own verdict, not one here).
+    fn qualify_in(&self, i: usize, address: &str) -> String {
+        match &self.carried {
+            Some((parent, at))
+                if i >= *at
+                    && !address.contains('#')
+                    && self.data_for(address).is_none()
+                    && self.data_for(parent).is_some() =>
+            {
+                format!("{parent}#{address}")
+            }
+            _ => self.qualify(address),
+        }
+    }
+
+    /// Does this document have the field `address` is about? A carried call
+    /// on a part the child does not have (a brief's mandatories, in research
+    /// spun off from it) is the parent's to settle, never a need here.
+    fn has_field_here(&self, address: &str) -> bool {
+        let path = address.split_once('#').map_or(address, |(_, p)| p);
+        let top = path.split(['.', '[']).next().unwrap_or(path);
+        !top.is_empty()
+            && (self.data.get(top).is_some()
+                || self
+                    .schema
+                    .get("properties")
+                    .and_then(|p| p.get(top))
+                    .is_some())
     }
 
     /// The data an address on `doc` is read from: this document's, or the
@@ -519,7 +568,7 @@ impl<'a> Lookup<'a> {
             .flatten()
             .filter_map(|v| v.as_str().map(String::from));
         let named = aims(d).cloned().chain(flags).any(|t| {
-            let t = self.qualify(&t);
+            let t = self.qualify_in(i, &t);
             t == address
                 || t.strip_prefix(address)
                     .is_some_and(|rest| rest.starts_with(['.', '[']))
@@ -907,6 +956,7 @@ pub(crate) fn fields_citing(
         findings: BTreeMap::new(),
         sources: BTreeMap::new(),
         chain: &chain,
+        carried: carried_home(clan, &chain),
     };
     let wanted: BTreeMap<&str, &Value> = findings
         .iter()
@@ -1336,9 +1386,14 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
             continue;
         }
         for t in &d.targets {
-            let address = ctx.qualify(t);
+            let address = ctx.qualify_in(i, t);
             let target = ctx.target(&address);
             if target.kind == "finding" {
+                continue;
+            }
+            // A call carried from the parent on a part this document does
+            // not have is the parent's (and settled there or not, there).
+            if !target.here && !ctx.has_field_here(&target.path) {
                 continue;
             }
             let answered = ctx.later(i, &address, |e| is_edit(e) || reasoned_good_verdict(e));
@@ -1875,7 +1930,7 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
         // finding: D1 wants a person to verify those.
         let bad_verdict = d.is_verdict() && d.polarity.as_deref() == Some("bad");
         let answered = |t: &String| {
-            let address = ctx.qualify(t);
+            let address = ctx.qualify_in(i, t);
             ctx.later(i, &address, is_person)
                 || (bad_verdict
                     && ctx.target(&address).kind != "finding"
@@ -1886,7 +1941,17 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
         if named || every {
             continue;
         }
-        let first = aims(d).next().map(|t| ctx.qualify(t));
+        // What the parent's crew flagged on parts this document does not
+        // have stays with the parent.
+        let carried_away = |t: &String| {
+            let target = ctx.target(&ctx.qualify_in(i, t));
+            !target.here && target.kind != "finding" && !ctx.has_field_here(&target.path)
+        };
+        let mut all_away = aims(d).peekable();
+        if all_away.peek().is_some() && all_away.all(carried_away) {
+            continue;
+        }
+        let first = aims(d).next().map(|t| ctx.qualify_in(i, t));
         let label = first.as_deref().map(|a| ctx.target(a).label);
         let item = |code, text: String| Attention {
             code,

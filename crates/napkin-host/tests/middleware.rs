@@ -461,7 +461,11 @@ fn a_change_another_poll_applied_hands_the_page_the_document() {
     assert_eq!(out["data"]["change"]["applied"], false);
     assert_eq!(out["data"]["change"]["reason"], "already applied");
     assert!(events.is_empty(), "nothing new to fan out");
-    assert_eq!(std::fs::read(f.id.as_str()).unwrap(), before, "nothing written");
+    assert_eq!(
+        std::fs::read(f.id.as_str()).unwrap(),
+        before,
+        "nothing written"
+    );
     assert_eq!(out["clan"]["version"], first["clan"]["version"]);
     assert_eq!(
         out["clan"]["data"],

@@ -970,6 +970,12 @@ fn a_field_whose_writing_decision_cites_a_rejected_finding_is_flagged() {
 /// [`doc_with`], spun off from `UP` with its upstream: the manifest records
 /// the hop (`lineage.carried`), as the SDK writes it.
 fn spun_off(entries: &[(&str, &str)]) -> Document {
+    spun_off_after(entries, None)
+}
+
+/// [`spun_off`], the parent's chain carried under this one's, its newest
+/// decision `last` (`lineage.carried.last_decision`).
+fn spun_off_after(entries: &[(&str, &str)], last: Option<&str>) -> Document {
     let plain = doc_with(entries);
     let clan = plain.clan();
     let mut manifest = clan.manifest().clone();
@@ -986,7 +992,7 @@ fn spun_off(entries: &[(&str, &str)]) -> Document {
             facts_sha256: None,
             findings_sha256: None,
             sources_sha256: None,
-            last_decision: None,
+            last_decision: last.map(String::from),
         }),
         attached: Vec::new(),
     });
@@ -1433,4 +1439,87 @@ fn a_fact_key_reads_without_its_uniqueness_hash() {
     // a word is never taken for a hash
     assert_eq!(f("category.sales_decade"), "Sales decade · IE");
     assert_eq!(f("category.share_2024"), "Share 2024 · IE");
+}
+
+// N4: a research spun off a brief carries the brief's chain. A call the brief
+// settled stays settled (its edit's bare path is the brief's, not the
+// research's), and a call on a part the research does not have is not a need
+// here at all.
+#[test]
+fn a_childs_carried_needs_are_its_own_fields_and_never_what_the_parent_settled() {
+    let chain = format!(
+        "decisions:
+- id: d_mine
+  kind: edit
+  agent: human
+  actor: human:u_a
+  action: edit tone
+  fields_changed: [notes]
+  rationale: notes
+  timestamp: 2026-11-09T03:00:00Z
+- id: d_edit_aud
+  kind: edit
+  agent: human
+  actor: human:u_a
+  action: edit audience
+  fields_changed: [audience]
+  rationale: Changed the audience
+  timestamp: 2026-11-09T02:28:00Z
+- id: d_bad_aud
+  kind: verdict
+  agent: draft_brief@1.0/judge
+  actor: process:middleware
+  action: judge
+  polarity: bad
+  targets: ['{UP}#audience']
+  rationale: Too long.
+  timestamp: 2026-11-09T02:20:00Z
+- id: d_bad_mand
+  kind: verdict
+  agent: draft_brief@1.0/judge
+  actor: process:middleware
+  action: judge
+  polarity: bad
+  targets: ['{UP}#mandatories']
+  rationale: The descriptor is wrong.
+  timestamp: 2026-11-09T02:19:00Z
+- id: d_bad_tone
+  kind: verdict
+  agent: draft_brief@1.0/judge
+  actor: process:middleware
+  action: judge
+  polarity: bad
+  targets: ['{UP}#tone']
+  rationale: Off brand.
+  timestamp: 2026-11-09T02:18:00Z
+"
+    );
+    let data = format!(
+        "audience: Shoppers
+tone: Warm
+notes: n
+upstream:
+  {UP}:
+    audience: Urban drinkers
+    mandatories: ABV 0.5%
+    tone: Dry
+"
+    );
+    let doc = spun_off_after(
+        &[(CHAIN_PATH, &chain), ("shared/data.yaml", &data)],
+        Some("d_edit_aud"),
+    );
+    let v = decisions(&doc).unwrap();
+    let bad: Vec<_> = v
+        .attention
+        .iter()
+        .filter(|a| a.code == "bad_verdict")
+        .map(|a| a.decision.as_deref())
+        .collect();
+    assert_eq!(
+        bad,
+        [Some("d_bad_tone")],
+        "the settled audience and the mandatories the child lacks are not needs: {:?}",
+        v.attention
+    );
 }

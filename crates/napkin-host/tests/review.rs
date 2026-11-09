@@ -1123,9 +1123,11 @@ fn a_contest_resolved_before_the_hop_is_not_resolved_again() {
 fn review_routes_take_ancestor_addresses() {
     let parent = fixture();
     let p = parent.doc.clone();
+    // The brief has the part too: a carried call on a part the child does
+    // not have is the parent's alone, never a need here.
     let brief = child_of(
         &parent,
-        json!({}),
+        json!({ "campaign": { "problem": { "value": "Frozen is seen as second best", "origin": "stated" } } }),
         |data| {
             data["campaign"] = json!({ "problem": { "value": "Frozen is seen as second best", "origin": "stated" } })
         },
