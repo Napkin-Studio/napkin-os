@@ -1219,6 +1219,23 @@ section.report{margin-top:0}
 .rbi-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
 .rb-btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);cursor:pointer}
 .rb-btn:hover{border-color:var(--ink)}
+.rb-btn.bad{color:var(--alert);border-color:color-mix(in srgb,var(--alert) 40%,transparent)}
+.rb-btn.pri{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+.rb-btn[disabled]{opacity:.5;cursor:default}
+.rbi-form{display:grid;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.rbi-form p{margin:0;font-size:12.5px;color:var(--ink-soft)}
+.rbi-presets{display:flex;flex-wrap:wrap;gap:6px}
+.rbi-presets button{height:24px;padding:0 9px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--ink);font:600 11.5px var(--font-ui);cursor:pointer}
+.rbi-form textarea{border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;font:13px var(--font-ui);background:var(--card);color:var(--ink);resize:vertical}
+.rbi-formacts{display:flex;gap:6px}
+.rbi-err{color:var(--alert)!important}
+.rbi-sec > h5 em{font-style:normal;font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--faint);margin-left:auto}
+.rbi-decs .rp-dec{border:1px solid var(--line);border-radius:8px;padding:0 10px;margin:0;background:var(--card);font-size:12.5px}
+.rbi-decs .rp-dec > summary{grid-template-columns:42px auto minmax(0,1fr) auto;gap:8px;padding:9px 0}
+.rbi-decs .rp-dec > summary .t{font:11px var(--font-mono);color:var(--muted)}
+.rp-sec.rsel-sec{background:color-mix(in srgb,#141413 3.5%,transparent);border-radius:8px;margin-left:30px!important;margin-right:30px!important;padding:14px 14px 14px}
+.rsel-line{background:color-mix(in srgb,#141413 5%,transparent);border-radius:6px;box-shadow:0 0 0 4px color-mix(in srgb,#141413 5%,transparent)}
+.rsel-hit{background:linear-gradient(transparent 38%,var(--rs-hl) 38%,var(--rs-hl) 88%,transparent 88%)!important;border-radius:2px}
 /* the evidence map is paper too, in both themes (the mock) */
 .insp-map:not([hidden]){--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--card:#FFFDF8;--paper:#FFFDF8;--line:#E2D9C8;--create:#C9462A;--amber:#B45309;--amber-soft:#FEF3DC;--soft:#F3ECDC;color:#141413;margin:-16px -18px 0;padding:14px 14px 14px;background:#FFFDF8;border-bottom:1px solid var(--line);gap:10px}
 .insp-map .map-h b{font:600 18px var(--font-ui);letter-spacing:-.01em;color:var(--ink)}
@@ -4002,7 +4019,17 @@ section.report{margin-top:0}
   // state. Continue in, Share and Export are the bar's own; Refresh, Lock and
   // accept and Run research are the Report box's (decision, 9 Nov).
   function barItems(st, has, lk){
-    return [{kind:'status', label:st.label, tone:st.tone, locked:st.locked}];
+    var items=[{kind:'status', label:st.label, tone:st.tone, locked:st.locked}], g=has&&!lk?gateWords():'';
+    // Continue in begins with why the report is not brief-ready yet (the mock, gaps L3).
+    if(g) items.unshift({kind:'gate', label:g, tone:'warn'});
+    return items;
+  }
+  function gateWords(){
+    var ids=Object.keys(fnds()), open=checks().filter(function(c){ return c.open; });
+    if(!open.length) return '';
+    var names=open.slice(0,3).map(function(c){ return c.kind==='finding'?'Finding '+(ids.indexOf(c.ref)+1):c.kind==='contest'?'a contest':String(c.label||'a check'); });
+    var t='Not brief-ready yet: '+open.length+' call'+(open.length===1?'':'s')+' open ('+names.join(', ')+(open.length>3?', …':'')+'). You can still start; the brief flags what is open.';
+    return t.length>200?t.slice(0,199)+'…':t;
   }
   function sendBar(st, has, lk){
     var items=barItems(st, has, lk), k=JSON.stringify(items);
@@ -4190,8 +4217,40 @@ section.report{margin-top:0}
         +(used.length?'<div class="rbi-use"><span>Findings</span>'+used.map(function(id){ return '<button type="button" class="rb-fchip" data-sel="'+esc(id)+'"><span class="rb-n">'+(Object.keys(fnds()).indexOf(id)+1)+'</span>Finding '+(Object.keys(fnds()).indexOf(id)+1)+'</button>'; }).join(' ')+'</div>':'')
         +(sums.length?'<div class="rbi-use"><span>Summary</span>'+sums.map(function(i){ return '<span class="rb-cchip">line '+(i+1)+'</span>'; }).join(' ')+'</div>':'')
       +'</div></section>':'')
-      +'<div class="rbi-acts"><button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(ref)+'">Full record →</button></div>';
+      +pinDecsHtml(ref)
+      +pinActsHtml(ref);
     return h;
+  }
+  // The decisions that name a pin, as the record shows them (the mock's
+  // "Decisions on the record" under the card).
+  function pinDecsHtml(ref){
+    if(CHAIN.state!=='ok') return '';
+    var ds=decs().filter(function(d){ return arr(d.targets).concat(arr(d.cites)).some(function(x){ return String(x).indexOf(ref)!==-1; }); });
+    if(!ds.length) return '';
+    return '<section class="rbi-sec rbi-decs"><h5>Decisions on the record<em>'+ds.length+'</em></h5>'+ds.map(recRow).join('')+'</section>';
+  }
+  // Confirm and Mark wrong, as the OS's drawer asks them: a verdict on
+  // facts[<id>] (good, or bad with a reason). Confidential… and the rest of
+  // the record are the drawer's (Full record →).
+  var PINACT={};
+  function pinActsHtml(ref){
+    var ui=PINACT[ref]||{}, L=reportLocked(), busy=!!ui.busy;
+    var h='<div class="rbi-acts">'+(!L?'<button type="button" class="rb-btn" data-act="pin-ok" data-ref="'+esc(ref)+'"'+(busy?' disabled':'')+'>Confirm</button><button type="button" class="rb-btn bad" data-act="pin-bad" data-ref="'+esc(ref)+'"'+(busy?' disabled':'')+'>Mark wrong…</button><button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(ref)+'">Confidential…</button>':'')
+      +'<button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(ref)+'">Full record →</button></div>';
+    if(ui.wrong) h+='<div class="rbi-form"><p>What’s wrong with '+esc(ref)+'? Findings that rest on it get flagged until someone looks.</p>'
+      +'<div class="rbi-presets">'+['out of date','wrong market','misread the source'].map(function(t){ return '<button type="button" data-act="pin-preset" data-ref="'+esc(ref)+'" data-why="'+esc(t)+'">'+esc(t)+'</button>'; }).join('')+'</div>'
+      +'<textarea id="pinwhy-'+esc(slug(ref))+'" data-ref="'+esc(ref)+'" rows="2" placeholder="Or say it in your words">'+esc(ui.why||'')+'</textarea>'
+      +(ui.err?'<p class="rbi-err" role="alert">Say what is wrong with it, so it can be fixed.</p>':'')
+      +'<div class="rbi-formacts"><button type="button" class="rb-btn pri" data-act="pin-bad-go" data-ref="'+esc(ref)+'"'+(busy?' disabled':'')+'>'+(busy?'Saving…':'Mark wrong')+'</button><button type="button" class="rb-btn" data-act="pin-bad-x" data-ref="'+esc(ref)+'">Cancel</button></div></div>';
+    return h;
+  }
+  function pinDecide(ref, body, done){
+    var ui=PINACT[ref]||(PINACT[ref]={}); ui.busy=true; renderSel();
+    hostDecide('/verdict', body).then(function(res){
+      ui.busy=false;
+      if(res&&res.ok){ delete PINACT[ref]; toast(done); } else toast('Not saved: '+((res&&(typeof res.error==='string'?res.error:res.error&&res.error.message))||'the host refused'));
+      renderSel();
+    }).catch(function(e){ ui.busy=false; toast('Not saved: '+(e&&e.message||e)); renderSel(); });
   }
   // A source, in full, in the inspector (the mock's selected source): what it
   // is, the pins it gave with their source lines, and what they reach.
@@ -4211,10 +4270,25 @@ section.report{margin-top:0}
   }
   // A crumb names what it is the way the record does: f_003, Finding 2, Summary.
   function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return r; if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||r, 28); if(/^sum:/.test(r)) return 'Summary'; return clipT(c&&c.label||r, 34); }
+  // What is selected shows in the report too (the mock): the line it is in is
+  // lit, its section takes a wash, and every other place naming it is marked.
+  function markReport(){
+    var root=$('report'); if(!root) return;
+    Array.prototype.forEach.call(root.querySelectorAll('.rsel-sec,.rsel-line,.rsel-hit'), function(n){ n.classList.remove('rsel-sec','rsel-line','rsel-hit'); });
+    var id=VIEW.sel; if(!id){ VIEW.origin=null; return; }
+    var o=VIEW.origin&&root.contains(VIEW.origin)?VIEW.origin:null;
+    if(!o&&/^sum:/.test(id)) o=root.querySelector('.rep-sum li[data-sum="'+id.slice(4)+'"]');
+    if(!o) o=root.querySelector('[data-rsel="'+id+'"],[data-ref="'+id+'"]');
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rsel="'+id+'"],clan-field[ref="'+id+'"] .clf,[data-ref="'+id+'"]'), function(n){ n.classList.add('rsel-hit'); });
+    if(!o) return;
+    var line=o.closest('.rep-sum li,.rp-fp,.headline,.rp-p,tr,.rp-gp,.rp-ct'), sec=o.closest('.rp-sec');
+    if(line) line.classList.add('rsel-line'); if(sec) sec.classList.add('rsel-sec');
+  }
   function plainDay(s){ var d=new Date(s); if(!s||isNaN(d)) return String(s||''); try{ return d.toLocaleDateString('en-GB',{day:'2-digit', month:'short', year:'numeric'}); }catch(e){ return String(s).slice(0,10); } }
   function renderSel(){
     var el=$('insp-sel'); if(!el) return;
     var ins=$('insp'); if(ins) ins.classList.toggle('has-sel', !!VIEW.sel);
+    markReport();
     if(!VIEW.sel){ el.innerHTML=''; return; }
     var t=VIEW.trail;
     // The trail, as the mock draws it: back, Report › … › where you are, close.
@@ -4804,6 +4878,7 @@ section.report{margin-top:0}
     else if(id&&id.indexOf('qtext-')===0) CHAT.qdraft[t.getAttribute('data-q')]=t.value;
     else if(id&&id.indexOf('chkwhy-')===0){ var ui=CHK.ui[t.getAttribute('data-ref')]; if(ui){ ui.why=t.value; if(t.value.trim()) ui.err=false; } }
     else if(id&&id.indexOf('rqin-')===0){ var ak=t.getAttribute('data-k'); (ASK.ui[ak]||(ASK.ui[ak]={})).draft=t.value; }
+    else if(id&&id.indexOf('pinwhy-')===0){ var pk=t.getAttribute('data-ref'); (PINACT[pk]||(PINACT[pk]={wrong:true})).why=t.value; }
     else if(id&&id.indexOf('rqlens-')===0){ var lk2=t.getAttribute('data-k'); (ASK.ui[lk2]||(ASK.ui[lk2]={})).lens=t.value; }
   });
   document.addEventListener('keydown', function(e){
@@ -4905,6 +4980,12 @@ section.report{margin-top:0}
       case 'chk-yes': case 'chk-no': case 'chk-reject': case 'chk-pick': case 'chk-reason': case 'chk-use': case 'chk-cancel': case 'chk-why': case 'chk-open':
         onCheck(act, b); break;
       case 'save-clan': if(window.clan&&window.clan.requestSave){ window.clan.requestSave(); toast('Saving a copy of this .clan…'); } else toast('Saving a copy runs through the host.'); var sm=b.closest('details'); if(sm) sm.open=false; break;
+      case 'pin-ok': pinDecide(b.getAttribute('data-ref'), {target:'facts['+b.getAttribute('data-ref')+']', polarity:'good', rationale:''}, 'Thanks. Saved as right.'); break;
+      case 'pin-bad': PINACT[b.getAttribute('data-ref')]={wrong:true}; renderSel(); var pw=$('pinwhy-'+slug(b.getAttribute('data-ref'))); if(pw) pw.focus(); break;
+      case 'pin-preset': var pr=b.getAttribute('data-ref'), pu=PINACT[pr]||(PINACT[pr]={wrong:true}); pu.why=b.getAttribute('data-why'); pu.err=false; renderSel(); break;
+      case 'pin-bad-x': delete PINACT[b.getAttribute('data-ref')]; renderSel(); break;
+      case 'pin-bad-go': var gr=b.getAttribute('data-ref'), gu=PINACT[gr]||(PINACT[gr]={wrong:true}), gt=$('pinwhy-'+slug(gr)), gw=String(gt&&gt.value||gu.why||'').trim();
+        if(!gw){ gu.err=true; renderSel(); break; } gu.why=gw; pinDecide(gr, {target:'facts['+gr+']', polarity:'bad', rationale:gw}, 'Thanks. Saved as wrong.'); break;
       case 'pin-full': if(window.ClanFields) ClanFields.open(b.getAttribute('data-ref')); break;
       case 'chk-next': nextCheck(); var jbx=$('judge'); if(jbx&&jbx.classList.contains('needs-box')) jbx.innerHTML=judgeBarHtml(checks()); break;
       case 'yc-cut': var yr=b.getAttribute('data-ref')||''; CHK.ui[yr]={mode:'no', why:''}; renderChecks();
@@ -4932,12 +5013,12 @@ section.report{margin-top:0}
   $('exportBtn').addEventListener('click', function(){ doExport('pdf'); });
   // the inspector
   $('viewsw').addEventListener('click', function(e){ var b=e.target.closest('[data-view]'); if(b) setView(b.getAttribute('data-view')); });
-  function mapPick(e){ var g=e.target.closest&&e.target.closest('[data-map]'); if(!g) return; e.preventDefault(); select(g.getAttribute('data-map'), false); }
+  function mapPick(e){ var g=e.target.closest&&e.target.closest('[data-map]'); if(!g) return; e.preventDefault(); VIEW.origin=null; select(g.getAttribute('data-map'), false); }
   $('mapview').addEventListener('click', mapPick);
   $('mapview').addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' ') mapPick(e); });
   $('insp-sel').addEventListener('click', function(e){
     var b=e.target.closest('button,tr[data-sel]'); if(!b) return;
-    if(b.hasAttribute('data-sel')) select(b.getAttribute('data-sel'), true);
+    if(b.hasAttribute('data-sel')){ VIEW.origin=null; select(b.getAttribute('data-sel'), true); }
     else if(b.hasAttribute('data-sel-back')) back();
     else if(b.hasAttribute('data-sel-close')){ VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel(); }
     else if(b.hasAttribute('data-crumb')){ var c=VIEW.trail[+b.getAttribute('data-crumb')]; if(c) select(c.ref, true); }
@@ -4951,11 +5032,11 @@ section.report{margin-top:0}
     if(!t.closest('clan-field')||document.documentElement.classList.contains('clf-editing')||t.classList.contains('editable')) return;
     var ref=t.getAttribute('data-ref'); if(!CARD_KINDS[ClanFields.kindOf(ref)]) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    select(ref, false);
+    VIEW.origin=t; select(ref, false);
   }, true);
   $('report').addEventListener('click', function(e){
     var t=e.target.closest&&e.target.closest('[data-rsel]'); if(!t) return;
-    e.preventDefault(); select(t.getAttribute('data-rsel'), false);
+    e.preventDefault(); VIEW.origin=t; select(t.getAttribute('data-rsel'), false);
   });
   try{ if(sessionStorage.getItem('clan.research.view.'+docId())==='map') setView('map'); }catch(e){}
 
