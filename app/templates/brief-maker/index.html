@@ -6,7 +6,7 @@
 <title>Brief Maker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet" />
 <style>
   /* Brief Maker, in the Napkin Studio OS design language (tokens as the
      shell's app/src/index.css). The OS top bar carries the product; this app
@@ -696,6 +696,404 @@
     .grip,.redge{display:none}
   }
   @media (hover:none) and (pointer:coarse){ .grip,.redge{opacity:1} }
+
+  /* ── The new UI: the approved mock (design/new-ui/napkin-app-v1.html; gaps.md §5, §13.4–13.5) ──
+     The mock's tokens, tinted by the agency's base (--ag-base, from clan:me through the
+     fields snippet), and its sheet, side tab and selected-part panel. Documents stay paper. */
+  :root{
+    --ag-base:#515BFF; --ag-acc:#C8CBFF; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+    --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+    --nd-desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7);
+    --nd-paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+    --nd-paper-2:#F3ECDC; --nd-card:#FFFFFF;
+    --nd-ink:#141413; --nd-ink-soft:#2A2620; --nd-muted:#6D655A; --nd-faint:#9A9082;
+    --nd-line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --nd-line-strong:#2A2620;
+    --nd-warn:#B45309; --nd-warn-soft:#FEF3DC; --nd-ok:#1D8A4E; --nd-ok-soft:#E6F6EC; --nd-alert:#C9462A;
+    --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+    --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+    /* the build's own names, on the mock's values */
+    --desk:var(--nd-desk); --paper:var(--nd-paper); --card:var(--nd-card); --soft:var(--nd-paper-2); --soft-2:var(--nd-paper-2);
+    --line:var(--nd-line); --line-soft:var(--nd-line);
+    --ink:var(--nd-ink); --ink2:var(--nd-muted); --ink3:var(--nd-faint);
+    --go:var(--ag-act); --go-2:var(--ag-act); --goText:var(--ag-act-ink);
+    --ui:var(--font-ui); --mono:var(--font-mono);
+    --grain:none; --fibre:none;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+      --nd-desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+      --nd-paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+      --nd-paper-2:#262320; --nd-card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+      --nd-ink:#EFE9DE; --nd-ink-soft:#D6CEC0; --nd-muted:#A49B8D; --nd-faint:#7B7367;
+      --nd-line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --nd-line-strong:#CFC6B6;
+      --nd-warn:#E09A4B; --nd-warn-soft:#3A2A18; --nd-ok:#5DBB83; --nd-ok-soft:#1C2E23;
+    }
+  }
+  :root[data-color-scheme="dark"]{
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --nd-desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+    --nd-paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --nd-paper-2:#262320; --nd-card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --nd-ink:#EFE9DE; --nd-ink-soft:#D6CEC0; --nd-muted:#A49B8D; --nd-faint:#7B7367;
+    --nd-line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --nd-line-strong:#CFC6B6;
+    --nd-warn:#E09A4B; --nd-warn-soft:#3A2A18; --nd-ok:#5DBB83; --nd-ok-soft:#1C2E23;
+  }
+  body{background:var(--nd-desk)!important;background-image:none!important;font-family:var(--font-ui);font-size:15px;line-height:1.55;color:var(--nd-ink)}
+
+  /* the desk: an A4-ish sheet (860) and the 440 side tab, 32 apart, 28 under the bar */
+  .app.wide{max-width:none;padding-left:0;padding-right:0}
+  #structured .bdesk{grid-template-columns:minmax(0,860px) minmax(320px,440px);gap:32px;justify-content:center;align-items:start;margin-top:0;padding:28px 16px 40px}
+  @media (max-width:1400px){ #structured .bdesk{grid-template-columns:minmax(0,860px) 380px;gap:24px} }
+  @media (max-width:1260px){ #structured .bdesk{grid-template-columns:minmax(0,860px) 350px;gap:20px} }
+  @media (max-width:1100px){ #structured .bdesk{grid-template-columns:minmax(0,1fr)} }
+  #structured .sheetcol{padding-top:16px}
+
+  /* the folder tab over the sheet */
+  #structured .sheettab{left:24px;top:0;height:17px;padding:0 10px;display:inline-flex;align-items:center;border:1px solid #C4AA75;border-bottom:0;border-radius:4px 4px 0 0;background:#E7D5AC;color:#5A4A2A!important;font:600 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;box-shadow:none;max-width:60%}
+
+  /* the sheet: paper in every room */
+  .sheet.a4{--b-text:#2A2620;--b-muted:#6D655A;--b-bg:#FFFDF8;--brief-accent:#C9462A;--sec:var(--brief-accent);
+    --ink:#141413;--ink2:#6D655A;--ink3:#9A9082;--line:#E2D9C8;--line-soft:#E2D9C8;--paper:#FFFDF8;--card:#FFFFFF;--soft:#F3ECDC;--soft-2:#F3ECDC;
+    --fieldFont:var(--font-ui);--grain:none;
+    color:var(--b-text);font-family:var(--font-ui);font-size:15px;line-height:1.55}
+  #sheet.a4{max-width:860px;width:100%;min-height:0;padding:0;border:1px solid #E2D9C8;border-radius:2px;box-shadow:var(--shadow-paper);background:#FFFDF8!important;background-image:none!important}
+  :root[data-color-scheme="dark"] #sheet.a4{border-color:transparent;box-shadow:0 24px 60px -24px rgba(0,0,0,.7)}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) #sheet.a4{border-color:transparent;box-shadow:0 24px 60px -24px rgba(0,0,0,.7)} }
+  #sheet.a4::before,#sheet.a4::after{display:none}
+  .sheet.a4.page{background:#FFFDF8!important;background-image:none!important}
+
+  /* the cover: logo tiles and names, the eyebrow, the serif title */
+  .b-cover{padding:52px 64px 28px;border-bottom:1px solid color-mix(in srgb,var(--b-text) 22%,transparent)}
+  .sheet.a4.page .b-cover{padding:0 0 28px;margin-bottom:10px}
+  .b-ident{display:flex;align-items:center;gap:12px;min-width:0;margin:-6px 0 18px;padding:0 0 14px;border-bottom:1px solid color-mix(in srgb,var(--b-text) 12%,transparent)}
+  .b-logos{display:inline-flex;align-items:center;gap:10px}
+  .b-logos:empty{display:none}
+  .b-logo{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;background:var(--ib);color:var(--if);font:800 13px var(--font-ui);letter-spacing:-.03em;flex:none}
+  .b-logo-img{height:32px;width:auto;max-width:140px;object-fit:contain;display:block}
+  .b-x{display:block;width:1px;height:26px;background:color-mix(in srgb,var(--b-text) 30%,transparent);flex:none}
+  .b-iname{font:700 16px var(--font-ui);letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--b-text)}
+  .b-ikind{margin-left:auto;font:600 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--b-muted);flex:none}
+  .eyebrow-row{display:flex;justify-content:space-between;gap:16px;margin:0 0 8px;font:400 11px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--b-text)}
+  .eyebrow-row span:last-child{text-align:right}
+  .b-cover h2.proj{display:block;margin:4px 0 6px;padding:0;background:none;border:0;box-shadow:none;font:600 34px/1.08 var(--font-serif);letter-spacing:-.015em;color:var(--b-text);max-width:none}
+  .b-cover h2.proj.derived{font-style:italic}
+  .b-cover .dtitle{font-size:12.5px;color:var(--b-muted)}
+  .b-cover .cli{display:none}
+  .sheet.cover-band .b-cover{background:var(--brief-accent);color:#fff;border-bottom:0;padding:32px 44px}
+  .sheet.a4.page.cover-band .b-cover{margin:-56px -64px 10px;padding:32px 64px}
+  .sheet.cover-band .b-cover .b-ident{border-bottom-color:rgba(255,255,255,.25)}
+  .sheet.cover-band .b-cover .b-iname,.sheet.cover-band .b-cover .eyebrow-row,.sheet.cover-band .b-cover h2.proj{color:#fff}
+  .sheet.cover-band .b-cover .b-ikind{color:rgba(255,255,255,.75)}
+  .sheet.cover-band .b-cover .b-x{background:rgba(255,255,255,.4)}
+
+  /* the parts */
+  #sheet .pgrid{column-gap:26px;row-gap:0;padding:10px 64px 36px}
+  .sheet.a4 .pgrid{column-gap:26px;row-gap:0}
+  .sheet.a4 .pgrid > .sechead{display:none}
+  .sheet.a4 .pgrid > .row{position:relative;padding:20px 10px 18px;margin:0;border-top:1px solid color-mix(in srgb,var(--b-text) 14%,transparent);border-radius:5px;box-shadow:none;background-color:transparent}
+  .sheet.a4 .pgrid > .row.r1{border-top-color:transparent}
+  .sheet.a4 .pgrid > .row:hover{background-color:color-mix(in srgb,var(--b-text) 3.5%,transparent);box-shadow:none}
+  .sheet.a4 .pgrid > .row.sel{background-color:color-mix(in srgb,var(--brief-accent) 4%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brief-accent) 30%,transparent);cursor:default}
+  .sheet.a4 .pgrid > .row .lab{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-height:13px;margin:0 0 8px}
+  .sheet.a4 .pgrid > .row .lab > span:first-child{font:700 11px/1.2 var(--font-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--brief-accent);background:none;padding:0}
+  .sheet.a4 .pgrid > .row .val{font-family:var(--font-ui);font-size:15px;line-height:1.55;color:var(--b-text);font-weight:400;letter-spacing:normal}
+  .sheet.a4 .pgrid > .row .val ul{padding-left:18px;margin:0}
+  .sheet.a4 .pgrid > .row .val li{margin:4px 0}
+  .sheet.a4 .pgrid > .row .val li::marker{color:var(--b-text)}
+  .sheet.a4 .pgrid > .row .val.empty{color:var(--b-muted);font-style:italic}
+  /* a cell: a short fact (Client, Project, Budget) */
+  .sheet.a4 .pgrid > .row.k-cell .lab > span:first-child{font:600 10.5px/1.2 var(--font-mono);letter-spacing:.08em;color:var(--b-muted)}
+  .sheet.a4 .pgrid > .row.k-cell .val{font-weight:600;font-size:14.4px}
+  /* the statement: the single-minded proposition */
+  .sheet.a4 .pgrid > .row.k-statement .val,.sheet.a4 .val.spp{font:600 28px/1.16 var(--font-serif)!important;letter-spacing:-.015em!important;color:var(--b-text);margin:4px 0;text-decoration:underline;text-decoration-color:var(--brief-accent);text-decoration-thickness:1.5px;text-underline-offset:7px;text-decoration-skip-ink:auto}
+  .sheet.a4 .val.spp .clf{text-decoration:inherit}
+  /* the callout: the insight */
+  .sheet.a4 .pgrid > .row.k-callout .val{font:italic 400 21px/1.32 var(--font-serif);border-left:3.5px solid var(--brief-accent);padding:4px 0 4px 16px;margin:4px 0}
+  /* a part that needs a call */
+  .sheet.a4 .pgrid > .row.needs{background-color:color-mix(in srgb,var(--nd-warn,#B45309) 7%,transparent);box-shadow:inset 3px 0 0 #B45309}
+  .sheet.a4 .pgrid > .row.needs::before{content:"Needs your call";position:absolute;top:14px;right:10px;padding:2px 8px;border-radius:999px;background:#B45309;color:#fff;font:700 9.5px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;z-index:2}
+  .sheet.a4 .pgrid > .row.needs .lab{padding-right:130px}
+  .sheet.a4 .pgrid > .row.needs:hover{background-color:color-mix(in srgb,#B45309 11%,transparent)}
+  .sheet.a4 .pgrid > .row.needs.sel{background-color:color-mix(in srgb,#B45309 7%,transparent);box-shadow:inset 3px 0 0 #B45309,inset 0 0 0 1px color-mix(in srgb,#B45309 45%,transparent)}
+  /* Why notes: hidden on the sheet unless the side tab says Show all (layout.why) */
+  .sheet.a4:not(.why-show) .prov,.sheet.a4:not(.why-show) .org,.sheet.a4:not(.why-show) .row > .why{display:none!important}
+  /* what asks for a person lives in the side tab's Selected part, not on the sheet */
+  #sheet .pgrid > .row > .notes{display:none}
+  /* the hover icons stay with the grip */
+  .sheet.a4 .pgrid > .row .ctrls{top:12px;right:6px}
+  .sheet.a4 .pgrid > .row.needs .ctrls{right:150px}
+  .sheet.a4 .grip{left:-16px;top:14px;width:14px;height:22px;color:var(--b-muted)}
+  .sheet.a4 .redge{right:-12px;top:8px;bottom:8px;width:10px}
+  .sheet.a4 .redge::after{left:4px;background:color-mix(in srgb,var(--b-text) 30%,transparent)}
+  .sheet.a4 .redge:hover::after,.sheet.a4 .row.resizing .redge::after{background:var(--brief-accent)}
+  .sheet.a4 .pbreak{margin:6px -64px}
+  .sheet.a4 .pbreak span{background:#FFFDF8}
+  .sheet.a4 .conftag{color:var(--b-muted)}
+  /* the boards and the foot */
+  #sheet .sechead#boardsHead{margin:0 64px;padding-top:20px;font:700 11px/1.2 var(--font-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--brief-accent);border-top:1px solid color-mix(in srgb,var(--b-text) 14%,transparent)}
+  #sheet #boardsNote,#sheet #boards{margin-left:64px;margin-right:64px}
+  .b-foot{display:flex;gap:10px;padding:18px 64px 26px;border-top:1px solid color-mix(in srgb,var(--b-text) 14%,transparent);font:400 11.5px var(--font-mono);color:var(--b-muted)}
+  .sheet.a4.page .b-foot{display:none}
+  /* boxed frame: the mock's outlined grid */
+  #sheet.frame-boxed .pgrid{column-gap:0;padding:0;margin:8px 60px 36px;border:1px solid color-mix(in srgb,var(--b-text) 70%,transparent)}
+  .sheet.a4.frame-boxed .pgrid > .row{border:0;border-radius:0;box-shadow:inset -1px -1px 0 color-mix(in srgb,var(--b-text) 70%,transparent);padding:18px 20px}
+  .sheet.a4.frame-boxed .pgrid > .row.sel{box-shadow:inset -1px -1px 0 color-mix(in srgb,var(--b-text) 70%,transparent),inset 0 0 0 2px color-mix(in srgb,var(--brief-accent) 50%,transparent)}
+  .sheet.a4.head-tab .pgrid > .row .lab > span:first-child{background:var(--b-text);color:var(--b-bg);padding:6px 12px;font:800 10.5px/1.2 var(--font-ui);letter-spacing:.14em;border-radius:0;position:absolute;top:0;left:0}
+  .sheet.a4.head-tab .pgrid > .row{padding-top:40px}
+
+  /* ── the side tab (#13.4) ── */
+  #structured .stab{position:sticky;top:calc(var(--clan-top,0px) + 12px);display:flex;flex-direction:column;gap:16px;padding:18px;border:1px solid var(--nd-line);border-radius:8px;background:var(--nd-paper);box-shadow:none;color:var(--nd-ink);font:400 15px/1.55 var(--font-ui);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow-y:auto;backdrop-filter:none}
+  #structured .stab > *{flex-shrink:0}
+  #structured .stab > [hidden]{display:none!important}
+  #structured .stab button{font-family:var(--font-ui)}
+  .side-link{all:unset;box-sizing:border-box;cursor:pointer;font:600 13px var(--font-ui);color:var(--nd-ink);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--ag-base) 55%,transparent);text-underline-offset:3px}
+  :root[data-color-scheme="dark"] .side-link{text-decoration-color:color-mix(in srgb,var(--nd-ink) 45%,transparent)}
+  .side-link:hover{text-decoration-color:currentColor}
+  .side-link:focus-visible,.sp-btn:focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
+  .side-link.armed{color:var(--nd-alert)}
+  .side-link[hidden]{display:none}
+  /* the research changed (upstream notice) */
+  #structured .upnote{display:block;margin:0;padding:0;border:1px solid color-mix(in srgb,var(--ag-base) 50%,var(--nd-line));border-radius:9px;background:color-mix(in srgb,var(--ag-base) 5%,var(--nd-paper));font-size:13px;line-height:1.55;box-shadow:none}
+  #structured .upnote .agent-figure{display:none}
+  /* Save · PDF, split */
+  #structured .splitbtn{display:grid;grid-template-columns:1fr 44px;gap:2px}
+  #structured .sb-main{min-height:38px;height:38px;gap:7px;padding:0 16px;border:1px solid var(--ag-act);border-radius:4px 0 0 4px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px/1.55 var(--font-ui);box-shadow:none}
+  #structured .sb-main .ic{display:none}
+  #structured .sb-more{width:auto;min-height:38px;border:0;border-radius:0 6px 6px 0;background:var(--ag-act);color:var(--ag-act-ink);box-shadow:none}
+  #structured .sb-more:hover,#structured .sb-main:hover{filter:brightness(1.08)}
+  #structured .sb-more .ic{width:16px;height:16px}
+  #structured .smenu{border-color:var(--nd-line);background:var(--nd-card);border-radius:8px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
+  #structured .smi{font-size:13px;min-height:34px}
+  #structured .smi .ic{display:none}
+  #structured .tabacts{display:flex;gap:16px}
+  #structured .tabacts .ic{display:none}
+  /* the state: Brief · chip · version line */
+  .b-state{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:12px;border-top:1px solid var(--nd-line)}
+  .b-state > b{display:flex;align-items:center;font:700 13.5px var(--font-ui);color:var(--nd-ink)}
+  #structured .b-state .pill,.st-chip{display:inline-flex;align-items:center;margin-left:8px;padding:4px 12px;border-radius:999px;border:0;background:color-mix(in srgb,var(--nd-warn) 16%,transparent);color:var(--nd-warn);font:400 11.5px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;gap:0}
+  :root[data-color-scheme="dark"] #structured .b-state .pill{background:color-mix(in srgb,var(--nd-warn) 22%,transparent)}
+  #structured .b-state .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:7px}
+  #structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
+  #structured .b-state .pill.warn{background:color-mix(in srgb,var(--nd-warn) 16%,transparent);color:var(--nd-warn)}
+  .b-state-t{font:400 11px var(--font-mono);color:var(--nd-muted);text-align:right}
+  .b-state-t.ok{color:var(--nd-ok)}
+  /* Lock the brief, Unlock: an outline button */
+  #structured .stab .lock{display:flex;align-items:center;justify-content:center;width:100%;height:36px;min-height:36px;margin:0;padding:0 10px;border:1px solid var(--nd-line);border-radius:8px;background:var(--nd-paper);color:var(--nd-ink);font:600 13px var(--font-ui);box-shadow:none;text-shadow:none;cursor:pointer;opacity:1}
+  #structured .stab .lock:hover:not(:disabled){border-color:var(--nd-ink)}
+  #structured .stab .lock:disabled{cursor:default;opacity:1}
+  #structured .stab .lock.locked{background:var(--nd-paper);color:var(--nd-ink)}
+  #lockedBadge{display:none!important}
+  /* the gate: what has to settle before it can lock */
+  #structured .locklist{display:block;margin:0;padding:2px 0 2px 12px;border-left:2px solid var(--nd-warn);font-size:13px;line-height:1.55}
+  #structured .locklist > .agent-figure{display:none}
+  .b-gate-h{font-weight:600;color:var(--nd-warn);margin-bottom:4px}
+  .b-gate-l{list-style:none;display:grid;gap:3px;margin:0;padding:0}
+  .b-gate-l button{all:unset;cursor:pointer;text-align:left;color:var(--nd-ink-soft);font:400 13px/1.4 var(--font-ui);text-decoration:underline;text-decoration-color:var(--nd-line);text-underline-offset:3px}
+  .b-gate-l button:hover{text-decoration-color:currentColor}
+  .b-gate-l small{font:500 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted);margin-right:6px}
+  .b-gate-more{font-size:12px;color:var(--nd-muted)}
+  /* Reopen a part… and Record the client's answer, under Locked */
+  #structured .reopen{display:grid;gap:8px;margin:0}
+  #structured .reopen .ghost{display:none}
+  #structured .reolist{display:grid;gap:6px;margin:0}
+  #structured .reolist p{font-size:12.5px;color:var(--nd-muted);line-height:1.45}
+  #structured .reolist .lkitem,.b-lk{display:grid;gap:2px;text-align:left;padding:8px 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-card);color:var(--nd-ink);cursor:pointer;font:400 13px var(--font-ui)}
+  #structured .reolist .lkitem .k{font:600 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-warn)}
+  .b-lockacts{display:flex;gap:16px;flex-wrap:wrap}
+  /* the brand card */
+  .brand-line{display:grid;grid-template-columns:12px 1fr;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--nd-line);border-radius:8px;background:var(--nd-card);font-size:13px;line-height:1.55;color:var(--nd-ink)}
+  .brand-line b{font-weight:700}
+  .brand-line small{display:block;font-size:11.5px;color:var(--nd-muted)}
+  .bl-dot{width:12px;height:12px;border-radius:50%;background:var(--brief-accent,#C9462A)}
+  .bl-acts{grid-column:2;display:flex;align-items:center;gap:12px}
+  /* made from */
+  #structured .madefrom.b-made{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:0;padding:0 2px;font-size:13px;line-height:1.55;color:var(--nd-muted)}
+  .b-made small{flex-basis:100%;font:500 11px var(--font-mono);color:var(--nd-muted)}
+  /* review: folded */
+  #structured .review{display:block;margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--nd-line);border-radius:0;background:none;box-shadow:none;font-size:13px;line-height:1.55}
+  .b-review > summary{cursor:pointer;font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--nd-muted)}
+  .b-review > summary small{text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;font-size:.8333em}
+  .b-rev-lead{color:var(--nd-muted);font-size:12.5px;margin:8px 0}
+  .b-review ul.b-rev-l{list-style:none;display:grid;gap:8px;margin:0;padding:0}
+  .b-review .b-rev-l li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:baseline}
+  .b-review .b-rev-l li b{font-size:13px}
+  .b-review .b-rev-l li span{grid-column:1;color:var(--nd-ink-soft);font-size:12.5px;line-height:1.4}
+  .b-review .b-rev-l .rv-tag{font:600 9.5px var(--font-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--nd-warn);margin-left:6px}
+  .b-review .b-rev-l .rv-tag.ok{color:var(--nd-ok)}
+  .b-review .b-rev-l .rv-tag.bad{color:var(--nd-alert)}
+  .b-review .b-rev-l .side-link{grid-area:1 / 2;font-size:12px}
+  .b-review .b-rev-crew{display:grid;gap:8px;margin-top:10px}
+  #structured .b-review .bcrew .pair{display:flex;gap:8px;max-width:none;margin:0}
+  #structured .b-review .bcrew .agent-figure{width:22px;height:30px;flex:none}
+  #structured .b-review .bcrew .say{font-size:12.5px;line-height:1.45;padding:0;border:0;background:none;box-shadow:none;color:var(--nd-ink-soft)}
+  #structured .b-review .bcrew .say::before,#structured .b-review .bcrew .say::after{display:none}
+  #structured .b-review .bcrew .sayer{font:600 9.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted);display:block}
+  #structured .b-review .bcrew .answers button{font:600 12px var(--font-ui);height:26px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);box-shadow:none;margin-top:4px}
+  /* the look */
+  #structured .look{display:grid;gap:16px;padding:0;border:0}
+  #structured .look .tk,.lay-row h4,.stab h4{margin:0 0 6px;font:700 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .look .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #structured .look .lgrid + .lgrid{margin-top:10px}
+  #structured .look .tk2{margin:0 0 5px;font:600 10.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .look .seg{display:flex;border:1px solid var(--nd-line);border-radius:4px;background:var(--nd-card);overflow:hidden}
+  #structured .look .seg button{flex:1;height:32px;min-height:32px;padding:0 4px;border:0;background:transparent;color:var(--nd-muted);font:600 12px/1.55 var(--font-ui)}
+  #structured .look .seg button + button{border-left:0}
+  #structured .look .seg button[aria-pressed="true"]{background:var(--ag-act);color:var(--ag-act-ink)}
+  #structured .swatches{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+  #structured .swatch{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--nd-line);padding:0}
+  #structured .swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--nd-ink)}
+  #structured .swatch.custom{border:0;box-shadow:0 0 0 1px var(--nd-line);background:conic-gradient(from 0deg,#ff4d4d,#ffd24d,#4dff88,#4dd2ff,#7a4dff,#ff4dd2,#ff4d4d)}
+  #structured .sw-gap{display:block;width:1px;height:16px;margin:0 2px;background:var(--nd-line)}
+  #structured .logos{display:flex;flex-wrap:wrap;gap:8px}
+  #structured .logo{position:relative;width:74px;height:74px;display:grid;place-items:center;align-content:center;gap:4px;padding:6px;border:1px solid var(--nd-line);border-radius:10px;background:var(--nd-card);font-size:11px}
+  #structured .logo img{max-width:58px;max-height:34px;height:auto;object-fit:contain}
+  #structured .logo small,#structured .logo > span:not(.lb-tile){font:600 9.5px var(--font-ui);color:var(--nd-muted);max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #structured .logo select{position:absolute;inset:auto 4px 4px;opacity:0;height:16px}
+  #structured .logo:hover select{opacity:1}
+  #structured .logo .x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;border:1px solid var(--nd-line);background:var(--nd-card);font:600 12px/1 var(--font-ui);opacity:0;transition:opacity .12s;padding:0;color:var(--nd-ink)}
+  #structured .logo:hover .x{opacity:1}
+  #structured .logo.add{border:1px dashed var(--nd-line-strong);background:transparent;color:var(--nd-ink)}
+  #structured .logo.add .ic{display:none}
+  #structured .logo.add b{font:300 26px/1 var(--font-ui);color:var(--nd-ink-soft)}
+  .lb-tile{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font:800 13px var(--font-ui);letter-spacing:-.03em;background:var(--ib);color:var(--if)}
+  #structured #resetLook{font-size:12px;color:var(--nd-muted);min-height:0}
+  .side-hint{font-size:12px;line-height:1.45;color:var(--nd-muted);border-top:1px solid var(--nd-line);padding-top:12px;margin:0}
+  #structured .status:empty{display:none}
+
+  /* ── the selected part (#13.5) ── */
+  #structured .selpart.side-part{display:grid;gap:9px;padding:12px;border:1px solid color-mix(in srgb,var(--ag-act) 45%,var(--nd-line));border-radius:8px;background:var(--nd-card);color:var(--nd-ink)}
+  #structured .selpart[hidden]{display:none}
+  .side-part > h4{margin:0 0 6px!important;font:700 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted);display:flex;justify-content:space-between;align-items:center}
+  .side-part > h4 .side-link{font:600 11px var(--font-ui);letter-spacing:0;text-transform:none;color:var(--nd-muted)}
+  .side-part .sp-name{display:block;font:700 14px var(--font-ui);letter-spacing:-.01em;color:var(--nd-ink)}
+  #structured .side-part .sp-acts{display:flex;flex-wrap:wrap;gap:6px}
+  .sp-btn,#structured .side-part .sp-acts button{display:inline-flex;align-items:center;gap:5px;height:28px;min-height:28px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:600 12px var(--font-ui);cursor:pointer;box-shadow:none}
+  .sp-btn:hover,#structured .side-part .sp-acts button:hover:not(:disabled){border-color:var(--nd-ink)}
+  #structured .side-part .sp-acts button.sp-edit{color:var(--nd-alert);border-color:color-mix(in srgb,var(--nd-alert) 40%,transparent)}
+  #structured .side-part .sp-acts button[aria-pressed="true"]{background:var(--nd-ink);color:var(--nd-card);border-color:var(--nd-ink)}
+  #structured .side-part .sp-acts button:disabled{opacity:.45;cursor:not-allowed}
+  #structured .side-part .sp-acts .ic{width:12px;height:12px}
+  /* Your call: questions with Yes / No / Answer…, and the crew's calls on this part */
+  .needs-box{display:grid;gap:8px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--nd-warn) 35%,transparent);border-radius:6px;background:color-mix(in srgb,var(--nd-warn) 6%,var(--nd-card));color:var(--nd-ink);cursor:default}
+  .nb-h{font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-warn)}
+  .nb-q{display:grid;gap:6px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--nd-warn) 18%,transparent)}
+  .nb-h + .nb-q{border-top:0;padding-top:0}
+  .nb-t{font-size:13.5px;line-height:1.4}
+  .nb-act{display:flex;flex-wrap:wrap;gap:6px}
+  .nb-act button{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--nd-line-strong);background:var(--nd-card);color:var(--nd-ink);font:600 12px var(--font-ui);cursor:pointer}
+  .nb-act button:hover{background:var(--nd-ink);color:var(--nd-card)}
+  .nb-act button.nb-why{border:0;background:none;color:var(--nd-muted);padding:0 4px;text-decoration:underline;text-underline-offset:3px}
+  .nb-act button.nb-why:hover{background:none;color:var(--nd-ink)}
+  .nb-act button.nb-primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+  .nb-in{flex:1;min-width:160px;height:28px;border:1px solid var(--nd-line-strong);border-radius:6px;padding:0 8px;font:13px var(--font-ui);background:var(--nd-card);color:var(--nd-ink)}
+  .nb-q.done .nb-t{color:var(--nd-muted)}
+  .nb-a{font-size:12.5px;font-weight:600;color:var(--nd-ok)}
+  .nb-a.left{color:var(--nd-muted)}
+  .nb-sub{font-size:12.5px;line-height:1.45;color:var(--nd-ink-soft)}
+  .nb-sub ul{margin:4px 0 0 16px}
+  .needs-box .note-v,.needs-box .note-p{display:grid;gap:6px;padding:8px 0 0;margin:0;border:0;border-top:1px solid color-mix(in srgb,var(--nd-warn) 18%,transparent);background:none;box-shadow:none;font-size:13px;line-height:1.45;color:var(--nd-ink)}
+  .needs-box .nb-h + .note-v,.needs-box .nb-h + .note-p{border-top:0;padding-top:0}
+  .needs-box .note-v > .agent-figure,.needs-box .note-p > .agent-figure{display:none}
+  .needs-box .note-v b{font-size:13.5px;font-weight:600}
+  .needs-box .note-v p,.needs-box .note-v ul{font-size:12.5px;color:var(--nd-ink-soft);margin:2px 0}
+  .needs-box .note-v .muted{font-size:12px;color:var(--nd-muted)}
+  .needs-box .note-v .editrow,.needs-box .note-p .editrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .needs-box button.act-fix,.needs-box .note-p .save{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;margin-top:4px}
+  .needs-box .act-override,.needs-box .note-p .cancel{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--nd-line-strong);background:var(--nd-card);color:var(--nd-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;text-decoration:none}
+  /* Built from: compact rows, the source card one click away */
+  .sp-built{display:grid;gap:8px}
+  .rsp-k{display:block;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
+  .bf-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;width:100%;padding:7px 9px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);text-align:left;font:inherit;cursor:pointer}
+  :root[data-color-scheme="dark"] .bf-row{background:var(--nd-card)}
+  .bf-row:hover{border-color:var(--nd-ink)}
+  .bf-row .pin{width:8px;height:8px;border-radius:50%;background:var(--nd-alert);margin:0 4px}
+  .bf-row .pin.ok{background:var(--nd-ok)}
+  .bf-row .pin.warn{background:var(--nd-warn)}
+  .bf-row .bf-ico{font-size:13px;color:var(--nd-muted);width:16px;text-align:center}
+  .bf-row b{display:block;font:600 12.5px/1.3 var(--font-ui)}
+  .bf-row small{display:block;font:400 10.5px var(--font-mono);color:var(--nd-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bf-row > span:nth-child(2){min-width:0}
+  .bf-val{font:700 12px var(--font-mono);padding:0 3px;background:#F6E36B;color:#151412;border-radius:2px;white-space:nowrap}
+  .bf-go{font:500 10.5px var(--font-mono);color:var(--nd-muted);white-space:nowrap}
+  .bf-used{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-2px 0 2px}
+  .bf-used .tk2{margin:0;font:600 9.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  .bf-chip{height:22px;min-height:22px;padding:0 8px;border:1px solid var(--nd-line);border-radius:999px;background:var(--nd-card);font:600 11px var(--font-ui);cursor:pointer;color:var(--nd-ink)}
+  .bf-card:empty{display:none}
+  #structured .side-part details{border-top:1px solid var(--nd-line);padding-top:9px}
+  #structured .side-part details > summary{cursor:pointer;margin:0 0 6px;min-height:0;display:list-item;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .side-part details:not([open]) > summary{margin:0}
+  #structured .side-part .why{font-size:13px}
+  /* upstream notice: the research changed */
+  .b-up > summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none;font:600 13px/1.55 var(--font-ui);color:var(--nd-ink)}
+  .b-up > summary::-webkit-details-marker{display:none}
+  .b-up > summary i{width:7px;height:7px;border-radius:50%;background:var(--ag-base);flex:none}
+  :root[data-color-scheme="dark"] .b-up > summary i{background:var(--ag-acc)}
+  .b-up > summary small{margin-left:auto;font:500 11px var(--font-mono);color:var(--nd-muted)}
+  .b-up-m{margin:0 12px 6px;font-size:12px;color:var(--nd-muted);line-height:1.45}
+  .b-up ul{margin:0 12px 8px 28px;display:grid;gap:4px;font-size:12.5px;line-height:1.45;color:var(--nd-ink-soft)}
+  .b-up ul .m{color:var(--nd-muted)}
+  .b-up-acts{display:flex;gap:10px;align-items:center;padding:0 12px 12px}
+  /* the state chip when locked */
+  #structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
+  /* Record the client's answer */
+  #structured .b-lockacts{display:block}
+  #structured .b-crbtn{width:100%;justify-content:center}
+  .b-cr{display:grid;gap:10px;padding:12px;border:1px solid var(--nd-line);border-radius:9px;background:var(--nd-card);font-size:13px;line-height:1.45;color:var(--nd-ink)}
+  .b-cr h4{margin:0!important}
+  .b-cr .cr-verdicts{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+  .b-cr .cr-verdicts label{position:relative;border:1px solid var(--nd-line);border-radius:6px;padding:7px 6px;text-align:center;cursor:pointer;font-size:12.5px}
+  .b-cr .cr-verdicts input{position:absolute;opacity:0;pointer-events:none}
+  .b-cr .cr-verdicts label:has(input:checked){border-color:var(--nd-ink);background:color-mix(in srgb,var(--nd-ink) 6%,transparent);font-weight:600}
+  .b-cr .cr-reasons{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px}
+  .b-cr .cr-reasons label{display:flex;gap:5px;align-items:center}
+  .b-cr .cr-which small{color:var(--nd-muted);font-size:12px}
+  .b-cr .cr-parts{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;max-height:150px;overflow:auto;font-size:12.5px;margin-top:4px}
+  .b-cr .cr-parts label,.b-cr .cr-call{display:flex;gap:6px;align-items:center}
+  .b-cr .cr-call{font-size:12px;color:var(--nd-muted)}
+  .b-cr textarea,.b-cr input[type=text]{width:100%;border:1px solid var(--nd-line);border-radius:6px;padding:7px 9px;font:13px var(--font-ui);background:var(--nd-paper);color:var(--nd-ink)}
+  .b-cr .cr-file{font-size:12.5px;color:var(--nd-muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .b-cr .cr-file input{font-size:12px;max-width:220px}
+  .b-cr .cr-strength{font-size:12px;color:var(--nd-muted);margin:0}
+  .b-cr .cr-err{font-size:12.5px;color:var(--nd-alert);margin:0}
+  .b-cr .cr-acts{display:flex;justify-content:flex-end;align-items:center;gap:10px}
+  /* on the sheet a field reads as words: its state (marked wrong, to check) is the part's badge and the panel's Your call */
+  .sheet.a4:not(.why-show) .pgrid > .row .clf.txt-f{background:none!important;border-bottom:0!important}
+  .sheet.a4:not(.why-show) .pgrid > .row .clf .tag{display:none!important}
+  .app.wide{padding-top:0;padding-bottom:40px}
+  .app.wide > .foot{display:none}
+  .needs-box .nb-h + .notes > :first-child,.needs-box .notes:first-child > :first-child{border-top:0;padding-top:0}
+  .needs-box .notes:empty{display:none}
+  .nb-in:focus{outline:2px solid var(--ag-act);outline-offset:0}
+  .b-gate-l .lkitem .x{text-decoration:inherit}
+  .b-gate-l .lkitem small.k{display:inline;margin:0 0 0 6px;text-decoration:none;font:500 9.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .tabacts:not(:has(> :not([hidden]))),#structured .b-lockacts:not(:has(> :not([hidden]))){display:none}
+  #structured .b-lockacts{display:grid;gap:10px;justify-items:start}
+  #structured .b-reopen{font-size:12.5px}
+  #structured .side-part .sp-acts button.sp-conf[aria-pressed="true"]::before{content:"● ";white-space:pre}
+  .sheet.a4 .pgrid > .row.conf{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,#C9462A 9%,transparent) 7px 8px);box-shadow:inset 0 0 0 1px color-mix(in srgb,#C9462A 45%,transparent)}
+  .sheet.a4 .conftag{color:#C9462A;border-color:color-mix(in srgb,#C9462A 60%,transparent);opacity:1}
+  .toast{background:#141413;color:#fff;border-radius:6px;font:500 13px var(--font-ui);padding:12px 18px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)}
+  .b-gate-l .lkitem .x{display:inline}
+  #structured .sheettab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:16px}
+  :root[data-color-scheme="dark"] #structured .b-state .pill.ok,#structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
+  :root[data-color-scheme="dark"] #structured .b-state .pill.ok{color:#141413}
+  .bf-row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bf-also > summary{cursor:pointer;font:500 10.5px var(--font-mono);color:var(--nd-muted);list-style:none}
+  .bf-also > summary::before{content:"▸ "}
+  .bf-also[open] > summary::before{content:"▾ "}
+  .bf-also .bf-used{margin:6px 0 0}
+  .sheet.a4 .pgrid > .row.meta-version{cursor:default}
+  .sheet.a4 .pgrid > .row.meta-version:hover{background-color:transparent}
+  .sheet.a4 .pgrid > .row.k-cell .val.empty{font-style:normal;font-weight:600;color:var(--b-muted)}
+  .side-link:disabled{opacity:.45;cursor:not-allowed;text-decoration-color:var(--nd-line)}
+  .sheet.a4 .pgrid > .row.k-cell.needs::before{position:static;display:table;margin:0 0 8px}
+  .sheet.a4 .pgrid > .row.k-cell.needs .lab{padding-right:0}
+  .sheet.a4 .pgrid > .row.k-cell.needs .ctrls{right:6px;top:40px}
+  /* New brief lives in Continue in › Start fresh (gaps.md §7 L2) */
+  #structured #newDraft{display:none}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -742,19 +1140,18 @@
       <div class="sheetcol">
         <div class="sheettab" id="sheetTab" aria-hidden="true"></div>
         <article class="sheet a4" id="sheet" aria-label="The brief">
-          <header class="shead">
-            <div class="slogos" id="sheetLogos"></div>
-            <div class="sident"><div class="ident" id="docIdent"></div></div>
+          <header class="b-cover" id="bCover">
+            <div class="b-ident"><span class="b-logos" id="sheetLogos"></span><span class="b-iname" id="sheetNames"></span><span class="b-ikind">Brief</span></div>
+            <div class="eyebrow-row"><span class="skick">Creative brief</span><span id="sheetMeta"></span></div>
+            <h2 class="proj" id="hProj"></h2><div class="dtitle" id="hDerived" hidden></div><div class="cli" id="hCli" hidden></div>
+            <div class="sident" hidden><div class="ident" id="docIdent"></div></div>
           </header>
-          <div class="stitle">
-            <div class="skick">Creative brief</div>
-            <div class="proj" id="hProj"></div><div class="dtitle" id="hDerived" hidden></div><div class="cli" id="hCli"></div>
-          </div>
           <div id="fields" class="pgrid"></div>
 
           <div class="sechead" id="boardsHead" style="display:none">Your pictures</div>
           <p class="pnote" id="boardsNote" hidden>From what you sent. Tap + to add more, or tap one to take it out.</p>
           <div class="boards" id="boards"></div>
+          <footer class="b-foot" id="sheetFoot"></footer>
         </article>
       </div>
 
@@ -774,42 +1171,54 @@
           </div>
         </div>
         <div class="tabacts">
-          <button type="button" class="tlink" data-act="redraft" id="redraft" title="Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them."><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5"/></svg>Draft it again</button>
-          <button type="button" class="tlink" id="newDraft" title="Start again from a new brief"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>New brief</button>
+          <button type="button" class="side-link" data-act="redraft" id="redraft" title="Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them."><span>Draft it again</span></button>
+          <button type="button" class="side-link" id="newDraft" title="Start again from a new brief">New brief</button>
         </div>
 
-        <div class="tsec tstate">
-          <div class="trow"><b>Brief</b><span class="pill" id="statusPill" role="status"></span></div>
-          <button class="lock" id="lockBtn" data-act="lock">Lock the brief</button>
-          <span class="muted" id="lockedBadge" style="display:none;color:var(--ok)">Locked for handoff</span>
-          <div class="locklist" id="lockList" hidden></div>
-          <div class="reopen" id="reopenBox" hidden>
-            <button type="button" class="ghost" id="reopenBtn" data-act="reopen" aria-expanded="false" aria-controls="reopenList">Reopen a part…</button>
-            <div class="reolist" id="reopenList" hidden></div>
-          </div>
-          <span class="muted status" id="status" role="status"></span>
+        <div class="b-state" id="bState"><b>Brief<span class="pill" id="statusPill" role="status"></span></b><span class="b-state-t" id="stateLine"></span></div>
+        <button class="lock" id="lockBtn" data-act="lock">Lock the brief</button>
+        <span class="muted" id="lockedBadge" style="display:none">Locked for handoff</span>
+        <div class="locklist" id="lockList" hidden></div>
+        <div class="b-lockacts" id="lockActs" hidden>
+          <button type="button" class="sp-btn b-crbtn" id="crOpen" aria-expanded="false" aria-controls="clientAnswer">Record the client’s answer</button>
+          <button type="button" class="side-link b-reopen" id="reopenBtn" data-act="reopen" aria-expanded="false" aria-controls="reopenList" title="A part reopens for a change the client asked for; the rest stays locked">Reopen a part…</button>
         </div>
+        <div class="reopen" id="reopenBox" hidden>
+          <div class="reolist" id="reopenList" hidden></div>
+        </div>
+        <section class="b-cr" id="clientAnswer" hidden aria-label="The client’s answer"></section>
+        <span class="muted status" id="status" role="status"></span>
 
-        <div class="tsec brandline" id="brandLine" hidden></div>
-        <div class="madefrom" id="madeFrom" hidden></div>
-        <div class="bcrew" id="crewline" aria-live="polite"></div>
+        <div class="brand-line" id="brandLine" hidden></div>
+        <div class="madefrom b-made" id="madeFrom" hidden></div>
 
-        <section class="tsec selpart" id="selPart" hidden aria-label="Selected part"></section>
+        <section class="selpart side-part" id="selPart" hidden aria-label="Selected part"></section>
 
-        <div class="review" id="review" hidden></div>
+        <details class="review b-review" id="review" hidden><summary>Review<small id="reviewSum"></small></summary><div id="reviewBody"></div><div class="b-rev-crew"><div class="bcrew" id="crewline" aria-live="polite"></div></div></details>
 
         <section class="tsec look" aria-label="How the brief looks">
-          <h3 class="tk">Layout</h3>
-          <div class="lgrid">
-            <div><div class="tk2" id="lkFrame">Frame</div><div class="seg" role="group" aria-labelledby="lkFrame" data-look="frame"><button type="button" data-v="open">Open</button><button type="button" data-v="boxed">Boxed</button></div></div>
-            <div><div class="tk2" id="lkHead">Headings</div><div class="seg" role="group" aria-labelledby="lkHead" data-look="headings"><button type="button" data-v="label">Label</button><button type="button" data-v="tab">Tab</button></div></div>
+          <div class="lay-row">
+            <h3 class="tk">Layout</h3>
+            <div class="lgrid">
+              <div><div class="tk2" id="lkFrame">Frame</div><div class="seg" role="group" aria-labelledby="lkFrame" data-look="frame"><button type="button" data-v="open">Open</button><button type="button" data-v="boxed">Boxed</button></div></div>
+              <div><div class="tk2" id="lkHead">Headings</div><div class="seg" role="group" aria-labelledby="lkHead" data-look="headings"><button type="button" data-v="label">Label</button><button type="button" data-v="tab">Tab</button></div></div>
+            </div>
+            <div class="lgrid">
+              <div><div class="tk2" id="lkCover">Cover</div><div class="seg" role="group" aria-labelledby="lkCover" data-look="cover"><button type="button" data-v="plain">Plain</button><button type="button" data-v="band">Band</button></div></div>
+              <div><div class="tk2" id="lkWhy">Why notes</div><div class="seg" role="group" aria-labelledby="lkWhy" data-look="why"><button type="button" data-v="hide">Hide</button><button type="button" data-v="show">Show all</button></div></div>
+            </div>
           </div>
-          <h3 class="tk">Colour</h3>
-          <div class="swatches" id="swatches" role="group" aria-label="The brief’s colour"></div>
-          <h3 class="tk">Logos</h3>
-          <div class="logos" id="logoList"></div>
-          <button type="button" class="tlink" id="resetLook">Reset look</button>
+          <div>
+            <h3 class="tk">Colour</h3>
+            <div class="swatches" id="swatches" role="group" aria-label="The brief’s colour"></div>
+          </div>
+          <div>
+            <h3 class="tk">Logos</h3>
+            <div class="logos" id="logoList"></div>
+          </div>
+          <button type="button" class="side-link" id="resetLook">Reset look</button>
         </section>
+        <p class="side-hint">Click a part to see its why and options here. Double-click to edit. Drag ⋮⋮ to move it, its right edge to resize.</p>
       </aside>
     </div>
   </section>
@@ -1877,17 +2286,19 @@
   function healthWords(n){ return n>=70?'in good shape':n<40?'needs work':'nearly there'; }
   function renderReview(){
     var el=$('review'); if(!el) return;
-    var rv=get('review'); if(!rv||typeof rv!=='object'||!rv.scorecard){ el.innerHTML=''; el.hidden=true; return; }
-    var sc=rv.scorecard, j=rv.judge;
-    var dims=arr(sc.dimensions).map(function(x){
-      return '<li><span class="pill'+(x.verdict==='pass'?' ok':x.verdict==='missing'?' alert':'')+'">'+esc(VERDICT[x.verdict]||x.verdict)+'</span> '+esc(dimName(x.dimension))+(x.fix&&x.verdict!=='pass'?' <span class="m">— '+esc(x.fix)+'</span>':'')+'</li>';
-    }).join('');
+    var rv=get('review'), sc=rv&&typeof rv==='object'?rv.scorecard:null, j=rv&&rv.judge;
+    var crew=$('crewline'), hasCrew=!!(crew&&crew.innerHTML.trim());
+    if(!sc&&!hasCrew){ el.hidden=true; return; }
+    var dims=sc?arr(sc.dimensions):[], gaps=dims.filter(function(x){ return x&&x.verdict!=='pass'; }), ok=dims.length-gaps.length;
+    var held=0; if(CHAIN.state==='ok') FIELDS.forEach(function(f){ var v=ownVerdictOf(f.key); if(v&&!v.bad&&!v.open) held++; });
+    var notes=gaps.length+FIELDS.filter(function(f){ return partCallOpen(f); }).length;
     el.hidden=false;
-    el.innerHTML='<div class="sechead">'+esc(JUDE)+'’s review'+(j&&typeof j.health==='number'?' <span class="pill'+(j.health>=70?' ok':j.health<40?' alert':'')+'">'+esc(healthWords(j.health))+'</span>':'')+'</div>'
-      +(sc.summary?'<p class="val" style="font-size:14.5px">'+esc(sc.summary)+'</p>':'')
-      +(dims?'<ul class="dims">'+dims+'</ul>':'');
+    $('reviewSum').textContent=(notes===1?'1 note':notes+' notes')+' · '+(held||ok)+' '+((held||ok)===1?'part holds':'parts hold')+' up'+(j&&typeof j.health==='number'?' · '+healthWords(j.health):'');
+    $('reviewBody').innerHTML='<p class="b-rev-lead">'+esc(sc&&sc.summary?sc.summary:'Is this right? '+JUDE+' checked every part against its sources.')+'</p>'
+      +(dims.length?'<ul class="b-rev-l">'+dims.map(function(x){
+        return '<li><b>'+esc(dimName(x.dimension))+'<span class="rv-tag'+(x.verdict==='pass'?' ok':x.verdict==='missing'?' bad':'')+'">'+esc(VERDICT[x.verdict]||x.verdict)+'</span></b>'+(x.fix&&x.verdict!=='pass'?'<span>'+esc(x.fix)+'</span>':'')+'</li>';
+      }).join('')+'</ul>':'');
   }
-
   // ---------- colour maths (keeps chrome legible on any ground) ----------
   function h2r(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(function(c){return c+c;}).join('');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
   function r2h(a){return '#'+a.map(function(x){return Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0');}).join('');}
@@ -2379,7 +2790,8 @@
   function upKeys(){ var u=get('upstream'); return u&&typeof u==='object'&&!Array.isArray(u)?Object.keys(u).filter(function(k){ return !isBrandKit(u[k]); }):[]; }
   function isResearchFed(){ return upKeys().length>0; }
   var UP={state:'idle', res:null, t:null};
-  function upEntry(){ var r=UP.res; return r?arr(r.upstream).filter(function(e){ return e&&e.direct; })[0]||null:null; }
+  // The research this brief was made from; else the one it is linked to (how:'linked').
+  function upEntry(){ var r=UP.res, ups=r?arr(r.upstream):[]; return ups.filter(function(e){ return e&&e.direct; })[0]||ups.filter(function(e){ return e&&e.how==='linked'&&e.noun!=='brand'; })[0]||null; }
   // The direct parent: the one lineage.carried names, else the only one there.
   function directUpId(){ var ks=upKeys(), c=UP.res&&UP.res.carried&&UP.res.carried.document_id; return c&&ks.indexOf(c)!==-1?c:ks[0]||''; }
   function upData(){ var id=directUpId(), u=get('upstream')||{}; return id&&u[id]&&typeof u[id]==='object'?u[id]:{}; }
@@ -2483,13 +2895,14 @@
       if(ch.data) w.push('its ask or its report was edited'); if(ch.facts) w.push('its facts changed'); if(ch.findings) w.push('its findings changed'); if(ch.sources) w.push('its sources changed');
       if(w.length){ var w0=listWords(w); li.push(esc('In the research, '+w0+'. Open the research to see what changed, and bring anything you need into this brief yourself.')); } }
     var ds=typeof e.decisions_since==='number'&&e.decisions_since>0?' '+Num(e.decisions_since)+' '+(e.decisions_since===1?'decision was':'decisions were')+' made there since.':'';
-    var shown=li.slice(0,5), rest=li.slice(5);
-    return '<div class="ub"><b>The research has changed since this brief started.</b>'
-      +'<span class="m">'+esc('This brief keeps the research as it was then; it doesn’t take the newer one on its own.'+ds)+'</span>'
-      +(shown.length?'<ul>'+shown.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>':'')
-      +(rest.length?'<details><summary>'+rest.length+' more '+(rest.length===1?'change':'changes')+'</summary><ul>'+rest.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul></details>':'')+'</div>';
+    return '<details class="b-up"><summary><i aria-hidden="true"></i>The research changed<small>'+li.length+'</small></summary>'
+      +'<p class="b-up-m">'+esc('This brief keeps the research as it was then; it doesn’t take the newer one on its own.'+ds)+'</p>'
+      +(li.length?'<ul>'+li.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>':'')
+      +(approveLocked()?'':'<div class="b-up-acts"><button type="button" class="sp-btn" data-up="redraft">Draft it again</button></div>')+'</details>';
   }
-  function renderUpNote(el){ if(!el) return; var h=upNoteInner(); el.hidden=!h; el.innerHTML=h; }
+  function renderUpNote(el){ if(!el) return; var h=upNoteInner(), was=el.querySelector('details.b-up'), open=!!(was&&was.open); el.hidden=!h; el.innerHTML=h;
+    var d=el.querySelector('details.b-up'); if(d&&open) d.open=true;
+    var r=el.querySelector('[data-up=redraft]'); if(r) r.addEventListener('click', function(){ redraftClick(); }); }
   // Read when the brief opens and after each write (a read, any actor, locked or not).
   function loadUpstream(){
     if(!isResearchFed()) return;
@@ -2503,16 +2916,75 @@
 
   // ---------- structured ----------
   var REGEN={};   // field key → true while its Drafter is redrafting it
+  // ---------- Your call: what a part asks of a person (gaps.md P2) ----------
+  // An open question answered in the brief keeps its words and gains the answer, in the
+  // same list item: "Q? — Answer: Yes, confirmed" (or "— Left open: why"). No new field.
+  var QA_RE=/^([\s\S]*?)\s+—\s+(Answer|Left open):\s*([\s\S]*)$/;
+  function openQs(){ return arr(get('open_questions')).map(function(t,i){ var x=String(t==null?'':t), m=QA_RE.exec(x); return {i:i, raw:x, q:m?m[1]:x, kind:m?(m[2]==='Answer'?'answer':'left'):null, a:m?m[3]:''}; }).filter(function(o){ return o.q.trim(); }); }
+  function openQsLeft(){ return openQs().filter(function(o){ return !o.kind; }); }
+  function answerQ(i, kind, words){
+    var list=arr(get('open_questions')).slice(), cur=String(list[i]==null?'':list[i]), m=QA_RE.exec(cur), q=m?m[1]:cur;
+    list[i]=q+' — '+(kind==='left'?'Left open':'Answer')+': '+String(words).trim();
+    return patch('open_questions', list, {actor:'human', pinned:true, action:kind==='left'?'leave an open question, with why':'answer an open question', rationale:(kind==='left'?'Left open: ':'Answered: ')+String(words).trim()});
+  }
+  function partCallOpen(f){
+    if(CHAIN.state!=='ok') return false;
+    var v=ownVerdictOf(f.key);
+    return !!((v&&v.open)||crossVerdictsOf(f.key).some(function(c){ return c.open; })||(proposalOf(f.key)&&!docLocked()));
+  }
+  function needsCall(f){ return !!f&&(partCallOpen(f)||(f.key==='open_questions'&&!docLocked()&&openQsLeft().length>0)); }
+  // ---------- the new UI's sheet head, labels and part kinds (gaps.md §5 S1–S4) ----------
+  // The sheet's heading for a part: the mock's words; a nested part names its group.
+  var SHEET_HEAD={project_name:'Project', client:'Client', background:'Where we are', audience:'Who we are talking to', insight:'Consumer insight', tone_and_world:'Tone & world', budget_and_scope:'Budget & scope'};
+  var GROUP_HEAD={objectives:'Objective', desired_response:'Response'};
+  function headOf(f){ if(!f) return ''; if(SHEET_HEAD[f.key]) return SHEET_HEAD[f.key]; var g=f.key.split('.')[0]; return GROUP_HEAD[g]&&f.key.indexOf('.')!==-1?GROUP_HEAD[g]+' · '+f.label:f.label; }
+  // How a part sits on the page: a short fact (cell), the proposition (statement), the insight (callout), or prose.
+  function kindOf(f){ return f.hero?'statement':f.key==='insight'?'callout':(f.key==='project_name'||f.key==='client'||f.key==='budget_and_scope')?'cell':'prose'; }
+  // The client and the agency, as the document and the person know them.
+  function clientName(){ var m=(window.__CLAN__||{}).manifest||{}, c=m.client; var n=c&&typeof c==='object'?String(c.name||'').trim():''; return n||String(get('client')||'').split(/[,(.:;]|\s[-–—]\s/)[0].trim(); }
+  var AGENCY_NAME={wk:'Wieden+Kennedy', tbwa:'TBWA\\Dublin', ogilvy:'Ogilvy', droga:'Droga5', harbour:'Harbour', napkin:'Napkin Studio'};
+  var ME=null;
+  function agencyId(){ var id=ME&&ME.id||''; var at=id.indexOf('@'); return at<0?'':id.slice(at+1).toLowerCase(); }
+  // The agency's display name from its registry entry (clan:me carries it with the colours); the map is a fallback.
+  function agencyName(){ var g=(window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now())||(ME&&ME.agency)||{}; if(typeof g.name==='string'&&g.name.trim()) return g.name.trim();
+    var a=agencyId(); return AGENCY_NAME[a]||(a?a.charAt(0).toUpperCase()+a.slice(1):''); }
+  function initialsOf(n){ n=String(n||'').replace(/[^A-Za-z0-9+ ]/g,' ').trim(); var w=n.split(/[\s+]+/).filter(Boolean); if(!w.length) return ''; if(/^mc/i.test(w[0])) return 'Mc'; if(w[0].length>2&&w[0]===w[0].toUpperCase()&&/[A-Z]/.test(w[0])) return w[0].slice(0,2); return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0].slice(0,2).toUpperCase(); }
+  // A logo tile for a name with no picture: the client's in the brief's colour, the agency's in its own.
+  function tileOf(kind){
+    if(kind==='agency'){ var a=window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now(); var nm=agencyName(); if(!nm) return null; return {name:nm, txt:initialsOf(nm), bg:a?a.base:'#141413', fg:a?a.accent:'#FFFFFF'}; }
+    var cn=clientName(); if(!cn) return null; var acc=String(get('theme.accent')||''); acc=/^#[0-9a-f]{6}$/i.test(acc)?acc:'#C9462A';
+    return {name:cn, txt:initialsOf(cn), bg:acc, fg:readable(acc)};
+  }
+  function tileHtml(t, cls){ return t?'<span class="'+(cls||'b-logo')+'" style="--ib:'+esc(t.bg)+';--if:'+esc(t.fg)+'">'+esc(t.txt)+'</span>':''; }
+  // The version and the date the sheet carries: the host's version, the latest change.
+  // The version a person would say: one more than the times it was locked (the host's version is a hash).
+  function docVersion(){ var n=arr((osView()||{}).decisions).filter(function(b){ return b&&b.decision&&b.decision.kind==='approve'&&arr(b.targets).some(function(t){ return t&&t.here!==false; }); }).length; return 'v'+Math.max(1,n); }
+  function lastWhen(){ var ds=CHAIN.decisions||[], t=ds.length?ds[ds.length-1].timestamp:''; var d=t?new Date(t):null; return d&&!isNaN(d)?d:null; }
+  function fmtDay(d){ return d?d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):''; }
+  function agoWords(d){ if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+'m ago'; var h=Math.round(m/60); if(h<24) return h+'h ago'; var dd=Math.round(h/24); return dd===1?'yesterday':dd+' days ago'; }
+  function renderSheetHead(){
+    var cn=clientName(), an=agencyName();
+    var shown=sheetLogos().filter(logoSrc), lg=$('sheetLogos');
+    var tiles=shown.length?shown.map(function(l){ return '<img class="b-logo-img" src="'+esc(logoSrc(l))+'" alt="'+esc(l.label||l.slot||'Logo')+'" />'; })
+      :[tileHtml(tileOf('client')), tileHtml(tileOf('agency'))].filter(Boolean);
+    lg.innerHTML=tiles.join('<i class="b-x"></i>');
+    $('sheetNames').textContent=[cn, an].filter(Boolean).join(' · ');
+    var meta=[cn, docVersion(), fmtDay(lastWhen())].filter(Boolean).join(' · ');
+    $('sheetMeta').textContent=meta;
+    var ft=$('sheetFoot'); if(ft) ft.textContent=[cn, 'Creative brief'].filter(Boolean).join(' · ');
+  }
   function renderStructured(){
     $('docIdent').innerHTML=IDENT;
     renderMadeFrom();
-    $('redraft').hidden=approveLocked();
+    // Locked, Draft it again stays where the mock has it, off, and says why.
+    var rd=$('redraft'); rd.hidden=false; rd.disabled=approveLocked(); rd.title=approveLocked()?'The brief is locked. Unlock it to draft it again.':'Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them.';
     var pn=String(get('project_name')||'').trim(), dt=pn?'':derivedTitle();
     $('hProj').textContent=pn||dt||'Untitled campaign';
     $('hProj').classList.toggle('derived', !pn&&!!dt);
     $('hDerived').hidden=!(!pn&&dt);
     $('hDerived').textContent=!pn&&dt?'Working title, from the client and the commercial objective. The project name is empty.':'';
     $('hCli').textContent=get('client')||'';
+    renderSheetHead();
     syncKind();
     // While the shell records a client's answer, the parts stay as they are:
     // the fields snippet has put its marks under them.
@@ -2522,14 +2994,17 @@
       // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
       // Where the printed sheet starts a new page, a guide takes a row of its own (SHEET_BREAKS, measured
       // on the sheet as it prints, so the screen breaks where the PDF does).
-      var headRow=0, guided={};
-      layoutPack(layoutItems()).forEach(function(p){
+      var headRow=0, guided={}, packed=packSheet(layoutItems()), firstRow=null;
+      packed.forEach(function(p){ if(!p.head&&(firstRow===null||p.row<firstRow)) firstRow=p.row; });
+      packed.forEach(function(p){
         var pg=SHEET_BREAKS.starts[p.row];
         if(pg&&!guided[p.row]){ guided[p.row]=1; var g=document.createElement('div'); g.className='pbreak'; g.setAttribute('aria-hidden','true');
           g.style.gridRow=String(guideRow(p.row)-1); g.innerHTML='<span>Page '+pg+' of '+SHEET_BREAKS.total+'</span>'; host.appendChild(g); }
+        if(p.version){ var vc=document.createElement('div'); vc.className='row k-cell r1 meta-version'; vc.style.gridColumn=p.col+' / span '+p.w; vc.style.gridRow=String(guideRow(p.row));
+          vc.innerHTML='<div class="lab"><span>Version</span></div><div class="val">'+esc(versionLine())+'</div>'; host.appendChild(vc); return; }
         if(p.head){ var h=document.createElement('div'); h.className='sechead'; h.textContent=p.head; h.style.gridRow=String(guideRow(p.row)); host.appendChild(h); headRow=p.row; return; }
         var i=fieldIndex(p.key), f=FIELDS[i];
-        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w}); host.appendChild(row);   // Studio tints the parts in turn
+        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); if(p.row===firstRow) row.classList.add('r1'); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w, meta:!!p.meta}); host.appendChild(row);   // Studio tints the parts in turn
         if(p.row===headRow+1) row.classList.add('afterhead');   // the heading's rule is the first row's
       });
     }
@@ -2553,7 +3028,7 @@
     if(fs.font) s+='font-family:'+fs.font+';'; if(fs.size) s+='font-size:'+fs.size+';'; if(fs.color) s+='color:'+fs.color+';'; return s; }
 
   function fieldRow(f,i){
-    var row=document.createElement('div'); row.className='row'; row.setAttribute('data-i', String(i));
+    var row=document.createElement('div'); row.className='row k-'+kindOf(f)+(needsCall(f)?' needs':''); row.setAttribute('data-i', String(i));
     // A part the client review can name (the shared protocol: the snippet
     // collects these in document order and hands them to the shell).
     row.setAttribute('data-clan-part', f.key); row.setAttribute('data-clan-part-label', partLabel(f));
@@ -2567,7 +3042,7 @@
     // on a tap. Without the snippet the words show as they always did.
     var clf=f.type!=='list'&&opensPath(f.key), opens=f.type==='list'&&opensPath(f.key);
     var reo=reopenedOf(f.key), writable=canWrite(f.key);
-    var valHtml = !has ? '<div class="val empty">'+(writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
+    var valHtml = !has ? '<div class="val empty">'+(isMeta(f.key)?'not given':writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
       : f.type==='list' ? '<div class="'+cls+(opens?' opens':'')+'"'+sa+(opens?' role="button" tabindex="0" title="Where this came from" aria-label="'+esc(f.label+': where this came from')+'"':'')+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul></div>'
       : '<div class="'+cls+'"'+sa+'>'+(clf?'<clan-field ref="'+esc(f.key)+'" as="block" caption="'+esc(partLabel(f))+'">'+esc(String(v))+'</clan-field>':esc(String(v)))+'</div>';
     var locked=isLocked(f.key), conf=isConf(f.key);
@@ -2580,7 +3055,7 @@
         '<button class="iconbtn act-regen" title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again')+'" aria-label="Write again: '+esc(f.label)+'"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+'>'+IC.regen+'</button>'+
         '<button class="iconbtn act-lock'+(locked?' on':'')+'" title="'+(locked?'Let the crew change this again':'Keep this as it is')+'" aria-label="'+(locked?'Unlock ':'Lock ')+esc(f.label)+'">'+(locked?IC.lock:IC.unlock)+'</button>'
       : reo ? '<button class="iconbtn act-edit" title="Make the change the client asked for" aria-label="Make the change the client asked for: '+esc(f.label)+'">'+IC.edit+'</button>' : '';
-    row.innerHTML='<div class="lab"><span>'+esc(f.label)+'</span>'+
+    row.innerHTML='<div class="lab"><span>'+esc(headOf(f))+'</span>'+
       provHtml(f)+
       (locked?' <span class="lockbadge">'+IC.lock+'locked</span>':'')+
       (reo?' <span class="lockbadge">open for the client’s change</span>':'')+
@@ -2598,7 +3073,7 @@
     if(ov){
       // In the OS's edit mode a list is edited in the brief's own editor (one
       // item per line); otherwise a tap shows where it came from.
-      var go=function(){ if(EDIT_MODE&&writable) startEdit(row,f); else { var F=OSF(); if(F) F.open(f.key); } };
+      var go=function(){ if(EDIT_MODE&&writable) startEdit(row,f); else if(SEL!==f.key) select(f.key); };
       ov.addEventListener('click',go);
       ov.addEventListener('keydown',function(e){ if(e.target===ov&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); go(); } });
     }
@@ -2810,7 +3285,7 @@
     var on=!isConf(f.key), cur=confList(), next=on?cur.concat([f.key]):cur.filter(function(k){ return k!==f.key; });
     Promise.resolve(patch('confidential_fields', next, {actor:'human', pinned:false, action:(on?'mark ':'share ')+f.key+(on?' confidential':' again'),
       rationale:on?'Kept in the agency copy, left out of the client copy.':'In the client copy again.'})).then(function(){
-      toast(on?'“'+partLabel(f)+'” is confidential: it stays in the agency copy and is left out of the client copy.':'“'+partLabel(f)+'” is shared again.'); });
+      toast(on?'“'+headOf(f)+'” is confidential: it stays in the agency copy and is left out of the client copy.':'“'+headOf(f)+'” is shared again.'); });
   }
   function setLock(key, on){
     var cur=lockedList(); var has=cur.indexOf(key)!==-1;
@@ -3115,10 +3590,11 @@
   function renderMadeFrom(){
     var el=$('madeFrom'); if(!el) return;
     if(!isResearchFed()){ el.hidden=true; el.innerHTML=''; return; }
-    var e=upEntry(), t=upTitle()||'the research', p=e&&e.path;
+    var e=upEntry(), t=upTitle()||'the research', p=e&&e.path, c=upCounts&&upCounts();
+    var facts=c&&typeof c==='object'&&c.pins?c.pins:null, ver=e&&e.taken!=null?((e.noun||'research')+' v'+e.taken):e&&e.version&&!/^sha/.test(String(e.version))?('research v'+String(e.version).replace(/^v/,'')):'';
     el.hidden=false;
-    el.innerHTML='Made from the research <b>'+esc(t)+'</b>'+(p?' · <button type="button" class="linkbtn" id="openUp">Open the research ↗</button>'
-      :(UP.state==='ok'?' · <span class="muted">not in this workspace</span>':''));
+    el.innerHTML='<span>'+(e&&e.how==='linked'?'Linked to':'Made from')+'</span>'+(p?'<button type="button" class="side-link" id="openUp">'+esc(t)+' ↗</button>':'<b>'+esc(t)+'</b>'+(UP.state==='ok'?' <span class="muted">· not in this workspace</span>':''))
+      +((facts!=null||ver)?'<small>'+esc([facts!=null?facts+' pinned '+(facts===1?'fact':'facts'):'', ver].filter(Boolean).join(' · '))+'</small>':'');
     var o=$('openUp'); if(o) o.addEventListener('click',function(){
       fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:p})}); });
   }
@@ -3153,7 +3629,7 @@
   var LOCK_SIG='';
   function lkItemHtml(x){
     return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'">'
-      +'<span class="k">'+esc(KIND_WORD[x.code]||'Needs you')+'</span><span class="x">'+esc(x.field?partLabel(x.field):(x.label||x.text))+'</span></button>';
+      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(KIND_WORD[x.code]||'Needs you')+'</small></button>';
   }
   // A part of this brief is settled at the part; anything else (a carried
   // contest, a finding) in the OS's evidence drawer.
@@ -3168,32 +3644,55 @@
   function lockWhy(n){ return n>0?n+' '+(n===1?'settles':'settle')+' before it can lock':'Everything listed has to be settled first'; }
   function lockListHtml(items, lead){
     var more=items.length>8?items.length-8:0;
-    return fig('judge',{state:'needs-you',decorative:true})+'<div class="lb"><div><b>'+esc(JUDE)+':</b> '+esc(lead)+'</div>'
-      +'<div class="lkitems">'+items.slice(0,8).map(lkItemHtml).join('')+'</div>'+(more?'<span class="muted">and '+more+' more, in the decision panel</span>':'')+'</div>';
+    return '<div class="b-gate-h">'+esc(lead)+'</div><ul class="b-gate-l">'+items.slice(0,8).map(function(x){ return '<li>'+lkItemHtml(x)+'</li>'; }).join('')+'</ul>'
+      +(more?'<span class="b-gate-more">and '+more+' more, in Decisions</span>':'');
   }
-  function renderLock(){ renderLockBtn(); renderPill(); renderReopen(); sendBar(); }
+  function renderLock(){ renderLockBtn(); renderPill(); renderReopen(); renderClientAnswer(); sendBar(); }
   function renderLockBtn(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
     var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
-    $('lockedBadge').style.display=L&&!again?'inline':'none';
     lb.classList.toggle('locked', L&&!again);
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
     // button carries no badge of its own; why it waits is said in words.
     var why=wait?lockWhy(n):'';
+    // Locked: where the mock has Unlock, the working route — a locked brief reopens one part for a
+    // change the client asked for (there is no unlocking an approve, W5-Z1).
     if(again){ lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
-    else if(A){ lb.disabled=true; lb.textContent='✓ Locked'; lb.title='Locked. A change from here makes a new version.'; }
-    else if(L){ lb.disabled=false; lb.textContent='✓ Locked'; lb.title='Unlock this brief'; }   // a brief locked before /approve
+    else if(A){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; }
+    else if(L){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve
     else { lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; }
+    renderStateLine();
+    var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
     var el=$('lockList'), show=(!L||again)&&n>0;
     el.hidden=!show; if(!show){ el.innerHTML=''; return; }
-    el.innerHTML=lockListHtml(items, lockWhy(n)+'. Tap one to settle it.');
+    el.innerHTML=lockListHtml(items, lockWhy(n));
     bindLkItems(el);
+  }
+  // "v1.3 · edited 2 days ago", or "v1.3 · locked by Tia Test, today".
+  function renderStateLine(){
+    var t=$('stateLine'); if(!t) return;
+    var v=docVersion(), lk=approveLocked()?lockDecisionHere():null, L=docLocked()&&!(approveLocked()&&arr((lockState()||{}).reopened).length);
+    if(L&&lk){ var who=lk.who&&lk.who.you?(ME&&ME.name)||'you':lk.who&&lk.who.name||'a person', at=new Date(String(lk.decision&&lk.decision.timestamp||'')), today=!isNaN(at)&&at.toDateString()===new Date().toDateString();
+      t.textContent=[v, 'locked by '+who+', '+(today?'today':fmtDay(isNaN(at)?null:at))].filter(Boolean).join(' · '); t.classList.add('ok'); }
+    else { var w=lastWhen(); t.textContent=[v, w?'edited '+agoWords(w):''].filter(Boolean).join(' · '); t.classList.remove('ok'); }
+  }
+  // Unlock: POST /unapprove (owner, 9 Nov 2026), called as /approve is; the host records it.
+  function unlockClick(){
+    var lb=$('lockBtn');
+    if(!approveLocked()) return;
+    if(!window.clan){ toast('Unlocking needs the Napkin host.'); return; }
+    lb.disabled=true;
+    hostPost('/unapprove',{rationale:'Brief unlocked to change it'}).then(function(res){
+      var F=OSF(); if(F) F.reload();
+      if(!(res&&res.ok)){ lb.disabled=false; toast(hostErrText(res)); return; }
+      toast('Unlocked.');
+    },function(){ lb.disabled=false; toast('That did not go through. Check your connection and try again.'); });
   }
   function lockClick(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked();
     // A brief locked by its old flag unlocks as it always did.
     if(legacyLocked()){ patch('locked',false,{actor:'human',pinned:true,action:'unlock brief',rationale:'Brief unlocked'}); return; }
-    if(A&&!(l&&arr(l.reopened).length)) return;
+    if(A&&!(l&&arr(l.reopened).length)){ unlockClick(); return; }   // the mock's Unlock (POST /unapprove)
     if(l&&!l.can_lock){ renderLock(); return; }
     if(!window.clan){ toast('Locking needs the Napkin host.'); return; }
     lb.disabled=true;
@@ -3309,6 +3808,19 @@
     });
     return out;
   }
+  // The sheet's meta row (the mock): Client, Project, Budget & scope and Version, always four cells
+  // across the top; every other part packs below it. The three parts stay parts (select, edit,
+  // Confidential); they are not moved or resized, and Version is the sheet's own.
+  var META_KEYS=['client','project_name','budget_and_scope'];
+  function isMeta(key){ return META_KEYS.indexOf(key)!==-1; }
+  function packSheet(items){
+    var have={}; items.forEach(function(it){ have[it.key]=1; });
+    var out=META_KEYS.filter(function(k){ return have[k]; }).map(function(k,i){ return {key:k, sec:'Identity', col:1+i*3, row:1, w:3, h:1, meta:true}; });
+    out.push({version:true, col:1+out.length*3, row:1, w:3, h:1});
+    layoutPack(items.filter(function(it){ return !isMeta(it.key); })).forEach(function(p){ var q={}; for(var k in p) q[k]=p[k]; q.row=p.row+1; out.push(q); });
+    return out;
+  }
+  function versionLine(){ var n=isResearchFed()?(upCounts().pins||0):0; return docVersion()+(n?' · '+n+' '+(n===1?'fact':'facts')+' attached':''); }
   // What layout.parts holds for these items: every part, so a later read needs nothing else.
   function layoutParts(items){
     var parts={};
@@ -3362,7 +3874,7 @@
     row.style.gridColumn=p.col+' / span '+p.w; row.style.gridRow=String(p.row);
     row.setAttribute('data-w', String(p.w));
     if(SEL===f.key) row.classList.add('sel');
-    if(!docLocked()){
+    if(!docLocked()&&!p.meta){
       var g=document.createElement('button'); g.type='button'; g.className='grip';
       g.title='Drag to move. Arrow keys move it too.'; g.setAttribute('aria-label','Move '+partLabel(f));
       g.innerHTML='<svg class="ic" viewBox="0 0 8 16" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="4" r="1.1"/><circle cx="6" cy="4" r="1.1"/><circle cx="2" cy="8" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/></g></svg>';
@@ -3394,7 +3906,9 @@
       e.stopPropagation(); e.preventDefault();
       if(SEL!==f.key) select(f.key);
       clearTimeout(row.__clfT);
-      if(e.detail>1) return;
+      // A click selects the part; where it came from is in the side tab's Selected part
+      // (Built from, then Source →). Only the OS's edit mode hands the tap to the field.
+      if(e.detail>1||!EDIT_MODE) return;
       row.__clfT=setTimeout(function(){ if(!c.isConnected) return; row.__clfPass=true; try{ c.click(); } finally{ row.__clfPass=false; } }, 300);
     }, true);
     // A double-click edits the part in the brief's own editor, as its pencil does
@@ -3454,22 +3968,28 @@
     if(!el) return;
     if(!f||phase!=='doc'){ el.hidden=true; el.innerHTML=''; return; }
     var A=approveLocked(), kept=isLocked(f.key), conf=isConf(f.key), wr=canWrite(f.key), items=layoutItems(), at=layoutIndex(items,f.key), w=at>=0?items[at].w:GRID_COLS;
-    var notes=notesHtml(f);
+    var notes=notesHtml(f), qs=f.key==='open_questions'?openQs():[], ql=qs.filter(function(o){ return !o.kind; }).length;
+    var ov=CHAIN.state==='ok'?ownVerdictOf(f.key):null, nOpen=ql+(CHAIN.state==='ok'?crossVerdictsOf(f.key).filter(function(c){ return c.open; }).length+(ov&&ov.open?1:0)+(proposalOf(f.key)&&!docLocked()?1:0):0);
     el.hidden=false;
-    el.innerHTML='<div class="trow"><h3 class="tk">Selected part</h3><span class="spacer"></span><button type="button" class="tlink" data-sp="done">Done</button></div>'
-      +'<div class="sp-name">'+esc(partLabel(f))+'</div>'
+    el.innerHTML='<h4>Selected part<button type="button" class="side-link" data-sp="done" title="Let go of this part (Esc)">Done</button></h4>'
+      +'<b class="sp-name">'+esc(headOf(f))+'</b>'
       +'<div class="sp-acts">'
-      +(wr?'<button type="button" data-sp="edit">Edit</button>':'')
-      +(!A?'<button type="button" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
-      +(!A?'<button type="button" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the crew change this again':'Keep this as it is')+'">'+(kept?'Kept as is':'Keep as is')+'</button>':'')
-      +'<button type="button" data-sp="conf" class="sp-conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">'+(conf?'Confidential':'Mark confidential')+'</button>'
+      +(wr?'<button type="button" class="sp-btn sp-edit" data-sp="edit">Edit</button>':'')
+      +(!A?'<button type="button" class="sp-btn" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
+      +(!A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the crew change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':'')
+      +'<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'
       +'</div>'
-      +(notes?'<div class="sp-call"><h3 class="tk">Your call</h3><div class="notes">'+notes+'</div></div>':'')
-      +'<details class="sp-b" open><summary>Built from</summary><div class="sp-built" id="spBuilt"></div></details>'
+      +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
+        +qs.map(function(o){ return '<div class="nb-q'+(o.kind?' done':'')+'" data-q="'+o.i+'"><span class="nb-t">'+esc(o.q)+'</span>'
+          +(o.kind?'<span class="nb-a'+(o.kind==='left'?' left':'')+'">'+esc((o.kind==='left'?'Left open: ':'')+o.a)+'</span>'
+            :(A&&!wr?'':'<span class="nb-act"><button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button><button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
+          +'</div>'; }).join('')
+        +'<div class="notes">'+notes+'</div></div>':'')
+      +'<div class="sp-built" id="spBuilt"></div>'
       +'<details class="sp-w"'+(OPEN_WHY['sp:'+f.key]?' open':'')+'><summary>Why it says this</summary><div class="why">'+whyHtml(f)+'</div></details>'
-      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
+      +(!docLocked()&&!isMeta(f.key)?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
         +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
-        +'<div class="sp-acts" style="margin-top:8px"><button type="button" data-sp="up"'+(at<=0?' disabled':'')+'>Move earlier</button><button type="button" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>Move later</button></div></details>':'');
+        +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(at<=0?' disabled':'')+'>↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>↓ Move down</button></div></details>':'');
     var row=rowOf(f.key);
     el.querySelectorAll('[data-sp]').forEach(function(b){ b.addEventListener('click', function(){
       var a=b.getAttribute('data-sp');
@@ -3485,7 +4005,26 @@
     var ld=el.querySelector('.sp-l'); if(ld) ld.addEventListener('toggle', function(){ OPEN_WHY['spl:'+f.key]=ld.open; });
     var wd=el.querySelector('.sp-w'); if(wd) wd.addEventListener('toggle', function(){ OPEN_WHY['sp:'+f.key]=wd.open; if(wd.open&&CHAIN.state!=='ok') loadChain(); });
     var n=el.querySelector('.sp-call .notes'); if(n) bindNotes(n, f);
+    bindAnswers(el);
     renderBuilt();
+  }
+  // Yes / No / Answer… / Leave it, say why: the answer goes into the question's own list item.
+  function bindAnswers(el){
+    function inline(row, i, kind){
+      var act=row.querySelector('.nb-act'); if(!act) return;
+      act.innerHTML='<input class="nb-in" type="text" placeholder="'+(kind==='left'?'Why it can stay open':'Type your answer')+'" aria-label="'+(kind==='left'?'Why it can stay open':'Your answer')+'"><button type="button" class="nb-primary nb-ok">Save</button><button type="button" class="nb-why nb-x">Cancel</button>';
+      var inp=act.querySelector('.nb-in'); inp.focus();
+      var go=function(){ var v=inp.value.trim(); if(!v){ inp.focus(); return; } act.querySelectorAll('button').forEach(function(b){ b.disabled=true; }); Promise.resolve(answerQ(i, kind, v)).then(function(){ toast(kind==='left'?'Left open, with your reason.':'Answered. It’s in the brief.'); }); };
+      act.querySelector('.nb-ok').addEventListener('click', function(e){ e.stopPropagation(); go(); });
+      act.querySelector('.nb-x').addEventListener('click', function(e){ e.stopPropagation(); renderSelPart(); });
+      inp.addEventListener('keydown', function(e){ if(e.key==='Enter') go(); else if(e.key==='Escape'){ e.stopPropagation(); renderSelPart(); } });
+    }
+    el.querySelectorAll('[data-ans]').forEach(function(b){ b.addEventListener('click', function(e){
+      e.stopPropagation(); var i=+b.getAttribute('data-ans'), v=b.getAttribute('data-v');
+      if(v==='?'){ inline(b.closest('.nb-q'), i, 'answer'); return; }
+      b.disabled=true; Promise.resolve(answerQ(i, 'answer', v==='Yes'?'Yes, confirmed':'No')).then(function(){ toast('Answered. It’s in the brief.'); });
+    }); });
+    el.querySelectorAll('[data-why]').forEach(function(b){ b.addEventListener('click', function(e){ e.stopPropagation(); inline(b.closest('.nb-q'), +b.getAttribute('data-why'), 'left'); }); });
   }
   // What a part cites: its newest write's cites and its claims', less a pin a person marked wrong.
   function partCites(key){ var d=decisionsFor(key)[0]; return citesOf([d, claimDecision(d)]).filter(function(id){ return !wrongPin(id); }); }
@@ -3496,23 +4035,57 @@
   // Built from: one OS source card per ref the part cites (ClanFields.card, os-source-card; the cards
   // asked for in one tick go to the host in one /cite call), each with the other parts it is used in.
   // A part that cites nothing shows its own field's card, as before.
+  // One Built from row in the mock's words: what it is, a value when it has one, and where it is from.
+  // Never a raw id: the crew by name, the person's own words as such, a fact by its short key.
+  var CREW_OF={judge:'judge', drafter:'drafter', extract:'extract', synthesis:'synthesis', context:'synthesis', review:'judge'};
+  var CREW_DID={judge:'checked the draft', drafter:'wrote it', extract:'read it from your material', synthesis:'planned it'};
+  function shortDay(t){ var d=new Date(t); return isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+  function builtRow(r, c, f){
+    c=c||{}; var k=c.kind||'unknown', id=String(r).split('#').pop(), det=String(c.detail||'');
+    if(k==='fact'||k==='pin'||k==='finding'){
+      var key=/^f_\d+$/.test(id)?id:'';
+      return {fact:true, title:c.title||c.label||'A fact', small:[key, c.publisher||(c.from&&c.from.title)||''].filter(Boolean).join(' · '), value:c.value||'',
+        tone:c.review&&c.review.verdict==='verified'?'ok':c.review&&c.review.verdict==='rejected'?'':'warn'};
+    }
+    if(k==='capture'){ var bits=det.split(' · '), what=bits[0]||'', inPrompt=/in prompt/.test(det);
+      return {title:c.label||'From your material', small:[what, inPrompt?'from your words':(bits[2]||'from your material')].filter(Boolean).join(' · ')}; }
+    if(k==='material'){ var prompt=/^prompt$/i.test(String(c.label||'')), when=(/received (\S+)/.exec(det)||[])[1];
+      return {title:prompt?'Your words, the ask':String(c.label||'Your material'), small:[prompt?'what you wrote':'', when?'received '+shortDay(when):'', /confidential/.test(det)?'client confidential':''].filter(Boolean).join(' · ')}; }
+    if(k==='decision'){ var lab=String(c.label||''), who=lab.split(/\s+—\s+/)[0].toLowerCase(), ck=CREW_OF[who]||'';
+      return {title:ck?(AGENT_NAME[ck]||lab)+' '+CREW_DID[ck]:(lab||'A decision'), small:short(det,64)}; }
+    if(k==='address'){ var g=fieldOf(id); return {title:g?headOf(g):headOf(f), small:'written in this brief'}; }
+    if(k==='source') return {title:c.title||c.publisher||c.label||'A source', small:[c.publisher, c.published_at?shortDay(c.published_at):''].filter(Boolean).join(' · ')};
+    if(k==='passage') return {title:c.title||c.label||'A library passage', small:c.publisher||'knowledge library'};
+    return {title:c.label||c.title||'Not found', small:k==='unknown'?'not in the document any more':''};
+  }
   function renderBuilt(){
     var b=$('spBuilt'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f) return;
-    if(!hasVal(get(f.key))){ b.innerHTML='<p class="muted">Nothing is written here yet.</p>'; return; }
-    if(!(F&&F.card&&docId())){ b.innerHTML='<p class="muted">Where this came from shows in the Napkin host.</p>'; return; }
-    if(CHAIN.state!=='ok'&&CHAIN.state!=='unavailable'){ b.innerHTML='<p class="muted">Finding what it was built from…</p>'; loadChain(); return; }
+    var head='<span class="rsp-k">Built from</span>';
+    if(!hasVal(get(f.key))){ b.innerHTML=head+'<p class="muted">Nothing is written here yet.</p>'; return; }
+    if(!(F&&F.cards&&docId())){ b.innerHTML=head+'<p class="muted">Where this came from shows in the Napkin host.</p>'; return; }
+    if(CHAIN.state!=='ok'&&CHAIN.state!=='unavailable'){ b.innerHTML=head+'<p class="muted">Finding what it was built from…</p>'; loadChain(); return; }
     var cites=CHAIN.state==='ok'?partCites(f.key):[], refs=cites.length?cites:[docId()+'#'+f.key];
     var sig=f.key+'|'+refs.join(',')+'|'+((osView()||{}).version||'');
-    if(b.getAttribute('data-sig')===sig&&b.childNodes.length) return;   // drawn already: keep the cards (and an open Record)
+    if(b.getAttribute('data-sig')===sig&&b.childNodes.length>1) return;   // drawn already
     b.setAttribute('data-sig', sig);
-    b.innerHTML=refs.map(function(r,i){
-      var used=cites.length?usedIn(r, f.key):[];
-      return '<div class="bf"><div class="bf-card" data-n="'+i+'"></div>'
-        +(used.length?'<div class="bf-used"><span class="tk2">Also used in</span>'+used.map(function(k){ var g=fieldOf(k); return '<button type="button" class="bf-chip" data-go="'+esc(k)+'">'+esc(g?partLabel(g):k)+'</button>'; }).join('')+'</div>':'')
-        +'</div>';
-    }).join('');
-    refs.forEach(function(r,i){ F.card(r, b.querySelector('.bf-card[data-n="'+i+'"]')); });
-    b.querySelectorAll('[data-go]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-go')); }); });
+    b.innerHTML=head+'<p class="muted">Finding what it was built from…</p>';
+    // One compact row per ref (all asked for in one /cite call); a click opens its source card.
+    F.cards(refs).then(function(m){
+      if(b.getAttribute('data-sig')!==sig) return;
+      var also={};
+      refs.forEach(function(r){ (cites.length?usedIn(r, f.key):[]).forEach(function(k2){ also[k2]=1; }); });
+      var al=layoutItems().map(function(it){ return it.key; }).filter(function(k2){ return also[k2]; });
+      b.innerHTML=head+refs.map(function(r){
+        var x=builtRow(r, m[r], f);
+        return '<button type="button" class="bf-row '+(x.fact?'bf-fact':'bf-doc')+'" data-ref="'+esc(r)+'" title="Where this came from">'
+          +(x.fact?'<span class="pin'+(x.tone?' '+x.tone:'')+'"></span>':'<span class="bf-ico" aria-hidden="true">▤</span>')
+          +'<span><b>'+esc(short(x.title,58))+'</b>'+(x.small?'<small>'+esc(x.small)+'</small>':'')+'</span>'
+          +(x.value?'<span class="bf-val">'+esc(short(x.value,14))+'</span>':'<span class="bf-go">Source →</span>')+'</button>';
+      }).join('')
+        +(al.length?'<details class="bf-also"><summary>Also used in '+al.length+' other '+(al.length===1?'part':'parts')+'</summary><div class="bf-used">'+al.map(function(k2){ var g=fieldOf(k2); return '<button type="button" class="bf-chip" data-go="'+esc(k2)+'">'+esc(g?headOf(g):k2)+'</button>'; }).join('')+'</div></details>':'');
+      b.querySelectorAll('.bf-row').forEach(function(x){ x.addEventListener('click', function(){ F.open(x.getAttribute('data-ref')); }); });
+      b.querySelectorAll('[data-go]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-go')); }); });
+    });
   }
   // Select a part and bring it into view (Built from's used-in chips).
   function goPart(key){
@@ -3546,6 +4119,7 @@
   var REDRAFT_ARMED=null;
   function redraftClick(){
     var b=$('redraft');
+    if(approveLocked()){ toast('The brief is locked. Unlock it to draft it again.'); return; }
     if(!REDRAFT_ARMED){
       b.classList.add('armed'); b.lastChild.textContent='Click again to redraft';
       REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; b.classList.remove('armed'); b.lastChild.textContent='Draft it again'; sendBar(); }, 4000);
@@ -3559,7 +4133,8 @@
     pdf:function(){ doExport('pdf'); },
     redraft:redraftClick,
     lock:function(){ lockClick(); },
-    reopen:function(){ toggleReopen(); }
+    reopen:function(){ toggleReopen(); },
+    unlock:function(){ unlockClick(); }
   };
   // What the OS bar shows for the brief (clan:bar, docs/contracts/clan-fields.md):
   // its buttons are the side tab's, by the same ids, and the pill is the state.
@@ -3570,7 +4145,7 @@
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, st=statusNow(), lb=$('lockBtn');
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});
-    if(A&&!re) items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'});
+    if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
     else items.push({kind:'button', id:'lock', label:re?'Lock the brief again':'Lock the brief', disabled:!!(lb&&lb.disabled), title:lb&&lb.disabled&&lb.title||undefined});
     items.push({kind:'status', label:st.label, tone:st.tone, locked:st.locked});
     return items;
@@ -3592,15 +4167,14 @@
   function clientReviewLabel(){ var c=(osView()||{}).client; return c&&c.answer&&c.answer.current?'New client answer':'Client review'; }
   function renderReopen(){
     var box=$('reopenBox'), A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0;
-    box.hidden=!(A&&!re);
-    if(box.hidden){ REOPEN_OPEN=false; return; }
     var btn=$('reopenBtn'), list=$('reopenList'), ps=reopenable();
-    btn.setAttribute('aria-expanded', String(REOPEN_OPEN)); list.hidden=!REOPEN_OPEN;
+    if(!(A&&!re)){ REOPEN_OPEN=false; box.hidden=true; list.innerHTML=''; return; }
+    btn.setAttribute('aria-expanded', String(REOPEN_OPEN)); box.hidden=!REOPEN_OPEN; list.hidden=!REOPEN_OPEN;
     if(!REOPEN_OPEN){ list.innerHTML=''; return; }
     list.innerHTML=ps.length
       ? ps.map(function(p,i){ return '<button type="button" class="lkitem" data-n="'+i+'"><span class="k">'+esc(p.state==='rejected'?'The client said no':'The client asked for a change')+'</span><span class="x">'+esc(addrLabel(p))+'</span></button>'; }).join('')
         +'<p>Reopening a part lets you make that change. Lock the brief again when it’s done.</p>'
-      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first ('+esc(clientReviewLabel())+' in the OS bar), then reopen the part they mean here.</p>';
+      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Record the client’s answer, below, or '+esc(clientReviewLabel())+' in the OS bar), then reopen the part they mean here.</p>';
     list.querySelectorAll('[data-n]').forEach(function(b){ b.addEventListener('click', function(){
       var p=ps[+b.getAttribute('data-n')]; b.disabled=true;
       hostPost('/client-review/reopen', {answer:p.decision}).then(function(res){
@@ -3611,8 +4185,75 @@
     }); });
   }
 
+  // ---------- the client's answer, in the side tab (gaps.md K2; os-layer §7.5) ----------
+  // Accepted / With changes / Rejected, which parts, their email (pasted, or the file), who
+  // answered: one POST /client-review, as the shell's panel sends it.
+  var CR={open:false, answer:'accepted', parts:{}, said:'', call:false, file:null, who:'', reasons:[], saving:false, err:''};
+  var CR_REASONS=[['off_brief','Off brief'],['wrong_audience','Wrong audience'],['tone','Tone'],['facts_wrong','Facts wrong'],['budget','Budget'],['other','Other']];
+  function crParts(){ return layoutItems().map(function(it){ return fieldOf(it.key); }).filter(function(f){ return f&&hasVal(get(f.key)); }); }
+  function crStrength(){
+    var n=CR.who.split(/\s+/)[0]||'the client', whose=n==='the client'?'the client’s':n+'’s';
+    if(CR.file) return 'Strong record: From '+(/\.pdf$/i.test(CR.file.name)?'the PDF '+n+' sent':whose+' email')+', file attached.';
+    if(CR.said.trim()) return 'Weaker record: '+(CR.call?'Your note of a call. Nothing attached.':'From '+whose+' email, pasted by you.');
+    return 'Weaker record: Recorded by you. Nothing attached.';
+  }
+  function renderClientAnswer(){
+    var el=$('clientAnswer'), btn=$('crOpen'); if(!el) return;
+    var A=approveLocked(), re=A&&arr((lockState()||{}).reopened).length>0, on=CR.open&&A&&!re;
+    if(btn) btn.setAttribute('aria-expanded', String(on));
+    if(!on){ el.hidden=true; el.innerHTML=''; if(btn) btn.hidden=false; return; }
+    if(btn) btn.hidden=true;
+    var ch=CR.answer!=='accepted', ps=crParts();
+    el.hidden=false;
+    el.innerHTML='<h4>The client’s answer</h4>'
+      +'<div class="cr-verdicts" role="radiogroup" aria-label="What the client said">'+[['accepted','Accepted'],['accepted_with_changes','With changes'],['rejected','Rejected']].map(function(x){ return '<label><input type="radio" name="crv" value="'+x[0]+'"'+(CR.answer===x[0]?' checked':'')+'>'+x[1]+'</label>'; }).join('')+'</div>'
+      +(CR.answer==='rejected'?'<div class="cr-reasons">'+CR_REASONS.map(function(r){ return '<label><input type="checkbox" name="crr" value="'+r[0]+'"'+(CR.reasons.indexOf(r[0])!==-1?' checked':'')+'>'+r[1]+'</label>'; }).join('')+'</div>':'')
+      +'<div class="cr-which"><small>Which parts</small><div class="cr-parts">'+ps.map(function(f){ return '<label><input type="checkbox" name="crp" value="'+esc(f.key)+'"'+(CR.parts[f.key]?' checked':'')+'>'+esc(headOf(f))+'</label>'; }).join('')+'</div></div>'
+      +'<textarea rows="3" name="said" placeholder="Paste their email, or note what they said">'+esc(CR.said)+'</textarea>'
+      +'<label class="cr-call"><input type="checkbox" name="crcall"'+(CR.call?' checked':'')+'> Nothing to attach: it was a call or a chat</label>'
+      +'<label class="cr-file">Or attach it <input type="file" accept=".eml,.pdf,message/rfc822,application/pdf">'+(CR.file?'<b>'+esc(CR.file.name)+'</b>':'')+'</label>'
+      +'<input type="text" name="who" value="'+esc(CR.who)+'" placeholder="Who answered (their name)" aria-label="Who answered">'
+      +'<p class="cr-strength">'+esc(crStrength())+'</p>'
+      +(CR.err?'<p class="cr-err" role="alert">'+esc(CR.err)+'</p>':'')
+      +'<div class="cr-acts"><button type="button" class="side-link" data-cr="cancel">Cancel</button><button type="button" class="sp-btn" data-cr="save"'+(CR.saving?' disabled':'')+'>'+(CR.saving?'Saving…':'Save the answer')+'</button></div>';
+    el.querySelectorAll('input[name=crv]').forEach(function(r){ r.addEventListener('change', function(){ CR.answer=r.value; CR.err=''; renderClientAnswer(); }); });
+    el.querySelectorAll('input[name=crr]').forEach(function(c){ c.addEventListener('change', function(){ CR.reasons=[].map.call(el.querySelectorAll('input[name=crr]:checked'), function(x){ return x.value; }); }); });
+    el.querySelectorAll('input[name=crp]').forEach(function(c){ c.addEventListener('change', function(){ CR.parts[c.value]=c.checked; }); });
+    var ta=el.querySelector('textarea'); ta.addEventListener('input', function(){ CR.said=ta.value; el.querySelector('.cr-strength').textContent=crStrength(); });
+    el.querySelector('input[name=crcall]').addEventListener('change', function(){ CR.call=this.checked; el.querySelector('.cr-strength').textContent=crStrength(); });
+    el.querySelector('.cr-file input').addEventListener('change', function(){ var f=this.files&&this.files[0]; if(f&&!/\.(eml|pdf)$/i.test(f.name)){ toast('The client’s file is an email (.eml) or a PDF.'); this.value=''; return; } CR.file=f||null; renderClientAnswer(); });
+    var who=el.querySelector('input[name=who]'); who.addEventListener('input', function(){ CR.who=who.value; el.querySelector('.cr-strength').textContent=crStrength(); });
+    el.querySelector('[data-cr=cancel]').addEventListener('click', function(){ CR.open=false; CR.err=''; renderClientAnswer(); });
+    el.querySelector('[data-cr=save]').addEventListener('click', saveClientAnswer);
+  }
+  function saveClientAnswer(){
+    if(CR.saving) return;
+    var name=CR.who.trim();
+    if(!name){ CR.err='Say who answered: their name goes on the record.'; renderClientAnswer(); return; }
+    var parts=crParts(), ch=CR.answer!=='accepted';
+    var channel=CR.file?'file':CR.said.trim()?(CR.call?'call':'pasted_email'):'none';
+    var body={answer:CR.answer, client:{name:name}, channel:channel, parts:parts.map(function(f){ var r={address:f.key, label:partLabel(f)}; if(PART_ALIASES[f.key]) r.aliases=PART_ALIASES[f.key].split(',').map(function(x){ return x.trim(); }).filter(Boolean); return r; })};
+    if(channel==='pasted_email'||channel==='call') body.said=CR.said;
+    if(CR.answer==='rejected'&&CR.reasons.length) body.reasons=CR.reasons.slice();
+    if(ch){ var m=parts.filter(function(f){ return CR.parts[f.key]; }).map(function(f){ return {address:f.key, answer:CR.answer}; }); if(m.length) body.marked=m; }
+    CR.saving=true; CR.err=''; renderClientAnswer();
+    var up=channel==='file'?CR.file.arrayBuffer().then(function(buf){
+      var when=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z'), dot=CR.file.name.lastIndexOf('.'), ext=dot>0?CR.file.name.slice(dot+1).toLowerCase():'', stem=(dot>0?CR.file.name.slice(0,dot):CR.file.name).replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'file';
+      return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent('client-'+when+'-'+stem+(ext?'.'+ext:'')),{method:'POST',body:buf}).then(function(r){ return r.json(); }).then(function(res){ if(!(res&&res.internal_path)) throw new Error(hostErrText(res)||'The file could not be stored.'); body.asset=res.internal_path; });
+    }):Promise.resolve();
+    up.then(function(){ return hostPost('/client-review', body); }).then(function(res){
+      CR.saving=false;
+      if(!(res&&res.ok)){ CR.err=hostErrText(res); renderClientAnswer(); return; }
+      CR={open:false, answer:'accepted', parts:{}, said:'', call:false, file:null, who:name, reasons:[], saving:false, err:''};
+      var F=OSF(); if(F) F.reload();
+      renderClientAnswer();
+      toast('The client’s answer is on the record.');
+    }, function(e){ CR.saving=false; CR.err=String(e&&e.message||'That did not go through. Check your connection and try again.'); renderClientAnswer(); });
+  }
+  $('crOpen').addEventListener('click', function(){ CR.open=true; if(!CR.who){ var a=clientNow(); CR.who=a&&a.client&&a.client.name||''; } renderClientAnswer(); var el=$('clientAnswer'); if(el) el.scrollIntoView({block:'nearest'}); });
+
   // ---------- the look: frame, headings, colour, logos (appearance keys) ----------
-  var SWATCHES=[['','The brief’s own'],['#C9462A','Stamp red'],['#221D15','Ink'],['#1F3FBF','Blue'],['#3D5A1E','Green'],['#B07A12','Ochre']];
+  var SWATCHES=[['','The brief’s own'],['#C9462A','Stamp red'],['#221D15','Ink'],['#1F3FBF','Blue'],['#3D5A1E','Green'],['#B07A12','Ochre']];   // the agency's base and accent join after the first two
   function logosOf(){ return arr(get('logos')).filter(function(l){ return l&&typeof l==='object'&&l.ref&&typeof l.ref==='object'; }); }
   var LOGO_SLOTS=[['client','Client'],['agency','Agency'],['partner','Partner']];
   // A logo's picture: an upload is this document's asset; a Brand Clan logo names the attached kit and
@@ -3646,10 +4287,12 @@
   function slotRank(s){ for(var i=0;i<LOGO_SLOTS.length;i++) if(LOGO_SLOTS[i][0]===s) return i; return LOGO_SLOTS.length; }
   function sheetLogos(){ return logosOf().map(function(l,i){ return {l:l, i:i}; }).sort(function(a,b){ return slotRank(a.l.slot)-slotRank(b.l.slot)||a.i-b.i; }).map(function(x){ return x.l; }); }
   function renderLook(){
-    var sh=$('sheet'), l=layoutData(), frame=l.frame==='boxed'?'boxed':'open', head=l.headings==='tab'?'tab':'label';
+    var sh=$('sheet'), l=layoutData(), frame=l.frame==='boxed'?'boxed':'open', head=l.headings==='tab'?'tab':'label', cover=l.cover==='band'?'band':'plain', why=l.why==='show'?'show':'hide';
     sh.classList.toggle('frame-boxed', frame==='boxed'); sh.classList.toggle('head-tab', head==='tab');
+    sh.classList.toggle('cover-band', cover==='band'); sh.classList.toggle('why-show', why==='show');
+    var LOOK={frame:frame, headings:head, cover:cover, why:why};
     document.querySelectorAll('#stab .seg[data-look]').forEach(function(s){
-      var cur=s.getAttribute('data-look')==='frame'?frame:head;
+      var cur=LOOK[s.getAttribute('data-look')];
       s.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-v')===cur)); });
     });
     var acc=String(get('theme.accent')||'');
@@ -3659,7 +4302,9 @@
     if(/^#[0-9a-f]{6}$/i.test(acc)){ sh.style.setProperty('--brief-accent', acc); sh.style.setProperty('--sec', acc); tabEl.style.color=acc; }
     else { sh.style.removeProperty('--brief-accent'); sh.style.removeProperty('--sec'); tabEl.style.removeProperty('color'); }
     var sw=$('swatches'), known=SWATCHES.some(function(x){ return x[0].toLowerCase()===acc.toLowerCase(); });
-    sw.innerHTML=SWATCHES.map(function(x){ return '<button type="button" class="swatch'+(x[0]?'':' none')+'" data-c="'+x[0]+'"'+(x[0]?' style="background:'+x[0]+'"':'')+' aria-pressed="'+(x[0].toLowerCase()===acc.toLowerCase())+'" title="'+esc(x[1])+'"><span class="sr">'+esc(x[1])+'</span></button>'; }).join('')
+    var ag=window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now(), sws=SWATCHES.slice(0,2).concat(ag?[[ag.base,agencyName()+' base'],[ag.accent,agencyName()+' accent']]:[]).concat(SWATCHES.slice(2));
+    known=sws.some(function(x){ return x[0].toLowerCase()===acc.toLowerCase(); });
+    sw.innerHTML=sws.map(function(x,i){ return (i===2?'<i class="sw-gap" aria-hidden="true"></i>':'')+'<button type="button" class="swatch'+(x[0]?'':' none')+'" data-c="'+x[0]+'"'+(x[0]?' style="background:'+x[0]+'"':'')+' aria-pressed="'+(x[0].toLowerCase()===acc.toLowerCase())+'" title="'+esc(x[1])+'"><span class="sr">'+esc(x[1])+'</span></button>'; }).join('')
       +'<label class="swatch custom" title="Another colour" aria-pressed="'+(!!acc&&!known)+'"><span class="sr">Another colour</span><input type="color" value="'+(/^#[0-9a-f]{6}$/i.test(acc)?acc:'#c9462a')+'" /></label>';
     sw.querySelectorAll('[data-c]').forEach(function(b){ b.addEventListener('click', function(){ var c=b.getAttribute('data-c'); patch('theme.accent', c||null, {actor:'human', pinned:false, action:'set the brief’s colour'}); }); });
     sw.querySelector('input').addEventListener('change', function(){ patch('theme.accent', this.value, {actor:'human', pinned:false, action:'set the brief’s colour'}); });
@@ -3667,18 +4312,23 @@
     var tab=$('sheetTab'), pn=String(get('project_name')||'').trim()||derivedTitle(); tab.textContent=pn;
   }
   function renderLogos(){
-    var ls=logosOf(), box=$('logoList'), head=$('sheetLogos'), cli=String(get('client')||'').trim();
-    var shown=sheetLogos().filter(logoSrc);
-    head.innerHTML=shown.map(function(l,i){ return (i?'':'')+'<img src="'+esc(logoSrc(l))+'" alt="'+esc(l.label||l.slot||'Logo')+'" />'; }).join('')
-      +(cli?(shown.length?'<span class="sep"></span>':'')+'<span class="names">'+esc(cli)+'</span>':'');
-    box.innerHTML=ls.map(function(l,i){
+    var ls=logosOf(), box=$('logoList');
+    if($('sheetNames')) renderSheetHead();
+    // With no picture uploaded for the client or the agency, their tiles stand in (initials on
+    // their colours), as on the sheet; Change uploads the real one into that slot.
+    var have={}; ls.forEach(function(l){ have[l.slot]=1; });
+    var virt=ls.length?[]:['client','agency'].filter(function(k){ return !have[k]&&tileOf(k); });
+    box.innerHTML=virt.map(function(k){ var t=tileOf(k);
+      return '<label class="logo virt" title="Click to put '+esc(t.name)+'’s logo here">'+tileHtml(t,'lb-tile')+'<small>'+esc(t.name)+'</small><input type="file" class="sr" data-slot="'+k+'" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'; }).join('')
+      +ls.map(function(l,i){
       var src=logoSrc(l);
-      return '<div class="logo'+(l.ref.brand?' kit':'')+'">'+(src?'<img src="'+esc(src)+'" alt="" />':'<span class="muted">Brand Clan</span>')
+      return '<div class="logo'+(l.ref.brand?' kit':'')+'">'+(src?'<img src="'+esc(src)+'" alt="" />':'<span class="muted">Brand Clan</span>')+'<small>'+esc(short(l.label||(LOGO_SLOTS.filter(function(s){ return s[0]===l.slot; })[0]||[,''])[1],14))+'</small>'
         +'<select aria-label="Whose logo is '+esc(l.label||'this')+'" data-n="'+i+'">'+LOGO_SLOTS.map(function(s){ return '<option value="'+s[0]+'"'+(l.slot===s[0]?' selected':'')+'>'+s[1]+'</option>'; }).join('')+'</select>'
         +'<button type="button" class="x" data-n="'+i+'" aria-label="Take off '+esc(l.label||'this logo')+'">×</button></div>';
     }).join('')+kitOffers().map(function(x,i){
       return '<button type="button" class="logo kit offer" data-k="'+i+'" title="Put the '+esc(x.brand)+' Brand Clan’s '+esc(x.name)+' on the brief"><img src="'+esc(assetUrl(x.asset))+'" alt="" /><span>'+esc(short(x.name,14))+'</span><span class="muted">Brand Clan</span></button>';
-    }).join('')+'<label class="logo add" title="Add a logo (PNG, JPG, SVG or WebP)">'+IC.plus+'<span>Add logo</span><input type="file" class="sr" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>';
+    }).join('')+'<label class="logo add" title="Add a logo (PNG, JPG, SVG or WebP)"><b aria-hidden="true">+</b><small>Add logo</small><input type="file" class="sr" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>';
+    box.querySelectorAll('.virt input[data-slot]').forEach(function(inp){ inp.addEventListener('change', function(){ var f=this.files&&this.files[0]; this.value=''; if(f) addLogo(f, inp.getAttribute('data-slot')); }); });
     box.querySelectorAll('.offer[data-k]').forEach(function(b){ b.addEventListener('click', function(){
       var x=kitOffers()[+b.getAttribute('data-k')]; if(!x) return;
       var n=logosOf().slice(); n.push({slot:nextSlot(n), ref:{brand:x.brandId, asset:x.id}, label:x.name});
@@ -3700,15 +4350,20 @@
   // The brand line: which Brand Clan the brief carries, and its version. Hidden with none attached.
   function renderBrandLine(){
     var el=$('brandLine'), b=brandAttached(); if(!el) return;
-    if(!b){ el.hidden=true; el.innerHTML=''; return; }
-    var v=b.kit.kit&&b.kit.kit.version, n=kitLogos(b.kit).length;
+    var cn=clientName();
+    if(!b&&!cn){ el.hidden=true; el.innerHTML=''; return; }
     el.hidden=false;
-    el.innerHTML='<div class="trow"><span class="bdot" aria-hidden="true"></span><b>'+esc(brandName(b.kit))+'</b></div>'
-      +'<span class="muted">Brand Clan'+(v!=null?' v'+esc(v):'')+' · '+(n?num(n)+' '+(n===1?'logo':'logos')+' in the Logos box':'no logos in its kit')+'</span>';
+    if(b){
+      var v=b.kit.kit&&b.kit.kit.version, n=kitLogos(b.kit).length;
+      el.innerHTML='<span class="bl-dot" aria-hidden="true"></span><span><b>'+esc(brandName(b.kit))+'</b><small>Brand applied · Brand Clan'+(v!=null?' v'+esc(v):'')+' · '+(n?num(n)+' '+(n===1?'logo':'logos'):'no logos in its kit')+'</small></span>';
+      return;
+    }
+    // No Brand Clan here yet (feat/brand-clan is unmerged): the client as the record knows it.
+    el.innerHTML='<span class="bl-dot" aria-hidden="true"></span><span><b>'+esc(cn)+'</b><small>The client on this brief · no Brand Clan yet</small></span>';
   }
   // The next slot nobody has: the client's logo first, then the agency's, then a partner's.
   function nextSlot(ls){ var have={}; ls.forEach(function(l){ have[l.slot]=1; }); return have.client?have.agency?'partner':'agency':'client'; }
-  function addLogo(file){
+  function addLogo(file, slot){
     if(!/^image\/(png|jpeg|svg\+xml|webp)$/.test(file.type||'')){ toast('A logo is a PNG, JPG, SVG or WebP picture.'); return; }
     if(!window.clan){ toast('Adding a logo needs the Napkin host.'); return; }
     var ext=(file.name.split('.').pop()||'png').replace(/[^a-zA-Z0-9]/g,'').toLowerCase(), name='logo-'+Date.now()+'.'+ext;
@@ -3716,7 +4371,7 @@
       return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf}).then(function(r){ return r.json(); });
     }).then(function(res){
       if(!(res&&res.internal_path)){ toast(hostErrText(res)||'The logo could not be added.'); return; }
-      var n=logosOf().slice(); n.push({slot:nextSlot(n), ref:{asset:name}, label:file.name});
+      var n=logosOf().slice(); n.push({slot:slot||nextSlot(n), ref:{asset:name}, label:file.name});
       patch('logos', n, {actor:'human', pinned:false, action:'add a logo'});
     }).catch(function(){ toast('The logo could not be added. Try again in a moment.'); });
   }
@@ -3774,14 +4429,15 @@
     return cells.filter(function(c){ return map[c.row]; }).map(function(c){
       var at='grid-column:'+c.col+' / span '+c.w+';grid-row:'+map[c.row], r=' data-r="'+c.row+'"';
       if(c.head){ headRow=c.row; return '<div class="sechead"'+r+' style="'+at+'">'+esc(c.head)+'</div>'; }
+      if(c.version) return '<div class="row k-cell r1"'+r+' style="'+at+';--w:'+c.w+'"><div class="lab"><span>Version</span></div><div class="val">'+esc(ctx.version||'')+'</div></div>';
       var f=ctx.fieldOf(c.key); if(!f) return '';
       var v=ctx.get(f.key), has=hasVal(v), conf=arr(ctx.conf).indexOf(f.key)!==-1, mk=exportMarkHtml((ctx.marks||{})[f.key]);
       var st=ctx.styleOf?ctx.styleOf(f.key):'', sa=st?' style="'+st+'"':'';
-      var val=!has?'<div class="val empty">Not written yet.</div>'
+      var val=!has?'<div class="val empty">'+(isMeta(f.key)?'not given':'Not written yet.')+'</div>'
         :f.type==='list'?'<div class="val"'+sa+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){ return '<li>'+esc(String(x))+'</li>'; }).join('')+'</ul>'+mk+'</div>'
         :'<div class="val'+(f.hero?' spp':'')+'"'+sa+'>'+esc(String(v))+mk+'</div>';
-      return '<div class="row'+(conf?' conf':'')+(c.row===headRow+1?' afterhead':'')+'"'+r+' style="'+at+';--w:'+c.w+'">'
-        +'<div class="lab"><span>'+esc(f.label)+'</span>'+(conf?' <span class="conftag">Confidential</span>':'')+'</div>'+val+'</div>';
+      return '<div class="row k-'+kindOf(f)+(conf?' conf':'')+(c.row===headRow+1?' afterhead':'')+(c.row===ctx.cells.filter(function(x){ return !x.head; }).reduce(function(m,x){ return Math.min(m,x.row); },1e9)?' r1':'')+'"'+r+' style="'+at+';--w:'+c.w+'">'
+        +'<div class="lab"><span>'+esc(headOf(f))+'</span>'+(conf?' <span class="conftag">Confidential</span>':'')+'</div>'+val+'</div>';
     }).join('');
   }
   // The whole document. pages null: one long sheet, to be measured; else [[block id]] per page, where a
@@ -3790,13 +4446,14 @@
   // derived, ident, look {frame, headings, accent}, boards [{src, label}], sources [[note]] per appendix
   // page, foot (the footer's words), copy ('agency'|'client').
   function sheetDoc(ctx, pages){
-    var lk=ctx.look||{}, cls='sheet a4 page'+(lk.frame==='boxed'?' frame-boxed':'')+(lk.headings==='tab'?' head-tab':'');
+    var lk=ctx.look||{}, cls='sheet a4 page'+(lk.frame==='boxed'?' frame-boxed':'')+(lk.headings==='tab'?' head-tab':'')+(lk.cover==='band'?' cover-band':'');
     var acc=/^#[0-9a-f]{6}$/i.test(String(lk.accent||''))?' style="--brief-accent:'+lk.accent+'"':'';
     var logos=arr(ctx.logos).filter(function(l){ return l&&/^data:image\/(png|jpeg|svg\+xml|webp)[;,]/.test(String(l.src||'')); });
-    var head='<header class="shead"><div class="slogos">'+logos.map(function(l){ return '<img src="'+esc(l.src)+'" alt="'+esc(l.alt||'Logo')+'" />'; }).join('')
-      +(ctx.client?(logos.length?'<span class="sep"></span>':'')+'<span class="names">'+esc(ctx.client)+'</span>':'')+'</div>'
-      +'<div class="sident"><div class="ident">'+(ctx.ident||'')+'</div></div></header>'
-      +'<div class="stitle"><div class="skick">Creative brief'+(ctx.copy==='client'?' · client copy':'')+'</div><div class="proj'+(ctx.derived?' derived':'')+'">'+esc(ctx.project||'Untitled campaign')+'</div><div class="cli">'+esc(ctx.client||'')+'</div></div>';
+    // The same cover as the sheet on screen: the logos (or the client's and agency's tiles), the names, the title.
+    var tiles=logos.length?logos.map(function(l){ return '<img class="b-logo-img" src="'+esc(l.src)+'" alt="'+esc(l.alt||'Logo')+'" />'; }):arr(ctx.tiles);
+    var head='<header class="b-cover"><div class="b-ident"><span class="b-logos">'+tiles.join('<i class="b-x"></i>')+'</span><span class="b-iname">'+esc(ctx.names||ctx.client||'')+'</span><span class="b-ikind">Brief</span></div>'
+      +'<div class="eyebrow-row"><span class="skick">Creative brief'+(ctx.copy==='client'?' · client copy':'')+'</span><span>'+esc(ctx.meta||'')+'</span></div>'
+      +'<h2 class="proj'+(ctx.derived?' derived':'')+'">'+esc(ctx.project||'Untitled campaign')+'</h2></header>';
     var boards=arr(ctx.boards).length?'<div class="pblk" data-b="boards"><div class="sechead">Your pictures</div><div class="boards on">'+ctx.boards.map(function(b){
       return '<div class="board">'+(b.src?'<img src="'+esc(b.src)+'" alt="" />':'<div class="doc">'+IC.doc+'</div>')+'<div class="nm">'+esc(b.label)+'</div></div>'; }).join('')+'</div></div>':'';
     var srcs=arr(ctx.sources).filter(function(s){ return arr(s).length; });
@@ -3812,7 +4469,7 @@
     }).join('');
     // NB: keep closing tags escaped so the host's injectors never mistake these literals for the real ones.
     return '<!DOCTYPE html><html lang="en" data-color-scheme="light"><head><meta charset="UTF-8"><title>'+esc(ctx.project||'Creative brief')+'</title>'
-      +'<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />'
+      +'<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet" />'
       +'<style>'+String(ctx.css||'').replace(/<\/style/gi,'<\\/style')+SHEET_PRINT_CSS+SHEET_DOC_CSS+'<\/style><\/head><body class="'+(pages?'paged':'flow')+'">'+body+'<\/body><\/html>';
   }
   // What only the printed document carries (the page itself has a desk and a side tab).
@@ -3869,16 +4526,18 @@
   // The context sheetDoc needs, from the brief as it is now. logos/boards are inlined by the caller.
   function sheetCtx(copy, extra){
     var items=sheetItems(copy), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
-    var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:layoutPack(items), items:items,
+    var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:packSheet(items), items:items, version:versionLine(),
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
-      look:{frame:l.frame, headings:l.headings, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
+      look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
+      names:[clientName(), agencyName()].filter(Boolean).join(' · '), meta:[clientName(), docVersion(), fmtDay(lastWhen())].filter(Boolean).join(' · '),
+      tiles:[tileHtml(tileOf('client')), tileHtml(tileOf('agency'))].filter(Boolean),
       foot:[gridClientName(cli), workingTitle(), 'Creative brief', copy==='client'?'Client copy':'Confidential'].filter(Boolean).join(' / ')};
     for(var k in extra||{}) ctx[k]=extra[k];
     return ctx;
   }
   // Where the agency copy's pages break, for the guides on the screen: {sig, starts:{row:page}, total}.
   var SHEET_BREAKS={sig:'', starts:{}, total:1}, BREAK_T=null, BREAK_RUN=0;
-  function breakSig(){ return JSON.stringify([layoutItems(), layoutData().frame, layoutData().headings, confList(), FIELDS.map(function(f){ return get(f.key); }), get('field_styles'), arr(data().reference_assets).length]); }
+  function breakSig(){ return JSON.stringify([layoutItems(), layoutData().frame, layoutData().headings, layoutData().cover, confList(), FIELDS.map(function(f){ return get(f.key); }), get('field_styles'), arr(data().reference_assets).length]); }
   function scheduleBreaks(){
     clearTimeout(BREAK_T);
     if(phase!=='doc') return;
@@ -3950,6 +4609,11 @@
     document.documentElement.classList.toggle('clan-glass', +m.top>0);
   });
   // The glass takes the desk's colour, light or dark; it is asked for again when the scheme changes.
+  // Who is signed in (the agency's name on the sheet head) and the agency's colours (its tile,
+  // its swatches): both arrive after the first paint, and the sheet head and the look redraw.
+  function askMe(){ if(window.clan&&typeof window.clan.me==='function') window.clan.me().then(function(m){ ME=m||null; if(phase==='doc'){ renderSheetHead(); renderLook(); renderStateLine(); } }, function(){}); }
+  if(document.readyState==='complete') setTimeout(askMe,0); else window.addEventListener('load', askMe);
+  window.addEventListener('napkin:agency', function(){ if(phase==='doc'){ renderSheetHead(); renderLook(); } });
   function askGlass(){
     var c=getComputedStyle(document.documentElement).getPropertyValue('--desk').trim();
     try{ window.parent.postMessage({type:'clan:chrome', mode:'glass', tint:/^#[0-9a-f]{6}$/i.test(c)?c:null}, '*'); }catch(e){}

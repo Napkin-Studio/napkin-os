@@ -54,8 +54,8 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(budget.locator('.conftag')).toHaveText('Confidential')
   await expect(panel.locator('[data-sp="conf"]')).toHaveAttribute('aria-pressed', 'true')
 
-  // Built from is the OS source card.
-  await expect(panel.locator('#spBuilt .clf-sc').first()).toBeVisible({ timeout: 15_000 })
+  // Built from: compact rows (the mock), each opening the OS source card.
+  await expect(panel.locator('#spBuilt .bf-row').first()).toBeVisible({ timeout: 15_000 })
 
   // Place on page: full width, then one place earlier; the keyboard on the grip moves it too.
   await panel.locator('.sp-l summary').click()

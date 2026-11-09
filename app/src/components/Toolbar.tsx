@@ -24,6 +24,7 @@ import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { BarButtons, BarChips } from './AppBarItems'
+import { gateOf } from '../shell/appBar'
 import './chrome.css'
 
 export type { Crew, DocBar, DocState, MenuItem, ToolBrand } from './barMenus'
@@ -356,6 +357,7 @@ export default function Toolbar({
             label="Continue in"
             className="ch-btn ch-btn-slot"
             groups={[
+              ...(gateOf(doc.bar ?? []) ? [{ items: [], empty: gateOf(doc.bar ?? [])!.label }] : []),
               { label: 'Turn it into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
               { label: 'Link to an existing one', items: cont.link, empty: 'Nothing in this workspace to link this to yet.' },
               ...(doc.madeFrom
@@ -367,6 +369,7 @@ export default function Toolbar({
                       : `Up to date with ${doc.madeFrom.title}.`,
                   }]
                 : []),
+              ...(cont.fresh.length ? [{ label: 'Start fresh', items: cont.fresh }] : []),
             ]}
           />
           <BarMenu id="ch-share-menu" label="Share" className="ch-btn ch-btn-slot" groups={[{ items: shareItems(doc) }]} />
