@@ -2296,18 +2296,34 @@ test('the storyboard\'s styles are the mock\'s, in tokens', () => {
 })
 
 // ── the document's client (owner bug 2026-11-09): a deck made in a client's desk never asks who the client is ──────────
-test('a deck in a client reads the client from the document and never asks for it', () => {
+test('a deck in a client autofills the client from the document; a name the person gives wins and stays', () => {
   const inClient = { client: { id: 'cli_1', name: "McDonald's Ireland" } }
-  const m = mount({ inputs: { prompt: {} } }, undefined, { ptext: { value: 'A deck for a drinks brand about summer.' } }, { manifest: inClient })
-  m.click({}, 'land-build')
-  const h = m.app.innerHTML
+  const read = (text: string, data: Record<string, unknown> = { inputs: { prompt: {} } }, manifest?: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
+    const m = mount(data, undefined, { ptext: { value: text }, ...extra }, manifest ? { manifest } : {})
+    m.click({}, 'land-build')
+    return m
+  }
+  // untouched: the document's client fills the read, and the client is not asked
+  let h = read('A deck for a drinks brand about summer.', undefined, inClient).app.innerHTML
   assert.equal(h.includes('Who is the client?'), false, 'no client question')
   assert.ok(h.includes('Question 1 of 1 ·'), 'only the kind of deck is asked')
-  assert.ok(h.includes('McDonald&#39;s Ireland') || h.includes("McDonald's Ireland"), 'the read shows the document\'s client')
-  assert.equal(/<small>Client<\/small>\[Client\]/.test(h), false)
+  assert.ok(h.includes('<small>Client</small>McDonald&#39;s Ireland') || h.includes("<small>Client</small>McDonald's Ireland"), 'the autofill')
+  // a client named in the prompt is the person's, and wins over the document's
+  const fern = read('Fernley Drinks is a small Irish cordial maker. Pitch a summer campaign.', undefined, inClient)
+  const said = fern.writes.map(w => (w.obj as Fx).inputs?.prompt?.client).filter(Boolean)
+  const shown = /<small>Client<\/small>([^<]*)/.exec(fern.app.innerHTML)?.[1]
+  assert.ok((said[0] ?? shown ?? '').startsWith('Fernley'), 'the prompt\'s client is the person\'s and is saved')
+  assert.equal(/McDonald/.test(said[0] ?? shown ?? ''), false)
+  // a client the person saved before stays on a later read, never put back to the autofill
+  h = read('A deck for a drinks brand about summer.', { inputs: { prompt: { client: 'Lumen Labs', text: '' } } }, inClient).app.innerHTML
+  assert.ok(h.includes('<small>Client</small>Lumen Labs'), 'the saved name survives')
+  // changing the CLIENT chip keeps the person's name
+  const m = read('A deck for a drinks brand about summer.', undefined, inClient, { 'rd-val': { value: 'Acme Foods' } })
+  m.click({ rd: 'client' })
+  m.click({ rdsave: 'client' })
+  assert.ok(m.app.innerHTML.includes('<small>Client</small>Acme Foods'), 'the chip\'s name wins')
   // with no client on the document the question is still asked
-  const out = mount({ inputs: { prompt: {} } }, undefined, { ptext: { value: 'A deck for a drinks brand about summer.' } })
-  out.click({}, 'land-build')
+  const out = read('A deck for a drinks brand about summer.')
   assert.ok(out.app.innerHTML.includes('Question 1 of 2 ·') && out.app.innerHTML.includes('[Client]'))
 })
 

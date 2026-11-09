@@ -2188,17 +2188,20 @@ var DeckLogic = (function () {
 
 
   // What the document already knows before the read asks anything: its client (the manifest's, the client desk it was made
-  // in) and the signed-in agency's name (clan.me). The document's client wins over a name read from the prompt: a deck made in
-  // McDonald's Ireland's desk is theirs. The client question is asked only when the document has none.
+  // in) and the signed-in agency's name (clan.me). They only autofill (owner, 2026-11-09: "autofill the name, then whatever name
+  // survives stays"): a client the person named (in the prompt, by the CLIENT chip, in the form, saved before) wins and stays;
+  // only an untouched read takes the document's. The client question is asked only when there is neither.
   var AGENCY = { name: '' };
   function docClient() {
     var m = (window.__CLAN__ || {}).manifest || {}, c = m.client;
     return c && typeof c === 'object' ? String(c.name || '').trim() : '';
   }
   function fromDocument(r) {
-    var c = docClient();
-    if (c) { r.client = c; r.clientFrom = 'document'; }
-    if (!r.agency && AGENCY.name) { r.agency = AGENCY.name; r.agencyFrom = 'you'; }
+    var saved = String((d().inputs.prompt || {}).client || '').trim(), c = docClient();
+    if (!r.client && saved && !/^\[.*\]$/.test(saved)) { r.client = saved; r.clientFrom = 'you'; }
+    else if (!r.client && c) { r.client = c; r.clientFrom = 'document'; }
+    var savedAg = String((d().inputs.prompt || {}).agency || '').trim();
+    if (!r.agency && (savedAg || AGENCY.name)) { r.agency = savedAg || AGENCY.name; r.agencyFrom = savedAg ? 'you' : 'agency'; }
     return r;
   }
 
