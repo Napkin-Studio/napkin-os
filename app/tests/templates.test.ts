@@ -2038,7 +2038,12 @@ test('research: the report box and the OS bar say the report’s state in the sa
   type F = { reportStatus(r: unknown, locked: boolean, stale: boolean, open: number): { label: string; tone: string | null; locked: boolean }
     barItems(st: unknown, has: boolean, lk: boolean): { kind: string; id?: string; label: string; disabled?: boolean; primary?: boolean }[] }
   const gate = { t: '' }
-  const f = lift<F>(RT, ['reportStatus', 'barItems'], { isObj, CHAT: { reportBusy: false }, gateWords: () => gate.t })
+  // the run's state, for the bar's mode (the name alone at the ask; the run's step while it works)
+  const run = { fresh: false, job: null as null | { state: string }, active: false, step: 0, report: true }
+  const f = lift<F>(RT, ['reportStatus', 'barItems', 'barMode'], {
+    isObj, CHAT: { reportBusy: false, get job() { return run.job } }, gateWords: () => gate.t,
+    thread: () => (run.fresh ? [] : [{}]), camp: () => (run.fresh ? {} : { name: {} }), jobActive: () => run.active,
+    liveQuestion: () => null, runStep: () => run.step, PLAN: [{}, {}, {}, {}], D: () => (run.report ? { report: {} } : {}) })
   assert.equal(f.reportStatus(null, false, false, 0).label, 'No report yet')
   assert.deepEqual(f.reportStatus({}, true, true, 3), { label: 'Locked', tone: 'ok', locked: true })
   assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
@@ -2054,6 +2059,14 @@ test('research: the report box and the OS bar say the report’s state in the sa
   assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'gate', label: gate.t, tone: 'warn' })
   assert.equal(f.barItems(f.reportStatus({}, true, false, 0), true, true).length, 1)
   gate.t = ''
+  // The mock's bar per step: the ask shows the name alone, a run its step, a run that left no report how it ended.
+  run.fresh = true
+  assert.deepEqual(f.barItems(f.reportStatus(null, false, false, 0), false, false)[0], { kind: 'mode', mode: 'ask' })
+  run.fresh = false; run.job = { state: 'running' }; run.active = true; run.step = 1
+  assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'mode', mode: 'working', label: 'Working · Step 2/4' })
+  run.active = false; run.job = { state: 'cancelled' }; run.report = false
+  assert.deepEqual(f.barItems(f.reportStatus(null, false, false, 0), false, false)[0], { kind: 'mode', mode: 'working', label: 'Stopped' })
+  run.job = null; run.report = true
   const box = RT.slice(RT.indexOf('<section class="insp-box" id="rbox"'), RT.indexOf('</section>', RT.indexOf('id="rbox"')))
   for (const id of ['rbox-status', 'rbox-refresh', 'lockBtn', 'researchBtn', 'synthBtn']) assert.match(box, new RegExp(`id="${id}"`), `${id} is in the Report box`)
   // A bar action from an older shell still does what the page's button does.
