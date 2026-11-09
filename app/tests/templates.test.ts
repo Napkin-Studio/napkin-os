@@ -1713,11 +1713,11 @@ test('each OS bar button runs the same handler as its side-tab control', () => {
   type BarI = { kind: string; id?: string; label: string; disabled?: boolean }
   const el = (disabled = false) => ({ disabled })
   const items = (o: { phase?: string; A?: boolean; reopened?: string[]; armed?: boolean; st?: unknown }) => lift<{ barItems(): BarI[] }>(BM, ['barItems'], {
-    phase: o.phase ?? 'doc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
+    phase: o.phase ?? 'doc', DRAFT: o.phase === 'proc' ? { stage: 'context', state: 'running' } : null, STAGES: ['extract', 'context', 'draft', 'judge'], PLAN: [1, 2, 3, 4], draftLive: () => o.phase === 'proc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
     statusNow: () => o.st ?? { label: 'Draft', tone: null, locked: false }, $: () => el(), REDRAFT_ARMED: o.armed ? 1 : null,
   }).barItems()
-  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: no buttons, and the state is Draft (never the host’s guess)')
-  assert.deepEqual(items({ phase: 'proc' }).map(i => i.label), ['Draft'], 'the crew at work: still a draft')
+  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
+  assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'the crew at work: the run’s step for the bar, still a draft')
   const draft = items({})
   assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')

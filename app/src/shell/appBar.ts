@@ -29,11 +29,15 @@ export type BarItem =
   | { kind: 'status'; label: string; tone: BarTone; locked: boolean }
   /** What Continue in says first, when the document is not ready to go on ("Not brief-ready yet: …"). At most one. */
   | { kind: 'gate'; label: string; tone: BarTone }
+  /** Where the document is before there is one to act on (the mock's bar per step): `ask` (the prompt:
+   *  the name alone) or `working` (the crew at work: the name and a status chip, "Working · step 1/4").
+   *  At most one; none means the document itself, with every action. */
+  | { kind: 'mode'; mode: 'ask' | 'working'; label: string }
 
 export type BarStatus = Extract<BarItem, { kind: 'status' }>
 
 /** What one bar takes. The rest of an app's list is dropped, in order. */
-export const BAR_LIMITS = { button: 6, chip: 4, status: 1, gate: 1, label: 28, gateLabel: 200, id: 64, title: 140 } as const
+export const BAR_LIMITS = { button: 6, chip: 4, status: 1, gate: 1, mode: 1, label: 28, gateLabel: 200, id: 64, title: 140 } as const
 
 /** The buttons drawn in the bar itself; any more go into More. */
 export const BAR_BUTTONS_SHOWN = 2
@@ -53,12 +57,19 @@ export function barFrom(message: unknown): BarItem[] {
   const m = message as { v?: unknown; items?: unknown } | null
   if (!m || m.v !== 1 || !Array.isArray(m.items)) return []
   const out: BarItem[] = []
-  const count = { button: 0, chip: 0, status: 0, gate: 0 }
+  const count = { button: 0, chip: 0, status: 0, gate: 0, mode: 0 }
   const ids = new Set<string>()
   for (const raw of m.items) {
     const it = (raw ?? {}) as Record<string, unknown>
     const kind = it.kind
-    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate') continue // a kind from the future, or a retired tab
+    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate' && kind !== 'mode') continue // a kind from the future, or a retired tab
+    if (kind === 'mode') {
+      if ((it.mode === 'ask' || it.mode === 'working') && count.mode < BAR_LIMITS.mode) {
+        out.push({ kind, mode: it.mode, label: text(it.label, BAR_LIMITS.label) })
+        count.mode++
+      }
+      continue
+    }
     const label = text(it.label, kind === 'gate' ? BAR_LIMITS.gateLabel : BAR_LIMITS.label)
     const title = text(it.title, BAR_LIMITS.title)
     const why = !label ? 'has no label' : count[kind] >= BAR_LIMITS[kind] ? `is past the ${BAR_LIMITS[kind]} ${kind}s a bar takes` : ''
@@ -94,6 +105,11 @@ type Button = Extract<BarItem, { kind: 'button' }>
 /** The app's own word for the document's state, when it sent one. */
 export function statusOf(bar: BarItem[]): BarStatus | null {
   return bar.find((i): i is BarStatus => i.kind === 'status') ?? null
+}
+
+/** Where the document is, when the app says it is before the document (the prompt, the crew at work). */
+export function modeOf(bar: BarItem[]): Extract<BarItem, { kind: 'mode' }> | null {
+  return bar.find((i): i is Extract<BarItem, { kind: 'mode' }> => i.kind === 'mode') ?? null
 }
 
 /** The app's gate line for Continue in, when it sent one. */

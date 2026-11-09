@@ -2963,9 +2963,7 @@
     var stp=$('procStop'); if(stp) stp.addEventListener('click',function(){ j.stopAsk=true; renderProc(); var y=$('procStopYes'); if(y) y.focus(); });
     var sno=$('procStopNo'); if(sno) sno.addEventListener('click',function(){ j.stopAsk=false; renderProc(); });
     var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
-    var open=$('procOpen'); open.disabled=!(hasContent()||j.state==='done');
-    open.title=open.disabled?'The brief opens here once the crew have written a part':'';
-    syncHead();
+    syncHead(); sendBar();
   }
   // Back to the ask: a stopped run goes back as before; a live one keeps working while you look
   // at the ask (step 2, Agents, brings you back to it).
@@ -2975,7 +2973,8 @@
     forceIntake=true; setPhase('intake'); render();
   });
   // Skip to the finished brief: what is written so far, and the rest as it lands.
-  $('procOpen').addEventListener('click',function(){ if(this.disabled) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); });
+  // (the mock's Skip: the sheet at once, its parts arriving as the crew write them)
+  $('procOpen').addEventListener('click',function(){ DRAFT=null; forceIntake=false; if(!hasContent()) handWrite=true; setPhase('doc'); render(); window.scrollTo(0,0); });
   function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'); }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
@@ -3180,7 +3179,8 @@
     if(c.sources) n.push('<b>'+c.sources+'</b> '+(c.sources===1?'source':'sources'));
     var ue=upEntry(), up_=ue&&ue.path;
     // The mock's one line ("From research: Irish summer treats · 12 facts"); what came with it opens under it.
-    var nf=c.pins||c.findings, line='From research: '+(t||'the research this brief started from')+(nf?' · '+nf+' '+(c.pins?(nf===1?'fact':'facts'):(nf===1?'finding':'findings')):'');
+    var upPins=Object.keys(((upData().projection||{}).pins)||upData().pins||{}).length;
+    var nf=c.pins||upPins||c.findings, line='From research: '+(t||'the research this brief started from')+(nf?' · '+nf+' '+(c.pins||upPins?(nf===1?'fact':'facts'):(nf===1?'finding':'findings')):'');
     var h='<div><div class="fu-k">From research</div><div class="fu-t">'+esc(t||'The research this brief started from')+'</div>'
       +(up_?'<button type="button" class="linkbtn" id="openUpIn">Open the research ↗</button>':'')+'</div>'
       +(hl?'<blockquote>'+esc(hl)+'</blockquote>':'')
@@ -4459,7 +4459,12 @@
   function barItems(){
     // Before the sheet (the ask, the crew at work) the bar has no buttons, but
     // still the brief's own word for its state, so the OS never guesses it.
-    if(phase!=='doc') return [{kind:'status', label:'Draft', tone:null, locked:false}];
+    if(phase!=='doc'){
+      // the mock's bar per step: the name alone at the ask; the name and the run's step while the crew work
+      var j=DRAFT, at=j?Math.max(0,STAGES.indexOf(j.stage)):0;
+      var mode=phase==='intake'?{kind:'mode', mode:'ask'}:{kind:'mode', mode:'working', label:!j?'Working':draftLive()?'Working · Step '+(at+1)+'/'+PLAN.length:j.state==='done'?'Done':'Stopped'};
+      return [mode, {kind:'status', label:'Draft', tone:null, locked:false}];
+    }
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, st=statusNow(), lb=$('lockBtn');
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});

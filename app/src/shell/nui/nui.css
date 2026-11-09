@@ -710,3 +710,8 @@ html[data-theme="dark"] .p33-stale:where(.nui, .nui *) { color: #F2B86A; }
 @keyframes p33pulse { 50% { opacity: .35; } }
 /* The tool page can open before the landing styles load: its screen-reader line stays visually hidden. */
 .lc-sr:where(.nui, .nui *) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The crew at work, in the bar (the mock's #bar-status "● Working · Step 1/4"). */
+.tb-status:where(.nui, .nui *) { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--desk); color: var(--muted); font: 600 10.5px/1.55 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.tb-status:where(.nui, .nui *) .sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ag-acc); box-shadow: 0 0 0 2px var(--ag-base); }
+@media (max-width: 760px) { .tb-status:where(.nui, .nui *) { display: none; } }

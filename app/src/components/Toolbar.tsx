@@ -23,6 +23,7 @@ import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
 import { accountItems, continueItems, docMenuItems, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
 import { MedallionMark, type MarkTarget } from './Medallion'
+import { modeOf } from '../shell/appBar'
 import { useEngaged } from './markStore'
 import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
@@ -227,6 +228,8 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
   }
   const invalid = !!doc.validation && doc.validation !== 'OK'
   const check = invalid ? 'not valid' : doc.trusted ? 'signed ✓' : 'valid ✓'
+  // Before there is a document to act on (the prompt, the crew at work): the name alone, as the mock.
+  const pre = !!modeOf(doc.bar ?? [])
   return (
     <span
       className={`tba-name tba-${doc.toolKey ?? 'brief'}`}
@@ -254,9 +257,9 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
             onBlur={() => finish(true)}
           />
         ) : <b title={title ?? undefined}>{title ?? <LogoSpinner size="xs" label="Loading…" />}</b>}
-        <small className="tba-saved" data-testid="saved-line">{doc.saved ? <>{doc.saved} · {check}</> : check}</small>
+        {!pre && <small className="tba-saved" data-testid="saved-line">{doc.saved ? <>{doc.saved} · {check}</> : check}</small>}
       </span>
-      <i className="tba-caret" aria-hidden>▾</i>
+      {!pre && <i className="tba-caret" aria-hidden>▾</i>}
     </span>
   )
 }
@@ -424,6 +427,7 @@ export default function Toolbar({
     const l = i.label.toLowerCase()
     return <ToolIcon tool={/research/.test(l) ? 'research' : /deck/.test(l) ? 'deck' : /brief/.test(l) ? 'brief' : 'production'} />
   }
+  const mode = modeOf(doc.bar ?? [])
   return (
     <div className="nui ch-bar-os" data-testid="os-bar" data-where="document">
       <div className="topbar-outer">
@@ -431,16 +435,19 @@ export default function Toolbar({
           {lead}
           <div className="tb-app" id="tb-app" aria-label="App" ref={appRef}>
             <DocName doc={doc} open={pop.open?.key === 'doc'} onMenu={el => pop.toggle('doc', el)} renaming={renaming} setRenaming={setRenaming} />
-            <Lineage doc={doc} />
-            <span className="tba-acts">
+            {!mode && <Lineage doc={doc} />}
+            {!mode && <span className="tba-acts">
               <button type="button" className="tba-btn tba-cont" data-tba="b-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
                 onClick={e => pop.toggle('cont', e.currentTarget)}>Continue in ▾</button>
               <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
                 onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>
-            </span>
+            </span>}
           </div>
           <span className="tb-spacer" />
           <span className="tb-tools">
+            {mode?.mode === 'working' && (
+              <span className="tb-status" data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`}><i className="sdot" aria-hidden />{mode.label || 'Working'}</span>
+            )}
             {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
             {doc.trusted && (
               <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">Trusted</span>
