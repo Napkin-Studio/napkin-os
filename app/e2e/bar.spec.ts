@@ -35,56 +35,62 @@ async function seed(page: Page) {
 
 async function openFromDesk(page: Page, title: string) {
   await page.getByTestId('decisions').click()
-  const drawer = page.getByTestId('desk-decisions')
+  const drawer = page.getByTestId('decisions-drawer')
   await expect(drawer).toBeVisible()
-  await drawer.getByTestId('desk-call').filter({ hasText: title }).getByRole('button', { name: 'Open' }).click()
+  await drawer.getByTestId('call-row').filter({ hasText: title }).first().getByRole('button', { name: 'Open', exact: true }).click()
   await expect(page.locator('[data-where="document"]')).toBeVisible({ timeout: 30_000 })
 }
 
-test('desk: Decisions is amber with the count across clients and opens the documents that need a call', async ({ page }) => {
+test('desk: Decisions is amber with the count across clients and lists the calls themselves', async ({ page }) => {
   await seed(page)
   const decisions = page.getByTestId('decisions')
-  await expect(decisions).toHaveClass(/ch-decisions-needs/)
+  await expect(decisions).toHaveClass(/has-needs/)
   await expect(page.getByTestId('needs-count')).toHaveText('2')
   await expect(page.getByTestId('medallion-mark')).toHaveAttribute('data-state', 'awake') // the desk never lights it
   await decisions.click()
-  const drawer = page.getByTestId('desk-decisions')
-  await expect(drawer.getByTestId('desk-call')).toHaveCount(2)
+  const drawer = page.getByTestId('decisions-drawer')
+  await expect(drawer.getByTestId('call-row')).toHaveCount(2)
+  await expect(drawer.getByTestId('call-card')).toContainText('2 open calls need your sign-off')
   await expect(drawer).toContainText('Client A')
   await expect(drawer).toContainText('Client B')
-  await expect(drawer).not.toContainText('Launch brief') // nothing to call there
-  await decisions.click()
+  await expect(drawer.getByTestId('call-card')).not.toContainText('Launch brief') // nothing to call there
+  // It sits over the desk with a backdrop; Close (or the backdrop) puts it away.
+  await page.getByRole('button', { name: 'Close decisions' }).click()
   await expect(drawer).toHaveCount(0)
-  // Open… sits in the desk's More too.
-  await page.getByRole('button', { name: /^More/ }).click()
-  await expect(page.getByRole('menuitem', { name: /Open…/ })).toBeVisible()
+  await decisions.click()
+  await page.locator('#dtree-backdrop').click({ position: { x: 20, y: 500 } })
+  await expect(drawer).toHaveCount(0)
+  // Open… sits in the desk's ⋯ menu.
+  await page.getByTestId('desk-more').click()
+  await expect(page.getByRole('menuitem', { name: /Open a \.clan file…/ })).toBeVisible()
 })
 
 test('document: the call card sets a need aside (out of the count, still a need) and brings it back', async ({ page }) => {
   await seed(page)
   await openFromDesk(page, 'Spring brief')
   await expect(page.getByTestId('needs-count')).toHaveText('1')
-  await expect(page.getByTestId('state-pill')).not.toContainText('Needs you') // one needs indicator
+  await expect(page.getByTestId('state-pill')).toHaveCount(0) // one needs indicator, and no state pill in the bar
   await expect(page.getByTestId('medallion-mark')).toHaveAttribute('data-state', 'needs')
   await page.getByTestId('decisions').click()
   const card = page.getByTestId('call-card')
-  await expect(card.getByTestId('need')).toHaveCount(1)
-  await expect(card.getByRole('button', { name: 'Open' })).toBeVisible()
+  await expect(card.getByTestId('call-row')).toHaveCount(1)
+  await expect(card.getByRole('button', { name: 'Open', exact: true })).toBeVisible()
   await expect(card.getByTestId('looks-right')).toHaveCount(0) // a contest needs a pick, not a yes
   await card.getByTestId('set-aside').click()
   await expect(page.getByTestId('needs-count')).toHaveText('0')
-  await expect(page.getByTestId('decisions')).not.toHaveClass(/ch-decisions-needs/)
+  await expect(page.getByTestId('decisions')).not.toHaveClass(/has-needs/)
   await expect(page.getByTestId('medallion-mark')).toHaveAttribute('data-state', 'awake')
-  const aside = page.getByTestId('set-aside-list')
-  await expect(aside.getByTestId('need')).toHaveCount(1)
-  await expect(page.locator('.dp-lock')).toContainText('once this is settled') // it still stops the lock
+  await expect(card.getByTestId('set-aside-list')).toContainText('Set aside · 1')
+  await expect(card.getByTestId('bring-back')).toHaveCount(1)
+  await expect(card.getByTestId('lock-line')).toContainText('once this is settled') // it still stops the lock
   // It holds when the document is opened again (this person's own, in this browser).
+  await page.getByRole('button', { name: 'Close decisions' }).click()
   await page.getByTestId('medallion').click()
   await expect(page.locator('[data-where="desk"]')).toBeVisible()
   await openFromDesk(page, 'Spring brief')
   await expect(page.getByTestId('needs-count')).toHaveText('0')
   await page.getByTestId('decisions').click()
-  await page.getByTestId('set-aside-list').getByTestId('bring-back').click()
+  await page.getByTestId('call-card').getByTestId('bring-back').click()
   await expect(page.getByTestId('needs-count')).toHaveText('1')
   await expect(page.getByTestId('set-aside-list')).toHaveCount(0)
 })
@@ -100,8 +106,13 @@ test('document: Share holds Copy link, Download a copy, and says what is not bui
   await expect(menu.getByRole('menuitem', { name: /Send the client copy/ })).toHaveAttribute('aria-disabled', 'true')
   await expect(menu.getByRole('menuitem', { name: /Send the client copy/ })).toContainText('Lock it first')
   await expect(menu.getByRole('menuitem', { name: /Invite to the crew/ })).toHaveAttribute('aria-disabled', 'true')
-  // The bar's three groups: who and where, the document, the tools; the crew sits before Decisions.
-  for (const g of ['.ch-bar-l', '.ch-bar-c', '.ch-bar-r']) await expect(page.locator(`[data-where="document"] ${g}`)).toBeVisible()
+  // The bar: who and where, the document (left-aligned), then the tools after the spacer; the crew sits before Decisions.
+  const bar = page.locator('[data-where="document"]')
+  for (const g of ['.dock-connected', '#tb-app', '.tb-spacer']) await expect(bar.locator(g)).toHaveCount(1)
+  const x = async (sel: string) => (await bar.locator(sel).first().boundingBox())!.x
+  expect(await x('.dock-connected')).toBeLessThan(await x('#tb-app'))
+  expect(await x('#tb-app')).toBeLessThan(await x('[data-testid="decisions"]'))
+  expect(await x('[data-testid="crew"]')).toBeLessThan(await x('[data-testid="decisions"]'))
 })
 
 test('glass: the inset the app is told follows the Decisions drawer open and closed', async ({ page }) => {
@@ -116,11 +127,11 @@ test('glass: the inset the app is told follows the Decisions drawer open and clo
   })
   const last = () => frame.evaluate(() => (window as unknown as { __insets: number[] }).__insets.at(-1) ?? null)
   await page.getByTestId('decisions').click()
-  const panel = page.locator('.ch-work > .dp-panel')
+  const panel = page.locator('.ch-work > .nui > .dtree-drawer')
   await expect(panel).toBeVisible()
   const width = Math.round((await panel.boundingBox())!.width)
   await expect.poll(last).toBe(width)
-  await page.getByTestId('decisions').click()
+  await page.getByRole('button', { name: 'Close decisions' }).click()
   await expect(panel).toHaveCount(0)
   await expect.poll(last).toBe(0)
 })

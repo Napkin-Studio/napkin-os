@@ -54,7 +54,8 @@ test('the desk: eyebrow, Clients., the greeting, Find a client and ⋯ always, o
     item(null, BRIEF, { title: 'Loose one' }),
   ]
   const html = desk(data([a, b, c], items))
-  assert.match(html, />YOUR DESK · 3 CLIENTS</)
+  assert.match(html, />YOUR DESK · 3 CLIENTS · 3 OPEN · 1 NEEDS YOU · 1 RUNNING</, 'the old agency home\'s counts line, in the eyebrow')
+  assert.match(html, /data-testid="unassigned">1 piece of work is not attached to a client yet\./)
   assert.match(html, /<h1[^>]*>Clients<span class="period-dot"/)
   assert.match(html, /Good (morning|afternoon|evening), Sam\. Pick a client to open their work, or add a new one\./)
   assert.match(html, /placeholder="Find a client"/, 'search is always there, not only past a page')
@@ -66,8 +67,10 @@ test('the desk: eyebrow, Clients., the greeting, Find a client and ⋯ always, o
   assert.match(html, /class="cl-line">Pitch · agents working</)
   assert.match(html, /class="cl-line">No work yet</)
   assert.match(html, /aria-label="Client A: Spring brief · 3 need you\. 3 need you\. Opens its tools"/)
-  // the circles keep the row's order and are one tab stop
-  assert.ok(html.indexOf('Client A') < html.indexOf('Client B'))
+  // urgent first (needs you, running, then the rest), one tab stop, each saying its ring's verb in words
+  assert.ok(html.indexOf('Client A') < html.indexOf('Client B') && html.indexOf('Client B') < html.indexOf('Client C'))
+  assert.match(html, /aria-label="Client B: Pitch · agents working, working\. Opens its tools" data-testid="client-circle" data-activity="work"/)
+  assert.match(html, /aria-label="Client C: No work yet, idle\. Opens its tools"/)
   assert.equal(count(html, /class="cl-circle[^"]*"[^>]*tabindex="0"/g), 1)
   assert.equal(count(html, /class="cl-circle[^"]*"[^>]*tabindex="-1"/g), 2)
   // no legend: every state is in words on its circle
@@ -122,7 +125,7 @@ test('Worth a look is what can be derived: thin findings, an upstream change, fi
 
 test('the empty desk: the greeting says to add the first client, the row has only the add circle, no lower grid', () => {
   const html = desk(data([]))
-  assert.match(html, />YOUR DESK · 0 CLIENTS</)
+  assert.match(html, />YOUR DESK · NO CLIENTS YET</)
   assert.match(html, /Add your first client to start their desk\./)
   assert.match(html, /class="cl-name">Add your first client</)
   assert.doesNotMatch(html, /client-circle/)
@@ -215,7 +218,12 @@ test('the client page: since, the name, a line naming the work, Needs you, work 
   assert.match(html, /data-testid="new-brief"[^>]*>\+</)
   assert.match(html, /aria-label="New deck for Client A"/)
   assert.equal(count(html, /data-testid="work-item"/g), 5, 'each document in its group, the one that needs you also on top')
-  assert.doesNotMatch(html, /data-testid="tool-/, 'no wheel')
+  // no wheel: each group's heading is its tool's door, one tab stop for them, named with its count
+  assert.match(html, /aria-label="Brief Maker for Client A, 2 open, needs you \(1 of 4\)"/)
+  assert.match(html, /data-testid="tool-brief"[^>]*tabindex="0"|tabindex="0"[^>]*data-testid="tool-brief"/)
+  assert.match(html, /data-testid="tool-deck"[^>]*tabindex="-1"|tabindex="-1"[^>]*data-testid="tool-deck"/)
+  assert.match(html, /role="group" aria-label="Tools for Client A"/)
+  assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 4\)"/)
   assert.match(html, /class="cp-st ">Draft</)
 })
 

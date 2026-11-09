@@ -78,3 +78,36 @@
 .nui #dtree-close-btn { border-color: var(--ink); }
 .nui .p33-pop:focus, .nui .tba-menu:focus { outline: none; }
 .nui #dtree-approve-all:disabled { opacity: .55; cursor: not-allowed; }
+.nui .dial-hub { z-index: 1; }
+/* The group heading is its tool's door: drawn exactly as the heading it sits in. */
+.nui .cp-tool { display: inline-flex; align-items: center; gap: 10px; font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; padding: 0; }
+.nui .cp-tool[aria-disabled="true"] { cursor: default; }
+/* 3D circles (Flat circles off): the client's sphere sits in the disc where its colour disc was. */
+.nui .cl-orb { position: relative; display: grid; place-items: center; line-height: 0; }
+.nui .cl-orb .lc-c3, .nui .cl-orb .lc-cir { display: block; }
+.nui .dtree-call-card .dp-lock { padding: 0; border: 0; font-size: 12px; color: var(--muted); }
+.nui .p33-pop .pp-opt { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 13px; cursor: pointer; text-align: left; border-radius: 7px; }
+.nui .p33-pop .pp-opt:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.nui .p33-pop .pp-box { width: 14px; height: 14px; border: 1px solid var(--line-strong); border-radius: 3px; display: grid; place-items: center; font-size: 10px; line-height: 1; }
+
+/* The bar on a phone: the same pieces, smaller; every target 44px; nothing past the window. */
+.nui .tb-cname { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) {
+  .nui .tb-locked { padding: 0 10px; gap: 8px !important; }
+  .nui .tb-vsep { display: none; }
+  .nui .stacked-lockup .sl-mono { display: none; }
+  .nui .name-pill.pill-accent { padding: 0 12px 0 28px; min-height: 44px; }
+  .nui .stacked-lockup .sl-big { font-size: 12.5px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+  .nui .tb-client { min-height: 44px; max-width: 132px; }
+  .nui .tb-theme, .nui .tb-decisions-btn { min-height: 44px; min-width: 44px; margin-right: 0; }
+  .nui .tb-decisions-btn > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .nui .tb-decisions-btn { justify-content: center; }
+  .nui .tb-app .tba-line, .nui .tb-tools .ch-chip { display: none; }
+  .nui .studio-shell { padding: 0 16px; }
+  .nui .p33-desk-tools { flex-wrap: wrap; }
+}
+@media (max-width: 400px) {
+  .nui .m1-medallion { width: 52px !important; height: 52px !important; top: 2px !important; }
+  .nui .tb-client { max-width: 110px; }
+  .nui .stacked-lockup .sl-big { max-width: 64px; }
+}

@@ -20,7 +20,7 @@
 //   desk calls      per-document /decisions of recent documents (DocFacts.calls)
 
 import type { AttentionItem, ClientRecord, LibraryItem } from '../../host'
-import { initialsOf, needsYou, summarise, type ClientSummary } from '../landing/model'
+import { initialsOf, needsYou, ordered, summarise, type ClientSummary } from '../landing/model'
 import { toolOfApp } from '../landing/tools'
 import type { ToolId } from '../route'
 import { clientBrand } from '../agency/clients'
@@ -130,9 +130,9 @@ export function clientLine(mine: readonly LibraryItem[]): string {
   return `${title} · draft`
 }
 
-/** The row of client circles, in the order the clients were made (the mock's row keeps its order). */
+/** The row of client circles, most urgent first (needs you, failed, running), then in the order they were made. */
 export function deskClients(clients: readonly ClientRecord[], items: readonly LibraryItem[]): DeskClient[] {
-  return clients.map(c => {
+  return ordered(clients, items).map(s => s.client).map(c => {
     const mine = items.filter(i => i.client?.id === c.id)
     return {
       id: c.id,
@@ -192,6 +192,10 @@ export function stateWords(item: LibraryItem): { text: string; needs: boolean; w
 function pickSub(item: LibraryItem, facts: DocFacts | undefined, me: string | null, now: Date): string {
   const client = item.client ? clientName(item.client) : 'No client'
   const e = facts?.editor
+  // A run in progress, failed or waiting says what it is doing, in its own words (the old Running and Needs you strips).
+  if (item.run && (item.run.state === 'working' || item.run.state === 'failed' || item.run.state === 'waiting')) {
+    return `${client} · ${item.run.label || (item.run.state === 'failed' ? 'Failed' : item.run.state === 'waiting' ? 'Waiting for you' : 'Running')}`
+  }
   if (item.run?.state === 'done' && (!e || e.at <= item.updated_at)) return `${client} · finished ${ago(item.updated_at, now)}`
   if (item.last_editor) {
     if (me && item.last_editor === me) return `${client} · edited by you ${ago(item.updated_at, now)}`

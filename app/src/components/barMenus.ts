@@ -90,6 +90,8 @@ export interface DocBar {
   onNewForClient?: { label: string; run: () => void } | null
   /** "Where it came from" in the Decisions drawer's Lineage view; absent, WorkspaceView. */
   onLineage?: () => void
+  /** Its tool's own page for its client (the old trail's last crumb): its other documents, and New. */
+  onToolPage?: { label: string; run: () => void } | null
 }
 
 /** The account menu on the agency pill (mock phase 33). */
@@ -118,6 +120,8 @@ export interface ClientChip {
   onOpen?: () => void
   switcher?: { id: string; name: string; sub?: string }[]
   onSwitch?: (id: string) => void
+  /** This client's page is the one on screen. */
+  current?: boolean
 }
 
 /** The crew in the open document, beside Decisions. */
@@ -267,6 +271,7 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
   return [
     ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id) })),
     ...(doc.onRename && startRename ? [{ label: 'Rename', hint: 'Or double-click the name', run: startRename }] : []),
+    ...(doc.onToolPage ? [{ label: doc.onToolPage.label, hint: 'Its other documents for this client, and New', run: doc.onToolPage.run }] : []),
     { label: 'Open…', hint: 'A .clan, PDF or HTML file', run: doc.onOpenFile },
     { label: 'Save as…', hint: 'A copy with a new name', run: doc.onSave },
     {

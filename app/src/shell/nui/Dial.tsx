@@ -8,9 +8,9 @@
 // yet"), a rim arc for what needs you or runs, and the client's own colour in
 // the hub, which opens the client. 1 to 4 pick a quadrant, Escape closes it.
 
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { LibraryItem } from '../../host'
-import { needsYou } from '../landing/model'
+import { activityOfItem, needsYou, strongest } from '../landing/model'
 import { toolById, toolOfApp, type Tool } from '../landing/tools'
 import { ToolPaths } from './icons'
 import type { ClientLook } from './deskData'
@@ -60,6 +60,9 @@ interface Props {
 
 export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  // One tab stop for the four quadrants (roving): the arrows move it, and it starts on the first.
+  const [at, setAt] = useState(0)
+  const quads = useRef<(SVGGElement | null)[]>([])
   const n = QUADRANTS.length, span = (2 * Math.PI) / n, start = -Math.PI / 2 - span / 2
   const choose = (i: number) => {
     const t = toolById(QUADRANTS[i].id)
@@ -78,8 +81,9 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-  // It opens from the circle: scaled from the disc's size (the mock's 320ms ease).
+  // It opens from the circle: scaled from the disc's size (the mock's 320ms ease); the focus goes to its first quadrant.
   useLayoutEffect(() => {
+    quads.current[0]?.focus({ preventScroll: true })
     const el = ref.current
     if (!el || typeof el.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
     el.animate([{ transform: `scale(${116 / 360})`, opacity: 0.5 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' })
@@ -93,14 +97,25 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     const [lx, ly] = pol(212, am)
     const c = mine.length
     const sub = !on ? 'Soon' : st === 'needs' ? '' : st === 'working' ? 'Agents working' : c ? `${c} ${q.noun[c > 1 ? 1 : 0]}` : 'Nothing yet'
-    const said = `${q.name}, ${!on ? 'coming soon' : st === 'needs' ? 'needs your call' : sub} (${i + 1} of ${n})`
+    const t = toolById(q.id)
+    const said = `${t?.full ?? q.name} for ${client.name}, ${!on ? 'coming soon' : st === 'needs' ? 'needs your call' : sub.toLowerCase()} (${i + 1} of ${n})`
+    const move = (to: number) => { const k = (to + n) % n; setAt(k); quads.current[k]?.focus() }
     return (
       <g key={q.id}>
         <g className={`dz dz-out${st === 'needs' ? ' dz-needs' : ''}`} data-i={i} style={{ ['--d' as string]: `${i * 55}ms` }}
-          role="button" tabIndex={0} aria-label={said} aria-keyshortcuts={String(i + 1)} data-testid={`quadrant-${q.id}`}
+          role="button" tabIndex={i === at ? 0 : -1} aria-label={said} aria-keyshortcuts={String(i + 1)} data-testid={`quadrant-${q.id}`}
+          data-activity={strongest(mine.map(activityOfItem))}
+          ref={el => { quads.current[i] = el }}
           aria-disabled={on ? undefined : true}
+          onFocus={() => setAt(i)}
           onClick={e => { e.stopPropagation(); choose(i) }}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i) } }}>
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i) }
+            else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(i + 1) }
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(i - 1) }
+            else if (e.key === 'Home') { e.preventDefault(); move(0) }
+            else if (e.key === 'End') { e.preventDefault(); move(n - 1) }
+          }}>
           <title>{q.name}</title>
           <path d={sector(R.o0, R.o1, a0, a1)} />
           <g className="dz-ico" transform={`translate(${f1(lx - 22)} ${f1(ly - 64)}) scale(1.83)`}>
@@ -127,12 +142,13 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
     <div className="dial" id="dial" ref={ref} role="group" aria-label={`${client.name}: its tools`} data-testid="dial"
       style={{ left: place.left, top: place.top, transformOrigin: place.origin }}
       onClick={e => e.stopPropagation()}>
-      <svg className="dial-svg" viewBox="0 0 640 640" aria-hidden={false}>{parts}</svg>
+      {/* The hub comes first in the tab order: Shift+Tab from the first quadrant reaches it. */}
       <button type="button" className="dial-hub" id="dial-hub" data-testid="dial-hub"
         style={{ ['--cl' as string]: client.look.cl, ['--cl-ink' as string]: client.look.ink }}
-        title={`Open ${client.name}`} onClick={e => { e.stopPropagation(); onOpenClient() }}>
+        title={`Open ${client.name}`} aria-label={`Open ${client.name}`} onClick={e => { e.stopPropagation(); onOpenClient() }}>
         <b>{hub.big}</b><small>{hub.small}</small>
       </button>
+      <svg className="dial-svg" viewBox="0 0 640 640" aria-hidden={false}>{parts}</svg>
     </div>
   )
 }

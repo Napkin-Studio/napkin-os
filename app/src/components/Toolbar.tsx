@@ -295,13 +295,15 @@ export default function Toolbar({
             className="tb-client"
             id={client.switcher ? 'p33-cswitch' : undefined}
             title={client.switcher ? 'Switch client' : `Back to ${client.name}`}
+            aria-label={client.switcher ? `Switch client: ${client.name}` : client.name}
+            aria-current={client.current ? 'page' : undefined}
             aria-haspopup={client.switcher ? 'menu' : undefined}
             aria-expanded={client.switcher ? pop.open?.key === 'client' : undefined}
             data-testid="client-chip"
             onClick={e => { if (client.switcher) pop.toggle('client', e.currentTarget); else client.onOpen?.() }}
           >
             <span className="tb-cdot" style={{ background: client.look.cl, color: client.look.ink }}>{client.mono}</span>
-            {client.name}
+            <span className="tb-cname">{client.name}</span>
             {client.switcher && <span style={{ color: 'var(--muted)', fontSize: 10, marginLeft: 2 }} aria-hidden>▾</span>}
           </button>
         )}
@@ -322,9 +324,9 @@ export default function Toolbar({
           {account && <hr />}
           <Rows items={acct} close={pop.close} />
           {account?.flat && (
-            <label className="pp-opt">
-              <input type="checkbox" checked={account.flat.on} onChange={account.flat.toggle} data-testid="flat-circles" /> Flat circles
-            </label>
+            <button type="button" className="pp-opt" aria-pressed={account.flat.on} data-testid="flat-circles" onClick={account.flat.toggle}>
+              <span className="pp-box" aria-hidden>{account.flat.on ? '✓' : ''}</span>Flat circles
+            </button>
           )}
         </Pop>
       )}

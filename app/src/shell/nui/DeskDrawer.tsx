@@ -49,7 +49,8 @@ export function DeskDrawer({ items, facts, agency, onOpen, onClose, onChanged }:
   const ops = useCallback((path: string) => host.docOps!(path), [])
   const groups: CallGroup[] = read.map(({ item, calls }) => ({
     key: item.path,
-    title: item.title || 'Untitled',
+    // On the desk each row says whose it is too: "Client A · Spring brief".
+    title: `${item.client ? `${clientName(item.client)} · ` : ''}${item.title || 'Untitled'}`,
     noun: NOUN[toolName(item)?.id ?? ''] ?? 'document',
     calls,
     aside: readAside(item.path),

@@ -37,10 +37,12 @@ test('four quadrants in the mock order, each with its number key and what is in 
   assert.deepEqual(ids, ['brief', 'research', 'deck', 'prod'])
   for (let i = 1; i <= 4; i++) assert.match(html, new RegExp(`aria-keyshortcuts="${i}"`))
   assert.match(html, /class="dz-tag">YOUR CALL</)
-  assert.match(html, /aria-label="Brief, needs your call \(1 of 4\)"/)
+  assert.match(html, /aria-label="Brief Maker for Client Alpha, needs your call \(1 of 4\)"/)
+  assert.match(html, /data-testid="quadrant-research" data-activity="work"/, 'the quadrant says its ring\'s verb')
+  assert.match(html, /data-testid="quadrant-brief"[^>]*tabindex|tabindex="0"[^>]*data-testid="quadrant-brief"/)
   assert.match(html, /class="dz-sub">Agents working</)
   assert.match(html, /class="dz-sub">Nothing yet</)
-  assert.match(html, /aria-label="Production, coming soon \(4 of 4\)"[^>]*aria-disabled="true"|aria-disabled="true"[^>]*aria-label="Production, coming soon/)
+  assert.match(html, /aria-label="Production Tool for Client Alpha, coming soon \(4 of 4\)"[^>]*aria-disabled="true"|aria-disabled="true"[^>]*aria-label="Production Tool for Client Alpha, coming soon/)
   assert.match(html, /class="dz-rim needs"/)
 })
 
@@ -49,6 +51,7 @@ test('the hub is the client in its own colour and opens it; with no sector the n
   assert.match(html, /data-testid="dial-hub"[^>]*style="--cl:#DA291C;--cl-ink:#FFC72C"[^>]*title="Open Client Alpha"/)
   assert.match(html, /<b>Client<\/b><small>Alpha<\/small>/)
   assert.match(html, /left:-8px;top:-12px;transform-origin:74px 70px/)
+  assert.ok(html.indexOf('data-testid="dial-hub"') < html.indexOf('data-testid="quadrant-brief"'), 'the hub first: Shift+Tab from the first quadrant reaches it')
 })
 
 test('a quadrant counts its work in its own noun', () => {

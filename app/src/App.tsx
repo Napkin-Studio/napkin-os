@@ -17,7 +17,7 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, routeOfDocument, runWords, whoIs } from './shell/landing/model'
-import { TOOLS, isLive, toolOfApp } from './shell/landing/tools'
+import { TOOLS, isLive, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
 import { signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
@@ -27,6 +27,7 @@ import { agencyNameOf, applyAgency, markOf } from './shell/agency/palette'
 import { DeskDrawer } from './shell/nui/DeskDrawer'
 import { AllToolsModal, CrewModal } from './shell/nui/AccountModals'
 import { useDeskFacts } from './shell/nui/useDeskFacts'
+import { useCanGL } from './shell/nui/use3D'
 import { callsIn, clientLook, clientName, monogramOf, sectorOf, setSector } from './shell/nui/deskData'
 import { setClientAgency } from './shell/agency/clients'
 import type { Account, ClientChip } from './components/barMenus'
@@ -136,6 +137,8 @@ export default function App() {
   const [modal, setModal] = useState<'tools' | 'crew' | null>(null)
   const [flat, setFlat] = useState(flatPref)
   const install = useInstall()
+  // Flat circles is offered only where there is a 3D to switch to.
+  const canGL = useCanGL()
   const offlineCopies = useOfflineCopies()
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
@@ -522,6 +525,7 @@ export default function App() {
     ...(route.level === 'tool' ? { onOpen: () => go({ level: 'client', client: pageClient.id }) } : {
       switcher: landing.data.clients.map(c => ({ id: c.id, name: clientName(c), sub: sectorOf(c.id) ?? `${landing.data!.items.filter(i => i.client?.id === c.id).length} open` })),
       onSwitch: (id: string) => go({ level: 'client', client: id }),
+      current: true,
     }),
   } : null
 
@@ -550,7 +554,7 @@ export default function App() {
     onCrew: () => setModal('crew'),
     ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
     onInstall: install,
-    flat: { on: flat, toggle: () => { setFlatPref(!flat); setFlat(!flat) } },
+    ...(canGL ? { flat: { on: flat, toggle: () => { setFlatPref(!flat); setFlat(!flat) } } } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -593,6 +597,10 @@ export default function App() {
           client={docChip}
           account={account}
           toolKey={toolOfApp(running.open.manifest.app?.app_id)?.id ?? null}
+          onToolPage={docRoute?.level === 'tool' && docClient ? {
+            label: `${toolById(docRoute.tool)?.full ?? 'Its tool'} for ${clientName({ id: docClient.id, name: docClient.name })}`,
+            run: () => leaveTo(docRoute),
+          } : null}
           onNewForClient={docClient && toolOfApp(running.open.manifest.app?.app_id)?.appId ? {
             label: `New ${toolOfApp(running.open.manifest.app?.app_id)!.noun[0]} for this client`,
             run: () => { retireDocEntry(); void launchApp(toolOfApp(running.open.manifest.app?.app_id)!.appId!, docClient.id) },

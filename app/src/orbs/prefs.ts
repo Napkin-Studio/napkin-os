@@ -10,12 +10,15 @@ import { shared } from './engine'
 
 const KEY = 'napkin.circles.flat'
 
+// The desk draws its clients as the approved mock's flat colour discs unless the
+// person turns 3D on (account menu, Flat circles off): flat is the default, and
+// '0' under the key is the person's choice of 3D.
 export function flatPref(): boolean {
-  try { return localStorage.getItem(KEY) === '1' } catch { return false }
+  try { return localStorage.getItem(KEY) !== '0' } catch { return true }
 }
 
 export function setFlatPref(flat: boolean): void {
-  try { if (flat) localStorage.setItem(KEY, '1'); else localStorage.removeItem(KEY) } catch { /* not kept */ }
+  try { localStorage.setItem(KEY, flat ? '1' : '0') } catch { /* not kept */ }
   shared().setFlat(flat)
 }
 

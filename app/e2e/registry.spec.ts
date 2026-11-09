@@ -24,7 +24,9 @@ test('adopt clients from free-text names, then rename, archive and restore one',
 
   await page.goto('/#clients')
   await expect(page.getByTestId('client-circle')).toHaveCount(1)
-  await page.getByTestId('adopt-button').click()
+  // Adopt clients lives in the desk's ⋯ menu, with the count.
+  await page.getByTestId('desk-more').click()
+  await page.getByRole('menuitem', { name: /^Adopt clients \(2\)/ }).click()
   await expect(page.getByTestId('adopt-panel')).toBeVisible()
   await expect(page.getByLabel(/Client D/)).toBeChecked()
   // Leave Client E out: only the chosen name becomes a client.
@@ -34,37 +36,44 @@ test('adopt clients from free-text names, then rename, archive and restore one',
   await page.getByRole('button', { name: 'Done' }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(2)
   // Client E stays on offer, with one document.
-  await expect(page.getByTestId('adopt-button')).toContainText('Adopt clients (1)')
+  await page.getByTestId('desk-more').click()
+  await expect(page.getByRole('menuitem', { name: /^Adopt clients \(1\)/ })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   // Rename: a name in use is refused in the host's words; a free one lands.
-  await page.getByRole('button', { name: /^Client D,/ }).click()
-  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
+  await page.getByRole('button', { name: /^Client D:/ }).click()
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page.getByTestId('work-item')).toHaveCount(2)
-  await page.getByRole('button', { name: 'Rename Client D' }).click()
+  // Rename and Archive live in the client's ⋯ menu.
+  await page.getByRole('button', { name: 'Options for Client D' }).click()
+  await page.getByRole('menuitem', { name: /^Rename/ }).click()
   await page.getByLabel('New name').fill('client a')
   await page.getByRole('button', { name: 'Rename', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('already a client called')
   await page.getByLabel('New name').fill('Client F')
   await page.getByRole('button', { name: 'Rename', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Client F' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Client F', level: 1 })).toBeVisible()
   await expect(page.getByTestId('work-item')).toHaveCount(2)
 
   // Archive asks first, keeps the work, and leaves the circles.
-  await page.getByRole('button', { name: 'Archive Client F' }).click()
+  await page.getByRole('button', { name: 'Options for Client F' }).click()
+  await page.getByRole('menuitem', { name: /^Archive/ }).click()
   await expect(page.getByTestId('archive-confirm')).toContainText('Its work is kept')
   await page.getByRole('button', { name: 'Keep it' }).click()
   await expect(page.getByTestId('client-page')).toBeVisible()
-  await page.getByRole('button', { name: 'Archive Client F' }).click()
-  await page.getByRole('button', { name: 'Archive Client F', exact: true }).last().click()
-  await expect(page).toHaveURL(/#clients$/)
+  await page.getByRole('button', { name: 'Options for Client F' }).click()
+  await page.getByRole('menuitem', { name: /^Archive/ }).click()
+  await page.getByRole('button', { name: 'Archive Client F', exact: true }).click()
+  await expect(page).toHaveURL(/#agency$/)
   await expect(page.getByTestId('client-circle')).toHaveCount(1)
-  await page.getByText('Archived clients (1)').click()
+  await page.getByTestId('archived-link').click()
+  await expect(page.getByTestId('archived')).toContainText('Archived clients · 1')
 
   // Restore brings it, and its work, back.
   await page.getByRole('button', { name: 'Restore Client F' }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(2)
-  await page.getByRole('button', { name: /^Client F,/ }).click()
-  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
+  await page.getByRole('button', { name: /^Client F:/ }).click()
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page.getByTestId('work-item')).toHaveCount(2)
 })
 
@@ -78,7 +87,8 @@ for (const width of [320, 390]) {
     expect((await page.request.post(`${api}/clients`, { data: { name: 'Client A' } })).status()).toBe(201)
     await legacyDoc(page, api, 'Old brief', 'Client D')
     await page.goto('/#clients')
-    await page.getByTestId('adopt-button').click()
+    await page.getByTestId('desk-more').click()
+    await page.getByRole('menuitem', { name: /^Adopt clients/ }).click()
     await expect(page.getByTestId('adopt-panel')).toBeVisible()
     const noScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
     expect(await noScroll(), 'adopt panel').toBe(true)
@@ -88,10 +98,11 @@ for (const width of [320, 390]) {
     }
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('adopt-panel')).toHaveCount(0)
-    await page.getByRole('button', { name: /^Client A,/ }).click()
-    await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
-    await expect(page.getByRole('button', { name: 'Rename Client A' })).toBeVisible()
-    await page.getByRole('button', { name: 'Archive Client A' }).click()
+    await page.getByRole('button', { name: /^Client A:/ }).click()
+    await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
+    await page.getByRole('button', { name: 'Options for Client A' }).click()
+    await expect(page.getByRole('menuitem', { name: /^Rename/ })).toBeVisible()
+    await page.getByRole('menuitem', { name: /^Archive/ }).click()
     expect(await noScroll(), 'archive confirm').toBe(true)
     // Escape closes the confirm and does not leave the client page.
     await page.keyboard.press('Escape')

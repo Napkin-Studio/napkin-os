@@ -13,6 +13,7 @@ import WorkspaceView from './WorkspaceView'
 import { DecisionsDrawer, type DrawerView } from './nui/DecisionsDrawer'
 import { openInApp } from './appExport'
 import { refOfAddress } from './decisions/words'
+import { lockWords } from './nui/drawerData'
 import { setScreen } from '../dogfood/recorder'
 import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
 import { splitAside } from './decisions/needs'
@@ -53,6 +54,8 @@ interface Props {
   toolKey?: string | null
   /** Continue in ▾ › Start fresh: a new one of this tool for this client. */
   onNewForClient?: { label: string; run: () => void } | null
+  /** The document menu's way to its tool's page for its client. */
+  onToolPage?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
   agency: string
   onAgency: () => void
@@ -74,7 +77,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onNewForClient, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onNewForClient, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
@@ -297,8 +300,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       const bottom = footRef.current?.getBoundingClientRect().height ?? 0
       // The rail (or the open panel) on the right; on a narrow screen it floats
       // in the footer instead, and covers nothing.
-      const side = workRef.current?.querySelector(':scope > .dp-rail, :scope > .dp-panel') as HTMLElement | null
-      const right = side && getComputedStyle(side).position === 'absolute' ? side.getBoundingClientRect().width : 0
+      const side = workRef.current?.querySelector(DRAWER_SEL) as HTMLElement | null
+      const pos = side ? getComputedStyle(side).position : ''
+      const right = side && (pos === 'absolute' || pos === 'fixed') ? side.getBoundingClientRect().width : 0
       setInsets(i => (i && i.top === Math.round(top) && i.right === Math.round(right) && i.bottom === Math.round(bottom)
         ? i : { top: Math.round(top), right: Math.round(right), bottom: Math.round(bottom) }))
     }
@@ -309,10 +313,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     if (workRef.current) ro.observe(workRef.current)
     const mo = new MutationObserver(() => {
       measure()
-      workRef.current?.querySelectorAll(':scope > .dp-rail, :scope > .dp-panel').forEach(el => ro.observe(el))
+      workRef.current?.querySelectorAll(DRAWER_SEL).forEach(el => ro.observe(el))
     })
     if (workRef.current) mo.observe(workRef.current, { childList: true })
-    workRef.current?.querySelectorAll(':scope > .dp-rail, :scope > .dp-panel').forEach(el => ro.observe(el))
+    workRef.current?.querySelectorAll(DRAWER_SEL).forEach(el => ro.observe(el))
     window.addEventListener('resize', measure)
     return () => { cancelAnimationFrame(first); ro.disconnect(); mo.disconnect(); window.removeEventListener('resize', measure) }
   }, [glass])
@@ -357,6 +361,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           toolKey,
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
           onNewForClient,
+          onToolPage,
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,
           locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
@@ -462,6 +467,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
               verify: async finding => { await host.verify(finding, 'Looks right (from the Decisions card)'); refreshApp() },
               approve: async () => { await approveDoc(); refreshApp() },
               open: item => openInApp(refOfAddress(item.address), String(item.address ?? '').split('#')[1]),
+              lock: lockWords(decisions.view),
             }]}
             focus={{
               title: barTitle,
@@ -488,6 +494,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     </div>
   )
 }
+
+/** The Decisions drawer over the document: what the glass insets keep clear on the right. */
+const DRAWER_SEL = ':scope > .nui > .dtree-drawer'
 
 /** Whether the chrome's own ink reads on `hex` (WCAG contrast 4.5:1 or more). */
 function readsWithChromeInk(hex: string): boolean {

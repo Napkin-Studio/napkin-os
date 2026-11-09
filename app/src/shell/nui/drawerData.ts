@@ -114,3 +114,12 @@ export function lineageOf(related: RelatedView | null, here: { title: string; no
     ...(related?.downstream ?? []).map(row),
   ]
 }
+
+/** What still stands between the document and its lock, in words (under the call card). */
+export function lockWords(view: DecisionsView | null): string | null {
+  if (!view || view.problem) return null
+  const n = view.attention.filter(a => a.blocks_lock).length
+  if (view.lock.locked && !view.lock.reopened?.length) return 'It is locked. A change from here makes a new version.'
+  if (view.lock.can_lock) return 'Nothing stops you locking it.'
+  return `You can lock it once ${n === 1 ? 'this is' : 'these are'} settled.`
+}

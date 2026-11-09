@@ -15,10 +15,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { ClientRecord, LegacyName } from '../../host'
-import { adoptLabel, matches, pageOf } from '../landing/model'
+import { ACTIVITY_WORD, adoptLabel, agencySummary, countsLine, matches, pageOf } from '../landing/model'
 import type { Tool } from '../landing/tools'
 import type { Manage } from '../landing/useLanding'
 import { AdoptPanel } from '../landing/Registry'
+import { Circle } from '../landing/Circle'
+import { shared } from '../../orbs/engine'
+import { installPressGate } from '../../orbs/gate'
+import { applyFlatPref } from '../../orbs/prefs'
+import { use3D } from './use3D'
 import type { LandingData } from '../landing/store'
 import { greeting } from '../when'
 import { clientName, deskClients, pickRows, sectorOf, worthItems, type DeskClient, type Facts } from './deskData'
@@ -88,6 +93,13 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
   // The heading takes focus on arrival, so a keyboard or a screen reader lands on it.
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [])
+  // 3D circles, where the person turned them on (Flat circles off) and WebGL is up: a press is seen
+  // (squish and ripple) before the dial opens. Flat, the gate lets every click straight through.
+  const three = use3D()
+  useEffect(() => {
+    applyFlatPref()
+    return top.current ? installPressGate(top.current, shared(), () => 'desk') : undefined
+  }, [])
 
   const all = useMemo(() => deskClients(data.clients, data.items), [data])
   const page = useMemo(() => {
@@ -103,7 +115,14 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
     setDial(d => (d === id ? null : id))
     if (row.current) setPlace(placeOf(row.current, el))
   }, [])
-  const closeDial = useCallback(() => setDial(null), [])
+  // Escape closes the dial and gives the focus back to its circle.
+  const dialRef = useRef<string | null>(null)
+  useEffect(() => { dialRef.current = dial })
+  const closeDial = useCallback(() => {
+    const id = dialRef.current
+    setDial(null)
+    if (id) row.current?.querySelector<HTMLElement>(`.cl-circle[data-client="${CSS.escape(id)}"]`)?.focus()
+  }, [])
   // A click anywhere off the circles closes the dial (the mock's document listener).
   useEffect(() => {
     if (!dial) return
@@ -142,13 +161,15 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   const worth = useMemo(() => worthItems(data.items, facts), [data.items, facts])
   const open = dial ? all.find(c => c.id === dial) ?? null : null
   const none = data.clients.length === 0
+  // The eyebrow counts the desk: clients, open work, and what needs you, runs or failed (the old agency home's line).
+  const counts = countsLine(agencySummary(data.clients, data.items, data.unassigned))
 
   return (
     <div className="nui nui-page" ref={top} data-testid="desk">
       <div className="studio-shell">
         <section className="app-head">
           <div className="app-head-text">
-            <div className="eyebrow" id="hero-eyebrow">YOUR DESK · {data.clients.length} {data.clients.length === 1 ? 'CLIENT' : 'CLIENTS'}</div>
+            <div className="eyebrow" id="hero-eyebrow" data-testid="counts" aria-label={`Your desk: ${counts}`}>YOUR DESK · {counts.toUpperCase()}</div>
             <h1 className="hero-title" id="hero-title" tabIndex={-1}>Clients<span className="period-dot" aria-hidden /></h1>
             <p className="hero-sub" id="hero-sub" data-testid="greeting">
               {hello} {none ? 'Add your first client to start their desk.' : 'Pick a client to open their work, or add a new one.'}
@@ -191,7 +212,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
             <div className="cl-row" id="cl-row" ref={row} role="group" aria-label="Your clients" onKeyDown={onRowKey}>
               {page.shown.map((c, i) => (
-                <Circle key={c.id} c={c} tab={i === atNow} open={dial === c.id}
+                <ClientCircle key={c.id} c={c} three={three} material={data.clients.find(x => x.id === c.id)?.material ?? 'pearl'} tab={i === atNow} open={dial === c.id}
                   onFocus={() => setAt(i)} onClick={el => openDial(c.id, el)} />
               ))}
               <button type="button" className="cl-circle cl-add" id="cl-add-btn" data-testid="add-client" aria-expanded={adding}
@@ -213,6 +234,11 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                 />
               )}
             </div>
+            {data.unassigned > 0 && (
+              <p className="nui-empty" data-testid="unassigned">
+                {data.unassigned === 1 ? '1 piece of work is' : `${data.unassigned} pieces of work are`} not attached to a client yet.
+              </p>
+            )}
             {query.trim() && page.total === 0 && (
               <p className="nui-empty" data-testid="no-match">No client matches “{query.trim()}”.</p>
             )}
@@ -300,15 +326,21 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   )
 }
 
-/** One client circle: its colour, monogram and needs badge; the name and a line naming the work. */
-function Circle({ c, tab, open, onFocus, onClick }: { c: DeskClient; tab: boolean; open: boolean; onFocus: () => void; onClick: (el: HTMLElement) => void }) {
-  const said = `${c.name}: ${c.line}${c.badge ? `. ${c.badge} need${c.badge === 1 ? 's' : ''} you` : ''}. Opens its tools`
+/** One client circle: its colour, monogram and needs badge (or its 3D sphere); the name and a line naming the work. */
+function ClientCircle({ c, three, material, tab, open, onFocus, onClick }: {
+  c: DeskClient; three: boolean; material: string; tab: boolean; open: boolean; onFocus: () => void; onClick: (el: HTMLElement) => void
+}) {
+  // What its ring would say, in words: a quiet verb (reading, thinking, checking, working) or idle.
+  const verb = c.summary.activity === 'human' || c.summary.activity === 'error' ? '' : `, ${ACTIVITY_WORD[c.summary.activity]}`
+  const said = `${c.name}: ${c.line}${verb}${c.badge ? `. ${c.badge} need${c.badge === 1 ? 's' : ''} you` : ''}. Opens its tools`
   return (
     <button type="button" className={`cl-circle${open ? ' is-open' : ''}`} data-client={c.id} aria-pressed={open} tabIndex={tab ? 0 : -1}
-      aria-label={said} data-testid="client-circle" onFocus={onFocus} onClick={e => onClick(e.currentTarget)}>
+      aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget)}>
       <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: c.look.ink }}>
         <svg viewBox="0 0 116 116" aria-hidden><circle cx="58" cy="58" r="52" className="cl-track" /></svg>
-        <b>{c.mono}</b>
+        {three
+          ? <span className="cl-orb"><Circle size={116} material={material} initials={c.mono} activity={c.summary.activity} slot={`client:${c.id}`} orb /></span>
+          : <b>{c.mono}</b>}
         {c.badge > 0 && <span className="cl-badge" data-testid="needs-badge">{c.badge}</span>}
       </span>
       <span className="cl-name">{c.name}</span>

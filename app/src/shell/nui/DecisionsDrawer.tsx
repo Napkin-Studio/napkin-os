@@ -40,6 +40,8 @@ export interface CallGroup {
   approve: () => Promise<void>
   /** Open the call where it is settled. */
   open: (item: AttentionItem) => void
+  /** What still stands before the lock, in words. */
+  lock?: string | null
 }
 
 /** The document the views show. */
@@ -170,6 +172,7 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
                 </div>
               ) : 'Every call is answered and on the record.'}
             </div>
+            {groups.map(g => g.lock && <p key={`lock|${g.key}`} className="dp-lock" data-testid="lock-line">{g.lock}</p>)}
             {error && <p className="dp-err" role="alert">{error}</p>}
             {groups.some(g => !g.locked && g.calls.length) && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} id="dtree-call-actions">{groups.map(approveFor)}</div>

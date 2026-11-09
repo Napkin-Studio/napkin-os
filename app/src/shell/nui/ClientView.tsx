@@ -9,7 +9,7 @@
 // Brand Clan card and the decisions on record. No tool wheel: 1 to 4 open a
 // tool's own page, as the wheel's number keys did.
 
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKey } from 'react'
 import type { ClientRecord, LibraryItem } from '../../host'
 import { needsYou } from '../landing/model'
 import { toolById, toolOfApp, type Tool } from '../landing/tools'
@@ -17,6 +17,8 @@ import { isTyping } from '../landing/keys'
 import { BRAND_APP } from '../landing/BrandClanCard'
 import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, type Facts } from './deskData'
 import { ToolIcon } from './icons'
+import { Circle } from '../landing/Circle'
+import { use3D } from './use3D'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
 
@@ -60,6 +62,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   const pop = usePop<'more' | 'deck'>()
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
   const look = clientLook(c.id, c.name)
+  const three = use3D()
   // The registry's display name where it shows; Rename still edits the stored name.
   const name = clientName(c)
   const work = items.filter(i => i.app_id !== BRAND_APP)
@@ -109,9 +112,28 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
     )
   }
 
-  const groups = GROUPS.map(g => ({ ...g, docs: work.filter(i => toolOfApp(i.app_id)?.id === g.tool) }))
+  const groups = GROUPS.map((g, n) => ({ ...g, n, docs: work.filter(i => toolOfApp(i.app_id)?.id === g.tool) }))
     // A new client lists Briefs and Research; Decks and Production once there is one (the mock's client page).
     .filter(g => g.docs.length > 0 || g.tool === 'brief' || g.tool === 'research')
+  // Each group's heading opens its tool's own page: one tab stop for them (roving), the arrows move it, as the tool wheel did.
+  const [at, setAt] = useState(0)
+  const heads = useRef<(HTMLButtonElement | null)[]>([])
+  const onHeadKey = (e: ReactKey, i: number) => {
+    const k = groups.length
+    const to = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? (i + 1) % k : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? (i - 1 + k) % k
+      : e.key === 'Home' ? 0 : e.key === 'End' ? k - 1 : -1
+    if (to < 0) return
+    e.preventDefault()
+    setAt(to)
+    heads.current[to]?.focus()
+  }
+  const toolSaid = (g: (typeof groups)[number]) => {
+    const t = toolById(g.tool)!
+    const on = live.has(t.id)
+    const needs = g.docs.filter(needsYou).length
+    const what = !on ? 'coming soon' : g.docs.length === 0 ? 'none open, start one' : `${g.docs.length} open${needs ? ', needs you' : ''}`
+    return `${t.full} for ${name}, ${what} (${g.n + 1} of ${GROUPS.length})`
+  }
   const other = work.filter(i => !toolOfApp(i.app_id) || !GROUPS.some(g => g.tool === toolOfApp(i.app_id)!.id))
   const sources = work.filter(i => ['brief', 'research'].includes(toolOfApp(i.app_id)?.id ?? ''))
 
@@ -120,7 +142,9 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
       <div className="studio-shell">
         <main id="view-client">
           <header className="cp-head">
-            <span className="cl-disc cp-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: look.ink }}><b>{monogramOf(c)}</b></span>
+            <span className="cl-disc cp-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: look.ink }}>
+              {three ? <span className="cl-orb"><Circle size={84} material={c.material} initials={monogramOf(c)} slot={`client:${c.id}`} orb /></span> : <b>{monogramOf(c)}</b>}
+            </span>
             <div>
               <div className="eyebrow">CLIENT{sinceWords}</div>
               <h1 className="hero-title" tabIndex={-1}>{name}<span className="period-dot" aria-hidden /></h1>
@@ -144,13 +168,21 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
 
           {work.length === 0 && <p className="cp-none" data-testid="no-work">No work yet. Start the first brief or research for {name} with its +.</p>}
 
-          {groups.map(g => {
+          <div role="group" aria-label={`Tools for ${name}`} style={{ display: 'contents' }}>
+          {groups.map((g, gi) => {
             const t = toolById(g.tool)!
             const on = live.has(t.id)
             return (
               <section key={g.tool} className={`cp-sec cp-group k-${g.icon}`} data-testid={`group-${g.tool}`} aria-label={`${g.label} for ${name}`}>
                 <div className="cp-hrow">
-                  <h2 className="cp-h"><span className={`cp-ico k-${g.icon}`}><ToolIcon tool={g.icon} /></span>{g.label}<small>{g.docs.length}</small></h2>
+                  <h2 className="cp-h">
+                    <button type="button" className="cp-tool" data-testid={`tool-${g.tool}`} ref={el => { heads.current[gi] = el }}
+                      tabIndex={gi === Math.min(at, groups.length - 1) ? 0 : -1} aria-keyshortcuts={String(g.n + 1)} aria-label={toolSaid(g)}
+                      aria-disabled={on ? undefined : true} onFocus={() => setAt(gi)} onKeyDown={e => onHeadKey(e, gi)}
+                      onClick={() => { if (on) onOpenTool(t); else onSoon(t) }}>
+                      <span className={`cp-ico k-${g.icon}`}><ToolIcon tool={g.icon} /></span>{g.label}<small>{g.docs.length}</small>
+                    </button>
+                  </h2>
                   <span className="cp-new">
                     <button type="button" className="cp-plus" data-new={g.tool} data-testid={`new-${g.tool}`}
                       title={on ? `New ${t.noun[0]}` : `${t.full} is coming soon`} aria-label={on ? `New ${t.noun[0]} for ${name}` : `${t.full} is coming soon`}
@@ -166,6 +198,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
               </section>
             )
           })}
+          </div>
           {other.length > 0 && (
             <section className="cp-sec cp-group" data-testid="group-other">
               <div className="cp-hrow"><h2 className="cp-h">Other<small>{other.length}</small></h2></div>
