@@ -2133,6 +2133,9 @@ pub(crate) fn fact_label(f: &Value) -> String {
             [.., last] if parts.len() > 1 && last.contains('_') => last.to_string(),
             _ => parts.join(" "),
         };
+        // A key the writer made unique with a short hash ("…_moderate_t_72b215",
+        // "rhythm.key_moment_dry_january_cd35c8") reads without it.
+        let leaf = strip_hash_suffix(&leaf);
         let mut w = leaf.replace('_', " ");
         if let Some(c) = w.get(..1) {
             w = c.to_uppercase() + &w[1..];
@@ -2153,19 +2156,33 @@ pub(crate) fn fact_label(f: &Value) -> String {
     }
 }
 
+/// `leaf` without a trailing `_` and six or more hex digits that holds a digit
+/// (a uniqueness hash, never a word such as `_decade`).
+fn strip_hash_suffix(leaf: &str) -> &str {
+    match leaf.rsplit_once('_') {
+        Some((head, tail))
+            if !head.is_empty()
+                && tail.len() >= 6
+                && tail
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+                && tail.chars().any(|c| c.is_ascii_digit()) =>
+        {
+            head
+        }
+        _ => leaf,
+    }
+}
+
 fn fact_detail(f: &Value) -> String {
     let value = f.get("value").map(|v| format_value(v, str_of(f, "unit")));
+    // How many sources it rests on; each is its own card, never a bare id here.
     let sources = f
         .get("sources")
         .and_then(Value::as_array)
-        .map(|s| {
-            s.iter()
-                .filter_map(Value::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        })
-        .filter(|s| !s.is_empty())
-        .map(|s| format!("sources {s}"));
+        .map(|s| s.iter().filter_map(Value::as_str).count())
+        .filter(|n| *n > 0)
+        .map(|n| format!("{n} source{}", if n == 1 { "" } else { "s" }));
     let parts = [
         value,
         str_of(f, "as_of").map(|a| format!("as of {a}")),

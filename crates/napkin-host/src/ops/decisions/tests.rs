@@ -149,6 +149,10 @@ fn cites_resolve_to_what_they_name() {
     );
     let detail = fact.detail.as_deref().unwrap();
     assert!(detail.starts_with("47% · as of 2026-06-30"), "{detail}");
+    assert!(
+        !detail.contains("src_"),
+        "a source is counted, never named by its id: {detail}"
+    );
 
     let created = v
         .decisions
@@ -1413,4 +1417,20 @@ passages:
     let r = c["f_01RVW001"].review.as_ref().unwrap();
     assert_eq!((r.verdict, r.by.as_str()), ("verified", "mary"));
     assert_eq!(r.at.as_deref(), Some("2026-11-01T10:00:00Z"));
+}
+
+#[test]
+fn a_fact_key_reads_without_its_uniqueness_hash() {
+    let f = |key: &str| super::fact_label(&serde_json::json!({"key": key, "market": "IE"}));
+    assert_eq!(
+        f("consumer.trend.18_24s_more_likely_to_moderate_t_72b215"),
+        "18 24s more likely to moderate t · IE"
+    );
+    assert_eq!(
+        f("rhythm.key_moment_dry_january_cd35c8"),
+        "Key moment dry january · IE"
+    );
+    // a word is never taken for a hash
+    assert_eq!(f("category.sales_decade"), "Sales decade · IE");
+    assert_eq!(f("category.share_2024"), "Share 2024 · IE");
 }
