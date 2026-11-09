@@ -835,6 +835,16 @@
   /* the boards and the foot */
   #sheet .sechead#boardsHead{margin:0 64px;padding-top:20px;font:700 11px/1.2 var(--font-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--brief-accent);border-top:1px solid color-mix(in srgb,var(--b-text) 14%,transparent)}
   #sheet #boardsNote,#sheet #boards{margin-left:64px;margin-right:64px}
+  /* the mock's YOUR PICTURES strip (#brief-page .pic-row): 4:3 tiles, the name over a shade at the foot */
+  #sheet #boardsHead{border-top:0;padding-top:24px}
+  #sheet .boards{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px;margin-bottom:20px}
+  #sheet .board{aspect-ratio:4/3;border:0;border-radius:3px;padding:0;background:color-mix(in srgb,var(--b-text) 6%,transparent);box-shadow:none;overflow:hidden}
+  #sheet .board img,#sheet .board.big img{width:100%;height:100%;object-fit:cover}
+  #sheet .board .doc{height:100%;background:none;color:var(--b-muted)}
+  #sheet .board audio,#sheet .board video{height:100%;object-fit:cover}
+  #sheet .board .nm{position:absolute;left:0;right:0;bottom:0;padding:14px 8px 6px;border:0;font:600 10.5px var(--font-ui);letter-spacing:0;color:#fff;word-break:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:linear-gradient(transparent,rgba(0,0,0,.55))}
+  #sheet .addboard{aspect-ratio:4/3;min-height:0;border-radius:3px}
+  #sheet #boardsNote{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .b-foot{display:flex;gap:10px;padding:18px 64px 26px;border-top:1px solid color-mix(in srgb,var(--b-text) 14%,transparent);font:400 11.5px var(--font-mono);color:var(--b-muted)}
   .sheet.a4.page .b-foot{display:none}
   /* boxed frame: the mock's outlined grid */
@@ -3632,6 +3642,7 @@
       box.appendChild(el);
     });
     var add=document.createElement('label'); add.className='addboard';
+    add.title='From what you sent. Tap + to add more, or tap one to take it out.';
     add.innerHTML=IC.plus+'<div>Add more</div><input type="file" class="sr" multiple aria-label="Add pictures, sound or video" />';
     add.querySelector('input').addEventListener('change',function(){ uploadFiles(this, $('status')); });
     box.appendChild(add);
