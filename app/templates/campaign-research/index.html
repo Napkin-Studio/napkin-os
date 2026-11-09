@@ -2272,13 +2272,18 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(b.job && b.job.state==='failed') return 'Job failed: '+(b.job.error && (b.job.error.message||b.job.error) || 'no reason given');
     return null;
   }
+  // A job's change is in the document: applied now, or `already applied` by
+  // another poll (the shell's job watcher, another tab). Either way the host
+  // hands back the document as it stands (the bridge swaps it in) and the page
+  // re-reads its chain; a race never strands it on the data from before.
+  function landed(ch){ return !!ch&&typeof ch==='object'&&(ch.applied===true||ch.reason==='already applied'); }
   function jobFrom(j, res){
     j.handler=res.handler||j.handler;
     if(res.job){ j.state=res.job.state; j.progress=res.job.progress||j.progress; j.jobId=res.job.id||j.jobId; }
     if(res.result && res.result.summary) j.summary=res.result.summary;
     if(res.trace && res.trace.scope) j.scope=res.trace.scope;
     if(res.trace && res.trace.backend) j.backend=res.trace.backend;
-    if(res.change){ j.applied=res.change.applied; j.version=res.change.version; j.reason=res.change.reason; }
+    if(res.change){ j.applied=landed(res.change); j.version=res.change.version; j.reason=res.change.reason; }
   }
   // What a finished job left, said by the agent who did it, from the document
   // as it stands (the middleware's own summary stays in the log).
@@ -2312,7 +2317,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
         +'<dl class="kv" style="margin-top:8px">'
         +(sc?'<dt>Scope</dt><dd class="mono" style="font-size:12px">'+esc(sc)+'</dd>':'')
         +(j.backend?'<dt>Backend</dt><dd class="mono" style="font-size:12px">'+esc(j.backend)+'</dd>':'')
-        +(j.applied!==undefined?'<dt>Change</dt><dd>'+(j.applied?'<span class="pill ok"><span class="d"></span>applied by the host</span> <span class="mono" style="font-size:12px">version '+esc(j.version)+'</span>':'<span class="pill alert"><span class="d"></span>not applied</span> '+esc(j.reason||''))+'</dd>':(j.state==='done'&&!j.error?'<dt>Change</dt><dd class="muted">none</dd>':''))
+        +(j.applied!==undefined?'<dt>Change</dt><dd>'+(j.applied?'<span class="pill ok"><span class="d"></span>applied by the host</span>'+(j.version?' <span class="mono" style="font-size:12px">version '+esc(j.version)+'</span>':''):'<span class="pill alert"><span class="d"></span>not applied</span> '+esc(j.reason||''))+'</dd>':(j.state==='done'&&!j.error?'<dt>Change</dt><dd class="muted">none</dd>':''))
         +'</dl></article>';
     }).join('')+'</div></div>';
   }
@@ -3107,7 +3112,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       if(Array.isArray(b.result.gaps)) j.gaps=b.result.gaps;
       arr(b.result.messages).forEach(function(m){ if(isObj(m)&&m.id&&m.text&&!CHAT.live[m.id]) CHAT.live[m.id]={role:'agent', text:m.text, stage:m.stage, job_id:j.id}; });
     }
-    if(isObj(b.change)){ j.applied=b.change.applied; j.reason=b.change.reason; if(b.change.applied) loadChain(); }
+    if(isObj(b.change)){ j.applied=landed(b.change); j.reason=b.change.reason; if(j.applied) loadChain(); }
     if(j.id) store(jobKey(), /^(done|failed|cancelled)$/.test(j.state||'')?null:j.id);
     render();
     if(j.state==='queued'||j.state==='running') schedulePoll();
@@ -3616,7 +3621,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       var b=mwBody(res);
       if(b.job&&b.job.state==='failed'){ CHAT.reportErr='Not refreshed: '+((b.job.error&&(b.job.error.message||b.job.error.type))||'the job failed'); }
       arr(b.result&&b.result.messages).forEach(function(m){ if(isObj(m)&&m.id&&m.text&&!CHAT.live[m.id]) CHAT.live[m.id]={role:'agent', text:m.text, stage:m.stage||'report', job_id:b.job&&b.job.id}; });
-      if(isObj(b.change)){ if(b.change.applied){ loadChain(); toast('Report refreshed.'); } else if(b.change.reason&&b.change.reason!=='already applied') CHAT.reportErr='The host did not apply the new report: '+b.change.reason; }
+      if(isObj(b.change)){ if(landed(b.change)){ loadChain(); toast('Report refreshed.'); } else if(b.change.reason) CHAT.reportErr='The host did not apply the new report: '+b.change.reason; }
       render();
     }, function(e){ CHAT.reportBusy=false; CHAT.reportErr='Not refreshed: the middleware could not be reached ('+(e&&e.message||e)+').'; render(); });
   }

@@ -9,6 +9,9 @@
 // and on every read the landing's watcher polls them through the host
 // (`Host.settleJob`, the page's own `job_status` path). The host applies a
 // change once: a second poll, the page's or this one, is `already applied`.
+// The document open in the shell is left to its own page: it polls its jobs
+// and reloads what they wrote, and a watcher racing it would leave the page's
+// poll with `already applied` and nothing to redraw from.
 
 import type { Host, LibraryItem } from '../../host'
 
@@ -20,16 +23,19 @@ export const GIVE_UP_AFTER = 3
 /**
  * A watcher's memory: what is being polled now, and how often each job's poll
  * failed. `settle(items)` polls every unsettled job not already in flight, and
- * resolves when all have answered. Without `settleJob` on the host it does nothing.
+ * resolves when all have answered. `open` is the document open in the shell,
+ * whose jobs its page polls; they are skipped. Without `settleJob` on the host
+ * it does nothing.
  */
 export function makeSettler(host: SettleHost) {
   const inFlight = new Set<string>()
   const failed = new Map<string, number>()
-  const settle = async (items: LibraryItem[]): Promise<void> => {
+  const settle = async (items: LibraryItem[], open?: string | null): Promise<void> => {
     const poll = host.settleJob
     if (!poll) return
     const todo: Promise<void>[] = []
     for (const item of items) {
+      if (open && item.path === open) continue
       for (const job of item.jobs ?? []) {
         const key = `${item.path}\u0000${job}`
         if (inFlight.has(key) || (failed.get(key) ?? 0) >= GIVE_UP_AFTER) continue

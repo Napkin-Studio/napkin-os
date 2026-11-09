@@ -2030,3 +2030,36 @@ test('the research lock counts the host’s needs, and lists unfilled parts apar
   assert.equal(lift<{ lockItems: () => unknown[] }>(R, names, env({ problem: 'no chain' })).lockItems().length, 3)
   assert.equal(lift<{ lockItems: () => unknown[] }>(R, names, env(null)).lockItems().length, 3)
 })
+
+// ── a job another poll applied first (N1) ──────────────────────────────────
+
+test('a done job another poll applied first still redraws the brief from what it wrote', () => {
+  let chains = 0, renders = 0, ended = 0
+  type B = { landed(c: unknown): boolean; onJobReply(j: Record<string, unknown>, r: unknown): void }
+  const b = lift<B>(BM, ['landed', 'onJobReply'], {
+    hostErr: () => null, mwBody: (r: unknown) => r, store: () => {}, jobKey: () => 'k',
+    loadChain: () => { chains += 1 }, render: () => { renders += 1 }, endJob: () => { ended += 1 }, pollJob: () => {},
+  })
+  assert.equal(b.landed({ applied: true }), true)
+  assert.equal(b.landed({ applied: false, reason: 'already applied' }), true)
+  assert.equal(b.landed({ applied: false, reason: 'stale base' }), false)
+  assert.equal(b.landed(null), false)
+  const j: Record<string, unknown> = { task: 'draft_brief', onUpdate: () => {}, onEnd: () => {} }
+  b.onJobReply(j, { api: 'napkin.middleware/1', job: { id: 'job_1', state: 'done' }, change: { applied: false, reason: 'already applied' } })
+  assert.equal(j.applied, true, 'the job reads as landed, not as failed')
+  assert.ok(chains >= 1 && renders >= 1, 'the chain is read again and the page redrawn')
+  assert.equal(ended, 1)
+})
+
+test('a research job another poll applied first reads as applied and the chain is read again', () => {
+  let chains = 0
+  type R = { landed(c: unknown): boolean; jobFrom(j: Record<string, unknown>, r: unknown): void; afterApplied(j: Record<string, unknown>): void }
+  const r = lift<R>(RT, ['landed', 'jobFrom', 'afterApplied'], {
+    loadChain: () => { chains += 1 }, render: () => {}, ended: () => {},
+  })
+  const j: Record<string, unknown> = {}
+  r.jobFrom(j, { job: { id: 'job_2', state: 'done' }, change: { applied: false, reason: 'already applied' } })
+  assert.equal(j.applied, true)
+  r.afterApplied(j)
+  assert.equal(chains, 1)
+})

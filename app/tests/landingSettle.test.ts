@@ -49,3 +49,13 @@ test('a job whose poll keeps failing is left alone', async () => {
 test('a host with one document at a time settles nothing', async () => {
   await makeSettler({}).settle([item('a.clan', ['job_1'])])
 })
+
+test('the document open in the shell is left to its own page', async () => {
+  const calls: string[] = []
+  const s = makeSettler({ settleJob: async (path, job) => { calls.push(`${path} ${job}`) } })
+  await s.settle([item('a.clan', ['job_1']), item('b.clan', ['job_2'])], 'a.clan')
+  assert.deepEqual(calls, ['b.clan job_2'])
+  calls.length = 0
+  await s.settle([item('a.clan', ['job_1'])], null)  // back on the desk: nobody else polls it
+  assert.deepEqual(calls, ['a.clan job_1'])
+})

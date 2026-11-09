@@ -100,7 +100,8 @@ export default function App() {
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
-  const landing = useLanding(host, (screen === 'home' && !allTools) || screen === 'app', !(device && !serverless))
+  const landing = useLanding(host, (screen === 'home' && !allTools) || screen === 'app', !(device && !serverless),
+    screen === 'app' ? running?.artifactPath ?? null : null)
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
   // A read from the server: the state is set when it answers.

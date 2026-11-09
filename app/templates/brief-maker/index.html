@@ -2016,11 +2016,16 @@
       if(b.result.fields&&typeof b.result.fields==='object') j.fields=b.result.fields;
       if(Array.isArray(b.result.proposals)){ j.proposals=b.result.proposals; LAST_PROPOSALS=b.result.proposals; }
     }
-    if(b.change&&typeof b.change==='object'){ j.applied=b.change.applied; j.reason=b.change.reason; if(b.change.applied) loadChain(); }
+    if(b.change&&typeof b.change==='object'){ j.applied=landed(b.change); j.reason=b.change.reason; if(j.applied){ loadChain(); render(); } }
     if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running')?j.id:null);
     if(j.state==='queued'||j.state==='running'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
     else endJob(j);
   }
+  // A job's change is in the document: applied now, or `already applied` by
+  // another poll (the shell's job watcher, another tab). Either way the host
+  // hands back the document as it stands (the bridge swaps it in) and the page
+  // re-reads its chain; a race never strands it on the data from before.
+  function landed(ch){ return !!ch&&typeof ch==='object'&&(ch.applied===true||ch.reason==='already applied'); }
   function pollJob(j){
     window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
   }

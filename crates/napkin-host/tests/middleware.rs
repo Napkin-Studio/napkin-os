@@ -446,6 +446,34 @@ fn the_operation_proposes_exactly_one_change() {
     assert_eq!(std::fs::read(f.id.as_str()).unwrap(), doc.bytes());
 }
 
+// The shell's job watcher (or another tab) applied a done job first: the
+// page's own poll is `already applied`, and it still gets the document as it
+// now stands, or it would keep showing what was there before and look failed.
+#[test]
+fn a_change_another_poll_applied_hands_the_page_the_document() {
+    let f = fixture();
+    let clan = f.session.clan_context_for_agent();
+    let (first, _) = settle(&f, reply_for(&clan));
+    assert_eq!(first["data"]["change"]["applied"], true, "{first}");
+
+    let before = std::fs::read(f.id.as_str()).unwrap();
+    let (out, events) = settle(&f, reply_for(&clan));
+    assert_eq!(out["data"]["change"]["applied"], false);
+    assert_eq!(out["data"]["change"]["reason"], "already applied");
+    assert!(events.is_empty(), "nothing new to fan out");
+    assert_eq!(std::fs::read(f.id.as_str()).unwrap(), before, "nothing written");
+    assert_eq!(out["clan"]["version"], first["clan"]["version"]);
+    assert_eq!(
+        out["clan"]["data"],
+        yaml(&on_disk(&f), "shared/data.yaml"),
+        "the document with the job's change in it"
+    );
+    assert_eq!(
+        out["clan"]["data"]["campaign"]["problem"]["value"],
+        "people who love Lúnasa are drinking less of it midweek"
+    );
+}
+
 #[test]
 fn a_change_for_another_document_is_refused() {
     let f = fixture();
