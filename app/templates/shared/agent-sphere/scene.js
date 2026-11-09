@@ -15,6 +15,14 @@
 //    skipped by the GL loop, so scrolling past 50 still tiles costs nothing; it is re-drawn when marked dirty;
 //  - a clock-only view (a story host: kind 'host') never clears or draws anything;
 //  - the canvas is sized in px from innerWidth / innerHeight (a 100vh canvas drifts on mobile URL-bar collapse).
+// Stray spheres (owner, 2026-11-09: an agent shows in one place only):
+//  - a view is drawn only while its element is connected and really shown: checkVisibility() catches display:none,
+//    visibility:hidden and a closed <details> (its content is content-visibility:hidden, so offsetParent is set and
+//    the rect is real: the sphere used to draw over whatever follows the summary); a zero rect is not drawn either;
+//  - a view whose element left the page is dropped from the scene (its pixels cleared) on the next frame;
+//  - rects are read every frame, and a scroll anywhere (captured, so a scrolling side panel counts) or a change to
+//    the page's classes, hidden, open or children redraws them; the clip ancestors are found again each frame;
+//  - the canvas's own offset is subtracted, so a sphere stays on its element even if the canvas is not at 0,0.
 (function (root) {
   'use strict';
   const VERT = 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }';
@@ -25,7 +33,7 @@
   document.body.appendChild(canvas);
   const gl = canvas.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   const FIXED = /[?&]fixed/.test(location.search), NOBAKE = /[?&]nobake/.test(location.search);
-  const ENG = { scale: 1, dpr: 1, W: 0, H: 0, avgMs: 16, frames: 0, draws: 0, skipped: 0, uploads: 0, fps: 0, drawsPerSec: 0, contexts: gl ? 1 : 0 };
+  const ENG = { scale: 1, dpr: 1, W: 0, H: 0, ox: 0, oy: 0, avgMs: 16, frames: 0, draws: 0, skipped: 0, uploads: 0, fps: 0, drawsPerSec: 0, contexts: gl ? 1 : 0 };
   const views = [];
   const programs = {};
   let raf = 0, timer = 0, lastT = 0, lastFrame = 0, govN = 0, moved = true, paused = false, fpsN = 0, fpsT = 0, drawN = 0;
@@ -69,17 +77,26 @@
     gl.scissor(0, 0, canvas.width, canvas.height); gl.clear(gl.COLOR_BUFFER_BIT);
     return true;
   }
+  // is the element on the page and really shown (not display:none, visibility:hidden or in a closed <details>)?
+  function shown(el) {
+    if (!el || !el.isConnected) return false;
+    if (typeof el.checkVisibility === 'function') return el.checkVisibility({ visibilityProperty: true });
+    return el.offsetParent !== null;
+  }
   // rect of a view in CSS px, viewport space; null when off screen or hidden
   function rectOf(v) {
+    if (!v.el || !v.el.isConnected) return null;
     const r = v.el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth || v.el.offsetParent === null) return null;
+    if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth || !shown(v.el)) return null;
     return r;
   }
-  // nearest ancestor that clips (overflow other than visible), cached per element
+  // nearest ancestor that clips (overflow other than visible), found once per frame (a class change can add one)
+  let fid = 0;
   function clipEl(el) {
-    if (el._nkClip !== undefined) return el._nkClip;
+    if (el._nkClipF === fid) return el._nkClip;
     let a = el.parentElement, found = null;
-    while (a && a !== document.body) { const cs = getComputedStyle(a); if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') { found = a; break; } a = a.parentElement; }
+    while (a && a !== document.body && a !== document.documentElement) { const cs = getComputedStyle(a); if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') { found = a; break; } a = a.parentElement; }
+    el._nkClipF = fid;
     return (el._nkClip = found);
   }
   // the part of r that is really visible: inside the viewport and every clipping ancestor
@@ -102,9 +119,10 @@
     gl.scissor(b[0], b[1], b[2], b[3]); gl.clear(gl.COLOR_BUFFER_BIT);   // the bitmap shows it now; never both (shadows would double)
   }
   function unbake(m) { if (m._bake) m._bake.style.display = 'none'; m.baked = false; }
-  function box(r) {   // device-pixel scissor box (GL origin bottom left), clamped to the canvas
-    const d = ENG.dpr, x0 = Math.max(0, Math.floor(r.left * d)), y1 = Math.min(canvas.height, Math.ceil(r.bottom * d));
-    const x1 = Math.min(canvas.width, Math.ceil(r.right * d)), y0 = Math.max(0, Math.floor(r.top * d));
+  function box(r) {   // device-pixel scissor box (GL origin bottom left), clamped to the canvas; r is viewport space
+    const d = ENG.dpr, ox = ENG.ox, oy = ENG.oy;
+    const x0 = Math.max(0, Math.floor((r.left - ox) * d)), y1 = Math.min(canvas.height, Math.ceil((r.bottom - oy) * d));
+    const x1 = Math.min(canvas.width, Math.ceil((r.right - ox) * d)), y0 = Math.max(0, Math.floor((r.top - oy) * d));
     return [x0, canvas.height - y1, Math.max(0, x1 - x0), Math.max(0, y1 - y0)];
   }
 
@@ -117,9 +135,11 @@
     g.members.push(view);
     wake(true); return view;
   }
-  function remove(view) {
-    const i = views.indexOf(view); if (i >= 0) views.splice(i, 1);
-    const g = view.group; if (g) { g.members.splice(g.members.indexOf(view), 1); if (!g.members.length) groups.splice(groups.indexOf(g), 1); }
+  function remove(view) {   // idempotent: the scene may have dropped a detached view before its owner destroys it
+    const i = views.indexOf(view); if (i < 0) return;
+    views.splice(i, 1);
+    const g = view.group, j = g && g.members ? g.members.indexOf(view) : -1;
+    if (j >= 0) { g.members.splice(j, 1); if (!g.members.length) { const k = groups.indexOf(g); if (k >= 0) groups.splice(k, 1); g.members = null; } }
     wake(true);
   }
   // a wake during a frame (a view's step changed something) is folded into that frame's own schedule: one rAF chain only
@@ -134,8 +154,16 @@
     const dtRaw = lastT ? Math.max(0, Math.min(.25, (now - lastT) / 1000)) : 0, dt = Math.min(.05, dtRaw); lastT = now;   // SPEC 10: views clamp dt to [0, .05]; a host's script clock gets real time
     clock += dt;
     const rm = motion.reduce;
+    fid++;
+    for (let i = views.length - 1; i >= 0; i--) {                     // 0. a view whose element left the page is dropped
+      const v = views[i];
+      if (v.el && v.el.isConnected) { v.wasConnected = true; continue; }
+      if (v.wasConnected) { remove(v); v.detached = true; }           // remove() wakes everything: its pixels are cleared below
+    }
     for (const v of views) if (v.step && !v.frozen) v.step(v.tickHz ? dtRaw : dt, clock, rm);          // 1. simulation (cheap, no allocation)
     const resized = resize();
+    const cr = canvas.getBoundingClientRect();                        // the canvas's own place (a transformed ancestor moves it)
+    if (cr.left !== ENG.ox || cr.top !== ENG.oy) { ENG.ox = cr.left; ENG.oy = cr.top; moved = true; }
     const all = moved || resized; moved = false;
     let nextMs = 1e9, nDue = 0;
     for (const g of groups) {                                         // 2. which stages are due
@@ -202,12 +230,18 @@
     if (ms <= 20) { raf = requestAnimationFrame(frame); return; }
     timer = setTimeout(() => { timer = 0; wake(); }, ms - 8);   // a timed wait keeps the clock (the script must not lose time)
   }
-  addEventListener('scroll', () => wake(true), { passive: true });
+  // scroll does not bubble: listen in the capture phase so a scrolling panel or list moves its spheres too
+  document.addEventListener('scroll', () => wake(true), { passive: true, capture: true });
+  // a panel opened or closed, a tab switched, a <details> toggled, a placeholder replaced: draw again at the new places
+  if (typeof MutationObserver === 'function') new MutationObserver(() => wake(true)).observe(document.documentElement,
+    { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'open'] });
+  document.addEventListener('toggle', () => wake(true), { capture: true });
+  document.addEventListener('transitionend', () => wake(true), { capture: true, passive: true });
   addEventListener('resize', () => { for (const v of views) if (v.baked) { unbake(v); v.dirty = true; } wake(true); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastT = 0; wake(true); } });
 
   root.NapkinScene = {
-    gl, canvas, ENG, motion, program, add, remove, wake, views,
+    gl, canvas, ENG, motion, program, add, remove, wake, views, shown,
     pause(p) { paused = !!p; if (!paused) { lastT = 0; wake(true); } },
     get paused() { return paused; },
     get clock() { return clock; },
