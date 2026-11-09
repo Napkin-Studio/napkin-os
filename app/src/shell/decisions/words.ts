@@ -74,12 +74,16 @@ const fixPlurals = (s: string) =>
  * agent wrote them ("Research 2 lenses…; skip 6", "Asked the person…"); a
  * line reads in the past, to you.
  */
+const IRREGULAR_PAST = new Set(['ran', 'read', 'set', 'found', 'wrote', 'made', 'took', 'chose', 'kept', 'left', 'held', 'gave',
+  'went', 'drew', 'built', 'sent', 'told', 'did', 'put', 'thought', 'brought', 'saw', 'got', 'began', 'came', 'said', 'spent', 'cut', 'split', 'met'])
 function pastTense(s: string): string {
   const m = /^Research (\d+) lens(?:\(es\)|es)? (?:across|in) (.+?); skip (\d+)/i.exec(s)
   if (m) return `chose ${m[1]} thing${m[1] === '1' ? '' : 's'} to look into in ${m[2]} and left out ${m[3]}`
   let out = s.replace(/\bthe person\b/g, 'you').replace(/^ran (?=\S)/i, 'looked into ')
   const first = out.split(' ')[0].toLowerCase()
-  const past = /ed$/.test(first) || ['ran', 'read', 'set', 'found', 'wrote', 'made', 'took', 'chose', 'kept', 'left', 'held', 'gave'].includes(first)
+  // Irregular past forms, with or without re- ("rewrote", "redrew").
+  const bare = /^re(?=wrote|drew|made|built|ran|read|set|took|sent|told|did|put|thought|wrote)/.test(first) ? first.slice(2) : first
+  const past = /ed$/.test(first) || IRREGULAR_PAST.has(bare)
   if (!past) out = `decided to ${lower(out)}`
   return out
 }

@@ -131,3 +131,10 @@ test('a proposal reads as a first or a new version, steered as its reason says',
   bare.targets = smp
   assert.equal(didWhat(bare, VIEW0), 'proposed a new single-minded proposition')
 })
+
+test('an agent’s own line in an irregular past reads as done, not “decided to …”', () => {
+  const said = (rationale: string) => didWhat(block({ id: 'd_X', action: 'draft_field', rationale }, agent('draft_brief@1.0/drafter')), VIEW0)
+  assert.equal(said('Rewrote the audience on your ask.'), 'rewrote the audience on your ask')
+  assert.equal(said('Went on without the judge stage.'), 'went on without the judge stage')
+  assert.equal(said('Keep the audience as written.'), 'decided to keep the audience as written')
+})
