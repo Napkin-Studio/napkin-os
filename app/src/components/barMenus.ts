@@ -80,6 +80,44 @@ export interface DocBar {
   onUnlink?: (documentId: string) => void
   /** Who is in the document: the people, and an agent while one works. */
   crew?: Crew
+  /** The tool's key for its icon and face in the bar (brief, research, deck, prod). */
+  toolKey?: string | null
+  /** Rename it (the name's double-click, and Rename in its menu): `/set-title`. Absent where it cannot be renamed. */
+  onRename?: (title: string) => void
+  /** A line above Continue in's choices: what is still open before it is ready to hand on. */
+  gate?: string | null
+  /** "Start fresh": a new document of the same tool for the same client. */
+  onNewForClient?: { label: string; run: () => void } | null
+  /** "Where it came from" in the Decisions drawer's Lineage view; absent, WorkspaceView. */
+  onLineage?: () => void
+}
+
+/** The account menu on the agency pill (mock phase 33). */
+export interface Account {
+  /** The person's name, and their initials on the avatar. */
+  name: string
+  initials: string
+  /** "Strategy lead · TBWA\Dublin": role (when known) and the agency's name. */
+  line: string
+  onAllTools?: () => void
+  onCrew?: () => void
+  onOffline?: () => void
+  /** How many offline copies are on this device, when known. */
+  offlineCount?: number | null
+  /** Install the app (the browser's own prompt); null where it cannot be installed now. */
+  onInstall?: (() => void) | null
+  /** "Flat circles": the person's own switch for the drawn circles (orbs/prefs.ts). */
+  flat?: { on: boolean; toggle: () => void }
+}
+
+/** The client chip in the bar: back to the client, or a switcher between clients. */
+export interface ClientChip {
+  name: string
+  mono: string
+  look: { cl: string; ink: string }
+  onOpen?: () => void
+  switcher?: { id: string; name: string; sub?: string }[]
+  onSwitch?: (id: string) => void
 }
 
 /** The crew in the open document, beside Decisions. */
@@ -217,6 +255,65 @@ export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => v
       apart: true,
     },
     ...signOutItem(user, onSignOut),
+  ]
+}
+
+/**
+ * The document menu on its name (mock phase 33): every action the old More ▾
+ * held but Sign out (which is the account's now), in the mock's order, with
+ * the app's own buttons past the two the bar shows at the top.
+ */
+export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] {
+  return [
+    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id) })),
+    ...(doc.onRename && startRename ? [{ label: 'Rename', hint: 'Or double-click the name', run: startRename }] : []),
+    { label: 'Open…', hint: 'A .clan, PDF or HTML file', run: doc.onOpenFile },
+    { label: 'Save as…', hint: 'A copy with a new name', run: doc.onSave },
+    {
+      label: doc.sidebarOpen ? 'Hide the file details' : 'File details',
+      hint: 'Manifest, signature, what uses it',
+      run: doc.onToggleSidebar,
+    },
+    ...(doc.onToggleEdit && !doc.editMode
+      ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: doc.onToggleEdit }]
+      : []),
+    ...(doc.onKeepOffline
+      ? [{ label: 'Present offline', hint: 'Keeps a copy that works without a connection', run: doc.onKeepOffline }]
+      : []),
+    { label: 'Export', hint: 'Make a PDF of it', run: () => doc.onExport('pdf') },
+    { label: 'Where it came from', hint: 'Its parent, what it was made from, what it fed', run: doc.onLineage ?? doc.onWorkspace, apart: true },
+  ]
+}
+
+/** "Continue in ▾ › Start fresh": a new one for the same client; this one stays as it is. */
+export function startFresh(doc: Pick<DocBar, 'onNewForClient'>): MenuItem[] {
+  const n = doc.onNewForClient
+  return n ? [{ label: n.label, hint: 'From new notes; this one stays as it is', run: n.run }] : []
+}
+
+/**
+ * The account menu on the agency pill (mock phase 33): All tools, the crew,
+ * Offline copies, Install the app, then Change password and Sign out. What the
+ * studio cannot do yet is shown and says so, never faked.
+ */
+export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void, onOpenFile?: () => void): MenuItem[] {
+  const n = account?.offlineCount
+  return [
+    ...(account?.onAllTools ? [{ label: 'All tools', hint: 'Every tool and template, and what is coming', run: account.onAllTools }] : []),
+    ...(account?.onCrew ? [{ label: 'Your crew', hint: 'The agents and what each one does', run: account.onCrew }] : []),
+    ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
+    ...(onOpenFile ? [{ label: 'Open…', hint: 'Open a .clan file from this computer', run: onOpenFile }] : []),
+    ...(account && account.onInstall !== undefined
+      ? [account.onInstall
+        ? { label: 'Install the app', hint: 'Napkin Studio on this computer', run: account.onInstall }
+        : { label: 'Install the app', hint: 'Installed already, or this browser cannot install it', run: () => {}, disabled: true }]
+      : []),
+    ...(user && onSignOut
+      ? [
+          { label: 'Change password', hint: 'Not built yet: ask your studio admin', run: () => {}, disabled: true, apart: true },
+          { label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut },
+        ]
+      : []),
   ]
 }
 

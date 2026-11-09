@@ -1,0 +1,86 @@
+/* The approved mock's base tokens (design/new-ui/napkin-app-v1.html :root;
+   gaps.md §13.0 and §13.8), over index.css's: warm paper, warm ink, the
+   mock's radii, shadows and faces. Imported after index.css, so the same
+   selectors win by order and index.css itself is left as it was.
+
+   The agency tints (--desk, --paper, --card and --line mixed with the
+   agency's base, and the --ag-* tokens) are the agency layer's
+   (shell/agency/palette.ts surfaceCss), a <style> of its own on :root that
+   comes after this file. The values here are the fallback before it lands. */
+
+:root,
+:root[data-theme='light'] {
+  --desk: #F6F1E7;
+  --paper: #FFFDF8;
+  --paper-2: #F3ECDC;
+  --card: #FFFFFF;
+  --ink: #141413;
+  --ink-soft: #2A2620;
+  --muted: #6D655A;
+  --faint: #9A9082;
+  --line: #E2D9C8;
+  --line-strong: #2A2620;
+  --accent-line: #C8CBFF;
+  --warn: #B45309;
+  --warn-soft: #FEF3DC;
+  --ok: #1D8A4E;
+  --ok-soft: #E6F6EC;
+  --alert: #C9462A;
+  --alert-soft: #FFF1EE;
+  --ag-base: #515BFF;
+  --ag-acc: #C8CBFF;
+  --ag-acc-ink: #101114;
+  --ag-act: #515BFF;
+  --ag-act-ink: #FFFFFF;
+
+  /* index.css's secondary and tertiary inks, onto the mock's. */
+  --ink2: var(--muted);
+  --ink3: var(--faint);
+  --ink-fixed: #141413;
+  --soft: var(--paper-2);
+  --line-soft: color-mix(in srgb, var(--line) 60%, transparent);
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+  --shadow-card: 0 1px 2px rgba(20,20,19,.06), 0 4px 12px -4px rgba(20,20,19,.08);
+  --shadow-paper: 0 1px 0 rgba(255,255,255,.75) inset, 0 8px 24px -8px rgba(50,38,18,.10), 0 1px 3px rgba(50,38,18,.08);
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Newsreader", Georgia, "Iowan Old Style", serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --f-display: var(--font-ui);
+  --f-mono: var(--font-mono);
+}
+
+:root[data-theme='dark'] {
+  --desk: #121110;
+  --paper: #1B1A18;
+  --paper-2: #262320;
+  --card: #201E1B;
+  --ink: #EFE9DE;
+  --ink-soft: #D6CEC0;
+  --muted: #A49B8D;
+  --faint: #7B7367;
+  --line: #34302A;
+  --line-strong: #CFC6B6;
+  --warn: #E09A4B;
+  --warn-soft: #3A2A18;
+  --ok: #5DBB83;
+  --ok-soft: #1C2E23;
+  --ag-act: #C8CBFF;
+  --ag-act-ink: #141413;
+  --ink-fixed: #141413;
+}
+
+/* The page: the agency-tinted desk, Geist 15px on 23.25px, warm ink. */
+body {
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* The mock's --accent is the agency's base, inside the new screens only
+   (index.css's --accent stays Create's red for everything else). */
+.nui { --accent: var(--ag-base); }

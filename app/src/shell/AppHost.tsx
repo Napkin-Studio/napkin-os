@@ -3,14 +3,16 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Toolbar, { type Crew, type ToolBrand } from '../components/Toolbar'
+import Toolbar, { type Account, type ClientChip, type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
 import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
 import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import WorkspaceView from './WorkspaceView'
-import DecisionPanel from './decisions/DecisionPanel'
+import { DecisionsDrawer, type DrawerView } from './nui/DecisionsDrawer'
+import { openInApp } from './appExport'
+import { refOfAddress } from './decisions/words'
 import { setScreen } from '../dogfood/recorder'
 import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
 import { splitAside } from './decisions/needs'
@@ -43,8 +45,14 @@ interface Props {
   banner?: ReactNode
   onExport: (kind: 'html' | 'pdf') => void
   onSpinoff: (appId: string) => void
-  /** Where the document sits below the agency (Clients > Client > Tool); absent for a document with no client. */
-  trail?: ReactNode
+  /** The document's client, after the agency's pill: the way back to its page; absent for a document with no client. */
+  client?: ClientChip | null
+  /** The account menu on the pill. */
+  account?: Account
+  /** The tool's key, for its icon and face in the bar. */
+  toolKey?: string | null
+  /** Continue in ▾ › Start fresh: a new one of this tool for this client. */
+  onNewForClient?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
   agency: string
   onAgency: () => void
@@ -66,7 +74,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onNewForClient, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
@@ -95,6 +103,13 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       return { docPath, open: typeof o === 'function' ? o(was) : o }
     })
   }, [docPath])
+  // "Approve all and lock": the document's own /approve, refused in the host's words while its lock list holds.
+  const approveDoc = useCallback(async () => {
+    if (typeof host.docOps !== 'function') throw new Error('Lock it from the document itself here.')
+    await (await host.docOps(docPath)).approve('Approved every open call in Decisions')
+  }, [docPath])
+  // Which view the drawer shows: Graph, By part, By time or Lineage.
+  const [drawerView, setDrawerView] = useState<DrawerView>('graph')
   const targets = useSpinoffTargets(docPath)
   const noun = nounOf(open.manifest.app?.app_id)
   // The tool, as its manifest names it (app.home.brand, else its name); a
@@ -316,7 +331,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         mark={mark}
         onAgency={onAgency}
         onHome={onHome}
-        crumbs={trail}
+        client={client}
+        account={account}
         // The medallion lights only for the document the person is IN (owner, 9 Nov 2026).
         attention={needs > 0 || !!crew?.waiting}
         needs={needs}
@@ -337,6 +353,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onToggleSidebar: () => setSidebarOpen(o => !o),
           sidebarOpen,
           onWorkspace: () => setWorkspaceOpen(true),
+          onLineage: () => { setDrawerView('lineage'); setDecisionsOpen(true) },
+          toolKey,
+          onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
+          onNewForClient,
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,
           locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
@@ -428,9 +448,38 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             error={saveError}
             onSave={save}
           />
-        ) : (
-          <DecisionPanel decisions={decisions} open={decisionsOpen} onOpenChange={setDecisionsOpen} aside={aside} />
-        )}
+        ) : decisionsOpen ? (
+          <DecisionsDrawer
+            title={`${client?.name ? `${client.name} · ` : ''}${barTitle}`}
+            groups={[{
+              key: docPath,
+              title: barTitle,
+              noun,
+              calls: needsOf(decisions.view),
+              aside: aside.keys,
+              onToggleAside: aside.toggle,
+              locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
+              verify: async finding => { await host.verify(finding, 'Looks right (from the Decisions card)'); refreshApp() },
+              approve: async () => { await approveDoc(); refreshApp() },
+              open: item => openInApp(refOfAddress(item.address), String(item.address ?? '').split('#')[1]),
+            }]}
+            focus={{
+              title: barTitle,
+              noun,
+              view: decisions.view,
+              error: decisions.error,
+              related: links.related,
+              onShow: (ref, path) => { setDecisionsOpen(false); openInApp(ref, path) },
+              onOpenPath: onOpenDocument,
+              acknowledge: id => host.acknowledge(id),
+              onWorkspace: () => setWorkspaceOpen(true),
+            }}
+            view={drawerView}
+            onView={setDrawerView}
+            onClose={() => setDecisionsOpen(false)}
+            onChanged={changed}
+          />
+        ) : null}
       </div>
       <footer className="ch-footer" ref={footRef}>
         <PoweredByClan />

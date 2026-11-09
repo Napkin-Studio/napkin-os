@@ -297,6 +297,7 @@ export const httpHost: Host = {
   updateLinked: documentId => clanPost<AttachReply>('/upstream/update', { document_id: documentId }),
   detach: documentId => clanPost<AttachReply>('/attach/detach', { document_id: documentId }),
   related: () => clanCall<RelatedView>('/related'),
+  setTitle: async (title: string) => { await clanPost<unknown>('/set-title', { title }) },
   cites: async refs => (await clanPost<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   clientReview: body => clanPost<ClientReviewReply>('/client-review', body),
@@ -360,6 +361,27 @@ export const httpHost: Host = {
   listLibrary: (filter?: LibraryFilter) => json<LibraryListing>(`/library${libraryQuery(filter)}`),
   settleJob: (path: string, jobId: string) =>
     json<unknown>(`/d/${encodeURIComponent(path)}/jobs/${encodeURIComponent(jobId)}/settle`, { method: 'POST' }),
+  docOps: async (path: string) => {
+    const view = await json<OpenView>(`/d/${encodeURIComponent(path)}`)
+    const origin = `${view.sandbox_origin ?? window.location.origin}/s/${view.token}`
+    const call = async <T,>(route: string, init?: RequestInit): Promise<T> => {
+      const resp = await fetch(`${origin}${route}`, init)
+      const body = await resp.text()
+      let parsed: unknown = null
+      try { parsed = body ? JSON.parse(body) : null } catch { /* not JSON */ }
+      if (!resp.ok) throw new Error((parsed as { error?: string } | null)?.error ?? (body || `${route}: ${resp.status}`))
+      return parsed as T
+    }
+    const post = (route: string, body: unknown) => call<unknown>(route, { method: 'POST', body: JSON.stringify(body) })
+    return {
+      decisions: () => call<DecisionsView>('/decisions'),
+      related: () => call<RelatedView>('/related'),
+      upstream: () => call<UpstreamView>('/upstream'),
+      verify: async (finding: string, rationale: string) => { await post('/verify', { finding, rationale }) },
+      acknowledge: async (decision: string) => { await post('/acknowledge', { decision }) },
+      approve: async (rationale: string) => { await post('/approve', { rationale }) },
+    }
+  },
   clients: {
     list: (includeArchived = false) => json<ClientRecord[]>(`/clients${includeArchived ? '?archived=1' : ''}`),
     create: (name, material) => json<ClientRecord>('/clients', postJson({ name, ...(material ? { material } : {}) })),

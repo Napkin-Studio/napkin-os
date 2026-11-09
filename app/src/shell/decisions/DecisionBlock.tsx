@@ -122,56 +122,19 @@ export function QuietItem({ block, text, busy, onLooksRight }: {
 }
 
 /** One line of history: who, signed · did what · where · when; opens to why. */
-export function HistoryLine({ block, view }: { block: DecisionBlock; view: DecisionsView }) {
+/** What a history line folds open: the change, why, where it came from, what was set aside, and the technical details. */
+export function HistoryBody({ block, view }: { block: DecisionBlock; view: DecisionsView }) {
   const d = block.decision
   const r = d.reasoning
-  const w = whoOf(block)
   const t = mainTarget(block)
-  const where = t ? whereOf(t.label) : null
   const sure = sureWord(r?.certainty?.level)
   const cites = citesOf(block)
   const sources = sourcesOf(block, view)
   const facts = cites.filter(c => view.cites[c]?.kind === 'fact').length
   const findings = cites.filter(c => view.cites[c]?.kind === 'finding').length
   const materials = cites.filter(c => view.cites[c]?.kind === 'material')
-  const hasMore = !!(r || d.rationale || cites.length)
-  // A client's answer leads with the client, not the person who recorded it.
-  const client = clientLineOf(block, view)
   const parts = partNamesOf(view)
   return (
-    <details className={`dp-ev ${block.superseded ? 'dp-ev-old' : ''}`}>
-      <summary>
-        <Face block={block} />
-        <div>
-          <Sign who={w} />
-          {/* An agent's line sits under its signature, so it does not name them again. */}
-          <div className="dp-line">
-            {client?.subject ? <><b>{client.subject}</b> {client.rest}</>
-              : w.person ? <><b>{w.name}</b> {didWhat(block, view)}</> : upper(didWhat(block, view))}
-          </div>
-          {typeof d.said === 'string' && d.action === 'client_answer' && (
-            <q className="dp-said">{clipSaid(d.said)}</q>
-          )}
-          {typeof d.was === 'string' && typeof d.now === 'string' && <Change was={d.was} now={d.now} why={d.rationale} />}
-          <div className="dp-meta">
-            {t && where && (
-              <button className="dp-where" onClick={e => { e.preventDefault(); openInApp(refOfAddress(t.address), t.path) }}>
-                {WHERE}{where}
-              </button>
-            )}
-            {sure === 'Unsure' && <span className="dp-pill-unsure">unsure</span>}
-            {block.superseded && <span className="dp-pill-old">replaced since</span>}
-            {/* the dogfood build asks about each agent's result; a click here must not open the line */}
-            {w.agent && (
-              <span onClick={e => e.preventDefault()}>
-                <ResultThumbs extra={{ decision: d.id ?? null, action: d.action, agent: w.name, target: t?.label ?? null }} />
-              </span>
-            )}
-          </div>
-        </div>
-        <span className="dp-time">{hhmm(d.timestamp)}{hasMore && <span className="dp-more">Why</span>}</span>
-      </summary>
-      {hasMore && (
         <div className="dp-ex">
           {typeof d.now === 'string' || typeof d.was === 'string' ? (
             <div className="dp-diff">
@@ -248,7 +211,54 @@ export function HistoryLine({ block, view }: { block: DecisionBlock; view: Decis
             </dl>
           </details>
         </div>
-      )}
+  )
+}
+
+export function HistoryLine({ block, view }: { block: DecisionBlock; view: DecisionsView }) {
+  const d = block.decision
+  const r = d.reasoning
+  const w = whoOf(block)
+  const t = mainTarget(block)
+  const where = t ? whereOf(t.label) : null
+  const sure = sureWord(r?.certainty?.level)
+  const cites = citesOf(block)
+  const hasMore = !!(r || d.rationale || cites.length)
+  // A client's answer leads with the client, not the person who recorded it.
+  const client = clientLineOf(block, view)
+  return (
+    <details className={`dp-ev ${block.superseded ? 'dp-ev-old' : ''}`}>
+      <summary>
+        <Face block={block} />
+        <div>
+          <Sign who={w} />
+          {/* An agent's line sits under its signature, so it does not name them again. */}
+          <div className="dp-line">
+            {client?.subject ? <><b>{client.subject}</b> {client.rest}</>
+              : w.person ? <><b>{w.name}</b> {didWhat(block, view)}</> : upper(didWhat(block, view))}
+          </div>
+          {typeof d.said === 'string' && d.action === 'client_answer' && (
+            <q className="dp-said">{clipSaid(d.said)}</q>
+          )}
+          {typeof d.was === 'string' && typeof d.now === 'string' && <Change was={d.was} now={d.now} why={d.rationale} />}
+          <div className="dp-meta">
+            {t && where && (
+              <button className="dp-where" onClick={e => { e.preventDefault(); openInApp(refOfAddress(t.address), t.path) }}>
+                {WHERE}{where}
+              </button>
+            )}
+            {sure === 'Unsure' && <span className="dp-pill-unsure">unsure</span>}
+            {block.superseded && <span className="dp-pill-old">replaced since</span>}
+            {/* the dogfood build asks about each agent's result; a click here must not open the line */}
+            {w.agent && (
+              <span onClick={e => e.preventDefault()}>
+                <ResultThumbs extra={{ decision: d.id ?? null, action: d.action, agent: w.name, target: t?.label ?? null }} />
+              </span>
+            )}
+          </div>
+        </div>
+        <span className="dp-time">{hhmm(d.timestamp)}{hasMore && <span className="dp-more">Why</span>}</span>
+      </summary>
+      {hasMore && <HistoryBody block={block} view={view} />}
     </details>
   )
 }

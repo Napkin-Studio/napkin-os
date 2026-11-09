@@ -11,7 +11,7 @@ import { useCallback, useState } from 'react'
 
 const KEY = 'napkin.setAside:'
 
-function read(docPath: string): Set<string> {
+export function read(docPath: string): Set<string> {
   try {
     const raw = window.localStorage.getItem(KEY + docPath)
     const list = raw ? JSON.parse(raw) : []
@@ -21,7 +21,7 @@ function read(docPath: string): Set<string> {
   }
 }
 
-function write(docPath: string, keys: Set<string>) {
+export function write(docPath: string, keys: Set<string>) {
   try {
     if (keys.size) window.localStorage.setItem(KEY + docPath, JSON.stringify([...keys]))
     else window.localStorage.removeItem(KEY + docPath)

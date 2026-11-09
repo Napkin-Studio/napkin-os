@@ -39,6 +39,23 @@ export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
   napkin: { base: '#515BFF', accent: '#C8CBFF' },
 }
 
+/**
+ * The agencies' display names on the pill, by the same id, where an admin has
+ * set one (the mock's kits). No backend serves an agency's name yet (the
+ * session and the roster carry the id only): an agency with none keeps the
+ * id's own label.
+ */
+export const AGENCY_NAMES: Readonly<Record<string, string>> = {
+  wk: 'Wieden+Kennedy',
+  tbwa: 'TBWA\\Dublin',
+}
+
+/** The agency's name for a signed-in person: the admin-set one, else `fallback` (the id, title-cased). */
+export function agencyNameOf(personId: string | null | undefined, fallback: string): string {
+  const id = agencyIdOf(personId)
+  return (id && AGENCY_NAMES[id]) || fallback
+}
+
 /** One theme's agency tokens. */
 export interface AgencyTokens { agency: string; fg: string; soft: string }
 
@@ -121,6 +138,26 @@ export function agencyCss(p: AgencyPalette): string {
 }
 
 const STYLE_ID = 'napkin-agency'
+const SURFACE_ID = 'napkin-agency-surface'
+
+/**
+ * The agency's tints on the studio's surfaces, as the approved mock draws them
+ * (gaps.md §13.0, mock phase 28): the desk, paper and lines take a little of
+ * the agency's base (6%, 2.5% and 10% in light; 12%, 9%, 7% and 16% in dark),
+ * and the action colour (--ag-act: selected toggles, primary buttons) is the
+ * base in light and the accent in dark. An agency an admin has not coloured
+ * takes Napkin's kit, as the medallion does (markOf).
+ */
+export function surfaceCss(colours: AgencyColours | null | undefined): string {
+  const c = colours && rgb(colours.base) && rgb(colours.accent) ? colours : NAPKIN_COLOURS
+  const b = c.base.toUpperCase(), a = c.accent.toUpperCase()
+  const ink = (bg: string) => (inkOn(bg) === INK ? '#141413' : WHITE)
+  const mixIn = (pct: string, onto: string) => `color-mix(in srgb, ${b} ${pct}, ${onto})`
+  const shared = `--ag-base: ${b}; --ag-acc: ${a}; --ag-acc-ink: ${inkOn(a)}; --accent-line: #C8CBFF;`
+  const light = `${shared} --ag-act: ${b}; --ag-act-ink: ${ink(b)}; --desk: ${mixIn('6%', '#F6F1E7')}; --paper: ${mixIn('2.5%', '#FFFDF8')}; --card: #FFFFFF; --line: ${mixIn('10%', '#E2D9C8')};`
+  const dark = `${shared} --ag-act: ${a}; --ag-act-ink: ${ink(a)}; --desk: ${mixIn('12%', '#121110')}; --paper: ${mixIn('9%', '#1B1A18')}; --card: ${mixIn('7%', '#201E1B')}; --line: ${mixIn('16%', '#34302A')};`
+  return `:root, :root[data-theme='light'] { ${light} }\n:root[data-theme='dark'] { ${dark} }`
+}
 
 /** Put the agency's layer on the page (or the neutral one); idempotent. */
 export function applyAgency(personId: string | null | undefined, doc: Document = document): void {
@@ -132,6 +169,14 @@ export function applyAgency(personId: string | null | undefined, doc: Document =
     doc.head.appendChild(el)
   }
   if (el.textContent !== css) el.textContent = css
+  const surface = surfaceCss(coloursOf(agencyIdOf(personId)))
+  let sl = doc.getElementById(SURFACE_ID) as HTMLStyleElement | null
+  if (!sl) {
+    sl = doc.createElement('style')
+    sl.id = SURFACE_ID
+    doc.head.appendChild(sl)
+  }
+  if (sl.textContent !== surface) sl.textContent = surface
 }
 
 /** Napkin's own kit: the medallion's colours for an agency an admin has not coloured. */

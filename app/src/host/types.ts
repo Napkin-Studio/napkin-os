@@ -656,6 +656,19 @@ export interface Person {
   name: string | null
 }
 
+/** A stored document's own routes (`Host.docOps`), on a token of its own. */
+export interface DocOps {
+  decisions(): Promise<DecisionsView>
+  related(): Promise<RelatedView>
+  upstream(): Promise<UpstreamView>
+  /** "Looks right" on a finding: `POST /verify`. */
+  verify(finding: string, rationale: string): Promise<void>
+  /** "Looks right" on an agent's call: `POST /acknowledge`. */
+  acknowledge(decision: string): Promise<void>
+  /** Lock it: `POST /approve`. Refused, in the host's words, while its lock list holds. */
+  approve(rationale: string): Promise<void>
+}
+
 export interface Host {
   // ── Who is here ───────────────────────────────────────────────────────────
   /** The signed-in person, as the host acts for them. Read-only. */
@@ -703,6 +716,8 @@ export interface Host {
   detach(documentId: string): Promise<AttachReply>
   /** What it was made from and links, and what was made from it or links it (`GET /related`). */
   related(): Promise<RelatedView>
+  /** Rename the open document (`POST /set-title`). Absent on a host that cannot. */
+  setTitle?(title: string): Promise<void>
   /** The source card for each ref, in one call (`POST /cite`). */
   cites(refs: string[]): Promise<Record<string, SourceCard>>
 
@@ -772,6 +787,12 @@ export interface Host {
   settleJob?(path: string, jobId: string): Promise<unknown>
   /** The client registry. */
   readonly clients: ClientsApi
+  /**
+   * One stored document's own routes, open or not (the desk's Decisions and
+   * its Worth a look read and settle calls across documents with it). Absent
+   * on a host with one document at a time.
+   */
+  docOps?(path: string): Promise<DocOps>
 
   // ── Branching one document into another app ───────────────────────────────
   /**
