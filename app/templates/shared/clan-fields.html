@@ -348,6 +348,28 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
    (clan://decisions): the kind of field and what it asks of a person are the
    record's, never the tag's. Every action is one host route; the reply
    carries the document as it now stands, which replaces the page's copy. */
+/* The agency's colours on a document's own controls (features/brief-new-ui.clan).
+   The shell answers clan:me with the agency's admin-set base and accent; they
+   land on :root as --ag-base and --ag-acc, with the ink that reads on each.
+   An app derives its primary actions from them (base in light, accent in
+   dark) and keeps its documents on paper. Nothing here is the document's. */
+var NapkinAgency=(function(){
+  var HEX=/^#[0-9a-f]{6}$/i, now=null;
+  function lum(h){ var n=parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255].map(function(v){ v/=255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); }).reduce(function(a,v,i){ return a+v*[.2126,.7152,.0722][i]; },0); }
+  function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
+  function apply(c){
+    if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
+    now={base:c.base, accent:c.accent};
+    var r=document.documentElement;
+    r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
+    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', inkOn(c.accent));
+    r.setAttribute('data-agency', '');
+    try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
+  }
+  function start(){ if(window.clan&&typeof window.clan.me==='function') window.clan.me().then(function(m){ if(m&&m.agency) apply(m.agency); }, function(){}); }
+  if(document.readyState==='complete') setTimeout(start,0); else window.addEventListener('load', start);
+  return {apply:apply, now:function(){ return now; }};
+})();
 var ClanFields=(function(){
   var SCHEME=(navigator.userAgent.indexOf('Windows')!==-1)?'http://clan.localhost':'clan://localhost';
   var VIEW=null, STACK=[], DRAWER=null, EDIT=false;
