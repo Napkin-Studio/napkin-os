@@ -24,6 +24,7 @@ import { signOut } from './shell/signOut'
 import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
 import { spinoffTitle } from './shell/docTitle'
 import { agencyNameOf, applyAgency, markOf } from './shell/agency/palette'
+import { rememberAgency } from './shell/agency/lastAgency'
 import { DeskDrawer } from './shell/nui/DeskDrawer'
 import { AllToolsModal, CrewModal } from './shell/nui/AccountModals'
 import { useDeskFacts } from './shell/nui/useDeskFacts'
@@ -126,7 +127,7 @@ export default function App() {
   const personId = landing.data?.person?.id ?? null
   // Whose client registry applies (agency/clients.ts): set before anything below reads a client's look.
   setClientAgency(personId)
-  useEffect(() => { applyAgency(personId) }, [personId])
+  useEffect(() => { applyAgency(personId); rememberAgency(personId) }, [personId])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // Decisions on the desk: every call across the documents it has read.

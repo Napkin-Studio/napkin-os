@@ -12,12 +12,19 @@
 // gave asks for the person's own, then the studio opens. The gate renders the studio unchanged when the server has no
 // accounts (anonymous mode), when the page is the public viewer, on the
 // device and on the desktop.
+//
+// The screen is the approved mock's (design/new-ui/napkin-app-v1.html,
+// .p33-signin): one paper card on the desk, the agency's medallion, the
+// heading, then the fields. After a sign-out the agency this browser last
+// signed in to is known (agency/lastAgency.ts): its name, colours and
+// medallion. Before that it is Napkin's medallion in neutral colours.
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { StudioLogo } from '../brand/StudioMark'
 import { LogoSpinnerFill } from '../brand/LogoSpinner'
-import { PoweredByClan } from '../brand/PoweredByClan'
+import { MedallionMark } from '../components/Medallion'
 import { accountName, isAccountName } from './accountName'
+import { agencyNameOf, applyAgency, coloursOf, markOf } from './agency/palette'
+import { justSignedOut, lastAgency, markSignedOut, rememberAgency } from './agency/lastAgency'
 import './SignIn.css'
 
 type Gate = 'checking' | 'open' | 'signin'
@@ -57,6 +64,16 @@ async function post(path: string, body: unknown): Promise<{ status: number; data
   return { status: r.status, data: await r.json().catch(() => ({})) }
 }
 
+/** Who the screen is for: the last agency signed in to here, or nobody yet (Napkin, neutral). */
+function useAgency(): { id: string | null; name: string | null; mark: { base: string; accent: string } } {
+  const [id] = useState(lastAgency)
+  const person = id ? `@${id}` : null
+  // The agency's colours on the desk, paper and action colour; none before anyone has signed in here.
+  useEffect(() => { if (id) applyAgency(person) }, [id, person])
+  const name = id ? agencyNameOf(person, coloursOf(id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1)) : null
+  return { id, name, mark: markOf(person) }
+}
+
 export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone: () => void }) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -65,6 +82,10 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
   const [challenge, setChallenge] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [forgot, setForgot] = useState(false)
+  const [signedOut] = useState(justSignedOut)
+  const agency = useAgency()
+  const done = () => { markSignedOut(false); rememberAgency(accountName(name)); onDone() }
 
   const signIn = async (e: FormEvent) => {
     e.preventDefault()
@@ -76,7 +97,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
         ? { username: accountName(name), password }
         : { username: accountName(name) }
       const { status, data } = await post('/api/auth/sign-in', body)
-      if (data.ok) { onDone(); return }
+      if (data.ok) { done(); return }
       if (data.step === 'new_password' && typeof data.session === 'string') { setChallenge(data.session); setPassword(''); return }
       setError(typeof data.error === 'string' ? data.error : `Sign-in failed (${status}).`)
     } catch {
@@ -90,7 +111,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
     setBusy(true); setError(null)
     try {
       const { status, data } = await post('/api/auth/new-password', { username: accountName(name), session: challenge, password: fresh })
-      if (data.ok) { onDone(); return }
+      if (data.ok) { done(); return }
       setError(typeof data.error === 'string' ? data.error : `That did not work (${status}).`)
       if (typeof data.error === 'string' && /sign in again/i.test(data.error)) { setChallenge(null); setFresh(''); setAgain('') }
     } catch {
@@ -98,49 +119,52 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
     } finally { setBusy(false) }
   }
 
+  const heading = signedOut ? 'Signed out.' : agency.id ? 'Welcome back.' : 'Sign in.'
+  const lede = agency.name ? `Sign in to ${agency.name} on Napkin Studio.` : 'Sign in to Napkin Studio.'
   return (
-    <main className="si">
-      <div className="si-card">
-        <div className="si-mark"><StudioLogo size={20} /></div>
-        {challenge === null ? (
-          <form onSubmit={signIn} noValidate>
-            <h1 className="si-h">Sign in to the studio</h1>
-            <label className="si-f">
-              <span>Sign-in name</span>
-              <input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
-                placeholder="name@agency" value={name} onChange={e => setName(e.target.value)} autoFocus />
+    <main className="nui p33-signin" data-agency={agency.id ?? 'none'}>
+      {challenge === null ? (
+        <form className="si-card" onSubmit={signIn} noValidate>
+          <span className="si-mark"><MedallionMark base={agency.mark.base} accent={agency.mark.accent} target={{ state: 'awake', progress: 0 }} size={54} /></span>
+          <h2>{heading}</h2>
+          <p>{lede}</p>
+          <label>
+            Sign-in name
+            <input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
+              placeholder="name@agency" value={name} onChange={e => setName(e.target.value)} autoFocus />
+          </label>
+          {asksPassword && (
+            <label>
+              Password
+              <input name="password" type="password" autoComplete="current-password"
+                value={password} onChange={e => setPassword(e.target.value)} />
             </label>
-            {asksPassword && (
-              <label className="si-f">
-                <span>Password</span>
-                <input name="password" type="password" autoComplete="current-password"
-                  value={password} onChange={e => setPassword(e.target.value)} />
-              </label>
-            )}
-            {error && <p className="si-err" role="alert">{error}</p>}
-            <button className="si-go" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-            <p className="si-note">{asksPassword
-              ? 'Your sign-in name and first password come from your studio admin.'
-              : 'Your studio admin adds your name to the studio.'}</p>
-          </form>
-        ) : (
-          <form onSubmit={choose} noValidate>
-            <h1 className="si-h">Choose your password</h1>
-            <p className="si-lede">This is your first sign-in as <b>{accountName(name)}</b>. Pick a password only you know: at least 10 characters, with a letter and a number.</p>
-            <label className="si-f">
-              <span>New password</span>
-              <input type="password" autoComplete="new-password" value={fresh} onChange={e => setFresh(e.target.value)} autoFocus />
-            </label>
-            <label className="si-f">
-              <span>The same again</span>
-              <input type="password" autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value)} />
-            </label>
-            {error && <p className="si-err" role="alert">{error}</p>}
-            <button className="si-go" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save and open the studio'}</button>
-          </form>
-        )}
-      </div>
-      <footer className="si-foot"><PoweredByClan /></footer>
+          )}
+          {error && <p className="si-err" role="alert">{error}</p>}
+          <button className="btn-rect primary" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+          {asksPassword ? (
+            forgot
+              ? <p className="si-note" role="status">Your sign-in name and first password come from your studio admin. Ask them to reset it.</p>
+              : <button type="button" className="side-link" onClick={() => setForgot(true)}>Forgot your password?</button>
+          ) : <p className="si-note">Your studio admin adds your name to the studio.</p>}
+        </form>
+      ) : (
+        <form className="si-card" onSubmit={choose} noValidate>
+          <span className="si-mark"><MedallionMark base={agency.mark.base} accent={agency.mark.accent} target={{ state: 'awake', progress: 0 }} size={54} /></span>
+          <h2>Choose your password.</h2>
+          <p>This is your first sign-in as <b>{accountName(name)}</b>. Pick a password only you know: at least 10 characters, with a letter and a number.</p>
+          <label>
+            New password
+            <input type="password" autoComplete="new-password" value={fresh} onChange={e => setFresh(e.target.value)} autoFocus />
+          </label>
+          <label>
+            The same again
+            <input type="password" autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value)} />
+          </label>
+          {error && <p className="si-err" role="alert">{error}</p>}
+          <button className="btn-rect primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save and open the studio'}</button>
+        </form>
+      )}
     </main>
   )
 }
