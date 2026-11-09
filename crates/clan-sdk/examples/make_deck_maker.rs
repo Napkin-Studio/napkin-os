@@ -121,6 +121,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             home: Some(AppHome {
                 colour: Some("#2F64F5".into()),
                 brand: Some("Deck".into()),
+                noun: vec!["deck".into(), "decks".into()],
+                untitled: Some("New deck".into()),
                 ..Default::default()
             }),
             name: "Deck Maker".into(),

@@ -25,6 +25,7 @@
   --shadow-soft:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08); --shadow-lift:0 24px 60px -24px rgba(50,38,18,.28),0 1px 3px rgba(50,38,18,.08);
   --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
   --r-md:8px; --r-sm:4px;
+  --manila:#F3E8CC; --manila-edge:#C4AA75; --manila-ink:#5A4A2A;
   /* the agent circle's ring: one colour per activity, the state also said in words */
   --ring-work:#FF4F2E; --ring-think:#7A5AF8; --ring-read:#B87100; --ring-check:#238A55; --ring-human:#E0560C; --ring-error:#16191D;
   --ring-wait:#9EA3AB; --ring-track:#D3D6DC; --ring-edge:#D3D6DC;
@@ -521,6 +522,95 @@ h1.sm{font-size:28px}
 .slide ul{margin-top:3cqi;gap:1.4cqi;max-width:84%}
 .slide li{font-size:clamp(11px,2.25cqi,16px)}
 .slide li .dot{margin-top:.6em}
+
+/* Build: the mock's live agent stage (napkin-app-v1 #brief-screen-loading; the brief's working step) */
+.app-head.compact{padding:14px 0 12px;align-items:center}
+.app-head.compact .hero-title{font-size:30px;margin-bottom:0}
+.app-head.compact .hero-sub{display:none}
+.app-head.compact .eyebrow{margin-bottom:4px}
+.nd[data-screen="build"] .ld-strip{padding:10px 0}
+.pwrap{margin-top:14px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-paper);overflow:hidden;position:relative}
+.ptop{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+:root[data-color-scheme="dark"] .ptop{background:var(--paper)}
+.apills{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.apills .stage{min-height:32px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:var(--paper);display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.apills .stage b{font:600 12px/1.55 var(--f-display);color:inherit;white-space:nowrap}
+.apills .stage .s{display:none}
+.apills .stage .ring{width:8px;height:8px;border:0;font-size:0;background:var(--line)}
+.apills .stage.done{border-color:var(--ok-fg);color:var(--ok-fg)}
+.apills .stage.done .ring{background:var(--ok-fg)}
+.apills .stage[aria-current="step"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.apills .stage[aria-current="step"] .ring{background:var(--paper)}
+.apills .stage.failed{border-color:var(--warn-fg);color:var(--warn-fg);background:var(--paper)}
+.apills .stage.failed .ring{background:var(--warn-fg)}
+.build.sstage{max-width:none;margin:0;padding:12px 16px;background:var(--desk);display:grid;grid-template-columns:minmax(240px,310px) minmax(320px,440px) minmax(240px,310px);justify-content:center;align-items:center;gap:16px;height:clamp(420px,calc(100vh - 338px),640px)}
+.sstage .rail{overflow-y:auto}
+.build.sstage.at-gate{height:auto;grid-template-columns:minmax(220px,260px) minmax(0,1fr) minmax(240px,300px);align-items:start;padding:20px 16px}
+.sstage .rail{display:flex;flex-direction:column;gap:8px;z-index:4;max-height:100%;padding:4px;position:static}
+.sstage .score{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
+.sstage.at-gate .score{display:block}
+.score>.status.hero{background:transparent;border-color:transparent;box-shadow:none;padding:0!important;margin:0}
+.score>.status.hero .srow{flex-direction:column;align-items:center;gap:10px;text-align:center}
+.score>.status.hero .stext{text-align:center}
+.score>.status .stext>div:first-child{font:700 11px/1.55 var(--f-mono)!important;letter-spacing:.08em;text-transform:uppercase;color:var(--ag-base)}
+:root[data-color-scheme="dark"] .score>.status .stext>div:first-child{color:var(--ag-act)}
+.score>.status .stext .note,.score>.status .stext .eyebrow{display:none}
+.score>.status .stext>div:first-child::after{content:" agent"}
+.score>.status .say{order:9;margin-top:4px}
+.score>.status .rule,.score>.status>.note{display:none}
+.scap{text-align:center;display:grid;margin-top:8px;max-width:440px}
+.scap .l1{display:block;font:700 20px/1.55 var(--f-display);letter-spacing:-.015em;color:var(--ink)}
+.scap .l2{display:block;font-size:13.5px;line-height:1.55;color:var(--muted);margin-top:2px}
+.scap .l2.err{color:var(--warn-fg)}
+.wsec{display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
+.wsec-h{font:700 10.5px/1.55 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-left:8px;border-left:2px solid var(--ink)}
+.wcard{position:relative;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:8px 11px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
+.wcard .wlab{font:600 10px/1.55 var(--f-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding-right:16px}
+.wcard .wsnip{font:13.5px/1.4 var(--f-serif);color:var(--ink);margin-top:3px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.wcard .wsnip.wait{color:var(--ink3);font-style:italic}
+.wcard .wchk{position:absolute;top:7px;right:8px;font-size:12px;font-weight:800;color:var(--ok-fg)}
+.wcard .wchk.now{color:var(--ag-base)}
+.wcard .wchk.bad{color:var(--warn-fg)}
+.sstage aside.stack>.card,.sstage aside.stack>.bf,.sstage aside.stack>.note{box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
+.sstage .cbox{max-height:360px;overflow:auto}
+.sstage .cbox .crow{padding:9px 14px}
+.sstage .cbox .crow .t{font-size:13.5px}
+.sstage .cgrid{grid-template-columns:minmax(0,1fr);padding:10px 12px}
+.runbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:12px 0 40px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:13px}
+.runbar .sp{flex:1 1 0%}
+.runbar .procActs{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.runbar .procActs:empty{display:none}
+.runbar .stopq{color:var(--ink2)}
+.side-link{border:0;background:none;padding:0;color:var(--ink);font:600 13.5px var(--f-display);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.sp-btn{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font:600 12px var(--f-display);cursor:pointer}
+.runbar .go{min-height:38px;padding:0 16px;border:1px solid var(--ag-act);border-radius:var(--r-sm);background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px/1.55 var(--f-display)}
+.runbar .go:disabled{opacity:.5}
+.apills{counter-reset:stg}.apills .stage b::before{counter-increment:stg;content:counter(stg) ". "}
+@media (max-width:980px){.build.sstage,.build.sstage.at-gate{grid-template-columns:1fr;height:auto}}
+
+/* Start: the mock's prompt sheet (the brief's "What's the brief?": design/new-ui/napkin-app-v1.html, brief-maker .paperc) */
+.ld.isheet{display:block;padding:28px 0 56px;text-align:left}
+.isec{font:600 28px/1.15 var(--f-serif);letter-spacing:-.01em;color:var(--ink);margin:0 0 16px}
+.paperc{width:100%;max-width:760px;display:flex;flex-direction:column;gap:18px;padding:24px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow-paper);clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
+.paperc .fromup{color:var(--muted);font-size:13px;line-height:1.55}
+.plabel{display:flex;justify-content:space-between;align-items:baseline;font:400 11px/1.55 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.plabel label{cursor:text}
+.pta{display:block;width:100%;min-height:190px;height:190px;margin:0;border:1px solid var(--line);border-radius:4px;padding:16px 16px 16px 44px;font:400 17px/27px var(--f-serif);color:var(--ink);resize:vertical;outline:none;
+  background:var(--card) repeating-linear-gradient(transparent 0 26px,color-mix(in srgb,var(--tool) 16%,transparent) 26px 27px);background-position:0 14px;background-attachment:local;box-shadow:inset 30px 0 0 -29px var(--warn-fg)}
+.pta::placeholder{color:var(--ink3);font-style:italic}
+.pta:focus{border-color:color-mix(in srgb,var(--ag-act) 55%,var(--line))}
+.iex{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.iex button{border:1px solid var(--line);border-radius:99px;padding:4px 11px;background:var(--card);color:var(--ink2);font:400 12.5px/1.55 var(--f-display);cursor:pointer}
+.iex button:hover{border-color:var(--ink)}
+.ifiles .chips{display:flex;flex-wrap:wrap;gap:8px}
+.ifiles .chip{display:inline-flex;align-items:center;padding:5px 10px;background:var(--manila);border:1px solid var(--manila-edge);border-radius:4px;font:400 11.5px/1.55 var(--f-mono);color:var(--manila-ink)}
+.cfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
+.paperc .attach{width:40px;height:40px;border-radius:50%;border:1.5px dashed var(--muted);background:none;color:var(--muted);font:400 18px/1.55 var(--f-display);display:inline-grid;place-items:center;cursor:pointer}
+.paperc .attach:hover{border-style:solid;border-color:var(--ink);color:var(--ink)}
+.paperc .go{min-height:44px;height:auto;padding:0 24px;border:1px solid var(--ag-act);border-radius:4px;background:var(--ag-act);color:var(--ag-act-ink);font:600 15px/1.55 var(--f-display)}
+
+.sb-facts{font:600 10.5px/1.55 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--warn-fg);margin-right:6px}
+.runbar .sb-facts{color:var(--muted);margin:0}
 </style>
 </head>
 <body>
@@ -1905,7 +1995,7 @@ var DeckLogic = (function () {
     }).join('') + '</ol>';
   }
   function appHead(s, scr) {
-    return '<header class="app-head"><div class="app-head-text"><div class="eyebrow hd-eye">' + esc(headEyebrow(s)) + '</div>' +
+    return '<header class="app-head' + (scr === 'build' ? ' compact' : '') + '"><div class="app-head-text"><div class="eyebrow hd-eye">' + esc(headEyebrow(s)) + '</div>' +
       '<h1 class="hero-title">Deck Studio<span class="period-dot" aria-hidden="true"></span></h1>' +
       '<p class="hero-sub">' + esc(headSub(s)) + '</p></div><div class="app-head-right">' + flowSteps(scr) + '</div></header>';
   }
@@ -1926,11 +2016,49 @@ var DeckLogic = (function () {
   var lastBar = null;
   function sendBar(s, scr) {
     if (!inShell) return;
-    var items = barChips(s, scr).map(function (c) { return { kind: 'chip', label: c.text, tone: c.tone }; });
+    var items = barItems(s, scr);
     var sig = JSON.stringify(items);
     if (sig === lastBar) return;
     lastBar = sig;
     window.parent.postMessage({ type: 'clan:bar', v: 1, items: items }, '*');
+  }
+
+  /** What the OS bar shows, as the mock's bar per step: the name alone at the prompt (mode ask); the name and the run's step while
+   *  the agents work or a gate waits (mode working, no Continue in or Share); the deck's own state once there is a deck. The error,
+   *  supply and cost facts are on the page (the storyboard row, the run bar), not chips in the bar. */
+  function barItems(s, scr) {
+    var run = s.run, all = run.stages || [], at = -1;
+    all.forEach(function (st, i) { if (at < 0 && (st.status === 'now' || st.status === 'failed')) at = i; });
+    var step = at >= 0 ? ' · Step ' + (at + 1) + '/' + all.length : '';
+    if (scr === 'start') return [{ kind: 'mode', mode: 'ask', label: '' }];
+    if (scr === 'build' && (run.gate || run.state === 'building' || run.state === 'failed' || !L.presented(s.deck).length)) {
+      return [{ kind: 'mode', mode: 'working', label: (run.gate ? 'Your call' : run.state === 'failed' ? 'Stopped' : 'Working') + step }];
+    }
+    var ds = L.deckApproval(s.raw);
+    return [{ kind: 'status', label: ds && ds.state === 'approved' ? 'Approved' : 'Draft', tone: ds && ds.state === 'approved' ? 'ok' : null, locked: false }];
+  }
+  /** The facts the bar's chips used to carry, said on the page: errors and what is to supply, and the run's cost. */
+  function factsLine(s, scr) { return barChips(s, scr).map(function (c) { return c.text; }).join(' · '); }
+
+  // The document's title (the OS bar and the client's desk read it): the project's name, else the client's and the kind of deck.
+  // Set while the document wears a title nobody chose; a name the person gave it is left alone.
+  var TITLE = { done: '', last: '' };
+  function workingTitle(s) {
+    var p = s.inputs.prompt || {}, meta = s.deck.meta || {}, named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) ? '' : v; };
+    var proj = named(p.project) || named(meta.project), client = named(p.client) || named(meta.client);
+    if (proj) return proj;
+    if (!client) return '';
+    var t = L.deckTypeOf(s.raw), ty = L.DECK_TYPES.filter(function (x) { return x.id === t.id; })[0];
+    return client + ' · ' + (ty ? ty.label.toLowerCase() : 'pitch');
+  }
+  function syncTitle(s) {
+    var t = workingTitle(s), m = (window.__CLAN__ || {}).manifest || {};
+    if (!t || !(window.clan && typeof window.clan.setTitle === 'function')) return;
+    var cur = String(m.title || '').trim();
+    if (TITLE.done === t || cur === t) return;
+    if (cur && !/^(untitled.*|new deck.*|deck( maker| studio)?)$/i.test(cur) && cur !== TITLE.last) return;
+    TITLE.done = t;
+    Promise.resolve(window.clan.setTitle(t)).then(function (res) { if (res && res.ok !== false) { m.title = t; TITLE.last = t; } else TITLE.done = ''; }, function () { TITLE.done = ''; });
   }
 
   function pick(name, id, cur, title, note) {
@@ -2072,18 +2200,22 @@ var DeckLogic = (function () {
     return !String(p.text || '').trim() && !L.documentsOf(s.raw).length && !Object.keys(s.upstream || {}).length &&
       !L.gapView(s.intake).questions.length && !(s.run.stages || []).length && !Object.keys(s.run.approvals || {}).length && !s.asked;
   }
+  // The examples' short names, as the brief's "Try an example" chips; the whole prompt is the chip's title.
+  var EXAMPLE_NAMES = ['Fernley elderflower launch', 'Lumen Labs seed round', 'A drinks brand about summer'];
+  function words(t) { var n = String(t || '').trim().split(/\s+/).filter(Boolean).length; return n + (n === 1 ? ' word' : ' words'); }
+  /** The landing page, the mock's prompt (as the brief's): the question, then one dog-eared sheet with what it is made from,
+   *  the ruled box and its word count, Try an example, the files on the desk, the + and Build deck. */
   function landing(s) {
-    var files = L.documentsOf(s.raw);
-    return '<main class="ld"><div class="ld-in">' +
-      '<h1 class="ld-h">What are we pitching?</h1>' +
-      '<p class="ld-sub">Tell us in a line or paste everything you have. Add anything they sent you.</p>' +
-      '<div class="ld-bar"><textarea id="ptext" data-land rows="1" placeholder="The client, the brand and what they want" aria-label="What are we pitching?">' + esc(draft('text', '')) + '</textarea>' +
-        '<label class="ld-attach" for="attach" title="Attach files" aria-label="Attach files">' + CLIP + '</label><input type="file" id="attach" multiple hidden>' +
-        '<button class="ld-go" id="land-build">Build deck</button></div>' +
-      (files.length ? '<div class="ld-files">' + files.map(function (f) { return '<span class="ld-file">' + esc(f.name) + '</span>'; }).join('') + '</div>' : '') +
-      '<div class="ld-eg"><span>For example:</span>' + EXAMPLES.map(function (e, i) { return '<button data-eg="' + i + '">“' + esc(e) + '”</button>'; }).join('') + '</div>' +
-      '<p class="ld-drop"><b>Got a brief, an email or a deck?</b> Attach it with the paperclip.</p>' +
-      '</div></main>';
+    var files = L.documentsOf(s.raw), up = L.upstreamSummary(s.raw), text = draft('text', '');
+    var from = up.brief ? 'From brief: ' + up.brief.name : up.research ? 'From research: ' + up.research.name : '';
+    return '<main class="ld isheet"><h2 class="isec ld-h">What are we pitching?</h2><div class="paperc">' +
+      (from ? '<div class="fromup">' + esc(from) + '</div>' : '') +
+      '<div class="iarea"><div class="plabel"><label for="ptext">The client, the brand and what they want</label><span id="wc" aria-live="off">' + words(text) + '</span></div>' +
+      '<textarea id="ptext" class="pta" data-land rows="6" placeholder="Tell us in a line or paste everything you have. Add anything they sent you." aria-label="What are we pitching?">' + esc(text) + '</textarea>' +
+      '<div class="iex" role="group" aria-label="Try an example"><span>Try an example</span>' + EXAMPLES.map(function (e, i) { return '<button data-eg="' + i + '" title="' + esc(e) + '">' + esc(EXAMPLE_NAMES[i]) + '</button>'; }).join('') + '</div></div>' +
+      (files.length ? '<div class="ifiles"><div class="plabel"><span>Attached files on the desk</span></div><div class="chips">' + files.map(function (f) { return '<span class="chip">' + esc(f.name) + '</span>'; }).join('') + '</div></div>' : '') +
+      '<div class="cfoot"><label class="attach" for="attach" title="Got a brief, an email or a deck? Attach it" aria-label="Attach files"><span aria-hidden="true">+</span></label><input type="file" id="attach" multiple hidden>' +
+      '<button class="go ld-go" id="land-build">Build deck</button></div></div></main>';
   }
   /** One chip of the read line: what was read, with a pencil to change it. A placeholder is dashed. */
   function rchip(k, label, text, ph, open) {
@@ -2284,30 +2416,79 @@ var DeckLogic = (function () {
       (gv.body === 'beats' ? '' : '<p class="note" style="margin-top:12px;font-size:13px">' + (none ? 'Pick a territory first. ' : '') + 'Every approve, edit or retry is recorded with who did it.</p>') + asked;
   }
 
+  // The Build screen is the mock's live agent stage (napkin-app-v1 #brief-screen-loading, as the brief's working step): the deck's
+  // stages as pills on a strip; the desk with what went in on the left, the agent's circle and its words in the middle (the gate
+  // card instead while a gate waits for you) and what it has worked out on the right; then Back, Stop and Skip under it.
+  var STAGE_SIZE = 220;
+  function stageSize() { return Math.min(STAGE_SIZE, L.circleCentreSize(window.innerWidth, window.innerHeight)); }
+  /** One slip on a rail: a mono label, a line of serif text, a mark (done, at work, to look at). */
+  function slip(lab, text, mark, wait) {
+    return '<div class="wcard"><div class="wlab"><span>' + esc(lab) + '</span></div><div class="wsnip' + (wait ? ' wait' : '') + '">' + esc(text) + '</div>' +
+      (mark ? '<span class="wchk' + (mark === 'now' ? ' now' : mark === 'bad' ? ' bad' : '') + '" aria-hidden="true">' + (mark === 'now' ? '…' : mark === 'bad' ? '!' : '✓') + '</span>' : '') + '</div>';
+  }
+  function wsec(h, cards, empty) {
+    return '<div class="wsec"><div class="wsec-h">' + esc(h) + '</div>' + (cards.length ? cards.join('') : slip('Nothing yet', empty || 'It fills as the agents work.', '', true)) + '</div>';
+  }
+  /** INPUTS ON THE DESK: what the deck is built from (the prompt, the files, the brief and research it was made from). */
+  function inputsRail(s) {
+    var p = s.inputs.prompt || {}, up = L.upstreamSummary(s.raw), out = [];
+    if (String(p.text || '').trim()) out.push(slip('Your words', short(String(p.text).trim(), 110), 'ok'));
+    L.documentsOf(s.raw).forEach(function (f) {
+      var ext = (/\.([a-z0-9]+)$/i.exec(f.name || '') || [])[1] || 'file';
+      out.push(slip('File · ' + String(ext).toUpperCase(), f.name, 'ok'));
+    });
+    if (up.brief) out.push(slip('Brief · .clan', up.brief.name + (up.brief.fields_total ? ' — ' + up.brief.fields_filled + ' of ' + up.brief.fields_total + ' fields' : ''), 'ok'));
+    if (up.research) out.push(slip('Research · .clan', up.research.name + (up.research.findings != null ? ' — ' + up.research.findings + ' findings' : ''), 'ok'));
+    if (p.client || p.project) out.push(slip('Client · project', [p.client || '[Client]', p.project || '[Project]'].join(' · '), 'ok'));
+    return wsec('Inputs on the desk', out, 'Nothing given yet.');
+  }
+  function short(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : t; }
+
   function build(s) {
     var run = s.run, gate = run.gate, who = L.agentState(run); // the circle: who is working and what they are doing
-    var stages = (run.stages || []).map(function (st) {
+    var all = run.stages || [], at = -1;
+    all.forEach(function (st, i) { if (at < 0 && (st.status === 'now' || st.status === 'failed')) at = i; });
+    var stages = all.map(function (st, i) {
       var glyph = st.status === 'done' ? '✓' : st.status === 'now' ? '•' : st.status === 'failed' ? '!' : '';
-      return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
+      return '<div class="stage ' + st.status + '" role="listitem" title="' + esc(st.sub) + '"' + (i === at ? ' aria-current="step"' : '') + '><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
     }).join('');
     var main, gv = gate ? L.gateView(run, view.pick) : null; // the gate registry: words and body for the open gate
     if (gate) main = gateHead(gv) + '<div class="card" style="overflow:hidden">' + dexRow(gv, who) + gateBody(gv, gate) + '</div>' + gateActions(gv);
     // With no gate open: running (a live feed), failed, done, or waiting for an engine that is not connected.
     var rv = gate ? null : L.runView(run, s.deck), live = rv && rv.kind !== 'waiting';
+    var step = at >= 0 ? 'Step ' + (at + 1) + ' of ' + all.length : '';
     if (rv && !live) {
-      main = '<h1 class="sm" style="margin-bottom:6px">' + (rv.title ? esc(rv.title) : 'Waiting') + '</h1>' +
-        '<p class="note" style="font-size:15px;max-width:600px">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>' +
-        waitingCard(who, true);
-    } else if (live) main = runBody(rv);
+      main = waitingCard(who, true) + '<div class="scap"><span class="l1">' + (rv.title ? esc(rv.title) : 'Waiting') + '</span>' +
+        '<span class="l2">' + (rv.title ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</span></div>';
+    } else if (live) {
+      main = statusCard(who, stageSize()) + '<div class="scap"><span class="l1">' + esc(rv.title) + '</span><span class="l2' + (rv.kind === 'failed' ? ' err' : '') + '">' +
+        esc((step && rv.kind === 'running' ? step + ' · ' : '') + rv.lede) + '</span></div>';
+    }
     // A gate's own checks when it wrote them (even none), else what the run has checked.
     var gateChecks = !!gate && Array.isArray(gate.checks), list = gateChecks ? gate.checks : run.checks;
     var checks = Array.isArray(list) && (gateChecks || list.length) ? checkedCard(list) : '';
-    return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
-      '<section>' + main + '</section><aside class="stack">' + (live ? statusCard(who) :
-      (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
+    var right = live ? runBox(rv) + checks + builtLine(builtOf(s))
+      : (gate ? '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + L.circleSvg({ agent: who.agent, activity: who.activity, size: 60 }) +
         '<div><div style="font-size:14px;font-weight:600">Waiting for you</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(gv.hold) + '</div></div></div><div class="rule"></div>' +
-        '<p class="note">' + esc(gv.next) + '</p></div>' : '')) +
-      (live ? checks + builtLine(builtOf(s)) : builtLine(builtOf(s)) + checks) + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+        '<p class="note">' + esc(gv.next) + '</p></div>' : '') + builtLine(builtOf(s)) + checks;
+    return '<div class="pwrap"><div class="ptop"><aside class="apills" role="list" aria-label="How the deck gets built">' + stages + '</aside></div>' +
+      '<main class="build sstage' + (gate ? ' at-gate' : '') + '"><div class="rail rl">' + inputsRail(s) + '</div>' +
+      '<section class="score">' + main + '</section><aside class="stack rail">' + right +
+      '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main></div>' +
+      runbar(s, rv, live);
+  }
+
+  /** Back to the prompt, Stop (while a build job runs), and Skip to the deck; Open the deck and Try again where the run is done or failed. */
+  function runbar(s, rv, live) {
+    var deckIn = L.presented(s.deck).length > 0, busy = !!(JOB && BUSY_JOB[JOB.state] && JOB.id);
+    var stop = busy ? (view.stopAsk ? '<span class="stopq">Stop the build? What is written so far stays.</span><button class="sp-btn" data-stop="yes">Yes, stop it</button><button class="sp-btn" data-stop="no">Keep going</button>'
+      : '<button class="sp-btn" data-stop="ask">Stop</button>') : '';
+    var act = rv && rv.kind === 'done' ? '<button class="btn go big" data-go="review">Open the deck</button>'
+      : rv && rv.kind === 'failed' ? '<button class="btn big' + (rv.retryable ? '' : ' go') + '" style="padding:0 20px;font-size:14px" data-retry="' + esc(rv.stage) + '">' + (rv.retryable ? 'Try again now' : 'Try again') + '</button>' +
+        '<span class="note">Nothing you approved is lost. The run starts again from this step.</span>'
+      : '<button class="btn go big" data-go="review"' + (deckIn ? '' : ' disabled title="There is no deck yet"') + '>Skip to the deck →</button>';
+    var cost = s.run.cost_usd != null ? '<span class="sb-facts">$' + Number(s.run.cost_usd).toFixed(2) + ' so far</span>' : '';
+    return '<div class="runbar"><button class="side-link" data-go="start">← Back to the prompt</button>' + cost + '<span class="sp"></span><span class="procActs">' + stop + '</span>' + act + '</div>';
   }
 
   /** Checked so far: what the run has checked (a gate's checks, or run.checks), each passed or to look at. */
@@ -2335,10 +2516,10 @@ var DeckLogic = (function () {
   function sayHtml(who) { return L.circleSizeFor(who) === 60 ? '' : '<p class="say" data-say aria-live="polite">' + HINT + '</p>'; }
 
   /** The status card while an agent works: the circle (60px, or enlarged in place while it works), who (a hand-off names both), their role, the state word, the step. */
-  function statusCard(who) {
-    var n = nameOf(who), name = n.name, role = n.role, big = L.circleSizeFor(who) !== 60;
+  function statusCard(who, size) {
+    var n = nameOf(who), name = n.name, role = n.role, big = !!size || L.circleSizeFor(who) !== 60;
     var tone = who.activity === 'complete' ? ' ok' : who.activity === 'error' ? ' err' : '';
-    return '<div class="card status' + (big ? ' hero' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, name) +
+    return '<div class="card status' + (big ? ' hero' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, name, size) +
       '<div class="stext"><div style="font-size:14px;font-weight:600">' + esc(name) + '</div>' + (role ? '<div class="note">' + esc(role) + '</div>' : '') +
       '<div class="sword' + tone + '">' + esc(who.word) + '</div>' +
       (who.step_index ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Step ' + who.step_index + ' of ' + who.step_total + '</div>' : '') +
@@ -2348,7 +2529,7 @@ var DeckLogic = (function () {
   /** The card while the engine is not connected: the same enlarged circle in its place, a short honest prompt, no time and no progress. */
   function waitingCard(who, centre) {
     var n = nameOf(who);
-    return '<div class="card status hero' + (centre ? ' centre' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name, centre ? L.circleCentreSize(window.innerWidth, window.innerHeight) : 0) +
+    return '<div class="card status hero' + (centre ? ' centre' : '') + '" style="padding:20px" data-status="' + esc(who.activity) + '"><div class="srow">' + orbHtml(who, n.name, centre ? stageSize() : 0) +
       '<div class="stext"><div style="font-size:16px;font-weight:700">Waiting for the engine</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">Not connected to this document yet</div></div></div>' +
       sayHtml(who) + '<div class="rule"></div><p class="note">Once the engine is connected it runs to the next gate and stops there.</p></div>';
   }
@@ -2360,8 +2541,8 @@ var DeckLogic = (function () {
   }
   var PILL_TONE = { done: 'ok', now: 'warn', pending: 'wait', failed: 'fail', supply: 'warn' };
 
-  /** The running, failed and done views: title, the line under it, the content box of what is being done, then the action. */
-  function runBody(v) {
+  /** What the run has worked out, for the right rail: the content box of what is being done (each row done, at work, to come, failed or to supply). */
+  function runBox(v) {
     var rows = v.grid
       ? '<div class="cgrid">' + v.items.map(function (x) {
           return '<div class="cslide ' + x.status + '"><div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + esc(x.n) + '</span><div class="spacer"></div>' +
@@ -2372,12 +2553,7 @@ var DeckLogic = (function () {
             (x.sub ? '<div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(x.sub) + '</div>' : '') + '</div><span class="pill ' + PILL_TONE[x.status] + '">' + esc(x.pill) + '</span></div>';
         }).join('');
     var tail = v.tail.map(function (t) { return '<div class="ctail">' + esc(t) + '</div>'; }).join('');
-    var act = v.kind === 'done' ? '<div style="margin-top:18px"><button class="btn go big" data-go="review">Open the deck</button></div>'
-      : v.kind === 'failed' ? '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn big' + (v.retryable ? '' : ' go') + '" style="padding:0 20px;font-size:14px" data-retry="' + esc(v.stage) + '">' + (v.retryable ? 'Try again now' : 'Try again') + '</button>' +
-        '<span class="note">Nothing you approved is lost. The run starts again from this step.</span></div>' : '';
-    return '<h1 class="sm" style="margin-bottom:6px">' + esc(v.title) + '</h1>' +
-      '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">' + esc(v.lede) + '</p>' +
-      '<div class="card cbox' + (v.kind === 'failed' ? ' failed' : '') + '" data-run="' + esc(v.kind) + '"><div class="cbox-h eyebrow">' + esc(v.head) + '</div>' + (rows || '<div class="crow pending"><span class="note">Nothing to show yet.</span></div>') + tail + '</div>' + act;
+    return '<div class="card cbox' + (v.kind === 'failed' ? ' failed' : '') + '" data-run="' + esc(v.kind) + '"><div class="cbox-h eyebrow">' + esc(v.head) + '</div>' + (rows || '<div class="crow pending"><span class="note">Nothing to show yet.</span></div>') + tail + '</div>';
   }
 
   // ── the deck's own status, on Review and Present (phase 4): the Approval agent asks for sign-off ──
@@ -2525,8 +2701,9 @@ var DeckLogic = (function () {
       (up.brief ? ' linked to ' + (up.brief.name && up.brief.name !== 'Brief' ? (/\bbrief\b/i.test(up.brief.name) ? up.brief.name : 'brief ' + up.brief.name) : 'the brief') : up.research ? ' linked to the research' : '');
     var back = upBack ? '<button type="button" class="btn-rect primary" data-up-open>← Back to the ' + upBack.noun + '</button>' : '';
     var appr = ds && ds.state === 'open' ? '<button type="button" class="btn-rect" data-approve="deck">Approve the deck</button>' : '';
+    var facts = factsLine(s, 'review'), fl = facts ? '<span class="sb-facts" data-facts>' + esc(facts) + '</span>' : '';
     return '<section class="section-block sb" aria-label="Storyboard"><div class="action-strip"><div class="action-left"><span class="sec-num">' + esc(label) + '</span></div>' +
-      '<div class="action-right"><button type="button" class="btn-rect" data-decisions>Decisions</button>' + appr + back + '</div></div>' +
+      '<div class="action-right">' + fl + '<button type="button" class="btn-rect" data-decisions>Decisions</button>' + appr + back + '</div></div>' +
       '<div class="deck-grid">' + ids.map(function (id, i) { return slideCard(s, id, i, i === 0); }).join('') + '</div></section>';
   }
 
@@ -3179,6 +3356,7 @@ return {
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
     document.getElementById('app').innerHTML = bar(s, scr) + '<div class="nd" data-screen="' + scr + '">' + appHead(s, scr) + readStrip(scr) + body + '</div>';
     sendBar(s, scr);
+    syncTitle(s);
     grow(document.getElementById('ptext'));
     Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
     growCard(before); // the status card's circle grows or shrinks in place when the state changes its size
@@ -3266,6 +3444,15 @@ return {
     if (a.why) { view.slide = a.why; view.picked = true; view.tab = 'evidence'; render(); toSlideView(); return; }
     if (a.decisions !== undefined) { if (inShell) window.parent.postMessage({ type: 'clan:decisions', v: 1 }, '*'); else toast('Decisions open in the OS, from its bar.'); return; }
     if (a.upOpen !== undefined) { if (upBack && typeof fetch === 'function') fetch(clanScheme + '/open', { method: 'POST', body: JSON.stringify({ path: upBack.path }) }).catch(function () {}); return; }
+    if (a.stop) {
+      // Stop: the build job is cancelled (cancel_job, as the brief's Stop); what the engine already wrote stays.
+      if (a.stop === 'ask') { view.stopAsk = true; return render(); }
+      view.stopAsk = false;
+      if (a.stop === 'yes' && JOB && JOB.id && window.clan && window.clan.apiProxy) {
+        window.clan.apiProxy('middleware', { task: 'cancel_job', input: { job_id: JOB.id } }).then(function () { toast('Stopped. What the engine wrote so far stays.'); }, function () { toast('Could not stop the build.'); });
+      }
+      return render();
+    }
     if (a.goBoard !== undefined) { var sb = document.querySelector && document.querySelector('.sb'); if (sb && sb.scrollIntoView) sb.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }); return; }
     if (a.orb !== undefined) return pressOrb(t, e.detail === 0);
     if (a.go) { view.screen = a.go; return render(); }
@@ -3431,7 +3618,8 @@ return {
 
   /** The landing page's prompt box grows with what is typed, to a limit. */
   function grow(el) {
-    if (el && el.hasAttribute && el.hasAttribute('data-land') && el.style) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight || 0, 220) + 'px'; }
+    if (el && el.hasAttribute && el.hasAttribute('data-land') && el.style) { el.style.height = 'auto'; el.style.height = Math.max(190, Math.min(el.scrollHeight || 0, 360)) + 'px'; }
+    var wc = document.getElementById('wc'); if (wc && el && el.id === 'ptext') wc.textContent = words(el.value);
   }
   document.addEventListener('input', function (e) { stashDraft(); grow(e.target); });
   // Enter sends on the landing page and in the read's answers; Shift+Enter is a new line in the prompt.

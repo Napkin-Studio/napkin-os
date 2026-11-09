@@ -858,8 +858,9 @@ const gateRun = () => ({
 })
 const buildData = (r: unknown) => ({ inputs: { prompt: { client: 'Lumen', project: 'P', text: 'x' } }, run: r })
 // The card while nothing runs and no gate holds: in the middle column, the circle at 184, not in the right one.
-const centreCard = (h: string) => /<section>[\s\S]*?<div class="card status hero centre" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
-const statusCard = (h: string) => /<aside class="stack"><div class="card(?: status hero)?" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
+const centreCard = (h: string) => /<section class="score">[\s\S]*?<div class="card status hero centre" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
+// the agent stage (deck-studio-new-ui): the working card is the stage's centre, the gate's waiting card heads the right rail
+const statusCard = (h: string) => /<(?:aside class="stack rail"|section class="score")><div class="card(?: status hero)?" style="padding:20px"[^>]*>([\s\S]*?)<div class="rule"><\/div>/.exec(h)?.[1] ?? ''
 
 test('gate 1: the status card shows the 60px circle with the same words, and Dex is a 32px circle', () => {
   const h = mount(buildData(gateRun())).app.innerHTML
@@ -921,8 +922,10 @@ test('the ring colours are tokens in light, dark and OS-dark', () => {
 type Fx = Record<string, any>
 const fixture = (name: string) => parseYaml(readFileSync(new URL(`templates/deck-maker/example/states/${name}.yaml`, root), 'utf8')) as Fx
 const RUNNING = ['reading', 'handoff', 'storyline', 'territories', 'slow', 'idea', 'copy', 'deck', 'check']
-const rightAside = (h: string) => /<\/section><aside class="stack">([\s\S]*)<\/aside><\/main>/.exec(h)?.[1] ?? ''
-const box = (h: string) => /<div class="card cbox[^"]*" data-run="(\w+)">([\s\S]*?)<\/section>/.exec(h)
+const rightAside = (h: string) => /<\/section><aside class="stack rail">([\s\S]*)<\/aside><\/main>/.exec(h)?.[1] ?? ''
+// the agent stage's centre (deck-studio-new-ui): the working card, its circle at the stage's size (184 with no window), and the caption
+const centre = (h: string) => /<section class="score">([\s\S]*?)<\/section>/.exec(h)?.[1] ?? ''
+const box = (h: string) => /<div class="card cbox[^"]*" data-run="(\w+)">([\s\S]*?)<\/aside>/.exec(h)
 
 test('runView: each fixture is the view its name says, and junk never throws', () => {
   for (const n of RUNNING) assert.equal(L.runView(fixture(n).run, fixture(n).deck).kind, 'running', n)
@@ -1019,17 +1022,18 @@ test('the hand-off circle is a flat blend: both agents, unique clip ids, no grad
 })
 
 for (const n of RUNNING) {
-  test(`Build, ${n}: the status card comes first, then the content box shows what is being done`, () => {
+  test(`Build, ${n}: the working card is the stage's centre, then the content box shows what is being done`, () => {
     const f = fixture(n), h = mount(f).app.innerHTML, who = L.agentState(f.run)
-    const aside = rightAside(h)
-    const px = L.circleSizeFor(who), cls = px === 60 ? 'cir s60' : 'cir'
-    assert.ok(aside.startsWith('<div class="card status'), 'the status card is first')
+    const aside = rightAside(h), mid = centre(h)
+    const px = 184, cls = 'cir'
+    assert.ok(mid.startsWith('<div class="card status'), 'the working card is the centre')
     // the card says the name and the word, so its circle is hidden from screen readers (said once, not twice)
-    assert.match(aside, new RegExp(`^<div class="card status${px === 60 ? '' : ' hero'}" style="padding:20px" data-status="${who.activity}"><div class="srow"><span class="slot[^"]*">(<button[^>]*>)?<svg class="${cls}" width="${px}" height="${px}"[^>]*aria-hidden="true"`))
-    assert.equal(new RegExp(`<svg class="${cls}"[^>]*(role="img"|aria-label=)`).test(aside), false)
-    assert.equal(aside.includes('data-orb'), px !== 60, 'only the enlarged circle is a button')
-    assert.ok(aside.includes(`<div class="sword">${who.word}</div>`), 'the state word is text, not colour alone')
-    assert.ok(aside.includes(`Step ${f.run.agent.step_index} of 7`))
+    assert.match(mid, new RegExp(`^<div class="card status hero" style="padding:20px" data-status="${who.activity}"><div class="srow"><span class="slot[^"]*"[^>]*>(<button[^>]*>)?<svg class="${cls}" width="${px}" height="${px}"[^>]*aria-hidden="true"`))
+    assert.equal(new RegExp(`<svg class="${cls}"[^>]*(role="img"|aria-label=)`).test(mid), false)
+    assert.ok(mid.includes('data-orb'), 'the enlarged circle is a button')
+    assert.ok(mid.includes(`<div class="sword">${who.word}</div>`), 'the state word is text, not colour alone')
+    assert.ok(mid.includes(`Step ${f.run.agent.step_index} of 7`))
+    assert.ok(mid.includes('<div class="scap"><span class="l1">'), 'the caption under the circle')
     assert.ok(aside.includes('Checked so far'))
     const b = box(h)!
     assert.equal(b[1], 'running')
@@ -1059,12 +1063,20 @@ test('circleSizeFor: 130 while it works or waits, 60 when a person is needed, on
 })
 
 test('the status card: 130px and a button while running or waiting; 60px and no button at a gate, on failure and when done', () => {
+  // on the agent stage the working circle is the centre's, at the stage's size (184 with no window), and a button
   for (const n of RUNNING) {
-    const aside = rightAside(mount(fixture(n)).app.innerHTML)
-    assert.match(aside, /<span class="slot big"><button type="button" class="orbb" data-orb aria-label="[^"]+\. Press to ask what is happening\."><svg class="cir" width="130" height="130"/, n)
-    assert.ok(aside.includes('data-say'), n)
+    const mid = centre(mount(fixture(n)).app.innerHTML)
+    assert.match(mid, /<span class="slot big" style="width:184px;height:184px"><button type="button" class="orbb" data-orb aria-label="[^"]+\. Press to ask what is happening\."><svg class="cir" width="184" height="184"/, n)
+    assert.ok(mid.includes('data-say'), n)
   }
-  for (const n of ['failed', 'done', 'gate1', 'gate2', 'gate3']) {
+  for (const n of ['failed', 'done']) {
+    const m = mount(fixture(n))
+    if (n === 'done') m.click({ go: 'build' })
+    const h = m.app.innerHTML
+    assert.equal(/data-orb|class="card status hero"/.test(rightAside(h)), false, n)
+    assert.match(centre(h), /<div class="card status hero"[^>]*><div class="srow"><span class="slot big"/, n)
+  }
+  for (const n of ['gate1', 'gate2', 'gate3']) {
     const m = mount(fixture(n))
     if (n === 'done') m.click({ go: 'build' }) // a finished run opens on Review
     const h = m.app.innerHTML
@@ -1074,7 +1086,7 @@ test('the status card: 130px and a button while running or waiting; 60px and no 
 })
 
 test('circle: the aria-label says the agent and the state once, and the svg inside the button says nothing', () => {
-  const aside = rightAside(mount(fixture('copy')).app.innerHTML)
+  const aside = centre(mount(fixture('copy')).app.innerHTML)
   assert.equal((aside.match(/aria-label=/g) ?? []).length, 1)
   assert.match(aside, /aria-label="Copy, Writing\. Press to ask what is happening\."/)
   assert.match(aside, /<svg class="cir"[^>]*aria-hidden="true"/)
@@ -1140,15 +1152,15 @@ test('pressing the circle shows one honest line after another, and a flurry gets
 
 test('Build, hand-off: the card names both agents over one blended circle', () => {
   const h = mount(fixture('handoff')).app.innerHTML
-  const aside = rightAside(h)
+  const aside = centre(h)
   assert.ok(aside.includes('>Brief → Strategy<') && aside.includes('Shapes the ask → Builds territories'))
-  assert.match(aside, /<svg class="cir" width="130" height="130"[^>]*aria-hidden="true" data-agent="brief" data-to="strategy" data-activity="handoff"/)
-  assert.ok(h.includes('<h1 class="sm" style="margin-bottom:6px">Passing the work on</h1>'))
+  assert.match(aside, /<svg class="cir" width="184" height="184"[^>]*aria-hidden="true" data-agent="brief" data-to="strategy" data-activity="handoff"/)
+  assert.ok(h.includes('<div class="scap"><span class="l1">Passing the work on</span>'))
 })
 
 test('Build, slow: the state word says it takes longer, the line says nothing is wrong', () => {
   const h = mount(fixture('slow')).app.innerHTML
-  assert.ok(rightAside(h).includes('<div class="sword">Writing · taking longer than usual</div>'))
+  assert.ok(centre(h).includes('<div class="sword">Writing · taking longer than usual</div>'))
   assert.ok(h.includes('Nothing is wrong'))
 })
 
@@ -1162,9 +1174,9 @@ test('Build, deck: a grid of slides with the one being built marked, and the app
 test('Build, failed: a failed run opens on Build with the failure, the failed row and a retry that writes nothing', () => {
   const f = fixture('failed'), m = mount(f), h = m.app.innerHTML
   assert.ok(h.includes('aria-current="step"><i>2</i><span>Build<'), 'failed routes to Build, not Start')
-  assert.ok(h.includes('>Something failed</h1>') && h.includes(f.run.error.message))
-  assert.match(rightAside(h), /data-status="error"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
-  assert.ok(rightAside(h).includes('<div class="sword err">Failed, retrying</div>'))
+  assert.ok(h.includes('<span class="l1">Something failed</span>') && h.includes(f.run.error.message))
+  assert.match(centre(h), /data-status="error"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
+  assert.ok(centre(h).includes('<div class="sword err">Failed, retrying</div>'))
   const b = box(h)!
   assert.equal(b[1], 'failed')
   assert.ok(b[2].includes('class="crow failed"') && b[2].includes('<span class="pill fail">Failed, retrying</span>'))
@@ -1180,9 +1192,9 @@ test('Build, done: the deck is ready, what to supply is listed, and Open the dec
   assert.ok(m.app.innerHTML.includes('aria-current="step"><i>3</i><span>Review<'), 'done still opens on Review')
   m.click({ go: 'build' })
   const h = m.app.innerHTML
-  assert.ok(h.includes('>The deck is ready for you</h1>'))
-  assert.match(rightAside(h), /data-status="complete"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
-  assert.ok(rightAside(h).includes('<div class="sword ok">Done</div>'))
+  assert.ok(h.includes('<span class="l1">The deck is ready for you</span>'))
+  assert.match(centre(h), /data-status="complete"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
+  assert.ok(centre(h).includes('<div class="sword ok">Done</div>'))
   const b = box(h)!
   assert.equal(b[1], 'done')
   assert.equal((b[2].match(/class="crow supply"/g) || []).length, 2)
@@ -1916,7 +1928,7 @@ function pageIn(shell: boolean) {
   return { app, classes, posted, tell, parent }
 }
 
-test('in the OS, Deck Maker draws no second bar, keeps its steps in its page, and asks the OS bar for its chips only', () => {
+test('in the OS, Deck Maker draws no second bar, keeps its steps in its page, and asks the OS bar for the name alone at the prompt', () => {
   const p = pageIn(true)
   assert.ok(!p.app.innerHTML.includes('class="bar"'), 'no second bar')
   assert.deepEqual(p.classes, ['in-shell'])
@@ -1927,7 +1939,8 @@ test('in the OS, Deck Maker draws no second bar, keeps its steps in its page, an
   const m = p.posted[0]
   assert.equal(m.type, 'clan:bar')
   assert.equal(m.v, 1)
-  assert.deepEqual((m.items ?? []).filter(i => i.kind !== 'chip'), [], 'chips only: no tabs')
+  // the mock's bar per step (owner, 2026-11-09): the prompt sends mode ask, no chips and no tabs
+  assert.deepEqual(m.items, [{ kind: 'mode', mode: 'ask', label: '' }], 'the name alone at the prompt')
 })
 
 test('the OS asking again gets the same list again, and an unchanged screen does not repeat it by itself', () => {
@@ -2219,7 +2232,7 @@ test('with no middleware the landing page still reads and saves, and says the en
 test('every screen opens under the mock\'s header: eyebrow, Deck Studio. and its line, the four steps as flow circles', () => {
   for (const n of ['gate1', 'done', 'failed']) {
     const h = review(n).app.innerHTML
-    assert.match(h, /<header class="app-head"><div class="app-head-text"><div class="eyebrow hd-eye">Ballymaloe Relish · Better With Ballymaloe<\/div>/, n)
+    assert.match(h, /<header class="app-head(?: compact)?"><div class="app-head-text"><div class="eyebrow hd-eye">Ballymaloe Relish · Better With Ballymaloe<\/div>/, n)
     assert.ok(h.includes('<h1 class="hero-title">Deck Studio<span class="period-dot" aria-hidden="true"></span></h1>'), n)
     assert.ok(h.includes('<ol class="flow" aria-label="Deck steps">'), n)
     for (const id of ['start', 'build', 'review', 'present']) assert.ok(h.includes(`data-go="${id}"`), `${n}: step ${id}`)
