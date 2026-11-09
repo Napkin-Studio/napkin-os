@@ -31,6 +31,7 @@ from .. import runlog
 from ..doc import ISO_3166, LENSES, ctx_facts, lens_of_key
 from ..jev import JevError, noul
 from ..rules import merge as merge_rules
+from ..model import ModelError
 from ..util import iso
 from . import capture as cap_stage
 from . import provenance as prov
@@ -39,6 +40,10 @@ from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, p
 from .job import BriefJob, log
 from . import checks
 from .questions import dedupe
+
+# Jude's whole-brief review: a full brief's dimensions, claims and notes run past 8000 output
+# tokens (thinking counts against the cap), and a cut-off review writes only half the parts.
+REVIEW_MAX_TOKENS = 24000
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
@@ -571,6 +576,20 @@ class PlannedBriefJob(BriefJob):
     # =========================================================================================
     # judge: Jude reviews the whole brief, Dara revises once, Jude scores again
     # =========================================================================================
+    def _judge_call(self, purpose, payload):
+        """Jude's review of the whole brief, with room for every part of it (21 parts, a dimension
+        each, notes and claims: 8000 tokens cut a full brief off, and only half its parts were
+        written). A reply still cut off is asked for once more with twice the room."""
+        schema = review_schema(list(KEYS))
+        try:
+            return self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, schema, max_tokens=REVIEW_MAX_TOKENS)
+        except ModelError as e:
+            if getattr(e, "kind", None) != "truncated":
+                raise
+            self.caps.runlog.note("review_cut_off", purpose=purpose, max_tokens=REVIEW_MAX_TOKENS)
+            return self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, schema,
+                                              max_tokens=REVIEW_MAX_TOKENS * 2)
+
     def _review(self, ev, purpose):
         brief = {k: prov.brief_entry(v) for k, v in self.whole.items()}
         earlier = prov.prior_claims(self.chain, self.doc, [k for k in KEYS if k not in brief])
@@ -582,7 +601,7 @@ class PlannedBriefJob(BriefJob):
         payload = {"brief": brief, "strategy": (self.plan_out or {}).get("strategy"), "facts": ev["facts"],
                    "findings": ev["findings"], "client_said": self._said(),
                    "part_checks": checks.facts(self.whole), "tests": checks.tests(list(self.whole))}
-        rv = self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, review_schema(list(KEYS)), max_tokens=8000)
+        rv = self._judge_call(purpose, payload)
         if purpose == "review_brief":  # what code can measure goes back with Jude's own list, once
             named = {x["part"] for x in rv.get("revise") or []}
             extra = [x for x in checks.revisions(self.whole) if x["part"] not in named]

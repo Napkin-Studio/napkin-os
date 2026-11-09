@@ -354,3 +354,35 @@ def test_the_job_the_barrier_and_the_objection_are_drafted_with_the_other_parts(
         assert k in seen["draft"]["parts"], f"Dara is asked for {k}"
         assert str(host.data.get(k) or "").strip(), f"{k} is written, not left empty"
         assert k in drafted, f"{k} carries a draft decision with its reasons"
+
+
+def test_the_judge_has_room_for_a_full_brief_and_a_cut_off_review_is_asked_again(tmp_path):
+    """mw.log, 9 Nov: review_brief cut off at max_tokens, the judge stage failed and only 10 of
+    21 parts were written. Jude's whole-brief review asks for room for every part, and one still
+    cut off is asked once more with twice the room."""
+    from napkin.brief.planned import REVIEW_MAX_TOKENS
+    seen = {}
+    m = planned_model(seen)
+    orig, cut = m.create, {"n": 0}
+
+    def create(**kw):
+        r = orig(**kw)
+        if m.calls[-1][0] == "review_brief" and cut["n"] == 0:
+            cut["n"] += 1
+            r.stop_reason = "max_tokens"
+        return r
+
+    m.create = create
+    s = Server(tmp_path, model=m, retrieval=retrieval(),
+               settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    asks = [kw["max_tokens"] for p, _, kw in m.calls if p == "review_brief"]
+    assert REVIEW_MAX_TOKENS >= 16000, "a full brief's review runs past 8000 tokens"
+    assert asks == [REVIEW_MAX_TOKENS, REVIEW_MAX_TOKENS * 2]
+    assert replies[-1]["job"]["state"] == "done"
+    assert [e for e in replies[-1].get("result", {}).get("skipped", []) if "judge" in str(e)] == []
+    assert len(seen["reviews"]) >= 1, "the judge stage finished on the second ask"
