@@ -351,6 +351,10 @@
   .side-agent[hidden]{display:none}
   .side-agent .nk-ag{width:30px;height:30px}
   .side-agent b{font-weight:600}
+  /* Nowhere else on the open sheet or its side tab: no sphere beside a note, a check, a why or the review's crew.
+     (A placeholder carries display:inline-block inline, so only !important hides it; the scene skips hidden views.) */
+  #structured .nk-ag{display:none!important}
+  #structured .side-agent .nk-ag{display:inline-block!important}
   .side-agent span{min-width:0;overflow-wrap:anywhere}
 
   /* why: the decision behind the field, in the spec's reasoning shape */

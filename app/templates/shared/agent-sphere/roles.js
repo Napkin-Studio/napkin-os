@@ -223,6 +223,8 @@
     var els = (scope || document).querySelectorAll('.nk-ag[data-nk-agent]');
     for (var i = 0; i < els.length; i++) {
       var el = els[i], want = el.getAttribute('data-nk-agent') + '|' + el.getAttribute('data-nk-state') + '|' + (el.getAttribute('data-nk-progress') || '') + '|' + (el.getAttribute('data-nk-next') || '');
+      // the scene drops a view whose element left the page; an element put back gets a new one
+      if (el._nk && el._nk.view && el._nk.view.detached) { el._nk.destroy(); el._nk = null; }
       if (el._nk && el._nkWant === want) continue;
       var pr = el.getAttribute('data-nk-progress'), o = { agent: el.getAttribute('data-nk-agent'), state: el.getAttribute('data-nk-state'), progress: pr == null ? undefined : +pr, next: el.getAttribute('data-nk-next') || undefined, size: +el.getAttribute('data-nk-size') || Math.min(el.clientWidth, el.clientHeight) || 28 };
       el._nkWant = want;

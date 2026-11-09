@@ -981,6 +981,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 #napkin-gl{z-index:31!important}
 .side-agent .nk-ag{width:30px;height:30px}
 .side-agent b{font-weight:600}
+/* Nowhere else in the inspector or on the report: no sphere beside a check, a note or a finding (owner, 2026-11-09:
+   an agent shows in one place only). A placeholder carries display:inline-block inline, so only !important hides it. */
+.insp .nk-ag,#report .nk-ag{display:none!important}
+.insp .side-agent .nk-ag{display:inline-block!important}
 .side-agent span{min-width:0;overflow-wrap:anywhere}
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -5026,7 +5030,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var N=all.length, open=all.filter(function(c){ return c.open; }).length, jn=TheAgent('review');
     var L=window.ClanFields&&ClanFields.locked?ClanFields.locked():null;
     var lockBtn=window.ClanFields?'<button type="button" class="jb-btn go" data-clf-lock>Lock the report</button>':'<button type="button" class="jb-btn go" data-act="lock">Lock the report</button>';
-    var h='<div class="jb-in">'+sphereTag('review', 32, !L&&open?'needs':'idle');
+    var h='<div class="jb-in">';
     var used=usedIn(), usedP=used.length?' '+esc(usedText(used)):'';
     // A part reopened for the client's change: the report is locked again
     // once it is changed (the host's lock view says when it may be).
