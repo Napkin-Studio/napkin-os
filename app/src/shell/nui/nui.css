@@ -708,3 +708,5 @@ html[data-theme="dark"] .p33-stale:where(.nui, .nui *) { color: #F2B86A; }
 .tba-menu:where(.nui, .nui *) .p36-mi { display: grid !important; grid-template-columns: 1fr !important; min-width: 280px; }
 .tba-menu:where(.nui, .nui *) .pp-h { font: 700 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
 @keyframes p33pulse { 50% { opacity: .35; } }
+/* The tool page can open before the landing styles load: its screen-reader line stays visually hidden. */
+.lc-sr:where(.nui, .nui *) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
