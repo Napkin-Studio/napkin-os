@@ -128,14 +128,14 @@ test('a part’s own words are shown as typed, and start the reason for its chan
   assert.match(CLF, /\.clf-q\.said\{white-space:pre-wrap;overflow-wrap:anywhere\}/)
 })
 
-test('a suggestion by the host’s matcher is Ellis’s', () => {
+test('a suggestion by the host’s matcher is the Knowledge agent’s', () => {
   type F = { crewKey(d: unknown): string | null }
-  const crew = () => ({ forWork: (w: string) => (w === 'read' ? 'extract' : ''), ofDecision: () => 'judge' })
+  const crew = () => ({ forWork: (w: string) => (w === 'read' ? 'knowledge' : ''), ofDecision: () => 'review' })
   const f = lift<F>(CLF, ['ellisKey', 'crewKey'], { crew }) as F & { ellisKey(): string }
-  assert.equal(f.crewKey({ handler: 'client_parts_match@1', actor: 'process:host', action: 'suggest_part' }), 'extract')
-  assert.equal(f.crewKey({ handler: 'client_parts_match@1' }), 'extract')
-  assert.equal(f.crewKey({ handler: 'find_client_parts@1.0' }), 'extract') // an older chain
-  assert.equal(f.crewKey({ handler: 'judge_brief@1' }), 'judge')
+  assert.equal(f.crewKey({ handler: 'client_parts_match@1', actor: 'process:host', action: 'suggest_part' }), 'knowledge')
+  assert.equal(f.crewKey({ handler: 'client_parts_match@1' }), 'knowledge')
+  assert.equal(f.crewKey({ handler: 'find_client_parts@1.0' }), 'knowledge') // an older chain
+  assert.equal(f.crewKey({ handler: 'judge_brief@1' }), 'review')
 })
 
 test('a carried item nothing here can settle is set aside, with a reason', () => {
@@ -502,6 +502,14 @@ test('a review leaves the page where it is, and the Strategy agent works at the 
 test('the research names its agents by role, draws them as spheres, and asks on the desk', () => {
   assert.doesNotMatch(RT, /agentFigure|agent-figure|NapkinAgents|AGENT_FIGURES|@napkin:agent-figures|CREW_OK/)
   assert.doesNotMatch(RT, /\b(Ellis|Dara|Jude|Sam|Dex|Max|Bo|Cam|Cody|Remy|Mo|Lex|Eden)\b/)
+  // the brief and the shared fields, too: no crew name and no figure, only the one engine's spheres
+  for (const src of [BM, CLF]) {
+    assert.doesNotMatch(src, /\b(Ellis|Dara|Jude|Sam|Dex)\b|agentFigure|agent-figure|NapkinAgents/)
+  }
+  assert.match(BM, /<div class="sstage" id="meet" data-nk-stage>/, 'the brief stage is a thread and ask stage')
+  assert.match(fn(BM, 'askInStage'), /ROLES\.ask\(stage, true\)/)
+  assert.match(fn(BM, 'askInStage'), /ROLES\.ask\(stage, false\)/)
+  assert.match(BM, /\.sstage\.nk-asking \.aglbox\{height:/, 'asking lifts the sphere inside the stage')
   assert.match(RT, /if\(window\.NapkinRoles\)\{ NapkinRoles\.auto\(\); NapkinRoles\.thread\(\); \}/)
   // The run's stage follows PLAN, the engine's stages for research; the words about a stage's work name its role.
   const { runRole, TheAgent } = lift<{ runRole(s: string): string; TheAgent(r: string): string }>(RT, ['roles', 'agentName', 'theAgent', 'TheAgent', 'runRole'], { window: rolesWindow(), ROLE_NM: {}, PLAN: [] })
@@ -602,7 +610,7 @@ test('the brief’s parts declare the words a client calls them by', () => {
   assert.match(fn(BM, 'fieldRow'), /row\.setAttribute\('data-clan-part-aliases', PART_ALIASES\[f\.key\]\)/)
 })
 
-test('Jude says nothing needs you only when the review agrees', () => {
+test('the Review agent says nothing needs you only when the review agrees', () => {
   type F = { scoreGaps(): { dimension: string }[]; holdsLine(passed: number, others: boolean, gaps: number): string }
   const W = ['none', 'one', 'two', 'three', 'four', 'five']
   const num = (n: number) => W[n] ?? String(n)
@@ -685,7 +693,7 @@ test('a check across parts shows its card on a part it still waits on', () => {
   }
   const f = lift<F>(BM, ['pathOf', 'names', 'about', 'isVerdict', 'isHuman', 'isWrite', 'newer', 'reasonedGood', 'verdictState', 'topsOf', 'isCross',
     'crossVerdictsOf', 'partsOf', 'openPartsOf', 'homeOf', 'acrossOf', 'listWords', 'crossNoteHtml'], {
-    CHAIN, FIELDS, TOP_LABEL: {}, JUDE: 'Jude', arr, esc, docId: () => D, hasReasoning: () => false,
+    CHAIN, FIELDS, TOP_LABEL: {}, REV_: 'The Review agent', arr, esc, docId: () => D, hasReasoning: () => false,
     fig: (k: string) => `<fig ${k}>`, fixBtn: (d: { id: string }) => `<fix ${d.id}>`, docLocked: () => false, OSF: () => ({}),
     reasonFix: (d: { rationale: string }) => ({ reason: d.rationale, fix: '', rule: '' }),
   })
@@ -693,7 +701,7 @@ test('a check across parts shows its card on a part it still waits on', () => {
   assert.equal(f.homeOf(cross)?.key, 'mandatories')
   assert.equal(f.crossVerdictsOf('budget_and_scope')[0].open, false, 'answered on budget by the pass')
   const home = f.crossNoteHtml(f.crossVerdictsOf('mandatories')[0], FIELDS[1])
-  assert.match(home, /Jude found a problem across budget &#38; scope, mandatories and open questions/)
+  assert.match(home, /The Review agent found a problem across budget &#38; scope, mandatories and open questions/)
   assert.match(home, /<fix d_x>/)
   assert.match(home, /data-keys="mandatories open_questions">Keep them as they are, and say why/)
   const other = f.crossNoteHtml(f.crossVerdictsOf('open_questions')[0], FIELDS[2])
@@ -708,22 +716,23 @@ test("a person's verdict on a part is theirs, not the Judge's", () => {
   const person = { id: 'd_p', kind: 'verdict', polarity: 'bad', agent: 'human:aoife', rationale: 'It needs mandatories.' }
   const judge = { id: 'd_j', kind: 'verdict', polarity: 'bad', agent: 'judge_brief', rationale: 'Too thin.' }
   const make = (v: Record<string, unknown>) => lift<F>(BM, ['provHtml', 'notesHtml'], {
-    CHAIN: { state: 'ok' }, OPEN_WHY: {}, JUDE: 'Jude', DARA: 'Dara', YOU: '<you>',
+    CHAIN: { state: 'ok' }, OPEN_WHY: {}, AGENT_NAME: { judge: 'Review agent', drafter: 'Brief agent' }, WRITER: 'the Brief agent', YOU: '<you>',
     get: () => '', hasVal: () => false, decisionsFor: () => [], esc: (s: string) => s, arr: (a: unknown) => (Array.isArray(a) ? a : []),
     verdictOf: () => ({ d: v, bad: true, open: true }), ownVerdictOf: () => ({ d: v, bad: true, open: true }),
     crossVerdictsOf: () => [], proposalOf: () => null, docLocked: () => false, OSF: () => ({}),
     hasReasoning: () => false, plainJudge: (s: string) => s, fig: (k: string) => `<fig ${k}>`,
     isHuman: (d: { agent?: string }) => /^human:/.test(String(d && d.agent)),
-    whoName: (d: { agent?: string }) => (/^human:/.test(String(d.agent)) ? 'You' : 'Jude'),
+    whoName: (d: { agent?: string }) => (/^human:/.test(String(d.agent)) ? 'You' : 'Review agent'),
     whoMark: (d: { agent?: string }) => (/^human:/.test(String(d.agent)) ? '<you>' : '<fig judge>'),
     fixBtn: (d: { id: string }) => `<fix ${d.id}>`,
   })
   const p = make(person), j = make(judge)
   assert.match(p.provHtml({ key: 'mandatories' }), /<you>You/)
   assert.match(p.notesHtml({ key: 'mandatories' }), /You said this part needs another look/)
-  assert.doesNotMatch(p.notesHtml({ key: 'mandatories' }), /Jude: this part/)
-  assert.match(j.provHtml({ key: 'mandatories' }), /<fig judge>Jude/)
-  assert.match(j.notesHtml({ key: 'mandatories' }), /Jude: this part needs another look/)
+  assert.doesNotMatch(p.notesHtml({ key: 'mandatories' }), /Review agent: this part/)
+  assert.match(j.provHtml({ key: 'mandatories' }), /<fig judge>Review agent/)
+  assert.match(j.notesHtml({ key: 'mandatories' }), /Review agent: this part needs another look/)
+  assert.match(j.notesHtml({ key: 'mandatories' }), /ask the Brief agent to write it again/)
   // either way, the crew can be asked to fix it
   assert.match(p.notesHtml({ key: 'mandatories' }), /<fix d_p>/)
   assert.match(j.notesHtml({ key: 'mandatories' }), /<fix d_j>/)
@@ -737,7 +746,7 @@ test('a part judged after the page drew it gets its mark when the chain comes', 
 // A note on a brief, fixed by the crew: one fix_parts job, the page left where
 // it is, and whoever is working walks the bottom edge meanwhile.
 test('a note on a brief can be fixed by the crew, and the worker walks the bottom edge', () => {
-  const FIX_SAY = new Function('SAM', 'DARA', 'JUDE', `${obj(BM, 'FIX_SAY')} return FIX_SAY;`)('Sam', 'Dara', 'Jude')
+  const FIX_SAY = new Function('STRAT_', 'WRITER_', 'REV_', `${obj(BM, 'FIX_SAY')} return FIX_SAY;`)('The Strategy agent', 'The Brief agent', 'The Review agent')
   const classes = new Set<string>()
   const attrs: Record<string, string> = {}
   const walker = {
@@ -750,7 +759,7 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   const said: string[] = []
   let locked = false
   const env = {
-    FIX: null, DRAFT: null, FIX_SAY, walker, SAM: 'Sam', DARA: 'Dara', JUDE: 'Jude', NO_MW: 'no middleware', phase: 'doc', reduce: false,
+    FIX: null, DRAFT: null, FIX_SAY, walker, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : null),
     esc: (s: string) => String(s), docLocked: () => locked, noMiddleware: () => false,
     window: { clan: { apiProxy: () => Promise.resolve() } },
@@ -761,7 +770,7 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   }
   type F = { fixBtn(d: { id: string } | null): string; fixParts(vid: string, resumeId?: string): void; walk(): void }
   const f = lift<F>(BM, ['fixBtn', 'fixParts', 'walk'], env)
-  assert.match(f.fixBtn({ id: 'd_note' }), /<button type="button" class="save act-fix" data-v="d_note" title="Sam looks up what it needs, Dara rewrites the parts, Jude checks them">Fix this with the crew<\/button>/)
+  assert.match(f.fixBtn({ id: 'd_note' }), /<button type="button" class="save act-fix" data-v="d_note" title="The Strategy agent looks up what it needs, the Brief agent rewrites the parts, the Review agent checks them">Fix this with the agents<\/button>/)
   locked = true
   assert.equal(f.fixBtn({ id: 'd_note' }), '', 'a locked brief has nothing to fix')
   locked = false
@@ -770,15 +779,15 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   assert.deepEqual(runs[0].input, { verdict: 'd_note' })
   assert.equal(runs[0].j.task, 'fix_parts')
   assert.ok(classes.has('on'))
-  assert.match(walker.innerHTML, /data-agent="synthesis" data-walking="true"/)
-  assert.match(walker.innerHTML, /Sam is looking up what the fix needs/)
+  assert.match(walker.innerHTML, /data-agent="synthesis"><\/svg>/, 'the Strategy agent\'s sphere, working')
+  assert.match(walker.innerHTML, /The Strategy agent is looking up what the fix needs/)
   assert.match(f.fixBtn({ id: 'd_note' }), / disabled /, 'one fix at a time')
   f.fixParts('d_other')
   assert.equal(runs.length, 1, 'a second fix waits for the first')
   runs[0].j.stage = 'draft'; runs[0].j.onUpdate(runs[0].j)
-  assert.match(walker.innerHTML, /data-agent="drafter"[^>]*>.*Dara is rewriting the parts together/)
+  assert.match(walker.innerHTML, /data-agent="drafter"[^>]*>.*The Brief agent is rewriting the parts together/)
   runs[0].j.stage = 'judge'; runs[0].j.onUpdate(runs[0].j)
-  assert.match(walker.innerHTML, /Jude is checking the fix/)
+  assert.match(walker.innerHTML, /The Review agent is checking the fix/)
   runs[0].j.summary = 'Fixed 3 of 3 part(s), 0 proposed, 4 new fact(s) found.'
   runs[0].j.onEnd(runs[0].j)
   assert.ok(!classes.has('on'))
@@ -795,7 +804,7 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
 
 // ── Brief Maker: what a part rests on (brief-fact-provenance) ─────────────
 
-// The Lidl brief: Dara worked out that the offer was over in 10 days from two
+// The Lidl brief: the Brief agent worked out that the offer was over in 10 days from two
 // facts research found outside the measure list, kept in this brief only.
 function provData(extra: Record<string, unknown> = {}) {
   return {
@@ -886,7 +895,7 @@ test('a claim resting on a fact marked wrong is flagged', () => {
 
 test('an accepted proposal keeps the claims it was proposed with', () => {
   const prop = { id: 'd_prop1', kind: 'edit', action: 'propose', cites: ['f_A', 'f_B'], claims: [derived] }
-  const acc = { id: 'd_acc', kind: 'edit', actor: 'human', rationale: 'Accepted d_prop1: Dara’s proposal for background.' }
+  const acc = { id: 'd_acc', kind: 'edit', actor: 'human', rationale: 'Accepted d_prop1: the Brief agent’s proposal for background.' }
   const f = provEnv(provData(), [prop, acc])
   assert.equal(f.claimDecision(acc)?.id, 'd_prop1')
   assert.equal(f.claimDecision(prop)?.id, 'd_prop1')
@@ -911,7 +920,7 @@ test('the drawer quotes the words the planner typed', () => {
     materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
     MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
     STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '', confidential: () => false, LOCK: '', fmt: () => '',
-    dayMonth: () => '', whoDid: () => '', blockOf: () => null, givenOf: () => 'Dara', proposerOf: () => 'Dara',
+    dayMonth: () => '', whoDid: () => '', blockOf: () => null, givenOf: () => 'Brief agent', proposerOf: () => 'Brief agent',
     VIEW: { decisions: [] }, declaredParts: () => [],
   })
   const h = w.writerBlock('background')
@@ -922,9 +931,9 @@ test('the drawer quotes the words the planner typed', () => {
 })
 
 // ── a redraft of a held part (redraft-provenance) ──────────────────────────
-// Dara's first draft, Jude's note that sent it back, Dara's second, and the
+// the Brief agent's first draft, the Review agent's note that sent it back, the Brief agent's second, and the
 // person's accept, as the chain holds them (newest first). Every reader
-// credits Dara, quotes the ask, and shows no decision's id.
+// credits the Brief agent, quotes the ask, and shows no decision's id.
 
 const SMP = 'single_minded_proposition'
 const SMP_ADDR = `brief#${SMP}`
@@ -937,13 +946,13 @@ const firstDraft = { decision: { id: 'd_P1', kind: 'edit', action: 'propose', ag
 const judeNo = { decision: { id: 'd_V', kind: 'verdict', polarity: 'bad', agent: 'napkin/brief/judge', cites: ['d_P1'], rationale: 'Say one thing, not two.',
   targets: [SMP_ADDR], timestamp: '2026-10-23T09:01:00+00:00' }, who: jude, targets: SMP_T, superseded: false }
 const secondDraft = { decision: { id: 'd_P2', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', cites: ['d_V', 'mat_p'], proposed_value: 'One thing, said once.',
-  targets: [SMP_ADDR], timestamp: '2026-10-23T09:02:00+00:00', rationale: 'Rewrote the single-minded proposition on Jude’s note and your ask.',
+  targets: [SMP_ADDR], timestamp: '2026-10-23T09:02:00+00:00', rationale: 'Rewrote the single-minded proposition on the Review agent’s note and your ask.',
   reasoning: { decided: 'One thing, said once.', because: [{ point: 'Your ask: “Make it one thing.”' }, { point: 'It says one thing.' }] } }, who: dara, targets: SMP_T, superseded: false }
 const youAccept = { decision: { id: 'd_A', kind: 'edit', agent: 'human', actor: 'human:me', action: `accept proposal ${SMP}`, fields_changed: [SMP],
-  timestamp: '2026-10-23T09:05:00+00:00', rationale: 'Accepted Dara’s new version of single-minded proposition.',
-  reasoning: { decided: 'Accepted it.', because: [{ point: 'Dara proposed it.', cites: ['d_P2'] }] } }, who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: SMP_T, superseded: false }
+  timestamp: '2026-10-23T09:05:00+00:00', rationale: 'Accepted the Brief agent’s new version of single-minded proposition.',
+  reasoning: { decided: 'Accepted it.', because: [{ point: 'The Brief agent proposed it.', cites: ['d_P2'] }] } }, who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: SMP_T, superseded: false }
 const oldAccept = { decision: { id: 'd_O', kind: 'edit', agent: 'human', actor: 'human:me', action: `edit ${SMP}`, fields_changed: [SMP],
-  timestamp: '2026-10-23T09:05:00+00:00', rationale: 'Accepted d_P2: Dara’s proposal for single-minded proposition.' },
+  timestamp: '2026-10-23T09:05:00+00:00', rationale: 'Accepted d_P2: the Brief agent’s proposal for single-minded proposition.' },
   who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: SMP_T, superseded: false }
 
 /** The drawer's readers over a chain, the crew named as the snippet names them, dates left as stamps. */
@@ -956,7 +965,7 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
     acceptOf(b: unknown): { decision: { id: string } } | null
   }
   const crewKey = (d: { agent?: string }) => (/drafter/.test(String(d.agent)) ? 'drafter' : /judge/.test(String(d.agent)) ? 'judge' : null)
-  const givenOf = (k: string | null) => ({ drafter: 'Dara', judge: 'Jude' } as Record<string, string>)[String(k)] || ''
+  const givenOf = (k: string | null) => ({ brief: 'Brief agent', review: 'Review agent', drafter: 'Brief agent', judge: 'Review agent' } as Record<string, string>)[String(k)] || ''
   const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
   const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
   return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
@@ -998,9 +1007,9 @@ test('the drawer names a part by its label in the crew’s words, never its key'
   assert.match(fn(CLF, 'history'), /said=isPerson\(d\)\?saidWords\(d\):noIds\(saidWords\(d\)\)/)
   const rl = lift<{ reviewLine(r: Record<string, string>): string }>(CLF, ['reviewLine'], {
     esc, isYou: () => false, personName: (n: string) => n.replace(/^human:/, ''), plainDate: (d: string) => d,
-    VERDICT_WORD: { rejected: 'Marked wrong' }, blockOf: () => ({ decision: { agent: 'judge' } }), whoDid: () => 'Jude', givenOf: () => 'Jude', judgeKey: () => 'judge',
+    VERDICT_WORD: { rejected: 'Marked wrong' }, blockOf: () => ({ decision: { agent: 'judge' } }), whoDid: () => 'Review agent', givenOf: () => 'Review agent', judgeKey: () => 'judge',
   })
-  assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'Regenerate field', actor: 'process:middleware', decision: 'd_1' }), 'Marked wrong by Jude')
+  assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'Regenerate field', actor: 'process:middleware', decision: 'd_1' }), 'Marked wrong by Review agent')
   assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'ana', actor: 'human:ana' }), 'Marked wrong by ana')
 })
 
@@ -1026,48 +1035,48 @@ test('the drawer shows a chain’s times in the viewer’s own zone', () => {
   assert.equal(f.dayMonth('2025-03'), 'March 2025')
 })
 
-test('the drawer credits an accepted proposal to Dara and quotes the ask', () => {
+test('the drawer credits an accepted proposal to the Brief agent and quotes the ask', () => {
   const f = drawerEnv([youAccept, secondDraft, judeNo, firstDraft])
   assert.equal(f.acceptOf(youAccept)?.decision.id, 'd_P2')
   assert.equal(f.acceptOf(judeNo), null, 'a verdict cites a draft to judge it')
-  assert.equal(f.provenance(SMP), 'drafted by Dara · you accepted')
+  assert.equal(f.provenance(SMP), 'drafted by Brief agent · you accepted')
   assert.equal(f.proposalOf(SMP), null, 'the accept answered it')
 
   const h = f.writerBlock(SMP)
-  assert.match(h, /^<p class="clf-by"><b>Dara<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.match(h, /^<p class="clf-by"><b>Brief agent<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
   assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">Make it one thing\.<\/blockquote><blockquote class="clf-q said">A brief for Lidl Connect\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
   // What the proposal rested on, not the accept; the ask is not listed twice.
   assert.match(h, /<summary>Why it says this<\/summary><ul class="clf-hist"><li><span>It says one thing\.<\/span><\/li><\/ul>/)
-  assert.doesNotMatch(h, /Dara proposed it|d_P2|d_A/)
+  assert.doesNotMatch(h, /The Brief agent proposed it|d_P2|d_A/)
 
   const lines = [...f.history(SMP).matchAll(/<li><span>(.*?)<\/span><\/li>/g)].map(m => m[1])
   assert.deepEqual(lines, [
-    '<b>You</b> accepted Dara’s new version on 2026-10-23T09:05:00+00:00 — “Accepted Dara’s new version of single-minded proposition.”',
-    '<b>Dara</b> proposed a new version on 2026-10-23T09:02:00+00:00 — “Rewrote the single-minded proposition on Jude’s note and your ask.”',
-    '<b>Jude</b> said it is wrong on 2026-10-23T09:01:00+00:00 — “Say one thing, not two.”',
-    '<b>Dara</b> proposed a first version on 2026-10-23T09:00:00+00:00 — “Wrote the single-minded proposition on your ask.”',
+    '<b>You</b> accepted the Brief agent’s new version on 2026-10-23T09:05:00+00:00 — “Accepted the Brief agent’s new version of single-minded proposition.”',
+    '<b>Brief agent</b> proposed a new version on 2026-10-23T09:02:00+00:00 — “Rewrote the single-minded proposition on the Review agent’s note and your ask.”',
+    '<b>Review agent</b> said it is wrong on 2026-10-23T09:01:00+00:00 — “Say one thing, not two.”',
+    '<b>Brief agent</b> proposed a first version on 2026-10-23T09:00:00+00:00 — “Wrote the single-minded proposition on your ask.”',
   ])
   assert.doesNotMatch(f.history(SMP), /\bd_[A-Z0-9]/)
 
   // Another person's accept.
   const ana = { ...youAccept, who: { kind: 'person', id: 'ana', name: 'ana' } }
-  assert.equal(drawerEnv([ana, secondDraft, judeNo, firstDraft]).provenance(SMP), 'drafted by Dara · accepted')
+  assert.equal(drawerEnv([ana, secondDraft, judeNo, firstDraft]).provenance(SMP), 'drafted by Brief agent · accepted')
 })
 
 test('an older brief’s accept reads the same, without the id it named', () => {
   const f = drawerEnv([oldAccept, secondDraft, judeNo, firstDraft])
   assert.equal(f.acceptOf(oldAccept)?.decision.id, 'd_P2')
-  assert.equal(f.provenance(SMP), 'drafted by Dara · you accepted')
-  assert.match(f.writerBlock(SMP), /^<p class="clf-by"><b>Dara<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
-  assert.match(f.history(SMP), /<b>You<\/b> accepted Dara’s new version on 2026-10-23T09:05:00\+00:00 — “Accepted Dara’s proposal for single-minded proposition\.”/)
+  assert.equal(f.provenance(SMP), 'drafted by Brief agent · you accepted')
+  assert.match(f.writerBlock(SMP), /^<p class="clf-by"><b>Brief agent<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.match(f.history(SMP), /<b>You<\/b> accepted the Brief agent’s new version on 2026-10-23T09:05:00\+00:00 — “Accepted the Brief agent’s proposal for single-minded proposition\.”/)
   assert.doesNotMatch(f.history(SMP), /d_P2/)
-  // The proposal gone from the chain: still Dara's, by the crew's draft work.
+  // The proposal gone from the chain: still the Brief agent's, by the crew's draft work.
   const gone = drawerEnv([oldAccept])
-  assert.equal(gone.provenance(SMP), 'drafted by Dara · you accepted')
-  assert.match(gone.writerBlock(SMP), /^<p class="clf-by"><b>Dara<\/b> wrote this; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.equal(gone.provenance(SMP), 'drafted by Brief agent · you accepted')
+  assert.match(gone.writerBlock(SMP), /^<p class="clf-by"><b>Brief agent<\/b> wrote this; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
 })
 
-test('the drawer offers the second draft, never the first Jude sent back', () => {
+test('the drawer offers the second draft, never the first the Review agent sent back', () => {
   assert.equal(drawerEnv([secondDraft, judeNo, firstDraft], 'Two things.').proposalOf(SMP)?.decision.id, 'd_P2')
   assert.equal(drawerEnv([judeNo, firstDraft], 'Two things.').proposalOf(SMP), null)
 })
@@ -1077,35 +1086,35 @@ test('the brief maker’s proposal is answered by the write that cites it', () =
   const first = { id: 'd_P1', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', superseded_by: 'd_P2', proposed_value: 'One thing.', targets: [SMP_ADDR] }
   const no = { id: 'd_V', kind: 'verdict', polarity: 'bad', agent: 'napkin/brief/judge', cites: ['d_P1'], rationale: 'Say one thing.', targets: [SMP_ADDR] }
   const second = { id: 'd_P2', kind: 'edit', action: 'propose', agent: 'draft_brief@1.0/drafter', cites: ['d_V'], proposed_value: 'One thing, said once.', targets: [SMP_ADDR] }
-  const accept = { id: 'd_A', kind: 'edit', agent: 'human', actor: 'human:me', action: `accept proposal ${SMP}`, rationale: 'Accepted Dara’s new version of single-minded proposition.',
-    reasoning: { decided: 'Accepted it.', because: [{ point: 'Dara proposed it.', cites: ['d_P2'] }] } }
+  const accept = { id: 'd_A', kind: 'edit', agent: 'human', actor: 'human:me', action: `accept proposal ${SMP}`, rationale: 'Accepted the Brief agent’s new version of single-minded proposition.',
+    reasoning: { decided: 'Accepted it.', because: [{ point: 'The Brief agent proposed it.', cites: ['d_P2'] }] } }
   const stillNo = { id: 'd_V2', kind: 'verdict', polarity: 'bad', agent: 'napkin/brief/judge', cites: ['d_P2'], rationale: 'Still two things.', targets: [SMP_ADDR] }
-  const old = { id: 'd_O', kind: 'edit', agent: 'human', actor: 'human:me', action: `edit ${SMP}`, rationale: 'Accepted d_P2: Dara’s proposal for single-minded proposition.' }
+  const old = { id: 'd_O', kind: 'edit', agent: 'human', actor: 'human:me', action: `edit ${SMP}`, rationale: 'Accepted d_P2: the Brief agent’s proposal for single-minded proposition.' }
   const make = (decisions: unknown[], writer: unknown = null) => lift<F>(BM, ['about', 'names', 'pathOf', 'isVerdict', 'isProposal', 'isWrite', 'newer', 'proposalOf', 'citesOf',
     'hasReasoning', 'acceptOf', 'isAccept', 'proposerOf', 'actionWords', 'provHtml', 'isHuman'], {
-    CHAIN: { state: 'ok', decisions }, arr, esc, docId: () => 'brief', dismissed: () => [], LAST_PROPOSALS: [], OPEN_WHY: {}, JUDE: 'Jude',
-    AGENT_NAME: { drafter: 'Dara', judge: 'Jude' }, agentKeyOf: (d: { agent?: string }) => (/judge/.test(String(d.agent)) ? 'judge' : 'drafter'),
+    CHAIN: { state: 'ok', decisions }, arr, esc, docId: () => 'brief', dismissed: () => [], LAST_PROPOSALS: [], OPEN_WHY: {},
+    AGENT_NAME: { drafter: 'Brief agent', judge: 'Review agent' }, agentKeyOf: (d: { agent?: string }) => (/judge/.test(String(d.agent)) ? 'judge' : 'drafter'),
     get: () => 'x', hasVal: () => true, verdictOf: () => null, decisionsFor: () => (writer ? [writer] : []),
-    whoName: (d: { agent?: string }) => (/^human/.test(String(d.agent)) ? 'You' : 'Dara'), whoMark: () => '<you>', fig: (k: string) => `<fig ${k}>`,
+    whoName: (d: { agent?: string }) => (/^human/.test(String(d.agent)) ? 'You' : 'Brief agent'), whoMark: () => '<you>', fig: (k: string) => `<fig ${k}>`,
   })
   // Newest first, as the chain is read.
   assert.equal(make([second, no, first]).proposalOf(SMP)?.d.id, 'd_P2')
-  assert.equal(make([no, first]).proposalOf(SMP), null, 'a first draft Jude sent back is never offered')
+  assert.equal(make([no, first]).proposalOf(SMP), null, 'a first draft the Review agent sent back is never offered')
   assert.equal(make([accept, second, no, first]).proposalOf(SMP), null, 'the accept cites it')
   assert.equal(make([old, second, no, first]).proposalOf(SMP), null, 'an older accept named it')
-  assert.equal(make([stillNo, second, no, first]).proposalOf(SMP)?.d.id, 'd_P2', 'a proposal Jude still fails stays offered')
+  assert.equal(make([stillNo, second, no, first]).proposalOf(SMP)?.d.id, 'd_P2', 'a proposal the Review agent still fails stays offered')
 
-  // The chip and the rows: Dara's figure and name, the accept as a note.
+  // The chip and the rows: the Brief agent's figure and name, the accept as a note.
   const f = make([accept, second, no, first], accept)
-  assert.equal(f.provHtml({ key: SMP }), '<button type="button" class="prov act-why" aria-expanded="false" title="Where did this come from?"><fig drafter>Dara<span class="acc">you accepted</span><span class="q">why?</span></button>')
-  assert.equal(f.actionWords(accept), 'accepted Dara’s new version')
-  assert.equal(f.actionWords(old), 'accepted Dara’s new version')
+  assert.equal(f.provHtml({ key: SMP }), '<button type="button" class="prov act-why" aria-expanded="false" title="Where did this come from?"><fig drafter>Brief agent<span class="acc">you accepted</span><span class="q">why?</span></button>')
+  assert.equal(f.actionWords(accept), 'accepted the Brief agent’s new version')
+  assert.equal(f.actionWords(old), 'accepted the Brief agent’s new version')
   assert.equal(f.actionWords(first), 'proposed a first version')
   assert.equal(f.actionWords(second), 'proposed a new version')
   assert.equal(f.actionWords({ action: 'edit background' }), 'edit background')
-  // The accept records the proposal as a cite on its reasoning, and names Dara, not the id.
+  // The accept records the proposal as a cite on its reasoning, and names the Brief agent, not the id.
   const src = fn(BM, 'acceptProposal')
-  assert.match(src, /said='Accepted '\+who\+'’s new version of '\+part\+'\.'/)
+  assert.match(src, /said='Accepted the '\+who\+'’s new version of '\+part\+'\.'/)
   assert.match(src, /reasoning:\{decided:said, because:\[\{point:who\+' proposed it\.', cites:\[p\.d\.id\]\}\]/)
   assert.doesNotMatch(src, /rationale:'Accepted '\+p\.d\.id/)
   assert.match(fn(BM, 'regenField'), /still fails my checks\. It’s there, flagged: use it, change it, or ask again\./)
@@ -1262,8 +1271,8 @@ test('the grid prints a header, an info grid and a footer as the sheets need the
   assert.match(out.html, /<div class="src"><ol><li value="1"><b>ThinkBusiness<\/b>: A title · 2024 — <a href="https:\/\/example\.com\/a">/)
   assert.deepEqual(out.warnings, [])
   // A part nobody has written reads as missing, never as a quiet blank (the export writes it before it prints).
-  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">Missing: ask Dara to write this part\.<\/p>/)
-  assert.match(out.html, /The objection it has to beat: <i>missing: ask Dara to write it<\/i>/)
+  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">Missing: ask the Brief agent to write this part\.<\/p>/)
+  assert.match(out.html, /The objection it has to beat: <i>missing: ask the Brief agent to write it<\/i>/)
   assert.doesNotMatch(out.html, /To be written|Not written yet/)
 })
 
@@ -1279,10 +1288,10 @@ test('the grid names a part that ran over its box, drops an appendix with nothin
   assert.match(out.html, /class="box fit3"/)
   assert.doesNotMatch(out.html, /<script>/)
   assert.match(out.html, /&#60;script&#62;alert\(1\)&#60;\/script&#62;/)
-  assert.match(out.html, /<p class="todo">Missing: ask Dara to write this part\.<\/p>/, 'a part nobody has written yet is not left blank')
+  assert.match(out.html, /<p class="todo">Missing: ask the Brief agent to write this part\.<\/p>/, 'a part nobody has written yet is not left blank')
 })
 
-test('a brief leaves with nothing empty: the gate names every empty part, the header holds suggestions, and Dara writes first', () => {
+test('a brief leaves with nothing empty: the gate names every empty part, the header holds suggestions, and the Brief agent writes first', () => {
   const g = grid()
   const all = { job: 'J.', background: 'B.', barrier: 'Ba.', audience: 'A.', 'objectives.commercial': 'c', 'objectives.behavioural': 'b', 'objectives.attitudinal': 'a',
     budget_and_scope: 'x', insight: 'I.', single_minded_proposition: 'S.', objection: 'O.', reasons_to_believe: ['r'], competitor_context: 'k',
@@ -1317,7 +1326,7 @@ test('a brief leaves with nothing empty: the gate names every empty part, the he
   const blank = g.gridHeaderInfo({ date: '29 October 2026', today: new Date(2026, 9, 29) })
   assert.ok(blank.every(p => String(p[1]).trim() !== ''), 'even a brief with no client, project or signed-in person has no empty cell')
   assert.equal(blank.find(p => p[0] === 'Prepared by')?.[1], 'Napkin Studio')
-  // The export: the grid asks Dara for what is missing and stops, saying so, if it is still missing; the plain export never waits.
+  // The export: the grid asks the Brief agent for what is missing and stops, saying so, if it is still missing; the plain export never waits.
   const ex = fn(BM, 'exportOnce')
   assert.match(ex, /style==='plain'\)\s*return runExport\(kind, style\)/)
   assert.match(ex, /gridGaps\(ctx\)/)
@@ -1404,7 +1413,7 @@ test('the page rule: a brief is two content sheets however long its parts run, a
   for (let n = 1; n <= out.appendixSheets; n++) assert.match(out.html, new RegExp(`APPENDIX<b>${n}/${out.appendixSheets}</b>`))
 })
 
-test('an export never prints a clipped sheet: it is measured, Dara tightens the long parts once, and otherwise it stops', () => {
+test('an export never prints a clipped sheet: it is measured, the Brief agent tightens the long parts once, and otherwise it stops', () => {
   assert.match(fn(BM, 'gridOverflow'), /createElement\('iframe'\)/)
   assert.match(fn(BM, 'gridOverflow'), /rows\[rows\.length-1\]\.getBoundingClientRect\(\)\.bottom>ft\.getBoundingClientRect\(\)\.top/)
   assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)\.then\(function\(bad\)\{ LAST_GRID_OVERFLOW=bad; return doc; \}\)/)
@@ -1441,7 +1450,7 @@ test('a sheet that cannot be measured is never exported: one retry with a longer
   const env = {
     LAST_GRID_OVERFLOW: null, LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m },
     buildExportHTML: () => Promise.resolve('<html>'), listWords: (a: string[]) => a.join(', '), gridLongest: () => [],
-    docLocked: () => false, noMiddleware: () => false, DARA: 'Dara', fillParts: () => Promise.resolve(), gridLimit: () => 0,
+    docLocked: () => false, noMiddleware: () => false, WRITER: 'the Brief agent', WRITER_: 'The Brief agent', fillParts: () => Promise.resolve(), gridLimit: () => 0,
     get: () => 'x', window: { clan: { exportDoc: () => { printed++; return Promise.resolve({ ok: true }) } } },
   }
   const r = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], env)
@@ -1460,19 +1469,19 @@ test('a sheet that cannot be measured is never exported: one retry with a longer
   assert.equal(printed, 2, 'a measured sheet prints, with no grid overflow rule')
 })
 
-test('a part Jude rejected is exported as to confirm, and the export says it was written, not approved', async () => {
+test('a part the Review agent rejected is exported as to confirm, and the export says it was written, not approved', async () => {
   const mark = lift<{ confirmMarked(v: unknown): unknown }>(BM, ['confirmMarked'], {}).confirmMarked
   assert.equal(mark('Families who cook.'), 'To confirm: Families who cook.')
   assert.equal(mark('To confirm: Families.'), 'To confirm: Families.', 'a part already marked is left alone')
   assert.deepEqual(mark(['a', 'b']), ['To confirm: a', 'b'], 'a list marks its first line')
   assert.equal(mark(''), '')
-  // fillParts: Jude passes one part and rejects the other. Only the rejected one is marked in the brief.
+  // fillParts: the Review agent passes one part and rejects the other. Only the rejected one is marked in the brief.
   const data: Record<string, unknown> = { audience: 'Families who cook.', insight: 'People skip dinner.' }
   const patched: Array<[string, unknown]> = []
   const FIELDS = [{ key: 'audience', label: 'Audience' }, { key: 'insight', label: 'The insight' }]
   const state: Record<string, string> = { audience: 'done', insight: 'failed' }
   const env = {
-    FIELDS, JUDE: 'Jude', hasVal, confirmMarked: mark, get: (k: string) => data[k],
+    FIELDS, REV: 'the Review agent', REV_: 'The Review agent', hasVal, confirmMarked: mark, get: (k: string) => data[k],
     patch: (k: string, v: unknown) => { patched.push([k, v]); data[k] = v; return Promise.resolve({ ok: true }) },
     regenField: (f: { key: string }, _g: unknown, _r: unknown, done: (j: unknown) => void) => done({ fields: { [f.key]: { state: state[f.key] } } }),
   }
@@ -1486,8 +1495,8 @@ test('a part Jude rejected is exported as to confirm, and the export says it was
   assert.match(out.html, /People skip dinner\./)
   assert.doesNotMatch(out.html, /To confirm: People/)
   // the toast names it
-  const words = lift<{ notApprovedWords(l: string[]): string }>(BM, ['notApprovedWords'], { JUDE: 'Jude', listWords: listJoin }).notApprovedWords
-  assert.equal(words(['The insight', 'Audience']), 'Written, not approved by Jude: the insight and audience.')
+  const words = lift<{ notApprovedWords(l: string[]): string }>(BM, ['notApprovedWords'], { REV: 'the Review agent', listWords: listJoin }).notApprovedWords
+  assert.equal(words(['The insight', 'Audience']), 'Written, not approved by the Review agent: the insight and audience.')
   assert.equal(words([]), '')
   // the export passes them on and says so once the export has started
   let said = ''
@@ -1496,7 +1505,7 @@ test('a part Jude rejected is exported as to confirm, and the export says it was
     get: () => 'x', notApprovedWords: words, window: { clan: { exportDoc: () => Promise.resolve({ ok: true }) } },
   })
   await run.runExport('pdf', 'grid', false, ['The insight'])
-  assert.equal(said, 'Written, not approved by Jude: the insight.')
+  assert.equal(said, 'Written, not approved by the Review agent: the insight.')
   await run.runExport('pdf', 'grid', false, [])
   assert.equal(said, 'Preparing PDF…', 'nothing rejected: nothing extra is said')
   assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, rejected\)/)
@@ -1941,7 +1950,7 @@ test('the screen and the PDF are one sheet: one builder, one measure, guides whe
 
 // ── the Research Tool on the new UI (features/research-new-ui.clan) ─────────
 
-test('research: every action the old header and Jude’s bar held is in the inspector, and the sections stay', () => {
+test('research: every action the old header and the Review agent’s bar held is in the inspector, and the sections stay', () => {
   const at = RT.indexOf('<aside class="insp'), end = RT.indexOf('</aside>', at)
   assert.ok(at > 0 && end > at, 'the inspector is in the page')
   const insp = RT.slice(at, end)
@@ -2244,7 +2253,7 @@ test('taking a point out with no reason says “Add a reason” at the box, not 
 
 // ── B4: what people read carries no keys or ids ────────────────────────────
 
-test('Jude’s words lose their ids; a finding is named by what it says', () => {
+test('the Review agent’s words lose their ids; a finding is named by what it says', () => {
   const F = { fi_DSEQGHSPHSY6: { statement: 'Christmas is the busiest period for cider' } }
   const b = lift<{ noIds(s: string): string }>(BM, ['noIds'], { get: (k: string) => (k === 'projection' ? { findings: F } : undefined) })
   assert.equal(b.noIds('below 1.2% ABV (f_RPH5UFCVDCUV). At 0.5% (f_TKL7YLB7DEEQ, f_VLB4EBQYKK4T) it is.'), 'below 1.2% ABV. At 0.5% it is.')
