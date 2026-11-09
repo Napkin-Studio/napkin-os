@@ -61,14 +61,18 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(panel.locator('#spBuilt .bf-row').first()).toBeVisible({ timeout: 15_000 })
 
   // Place on page: full width, then one place earlier; the keyboard on the grip moves it too.
+  // The meta row's cells (client, project, budget) hold their places, so a movable part is moved.
+  const mand = app.locator('#fields .row[data-clan-part="mandatories"]')
+  await mand.locator('.lab > span').first().click()
+  await expect(mand).toHaveClass(/\bsel\b/)
   await panel.locator('.sp-l summary').click()
   await panel.locator('.sp-l [data-w="12"]').click()
-  await expect(budget).toHaveAttribute('data-w', '12')
+  await expect(mand).toHaveAttribute('data-w', '12')
   await panel.locator('[data-sp="up"]').click()
   await expect.poll(async () => {
     const d = await order(page) as { layout?: { parts?: Record<string, { order: number; w: number }> } }
     const p = d.layout?.parts ?? {}
-    return p.budget_and_scope && p.tone_and_world ? [p.budget_and_scope.w, p.budget_and_scope.order < p.tone_and_world.order] : null
+    return p.mandatories && p.tone_and_world ? [p.mandatories.w, p.mandatories.order < p.tone_and_world.order] : null
   }).toEqual([12, true])
 
   // A reload keeps all of it: the layout, the width and the confidential part.
@@ -78,10 +82,11 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   const again = page.frameLocator('iframe').first()
   await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
   const b2 = again.locator('#fields .row[data-clan-part="budget_and_scope"]')
-  await expect(b2).toHaveAttribute('data-w', '12')
   await expect(b2).toHaveClass(/\bconf\b/)
+  const m2 = again.locator('#fields .row[data-clan-part="mandatories"]')
+  await expect(m2).toHaveAttribute('data-w', '12')
   const keys = await again.locator('#fields .row').evaluateAll(rs => rs.map(r => r.getAttribute('data-clan-part')))
-  expect(keys.indexOf('budget_and_scope')).toBeLessThan(keys.indexOf('tone_and_world'))
+  expect(keys.indexOf('mandatories')).toBeLessThan(keys.indexOf('tone_and_world'))
   // Save · PDF and the menu's other ways to save are all there.
   for (const id of ['exPdf', 'exClient', 'exHtml', 'exGridPdf', 'exGridHtml', 'exHtmlPlain', 'exPdfPlain', 'saveBtn']) await expect(again.locator(`#${id}`)).toHaveCount(1)
 })

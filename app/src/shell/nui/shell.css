@@ -105,6 +105,8 @@
   .nui .tb-app .tba-line, .nui .tb-tools .ch-chip { display: none; }
   .nui .studio-shell { padding: 0 16px; }
   .nui .p33-desk-tools { flex-wrap: wrap; }
+  /* a document's bar holds more than a phone is wide: it scrolls sideways in itself, never the page */
+  .nui.ch-bar-os[data-where='document'] .tb-locked { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 }
 @media (max-width: 400px) {
   .nui .m1-medallion { width: 52px !important; height: 52px !important; top: 2px !important; }
