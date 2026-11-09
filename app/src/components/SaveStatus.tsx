@@ -23,7 +23,7 @@ export default function SaveStatus({ docPath }: { docPath: string }) {
   const time = at?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   return (
     <span className="ch-saved" title={`Every change is kept as you make it.${time ? ` Last change kept at ${time}.` : ''}`}>
-      Saved
+      <span className="ch-saved-w">Saved</span>
     </span>
   )
 }

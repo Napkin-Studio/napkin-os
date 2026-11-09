@@ -54,7 +54,7 @@ export function Trail({ route, agency, client, inDocument, noAgency, onGo }: Pro
                 data-level={c.route.level}
                 aria-current={here ? 'page' : undefined}
                 aria-label={c.label}
-                title={c.route.level === 'agency' ? 'Back to the studio' : undefined}
+                title={c.route.level === 'agency' ? 'Back to the studio' : c.label}
                 onClick={() => { if (!here) onGo(c.route) }}
               >
                 {c.disc}

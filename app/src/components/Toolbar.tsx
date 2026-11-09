@@ -324,7 +324,7 @@ export default function Toolbar({
         <span className="ch-bar-c">
           <span className="ch-slot">
             {doc.tool && <ToolName tool={doc.tool} />}
-            <span className="ch-slot-title">{title}</span>
+            <span className="ch-slot-title" title={doc.loading ? undefined : doc.title ?? undefined}>{title}</span>
           </span>
           <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
         </span>
@@ -345,7 +345,7 @@ export default function Toolbar({
       <span className="ch-bar-c">
         <span className="ch-slot" role="group" aria-label="App">
           {doc.tool && <ToolName tool={doc.tool} />}
-          <span className="ch-slot-title">{title}</span>
+          <span className="ch-slot-title" title={doc.loading ? undefined : doc.title ?? undefined}>{title}</span>
           <Lineage doc={doc} />
           {doc.state && <StatePill state={doc.state} />}
           <BarMenu

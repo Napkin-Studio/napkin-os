@@ -170,7 +170,8 @@
    left, the document in the centre, the tools on the right. The two sides
    share what the centre leaves, so the slot sits in the middle when it can. */
 .ch-bar-l, .ch-bar-c, .ch-bar-r { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ch-bar-l { flex: 1 1 auto; gap: 10px; }
+/* the trail gives way well before the document's slot does */
+.ch-bar-l { flex: 1 8 auto; gap: 10px; }
 .ch-bar-c { flex: 0 1 auto; justify-content: center; }
 .ch-bar-r { flex: 1 0 auto; justify-content: flex-end; }
 
@@ -236,6 +237,10 @@
 /* in a document the slot's title leads: the trail gives way first */
 .ch-bar-os[data-where='document'] .ch-crumbs { max-width: 26vw; }
 .ch-crumbs .lc-crumb { font-size: 13px; }
+/* each level gives way evenly, to its circle (its name is in its title) */
+.ch-crumbs .lc-trail ol { min-width: 0; }
+.ch-bar .ch-crumbs .lc-trail li { min-width: 0; flex: 0 1 auto; }
+.ch-crumbs .lc-crumb { min-width: 34px; max-width: 100%; }
 
 /* The OS app slot: the tool, the document's name, its state, Continue in and More. */
 .ch-slot {
@@ -259,7 +264,9 @@
   color: color-mix(in oklab, var(--tool, var(--ink)) 78%, var(--ink));
 }
 .ch-slot-title {
-  min-width: 0;
+  /* the name is what the slot is for: it keeps a readable floor while the
+     trail on the left gives way (the full name is in its title) */
+  min-width: min(14ch, 16vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -403,6 +410,14 @@
   color: var(--ink3);
   white-space: nowrap;
   cursor: default;
+}
+/* A full document bar on a laptop: the dot says it, the word is in the title. */
+@media (max-width: 1560px) and (min-width: 721px) {
+  .ch-bar-os[data-where='document'] { gap: 12px; }
+  .ch-bar-os[data-where='document'] .ch-bar-c { flex-shrink: 0; }
+  /* the slot names the tool already: Clients and the tool keep their circles, the client its name */
+  .ch-bar-os[data-where='document'] .ch-crumbs .lc-crumb:not([data-level='client']) .lc-cn { display: none; }
+  .ch-bar-os[data-where='document'] .ch-saved-w { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
 .ch-saved::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--status-green); }
 
