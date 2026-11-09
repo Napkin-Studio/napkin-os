@@ -1485,6 +1485,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var o=env.origin, h='';
     if(o==='extracted'){
       h+=spanHtml(env.source, f.k==='budget_band'?'The span carries no quote — the quote would carry the figure.':'');
+    } else if(o==='proposed'&&!arr(env.fact_ids).length&&arr(env.upstream_refs).length){
+      h+='<div class="inferbox"><div class="h">From the brief this research started from — confirm it.</div></div>';
+    } else if(o==='proposed'&&!arr(env.fact_ids).length&&env.workspace_ref){
+      h+='<div class="inferbox"><div class="h">The client this research was started for — confirm it.</div></div>';
     } else if(o==='proposed'){
       h+='<div class="inferbox"><div class="h">Derived from '+arr(env.fact_ids).length+' pinned fact'+(arr(env.fact_ids).length===1?'':'s')+' — no one said this.</div>'+pinChips(env.fact_ids)+'</div>';
     } else if(o==='confirmed'){
@@ -2813,6 +2817,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(isObj(o.source)){ var m=material(o.source.material_id), nm=m?(m.name||o.source.material_id):o.source.material_id;
       return (o.source.quote?'“'+o.source.quote+'” — ':'From ')+nm; }
     if(arr(o.fact_ids).length) return 'From what we already know';
+    if(arr(o.upstream_refs).length) return 'From the brief';
     return '';
   }
   function questionCard(Q, T){
@@ -2873,8 +2878,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
         +'<span class="rs-tip" aria-hidden="true"><span class="say"><span class="who">'+esc(who)+'</span>'+esc(line)+'</span></span></span>';
     }).join('')+'</div>';
   }
+  var FROM_BRIEF_PROMPT='Research for the brief this started from.';
   function startHtml(){
     var hi=CHAT.sending?CHAT.sendStep:CHAT.askWho&&!me()?'Before I start: what’s your name? It goes on everything you send.'
+      :briefUpstream()?'Hi, I’m '+given('extract')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.'
       :'Hi, I’m '+given('extract')+'! Tell me who the client is and the market. I’ll read anything you add.';
     var off=CHAT.sending?' disabled':'';
     return '<div class="rs-start">'
@@ -2963,6 +2970,9 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function doSend(){
     if(CHAT.sending) return;
     var ta=$('cmp-prompt'), prompt=String(ta?ta.value:CHAT.draft).trim();
+    // A research started from a brief can start from the brief alone: the crew
+    // reads its client, audience, background and objectives (features/spinoff-and-links).
+    if(!prompt&&briefUpstream()&&!CHAT.files.length) prompt=FROM_BRIEF_PROMPT;
     if(!prompt){ toast('Say what the client needs: the research starts from your prompt.'); if(ta) ta.focus(); return; }
     if(!(window.clan&&window.clan.patchData&&window.clan.apiProxy&&(window.clan.uploadAsset||!CHAT.files.length))){ toast('Starting a campaign needs the host.'); return; }
     // `by` must name the person: the shell's, or the one this device knows.

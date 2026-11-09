@@ -283,10 +283,54 @@ UPSTREAM_ASK = [
     ("objectives.attitudinal", "objective"),
 ]
 
+# Words that open a sentence in capitals without naming anyone.
+_NOT_NAMES = {"the", "a", "an", "our", "we", "they", "this", "that", "it", "its", "for", "client", "brand", "brands",
+              "clients", "company", "campaign", "in", "on", "at", "to", "with", "by", "from", "and", "or", "of",
+              "is", "are", "who", "what", "their", "his", "her", "my", "your", "likely", "aim", "see", "note"}
+_NAME_WORD = r"[A-Z0-9][\w'’&.+-]*"
+_NAME = re.compile(rf"{_NAME_WORD}(?:\s+(?:{_NAME_WORD}|of|and|&|de|du|la|le)(?=\s+{_NAME_WORD}|\b))*"
+                   rf"(?:\s+{_NAME_WORD})*")
+
+
+def workspace_client(clan: dict) -> dict | None:
+    """The client the document belongs to (`clan.workspace_client`, the host's
+    manifest.client): {id, name}, or None."""
+    wc = clan.get("workspace_client")
+    if isinstance(wc, dict) and isinstance(wc.get("name"), str) and wc["name"].strip() and slug(wc["name"]):
+        return {"id": str(wc.get("id") or ""), "name": wc["name"].strip()}
+    return None
+
+
+def brief_name(text: str, workspace: dict | None = None) -> str | None:
+    """A name from a brief's Client / Brand paragraph: the workspace client's
+    name when the paragraph names it, else the first proper-noun phrase
+    ("Guinness (Diageo) wants…" -> "Guinness"). None when it names nobody."""
+    t = (text or "").strip()
+    if not t:
+        return None
+    if workspace and re.search(rf"(?<![a-z0-9]){re.escape(slug(workspace['name']))}(?![a-z0-9])", slug(t)):
+        return workspace["name"]
+    for m in _NAME.finditer(t):
+        words = m.group(0).split()
+        while words and words[0].lower().strip(".,;:") in _NOT_NAMES:
+            words.pop(0)
+        while words and words[-1].lower() in ("of", "and", "&", "de", "du", "la", "le"):
+            words.pop()
+        name = " ".join(words).rstrip(".,;:'’-")
+        if name and slug(name) and any(c.isalpha() for c in name):
+            return name
+    return None
+
+
+def org_value(name: str) -> dict | None:
+    ref = slug(name)
+    return {"ref": f"org/{ref}", "name": name} if ref else None
+
 
 def upstream_proposals(clan: dict) -> dict:
     """Step 0: the carried brief's ask -> proposed campaign fields, each
-    citing the brief's path (`upstream_refs`). Empty without one."""
+    citing the brief's path (`upstream_refs`). Empty without one. The
+    client paragraph becomes a name (`brief_name`)."""
     ask = clan.get("upstream_ask") if isinstance(clan.get("upstream_ask"), dict) else {}
     brief, fields = ask.get("document_id"), ask.get("fields")
     if not isinstance(brief, str) or not isinstance(fields, dict):
@@ -298,10 +342,9 @@ def upstream_proposals(clan: dict) -> dict:
             continue
         v = v.strip()
         if fname == "client_org":
-            ref = slug(v)
-            if not ref:
+            v = org_value(brief_name(v, workspace_client(clan)) or "")
+            if not v:
                 continue
-            v = {"ref": f"org/{ref}", "name": v}
         out[fname] = {"value": v, "upstream_refs": [f"{brief}#{path}"]}
     return out
 
