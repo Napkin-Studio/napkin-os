@@ -74,6 +74,19 @@ def schema(cite_ids: list[str], lenses: list[str]) -> dict:
                  "grounds": rsn.MODEL_SCHEMA})
 
 
+def claim_names(camp: dict) -> list[str]:
+    """Words whose digits are names, not figures, for the cite rule: the campaign's name, its brand and
+    competitors, and the audience the ask states. "16–24s" says who the work is for; no pin holds 16 and 24,
+    so a headline that names the audience the person asked about was dropped by the rule and the report
+    fell back to a finding for its headline."""
+    val = lambda k: (camp.get(k) or {}).get("value") if isinstance(camp.get(k), dict) else None
+    aud = val("audience_stated")
+    return [val("name") if isinstance(val("name"), str) else "", (val("brand") or {}).get("name", "")
+            if isinstance(val("brand"), dict) else ""] + \
+        [c.get("name", "") for c in (val("competitor_set") or []) if isinstance(c, dict)] + \
+        [aud if isinstance(aud, str) else ""]
+
+
 def part_schema(cite_ids: list[str], lenses: list[str], page: list[int], headline: bool, summary: bool) -> dict:
     """What the model writes when only part of the report is written again (`compose(part=...)`)."""
     claim = _obj({"text": {"type": "string"}, "cites": {"type": "array", "items": {"type": "string",
@@ -124,8 +137,7 @@ def compose(doc, clan, handler, caps, part=None):
     fval = lambda f: (camp.get(f) or {}).get("value")
     brand = (fval("brand") or {}).get("name") or fval("name") or "The campaign"
     markets = list(fval("markets") or [])
-    names = [fval("name") or "", (fval("brand") or {}).get("name", "")] + \
-        [c.get("name", "") for c in (fval("competitor_set") or []) if isinstance(c, dict)]
+    names = claim_names(camp)
 
     roster = [f for f in pins if str(f.get("key", "")).startswith("roster.")]
     by_lens = {l: {"pins": [], "findings": [], "gaps": [], "contests": []} for l in LENSES}
