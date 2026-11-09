@@ -37,7 +37,7 @@ from ..util import iso
 from . import capture as cap_stage
 from . import provenance as prov
 from .drafters import _query
-from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
+from .fields import ARRAY_KEYS, KEYS, LABELS, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
 from . import checks
 from .questions import dedupe
@@ -815,7 +815,7 @@ class PlannedBriefJob(BriefJob):
         for k, v in self.whole.items():
             if not v.get("sent_back") or k in flagged or k not in self.writer:
                 continue
-            r = rsn.make(f"Checked the new {LABELS.get(k, k)}: it answers the note.",
+            r = rsn.make(f"Checked the new {bare(k)}: it answers the note.",
                          [rsn.point("Jude reviewed the brief again and left no note on it", [self.writer[k]])],
                          rsn.certainty("medium", "a model judged the brief as a whole"),
                          "the part changes again", only_option="the rewrite passed the review")

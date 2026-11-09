@@ -64,6 +64,13 @@ LABELS = {
     "desired_response": "desired response",
 }
 
+
+def bare(key: str) -> str:
+    """A part's label without its own article, for a sentence that brings one:
+    "the new barrier", never "the new the barrier"."""
+    lab = LABELS.get(key, key)
+    return lab[4:] if lab.startswith("the ") else lab
+
 RUBRIC = json.loads((Path(__file__).resolve().parent / "golden_brief.schema.json").read_text())
 RUBRIC_FIELDS = {f["id"]: f for f in RUBRIC["fields"]}
 

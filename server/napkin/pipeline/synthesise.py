@@ -38,6 +38,11 @@ any of them again, and do not describe the audience in their terms.""" + rsn.GUI
     " for your answer as a whole", " for each finding and the audience")
 
 
+def _a(words: str) -> str:
+    """"a market structure", "an effectiveness evidence": the article the words take."""
+    return ("an " if words[:1].lower() in "aeio" else "a ") + words
+
+
 def _obj(props: dict) -> dict:
     return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
 
@@ -127,7 +132,7 @@ def run_synthesis(doc, base, clan, inp, handler, caps, seed=None, with_audience=
             fi["markets"] = mk
         findings.append(fi)
         r, why_notes = rsn.from_model(
-            item.get("grounds"), decided=f"Proposed a {lens.replace('_', ' ')} finding for a person to verify.",
+            item.get("grounds"), decided=f"Proposed {_a(lens.replace('_', ' '))} finding for a person to verify.",
             known=by_id, certainty_=_derived(cited, fi["confidence"]),
             fallback=[rsn.point(_pin_line(f), f["id"]) for f in cited],
             would_change_if="a cited pin is revised, excluded or goes stale",
