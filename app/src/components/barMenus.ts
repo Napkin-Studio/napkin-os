@@ -114,6 +114,7 @@ export function linksOf(view: RelatedView | null): { linked: LinkedDoc[]; madeIn
       dir: 'in' as const,
       changed: u.status === 'changed',
       taken: u.taken ?? null,
+      noun: u.noun ?? null,
     })),
     ...view.downstream.filter(d => d.how === 'linked_in').map(d => ({
       documentId: d.document_id,

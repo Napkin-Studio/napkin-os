@@ -772,6 +772,14 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
             entry["app_id"] = json!(app_id);
             entry["path"] = path.into();
             entry["how"] = how.into();
+            if let Some(noun) = pm
+                .app
+                .as_ref()
+                .and_then(|a| a.home.as_ref())
+                .and_then(|h| h.noun.first())
+            {
+                entry["noun"] = noun.clone().into();
+            }
             entry
         })
         .collect();

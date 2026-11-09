@@ -1441,7 +1441,7 @@ pub fn related(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value {
         .map(|u| {
             serde_json::json!({
                 "document_id": u["document_id"], "title": u["title"], "app_id": u["app_id"],
-                "path": u["path"], "how": u["how"], "version": u["version"],
+                "path": u["path"], "how": u["how"], "version": u["version"], "noun": u["noun"],
                 "taken": u["taken"], "status": u["status"],
             })
         })
