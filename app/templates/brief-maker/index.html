@@ -1069,6 +1069,9 @@
   .nb-in:focus{outline:2px solid var(--ag-act);outline-offset:0}
   .b-gate-l .lkitem .x{text-decoration:inherit}
   .b-gate-l .lkitem small.k{display:inline;margin:0 0 0 6px;text-decoration:none;font:500 9.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .tabacts:not(:has(> :not([hidden]))),#structured .b-lockacts:not(:has(> :not([hidden]))){display:none}
+  #structured .b-lockacts{display:grid;gap:10px;justify-items:start}
+  #structured .b-reopen{font-size:12.5px}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -1156,6 +1159,7 @@
         <div class="locklist" id="lockList" hidden></div>
         <div class="b-lockacts" id="lockActs" hidden>
           <button type="button" class="sp-btn b-crbtn" id="crOpen" aria-expanded="false" aria-controls="clientAnswer">Record the client’s answer</button>
+          <button type="button" class="side-link b-reopen" id="reopenBtn" data-act="reopen" aria-expanded="false" aria-controls="reopenList" title="A part reopens for a change the client asked for; the rest stays locked">Reopen a part…</button>
         </div>
         <div class="reopen" id="reopenBox" hidden>
           <div class="reolist" id="reopenList" hidden></div>
@@ -3626,7 +3630,7 @@
     // Locked: where the mock has Unlock, the working route — a locked brief reopens one part for a
     // change the client asked for (there is no unlocking an approve, W5-Z1).
     if(again){ lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; lb.setAttribute('data-act','lock'); }
-    else if(A){ lb.disabled=false; lb.textContent='Reopen a part…'; lb.title='A locked brief changes one part at a time, for something the client asked. Reopen the part they mean.'; lb.setAttribute('data-act','reopen'); lb.setAttribute('aria-controls','reopenList'); }
+    else if(A){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; lb.setAttribute('data-act','unlock'); }
     else if(L){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; lb.setAttribute('data-act','lock'); }   // a brief locked before /approve
     else { lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; lb.setAttribute('data-act','lock'); }
     renderStateLine();
@@ -3643,6 +3647,18 @@
     if(L&&lk){ var who=lk.who&&lk.who.you?(ME&&ME.name)||'you':lk.who&&lk.who.name||'a person', at=new Date(String(lk.decision&&lk.decision.timestamp||'')), today=!isNaN(at)&&at.toDateString()===new Date().toDateString();
       t.textContent=[v, 'locked by '+who+', '+(today?'today':fmtDay(isNaN(at)?null:at))].filter(Boolean).join(' · '); t.classList.add('ok'); }
     else { var w=lastWhen(); t.textContent=[v, w?'edited '+agoWords(w):''].filter(Boolean).join(' · '); t.classList.remove('ok'); }
+  }
+  // Unlock: POST /unapprove (owner, 9 Nov 2026), called as /approve is; the host records it.
+  function unlockClick(){
+    var lb=$('lockBtn');
+    if(!approveLocked()) return;
+    if(!window.clan){ toast('Unlocking needs the Napkin host.'); return; }
+    lb.disabled=true;
+    hostPost('/unapprove',{rationale:'Brief unlocked to change it'}).then(function(res){
+      var F=OSF(); if(F) F.reload();
+      if(!(res&&res.ok)){ lb.disabled=false; toast(hostErrText(res)); return; }
+      toast('Unlocked.');
+    },function(){ lb.disabled=false; toast('That did not go through. Check your connection and try again.'); });
   }
   function lockClick(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked();
@@ -4052,7 +4068,8 @@
     pdf:function(){ doExport('pdf'); },
     redraft:redraftClick,
     lock:function(){ lockClick(); },
-    reopen:function(){ toggleReopen(); }
+    reopen:function(){ toggleReopen(); },
+    unlock:function(){ unlockClick(); }
   };
   // What the OS bar shows for the brief (clan:bar, docs/contracts/clan-fields.md):
   // its buttons are the side tab's, by the same ids, and the pill is the state.
@@ -4063,7 +4080,7 @@
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, st=statusNow(), lb=$('lockBtn');
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});
-    if(A&&!re) items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'});
+    if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
     else items.push({kind:'button', id:'lock', label:re?'Lock the brief again':'Lock the brief', disabled:!!(lb&&lb.disabled), title:lb&&lb.disabled&&lb.title||undefined});
     items.push({kind:'status', label:st.label, tone:st.tone, locked:st.locked});
     return items;
@@ -4085,7 +4102,7 @@
   function clientReviewLabel(){ var c=(osView()||{}).client; return c&&c.answer&&c.answer.current?'New client answer':'Client review'; }
   function renderReopen(){
     var box=$('reopenBox'), A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0;
-    var btn=$('lockBtn'), list=$('reopenList'), ps=reopenable();
+    var btn=$('reopenBtn'), list=$('reopenList'), ps=reopenable();
     if(!(A&&!re)){ REOPEN_OPEN=false; box.hidden=true; list.innerHTML=''; return; }
     btn.setAttribute('aria-expanded', String(REOPEN_OPEN)); box.hidden=!REOPEN_OPEN; list.hidden=!REOPEN_OPEN;
     if(!REOPEN_OPEN){ list.innerHTML=''; return; }
@@ -4111,7 +4128,6 @@
   function crParts(){ return layoutItems().map(function(it){ return fieldOf(it.key); }).filter(function(f){ return f&&hasVal(get(f.key)); }); }
   function crStrength(){
     var n=CR.who.split(/\s+/)[0]||'the client', whose=n==='the client'?'the client’s':n+'’s';
-    if(CR.answer==='accepted') return 'Weaker record: Recorded by you. Nothing attached.';
     if(CR.file) return 'Strong record: From '+(/\.pdf$/i.test(CR.file.name)?'the PDF '+n+' sent':whose+' email')+', file attached.';
     if(CR.said.trim()) return 'Weaker record: '+(CR.call?'Your note of a call. Nothing attached.':'From '+whose+' email, pasted by you.');
     return 'Weaker record: Recorded by you. Nothing attached.';
@@ -4127,10 +4143,10 @@
     el.innerHTML='<h4>The client’s answer</h4>'
       +'<div class="cr-verdicts" role="radiogroup" aria-label="What the client said">'+[['accepted','Accepted'],['accepted_with_changes','With changes'],['rejected','Rejected']].map(function(x){ return '<label><input type="radio" name="crv" value="'+x[0]+'"'+(CR.answer===x[0]?' checked':'')+'>'+x[1]+'</label>'; }).join('')+'</div>'
       +(CR.answer==='rejected'?'<div class="cr-reasons">'+CR_REASONS.map(function(r){ return '<label><input type="checkbox" name="crr" value="'+r[0]+'"'+(CR.reasons.indexOf(r[0])!==-1?' checked':'')+'>'+r[1]+'</label>'; }).join('')+'</div>':'')
-      +'<div class="cr-which"><small>Which parts</small><div class="cr-parts">'+ps.map(function(f){ return '<label><input type="checkbox" name="crp" value="'+esc(f.key)+'"'+(CR.parts[f.key]?' checked':'')+(ch?'':' disabled')+'>'+esc(headOf(f))+'</label>'; }).join('')+'</div></div>'
-      +'<textarea rows="3" name="said" placeholder="Paste their email, or note what they said"'+(ch?'':' disabled')+'>'+esc(CR.said)+'</textarea>'
-      +'<label class="cr-call"><input type="checkbox" name="crcall"'+(CR.call?' checked':'')+(ch?'':' disabled')+'> Nothing to attach: it was a call or a chat</label>'
-      +'<label class="cr-file">Or attach it <input type="file" accept=".eml,.pdf,message/rfc822,application/pdf"'+(ch?'':' disabled')+'>'+(CR.file?'<b>'+esc(CR.file.name)+'</b>':'')+'</label>'
+      +'<div class="cr-which"><small>Which parts</small><div class="cr-parts">'+ps.map(function(f){ return '<label><input type="checkbox" name="crp" value="'+esc(f.key)+'"'+(CR.parts[f.key]?' checked':'')+'>'+esc(headOf(f))+'</label>'; }).join('')+'</div></div>'
+      +'<textarea rows="3" name="said" placeholder="Paste their email, or note what they said">'+esc(CR.said)+'</textarea>'
+      +'<label class="cr-call"><input type="checkbox" name="crcall"'+(CR.call?' checked':'')+'> Nothing to attach: it was a call or a chat</label>'
+      +'<label class="cr-file">Or attach it <input type="file" accept=".eml,.pdf,message/rfc822,application/pdf">'+(CR.file?'<b>'+esc(CR.file.name)+'</b>':'')+'</label>'
       +'<input type="text" name="who" value="'+esc(CR.who)+'" placeholder="Who answered (their name)" aria-label="Who answered">'
       +'<p class="cr-strength">'+esc(crStrength())+'</p>'
       +(CR.err?'<p class="cr-err" role="alert">'+esc(CR.err)+'</p>':'')
@@ -4150,7 +4166,7 @@
     var name=CR.who.trim();
     if(!name){ CR.err='Say who answered: their name goes on the record.'; renderClientAnswer(); return; }
     var parts=crParts(), ch=CR.answer!=='accepted';
-    var channel=!ch?'none':CR.file?'file':CR.said.trim()?(CR.call?'call':'pasted_email'):'none';
+    var channel=CR.file?'file':CR.said.trim()?(CR.call?'call':'pasted_email'):'none';
     var body={answer:CR.answer, client:{name:name}, channel:channel, parts:parts.map(function(f){ var r={address:f.key, label:partLabel(f)}; if(PART_ALIASES[f.key]) r.aliases=PART_ALIASES[f.key].split(',').map(function(x){ return x.trim(); }).filter(Boolean); return r; })};
     if(channel==='pasted_email'||channel==='call') body.said=CR.said;
     if(CR.answer==='rejected'&&CR.reasons.length) body.reasons=CR.reasons.slice();
