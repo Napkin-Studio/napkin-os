@@ -431,6 +431,13 @@ pub fn dispatch(
                 &crate::ops::review::parse_acknowledge(&req.body_str())?,
             )
         }),
+        "/unapprove" => review(session, ctx, |c, d| {
+            crate::ops::review::unapprove(
+                c,
+                d,
+                &crate::ops::review::parse_approve(&req.body_str())?,
+            )
+        }),
         "/approve" => review_then(
             session,
             ctx,
