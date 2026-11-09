@@ -1257,6 +1257,63 @@ section.report{margin-top:0}
 .rbi-pins td.v{font:600 12px var(--font-mono);color:var(--ink);text-align:right}
 .rbi-pins small.rbi-pq{display:block;margin-top:4px;padding-left:10px;border-left:2px solid var(--ink);font:italic 12.5px/1.45 var(--font-ui);color:var(--ink-soft)}
 .rbi-grid dd a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+
+/* ── the prompt and loading steps, as the mock (gaps R11, R12) ── */
+body.fresh .ws > main{padding:0 24px 80px}
+.rs-start.rt-prompt{display:block;min-height:0;max-width:1132px;margin:0 auto;padding:40px 0 40px;text-align:left}
+.rt-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding-bottom:22px;border-bottom:1px solid var(--line);margin-bottom:30px}
+.rt-head.compact{padding-bottom:12px;margin-bottom:14px;align-items:center}
+.rt-eb{display:flex;align-items:center;gap:8px;font:700 11.5px var(--font-mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--ink)}
+.rt-eb i{width:18px;height:6px;background:var(--ag-acc);border-radius:1px}
+.rt-h1{margin:8px 0 0;font:800 50px/1 var(--font-ui);letter-spacing:-2px;color:var(--ink)}
+.rt-head.compact .rt-h1{font-size:28px;letter-spacing:-1px;margin-top:6px}
+.rt-dot{display:inline-block;width:.2em;height:.2em;border-radius:50%;background:var(--ag-acc);margin-left:2px;box-shadow:0 0 0 1.5px var(--ink)}
+.rt-sub{margin:14px 0 0;max-width:600px;font-size:15px;line-height:1.5;color:var(--ink-soft)}
+.rt-steps{display:flex;align-items:flex-start;gap:0}
+.rt-st{display:grid;justify-items:center;gap:8px;width:58px}
+.rt-st b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);font:700 12px var(--font-mono);color:var(--muted);background:transparent}
+.rt-st small{font:600 10.5px var(--font-mono);letter-spacing:1.3px;text-transform:uppercase;color:var(--faint)}
+.rt-st.on b{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.rt-st.on small{color:var(--ink)}
+.rt-st.done b{background:var(--muted);border-color:var(--muted);color:var(--paper)}
+.rt-ln{width:28px;height:1px;background:var(--ink-soft);margin-top:17px}
+.rt-cols{display:grid;grid-template-columns:minmax(0,760px) minmax(0,1fr);gap:40px;align-items:start}
+.rt-prompt .rs-stage{width:auto;display:block}
+.rt-q{margin:0 0 16px;font:700 26px/1.2 var(--font-mono);letter-spacing:-.5px;color:var(--ink)}
+.rs-box.rt-box{display:block;border:2px solid var(--ink);border-radius:22px;background:var(--paper);padding:20px 26px;box-shadow:none}
+.rs-box.rt-box:focus-within{box-shadow:0 0 0 4px color-mix(in srgb,var(--ag-acc) 35%,transparent)}
+.rs-box.rt-box textarea{width:100%;min-height:136px;max-height:none;padding:0;font:17px/1.5 var(--font-ui);color:var(--ink)}
+.rt-prompt .rs-under{justify-content:flex-start;margin-top:16px;gap:6px}
+.rt-prompt .rs-eg{font-size:13px;color:var(--muted);margin-right:2px}
+.rt-prompt .rs-try{border:1px solid var(--line);border-style:solid;background:var(--card);color:var(--ink-soft);border-radius:999px;padding:4px 12px;min-height:28px;font-size:13px}
+.rt-picks{display:grid;gap:12px;margin-top:20px}
+.rt-pk{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;align-items:center}
+.rt-pl{font:700 10.5px var(--font-mono);letter-spacing:1.3px;text-transform:uppercase;color:var(--muted)}
+.rt-chips{display:flex;flex-wrap:wrap;gap:6px}
+.rt-chip{display:inline-flex;align-items:center;gap:7px;height:27px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:500 13px var(--font-ui);cursor:pointer}
+.rt-chip i{width:7px;height:7px;border-radius:50%;border:1px solid currentColor}
+.rt-chip.on{border-color:var(--ink);color:var(--ink);background:var(--card)}
+.rt-chip.on i{background:var(--ink);border-color:var(--ink)}
+.rt-mk{width:30px;height:30px;border-radius:50%;border:1px solid var(--ink-soft);background:transparent;color:var(--ink);font:700 11px var(--font-mono);cursor:pointer;padding:0}
+.rt-mk.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.rt-win{font:700 13px var(--font-mono);color:var(--ink)}
+.rt-win input{width:52px;border:0;border-bottom:1px dashed var(--line-strong);background:transparent;font:inherit;color:inherit;padding:2px 0;text-align:center}
+.rt-pnote{margin:0 0 0 66px;font-size:12px;color:var(--muted)}
+.rt-foot{display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+.rs-clip.rt-add{width:40px;height:40px;border:1px dashed var(--ink-soft);background:transparent;color:var(--muted);font:400 18px var(--font-ui)}
+.rt-files{flex:1;min-width:0;font-size:13px;color:var(--muted)}
+.rt-files b{color:var(--ink-soft);font-weight:600}
+.rt-files .att{display:inline-flex;gap:4px;align-items:center;border:0;background:none;padding:0}
+.rt-files .att button{border:0;background:none;color:var(--muted);cursor:pointer}
+.rs-go.rt-go{background:var(--ag-act);color:var(--ag-act-ink);height:44px;min-height:44px;padding:0 26px;font:600 15.5px var(--font-ui);box-shadow:none}
+.rt-prompt .rs-more{justify-content:flex-start;margin-top:14px}
+.rt-prompt .rs-name{justify-content:flex-start}
+.rt-side{display:grid;gap:10px;padding-top:52px}
+.rt-side .rs-hi{order:0;margin:0}
+.rt-side .rs-crew{order:0;padding:0;justify-content:flex-start;flex-wrap:wrap;gap:4px 2px}
+.rt-side .rs-m .agent-figure{width:34px;height:45px;margin-bottom:0}
+.rt-side .rs-m.big .agent-figure{width:40px;height:53px}
+@media (max-width:900px){ .rt-cols{grid-template-columns:1fr} .rt-side{padding-top:0} .rt-head{flex-direction:column;align-items:flex-start} .rt-h1{font-size:40px} }
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -3211,29 +3268,63 @@ section.report{margin-top:0}
     }).join('')+'</div>';
   }
   var FROM_BRIEF_PROMPT='Research for the brief this started from.';
+  // The tool's header, as the mock draws every step: eyebrow, "Research.",
+  // what it does, and the 1 Ask · 2 Agents · 3 Report stepper.
+  function toolHeadHtml(step, compact){
+    var org=camp().client_org&&camp().client_org.value&&camp().client_org.value.name, nm=CHAT.name||(camp().name&&camp().name.value)||'';
+    var eb=[org, nm||(step===1?'New question':'')].filter(Boolean).join(' · ');
+    var st=['Ask','Agents','Report'].map(function(t, i){ var n=i+1, c=n<step?'done':n===step?'on':'';
+      return (i?'<i class="rt-ln" aria-hidden="true"></i>':'')+'<span class="rt-st '+c+'"'+(n===step?' aria-current="step"':'')+'><b>'+n+'</b><small>'+t+'</small></span>'; }).join('');
+    return '<header class="rt-head'+(compact?' compact':'')+'"><div class="rt-l"><div class="rt-eb"><i aria-hidden="true"></i>'+esc(eb||'Research')+'</div><h1 class="rt-h1">Research<span class="rt-dot" aria-hidden="true"></span></h1>'
+      +(compact?'':'<p class="rt-sub">Ask one sharp question. Napkin searches the open web, reads your files, pins every fact with a source, and puts every call on the record.</p>')+'</div>'
+      +'<nav class="rt-steps" aria-label="Steps">'+st+'</nav></header>';
+  }
+  // Lenses, markets and a window before the run (gaps R11). The ask has no
+  // field for them until Ellis reads it, so what is picked is said in the
+  // request itself, under the question; nothing is picked unless a person does.
+  var MK_OFFER=['IE','GB','NI','US','DE','FR'];
+  function picks(){ return CHAT.picks||(CHAT.picks={lenses:[], markets:[], from:'', to:''}); }
+  function picksText(){
+    var P=picks(), t=[];
+    if(P.lenses.length) t.push('Lenses: '+P.lenses.map(function(k){ return lensName(k); }).join(', ')+'.');
+    if(P.markets.length) t.push('Markets: '+P.markets.join(', ')+'.');
+    if(P.from||P.to) t.push('Window: '+(P.from||'…')+'–'+(P.to||'…')+'.');
+    return t.length?'\n\n'+t.join(' '):'';
+  }
+  function picksHtml(off){
+    var P=picks();
+    return '<div class="rt-picks">'
+      +'<div class="rt-pk"><span class="rt-pl">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1; return '<button type="button" class="rt-chip'+(on?' on':'')+'" data-act="pk-lens" data-k="'+esc(L.k)+'" aria-pressed="'+on+'"'+off+'><i></i>'+esc(L.l)+'</button>'; }).join('')+'</span></div>'
+      +'<div class="rt-pk"><span class="rt-pl">Markets</span><span class="rt-chips">'+MK_OFFER.map(function(m){ var on=P.markets.indexOf(m)!==-1; return '<button type="button" class="rt-mk'+(on?' on':'')+'" data-act="pk-mk" data-k="'+m+'" aria-pressed="'+on+'"'+off+'>'+m+'</button>'; }).join('')+'</span></div>'
+      +'<div class="rt-pk"><span class="rt-pl">Window</span><span class="rt-win"><input type="text" id="pk-from" inputmode="numeric" maxlength="4" placeholder="2024" value="'+esc(P.from)+'" aria-label="From year"'+off+'> – <input type="text" id="pk-to" inputmode="numeric" maxlength="4" placeholder="2026" value="'+esc(P.to)+'" aria-label="To year"'+off+'></span></div>'
+      +'<p class="rt-pnote">Leave these and Jude picks the lenses from your question. Whatever you pick goes in with it.</p></div>';
+  }
   function startHtml(){
     var hi=CHAT.sending?CHAT.sendStep:CHAT.askWho&&!me()?'Before I start: what’s your name? It goes on everything you send.'
       :briefUpstream()?'Hi, I’m '+given('extract')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.'
       :'Hi, I’m '+given('extract')+'! Tell me who the client is and the market. I’ll read anything you add.';
     var off=CHAT.sending?' disabled':'';
-    return '<div class="rs-start">'
-      +'<div class="rs-hello"><h1>What should we find out?</h1><p>Name the client and the market. Add anything they sent you.</p></div>'
-      +'<div class="rs-stage">'
-      +'<div class="rs-box" id="composer">'
-        +'<label class="sr" for="cmp-prompt">What should we find out?</label>'
-        +'<textarea id="cmp-prompt" rows="1" placeholder="The client, the brand and the market"'+off+'>'+esc(CHAT.draft)+'</textarea>'
-        +'<button type="button" class="rs-clip" data-act="cmp-attach" aria-label="Add the client’s files" title="Add the client’s files"'+off+'>'+ICON.clip+'</button><input type="file" id="cmp-file" multiple hidden>'
-        +'<button type="button" class="rs-go" data-act="cmp-send"'+off+'>'+(CHAT.sending?'Starting…':'Start the research')+'</button>'
+    return '<div class="rs-start rt-prompt">'
+      +toolHeadHtml(1)
+      +'<div class="rt-cols"><div class="rs-stage">'
+      +'<h2 class="rt-q" id="rt-q">What do you need to find out?</h2>'
+      +'<div class="rs-box rt-box" id="composer">'
+        +'<label class="sr" for="cmp-prompt">What do you need to find out?</label>'
+        +'<textarea id="cmp-prompt" rows="5" placeholder="The client, the brand and the market, and the question you need answered"'+off+'>'+esc(CHAT.draft)+'</textarea>'
       +'</div>'
-      +'<div class="rs-hi" aria-live="polite"><span class="say"><span class="who">'+esc(whoOf('extract'))+'</span>'+esc(hi)+'</span></div>'
-      +crewBar()
-      +(CHAT.files.length?'<div class="rs-files atts">'+CHAT.files.map(function(f,i){ return '<span class="att">'+ICON.doc+'<span class="nm">'+esc(f.name)+'</span><small>'+esc(fmtSize(f.size||0))+'</small><button type="button" data-act="cmp-rm" data-i="'+i+'" aria-label="Remove '+esc(f.name)+'"'+off+'>×</button></span>'; }).join('')+'</div>':'')
+      +'<div class="rs-under" role="group" aria-labelledby="rs-eg"><span class="rs-eg" id="rs-eg">Try an example</span>'+TRY.map(function(t){ return '<button type="button" class="rs-try" data-act="cmp-try" data-text="'+esc(t)+'" title="Put this example in the box"'+off+'>'+esc(t)+'</button>'; }).join('')+'</div>'
+      +picksHtml(off)
       +askNameHtml()
       +(CHAT.showName||CHAT.name?'<div class="rs-name"><label for="cmp-name">Working name</label><input type="text" id="cmp-name" value="'+esc(CHAT.name)+'" placeholder="optional" autocomplete="off"></div>':'')
       +(CHAT.sendErr?'<div class="flag rs-err" role="alert"><div>'+esc(CHAT.sendErr)+'</div></div>':'')
-      +'<div class="rs-under" role="group" aria-labelledby="rs-eg"><span class="rs-eg" id="rs-eg">For example:</span>'+TRY.map(function(t){ return '<button type="button" class="rs-try" data-act="cmp-try" data-text="'+esc(t)+'" title="Put this example in the box"'+off+'>“'+esc(t)+'”</button>'; }).join('')+'</div>'
-      +'<p class="rs-drop"><b>Got a brief, an email or a deck?</b> Drop it anywhere on this page.</p>'
+      +'<div class="rt-foot">'
+        +'<button type="button" class="rs-clip rt-add" data-act="cmp-attach" aria-label="Add the client’s files" title="Add the client’s files"'+off+'>+</button><input type="file" id="cmp-file" multiple hidden>'
+        +'<span class="rt-files">'+(CHAT.files.length?CHAT.files.length+' file'+(CHAT.files.length===1?'':'s')+' attached: '+CHAT.files.map(function(f,i){ return '<span class="att"><b>'+esc(f.name)+'</b><button type="button" data-act="cmp-rm" data-i="'+i+'" aria-label="Remove '+esc(f.name)+'"'+off+'>×</button></span>'; }).join(' '):'<b>Got a brief, an email or a deck?</b> Add it, or drop it anywhere on this page.')+'</span>'
+        +'<button type="button" class="rs-go rt-go" data-act="cmp-send"'+off+'>'+(CHAT.sending?'Starting…':'Start research')+'</button>'
+      +'</div>'
       +'<div class="rs-more">'+(CHAT.showName||CHAT.name?'':'<button type="button" class="linkbtn" data-act="cmp-name">Give it a working name</button>')+signAsHtml()+'</div>'
+      +'</div>'
+      +'<aside class="rt-side"><div class="rs-hi" aria-live="polite"><span class="say"><span class="who">'+esc(whoOf('extract'))+'</span>'+esc(hi)+'</span></div>'+crewBar()+'</aside>'
       +'</div></div>';
   }
   function renderChat(){
@@ -3306,6 +3397,7 @@ section.report{margin-top:0}
     // reads its client, audience, background and objectives (features/spinoff-and-links).
     if(!prompt&&briefUpstream()&&!CHAT.files.length) prompt=FROM_BRIEF_PROMPT;
     if(!prompt){ toast('Say what the client needs: the research starts from your prompt.'); if(ta) ta.focus(); return; }
+    prompt+=picksText();
     if(!(window.clan&&window.clan.patchData&&window.clan.apiProxy&&(window.clan.uploadAsset||!CHAT.files.length))){ toast('Starting a campaign needs the host.'); return; }
     // `by` must name the person: the shell's, or the one this device knows.
     // Failing both, an upload is recorded as the person's, so with a file
@@ -4874,6 +4966,7 @@ section.report{margin-top:0}
     var t=e.target, id=t&&t.id;
     if(id==='cmp-prompt'){ CHAT.draft=t.value; grow(t); }
     else if(id==='cmp-name') CHAT.name=t.value;
+    else if(id==='pk-from'||id==='pk-to'){ picks()[id==='pk-from'?'from':'to']=t.value.replace(/[^0-9]/g,'').slice(0,4); }
     else if(id==='cmp-who') CHAT.who=t.value.trim();
     else if(id&&id.indexOf('qtext-')===0) CHAT.qdraft[t.getAttribute('data-q')]=t.value;
     else if(id&&id.indexOf('chkwhy-')===0){ var ui=CHK.ui[t.getAttribute('data-ref')]; if(ui){ ui.why=t.value; if(t.value.trim()) ui.err=false; } }
@@ -4963,6 +5056,7 @@ section.report{margin-top:0}
       case 'cmp-rm': CHAT.files.splice(+b.getAttribute('data-i'),1); renderChat(); break;
       case 'cmp-send': doSend(); break;
       case 'cmp-try': var tp=$('cmp-prompt'); CHAT.draft=b.getAttribute('data-text')||''; if(tp){ tp.value=CHAT.draft; grow(tp); tp.focus(); try{ tp.setSelectionRange(tp.value.length, tp.value.length); }catch(x){} } break;
+      case 'pk-lens': case 'pk-mk': var PK=picks(), pl=act==='pk-lens'?PK.lenses:PK.markets, pkk=b.getAttribute('data-k'), pix=pl.indexOf(pkk); if(pix===-1) pl.push(pkk); else pl.splice(pix,1); renderChat(); break;
       case 'cmp-name': CHAT.showName=true; renderChat(); var ni=$('cmp-name'); if(ni) ni.focus(); break;
       case 'chat-retry': doRetry(); break;
       case 'chat-poll': POLL.delay=1000; pollNow(); break;
