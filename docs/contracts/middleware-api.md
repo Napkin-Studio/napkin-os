@@ -37,7 +37,8 @@ name the stand-in, its port, or branch on which implementation answered.
             "app": { "app_id": "...", "version": "..." },
             "schema": {}, "data": {}, "facts": [], "findings": [], "pipeline": {},
             "decision_chain": {}, "context": "...", "lineage": {},
-            "upstream_payload"?: {}, "upstream_skipped"?: [], "upstream_ask"?: {} }
+            "upstream_payload"?: {}, "upstream_skipped"?: [], "upstream_ask"?: {},
+            "workspace_client"?: { "id": "cli_…", "name": "..." } }
 }
 ```
 
@@ -81,7 +82,22 @@ name the stand-in, its port, or branch on which implementation answered.
   the material and the roster gave nothing: origin `proposed`, citing
   `upstream_refs: ["<brief id>#<path>"]`, never over a `stated`, `confirmed`
   or `extracted` field. With no prompt or attachment, the brief is read
-  alone and no model is called.
+  alone and no model is called. `start_campaign`'s identify reads the same
+  ask beside the material (2026-11-09): its one model call is given each
+  path as a text `brief:<path>`, and a brand, client or category read only
+  from the brief is proposed with `upstream_refs`, never extracted. When the
+  material names no brand and the model read none from the brief, the
+  brief's `client` paragraph becomes a name (the workspace client's name if
+  the paragraph names it, else its first proper-noun phrase) and is
+  proposed as the brand and the client. The material always wins; the
+  confirm step gates every proposal.
+- **`workspace_client`** (2026-11-09, features/research-new-ui): the client
+  the document belongs to, its manifest's `client` (`{id, name}`, `id` is
+  `cli_` and eight hex digits). Absent when the document has no client.
+  `start_campaign`'s identify proposes `campaign.client_org` from it when
+  neither the roster, the material nor a carried brief names one: origin
+  `proposed`, with `workspace_ref: "<id>"` in place of `fact_ids` /
+  `upstream_refs` (Contract 3, client_org only).
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the

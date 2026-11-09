@@ -500,6 +500,12 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
     if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
         context["upstream_ask"] = ask;
     }
+    // The client the document belongs to (its manifest's), so a research
+    // started from the client page knows whose it is (`napkin.middleware/1`
+    // §1, `workspace_client`).
+    if let Some(c) = m.client.as_ref() {
+        context["workspace_client"] = json!({ "id": c.id, "name": c.name });
+    }
     if runs_brief_tasks(doc, &context["pipeline"]) {
         if let Some(up) = upstream_payload(doc) {
             context["upstream_payload"] = up.payload;
@@ -1318,6 +1324,32 @@ mod tests {
             .unwrap()
             .values()
             .all(|v| v.get("client").is_none()));
+    }
+
+    #[test]
+    fn the_middleware_is_told_whose_client_the_document_is() {
+        // research() has no client: nothing is sent.
+        assert!(clan_context_for_agent(&open(&research()))
+            .get("workspace_client")
+            .is_none());
+        // A document opened from a client's page carries the client.
+        let base = research();
+        let mut manifest = base.manifest().clone();
+        manifest.client = Some(clan_sdk::manifest::ClientRef {
+            id: "cli_0b19a78d".into(),
+            name: "Guinness".into(),
+        });
+        let mut b = ClanBuilder::new(manifest);
+        for (p, v) in base.read_all_entries().unwrap() {
+            if p != MANIFEST_PATH {
+                b.add_entry(p, v);
+            }
+        }
+        let with = open(&ClanFile::from_bytes(b.build().unwrap()).unwrap());
+        assert_eq!(
+            clan_context_for_agent(&with)["workspace_client"],
+            serde_json::json!({ "id": "cli_0b19a78d", "name": "Guinness" })
+        );
     }
 
     #[test]
