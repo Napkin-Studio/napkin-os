@@ -1797,10 +1797,12 @@ test('nothing the brief did before is gone: every control is still on the page',
     'fields', 'review', 'crewline', 'upNote', 'madeFrom', 'boards', 'redraft', 'newDraft', 'lockBtn', 'lockList', 'lockedBadge', 'status',
     'saveBtn', 'exHtml', 'exPdf', 'exHtmlPlain', 'exPdfPlain', 'toast', 'walker', 'docIdent', 'hProj', 'hCli'])
     assert.match(BM, new RegExp(`id="${id}"`), `#${id} is on the page`)
-  assert.match(BM, /See each part as it’s written/)
-  // Per-part controls: edit, write again, keep as is (locked_fields), and the way into why.
+  assert.match(BM, /See each part as it is written/)
+  // Per-part: the way into why stays on the part; edit, write again and keep as is (locked_fields)
+  // are the Selected part panel's, as the mock (no hover icons on the part).
   const row = fn(BM, 'fieldRow')
-  for (const c of ['act-edit', 'act-regen', 'act-lock', 'prov']) assert.match(row + fn(BM, 'provHtml'), new RegExp(c))
+  assert.match(row + fn(BM, 'provHtml'), /prov/)
+  assert.doesNotMatch(row, /class="ctrls"|act-edit|act-regen|act-lock/, 'no hover cluster on the part')
   // The selected part offers the same, through the same functions.
   const sel = fn(BM, 'renderSelPart')
   assert.match(sel, /startEdit\(row,f\)/)

@@ -1085,6 +1085,9 @@
   .bf-also > summary::before{content:"▸ "}
   .bf-also[open] > summary::before{content:"▾ "}
   .bf-also .bf-used{margin:6px 0 0}
+  /* the meta row's cells hold short values (the mock): a long one is clamped to the mock's two lines on
+     screen, its whole text in the cell's tooltip and in Edit; the PDF keeps every word */
+  @media screen{ .sheet.a4:not(.page) .pgrid > .row.k-cell:is([data-clan-part="client"],[data-clan-part="project_name"],[data-clan-part="budget_and_scope"]) .val{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden} }
   .sheet.a4 .pgrid > .row.meta-version{cursor:default}
   .sheet.a4 .pgrid > .row.meta-version:hover{background-color:transparent}
   .sheet.a4 .pgrid > .row.k-cell .val.empty{font-style:normal;font-weight:600;color:var(--b-muted)}
@@ -1119,6 +1122,7 @@
   .flow button[aria-current="step"]{color:var(--nd-ink)}
   .flow button[aria-current="step"] i{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
   .flow button.done i{background:var(--nd-ink);border-color:var(--nd-ink);color:var(--nd-paper)}
+  .flow button.done:not([aria-current]){opacity:.45}
   /* the crew, under step 2: Ellis greets, Dara and Jude say what they do */
   .crewpop{position:absolute;top:calc(100% + 12px);right:-74px;z-index:30;width:max-content;max-width:min(560px,92vw);padding:18px 18px 8px;background:var(--nd-paper);border:1px solid var(--nd-line);border-radius:8px;box-shadow:var(--shadow-paper);opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .15s,transform .15s,visibility 0s .15s}
   .fl-crew:hover .crewpop,.fl-crew:focus-within .crewpop,.fl-crew.open .crewpop{opacity:1;visibility:visible;transform:none;transition:opacity .15s,transform .15s}
@@ -1181,6 +1185,58 @@
   /* the start's own line is the header's ("Turn client notes … on a single sheet of paper"); the
      footer's line stays under the working crew */
   .app.p-intake > .foot{display:none}
+  /* ── The crew at work, to the mock's live agent stage (#brief-screen-loading, body[data-step=loading],
+     .p33-runbar): one paper panel, the step pills on a white strip, the desk with two rails and the
+     agent's sphere, the caption under it; then the run bar. ── */
+  .app.p-start > .proc{padding:14px 0 0;gap:0;align-items:stretch}
+  .pwrap{background:var(--nd-paper);border:1px solid var(--nd-line);border-radius:8px;box-shadow:var(--shadow-paper);overflow:hidden;position:relative}
+  .ptop{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--nd-line);background:var(--nd-card);flex-wrap:wrap;position:relative;z-index:15}
+  :root[data-color-scheme="dark"] .ptop{background:var(--nd-paper)}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .ptop{background:var(--nd-paper)} }
+  .apills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .apill{min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--nd-line);background:var(--nd-paper);font:600 12.5px/1.55 var(--font-ui);color:var(--nd-muted);display:inline-flex;align-items:center;gap:6px}
+  .apill .mdot{width:8px;height:8px;border-radius:50%}
+  .apill[aria-current="step"]{background:var(--nd-ink);color:var(--nd-paper);border-color:var(--nd-ink)}
+  .apill.done{border-color:var(--nd-ok);color:var(--nd-ok)}
+  .sstage{position:relative;background:var(--nd-desk);display:grid;grid-template-columns:minmax(240px,310px) minmax(320px,440px) minmax(240px,310px);justify-content:center;align-items:center;gap:16px;padding:12px 16px;height:clamp(420px,calc(100vh - 338px),640px)}
+  .sstage .rail{display:flex;flex-direction:column;gap:8px;z-index:4;max-height:100%;overflow-y:auto;padding:4px}
+  .score{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .aglbox{width:min(360px,44vh);height:min(340px,40vh);position:relative;display:grid;place-items:center}
+  .aglbox .agent-figure{width:96px;height:128px}
+  .scap{text-align:center;min-height:64px;z-index:4;display:grid}
+  .abadge{display:inline-block;font:700 11px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ag-base);margin-bottom:3px}
+  .scap .l1{display:block;font:700 20px/1.55 var(--font-ui);letter-spacing:-.015em;color:var(--nd-ink)}
+  .scap .l2{display:block;font-size:13.5px;line-height:1.55;color:var(--nd-muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  .scap .l2.err{color:var(--nd-alert)}
+  .wsec{display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
+  .wsec-h{font:700 10.5px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted);padding-left:8px;border-left:2px solid var(--nd-ink)}
+  .wcard{position:relative;background:var(--nd-paper);color:var(--nd-ink);border:1px solid var(--nd-line);border-radius:5px;padding:8px 11px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
+  :root[data-color-scheme="dark"] .wcard{background:var(--nd-card)}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .wcard{background:var(--nd-card)} }
+  .wcard .wlab{font:600 10px/1.55 var(--font-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--nd-muted);display:flex;align-items:center;gap:6px;padding-right:16px}
+  .wcard .wsnip{font:13.5px/1.4 var(--font-serif);color:var(--nd-ink);margin-top:3px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .wcard .wsnip.wait{color:var(--nd-faint);font-style:italic}
+  .wcard .wchk{position:absolute;top:7px;right:8px;font-size:12px;font-weight:800;color:var(--nd-ok)}
+  .wcard .wchk.now{color:var(--ag-base)}
+  .wcard .wchk.bad{color:var(--nd-alert)}
+  .runbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:12px;padding:12px 16px;border:1px solid var(--nd-line);border-radius:12px;background:var(--nd-paper);font-size:13px}
+  .runbar .sp{flex:1 1 0%}
+  .runbar .procActs{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .runbar .procActs:empty{display:none}
+  .runbar .stopq{color:var(--nd-ink-soft)}
+  .runbar .sp-btn{height:28px;min-height:28px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer}
+  .runbar .go{min-height:38px;height:38px;padding:0 16px;border:1px solid var(--ag-act);border-radius:4px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px/1.55 var(--font-ui);letter-spacing:0;text-shadow:none;box-shadow:none}
+  .runbar .go:disabled{opacity:.5}
+  .ptiles{flex-basis:100%;order:9}
+  .ptiles summary{cursor:pointer;font-size:12.5px;color:var(--nd-muted)}
+  .ptiles .tiles{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .ptiles .tile{font-size:12px;padding:5px 10px;border-radius:6px;border:1px dashed var(--nd-line);color:var(--nd-faint);background:transparent;box-shadow:none;display:inline-block;min-height:0}
+  .ptiles .tile.done{border-style:solid;color:var(--nd-ink-soft);background:var(--nd-card)}
+  .ptiles .tile.done::before{content:"✓ ";color:var(--nd-ok)}
+  .ptiles .tile.now{border-style:solid;border-color:var(--ag-base);color:var(--ag-base)}
+  .ptiles .tile.fail{border-style:solid;border-color:var(--nd-alert);color:var(--nd-alert)}
+  .app.p-start:has(> .proc.on) > .foot{display:none}
+  @media (max-width:980px){ .sstage{grid-template-columns:1fr;height:auto} }
   @media (max-width:880px){ .paperc{max-width:none} }
   @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} .crewpop{left:0;right:0;top:calc(100% - 8px);max-width:none;width:auto} }
   @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} .crewpop .onbox{flex-direction:column;gap:14px} .crewpop .onbox .m{width:auto} }
@@ -1236,16 +1292,32 @@
     </div>
   </section>
 
-  <!-- PHASE 2 — WORKING: the crew introduce themselves, each with their live status -->
+  <!-- PHASE 2 — WORKING: the mock's live agent stage (napkin-app-v1 #brief-screen-loading and phase 33's
+       run bar): the four steps as pills, the desk filling on two rails, the active agent's sphere
+       and its words, then Back, Stop, Skip to the finished brief and each part as it is written. -->
   <section class="proc" id="proc">
-    <div class="hello" aria-live="polite">
-      <h2 class="h1" id="procH">Meet your crew</h2>
-      <p class="lede procS" id="procS"></p>
+    <div class="pwrap">
+      <div class="ptop"><div class="apills" id="apills" role="list" aria-label="The crew’s steps"></div></div>
+      <div class="sstage" id="meet">
+        <div class="rail" id="railL"></div>
+        <div class="score">
+          <div class="aglbox" id="aglBox" title="Nothing gets lost. Every brief stored and searchable."></div>
+          <div class="scap" aria-live="polite">
+            <span class="abadge" id="capAgent" title="You’ll see these names in every tool. The same crew works everywhere, and every part of the brief says who wrote it."></span>
+            <span class="l1" id="procH"></span>
+            <span class="l2 procS" id="procS"></span>
+          </div>
+        </div>
+        <div class="rail" id="railR"></div>
+      </div>
     </div>
-    <div class="meet" id="meet"></div>
-    <div class="procActs" id="procActs"></div>
-    <details class="parts"><summary>See each part as it’s written</summary><div class="tiles" id="tiles"></div></details>
-    <p class="later">You’ll see these names in every tool. The same crew works everywhere, and every part of the brief says who wrote it.</p>
+    <div class="runbar">
+      <button type="button" class="side-link" id="procBackL">← Back to the ask</button>
+      <span class="sp"></span>
+      <span class="procActs" id="procActs"></span>
+      <button type="button" class="go" id="procOpen">Skip to the finished brief →</button>
+      <details class="ptiles"><summary id="tilesSum">See each part as it is written</summary><div class="tiles" id="tiles"></div></details>
+    </div>
   </section>
 
   <!-- PHASE 3 — THE BRIEF: an A4 sheet, and the side tab beside it (features/brief-new-ui.clan) -->
@@ -1342,6 +1414,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="dropveil" id="dropveil" hidden>Drop to add to your brief</div>
 
+<!-- @napkin:agent-sphere -->
 <script>
   var clanScheme = navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
   var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
@@ -2542,18 +2615,18 @@
     [ask,crew,br].forEach(function(b){ b.removeAttribute('aria-current'); b.classList.remove('done'); });
     (phase==='proc'?crew:ask).setAttribute('aria-current','step');
     if(phase==='proc') ask.classList.add('done');
-    stepOn(ask, phase==='intake'||!!$('procBack'), 'The crew are working on it');
+    stepOn(ask, true, '');
     stepOn(br, hasContent(), 'The brief is written here once the crew have drafted it');
-    crew.classList.toggle('ahead-dim', phase==='intake'); crew.title=phase==='intake'?'Your crew: who works on the brief':'';
+    crew.classList.toggle('ahead-dim', phase==='intake'&&!draftLive()); crew.title=phase==='intake'?(draftLive()?'The crew are at work: see them':'Your crew: who works on the brief'):'';
     if(phase!=='intake') crewPop(false);
     renderHeadEye();
   }
   function crewPop(on){ var li=$('stepCrew').parentNode; li.classList.toggle('open', !!on); $('stepCrew').setAttribute('aria-expanded', on?'true':'false'); }
-  $('stepAsk').addEventListener('click',function(){ if(phase==='proc'){ var b=$('procBack'); if(b) b.click(); } });
-  $('stepCrew').addEventListener('click',function(){ if(phase==='intake') crewPop(!$('stepCrew').parentNode.classList.contains('open')); });
+  $('stepAsk').addEventListener('click',function(){ if(phase==='proc') $('procBackL').click(); });
+  $('stepCrew').addEventListener('click',function(){ if(phase!=='intake') return; if(draftLive()){ crewPop(false); setPhase('proc'); renderProc(); return; } crewPop(!$('stepCrew').parentNode.classList.contains('open')); });
   $('stepBrief').addEventListener('click',function(){
     if(!hasContent()) return;
-    if(phase==='proc'){ var s=$('procSee'); if(s) s.click(); return; }
+    if(phase==='proc'){ $('procOpen').click(); return; }
     forceIntake=false; render();
   });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('stepCrew').parentNode.classList.contains('open')){ crewPop(false); $('stepCrew').focus(); } });
@@ -2770,80 +2843,140 @@
   }
   // Four of us: Sam plans the whole brief (and runs the research it needs) before Dara writes.
   function meetOf(j){ return ['extract','synthesis','drafter','judge']; }
+  // The mock's four steps (RUN_PLANS.brief): who works each, its sphere and the kind of work.
+  var PLAN=[
+    {st:'extract', who:'extract',   agent:'knowledge', name:'Knowledge', mat:'ONYX',     kind:'read',  l1:'Reading what you sent'},
+    {st:'context', who:'synthesis', agent:'strategy',  name:'Strategy',  mat:'GRAPHITE', kind:'think', l1:'Planning the whole brief'},
+    {st:'draft',   who:'drafter',   agent:'brief',     name:'Brief',     mat:'PEARL',    kind:'write', l1:'Writing every part on the sheet'},
+    {st:'judge',   who:'judge',     agent:'review',    name:'Review',    mat:'PEARL',    kind:'check', l1:'Checking every part against evidence'}];
+  var MAT_C={ONYX:'#16191D', GRAPHITE:'#3B4254', PEARL:'#D8D4CA', GLASS:'#93B4E8'};
+  // The agent sphere (identity-v4/agents, inlined as NapkinSpheres): one, made on the first run, told
+  // each step as the job reports it; a step that moves on is a handoff, as the mock's renderStageStep.
+  var SPH={view:null, tried:false, key:''};
+  function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function hexMix(a, b, t){ var p=function(h){ h=String(h).replace('#',''); return [0,2,4].map(function(i){ return parseInt(h.slice(i,i+2),16)||0; }); }, x=p(a), y=p(b);
+    return '#'+x.map(function(v,i){ return ('0'+Math.round(v+(y[i]-v)*t).toString(16)).slice(-2); }).join(''); }
+  function lumOf(h){ var c=String(h).replace('#',''); return (0.299*parseInt(c.slice(0,2),16)+0.587*parseInt(c.slice(2,4),16)+0.114*parseInt(c.slice(4,6),16))/255; }
+  function sphere(){
+    if(SPH.view||SPH.tried) return SPH.view;
+    SPH.tried=true;
+    var S=window.NapkinScene, A=window.NapkinSpheres;
+    if(!S||!A||!S.gl) return null;
+    try{
+      var base=cssVar('--ag-base')||'#515BFF', acc=cssVar('--ag-acc')||'#C8CBFF', dark=document.documentElement.getAttribute('data-color-scheme')==='dark'||(!document.documentElement.getAttribute('data-color-scheme')&&matchMedia('(prefers-color-scheme: dark)').matches);
+      // the ring is the agency's base; a near-black base rings in its accent, deepened (the mock's TBWA ring)
+      var ring=lumOf(base)<0.15?hexMix(acc,'#000000',0.23):base;
+      SPH.view=A.create(S, $('aglBox'), {level:4, accent:ring, inkAccent:base, bg:'#F6F1E7', dark:dark, rFrac:[0.27,0.24], cyFrac:0.45});
+    }catch(e){ SPH.view=null; }
+    return SPH.view;
+  }
+  function tellSphere(at, j, live){
+    var v=sphere(), box=$('aglBox');
+    if(!v){ var k=PLAN[at].who; if(box.getAttribute('data-fig')!==k){ box.setAttribute('data-fig',k); box.innerHTML=fig(k,{state:live?'working':'idle',label:sayer(k)}); } return; }
+    var phase=j.state==='done'?'hold':'run', key=at+':'+phase+':'+(j.state==='failed'?'e':'');
+    if(key===SPH.key) return;
+    var prev=SPH.key?+SPH.key.split(':')[0]:-1; SPH.key=key;
+    var steps=PLAN.map(function(p){ return {label:p.l1, kind:p.kind}; });
+    if(live&&prev>=0&&at>prev) v.setEnvelope({agentKey:PLAN[prev].agent, nextAgentKey:PLAN[at].agent, phase:'handoff', steps:steps, step:{index:prev}, stepStartedAt:Date.now(), streaming:true});
+    v.setEnvelope({agentKey:PLAN[at].agent, nextAgentKey:PLAN[Math.min(at+1,3)].agent, phase:phase, steps:steps, step:{index:phase==='hold'?steps.length:at},
+      stepStartedAt:Date.now(), streaming:live, errorRetrying:j.state==='failed'});
+  }
+  function slip(lab, text, mark, wait){ return '<div class="wcard"><div class="wlab"><span>'+esc(lab)+'</span></div><div class="wsnip'+(wait?' wait':'')+'">'+esc(text)+'</div>'
+    +(mark?'<span class="wchk'+(mark==='now'?' now':mark==='bad'?' bad':'')+'" aria-hidden="true">'+(mark==='now'?'…':mark==='bad'?'!':'✓')+'</span>':'')+'</div>'; }
+  // A rail section holds four slips, as the mock's: the ones at work first; the count says the rest.
+  function wsec(h, cards){
+    var now=cards.filter(function(c){ return c.indexOf('wchk now')!==-1; }), rest=cards.filter(function(c){ return c.indexOf('wchk now')===-1; }), shown=now.concat(rest).slice(0,4);
+    return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip('Nothing yet', 'It fills as the crew work.', '', true))+'</div>'; }
+  function valText(v){ return Array.isArray(v)?v.join(' · '):v&&typeof v==='object'?Object.keys(v).map(function(k){ return v[k]; }).filter(Boolean).join(' · '):String(v==null?'':v); }
+  // A part on a rail: its value once written, else what is happening to it.
+  function partSlip(f, fs){ var x=fs[f.key]||{state:'waiting'}, v=get(f.key), busy=!!BUSY[x.state];
+    var mark=busy?'now':x.state==='failed'?'bad':x.state==='done'||x.state==='proposed'||x.state==='kept'?'ok':'';
+    return slip(f.label, hasVal(v)&&!busy?short(valText(v),110):stateText(f,x), mark, !hasVal(v)||busy); }
+  // What each step puts on the desk: the mock's rails for that step, filled from the job.
+  function rails(at, j){
+    var fs=j.fields||{}, ended=at>0||j.state==='done';
+    var byKey=function(ks){ return FIELDS.filter(function(f){ return ks.indexOf(f.key)!==-1; }); };
+    if(at===0){
+      var ins=[], words=String(get('brief_input')||'').trim();
+      if(j.sent?j.sent.words:words) ins.push(slip('Your words', words?short(words,110):'What you typed', ended?'ok':'now'));
+      arr(data().reference_assets).forEach(function(a){ var ext=(/\.([a-z0-9]+)$/i.exec(a.label||a.name||'')||[])[1]||a.type||'file';
+        ins.push(slip('File · '+String(ext).toUpperCase(), a.label||a.name, ended?'ok':'now')); });
+      if(isResearchFed()){ var c=upCounts(); ins.push(slip('Research · .clan', (upTitle()||'The research')+(c.pins?' — '+c.pins+' pinned '+(c.pins===1?'fact':'facts'):''), ended?'ok':'now')); }
+      var got=FIELDS.filter(function(f){ return (j.ek||{})[f.key]; }).map(function(f){ return partSlip(f, fs); });
+      return [wsec('Inputs on the desk', ins), wsec('Extracted constraints', got)];
+    }
+    if(at===1){
+      var sam=FIELDS.filter(function(f){ return (j.sk||{})[f.key]; });
+      return [wsec('Core territory', byKey(['background','barrier','audience']).map(function(f){ return partSlip(f, fs); })),
+        wsec('Strategic thesis', (sam.length?sam:byKey(['insight','single_minded_proposition'])).map(function(f){ return partSlip(f, fs); }))];
+    }
+    if(at===2){
+      var mine=FIELDS.filter(function(f){ return (j.dk||{})[f.key]; }), list=mine.length?mine:FIELDS, half=Math.ceil(list.length/2);
+      return [wsec('Identity & Objectives', list.slice(0,half).map(function(f){ return partSlip(f, fs); })),
+        wsec('Proposition & Response', list.slice(half).map(function(f){ return partSlip(f, fs); }))];
+    }
+    var held=FIELDS.filter(function(f){ return (fs[f.key]||{}).state==='done'; }), redo=FIELDS.filter(function(f){ var st=(fs[f.key]||{}).state; return st==='revising'||st==='failed'||st==='proposed'||st==='judging'; });
+    return [wsec('Verified against research', held.map(function(f){ return partSlip(f, fs); })), wsec('Self-critique & rewrite', redo.map(function(f){ return partSlip(f, fs); }))];
+  }
   function renderProc(){
     var j=DRAFT; if(!j) return;
     track(j);
-    var c=crewStates(j), fs=j.fields||{}, at=STAGES.indexOf(j.stage);
+    var c=crewStates(j), fs=j.fields||{}, at=Math.max(0, STAGES.indexOf(j.stage));
     var live=j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking';
-    var stopAt=!live&&j.state!=='done'?Math.max(at,0):-1;
+    if(j.state==='done') at=3;
+    var stopAt=!live&&j.state!=='done'?at:-1;
     var H={done:'Your brief is ready', failed:'We had to stop', unsent:'We couldn’t start', stalled:'We lost touch with the work', cancelled:'You stopped the draft'};
-    $('procH').textContent=H[j.state]||'Meet your crew';
-    var MEET=meetOf(j);
-    $('procS').textContent=j.error?j.error:j.state==='done'?'Opening it now…':j.state==='cancelled'?'What the crew had written before you stopped it stays in the brief.':(MEET.length===4?'Four':'Three')+' of us are on your brief. We’ll tell you what we’re doing as we go.';
-    $('procS').classList.toggle('err', !!j.error);
+    // the pills: done ticked, the one at work filled, the rest outlined
+    $('apills').innerHTML=PLAN.map(function(p,i){ var done=i<at||j.state==='done', cur=i===at&&j.state!=='done';
+      return '<span class="apill'+(done?' done':'')+'" role="listitem"'+(cur?' aria-current="step"':'')+'><span class="mdot" style="background:'+MAT_C[p.mat]+'"></span><span>'+(done?'✓ ':'')+(i+1)+'. '+p.name+' ('+p.kind+')</span></span>'; }).join('');
+    // the crew's own words, as the build had them: each agent's intro and its live line
     var d=daraCount(j), eN=Object.keys(j.eDone).length, failed=FIELDS.filter(function(f){ return (fs[f.key]||{}).state==='failed'; }).length;
-    var busyDraft=FIELDS.filter(function(f){ var x=fs[f.key]||{}; return x.by==='drafter'&&BUSY[x.state]; });
-    var st={extract:c.states.extract, synthesis:c.states.synthesis, drafter:c.states.drafter, judge:c.states.judge};
-    var sN=Object.keys(j.sk||{}).filter(function(k){ return (fs[k]||{}).state==='done'; }).length;
-    if(live&&at<=0&&st.extract==='idle') st.extract='working';   // sending, picking up: Ellis is first
-    var M={
-      extract:{
-        intro:st.extract==='done'?'<b>Hi, I’m '+esc(ELLIS)+'.</b> I read everything you sent'+esc(sentWords(j))+'.'
-          :'<b>Hi, I’m '+esc(ELLIS)+'.</b> I’m reading everything you sent'+esc(sentWords(j))+'.',
-        st:st.extract==='done'?['ok','✓ Done.'+(eN?' I picked out '+eN+ofAll()+'.':'')]
-          :['', j.state==='sending'||j.state==='checking'||j.state==='queued'?'Getting started…':'Reading now…']},
-      drafter:{
-        intro:st.drafter==='idle'&&at<2?'<b>I’m '+esc(DARA)+'.</b> I’ll write your whole brief from '+esc(SAM)+'’s plan.'
-          :st.drafter==='done'&&!d.n?'<b>I’m '+esc(DARA)+'.</b> There was nothing for me to write this time.'
-          :st.drafter==='done'&&!d.w?'<b>I’m '+esc(DARA)+'.</b> None of my parts went into the brief this time.'
-          :'<b>I’m '+esc(DARA)+'.</b> '+(st.drafter==='done'?'I wrote '+d.w:'I’m writing '+(d.n?d.n:'my share'))+esc(ofAll())+', all at once from '+esc(SAM)+'’s plan.',
-        st:st.drafter==='done'?['ok','✓ Done.'+(d.props.length?' I’ve a new version of '+esc(listWords(d.props.map(partName)))+' for you. You hold '+(d.props.length===1?'that part':'those parts')+', so I didn’t change '+(d.props.length===1?'it':'them')+'.':'')]
-          :st.drafter==='working'&&at===3?['', 'Rewriting '+esc(listWords(busyDraft.map(partName)))+' on '+esc(JUDE)+'’s note.']
-          :st.drafter==='working'?['', '<span class="pbar" aria-hidden="true"><i style="width:'+(d.n?Math.round(100*d.k/d.n):4)+'%"></i></span>'+(d.n?d.k+' of my '+d.n+' written':'Starting…')]
-          :['', 'Waiting for '+esc(SAM)]},
-      synthesis:{
-        intro:'<b>I’m '+esc(SAM)+'.</b> '+(st.synthesis==='done'?'I planned the whole brief and looked up what it needed.'
-          :'I plan the whole brief first, so every part serves one idea, and I look up what it needs.'),
-        st:st.synthesis==='done'?['ok','✓ Done. The plan is with '+esc(DARA)+'.']
-          :st.synthesis==='working'?['', 'Planning, then researching what the plan needs…']
-          :['', 'Waiting for '+esc(ELLIS)]},
-      judge:{
-        intro:'<b>And I’m '+esc(JUDE)+'.</b> '+(st.judge==='working'?'I’m reading the whole brief and checking what rests on the research.'
-          :st.judge==='done'||st.judge==='needs-you'?'I read the whole brief and checked what rests on the research.'
-          :'When '+esc(DARA)+'’s done, I read the whole brief, check what rests on the research, and tell you what needs you.'),
-        st:st.judge==='needs-you'?['err', '✓ Done. '+esc(Num(failed)+' '+(failed===1?'part needs':'parts need'))+' you.']
-          :st.judge==='done'?['ok','✓ Done. Every part I checked holds up.']
-          :st.judge==='working'?['', esc(c.texts.judge||'Checking…')]
-          :['', 'Waiting for '+esc(DARA)]}
+    var st=c.states; if(live&&at<=0&&st.extract==='idle') st.extract='working';
+    var LINE={
+      extract:st.extract==='done'?ELLIS+' read everything you sent'+sentWords(j)+(eN?'. Picked out '+eN+ofAll()+'.':'.')
+        :(j.state==='sending'||j.state==='checking'||j.state==='queued'?'Getting started… ':'')+ELLIS+' is reading everything you sent'+sentWords(j)+'.',
+      synthesis:st.synthesis==='done'?SAM+' planned the whole brief; the plan is with '+DARA+'.':st.synthesis==='working'?SAM+' is planning, then researching what the plan needs…':'Waiting for '+ELLIS+'.',
+      drafter:st.drafter==='done'?(d.w?DARA+' wrote '+d.w+ofAll()+'.':DARA+': none of my parts went into the brief this time.')+(d.props.length?' A new version of '+listWords(d.props.map(partName))+' for you; you hold '+(d.props.length===1?'it':'them')+'.':'')
+        :st.drafter==='working'?(d.n?DARA+': '+d.k+' of my '+d.n+' written':DARA+' is starting…'):'Waiting for '+SAM+'.',
+      judge:st.judge==='needs-you'?JUDE+': '+Num(failed)+' '+(failed===1?'part needs':'parts need')+' you.':st.judge==='done'?JUDE+': every part I checked holds up.':st.judge==='working'?(c.texts.judge?JUDE+': '+c.texts.judge:JUDE+' is checking…'):'Waiting for '+DARA+'.'
     };
-    var el=$('meet');
-    if(el.childNodes.length!==MEET.length) el.innerHTML=MEET.map(function(k){ return '<div class="mate" data-k="'+k+'"><div class="mfig"></div><div class="say up"></div></div>'; }).join('');
-    MEET.forEach(function(k,i){
-      var m=el.querySelector('.mate[data-k="'+k+'"]'), s=st[k], stop=stopAt>=0&&STAGE_K[STAGES[stopAt]]===k;
-      var fst=stop||s==='needs-you'?'needs-you':s==='working'?'working':'idle';
-      // redraw the figure only when its state changes, so it keeps its motion
-      if(m.getAttribute('data-st')!==fst){ m.setAttribute('data-st',fst); m.querySelector('.mfig').innerHTML=fig(k,{state:fst,label:sayer(k)}); }
-      var now=s==='working'&&live, warn=stop||s==='needs-you', next=!now&&!warn&&s==='idle';
-      m.className='mate'+(now?' now':'')+(next?' next':'');
-      var line=stop?['err', j.state==='cancelled'?'You stopped it here.':'I had to stop here.']:M[k].st;
-      m.querySelector('.say').className='say up'+(warn?' warn':now?' now':'');
-      m.querySelector('.say').innerHTML='<span class="sayer">'+esc(sayer(k))+'</span>'+M[k].intro+'<span class="st'+(line[0]?' '+line[0]:'')+'">'+line[1]+'</span>';
-    });
-    $('tiles').innerHTML=FIELDS.map(function(f){ return tileHtml(f, fs[f.key]||{state:isLocked(f.key)?'kept':'waiting', by:null}); }).join('');
-    var acts=$('procActs');
-    // Stop the draft: a person may cancel it at any stage (cancel_job). What
-    // the crew already sent stays; it writes nothing more.
-    var canStop=live&&j.id&&j.state!=='checking';
-    acts.innerHTML=!live&&j.state!=='done'?(hasContent()?'<button type="button" class="ghost big" id="procSee">See what was written</button>':'')+'<button type="button" class="ghost big" id="procBack">Back to the start</button>'
-      :canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="ghost big" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="ghost big" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
-        :'<button type="button" class="ghost big" id="procStop">Stop the draft</button>'):'';
+    var P=PLAN[at], k=P.who;
+    $('capAgent').textContent=P.name.toUpperCase()+' AGENT · '+P.mat+' SPHERE';
+    var l1=$('procH'), l2=$('procS');
+    l1.textContent=H[j.state]||P.l1;
+    l1.title=sayer(k);
+    var stopLine=stopAt>=0?(j.state==='cancelled'?'You stopped it at '+P.name.toLowerCase()+'. What the crew had written stays in the brief.':'The crew had to stop at '+P.name.toLowerCase()+'.'):'';
+    l2.textContent=j.error?j.error:j.state==='done'?'Opening it now…':stopLine||('Step '+(at+1)+' of '+PLAN.length+' · '+LINE[k]);
+    l2.classList.toggle('err', !!j.error);
+    var R=rails(at, j); $('railL').innerHTML=R[0]; $('railR').innerHTML=R[1];
+    tellSphere(at, j, live);
+    // each part as it is written
+    var written=FIELDS.filter(function(f){ return (fs[f.key]||{}).state==='done'; }).length;
+    $('tiles').innerHTML=FIELDS.map(function(f){ var x=fs[f.key]||{state:isLocked(f.key)?'kept':'waiting', by:null}, s0=x.state;
+      var cls=BUSY[s0]?'now':s0==='done'||s0==='kept'||s0==='proposed'?'done':s0==='failed'?'fail':'';
+      return '<span class="tile'+(cls?' '+cls:'')+'" data-key="'+esc(f.key)+'" data-state="'+esc(s0)+'" title="'+esc(stateText(f,x))+'">'+esc(f.label)+'</span>'; }).join('');
+    $('tilesSum').textContent='See each part as it is written · '+written+' of '+FIELDS.length;
+    // Stop: a person may cancel it at any stage (cancel_job); what the crew already sent stays.
+    var acts=$('procActs'), canStop=live&&j.id&&j.state!=='checking';
+    acts.innerHTML=canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+      :'<button type="button" class="sp-btn" id="procStop">Stop</button>'):'';
     var stp=$('procStop'); if(stp) stp.addEventListener('click',function(){ j.stopAsk=true; renderProc(); var y=$('procStopYes'); if(y) y.focus(); });
     var sno=$('procStopNo'); if(sno) sno.addEventListener('click',function(){ j.stopAsk=false; renderProc(); });
     var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
-    var see=$('procSee'); if(see) see.addEventListener('click',function(){ DRAFT=null; forceIntake=false; setPhase('doc'); render(); });
-    var back=$('procBack'); if(back) back.addEventListener('click',function(){ DRAFT=null; forceIntake=true; setPhase('intake'); render(); });
+    var open=$('procOpen'); open.disabled=!(hasContent()||j.state==='done');
+    open.title=open.disabled?'The brief opens here once the crew have written a part':'';
     syncHead();
   }
+  // Back to the ask: a stopped run goes back as before; a live one keeps working while you look
+  // at the ask (step 2, Agents, brings you back to it).
+  $('procBackL').addEventListener('click',function(){
+    var j=DRAFT, live=j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking');
+    if(!live) DRAFT=null;
+    forceIntake=true; setPhase('intake'); render();
+  });
+  // Skip to the finished brief: what is written so far, and the rest as it lands.
+  $('procOpen').addEventListener('click',function(){ if(this.disabled) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); });
+  function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'); }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
       renderProc();
@@ -2916,6 +3049,7 @@
   function draftNow(prompt){
     var typed=!!prompt, ask=prompt||String(get('brief_input')||'').trim()||(isResearchFed()?upPrompt():'');
     if(!window.clan){ $('intakeStatus').textContent='No host bridge — open this inside the studio.'; return; }
+    if(draftLive()){ setPhase('proc'); renderProc(); return; }   // one draft at a time: back to the crew at work
     if(noMiddleware()){ renderIntake(); return; }
     if(!ask&&!(data().reference_assets||[]).length&&!upMaterials().length){ $('intakeStatus').textContent='Say what the brief is, or attach the client’s material.'; return; }
     $('intakeStatus').classList.remove('err'); $('intakeStatus').textContent='';
@@ -3233,29 +3367,20 @@
     var reo=reopenedOf(f.key), writable=canWrite(f.key);
     var valHtml = !has ? '<div class="val empty">'+(isMeta(f.key)?'not given':writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
       : f.type==='list' ? '<div class="'+cls+(opens?' opens':'')+'"'+sa+(opens?' role="button" tabindex="0" title="Where this came from" aria-label="'+esc(f.label+': where this came from')+'"':'')+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul></div>'
-      : '<div class="'+cls+'"'+sa+'>'+(clf?'<clan-field ref="'+esc(f.key)+'" as="block" caption="'+esc(partLabel(f))+'">'+esc(String(v))+'</clan-field>':esc(String(v)))+'</div>';
+      : '<div class="'+cls+'"'+sa+(isMeta(f.key)?' title="'+esc(String(v))+'"':'')+'>'+(clf?'<clan-field ref="'+esc(f.key)+'" as="block" caption="'+esc(partLabel(f))+'">'+esc(String(v))+'</clan-field>':esc(String(v)))+'</div>';
     var locked=isLocked(f.key), conf=isConf(f.key);
     row.classList.toggle('conf', conf);
-    // Locked by an approve, a part offers nothing but its evidence; a part
-    // reopened for the client's request offers its pencil, and only that.
-    var ctrls=!approveLocked()
-      ? '<button class="iconbtn act-edit" title="Change this" aria-label="Change '+esc(f.label)+'">'+IC.edit+'</button>'+
-
-        '<button class="iconbtn act-regen" title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again')+'" aria-label="Write again: '+esc(f.label)+'"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+'>'+IC.regen+'</button>'+
-        '<button class="iconbtn act-lock'+(locked?' on':'')+'" title="'+(locked?'Let the crew change this again':'Keep this as it is')+'" aria-label="'+(locked?'Unlock ':'Lock ')+esc(f.label)+'">'+(locked?IC.lock:IC.unlock)+'</button>'
-      : reo ? '<button class="iconbtn act-edit" title="Make the change the client asked for" aria-label="Make the change the client asked for: '+esc(f.label)+'">'+IC.edit+'</button>' : '';
+    // No hover icons on the part (the mock): Edit, Redraft…, Keep as is and Confidential are the
+    // Selected part panel's, and a part reopened for the client's change offers its Edit there.
     row.innerHTML='<div class="lab"><span>'+esc(headOf(f))+'</span>'+
       provHtml(f)+
       (locked?' <span class="lockbadge">'+IC.lock+'locked</span>':'')+
       (reo?' <span class="lockbadge">open for the client’s change</span>':'')+
       (conf?' <span class="conftag" title="Kept in the agency copy, left out of the client copy">Confidential</span>':'')+
-      (ctrls?'<span class="ctrls"'+(reo?' style="opacity:1"':'')+'>'+ctrls+'</span>':'')+'</div>'+valHtml+
+      '</div>'+valHtml+
       regenLine(f)+
       '<div class="notes">'+notesHtml(f)+'</div>'+
       (OPEN_WHY[f.key]?'<div class="why">'+whyHtml(f)+'</div>':'');
-    var eb=row.querySelector('.act-edit'); if(eb) eb.addEventListener('click',function(){startEdit(row,f);});
-    var rb=row.querySelector('.act-regen'); if(rb) rb.addEventListener('click',function(){startRegen(row,f);});
-    var lb=row.querySelector('.act-lock'); if(lb) lb.addEventListener('click',function(){toggleLock(f);});
     var sb=row.querySelector('.act-style'); if(sb) sb.addEventListener('click',function(){startStyle(row,f);});
     var pb=row.querySelector('.prov'); if(pb) pb.addEventListener('click',function(){toggleWhy(row,f);});
     var ov=row.querySelector('.val.opens');
