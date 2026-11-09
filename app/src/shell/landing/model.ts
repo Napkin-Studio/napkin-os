@@ -107,10 +107,14 @@ export function activityOfItem(item: LibraryItem): Activity {
   return 'idle'
 }
 
-/** "3 briefs · 1 needs you · 1 running · 1 failed": nothing said about a zero. */
+/** "3 briefs · 2 research · 1 needs you · 1 running · 1 failed": each tool's work by its own noun, nothing said about a zero. */
 export function statusLine(perTool: Record<ToolId, Tally>, total: Tally): string {
-  const briefs = perTool.brief.open
-  const parts = [briefs ? plural(briefs, 'brief') : total.open ? plural(total.open, 'piece of work', 'pieces of work') : 'No work yet']
+  const byTool = TOOLS.filter(t => perTool[t.id].open).map(t => plural(perTool[t.id].open, t.noun[0], t.noun[1]))
+  const known = TOOLS.reduce((n, t) => n + perTool[t.id].open, 0)
+  const rest = total.open - known
+  const parts = byTool.length
+    ? [...byTool, ...(rest > 0 ? [`${rest} other`] : [])]
+    : [total.open ? plural(total.open, 'piece of work', 'pieces of work') : 'No work yet']
   if (total.needsYou) parts.push(total.needsYou === 1 ? 'needs you' : `${total.needsYou} need you`)
   if (total.failed) parts.push(`${total.failed} failed`)
   if (total.running) parts.push(`${total.running} running`)

@@ -43,7 +43,7 @@ test('a client is counted by tool, and the status line says only what is so', ()
   assert.equal(s.perTool.deck.open, 0)
   assert.equal(s.total.needsYou, 1, 'a document with things to check is one that needs you')
   assert.equal(s.total.running, 1)
-  assert.equal(s.status, '3 briefs · needs you · 1 running')
+  assert.equal(s.status, '3 briefs · 1 research · needs you · 1 running', 'every tool’s work is counted, not only briefs')
   assert.equal(s.activity, 'human')
 })
 
