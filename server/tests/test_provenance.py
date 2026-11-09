@@ -684,6 +684,10 @@ def test_the_writers_to_confirm_line_stays_to_confirm():
     tbc = [c for c in got["claims"] if c["text"].startswith("To confirm")]
     assert len(tbc) == 2 and all(c["kind"] == "to_confirm" and c["cites"] == [] and c["by"] == "writer"
                                  for c in tbc)
+    # the attention says "To confirm:" once, not again for each claim that already starts with it
+    attn = placed(got, ctx.client)["attention"]
+    assert attn.startswith("To confirm: you can buy") and "To confirm: To confirm:" not in attn
+    assert attn.count("To confirm:") == 1, attn
 
 
 def test_a_brand_named_in_digits_is_not_a_figure():
