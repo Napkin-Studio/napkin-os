@@ -3303,7 +3303,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // The loading step, to the mock's live agent stage (napkin-app-v1 ?tool=research&step=loading,
   // RUN_PLANS.research; gaps §6): the four steps as pills and the lenses as dots on a white strip;
   // the desk with two rails and the agent's sphere, its caption under it; the agent's question under
-  // the desk; then Back, Stop, Skip to the finished report and each section as it is written. Every
+  // the desk; then Back, Stop (Open the finished report once one exists) and each section as it is written. Every
   // part is the job's own: the six stages of the run map onto the mock's four steps, and the rails
   // fill from the record as the job writes it.
   var PLAN=[
@@ -3445,7 +3445,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         +'<div class="rail">'+R[1]+'</div></div></div>'
       +(Q?'<div class="rt-qrow">'+questionCard(Q, T)+'</div>':'')
       +'<div class="runbar no-print"><button type="button" class="linkbtn rt-back" data-act="rt-back">← Back to the ask</button><span class="sp"></span>'+cancelHtml()
-      +'<button type="button" class="go rt-skip" data-act="rt-skip">'+(isObj(D().report)&&!live?'Open the finished report →':'Skip to the finished report →')+'</button>'
+      +(isObj(D().report)&&!live?'<button type="button" class="go rt-skip" data-act="rt-skip">Open the finished report →</button>':'')
       +'<details class="ptiles"'+(CHAT.tilesOpen?' open':'')+'><summary data-act="rt-tiles">See each section as it is written · '+wN+' of '+tiles.length+'</summary><div class="tiles">'
         +tiles.map(function(t){ return '<span class="tile'+(t.c?' '+t.c:'')+'">'+esc(t.l)+'</span>'; }).join('')+'</div></details>'
       +laterHtml(T)+activityHtml(T)
