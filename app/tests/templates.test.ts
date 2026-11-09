@@ -619,15 +619,55 @@ test('a part the Judge failed can be kept with a reason, empty or not', () => {
   assert.match(notes, /'Keep it as it is, and say why'/)
   // It is answered where it was asked: a reason box in place, recorded as the
   // drawer's override is (a reasoned good verdict on the part), never the drawer.
-  assert.match(fn(BM, 'bindNotes'), /act-override'\); if\(o\) o\.addEventListener\('click',function\(\)\{ overrideHere\(o, f\); \}\)/)
+  assert.match(fn(BM, 'bindNotes'), /\.act-override'\)\.forEach\(function\(o\)\{ o\.addEventListener\('click'/)
+  assert.match(fn(BM, 'bindNotes'), /overrideHere\(o, f, ks\.length\?ks:null\)/)
   const here = fn(BM, 'overrideHere')
-  assert.match(here, /hostPost\('\/verdict',\{target:f\.key, polarity:'good', rationale:why\}\)/)
+  assert.match(here, /var ks=keys&&keys\.length\?keys:\[f\.key\]/)
+  assert.match(here, /hostPost\('\/verdict',\{target:left\.shift\(\), polarity:'good', rationale:why\}\)/)
   assert.match(here, /if\(!why\)/, 'a reason is needed')
   assert.doesNotMatch(here, /type="submit"/, 'an app frame has no allow-forms: Save acts on its click')
   // The drawer offers the override on a path whatever its value.
   const vb = fn(CLF, 'verdictBlock')
   assert.match(vb, /data-clf="override"/)
   assert.doesNotMatch(vb.slice(0, vb.indexOf('data-clf="override"')), /editableValue|textOf/)
+})
+
+// One check across parts, answered on one of them already (the Judge passed
+// that part's redraft): the card sits on a part that still waits on it, and
+// the note on every other part points there (final retest, HIGH 1).
+test('a check across parts shows its card on a part it still waits on', () => {
+  const D = 'doc1'
+  const FIELDS = [
+    { key: 'budget_and_scope', label: 'Budget & scope', sec: 'Budget' },
+    { key: 'mandatories', label: 'Mandatories', sec: 'Budget' },
+    { key: 'open_questions', label: 'Open questions', sec: 'Budget' },
+  ]
+  const cross = { id: 'd_x', kind: 'verdict', polarity: 'bad', agent: 'judge_brief', targets: FIELDS.map(f => `${D}#${f.key}`), rationale: 'Legal asks are split across three parts.' }
+  // newest first: a later reasoned pass of another check that names budget_and_scope
+  const pass = { id: 'd_g', kind: 'verdict', polarity: 'good', agent: 'judge_brief', targets: [`${D}#audience`, `${D}#budget_and_scope`], rationale: 'Holds.' }
+  const CHAIN = { state: 'ok', decisions: [pass, cross] }
+  type F = {
+    homeOf(d: unknown): { key: string } | null; openPartsOf(d: unknown): { key: string }[]
+    crossNoteHtml(c: unknown, f: { key: string }): string; crossVerdictsOf(k: string): { d: unknown; open: boolean }[]
+  }
+  const f = lift<F>(BM, ['pathOf', 'names', 'about', 'isVerdict', 'isHuman', 'isWrite', 'newer', 'reasonedGood', 'verdictState', 'topsOf', 'isCross',
+    'crossVerdictsOf', 'partsOf', 'openPartsOf', 'homeOf', 'acrossOf', 'listWords', 'crossNoteHtml'], {
+    CHAIN, FIELDS, TOP_LABEL: {}, JUDE: 'Jude', arr, esc, docId: () => D, hasReasoning: () => false,
+    fig: (k: string) => `<fig ${k}>`, fixBtn: (d: { id: string }) => `<fix ${d.id}>`, docLocked: () => false, OSF: () => ({}),
+    reasonFix: (d: { rationale: string }) => ({ reason: d.rationale, fix: '', rule: '' }),
+  })
+  assert.deepEqual(f.openPartsOf(cross).map(x => x.key), ['mandatories', 'open_questions'])
+  assert.equal(f.homeOf(cross)?.key, 'mandatories')
+  assert.equal(f.crossVerdictsOf('budget_and_scope')[0].open, false, 'answered on budget by the pass')
+  const home = f.crossNoteHtml(f.crossVerdictsOf('mandatories')[0], FIELDS[1])
+  assert.match(home, /Jude found a problem across budget &#38; scope, mandatories and open questions/)
+  assert.match(home, /<fix d_x>/)
+  assert.match(home, /data-keys="mandatories open_questions">Keep them as they are, and say why/)
+  const other = f.crossNoteHtml(f.crossVerdictsOf('open_questions')[0], FIELDS[2])
+  assert.match(other, /see <a href="#" class="act-goto" data-k="mandatories">Mandatories<\/a>/)
+  // Nothing answered yet: the first part it names carries it, as before.
+  CHAIN.decisions = [cross]
+  assert.equal(f.homeOf(cross)?.key, 'budget_and_scope')
 })
 
 test("a person's verdict on a part is theirs, not the Judge's", () => {

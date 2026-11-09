@@ -1093,13 +1093,19 @@
     });
     return out;
   }
-  // Where a cross-field verdict is shown in full: the first field it names,
-  // in the order the brief reads.
-  function homeOf(d){
+  // The parts a cross-field verdict names, in the order the brief reads.
+  function partsOf(d){
     var ts=arr(d.targets).map(pathOf);
-    for(var i=0;i<FIELDS.length;i++){ if(ts.indexOf(FIELDS[i].key)!==-1) return FIELDS[i]; }
-    return null;
+    return FIELDS.filter(function(f){ return ts.indexOf(f.key)!==-1; });
   }
+  // The parts where it is still open: the host answers it part by part (a
+  // redraft the Judge passed answers it on that part only), so these are what
+  // a person still owes.
+  function openPartsOf(d){ return partsOf(d).filter(function(f){ return verdictState(d,f.key).open; }); }
+  // Where a cross-field verdict is shown in full: the first part it names that
+  // still waits on it, in the order the brief reads (else the first it names),
+  // so the part the other notes point to always carries the card.
+  function homeOf(d){ return openPartsOf(d)[0]||partsOf(d)[0]||null; }
   var TOP_LABEL={objectives:'objectives', desired_response:'desired response'};
   function acrossOf(d){
     return topsOf(d).map(function(t){
@@ -1681,7 +1687,10 @@
       +(rf.fix?'<p class="fix"><b>Fix:</b> '+esc(rf.fix)+'</p>':'')
       +(rf.rule?'<p class="muted">The rule: '+esc(rf.rule)+'</p>':'')
       +'<span class="muted">Change any of these parts, or ask the crew to fix them. Someone answers this before the brief is locked.</span>'
-      +fixBtn(d)+'</div></div>';
+      // Or answer it with a reason: one reasoned good verdict on each part it
+      // still waits on, as the drawer's override records on one.
+      +fixBtn(d)+(!docLocked()&&OSF()?'<div class="editrow"><button type="button" class="cancel act-override" data-keys="'+esc(openPartsOf(d).map(function(x){ return x.key; }).join(' '))+'">Keep them as they are, and say why</button></div>':'')
+      +'</div></div>';
   }
   function gotoField(key){
     var i=-1; FIELDS.forEach(function(x,j){ if(x.key===key) i=j; });
@@ -1694,7 +1703,8 @@
   }
   function bindNotes(el,f){
     el.querySelectorAll('.act-goto').forEach(function(g){ g.addEventListener('click',function(e){ e.preventDefault(); gotoField(g.getAttribute('data-k')); }); });
-    var o=el.querySelector('.act-override'); if(o) o.addEventListener('click',function(){ overrideHere(o, f); });
+    el.querySelectorAll('.act-override').forEach(function(o){ o.addEventListener('click',function(){
+      var ks=String(o.getAttribute('data-keys')||'').split(' ').filter(Boolean); overrideHere(o, f, ks.length?ks:null); }); });
     el.querySelectorAll('.act-fix').forEach(function(b){ b.addEventListener('click',function(){ fixParts(b.getAttribute('data-v')); }); });
     var a=el.querySelector('.act-accept'), x=el.querySelector('.act-dismiss');
     if(a) a.addEventListener('click',function(){ acceptProposal(f); });
@@ -1703,25 +1713,35 @@
   // "Keep it as it is, and say why", answered where it was asked: the reason
   // box takes the button's place, and Save records the same reasoned good
   // verdict the OS drawer's override does (POST /verdict, polarity good).
-  function overrideHere(btn, f){
+  // A check across parts is answered on each part it still waits on (`keys`):
+  // the same verdict, one part at a time, as the host settles it part by part.
+  function overrideHere(btn, f, keys){
+    var ks=keys&&keys.length?keys:[f.key], many=ks.length>1;
     var row=btn.closest('.editrow')||btn, box=document.createElement('div');
-    box.className='ovr'; box.setAttribute('aria-label','Why '+partName(f)+' is right as it is');
-    box.innerHTML='<label><span>Why is it right as it is? <span class="muted">(needed)</span></span><textarea class="rat" rows="3" required></textarea></label>'
-      +'<div class="note err" hidden></div><div class="editrow"><button type="button" class="save">Keep it as it is</button><button type="button" class="cancel">Cancel</button></div>';
+    box.className='ovr'; box.setAttribute('aria-label',many?'Why these parts are right as they are':'Why '+partName(f)+' is right as it is');
+    box.innerHTML='<label><span>'+(many?'Why are they right as they are?':'Why is it right as it is?')+' <span class="muted">(needed)</span></span><textarea class="rat" rows="3" required></textarea></label>'
+      +'<div class="note err" hidden></div><div class="editrow"><button type="button" class="save">'+(many?'Keep them as they are':'Keep it as it is')+'</button><button type="button" class="cancel">Cancel</button></div>';
     row.replaceWith(box);
     var ta=box.querySelector('textarea'), err=box.querySelector('.err'), go=box.querySelector('.save');
     try{ ta.focus({preventScroll:true}); }catch(e){}
     box.querySelector('.cancel').addEventListener('click',function(){ box.replaceWith(row); });
+    function failed(t){ go.disabled=false; err.textContent=t; err.hidden=false; }
     // An app frame has no allow-forms: a form never submits, so Save acts on its click.
     go.addEventListener('click',function(){
       var why=ta.value.trim();
       if(!why){ err.textContent='Say why, in a few words.'; err.hidden=false; ta.focus(); return; }
       go.disabled=true; err.hidden=true;
-      hostPost('/verdict',{target:f.key, polarity:'good', rationale:why}).then(function(res){
-        if(!(res&&res.ok!==false&&!res.error)){ go.disabled=false; err.textContent=hostErrText(res); err.hidden=false; return; }
-        toast('Saved. It stays as it is, with your reason.');
-        var F=OSF(); if(F&&F.reload) F.reload(); loadChain();
-      },function(){ go.disabled=false; err.textContent='That did not go through. Check your connection and try again.'; err.hidden=false; });
+      var left=ks.slice();
+      (function next(){
+        if(!left.length){
+          toast(many?'Saved. They stay as they are, with your reason.':'Saved. It stays as it is, with your reason.');
+          var F=OSF(); if(F&&F.reload) F.reload(); loadChain(); return;
+        }
+        hostPost('/verdict',{target:left.shift(), polarity:'good', rationale:why}).then(function(res){
+          if(!(res&&res.ok!==false&&!res.error)){ failed(hostErrText(res)); loadChain(); return; }
+          next();
+        },function(){ failed('That did not go through. Check your connection and try again.'); });
+      })();
     });
   }
   // Accepting is the person's write of the field, citing the proposal
