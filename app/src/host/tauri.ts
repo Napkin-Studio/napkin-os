@@ -27,6 +27,7 @@ import type {
   Unlisten,
   UpstreamView,
   UpstreamUpdateReply,
+  AppUpdateReply,
   AttachTarget,
   AttachReply,
   RelatedView,
@@ -75,6 +76,7 @@ export const tauriHost: Host = {
   // The clan:// route table answers these, as it answers the frame.
   upstream: () => clanRoute<UpstreamView>('/upstream'),
   updateFromUpstream: () => clanRoute<UpstreamUpdateReply>('/upstream/update', {}),
+  updateApp: () => clanRoute<AppUpdateReply>('/app/update', {}),
   attachTargets: () => clanRoute<AttachTarget[]>('/attach-targets'),
   attach: documentId => clanRoute<AttachReply>('/attach', { document_id: documentId }),
   updateLinked: documentId => clanRoute<AttachReply>('/upstream/update', { document_id: documentId }),

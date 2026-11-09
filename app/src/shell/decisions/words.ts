@@ -218,10 +218,23 @@ function linkLine(block: DecisionBlock, view: DecisionsView): string | null {
   return `took the newer ${it}`
 }
 
+/** The document moved onto a newer version of its app (§7.1): "updated Research Tool 0.5.1 → 0.6.0". */
+function appUpdateLine(d: DecisionBlock['decision']): string | null {
+  if (d.kind !== 'app_update') return null
+  const ref = (v: unknown) => (v && typeof v === 'object' ? v as { name?: unknown; version?: unknown } : {})
+  const from = ref(d.from), to = ref(d.to)
+  const name = typeof to.name === 'string' && to.name ? to.name : 'the app'
+  const was = typeof from.version === 'string' ? from.version : null
+  const now = typeof to.version === 'string' ? to.version : null
+  return `updated ${name}${was && now ? ` ${was} → ${now}` : now ? ` to ${now}` : ''}`
+}
+
 export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   const d = block.decision
   const t = mainTarget(block)
   const what = t ? strip(t.label) : 'the document'
+  const updated = appUpdateLine(d)
+  if (updated) return updated
   const client = clientLineOf(block, view)
   if (client) return client.rest
   const link = linkLine(block, view)

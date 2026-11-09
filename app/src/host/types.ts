@@ -48,6 +48,44 @@ export interface OpenResult {
   render_model: 'authored' | 'legacy'
   is_template: boolean
   trusted: boolean
+  /** Where the page is served from: the installed app's (`library`) or the document's own copy. */
+  view_source?: 'library' | 'document'
+  /** The app version of the page served. */
+  view_version?: string | null
+  /**
+   * The installed app differs from the copy the document carries (OS-layer
+   * contract §7.1). A locked document offers it as Update; an unlocked one
+   * catches up on its next save. Absent when there is nothing newer.
+   */
+  app_update?: AppUpdate | null
+}
+
+/** One app as a document or the library carries it. */
+export interface AppRef {
+  app_id: string
+  version: string
+  digest: string
+  name: string
+}
+
+/** `OpenResult.app_update`: what Update would move the document from and to. */
+export interface AppUpdate {
+  available: boolean
+  /** The installed app's name. */
+  name: string
+  from: AppRef
+  to: AppRef
+  /** The fields of the document's data the installed app would not take; present means Update is refused. */
+  blocked?: string[] | null
+}
+
+/** `POST /app/update`: the document moved onto the installed app. */
+export interface AppUpdateReply {
+  ok: boolean
+  decision: string
+  kind: 'app_update'
+  from: AppRef
+  to: AppRef
 }
 
 /** A template app installed in the local library, listed on the launcher. */
@@ -712,6 +750,12 @@ export interface Host {
    * parent has not changed.
    */
   updateFromUpstream(): Promise<UpstreamUpdateReply>
+  /**
+   * Move the open document onto the installed version of its app
+   * (`POST /app/update`, a person's). A locked document keeps its lock.
+   * Refused, in the host's words, when its data does not fit or nothing is newer.
+   */
+  updateApp(): Promise<AppUpdateReply>
   /** The documents the open one could link (`GET /attach-targets`); empty when its app links nothing. */
   attachTargets(): Promise<AttachTarget[]>
   /** Link an existing document into the open one (`POST /attach`). Refused on a locked document, in the host's words. */

@@ -35,6 +35,7 @@ import type {
   Unlisten,
   UploadedAsset,
   UpstreamUpdateReply,
+  AppUpdateReply,
   UpstreamView,
   AttachTarget,
   AttachReply,
@@ -265,6 +266,7 @@ export const wasmHost: Host = {
 
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
   updateFromUpstream: () => post<UpstreamUpdateReply>('/upstream/update', {}),
+  updateApp: () => post<AppUpdateReply>('/app/update', {}),
   attachTargets: () => route<AttachTarget[]>('/attach-targets', '', new Uint8Array()),
   attach: documentId => post<AttachReply>('/attach', { document_id: documentId }),
   updateLinked: documentId => post<AttachReply>('/upstream/update', { document_id: documentId }),

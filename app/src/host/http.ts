@@ -35,6 +35,7 @@ import type {
   Unlisten,
   UploadedAsset,
   UpstreamUpdateReply,
+  AppUpdateReply,
   UpstreamView,
   AttachTarget,
   AttachReply,
@@ -292,6 +293,7 @@ export const httpHost: Host = {
 
   upstream: () => clanCall<UpstreamView>('/upstream'),
   updateFromUpstream: () => clanPost<UpstreamUpdateReply>('/upstream/update', {}),
+  updateApp: () => clanPost<AppUpdateReply>('/app/update', {}),
   attachTargets: () => clanCall<AttachTarget[]>('/attach-targets'),
   attach: documentId => clanPost<AttachReply>('/attach', { document_id: documentId }),
   updateLinked: documentId => clanPost<AttachReply>('/upstream/update', { document_id: documentId }),

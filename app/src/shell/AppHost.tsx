@@ -30,6 +30,7 @@ import { useEngaged } from '../components/markStore'
 import { markTarget } from '../components/medallionMotion'
 import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
+import { AppUpdateNotice } from './AppUpdateNotice'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
 import '../components/chrome.css'
@@ -239,6 +240,25 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const { linked, madeInto } = linksOf(links.related)
   const changedLinks = linked.filter(l => l.dir === 'in' && l.changed)
 
+  // A newer version of the app, offered on a locked document (§7.1): Update
+  // moves it onto the installed app, keeps the lock, and reopens it on the
+  // new page. A refusal is said where the bar is, in the host's words.
+  const [appUpdating, setAppUpdating] = useState<string | null>(null)
+  const [appUpdateError, setAppUpdateError] = useState<{ docPath: string; message: string } | null>(null)
+  const updateApp = async () => {
+    setAppUpdating(docPath)
+    setAppUpdateError(null)
+    try {
+      await host.updateApp()
+      if (onOpenDocument) onOpenDocument(docPath)
+      else changed()
+    } catch (e) {
+      setAppUpdateError({ docPath, message: String(e instanceof Error ? e.message : e) })
+    } finally {
+      setAppUpdating(null)
+    }
+  }
+
   const save = useCallback(async () => {
     if (!review || review.docPath !== docPath || problemOf(review.draft)) return
     const { draft, marks } = review
@@ -430,6 +450,22 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           <button type="button" className="ch-link" onClick={() => links.unlink(l.documentId)}>Unlink</button>
         </div>
       ))}
+      {appUpdateError?.docPath === docPath && (
+        <div className="ch-banner" role="alert" data-testid="app-update-error">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Could not update {open.app_update?.name ?? 'the app'}.</strong>{appUpdateError.message}</span>
+          <button type="button" className="ch-link" onClick={() => setAppUpdateError(null)}>Dismiss</button>
+        </div>
+      )}
+      {!open.is_template && (
+        <AppUpdateNotice
+          update={open.app_update}
+          locked={!!decisions.view?.lock.locked}
+          noun={noun}
+          busy={appUpdating === docPath}
+          onUpdate={() => { void updateApp() }}
+        />
+      )}
       </div>
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
