@@ -1061,8 +1061,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   --create-ink:var(--alert); --create-soft:var(--alert-soft);
   --shadow:var(--shadow-card);
 }
-/* The report is paper, light, in both themes (R9, A3). */
-#doc{
+/* The report is paper, light, in both themes (R9, A3); before there is one, the page wears the theme. */
+body:not(.no-report) #doc{
   color-scheme:light;
   --paper:#FFFDF8; --paper-2:#F3ECDC; --card:#FFFFFF; --soft:#F3ECDC;
   --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082; --ink2:#2A2620; --ink3:#6D655A;
@@ -1074,14 +1074,16 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 body{background:var(--desk);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.55}
 
 /* ── the workspace: sheet 928 + 24 + inspector 440 ── */
-body.done .ws,body:not(.fresh) .ws{grid-template-columns:minmax(0,1fr) 440px;gap:24px;max-width:none;padding:0 24px}
-body:not(.fresh) .ws > main{padding-top:34px}
-body:not(.fresh) .ws.ws-map{grid-template-columns:minmax(360px,1fr) minmax(440px,744px);gap:0}
+@media (min-width:901px){
+  body:not(.fresh) .ws{grid-template-columns:minmax(0,1fr) 440px;gap:24px;max-width:none;padding:0 24px}
+  body:not(.fresh) .ws > main{padding-top:34px}
+  body:not(.fresh) .ws.ws-map{grid-template-columns:minmax(360px,1fr) minmax(440px,744px);gap:0}
+}
 body:not(.no-report) #hero{display:none}
 section.report{margin-top:0}
 .rep{border:1px solid #E2D9C8;border-radius:8px;background:#FFFDF8;box-shadow:var(--shadow-paper);padding:0 0 44px;gap:0;overflow:visible}
 :root[data-color-scheme="dark"] .rep{border-color:transparent;box-shadow:0 24px 60px -24px rgba(0,0,0,.7);color:#2A2620}
-.rep #rp-pre > .rp-band{margin:0;border-radius:8px 8px 0 0;padding:24px 44px 32px;background:var(--band);color:var(--band-fg);box-shadow:inset 0 -6px 0 var(--rs-hl)}
+.rep #rp-pre > .rp-band{margin:0;border-radius:8px 8px 0 0;padding:24px clamp(16px,4vw,44px) 32px;background:var(--band);color:var(--band-fg);box-shadow:inset 0 -6px 0 var(--rs-hl)}
 .rp-band .eyebrow{font:600 11.5px/17.825px var(--font-mono);letter-spacing:1.15px;text-transform:uppercase;color:var(--band-2)}
 .rp-q{margin:10px 0 8px;font:600 34px/38.08px var(--font-ui);letter-spacing:-.85px;max-width:644px;color:var(--band-fg)}
 .rp-meta{font-size:13.5px;line-height:20.925px;color:var(--band-2)}
@@ -1099,13 +1101,15 @@ section.report{margin-top:0}
 .rp-af.wide{background:color-mix(in srgb,var(--rs-hl) 14%,#FFFFFF)}
 
 /* ── the inspector (#r-side) ── */
-.insp{top:calc(var(--clan-top,0px) + 14px);margin-top:34px;max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 30px);background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:none;color:var(--ink)}
+@media (min-width:901px){ .insp{top:calc(var(--clan-top,0px) + 14px);margin-top:34px;max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 30px);border-radius:8px;box-shadow:none} }
+.insp{background:var(--paper);border:1px solid var(--line);color:var(--ink)}
 .insp-body{padding:0 18px 18px;gap:16px}
 .insp-sw{margin:0 -18px 16px;display:flex;border:1px solid color-mix(in srgb,var(--ag-act) 45%,var(--line));border-radius:4px;background:var(--card);overflow:hidden}
 .insp-sw button{flex:1;height:32px;padding:0;border:0;background:transparent;font:600 12px/18.6px var(--font-ui);color:var(--muted)}
 :root[data-color-scheme="dark"] .insp-sw button{color:var(--ink-soft)}
 .insp-sw button[aria-pressed="true"],:root[data-color-scheme="dark"] .insp-sw button[aria-pressed="true"]{background:var(--ag-act);color:var(--ag-act-ink)}
-.insp-save{display:flex;gap:2px}
+.insp-save{display:flex;gap:2px;position:relative;z-index:6}
+.insp #judge{z-index:auto}
 .insp-save #exportBtn{flex:1;min-height:38px;padding:0 16px;border-radius:4px 0 0 4px;border:1px solid var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui);justify-content:center;box-shadow:none}
 .insp-save .save-more > summary.btn{width:44px;height:38px;min-height:38px;padding:0;justify-content:center;border:0;border-radius:0 6px 6px 0;background:var(--ag-act);color:var(--ag-act-ink);box-shadow:none}
 .btn.primary{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
@@ -1296,7 +1300,7 @@ section.report{margin-top:0}
     <div class="insp-save">
       <button type="button" class="btn primary" id="exportBtn">Save · PDF</button>
       <details class="save-more"><summary class="btn" aria-label="More ways to save" title="More ways to save"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></summary>
-        <div class="save-menu" role="menu"><button type="button" role="menuitem" data-act="export-html" title="Save the report as one HTML file">HTML file</button><button type="button" role="menuitem" data-act="export-pdf">PDF</button></div></details>
+        <div class="save-menu" role="menu"><button type="button" role="menuitem" data-act="export-html" title="Save the report as one HTML file">HTML file</button><button type="button" role="menuitem" data-act="export-pdf">PDF</button><button type="button" role="menuitem" data-act="save-clan" title="Download a copy of this research as a .clan file">.clan copy</button></div></details>
     </div>
     <div class="judgebar" id="judge" role="region" aria-label="Your call" hidden></div>
     <section class="insp-box" id="rbox" aria-labelledby="rbox-h">
@@ -3719,7 +3723,12 @@ section.report{margin-top:0}
     }).join('')+'</ul></section>';
   }
   function rpNotResearched(r, n){
-    var nr=arr(r.not_researched); if(!nr.length) return '';
+    var nr=arr(r.not_researched);
+    // The mock always says what was left out. With no list from the report,
+    // the gaps that were never looked up are what was left out; with neither,
+    // it says nothing was.
+    if(!nr.length){ var seen={}; arr(sel().gaps).filter(notRun).forEach(function(g){ var k=(g.lens||'')+'|'+(g.market||''); if(seen[k]) return; seen[k]=1; nr.push({lens:g.lens, market:g.market, reason:gapWords(g.note||'not looked up')}); }); }
+    if(!nr.length) return '<section class="rp-sec" id="rp-notr">'+rpHead(n, 'Scope', 'Not researched')+'<div class="rp-notr"><span><i class="sq none" aria-hidden="true"></i>Nothing was left out: every lens in the ask ran for every market in it.</span></div></section>';
     return '<section class="rp-sec" id="rp-notr">'+rpHead(n, 'Scope', 'Not researched')+'<div class="rp-notr">'+nr.map(function(x){
       return '<span><i class="sq none" aria-hidden="true"></i><b>'+esc(lensName(x.lens))+'</b>'+(x.market?' · '+esc(x.market):' · every market')+' <span class="muted">'+esc(x.reason)+'</span></span>'; }).join('')+'</div></section>';
   }
@@ -3741,7 +3750,8 @@ section.report{margin-top:0}
     return h;
   }
   function rpContests(n){
-    var ct=arr(sel().contested); if(!ct.length) return '';
+    var ct=arr(sel().contested);
+    if(!ct.length) return '<section class="rp-sec" id="rp-contests">'+rpHead(n, 'Where sources disagree', 'No contests')+'<p class="rp-p muted">No two sources gave different values for the same figure, so nothing had to be picked.</p></section>';
     var open=ct.filter(function(c){ return c.status==='open'; }).length, N=ct.length<NUM.length?NUM[ct.length]:String(ct.length);
     var t=N+' contest'+(ct.length===1?'':'s')+(open?', '+open+' open':ct.length===1?', resolved':', all resolved');
     return '<section class="rp-sec" id="rp-contests">'+rpHead(n, 'Where sources disagree', t)+ct.map(rpContest).join('')+'</section>';
@@ -4893,6 +4903,7 @@ section.report{margin-top:0}
       case 'goto-confirm': gotoConfirm(b.getAttribute('data-field')); break;
       case 'chk-yes': case 'chk-no': case 'chk-reject': case 'chk-pick': case 'chk-reason': case 'chk-use': case 'chk-cancel': case 'chk-why': case 'chk-open':
         onCheck(act, b); break;
+      case 'save-clan': if(window.clan&&window.clan.requestSave){ window.clan.requestSave(); toast('Saving a copy of this .clan…'); } else toast('Saving a copy runs through the host.'); var sm=b.closest('details'); if(sm) sm.open=false; break;
       case 'pin-full': if(window.ClanFields) ClanFields.open(b.getAttribute('data-ref')); break;
       case 'chk-next': nextCheck(); var jbx=$('judge'); if(jbx&&jbx.classList.contains('needs-box')) jbx.innerHTML=judgeBarHtml(checks()); break;
       case 'yc-cut': var yr=b.getAttribute('data-ref')||''; CHK.ui[yr]={mode:'no', why:''}; renderChecks();
