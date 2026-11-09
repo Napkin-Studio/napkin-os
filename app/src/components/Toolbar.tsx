@@ -28,7 +28,6 @@ import { modeOf } from '../shell/appBar'
 import { useEngaged } from './markStore'
 import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
-import AgentSphere from '../shell/agents/AgentSphere'
 import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { BarButtons, BarChips } from './AppBarItems'
@@ -182,7 +181,9 @@ function Lineage({ doc }: { doc: DocBar }) {
 const CREW_COLOURS = ['#C9462A', '#2F6B3A', '#1E3A8A', '#7A1E1E', '#5B2A86']
 const crewColour = (name: string) => CREW_COLOURS[[...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % CREW_COLOURS.length]
 
-/** Who is in the document: the people, then an agent orb with a spinning ring only while one works. */
+/** Who is in the document: the people only. An agent shows in one place, on
+ * the run stage or in the document's side panel, never here (owner, 2026-11-09);
+ * that one works is the bar's working chip ({@link JobChip}). */
 function CrewHere({ crew }: { crew: Crew }) {
   const names = crew.people.map(p => (p.you ? `${p.name} (you)` : p.name))
   const who = crew.agent ? roles.the(crew.agent) : 'an agent'
@@ -190,13 +191,18 @@ function CrewHere({ crew }: { crew: Crew }) {
   return (
     <span className="tb-crew" id="tb-crew" role="group" aria-label={said} title={said} data-testid="crew">
       {crew.people.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
-      {crew.working && (
-        <i className="cw ag" data-testid="agent-working" data-agent={roles.of(crew.agent) || 'orchestrator'} title={`${roles.name(crew.agent ?? '')} at work`} aria-hidden>
-          <AgentSphere agent={crew.agent ?? 'orchestrator'} size={26} state="working" progress={crew.progress ?? undefined} label="" />
-        </i>
-      )}
     </span>
   )
+}
+
+/** A job runs on the open document while you're on its sheet: the mock's status
+ * chip, with the step while the run says it. The agent itself is in the side panel. */
+function JobChip({ crew }: { crew: Crew }) {
+  const p = crew.progress
+  const word = crew.working ? crew.working.charAt(0).toUpperCase() + crew.working.slice(1) : 'Working'
+  const label = p ? `${word} · step ${p[0]}/${p[1]}` : word
+  const who = crew.agent ? roles.name(crew.agent) : 'An agent'
+  return <span className="tb-status" data-testid="agent-working" data-st="working" title={`${who} is ${crew.working}`}><i className="sdot" aria-hidden />{label}</span>
 }
 
 /** Decisions, with the needs-your-call count. */
@@ -453,9 +459,9 @@ export default function Toolbar({
           </div>
           <span className="tb-spacer" />
           <span className="tb-tools">
-            {mode?.mode === 'working' && (
-              <span className="tb-status" data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`}><i className="sdot" aria-hidden />{mode.label || 'Working'}</span>
-            )}
+            {mode?.mode === 'working'
+              ? <span className="tb-status" data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`}><i className="sdot" aria-hidden />{mode.label || 'Working'}</span>
+              : doc.crew?.working ? <JobChip crew={doc.crew} /> : null}
             {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
             {doc.trusted && (
               <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">Trusted</span>
