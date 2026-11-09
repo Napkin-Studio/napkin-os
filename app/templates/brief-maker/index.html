@@ -1134,15 +1134,6 @@
   .flow button.done i{background:var(--nd-ink);border-color:var(--nd-ink);color:var(--nd-paper)}
   .flow button.done:not([aria-current]){opacity:.45}
   /* the crew, under step 2: Ellis greets, Dara and Jude say what they do */
-  .crewpop{position:absolute;top:calc(100% + 12px);right:-74px;z-index:30;width:max-content;max-width:min(560px,92vw);padding:18px 18px 8px;background:var(--nd-paper);border:1px solid var(--nd-line);border-radius:8px;box-shadow:var(--shadow-paper);opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .15s,transform .15s,visibility 0s .15s}
-  .fl-crew:hover .crewpop,.fl-crew:focus-within .crewpop,.fl-crew.open .crewpop{opacity:1;visibility:visible;transform:none;transition:opacity .15s,transform .15s}
-  .crewpop .onbox{gap:28px;min-height:0;padding:0;align-items:flex-start}
-  .crewpop .onbox .m{flex-direction:column-reverse;align-items:flex-start;gap:8px;width:160px}
-  .crewpop .onbox .first,.crewpop .onbox .tip{position:static;transform:none;opacity:1;max-width:none;width:auto;pointer-events:auto}
-  .crewpop .onbox .first{opacity:1!important}
-  .crewpop .onbox .say{font-size:13px;line-height:1.4}
-  .crewpop .onbox .say::after{display:none}
-  .crewpop .onbox .agent-figure{width:44px;height:58px;margin:0}
   .intake.isheet{display:block;padding:28px 0;flex:none}
   .isec{font-family:var(--font-serif);font-size:28px;font-weight:600;letter-spacing:-.01em;line-height:1.15;color:var(--nd-ink);margin:0 0 16px}
   .paperc{width:100%;max-width:760px;display:flex;flex-direction:column;gap:18px;padding:24px;background:var(--nd-paper);color:var(--nd-ink);border:1px solid var(--nd-line);border-radius:8px;box-shadow:var(--shadow-paper);clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
@@ -1248,8 +1239,8 @@
   .app.p-start:has(> .proc.on) > .foot{display:none}
   @media (max-width:980px){ .sstage{grid-template-columns:1fr;height:auto} }
   @media (max-width:880px){ .paperc{max-width:none} }
-  @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} .crewpop{left:0;right:0;top:calc(100% - 8px);max-width:none;width:auto} }
-  @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} .crewpop .onbox{flex-direction:column;gap:14px} .crewpop .onbox .m{width:auto} }
+  @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} }
+  @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} }
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -1268,8 +1259,7 @@
     <div class="ahead-right">
       <ol class="flow" aria-label="Steps">
         <li><button type="button" id="stepAsk" data-step="intake"><i>1</i><span>Ask</span></button></li>
-        <li class="fl-crew"><button type="button" id="stepCrew" data-step="proc" aria-expanded="false" aria-controls="crewPop"><i>2</i><span>Agents</span></button>
-          <div class="crewpop" id="crewPop" role="group" aria-label="Your crew"><div class="onbox" id="introCrew"></div></div></li>
+        <li class="fl-crew"><button type="button" id="stepCrew" data-step="proc"><i>2</i><span>Agents</span></button></li>
         <li><button type="button" id="stepBrief" data-step="doc"><i>3</i><span>Brief</span></button></li>
       </ol>
     </div>
@@ -2579,7 +2569,7 @@
   // The crew stand on the box, built once so they keep their motion: Ellis
   // greets; Dara and Jude say their line on hover or focus.
   function buildIntroCrew(){
-    var el=$('introCrew'); if(el.childNodes.length) return;
+    var el=$('introCrew'); if(!el||el.childNodes.length) return;
     el.innerHTML='<span class="m lead"><span class="first">'+say('extract','<span id="ellisLine" aria-live="polite"></span>')+'</span>'+fig('extract',{label:sayer('extract')})+'</span>'
       +[['drafter','I’m '+DARA+'. I’ll write every part of the brief.'],['judge','I’m '+JUDE+'. I’ll check it all holds together.']].map(function(x){
         return '<span class="m" tabindex="0" role="note" aria-label="'+esc(sayer(x[0])+': '+x[1])+'"><span class="tip" aria-hidden="true">'+say(x[0],esc(x[1]))+'</span>'+fig(x[0],{decorative:true})+'</span>';
@@ -2631,17 +2621,15 @@
     if(phase!=='intake') crewPop(false);
     renderHeadEye();
   }
-  function crewPop(on){ var li=$('stepCrew').parentNode; li.classList.toggle('open', !!on); $('stepCrew').setAttribute('aria-expanded', on?'true':'false'); }
+  function crewPop(){ /* the crew popover was removed (owner, 2026-11-09) */ }
   $('stepAsk').addEventListener('click',function(){ if(phase==='proc') $('procBackL').click(); });
-  $('stepCrew').addEventListener('click',function(){ if(phase!=='intake') return; if(draftLive()){ crewPop(false); setPhase('proc'); renderProc(); return; } crewPop(!$('stepCrew').parentNode.classList.contains('open')); });
+  $('stepCrew').addEventListener('click',function(){ if(phase!=='intake') return; if(draftLive()){ setPhase('proc'); renderProc(); } });
   $('stepBrief').addEventListener('click',function(){
     if(!hasContent()) return;
     if(phase==='proc'){ $('procOpen').click(); return; }
     forceIntake=false; render();
   });
-  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('stepCrew').parentNode.classList.contains('open')){ crewPop(false); $('stepCrew').focus(); } });
-  document.addEventListener('click',function(e){ if(!e.target.closest||!e.target.closest('.fl-crew')) crewPop(false); });
-
+    
   // Three made-up asks, shown as examples (as the Research Tool does). They fill the box;
   // nothing is sent until you press Write the brief.
   var EXAMPLES=[
