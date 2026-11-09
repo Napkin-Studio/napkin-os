@@ -111,7 +111,10 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   const shownIds = page.shown.map(c => c.id).join(',')
   const atNow = Math.min(at, Math.max(0, page.shown.length - 1))
 
-  const openDial = useCallback((id: string, el: HTMLElement) => {
+  // Whether the dial was opened from the keyboard (a click with no pointer): then its first quadrant takes the focus.
+  const [byKey, setByKey] = useState(false)
+  const openDial = useCallback((id: string, el: HTMLElement, key = false) => {
+    setByKey(key)
     setDial(d => (d === id ? null : id))
     if (row.current) setPlace(placeOf(row.current, el))
   }, [])
@@ -121,7 +124,8 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   const closeDial = useCallback(() => {
     const id = dialRef.current
     setDial(null)
-    if (id) row.current?.querySelector<HTMLElement>(`.cl-circle[data-client="${CSS.escape(id)}"]`)?.focus()
+    // After the dial has gone: an open circle is hidden behind it, and a hidden button takes no focus.
+    if (id) requestAnimationFrame(() => row.current?.querySelector<HTMLElement>(`.cl-circle[data-client="${CSS.escape(id)}"]`)?.focus())
   }, [])
   // A click anywhere off the circles closes the dial (the mock's document listener).
   useEffect(() => {
@@ -215,7 +219,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
             <div className="cl-row" id="cl-row" ref={row} role="group" aria-label="Your clients" onKeyDown={onRowKey}>
               {page.shown.map((c, i) => (
                 <ClientCircle key={c.id} c={c} three={three} material={data.clients.find(x => x.id === c.id)?.material ?? 'pearl'} tab={i === atNow} open={dial === c.id}
-                  onFocus={() => setAt(i)} onClick={el => openDial(c.id, el)} />
+                  onFocus={() => setAt(i)} onClick={(el, key) => openDial(c.id, el, key)} />
               ))}
               <button type="button" className="cl-circle cl-add" id="cl-add-btn" data-testid="add-client" aria-expanded={adding}
                 onClick={() => setAdding(true)}>
@@ -233,6 +237,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                   onSoon={onSoon}
                   onOpenClient={() => { setDial(null); onOpenClient(open.id) }}
                   onClose={closeDial}
+                  focusFirst={byKey}
                 />
               )}
             </div>
@@ -330,14 +335,14 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
 /** One client circle: its colour, monogram and needs badge (or its 3D sphere); the name and a line naming the work. */
 function ClientCircle({ c, three, material, tab, open, onFocus, onClick }: {
-  c: DeskClient; three: boolean; material: string; tab: boolean; open: boolean; onFocus: () => void; onClick: (el: HTMLElement) => void
+  c: DeskClient; three: boolean; material: string; tab: boolean; open: boolean; onFocus: () => void; onClick: (el: HTMLElement, byKey: boolean) => void
 }) {
   // What its ring would say, in words: a quiet verb (reading, thinking, checking, working) or idle.
   const verb = c.summary.activity === 'human' || c.summary.activity === 'error' ? '' : `, ${ACTIVITY_WORD[c.summary.activity]}`
   const said = `${c.name}: ${c.line}${verb}${c.badge ? `. ${c.badge} need${c.badge === 1 ? 's' : ''} you` : ''}. Opens its tools`
   return (
     <button type="button" className={`cl-circle${open ? ' is-open' : ''}`} data-client={c.id} aria-pressed={open} tabIndex={tab ? 0 : -1}
-      aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget)}>
+      aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget, e.detail === 0)}>
       <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: c.look.ink }}>
         <svg viewBox="0 0 116 116" aria-hidden><circle cx="58" cy="58" r="52" className="cl-track" /></svg>
         {three

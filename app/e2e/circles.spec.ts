@@ -19,7 +19,8 @@ const SOFT_GL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-s
 
 test.use({ launchOptions: { args: SOFT_GL } })
 // 3D chosen (Flat circles off), as a person does from the account menu.
-test.beforeEach(async ({ page }) => { await page.addInitScript(() => { try { localStorage.setItem('napkin.circles.flat', '0') } catch { /* not kept */ } }) })
+// Only where the person has not chosen yet, so a choice made in a test is remembered across a reload.
+test.beforeEach(async ({ page }) => { await page.addInitScript(() => { try { if (localStorage.getItem('napkin.circles.flat') === null) localStorage.setItem('napkin.circles.flat', '0') } catch { /* not kept */ } }) })
 const CIRCLE = '[data-testid="client-circle"]'
 
 /** The page's WebGL context, kept so a test can lose and restore it. */

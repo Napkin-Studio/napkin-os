@@ -56,9 +56,11 @@ interface Props {
   onSoon: (tool: Tool) => void
   onOpenClient: () => void
   onClose: () => void
+  /** Opened from the keyboard: the focus goes to the first quadrant (a mouse open leaves it on the circle). */
+  focusFirst?: boolean
 }
 
-export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose }: Props) {
+export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenClient, onClose, focusFirst }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   // One tab stop for the four quadrants (roving): the arrows move it, and it starts on the first.
   const [at, setAt] = useState(0)
@@ -83,10 +85,12 @@ export function Dial({ client, items, live, place, onOpenTool, onSoon, onOpenCli
   }, [onClose])
   // It opens from the circle: scaled from the disc's size (the mock's 320ms ease); the focus goes to its first quadrant.
   useLayoutEffect(() => {
-    quads.current[0]?.focus({ preventScroll: true })
+    if (focusFirst) quads.current[0]?.focus({ preventScroll: true })
     const el = ref.current
     if (!el || typeof el.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
     el.animate([{ transform: `scale(${116 / 360})`, opacity: 0.5 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' })
+    // Once, as it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const parts = QUADRANTS.map((q, i) => {

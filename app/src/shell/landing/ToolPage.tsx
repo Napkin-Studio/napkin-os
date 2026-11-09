@@ -75,7 +75,7 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lense
     )
   }
   return (
-    <div className="nui nui-page" data-tool={kind === 'other' ? tool.id : kind}>
+    <div className="nui nui-page" data-testid="tool-page" data-client={client.id} data-tool={tool.id}>
       <div className="studio-shell">
         <section className="app-head">
           <div className="app-head-text">
@@ -84,7 +84,7 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lense
             <p className="hero-sub" id="hero-sub">{LINE[tool.id] ?? ''}</p>
           </div>
         </section>
-        <section className="section-block" data-testid="tool-page" data-client={client.id} data-tool={tool.id}
+        <section className="section-block"
           aria-label={`${tool.full} documents for ${name}`}>
           <div className="sec-num lc-sr">Client: {name} · {items.length === 0 ? `No ${many} for ${name} yet.` : `${items.length} ${items.length === 1 ? one : many} for ${name}.`}</div>
           <h2 className="sec-title">Pick one to open, or start a new {one === 'research' ? 'research question' : one}</h2>
