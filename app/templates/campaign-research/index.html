@@ -707,6 +707,7 @@ body.done:not(.show-run):not(.no-report) #start{display:none}
 .rc-why{display:grid;gap:8px;margin-top:12px}
 .rc-why label{font-size:14px;color:var(--ink2)}
 .rc-why .r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rc-why .rc-err{margin:0;color:var(--create-ink);font-size:13.5px}
 .rc-why input{flex:1 1 220px;min-width:0;padding:10px 12px;border-radius:12px;font-size:15px}
 .rc-chk.flash{animation:rcflash 1.2s var(--ease)}
 @keyframes rcflash{0%{box-shadow:0 0 0 7px color-mix(in srgb,var(--create) 35%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
@@ -3979,9 +3980,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
         +(gone.length?'<p class="t" style="color:var(--create-ink)">'+esc('It rests on a fact someone marked wrong'+(gone.length>1?' ('+gone.length+' of them)':'')+'. If there is a new point in its place, check that one and take this one out.')+'</p>':'');
       if(ui.mode==='no'){
         h+='<div class="rc-why"><label for="chkwhy-'+slug(c.ref)+'">What’s wrong with it? '+esc(given('synthesis'))+' will use this to fix it.</label>'
-          +'<div class="r"><input type="text" id="chkwhy-'+slug(c.ref)+'" data-ref="'+ref+'" value="'+esc(ui.why||'')+'" autocomplete="off"'+off+'>'
+          +'<div class="r"><input type="text" id="chkwhy-'+slug(c.ref)+'" data-ref="'+ref+'" value="'+esc(ui.why||'')+'" autocomplete="off"'+(ui.err?' aria-invalid="true" aria-describedby="chkerr-'+slug(c.ref)+'"':'')+off+'>'
           +'<button type="button" class="ans primary" data-act="chk-reject" data-ref="'+ref+'"'+off+'>'+(busy?'Saving…':'Take it out')+'</button>'
-          +'<button type="button" class="ans" data-act="chk-cancel" data-ref="'+ref+'"'+off+'>Keep it for now</button></div></div>';
+          +'<button type="button" class="ans" data-act="chk-cancel" data-ref="'+ref+'"'+off+'>Keep it for now</button></div>'
+          +(ui.err?'<p class="t rc-err" id="chkerr-'+slug(c.ref)+'" role="alert">Add a reason: say what’s wrong with it, so it can be fixed.</p>':'')+'</div>';
       } else if(!locked){
         h+='<div class="answers sm"><button type="button" class="ans primary" data-act="chk-yes" data-ref="'+ref+'"'+off+'>'+(busy?'Saving…':'Yes, keep it')+'</button>'
           +'<button type="button" class="ans" data-act="chk-no" data-ref="'+ref+'"'+off+'>No, take it out</button>'
@@ -4140,7 +4142,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       case 'chk-yes': chkDecide(ref, '/verify', {finding:ref, rationale:''}, 'Kept: you agreed.'); break;
       case 'chk-no': CHK.ui[ref]={mode:'no', why:''}; renderChecks(); focusWhy(); break;
       case 'chk-reject':
-        if(!String(ui.why||'').trim()){ toast('Say what’s wrong, so it can be fixed.'); focusWhy(); return; }
+        // Said where the box is, not in a passing toast.
+        if(!String(ui.why||'').trim()){ ui.err=true; renderChecks(); focusWhy(); return; }
         chkDecide(ref, '/verdict', {target:'findings['+ref+']', polarity:'bad', rationale:String(ui.why).trim()}, 'Taken out.'); break;
       case 'chk-pick': CHK.ui[ref]={mode:'pick', fid:b.getAttribute('data-fid'), why:''}; renderChecks();
         var first=document.querySelector('#'+chkId({ref:ref})+' [data-act=chk-reason]'); if(first) first.focus(); break;
@@ -4398,7 +4401,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     else if(id==='cmp-name') CHAT.name=t.value;
     else if(id==='cmp-who') CHAT.who=t.value.trim();
     else if(id&&id.indexOf('qtext-')===0) CHAT.qdraft[t.getAttribute('data-q')]=t.value;
-    else if(id&&id.indexOf('chkwhy-')===0){ var ui=CHK.ui[t.getAttribute('data-ref')]; if(ui) ui.why=t.value; }
+    else if(id&&id.indexOf('chkwhy-')===0){ var ui=CHK.ui[t.getAttribute('data-ref')]; if(ui){ ui.why=t.value; if(t.value.trim()) ui.err=false; } }
     else if(id&&id.indexOf('rqin-')===0){ var ak=t.getAttribute('data-k'); (ASK.ui[ak]||(ASK.ui[ak]={})).draft=t.value; }
     else if(id&&id.indexOf('rqlens-')===0){ var lk2=t.getAttribute('data-k'); (ASK.ui[lk2]||(ASK.ui[lk2]={})).lens=t.value; }
   });

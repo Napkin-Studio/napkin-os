@@ -2092,3 +2092,19 @@ test('a list printed in one line loses each item’s closing stop before the joi
   const g = lift<{ gridText(v: unknown): string }>(BM, ['gridText'], {})
   assert.equal(g.gridText(['Launch in the UK this spring.', 'Reach 3% share.']), 'Launch in the UK this spring; Reach 3% share.')
 })
+
+test('the reopen help names the client review button as the OS bar reads it now', () => {
+  const view = { v: null as unknown }
+  const f = lift<{ clientReviewLabel(): string }>(BM, ['clientReviewLabel'], { osView: () => view.v })
+  assert.equal(f.clientReviewLabel(), 'Client review')
+  view.v = { client: { answer: { current: true } } }
+  assert.equal(f.clientReviewLabel(), 'New client answer')
+  assert.match(fn(BM, 'renderReopen'), /clientReviewLabel\(\)/)
+})
+
+test('taking a point out with no reason says “Add a reason” at the box, not in a toast', () => {
+  const src = fn(RT, 'onCheck')
+  assert.doesNotMatch(src, /toast\('Say what/)
+  assert.match(src, /ui\.err=true/)
+  assert.match(RT, /Add a reason: say what’s wrong with it/)
+})

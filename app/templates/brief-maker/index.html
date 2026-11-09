@@ -602,8 +602,11 @@
   /* Headings: a label above the words, or a tab on the part's top edge */
   .sheet.head-tab .pgrid > .row .lab > span:first-child{background:var(--brief-accent);color:var(--paper);padding:2px 8px;border-radius:3px 3px 0 0}
   /* the side tab */
-  .stab{position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow:auto;display:grid;gap:16px;align-content:start;padding:18px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--grain),var(--card);box-shadow:var(--edge-hi),var(--lift);font-size:13.5px}
+  .stab{position:sticky;top:calc(var(--clan-top,0px) + 12px);max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 24px);overflow-x:hidden;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-content:start;padding:18px;border:1px solid var(--line);border-radius:var(--r-panel);background:var(--grain),var(--card);box-shadow:var(--edge-hi),var(--lift);font-size:13.5px}
   .stab .upnote{margin:0}
+  /* Nothing in the side tab is wider than it: a long chip ("Verified by … · 9 November 2026") wraps. */
+  .stab>*{min-width:0}
+  .stab .clf-sc-k,.stab .clf-sc-r{white-space:normal;overflow-wrap:anywhere}
   .splitbtn{position:relative;display:flex;gap:2px}
   .sb-main{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;border:1px solid var(--go-2);border-radius:8px 0 0 8px;background:var(--go);color:var(--goText);font-weight:600;cursor:pointer}
   .sb-more{width:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--go-2);border-radius:0 8px 8px 0;background:var(--go);color:var(--goText);cursor:pointer}
@@ -3538,6 +3541,9 @@
   var REOPEN_OPEN=false;
   function reopenable(){ return clientOpenParts().filter(function(p){ return p&&!p.reopened&&p.decision&&(p.state==='rejected'||p.state==='accepted_with_changes'); }); }
   function toggleReopen(on){ REOPEN_OPEN=on==null?!REOPEN_OPEN:!!on; renderReopen(); if(REOPEN_OPEN){ var b=$('reopenBox'); if(b) b.scrollIntoView({block:'nearest'}); } }
+  // The OS bar's client review button, as it reads now: "New client answer"
+  // once the client has answered this locked version (AppHost clientAnswered).
+  function clientReviewLabel(){ var c=(osView()||{}).client; return c&&c.answer&&c.answer.current?'New client answer':'Client review'; }
   function renderReopen(){
     var box=$('reopenBox'), A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0;
     box.hidden=!(A&&!re);
@@ -3548,7 +3554,7 @@
     list.innerHTML=ps.length
       ? ps.map(function(p,i){ return '<button type="button" class="lkitem" data-n="'+i+'"><span class="k">'+esc(p.state==='rejected'?'The client said no':'The client asked for a change')+'</span><span class="x">'+esc(addrLabel(p))+'</span></button>'; }).join('')
         +'<p>Reopening a part lets you make that change. Lock the brief again when it’s done.</p>'
-      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Client review in the OS bar), then reopen the part they mean here.</p>';
+      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first ('+esc(clientReviewLabel())+' in the OS bar), then reopen the part they mean here.</p>';
     list.querySelectorAll('[data-n]').forEach(function(b){ b.addEventListener('click', function(){
       var p=ps[+b.getAttribute('data-n')]; b.disabled=true;
       hostPost('/client-review/reopen', {answer:p.decision}).then(function(res){
