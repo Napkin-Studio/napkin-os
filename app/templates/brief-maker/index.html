@@ -1072,6 +1072,12 @@
   #structured .tabacts:not(:has(> :not([hidden]))),#structured .b-lockacts:not(:has(> :not([hidden]))){display:none}
   #structured .b-lockacts{display:grid;gap:10px;justify-items:start}
   #structured .b-reopen{font-size:12.5px}
+  #structured .side-part .sp-acts button.sp-conf[aria-pressed="true"]::before{content:"● ";white-space:pre}
+  .sheet.a4 .pgrid > .row.conf{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,#C9462A 9%,transparent) 7px 8px);box-shadow:inset 0 0 0 1px color-mix(in srgb,#C9462A 45%,transparent)}
+  .sheet.a4 .conftag{color:#C9462A;border-color:color-mix(in srgb,#C9462A 60%,transparent);opacity:1}
+  .toast{background:#141413;color:#fff;border-radius:6px;font:500 13px var(--font-ui);padding:12px 18px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)}
+  .b-gate-l .lkitem .x{display:inline}
+  #structured .sheettab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:16px}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -2918,12 +2924,12 @@
   // How a part sits on the page: a short fact (cell), the proposition (statement), the insight (callout), or prose.
   function kindOf(f){ return f.hero?'statement':f.key==='insight'?'callout':(f.key==='project_name'||f.key==='client'||f.key==='budget_and_scope')?'cell':'prose'; }
   // The client and the agency, as the document and the person know them.
-  function clientName(){ var m=(window.__CLAN__||{}).manifest||{}, c=m.client; var n=c&&typeof c==='object'?String(c.name||'').trim():''; return n||String(get('client')||'').split(/[,(]/)[0].trim(); }
+  function clientName(){ var m=(window.__CLAN__||{}).manifest||{}, c=m.client; var n=c&&typeof c==='object'?String(c.name||'').trim():''; return n||String(get('client')||'').split(/[,(.:;]|\s[-–—]\s/)[0].trim(); }
   var AGENCY_NAME={wk:'Wieden+Kennedy', tbwa:'TBWA\\Dublin', ogilvy:'Ogilvy', droga:'Droga5', harbour:'Harbour', napkin:'Napkin Studio'};
   var ME=null;
   function agencyId(){ var id=ME&&ME.id||''; var at=id.indexOf('@'); return at<0?'':id.slice(at+1).toLowerCase(); }
   function agencyName(){ var a=agencyId(); return AGENCY_NAME[a]||(a?a.charAt(0).toUpperCase()+a.slice(1):''); }
-  function initialsOf(n){ n=String(n||'').replace(/[^A-Za-z0-9+ ]/g,' ').trim(); var w=n.split(/\s+/).filter(Boolean); if(!w.length) return ''; if(/^mc/i.test(w[0])) return 'Mc'; if(w[0].length>2&&w[0]===w[0].toUpperCase()&&/[A-Z]/.test(w[0])) return w[0].slice(0,2); return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0].slice(0,2).toUpperCase(); }
+  function initialsOf(n){ n=String(n||'').replace(/[^A-Za-z0-9+ ]/g,' ').trim(); var w=n.split(/[\s+]+/).filter(Boolean); if(!w.length) return ''; if(/^mc/i.test(w[0])) return 'Mc'; if(w[0].length>2&&w[0]===w[0].toUpperCase()&&/[A-Z]/.test(w[0])) return w[0].slice(0,2); return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0].slice(0,2).toUpperCase(); }
   // A logo tile for a name with no picture: the client's in the brief's colour, the agency's in its own.
   function tileOf(kind){
     if(kind==='agency'){ var a=window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now(); var nm=agencyName(); if(!nm) return null; return {name:nm, txt:initialsOf(nm), bg:a?a.base:'#141413', fg:a?a.accent:'#FFFFFF'}; }
@@ -3257,7 +3263,7 @@
     var on=!isConf(f.key), cur=confList(), next=on?cur.concat([f.key]):cur.filter(function(k){ return k!==f.key; });
     Promise.resolve(patch('confidential_fields', next, {actor:'human', pinned:false, action:(on?'mark ':'share ')+f.key+(on?' confidential':' again'),
       rationale:on?'Kept in the agency copy, left out of the client copy.':'In the client copy again.'})).then(function(){
-      toast(on?'“'+partLabel(f)+'” is confidential: it stays in the agency copy and is left out of the client copy.':'“'+partLabel(f)+'” is shared again.'); });
+      toast(on?'“'+headOf(f)+'” is confidential: it stays in the agency copy and is left out of the client copy.':'“'+headOf(f)+'” is shared again.'); });
   }
   function setLock(key, on){
     var cur=lockedList(); var has=cur.indexOf(key)!==-1;
