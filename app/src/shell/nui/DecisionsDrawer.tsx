@@ -133,9 +133,9 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
   }
 
   return (
-    <div className="nui" data-testid="decisions-drawer">
+    <div className="nui">
       <div className="dtree-backdrop" id="dtree-backdrop" onClick={onClose} aria-hidden />
-      <aside className="dtree-drawer" id="dtree-drawer" aria-label="Decisions" role="dialog">
+      <aside className="dtree-drawer" id="dtree-drawer" aria-label="Decisions" role="dialog" data-testid="decisions-drawer">
         <header className="dtree-head">
           <div>
             <div className="sec-num" style={{ margin: 0 }}>DECISIONS</div>

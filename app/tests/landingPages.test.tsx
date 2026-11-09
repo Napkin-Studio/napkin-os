@@ -72,7 +72,11 @@ test('the tool page lists the client’s documents of that tool and offers a new
   ]
   const html = renderToStaticMarkup(createElement(ToolPage, { client: a, tool: brief, items, onNew: noop, onOpenItem: noop, onBack: noop }))
   assert.match(html, /data-testid="tool-page"[^>]*data-client="cli_00000001"[^>]*data-tool="brief"/)
-  assert.match(html, /<h1[^>]*>Brief Maker<\/h1>/)
+  assert.match(html, /<h1[^>]*>Brief Maker<span class="period-dot"/)
+  // Brief Maker's identity: dog-eared sheets with a manila tab, in the brief's home
+  assert.match(html, /class="home-grid bm-homes"/)
+  assert.equal(count(html, /class="home-card bm-card"/g), 2)
+  assert.match(html, /class="bm-tab"/)
   assert.match(html, /Client: Client A/)
   assert.match(html, /2 briefs for Client A/)
   assert.match(html, /New brief for Client A/)

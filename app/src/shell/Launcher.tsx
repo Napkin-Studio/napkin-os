@@ -55,8 +55,12 @@ function names(crew: readonly AgentKey[]): string {
   return n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`
 }
 
+/** Napkin's own tools wear their identity (mock phase 2: Brief Maker's manila and terracotta, Research's ink), not the colour of their name. */
+const IDENTITY: Record<string, string> = { 'ie.napkin.brief-maker': '#C9462A', 'ie.napkin.campaign-research': 'var(--ink)' }
+
 /** The app's colour as a style, when it is one; the OS mixes the rest. */
-function tint(home?: AppHome | null): CSSProperties | undefined {
+function tint(home?: AppHome | null, appId?: string): CSSProperties | undefined {
+  if (appId && IDENTITY[appId]) return { '--tc': IDENTITY[appId] } as CSSProperties
   const c = home?.colour
   return c && /^#[0-9a-f]{6}$/i.test(c) ? ({ '--tc': c } as CSSProperties) : undefined
 }
@@ -236,7 +240,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
                 key={app.app_id}
                 className={['ln-app', isNew(app.app_id) && 'ln-app-new', busy && 'ln-app-busy'].filter(Boolean).join(' ')}
                 data-dogfood={`open app ${app.app_id}`}
-                style={tint(home)}
+                style={tint(home, app.app_id)}
                 title={home?.line}
                 aria-busy={busy || undefined}
                 onClick={() => launch(app.app_id)}

@@ -20,7 +20,10 @@ import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
 import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
+import { useLensDots } from '../nui/lenses'
 import './landing.css'
+
+const NONE: never[] = []
 
 interface Props {
   route: Route
@@ -115,6 +118,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const tool = route.level === 'tool' ? toolById(route.tool) : undefined
   const mine = client ? data.items.filter(i => i.client?.id === client.id) : []
   const inTool = tool?.appId ? mine.filter(i => i.app_id === tool.appId) : []
+  const lenses = useLensDots(tool?.id === 'research' ? inTool : NONE)
   // a repeated word is still a change to the region, so it is said again
   const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : ' ') : arrival(route, {
     agency: who.agency, client: client?.name, tool: tool?.full, tools: 4, open: inTool.length,
@@ -123,16 +127,15 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   let body
   if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
     body = (
-      <div className="lc">
-        <ToolPage
-          client={client}
-          tool={tool}
-          items={inTool}
-          onNew={() => { if (tool.appId) onStart(tool.appId, client.id) }}
-          onOpenItem={onOpenDocument}
-          onBack={() => go({ level: 'client', client: client.id })}
-        />
-      </div>
+      <ToolPage
+        client={client}
+        tool={tool}
+        items={inTool}
+        onNew={() => { if (tool.appId) onStart(tool.appId, client.id) }}
+        onOpenItem={onOpenDocument}
+        onBack={() => go({ level: 'client', client: client.id })}
+        lenses={lenses}
+      />
     )
   } else if (clientId && client) {
     body = (

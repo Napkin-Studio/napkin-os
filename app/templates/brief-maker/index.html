@@ -1094,6 +1094,15 @@
   .sheet.a4 .pgrid > .row.k-cell.needs .ctrls{right:6px;top:40px}
   /* New brief lives in Continue in › Start fresh (gaps.md §7 L2) */
   #structured #newDraft{display:none}
+
+  /* Brief Maker's identity at the start (mock phase 2 "Brief / Research identity"): the
+     serif of a written brief, the terracotta mark and rule, and the dog-eared sheet the
+     ask is written on (a ruled, serif page). Identity only: the crew and the box stay. */
+  .intake .ident svg{color:#C9462A}
+  .intake .h1{font-family:var(--font-serif,"Newsreader",Georgia,serif);font-weight:600;letter-spacing:-.02em}
+  .intake .composer{border-radius:4px;clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
+  .intake .composer::after{content:"";position:absolute;top:0;right:0;width:20px;height:20px;background:linear-gradient(225deg,transparent 50%,var(--line,#EAE1CF) 50%);pointer-events:none}
+  .intake .composer textarea{font-family:var(--font-serif,"Newsreader",Georgia,serif);font-size:17px}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->

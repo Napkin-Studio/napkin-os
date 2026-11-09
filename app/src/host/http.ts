@@ -379,6 +379,7 @@ export const httpHost: Host = {
       upstream: () => call<UpstreamView>('/upstream'),
       verify: async (finding: string, rationale: string) => { await post('/verify', { finding, rationale }) },
       acknowledge: async (decision: string) => { await post('/acknowledge', { decision }) },
+      data: () => text(`/d/${encodeURIComponent(path)}/entry/data`),
       approve: async (rationale: string) => { await post('/approve', { rationale }) },
     }
   },

@@ -84,3 +84,6 @@ body {
 /* The mock's --accent is the agency's base, inside the new screens only
    (index.css's --accent stays Create's red for everything else). */
 .nui { --accent: var(--ag-base); }
+
+/* The tools' own identities (mock phase 2): Brief Maker's manila and terracotta, Research's highlighter. */
+:root { --bm-manila: #E7D5AC; --bm-manila-2: #F3E8CC; --bm-manila-line: #C4AA75; --bm-red: #C9462A; --rs-hl: #F6E36B; }

@@ -111,3 +111,11 @@
   .nui .tb-client { max-width: 110px; }
   .nui .stacked-lockup .sl-big { max-width: 64px; }
 }
+@media (max-width: 360px) {
+  .nui .tb-locked { padding: 0 6px; gap: 5px !important; }
+  .nui .m1-medallion { width: 46px !important; height: 46px !important; top: 2px !important; }
+  .nui .name-pill.pill-accent { margin-left: -16px; padding: 0 8px 0 20px; }
+  .nui .stacked-lockup .sl-big { max-width: 44px; }
+  .nui .tb-client { max-width: 84px; padding-right: 8px; }
+  .nui .tb-theme, .nui .tb-decisions-btn { min-width: 40px; min-height: 40px; width: 40px; height: 40px; padding: 0; }
+}

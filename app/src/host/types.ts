@@ -667,6 +667,8 @@ export interface DocOps {
   verify(finding: string, rationale: string): Promise<void>
   /** "Looks right" on an agent's call: `POST /acknowledge`. */
   acknowledge(decision: string): Promise<void>
+  /** Its data entry as stored (YAML or JSON text): what a tool home reads its lens coverage from. */
+  data(): Promise<string>
   /** Lock it: `POST /approve`. Refused, in the host's words, while its lock list holds. */
   approve(rationale: string): Promise<void>
 }

@@ -31,7 +31,7 @@ import { useCanGL } from './shell/nui/use3D'
 import { callsIn, clientLook, clientName, monogramOf, sectorOf, setSector } from './shell/nui/deskData'
 import { setClientAgency } from './shell/agency/clients'
 import type { Account, ClientChip } from './components/barMenus'
-import { flatPref, setFlatPref } from './orbs/prefs'
+import { applyFlatPref, flatPref, setFlatPref } from './orbs/prefs'
 import { useInstall } from './pwa/pwa'
 import { useOfflineCopies } from './offline/useOfflineCopies'
 import { useRoute } from './shell/useRoute'
@@ -139,6 +139,8 @@ export default function App() {
   const install = useInstall()
   // Flat circles is offered only where there is a 3D to switch to.
   const canGL = useCanGL()
+  // The person's Flat circles choice holds on every screen, not only once the desk has drawn.
+  useEffect(() => { applyFlatPref() }, [])
   const offlineCopies = useOfflineCopies()
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
@@ -640,6 +642,7 @@ export default function App() {
               onAgency={toAgency}
               onHome={toAgency}
               client={deskChip}
+              place={onLanding && route.level === 'tool' ? { tool: route.tool, label: (toolById(route.tool)?.noun[1] ?? '').replace(/^./, c => c.toUpperCase()) } : null}
               needs={deskNeeds}
               // On the desk, Decisions opens the calls across every client.
               onDecisions={onLanding ? () => setDeskDecisions(o => !o) : undefined}

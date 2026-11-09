@@ -21,7 +21,7 @@
 
 import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { accountItems, continueItems, docMenuItems, shareItems, type Account, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
+import { accountItems, continueItems, docMenuItems, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
 import { MedallionMark } from './Medallion'
 import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
@@ -68,6 +68,8 @@ interface Props {
   account?: Account
   /** The open document; absent on the desk. */
   doc?: DocBar
+  /** A tool's home for the client (no document): named in the app slot, as the mock's "Briefs". */
+  place?: BarPlace | null
 }
 
 type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share'
@@ -255,7 +257,7 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
 }
 
 export default function Toolbar({
-  agency, onHome, mark = markOf(null), onOpenFile, attention, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc,
+  agency, onHome, mark = markOf(null), onOpenFile, attention, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
 }: Props) {
   const pop = usePop<PopKey>()
   const appRef = useRef<HTMLDivElement>(null)
@@ -359,7 +361,13 @@ export default function Toolbar({
         <div className="topbar-outer">
           <header className="tb-locked" aria-label="Napkin Studio Top Bar">
             {lead}
-            <div className="tb-app" id="tb-app" aria-label="App" />
+            <div className="tb-app" id="tb-app" aria-label="App">
+              {place && (
+                <span className={`tba-name tba-static tba-${place.tool}`} data-testid="bar-place">
+                  <ToolIcon tool={place.tool} /><span className="tba-n2"><b>{place.label}</b></span>
+                </span>
+              )}
+            </div>
             <span className="tb-spacer" />
             {tools}
             {right}

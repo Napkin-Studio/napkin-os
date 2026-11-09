@@ -110,6 +110,9 @@ export interface Account {
   flat?: { on: boolean; toggle: () => void }
 }
 
+/** Where the bar is when no document is open but a tool's home is: its icon and its plural ("Briefs"). */
+export interface BarPlace { tool: string; label: string }
+
 /** The client chip in the bar: back to the client, or a switcher between clients. */
 export interface ClientChip {
   name: string
