@@ -233,6 +233,8 @@ html[data-orbs-gl='0'] .lc-flat-toggle { display: none; }
 
 /* ── the dial: a client's apps, in place round its circle (features/new-ui-shell.clan) ── */
 .lc-client[aria-expanded='true'] .lc-orb { box-shadow: 0 0 0 3px var(--agency); border-radius: 50%; }
+/* the open dial names its client on its hub: the circle's own label under it is hidden, not read through */
+.lc-client[aria-expanded='true'] .lc-lbl { visibility: hidden; }
 .lc-dial { position: absolute; z-index: 20; width: 0; height: 0; pointer-events: none; }
 .lc-dial > * { pointer-events: auto; }
 .lc-dial::before {
