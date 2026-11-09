@@ -39,7 +39,9 @@ export function docStateOf(view: DecisionsView | null): DocStateWords | null {
   if (lock.locked) return { label: 'Locked', tone: 'ok', locked: true }
   // What needs a call is counted once, on the Decisions button (owner, 9 Nov
   // 2026: one needs indicator); the pill says only where the document is.
-  if (lock.can_lock) return { label: 'Ready to lock', tone: 'ok', locked: false }
+  // The host's can_lock is true for a document with nothing in it yet (no
+  // blockers): one nobody and no agent has written anything into is a draft.
+  if (lock.can_lock && view.decisions.length > 0) return { label: 'Ready to lock', tone: 'ok', locked: false }
   return { label: 'Draft', tone: null, locked: false }
 }
 

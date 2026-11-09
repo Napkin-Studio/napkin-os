@@ -30,7 +30,10 @@ test('the state pill: Draft, Ready to lock, Locked, Reopened; what needs a call 
   assert.deepEqual(docStateOf(view([])), { label: 'Draft', tone: null, locked: false })
   // One needs indicator (owner, 9 Nov 2026): the pill never repeats the count.
   assert.deepEqual(docStateOf(view([need('unverified', 'a'), need('rejected', 'c')])), { label: 'Draft', tone: null, locked: false })
-  assert.deepEqual(docStateOf(view([], { can_lock: true })), { label: 'Ready to lock', tone: 'ok', locked: false })
+  // An empty document has no blockers, so the host says can_lock: it is still a draft.
+  assert.deepEqual(docStateOf(view([], { can_lock: true })), { label: 'Draft', tone: null, locked: false })
+  const written = { ...view([], { can_lock: true }), decisions: [{}] } as unknown as DecisionsView
+  assert.deepEqual(docStateOf(written), { label: 'Ready to lock', tone: 'ok', locked: false })
   assert.deepEqual(docStateOf(view([], { locked: true })), { label: 'Locked', tone: 'ok', locked: true })
   assert.deepEqual(docStateOf(view([], { locked: true, reopened: [{}] as never })), { label: 'Reopened', tone: 'warn', locked: false })
 })
