@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { LibraryItem } from '../src/host/types.ts'
-import { listedTitle, othersStamp } from '../src/shell/docFreshness.ts'
+import { lastSaved, listedTitle, listedUpdated, othersStamp, savedWords } from '../src/shell/docFreshness.ts'
 
 const it = (path: string, updated_at: string, title = path): LibraryItem => ({
   path, app_id: 'ie.napkin.campaign-research', title, updated_at, client: null, run: null,
@@ -30,4 +30,21 @@ test('the bar takes the name the library has now', () => {
   assert.equal(listedTitle(lib, 'other.clan'), null)
   assert.equal(listedTitle([it('r.clan', 't1', '  ')], 'r.clan'), null)
   assert.equal(listedTitle(undefined, 'r.clan'), null)
+})
+
+test('the saved line always has a time when the document has updated_at (the mock: "saved 37m ago")', () => {
+  const now = Date.parse('2026-11-09T12:00:00Z')
+  const lib = [it('b.clan', '2026-11-09T11:23:00Z')]
+  assert.equal(listedUpdated(lib, 'b.clan'), '2026-11-09T11:23:00Z')
+  assert.equal(listedUpdated(lib, 'x.clan'), null)
+  // Before any change in this tab: the document's own time, not a bare "saved".
+  assert.equal(savedWords(lastSaved(null, '2026-11-09T11:23:00Z'), now), 'saved 37m ago')
+  // A change kept in this tab later than the stored time wins, and the other way round.
+  assert.equal(savedWords(lastSaved(new Date(now - 30_000), '2026-11-09T11:23:00Z'), now), 'saved just now')
+  assert.equal(savedWords(lastSaved(new Date(now - 3_600_000), '2026-11-09T11:58:00Z'), now), 'saved 2m ago')
+  assert.equal(savedWords(lastSaved(null, '2026-11-09T09:00:00Z'), now), 'saved 3h ago')
+  assert.equal(savedWords(lastSaved(null, '2026-11-07T12:00:00Z'), now), 'saved 2d ago')
+  // No time anywhere: the word alone.
+  assert.equal(savedWords(lastSaved(null, ''), now), 'saved')
+  assert.equal(savedWords(lastSaved(null, 'not a date'), now), 'saved')
 })

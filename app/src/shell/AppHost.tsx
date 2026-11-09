@@ -26,7 +26,7 @@ import { barAction, refreshApp } from './appExport'
 import { statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem } from '../host'
-import { listedTitle, othersStamp } from './docFreshness'
+import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
@@ -381,7 +381,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
-          saved: saved ? <SaveStatus docPath={docPath} /> : undefined,
+          saved: saved ? <SaveStatus docPath={docPath} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.
