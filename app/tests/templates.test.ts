@@ -1801,6 +1801,52 @@ test('research: every action the old header and Jude’s bar held is in the insp
   assert.match(fn(RT, 'renderAsks'), /askBoxHtml\('_new', 'Ask the research'\)/)
   // Owner removals stay removed.
   for (const gone of ['show-findings', 'source-mix', 'rb-outline', 'answer formed']) assert.ok(!RT.includes(gone), gone)
+  // Continue in is the OS bar's: the panel starts no brief of its own (same POST /spinoff).
+  assert.doesNotMatch(RT, /data-act="spin-brief"|function doSpinBrief/)
+  assert.match(fn(RT, 'judgeBarHtml'), /Continue in ▾/)
+  // Save · PDF keeps its other ways to save behind ▾.
+  assert.match(insp, /data-act="export-html"[^>]*>HTML file</)
+})
+
+test('research: the report body is the mock’s, and every section of the record is drawn in it', () => {
+  const r = fn(RT, 'renderReport')
+  // band, stats, 00 the ask, headline and summary, lens × market sections, then the record
+  for (const part of ['rpBand(r, lk)', 'rpStats()', 'rpAsk(0)', 'h2 class="headline"', 'rep-sum', 'rpBlock', 'rpConfirm(r', 'rpNotResearched(r',
+    'rpContests(k)', 'rpGaps(k)', 'rpPinned(r, k)', 'rpCoverage(k)', 'rpExcluded(r, k)', 'rpHowRan(k)', 'rpRecord(k)', 'rp-asks-at', 'rep-foot'])
+    assert.ok(r.includes(part), part)
+  // Read the ask again sits under the ask; All 19 fields and Your request open what they name.
+  const ask = fn(RT, 'rpAsk')
+  assert.match(ask, /data-act="extract"[^>]*>Read the ask again</)
+  assert.match(ask, /data-act="goto-records" data-to="ask"/)
+  assert.match(ask, /data-act="show-run">Your request and answers</)
+  // Contests keep Resolve and Why; gaps offer Research this, which only fills the ask box.
+  assert.match(fn(RT, 'rpContest'), /data-act="resolve"/)
+  assert.match(fn(RT, 'rpContest'), /data-act="why"/)
+  assert.match(fn(RT, 'rpGaps'), /data-act="gap-ask"/)
+  assert.doesNotMatch(fn(RT, 'gapAsk'), /doAsk|sendAsk|apiProxy/)
+  // One Ask the research box; a lens-scoped question is asked from it with About.
+  assert.doesNotMatch(fn(RT, 'renderAsks'), /askBoxHtml\(L\.k/)
+  assert.match(fn(RT, 'askBoxHtml'), /id="rqlens-_new"/)
+  assert.match(fn(RT, 'doAsk'), /rqlens-/)
+})
+
+test('research: a figure the sentence states becomes its field where it stands', () => {
+  const P: Record<string, { value: unknown; unit: string }> = { f_A: { value: 0.24, unit: 'proportion' }, f_B: { value: 0.11, unit: 'proportion' }, f_T: { value: 'long words that are not a figure at all', unit: 'text' } }
+  const env = {
+    arr, isObj, esc: (x: unknown) => String(x ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`), pins: () => P, fnds: () => ({ fi_X: { statement: 'X' } }),
+    window: { ClanFields: {} }, fmtAny: (p: { value: number }) => `${Math.round(p.value * 100)}%`,
+    pinChip: (id: string) => `[chip ${id}]`,
+  }
+  const f = lift<{ inlineCited(t: string, c: string[]): { html: string; left: string[] }; claimHtml(t: string, c: string[]): string }>(RT, ['inlineFig', 'fno', 'inlineCited', 'restCites', 'claimHtml'], env)
+  const x = f.inlineCited('Ireland grew 24% and GB 11% & more.', ['f_A', 'f_B', 'fi_X'])
+  assert.equal(x.html, 'Ireland grew <clan-field ref="f_A"></clan-field> and GB <clan-field ref="f_B"></clan-field> &#38; more.')
+  assert.deepEqual(x.left, ['fi_X'])
+  // Not inside a longer number, and a figure the sentence does not state follows it.
+  const y = f.inlineCited('Up 124% on 2024.', ['f_A'])
+  assert.deepEqual(y.left, ['f_A'])
+  const c = f.claimHtml('Growth is real.', ['f_A', 'f_T', 'fi_X'])
+  assert.match(c, /^Growth is real\. <span class="rp-cites"><clan-field ref="f_A"><\/clan-field>\[chip f_T\]<button type="button" class="rp-f" data-rsel="fi_X"[^>]*>F1<\/button><span class="rp-n">2 pins<\/span><\/span>$/)
+  assert.match(f.claimHtml('Nothing cited.', []), /no cite/)
 })
 
 type MapNode = { id: string; col: string; kind: string; used: boolean; out?: boolean; order: number; label: string; meta?: string }
@@ -1863,14 +1909,14 @@ test('research: the report box and the OS bar say the report’s state in the sa
   assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
   assert.equal(f.reportStatus({}, false, false, 2).label, 'Draft')
   assert.equal(f.reportStatus({}, false, false, 0).label, 'Ready to lock')
+  // The OS bar takes the state only (decision 9 Nov): Continue in, Share and Export are
+  // the bar's own; Refresh, Lock and accept and Run research are the Report box's.
   const st = f.reportStatus({}, false, false, 1)
-  const items = f.barItems(st, true, false)
-  assert.deepEqual(items.map(i => i.kind === 'status' ? `status:${i.label}` : i.id), ['status:Draft', 'refresh', 'lock', 'export'])
-  assert.ok(items.every(i => i.label.length <= 28))
-  // Locked: nothing to refresh or lock.
-  const lk = f.barItems(f.reportStatus({}, true, false, 0), true, true)
-  assert.ok(lk.filter(i => i.id === 'refresh' || i.id === 'lock').every(i => i.disabled))
-  // The bar's buttons do what the page's do.
+  assert.deepEqual(f.barItems(st, true, false), [{ kind: 'status', label: 'Draft', tone: 'warn', locked: false }])
+  assert.deepEqual(f.barItems(f.reportStatus({}, true, false, 0), true, true), [{ kind: 'status', label: 'Locked', tone: 'ok', locked: true }])
+  const box = RT.slice(RT.indexOf('<section class="insp-box" id="rbox"'), RT.indexOf('</section>', RT.indexOf('id="rbox"')))
+  for (const id of ['rbox-status', 'rbox-refresh', 'lockBtn', 'researchBtn', 'synthBtn']) assert.match(box, new RegExp(`id="${id}"`), `${id} is in the Report box`)
+  // A bar action from an older shell still does what the page's button does.
   const onBar = fn(RT, 'onBarAction')
   assert.match(onBar, /'refresh'\) doRefreshReport\(\)/)
   assert.match(onBar, /'lock'\) doLock\(\)/)
