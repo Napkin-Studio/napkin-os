@@ -4152,7 +4152,11 @@
   }
   // One step earlier or later in reading order (the keyboard's move, and the panel's).
   function layoutStep(items, key, d){
-    var i=layoutIndex(items,key), j=i+d; if(i<0||j<0||j>=items.length) return items.slice();
+    var i=layoutIndex(items,key), j=i+d;
+    // the meta row's cells hold their places in row 1: a part steps past them, so a move always shows
+    var meta=typeof isMeta==='function'?isMeta:function(){ return false; };
+    if(!meta(key)) while(j>=0&&j<items.length&&meta(items[j].key)) j+=d;
+    if(i<0||j<0||j>=items.length) return items.slice();
     return layoutMove(items, key, items[j].key, d>0);
   }
   function layoutResize(items, key, w){
