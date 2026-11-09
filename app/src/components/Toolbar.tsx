@@ -22,7 +22,8 @@
 import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
 import { accountItems, continueItems, docMenuItems, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
-import { MedallionMark } from './Medallion'
+import { MedallionMark, type MarkTarget } from './Medallion'
+import { useEngaged } from './markStore'
 import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
 import { DogfoodBadge } from '../dogfood/Dogfood'
@@ -52,6 +53,8 @@ interface Props {
    * never from another client's work: that is the Decisions count's job.
    */
   attention?: boolean
+  /** What the medallion is told (the host owns its state); else asleep until the person engages, then awake. */
+  markTarget?: MarkTarget
   /** The client chip after the pill: in a document, back to its client; on the client page, the switcher. */
   client?: ClientChip | null
   /** The needs-your-call count beside Decisions. Desk: across all clients; document: needsOf(view) less what was set aside. */
@@ -112,7 +115,9 @@ function TbaRows({ items, close, icon }: { items: MenuItem[]; close: (refocus: b
 }
 
 /** The medallion: the mock's satin mark in a raised circle; it warms and rings when the app you are in needs you. */
-function Medallion({ onHome, attention, mark }: { onHome: () => void; attention?: boolean; mark: { base: string; accent: string } }) {
+function Medallion({ onHome, attention, mark, target }: { onHome: () => void; attention?: boolean; mark: { base: string; accent: string }; target?: MarkTarget }) {
+  const engaged = useEngaged()
+  const told: MarkTarget = target ?? (attention ? { state: 'needs', progress: 0.85 } : { state: engaged ? 'awake' : 'sleep', progress: 0 })
   return (
     <button
       type="button"
@@ -124,7 +129,7 @@ function Medallion({ onHome, attention, mark }: { onHome: () => void; attention?
       title={attention ? 'Back to the studio. This document needs you.' : 'Back to the studio'}
       aria-label={attention ? 'Back to the studio (this document needs you)' : 'Back to the studio'}
     >
-      <MedallionMark base={mark.base} accent={mark.accent} state={attention ? 'needs' : 'awake'} size={54} />
+      <MedallionMark base={mark.base} accent={mark.accent} target={told} size={54} />
     </button>
   )
 }
@@ -257,7 +262,7 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
 }
 
 export default function Toolbar({
-  agency, onHome, mark = markOf(null), onOpenFile, attention, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
+  agency, onHome, mark = markOf(null), onOpenFile, attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
 }: Props) {
   const pop = usePop<PopKey>()
   const appRef = useRef<HTMLDivElement>(null)
@@ -273,7 +278,7 @@ export default function Toolbar({
   const lead = (
     <>
       <div className="dock-connected">
-        <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} />
+        <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} target={doc ? markTarget : undefined} />
         <button
           type="button"
           className="name-pill pill-accent"

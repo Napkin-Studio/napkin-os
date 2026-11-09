@@ -188,8 +188,9 @@ test('one needs indicator: Decisions is amber with the count; the state pill nev
   assert.match(waiting, /data-testid="needs-count">1</)
   // The medallion reacts only for the open app, and never on the desk.
   assert.match(html, /data-testid="medallion-mark" data-state="needs"/)
-  assert.match(bar({ needs: 0, doc: doc() }), /data-state="awake"/)
-  assert.match(bar({ needs: 5, attention: true }), /data-state="awake"/, 'the desk count never lights it')
+  assert.doesNotMatch(bar({ needs: 0, doc: doc() }), /data-state="needs"/)
+  // The desk: asleep until the person engages (the mock's wakeMark), and its count never lights it.
+  assert.match(bar({ needs: 5, attention: true }), /data-testid="medallion-mark" data-state="sleep"/, 'the desk count never lights it')
 })
 
 test('Share ▾: Copy link where there is a server, Download a copy always; client copy and crew say what is not built', () => {

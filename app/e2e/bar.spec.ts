@@ -46,7 +46,10 @@ test('desk: Decisions is amber with the count across clients and lists the calls
   const decisions = page.getByTestId('decisions')
   await expect(decisions).toHaveClass(/has-needs/)
   await expect(page.getByTestId('needs-count')).toHaveText('2')
-  await expect(page.getByTestId('medallion-mark')).toHaveAttribute('data-state', 'awake') // the desk never lights it
+  // The desk never lights it: asleep until the person engages (the mock's wakeMark), then awake.
+  await expect(page.getByTestId('medallion-mark')).toHaveAttribute('data-state', 'sleep')
+  await page.mouse.click(5, 700)
+  await expect(page.getByTestId('medallion-mark')).toHaveAttribute('data-state', 'awake')
   await decisions.click()
   const drawer = page.getByTestId('decisions-drawer')
   await expect(drawer.getByTestId('call-row')).toHaveCount(2)

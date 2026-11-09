@@ -614,6 +614,7 @@ export default function App() {
           onAgency={() => leaveTo({ level: 'agency' })}
           onCopyLink={hasServer && !device ? copyLink : undefined}
           crew={crew}
+          run={docItem?.run ?? null}
           library={landing.data?.items ?? null}
           user={user}
           onSignOut={onSignOut}

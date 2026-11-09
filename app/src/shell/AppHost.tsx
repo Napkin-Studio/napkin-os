@@ -25,7 +25,9 @@ import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
 import { statusOf, type BarItem } from './appBar'
 import { host } from '../host'
-import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem } from '../host'
+import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
+import { useEngaged } from '../components/markStore'
+import { markTarget } from '../components/medallionMotion'
 import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
@@ -74,10 +76,12 @@ interface Props {
   crew?: Crew
   /** The library as the shell last read it: the document's current name, and when others changed. */
   library?: LibraryItem[] | null
+  /** The open document's run, as the host tracks it: what the medallion shows while it works. */
+  run?: RunInfo | null
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
@@ -97,6 +101,17 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // less what this person set aside (it still blocks the lock).
   const aside = useSetAside(docPath)
   const needs = useMemo(() => splitAside(needsOf(decisions.view), aside.keys).open.length, [decisions.view, aside.keys])
+  // The medallion (the mock's headerMark): working during this document's run, done once a run
+  // ended here with nothing open, needs when it needs you, else awake (or asleep before you engage).
+  const runState = run?.state ?? null
+  const [runSeen, setRunSeen] = useState({ docPath, last: runState, finished: false })
+  if (runSeen.docPath !== docPath || runSeen.last !== runState) {
+    const same = runSeen.docPath === docPath
+    const ended = same && runSeen.last === 'working' && (runState === null || runState === 'idle' || runState === 'done')
+    setRunSeen({ docPath, last: runState, finished: ended || (same && runSeen.finished && runState !== 'working') })
+  }
+  const engaged = useEngaged()
+  const mark_ = markTarget({ inDoc: true, needs, run, finished: runSeen.finished, engaged })
   // The Decisions drawer, opened from the bar. Kept with the document it was opened on.
   const [drawer, setDrawer] = useState<{ docPath: string; open: boolean }>({ docPath, open: false })
   const decisionsOpen = drawer.docPath === docPath && drawer.open
@@ -339,6 +354,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         account={account}
         // The medallion lights only for the document the person is IN (owner, 9 Nov 2026).
         attention={needs > 0 || !!crew?.waiting}
+        markTarget={mark_}
         needs={needs}
         onDecisions={clientOn ? undefined : () => setDecisionsOpen(o => !o)}
         decisionsOpen={decisionsOpen && !clientOn}

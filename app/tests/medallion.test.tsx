@@ -46,12 +46,17 @@ test('the wave path: 19 points, closed to the sea when filled', () => {
   assert.match(wavePath(0, 3.95, -1.8, true), /Z$/)
 })
 
-test('the mark renders in both states, with the ring only when it needs you', () => {
-  const awake = renderToStaticMarkup(createElement(MedallionMark, { base: '#1E22AA', accent: '#FFB800', state: 'awake' }))
-  const needs = renderToStaticMarkup(createElement(MedallionMark, { base: '#1E22AA', accent: '#FFB800', state: 'needs' }))
+test('the mark renders as the mock\'s H1: the arc is always drawn, lit only in a state that rings', async () => {
+  const { resetMark } = await import('../src/components/markStore.ts')
+  resetMark()
+  const awake = renderToStaticMarkup(createElement(MedallionMark, { base: '#1E22AA', accent: '#FFB800', target: { state: 'awake', progress: 0 } }))
   assert.match(awake, /viewBox="-50 -50 100 100"/)
-  assert.doesNotMatch(awake, /medallion-arc/)
-  assert.match(needs, /medallion-arc/)
+  assert.match(awake, /data-testid="medallion-arc"[^>]*/)
+  assert.match(awake, /data-k="arc"[^>]*opacity="0\.000"/, 'awake: the ring is not lit')
+  resetMark()
+  const needs = renderToStaticMarkup(createElement(MedallionMark, { base: '#1E22AA', accent: '#FFB800', target: { state: 'needs', progress: 0.85 } }))
+  assert.match(needs, /data-k="arc"[^>]*opacity="1\.000"/, 'needs: the ring closes round the sphere')
+  assert.match(needs, /data-state="needs"/)
 })
 
 test('the medallion takes the signed-in agency\'s kit, else Napkin\'s', () => {

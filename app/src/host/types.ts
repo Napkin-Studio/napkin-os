@@ -165,6 +165,8 @@ export interface RunInfo {
   /** The stage it is at (`research`, `Layout`), when it says: what the ring shows. */
   stage?: string
   since?: string
+  /** Steps done and steps in all, when the job says. */
+  progress?: [number, number]
 }
 
 /** One piece of work in the library, with who it is for. */

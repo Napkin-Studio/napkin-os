@@ -203,6 +203,10 @@ impl RunTracker {
             label,
             stage,
             since: job.since.clone(),
+            progress: job
+                .progress
+                .filter(|(_, t)| *t > 0)
+                .map(|(d, t)| [d.min(t), t]),
         })
     }
 
@@ -332,6 +336,8 @@ mod tests {
             r.run_at(&d, t(6)).unwrap().label,
             "Working: research (3 of 6)"
         );
+        // The steps travel as numbers too: the medallion's arc is done / total.
+        assert_eq!(r.run_at(&d, t(6)).unwrap().progress, Some([3, 6]));
     }
 
     #[test]

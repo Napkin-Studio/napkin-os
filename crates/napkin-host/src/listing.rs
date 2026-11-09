@@ -65,6 +65,9 @@ pub struct RunInfo {
     /// When that began, when the document says.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<String>,
+    /// Steps done and steps in all, when the job says: what the medallion's arc shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<[u64; 2]>,
 }
 
 /// One document in the library listing.
@@ -310,5 +313,6 @@ fn run_of(clan: &ClanFile) -> Option<RunInfo> {
             .get("since")
             .and_then(serde_yaml::Value::as_str)
             .map(String::from),
+        progress: None,
     })
 }
