@@ -1797,7 +1797,7 @@ queries and links, not the counts the draft assumed (AR7).
 
 Brand A · campaign research · XA · example · market structure
 
-Not established: market.off_trade_volume for category/example in XA, in the market structure lens; Max looked for it on 2026-09-20.
+Not established: market.off_trade_volume for category/example in XA, in the market structure lens; the Research agent looked for it on 2026-09-20.
 
 What was looked for, as recorded:
 > {searched}
@@ -1806,7 +1806,7 @@ Searches tried, as recorded:
 > {sources_tried[0]}
 > {sources_tried[1]}
 
-Max's note, as recorded:
+The Research agent's note, as recorded:
 > {note}
 ```
 
@@ -3746,7 +3746,7 @@ and unit are left out of its frontmatter.
 From `24-research/`, the heading and body:
 
 ~~~markdown
-## d_01JXA0R03 · Max researched market structure in XA · decision · thought process
+## d_01JXA0R03 · The Research agent researched market structure in XA · decision · thought process
 
 Max, the market structure agent, researched market structure in XA on 2026-09-20.
 
