@@ -696,7 +696,7 @@ impl<'a> Lookup<'a> {
             [Seg::Name("selection"), Seg::Name("contested"), Seg::Key(id)] => {
                 let key = data
                     .and_then(|d| contest_entry(d, id))
-                    .and_then(|c| c.get("key")?.as_str().map(String::from))
+                    .and_then(|c| c.get("key")?.as_str().map(contest_label))
                     .unwrap_or_else(|| id.to_string());
                 (format!("Contest · {key}"), "contest")
             }
@@ -2274,6 +2274,27 @@ pub(crate) fn fact_label(f: &Value) -> String {
     );
     if label.is_empty() {
         str_of(f, "id").unwrap_or("fact").to_string()
+    } else {
+        label
+    }
+}
+
+/// A contest as a person names it: the fact it is about, as [`fact_label`]
+/// names one. Its key is `<scope>:<fact key>@<market>`
+/// (`category/alcohol.cider:market.export_value@IE` → "Export value · IE").
+fn contest_label(key: &str) -> String {
+    let (rest, market) = match key.rsplit_once('@') {
+        Some((r, m)) if !m.is_empty() => (r, Some(m)),
+        _ => (key, None),
+    };
+    let fact = rest.rsplit_once(':').map_or(rest, |(_, k)| k);
+    let mut f = serde_json::json!({ "key": fact });
+    if let Some(m) = market {
+        f["market"] = Value::String(m.to_string());
+    }
+    let label = fact_label(&f);
+    if label.is_empty() || label == "fact" {
+        key.to_string()
     } else {
         label
     }

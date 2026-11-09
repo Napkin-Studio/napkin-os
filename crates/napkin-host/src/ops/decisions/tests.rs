@@ -129,10 +129,7 @@ fn the_example_lists_what_blocks_its_lock() {
     assert_eq!(cto.who.kind, "agent");
     assert_eq!(cto.who.name, "Start campaign");
     assert_eq!(cto.targets[0].kind, "contest");
-    assert_eq!(
-        cto.targets[0].label,
-        "Contest · brand/orchard-hill:product.abv"
-    );
+    assert_eq!(cto.targets[0].label, "Contest · Product abv");
 }
 
 #[test]
@@ -190,7 +187,7 @@ fn cites_resolve_to_what_they_name() {
 
     let address = &v.cites[&format!("{DOC}#selection.contested[ct_orchard_hill_abv]")];
     assert_eq!(address.kind, "address");
-    assert_eq!(address.label, "Contest · brand/orchard-hill:product.abv");
+    assert_eq!(address.label, "Contest · Product abv");
 }
 
 const CHAIN: &str = "decisions:
@@ -774,7 +771,7 @@ unresolved: 1
     );
     assert_eq!(
         contest.label.as_deref(),
-        Some("Contest · brand/orchard-hill:product.abv@IE"),
+        Some("Contest · Product abv · IE"),
         "labelled from the frozen copy"
     );
     assert!(v.attention[1].text.contains("settled there, in the parent"));
