@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { ClientRecord, LegacyName } from '../../host'
-import { matches, pageOf } from '../landing/model'
+import { adoptLabel, matches, pageOf } from '../landing/model'
 import type { Tool } from '../landing/tools'
 import type { Manage } from '../landing/useLanding'
 import { AdoptPanel } from '../landing/Registry'
@@ -281,7 +281,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
         <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label="More for the desk" testid="desk-menu">
           <button type="button" role="menuitem" aria-disabled={!manage || offer.length === 0 || undefined}
             onClick={() => { if (!manage || offer.length === 0) return; pop.close(false); setAdopting(true) }}>
-            Adopt clients{offer.length ? ` (${offer.length})` : ''}
+            {offer.length ? adoptLabel(offer.length) : 'Adopt clients'}
             <small>{offer.length ? 'Names in your documents that no client has yet' : 'Nothing to adopt: every document has its client'}</small>
           </button>
           {onOpenFile && (
@@ -331,7 +331,7 @@ function ArchivedRow({ c, onRestore }: { c: ClientRecord; onRestore: () => Promi
 }
 
 /** The mock's add form: Client name and Sector, its own validation, the host's words on a refusal. */
-function AddForm({ onAdd, onClose }: { onAdd: (name: string, sector: string) => Promise<string | null>; onClose: () => void }) {
+export function AddForm({ onAdd, onClose }: { onAdd: (name: string, sector: string) => Promise<string | null>; onClose: () => void }) {
   const [name, setName] = useState('')
   const [sector, setSector] = useState('')
   const [error, setError] = useState<string | null>(null)

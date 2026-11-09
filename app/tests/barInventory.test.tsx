@@ -16,14 +16,13 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import Toolbar from '../src/components/Toolbar.tsx'
-import { continueItems, deskItems, linksOf, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
+import { accountItems, continueItems, deskItems, docMenuItems, linksOf, madeFromOf, moreItems, shareItems, startFresh, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
-import { Trail } from '../src/shell/landing/Trail.tsx'
 
 const noop = () => {}
 const doc = (over: Partial<DocBar> = {}): DocBar => ({
-  title: 'Spring brief', tool: { name: 'Brief' },
+  title: 'Spring brief', tool: { name: 'Brief' }, toolKey: 'brief',
   onOpenFile: noop, onToggleSidebar: noop, sidebarOpen: false, onWorkspace: noop, onSave: noop,
   onKeepOffline: noop, onExport: noop, targets: [{ app_id: 'ie.napkin.deck-maker', name: 'Deck Maker', version: '1' }],
   onSpinoff: noop, onToggleEdit: noop, saved: createElement('span', { className: 'ch-saved' }, 'Saved'), ...over,
@@ -33,25 +32,29 @@ const bar = (props: Partial<Parameters<typeof Toolbar>[0]> = {}) => renderToStat
 }))
 const labels = (items: { label: string }[]) => items.map(i => i.label)
 
-test('the desk: medallion, agency pill, where you are, Offline, the theme, Decisions with the count, Sign out in More', () => {
+test('the desk: medallion, the agency pill with its account menu, the client chip, the theme, Decisions with the count', () => {
   dogfood({ on: true, consented: false })
-  const crumbs = createElement(Trail, { route: { level: 'clients' }, agency: 'Studio A', noAgency: true, onGo: noop })
   const html = bar({
-    needs: 3, crumbs, user: 'sam@studio-a', onSignOut: noop,
+    needs: 3, user: 'sam@studio-a', onSignOut: noop,
+    client: { name: 'Client A', mono: 'CA', look: { cl: '#DA291C', ink: '#FFC72C' }, switcher: [{ id: 'cli_1', name: 'Client A' }], onSwitch: noop },
     tools: createElement('button', { className: 'ch-btn' }, 'Offline'),
   })
   dogfood({ on: false, consented: false })
   assert.match(html, /data-where="desk"/)
   assert.match(html, /data-testid="medallion"/)
-  assert.match(html, /class="ch-agency"[^>]*>.*Studio A.*Napkin Studio/)
-  assert.match(html, />Clients</, 'the trail below the agency')
-  assert.doesNotMatch(html, /lc-crumb"[^>]*data-level="agency"/, 'the agency is the pill, not a crumb')
-  assert.match(html, />Offline</)
+  assert.match(html, /id="header-name-pill"[^>]*aria-haspopup="menu"[^>]*>.*Studio A.*Napkin Studio/, 'the pill opens the account menu')
+  assert.match(html, /data-testid="client-chip"[^>]*>.*Client A/, 'on a client page: the chip, a switcher')
+  assert.match(html, /id="p33-cswitch"[^>]*title="Switch client"/)
+  assert.match(html, />Offline</, 'a caller\'s own tools still have a place')
   assert.match(html, />Beta</, 'DogfoodBadge')
   assert.match(html, /Switch to (light|dark) mode/, 'ThemeToggle')
   assert.match(html, /aria-label="Decisions: 3 need your call"/)
   assert.match(html, /data-testid="needs-count">3</)
-  assert.match(html, /aria-haspopup="menu"[^>]*>More /)
+  assert.doesNotMatch(html, />More </, 'no More ▾ on the desk: its actions are in the account and desk menus')
+  // The account menu: who you are, All tools, the crew, Offline copies, Open…, Install, Change password, Sign out.
+  const acct = labels(accountItems({ name: 'Sam', initials: 'SA', line: 'Studio A', onAllTools: noop, onCrew: noop, onOffline: noop, offlineCount: 2, onInstall: null }, 'sam@studio-a', noop, noop))
+  assert.deepEqual(acct, ['All tools', 'Your crew', 'Offline copies', 'Open…', 'Install the app', 'Change password', 'Sign out'])
+  assert.deepEqual(labels(accountItems(undefined, null, noop)), [], 'no accounts, no Sign out')
   assert.deepEqual(labels(deskItems('sam@studio-a', noop)), ['Sign out'])
   assert.deepEqual(deskItems(null, noop), [], 'no accounts, no Sign out')
   // Open… (a .clan from this computer) sits in the desk's More too (open question answered 9 Nov 2026).
@@ -60,7 +63,7 @@ test('the desk: medallion, agency pill, where you are, Offline, the theme, Decis
   assert.doesNotMatch(html, /data-attention/, 'the desk never lights the medallion')
 })
 
-test('a document: the slot holds the tool, the title, the state, Continue in, Share and More; Saved and the chips are on the bar', () => {
+test('a document: its tool icon and name with saved · valid under it, Continue in and Share; the chips are on the bar; no state pill', () => {
   const items = barFrom({ v: 1, items: [
     { kind: 'button', id: 'a', label: 'Build', primary: true }, { kind: 'button', id: 'b', label: 'Check' }, { kind: 'button', id: 'c', label: 'Rerun' },
     { kind: 'chip', label: '0 errors', tone: 'ok' },
@@ -69,16 +72,22 @@ test('a document: the slot holds the tool, the title, the state, Continue in, Sh
     needs: 2, attention: true, decisionsOpen: true,
     doc: doc({ bar: items, isTemplate: true, trusted: true, validation: 'bad header', state: { label: 'Draft', tone: null, locked: false } }),
   })
-  for (const want of ['>Brief<', '>Spring brief<', 'Draft', '>Continue in <', '>More <', '>Share <', '>Saved<',
+  for (const want of ['class="tba-name tba-brief"', '>Spring brief<', '>Continue in ▾<', '>Share<', '>Saved<', '· not valid',
     '>Template<', '>Trusted<', 'Something’s wrong with this file', '>0 errors<', '>Build<', '>Check<']) {
     assert.ok(html.includes(want), `bar shows ${want}`)
   }
+  assert.ok(!html.includes('data-testid="state-pill"') && !html.includes('>Draft<'), 'no state pill in the bar (mock phase 26)')
+  assert.match(html, /aria-haspopup="menu"[^>]*data-testid="doc-name"/, 'the document menu is on the name')
   assert.ok(!html.includes('>Rerun<'), 'a third app button goes to More')
   assert.match(html, /data-attention="true"/, 'the app you are in needs you: the medallion says so')
   assert.match(html, /aria-expanded="true"[^>]*data-testid="decisions"/)
   const more = labels(moreItems(doc({ bar: items }), 'sam@studio-a', noop))
   assert.deepEqual(more, ['Rerun', 'Edit', 'Open…', 'Save as…', 'Present offline', 'Export', 'Where it came from', 'Show the file’s details', 'Sign out'])
-  assert.ok(!more.some(l => l.startsWith('Continue in')), 'Continue in is not in More')
+  // The document menu on the name holds them now, in the mock's order; Sign out is the account's.
+  const menu = labels(docMenuItems(doc({ bar: items, onRename: noop }), noop))
+  assert.deepEqual(menu, ['Rerun', 'Rename', 'Open…', 'Save as…', 'File details', 'Edit', 'Present offline', 'Export', 'Where it came from'])
+  assert.ok(!menu.some(l => l.startsWith('Continue in')), 'Continue in is not in the document menu')
+  assert.deepEqual(labels(startFresh(doc({ onNewForClient: { label: 'New brief for this client', run: noop } }))), ['New brief for this client'])
   const cont = continueItems(doc())
   assert.deepEqual(labels(cont.spin), ['Continue in Deck Maker'])
   assert.deepEqual(cont.link, [], 'nothing to link: the group says so')
@@ -98,17 +107,20 @@ test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made fr
   assert.deepEqual(continueItems(doc({ madeFrom: { title: 'Lúnasa research', changed: true } })).update, [])
   // The menu itself is closed in static markup; its groups are in the source.
   const src = readFileSync('src/components/Toolbar.tsx', 'utf8')
-  for (const want of ["'Turn it into'", "'Link to an existing one'", "'Made from'", 'Up to date with', 'A locked version keeps what it was made from']) {
+  for (const want of ['>Turn it into<', '>Link to an existing one<', '>Made from<', '>Start fresh<', 'Up to date with', 'A locked version keeps what it was made from']) {
     assert.ok(src.includes(want), `Toolbar has ${want}`)
   }
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {
-  const OLD = ['Edit', 'Open…', 'Save as…', 'Present offline', 'Export', 'Where it came from', 'Show the file’s details', 'Sign out']
-  const now = labels(moreItems(doc(), 'sam', noop))
-  for (const l of OLD) assert.ok(now.includes(l), `${l} has a home`)
-  assert.ok(labels(moreItems(doc({ sidebarOpen: true }), 'sam', noop)).includes('Hide the file’s details'))
-  assert.ok(!labels(moreItems(doc({ onKeepOffline: undefined }))).includes('Present offline'), 'only where it makes sense, as before')
+  // The old More ▾: each action's home is now the document menu on the name, or the account menu (Sign out).
+  const OLD: [string, string][] = [['Edit', 'Edit'], ['Open…', 'Open…'], ['Save as…', 'Save as…'], ['Present offline', 'Present offline'],
+    ['Export', 'Export'], ['Where it came from', 'Where it came from'], ['Show the file’s details', 'File details'], ['Sign out', 'Sign out']]
+  const now = [...labels(docMenuItems(doc())), ...labels(accountItems(undefined, 'sam', noop))]
+  for (const [was, is] of OLD) assert.ok(now.includes(is), `${was} has a home (${is})`)
+  assert.ok(labels(docMenuItems(doc({ sidebarOpen: true }))).includes('Hide the file details'))
+  assert.ok(!labels(docMenuItems(doc({ onKeepOffline: undefined }))).includes('Present offline'), 'only where it makes sense, as before')
+  assert.ok(labels(moreItems(doc(), 'sam', noop)).includes('Show the file’s details'), 'the inventory function is kept')
 })
 
 test('edit mode: Done editing on the bar, Edit leaves More', () => {
@@ -166,9 +178,13 @@ test('madeFromOf reads the direct parent the host holds, and nothing else', () =
 
 test('one needs indicator: Decisions is amber with the count; the state pill never repeats it', () => {
   const html = bar({ needs: 2, attention: true, doc: doc({ state: { label: 'Draft', tone: null, locked: false } }) })
-  assert.match(html, /class="ch-decisions ch-decisions-needs"/)
+  assert.match(html, /class="tb-decisions-btn has-needs"/)
   assert.doesNotMatch(html, /Needs you \(/)
-  assert.doesNotMatch(bar({ needs: 0, doc: doc() }), /ch-decisions-needs/, 'nothing needs a call: not amber')
+  assert.doesNotMatch(bar({ needs: 0, doc: doc() }), /has-needs/, 'nothing needs a call: not amber')
+  // A run waiting on the person's answer counts as one call (gaps.md X8), never "0" in amber.
+  const waiting = bar({ needs: 0, doc: doc({ crew: { people: [], waiting: true } }) })
+  assert.match(waiting, /has-needs/)
+  assert.match(waiting, /data-testid="needs-count">1</)
   // The medallion reacts only for the open app, and never on the desk.
   assert.match(html, /data-testid="medallion-mark" data-state="needs"/)
   assert.match(bar({ needs: 0, doc: doc() }), /data-state="awake"/)
@@ -202,7 +218,7 @@ test('lineage chips beside the name, and the crew before Decisions with an agent
   assert.ok(html.indexOf('data-testid="crew"') < html.indexOf('data-testid="decisions"'), 'the crew sits before Decisions')
   const idle = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: null } }) })
   assert.doesNotMatch(idle, /agent-working/, 'no agent works: no status dot')
-  assert.doesNotMatch(bar({ doc: doc() }), /ch-lineage/, 'made from nothing: no chips')
+  assert.doesNotMatch(bar({ doc: doc() }), /tba-line/, 'made from nothing: no chips')
 })
 
 test('Link to an existing one: each document it could link, then Update and Unlink for what is linked', () => {
@@ -252,9 +268,19 @@ test('linksOf reads /related into the lineage chips, both ways, and what was mad
   assert.match(html, /data-testid="lineage-linked-in"[^>]*>↔ in <b>Spring film<\/b>/)
 })
 
-test('the bar is three groups: who and where, the document, the tools', () => {
-  const html = bar({ doc: doc() })
-  const l = html.indexOf('ch-bar-l'), c = html.indexOf('ch-bar-c'), r = html.indexOf('ch-bar-r')
-  assert.ok(l > 0 && l < c && c < r)
-  assert.ok(html.indexOf('data-testid="medallion"') < c && html.indexOf('ch-slot') > c && html.indexOf('data-testid="decisions"') > r)
+test('the bar: who and where, then the document left-aligned (phase 36), then the tools after the spacer', () => {
+  const html = bar({ doc: doc(), client: { name: 'Client A', mono: 'CA', look: { cl: '#111111', ink: '#FFFFFF' }, onOpen: noop } })
+  const dock = html.indexOf('dock-connected'), chip = html.indexOf('data-testid="client-chip"'), app = html.indexOf('id="tb-app"'), sp = html.indexOf('tb-spacer')
+  assert.ok(dock > 0 && dock < chip && chip < app && app < sp)
+  assert.ok(html.indexOf('data-testid="medallion"') < app && html.indexOf('data-testid="doc-name"') > app && html.indexOf('data-testid="decisions"') > sp)
+  assert.match(html, /title="Back to Client A"/, 'in a document the chip goes back to its client')
+})
+
+test('a long title never pushes the bar\'s tools off: the document slot shrinks and its name truncates (gaps.md B8)', () => {
+  const css = readFileSync('src/shell/nui/shell.css', 'utf8')
+  assert.match(css, /\.nui \.tb-locked > \* \{ flex-shrink: 0; \}/)
+  assert.match(css, /\.nui \.tb-locked > \.tb-app \{ flex: 1 1 auto !important; min-width: 0; overflow: hidden !important; \}/)
+  assert.match(css, /\.nui \.tb-app > \.tba-name \{ flex-shrink: 1;/)
+  const html = bar({ doc: doc({ title: 'A'.repeat(200), onToggleEdit: undefined, onClientReview: noop }) })
+  assert.ok(html.indexOf('>Client review<') > html.indexOf('tb-spacer'), 'Client review sits with the tools, after the slot')
 })

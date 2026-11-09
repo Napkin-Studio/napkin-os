@@ -10,7 +10,7 @@ import { test } from 'node:test'
 
 import type { AttentionItem, DecisionsView } from '../src/host/types.ts'
 import { docStateOf, looksRightOf, needKey, needsOf, splitAside } from '../src/shell/decisions/needs.ts'
-import { deskCalls } from '../src/shell/decisions/deskCalls.ts'
+import { deskCallDocs } from '../src/shell/nui/deskData.ts'
 import type { LibraryItem } from '../src/host/types.ts'
 
 const need = (code: string, address: string, blocks = true): AttentionItem =>
@@ -59,14 +59,22 @@ test('Looks right only where one click is a true answer: an unchecked finding is
   assert.equal(looksRightOf(need('unverified_finding', 'doc1')), null, 'no finding id, no verify')
 })
 
-test('desk Decisions: every document across clients that needs a call, by client, newest first', () => {
+test('desk Decisions: every call across the documents the desk has read, most calls first; the rest listed to open', () => {
   const item = (path: string, client: string | null, updated: string, needs: number, locked = false): LibraryItem => ({
     path, app_id: 'ie.napkin.brief-maker', title: path, updated_at: updated,
     client: client ? { id: client, name: client } : null, state: { needs_you: needs, locked }, run: null,
   })
-  const groups = deskCalls([
+  const call = (code: string, address: string) => ({ code, address, text: code, blocks_lock: true }) as never
+  const facts = (calls: unknown[]) => ({ editor: null, calls, thin: [], upstreamChanged: null, locked: false, canLock: false, decisions: 1 }) as never
+  const items = [
     item('a', 'Zest', '2026-11-01', 2), item('b', 'Bulmers', '2026-11-02', 1), item('c', 'Bulmers', '2026-11-05', 3),
     item('d', 'Bulmers', '2026-11-06', 0), item('e', null, '2026-11-07', 1), item('f', 'Zest', '2026-11-08', 4, true),
-  ])
-  assert.deepEqual(groups.map(g => [g.client, g.items.map(i => i.path)]), [['Bulmers', ['c', 'b']], ['Zest', ['a']], ['', ['e']]])
+  ]
+  const { read, unread } = deskCallDocs(items, {
+    a: facts([call('unverified_finding', 'x#findings[f1]'), call('open_contest', 'x#contests[c1]')]),
+    c: facts([call('unverified_finding', 'x#findings[f2]')]),
+    d: facts([call('unverified_finding', 'x#findings[f3]')]),
+  })
+  assert.deepEqual(read.map(r => [r.item.path, r.calls.length]), [['a', 2], ['c', 1]], 'the calls themselves, most first; a document that needs nothing is left out')
+  assert.deepEqual(unread.map(i => i.path), ['b', 'e'], 'not read yet: listed to open; a locked one needs nothing')
 })
