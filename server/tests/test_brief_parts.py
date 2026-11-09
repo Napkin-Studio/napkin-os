@@ -45,7 +45,7 @@ def test_the_values_are_read_from_the_apps_keys():
 def test_the_template_declares_the_same_parts():
     schema = json.loads((REPO / "app/templates/brief-maker/schema.json").read_text())
     props = schema["properties"]
-    assert all(props[k] == {"type": "string"} for k in NEW)
+    assert all(props[k].get("type") == "string" and set(props[k]) <= {"type", "title"} for k in NEW)
     text = (REPO / "app/templates/brief-maker/app/pipeline.yaml").read_text()
     declared = dict(re.findall(r"^  ([\w.]+):\s+\{ class: (\w+)", text, re.M))
     assert {k: v["class"] for k, v in BUILTIN_FIELD_MAP.items()} == declared, "pipeline.yaml and fields.py declare one map"

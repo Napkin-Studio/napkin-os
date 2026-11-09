@@ -205,6 +205,7 @@ test('a carried item nothing here can settle is set aside, with a reason', () =>
   attention.push(pinless)
   assert.equal(f.carriedAt('ct_nopin').length, 1)
   assert.equal(f.carriedName({ ...pinless, label: 'Contest · brand/orchard-hill:product.abv@IE' }), 'Sources disagree on abv')
+  assert.equal(f.carriedName({ ...pinless, label: 'Contest · Export value · IE' }), 'Sources disagree on export value')
   assert.match(f.carriedBlock([pinless]), /The sources “Lúnasa launch” used disagree here, and this copy holds none of their values to pick from\./)
   assert.match(f.carriedBlock([attention[1]]), /Two agents working on/)
   assert.match(fn(CLF, 'draw'), /c\.status==='open'&&\(ca\.length\|\|sa\)/)
@@ -872,13 +873,14 @@ test('the drawer quotes the words the planner typed', () => {
     mat_f: { kind: 'client_brief', name: 'Lidl brief.pdf' },
   }
   const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
-  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
+  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
     arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
     writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
     materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
     MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
     STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '', confidential: () => false, LOCK: '', fmt: () => '',
     dayMonth: () => '', whoDid: () => '', blockOf: () => null, givenOf: () => 'Dara', proposerOf: () => 'Dara',
+    VIEW: { decisions: [] }, declaredParts: () => [],
   })
   const h = w.writerBlock('background')
   assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">A brief for Lidl Connect: win back switchers\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
@@ -925,9 +927,9 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
   const givenOf = (k: string | null) => ({ drafter: 'Dara', judge: 'Jude' } as Record<string, string>)[String(k)] || ''
   const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
   const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
-  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
+  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
     'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history', 'writerBlock'], {
-    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION,
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION, declaredParts: () => [],
     docId: () => 'brief', upstreams: () => ({}), valueAt: () => value, envAt: () => null, ORIGIN: {}, personName: () => 'ana',
     crew: () => ({ forWork: (w: string) => (w === 'draft' ? 'drafter' : '') }), crewKey, givenOf,
     whoDid: (b: { who: { you?: boolean }; decision: { agent?: string } }) => (b.who.you ? 'You' : givenOf(crewKey(b.decision)) || 'The crew'),
@@ -937,6 +939,38 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
     confidential: () => false, LOCK: '', fmt: () => '',
   })
 }
+
+// B4: the drawer says a part by its label, never its key (final retest).
+test('the drawer names a part by its label in the crew’s words, never its key', () => {
+  type K = { keyWords(s: string): string; noIds(s: string): string }
+  const VIEW = { decisions: [{ targets: [
+    { here: true, kind: 'field', path: 'budget_and_scope', label: 'Budget & scope' },
+    { here: true, kind: 'field', path: 'competitor_context', label: 'Competitor context' },
+    { here: true, kind: 'field', path: 'background', label: 'Background' },
+  ] }] }
+  const k = lift<K>(CLF, ['keyWords', 'partNames', 'lowerWord', 'noIds'], {
+    arr, VIEW, findings: () => ({}),
+    declaredParts: () => [{ address: 'single_minded_proposition', label: 'Single-minded proposition' }],
+  })
+  assert.equal(k.keyWords('Mandatories name Sections 15 and 16, budget_and_scope asks legal which apply.'),
+    'Mandatories name Sections 15 and 16, budget & scope asks legal which apply.')
+  assert.equal(k.keyWords('Over length: background 99/70, competitor_context 120/70.'),
+    'Too long: background (99 words, 70 at most), competitor context (120 words, 70 at most).')
+  assert.equal(k.keyWords('It contradicts single_minded_proposition.'), 'It contradicts single-minded proposition.')
+  assert.equal(k.keyWords('an unknown_key_here'), 'an unknown key here')
+  assert.equal(k.keyWords('Checked the new the barrier: it answers the note.'), 'Checked the new barrier: it answers the note.')
+  assert.equal(k.keyWords('Proposed a effectiveness evidence finding, a useful one and a one-off.'), 'Proposed an effectiveness evidence finding, a useful one and a one-off.')
+  assert.equal(k.noIds('budget_and_scope (d_01ABCDEFGHJK) holds.'), 'budget & scope holds.')
+  // The verdict and the history read through it; a reviewer that is not a person is the crew member.
+  assert.match(fn(CLF, 'verdictBlock'), /clip\(noIds\(d\.rationale\),280\)/)
+  assert.match(fn(CLF, 'history'), /said=isPerson\(d\)\?saidWords\(d\):noIds\(saidWords\(d\)\)/)
+  const rl = lift<{ reviewLine(r: Record<string, string>): string }>(CLF, ['reviewLine'], {
+    esc, isYou: () => false, personName: (n: string) => n.replace(/^human:/, ''), plainDate: (d: string) => d,
+    VERDICT_WORD: { rejected: 'Marked wrong' }, blockOf: () => ({ decision: { agent: 'judge' } }), whoDid: () => 'Jude', givenOf: () => 'Jude', judgeKey: () => 'judge',
+  })
+  assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'Regenerate field', actor: 'process:middleware', decision: 'd_1' }), 'Marked wrong by Jude')
+  assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'ana', actor: 'human:ana' }), 'Marked wrong by ana')
+})
 
 test('the drawer shows a chain’s times in the viewer’s own zone', () => {
   type D = { dayMonth(d: string, time?: boolean): string }

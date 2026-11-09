@@ -4,39 +4,41 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
-    "project_name": { "type": "string" },
-    "client": { "type": "string" },
-    "background": { "type": "string" },
+    "project_name": { "title": "Project name", "type": "string" },
+    "client": { "title": "Client", "type": "string" },
+    "background": { "title": "Background", "type": "string" },
     "objectives": {
+      "title": "Objectives",
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "commercial": { "type": "string" },
-        "behavioural": { "type": "string" },
-        "attitudinal": { "type": "string" }
+        "commercial": { "title": "Commercial objective", "type": "string" },
+        "behavioural": { "title": "Behavioural objective", "type": "string" },
+        "attitudinal": { "title": "Attitudinal objective", "type": "string" }
       }
     },
-    "audience": { "type": "string" },
-    "competitor_context": { "type": "string" },
-    "insight": { "type": "string" },
-    "single_minded_proposition": { "type": "string" },
-    "job": { "type": "string" },
-    "barrier": { "type": "string" },
-    "objection": { "type": "string" },
-    "reasons_to_believe": { "type": "array", "items": { "type": "string" } },
+    "audience": { "title": "Audience", "type": "string" },
+    "competitor_context": { "title": "Competitor context", "type": "string" },
+    "insight": { "title": "Insight", "type": "string" },
+    "single_minded_proposition": { "title": "Single-minded proposition", "type": "string" },
+    "job": { "title": "Job", "type": "string" },
+    "barrier": { "title": "Barrier", "type": "string" },
+    "objection": { "title": "Objection to beat", "type": "string" },
+    "reasons_to_believe": { "title": "Reasons to believe", "type": "array", "items": { "type": "string" } },
     "desired_response": {
+      "title": "Desired response",
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "think": { "type": "string" },
-        "feel": { "type": "string" },
-        "do": { "type": "string" }
+        "think": { "title": "What they should think", "type": "string" },
+        "feel": { "title": "What they should feel", "type": "string" },
+        "do": { "title": "What they should do", "type": "string" }
       }
     },
-    "tone_and_world": { "type": "array", "items": { "type": "string" } },
-    "budget_and_scope": { "type": "string" },
-    "mandatories": { "type": "array", "items": { "type": "string" } },
-    "open_questions": { "type": "array", "items": { "type": "string" } },
+    "tone_and_world": { "title": "Tone & world", "type": "array", "items": { "type": "string" } },
+    "budget_and_scope": { "title": "Budget & scope", "type": "string" },
+    "mandatories": { "title": "Mandatories", "type": "array", "items": { "type": "string" } },
+    "open_questions": { "title": "Open questions", "type": "array", "items": { "type": "string" } },
     "reference_assets": {
       "type": "array",
       "items": {
