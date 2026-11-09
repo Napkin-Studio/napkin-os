@@ -1219,7 +1219,8 @@ section.report{margin-top:0}
 .rbi-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
 .rb-btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);cursor:pointer}
 .rb-btn:hover{border-color:var(--ink)}
-.insp-map:not([hidden]){margin:-16px -18px 0;padding:14px 14px 14px;background:var(--card);border-bottom:1px solid var(--line);gap:10px}
+/* the evidence map is paper too, in both themes (the mock) */
+.insp-map:not([hidden]){--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--card:#FFFDF8;--paper:#FFFDF8;--line:#E2D9C8;--create:#C9462A;--amber:#B45309;--amber-soft:#FEF3DC;--soft:#F3ECDC;color:#141413;margin:-16px -18px 0;padding:14px 14px 14px;background:#FFFDF8;border-bottom:1px solid var(--line);gap:10px}
 .insp-map .map-h b{font:600 18px var(--font-ui);letter-spacing:-.01em;color:var(--ink)}
 .insp-map .map-h span{font-size:12px;color:var(--muted)}
 .insp-map .map-leg{font:10.5px var(--font-mono);color:var(--muted);padding-bottom:12px;border-bottom:1px solid var(--line);margin:0 -14px;padding-left:14px}
