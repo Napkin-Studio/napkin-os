@@ -22,7 +22,7 @@ change it here.
 
 The change keeps every §10 rule: omitted, not blank; a locked field is not
 written; a field a person holds is proposed; every write is named by a
-decision. Each written field gets one `draft` decision by the drafter (Dara),
+decision. Each written field gets one `draft` decision by the drafter (the Brief agent),
 citing the materials and, for every `fact_ref`, the fact id (and the finding
 it became, when that is how the document holds it), so the evidence drawer
 resolves them. The open questions and every fact conflict are attention
@@ -309,7 +309,7 @@ class EngineBriefJob(BriefJob):
             reason = "nothing readable to send it"
         else:
             with self.lock:
-                self.engine_state, self.stage_idx = "running", 1  # Dara writes: the view shows the draft stage
+                self.engine_state, self.stage_idx = "running", 1  # the Brief agent writes: the view shows the draft stage
             self.set_state(live, "drafting", "drafter")
             kept = (list(self.proposals), list(self.hits), dict(self.writer))  # _land commits its chunk last
             try:

@@ -1,15 +1,15 @@
 """fix_parts: a problem standing on a brief, fixed by the crew in one job (middleware-api.md §10.15).
 
-  context   Sam reads the problem (Jude's note, and what people marked wrong on the same parts)
+  context   The Strategy agent reads the problem (the Review agent's note, and what people marked wrong on the same parts)
             against the brief and every fact it holds: what each named part must now say, and
             the research it still lacks. That research runs as draft_brief's does (the Research
             Tool's units, jev's already-held skip, capped), pinned into the brief with its sources.
-  draft     Dara rewrites the named parts together, from the problem, Sam's instructions and the
+  draft     The Brief agent rewrites the named parts together, from the problem, the Strategy agent's instructions and the
             facts. Nothing else in the brief is written.
-  judge     Jude checks the brief again, as draft_brief's judge does, on the named parts only;
-            what he still finds goes back to Dara once, and what stands after that is a new note.
+  judge     The Review agent checks the brief again, as draft_brief's judge does, on the named parts only;
+            what it still finds goes back to the Brief agent once, and what stands after that is a new note.
 
-Why (the owner, 2026-10-19): a note Jude leaves on a brief often turns on facts the brief does
+Why (the owner, 2026-10-19): a note the Review agent leaves on a brief often turns on facts the brief does
 not have; the planner should be able to ask the crew to find them and fix the parts, not
 reword one part at a time.
 """
@@ -60,7 +60,7 @@ def fix_plan_schema(keys, lens_codes, cat_codes):
 
 class FixPartsJob(PlannedBriefJob):
     """fix_parts@1 (module docstring). `parts`: the brief keys the problem names; `problem`:
-    [{"by", "text", "decision"}], Jude's note first, then what people said on those parts."""
+    [{"by", "text", "decision"}], the Review agent's note first, then what people said on those parts."""
 
     def __init__(self, *a, parts, problem, **kw):
         super().__init__(*a, **kw)
@@ -98,13 +98,13 @@ class FixPartsJob(PlannedBriefJob):
         return [p["decision"] for p in self.problem if p.get("decision")]
 
     def _wrote(self, k, v, answers=None):
-        """A fix rewrites, and the line says on what: Jude's note it answers, the person's ask
+        """A fix rewrites, and the line says on what: the Review agent's note it answers, the person's ask
         (a redraft on a planned brief comes as one), else the standing note the problem quotes."""
-        on = ["Jude's note"] if answers else []
+        on = ["the Review agent's note"] if answers else []
         if self.guidance or any(p.get("by") == "a person" for p in self.problem):
             on.append("your ask")
         elif not answers:
-            on.append("Jude's note")
+            on.append("the Review agent's note")
         return f"Rewrote the {LABELS.get(k, k)} on {' and '.join(on)}."
 
     def _ask_cites(self):
@@ -112,12 +112,12 @@ class FixPartsJob(PlannedBriefJob):
         return self._problem_cites()
 
     def _answered(self, rv):
-        """The fix's own pass (`_passed`) answers Jude's note on every part it wrote; only a
+        """The fix's own pass (`_passed`) answers the Review agent's note on every part it wrote; only a
         held part, which the fix proposes and never passes, gets the loop's answer."""
         return [d for d in super()._answered(rv) if self.held.get(d["targets"][0].split("#", 1)[1])]
 
     # =========================================================================================
-    # context: Sam plans the fix, then the research it needs
+    # context: the Strategy agent plans the fix, then the research it needs
     # =========================================================================================
     def stage_context(self):
         rl = self.caps.runlog
@@ -156,7 +156,7 @@ class FixPartsJob(PlannedBriefJob):
         self.set_state(keys, "waiting", "drafter")
 
     # =========================================================================================
-    # draft: Dara rewrites the named parts together
+    # draft: the Brief agent rewrites the named parts together
     # =========================================================================================
     def stage_draft(self):
         keys = self._open_keys()
@@ -186,23 +186,23 @@ class FixPartsJob(PlannedBriefJob):
 
     # -- judge: draft_brief's, on the named parts (planned.stage_judge); placing differs here ----
     def stage_judge(self):
-        if not self.whole:  # Dara wrote nothing: there is nothing to check, and the problem stands
+        if not self.whole:  # the Brief agent wrote nothing: there is nothing to check, and the problem stands
             self.caps.runlog.note("fix_nothing", detail="the rewrite gave none of the parts")
             return
         super().stage_judge()
 
     def _note_stands(self, res):
-        """After a rewrite, Jude's issue stands only if jev still doubts the argument."""
+        """After a rewrite, the Review agent's issue stands only if jev still doubts the argument."""
         read = res.get("after") or res.get("before")
         return not res.get("rewritten") or read is None or read["chain"] < FLAG_AT
 
     def _place(self, rv, ev):
-        # Jude's notes on parts the fix did not touch are not this job's to place
+        # The Review agent's notes on parts the fix did not touch are not this job's to place
         rv = {**rv, "notes": [n for n in rv.get("notes") or [] if set(n.get("parts") or []) & set(self.parts)]}
         super()._place(rv, ev)
 
     def _passed(self, decisions):
-        """Jude's pass on the parts the fix wrote that no new note names: a good verdict with
+        """The Review agent's pass on the parts the fix wrote that no new note names: a good verdict with
         a reason, which answers the old note as the Judge passing a redraft does."""
         # a note on a draft the rewrite superseded is the loop's record, not a note that stands
         back = {d["id"] for d in decisions if d.get("superseded_by")}
@@ -214,7 +214,7 @@ class FixPartsJob(PlannedBriefJob):
         cites = [self.writer[k] for k in ok] + self._problem_cites()
         r = rsn.make(f"Checked the fix: the problem no longer holds for {', '.join(LABELS.get(k, k) for k in ok)}.",
                      [rsn.point(f"The problem was: {_short(self.problem[0]['text'], 300)}", self._problem_cites()),
-                      rsn.point("Jude checked the rewritten parts and left no note on them",
+                      rsn.point("The Review agent checked the rewritten parts and left no note on them",
                                 [self.writer[k] for k in ok])],
                      rsn.certainty("medium", "a model checked the rewritten parts against the brief"),
                      "the parts change again, or a person says otherwise", only_option="the fix passed the check")
@@ -270,7 +270,7 @@ def standing_problem(doc: str, chain: list, verdict_id: str) -> tuple[list, list
         more = [m for m in more if m and m not in txt]
         return " ".join([txt] + more[:3]).strip()
 
-    who = "a person" if _is_human(v) else "Jude"
+    who = "a person" if _is_human(v) else "the Review agent"
     problem = [{"by": who, "text": words(v), "decision": v["id"]}]
     for i, d in enumerate(chain):
         if d is v or d.get("kind") != "verdict" or d.get("polarity") != "bad" or d.get("superseded_by") \

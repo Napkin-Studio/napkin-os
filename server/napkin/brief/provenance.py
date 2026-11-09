@@ -1,7 +1,7 @@
-"""Provenance: what each part of a planned brief rests on, worked out AFTER Dara wrote it
+"""Provenance: what each part of a planned brief rests on, worked out AFTER the Brief agent wrote it
 (brief-fact-provenance, the owner 2026-10-19).
 
-Dara drafts as she always has. Then one cleaner, `clean_parts`, runs after every draft and every
+The Brief agent drafts as it always has. Then one cleaner, `clean_parts`, runs after every draft and every
 rewrite (draft, review revise, the check loop's rewrite, fix_parts, EngineCheckedBriefJob):
 
   1. the value is split into sentence-sized claims; the must-tie spans of each (figures, dates,
@@ -16,7 +16,7 @@ rewrite (draft, review revise, the check loop's rewrite, fix_parts, EngineChecke
   4. anything still untied is `to_confirm`, and its sentence goes to the decision's attention.
 
 The owner's rule: a value is NEVER edited, reworded, stripped or rejected here, and nothing here
-narrows what Dara sees. A worked-out conclusion is a claim like any other, tied to its inputs.
+narrows what the Brief agent sees. A worked-out conclusion is a claim like any other, tied to its inputs.
 No claim's kind or verdict sends a part to a rewrite. The basis of a part follows from its
 claims; "client" only when a capture item is mapped to the part (the client guard).
 
@@ -185,7 +185,7 @@ class ClientWords:
         return str(i.get("quote") or i.get("value") or "")
 
     def payload(self) -> list:
-        """The client's words with their ids, for Dara and the tie call."""
+        """The client's words with their ids, for the Brief agent and the tie call."""
         return [{"id": c, "key": i["key"], "words": self.text_of(c)[:400], "status": i.get("status")}
                 for c, i in list(self.items.items())[:120]]
 
@@ -645,7 +645,7 @@ def _certainty(claims: list, IN: Inputs) -> tuple[str, str]:
 
 def clean_parts(out: dict, ctx: Ctx, *, stage: str, keys=None, prior: dict | None = None,
                 says: dict | None = None) -> dict:
-    """Dara's parts as written, each with what it rests on: {key: {value, basis, cites, builds_on_client,
+    """The Brief agent's parts as written, each with what it rests on: {key: {value, basis, cites, builds_on_client,
     why, claims, downgraded, certainty, basis_said}}. `prior`: each part's claims before this rewrite
     (counted, never restored). `says`: what each part should say (for the log only). The values are
     never edited (asserted)."""
@@ -930,8 +930,8 @@ def code_verdicts(parts: dict) -> list:
 
 
 def judge_claims(parts: dict, rv_claims: list) -> list:
-    """Jude's claim verdicts, with code's: a verdict on a worked-out claim that recomputes is supported
-    whatever Jude says (he grades the working, never the literal words); code's verdicts are added."""
+    """The Review agent's claim verdicts, with code's: a verdict on a worked-out claim that recomputes is supported
+    whatever the Review agent says (it grades the working, never the literal words); code's verdicts are added."""
     out = []
     for c in rv_claims or []:
         part = parts.get(c.get("part")) or {}

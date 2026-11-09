@@ -1,14 +1,14 @@
 """The check loop (the owner, 2026-10-01): whoever wrote the brief, jev finds the parts that
-need rewriting, Jude says why, Dara rewrites those parts.
+need rewriting, the Review agent says why, the Brief agent rewrites those parts.
 
   1. jev, one yes/no per written part: does it need rewriting before a creative team sees it?
      One more for the whole brief: does objective -> insight -> proposition -> proof hold?
      And the seven BetterBriefs dimensions as choices, for the review and a before/after score.
      Fast and cheap; its 0.5 line is provisional (never checked on Napkin data), so every
-     probability is logged and every time Jude disagrees with a flag is logged too.
-  2. Jude (a model call) on the flagged and the empty parts only: does it really need work, why,
-     and one instruction for Dara. Something only the client can supply is not rewritten.
-  3. Dara rewrites those parts in one call, the whole brief in view, with each part's claims as they
+     probability is logged and every time the Review agent disagrees with a flag is logged too.
+  2. The Review agent (a model call) on the flagged and the empty parts only: does it really need work, why,
+     and one instruction for the Brief agent. Something only the client can supply is not rewritten.
+  3. The Brief agent rewrites those parts in one call, the whole brief in view, with each part's claims as they
      stand; the caller's `clean` (provenance.clean_parts) says what each rewritten part rests on.
      The loop holds no cleaning of its own, and no claim's kind or verdict puts a part in `todo`.
   4. jev again on what changed, for the log: did the rewrite help?
@@ -41,7 +41,7 @@ DIM_Q = {
     "language": "simple, succinct language with no jargon",
 }
 
-JUDE_SYSTEM = """You are Jude, the agency's brief judge. A fast checker (jev) read the creative brief and flagged the
+REVIEW_SYSTEM = """You are the Review agent, the agency's brief judge. A fast checker (jev) read the creative brief and flagged the
 parts it thinks need rewriting, each with its probability; some parts are empty. For each part listed:
 - rework: true when a rewrite from what the brief, the client's words and the facts hold would make it
   better; false when the flag is wrong, or when only the client can supply it (a budget figure, success
@@ -62,7 +62,7 @@ def _obj(props):
     return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
 
 
-def jude_schema(keys):
+def review_schema(keys):
     s = {"type": "string"}
     return _obj({"parts": _obj({k: _obj({"rework": {"type": "boolean"}, "why": s, "instruction": s}) for k in keys}),
                  "dimensions": {"type": "array", "items": _obj({
@@ -110,8 +110,8 @@ def jev_read(job, values: dict, said: str, parts: list, what: str) -> dict | Non
 def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: list, plan=None, *, clean,
         claims=None) -> dict:
     """The loop over the brief as it stands. Returns {"before", "after", "jude", "rewritten", "todo"}:
-    rewritten = `clean(Dara's answer, the parts)` (provenance.clean_parts), `why` being Jude's. `claims`:
-    each part's claims as they stand, for Jude and the rewrite."""
+    rewritten = `clean(the Brief agent's answer, the parts)` (provenance.clean_parts), `why` being the Review agent's. `claims`:
+    each part's claims as they stand, for the Review agent and the rewrite."""
     claims = claims or {}
     rl = job.caps.runlog
     written = [k for k in open_keys if filled(values.get(k)) and k != "open_questions"]
@@ -134,7 +134,7 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
                "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
                "claims": {k: [{x: c[x] for x in ("text", "kind", "cites", "working") if x in c} for c in cs]
                           for k, cs in claims.items() if cs}}
-    jude = job.caps.model.structured("explain_flags", JUDE_SYSTEM, payload, jude_schema(ask),
+    jude = job.caps.model.structured("explain_flags", REVIEW_SYSTEM, payload, review_schema(ask),
                                      max_tokens=6000)
     out["jude"] = jude
     todo = {k: v["instruction"] for k, v in (jude.get("parts") or {}).items()
@@ -166,8 +166,8 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
                                     draft_schema(list(todo)), max_tokens=8000)
     for k, v in clean(got, list(todo)).items():
         why = ((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue") or ""
-        out["rewritten"][k] = {**v, "why": _short(f"Rewritten on Jude's note: {why}", 300), "revised": True,
-                               # placing records the loop: Jude's note, in his words, on the draft he sent back
+        out["rewritten"][k] = {**v, "why": _short(f"Rewritten on the Review agent's note: {why}", 300), "revised": True,
+                               # placing records the loop: the Review agent's note, in its words, on the draft it sent back
                                "sent_back": {"instruction": _short(todo[k], 400), "why": _short(why, 400)}}
     after_vals = {**values, **{k: v["value"] for k, v in out["rewritten"].items()}}
     out["after"] = jev_read(job, after_vals, said, [k for k in open_keys if filled(after_vals.get(k))

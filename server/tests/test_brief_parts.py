@@ -1,4 +1,4 @@
-"""The job, the barrier and the objection to beat: parts the brief writes and Jude judges (ADR 0034's
+"""The job, the barrier and the objection to beat: parts the brief writes and the Review agent judges (ADR 0034's
 sibling, feature brief-grid-template). The server's declaration, the template's and the schema must agree."""
 
 import json

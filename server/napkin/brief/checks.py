@@ -3,10 +3,10 @@
 The default flow writes the whole brief in one call, so the per-field rubric (judge.py) never saw a first
 draft. These are the pieces of it that the whole-brief review can use: what code can measure (words against a
 part's limit, sentences, a standalone 'and' in the proposition), the planning skill's tests for the five parts
-Jude judges, and the one rule about marking: an assumption says it is one.
+the Review agent judges, and the one rule about marking: an assumption says it is one.
 
 Code decides only what it can measure. Whether an 'and' joins two thoughts, or an objection is one doubt, is
-Jude's call, given the test."""
+the Review agent's call, given the test."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ APP_RUBRIC = {"background": "background", "audience": "audience", "budget_and_sc
               "competitor_context": "competitor_context", "insight": "insight", "single_minded_proposition": "smp",
               "tone_and_world": "tone_world_assets", "mandatories": "mandatories", "job": "job", "reasons_to_believe": "reasons_to_believe",
               "barrier": "barrier", "objection": "objection"}
-# the five parts Jude judges against the skill's tests
+# the five parts the Review agent judges against the skill's tests
 TESTED = ("insight", "single_minded_proposition", "job", "barrier", "objection")
 # one sentence at most: a word or a phrase is fine (Laurence, 3 Oct), several sentences are several thoughts
 ONE_SENTENCE = ("single_minded_proposition", "job", "objection")
@@ -59,7 +59,7 @@ def max_items(key: str) -> int | None:
 
 
 def facts(whole: dict) -> dict:
-    """What code measured, per part Jude judges or that has a limit."""
+    """What code measured, per part the Review agent judges or that has a limit."""
     out = {}
     for k, e in whole.items():
         t = _spoken(e.get("value"))
@@ -112,7 +112,7 @@ def tests(keys) -> dict:
 
 def mark_assumptions(entries: dict, insight: dict | None = None) -> list[str]:
     """Mark each assumption 'To confirm:' (idempotent), and the proposition and objection when the insight they
-    rest on is one. Run on Dara's raw output, before provenance reads the sentences, so a claim and its sentence
+    rest on is one. Run on the Brief agent's raw output, before provenance reads the sentences, so a claim and its sentence
     stay the same text. Lists, client words and research stay as they are. `insight`: the insight already held,
     when this output does not carry one. -> the parts marked now."""
     marked = []
@@ -136,7 +136,7 @@ def mark_assumptions(entries: dict, insight: dict | None = None) -> list[str]:
 
 
 def mark_downgraded(entries: dict) -> list[str]:
-    """Provenance moved some parts to 'assumption' (Dara said research, library or client; nothing tied the claim).
+    """Provenance moved some parts to 'assumption' (the Brief agent said research, library or client; nothing tied the claim).
     They say so too. A part with figures is left as it is: a mark in front of its first sentence would stop the
     sentence from tying to its claim."""
     marked = []

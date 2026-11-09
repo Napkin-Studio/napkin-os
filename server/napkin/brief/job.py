@@ -124,7 +124,7 @@ def _quote(s, n=160) -> str:
 
 
 def _snapshot(d):
-    """A draft as it stands before a revision rewrites it in place: what Jude sent back."""
+    """A draft as it stands before a revision rewrites it in place: what the Review agent sent back."""
     s = copy.copy(d)
     s.rejected, s.attention = list(d.rejected), list(d.attention)
     return s
@@ -487,7 +487,7 @@ class BriefJob:
             if value is not None and cap_stage.echoes_request(
                     value, [cap["items"][c].get("quote") or "" for c in got["caps"]] + [got.get("quote") or ""]):
                 value = None  # the person's request to the crew, not the client's brief
-                self.notes.append(f"Ellis left the {LABELS[k]} empty: what was there only restated the request.")
+                self.notes.append(f"The Knowledge agent left the {LABELS[k]} empty: what was there only restated the request.")
             if value is None:
                 abstained.append(k)
                 self.set_state([k], "absent", "extract")
@@ -721,7 +721,7 @@ class BriefJob:
             drafted = next((d for d in drafts.values() if d.rid == rid and not d.error), None)
             outcome = "passed" if not fails else "failed"
             first_clean = not fails and all(c["status"] == PASS for c in res["checks"])
-            sent_back = None  # (the draft Jude sent back, its checks, its failures) once Dara revised it
+            sent_back = None  # (the draft the Review agent sent back, its checks, its failures) once the Brief agent revised it
             if fails and drafted is not None:
                 self.set_state(live, "revising", "drafter")
                 dr = self.plan[drafted.group]
@@ -748,7 +748,7 @@ class BriefJob:
                 if fails:
                     failed_keys += live
                     self.notes.append(clip("; ".join(f"{f['check']}: {f['reason']}" for f in fails), FIX_MAX))
-                # the loop as it happened: the draft Jude sent back, his verdict on it, then the rewrite
+                # the loop as it happened: the draft the Review agent sent back, its verdict on it, then the rewrite
                 answers, note = None, ""
                 if sent_back is not None:
                     before, res0, fails0 = sent_back
@@ -848,27 +848,27 @@ class BriefJob:
 
     # -- placing a judged value ------------------------------------------------------
     def _drafted(self, group, answers=None):
-        """What a draft decision says it did, and what steered it: Jude's note it answers, and
+        """What a draft decision says it did, and what steered it: the Review agent's note it answers, and
         the planner's ask (a redraft comes with one). The history's line names the person's part."""
-        on = (["Jude's note"] if answers else []) + (["your ask"] if self.guidance else [])
+        on = (["the Review agent's note"] if answers else []) + (["your ask"] if self.guidance else [])
         return (f"{'Rewrote' if answers else 'Drafted'} the {LABELS.get(group, group)}"
                 + (f" on {' and '.join(on)}" if on else "") + ".")
 
     def _steer_points(self, live, answers=None, note=""):
         """The points that say what steered a draft, each cited: the planner's ask in their own
-        words, against the parts it is about; Jude's note, against his verdict."""
+        words, against the parts it is about; the Review agent's note, against its verdict."""
         pts = []
         if self.guidance:
             pts.append(rsn.point(f"Your ask: “{clip(self.guidance, 300)}”", [f"{self.doc}#{k}" for k in live]))
         if answers:
-            pts.append(rsn.point(f"Jude's note: {note or 'rewrite it'}", [answers]))
+            pts.append(rsn.point(f"The Review agent's note: {note or 'rewrite it'}", [answers]))
         return pts
 
     def _place_draft(self, d, live, res, first_clean, patch, decisions, passages_out, failed=(),
                      record_only=False, answers=None, note="") -> dict:
         """Write (or propose) a judged draft; `failed`, the checks it still
-        fails, flag it for a person. `record_only` keeps a draft Jude sent back
-        in the chain without writing it; `answers` names his verdict on it,
+        fails, flag it for a person. `record_only` keeps a draft the Review agent sent back
+        in the chain without writing it; `answers` names its verdict on it,
         which this draft answers, and `note` what it said. -> {key: decision id}."""
         raw = _figure_needs_pin(d.grounds)
         fallback = [rsn.point(f"Precedent: {p['citation']}", pid) for pid, p in list(d.passages.items())[:2]] or \
@@ -876,7 +876,7 @@ class BriefJob:
         action = "regenerate" if self.task == "regenerate_field" else "draft"
         attn = list(d.attention)
         if failed:
-            attn.insert(0, "Jude's checks still fail after one revision: " + " ".join(
+            attn.insert(0, "The Review agent's checks still fail after one revision: " + " ".join(
                 sentence(f"{f['check']}: {f['reason']}") + (f" Fix: {sentence(f['fix'])}" if f.get("fix") else "")
                 for f in failed[:3]) + " Check it, edit it, or ask for another draft.")
         r, notes = rsn.from_model(raw, decided=self._drafted(d.group, answers), known=d.known,
@@ -890,7 +890,7 @@ class BriefJob:
         packs = {d.passages[c]["pack"] for c in psg}
         pins = [c for c in cites if c.startswith("f_")]
         if record_only:
-            lvl, why = "low", "Jude sent it back"
+            lvl, why = "low", "The Review agent sent it back"
         elif failed:
             lvl, why = "low", "fails the Judge's checks after one revision"
         elif not psg:
@@ -964,8 +964,8 @@ class BriefJob:
 
     # -- verdicts ----------------------------------------------------------------------
     def _verdict(self, rid, keys, res, fails, outcome, cites, rule_ids):
-        """Jude's verdict on a rubric's fields. Outcome `sent_back` is his verdict on the draft
-        he sent back, recorded beside the one on the rewrite, so it gets its own id."""
+        """The Review agent's verdict on a rubric's fields. Outcome `sent_back` is its verdict on the draft
+        it sent back, recorded beside the one on the rewrite, so it gets its own id."""
         label = RUBRIC_FIELDS[rid]["label"]
         bad = bool(fails)
         deciding = [c for c in res["checks"] if c["status"] == FAIL] if bad else \
@@ -1043,7 +1043,7 @@ class BriefJob:
         for need, rids in self.needs_input.items():
             what = ", ".join(dict.fromkeys(RUBRIC_FIELDS[r]["label"].lower() for r in rids))
             qs.append(f"{LABELS.get(need, need.replace('_', ' '))[0].upper() + LABELS.get(need, need.replace('_', ' '))[1:]}: "
-                      f"Jude needs it to finish checking the {what}.")
+                      f"The Review agent needs it to finish checking the {what}.")
             pts.append(rsn.point(f"The {what} can't be fully checked without the {LABELS.get(need, need)}",
                                  f"{self.doc}#{need}"))
         for fk, fails in bad_captured:
