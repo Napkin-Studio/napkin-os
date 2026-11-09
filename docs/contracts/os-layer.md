@@ -836,8 +836,8 @@ email, attached as a file, or noted from a call.
    reaches a model or the middleware (*2026-09-30*: the parts are found by the
    host's own word match, §7.5.2a), so `model: false` has nothing to
    withhold here.
-7. **Ellis, shown; the host, recorded.** The shell shows the suggestions as
-   Ellis's (the crew member who reads what people send). The chain records the
+7. **The Knowledge agent, shown; the host, recorded.** The shell shows the suggestions as
+   the Knowledge agent's (the agent that reads what people send). The chain records the
    process that made them: `actor: process:host`, `handler:
    client_parts_match@1` (§7.5.2a).
 
@@ -906,7 +906,7 @@ dismissal. "Make this change" writes an `unlock` (§7.5.6).
     - { address: "3f2a…#audience", label: Audience, aliases: [who it is for], part_hash: "sha256:…" }
   rationale: Jane Murphy rejected the document (off brief, tone), from an attached file; recorded by aoife.
 
-# A suggestion — the host's word match (§7.5.2a), shown as Ellis's; counts for nothing until a person confirms it
+# A suggestion — the host's word match (§7.5.2a), shown as the Knowledge agent's; counts for nothing until a person confirms it
 - id: d_01K…S
   kind: client_review
   action: suggest_part
@@ -973,7 +973,7 @@ dismissal. "Make this change" writes an `unlock` (§7.5.6).
 | `seen` | `{version, doc_hash, parts[]}` on the document answer; `{version, doc_hash, part_hash}` on a part record | `version` is the one the lock's `approve` names: every answer is tied to the locked version. `parts[]` is `{address, label, part_hash}` for every part the app declared |
 | `review` | decision id | Part records: the document answer they belong to |
 | `label` | string | Part records: the part's label as the app declared it |
-| `found_by` | `person` \| `agent` | Part answers and suggestions. `agent` on a part answer means a person confirmed a suggestion (the match's, shown as Ellis's): the part answer is itself the confirming decision, and `suggestion` names what it confirmed. The value keeps its name from when a model suggested; it means "suggested", not "a model" |
+| `found_by` | `person` \| `agent` | Part answers and suggestions. `agent` on a part answer means a person confirmed a suggestion (the match's, shown as the Knowledge agent's): the part answer is itself the confirming decision, and `suggestion` names what it confirmed. The value keeps its name from when a model suggested; it means "suggested", not "a model" |
 | `suggestion` | decision id | A part answer with `found_by: agent`, and a dismissal |
 | `quote` | string | Suggestions, and part answers confirming one: the sentence the match found, a verbatim substring of the proof (§7.5.2a, item 5), at most 500 characters. Never compressed |
 | `matched` | `{name, cue?}` | Suggestions: the part name the sentence holds (label, alias or the label's last word) and the change cue that set `accepted_with_changes`, when one did — what the match read, so a person can see why |
@@ -1077,7 +1077,7 @@ from the moment it is recorded, so the view shows what the next lock needs.
   (`client_rejected_parts_unknown`, blocks)
 - `accepted_with_changes` **never blocks.** Until answered it is attention:
   "Jane Murphy asked for a change to Audience." (`client_change_asked`)
-- An open suggestion is attention, not a blocker: "Ellis thinks Jane Murphy's
+- An open suggestion is attention, not a blocker: "The Knowledge agent thinks Jane Murphy's
   answer is about Audience. Confirm or dismiss it." (`client_part_suggested`)
 - A client's `accepted` is never required to lock.
 
@@ -1627,8 +1627,8 @@ process), records as the person in `Ctx`, and writes one change.
      when none were typed; the part's popover shows it.
    - `client.suggestions`: suggestions nobody has confirmed or dismissed yet,
      oldest first.
-   - A suggestion's block in `decisions` names its maker `Ellis` (`who`:
-     `{kind: agent, id: client_parts_match, name: Ellis}`); the decision says
+   - A suggestion's block in `decisions` names its maker `Knowledge agent` (`who`:
+     `{kind: agent, id: client_parts_match, name: Knowledge agent, you: false}`); the decision says
      `process:host`.
    - The §7.5.4 items are in `attention` with their codes, `address` the
      part's, `decision` the answer's; an open suggestion's item names the

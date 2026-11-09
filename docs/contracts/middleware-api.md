@@ -923,8 +923,8 @@ fidelity to the client's own words, and injected text craters it.
 
 **The planned engine** (*added 2026-10-19*, brief-fact-provenance). The
 default flow (`NAPKIN_BRIEF_FLOW=planned`) runs `extract → context → draft →
-judge`: Sam plans the brief and runs the research it lacks, Dara drafts every
-part at once, and Jude (or jev's check loop) has the parts that need it
+judge`: the Strategy agent plans the brief and runs the research it lacks, the Brief agent drafts every
+part at once, and the Review agent (or jev's check loop) has the parts that need it
 rewritten. Capture stays RAG-free and research-free as above. What changes is
 where a part's value may come from: in the planned engine every part,
 captured-class parts included, may rest on the client, the research (`f_`,
@@ -943,8 +943,8 @@ captured-class parts included, may rest on the client, the research (`f_`,
   (same type) and `success_metrics` for desired response. A value the
   working brief already holds is not, by itself, the client's words. A
   `builds_on_client` point takes the same gate.
-- **Provenance is added after drafting, never by restricting it.** Dara's
-  draft call, its inputs and its schema are unchanged, and she is never asked
+- **Provenance is added after drafting, never by restricting it.** The Brief agent's
+  draft call, its inputs and its schema are unchanged, and it is never asked
   for claim bookkeeping. One cleaner (`server/napkin/brief/provenance.py`,
   `clean_parts`) runs after every draft and every rewrite on every path:
   draft, review revise, the jev check-loop rewrite, `fix_parts`
@@ -957,7 +957,7 @@ captured-class parts included, may rest on the client, the research (`f_`,
   nor any judge applies to a brief value.
 - **Facts outside the measure list** that the context stage's research
   finds are kept as document pins (§3 `facts_append`, `kept_in_document`) in
-  this job's change, before the draft, so Dara can cite them and the cleaner
+  this job's change, before the draft, so the Brief agent can cite them and the cleaner
   can tie to them. They are never written to the layers.
 
 **Omitted, not blank.** No patch sets a brief field to `""`, `[]`, `{}` or
@@ -1075,7 +1075,7 @@ the view's human write of `K` (as §8.3's answers are), citing the proposal's
 decision from a point of its reasoning (`reasoning.because[].cites`: the host
 keeps a view claim's reasoning, not a top-level `cites`); its rationale names
 the proposer and never an id
-(`Accepted Dara's new version of the single-minded proposition.`). Briefs from
+(`Accepted the Brief agent's new version of the single-minded proposition.`). Briefs from
 before 2026-10-23 named the id in the rationale instead (`Accepted d_…: …`), and
 readers still understand that form. Ignoring a proposal changes nothing. Locked
 fields are not even proposed. A human-held `open_questions` is proposed like
@@ -1192,7 +1192,7 @@ claims:
     working: "15 Oct 2026 - 5 Oct 2026 = 10 days"   # derived only: how it was worked out
     calc: { op: days_between, inputs: [...] }       # derived only, when one was parsed
     check: recomputed        # derived and fact: recomputed | stated | false
-    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code) | writer (Dara's own "To confirm:" line)
+    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code) | writer (the Brief agent's own "To confirm:" line)
     suggest: [f_C]           # to_confirm only: ids that may support it, never cited
 ```
 
@@ -1219,7 +1219,7 @@ claims:
 - **`client`**: the claim is in a capture item's quote, citing its `cap_`
   and `mat_`. Certainty comes from the capture (`capture_certainty`), never
   a fixed `high`.
-- **`to_confirm`**: nothing the document holds supports it, or Dara wrote
+- **`to_confirm`**: nothing the document holds supports it, or the Brief agent wrote
   the line as "To confirm: …" (`by: writer`), whatever a pin near it says. The value is
   unchanged; `attention` reads "To confirm: <claim>", certainty is `low`,
   and `cites` is empty. A coincidental match (a pin pair whose sum is right
@@ -1340,23 +1340,23 @@ field whose decisions are all in the chain.
   brief, where the redraft runs as a one-part fix, §10.15 — plus its verdict)
   — or, when the field is human-held, proposes it (§10.5): pressing Redraft
   asks for a draft, and the planner decides whether it replaces their words. A
-  draft Jude still fails after one revision is placed all the same, with low
-  certainty and his reasons in its attention (an empty part helps nobody);
+  draft the Review agent still fails after one revision is placed all the same, with low
+  certainty and its reasons in its attention (an empty part helps nobody);
   `result.summary` says so and the bad verdict is recorded.
 - **What steered a draft is on the record.** Its reasoning carries the
   planner's guidance as a point in their own words, `Your ask: “…”`, cited
   against the part (on a planned brief, against what wrote it), and its
   `decided` line says so: `Drafted the insight on your ask.`
-- **The loop is recorded as it happened.** When Jude sends a draft back and
-  Dara revises it, the change carries three decisions for the part, in this
-  order: the draft he sent back (`superseded_by` the rewrite; certainty low,
-  `Jude sent it back`), his verdict on it (`bad`, citing that draft, his
+- **The loop is recorded as it happened.** When the Review agent sends a draft back and
+  the Brief agent revises it, the change carries three decisions for the part, in this
+  order: the draft it sent back (`superseded_by` the rewrite; certainty low,
+  `The Review agent sent it back`), its verdict on it (`bad`, citing that draft, its
   reasons as its points), and the rewrite, citing the verdict, with the point
-  `Jude's note: …` and the line `Rewrote the insight on Jude's note and your
+  `The Review agent's note: …` and the line `Rewrote the insight on the Review agent's note and your
   ask.` Nothing is collapsed into one line. The same holds for `draft_brief`'s
-  whole-brief review and for `fix_parts` (§10.15); there, Jude's pass on a
-  part he sent back that his final review no longer flags is a `good` verdict
-  with a reason, so his note is answered on the record and not only by a
+  whole-brief review and for `fix_parts` (§10.15); there, the Review agent's pass on a
+  part it sent back that its final review no longer flags is a `good` verdict
+  with a reason, so its note is answered on the record and not only by a
   draft.
 - *Changed 2026-10-19* (brief-fact-provenance; owner: no orphan route left).
   On a brief drafted by the planned engine (§10.3), `regenerate_field` runs
@@ -1493,7 +1493,7 @@ client's words, and each call carries only what it needs.
    (§3 `facts_append`, `kept_in_document`, carrying the candidate's layer and
    sources) in the brief only, after `merge_rules.merge` against the pins it
    holds, so one identity holds one pin. They are listed first among the
-   held facts Dara sees, so the 400-fact cap never cuts them. They are never
+   held facts the Brief agent sees, so the 400-fact cap never cuts them. They are never
    written to the layers; the measure is still proposed. On a brief whose
    embedded facts schema predates `kept_in_document` the fact stays a run-log
    note, and a claim resting on it is `to_confirm` with the fact id in
@@ -1501,14 +1501,14 @@ client's words, and each call carries only what it needs.
 10. **Rewrites keep what was worked out** (*added 2026-10-19*). Every
     rewrite (review revise, the jev check loop, `fix_parts`, the brief
     engine's) carries the part's prior claims, `research_upstream` and the
-    draft's library, and asks Dara to keep a worked-out conclusion unless the
+    draft's library, and asks the Brief agent to keep a worked-out conclusion unless the
     instruction says it is wrong. The rewrite passes through the cleaner like
     the draft. A conclusion a rewrite lost is counted in the run log
     (`derived_lost`), never restored by code.
-11. **Judges never strip a conclusion** (*added 2026-10-19*). Jude grades a
+11. **Judges never strip a conclusion** (*added 2026-10-19*). The Review agent grades a
     `derived` claim on its working and inputs, not on whether its number is
     literally in a fact, and code sets a recomputed derived claim to
-    `supported` whatever Jude says. In jev mode the cleaner's `to_confirm`
+    `supported` whatever the Review agent says. In jev mode the cleaner's `to_confirm`
     and `check: false` claims are added to `rv.claims` as code-derived
     `unsupported` verdicts, and `explain_flags` sees each claim with its
     working. In both modes **no claim verdict adds a part to the revise list
@@ -1556,7 +1556,7 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    written, nor proposed (`map_brief` echoes the names sent). Otherwise a
    field a person holds is proposed. Each written field (per
    leaf) gets one `edit`, action `draft`, `agent draft_brief@1.x/drafter`
-   (Dara), flatten `drafted_by: "brief-engine"`. Its cites are the `mat_` ids
+   (the Brief agent), flatten `drafted_by: "brief-engine"`. Its cites are the `mat_` ids
    the engine read and, for every `fact_ref` on that leaf, the fact id when
    `clan.facts` holds it, or the research finding by its own id.
    The refs themselves ride as flatten `fact_refs`. A ref the document holds
@@ -1597,7 +1597,7 @@ applies. `regenerate_field` is unchanged either way. The adapter is
 7. **Rewrites are cleaned; the engine's draft is not** (*added
    2026-10-19*, brief-fact-provenance). When the engine's draft is checked
    and parts are rewritten (`EngineCheckedBriefJob`), each rewrite reads
-   `provenance.evidence` (the same facts the planned engine's Dara sees,
+   `provenance.evidence` (the same facts the planned engine's Brief agent sees,
    upstream headline cites included) and passes through `clean_parts`
    (§10.3), so it carries `claims` (§10.7) and a derived basis. The engine's
    own draft keeps item 2's cites and is not cleaned.
@@ -1606,9 +1606,9 @@ applies. `regenerate_field` is unchanged either way. The adapter is
 
 ### 10.15 `fix_parts`
 
-*Added 2026-10-19* (owner: when Jude leaves a problem on a brief, the planner
-asks the crew to fix it: Sam finds what it lacks, Dara rewrites the parts
-together, Jude checks them).
+*Added 2026-10-19* (owner: when the Review agent leaves a problem on a brief, the planner
+asks the crew to fix it: the Strategy agent finds what it lacks, the Brief agent rewrites the parts
+together, the Review agent checks them).
 
 `{ verdict, guidance? }` — fix the problem a bad verdict names.
 
@@ -1620,12 +1620,12 @@ together, Jude checks them).
 - **The problem** is the verdict's own words (its reasoning's `decided` and
   points), then those of every person's bad verdict still standing on the
   same parts. The job's parts are the verdict's open parts.
-- Stages `context` — Sam: one plan call (`plan_fix`) with the brief as it
+- Stages `context` — the Strategy agent: one plan call (`plan_fix`) with the brief as it
   stands, the parts, the problem and every fact and finding the brief holds,
   giving each part an instruction and the research the fix lacks; that
   research runs as `draft_brief`'s (§10.13): already-held needs skipped (jev),
   at most two runs, each pin and source in the change, its raw facts written
-  to the layers as every research run's are — then `draft` — Dara rewrites
+  to the layers as every research run's are — then `draft` — the Brief agent rewrites
   the parts together in one call (`fix_brief_parts`) from the problem, the
   instructions and the facts, never one a person excluded — then `judge` —
   `draft_brief`'s Judge on the parts only (the whole-brief review, or with
@@ -1633,12 +1633,12 @@ together, Jude checks them).
   `progress`: `{done, total: 3}`.
 - It writes only the parts (an `edit`, action `draft`, each) and the review;
   a part a person wrote last is proposed (§10.5). `open_questions`, when not
-  a part, only gains what Jude says only the client can answer. A part's later
+  a part, only gains what the Review agent says only the client can answer. A part's later
   edit answers the verdict (Contract 4, the lock list). After a rewrite with
-  jev, Jude's argument note is placed as a new bad verdict only while jev
+  jev, the Review agent's argument note is placed as a new bad verdict only while jev
   still reads the argument as broken.
 - `result.summary`: how many parts were fixed, proposed, and the new facts.
-- *Changed 2026-10-19* (brief-fact-provenance). Dara's rewrite passes
+- *Changed 2026-10-19* (brief-fact-provenance). The Brief agent's rewrite passes
   through `clean_parts` (§10.3), so each part's decision carries `claims`
   (§10.7). The client's words come from `data.capture.items`, the capture
   the document holds, so the client guard holds here as on the draft. The

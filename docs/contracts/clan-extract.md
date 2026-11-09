@@ -114,7 +114,7 @@ override the draft, the review issues and the critic wherever they disagree.
 | OD3 | **Four conditions.** (a) Only fixed schema labels survive a redaction; names and keys an agent invented are part of the value, so a hidden fact reads "a private fact about <entity>". (b) Two nets: follow the cites — anything resting on a hidden value is redacted, while who acted, and why in general terms, may stay — then scan every rendered line for the exact hidden values, number formats included (400k, EUR 400,000, 0.55 and 55%); any hit blocks the file. Paraphrase is a residual risk, and the contract says so. (c) No hash, length or checksum of a hidden value in the corpus version. (d) The agent version is never stored, and ingestion refuses any file whose header is not `profile: corpus`. | §5 | **Narrowed by OD8.** What remains: the exact-value match with its number forms, from (b); no hash or length of a marked value, from (c); and (d) whole. Withdrawn: (a), the first net's spread along the cites, the file-blocking scan, and the aliases the draft took from (c). |
 | OD4 | **The agent version is split into named sections**: EVIDENCE, one line per fact or finding (`[short id] statement · as_of · source · status`); WHAT PEOPLE DECIDED, with people's reasons verbatim — rejections, resolved contests, edits, client reviews; STILL OPEN — open contests with every value flagged, and unverified findings "derived by the agent, not verified". Each drafter gets only its lenses' sections. Rejected and superseded items appear only as "don't use, and why". The research block comes first and is identical across drafter calls, so NIM can cache the prefix. Tool-use querying and search inside the document are rejected for now. | §10 | Reverses `napkin.middleware/1` §10.13 item 7's "no prompt caching until a measured run" for the research block, and item 5's "a value of an open contest is not sent": it is sent, flagged. Settles X7 and RF3. **Narrowed by OD11:** the sections remain the agent version's text form (§10.3), but no input of the brief engine takes them; the engine reads the research as fact rows only (§11.2). |
 | OD5 | **The RAG layout.** Every record has three parts: a statement that stands alone — the only embedded text — after a short context line (client · doc type · market · category · lens); metadata, stored as fields and never embedded, for filters ("this client only", "not superseded") and for keyword search on ids and numbers; and an anchor that resolves into the `.clan`. One record is one chunk; no chunk mixes records. The agent version prints the same three parts as list lines. | §2 | Replaces the draft's 25–60-word context line and its per-file status and verdict partitions. Settles X4 and RF9: no title and no revision in embedded text. **Adapted by OD10:** the metadata is each record file's frontmatter, and the RAG module as it is also embeds a section's heading, so the heading's anchor is embedded (§2.1, §11.8 L2). |
-| OD6 | **Client review** (`client_review`, Contract 4 §7.5). One record per document answer — the answer, the client's words as a quote, the reason chips, the evidence strength (strong: a file attached; weaker: pasted text or a call note, "recorded by <person>") — with part lines only for parts a person marked or confirmed. Ellis's unconfirmed suggestions are left out, and the record says so. The agency's later edit that answered a part is shown with its before and after. Scoped to that client. Only the client's quoted words go in, never the email. Client text is quoted and untrusted. | §3.6, §5.8 | Contract 4 §7.5.8 says the extract filters client reviews by no mark. That holds for the agent version and for every view a client sees; in the corpus version a marked value, and any exact occurrence of it in the client's words, is replaced (OD8). |
+| OD6 | **Client review** (`client_review`, Contract 4 §7.5). One record per document answer — the answer, the client's words as a quote, the reason chips, the evidence strength (strong: a file attached; weaker: pasted text or a call note, "recorded by <person>") — with part lines only for parts a person marked or confirmed. The Knowledge agent's unconfirmed suggestions are left out, and the record says so. The agency's later edit that answered a part is shown with its before and after. Scoped to that client. Only the client's quoted words go in, never the email. Client text is quoted and untrusted. | §3.6, §5.8 | Contract 4 §7.5.8 says the extract filters client reviews by no mark. That holds for the agent version and for every view a client sees; in the corpus version a marked value, and any exact occurrence of it in the client's words, is replaced (OD8). |
 | OD7 | **A hosted embedder may embed client material**, "otherwise the RAG search will yield bad results" (2026-09-30). | §5.6, §11.6 | Answers Q1. The ingester no longer refuses client material outside a boundary. The hosted NVIDIA endpoints the RAG module uses today are on trial terms that do not allow production use: a licensing matter for whoever signs the NVIDIA terms, not a confidentiality rule (§11.6). Settles CF9. |
 | OD8 | **"We block the exact figures — prose, marked confidential, that's it. Nothing else."** (2026-09-30). A value marked confidential, a figure or a piece of prose, is replaced by `[Marked confidential]` wherever that exact value appears in the corpus version, with the normal number forms of a figure. `model: false` still hides its value in both versions. Nothing related to a marked value is withheld, no file is blocked, no id is aliased, and nothing is private by default. | §5 | Answers Q2 and replaces most of OD3. The accepted residual: a restatement in other words is not caught. Withdraws CF1, CF2, CF5, CF6 and CF7, and narrows CF3 and CF4 (Appendix A). |
 | OD9 | **Names come from the account.** Accounts will exist; until then a dummy account supplies the person's name (2026-09-30). | §3.1.2 | Answers Q3. The grammar reads the name from the context it is given. The pseudonym, the decoding of name-encoded ids and the `tenant-is-person` refusal are withdrawn. |
@@ -243,7 +243,7 @@ Every issue raised, and how it was resolved: Appendix A.
   accounts; until they exist, a dummy account supplies the name (OD9).
 - **Agent names** (`app/src/studio/model.ts` `agentOfDecision`, `words.ts`
   `whoOf`): a research decision that names no lens is "The researchers";
-  `select` is judging work (Jude).
+  `select` is judging work (the Review agent).
 - **Report wording keys** (`clan-fields.html:974-1006`): the layout is parsed
   by `template.innerHTML`, cleaned by an allow-list, and keyed `report:` +
   base36 djb2 over its UTF-16 units; the innermost text blocks outside `clan-*`
@@ -539,12 +539,12 @@ own before they go near a knowledge base (critic G7).
 | 12 | state-findings | state | verified findings; the agent version also shows proposed ones |
 | 13 | state-report | state | the report, with people's wording applied |
 | 20 | intake | history | the person's ask and answers, and the materials added |
-| 21 | extract | history | Ellis reads the ask |
-| 22 | identify | history | Ellis identifies the brand, client, categories and markets, asks questions, looks up the roster |
-| 23 | select | history | Jude chooses what to research |
+| 21 | extract | history | The Knowledge agent reads the ask |
+| 22 | identify | history | The Knowledge agent identifies the brand, client, categories and markets, asks questions, looks up the roster |
+| 23 | select | history | The Review agent chooses what to research |
 | 24 | research | history | the lens runs, the merge, the contests opened |
-| 25 | synthesise | history | Sam's findings and proposed audience |
-| 26 | report | history | Dara writes the report |
+| 25 | synthesise | history | The Strategy agent's findings and proposed audience |
+| 26 | report | history | The Brief agent writes the report |
 | 28 | upkeep | history | Napkin's own processes and seeds, apart from stale marks, which fold into their facts |
 | 29 | other | history | any decision no rule places |
 | 30 | review | history | one file per person: their review decisions and the lock |
@@ -568,7 +568,7 @@ Decisions are taken in chain order (§6.2). The first rule that matches wins.
    target's setter (§4.1).
 3. **Dropped**, and counted in `91-bundle.json`: kind `lease`; the
    presentational actions: the host's rolling `look` entry (Contract 4
-   §4, "How it looks") and the older `set style`, `style <key>` and `set theme`; Ellis's
+   §4, "How it looks") and the older `set style`, `style <key>` and `set theme`; the Knowledge agent's
    suggestions (`client_review`, action `suggest_part`), which count for
    nothing until a person confirms one (§3.6).
 4. **Folded** into another record (§3.7): kind `backref` (the index
@@ -727,8 +727,8 @@ appears once, in the index `document` record (§2.9).
 ### 2.4 The statement
 
 - **The lead** is one sentence, subject first, in the past tense, with the
-  date: `Alex Doe (planner) rejected finding fi_01JXF05E on 2026-09-22; Sam,
-  the synthesis agent, proposed it, and it must not be used as evidence.`
+  date: `Alex Doe (planner) rejected finding fi_01JXF05E on 2026-09-22; the Strategy agent
+  proposed it, and it must not be used as evidence.`
 - **Slots** follow in the frame's order (§3): someone's words as quote
   blocks, an agent's reasoning, before and after, validity sentences.
 - **It stands alone.** It names who acted, on what, the value (or `[Marked
@@ -964,14 +964,14 @@ stores it. `<noun>` is `campaign research`,
 | client | `What the client said about the <noun> <doc8>` |
 
 Step phrases. Research: `What the team asked for in the campaign research
-<doc8>` (20), `Ellis reads the ask in the campaign research <doc8>` (21),
-`Ellis identifies the brand and markets in the campaign research <doc8>`
-(22), `Jude chooses what to research in the campaign research <doc8>` (23),
+<doc8>` (20), `The Knowledge agent reads the ask in the campaign research <doc8>` (21),
+`The Knowledge agent identifies the brand and markets in the campaign research <doc8>`
+(22), `The Review agent chooses what to research in the campaign research <doc8>` (23),
 `The researchers research the market for the campaign research <doc8>` (24),
-`Sam finds the points in the campaign research <doc8>` (25), `Dara writes the
+`The Strategy agent finds the points in the campaign research <doc8>` (25), `The Brief agent writes the
 report in the campaign research <doc8>` (26). Brief: `What the team asked for
-in the brief <doc8>` (20), `Ellis reads the client's materials for the brief
-<doc8>` (21), `Dara drafts the brief <doc8>` (22), `Jude checks the brief
+in the brief <doc8>` (20), `The Knowledge agent reads the client's materials for the brief
+<doc8>` (21), `The Brief agent drafts the brief <doc8>` (22), `The Review agent checks the brief
 <doc8>` (23). Both: `Napkin's upkeep of the <noun> <doc8>` (28), `Other
 decisions in the <noun> <doc8>` (29).
 
@@ -1073,13 +1073,13 @@ words.ts`), both at `fe7fb03`, so the extract names the agent the person saw
 cast(d):
   who = d.agent
   if who == "" or who == "human" or who starts "human:": none
-  if d.kind == "verdict" or d.polarity is set:        Jude
-  if d.kind == "finding":                              Sam
+  if d.kind == "verdict" or d.polarity is set:        the Review agent
+  if d.kind == "finding":                              the Strategy agent
   work = WORK_OF_STEP[last_part(who)] ?? WORK_OF_STEP[lower(d.action)]
          ?? (who ~ /judge|critic/i ? judge
             : (who + " " + d.action) ~ /extract|capture/i ? read
             : who ~ /draft/i ? draft : none)
-  read → Ellis;  synthesise → Sam;  draft → Dara;  judge → Jude
+  read → the Knowledge agent;  synthesise → the Strategy agent;  draft → the Brief agent;  judge → the Review agent
   research → the first lens id, in lens order, that is a substring of
              d.lens, d.action or any target; with none, "the researchers"
   none → no figure (§3.1.4)
@@ -1096,7 +1096,7 @@ last_part(s) = lower(the last segment after "/", with "@…" removed)
 | draft | `draft`, `draft_brief`, `regenerate_field`, `report`, `compose_report`, `drafter` |
 | judge | `judge`, `select`, `verdict`, `golden_critic` |
 
-The keys in bold are not in the view's table at `fe7fb03`: Ellis is shown
+The keys in bold are not in the view's table at `fe7fb03`: the Knowledge agent is shown
 for the client parts the host's word match finds (Contract 4 §7.5.2a; the
 middleware's `find_client_parts` it replaced was removed 2026-09-30), and the
 contest openers are the researchers' work. The panel shows the handler's name for them until P4 adds
@@ -1104,7 +1104,7 @@ the same keys to the one shared table.
 
 | Given name | Role phrase | Source |
 |---|---|---|
-| Ellis | extract | read work |
+| Knowledge agent | extract | read work |
 | Max | market structure | lens `market_structure` |
 | Bo | brands and positioning | lens `brands_positioning` |
 | Cam | consumer and culture | lens `consumer_culture` |
@@ -1113,9 +1113,9 @@ the same keys to the one shared table.
 | Mo | media and spend | lens `media_spend` |
 | Lex | regulation | lens `regulation_clearance` |
 | Eden | effectiveness | lens `effectiveness_evidence` |
-| Sam | synthesis | synthesise work |
-| Dara | drafting | draft work |
-| Jude | judging | judge work |
+| Strategy agent | synthesis | synthesise work |
+| Brief agent | drafting | draft work |
+| Review agent | judging | judge work |
 
 - The first mention in a lead is an appositive closed by a comma: `Max, the
   market structure agent, researched…`; later mentions are `Max`. Research
@@ -1392,7 +1392,7 @@ it in intake.
 | classify, both true | `opened {Label}` | `{P} opened {T} on {date}: the agency's shared memory may hold it, and agents may read it.` Then R1 (classify). A mark's `export` flag is never mentioned (OD1). A mark a newer one overrides is `superseded` (§8.1) |
 | approve / `lock` | `locked the {noun}` | `{P} accepted and locked the {noun} on {date}; nothing was left unresolved.` Locking again after a reopened part: `{P} locked the {noun} again on {date}, which closed the reopened parts: {labels}.` Then R1 (choose). The version hash the `approve` records is never printed (§5.3) |
 | unlock / `reopen_part` | `reopened {Label}` | `{P} reopened {T} on {date} so it could be changed for {C}'s request ({d_part}), under the lock {d_lock}.` Its rationale is the host's; the client's words are in the client record (§3.6) |
-| client_review / `dismiss_part`, a person's own | `dismissed Ellis's suggestion` | `{P} dismissed, on {date}, Ellis's suggestion that {C} meant {Label} ({d_sugg}).` Then R1 (reject) from the text after `Dismissed: `, else `{P} gave no reason.` |
+| client_review / `dismiss_part`, a person's own | `dismissed the Knowledge agent's suggestion` | `{P} dismissed, on {date}, the Knowledge agent's suggestion that {C} meant {Label} ({d_sugg}).` Then R1 (reject) from the text after `Dismissed: `, else `{P} gave no reason.` |
 | intake: `start_campaign`, `create` | `started the campaign` | `{P} started the campaign on {date} with a message and {n} materials.` Then R1 (ask) from `intake.messages[msg].text` |
 | intake: `answer_question` | `answered {A}'s question` | `{P} answered {A}'s question on {date}.` Then `{A} asked:` above the question, then `{P} picked the option:` above its label when `answer.option_id` is set, else R1 (answer) from the message's text; then `This set {labels}.` |
 | intake: `upload-asset` | `added a material` | `{P} added material {mat} ({kind}, {media type}) on {date}.` The material is found by its asset path (§3.8); its name follows as a quote paragraph, a value slot. Never its content |
@@ -1438,9 +1438,9 @@ changes to the {noun}` or `the client rejected the {noun}`. The statement:
    answer implies — the answer line says "accepted". One paragraph per part,
    in the order of `seen.parts`:
    `Part {Label} ({path}): {accepted / asked for a change / rejected}.
-   {Marked by {P} / Found by Ellis in the client's words and confirmed by {P}}
+   {Marked by {P} / Found by the Knowledge agent in the client's words and confirmed by {P}}
    on {date} ({d}). {Stale: its value is no longer the one the client saw. | }`
-   Then, for a confirmed suggestion, `The words Ellis found (the client's, as
+   Then, for a confirmed suggestion, `The words the Knowledge agent found (the client's, as
    sent):` above the `quote`, and a reason the confirming person typed as R1
    (choose). `{Label}` is the profile's label for the address, else the
    sanitised label the app declared.
@@ -1448,7 +1448,7 @@ changes to the {noun}` or `the client rejected the {noun}`. The statement:
    carrying `answers: <this part answer>`, else the first person's edit of the
    part after the answer — `Answered: {P} changed {Label} on {date} ({d}).`
    followed by R3's before and after from that edit; else `Not yet answered.`
-6. **What was left out**, when there was any: `Ellis suggested {n} more
+6. **What was left out**, when there was any: `The Knowledge agent suggested {n} more
    parts that no person confirmed; they are left out.` — counting the
    suggestions dismissed, open, or closed by a later lock (`closed_by`).
 
@@ -1546,7 +1546,7 @@ entry whose `asset` is `human/assets/<name>` or `assets/<name>`; with none,
 Every rule that asks "who set this value" or "was this overwritten" uses these
 definitions. *Changed 2026-09-30:* the draft counted any decision whose
 targets, `fields_changed` or whole-block target touched a path. That made
-Jude's verdicts the setters of every brief field, and filed research runs and
+the Review agent's verdicts the setters of every brief field, and filed research runs and
 extractions that were still current as superseded (AR2, AB5).
 
 - **A write** is a decision, not superseded, whose kind is `edit` (or that is
@@ -1668,7 +1668,7 @@ Checked: … (folded verdicts, §3.7)
 
   | Origin | Sentence |
   |---|---|
-  | `extracted` | `Ellis took it from material {mat}, {locator}` |
+  | `extracted` | `The Knowledge agent took it from material {mat}, {locator}` |
   | `proposed` | `{A} proposed it{ from facts {ids}}{ and findings {ids}}` |
   | `confirmed` | `{P} confirmed it on {date} ({d}){, from {confirmed_from}}` |
   | `stated` | `{P} stated it on {date} ({d})` |
@@ -1829,7 +1829,7 @@ Brand A · campaign research · XA · example · consumer and culture
 Finding fi_01JXF0A1, verified by Alex Doe (planner) on 2026-09-22 (d_01JXA0VER):
 > {statement}
 
-It rests on facts {ids}. Sam derived it ({derived_by}) on {derived_at}.
+It rests on facts {ids}. The Strategy agent derived it ({derived_by}) on {derived_at}.
 ```
 
 - **A proposed finding** is rendered only in the agent version, with its
@@ -1971,7 +1971,7 @@ Not rendered as fields: `brief_input` (intake), `brief_style`, `theme`,
   | an address | as §3.2 writes it |
   | anything else | the id, with the integrity flag `unknown-target` |
 
-- **Checks** come from `review.judge.fields[<path>]`: `Jude's checks:
+- **Checks** come from `review.judge.fields[<path>]`: `The Review agent's checks:
   {check}: {status} ({method}); …`, then `Note on {check}: {note inline}.
   Suggested fix: {fix inline}.` for a check with a note. A check the Judge
   copied onto several leaves is one line naming every leaf.
@@ -1989,17 +1989,17 @@ Brand A · brief · XA
 
 Desired response, as the brief holds it, in three parts.
 
-Think, drafted by Dara, the drafting agent, on 2026-09-24 (d_TNNH0DRAFT):
+Think, drafted by the Brief agent on 2026-09-24 (d_TNNH0DRAFT):
 > Product B belongs in the midweek basket.
 
 Grounded in: captured fact cap_23f0aa11bb22cc33 (midweek_occasion); passage psg_52068bf53dba469811cc (playbook › Craft rules for a brief); finding fi_01JXF0A1, carried from the campaign research 0000aaaa.
 
-Feel, drafted by Dara on 2026-09-24 (d_TNNH0DRAFT):
+Feel, drafted by the Brief agent on 2026-09-24 (d_TNNH0DRAFT):
 > Pleased to have found a lighter midweek choice.
 
 Grounded in: captured fact cap_23f0aa11bb22cc33 (midweek_occasion).
 
-Do, drafted by Dara on 2026-09-24 (d_TNNH0DRAFT):
+Do, drafted by the Brief agent on 2026-09-24 (d_TNNH0DRAFT):
 > Pick Product B up on a Tuesday shop.
 
 Grounded in: passage psg_52068bf53dba469811cc (playbook › Craft rules for a brief).
@@ -2007,7 +2007,7 @@ Grounded in: passage psg_52068bf53dba469811cc (playbook › Craft rules for a br
 What the material says (cap_23f0aa11bb22cc33, verbatim):
 > Midweek is where we lose the basket.
 
-Jude's checks: single thought: pass (llm); client words: fail (auto).
+The Review agent's checks: single thought: pass (llm); client words: fail (auto).
 
 Note on client words: The think line does not use the client's term for the occasion. Suggested fix: Use the client's term.
 ```
@@ -2020,7 +2020,7 @@ or `missing` — each with its evidence as `What the material says:` above the
 quote, and its fix inline; `single_mindedness` (`single`, or `multiple` with
 `split_into`); the summary, inline; `review.judge.definition_of_done[]` and
 `review.judge.dependencies[]` as `{id}: {status}` with notes; and `Health: {n}
-out of 100, Jude's score, computed by code.` from `review.judge.health`
+out of 100, the Review agent's score, computed by code.` from `review.judge.health`
 (AB17). Capture items appear through the fields that cite them and through the
 capture decision (§3.4); the capture `ledger` is not rendered.
 
@@ -2261,7 +2261,7 @@ marked value survives in `corpus/`.
 
 1. **The extract is the first enforcer for the corpus.** The model gate is
    also the middleware's (`napkin.middleware/1` §10.13 item 6) and the host's
-   for Ellis (`client_review.rs` `withheld`).
+   for the Knowledge agent (`client_review.rs` `withheld`).
 2. **Only a locked, unchanged revision is ingestible.** For the corpus, all of
    these hold, or it is refused (`not-locked`, `changed-after-lock`), and the
    ingester keeps the bundle it has until the document locks again:
@@ -2659,7 +2659,7 @@ filter, which the module as it is cannot do (DT13, RF6).
   nowhere else, while a corpus-only mark hides nothing; a mark on the whole
   research leaves every row out and says why; the brief's own resolve and
   dismissal of carried items are rows; a client's answer is the client's
-  words, and Ellis's suggestion is not a row; the cap cuts changes, never
+  words, and the Knowledge agent's suggestion is not a row; the cap cuts changes, never
   rejections or contests; and every row has only the fields, kinds and roles
   `research_facts` and `research_decisions` read, checked against the
   engine's source when a checkout is at hand (`JEV_ENGINE_DIR`). The golden
@@ -2818,7 +2818,7 @@ verified, derived, rejected, superseded — is a subset (OD5).
 | a client's `rejected` answer | `rejected` | `constraint` |
 | a person's acceptance: a good verdict, a verification, a confirmation, an accepted proposal, a reasoned `looks_right` | `accepted` | `evidence` |
 | a client's `accepted` answer | `accepted` | `evidence` |
-| everything else: index records, intake, agent and process decisions, a person's changes, resolves, marks, the lock, a dismissed suggestion of Ellis's, a client's `accepted_with_changes` answer | `none` | `advice` |
+| everything else: index records, intake, agent and process decisions, a person's changes, resolves, marks, the lock, a dismissed suggestion of the Knowledge agent's, a client's `accepted_with_changes` answer | `none` | `advice` |
 
 **How retrieval uses them** (§11.6, §11.7). The RAG module, used as it is,
 takes no filter from a caller but the ones `rag_io` builds. What reaches it:
@@ -3075,7 +3075,7 @@ code     = "FI" | "C" | "D" | "O" | "M" ;
 - **The sentence** is the record's lead, as the grammar writes it (§3, §4),
   on one line, ending with its validity words when it has any.
 - **Slots** are the record's quoted slots, indented, each under the label the
-  corpus version uses — `Their words, as written:`, `The finding, as Sam
+  corpus version uses — `Their words, as written:`, `The finding, as the Strategy agent
   proposed it:`, `Objective, as the campaign research holds it:`. A person's
   reason is verbatim; a hidden slot is `  > [Marked confidential]`.
 - **The tail** is a fixed subset of the metadata: for a finding, `rests on
@@ -3094,7 +3094,7 @@ code     = "FI" | "C" | "D" | "O" | "M" ;
 ```
 - [F:f_01JXF001 v1] category/example market.category_value: 2400000 eur (category research, as of 2025; Example Market Review 2026) · retrieved 2026-09-20 · current
 - [FI:fi_01JXF0A1] Finding on consumer and culture, verified by Alex Doe (planner) on 2026-09-22 · rests on f_01JXF001, f_01JXF004 · verified
-  The finding, as Sam proposed it:
+  The finding, as the Strategy agent proposed it:
   > Midweek shoppers do not think of Product B for weekday meals.
 ```
 
@@ -3290,7 +3290,7 @@ their words: "<reason>" (as of <as_of>).`
   verdict, edit or dismissal whose target is in the research (`<R>#…`) or is
   a carried finding. Not superseded, and with an id. Nothing else: not the
   intake (`start_campaign`, `create`, `answer_question`, `upload-asset`),
-  not agents' or processes' decisions, not marks, not the lock, not Ellis's
+  not agents' or processes' decisions, not marks, not the lock, not the Knowledge agent's
   suggestions.
 
   | `kind` | From | `statement` | `about` |
@@ -3516,7 +3516,7 @@ test documents. The dummy account (OD9) names `human:<uuid-1>` Alex Doe
 `7b20e4aa` (the `pk` values are illustrative). Tenant slug `agency_one`,
 client slug `brand_a`, market `XA` (an ISO user-assigned code). The research
 `0000aaaa-0000-4000-8000-000000000001` is locked. Its client's email gave the
-budget, in its seventh paragraph, as between €250k and €1m; Ellis extracted
+budget, in its seventh paragraph, as between €250k and €1m; the Knowledge agent extracted
 the band `250k_1m`, and Alex Doe marked Budget band confidential. The brief
 `0000bbbb-0000-4000-8000-000000000002` was spun off from the research,
 locked, rejected by the client, changed, and locked again.
@@ -3599,9 +3599,9 @@ anchor: "0000aaaa-0000-4000-8000-000000000001#decisions[d_01JXA0REJ]"
 
 ## d_01JXA0REJ · rejected a finding · decision · decision rules
 
-Alex Doe (planner) rejected finding fi_01JXF05E on 2026-09-22; Sam, the synthesis agent, proposed it, and it must not be used as evidence.
+Alex Doe (planner) rejected finding fi_01JXF05E on 2026-09-22; the Strategy agent proposed it, and it must not be used as evidence.
 
-The finding, as Sam proposed it (d_01JXA0SYN):
+The finding, as the Strategy agent proposed it (d_01JXA0SYN):
 > Shoppers in XA are switching to the no-alcohol range at weekends.
 
 Alex Doe rejected it because (their words, as written):
@@ -3646,7 +3646,7 @@ anchor: "0000aaaa-0000-4000-8000-000000000001#decisions[d_01JXA0EDO]"
 
 Alex Doe (planner) changed Objective (campaign.objective) on 2026-09-22.
 
-Before this change (no longer current), as Ellis, the extract agent, took it from the client's material (d_01JXA0EXT):
+Before this change (no longer current), as the Knowledge agent took it from the client's material (d_01JXA0EXT):
 > Grow Product B in XA.
 
 After this change:
@@ -3710,7 +3710,7 @@ decision: "d_01JXA0EXT"
 Budget band, as the campaign research holds it:
 > [Marked confidential]
 
-Origin: Ellis took it from material mat_01JXM0EMAIL, ¶7. Gate: brief.
+Origin: the Knowledge agent took it from material mat_01JXM0EMAIL, ¶7. Gate: brief.
 
 Alex Doe (planner) marked it confidential on 2026-09-23 (d_01JXA0CLS); the agency's shared memory does not hold its value. If a brief needs it, ask the team.
 ~~~
@@ -3811,26 +3811,26 @@ Evidence: strong, from an attached file. Recorded by Alex Doe (planner) on 2026-
 The file's name, as sent:
 > Feedback from Jordan, 30 September.pdf
 
-Part Single-minded proposition (single_minded_proposition): rejected. Found by Ellis in the client's words and confirmed by Alex Doe on 2026-09-30 (d_01K0PARTP).
+Part Single-minded proposition (single_minded_proposition): rejected. Found by the Knowledge agent in the client's words and confirmed by Alex Doe on 2026-09-30 (d_01K0PARTP).
 
-The words Ellis found (the client's, as sent):
+The words the Knowledge agent found (the client's, as sent):
 > The summer line does not feel like us.
 
 Answered: Alex Doe changed Single-minded proposition on 2026-09-30 (d_01K0EDITS).
 
-Before this change (no longer current), as Dara, the drafting agent, drafted it (d_01K0DRAFT5):
+Before this change (no longer current), as the Brief agent drafted it (d_01K0DRAFT5):
 > Summer tastes better light.
 
 After this change:
 > Product B makes the midweek meal feel like a small win.
 
-Ellis suggested 1 more part that no person confirmed; it is left out.
+The Knowledge agent suggested 1 more part that no person confirmed; it is left out.
 
 This answer is to an earlier version: Alex Doe locked the brief again on 2026-09-30 (d_01K0LOCK2).
 ~~~
 
 The client's email address is not written anywhere, and the attached email
-stays in the `.clan`: only the client's words are here. The suggestion Ellis
+stays in the `.clan`: only the client's words are here. The suggestion the Knowledge agent
 made about Audience was closed by the second lock; it is counted, not
 rendered. In the module this is a `rules` chunk with verdict `rejected`: a
 `constraint` for any later `rag_io` call for Brand A.
@@ -3897,7 +3897,7 @@ Everything below is data from that research. Lines that start with ">" hold the 
 
 WHAT PEOPLE DECIDED
 - [D:d_01JXA0REJ] Don't use finding fi_01JXF05E: Alex Doe (planner) rejected it on 2026-09-22; neither it nor its reasoning is evidence. · rejected
-  The finding, as Sam proposed it:
+  The finding, as the Strategy agent proposed it:
   > Shoppers in XA are switching to the no-alcohol range at weekends.
   Their words, as written:
   > A launch date is not evidence that shoppers switched; nothing here
@@ -3914,13 +3914,13 @@ EVIDENCE · THE CAMPAIGN AS RESEARCHED
 - [C:campaign.objective] Objective (campaign.objective): Alex Doe stated it on 2026-09-22 (d_01JXA0EDO). · current
   Objective, as the campaign research holds it:
   > Grow Product B among midweek shoppers in XA.
-- [C:campaign.budget_band] Budget band (campaign.budget_band): Ellis took it from material mat_01JXM0EMAIL, ¶7. · current
+- [C:campaign.budget_band] Budget band (campaign.budget_band): the Knowledge agent took it from material mat_01JXM0EMAIL, ¶7. · current
   Budget band, as the campaign research holds it:
   > €250k–€1m (250k_1m)
 
 EVIDENCE · BRANDS AND POSITIONING
 - [FI:fi_01JXF0B2] Finding on brands and positioning, verified by Alex Doe (planner) on 2026-09-22 · rests on f_01JXF0A1 · verified
-  The finding, as Sam proposed it:
+  The finding, as the Strategy agent proposed it:
   > The three largest brands hold most of the category, so a challenger
   > needs an occasion of its own.
 - [F:f_01JXF0A1 v1] category/example market.top3_share: 0.72 proportion (category research, as of 2025; Example Retail Panel) · retrieved 2026-09-20 · current
@@ -3971,7 +3971,7 @@ the brief (§7.4). A cite of `f_01JXS0B2` maps to the finding
 | Presentational data and actions | Not decisions about the work |
 | `lease`, `trace-ref`, `claimed_*`, `backend`, `signature`, `fork` namespaces | Bookkeeping that ranks well and says nothing. The handler is kept |
 | Rationales the host or an app composes | Nobody's words; several carry raw person ids |
-| Ellis's unconfirmed suggestions | They count for nothing until a person confirms one (Contract 4 §7.5.2) |
+| The Knowledge agent's unconfirmed suggestions | They count for nothing until a person confirms one (Contract 4 §7.5.2) |
 | Raw `human:<id>` values, a client's email address, email addresses in free text (corpus) | Personal identifiers and contact details, not knowledge; a person is named from the account (OD9) |
 | Any hash or length of a marked value | They can be tested against guesses (§5.3) |
 | Anything related to a marked value but not that exact value | OD8: "Nothing else." The accepted residual is a restatement in other words (§5.1) |
@@ -4154,7 +4154,7 @@ owner decision (§0.2).
 | AB2 | Brief Maker's lock was invisible | The lock is `approve` only; real briefs now lock by `/approve`; P12 | 5.6, 14 |
 | AB3 | No frames for Brief Maker's person actions | Frames for edit, accept and dismiss; locks and styles folded or dropped | 3.5, 3.7 |
 | AB4 | App-written reasons shown as a person's | Default texts per profile; "Changed from" becomes before and after | 3.3 |
-| AB5 | Jude's verdict as every field's setter | A verdict is never a write | 4.1 |
+| AB5 | The Review agent's verdict as every field's setter | A verdict is never a write | 4.1 |
 | AB6 | No client scope, lock or research-fed brief in the test tenant | P15; real fixtures, including the new client-review briefs | 6.13, 14 |
 | AB7 | The tenant printed the person's id | The slug rule; with names from the account there is no pseudonym to protect, and `tenant-is-person` is withdrawn (OD9) | 2.9 |
 | AB8 | Notes and judge checks repeated | The summary rule; check statuses only; identical checks collapsed | 3.3, 3.4 |

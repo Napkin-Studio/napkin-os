@@ -1688,7 +1688,7 @@ fn number_in(s: &str) -> Option<(f64, bool)> {
 /// A locked document with a part reopened for a client's request locks again
 /// (Contract 4 §7.5.6, item 3): the whole list is run, a client's unanswered
 /// rejection included, and the new `approve` — now the lock — closes every
-/// reopened part. The older one is not rewritten. Any of Ellis's suggestions
+/// reopened part. The older one is not rewritten. Any of the Knowledge agent's suggestions
 /// still unconfirmed is closed by it, one dismissal each, written after it
 /// (§7.5.3): they were about a version the new lock replaces.
 pub fn approve(ctx: &Ctx, doc: &Document, rationale: &str) -> HostResult<Outcome> {

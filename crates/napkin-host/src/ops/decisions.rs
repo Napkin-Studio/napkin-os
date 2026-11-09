@@ -40,7 +40,7 @@
 //! here too: each part's current answer, whether it went stale (its own value
 //! changed since), whether an edit answered it, whether it is reopened; and
 //! what it asks of a person — an unanswered rejection blocks locking again, a
-//! change asked or one of Ellis's suggestions is attention.
+//! change asked or one of the Knowledge agent's suggestions is attention.
 //!
 //! A read of one snapshot: nothing here writes.
 
@@ -213,7 +213,7 @@ pub struct ClientView {
     pub answers: Vec<ClientAnswer>,
     /// One per address with a current answer, by address.
     pub parts: Vec<ClientPart>,
-    /// Ellis's suggestions nobody has confirmed or dismissed, oldest first.
+    /// The Knowledge agent's suggestions nobody has confirmed or dismissed, oldest first.
     pub suggestions: Vec<ClientSuggestion>,
 }
 
@@ -1793,7 +1793,7 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
         attention.push(item(
             "client_part_suggested",
             format!(
-                "Ellis thinks {who}'s answer is about {}. Confirm or dismiss it.",
+                "The Knowledge agent thinks {who}'s answer is about {}. Confirm or dismiss it.",
                 s.label
             ),
             false,
@@ -1962,7 +1962,7 @@ fn asked_for(ctx: &Lookup) -> Vec<Attention> {
     let mut out = Vec::new();
     for (i, d) in ctx.chain.decisions.iter().enumerate() {
         let Some(r) = &d.reasoning else { continue };
-        // Ellis's suggestions ask for a person as client review does
+        // The Knowledge agent's suggestions ask for a person as client review does
         // (`client_part_suggested`), once.
         if d.superseded_by.is_some() || d.kind.as_deref() == Some(cr::KIND) {
             continue;
@@ -2111,10 +2111,10 @@ fn who(d: &Decision) -> Who {
     let id = raw.split(['@', '/']).next().unwrap_or(raw).to_string();
     Who {
         kind: "agent",
-        // The host's word match over a client's words is shown as Ellis, the
-        // crew member who reads what people send (Contract 4 §7.5.2a).
+        // The host's word match over a client's words is shown as the Knowledge
+        // agent, the agent that reads what people send (Contract 4 §7.5.2a).
         name: if id == cr::MATCHER {
-            "Ellis".to_string()
+            "Knowledge agent".to_string()
         } else {
             humanise(&id)
         },
