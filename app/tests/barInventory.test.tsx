@@ -205,7 +205,7 @@ test('Share ▾: Copy link where there is a server, Download a copy always; clie
   assert.equal(saved, 1, 'the old Share (download a copy) keeps its home')
 })
 
-test('lineage chips beside the name, and the crew before Decisions with an agent only while one works', () => {
+test('lineage chips beside the name; the crew is people only, and a job shows as the working chip', () => {
   const opened: string[] = []
   const html = bar({ doc: doc({
     madeFrom: { title: 'Lúnasa research', path: 'store/r1', changed: true },
@@ -216,16 +216,16 @@ test('lineage chips beside the name, and the crew before Decisions with an agent
   assert.match(html, /data-testid="lineage-from"[^>]*>from <b>Lúnasa research<\/b>/)
   assert.match(html, /→ <b>2 decks<\/b>/)
   assert.match(html, /aria-label="In this document: Sam \(you\); an agent is writing"/)
-  assert.match(html, /data-testid="agent-working"/)
   assert.ok(html.indexOf('data-testid="crew"') < html.indexOf('data-testid="decisions"'), 'the crew sits before Decisions')
-  // the real working agent, as its sphere (the one engine), never a grey ball
+  // the agent is never drawn in the bar (owner, 2026-11-09): only the job chip says one works
+  assert.match(html, /data-testid="agent-working"[^>]*data-st="working"[^>]*><i class="sdot"[^>]*><\/i>Writing<\/span>/)
+  assert.doesNotMatch(html, /class="nk-ag"/, 'no agent sphere in the bar')
   const knowing = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: 'reading', agent: 'knowledge', progress: [1, 4] } }) })
   assert.match(knowing, /aria-label="In this document: Sam \(you\); the Knowledge agent is reading"/)
-  assert.match(knowing, /data-testid="agent-working"[^>]*data-agent="knowledge"/)
-  assert.match(knowing, /class="nk-ag" data-agent="knowledge" data-state="working"/)
-  assert.match(knowing, /<svg class="nk-still"[^>]*width="26"/, 'the static frame of the same sphere shows before (and without) WebGL')
+  assert.match(knowing, />Reading · step 1\/4<\/span>/)
+  assert.doesNotMatch(knowing, /class="nk-ag"/)
   const idle = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: null } }) })
-  assert.doesNotMatch(idle, /agent-working/, 'no agent works: no status dot')
+  assert.doesNotMatch(idle, /agent-working/, 'no job: no chip')
   assert.doesNotMatch(bar({ doc: doc() }), /tba-line/, 'made from nothing: no chips')
 })
 

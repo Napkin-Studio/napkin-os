@@ -179,6 +179,10 @@ pub struct Cite {
     pub published_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
+    /// An address on a line that cites (a report line, a paragraph): what it
+    /// cites, by id.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cites: Vec<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -972,6 +976,7 @@ impl<'a> Lookup<'a> {
                 label: t.label,
                 detail,
                 quote,
+                cites: node.map(cites_of).unwrap_or_default(),
                 ..Default::default()
             };
         }
@@ -2154,7 +2159,8 @@ fn segments(path: &str) -> Vec<Seg<'_>> {
 }
 
 /// The value at an entity-keyed path: a map by key, a list by the `id`,
-/// `ref` or `key` of its entries.
+/// `ref` or `key` of its entries, else by position (`report.summary[2]`, a
+/// list part's line `mandatories[0]`).
 fn lookup<'v>(data: &'v Value, path: &str) -> Option<&'v Value> {
     segments(path).into_iter().try_fold(data, |v, s| {
         let k = match s {
@@ -2162,11 +2168,14 @@ fn lookup<'v>(data: &'v Value, path: &str) -> Option<&'v Value> {
         };
         match v {
             Value::Object(m) => m.get(k),
-            Value::Array(items) => items.iter().find(|x| {
-                ["id", "ref", "key"]
-                    .iter()
-                    .any(|f| x.get(f).and_then(Value::as_str) == Some(k))
-            }),
+            Value::Array(items) => items
+                .iter()
+                .find(|x| {
+                    ["id", "ref", "key"]
+                        .iter()
+                        .any(|f| x.get(f).and_then(Value::as_str) == Some(k))
+                })
+                .or_else(|| k.parse::<usize>().ok().and_then(|i| items.get(i))),
             _ => None,
         }
     })
@@ -2389,9 +2398,26 @@ fn preview(node: &Value) -> Option<String> {
     match v {
         Value::String(s) => Some(clip(s, 160)),
         Value::Number(_) | Value::Bool(_) => Some(v.to_string()),
-        Value::Object(m) => m.get("name").and_then(Value::as_str).map(String::from),
+        // A line of the report (`{text, cites}`), else a named thing.
+        Value::Object(m) => m
+            .get("text")
+            .or_else(|| m.get("name"))
+            .and_then(Value::as_str)
+            .map(|s| clip(s, 160)),
         _ => None,
     }
+}
+
+/// What a line in the data cites (`report.summary[i].cites`, a paragraph's
+/// `cites`): the ids its card links on to.
+fn cites_of(node: &Value) -> Vec<String> {
+    node.get("cites")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(String::from)
+        .collect()
 }
 
 fn str_of<'v>(v: &'v Value, key: &str) -> Option<&'v str> {

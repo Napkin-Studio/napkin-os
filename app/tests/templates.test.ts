@@ -915,7 +915,7 @@ test('the drawer quotes the words the planner typed', () => {
   }
   const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
   const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
-    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, gap: () => null,
     writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
     materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
     MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
@@ -970,7 +970,7 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
   const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
   return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
     'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history', 'writerBlock'], {
-    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION, declaredParts: () => [],
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, gap: () => null, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION, declaredParts: () => [],
     docId: () => 'brief', upstreams: () => ({}), valueAt: () => value, envAt: () => null, ORIGIN: {}, personName: () => 'ana',
     crew: () => ({ forWork: (w: string) => (w === 'draft' ? 'drafter' : '') }), crewKey, givenOf,
     whoDid: (b: { who: { you?: boolean }; decision: { agent?: string } }) => (b.who.you ? 'You' : givenOf(crewKey(b.decision)) || 'The crew'),
@@ -2292,4 +2292,53 @@ test('the brief sheet opens with the mock’s meta row: Client, Project, Budget 
   assert.deepEqual(top.map(c => [c.col, c.w]), [[1, 3], [4, 3], [7, 3], [10, 3]])
   assert.ok(out.filter(c => c.key === 'job').every(c => c.row > 1), 'every other part packs below it')
   assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?'not given'/, 'an empty meta cell says “not given”')
+})
+
+// ── every line is a field (owner, 2026-11-09) ──────────────────────────────
+
+test('every line of a report or a list is a field: the answer, a line, a list item, a chart, a gap by its id', () => {
+  const f = lift<{ kindOf(r: string): string | null }>(CLF, ['kindOf', 'isPath'], {
+    PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, gap: (id: string) => (id === 'g_gb_awareness' ? { id } : null),
+  })
+  assert.equal(f.kindOf('report.headline'), 'answer')
+  assert.equal(f.kindOf('report.summary[2]'), 'line')
+  assert.equal(f.kindOf('report.sections[s_market].blocks[0]'), 'line')
+  assert.equal(f.kindOf('mandatories[0]'), 'item')
+  assert.equal(f.kindOf('objectives.commercial[1]'), 'item')
+  assert.equal(f.kindOf('chart:f_1,f_2'), 'chart')
+  assert.equal(f.kindOf('g_gb_awareness'), 'gap')
+  assert.equal(f.kindOf('insight'), 'path')
+  // The report's own lines are named by their place, never as a list item; what the host writes is no field.
+  assert.equal(f.kindOf('report[0]'), null)
+  assert.equal(f.kindOf('projection.pins[0]'), null)
+  assert.equal(f.kindOf('fi_1'), 'finding')
+})
+
+test('a line’s kind and certainty come from what it cites, never from a model', () => {
+  type K = { kind: string; lv: number; fis: string[]; flag: boolean }
+  const findings = {
+    fi_a: { statement: 'A', status: 'verified', confidence: 'high', cites: ['f_1'] },
+    fi_b: { statement: 'B', status: 'proposed', confidence: 'medium', cites: ['f_2'] },
+    fi_c: { statement: 'C', status: 'rejected', cites: [] },
+  }
+  const pins = { f_1: { value: 0.68, confidence: 'high' }, f_2: { value: 0.234, confidence: 'medium' }, f_3: { value: 12, confidence: 'low' } }
+  const contests = [{ id: 'ct', status: 'resolved', chosen: 'f_2', values: [{ fact_id: 'f_2' }, { fact_id: 'f_9' }] }]
+  const LV = new Function(`${obj(CLF, 'LV')} return LV;`)()
+  const f = lift<{ lineKind(l: unknown): K }>(CLF, ['lineKind', 'findingLv', 'pinLv', 'lvOf', 'resolvedFor', 'excludedPin', 'fno', 'uniq'], {
+    arr, obj: (v: unknown) => (isObj(v) ? v : {}), LV, findings: () => findings, pins: () => pins, contests: () => contests,
+    data: () => ({ selection: { excluded: [{ fact_id: 'f_3' }] } }),
+    fmt: (p: { value: number }) => (p.value < 1 ? `${Math.round(p.value * 1000) / 10}%` : String(p.value)),
+  })
+  const k = (text: string, cites: string[]) => f.lineKind({ text, cites })
+  assert.deepEqual([k('Most stops are social.', ['fi_a', 'f_1']).kind, k('x', ['fi_a']).lv], ['Restates Finding 1', 3])
+  assert.equal(k('68% of stops are unplanned.', ['f_1']).kind, 'Figure, quoted as written')
+  assert.equal(k('Delivery grew 23.4%.', ['f_2']).kind, 'Figure, contested then resolved')
+  const inf = k('So it moves home.', ['fi_a', 'fi_b'])
+  assert.deepEqual([inf.kind, inf.lv], ['Inference · no source says this', 1])
+  assert.equal(k('Nobody says so.', []).kind, 'Inference · no source says this')
+  const thin = k('A ritual, maybe.', ['fi_b'])
+  assert.deepEqual([thin.kind, thin.lv], ['From Finding 2 · proposed', 1])
+  // A rejected finding or a figure marked wrong flags the line, and it is low.
+  assert.deepEqual([k('x', ['fi_c']).flag, k('x', ['fi_c']).lv], [true, 1])
+  assert.equal(k('12 of them.', ['f_3']).flag, true)
 })

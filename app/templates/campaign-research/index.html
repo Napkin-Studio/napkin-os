@@ -979,6 +979,15 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 .walker .wk-fig .nk-ag{display:block}
 .walker .wk-say{background:var(--ink);color:var(--paper);font-size:12px;padding:5px 11px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadow-lg)}
 @media (prefers-reduced-motion: reduce){.walker{transition:none}}
+/* The agent at work on the open report (owner, 2026-11-09: the agent stays on the run's stage or moves
+   to the side panel, nowhere else): its sphere, small, at the top of the right panel, with one line. */
+.side-agent{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:13px;line-height:1.35;color:var(--ink)}
+.side-agent[hidden]{display:none}
+/* The one scene canvas draws above the sticky inspector (z 30), so a sphere in it shows; drawers and sheets stay above. */
+#napkin-gl{z-index:31!important}
+.side-agent .nk-ag{width:30px;height:30px}
+.side-agent b{font-weight:600}
+.side-agent span{min-width:0;overflow-wrap:anywhere}
 
 /* ════════════════════════════════════════════════════════════════════════
    The approved mock, exactly (features/research-new-ui.clan; gaps.md §6,
@@ -1219,6 +1228,15 @@ section.report{margin-top:0}
 .rp-sec.rsel-sec{background:color-mix(in srgb,#141413 3.5%,transparent);border-radius:8px;margin-left:30px!important;margin-right:30px!important;padding:14px 14px 14px}
 .rsel-line{background:color-mix(in srgb,#141413 5%,transparent);border-radius:6px;box-shadow:0 0 0 4px color-mix(in srgb,#141413 5%,transparent)}
 .rsel-hit{background:linear-gradient(transparent 38%,var(--rs-hl) 38%,var(--rs-hl) 88%,transparent 88%)!important;border-radius:2px}
+/* Every line is a field (the OS's clan-field, keep): the headline takes the mock's soft wash
+   as a whole, a summary line or a paragraph its highlighter wash, and a selected line stays lit. */
+.rep #rp-pre .headline > clan-field.clf-ln[as="answer"]{margin:0;padding:0;border-radius:0}
+.rep #rp-pre .headline > clan-field.clf-ln[as="answer"]:hover{background:none}
+.rep #rp-pre .headline:has(> clan-field.clf-ln){cursor:pointer;transition:background .12s}
+.rep #rp-pre .headline:has(> clan-field.clf-ln:hover){background:color-mix(in srgb,#141413 4%,transparent)}
+.rep #rp-pre .headline.rsel-line{background:color-mix(in srgb,#141413 5%,transparent)}
+.rep-sum clan-field.clf-ln.rsel-hit,.rp-p clan-field.clf-ln.rsel-hit{background:color-mix(in srgb,var(--rs-hl) 62%,transparent)!important;box-shadow:0 2px 0 #141413}
+.rp-fs.clf-ln:hover{outline:0}
 /* the evidence map is paper too, in both themes (the mock) */
 .insp-map:not([hidden]){--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--card:#FFFDF8;--paper:#FFFDF8;--line:#E2D9C8;--create:#C9462A;--amber:#B45309;--amber-soft:#FEF3DC;--soft:#F3ECDC;color:#141413;margin:-16px -18px 0;padding:14px 14px 14px;background:#FFFDF8;border-bottom:1px solid var(--line);gap:10px}
 .insp-map .map-h b{font:600 18px var(--font-ui);letter-spacing:-.01em;color:var(--ink)}
@@ -1495,6 +1513,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 <aside class="insp no-print" id="insp" aria-label="Inspector">
   <button type="button" class="insp-grab" id="insp-grab" aria-expanded="false" aria-controls="insp-body"><span class="insp-handle" aria-hidden="true"></span><span class="insp-peek" id="insp-peek">Report and what needs you</span></button>
   <div class="insp-body" id="insp-body">
+    <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
     <div class="insp-sw" id="viewsw" role="group" aria-label="View">
       <button type="button" data-view="report" aria-pressed="true">Report</button>
       <button type="button" data-view="map" aria-pressed="false">Evidence map</button>
@@ -1757,8 +1776,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // bottom edge of the window, so the person sees the agents at work without
   // the page moving.
   function walk(){
+    sideAgent();
     var w=$('walker'); if(!w) return;
-    var on=!!RECON.job, was=w.classList.contains('on');
+    var on=false, was=w.classList.contains('on');
     if(on&&!was){
       clearTimeout(walk._t);
       w.innerHTML='<div class="wk-who"><span class="wk-fig">'+sphereTag('strategy', 44, 'working')+'</span>'
@@ -1766,6 +1786,26 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     }
     w.classList.toggle('on', on);
     if(!on&&was){ clearTimeout(walk._t); walk._t=setTimeout(function(){ if(!w.classList.contains('on')) w.innerHTML=''; }, 400); }
+  }
+  // The agent at work while the report is open, at the top of the right panel: one sphere, small, and
+  // "<Role> agent · <what it is doing>". Gone when the job ends; on the run screen the stage has it.
+  function sideAgent(){
+    var el=$('sideAgent'); if(!el) return;
+    var on=null, live=function(j){ return j&&!j.error&&/^(sending|queued|running)$/.test(j.state||'sending'); };
+    if(!document.body.classList.contains('working')&&isObj(D().report)){
+      var aj=ASK.jobs.filter(live)[0], tj=JOBS.filter(function(j){ return live(j)&&j!==RECON.job; })[0];
+      if(RECON.job) on=['strategy','bringing the report in step with your review'];
+      else if(CHAT.reportBusy) on=['brief','writing the report again'];
+      else if(aj) on=['research','answering “'+clipT(aj.question, 60)+'”'+(aj.lens&&LENS[aj.lens]?' in '+lensName(aj.lens):'')];
+      else if(tj){ var R=roles(), k=R&&R.of(tj.task)||'research', ln=tj.input&&tj.input.lens||tj.lens;
+        on=[k, tj.task==='research_lens'?'researching '+(ln&&LENS[ln]?lensName(ln):'a lens')+' again':String(tj.task||'working').replace(/_/g,' ')]; }
+    }
+    var want=on?on.join('|'):'';
+    if(el.getAttribute('data-k')===want) return;
+    el.setAttribute('data-k', want);
+    if(!on){ el.hidden=true; el.innerHTML=''; return; }
+    el.innerHTML=sphereTag(on[0], 30, 'working')+'<span><b>'+esc(TheAgent(on[0]).replace(/^The /,''))+'</b> · '+esc(on[1])+'</span>';
+    el.hidden=false;
   }
   function reconsider(){
     if(RECON.job||!RECON.queue.length) return;
@@ -2433,6 +2473,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       if(window.ClanFields) ClanFields.refresh();
       renderChecks();
       renderInspector();
+      sideAgent();
     }catch(e){
       console.error(e);
       $('notices').innerHTML='<div class="notice" role="alert"><b>The view could not render this document.</b> '+esc(e&&e.message)+'</div>';
@@ -2782,6 +2823,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return line&&line[0]?'<b>'+esc(line[0])+':</b> '+esc(line[1]):'';
   }
   function renderJobs(){
+    try{ sideAgent(); }catch(e){}
     var el=$('jobs'); if(!el) return;
     if(!JOBS.length){ el.innerHTML=''; return; }
     el.innerHTML='<div class="group no-print"><h3>Research activity</h3><div class="cards">'+JOBS.map(function(j){
@@ -2826,7 +2868,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // `quiet`: a job the view starts on its own (reconsider after a review)
   // leaves the page where the person is; the walker shows it instead.
   function runTask(task, input, then, quiet){
-    var j={task:task, state:'sending', then:then};
+    var j={task:task, input:input, state:'sending', then:then};
     if(!(window.clan&&window.clan.apiProxy)){ toast('Research runs through the host’s api-proxy.'); failed(j, 'No api-proxy.'); return j; }
     // The client's documents are research sources: the host adds their text.
     if(task==='research_lens'&&!input.attachments&&attachments().length) input=Object.assign({}, input, {attachments:attachments()});
@@ -3982,7 +4024,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var f=fnds()[id];
     if(!f) return '<p class="rp-fp"><span class="tag">'+esc(id)+' · not in the projection</span></p>';
     var st=f.status, tag=st==='verified'?'verified':st==='rejected'?'rejected':st==='superseded'?'replaced after a review':'needs your call', to=replacedBy(id);
-    return '<p class="rp-fp s-'+esc(st)+'" data-anchor="'+esc(id)+'"><button type="button" class="rp-fs" data-rsel="'+esc(id)+'" title="'+esc('Worked out by '+theAgent('strategy')+' from '+arr(f.cites).length+' pin'+(arr(f.cites).length===1?'':'s'))+'">'+esc(f.statement)+'</button> '
+    return '<p class="rp-fp s-'+esc(st)+'" data-anchor="'+esc(id)+'"><clan-field class="rp-fs" ref="'+esc(id)+'" as="claim" keep title="'+esc('Worked out by '+theAgent('strategy')+' from '+arr(f.cites).length+' pin'+(arr(f.cites).length===1?'':'s'))+'">'+esc(f.statement)+'</clan-field> '
       +'<span class="tag">Finding '+esc(fno(id))+' · '+esc(tag)+'</span>'+(to?' <button type="button" class="rp-f" data-rsel="'+esc(to)+'">Replaced by F'+esc(fno(to))+'</button>':'')+'</p>';
   }
   // A gap as a person reads it: no entity ids ("category/alcohol.cider" is
@@ -4010,17 +4052,21 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function rpGapNote(gid){
     var g=gapById(gid);
     if(!g) return '<div class="rp-gap"><span class="gap-k">Gap</span><span>'+esc(gid)+' · not in selection</span></div>';
-    return '<div class="rp-gap" id="rgap-'+esc(slug(g.id))+'"><span class="gap-k">Gap</span><span>'+esc(gapWords(g.searched))+(g.note?' <span class="muted">'+esc(gapWords(g.note))+'</span>':'')+'</span></div>';
+    return '<div class="rp-gap" id="rgap-'+esc(slug(g.id))+'"><span class="gap-k">Gap</span><span><clan-field ref="'+esc(g.id)+'" as="gap" keep>'+esc(gapWords(g.searched))+'</clan-field>'+(g.note?' <span class="muted">'+esc(gapWords(g.note))+'</span>':'')+'</span></div>';
   }
   function rpPins(ids){
     return '<p class="rp-pins">'+arr(ids).map(function(id){ var p=pins()[id];
       if(!p||!inlineFig(id)) return pinChip(id);
       return '<span class="rp-pin"><small>'+esc(String(p.key||'').split('.').slice(-2).join(' ').replace(/_/g,' '))+(p.market?' · '+esc(p.market):'')+'</small><clan-field ref="'+esc(id)+'"></clan-field></span>'; }).join('')+'</p>';
   }
-  function rpBlock(b){
+  // A line of the report as the OS's field (report.headline, report.summary[i],
+  // report.sections[<id>].blocks[<i>]): its words as drawn here, and a click
+  // traces it to what it rests on.
+  function lineField(ref, as, inner){ return '<clan-field ref="'+esc(ref)+'" as="'+as+'" keep>'+inner+'</clan-field>'; }
+  function rpBlock(b, sid, j){
     if(!isObj(b)) return '';
     switch(b.kind){
-      case 'claim': return '<p class="rp-p blk-claim">'+claimHtml(b.text, b.cites)+'</p>';
+      case 'claim': return '<p class="rp-p blk-claim">'+(/^[A-Za-z0-9_-]+$/.test(String(sid||''))?lineField('report.sections['+sid+'].blocks['+j+']', 'line', claimHtml(b.text, b.cites)):claimHtml(b.text, b.cites))+'</p>';
       case 'pins': return rpPins(b.fact_ids);
       case 'finding': return rpFinding(b.finding_id);
       case 'gap': return rpGapNote(b.gap_id);
@@ -4158,7 +4204,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return '<section class="rp-sec" id="rp-gaps">'+rpHead(n, 'Not found / not researched', 'Gaps')+'<div class="rp-gaps">'+gaps.map(function(g){
       var nr=notRun(g);
       return '<div class="rp-gp" id="gapr-'+esc(slug(g.id))+'"><i class="sq '+(nr?'none':'empty')+'" aria-hidden="true"></i><div><div class="rp-gp-k"><b>'+(nr?'Not looked up':'Not found')+'</b>'
-        +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div>'+esc(gapWords(g.searched))
+        +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div><clan-field ref="'+esc(g.id)+'" as="gap" keep>'+esc(gapWords(g.searched))+'</clan-field>'
         +'<div class="rp-gp-d">'+(arr(g.sources_tried).length?'Sources tried: '+esc(arr(g.sources_tried).join(', '))+'<br>':'')+(g.note?esc(gapWords(g.note)):'')+'</div></div>'
         +'<button type="button" class="linkbtn no-print" data-act="gap-ask" data-gap="'+esc(g.id)+'" title="Put this in Ask the research; nothing runs until you press Ask">Research this</button></div>';
     }).join('')+'</div></section>';
@@ -4285,8 +4331,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(CHAT.reportErr) pre+='<div class="flag" role="alert"><div>'+esc(CHAT.reportErr)+'</div></div>';
     pre+=rpAsk(0);
     var hl=isObj(r.headline)?r.headline:{};
-    pre+='<section class="rp-sec rp-top" aria-label="Headline and summary"><div class="rs-h"><span>Headline</span></div><h2 class="headline" id="h-report">'+claimHtml(hl.text, hl.cites)+'</h2>';
-    if(arr(r.summary).length) pre+='<div class="rs-h"><span>Summary</span></div><ul class="rep-sum">'+arr(r.summary).map(function(s, i){ return '<li data-sum="'+i+'"><span>'+claimHtml(s&&s.text, s&&s.cites)+'</span></li>'; }).join('')+'</ul>';
+    pre+='<section class="rp-sec rp-top" aria-label="Headline and summary"><div class="rs-h"><span>Headline</span></div><h2 class="headline" id="h-report">'+lineField('report.headline', 'answer', claimHtml(hl.text, hl.cites))+'</h2>';
+    if(arr(r.summary).length) pre+='<div class="rs-h"><span>Summary</span></div><ul class="rep-sum">'+arr(r.summary).map(function(s, i){ return '<li data-sum="'+i+'"><span>'+lineField('report.summary['+i+']', 'line', claimHtml(s&&s.text, s&&s.cites))+'</span></li>'; }).join('')+'</ul>';
     pre+='</section>';
     $('rp-pre').innerHTML=pre;
     if(layout){
@@ -4301,7 +4347,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       $('rp-body').innerHTML=arr(r.sections).map(function(s){
         if(!isObj(s)) return '';
         n++;
-        return '<section class="rp-sec rep-sec" id="rs-'+esc(slug(s.id||''))+'"'+(s.lens?' data-lens="'+esc(s.lens)+'"':'')+'>'+rpHead(n, (s.lens?lensName(s.lens):'Section')+' · '+(s.market||ms||'every market'), s.title)+arr(s.blocks).map(rpBlock).join('')+'</section>';
+        return '<section class="rp-sec rep-sec" id="rs-'+esc(slug(s.id||''))+'"'+(s.lens?' data-lens="'+esc(s.lens)+'"':'')+'>'+rpHead(n, (s.lens?lensName(s.lens):'Section')+' · '+(s.market||ms||'every market'), s.title)+arr(s.blocks).map(function(b, j){ return rpBlock(b, s.id, j); }).join('')+'</section>';
       }).join('');
     }
     var post='';
@@ -4565,12 +4611,13 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
 
   // ── what is selected, with its trail and a way back ─────────────────────
-  var CARD_KINDS={pin:1, finding:1, source:1, material:1, passage:1, capture:1};
+  var CARD_KINDS={pin:1, finding:1, source:1, material:1, passage:1, capture:1, answer:1, line:1, gap:1, chart:1, item:1};
   function selLabel(ref){
     var M=VIEW.model, n=M&&M.nodes[ref];
     if(n) return clipT(mapLines(n)[0], 40);
     if(pins()[ref]) return clipT(fmtAny(pins()[ref])+' · '+pinLabel(pins()[ref]), 40);
     if(fnds()[ref]) return clipT(fnds()[ref].statement, 40);
+    if(window.ClanFields&&ClanFields.named){ var nm=ClanFields.named(ref); if(nm) return clipT(nm, 40); }
     return ref;
   }
   function select(ref, push){
@@ -4583,7 +4630,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function back(){ VIEW.trail.pop(); var top=VIEW.trail[VIEW.trail.length-1]; VIEW.sel=top?top.ref:null; traceSel(); renderSel(); }
   function selBody(ref){
     var M=VIEW.model, n=M&&M.nodes[ref];
-    if(/^sum:/.test(ref)&&n) return '<p style="margin:0;font-size:14px">'+esc(n.label)+'</p><div class="crumbs">Rests on '+n.cites.map(function(c){ return '<button type="button" data-sel="'+esc(c)+'">'+esc(selLabel(c))+'</button>'; }).join('')+'</div>';
+    // A summary line on the map is the report's line: the same view.
+    if(/^sum:/.test(ref)&&n) return '<div id="insp-card" data-line="report.summary['+esc(ref.slice(4))+']"></div>';
     if(n&&n.kind==='gap') return '<p style="margin:0;font-size:13.5px"><b>A gap.</b> '+esc(n.label)+(n.meta?': '+esc(n.meta):'')+'. The map shows only links the document holds.</p>';
     if(pins()[ref]) return pinCardHtml(ref);
     if(srcRecs()[ref]) return sourceCardHtml(ref);
@@ -4677,7 +4725,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'<div class="rbi-acts"><button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(sid)+'">Full record →</button></div>';
   }
   // A crumb names what it is the way the record does: f_003, Finding 2, Summary.
-  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return r; if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||r, 28); if(/^sum:/.test(r)) return 'Summary'; return clipT(c&&c.label||r, 34); }
+  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return r; if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||r, 28); if(/^sum:/.test(r)) return 'Line '+(+r.slice(4)+1); if(r==='report.headline') return 'Summary'; return clipT(c&&c.label||r, 34); }
   // What is selected shows in the report too (the mock): the line it is in is
   // lit, its section takes a wash, and every other place naming it is marked.
   function markReport(){
@@ -4709,7 +4757,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       // The card arrives after the read: bring the selection into view once it
       // has its height, so it never opens below the inspector's fold.
       var want=VIEW.sel;
-      Promise.resolve(ClanFields.card(VIEW.sel, cd)).then(function(){
+      Promise.resolve(ClanFields.card(cd.getAttribute('data-line')||VIEW.sel, cd)).then(function(){
         if(VIEW.sel!==want||VIEW.v==='map') return;
         var ip=$('insp'); if(ip) ip.scrollTop=0;
       });
@@ -5137,6 +5185,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +(key==='_new'?'<p class="rq-hint">A new question gets a section of its own. The agents answer from what the research found, and looks further only if that isn’t enough.</p>':'')+'</div>';
   }
   function renderAsks(){
+    try{ sideAgent(); }catch(e){}
     var root=$('report'), side=$('insp-ask'); if(!root) return;
     var ae=document.activeElement, keep=ae&&ae.id&&ae.closest&&ae.closest('.rq')?{id:ae.id, s:ae.selectionStart, e:ae.selectionEnd}:null;
     Array.prototype.forEach.call(root.querySelectorAll('.rq'), function(n){ n.remove(); });
@@ -5442,13 +5491,30 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // A figure or a finding in the report opens in the inspector, with its
   // trail; its card's "Where this came from" opens the OS's drawer, as a
   // click did before. While editing, a click is the editor's.
+  // Every line is a field (owner, 2026-11-09): the headline, a summary line, a
+  // paragraph, a finding, a gap, a chart or one of its bars opens here too.
   document.addEventListener('click', function(e){
-    var t=e.target.closest&&e.target.closest('#report [data-ref]'); if(!t||!window.ClanFields) return;
-    if(!t.closest('clan-field')||document.documentElement.classList.contains('clf-editing')||t.classList.contains('editable')) return;
+    if(!window.ClanFields||!e.target.closest||document.documentElement.classList.contains('clf-editing')) return;
+    var ch=e.target.closest('#report clan-chart[refs]');
+    if(ch){
+      var mk=e.target.closest('.mark[data-ref]'), cref=mk?mk.getAttribute('data-ref'):'chart:'+(ch.getAttribute('refs')||'').split(/\s+/).filter(Boolean).join(',');
+      if(!mk&&e.target.closest('a,button')) return;
+      e.preventDefault(); e.stopImmediatePropagation(); VIEW.origin=mk||ch; select(cref, false); return;
+    }
+    var t=e.target.closest('#report [data-ref]'); if(!t) return;
+    if(!t.closest('clan-field')||t.classList.contains('editable')) return;
+    // A control inside a line (a finding's chip, Research this) is its own.
+    var inner=e.target.closest('button,a,[data-rsel]'); if(inner&&inner!==t&&t.contains(inner)) return;
     var ref=t.getAttribute('data-ref'); if(!CARD_KINDS[ClanFields.kindOf(ref)]) return;
     e.preventDefault(); e.stopImmediatePropagation();
     VIEW.origin=t; select(ref, false);
   }, true);
+  // A link inside a line's view opens here, with its trail, not in the drawer.
+  window.addEventListener('clan:cardgo', function(e){
+    var d=e.detail||{}, ins=$('insp'); if(d.drawer||!d.ref||!ins||!VIEW.sel) return;
+    e.preventDefault(); VIEW.origin=null; select(d.ref, true);
+  });
+  window.addEventListener('clan:cardact', function(e){ if((e.detail||{}).act==='map') setView('map'); });
   $('report').addEventListener('click', function(e){
     var t=e.target.closest&&e.target.closest('[data-rsel]'); if(!t) return;
     e.preventDefault(); VIEW.origin=t; select(t.getAttribute('data-rsel'), false);

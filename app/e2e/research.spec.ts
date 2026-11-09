@@ -71,7 +71,7 @@ test('the report reads as the mock, the map widens the inspector beside it, a fi
   await app.locator('#mapview [data-map="sum:0"]').click()
   const sel = app.locator('#insp-sel')
   await expect(sel.locator('.crumbs [data-crumb]')).toHaveCount(1)
-  await sel.locator('[data-sel]').first().click()
+  await sel.locator('[data-sel],[data-clf-go]').first().click()
   await expect(sel.locator('.crumbs [data-crumb]')).toHaveCount(2)
   await sel.locator('[data-sel-back]').click()
   await expect(sel.locator('.crumbs [data-crumb]')).toHaveCount(1)
