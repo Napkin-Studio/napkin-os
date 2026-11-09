@@ -301,8 +301,15 @@ def compose(doc, clan, handler, caps, part=None):
         summary = [{"text": f"Only {brand}'s roster row is pinned so far; nothing has been researched yet.",
                     "cites": [f["id"] for f in roster] or [pins[0]["id"]]}]
     open_ct = [c for c in sel.get("contested") or [] if c.get("status") == "open"]
-    headline = written["headline"] or (old["headline"] if part and not want_head else None) or {
-        "text": f"{brand}{' in ' + market_list(markets) if markets else ''}: what the research found"
+    # No headline written: the run's strongest finding is the headline (its own words), and only
+    # when there is none a plain line, which never names the place twice ("X in Ireland in Ireland").
+    place = market_list(markets) if markets else ""
+    if place and place.lower() in brand.lower():
+        place = ""
+    lead = next((fi for l in LENSES for fi in by_lens[l]["findings"]), None)
+    headline = written["headline"] or (old["headline"] if part and not want_head else None) or (
+        {"text": lead["statement"], "cites": fcites(lead)} if lead and lead.get("statement") else None) or {
+        "text": f"{brand}{' in ' + place if place else ''}: what the research found"
                 + (", with values still contested" if open_ct else "") + ".",
         "cites": [findings[0]["id"]] if findings else [pins[0]["id"]]}
 
