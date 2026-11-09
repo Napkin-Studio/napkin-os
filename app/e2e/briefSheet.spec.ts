@@ -29,7 +29,10 @@ async function openBrief(page: Page) {
   await page.reload()
   await page.getByTestId('work-item').first().click()
   const app = page.frameLocator('iframe').first()
-  await expect(app.locator('#fields .row')).toHaveCount(21, { timeout: 30_000 })
+  // 21 parts. The meta row's Version cell (the mock's fourth meta cell) is a row on the
+  // grid too, but it is read-only and no part: count the rows that carry a part.
+  await expect(app.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
+  await expect(app.locator('#fields .row.meta-version')).toHaveCount(1)
   return app
 }
 
@@ -73,7 +76,7 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   // The shell reopens on the tool's page; the brief is opened again from its list.
   await page.getByTestId('work-item').first().click()
   const again = page.frameLocator('iframe').first()
-  await expect(again.locator('#fields .row')).toHaveCount(21, { timeout: 30_000 })
+  await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
   const b2 = again.locator('#fields .row[data-clan-part="budget_and_scope"]')
   await expect(b2).toHaveAttribute('data-w', '12')
   await expect(b2).toHaveClass(/\bconf\b/)
