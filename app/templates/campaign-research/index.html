@@ -552,6 +552,10 @@ body.dragging::after{content:"Drop it here to add it";position:fixed;inset:10px;
 .rs-now > .agent-figure{width:56px;height:75px}
 .rs-now .say{max-width:none}
 .rs-lensrow{display:flex;flex-wrap:wrap;gap:2px 4px;align-items:flex-end;max-width:380px}
+/* The researchers' row and their words wrap onto two lines when the column is
+   narrow (the Decisions drawer open), never squeezing the words to one per line. */
+.rs-now:has(> .rs-lensrow){display:flex;flex-wrap:wrap;align-items:center}
+.rs-now > .rs-lensrow + div{flex:1 1 260px;min-width:0}
 .rs-lensrow .nm{display:flex;flex-direction:column;align-items:center;gap:2px}
 .rs-lensrow .agent-figure{width:40px;height:53px}
 .rs-lensrow small{font-size:12px;color:var(--ink2);font-weight:500}
@@ -1399,10 +1403,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
         if(!inSel && !resolved) b.push({k:'Open contest', html:esc(p)+' — opened by '+esc(d.id||d.action)+', not resolved'});
       });
     });
-    Object.keys(fnds()).forEach(function(id){ if(fnds()[id].status==='proposed') b.push({k:'Unverified finding', html:'<a href="#finding-'+esc(id)+'">'+esc(id)+'</a> — '+esc(fnds()[id].statement)}); });
+    Object.keys(fnds()).forEach(function(id){ if(fnds()[id].status==='proposed') b.push({k:'Unverified finding', html:'<a href="#finding-'+esc(id)+'">'+esc(fnds()[id].statement||'A finding')+'</a> — nobody has checked it yet'}); });
     FIELDS.forEach(function(f){
       var env=c[f.k]; if(!isObj(env)) return;
-      rejectedCited(env).forEach(function(id){ b.push({k:'Flagged field', html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> cites finding '+esc(id)+', '+outWhy(id)+' — revise it'}); });
+      rejectedCited(env).forEach(function(id){ b.push({k:'Flagged field', html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> cites a finding ('+esc(clipT(String((fnds()[id]||{}).statement||'one no longer in the document'),80))+'), '+outWhy(id)+' — revise it'}); });
       verdictState('campaign.'+f.k).unanswered.forEach(function(v){ b.push({k:'Bad verdict', html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> — “'+esc(v.rationale||'')+'” ('+esc(human(v.actor||v.agent))+'), unanswered'}); });
     });
     ['created','research','brief'].forEach(function(g){ missingFor(g).forEach(function(f){ b.push({k:'Missing · '+g, html:'<a href="#field-'+f.k+'">'+esc(f.label)+'</a> is not filled'}); }); });
@@ -2180,7 +2184,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   // ── LOCK (Contract 3 §11): lists blockers; final step is W5-Z1.
   function doLock(){
     var b=blockers(), F=fnds(), st=stalePins();
-    var h='<h2 id="dlg-title">Lock and accept</h2><div class="addr">'+esc(docId())+'</div>';
+    var h='<h2 id="dlg-title">Lock and accept</h2><div class="addr">'+esc(researchTitle()||'This research')+'</div>';
     if(b.length){
       h+='<p style="margin:0">'+b.length+' item'+(b.length===1?'':'s')+' must be resolved first. Locking is file-wide: a locked campaign is brief-ready.</p><ul class="blockers">'+b.map(function(x){ return '<li><span class="k">'+esc(x.k)+'</span><span>'+x.html+'</span></li>'; }).join('')+'</ul>';
     } else {
@@ -3796,7 +3800,15 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     el.innerHTML='<div class="crumbs" aria-label="Trail">'+(t.length>1?'<button type="button" class="back" data-sel-back>← Back</button>':'<button type="button" class="back" data-sel-close>Close</button>')
       +t.map(function(c, i){ return (i?'<span aria-hidden="true">›</span>':'')+'<button type="button" data-crumb="'+i+'"'+(i===t.length-1?' aria-current="true"':'')+' title="'+esc(c.label)+'">'+esc(c.label)+'</button>'; }).join('')+'</div>'
       +selBody(VIEW.sel);
-    var cd=$('insp-card'); if(cd&&window.ClanFields&&ClanFields.card) ClanFields.card(VIEW.sel, cd);
+    var cd=$('insp-card'); if(cd&&window.ClanFields&&ClanFields.card){
+      // The card arrives after the read: bring the selection into view once it
+      // has its height, so it never opens below the inspector's fold.
+      var want=VIEW.sel;
+      Promise.resolve(ClanFields.card(VIEW.sel, cd)).then(function(){
+        if(VIEW.sel!==want||VIEW.v==='map'||!el.scrollIntoView) return;
+        el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
+      });
+    }
   }
   function openSheet(on){ var i=$('insp'); if(!i) return; i.classList.toggle('open', on); $('insp-grab').setAttribute('aria-expanded', String(on)); }
 
