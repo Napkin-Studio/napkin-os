@@ -1846,9 +1846,9 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       return '<article class="card gap" id="gap-'+esc(g.id)+'" data-address="'+esc(addr('selection.gaps['+g.id+']'))+'"><div class="fh"><span class="pill warn"><span class="d"></span>'+(notRun(g)?'not looked up':'not found')+'</span>'
         +(g.lens?'<span class="pill">'+esc((LENS[g.lens]||{}).l||g.lens)+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')
         +'<span class="sp" style="flex:1"></span><span class="path">'+esc(g.key)+'</span></div>'
-        +'<div class="searched">'+esc(g.searched)+'</div>'
+        +'<div class="searched">'+esc(gapWords(g.searched))+'</div>'
         +'<dl class="kv" style="margin-top:8px"><dt>Tried</dt><dd>'+arr(g.sources_tried).map(function(s){ return '<span class="pill">'+esc(s)+'</span>'; }).join(' ')+'</dd>'
-        +(g.note?'<dt>Note</dt><dd>'+esc(g.note)+'</dd>':'')+'</dl></article>';
+        +(g.note?'<dt>Note</dt><dd>'+esc(gapWords(g.note))+'</dd>':'')+'</dl></article>';
     }).join('')+'</div></div>';
 
     // exclusions
@@ -3344,6 +3344,20 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return '<p class="rp-fp s-'+esc(st)+'" data-anchor="'+esc(id)+'"><button type="button" class="rp-fs" data-rsel="'+esc(id)+'" title="'+esc('Worked out by '+(given('synthesis')||'the crew')+' from '+arr(f.cites).length+' pin'+(arr(f.cites).length===1?'':'s'))+'">'+esc(f.statement)+'</button> '
       +'<span class="tag">Finding '+esc(fno(id))+' · '+esc(tag)+'</span>'+(to?' <button type="button" class="rp-f" data-rsel="'+esc(to)+'">Replaced by F'+esc(fno(to))+'</button>':'')+'</p>';
   }
+  // A gap as a person reads it: no entity ids ("category/alcohol.cider" is
+  // cider, "brand/bulmers" Bulmers), no measure keys ("codes.x_key_visual" is
+  // key visual), and the layers' bookkeeping said plainly.
+  function entityWords(e){ var m=/^([a-z]+)\/(.+)$/.exec(String(e||'')); if(!m) return String(e||'');
+    var last=m[2].split('.').pop().replace(/[-_]/g,' '); return m[1]==='category'?last:last.replace(/\b[a-z]/g,function(c){ return c.toUpperCase(); }); }
+  function gapWords(s){
+    return String(s||'')
+      .replace(/^not on the measure list: kept here for a planner \(these layers take no proposals\)\.\s*/,'Found, but not one of the measures the research keeps, so it is left here for a planner. ')
+      .replace(/The fact: ([a-z]+(?:\.[a-z0-9_]+)+) for ([a-z]+\/[a-z0-9.\-]+) = /,function(_,k){ return 'What was found ('+k.split('.').slice(1).join(' ').replace(/^x_/,'').replace(/_/g,' ')+'): '; })
+      .replace(/^x (?=[a-z])/,'')
+      .replace(/(^|[\s(])([a-z]+\/[a-z0-9.\-]+)(?=[\s,.;:)]|$)/g,function(_,b,e){ return b+entityWords(e); })
+      .replace(/\byoy\b/g,'year on year').replace(/:\s*zero zero\b/,' (Zero Zero)')
+      .replace(/^[a-z]/,function(c){ return c.toUpperCase(); });
+  }
   function keyWords(k){ var s=String(k||''), m=/^([^:]+):(.+?)(@.+)?$/.exec(s); return m?m[2].replace(/[._]/g,' ')+' · '+m[1].split('/').pop()+(m[3]?' '+m[3].slice(1):''):s; }
   function rpContestLine(cid){
     var c=contestById(cid);
@@ -3355,7 +3369,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function rpGapNote(gid){
     var g=gapById(gid);
     if(!g) return '<div class="rp-gap"><span class="gap-k">Gap</span><span>'+esc(gid)+' · not in selection</span></div>';
-    return '<div class="rp-gap" id="rgap-'+esc(slug(g.id))+'"><span class="gap-k">Gap</span><span>'+esc(g.searched)+(g.note?' <span class="muted">'+esc(g.note)+'</span>':'')+'</span></div>';
+    return '<div class="rp-gap" id="rgap-'+esc(slug(g.id))+'"><span class="gap-k">Gap</span><span>'+esc(gapWords(g.searched))+(g.note?' <span class="muted">'+esc(gapWords(g.note))+'</span>':'')+'</span></div>';
   }
   function rpPins(ids){
     return '<p class="rp-pins">'+arr(ids).map(function(id){ var p=pins()[id];
@@ -3481,8 +3495,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return '<section class="rp-sec" id="rp-gaps">'+rpHead(n, 'Not found / not researched', 'Gaps')+'<div class="rp-gaps">'+gaps.map(function(g){
       var nr=notRun(g);
       return '<div class="rp-gp" id="gapr-'+esc(slug(g.id))+'"><i class="sq '+(nr?'none':'empty')+'" aria-hidden="true"></i><div><div class="rp-gp-k"><b>'+(nr?'Not looked up':'Not found')+'</b>'
-        +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div>'+esc(g.searched)
-        +'<div class="rp-gp-d">'+(arr(g.sources_tried).length?'Sources tried: '+esc(arr(g.sources_tried).join(', '))+'<br>':'')+(g.note?esc(g.note):'')+'</div></div>'
+        +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div>'+esc(gapWords(g.searched))
+        +'<div class="rp-gp-d">'+(arr(g.sources_tried).length?'Sources tried: '+esc(arr(g.sources_tried).join(', '))+'<br>':'')+(g.note?esc(gapWords(g.note)):'')+'</div></div>'
         +'<button type="button" class="linkbtn no-print" data-act="gap-ask" data-gap="'+esc(g.id)+'" title="Put this in Ask the research; nothing runs until you press Ask">Research this</button></div>';
     }).join('')+'</div></section>';
   }
