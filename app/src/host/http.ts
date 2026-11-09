@@ -271,7 +271,7 @@ export const httpHost: Host = {
     if (!doc) return null
     params.delete('open')
     const query = params.toString()
-    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''))
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash)
     return doc
   },
 

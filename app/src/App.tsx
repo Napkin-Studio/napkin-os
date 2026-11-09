@@ -24,7 +24,7 @@ import { signOut } from './shell/signOut'
 import { applyAgency, markOf } from './shell/agency/palette'
 import DeskDecisions from './shell/decisions/DeskDecisions'
 import { useRoute } from './shell/useRoute'
-import { type Route } from './shell/route'
+import { formatRoute, type Route } from './shell/route'
 import AppHost from './shell/AppHost'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
@@ -57,8 +57,21 @@ function resetTheme() {
 /** The history entry an open document stands on, so Back leaves it and lands where it was opened. */
 const DOC_ENTRY = { napkinDoc: true }
 const isDocEntry = () => (window.history.state as { napkinDoc?: boolean } | null)?.napkinDoc === true
+/**
+ * The URL of an open studio document: `?open=<path>` (what Share's Copy link
+ * gives, read back by host/http.ts takeLaunchFile), so a reload reopens it, and
+ * the hash of its own client and tool, so the URL says where it belongs after
+ * a spin-off. A document on the device has no such link.
+ */
+function docUrl(path: string | null, hash: string | null): string {
+  const params = new URLSearchParams(window.location.search)
+  if (path) params.set('open', path)
+  else params.delete('open')
+  const q = params.toString()
+  return window.location.pathname + (q ? `?${q}` : '') + (hash ?? window.location.hash)
+}
 /** The document's entry becomes the page it leaves to: no stale entry left to Back into. */
-const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(null, '', window.location.href) }
+const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(null, '', docUrl(null, null)) }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
@@ -166,7 +179,11 @@ export default function App() {
     setScreen('app')
     // The browser's Back leaves the document for where it was opened from: the
     // document takes one history entry of its own (once, however many it opens).
-    if (!isDocEntry()) window.history.pushState(DOC_ENTRY, '', window.location.href)
+    const route = routeOfDocument(open.manifest)
+    const url = hasServer && !source && !open.is_template && !onDevice()
+      ? docUrl(open.path, route ? formatRoute(route) : null) : window.location.href
+    if (!isDocEntry()) window.history.pushState(DOC_ENTRY, '', url)
+    else window.history.replaceState(DOC_ENTRY, '', url)
   }, [])
 
   // A .clan from this device — dropped, chosen, handed over by the OS, or an
