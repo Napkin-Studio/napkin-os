@@ -1,4 +1,4 @@
-// The final screenshot matrix of the landing, on the real shell and the real server:
+// The final screenshot matrix of the desk, on the real shell and the real server:
 // every screen at 1440 and 390 wide, in light and dark, with WebGL on (SwiftShader,
 // so it runs with no GPU) and the flat fallback. It writes nothing unless a folder is
 // given, and it asserts only that each screen shows up, so it stays a cheap smoke.
@@ -28,7 +28,8 @@ async function open(browser: Browser, size: { width: number; height: number }, t
   await ctx.addInitScript(([t, f]) => {
     try {
       localStorage.setItem('napkin.theme', t as string)
-      if (f) localStorage.setItem('napkin.circles.flat', '1')
+      // 3D is the person's choice (Flat circles off); the flat fallback is the mock's colour discs.
+      localStorage.setItem('napkin.circles.flat', f ? '1' : '0')
     } catch { /* not kept */ }
   }, [theme, flat])
   const page = await ctx.newPage()
@@ -68,8 +69,8 @@ for (const size of SIZES) {
       await work(page, api, BRIEF, 'Launch brief', ids[1])
       await work(page, api, DECK, 'Board deck', ids[2], { run: { state: 'failed' } })
       await work(page, api, BRIEF, 'Review brief', ids[3], CONTEST)
-      await snap(page, `01-landing-running-needs-you-${tag}`, '#agency', 'agency-circle')
-      await snap(page, `02-clients-${tag}`, '#clients', 'client-circle')
+      await snap(page, `01-desk-running-needs-you-${tag}`, '#agency', 'client-circle')
+      await snap(page, `02-desk-clients-${tag}`, '#clients', 'client-circle')
       await snap(page, `03-client-tools-${tag}`, `#client-${ids[0]}`, 'tool-brief')
       await snap(page, `04-tool-page-${tag}`, `#tool-${ids[0]}-brief`, 'tool-page')
       await ctx.close()
@@ -77,8 +78,8 @@ for (const size of SIZES) {
 
     test(`screens empty, ${tag}`, async ({ browser }) => {
       const { ctx, page } = await open(browser, size, theme)
-      await snap(page, `05-empty-landing-${tag}`, '#agency', 'agency-circle')
-      await snap(page, `06-empty-clients-${tag}`, '#clients', 'empty')
+      await snap(page, `05-empty-desk-${tag}`, '#agency', 'desk')
+      await snap(page, `06-empty-desk-clients-${tag}`, '#clients', 'add-client')
       await ctx.close()
     })
 
@@ -99,7 +100,7 @@ for (const size of SIZES) {
       const { api, ids } = await seedClients(page, 4)
       await work(page, api, BRIEF, 'Spring brief', ids[0], CONTEST)
       await work(page, api, DECK, 'Pitch deck', ids[1], { run: { state: 'building', stage: 'Layout' } })
-      await snap(page, `09-flat-landing-${tag}`, '#agency', 'agency-circle')
+      await snap(page, `09-flat-desk-${tag}`, '#agency', 'client-circle')
       await snap(page, `10-flat-clients-${tag}`, '#clients', 'client-circle')
       await snap(page, `11-flat-client-tools-${tag}`, `#client-${ids[0]}`, 'tool-brief')
       await expect(page.locator('html')).not.toHaveAttribute('data-orbs', 'gl')

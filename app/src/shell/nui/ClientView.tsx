@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKey } from 'react'
 import type { ClientRecord, LibraryItem } from '../../host'
-import { needsYou } from '../landing/model'
+import { activityOfItem, needsYou, strongest } from '../landing/model'
 import { toolById, toolOfApp, type Tool } from '../landing/tools'
 import { isTyping } from '../landing/keys'
 import { BRAND_APP } from '../landing/BrandClanCard'
@@ -176,7 +176,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
               <section key={g.tool} className={`cp-sec cp-group k-${g.icon}`} data-testid={`group-${g.tool}`} aria-label={`${g.label} for ${name}`}>
                 <div className="cp-hrow">
                   <h2 className="cp-h">
-                    <button type="button" className="cp-tool" data-testid={`tool-${g.tool}`} ref={el => { heads.current[gi] = el }}
+                    <button type="button" className="cp-tool" data-testid={`tool-${g.tool}`} data-activity={strongest(g.docs.map(activityOfItem))} ref={el => { heads.current[gi] = el }}
                       tabIndex={gi === Math.min(at, groups.length - 1) ? 0 : -1} aria-keyshortcuts={String(g.n + 1)} aria-label={toolSaid(g)}
                       aria-disabled={on ? undefined : true} onFocus={() => setAt(gi)} onKeyDown={e => onHeadKey(e, gi)}
                       onClick={() => { if (on) onOpenTool(t); else onSoon(t) }}>

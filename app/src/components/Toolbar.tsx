@@ -277,6 +277,7 @@ export default function Toolbar({
           className="name-pill pill-accent"
           id="header-name-pill"
           title="Your account and studio"
+          aria-label={`${agency}, Napkin Studio: your account and studio`}
           aria-haspopup="menu"
           aria-expanded={pop.open?.key === 'account'}
           data-testid="agency-pill"

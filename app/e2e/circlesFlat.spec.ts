@@ -19,23 +19,27 @@ test('without WebGL every screen is the flat circle and nothing waits', async ({
   await seedClients(page, 3)
   await page.reload()
 
-  await expect(page.getByTestId('landing')).toBeVisible()
+  await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-orbs', 'flat')
   await expect(page.locator('html')).toHaveAttribute('data-orbs-gl', '0')
   await expect(page.locator('html')).toHaveAttribute('data-orbs-why', /no WebGL/)
   await expect(page.locator('[data-orb="on"]')).toHaveCount(0)
-  await expect(page.getByTestId('agency-circle').locator('svg.lc-cir')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Flat circles' })).toBeHidden() // nothing to switch
-  await shot(page, 'p4-12-no-webgl-landing')
+  await expect(page.getByTestId('client-circle').first().locator('.cl-disc > b')).toBeVisible() // the flat colour disc
+  expect(await page.locator('canvas').count()).toBe(0)
+  // nothing to switch: the account menu has no Flat circles
+  await page.getByTestId('agency-pill').click()
+  await expect(page.getByTestId('account-menu')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Flat circles' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await shot(page, 'p4-12-no-webgl-desk')
 
-  await page.getByTestId('agency-circle').click()
-  await expect(page).toHaveURL(/#clients$/, { timeout: 150 })
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
-  await shot(page, 'p4-13-no-webgl-clients')
-  await page.getByRole('button', { name: /^Client A,/ }).click()
-  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
+  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await expect(page.getByTestId('dial')).toBeVisible({ timeout: 150 }) // no gate when flat
+  await shot(page, 'p4-13-no-webgl-dial')
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(/#client-/, { timeout: 150 })
-  await expect(page.getByTestId('tool-deck')).toBeVisible()
+  await expect(page.getByTestId('tool-research')).toBeVisible()
   await shot(page, 'p4-14-no-webgl-client')
   await page.getByTestId('tool-brief').click()
   await expect(page).toHaveURL(/#tool-.*-brief$/, { timeout: 150 })

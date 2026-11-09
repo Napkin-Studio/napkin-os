@@ -1,8 +1,10 @@
 // The 3D circles, end to end, in the real shell with WebGL on (SwiftShader, so it
-// runs on a machine with no GPU): one context, a canvas per circle, the pointer
-// followed across the window, a press seen before the page moves on, the keyboard
-// never held up, "Flat circles", dark, a lost context, reduced motion, and the
-// frame budget at 390 px with 6 and 20 clients. Clients are placeholders.
+// runs on a machine with no GPU). The desk draws the approved mock's flat colour
+// discs by default; 3D is the person's choice (account menu, Flat circles off),
+// and every test here starts with it chosen: one context, a canvas per circle,
+// the pointer followed across the window, a press seen before the dial opens, the
+// keyboard never held up, "Flat circles", dark, a lost context, reduced motion,
+// and the frame budget at 390 px with 6 and 20 clients. Clients are placeholders.
 //
 //   npm run e2e -- circles
 //   NAPKIN_E2E_SHOTS=<dir> npm run e2e -- circles     (also writes screenshots)
@@ -16,6 +18,9 @@ const ON = '[data-orb-host][data-orb="on"]'
 const SOFT_GL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
 
 test.use({ launchOptions: { args: SOFT_GL } })
+// 3D chosen (Flat circles off), as a person does from the account menu.
+test.beforeEach(async ({ page }) => { await page.addInitScript(() => { try { localStorage.setItem('napkin.circles.flat', '0') } catch { /* not kept */ } }) })
+const CIRCLE = '[data-testid="client-circle"]'
 
 /** The page's WebGL context, kept so a test can lose and restore it. */
 const keepGL = (page: Page) => page.addInitScript(() => {
@@ -39,27 +44,19 @@ test('every screen draws its circles in 3D through one context', async ({ page }
   const html = page.locator('html')
   await expect(html).toHaveAttribute('data-orbs', 'gl')
   await expect(html).toHaveAttribute('data-orbs-gl', '1')
-  await expect(page.locator(ON)).toHaveCount(1) // the agency circle
-  expect(await ink(page, '[data-testid="agency-circle"]')).toBeGreaterThan(2000)
-  // the flat circle is still the accessible mark: the button names it, the initials stay as text
-  await expect(page.getByTestId('agency-circle').locator('.lc-ini')).toBeVisible()
-  await shot(page, 'p4-01-landing-3d')
-
-  await page.getByTestId('agency-circle').click()
-  await expect(page).toHaveURL(/#clients$/)
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
-  await expect(page.locator(ON)).toHaveCount(4) // three clients and the hub
-  for (let i = 0; i < 3; i++) expect(await ink(page, `[data-testid="client-circle"]:nth-child(${i + 2})`)).toBeGreaterThan(500)
-  await shot(page, 'p4-02-clients-3d')
+  await expect(page.locator(ON)).toHaveCount(3) // one per client on the desk
+  for (let i = 0; i < 3; i++) expect(await ink(page, `${CIRCLE}:nth-child(${i + 1})`)).toBeGreaterThan(500)
+  // the flat circle is still the accessible mark: the button names it, the initials stay as text
+  await expect(page.getByTestId('client-circle').first().locator('.lc-ini')).toBeVisible()
+  await shot(page, 'p4-01-desk-3d')
 
-  await page.getByRole('button', { name: /^Client A,/ }).click()
-  await page.getByTestId('dial-open-client').click() // the dial's hub: the client's page
+  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(/#client-/)
   await expect(page.getByTestId('tool-brief')).toBeVisible()
-  await expect(page.locator(ON)).toHaveCount(7) // the client and six tools
-  await expect(page.locator('.lc-dim[data-orb-host]')).toHaveCount(3) // Idea and Prod are "Soon"; so is Ads, which the seed does not install
-  await expect(page.getByTestId('tool-idea')).toHaveAttribute('aria-disabled', 'true')
-  await shot(page, 'p4-03-client-tools-3d')
+  await expect(page.locator(ON)).toHaveCount(1) // the client's own sphere at the head of its page
+  await shot(page, 'p4-03-client-3d')
 
   // one WebGL context for all of them: the page's one drawing canvas is not in the document
   expect(await page.evaluate(() => [...document.querySelectorAll('canvas')].filter(c => !c.closest('[data-orb-host]')).length)).toBe(0)
@@ -70,9 +67,8 @@ test('every 3D circle leans toward the pointer anywhere in the window, no click 
   await page.goto('/')
   await seedClients(page, 3)
   await page.reload()
-  await page.getByTestId('agency-circle').click()
-  await expect(page.locator(ON)).toHaveCount(4)
-  const sel = '[data-testid="client-circle"]:nth-child(2)'
+  await expect(page.locator(ON)).toHaveCount(3)
+  const sel = `${CIRCLE}:nth-child(2)`
   const rest = []
   for (const [x, y] of [[8, 8], [1270, 700], [640, 780], [8, 700]]) {
     await page.mouse.move(x, y, { steps: 4 })
@@ -87,59 +83,57 @@ test('every 3D circle leans toward the pointer anywhere in the window, no click 
   expect(await ink(page, sel)).toBeGreaterThan(500)
 })
 
-test('a press is seen before the page moves on; a drag to play still goes on at the release', async ({ page }) => {
+test('a press is seen before the dial opens; a drag to play still goes on at the release', async ({ page }) => {
   await page.goto('/')
   await seedClients(page, 2)
   await page.reload()
-  await expect(page.locator(ON)).toHaveCount(1)
-  const door = page.getByTestId('agency-circle')
+  await expect(page.locator(ON)).toHaveCount(2)
+  const first = `${CIRCLE}:nth-child(1)`
 
-  // a tap: the squish and ripple start, and the next screen follows
-  const box = (await door.boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + 100)
-  const before = await picture(page, '[data-testid="agency-circle"]')
+  // a tap: the squish and ripple start, and the dial follows
+  const box = (await page.locator(first).locator('.cl-disc').boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  const before = await picture(page, first)
   await page.mouse.down(); await page.mouse.up()
   await page.waitForTimeout(60)
-  await expect(page).toHaveURL(/#agency$/) // not yet
-  expect(await picture(page, '[data-testid="agency-circle"]')).not.toBe(before) // the ripple has started
-  await expect(page).toHaveURL(/#clients$/, { timeout: 1500 })
+  await expect(page.getByTestId('dial')).toHaveCount(0) // not yet
+  expect(await picture(page, first)).not.toBe(before) // the ripple has started
+  await expect(page.getByTestId('dial')).toBeVisible({ timeout: 1500 })
+  await page.keyboard.press('Escape')
 
   // press, drag away, play, release anywhere: goes on at the release, not before
-  await page.goto('/#clients')
-  await expect(page.locator(ON)).toHaveCount(3)
-  const c = (await page.getByTestId('client-circle').first().boundingBox())!
-  await page.mouse.move(c.x + c.width / 2, c.y + 40)
+  const c = (await page.locator(`${CIRCLE}:nth-child(2)`).locator('.cl-disc').boundingBox())!
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2)
   await page.mouse.down()
   await page.mouse.move(c.x + c.width + 160, c.y + 200, { steps: 8 })
   await page.waitForTimeout(700)
-  await expect(page).toHaveURL(/#clients$/)
+  await expect(page.getByTestId('dial')).toHaveCount(0)
   await page.mouse.up()
   // the press goes on at the release: the circle's dial opens in place
-  await expect(page.getByTestId('dial-open-client')).toBeVisible({ timeout: 1500 })
-  await expect(page).toHaveURL(/#clients$/)
+  await expect(page.getByTestId('dial-hub')).toBeVisible({ timeout: 1500 })
+  await expect(page).toHaveURL(/#agency$/)
 })
 
-test('the keyboard is never held up: Enter goes straight on', async ({ page }) => {
+test('the keyboard is never held up: Enter and Space go straight on', async ({ page }) => {
   await page.goto('/')
   await seedClients(page, 2)
   await page.reload()
-  await expect(page.locator(ON)).toHaveCount(1)
-  await page.getByTestId('agency-circle').focus()
-  await page.keyboard.press('Enter')
-  await expect(page).toHaveURL(/#clients$/, { timeout: 120 })
+  await expect(page.locator(ON)).toHaveCount(2)
   await page.getByTestId('client-circle').first().focus()
   await page.keyboard.press('Space')
-  await expect(page.getByTestId('dial-brief')).toBeFocused({ timeout: 120 })
-  await page.keyboard.press('Shift+Tab') // from the first petal back to the hub
+  await expect(page.getByTestId('quadrant-brief')).toBeFocused({ timeout: 120 })
+  await page.keyboard.press('Shift+Tab') // from the first quadrant back to the hub
+  await expect(page.getByTestId('dial-hub')).toBeFocused({ timeout: 120 })
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/#client-/, { timeout: 120 })
 })
 
-test('Flat circles: the flat SVG, plain clicks, and it is remembered', async ({ page }) => {
+test('Flat circles: the flat discs, plain clicks, and it is remembered', async ({ page }) => {
   await page.goto('/')
   await seedClients(page, 2)
   await page.reload()
-  await expect(page.locator(ON)).toHaveCount(1)
+  await expect(page.locator(ON)).toHaveCount(2)
+  await page.getByTestId('agency-pill').click()
   const toggle = page.getByRole('button', { name: 'Flat circles' })
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await toggle.click()
@@ -147,14 +141,17 @@ test('Flat circles: the flat SVG, plain clicks, and it is remembered', async ({ 
   await expect(page.locator('html')).toHaveAttribute('data-orbs', 'flat')
   await expect(page.locator('html')).toHaveAttribute('data-orbs-why', 'forced flat')
   await expect(page.locator(ON)).toHaveCount(0)
-  await expect(page.getByTestId('agency-circle').locator('svg.lc-cir circle').first()).toBeVisible()
-  await shot(page, 'p4-04-landing-forced-flat')
-  await page.getByTestId('agency-circle').click()
-  await expect(page).toHaveURL(/#clients$/, { timeout: 150 }) // no gate when flat
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('client-circle').first().locator('.cl-disc > b')).toBeVisible() // the mock's colour disc
+  await shot(page, 'p4-04-desk-forced-flat')
+  await page.getByTestId('client-circle').first().click()
+  await expect(page.getByTestId('dial')).toBeVisible({ timeout: 150 }) // no gate when flat
+  await page.keyboard.press('Escape')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-orbs', 'flat')
+  await page.getByTestId('agency-pill').click()
   await page.getByRole('button', { name: 'Flat circles' }).click()
-  await expect(page.locator(ON)).toHaveCount(3)
+  await expect(page.locator(ON)).toHaveCount(2)
 })
 
 test('dark and light read the page tokens', async ({ page }) => {
@@ -162,19 +159,15 @@ test('dark and light read the page tokens', async ({ page }) => {
   await seedClients(page, 2)
   await page.reload()
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
-  await page.getByTestId('agency-circle').focus()
-  await expect(page.locator(ON)).toHaveCount(1)
+  await page.getByTestId('client-circle').first().focus()
+  await expect(page.locator(ON)).toHaveCount(2)
   await page.waitForTimeout(400)
-  const light = await picture(page, '[data-testid="agency-circle"]')
+  const light = await picture(page, `${CIRCLE}:nth-child(1)`)
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
   await page.waitForTimeout(800)
-  const dark = await picture(page, '[data-testid="agency-circle"]')
+  const dark = await picture(page, `${CIRCLE}:nth-child(1)`)
   expect(dark).not.toBe(light)
-  await shot(page, 'p4-05-landing-dark-3d')
-  await page.getByTestId('agency-circle').click()
-  await expect(page).toHaveURL(/#clients$/)
-  await page.waitForTimeout(500)
-  await shot(page, 'p4-06-clients-dark-3d')
+  await shot(page, 'p4-05-desk-dark-3d')
 })
 
 test('a lost context shows the flat circles; a restored one brings the 3D back', async ({ page }) => {
@@ -182,7 +175,7 @@ test('a lost context shows the flat circles; a restored one brings the 3D back',
   await page.goto('/')
   await seedClients(page, 2)
   await page.reload()
-  await expect(page.locator(ON)).toHaveCount(1)
+  await expect(page.locator(ON)).toHaveCount(2)
   await page.evaluate(() => {
     const w = window as unknown as { __gl: WebGLRenderingContext; __lose: WEBGL_lose_context }
     w.__lose = w.__gl.getExtension('WEBGL_lose_context')!
@@ -191,8 +184,9 @@ test('a lost context shows the flat circles; a restored one brings the 3D back',
   await expect(page.locator('html')).toHaveAttribute('data-orbs', 'flat')
   await expect(page.locator(ON)).toHaveCount(0)
   await shot(page, 'p4-07-context-lost-flat')
-  await page.getByTestId('agency-circle').click() // still works, flat, no gate
-  await expect(page).toHaveURL(/#clients$/, { timeout: 150 })
+  await page.getByTestId('client-circle').first().click() // still works, flat, no gate
+  await expect(page.getByTestId('dial')).toBeVisible({ timeout: 150 })
+  await page.keyboard.press('Escape')
   await page.evaluate(() => (window as unknown as { __lose: WEBGL_lose_context }).__lose.restoreContext())
   await expect(page.locator('html')).toHaveAttribute('data-orbs', 'gl')
   await expect(page.locator(ON)).not.toHaveCount(0)
@@ -237,16 +231,15 @@ test.describe('reduced motion', () => {
     await page.goto('/')
     await seedClients(page, 2)
     await page.reload()
-    await expect(page.locator(ON)).toHaveCount(1)
+    await expect(page.locator(ON)).toHaveCount(2)
     await page.mouse.move(5, 5)
     await page.waitForTimeout(700)
-    const a = await picture(page, '[data-testid="agency-circle"]')
+    const a = await picture(page, `${CIRCLE}:nth-child(1)`)
     await page.waitForTimeout(1200)
-    expect(await picture(page, '[data-testid="agency-circle"]'), 'nothing moves on its own').toBe(a)
-    await shot(page, 'p4-10-landing-reduced-motion')
-    await page.getByTestId('agency-circle').click()
-    await expect(page).toHaveURL(/#clients$/, { timeout: 150 })
-    await expect(page.locator(ON)).toHaveCount(3)
-    await shot(page, 'p4-11-clients-reduced-motion')
+    expect(await picture(page, `${CIRCLE}:nth-child(1)`), 'nothing moves on its own').toBe(a)
+    await shot(page, 'p4-10-desk-reduced-motion')
+    await page.getByTestId('client-circle').first().click()
+    await expect(page.getByTestId('dial')).toBeVisible({ timeout: 150 })
+    await shot(page, 'p4-11-dial-reduced-motion')
   })
 })

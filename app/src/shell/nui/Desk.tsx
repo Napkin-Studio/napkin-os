@@ -143,6 +143,8 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
   const onRowKey = (e: React.KeyboardEvent) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return
+    // Only the circles rove here; the dial (inside the row) keeps its own arrows.
+    if (!(e.target as HTMLElement).closest?.('.cl-circle')) return
     const n = page.shown.length
     if (!n) return
     const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as Record<string, number>
