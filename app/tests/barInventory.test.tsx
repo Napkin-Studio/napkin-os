@@ -16,7 +16,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import Toolbar from '../src/components/Toolbar.tsx'
-import { accountItems, continueItems, deskItems, docMenuItems, linksOf, madeFromOf, moreItems, shareItems, startFresh, type DocBar } from '../src/components/barMenus.ts'
+import { accountItems, continueItems, deskItems, docMenuItems, linksOf, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 
@@ -87,9 +87,10 @@ test('a document: its tool icon and name with saved · valid under it, Continue 
   const menu = labels(docMenuItems(doc({ bar: items, onRename: noop }), noop))
   assert.deepEqual(menu, ['Rerun', 'Rename', 'Open…', 'Save as…', 'File details', 'Edit', 'Present offline', 'Export', 'Where it came from'])
   assert.ok(!menu.some(l => l.startsWith('Continue in')), 'Continue in is not in the document menu')
-  assert.deepEqual(labels(startFresh(doc({ onNewForClient: { label: 'New brief for this client', run: noop } }))), ['New brief for this client'])
+  assert.deepEqual(labels(continueItems(doc({ onStartFresh: noop })).fresh), ['New brief for this client'], 'Start fresh, in Continue in')
   const cont = continueItems(doc())
-  assert.deepEqual(labels(cont.spin), ['Continue in Deck Maker'])
+  assert.deepEqual(labels(cont.spin), ['Deck'])
+  assert.match(cont.spin[0].hint ?? '', /A board deck from this/)
   assert.deepEqual(cont.link, [], 'nothing to link: the group says so')
   assert.deepEqual(cont.update, [], 'made from nothing: nothing to update from')
 })
@@ -235,7 +236,7 @@ test('Link to an existing one: each document it could link, then Update and Unli
     onUnlink: id => { ran.push(`unlink:${id}`) },
   }))
   assert.deepEqual(labels(cont.link), ['↔ Irish summer treats', 'Update Oat milk', 'Unlink Oat milk'], 'linked already: not offered again; linked into another: not here')
-  assert.match(cont.link[0].hint ?? '', /Each keeps its own version/)
+  assert.match(cont.link[0].hint ?? '', /^Research · each keeps its own version/)
   assert.match(cont.link[1].hint ?? '', /\(v1\)/)
   assert.ok(cont.link[1].apart, 'what is linked sits apart from what could be')
   cont.link.forEach(i => i.run())

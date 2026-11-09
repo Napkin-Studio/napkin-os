@@ -27,11 +27,13 @@ export type BarItem =
   | { kind: 'chip'; label: string; tone: BarTone; title: string }
   /** The document's state in the app's words, for the slot's pill. At most one. */
   | { kind: 'status'; label: string; tone: BarTone; locked: boolean }
+  /** What Continue in says first, when the document is not ready to go on ("Not brief-ready yet: …"). At most one. */
+  | { kind: 'gate'; label: string; tone: BarTone }
 
 export type BarStatus = Extract<BarItem, { kind: 'status' }>
 
 /** What one bar takes. The rest of an app's list is dropped, in order. */
-export const BAR_LIMITS = { button: 6, chip: 4, status: 1, label: 28, id: 64, title: 140 } as const
+export const BAR_LIMITS = { button: 6, chip: 4, status: 1, gate: 1, label: 28, gateLabel: 200, id: 64, title: 140 } as const
 
 /** The buttons drawn in the bar itself; any more go into More. */
 export const BAR_BUTTONS_SHOWN = 2
@@ -51,13 +53,13 @@ export function barFrom(message: unknown): BarItem[] {
   const m = message as { v?: unknown; items?: unknown } | null
   if (!m || m.v !== 1 || !Array.isArray(m.items)) return []
   const out: BarItem[] = []
-  const count = { button: 0, chip: 0, status: 0 }
+  const count = { button: 0, chip: 0, status: 0, gate: 0 }
   const ids = new Set<string>()
   for (const raw of m.items) {
     const it = (raw ?? {}) as Record<string, unknown>
     const kind = it.kind
-    if (kind !== 'button' && kind !== 'chip' && kind !== 'status') continue // a kind from the future, or a retired tab
-    const label = text(it.label, BAR_LIMITS.label)
+    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate') continue // a kind from the future, or a retired tab
+    const label = text(it.label, kind === 'gate' ? BAR_LIMITS.gateLabel : BAR_LIMITS.label)
     const title = text(it.title, BAR_LIMITS.title)
     const why = !label ? 'has no label' : count[kind] >= BAR_LIMITS[kind] ? `is past the ${BAR_LIMITS[kind]} ${kind}s a bar takes` : ''
     if (why) { console.warn(`app bar: ${kind} ${JSON.stringify(label)} ${why}; left out`); continue }
@@ -65,6 +67,11 @@ export function barFrom(message: unknown): BarItem[] {
     if (kind === 'chip') {
       out.push({ kind, label, tone, title })
       count.chip++
+      continue
+    }
+    if (kind === 'gate') {
+      out.push({ kind, label, tone })
+      count.gate++
       continue
     }
     if (kind === 'status') {
@@ -87,6 +94,11 @@ type Button = Extract<BarItem, { kind: 'button' }>
 /** The app's own word for the document's state, when it sent one. */
 export function statusOf(bar: BarItem[]): BarStatus | null {
   return bar.find((i): i is BarStatus => i.kind === 'status') ?? null
+}
+
+/** The app's gate line for Continue in, when it sent one. */
+export function gateOf(bar: BarItem[]): Extract<BarItem, { kind: 'gate' }> | null {
+  return bar.find((i): i is Extract<BarItem, { kind: 'gate' }> => i.kind === 'gate') ?? null
 }
 
 /** The buttons past the ones the bar has room for: More carries them, a disabled one not at all. */

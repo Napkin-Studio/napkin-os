@@ -52,8 +52,8 @@ interface Props {
   account?: Account
   /** The tool's key, for its icon and face in the bar. */
   toolKey?: string | null
-  /** Continue in ▾ › Start fresh: a new one of this tool for this client. */
-  onNewForClient?: { label: string; run: () => void } | null
+  /** Continue in › Start fresh: a new document of this app for this client. */
+  onStartFresh?: () => void
   /** The document menu's way to its tool's page for its client. */
   onToolPage?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
@@ -77,7 +77,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onNewForClient, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
@@ -360,7 +360,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onLineage: () => { setDrawerView('lineage'); setDecisionsOpen(true) },
           toolKey,
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
-          onNewForClient,
+          onStartFresh,
           onToolPage,
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,

@@ -228,7 +228,7 @@ test('a spin-off of a client’s document stays that client’s and the bar foll
 
   // Continue in ▾ is in the app slot.
   await page.getByRole('button', { name: /^Continue in/ }).click()
-  await page.getByRole('menuitem', { name: /^Continue in Deck Maker/ }).click()
+  await page.getByRole('menuitem', { name: /^Deck/ }).click()
   await expect(page.locator('.tba-name.tba-deck')).toBeVisible({ timeout: 30_000 })
   await expect(trail(page).getByRole('button', { name: 'Client A' })).toBeVisible()
   await expect((await docMenu(page)).getByRole('menuitem', { name: /^Deck Maker for Client A/ })).toBeVisible()

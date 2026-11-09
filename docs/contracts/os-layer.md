@@ -1125,8 +1125,8 @@ nothing else:
    sends backrefs as any `/approve` does (§7.4). The newest unsuperseded
    `approve` is the lock; the older one is not rewritten. The new `approve`
    closes every reopened part, edited or not.
-4. **Nothing else changes.** §7.1 is unchanged; there is no whole-document
-   unlock (what unsealing means stays W5-Z1's).
+4. **Nothing else changes.** §7.1 is unchanged. The whole-document unlock is
+   §7.6, a separate route.
 
 Why this, and not an `/edit` permitted on a locked document for a part with
 an open request:
@@ -1144,8 +1144,9 @@ an open request:
   the next lock (item 6a) until it is edited; an `accepted_with_changes` part
   does not, and the next lock closes it.
 
-Rejected: unlocking the whole document (superseding the `approve`). It reopens
-every part, including those the client accepted, for a request about one.
+Rejected for a client's request: unlocking the whole document. It reopens
+every part, including those the client accepted, for a request about one. A
+person who means to unlock the whole document uses §7.6.
 
 #### 7.5.7 Spin-off
 
@@ -1189,6 +1190,37 @@ words reach the match (§7.5.2a) only when the recorder pastes them as `said`.
 
 ---
 
+
+### 7.6 Unlocking the whole document: `/unapprove`
+
+Owner, 2026-11-09: a person can unlock a locked document (settles W5-Z1's
+whole-document unlock; what an exported seal means is unchanged).
+
+```yaml
+- id: d_01K…X
+  kind: unlock
+  action: unlock_document
+  agent: human:aoife
+  actor: human:aoife
+  targets: ["3f2a…"]                    # the document id, no part
+  cites: [d_01K…LOCK]
+  lock: d_01K…LOCK                      # the approve it ends
+  unlocks_version: "v3"                 # the version that lock accepted
+  rationale: "The client moved the launch."
+```
+
+1. `POST /unapprove {rationale}`: a person, holding the lease (§6), on a
+   locked document, with a non-empty reason. Not locked is `409`; no reason
+   is `400`.
+2. **The lock predicate (§7.1) gains one clause:** the newest unsuperseded
+   decision targeting the document that is an `approve` or an
+   `unlock_document` decides. An `approve` locks; an `unlock_document` means
+   nothing holds. The `approve` is never rewritten or superseded.
+3. After it every write is allowed again, as on a document never locked.
+   Parts reopened under the ended lock (§7.5.6) stop counting as reopened.
+   Client answers stay in the chain, on the version they answered.
+4. The next `/approve` runs the whole §7.2 list and is a new lock.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed
@@ -1206,7 +1238,7 @@ freely, never redefine.
 - A body `agent` field on `/patch-data` is kept as `claimed_agent` on the
   decision. The actor always comes from `Ctx`.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
-  `/verify`, `/approve`, `/history`, `/timeline`, `/open`, `/stale`,
+  `/verify`, `/approve`, `/unapprove` (§7.6), `/history`, `/timeline`, `/open`, `/stale`,
   `/upstream` (§8.1), `/client-review`, `/client-review/confirm` and
   `/client-review/reopen` (§8.2), and `/cite` (§8.3).
 - Landed (2026-09-28), each a person's decision — a process is refused `403` —
@@ -1257,6 +1289,9 @@ freely, never redefine.
   - `/approve {rationale?}` — refused while anything on the §7 list is open;
     otherwise one `approve` decision naming the exact version accepted. What
     locking does to other writes (`/patch-data`, a job) is W5-Z1's.
+  - `/unapprove {rationale}` — a person, on a locked document, with a reason:
+    one `unlock` decision (`action: unlock_document`) that ends the lock
+    (§7.6). `409` when not locked, `400` without a reason.
 - `/decisions` (landed): every decision, newest first, with who made it, its
   targets as labels, its cites resolved, and what needs a person — derived by
   the host from the chain, the members and the data: `reasoning.attention`,

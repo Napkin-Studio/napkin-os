@@ -348,6 +348,28 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
    (clan://decisions): the kind of field and what it asks of a person are the
    record's, never the tag's. Every action is one host route; the reply
    carries the document as it now stands, which replaces the page's copy. */
+/* The agency's colours on a document's own controls (features/brief-new-ui.clan).
+   The shell answers clan:me with the agency's admin-set base and accent; they
+   land on :root as --ag-base and --ag-acc, with the ink that reads on each.
+   An app derives its primary actions from them (base in light, accent in
+   dark) and keeps its documents on paper. Nothing here is the document's. */
+var NapkinAgency=(function(){
+  var HEX=/^#[0-9a-f]{6}$/i, now=null;
+  function lum(h){ var n=parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255].map(function(v){ v/=255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); }).reduce(function(a,v,i){ return a+v*[.2126,.7152,.0722][i]; },0); }
+  function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
+  function apply(c){
+    if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
+    now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null};
+    var r=document.documentElement;
+    r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
+    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', inkOn(c.accent));
+    r.setAttribute('data-agency', '');
+    try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
+  }
+  function start(){ if(window.clan&&typeof window.clan.me==='function') window.clan.me().then(function(m){ if(m&&m.agency) apply(m.agency); }, function(){}); }
+  if(document.readyState==='complete') setTimeout(start,0); else window.addEventListener('load', start);
+  return {apply:apply, now:function(){ return now; }};
+})();
 var ClanFields=(function(){
   var SCHEME=(navigator.userAgent.indexOf('Windows')!==-1)?'http://clan.localhost':'clan://localhost';
   var VIEW=null, STACK=[], DRAWER=null, EDIT=false;
@@ -1013,9 +1035,17 @@ var ClanFields=(function(){
   // The lock: an approve, not superseded, on THIS document (Contract 4 §7.1).
   // A carried approve targets the parent: history, not the lock. The newest
   // is the lock when a document was locked again after a part was reopened.
-  function lockDecision(){ var id=docId();
-    return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
-      return d.kind==='approve'&&!b.superseded&&!d.superseded_by&&(arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; }))); })[0]||null; }
+  // The newest unsuperseded approve or unlock_document on this document decides (POST /unapprove,
+  // 9 Nov 2026): an approve locks it; an unlock that is newer than it means it is not locked.
+  function onThisDoc(b){ var d=b.decision||{}, id=docId(); return arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; })); }
+  function isUnlockDoc(d){ return d.action==='unlock_document'||(d.kind==='unlock'&&!!d.lock); }
+  function lockDecision(){
+    var ds=arr(VIEW&&VIEW.decisions), live=function(b){ var d=b.decision||{}; return !b.superseded&&!d.superseded_by&&onThisDoc(b); };
+    var lock=ds.filter(function(b){ return (b.decision||{}).kind==='approve'&&live(b); })[0]||null;
+    if(!lock) return null;
+    var at=function(b){ var t=Date.parse(String((b.decision||{}).timestamp||'')); return isNaN(t)?0:t; };
+    var un=ds.filter(function(b){ var d=b.decision||{}; return isUnlockDoc(d)&&live(b)&&(d.lock===lock.decision.id||arr(d.cites).indexOf(lock.decision.id)!==-1||at(b)>at(lock)); })[0]||null;
+    return un?null:lock; }
   function reopenedParts(){ return arr(obj(VIEW&&VIEW.lock).reopened); }
   // What needs a person before the lock: the host's view, one item per place
   // and reason (the shell's needsOf keys them the same way, code:address), so
@@ -1033,7 +1063,7 @@ var ClanFields=(function(){
     if(!VIEW){ el.innerHTML=''; return; }
     var lock=lockDecision(), items=needs(), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
     var h='<div class="clf-tray" role="region" aria-label="What needs you"><div class="clf-tray-in">';
-    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span>'; }
+    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span><button type="button" class="clf-btn" data-clf-unlock>Unlock</button>'; }
     else {
       var fig=typeof NapkinAgents==='object'?NapkinAgents.figure('judge',{state:items.length?'needs-you':'idle',decorative:true}):'';
       h+='<span class="who">'+fig+'<span class="count'+(items.length?'':' zero')+'">'+(items.length?items.length+' thing'+(items.length===1?'':'s')+' need'+(items.length===1?'s':'')+' you':'Nothing needs you')+'</span></span>';
@@ -1173,7 +1203,7 @@ var ClanFields=(function(){
   // What happened to a thing, in plain words: who did what, when, and why.
   var DID={verdict:'checked it',verify:'said it is right',classify:'set who may see it',edit:'changed it',correct:'corrected it',resolve:'picked a value',approve:'locked it',finding:'worked it out',pin:'saved it',claim:'saved it',
     client_review:'recorded the client’s answer',unlock:'opened it for the client’s change',backref:'noted it was used'};
-  var DID_ACTION={propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
+  var DID_ACTION={unlock_document:'unlocked it',propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
   function whoDid(b){
     var d=b.decision||{}, A=crew(), k=crewKey(d);
     if(b.who&&b.who.you) return 'You';
@@ -2021,6 +2051,8 @@ var ClanFields=(function(){
       if(tx&&tx.__clfEditing&&!e.target.closest('[data-ref]')) return; // typing
       if(tx&&!e.target.closest('[data-ref]')&&!e.target.closest('.clf-textbar')){ e.preventDefault(); editText(tx); return; }
     }
+    var ub=e.target.closest('[data-clf-unlock]');
+    if(ub){ var tu=ub.closest('clan-tray'), nu=tu&&tu.getAttribute('noun')||'report'; act('/unapprove',{rationale:'Unlocked to change the '+nu},null,'Unlocked.'); return; }
     var lb=e.target.closest('[data-clf-lock]');
     if(lb){ var tr=lb.closest('clan-tray'), noun=tr&&tr.getAttribute('noun')||'report'; act('/approve',{},null,'The '+noun+' is locked. This version is the final one.'); return; }
     var t=e.target.closest('[data-ref]'); if(!t) return;

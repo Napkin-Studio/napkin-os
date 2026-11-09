@@ -21,7 +21,7 @@
 
 import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { accountItems, continueItems, docMenuItems, shareItems, startFresh, type Account, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
+import { accountItems, continueItems, docMenuItems, shareItems, type Account, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
 import { MedallionMark } from './Medallion'
 import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
@@ -30,6 +30,7 @@ import { BarButtons, BarChips } from './AppBarItems'
 import { Pop } from '../shell/nui/Pop'
 import { usePop } from '../shell/nui/popKit'
 import { ToolIcon } from '../shell/nui/icons'
+import { gateOf } from '../shell/appBar'
 import './chrome.css'
 
 export type { Account, ClientChip, Crew, DocBar, DocState, MenuItem, ToolBrand } from './barMenus'
@@ -399,13 +400,15 @@ export default function Toolbar({
   }
 
   const cont = continueItems(doc)
-  const fresh = startFresh(doc)
+  const fresh = cont.fresh
+  // The research's gate line ("Not brief-ready yet: …"), first in Continue in, when the app sends one.
+  const gate = gateOf(doc.bar ?? [])?.label ?? null
   const contIcon = (i: MenuItem) => {
-    const m = /^Continue in (.+)$/.exec(i.label)
-    if (m) return <ToolIcon tool={/research/i.test(m[1]) ? 'research' : /deck/i.test(m[1]) ? 'deck' : /brief/i.test(m[1]) ? 'brief' : 'production'} />
     if (i.label.startsWith('↔')) return '↔'
     if (i.label.startsWith('New ')) return '+'
-    return '↻'
+    if (i.label.startsWith('Update ') || i.label.startsWith('Unlink ')) return '↻'
+    const l = i.label.toLowerCase()
+    return <ToolIcon tool={/research/.test(l) ? 'research' : /deck/.test(l) ? 'deck' : /brief/.test(l) ? 'brief' : 'production'} />
   }
   return (
     <div className="nui ch-bar-os" data-testid="os-bar" data-where="document">
@@ -465,7 +468,7 @@ export default function Toolbar({
       )}
       {pop.open?.key === 'cont' && (
         <Pop anchor={pop.open.anchor} onClose={pop.close} label="Continue in" className="tba-menu" at={underSlot} testid="continue-menu">
-          {doc.gate && <p className="tba-gate">{doc.gate}</p>}
+          {gate && <p className="tba-gate" data-testid="continue-gate">{gate}</p>}
           <div className="tba-mh">Turn it into</div>
           {cont.spin.length ? <TbaRows items={cont.spin} close={pop.close} icon={contIcon} /> : <p className="tba-empty">No app here takes this as a source yet.</p>}
           <div className="tba-mh">Link to an existing one</div>

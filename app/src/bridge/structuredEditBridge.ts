@@ -138,7 +138,7 @@ export const STRUCTURED_EDIT_BRIDGE = `
       }
       function onMe(e) {
         if (e.source !== window.parent || !e.data || e.data.type !== 'clan:me') return;
-        done(e.data.actor ? { actor: e.data.actor, id: e.data.id, name: e.data.name || null } : null);
+        done(e.data.actor ? { actor: e.data.actor, id: e.data.id, name: e.data.name || null, agency: e.data.agency || null } : null);
       }
       window.addEventListener('message', onMe);
       window.parent.postMessage({ type: 'clan:me?' }, '*');

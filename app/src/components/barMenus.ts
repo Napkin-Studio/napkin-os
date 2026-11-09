@@ -44,6 +44,8 @@ export interface DocBar {
   /** "Continue in ▾": the apps that take this document as a spin-off source (host.spinoffTargets()). */
   targets: SpinoffTarget[]
   onSpinoff: (appId: string) => void
+  /** Continue in › Start fresh: a new document of the same app for the same client. */
+  onStartFresh?: () => void
   /** What it was made from (`GET /upstream`); absent when it was made from nothing the host holds. */
   madeFrom?: MadeFrom | null
   /** Take the newer version of what it was made from (`POST /upstream/update`). Absent on a locked document. */
@@ -84,10 +86,6 @@ export interface DocBar {
   toolKey?: string | null
   /** Rename it (the name's double-click, and Rename in its menu): `/set-title`. Absent where it cannot be renamed. */
   onRename?: (title: string) => void
-  /** A line above Continue in's choices: what is still open before it is ready to hand on. */
-  gate?: string | null
-  /** "Start fresh": a new document of the same tool for the same client. */
-  onNewForClient?: { label: string; run: () => void } | null
   /** "Where it came from" in the Decisions drawer's Lineage view; absent, WorkspaceView. */
   onLineage?: () => void
   /** Its tool's own page for its client (the old trail's last crumb): its other documents, and New. */
@@ -216,17 +214,23 @@ export interface MenuItem {
 
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
 export function continueItems(
-  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'>,
-): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[] } {
+  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'> & Partial<Pick<DocBar, 'tool' | 'onStartFresh'>>,
+): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[]; fresh: MenuItem[] } {
   const from = doc.madeFrom
   const since = from?.decisionsSince
+  const noun = nounOfTool(doc.tool?.name)
   return {
+    // The mock's words (gaps.md §7 L1): the tool, and what it makes from this one.
     spin: doc.targets.map(t => ({
-      label: `Continue in ${t.name}`,
-      hint: t.map ? `Takes this along, into ${t.map}` : 'Takes its data and decisions along',
+      label: shortTool(t.name),
+      hint: spinHint(t, noun),
       run: () => doc.onSpinoff(t.app_id),
     })),
     link: linkItems(doc),
+    // Start fresh (gaps.md §7 L2): the same app, the same client, new notes.
+    fresh: doc.onStartFresh
+      ? [{ label: `New ${noun === 'one' ? 'document' : noun} for this client`, hint: 'From new notes; this one stays as it is', run: doc.onStartFresh }]
+      : [],
     // A spin-off may take its parent's newer version (owner, 2026-11-09).
     update: from?.changed && doc.onUpdateFromUpstream
       ? [{
@@ -236,6 +240,28 @@ export function continueItems(
         }]
       : [],
   }
+}
+
+/** What the open document is called, from its tool's name: a brief, a report, else "one". */
+function nounOfTool(name?: string | null): string {
+  const n = String(name ?? '')
+  return /brief/i.test(n) ? 'brief' : /research|report/i.test(n) ? 'report' : 'one'
+}
+
+/** A tool's short name, as the menu says it: "Deck Maker" is Deck, "Research Tool" is Research. */
+function shortTool(name: string): string {
+  const n = name.replace(/\s+(Maker|Tool|Studio)$/i, '').trim()
+  return /advertising/i.test(name) ? 'Production' : n || name
+}
+
+/** What the target makes from this one, in the mock's words. */
+function spinHint(t: { app_id: string; name: string; map?: string | null }, noun: string): string {
+  const id = `${t.app_id} ${t.name}`
+  if (/deck/i.test(id)) return `A board deck from this ${noun}`
+  if (/advertising|film|production/i.test(id)) return noun === 'report' ? 'A film treatment from the findings' : `Films and stills from this ${noun}`
+  if (/research/i.test(id)) return noun === 'brief' ? 'A follow-up question from its open questions' : `Research from this ${noun}`
+  if (/brief/i.test(id)) return noun === 'report' ? 'A brief with these pinned facts' : `A brief from this ${noun}`
+  return t.map ? `Takes this along, into ${t.map}` : 'Takes its data and decisions along'
 }
 
 /** "More ▾" in the slot: the rarer actions of an open document, in plain words. */
@@ -290,11 +316,6 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
   ]
 }
 
-/** "Continue in ▾ › Start fresh": a new one for the same client; this one stays as it is. */
-export function startFresh(doc: Pick<DocBar, 'onNewForClient'>): MenuItem[] {
-  const n = doc.onNewForClient
-  return n ? [{ label: n.label, hint: 'From new notes; this one stays as it is', run: n.run }] : []
-}
 
 /**
  * The account menu on the agency pill (mock phase 33): All tools, the crew,
@@ -370,7 +391,7 @@ function linkItems(
       label: `↔ ${t.title}`,
       hint: locked
         ? 'It is locked: a locked version keeps what it holds. Reopen it to link.'
-        : `${t.app_name}. Each keeps its own version; changes show as updates.`,
+        : `${shortTool(t.app_name)} · each keeps its own version; changes show as updates.`,
       run: () => doc.onLink?.(t.document_id),
       ...(locked ? { disabled: true } : {}),
     })
