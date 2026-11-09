@@ -56,6 +56,44 @@ pub fn inline_fields(templates: &Path, html: &str) -> Result<String, Box<dyn std
     Ok(html.replacen(FIELDS_MARKER, snippet.trim_end(), 1))
 }
 
+/// Where a template's `<body>` asks for the agent sphere (the mock's loading stage).
+pub const SPHERE_MARKER: &str = "<!-- @napkin:agent-sphere -->";
+
+/// The agent sphere's scripts, in their order: the figures kept aside, the shared finish, the one WebGL
+/// scene, the agent view (design/new-ui/identity-v4/agents/lib, verbatim) and
+/// the mock's extra geometries, and the figures given back (pre.js, post.js).
+const SPHERE_FILES: [&str; 6] = [
+    "pre.js",
+    "finish.js",
+    "scene.js",
+    "agent-view.js",
+    "extra.js",
+    "post.js",
+];
+
+/// Splice `app/templates/shared/agent-sphere/*.js` into the template at its
+/// marker, as one `<script>`, when it has one. The scene appends its canvas to
+/// `document.body`, so the marker sits in the body, before the app's script.
+pub fn inline_sphere(templates: &Path, html: &str) -> Result<String, Box<dyn std::error::Error>> {
+    match html.matches(SPHERE_MARKER).count() {
+        0 => return Ok(html.to_string()),
+        1 => {}
+        _ => return Err(format!("the template has more than one {SPHERE_MARKER}").into()),
+    }
+    let mut js = String::new();
+    for f in SPHERE_FILES {
+        let src = fs::read_to_string(templates.join("shared/agent-sphere").join(f))
+            .map_err(|e| format!("app/templates/shared/agent-sphere/{f}: {e}"))?;
+        let low = src.to_ascii_lowercase();
+        if low.contains("</script") || low.contains("</body") {
+            return Err(format!("agent-sphere/{f} closes a script or the body").into());
+        }
+        js.push_str(&src);
+        js.push('\n');
+    }
+    Ok(html.replacen(SPHERE_MARKER, &format!("<script>\n{js}</script>"), 1))
+}
+
 /// Where an app's mark lives in its archive. The manifest's `app.icon` names
 /// this member (spec §28: an archive path); the host hands it to the home
 /// screen inline, as a `data:` URI, because a page cannot read into an archive.
