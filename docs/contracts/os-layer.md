@@ -130,7 +130,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | Field | Meaning |
 |---|---|
 | `id` | Stable, generated at creation, never content-derived |
-| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) |
+| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) · `app_update` (§7.1) |
 | `targets[]` | Addresses this decision is about |
 | `cites[]` | Fact pins, sources, findings and decisions it rests on |
 | `superseded_by` | The decision that replaced this one |
@@ -637,6 +637,47 @@ item is settled in the child, and fixes the backref's shape and moment.
 3. An app's own flag (Brief Maker's older `data.locked: true`) is not the lock.
    The middleware honours either (`napkin.middleware/1` §10.5); a view locks
    through `/approve` only.
+4. **A locked document is shown with its own app** (owner, 2026-11-09,
+   feature doc-app-upgrade). The installed version of its app (§8) is not
+   served to it: the page, the export and every handoff are the copy it
+   carries, as the client approved it. Documents locked before this went back
+   to their own page until someone updates them.
+5. **Update.** When the installed app differs from the copy a document
+   carries — `clan_sdk::app_digest` over the app-owned entries and the app
+   block, not the version string — the open result carries
+   `app_update {available, name, from, to, blocked?}`, `from` and `to` each
+   `{app_id, version, digest, name}`. On a locked document the shell offers
+   it as "A newer <App> is available · Update"; any person who may edit the
+   document may press it (`POST /app/update`, §8). Update rewrites only the
+   app-owned entries (`human/index.html`, `human/styles.css`,
+   `human/export.html`, `agent/output-schema.json`, `app/pipeline.yaml`,
+   `app/schemas/*`, `app/manifest.yaml`, `app/icon.svg`, the template's
+   `human/assets/*` the document lacks, and the manifest's app block and
+   signature), all together, and only when the document's data and members
+   validate against the new schemas (`blocked` names the fields that do
+   not). It does not end, move or supersede the lock: `lock_of` returns the
+   same `approve`, and client answers stay current against its version.
+6. **Catching up.** An unlocked document is shown with the installed app
+   (§8) and carries it from its next write on: the host applies the same
+   upgrade just before the write, once. Opening never writes. Data that does
+   not fit leaves it on its own app, and the write goes on against its own
+   schema.
+
+Both write one pinned decision:
+
+```yaml
+- id: d_01K…U
+  kind: app_update
+  action: update_app
+  agent: human:aoife                    # napkin-host when caught up on save
+  actor: human:aoife                    # the writer
+  targets: ["3f2a…"]                    # the document id
+  from: {app_id: ie.napkin.brief-maker, version: 0.5.1, digest: "sha256:…", name: Brief Maker}
+  to:   {app_id: ie.napkin.brief-maker, version: 0.6.0, digest: "sha256:…", name: Brief Maker}
+  trigger: update                       # save | update
+  pinned: true
+  rationale: "Brought the locked version up to Brief Maker 0.6.0; the content is unchanged."
+```
 
 ### 7.2 The lock list
 
@@ -1226,7 +1267,8 @@ whole-document unlock; what an exported seal means is unchanged).
 `/capabilities` reports `contract: 1`. A document is shown with the installed
 version of its app when that version has the same major and is not older than
 the one the document was made with; otherwise with the copy it carries (owner
-decision, 2026-09-24 — M2's `name@major` rule applied to views). The copy in
+decision, 2026-09-24 — M2's `name@major` rule applied to views). A locked
+document is always shown with the copy it carries (§7.1 item 4). The copy in
 the `.clan` is what export, handoff and the offline presenter use, and old
 majors still run, so the route surface is a contract apps depend on: add
 freely, never redefine.
@@ -1238,7 +1280,7 @@ freely, never redefine.
 - A body `agent` field on `/patch-data` is kept as `claimed_agent` on the
   decision. The actor always comes from `Ctx`.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
-  `/verify`, `/approve`, `/unapprove` (§7.6), `/history`, `/timeline`, `/open`, `/stale`,
+  `/verify`, `/approve`, `/unapprove` (§7.6), `/app/update` (§7.1), `/history`, `/timeline`, `/open`, `/stale`,
   `/upstream` (§8.1), `/client-review`, `/client-review/confirm` and
   `/client-review/reopen` (§8.2), and `/cite` (§8.3).
 - Landed (2026-09-28), each a person's decision — a process is refused `403` —
@@ -1292,6 +1334,12 @@ freely, never redefine.
   - `/unapprove {rationale}` — a person, on a locked document, with a reason:
     one `unlock` decision (`action: unlock_document`) that ends the lock
     (§7.6). `409` when not locked, `400` without a reason.
+  - `/app/update` — a person moves the document onto the installed version
+    of its app (§7.1 items 5–6): one `app_update` decision, `trigger:
+    update`; a locked document keeps its lock and may be updated. `409` when
+    nothing newer is installed or the document already carries it, `422`
+    naming the fields when its data does not fit. The reply is `{ok,
+    decision, kind, from, to, clan}`.
 - `/decisions` (landed): every decision, newest first, with who made it, its
   targets as labels, its cites resolved, and what needs a person — derived by
   the host from the chain, the members and the data: `reasoning.attention`,
