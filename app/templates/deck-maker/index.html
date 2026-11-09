@@ -1029,7 +1029,7 @@ var DeckLogic = (function () {
     var label = o.aria === 'name' ? name : name + ', ' + word;
     var pr = typeof o.progress === 'number' && o.progress >= 0 && o.progress <= 1 ? Math.round(o.progress * 1000) / 1000 : null;
     var key = a ? o.agent : 'orchestrator', st = ENGINE_STATE[act];
-    var tag = Roles ? Roles.tag(key, { size: size, state: st, label: label, decorative: o.aria === 'hidden', progress: pr, cls: cls })
+    var tag = Roles ? Roles.tag(key, { size: size, state: st, label: label, decorative: o.aria === 'hidden', progress: pr, cls: cls, next: to || undefined })
       : '<span class="nk-ag ' + cls + '" data-nk-agent="' + key + '" data-nk-state="' + st + '"' + (o.aria === 'hidden' ? ' aria-hidden="true"' : ' role="img" aria-label="' + escAttr(label) + '"') + '></span>';
     return tag.replace(/^<span /, '<span data-activity="' + act + '"' + (to ? ' data-to="' + to + '"' : '') + ' ');
   }

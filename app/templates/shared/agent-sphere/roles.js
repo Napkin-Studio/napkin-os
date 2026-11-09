@@ -208,7 +208,7 @@
     var k = of(r) || 'orchestrator', size = o.size || 0, st = o.state === 'needs-you' ? 'needs' : o.state || 'idle';
     var label = o.label || name(k) + (st === 'working' ? ', working' : st === 'needs' ? ', needs you' : '');
     return '<span class="nk-ag' + (o.cls ? ' ' + esc(o.cls) : '') + '" data-nk-agent="' + k + '" data-nk-state="' + esc(st) + '"' + (size ? ' data-nk-size="' + size + '"' : '') +
-      (o.progress != null ? ' data-nk-progress="' + esc(o.progress) + '"' : '') +
+      (o.progress != null ? ' data-nk-progress="' + esc(o.progress) + '"' : '') + (o.next && of(o.next) ? ' data-nk-next="' + of(o.next) + '"' : '') +
       ' style="display:inline-block;position:relative;flex:none;vertical-align:middle;line-height:0' + (size ? ';width:' + size + 'px;height:' + size + 'px' : '') + '"' +
       (o.decorative ? ' aria-hidden="true"' : ' role="img" aria-label="' + esc(label) + '"') + '>' + still(k, size) + '</span>';
   }
@@ -217,9 +217,9 @@
     if (!S || !S.gl || !root.document) return;
     var els = (scope || document).querySelectorAll('.nk-ag[data-nk-agent]');
     for (var i = 0; i < els.length; i++) {
-      var el = els[i], want = el.getAttribute('data-nk-agent') + '|' + el.getAttribute('data-nk-state') + '|' + (el.getAttribute('data-nk-progress') || '');
+      var el = els[i], want = el.getAttribute('data-nk-agent') + '|' + el.getAttribute('data-nk-state') + '|' + (el.getAttribute('data-nk-progress') || '') + '|' + (el.getAttribute('data-nk-next') || '');
       if (el._nk && el._nkWant === want) continue;
-      var pr = el.getAttribute('data-nk-progress'), o = { agent: el.getAttribute('data-nk-agent'), state: el.getAttribute('data-nk-state'), progress: pr == null ? undefined : +pr, size: +el.getAttribute('data-nk-size') || Math.min(el.clientWidth, el.clientHeight) || 28 };
+      var pr = el.getAttribute('data-nk-progress'), o = { agent: el.getAttribute('data-nk-agent'), state: el.getAttribute('data-nk-state'), progress: pr == null ? undefined : +pr, next: el.getAttribute('data-nk-next') || undefined, size: +el.getAttribute('data-nk-size') || Math.min(el.clientWidth, el.clientHeight) || 28 };
       el._nkWant = want;
       if (el._nk) { el._nk.set(o); continue; }
       var svg = el.querySelector('.nk-still');
@@ -234,7 +234,7 @@
     if (obs || !root.MutationObserver || !root.document) { hydrate(); return; }
     var queued = false;
     obs = new MutationObserver(function () { if (queued) return; queued = true; (root.requestAnimationFrame || setTimeout)(function () { queued = false; sweep(); hydrate(); }); });
-    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-nk-agent', 'data-nk-state', 'data-nk-progress'] });
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-nk-agent', 'data-nk-state', 'data-nk-progress', 'data-nk-next'] });
     hydrate();
   }
 
