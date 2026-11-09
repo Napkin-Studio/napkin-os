@@ -139,6 +139,14 @@ test('an agent’s own line in an irregular past reads as done, not “decided t
   assert.equal(said('Keep the audience as written.'), 'decided to keep the audience as written')
 })
 
+test('a line that is not a verb phrase reads as it is, never “decided to the …”', () => {
+  const said = (rationale: string) => didWhat(block({ id: 'd_X', action: 'judge_field', rationale }, agent('draft_brief@1.0/judge')), VIEW0)
+  assert.equal(said('The audience section turns into a product pitch.'), 'the audience section turns into a product pitch')
+  assert.equal(said('Ferryman Light answers the doubt.'), 'Ferryman Light answers the doubt')
+  assert.equal(said('Two parts disagree on the budget.'), 'two parts disagree on the budget')
+  assert.equal(said('Use the research’s audience.'), 'decided to use the research’s audience')
+})
+
 test('a link, its update and its unlink each say what they did, to which document', () => {
   const you = { kind: 'person', id: 'x', name: 'x', you: true } as DecisionBlock['who']
   const at = ['d1#upstream.fd7f207f-af73-4c24-9d1e-000000000001']

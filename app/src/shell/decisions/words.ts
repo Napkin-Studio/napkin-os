@@ -84,9 +84,27 @@ function pastTense(s: string): string {
   // Irregular past forms, with or without re- ("rewrote", "redrew").
   const bare = /^re(?=wrote|drew|made|built|ran|read|set|took|sent|told|did|put|thought|wrote)/.test(first) ? first.slice(2) : first
   const past = /ed$/.test(first) || IRREGULAR_PAST.has(bare)
-  if (!past) out = `decided to ${lower(out)}`
-  return out
+  // "Keep the audience as written" was a choice: "decided to keep …". A line
+  // that is not a verb phrase ("The audience section turns into …") reads as
+  // it is, never "decided to the audience …".
+  if (past) return lower(out)
+  if (BARE_VERBS.has(first.replace(/[^a-z-]/g, ''))) return `decided to ${lower(out)}`
+  // As it is: a name keeps its capital ("Ferryman Light answers …").
+  return COMMON_START.has(first) ? lower(out) : out
 }
+
+/** Words a sentence starts with that are not names: lower-cased mid-line. */
+const COMMON_START = new Set(['the', 'a', 'an', 'this', 'that', 'these', 'those', 'it', 'its', 'there', 'some', 'all', 'no', 'each',
+  'every', 'one', 'two', 'three', 'four', 'five', 'both', 'nothing', 'none', 'only', 'most', 'many', 'several', 'any', 'their', 'our'])
+
+/** Verbs an agent's line starts with when it says what it chose to do. */
+const BARE_VERBS = new Set(['accept', 'add', 'adjust', 'answer', 'ask', 'avoid', 'bring', 'build', 'carry', 'change', 'check', 'choose',
+  'cite', 'clarify', 'combine', 'compose', 'confirm', 'correct', 'cut', 'draft', 'drop', 'expand', 'explain', 'extract', 'fill', 'find',
+  'fix', 'flag', 'focus', 'follow', 'give', 'go', 'hold', 'include', 'keep', 'lead', 'leave', 'link', 'list', 'look', 'make', 'mark',
+  'merge', 'move', 'name', 'narrow', 'note', 'omit', 'open', 'pin', 'prefer', 'propose', 'pull', 'put', 'raise', 'read', 'rebuild',
+  'redraft', 'reframe', 'reject', 'remove', 'rename', 'reopen', 'replace', 'research', 'resolve', 'restate', 'rewrite', 'run', 'say',
+  'search', 'send', 'set', 'shorten', 'show', 'skip', 'split', 'start', 'state', 'stop', 'summarise', 'summarize', 'swap', 'synthesise',
+  'take', 'tighten', 'treat', 'trim', 'turn', 'update', 'use', 'verify', 'wait', 'weigh', 'write'])
 
 const lower = (s: string) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s)
 /** A line that starts a sentence: "Proposed …" under a signature. */
@@ -250,7 +268,7 @@ export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   // Judge sent it back and a second replaced it, else a new one.
   if (d.action === 'propose') return `proposed a ${d.superseded_by ? 'first' : 'new'} ${t ? partOf(t.label) : what}${steerOf(d.rationale)}`
   const said = d.reasoning?.decided || d.rationale.split(/\. Because/)[0] || d.action.replace(/_/g, ' ')
-  return lower(pastTense(plain(said.replace(/\.$/, ''))))
+  return pastTense(plain(said.replace(/\.$/, '')))
 }
 
 // ── client review (OS-layer contract §7.5) ──────────────────────────────────
