@@ -450,10 +450,12 @@ h1.sm{font-size:28px}
 .ld-in{max-width:760px;align-items:flex-start}
 .ld-h{font:600 28px/1.15 var(--f-serif);letter-spacing:-.01em;margin:0 0 6px}
 .ld-sub{font-size:14.5px;color:var(--ink2);max-width:62ch}
-.ld-bar{margin-top:18px;max-width:760px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--paper);box-shadow:var(--shadow-paper);padding:14px 14px 14px 20px;align-items:flex-end}
+.ld-bar{margin-top:18px;max-width:760px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--paper);box-shadow:var(--shadow-paper);padding:24px 24px 22px;flex-wrap:wrap;align-items:center;gap:14px 10px}
 .ld-bar:focus-within{border-color:var(--ink)}
-.ld-bar textarea{font-size:16px;min-height:72px}
-.ld-attach{border-radius:50%;border:1px dashed var(--line-strong);background:transparent}
+.ld-bar textarea{flex:1 1 100%;font:400 18px/1.5 var(--f-serif);min-height:110px;padding:10px 14px;border:1px solid var(--line);border-left:2px solid var(--warn-fg);border-radius:var(--r-sm);background:var(--paper)}
+.ld-bar textarea:focus{border-color:var(--ink);border-left-color:var(--warn-fg)}
+.ld-attach{border-radius:50%;border:1px dashed var(--line-strong);background:transparent;margin-right:auto}
+.ld-bar .ld-attach{order:2}.ld-bar .ld-go{order:3}
 .ld-go{height:44px;padding:0 22px;font-weight:600;font-size:14.5px}
 .ld-files,.ld-eg{justify-content:flex-start}
 .ld-file{border-radius:var(--r-sm);background:var(--soft);font:12px var(--f-mono);border:1px solid var(--line)}
@@ -513,10 +515,11 @@ h1.sm{font-size:28px}
 .toast{border-radius:var(--r-sm)}
 @media (max-width:1100px){.start,.build,.review,.present{grid-template-columns:minmax(0,1fr);padding:20px 0 48px}}
 @media (max-width:640px){.nd{padding:0 16px}}
-.slide{container-type:inline-size}
-.slide h2{font-size:clamp(18px,5.2cqi,34px)}
-.slide ul{margin-top:3.5cqi;gap:1.6cqi}
-.slide li{font-size:clamp(11px,2.25cqi,17px)}
+.slide,.pslide{container-type:inline-size}
+.pslide h2{font-size:clamp(24px,7cqi,56px)}
+.slide h2{font-size:clamp(16px,4.6cqi,32px);max-width:86%}
+.slide ul{margin-top:3cqi;gap:1.4cqi;max-width:84%}
+.slide li{font-size:clamp(11px,2.25cqi,16px)}
 .slide li .dot{margin-top:.6em}
 </style>
 </head>
@@ -1884,7 +1887,7 @@ var DeckLogic = (function () {
     var p = s.inputs.prompt || {}, meta = s.deck.meta || {};
     var client = mc || String(p.client || meta.client || '').trim();
     // a project the read left as its placeholder ("[Project]") or a document nobody named yet is not a name
-    var named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) || /^untitled\b/i.test(v) ? '' : v; };
+    var named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) || /^untitled\b/i.test(v) || /^deck (maker|studio)$/i.test(v) ? '' : v; };
     var proj = named(p.project) || named(meta.project) || named(m.title) || 'New deck';
     return [client, proj].filter(Boolean).join(' · ');
   }
@@ -2283,7 +2286,7 @@ var DeckLogic = (function () {
 
   function build(s) {
     var run = s.run, gate = run.gate, who = L.agentState(run); // the circle: who is working and what they are doing
-    var stages = run.stages.map(function (st) {
+    var stages = (run.stages || []).map(function (st) {
       var glyph = st.status === 'done' ? '✓' : st.status === 'now' ? '•' : st.status === 'failed' ? '!' : '';
       return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
     }).join('');
@@ -2501,7 +2504,8 @@ var DeckLogic = (function () {
     var sl = s.deck.slides[id], st = L.statusOf(sl), refs = L.refsOf(sl), ev = s.evidence;
     // what it cites, short: a fact or finding by its id (f_007), a brief field or requirement by its kind (brief, req), once each
     var short = []; refs.forEach(function (r) { var c = r.indexOf(':'), k = c > 0 ? r.slice(0, c) : r; if (short.indexOf(k) < 0) short.push(k); });
-    var cite = short.length ? 'Cites ' + short.slice(0, 2).join(', ') + (short.length > 2 ? ' +' + (short.length - 2) : '') : '';
+    var keep = st === 'need' ? 1 : 2; // a slide that needs a call keeps room to say so
+    var cite = short.length ? 'Cites ' + short.slice(0, keep).join(', ') + (short.length > keep ? ' +' + (short.length - keep) : '') : '';
     var client = (s.deck.meta && s.deck.meta.client) || (s.inputs.prompt || {}).client || '';
     var right = cover ? client : [cite, st === 'need' ? 'Needs call' : ''].filter(Boolean).join(' · ');
     var b = (sl.blocks || [])[0], body = b ? (L.isPlaceholder(b) ? 'To supply: ' + b.text : b.text) : (sl.notes || '');
