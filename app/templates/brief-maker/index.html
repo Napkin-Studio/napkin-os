@@ -345,6 +345,13 @@
   .val.spp{font-size:clamp(22px,3vw,28px);line-height:1.2;font-weight:700;letter-spacing:-.03em;max-width:32ch}
   .regen-now{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--muted)}
   .regen-now .nk-ag{width:22px;height:22px}
+  /* The agent at work on the open sheet (owner, 2026-11-09: the agent stays on the run's stage or
+     moves to the side panel, nowhere else): its sphere, small, at the top of the side tab. */
+  .side-agent{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 12px;border:1px solid var(--nd-line,var(--line));border-radius:10px;background:var(--nd-card,var(--bg));font-size:13px;line-height:1.35;color:var(--nd-ink,var(--text))}
+  .side-agent[hidden]{display:none}
+  .side-agent .nk-ag{width:30px;height:30px}
+  .side-agent b{font-weight:600}
+  .side-agent span{min-width:0;overflow-wrap:anywhere}
 
   /* why: the decision behind the field, in the spec's reasoning shape */
   .why{margin-top:10px;border-left:2px solid var(--border);padding:4px 0 4px 14px;display:grid;gap:8px;max-width:72ch}
@@ -1014,6 +1021,11 @@
   .needs-box .act-override,.needs-box .note-p .cancel{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--nd-line-strong);background:var(--nd-card);color:var(--nd-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;text-decoration:none}
   /* Built from: compact rows, the source card one click away */
   .sp-built{display:grid;gap:8px}
+  /* A list part's line, selected: lit on the sheet, its view in the panel (the OS's card) */
+  .sp-line{display:grid;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--nd-line)}
+  .sp-line .clf-rv{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper)}
+  .sp-line .clf-rv .rv-title{font-size:15px}
+  #fields clan-field.clf-ln[as="item"].sp-on{background:color-mix(in srgb,var(--clf-hl) 55%,transparent);box-shadow:0 2px 0 currentColor}
   .rsp-k{display:block;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
   .bf-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;width:100%;padding:7px 9px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);text-align:left;font:inherit;cursor:pointer}
   :root[data-color-scheme="dark"] .bf-row{background:var(--nd-card)}
@@ -1361,6 +1373,7 @@
       </div>
 
       <aside class="stab" id="stab" aria-label="The brief’s controls">
+        <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
         <div class="upnote" id="upNote" role="status" hidden></div>
         <div class="splitbtn" id="saveSplit">
           <button class="sb-main" data-act="pdf" id="exPdf" title="The page as it prints, on A4"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg><span>Save · PDF</span></button>
@@ -3353,6 +3366,7 @@
     var ft=$('sheetFoot'); if(ft) ft.textContent=[cn, 'Creative brief'].filter(Boolean).join(' · ');
   }
   function renderStructured(){
+    try{ sideAgent(); }catch(e){}
     $('docIdent').innerHTML=IDENT;
     renderMadeFrom();
     // Locked, Draft it again stays where the mock has it, off, and says why.
@@ -3422,7 +3436,7 @@
     var clf=f.type!=='list'&&opensPath(f.key), opens=f.type==='list'&&opensPath(f.key);
     var reo=reopenedOf(f.key), writable=canWrite(f.key);
     var valHtml = !has ? '<div class="val empty">'+(isMeta(f.key)?'not given':writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
-      : f.type==='list' ? '<div class="'+cls+(opens?' opens':'')+'"'+sa+(opens?' role="button" tabindex="0" title="Where this came from" aria-label="'+esc(f.label+': where this came from')+'"':'')+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul></div>'
+      : f.type==='list' ? '<div class="'+cls+(opens?' opens':'')+'"'+sa+(opens?' role="button" tabindex="0" title="Where this came from" aria-label="'+esc(f.label+': where this came from')+'"':'')+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x,j){return '<li>'+(opens?'<clan-field ref="'+esc(f.key)+'['+j+']" as="item" keep'+(SEL===f.key&&SEL_ITEM===j?' class="sp-on"':'')+'>'+esc(String(x))+'</clan-field>':esc(String(x)))+'</li>';}).join('')+'</ul></div>'
       : '<div class="'+cls+'"'+sa+(isMeta(f.key)?' title="'+esc(String(v))+'"':'')+'>'+(clf?'<clan-field ref="'+esc(f.key)+'" as="block" caption="'+esc(partLabel(f))+'">'+esc(String(v))+'</clan-field>':esc(String(v)))+'</div>';
     var locked=isLocked(f.key), conf=isConf(f.key);
     row.classList.toggle('conf', conf);
@@ -3443,9 +3457,16 @@
     if(ov){
       // In the OS's edit mode a list is edited in the brief's own editor (one
       // item per line); otherwise a tap shows where it came from.
-      var go=function(){ if(EDIT_MODE&&writable) startEdit(row,f); else if(SEL!==f.key) select(f.key); };
+      // Each line of the list is a field of its own (list-item clan-fields): a tap selects
+      // the part with that line, and the Selected part panel shows where the line came from.
+      var go=function(e){
+        var it=e&&e.target&&e.target.closest&&e.target.closest('clan-field[as="item"]'), j=it?+String(it.getAttribute('ref')).replace(/^.*\[(\d+)\]$/,'$1'):null;
+        if(e&&it) e.stopPropagation();
+        if(EDIT_MODE&&writable){ startEdit(row,f); return; }
+        if(SEL!==f.key) select(f.key, j); else if(j!==SEL_ITEM){ SEL_ITEM=j; markItem(); renderSelPart(); }
+      };
       ov.addEventListener('click',go);
-      ov.addEventListener('keydown',function(e){ if(e.target===ov&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); go(); } });
+      ov.addEventListener('keydown',function(e){ if(e.target===ov&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); go(e); } });
     }
     bindNotes(row.querySelector('.notes'), f);
     return row;
@@ -3597,12 +3618,32 @@
       :st==='revising'?WRITER_+' is rewriting '+f.label.toLowerCase()+' on '+REV+'’s note…'
       :j.state==='sending'?'Asking '+WRITER+' to write '+f.label.toLowerCase()+' again…'
       :WRITER_+' is writing '+f.label.toLowerCase()+' again…';
-    return '<div class="regen-now">'+fig(AGENT_NAME[by]?by:'drafter',{state:'working',label:(AGENT_NAME[by]||WRITER)+' · '+f.label})+'<span>'+esc(t)+'</span></div>';
+    return '<div class="regen-now"><span>'+esc(t)+'</span></div>';
+  }
+  // The agent at work while the sheet is open, at the top of the side tab: one sphere, small, and one
+  // line, "<Role> agent · <what it is doing>". Gone when the job ends; the run screen keeps its own stage.
+  function sideAgent(){
+    var el=$('sideAgent'); if(!el) return;
+    var on=null;
+    if(phase==='doc'){
+      if(FIX){ var st0=FIX.stage||'context'; on=st0==='draft'?['drafter','rewriting the parts the note names']:st0==='judge'?['judge','checking the fix']:['synthesis','looking up what the fix needs']; }
+      else { var k=Object.keys(REGEN)[0], j=k&&REGEN[k], f=k&&fieldOf(k);
+        if(j&&f){ var fs=(j.fields||{})[k]||{}, st=fs.state||'drafting', w=f.label.toLowerCase();
+          on=st==='judging'?['judge','checking the new '+w]:st==='revising'?[fs.by||'drafter','rewriting '+w+' on the review’s note']:[fs.by||'drafter','writing '+w+' again']; } }
+    }
+    var want=on?on.join('|'):'';
+    if(el.getAttribute('data-k')===want) return;
+    el.setAttribute('data-k', want);
+    if(!on){ el.hidden=true; el.innerHTML=''; return; }
+    var nm=ROLES&&ROLES.of(on[0])?ROLES.name(ROLES.of(on[0])):(AGENT_NAME[on[0]]||'An agent');
+    el.innerHTML=fig(on[0],{state:'working', decorative:true, size:30})+'<span><b>'+esc(nm)+'</b> · '+esc(on[1])+'</span>';
+    el.hidden=false;
   }
   function renderRegen(f){
     var i=FIELDS.indexOf(f), row=document.querySelector('#fields .row[data-i="'+i+'"]'); if(!row) return;
     var old=row.querySelector('.regen-now'), h=regenLine(f);
     if(old) old.outerHTML=h; else if(h){ var v=row.querySelector('.val'); if(v) v.insertAdjacentHTML('afterend', h); }
+    sideAgent();
   }
 
   // ---------- a note fixed by the crew: a fix_parts job (middleware-api §10.15) ----------
@@ -3633,8 +3674,9 @@
     draft:['drafter', function(){ return WRITER_+' is rewriting the parts together…'; }],
     judge:['judge', function(){ return REV_+' is checking the fix…'; }]};
   function walk(){
+    sideAgent();
     var w=$('walker'); if(!w) return;
-    var on=!!FIX, was=w.classList.contains('on');
+    var on=false, was=w.classList.contains('on');
     if(on){
       var at=FIX_SAY[FIX.stage]||FIX_SAY.context;
       if(w.getAttribute('data-k')!==at[0]){
@@ -4236,9 +4278,9 @@
   }
 
   // The part the side tab is showing (a click selects it; Escape or Done lets go).
-  var SEL=null;
-  function select(key){
-    SEL=key||null;
+  var SEL=null, SEL_ITEM=null;
+  function select(key, item){
+    SEL=key||null; SEL_ITEM=SEL&&item!=null?item:null; markItem();
     document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
     var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
     renderSelPart();
@@ -4360,6 +4402,7 @@
             :(A&&!wr?'':'<span class="nb-act"><button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button><button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
           +'</div>'; }).join('')
         +'<div class="notes">'+notes+'</div></div>':'')
+      +(SEL_ITEM!=null&&f.type==='list'?'<div class="sp-line" id="spLine"><span class="rsp-k">This line</span><div id="spLineCard"></div></div>':'')
       +'<div class="sp-built" id="spBuilt"></div>'
       +'<details class="sp-w"'+(OPEN_WHY['sp:'+f.key]?' open':'')+'><summary>Why it says this</summary><div class="why">'+whyHtml(f)+'</div></details>'
       +(!docLocked()&&!isMeta(f.key)?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
@@ -4382,6 +4425,12 @@
     var n=el.querySelector('.sp-call .notes'); if(n) bindNotes(n, f);
     bindAnswers(el);
     renderBuilt();
+    var lc=$('spLineCard'), F=OSF(); if(lc&&F&&F.card) F.card(f.key+'['+SEL_ITEM+']', lc);
+  }
+  // The line of a list part that is selected is lit on the sheet.
+  function markItem(){
+    document.querySelectorAll('#fields clan-field.sp-on').forEach(function(x){ x.classList.remove('sp-on'); });
+    if(SEL&&SEL_ITEM!=null){ var r=rowOf(SEL), it=r&&r.querySelector('clan-field[as="item"][ref="'+SEL+'['+SEL_ITEM+']"]'); if(it) it.classList.add('sp-on'); }
   }
   // Yes / No / Answer… / Leave it, say why: the answer goes into the question's own list item.
   function bindAnswers(el){

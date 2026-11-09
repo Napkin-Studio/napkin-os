@@ -61,6 +61,29 @@ What the new refs show:
 | `mat_…` | `data.materials` | Its name and kind | When it arrived, its licence, whether it was read or transcribed | Confidential… (`/classify` on `materials[<id>]`) |
 | `ct_…` | `data.selection.contested`, then each `data.upstream.<id>.selection.contested` | As before | A carried contest says **carried from upstream** | Use this value: `/resolve`, which settles it in this document (Contract 4 §8.1) |
 
+### 2.2 Lines as fields
+
+*Added 2026-11-09 (owner: every line has a source, and every one is clickable).*
+A line of a document is a field too. The app draws its words inside
+`<clan-field ref as keep>`; the field leaves them and makes them a target
+(hover wash, pointer, Enter). Without `keep` it draws the record's words.
+
+| Ref | Kind | The line |
+|---|---|---|
+| `report.headline` | `answer` | the report's headline and summary as one answer |
+| `report.summary[i]`, `report.sections[<id>].blocks[i]` | `line` | one summary line, one paragraph |
+| `<path>[i]` | `item` | one line of a list part (`mandatories[0]`) |
+| `chart:<ref>,<ref>` | `chart` | a `<clan-chart>` clicked off its bars; a bar is its pin |
+| a `selection.gaps` id, any prefix | `gap` | a gap (research writes `g_…`) |
+
+`ClanFields.card(ref, el)` draws the line's view (the mock's `vAnswer`,
+`vClaim`, `vFinding`) for these kinds and for a finding: what it cites, its
+kind and certainty, both derived from the cites (a finding restated, a
+figure quoted as written or contested then resolved, an inference no source
+says), never asked of a model. Links in a view are `data-clf-go`; an app that
+shows them itself cancels `clan:cardgo {ref, drawer}`. The host's `/cite`
+reads an address by position as well as by id, and answers a line's `cites`.
+
 Every element opens the evidence drawer: the value, the verbatim quote with the
 figure marked, the source's record and link, the decisions recorded on it, and
 the element the agent wrote. A pin whose source record is not in the document
