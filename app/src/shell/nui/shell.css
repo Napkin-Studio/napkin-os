@@ -76,3 +76,5 @@
 
 /* The drawer's Close is outlined in ink (gaps.md §13.7: 1px solid ink). */
 .nui #dtree-close-btn { border-color: var(--ink); }
+.nui .p33-pop:focus, .nui .tba-menu:focus { outline: none; }
+.nui #dtree-approve-all:disabled { opacity: .55; cursor: not-allowed; }

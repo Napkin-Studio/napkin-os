@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AttentionItem, DecisionsView, RelatedView } from '../../host'
 import { LogoSpinner } from '../../brand/LogoSpinner'
 import { looksRightOf, needKey, splitAside } from '../decisions/needs'
-import { refOfAddress, runsOf, sectionsOf } from '../decisions/words'
+import { refOfAddress, sectionsOf } from '../decisions/words'
 import { HistoryBody, QuietItem } from '../decisions/DecisionBlock'
 import { approveWords, callCount, callWords, graphOf, lineageOf, rowOf } from './drawerData'
 import '../decisions/DecisionPanel.css'
@@ -189,7 +189,6 @@ function Views({ focus, view, onView, busy, act }: {
 }) {
   const v = focus.view
   const graph = useMemo(() => (v ? graphOf(v) : []), [v])
-  const blocks = useMemo(() => new Map((v?.decisions ?? []).map(b => [b.decision.id ?? '', b])), [v])
   const quiet = useMemo(() => quietOf(v), [v])
   const tabs: [DrawerView, string][] = [['graph', 'Graph'], ['part', 'By part'], ['time', 'By time'], ['lineage', 'Lineage']]
   let body: ReactNode
@@ -234,7 +233,8 @@ function Views({ focus, view, onView, busy, act }: {
       </div>
     )
   } else {
-    const groups = view === 'time' ? runsOf(v) : sectionsOf(v)
+    // By time is one list, newest first (the mock's "What happened, newest first"); By part groups by the part each decision touched.
+    const groups = view === 'time' ? [{ key: 'time', title: 'What happened, newest first', blocks: v.decisions }] : sectionsOf(v)
     body = (
       <div className="p33-dlist" id="p33-dlist">
         {groups.length === 0 && <p className="nui-empty">Nothing has happened yet.</p>}
@@ -266,7 +266,6 @@ function Views({ focus, view, onView, busy, act }: {
             ))}
           </div>
         )}
-        {blocks.size === 0 && null}
       </div>
     )
   }

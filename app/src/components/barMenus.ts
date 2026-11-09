@@ -275,7 +275,7 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
       run: doc.onToggleSidebar,
     },
     ...(doc.onToggleEdit && !doc.editMode
-      ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: doc.onToggleEdit }]
+      ? [{ label: 'Edit', hint: 'What you can change here', run: doc.onToggleEdit }]
       : []),
     ...(doc.onKeepOffline
       ? [{ label: 'Present offline', hint: 'Keeps a copy that works without a connection', run: doc.onKeepOffline }]
@@ -311,7 +311,7 @@ export function accountItems(account: Account | undefined, user?: string | null,
     ...(user && onSignOut
       ? [
           { label: 'Change password', hint: 'Not built yet: ask your studio admin', run: () => {}, disabled: true, apart: true },
-          { label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut },
+          { label: 'Sign out', run: onSignOut },
         ]
       : []),
   ]

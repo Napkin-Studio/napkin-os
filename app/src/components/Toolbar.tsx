@@ -19,7 +19,7 @@
 // Pure: everything it shows comes in as props, so a test can draw every state
 // with no host.
 
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
 import { accountItems, continueItems, docMenuItems, shareItems, startFresh, type Account, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
 import { MedallionMark } from './Medallion'
@@ -74,7 +74,7 @@ type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share'
 /** A popover's rows: a button per item, with its hint; a rule above `apart`; disabled ones say why. */
 function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) => void }) {
   return <>{items.map(item => (
-    <span key={item.label} style={{ display: 'contents' }}>
+    <Fragment key={item.label}>
       {item.apart && <hr />}
       <button
         type="button"
@@ -86,7 +86,7 @@ function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) =
         {item.label}
         {item.hint && <small>{item.hint}</small>}
       </button>
-    </span>
+    </Fragment>
   ))}</>
 }
 

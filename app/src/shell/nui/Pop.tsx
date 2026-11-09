@@ -40,7 +40,8 @@ export function Pop({ anchor, align = 'left', onClose, label, className = 'p33-p
     })
   }, [anchor, align, at])
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('button:not([disabled]), [role="menuitem"]')?.focus({ preventScroll: true })
+    // The menu takes focus, not its first item (no ring until the keyboard moves): ArrowDown goes to the first.
+    ref.current?.focus({ preventScroll: true })
     const outside = (e: PointerEvent) => {
       const t = e.target as Node
       if (ref.current?.contains(t) || anchor?.contains(t)) return
@@ -62,6 +63,7 @@ export function Pop({ anchor, align = 'left', onClose, label, className = 'p33-p
         ref={ref}
         className={className}
         role="menu"
+        tabIndex={-1}
         aria-label={label}
         data-testid={testid}
         style={pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }}
