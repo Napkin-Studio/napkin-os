@@ -87,6 +87,8 @@ export interface Crew {
   people: { name: string; initials: string; you?: boolean }[]
   /** What the agent working on it is doing, in words; null when none works. The status dot shows only then. */
   working?: string | null
+  /** The run stopped to ask the person something (a question in the document). It needs them, though nothing blocks the lock. */
+  waiting?: boolean
 }
 
 /** A document linked with the open one, as the lineage chips and the menu say it. */

@@ -297,7 +297,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         onHome={onHome}
         crumbs={trail}
         // The medallion lights only for the document the person is IN (owner, 9 Nov 2026).
-        attention={needs > 0}
+        attention={needs > 0 || !!crew?.waiting}
         needs={needs}
         onDecisions={clientOn ? undefined : () => setDecisionsOpen(o => !o)}
         decisionsOpen={decisionsOpen && !clientOn}

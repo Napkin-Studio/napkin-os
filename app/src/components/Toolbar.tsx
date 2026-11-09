@@ -265,11 +265,14 @@ function ToolName({ tool }: { tool: ToolBrand }) {
 }
 
 /** Decisions, with the needs-your-call count. */
-function DecisionsButton({ needs, onDecisions, open }: { needs: number; onDecisions?: () => void; open?: boolean }) {
-  const said = needs ? `${needs} need${needs === 1 ? 's' : ''} your call` : 'nothing needs your call'
+function DecisionsButton({ needs, onDecisions, open, waiting }: { needs: number; onDecisions?: () => void; open?: boolean; waiting?: boolean }) {
+  // A question the crew stopped on is answered in the document, not here, so
+  // it is not counted; but the bar must not say nothing needs you.
+  const asked = waiting ? 'the crew is waiting on your answer in the document' : ''
+  const said = needs ? `${needs} need${needs === 1 ? 's' : ''} your call${asked ? `, and ${asked}` : ''}` : asked || 'nothing needs your call'
   return (
     <button
-      className={needs ? 'ch-decisions ch-decisions-needs' : 'ch-decisions'}
+      className={needs || waiting ? 'ch-decisions ch-decisions-needs' : 'ch-decisions'}
       onClick={onDecisions}
       disabled={!onDecisions}
       aria-expanded={open}
@@ -402,7 +405,7 @@ export default function Toolbar({
         <DogfoodBadge />
         <ThemeToggle />
         {doc.crew && <CrewHere crew={doc.crew} />}
-        <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
+        <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} waiting={!!doc.crew?.waiting} />
       </span>
     </div>
   )

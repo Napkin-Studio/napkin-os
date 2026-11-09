@@ -500,6 +500,7 @@ export default function App() {
   const crew = running && !device ? {
     people: user ? [{ name: whoIs(landing.data?.person ?? null).first ?? user, initials: initialsOf(whoIs(landing.data?.person ?? null).first ?? user), you: true }] : [],
     working: docItem?.run?.state === 'working' ? runWords(docItem).toLowerCase() : null,
+    waiting: docItem?.run?.state === 'waiting',
   } : undefined
 
   return (
