@@ -17,6 +17,8 @@
 //                  smear in the ring's step colour; the review read it as a lens flare.)
 //       3 RING     + the ring's track takes the O's inner-wall tone. Option: ring at the O's proportion
 //                  (sphere radius = .60 x ring radius, as the O's window is .60 of the orb).
+//  4. ANY SIZE (Napkin Studio, 2026-11-09): opts.ringGap (px between sphere and ring, default 20) and
+//     opts.ringScale (ring and track width, default 1), so the same view draws a 26 px bar avatar.
 (function (root) {
   'use strict';
   const RAW = [
@@ -480,7 +482,7 @@ void main(){
       const cx = W / 2, cy = H * (opts.cyFrac || .40);
       // level-3 option: the ring at the O's proportion. The ring keeps v1's place (R + 20); the sphere becomes .60 of it
       const prop = LV.level >= 3 && LV.proportion;
-      const ringBase = R + 20;
+      const gap = opts.ringGap ?? 20, ringBase = R + gap;
       if (prop) R = ringBase * .60;
       I.cx = cx; I.cy = cy; I.R = R;
       POSE_SPAN(A, reduce ? 0 : mt, PA, CA);
@@ -509,7 +511,7 @@ void main(){
       if (handoff || reduce) RING.len = tgtLen; else RING.len += (tgtLen - RING.len) * (1 - Math.exp(-dt * 3));
       if (!reduce) RING.ang += dt * (RING.v[9] + 180 * RING.swell) / 360;
       const ringPad = R * (Math.abs(wobV[0]) + Math.abs(wobV[1]) + Math.abs(wobV[2]) + Math.abs(wobV[3]) + Math.abs(F.slosh) + Math.max(0, breath - 1));
-      RING.ringR = prop ? ringBase + ringPad : R + 20 + ringPad;
+      RING.ringR = prop ? ringBase + ringPad : R + gap + ringPad;
       let pingOn = 0; for (let i = 0; i < 4; i++) { if (E.pings[i] >= 0) { E.pings[i] += dt * 1.4; if (E.pings[i] > 1.7) E.pings[i] = -1; else pingOn = 1; } pingV[i] = E.pings[i]; }
       if (!E.streaming) pingOn = 0;
       // the horizon (level 2+): state cues borrowed from Deep O, kept small
@@ -551,11 +553,11 @@ void main(){
       P.v('uArc0', 4, arc0); P.v('uArc1', 4, arc1); P.v('uCir0', 4, cir0); P.v('uCir1', 4, cir1);
       for (let i = 0; i < 4; i++) { const rr = I.rips[i], q = i * 4; if (rr) { rip[q] = ox + rr.x; rip[q + 1] = oy + rr.y; rip[q + 2] = clk - rr.t0; rip[q + 3] = rr.amp; } else { rip[q] = 0; rip[q + 1] = 0; rip[q + 2] = -1; rip[q + 3] = 0; } }
       P.v('uRip', 4, rip); P.f1('uRipOn', I.ripOn ? 1 : 0); v2[0] = I.light[0]; v2[1] = I.light[1]; P.v('uLight', 2, v2);
-      rs[0] = RING.v[0]; rs[1] = RING.v[1]; rs[2] = RING.v[2]; rs[3] = RING.v[3]; P.v('uRS', 4, rs); rf[0] = RING.v[4]; rf[1] = RING.v[5]; rf[2] = RING.v[6]; rf[3] = RING.v[7]; P.v('uRFx', 4, rf);
+      rs[0] = RING.v[0]; rs[1] = RING.v[1]; rs[2] = RING.v[2] * (opts.ringScale || 1); rs[3] = RING.v[3]; P.v('uRS', 4, rs); rf[0] = RING.v[4]; rf[1] = RING.v[5]; rf[2] = RING.v[6]; rf[3] = RING.v[7]; P.v('uRFx', 4, rf);
       rg[0] = RING.len; rg[1] = RING.ang - Math.floor(RING.ang); rg[2] = RING.v[8]; P.v('uRG', 4, rg); P.v('uPing', 4, pingV);
       const lv = LEVELS[LV.level];
       P.f1('uSatin', lv.satin); P.f1('uHz', LV.hz); P.f1('uHzY', LV.hzY); P.f1('uHzWave', LV.hzWave); P.f1('uHzDrift', LV.drift); P.f1('uHzWarm', LV.hzWarm);
-      P.v('uTrack', 3, trackV); P.f1('uTrackW', lv.track ? 1.0 : .75); P.f1('uFade', LV.fade * (LV.xf ?? 1)); P.v('uHzCol', 3, hzCol); P.f1('uDarkBg', darkBg ? 1 : 0);
+      P.v('uTrack', 3, trackV); P.f1('uTrackW', (lv.track ? 1.0 : .75) * (opts.ringScale || 1)); P.f1('uFade', LV.fade * (LV.xf ?? 1)); P.v('uHzCol', 3, hzCol); P.f1('uDarkBg', darkBg ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
@@ -585,4 +587,4 @@ void main(){
     return scene.add(view);
   }
   root.NapkinAgents = { create, AG, ORDER, STYLE, K_FIXED, LEVELS, MATS, MAT_OF, TYPE_OF };
-})(window);
+})(typeof window !== "undefined" ? window : globalThis);
