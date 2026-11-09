@@ -195,7 +195,7 @@
 .ch-medallion:hover { transform: scale(1.04); }
 .ch-medallion:focus-visible { outline: 3px solid var(--agency); outline-offset: 2px; }
 /* The app you are IN needs you: the mark itself warms and closes its ring
-   (components/Medallion.tsx); the label says so too. */
+   (brand/DeepOMark.tsx); the label says so too. */
 
 .ch-agency {
   position: relative;

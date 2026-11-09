@@ -6,6 +6,8 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
+import { bootMarkSvg, DEEP_O_CSS } from './src/brand/deepOSvg'
+
 // One bundle, every host. The web build talks to napkin-web and loads the
 // WebAssembly host only when a file is opened on the device; the serverless
 // build (`VITE_NAPKIN_HOST=wasm`, `npm run build:static`) is the same bundle
@@ -70,8 +72,23 @@ function serviceWorker(): Plugin {
   }
 }
 
+/**
+ * The boot splash's mark (index.html), before any script runs: the static,
+ * CSS-animated Deep O from src/brand/deepOSvg.ts, the same geometry every
+ * other mark draws, so there is no hand-kept copy of it to drift.
+ */
+function deepOBoot(): Plugin {
+  return {
+    name: 'napkin-deep-o-boot',
+    transformIndexHtml(html) {
+      if (!html.includes('<!-- deep-o:boot -->')) throw new Error('index.html lost its <!-- deep-o:boot --> mark')
+      return html.replace('/* deep-o:css */', DEEP_O_CSS).replace('<!-- deep-o:boot -->', bootMarkSvg())
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), serviceWorker()],
+  plugins: [react(), serviceWorker(), deepOBoot()],
   // Set for a project page, whose site lives under /<repo>/.
   base: process.env.VITE_BASE || '/',
   resolve: {

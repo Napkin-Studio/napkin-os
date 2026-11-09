@@ -22,7 +22,8 @@
 import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
 import { accountItems, continueItems, docMenuItems, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
-import { MedallionMark, type MarkTarget } from './Medallion'
+import { DeepOMark } from '../brand/DeepOMark'
+import type { MarkTarget } from './medallionMotion'
 import { modeOf } from '../shell/appBar'
 import { useEngaged } from './markStore'
 import { markOf } from '../shell/agency/palette'
@@ -132,7 +133,7 @@ function Medallion({ onHome, attention, mark, target }: { onHome: () => void; at
       title={attention ? 'Back to the studio. This document needs you.' : 'Back to the studio'}
       aria-label={attention ? 'Back to the studio (this document needs you)' : 'Back to the studio'}
     >
-      <MedallionMark base={mark.base} accent={mark.accent} target={told} size={54} />
+      <DeepOMark size={54} palette={mark} shared state={told.state} progress={told.progress} kind={told.kind} stage={told.stage} testId="medallion-mark" />
     </button>
   )
 }

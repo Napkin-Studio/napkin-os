@@ -12,7 +12,7 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { MedallionMark } from '../src/components/Medallion.tsx'
+import { DeepOMark } from '../src/brand/DeepOMark.tsx'
 import { medallionLook, mix, wavePath } from '../src/components/medallionLook.ts'
 import { AGENCY_COLOURS, markOf } from '../src/shell/agency/palette.ts'
 
@@ -49,12 +49,12 @@ test('the wave path: 19 points, closed to the sea when filled', () => {
 test('the mark renders as the mock\'s H1: the arc is always drawn, lit only in a state that rings', async () => {
   const { resetMark } = await import('../src/components/markStore.ts')
   resetMark()
-  const awake = renderToStaticMarkup(createElement(MedallionMark, { base: '#1E22AA', accent: '#FFB800', target: { state: 'awake', progress: 0 } }))
+  const awake = renderToStaticMarkup(createElement(DeepOMark, { size: 54, palette: { base: '#1E22AA', accent: '#FFB800' }, shared: true, state: 'awake', progress: 0, testId: 'medallion-mark' }))
   assert.match(awake, /viewBox="-50 -50 100 100"/)
   assert.match(awake, /data-testid="medallion-arc"[^>]*/)
   assert.match(awake, /data-k="arc"[^>]*opacity="0\.000"/, 'awake: the ring is not lit')
   resetMark()
-  const needs = renderToStaticMarkup(createElement(MedallionMark, { base: '#1E22AA', accent: '#FFB800', target: { state: 'needs', progress: 0.85 } }))
+  const needs = renderToStaticMarkup(createElement(DeepOMark, { size: 54, palette: { base: '#1E22AA', accent: '#FFB800' }, shared: true, state: 'needs', progress: 0.85, testId: 'medallion-mark' }))
   assert.match(needs, /data-k="arc"[^>]*opacity="1\.000"/, 'needs: the ring closes round the sphere')
   assert.match(needs, /data-state="needs"/)
 })

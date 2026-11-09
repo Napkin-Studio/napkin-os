@@ -21,7 +21,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { LogoSpinnerFill } from '../brand/LogoSpinner'
-import { MedallionMark } from '../components/Medallion'
+import { DeepOMark } from '../brand/DeepOMark'
 import { accountName, isAccountName } from './accountName'
 import { agencyNameOf, applyAgency, coloursOf, markOf } from './agency/palette'
 import { justSignedOut, lastAgency, markSignedOut, rememberAgency } from './agency/lastAgency'
@@ -125,7 +125,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
     <main className="nui p33-signin" data-agency={agency.id ?? 'none'}>
       {challenge === null ? (
         <form className="si-card" onSubmit={signIn} noValidate>
-          <span className="si-mark"><MedallionMark base={agency.mark.base} accent={agency.mark.accent} target={{ state: 'awake', progress: 0 }} size={54} /></span>
+          <span className="si-mark"><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
           <h2>{heading}</h2>
           <p>{lede}</p>
           <label>
@@ -150,7 +150,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
         </form>
       ) : (
         <form className="si-card" onSubmit={choose} noValidate>
-          <span className="si-mark"><MedallionMark base={agency.mark.base} accent={agency.mark.accent} target={{ state: 'awake', progress: 0 }} size={54} /></span>
+          <span className="si-mark"><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
           <h2>Choose your password.</h2>
           <p>This is your first sign-in as <b>{accountName(name)}</b>. Pick a password only you know: at least 10 characters, with a letter and a number.</p>
           <label>
