@@ -159,3 +159,42 @@ test('a link, its update and its unlink each say what they did, to which documen
   assert.equal(didWhat(detach, view), 'unlinked “Guinness 0.0 · Ireland”', 'the unlink finds the title its link named')
   assert.equal(didWhat(detach, { ...VIEW0, decisions: [detach] }), 'unlinked a linked document')
 })
+
+// B4 leftovers (final retest): handlers read as the crew, keys and ids as words.
+test('a step no one of the crew owns is the crew’s, never its job’s name', () => {
+  assert.equal(whoOf(block({ action: 'reconsider' }, agent('reconsider'))).name, 'The crew')
+  assert.equal(whoOf(block({ action: 'report' }, agent('start_campaign'))).name, AGENTS.drafter.given)
+  const contest = whoOf(block({ action: 'open_contest', kind: 'contest' }, agent('start_campaign')))
+  assert.equal(contest.name, 'The researchers')
+  assert.equal(contest.person, false)
+})
+
+test('a contest’s key, a spin-off and a reconsider read as sentences without ids', () => {
+  const view = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] } as unknown as DecisionsView
+  assert.equal(plain('Opened a contest on category/alcohol.cider:market.export_value@IE; nothing is picked'),
+    'Opened a contest on the export value in Ireland; nothing is picked')
+  const spin = block({
+    action: 'spin off "Dry Run" into Research Tool',
+    rationale: 'Carried its data, frozen under upstream.a3eba7f3-def2-499a-bcb9-24df86b92c25, its facts, findings, sources, branches and assets, and 90 decision(s) from "Dry Run" (a3eba7f3). Everything below this entry was decided in that document.',
+  }, agent('napkin-spinoff'))
+  const said = didWhat(spin, view)
+  assert.equal(said, 'started this from “Dry Run”, carrying in its facts, findings and sources and 90 decisions made there')
+  const why = plain(spin.decision.rationale)
+  assert.doesNotMatch(why, /upstream|a3eba7f3/)
+  const rec = block({
+    action: 'reconsider',
+    rationale: "Brought the document in step with a person's review: 1 review(s): 0 finding(s) checked, 0 still stand, 0 superseded by what they were worked out again as, 0 no longer stand. Because: A person verified it",
+  }, agent('reconsider'))
+  assert.equal(didWhat(rec, view), 'went over the findings after a person’s review; none of them needed changing')
+  const rec2 = block({ ...rec.decision, rationale: "Brought the document in step with a person's review: 2 review(s): 3 finding(s) checked, 2 still stand, 1 superseded by what they were worked out again as, 0 no longer stand." }, agent('reconsider'))
+  assert.equal(didWhat(rec2, view), 'went over the findings after 2 reviews by a person: 3 findings checked again, 2 findings still stand, 1 finding was worked out again')
+})
+
+test('a part named by its key reads by the label the host gives it', () => {
+  const parts = { budget_and_scope: 'budget & scope', background: 'background', competitor_context: 'competitor context' }
+  assert.equal(plain('budget_and_scope asks legal which sections apply', parts), 'budget & scope asks legal which sections apply')
+  assert.equal(plain('Over length: background 99/70, competitor_context 120/70', parts),
+    'Too long: background (99 words, 70 at most), competitor context (120 words, 70 at most)')
+  assert.equal(plain('Checked the new the barrier: it answers the note.'), 'Checked the new barrier: it answers the note.')
+  assert.equal(plain('Proposed a effectiveness_evidence finding for a person to verify'), 'Proposed an effectiveness point for you to check')
+})

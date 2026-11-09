@@ -14,7 +14,7 @@ import { ResultThumbs } from '../../dogfood/Dogfood'
 import { AGENTS } from '../../studio/model'
 import { canRun, openInApp, runInApp } from '../appExport'
 import {
-  changeOf, chipOf, citesOf, clientLineOf, didWhat, hhmm, mainTarget, opensInApp, plain, redoOf, refOfAddress, signOf, skippedOf,
+  changeOf, chipOf, citesOf, clientLineOf, didWhat, hhmm, mainTarget, opensInApp, partNamesOf, plain, redoOf, refOfAddress, signOf, skippedOf,
   sourcesOf, sureWord, upper, whereOf, whoOf, withCountry,
 } from './words'
 import type { WhoIs } from './words'
@@ -62,7 +62,7 @@ export function NeedsCard({ item, block, actions, aside }: { item: AttentionItem
   const ref = refOfAddress(item.address)
   const path = String(item.address ?? '').split('#')[1]
   const who = block ? whoOf(block) : null
-  const statement = item.code === 'unverified_finding' || item.code === 'flagged_field'
+  const statement = item.code === 'unverified_finding' || item.code === 'flagged_field' || item.code === 'open_contest'
     ? withCountry((item.label ?? '').replace(/^(Finding|Fact|Contest) · /, '')) : withCountry(item.label ?? '')
   // A client's answer is not something anyone "raised": the host's sentence says whose it is.
   const raisedBy = block && !item.code.startsWith('client_')
@@ -137,6 +137,7 @@ export function HistoryLine({ block, view }: { block: DecisionBlock; view: Decis
   const hasMore = !!(r || d.rationale || cites.length)
   // A client's answer leads with the client, not the person who recorded it.
   const client = clientLineOf(block, view)
+  const parts = partNamesOf(view)
   return (
     <details className={`dp-ev ${block.superseded ? 'dp-ev-old' : ''}`}>
       <summary>
@@ -179,7 +180,7 @@ export function HistoryLine({ block, view }: { block: DecisionBlock; view: Decis
               <div><h4>Why</h4><p>{d.rationale}</p></div>
             </div>
           ) : (
-            <p className="dp-decided">{plain(r?.decided || d.rationale.split(/\. Because/)[0])}</p>
+            <p className="dp-decided">{plain(r?.decided || d.rationale.split(/\. Because/)[0], parts)}</p>
           )}
           {r?.because?.length ? (
             <div>
@@ -187,14 +188,14 @@ export function HistoryLine({ block, view }: { block: DecisionBlock; view: Decis
               <ul>
                 {r.because.map((p, i) => (
                   <li key={i}>
-                    {plain(p.point)}
+                    {plain(p.point, parts)}
                     <Chips ids={p.cites ?? []} view={view} />
                   </li>
                 ))}
               </ul>
             </div>
           ) : d.rationale.includes('. Because') ? (
-            <div><h4>Why</h4><p>{plain(d.rationale.split('. Because: ')[1] ?? '')}</p></div>
+            <div><h4>Why</h4><p>{plain(d.rationale.split('. Because: ')[1] ?? '', parts)}</p></div>
           ) : null}
           {(facts + findings + sources.length + materials.length) > 0 && (
             <div>
@@ -229,9 +230,9 @@ export function HistoryLine({ block, view }: { block: DecisionBlock; view: Decis
             </div>
           )}
           {r?.rejected?.length ? (
-            <div><h4>Considered and set aside</h4><ul>{r.rejected.map((x, i) => <li key={i}>{plain(x.option)}{x.why && <span className="dp-muted"> — {plain(x.why)}</span>}</li>)}</ul></div>
+            <div><h4>Considered and set aside</h4><ul>{r.rejected.map((x, i) => <li key={i}>{plain(x.option, parts)}{x.why && <span className="dp-muted"> — {plain(x.why, parts)}</span>}</li>)}</ul></div>
           ) : null}
-          {sure && <p><b>{sure}</b>{r?.certainty?.why ? ` · ${plain(r.certainty.why)}` : ''}</p>}
+          {sure && <p><b>{sure}</b>{r?.certainty?.why ? ` · ${plain(r.certainty.why, parts)}` : ''}</p>}
           <Again block={block} />
           {t && <div className="dp-acts"><button className="dp-link" onClick={() => openInApp(refOfAddress(t.address), t.path)}>Show in document</button></div>}
           <details className="dp-tech">
