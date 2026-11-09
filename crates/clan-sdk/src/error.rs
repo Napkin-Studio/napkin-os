@@ -49,4 +49,9 @@ pub enum Error {
 
     #[error("signing error: {0}")]
     Signing(String),
+
+    /// The document's data or a member would not validate against a newer
+    /// app's schemas ([`crate::upgrade_app`]); the fields that do not fit.
+    #[error("the document's data does not fit this version of its app: {}", .0.join(", "))]
+    DoesNotFit(Vec<String>),
 }

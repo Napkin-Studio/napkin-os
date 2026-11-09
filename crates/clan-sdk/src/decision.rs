@@ -38,6 +38,7 @@ pub const DECISION_KINDS: &[&str] = &[
     "backref",
     "client_review",
     "unlock",
+    "app_update",
 ];
 
 /// Prefix every generated decision id carries.

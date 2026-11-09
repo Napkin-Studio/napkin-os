@@ -29,6 +29,7 @@ pub mod patch;
 pub mod render;
 pub mod sign;
 pub mod toon;
+pub mod upgrade;
 pub mod validate;
 
 pub use attach::{attach, detach, AttachOutcome, AttachVerb, DetachOutcome, ATTACH_AGENT};
@@ -63,4 +64,5 @@ pub use patch::{apply_patch_and_repack, Patch, Patches};
 pub use render::render;
 pub use sign::{generate_keypair, sign_app, verify_app};
 pub use toon::{to_toon, yaml_to_toon};
+pub use upgrade::{app_digest, is_app_entry, upgrade_app, upgrade_misfits, APP_ENTRIES};
 pub use validate::{validate, ValidationReport};
