@@ -7,6 +7,7 @@ unset there is no engine: the task says so, and writes nothing."""
 from ..deck import engine as eng
 from ..deck.job import DeckJob
 from ..doc import ctx_data
+from ..pipeline.extract import workspace_client
 from ..util import TaskError, bad
 
 NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "build_deck", "build_deck", "1.0", "deck", 1
@@ -27,8 +28,14 @@ def start(req, caps, settings, jid):
         raise TaskError(503, "engine_unavailable", "no deck engine is configured for this middleware (NAPKIN_DECK_ENGINE_URL)")
     run = data.get("run") if isinstance(data.get("run"), dict) else {}
     approvals = run.get("approvals") if isinstance(run.get("approvals"), dict) else {}
+    out_prompt = {k: prompt.get(k) or "" for k in ("text", "client", "project", "agency")}
+    # The client the document belongs to (the host's manifest.client, as workspace_client) when the prompt names none:
+    # a deck made in a client's desk puts that client on its cover, never [Client].
+    wc = workspace_client(req.clan)
+    if wc and not str(out_prompt["client"]).strip():
+        out_prompt["client"] = wc["name"]
     body = {"doc": req.doc,
-            "inputs": {"prompt": {k: prompt.get(k) or "" for k in ("text", "client", "project", "agency")},
+            "inputs": {"prompt": out_prompt,
                        "kind": inputs.get("kind") or "agency", "format": inputs.get("format") or "pitch"},
             "approvals": approvals, "render": bool(getattr(settings, "deck_render", True))}
     if carries:

@@ -291,7 +291,7 @@ test('nothing in the app writes inputs.brief or inputs.research', () => {
 
 // A stub DOM: enough to run the page script, render, and click.
 type Writes = { obj: Record<string, unknown>; action: string }[]
-type MountOpts = { apiProxy?: (kind: string, payload: { task: string; input: Record<string, unknown> }) => Promise<unknown>; timers?: boolean }
+type MountOpts = { apiProxy?: (kind: string, payload: { task: string; input: Record<string, unknown> }) => Promise<unknown>; timers?: boolean; manifest?: Record<string, unknown> }
 function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Record<string, unknown> = {}, opts: MountOpts = {}) {
   const writes: Writes = []
   const handlers: Record<string, ((e: unknown) => void)[]> = {}
@@ -304,7 +304,7 @@ function mount(data: Record<string, unknown>, fetchImpl?: unknown, extraEls: Rec
     title: '',
   }
   const win: Record<string, unknown> = {
-    __CLAN__: { data },
+    __CLAN__: { data, ...(opts.manifest ? { manifest: opts.manifest } : {}) },
     clan: { patchData: (obj: Record<string, unknown>, o: { action: string }) => { writes.push({ obj, action: o.action }); return Promise.resolve() },
             ...(opts.apiProxy ? { apiProxy: opts.apiProxy } : {}) },
     addEventListener() {},
@@ -2293,4 +2293,28 @@ test('the storyboard\'s styles are the mock\'s, in tokens', () => {
   assert.match(css, /\.slide-h\{font:600 22px\/1\.2 var\(--f-serif\)/)
   assert.match(css, /\.btn-rect\.primary\{background:var\(--ag-act\)/)
   assert.match(html, /family=Newsreader/)
+})
+
+// ── the document's client (owner bug 2026-11-09): a deck made in a client's desk never asks who the client is ──────────
+test('a deck in a client reads the client from the document and never asks for it', () => {
+  const inClient = { client: { id: 'cli_1', name: "McDonald's Ireland" } }
+  const m = mount({ inputs: { prompt: {} } }, undefined, { ptext: { value: 'A deck for a drinks brand about summer.' } }, { manifest: inClient })
+  m.click({}, 'land-build')
+  const h = m.app.innerHTML
+  assert.equal(h.includes('Who is the client?'), false, 'no client question')
+  assert.ok(h.includes('Question 1 of 1 ·'), 'only the kind of deck is asked')
+  assert.ok(h.includes('McDonald&#39;s Ireland') || h.includes("McDonald's Ireland"), 'the read shows the document\'s client')
+  assert.equal(/<small>Client<\/small>\[Client\]/.test(h), false)
+  // with no client on the document the question is still asked
+  const out = mount({ inputs: { prompt: {} } }, undefined, { ptext: { value: 'A deck for a drinks brand about summer.' } })
+  out.click({}, 'land-build')
+  assert.ok(out.app.innerHTML.includes('Question 1 of 2 ·') && out.app.innerHTML.includes('[Client]'))
+})
+
+test('an intake answer may null the keys of the other kinds (RFC 7396): the schema takes the read\'s deck type', () => {
+  const sch = JSON.parse(readFileSync(new URL('templates/deck-maker/schema.json', root), 'utf8'))
+  const row = sch.properties.intake.properties.answers.additionalProperties.properties
+  for (const k of ['text', 'option_id', 'skipped']) assert.ok(row[k].type.includes('null'), k)
+  const p = L.answerPatch('q_deck_type', { option_id: 'agency_pitch' }, 'now') as Fx
+  assert.equal(p.intake.answers.q_deck_type.skipped, null)
 })

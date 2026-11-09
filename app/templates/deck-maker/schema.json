@@ -819,16 +819,17 @@
             "type": "object",
             "properties": {
               "text": {
-                "type": "string"
+                "type": ["string", "null"],
+                "description": "null clears an earlier answer of another kind (the store merges patches, RFC 7396)"
               },
               "option_id": {
-                "type": "string"
+                "type": ["string", "null"]
               },
               "at": {
                 "type": "string"
               },
               "skipped": {
-                "type": "boolean"
+                "type": ["boolean", "null"]
               }
             }
           }

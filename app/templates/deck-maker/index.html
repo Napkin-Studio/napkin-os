@@ -2187,6 +2187,21 @@ var DeckLogic = (function () {
   }
 
 
+  // What the document already knows before the read asks anything: its client (the manifest's, the client desk it was made
+  // in) and the signed-in agency's name (clan.me). The document's client wins over a name read from the prompt: a deck made in
+  // McDonald's Ireland's desk is theirs. The client question is asked only when the document has none.
+  var AGENCY = { name: '' };
+  function docClient() {
+    var m = (window.__CLAN__ || {}).manifest || {}, c = m.client;
+    return c && typeof c === 'object' ? String(c.name || '').trim() : '';
+  }
+  function fromDocument(r) {
+    var c = docClient();
+    if (c) { r.client = c; r.clientFrom = 'document'; }
+    if (!r.agency && AGENCY.name) { r.agency = AGENCY.name; r.agencyFrom = 'you'; }
+    return r;
+  }
+
   // ── the landing page (features/deck-maker-simple-start.clan) ──────────────────────────────────────────────────
   var EXAMPLES = [
     'Fernley Drinks is a small Irish cordial maker launching a sparkling elderflower drink. Pitch a summer campaign for 25 to 35 year olds. Modest budget.',
@@ -2316,7 +2331,7 @@ var DeckLogic = (function () {
       '<div class="stack">' + typeSelector(s) +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">01</span><b>Your prompt</b><div class="spacer"></div>' +
         '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
-        '<div class="three">' + field('client', 'Client', p.client) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
+        '<div class="three">' + field('client', 'Client', p.client || docClient()) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency || AGENCY.name, 'Shows as [Agency]') + '</div>' +
         '<div style="margin-top:14px"><label class="lab" for="ptext">What are we pitching? (a line is enough; paste everything you have)</label><textarea class="inp ta" id="ptext">' + esc(text) + '</textarea></div></section>' +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
         docList + '<div style="margin-top:10px"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple style="position:absolute;left:-9999px" aria-label="Attach documents" />' +
@@ -3478,7 +3493,7 @@ return {
       stashDraft();
       var typed0 = String(draft('text', '')).trim();
       if (!typed0 && !L.documentsOf(s.raw).length) { toast('Give the deck something to build from: a line about what you are pitching, or a document.'); return; }
-      var rd = L.readPrompt(typed0);
+      var rd = fromDocument(L.readPrompt(typed0));
       rd.qs = L.readQuestions(rd); rd.qi = 0; rd.editing = null;
       view.read = rd;
       return afterAnswer();
@@ -3509,7 +3524,7 @@ return {
     }
     if (a.rdgo !== undefined) return commitRead();
     if (a.rdagain !== undefined) {
-      var back = view.last || L.readPrompt(String(d().inputs.prompt.text || ''));
+      var back = view.last || fromDocument(L.readPrompt(String(d().inputs.prompt.text || '')));
       back.qs = []; back.qi = 0; back.editing = null;   // everything was already settled: change what you like, then build again
       view.read = back; view.screen = 'start'; view.readLine = null;
       return render();
@@ -3672,6 +3687,7 @@ return {
       if (!(window.clan && typeof window.clan.me === 'function')) return;
       Promise.resolve(window.clan.me()).then(function (m) {
         var c = m && m.agency, HEX = /^#[0-9a-f]{6}$/i, r = document.documentElement;
+        if (c && typeof c.name === 'string' && c.name.trim()) AGENCY.name = c.name.trim();
         if (!c || !HEX.test(c.base || '') || !HEX.test(c.accent || '') || !r || !r.style) return;
         var inkOn = function (h) {
           var n = parseInt(h.slice(1), 16), l = [n >> 16, (n >> 8) & 255, n & 255].map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });

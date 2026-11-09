@@ -294,3 +294,20 @@ def test_a_deck_that_carries_nothing_sends_no_deck_inputs(deck, monkeypatch):
     fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
     build(deck, Host(data=deck_data(), schema=SCHEMA))
     assert "deck_inputs" not in fake.posts[0]
+
+
+def test_a_deck_in_a_client_desk_sends_that_client_when_the_prompt_names_none(deck, monkeypatch):
+    fake = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    h = Host(data=deck_data(), schema=SCHEMA)
+    h.data["inputs"]["prompt"]["client"] = ""
+    base = h.clan
+    h.clan = lambda: {**base(), "workspace_client": {"id": "cli_1", "name": "McDonald's Ireland"}}
+    build(deck, h)
+    assert fake.posts[0]["inputs"]["prompt"]["client"] == "McDonald's Ireland"
+    # a client the person named stays theirs
+    fake2 = use(monkeypatch, FakeEngine(view("gate", gate=GATE1)))
+    h2 = Host(data=deck_data(), schema=SCHEMA)
+    base2 = h2.clan
+    h2.clan = lambda: {**base2(), "workspace_client": {"id": "cli_1", "name": "McDonald's Ireland"}}
+    build(deck, h2)
+    assert fake2.posts[0]["inputs"]["prompt"]["client"] == "Fernley"
