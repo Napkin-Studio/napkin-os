@@ -209,9 +209,14 @@ function Lineage({ doc }: { doc: DocBar }) {
   }
   for (const l of doc.linked ?? []) {
     const go = open(l.path)
+    const said = l.dir === 'in'
+      ? `Linked: ${l.title}${l.taken ? `, v${l.taken} kept here` : ''}${l.changed ? ', which has changed since' : ''}`
+      : `Linked into ${l.title}`
     chips.push(
-      <button key={`l:${l.path ?? l.title}`} type="button" className="ch-line ch-line-link" onClick={go} disabled={!go} title={`Linked: ${l.title}`}>
-        ↔ <b>{l.title}</b>
+      <button key={`l:${l.dir}:${l.documentId}`} type="button" className="ch-line ch-line-link" onClick={go} disabled={!go} title={said}
+        data-testid={l.dir === 'in' ? 'lineage-linked' : 'lineage-linked-in'}>
+        ↔ {l.dir === 'out' && 'in '}<b>{l.title}</b>{l.dir === 'in' && l.taken ? <small className="ch-line-v"> v{l.taken}</small> : null}
+        {l.changed && <i className="ch-line-dot" aria-label="changed since" />}
       </button>,
     )
   }
@@ -349,7 +354,7 @@ export default function Toolbar({
             className="ch-btn ch-btn-slot"
             groups={[
               { label: 'Turn it into', items: cont.spin, empty: 'No app here takes this as a source yet.' },
-              { label: 'Link to an existing one', items: cont.link, empty: 'Linking to other work is coming.' },
+              { label: 'Link to an existing one', items: cont.link, empty: 'Nothing in this workspace to link this to yet.' },
               ...(doc.madeFrom
                 ? [{
                     label: 'Made from',

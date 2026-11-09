@@ -6,7 +6,7 @@
 // inventory test (tests/barInventory.test.tsx) can read every item with no DOM.
 
 import type { ReactNode } from 'react'
-import type { SpinoffTarget, UpstreamView } from '../host/types'
+import type { AttachTarget, RelatedView, SpinoffTarget, UpstreamView } from '../host/types'
 import { overflowButtons, type BarItem, type BarStatus } from '../shell/appBar'
 
 /** A tool as the bar names it: its own name, colour and face (its app.home). */
@@ -68,8 +68,16 @@ export interface DocBar {
   onOpenDocument?: (path: string) => void
   /** What was made from it (`GET /related`, features/spinoff-and-links.clan); absent until the host answers it. */
   madeInto?: { count: number; noun?: string; path?: string } | null
-  /** Documents linked to it (the general attach); absent until linking lands. */
-  linked?: { title: string; path?: string }[]
+  /** Documents linked with it (os-layer §5.7, `GET /related`): linked into it, and those it is linked into. */
+  linked?: LinkedDoc[]
+  /** "Continue in ▾ › Link to an existing one": what it could link (`GET /attach-targets`). */
+  linkTargets?: AttachTarget[]
+  /** Link that document into this one (`POST /attach`). */
+  onLink?: (documentId: string) => void
+  /** Take a linked document's newer version (`POST /upstream/update {document_id}`). */
+  onUpdateLinked?: (documentId: string) => void
+  /** Let go of a linked document (`POST /attach/detach`). */
+  onUnlink?: (documentId: string) => void
   /** Who is in the document: the people, and an agent while one works. */
   crew?: Crew
 }
@@ -79,6 +87,53 @@ export interface Crew {
   people: { name: string; initials: string; you?: boolean }[]
   /** What the agent working on it is doing, in words; null when none works. The status dot shows only then. */
   working?: string | null
+}
+
+/** A document linked with the open one, as the lineage chips and the menu say it. */
+export interface LinkedDoc {
+  documentId: string
+  title: string
+  path?: string
+  /** `in`: linked into this one (it carries a frozen copy); `out`: this one is linked into it. */
+  dir: 'in' | 'out'
+  /** It changed since this one took it (`in` only). */
+  changed?: boolean
+  /** Which version of it this one holds: 1 on link, one more on each update. */
+  taken?: number | null
+  noun?: string | null
+}
+
+/** What `GET /related` says, as the bar shows it: links both ways, and what was made from it. */
+export function linksOf(view: RelatedView | null): { linked: LinkedDoc[]; madeInto: DocBar['madeInto'] } {
+  if (!view) return { linked: [], madeInto: null }
+  const linked: LinkedDoc[] = [
+    ...view.upstream.filter(u => u.how === 'linked').map(u => ({
+      documentId: u.document_id,
+      title: u.title || 'a linked document',
+      ...(u.path ? { path: u.path } : {}),
+      dir: 'in' as const,
+      changed: u.status === 'changed',
+      taken: u.taken ?? null,
+      noun: u.noun ?? null,
+    })),
+    ...view.downstream.filter(d => d.how === 'linked_in').map(d => ({
+      documentId: d.document_id,
+      title: d.title || 'a document',
+      ...(d.path ? { path: d.path } : {}),
+      dir: 'out' as const,
+      noun: d.noun ?? null,
+    })),
+  ]
+  const into = view.downstream.filter(d => d.how === 'made_into')
+  const nouns = new Set(into.map(d => d.noun ?? 'document'))
+  const madeInto = into.length
+    ? {
+        count: into.length,
+        noun: nouns.size === 1 ? [...nouns][0] : 'document',
+        ...(into[0].path ? { path: into[0].path } : {}),
+      }
+    : null
+  return { linked, madeInto }
 }
 
 /** The document this one was made from, as the Continue in ▾ menu says it. */
@@ -117,7 +172,7 @@ export interface MenuItem {
 
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
 export function continueItems(
-  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream'>,
+  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'>,
 ): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[] } {
   const from = doc.madeFrom
   const since = from?.decisionsSince
@@ -127,9 +182,7 @@ export function continueItems(
       hint: t.map ? `Takes this along, into ${t.map}` : 'Takes its data and decisions along',
       run: () => doc.onSpinoff(t.app_id),
     })),
-    // Linking an existing document needs the general attach (feat/brand-clan,
-    // features/spinoff-and-links.clan); the group keeps its place until then.
-    link: [],
+    link: linkItems(doc),
     // A spin-off may take its parent's newer version (owner, 2026-11-09).
     update: from?.changed && doc.onUpdateFromUpstream
       ? [{
@@ -195,3 +248,49 @@ function signOutItem(user?: string | null, onSignOut?: () => void): MenuItem[] {
   return user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: true }] : []
 }
 
+
+/**
+ * "Link to an existing one": each document it could link, then, apart, the
+ * ones linked into it now: Update when one changed, and Unlink. A locked
+ * document shows what it could link, disabled, saying why (the host refuses
+ * it too).
+ */
+function linkItems(
+  doc: Pick<DocBar, 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'>,
+): MenuItem[] {
+  const out: MenuItem[] = []
+  for (const t of doc.linkTargets ?? []) {
+    if (t.attached) continue
+    const locked = t.locked || !doc.onLink
+    out.push({
+      label: `↔ ${t.title}`,
+      hint: locked
+        ? 'It is locked: a locked version keeps what it holds. Reopen it to link.'
+        : `${t.app_name}. Each keeps its own version; changes show as updates.`,
+      run: () => doc.onLink?.(t.document_id),
+      ...(locked ? { disabled: true } : {}),
+    })
+  }
+  let first = true
+  for (const l of (doc.linked ?? []).filter(l => l.dir === 'in')) {
+    if (l.changed && doc.onUpdateLinked) {
+      out.push({
+        label: `Update ${l.title}`,
+        hint: `It changed since this took it${l.taken ? ` (v${l.taken})` : ''}. Takes the newer version; your own work here stays.`,
+        run: () => doc.onUpdateLinked!(l.documentId),
+        ...(first ? { apart: true } : {}),
+      })
+      first = false
+    }
+    if (doc.onUnlink) {
+      out.push({
+        label: `Unlink ${l.title}`,
+        hint: 'Lets go of it here. What this took from it stays as this one’s own.',
+        run: () => doc.onUnlink!(l.documentId),
+        ...(first ? { apart: true } : {}),
+      })
+      first = false
+    }
+  }
+  return out
+}

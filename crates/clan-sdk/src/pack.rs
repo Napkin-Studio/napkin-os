@@ -362,6 +362,7 @@ pub fn pack(
         parents: Vec::new(),
         merge: false,
         carried: parent_manifest.carried().cloned(),
+        attached: parent_manifest.attached().to_vec(),
     });
 
     // View bookkeeping (spec §23): view-producing modes refresh the view and
@@ -1302,6 +1303,7 @@ fn repack_with_entry_decision(
         parents: Vec::new(),
         merge: false,
         carried: parent_manifest.carried().cloned(),
+        attached: parent_manifest.attached().to_vec(),
     });
 
     // Ensure the file is tracked in manifest files array if it's an asset or state

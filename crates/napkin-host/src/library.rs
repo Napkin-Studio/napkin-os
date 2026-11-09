@@ -449,12 +449,14 @@ pub fn spinoff_targets(store: &dyn DocStore, source_app_id: Option<&str>) -> Vec
             continue;
         }
         let Some(app) = &m.app else { continue };
-        let Some(spec) = &app.spinoff else { continue };
-        let accepted = spec.accepts.is_empty()
-            || source_app_id.is_some_and(|id| spec.accepts.iter().any(|a| a == id));
-        if !accepted {
+        let Some(declared) = &app.spinoff else {
+            continue;
+        };
+        if !declared.accepts_source(source_app_id) {
             continue;
         }
+        // A source app with its own carry (`by_source`) is offered by it.
+        let spec = &declared.for_source(source_app_id);
         out.push(SpinoffTarget {
             app_id: app.app_id.clone(),
             name: app.name.clone(),
@@ -596,7 +598,7 @@ fn spinoff_from(
 /// without waiting for a write. Any other spin-off is returned as it came.
 fn with_projection(bytes: Vec<u8>) -> HostResult<Vec<u8>> {
     let clan = ClanFile::from_bytes(bytes)?;
-    if clan.manifest().carried().is_none() {
+    if clan.manifest().carried().is_none() && clan.manifest().attached().is_empty() {
         return Ok(clan.raw_bytes().to_vec());
     }
     let member = |m: members::Member| -> HostResult<(Vec<serde_yaml::Value>, Vec<u8>)> {
@@ -666,14 +668,14 @@ fn tenant_of(clan: &ClanFile) -> Option<String> {
 /// `clan` belongs to another tenant than the one `ctx` acts for. A context
 /// with no tenant (the desktop, the browser) and a document that names none
 /// are never foreign.
-fn foreign(ctx: &Ctx, clan: &ClanFile) -> bool {
+pub(crate) fn foreign(ctx: &Ctx, clan: &ClanFile) -> bool {
     match (&ctx.scope.org, tenant_of(clan)) {
         (Some(ours), Some(theirs)) => *ours != theirs,
         _ => false,
     }
 }
 
-fn chain_of(clan: &ClanFile) -> DecisionChain {
+pub(crate) fn chain_of(clan: &ClanFile) -> DecisionChain {
     clan.read_entry(CHAIN)
         .ok()
         .and_then(|b| DecisionChain::from_yaml(&b).ok())
@@ -733,6 +735,11 @@ pub enum Backref {
     },
     /// `/verify` of `finding`, which the direct parent holds too.
     Verified { finding: String },
+    /// `/attach` or `/attach/update`: `source` was linked into the child
+    /// (`os-layer.md` §5.7), so it says where it is used.
+    Linked { source: String },
+    /// `/attach/detach`: the child let go of `source`.
+    Unlinked { source: String },
 }
 
 /// One back-reference written: the parent, and the decision it now holds.
@@ -767,6 +774,9 @@ pub fn backref_changes(
         .iter()
         .find(|d| d.id.as_deref() == Some(decision))
         .and_then(|d| d.version.clone())
+        // A link's decision names the source's version it took; the backref
+        // names the child's.
+        .filter(|_| !matches!(backref, Backref::Linked { .. } | Backref::Unlinked { .. }))
         .unwrap_or_else(|| child.version().as_str().to_string());
 
     // (parent, action, target, rationale)
@@ -801,6 +811,18 @@ pub fn backref_changes(
             })
             .into_iter()
             .collect(),
+        Backref::Linked { source } => vec![(
+            source.clone(),
+            "linked",
+            source.clone(),
+            format!("Linked into \"{title}\" at {version}."),
+        )],
+        Backref::Unlinked { source } => vec![(
+            source.clone(),
+            "unlinked",
+            source.clone(),
+            format!("Unlinked from \"{title}\"."),
+        )],
     };
 
     let mut out = Vec::new();
@@ -926,7 +948,39 @@ pub fn update_from_upstream(
     ctx: &Ctx,
     doc: &Document,
 ) -> HostResult<crate::ops::Outcome> {
+    update_from_upstream_of(store, ctx, doc, None)
+}
+
+/// [`update_from_upstream`], or, when `document_id` names a document linked
+/// to this one (`lineage.attached`), take that one's newer version: the same
+/// carry as `POST /attach/update`, one `update_from_<noun>` decision.
+pub fn update_from_upstream_of(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+    document_id: Option<&str>,
+) -> HostResult<crate::ops::Outcome> {
     let clan = doc.clan();
+    if let Some(id) = document_id {
+        let made_from = clan
+            .manifest()
+            .carried()
+            .is_some_and(|c| c.document_id == id);
+        let linked = clan
+            .manifest()
+            .attached()
+            .iter()
+            .any(|a| a.carried.document_id == id);
+        if linked && !made_from {
+            let (change, reply) = attach_change(store, ctx, doc, id, AttachMode::Update)?;
+            return Ok(crate::ops::Outcome::changed(reply, change));
+        }
+        if !made_from {
+            return Err(HostError::conflict(format!(
+                "{id} is neither what this was made from nor linked to it"
+            )));
+        }
+    }
     let here = clan.document_id().to_string();
     let Some(carried) = clan.manifest().carried().cloned() else {
         return Err(HostError::conflict(
@@ -1032,6 +1086,399 @@ pub fn source_cards(
     crate::ops::decisions::source_cards(doc, refs, |id| find_upstream(store, ctx, doc, id))
 }
 
+// ── Links: attach (os-layer §5.7) ───────────────────────────────────────────
+//
+// A document takes another existing one in beside its own work: a research
+// in a brief, a brief in a research, either in a deck or a production. The
+// SDK's `attach` does the carry; this is what the host adds: who may, which
+// documents are on offer, the attribution, the projection the host owns, and
+// what links point at a document (`GET /related`).
+
+/// A document the open one could link, offered by `GET /attach-targets`.
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachTarget {
+    pub app_id: String,
+    pub app_name: String,
+    pub document_id: String,
+    pub title: String,
+    /// The source's `kit.version`, when it declares one.
+    pub version: Option<u64>,
+    /// Where the shell opens it.
+    pub path: String,
+    pub updated_at: String,
+    /// The open document has it linked now.
+    pub attached: bool,
+    /// The app lets a document hold more than one of this app at once.
+    pub many: bool,
+    /// The open document is locked: a link would be refused, and the shell
+    /// says why rather than offer it.
+    pub locked: bool,
+}
+
+pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
+    let data: serde_yaml::Value = serde_yaml::from_slice(&clan.read_entry(DATA).ok()?).ok()?;
+    data.get("kit")?.get("version")?.as_u64()
+}
+
+/// The documents of this tenant that the open document's app lets be linked
+/// (`app.attach.accepts`), by title. Empty when the app declares none. A fork
+/// branch, a template, another tenant's document, the document itself and
+/// what it was made from are never offered.
+pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<AttachTarget> {
+    let manifest = doc.clan().manifest();
+    let spec = manifest
+        .app
+        .as_ref()
+        .and_then(|a| a.attach.clone())
+        .unwrap_or_default();
+    if spec.accepts.is_empty() {
+        return Vec::new();
+    }
+    let here = manifest.document_id().to_string();
+    let made_from = manifest.carried().map(|c| c.document_id.clone());
+    let attached: Vec<String> = manifest
+        .attached()
+        .iter()
+        .map(|a| a.carried.document_id.clone())
+        .collect();
+    let locked = locked_error(doc.clan()).is_some();
+    let mut out: Vec<AttachTarget> = store
+        .documents()
+        .into_iter()
+        .filter(|id| id != doc.id())
+        .filter_map(|id| {
+            let d = Document::load(store.parts(), id).ok()?;
+            let m = d.clan().manifest();
+            let app = m.app.as_ref()?;
+            let document_id = m.document_id().to_string();
+            if m.fork.is_some()
+                || m.document_type.as_deref() == Some("template")
+                || !spec.accepts.contains(&app.app_id)
+                || document_id == here
+                || Some(&document_id) == made_from.as_ref()
+                || foreign(ctx, d.clan())
+            {
+                return None;
+            }
+            Some(AttachTarget {
+                app_id: app.app_id.clone(),
+                app_name: app.name.clone(),
+                attached: attached.contains(&document_id),
+                many: spec.many.contains(&app.app_id),
+                locked,
+                document_id,
+                title: m.title.clone(),
+                version: kit_version(d.clan()),
+                path: d.id().to_string(),
+                updated_at: m.updated_at.clone(),
+            })
+        })
+        .collect();
+    out.sort_by_key(|a| a.title.to_lowercase());
+    out
+}
+
+/// Which of the two the caller means. `/attach` never silently updates and
+/// `/attach/update` never silently attaches: each says `409` when the
+/// document is not in the state the verb is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachMode {
+    Attach,
+    Update,
+}
+
+pub(crate) fn locked_error(clan: &ClanFile) -> Option<HostError> {
+    crate::ops::review::lock_of(&chain_of(clan), clan.document_id()).map(|d| {
+        HostError::conflict(format!(
+            "\"{}\" was locked by {} at {}; a locked version keeps what it holds. \
+             Reopen it, or make a new version, to link to it",
+            clan.manifest().title,
+            d.actor.as_deref().unwrap_or(&d.agent),
+            d.timestamp
+        ))
+    })
+}
+
+/// A person's decision, as the chain says: the attach's own entries carry the
+/// actor and the org the shell resolved, as every attributed write does, and
+/// the seeds keep the process that made them.
+fn attribute_attach(bytes: Vec<u8>, before: &ClanFile, ctx: &Ctx) -> HostResult<Vec<u8>> {
+    let clan = ClanFile::from_bytes(bytes)?;
+    let old: std::collections::BTreeSet<String> = chain_of(before)
+        .decisions
+        .into_iter()
+        .filter_map(|d| d.id)
+        .collect();
+    let mut chain = chain_of(&clan);
+    let who = attributed(ctx, "", "edit");
+    for d in &mut chain.decisions {
+        let is_new = d.id.as_ref().is_some_and(|id| !old.contains(id));
+        let is_ours = d.agent == clan_sdk::ATTACH_AGENT && d.action != "seed";
+        if is_new && is_ours {
+            d.kind = who.kind.clone();
+            d.actor = who.actor.clone();
+            d.handler = who.handler.clone();
+            d.backend = who.backend.clone();
+            d.scope = who.scope.clone();
+        } else if is_new && d.agent == clan_sdk::ATTACH_AGENT {
+            // A seed: the process made it, for the person; the org is theirs.
+            d.scope = who.scope.clone();
+        }
+    }
+    let mut b = ClanBuilder::new(clan.manifest().clone());
+    for (path, entry) in clan.read_all_entries()? {
+        if path != clan_sdk::MANIFEST_PATH && path != CHAIN {
+            b.add_entry(path, entry);
+        }
+    }
+    b.add_entry(CHAIN, chain.to_yaml()?);
+    Ok(b.build()?)
+}
+
+/// The decisions `after` holds that `before` did not, by id, newest first.
+/// An attach carries the source's decisions behind the document's own, so the
+/// leading entries are not the new ones.
+fn new_decisions(before: &ClanFile, after: &ClanFile) -> Vec<Decision> {
+    let old: std::collections::BTreeSet<String> = chain_of(before)
+        .decisions
+        .into_iter()
+        .filter_map(|d| d.id)
+        .collect();
+    chain_of(after)
+        .decisions
+        .into_iter()
+        .filter(|d| d.id.as_ref().is_some_and(|id| !old.contains(id)))
+        .collect()
+}
+
+/// The document `document_id` as the store holds it for `ctx`, to link.
+pub(crate) fn find_source(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+    document_id: &str,
+) -> HostResult<Document> {
+    for id in store.documents() {
+        if &id == doc.id() {
+            continue;
+        }
+        let Ok(d) = Document::load(store.parts(), id) else {
+            continue;
+        };
+        let m = d.clan().manifest();
+        if m.document_id() != document_id
+            || m.fork.is_some()
+            || m.document_type.as_deref() == Some("template")
+        {
+            continue;
+        }
+        if foreign(ctx, d.clan()) {
+            return Err(HostError::new(
+                403,
+                format!(
+                    "\"{}\" belongs to another workspace; a link stays in the workspace it starts in",
+                    m.title
+                ),
+            ));
+        }
+        return Ok(d);
+    }
+    Err(HostError::not_found(format!(
+        "no document {document_id} in this workspace to link"
+    )))
+}
+
+/// The change that links (or updates, or replaces) `source_document_id` into
+/// `doc`, and the reply that says what it did. Refused: a context that is not
+/// a person (`403`), a locked document (`409`), another workspace's source
+/// (`403`), a source the document's app does not accept (`422`), and the verb
+/// not matching the state (`409`: attach of what is linked, update of what is
+/// not linked or has not moved).
+pub fn attach_change(
+    store: &dyn DocStore,
+    ctx: &Ctx,
+    doc: &Document,
+    source_document_id: &str,
+    mode: AttachMode,
+) -> HostResult<(Change, Value)> {
+    if !ctx.actor.is_human() {
+        return Err(HostError::new(
+            403,
+            format!(
+                "only a person can link a document; {} is not one",
+                ctx.actor
+            ),
+        ));
+    }
+    if let Some(e) = locked_error(doc.clan()) {
+        return Err(e);
+    }
+    let source = find_source(store, ctx, doc, source_document_id)?;
+    let held = doc
+        .clan()
+        .manifest()
+        .attached()
+        .iter()
+        .find(|a| a.carried.document_id == source_document_id);
+    match (mode, held) {
+        (AttachMode::Attach, Some(_)) => {
+            return Err(HostError::conflict(
+                "that document is linked already; update it to take its newer version",
+            ))
+        }
+        (AttachMode::Update, None) => {
+            return Err(HostError::conflict(
+                "that document is not linked; link it first",
+            ))
+        }
+        (AttachMode::Update, Some(a)) if linked_status(a, &source) != "changed" => {
+            return Err(HostError::conflict(format!(
+                "\"{}\" has not changed since it was linked",
+                source.clan().manifest().title
+            )));
+        }
+        _ => {}
+    }
+    let out = clan_sdk::attach(doc.clan(), source.clan())?;
+    let bytes = with_projection(out.bytes)?;
+    let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
+    let after = ClanFile::from_bytes(bytes.clone())?;
+    let mut change = doc.change(bytes)?;
+    change.decisions = new_decisions(doc.clan(), &after);
+    let marker = chain_of(&after)
+        .decisions
+        .into_iter()
+        .find(|d| d.agent == clan_sdk::ATTACH_AGENT && d.action != "seed");
+    let decision = marker.as_ref().and_then(|d| d.id.clone());
+    let action = marker.map(|d| d.action);
+    change.events.push(crate::event::HostEvent::DataChanged(
+        serde_json::json!({ "ok": true, "source": "attach", "decision": decision }),
+    ));
+    let verb = match out.verb {
+        clan_sdk::AttachVerb::Attached => "attached",
+        clan_sdk::AttachVerb::Updated => "updated",
+        clan_sdk::AttachVerb::Replaced => "replaced",
+    };
+    let reply = serde_json::json!({
+        "ok": true, "verb": verb, "decision": decision, "action": action,
+        "document_id": source_document_id,
+        "attached": out.record, "seeded": out.seeded, "kept": out.kept,
+        "carried_decisions": out.carried_decisions,
+    });
+    Ok((change, reply))
+}
+
+/// The change that unlinks `which` (a source's `document_id`, or the
+/// `app_id` of the one source of that app) from `doc`.
+pub fn detach_change(ctx: &Ctx, doc: &Document, which: &str) -> HostResult<(Change, Value)> {
+    if !ctx.actor.is_human() {
+        return Err(HostError::new(
+            403,
+            format!(
+                "only a person can unlink a document; {} is not one",
+                ctx.actor
+            ),
+        ));
+    }
+    if let Some(e) = locked_error(doc.clan()) {
+        return Err(e);
+    }
+    let out =
+        clan_sdk::detach(doc.clan(), which).map_err(|e| HostError::conflict(e.to_string()))?;
+    let bytes = with_projection(out.bytes)?;
+    let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
+    let after = ClanFile::from_bytes(bytes.clone())?;
+    let mut change = doc.change(bytes)?;
+    change.decisions = new_decisions(doc.clan(), &after);
+    let decision = change.decisions.first().and_then(|d| d.id.clone());
+    change.events.push(crate::event::HostEvent::DataChanged(
+        serde_json::json!({ "ok": true, "source": "detach", "decision": decision }),
+    ));
+    let reply = serde_json::json!({
+        "ok": true, "decision": decision, "action": "detach",
+        "document_id": out.record.carried.document_id,
+        "detached": out.record, "unseeded": out.unseeded,
+    });
+    Ok((change, reply))
+}
+
+/// `current` when each hash `a` took is the hash of `source`'s entry now
+/// (absent on both sides is equal), else `changed`. A backref written to the
+/// source changes only its chain, so it never makes it `changed`.
+pub fn linked_status(a: &clan_sdk::Attached, source: &Document) -> &'static str {
+    let c = source.clan();
+    let now = |p: &str| {
+        c.read_entry(p)
+            .ok()
+            .map(|b| clan_sdk::hash::sha256_prefixed(&b))
+    };
+    let same = now(DATA).as_deref() == Some(a.carried.data_sha256.as_str())
+        && now(FACTS.path) == a.carried.facts_sha256
+        && now(FINDINGS.path) == a.carried.findings_sha256
+        && now(SOURCES.path) == a.carried.sources_sha256;
+    if same {
+        "current"
+    } else {
+        "changed"
+    }
+}
+
+/// `GET /related` for `doc`: what it was made from and what is linked into it
+/// (`upstream`), and what was made from it or links it (`downstream`), each
+/// `{document_id, title, app_id, path, how, version?, status?}`. `how` is
+/// `made_from`, `linked` (upstream) or `made_into`, `linked_in` (downstream).
+/// A read of manifests only: nothing is written, no data is parsed past the
+/// manifest for the downstream half.
+pub fn related(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value {
+    let here = doc.clan().document_id().to_string();
+    let status = upstream_status(store, ctx, doc);
+    let upstream: Vec<Value> = status["upstream"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|u| u["how"] == "made_from" || u["how"] == "linked")
+        .map(|u| {
+            serde_json::json!({
+                "document_id": u["document_id"], "title": u["title"], "app_id": u["app_id"],
+                "path": u["path"], "how": u["how"], "version": u["version"], "noun": u["noun"],
+                "taken": u["taken"], "status": u["status"],
+            })
+        })
+        .collect();
+    let mut downstream = Vec::new();
+    for id in store.documents() {
+        if &id == doc.id() {
+            continue;
+        }
+        let Ok(bytes) = store.read(&id) else { continue };
+        let Ok(clan) = ClanFile::from_bytes(bytes) else {
+            continue;
+        };
+        let m = clan.manifest();
+        if m.fork.is_some() || m.document_type.as_deref() == Some("template") || foreign(ctx, &clan)
+        {
+            continue;
+        }
+        let how = if m.carried().is_some_and(|c| c.document_id == here) {
+            "made_into"
+        } else if m.attached().iter().any(|a| a.carried.document_id == here) {
+            "linked_in"
+        } else {
+            continue;
+        };
+        let app = m.app.as_ref();
+        downstream.push(serde_json::json!({
+            "document_id": m.document_id(), "title": m.title,
+            "app_id": app.map(|a| a.app_id.clone()),
+            "noun": app.and_then(|a| a.home.as_ref()).and_then(|h| h.noun.first().cloned()),
+            "path": id.to_string(), "how": how, "updated_at": m.updated_at,
+        }));
+    }
+    downstream.sort_by(|a, b| b["updated_at"].as_str().cmp(&a["updated_at"].as_str()));
+    serde_json::json!({ "document_id": here, "upstream": upstream, "downstream": downstream })
+}
+
 // ── The home page, as a CLAN file ───────────────────────────────────────────
 //
 // The launcher itself is an authored CLAN app rendered by the host like any
@@ -1093,6 +1540,7 @@ pub fn home_change(store: &dyn DocStore) -> HostResult<(DocId, Option<Change>)> 
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )?;
@@ -1189,6 +1637,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         }
     }
 
@@ -1251,6 +1700,7 @@ mod tests {
                 .collect(),
             pin_source_decisions: true,
             upstream: false,
+            by_source: Default::default(),
         }
     }
 

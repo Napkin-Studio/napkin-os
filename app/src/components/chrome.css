@@ -355,6 +355,8 @@
 .ch-line:disabled { cursor: default; }
 .ch-line:focus-visible { outline: 2px solid var(--agency); outline-offset: 1px; }
 .ch-line-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
+.ch-line-link { border-style: solid; }
+.ch-line-v { color: var(--ink3); font: inherit; font-weight: 600; flex-shrink: 0; }
 
 /* The crew in the document: the people, then an agent while one works. */
 .ch-crew { display: inline-flex; align-items: center; }

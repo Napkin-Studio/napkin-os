@@ -498,6 +498,51 @@ test('a locked report starts no reconsider job', () => {
   assert.equal(RECON.queue.length, 1)
 })
 
+// A research started from a brief, or with one linked (features/spinoff-and-links):
+// with nothing else to read, the brief's ask is read once, on open.
+function askEnv(over: { data?: Record<string, unknown>; chain?: unknown[]; thread?: unknown[]; jobs?: unknown[]; asked?: boolean; bridge?: boolean } = {}) {
+  const runs: { task: string; input: unknown; quiet?: boolean }[] = []
+  const toasts: string[] = []
+  const kept: Record<string, string> = over.asked ? { 'clan.research.askedFromBrief.doc1': '1' } : {}
+  const data = over.data ?? { upstream: { b1: { client: 'Orchard Hill Cider', audience: 'Irish adults' } }, campaign: {} }
+  const env = {
+    ASK_FIELDS: ['client', 'audience', 'background', 'objectives'],
+    CHAIN: { state: 'ok', decisions: over.chain ?? [] },
+    window: over.bridge === false ? {} : { clan: { apiProxy: () => Promise.resolve() } },
+    isObj, D: () => data,
+    camp: () => (isObj(data.campaign) ? data.campaign : {}),
+    mats: () => (isObj(data.materials) ? data.materials : {}),
+    thread: () => over.thread ?? [], JOBS: over.jobs ?? [],
+    decs: () => over.chain ?? [],
+    docId: () => 'doc1',
+    stored: (k: string) => kept[k] ?? null,
+    store: (k: string, v: string) => { kept[k] = v },
+    runTask: (task: string, input: unknown, _then: unknown, quiet?: boolean) => { runs.push({ task, input, quiet }) },
+    toast: (t: string) => { toasts.push(t) },
+  }
+  return { f: lift<{ askFromBrief(): void; briefUpstream(): string | null }>(RT, ['briefUpstream', 'askFromBrief'], env), runs, toasts, kept }
+}
+
+test('a research from a brief reads the brief’s ask once on open, and never over anything already there', () => {
+  const { f, runs, toasts } = askEnv()
+  assert.equal(f.briefUpstream(), 'b1')
+  f.askFromBrief()
+  assert.deepEqual(runs, [{ task: 'extract_ask', input: { prompt: '', attachments: [] }, quiet: true }])
+  assert.match(toasts[0], /brief/)
+  f.askFromBrief()
+  assert.equal(runs.length, 1, 'once per document')
+  const none = (over: Parameters<typeof askEnv>[0]) => { const e = askEnv(over); e.f.askFromBrief(); return e.runs.length }
+  assert.equal(none({ data: { upstream: { r1: { campaign: {} } }, campaign: {} } }), 0, 'a research upstream is not a brief')
+  assert.equal(none({ data: { campaign: {} } }), 0, 'made from nothing')
+  assert.equal(none({ data: { upstream: { b1: { client: 'A' } }, campaign: { client_org: { value: 'A', origin: 'stated' } } } }), 0, 'the ask is begun')
+  assert.equal(none({ data: { upstream: { b1: { client: 'A' } }, campaign: {}, materials: { mat_0001: {} } } }), 0, 'material to read: the person runs it')
+  assert.equal(none({ chain: [{ handler: 'extract_ask@1.0', action: 'extract_ask' }] }), 0, 'the ask was read already')
+  assert.equal(none({ thread: [{ id: 'm1' }] }), 0, 'the intake has begun')
+  assert.equal(none({ jobs: [{ task: 'research_lens' }] }), 0, 'a job is running')
+  assert.equal(none({ asked: true }), 0, 'asked already in this session')
+  assert.equal(none({ bridge: false }), 0, 'no bridge yet: it waits for it')
+})
+
 test('the Research Tool’s parts declare their aliases', () => {
   const PART_ALIASES = new Function(`${obj(RT, 'PART_ALIASES')} return PART_ALIASES;`)() as Record<string, string>
   assert.equal(PART_ALIASES.audience_stated, 'audience, target, who')

@@ -543,6 +543,10 @@ export interface UpstreamEntry {
   version?: string
   locked?: boolean
   status: 'current' | 'changed' | 'not_compared' | 'unknown'
+  /** `made_from` (the direct parent), `linked` (attached, os-layer §5.7) or `carried` (further upstream). */
+  how?: 'made_from' | 'linked' | 'carried'
+  /** A linked document: how many times this one took it (1 on link, one more on each update). */
+  taken?: number | null
   changed?: { data: boolean; facts: boolean; findings: boolean; sources: boolean }
   decisions_since?: number | null
   pins?: { id: string; change: 'added' | 'replaced' | 'changed'; label: string; replaced_by?: string }[]
@@ -554,6 +558,52 @@ export interface UpstreamView {
   document_id: string
   carried: UpstreamCarried | null
   upstream: UpstreamEntry[]
+}
+
+// ── Links (os-layer §5.7, §8.1 item 9) ─────────────────────────────────────────
+
+/** A document the open one could link (`GET /attach-targets`). */
+export interface AttachTarget {
+  app_id: string
+  app_name: string
+  document_id: string
+  title: string
+  version?: number | null
+  path: string
+  updated_at: string
+  /** Linked to the open document now. */
+  attached: boolean
+  /** The open document may hold several of this app at once. */
+  many: boolean
+  /** The open document is locked, so a link would be refused. */
+  locked: boolean
+}
+
+/** `POST /attach`, `/attach/update` or `/attach/detach`: what was written. */
+export interface AttachReply {
+  ok: true
+  verb?: 'attached' | 'updated' | 'replaced'
+  decision: string | null
+  action: string
+  document_id: string
+}
+
+/** One document related to the open one (`GET /related`). */
+export interface RelatedDoc {
+  document_id: string
+  title?: string | null
+  app_id?: string | null
+  path?: string | null
+  how: 'made_from' | 'linked' | 'made_into' | 'linked_in'
+  noun?: string | null
+  taken?: number | null
+  status?: UpstreamEntry['status'] | null
+}
+
+export interface RelatedView {
+  document_id: string
+  upstream: RelatedDoc[]
+  downstream: RelatedDoc[]
 }
 
 /** `POST /upstream/update`: the parent's newer version, taken (Contract 4 §5.5, §8.1 item 8). */
@@ -641,6 +691,16 @@ export interface Host {
    * parent has not changed.
    */
   updateFromUpstream(): Promise<UpstreamUpdateReply>
+  /** The documents the open one could link (`GET /attach-targets`); empty when its app links nothing. */
+  attachTargets(): Promise<AttachTarget[]>
+  /** Link an existing document into the open one (`POST /attach`). Refused on a locked document, in the host's words. */
+  attach(documentId: string): Promise<AttachReply>
+  /** Take a linked document's newer version (`POST /upstream/update {document_id}`). */
+  updateLinked(documentId: string): Promise<AttachReply>
+  /** Let go of a linked document (`POST /attach/detach`). */
+  detach(documentId: string): Promise<AttachReply>
+  /** What it was made from and links, and what was made from it or links it (`GET /related`). */
+  related(): Promise<RelatedView>
   /** The source card for each ref, in one call (`POST /cite`). */
   cites(refs: string[]): Promise<Record<string, SourceCard>>
 

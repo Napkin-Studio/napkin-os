@@ -11,6 +11,7 @@
 //!
 //! See `CLAN-SPEC.md` for the full format specification.
 
+pub mod attach;
 pub mod compress;
 pub mod container;
 pub mod create;
@@ -30,6 +31,7 @@ pub mod sign;
 pub mod toon;
 pub mod validate;
 
+pub use attach::{attach, detach, AttachOutcome, AttachVerb, DetachOutcome, ATTACH_AGENT};
 pub use compress::{compress_chain, nlp_compress, CompressionConfig, Compressor};
 pub use container::{ClanBuilder, ClanFile, MANIFEST_PATH};
 pub use create::{create, export_static, CreateOptions};
@@ -44,9 +46,9 @@ pub use instantiate::{
     MakeTemplateOptions, SpinoffOptions, TakenUpstream,
 };
 pub use manifest::{
-    is_client_id, new_client_id, AppHome, AppInfo, Carried, ClientRef, ExternalRef, FileEntry,
-    ForkInfo, Lineage, Manifest, MergePolicies, ParentRef, Signature, SpinoffSpec, ViewState,
-    CLAN_VERSION, CLAN_VERSION_MINOR,
+    is_client_id, new_client_id, AppHome, AppInfo, AttachSpec, Attached, Carried, ClientRef,
+    ExternalRef, FileEntry, ForkInfo, Lineage, Manifest, MergePolicies, ParentRef, Signature,
+    SourceCarry, SpinoffSpec, ViewState, CLAN_VERSION, CLAN_VERSION_MINOR,
 };
 pub use merge::{
     fork, fork_with_contexts, merge, ConflictValue, MergeConflict, MergeOptions, MergeOutcome,

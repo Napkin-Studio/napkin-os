@@ -2,6 +2,7 @@
 
 import json
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -651,3 +652,33 @@ def test_a_proposed_field_still_needs_fact_ids_or_upstream_refs_in_the_schema():
     assert list(v.iter_errors({"campaign": {"problem": base}})), "proposed with neither is refused"
     assert not list(v.iter_errors({"campaign": {"problem": {**base, "upstream_refs": [f"{BRIEF_DOC}#background"]}}}))
     assert list(v.iter_errors({"campaign": {"problem": {**base, "upstream_refs": ["not-an-address"]}}}))
+
+
+# ---- origin_kind: where each new pin and finding came from (features/os-source-card) ----
+
+def test_a_pin_found_by_research_says_research_and_one_reused_from_the_layers_says_layer(store):
+    caps = caps_for(store)
+    _, change, _ = Researcher(DOC, "3", rclan(), "t@1.0", caps, ["market_structure", "media_spend"],
+                              ["IE", "GB"], ["automotive.ev_charging"]).run()
+    assert change["facts_append"] and all(p["origin_kind"] == "research" for p in change["facts_append"])
+    # a second campaign pins the same rows from the layers, researching nothing
+    _, again, _ = Researcher("22222222-2222-4333-8444-555555555555", "1", rclan(), "t@1.0",
+                             caps_for(store, research=FakeResearch()), ["market_structure", "media_spend"],
+                             ["IE", "GB"], ["automotive.ev_charging"]).run()
+    assert again["facts_append"] and all(p["origin_kind"] == "layer" for p in again["facts_append"])
+
+
+def test_a_synthesised_finding_says_research(store):
+    caps = caps_for(store)
+    _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["media_spend"], ["IE"],
+                           ["automotive.ev_charging"]).run()
+    _, syn, _ = synthesise.run_synthesis(DOC, "3", dict(rclan(["IE"]), facts=rch["facts_append"]), {}, "t@1.0", caps)
+    assert syn["findings_append"] and all(f["origin_kind"] == "research" for f in syn["findings_append"])
+
+
+def test_origin_kind_names_only_what_the_source_card_reads():
+    from napkin import origin
+    card = (Path(__file__).resolve().parents[2] / "crates/napkin-host/src/ops/decisions/card.rs").read_text()
+    assert f'ORIGIN_KEY: &str = "{origin.KEY}"' in card
+    for kind in (origin.RESEARCH, origin.LAYER, origin.CLIENT, origin.BRAND, origin.PERSON):
+        assert f'"{kind}"' in card.split("pub const ORIGINS")[1].split("];")[0]

@@ -36,6 +36,9 @@ import type {
   UploadedAsset,
   UpstreamUpdateReply,
   UpstreamView,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
   SourceCard,
 } from './types'
 
@@ -289,6 +292,11 @@ export const httpHost: Host = {
 
   upstream: () => clanCall<UpstreamView>('/upstream'),
   updateFromUpstream: () => clanPost<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => clanCall<AttachTarget[]>('/attach-targets'),
+  attach: documentId => clanPost<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => clanPost<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => clanPost<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => clanCall<RelatedView>('/related'),
   cites: async refs => (await clanPost<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   clientReview: body => clanPost<ClientReviewReply>('/client-review', body),

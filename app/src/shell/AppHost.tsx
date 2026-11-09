@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Toolbar, { type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
-import { useMadeFrom, useSpinoffTargets } from '../components/ContinueIn'
+import { useLinks, useMadeFrom, useSpinoffTargets } from '../components/ContinueIn'
+import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import WorkspaceView from './WorkspaceView'
@@ -174,6 +175,16 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const onUpTaken = useCallback(() => { setUpError(null); changed() }, [changed])
   const { madeFrom, update: updateFromUpstream } = useMadeFrom(docPath, onUpTaken, onUpError)
 
+  // Links (os-layer §5.7): link an existing document, take a linked one's
+  // newer version, let go of one. A refusal (a locked document) is said where
+  // the bar is, in the host's words.
+  const [linkError, setLinkError] = useState<{ docPath: string; message: string } | null>(null)
+  const onLinkError = useCallback((message: string) => setLinkError({ docPath, message }), [docPath])
+  const onLinked = useCallback(() => { setLinkError(null); changed() }, [changed])
+  const links = useLinks(docPath, onLinked, onLinkError)
+  const { linked, madeInto } = linksOf(links.related)
+  const changedLinks = linked.filter(l => l.dir === 'in' && l.changed)
+
   const save = useCallback(async () => {
     if (!review || review.docPath !== docPath || problemOf(review.draft)) return
     const { draft, marks } = review
@@ -315,6 +326,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           targets,
           onSpinoff,
           madeFrom,
+          madeInto,
+          linked,
+          linkTargets: links.targets,
+          onLink: open.is_template ? undefined : links.link,
+          onUpdateLinked: decisions.view?.lock.locked || open.is_template ? undefined : links.update,
+          onUnlink: decisions.view?.lock.locked || open.is_template ? undefined : links.unlink,
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
@@ -336,6 +353,21 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           <button type="button" className="ch-link" onClick={() => setUpError(null)}>Dismiss</button>
         </div>
       )}
+      {linkError?.docPath === docPath && (
+        <div className="ch-banner" role="alert" data-testid="link-error">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Could not change the link.</strong>{linkError.message}</span>
+          <button type="button" className="ch-link" onClick={() => setLinkError(null)}>Dismiss</button>
+        </div>
+      )}
+      {!decisions.view?.lock.locked && !open.is_template && changedLinks.map(l => (
+        <div key={l.documentId} className="ch-banner ch-banner-note" role="status" data-testid="link-changed">
+          <span className="ch-banner-dot" aria-hidden />
+          <span className="ch-banner-text"><strong>Linked {l.noun ?? ''}{l.noun ? ' ' : ''}{l.title}{l.taken ? ` · v${l.taken}` : ''} · changed.</strong>It changed since this took it. Your own work here stays when you update.</span>
+          <button type="button" className="ch-link" onClick={() => links.update(l.documentId)}>Update</button>
+          <button type="button" className="ch-link" onClick={() => links.unlink(l.documentId)}>Unlink</button>
+        </div>
+      ))}
       </div>
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
