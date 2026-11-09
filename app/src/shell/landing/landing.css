@@ -238,7 +238,8 @@ html[data-orbs-gl='0'] .lc-flat-toggle { display: none; }
 .lc-dial::before {
   content: ''; position: absolute; left: calc(-1 * var(--dial-r) - 40px); top: calc(-1 * var(--dial-r) - 40px);
   width: calc(2 * var(--dial-r) + 80px); height: calc(2 * var(--dial-r) + 80px); border-radius: 50%;
-  background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* near-solid: the client's own name and state under the dial must not read through it */
+  background: color-mix(in srgb, var(--card) 97%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   box-shadow: var(--shadow-soft); border: 1px solid var(--line-soft); pointer-events: none;
   animation: lc-dial-in 180ms var(--lc-ease, ease-out);
 }
