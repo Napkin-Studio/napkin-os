@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from ..doc import ctx_facts, ctx_findings
 from .fields import ARRAY_KEYS, LABELS, clean, filled
+from ..util import join_list
 
 # The parts the context fill may write, and what each is for the planner.
 PARTS = {
@@ -114,7 +115,7 @@ def fill(model, said: str, working: dict, empty: list[str], view: dict) -> dict:
         if not isinstance(r, dict):
             continue
         v = clean(k, r.get("value") if k in ARRAY_KEYS or not isinstance(r.get("value"), list)
-                  else "; ".join(r["value"]))
+                  else join_list(r["value"]))
         if v is None:
             continue
         cites = [c for c in dict.fromkeys(r.get("cites") or []) if c in ids]

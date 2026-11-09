@@ -20,7 +20,7 @@ import re
 
 from .. import backend, reading
 from ..rules.quotes import contains_word, find_quote
-from ..util import bad
+from ..util import bad, join_list
 
 LOOP1_KEYS = ["background_context", "business_problem", "objective", "target_audience", "deliverables",
               "mandatories", "budget", "timeline", "success_metrics", "key_message", "proof_points",
@@ -531,7 +531,7 @@ def working_brief(items: dict, named: dict) -> dict:
         for k in keys:
             got = by.get(k)
             if got:
-                return "; ".join(it["value"] for _, it in got), [c for c, _ in got], sorted({it["material_id"] for _, it in got})
+                return join_list(it["value"] for _, it in got), [c for c, _ in got], sorted({it["material_id"] for _, it in got})
         return None
 
     for app, keys in (("background", ("business_problem", "background_context")), ("audience", ("target_audience",)),
@@ -545,7 +545,7 @@ def working_brief(items: dict, named: dict) -> dict:
     if not objs and by.get("success_metrics"):
         objs["commercial"] = by["success_metrics"]
     for t, got in objs.items():
-        out[f"objectives.{t}"] = {"value": "; ".join(it["value"] for _, it in got), "caps": [c for c, _ in got],
+        out[f"objectives.{t}"] = {"value": join_list(it["value"] for _, it in got), "caps": [c for c, _ in got],
                                   "mats": sorted({it["material_id"] for _, it in got})}
     for app, key in (("tone_and_world", "tone_and_brand"), ("mandatories", "mandatories")):
         got = by.get(key)

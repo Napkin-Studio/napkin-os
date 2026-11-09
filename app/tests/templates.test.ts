@@ -2087,3 +2087,8 @@ test('the lock carries no count badge of its own: Decisions holds the one count,
   assert.equal(w.lockWhy(1), '1 settles before it can lock')
   assert.doesNotMatch(fn(BM, 'renderLockBtn'), /need you|lb\.innerHTML/)
 })
+
+test('a list printed in one line loses each item’s closing stop before the join', () => {
+  const g = lift<{ gridText(v: unknown): string }>(BM, ['gridText'], {})
+  assert.equal(g.gridText(['Launch in the UK this spring.', 'Reach 3% share.']), 'Launch in the UK this spring; Reach 3% share.')
+})

@@ -1381,7 +1381,8 @@
   // (the export writes it again) instead of printing as "[object Object]".
   function gridText(v){
     if(v==null) return '';
-    if(Array.isArray(v)) return v.map(gridText).filter(Boolean).join('; ');
+    // Each item but the last loses its closing stop first: "this spring; Reach", never "spring.; Reach".
+    if(Array.isArray(v)) return v.map(gridText).filter(Boolean).map(function(x,i,a){ return i<a.length-1?x.replace(/[\s.;,:]+$/,''):x; }).join('; ');
     if(typeof v==='number'&&isFinite(v)) return String(v);
     return typeof v==='string'?v.trim().replace(/^\s*to confirm:\s*/i,''):'';
   }
