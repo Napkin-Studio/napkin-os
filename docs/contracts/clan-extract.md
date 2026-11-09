@@ -52,8 +52,8 @@ it.
 The owner's sentence forms are the grammar's frames:
 
 - **"Agent X made this."** Every agent record leads with the agent's name and
-  what it did: `Max, the market structure agent, researched market structure
-  in XA on 2026-09-20.`
+  what it did: `The Research agent researched market structure in XA on
+  2026-09-20.`
 - **"<Person> chose this because: <their reason>."** Every reason a person
   gave is a quote block under a line that says whose words it holds: `Alex Doe
   chose this because (their words, as written):`.
@@ -1102,25 +1102,24 @@ middleware's `find_client_parts` it replaced was removed 2026-09-30), and the
 contest openers are the researchers' work. The panel shows the handler's name for them until P4 adds
 the same keys to the one shared table.
 
-| Given name | Role phrase | Source |
+| Name (by role) | Role phrase | Source |
 |---|---|---|
 | Knowledge agent | extract | read work |
-| Max | market structure | lens `market_structure` |
-| Bo | brands and positioning | lens `brands_positioning` |
-| Cam | consumer and culture | lens `consumer_culture` |
-| Cody | category codes | lens `category_codes` |
-| Remy | rhythm and moments | lens `rhythm_moments` |
-| Mo | media and spend | lens `media_spend` |
-| Lex | regulation | lens `regulation_clearance` |
-| Eden | effectiveness | lens `effectiveness_evidence` |
+| Research agent | market structure | lens `market_structure` |
+| Research agent | brands and positioning | lens `brands_positioning` |
+| Research agent | consumer and culture | lens `consumer_culture` |
+| Research agent | category codes | lens `category_codes` |
+| Research agent | rhythm and moments | lens `rhythm_moments` |
+| Research agent | media and spend | lens `media_spend` |
+| Research agent | regulation | lens `regulation_clearance` |
+| Research agent | effectiveness | lens `effectiveness_evidence` |
 | Strategy agent | synthesis | synthesise work |
 | Brief agent | drafting | draft work |
 | Review agent | judging | judge work |
 
-- The first mention in a lead is an appositive closed by a comma: `Max, the
-  market structure agent, researched…`; later mentions are `Max`. Research
-  with no lens reads `the researchers` (`The researchers` to start a
-  sentence).
+- Agents are named by role (owner, 2026-11-09): `The Research agent researched
+  market structure…`, the lens said after the verb. Research with no lens reads
+  `the Research agent` (`The Research agent` to start a sentence).
 - **Lens order** is the order of the table above (market structure first,
   effectiveness last). Lens labels: market structure, brands and positioning,
   consumer and culture, category codes, rhythm and moments, media and spend,
@@ -2675,7 +2674,7 @@ filter, which the module as it is cannot do (DT13, RF6).
   marked research value render exactly as they would with no mark, but for
   exact occurrences; every file is written; every id is the stored id.
 - **Ports**: the cast equals `agentOfDecision` and `whoOf` on the fixtures of
-  `tests/agentFigures.test.ts` and `decisionWords.test.ts`; report keys equal
+  `decisionWords.test.ts` (the one lookup, app/templates/shared/agent-sphere/roles.js); report keys equal
   `stampTexts` on shared layout vectors — malformed nesting, a block holding
   only a `clan-cite`, a U+FEFF block; the slug equals the RAG module's
   `normalise.snake`; the display form equals `fmt`; the untitled rule equals

@@ -90,9 +90,11 @@ test('a run of look changes reads as one line', () => {
   assert.equal(didWhat(b, view), 'changed the look: Studio brief, Dark with orange palette')
 })
 
-// A redraft of a part a person holds (redraft-provenance): Dara's drafts are
-// proposals, the Review agent's note (an older record: "Jude's") sends the first back, and the person's accept is
-// credited to Dara. No line carries a decision's id.
+// A redraft of a part a person holds (redraft-provenance): the Brief agent's
+// drafts are proposals, the Review agent's note sends the first back, and the
+// person's accept is credited to the Brief agent. These records are OLDER ones,
+// written while agents had crew names: they must read by role. No line carries
+// a decision's id.
 const smp = [{ address: 'd#single_minded_proposition', path: 'single_minded_proposition', label: 'Single-minded proposition', kind: 'field' as const, here: true }]
 const VIEW0: DecisionsView = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] }
 const me = { kind: 'person' as const, id: 'x', name: 'x', you: true }
