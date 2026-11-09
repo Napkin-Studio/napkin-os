@@ -318,7 +318,8 @@ def compose(doc, clan, handler, caps, part=None):
     place = market_list(markets) if markets else ""
     if place and place.lower() in brand.lower():
         place = ""
-    lead = next((fi for l in LENSES for fi in by_lens[l]["findings"]), None)
+    # a finding none of whose pins names a lens still leads, before the plain line
+    lead = next((fi for l in LENSES for fi in by_lens[l]["findings"]), None) or next(iter(findings), None)
     headline = written["headline"] or (old["headline"] if part and not want_head else None) or (
         {"text": lead["statement"], "cites": fcites(lead)} if lead and lead.get("statement") else None) or {
         "text": f"{brand}{' in ' + place if place else ''}: what the research found"
