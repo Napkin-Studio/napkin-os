@@ -57,6 +57,16 @@ def _single_sentence(f, v):
     return (PASS, "1 sentence") if n <= 1 else (FAIL, f"{n} sentences")
 
 
+_AND = re.compile(r"(?<![\w'’-])(and|&)(?![\w'’-])", re.I)
+
+
+def and_flag(v) -> bool:
+    """A standalone 'and' or '&' in the proposition. The planning skill's test is "one thought, not a
+    thought with an 'and'": the word alone fails nothing (ADR 0007, ADR 0034), it is a flag the judge
+    answers: does it join two thoughts?"""
+    return bool(_AND.search(str(v or "")))
+
+
 def _single_minded(f, v):
     s = re.sub(r",(?=\d{3}\b)", "", str(v or ""))
     listy = re.search(r"(,| and | & |·|;|/)", s)
@@ -105,6 +115,8 @@ def rubric_value(rid: str, values: dict):
         return {k: values.get(f"desired_response.{k}") or "" for k in ("think", "feel", "do")}
     app = {"background": "background", "audience": "audience", "budget_scope": "budget_and_scope",
            "competitor_context": "competitor_context", "insight": "insight", "smp": "single_minded_proposition",
+           "job": "job", "barrier": "barrier", "objection": "objection", "media_roles": "media_roles",
+           "measurement": "measurement",
            "reasons_to_believe": "reasons_to_believe", "tone_world_assets": "tone_and_world",
            "mandatories": "mandatories"}[rid]
     v = values.get(app)
@@ -147,7 +159,8 @@ def auto_gate(rid: str, value) -> tuple[bool, list[str]]:
 REASON_CODES = {
     "within_limit": "not_single_minded", "single_sentence": "not_single_minded", "single_minded": "not_single_minded",
     "one_strategy": "not_single_minded", "max_items": "not_single_minded",
-    "ownable": "cliche", "not_a_tagline": "cliche",
+    "ownable": "cliche", "not_a_tagline": "cliche", "fresh": "cliche",
+    "true_backed": "off_strategy", "about_audience": "off_strategy",
     "smp_derivation": "off_strategy", "rtb_supports_smp": "off_strategy", "supports_smp": "off_strategy",
     "response_ladders": "off_strategy", "derives_from": "off_strategy", "linked": "off_strategy",
     "backbone_balance": "off_strategy", "has_constraint": "unfeasible",

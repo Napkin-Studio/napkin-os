@@ -77,6 +77,15 @@ def test_every_sector_target_is_a_contract_category():
     ("WOOD Pencil", "wood_pencil"), ("Yellow Pencil", "yellow_pencil"), ("Black Pencil", "black_pencil"),
     ("Shortlist", "shortlist"), ("Special Mention", "other"),
     ("", None), (None, None), ("not recorded", None),
+    # The award case library's wordings (2026-10-22): each body's own name for its top prize,
+    # Spanish and French metals, "Short List", and D&AD pencils written without "Pencil".
+    ("Grand Award", "grand_prix"), ("Global Grand Effie", "grand_prix"), ("Grand LIA", "grand_prix"),
+    ("Grande Lotus", "grand_prix"), ("Grand Effie", "grand_prix"),
+    ("BRONCE", "bronze"), ("PLATA", "silver"), ("ORO", "gold"), ("Or", "gold"), ("2022 Carpe Diem Oro", "gold"),
+    ("Short List", "shortlist"), ("WOOD", "wood_pencil"), ("GRAPHITE", "graphite_pencil"), ("YELLOW", "yellow_pencil"),
+    # Named but not a tier we can rank: pinned as `other`, never guessed into a metal.
+    ("Merit", "other"), ("Finalist", "other"), ("Nominee", "other"), ("Honoree", "other"), ("Winner", "other"),
+    ("Highly Commended", "other"), ("Best of Discipline Pencil", "other"),
 ])
 def test_award_tier(raw, expected):
     """award_tier() maps each raw award-tier label to its contract value, an unrecognised

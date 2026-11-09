@@ -72,6 +72,11 @@ export function refreshApp() {
   frame?.postMessage({ type: 'clan:dataupdated', source: 'shell' }, '*')
 }
 
+/** A tab or button the app put in the OS bar was pressed: tell the app which. */
+export function barAction(id: string) {
+  frame?.postMessage({ type: 'clan:bar-action', id }, '*')
+}
+
 // ── steps the app can run again ──────────────────────────────────────────────
 // An app says which of its tasks the OS may ask for ("clan:can-run"); the
 // decision panel offers "Ask to redo" only for those, and the app runs them

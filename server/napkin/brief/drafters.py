@@ -101,7 +101,7 @@ def field_system(rid: str, n: int = 1) -> str:
 
 
 RANK_SYSTEM = ("You are a strategy director ranking candidate '{label}' lines for a creative brief. Reward PURITY "
-               "and single-mindedness (one idea, never a list or an 'and'), ownable territory (a direct rival could "
+               "and single-mindedness (one thought, not a thought with an 'and': never a list, never two claims joined), ownable territory (a direct rival could "
                "not say the same line), and a real human tension specific to THIS brand. Penalise category truths "
                "everyone would nod at, restated brand taglines, and anything trying to say two things. Judge each "
                "on: {crit}. Return the candidate indexes best first, one line on why the winner wins, and one line "
@@ -229,7 +229,7 @@ class Drafter:
     def _call(self, purpose, system, payload, schema):
         return self.ctx.caps.model.structured(purpose, system, payload, schema, max_tokens=6000)
 
-    def draft(self, insight: str | None = None) -> Draft:
+    def draft(self, insight: str | None = None, proposition: str | None = None) -> Draft:
         d = Draft(self.group, self.keys, self.rid)
         g = self.ctx.gist()
         q, cq = _query(self.loop, g, insight, self.group)
@@ -237,6 +237,8 @@ class Drafter:
         d.attention += notes
         d.known = self.ctx.known(d.passages)
         extra = {"insight": insight if self.group != "insight" else None, "field": LABELS.get(self.group, self.group)}
+        if self.group == "objection":  # the doubt the proposition has to beat: it reads the proposition
+            extra["proposition"] = proposition or self.ctx.current.get("single_minded_proposition")
         if self.group.startswith("desired_response") and self.only_leaf:
             extra["redraft_only"] = self.only_leaf.split(".", 1)[1]
             extra["current_desired_response"] = {k.split(".")[1]: v for k, v in self.ctx.current.items()
@@ -353,9 +355,9 @@ def run_drafters(ctx: DraftContext, plan: list[Drafter], on_state) -> dict:
     by = {d.group: d for d in plan}
     out: dict = {}
 
-    def one(dr: Drafter, insight=None):
+    def one(dr: Drafter, insight=None, proposition=None):
         on_state(dr.group, "drafting")
-        res = dr.draft(insight=insight)
+        res = dr.draft(insight=insight, proposition=proposition)
         out[dr.group] = res
         on_state(dr.group, "failed" if res.error else "drafted")
         return res
@@ -367,10 +369,14 @@ def run_drafters(ctx: DraftContext, plan: list[Drafter], on_state) -> dict:
             ins = r.value if not r.error else None
         if ins is None:
             ins = ctx.current.get("insight")
+        prop = None
         if "single_minded_proposition" in by:
-            one(by["single_minded_proposition"], insight=ins)
+            r = one(by["single_minded_proposition"], insight=ins)
+            prop = r.value if not r.error else None
+        if "objection" in by:
+            one(by["objection"], insight=ins, proposition=prop)
 
-    rest = [d for g, d in by.items() if g not in ("insight", "single_minded_proposition")]
+    rest = [d for g, d in by.items() if g not in ("insight", "single_minded_proposition", "objection")]
     with ThreadPoolExecutor(max_workers=1 + max(1, len(rest))) as ex:
         futs = [ex.submit(chain)]
         insight_now = ctx.current.get("insight")

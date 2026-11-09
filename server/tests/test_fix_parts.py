@@ -85,7 +85,8 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
     assert seen["fix"]["rewrite"]["objectives.commercial"].startswith("give objectives.commercial a measure")
     assert gone not in {f["id"] for f in seen["fix"]["facts"]}
     # placed: the commercial objective written, the held one proposed, nothing else changed
-    assert host.data["objectives"]["commercial"].startswith("objectives.commercial: up 10%")
+    # a rewritten assumption says it is one (feature brief-first-draft-checks)
+    assert host.data["objectives"]["commercial"].startswith("To confirm: objectives.commercial: up 10%")
     assert host.data["objectives"]["behavioural"] == before["objectives"]["behavioural"]
     assert any(d.get("action") == "propose" and f"{DOC}#objectives.behavioural" in d["targets"]
                for d in host.chain if d.get("handler", "").startswith("fix_parts@1"))
@@ -180,7 +181,8 @@ def test_with_jev_the_check_reads_only_the_named_parts_and_a_mended_argument_lea
         s.stop()
     assert sorted(seen["explain"]["flagged"]) == OBJ, "jev reads the named parts only"
     assert sorted(seen["rewrite"]["rewrite"]) == OBJ, "Jude's chain issue reaches only the named parts"
-    assert host.data["objectives"]["commercial"] == "objectives.commercial: up 10% by August"
+    # a rewritten assumption says it is one (feature brief-first-draft-checks)
+    assert host.data["objectives"]["commercial"] == "To confirm: objectives.commercial: up 10% by August"
     # Jude's notes on the drafts he sent back are recorded (redraft-provenance), each on a draft the
     # rewrite superseded; none stands on the brief as it is now
     back = {d["id"] for d in host.chain if d.get("superseded_by")}

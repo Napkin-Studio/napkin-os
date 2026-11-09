@@ -13,6 +13,10 @@ Every shape below is the engine's own, except `run`, `evidence`, `exports`, `int
 Sample: `app/templates/deck-maker/example/data.yaml` (checked against `engine/deck/deck.schema.json` by
 `engine/deck/tests/test_deck_maker_fixture.py`).
 
+State fixtures for every screen (`app/templates/deck-maker/example/states/*.yaml`, hand-built on the
+Ballymaloe sample, dev and test only, not packed) are checked against the schema by
+`app/tests/deckMakerFixtures.test.ts`.
+
 ## What a deck is built from
 
 The Deck stands alone. A deck builds from any of: the prompt text, documents the person attached, a
@@ -46,12 +50,19 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `research_request` `{status: "asked", at}` | the app | the Strengthen click. Records a request and **launches nothing** |
 | `run.stages[]` `{id,name,sub,status}` | the runner | `engine/deck/stages.py` |
 | `run.gate` | the runner | the open gate, or `null` |
-| `run.approvals.<gate>` `{by, at}` | the app | on Approve |
+| `run.approvals.<gate>` `{by, at, decision?, picked?, note?}` | the app | on Approve; `decision` is `approve\|edit\|retry`, `picked` the territory id at gate 2. `approvals.deck` `{by, at, decision}` is the deck approval at Review (see Review and Present) |
+| `run.agent` `{key, activity, step_index?, step_total?, to?, slow?}` | the server (a fixture until then) | what the agent circle shows. Optional. `slow` is a flag, never a time |
+| `run.stages[].items[]` `{text, status: done\|now\|pending}` | the runner | the content box of a running stage. Optional |
+| `run.error` `{stage, message, retryable}` | the runner | with `state: failed`. Optional |
+| `run.done` `{summary, slides, appendix, to_supply}` | the runner | with `state: done`. Optional |
+| `run.gate.agent`, `run.gate.territories[]` `{id, n, name, thought, why}`, `first_pick`, `picked`, `run.gate.idea` `{line, basis, territory_id, territory_name?, executions[], rests_on[]}` | the runner | gates 2 and 3. Territories, the idea and its executions are proposals. Optional |
+| `run.decisions[]` `{gate, kind, by, at}`, `run.gate_requests[]` `{gate, kind, at, status}` | the app | every approve, edit or retry; an edit or retry ask is recorded like `change_requests` and launches nothing. Optional |
+| `deck.appendix_ids[]`, `deck.slides.<id>.appendix` | the runner, or the app via `put` | the appendix; `appendix_count` stays the fallback. Optional |
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
 | `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
-| `exports.web\|pptx\|anim\|pdf` | the runner | file names, once written. Absent means "Not built yet" |
+| `exports.web\|pptx\|anim\|pdf` | the runner | `{file, url?, bytes?}`, once written; the older shapes, `true` and the file name as a string, still read as written. Absent means "Not built yet". The app shows the file name (its last path part), never `url` or `bytes`. The animated deck reads the same way; the engine does not build it yet, so it shows Not built yet until a runner writes it |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 
 On Build the app writes only the person's own inputs (`inputs.prompt`, `kind`, `format`). The Brief and
@@ -132,10 +143,43 @@ rejected and is never used on a slide.
 ## Gates
 
 A gate stops the run. `run.gate` names it and every stage after it is `next`, never `now`
-(`DeckLogic.gateHolds`). Approving writes one patch: the gate's stage `done`, the next stage `now`,
-`gate: null`, `approvals.<gate> = {by, at}`, with the decision `approve <gate>`. Only the open gate
-can be approved. Edit beats and Ask Dex to try again are specified here and not built: the app only
-toasts that they need the engine server.
+(`DeckLogic.gateHolds`). The gate id is the stage id. The app draws a gate from its registry
+(`DeckLogic.GATES`, read through `DeckLogic.gateView`): `storyline` (gate 1) shows `gate.beats`,
+`territories` (gate 2) shows `gate.territories` with the blind judge's `first_pick` marked and picked
+until the person picks another, and `idea` (gate 3) shows `gate.idea` (the line, its `executions`, what
+it `rests_on`). A gate the registry does not know gets generic words and whatever body its data carries;
+no gate assumes `beats`. Dex's note (`gate.dex`) on gates 2 and 3 is marked as proposed wording.
+
+Approving writes one patch under `run`: the gate's stage `done`, the next stage `now`, `gate: null`,
+`agent: null` (the feed described the gate), `approvals.<gate> = {by, at, decision: "approve", picked?,
+note?}` and `decisions[]` with `{gate, kind: "approve", by, at}` added, with the decision `approve <gate>`.
+At gate 2 the pick is view state until Pick this territory writes it as `approvals.territories.picked`;
+a pick that is not one of the territories is refused. Only the open gate can be approved.
+
+Edit and Ask Dex to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
+and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or
+`retry <gate>`, and launch nothing: the engine acts on them once it is connected. The gate then says the
+request waits.
+
+## Review and Present: the deck approval, the appendix, the exports
+
+Once `run.state` is `done` and the deck has presented slides, the Approval agent holds the deck
+(`DeckLogic.deckApproval`): Needs you until `run.approvals.deck` is written, then Approved. Review shows
+its circle and word beside Approve the deck, with its status card and Checked so far (`run.checks`) under
+the rail; Present shows the same card and checks, and the circle in the Export card's head.
+
+Approve the deck (`DeckLogic.approveDeck`) writes one patch under `run`, like a gate: `approvals.deck =
+{by, at, decision: "approve"}`, `decisions[]` with `{gate: "deck", kind: "approve", by, at}` added, the
+`review` stage `done` and `agent: null`, with the decision `approve deck` and the open counts in the
+rationale. It is refused while a gate is open, before the run is done, and once approved. Approving with
+facts to supply or items to confirm still open is allowed; the screen says what stays open.
+
+The appendix (`DeckLogic.appendixOf`) is `deck.appendix_ids` (slides the deck holds, not presented), else
+the slides marked `appendix: true`; with either it opens in the Review rail and each slide can be
+selected; with only `appendix_count` it stays a count. The Export rows come from `DeckLogic.exportRows`
+and the report line from `DeckLogic.reportLine` (`validation.errors`; at 0 errors every number traced,
+since an untraced number is an error; then placeholders from the To supply count). The confirm list
+stays on Present as well as Review.
 
 ## Rules the screens keep
 
@@ -263,8 +307,15 @@ is not JSON gets one repair call. Bench cost ranges are assumptions, plus or min
   `app/pipeline.yaml`) needs the server feature.
 - Launching the Research Tool on a Strengthen yes (only the request is recorded).
 - Attaching documents from the app (the display list is written by the host).
-- The territory and idea gates' screens, and Edit beats and retry.
-- File delivery for `exports`.
+- Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
+  writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
+  tags and `rests_on`, `territory_name` and Dex's notes come from the state fixtures only.
+- File delivery for `exports` (Open and Download name the file and say where to find it), the animated deck,
+  and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.
 - Live measures for the twelve craft fixes (ADR 0030 to 0032 are proposed), the app reading the Gate 1 payload, and the
   `schema.json` entries for the new slide types.
+
+## The status circle's size
+
+The status card's circle is 130px while an agent works or the run waits (`run.agent.activity` work, write, think, read, check, a hand-off, or no feed and nothing open), and 60px when a gate needs the person, on failure and when done (`DeckLogic.circleSizeFor`). It grows and shrinks in place; no new data is read or written. While enlarged it is a button that answers with a few fixed lines (who it is, what it is doing, that it changes size); it shows no progress, percentage or time.

@@ -1,6 +1,6 @@
 # ADR 0007 — The SMP rules come from the literature, not from a template
 
-Status: accepted (Sai, 2026-09-26: "okay with SMP"; examples, audience rule and the
+Status: accepted, one sentence superseded for the server's Brief Maker by ADR 0034 (2026-10-28) (Sai, 2026-09-26: "okay with SMP"; examples, audience rule and the
 visible marks parked) · Research: `engine/outputs/research_2026_09_24/R1_smp_report.md`
 (R1, 171 citations checked; spot-checked 2026-09-25) · Code: `engine/golden-brief/golden_brief.schema.json`
 (field `smp`), `engine/golden_critic.py`, `engine/parse_brief.py` (`_rubric_flags`,

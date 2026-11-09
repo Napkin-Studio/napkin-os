@@ -37,6 +37,8 @@ from . import provenance as prov
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
 from .job import BriefJob, log
+from . import checks
+from .questions import dedupe
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
 FACTS_MAX = prov.FACTS_MAX
@@ -56,7 +58,9 @@ DIMS = ["objectives_quality", "audience_vividness", "single_minded_message", "ev
 BASES = ["client", "research", "library", "assumption"]
 WHAT = {
     "project_name": "a short working name", "client": "the client and brand",
+    "job": "the job in one plain sentence: the problem reframed as the change in what one person thinks, feels or does (not the task)",
     "background": "the business situation and why now",
+    "barrier": "what stands in their way: the belief, habit, fear or rival in their head or routine, in plain words",
     "objectives.commercial": "the business result, measurable and time-bound where the input allows",
     "objectives.behavioural": "what the audience should do differently",
     "objectives.attitudinal": "what the audience should think or feel differently",
@@ -64,14 +68,29 @@ WHAT = {
     "competitor_context": "named competitors, what each claims, and the space left open",
     "insight": "one human truth about the audience that opens the problem",
     "single_minded_proposition": "one sentence, one thought",
+    "objection": "the doubt already in their head that the proposition has to beat, in their words, one sentence",
     "reasons_to_believe": "proof points for the proposition (list)",
     "desired_response.think": "what they should think", "desired_response.feel": "what they should feel",
     "desired_response.do": "what they should do",
     "tone_and_world": "how the work should feel (list of short phrases)",
-    "budget_and_scope": "deliverables, channels, timing; never a budget figure that was not given",
+    "budget_and_scope": "deliverables, channels, timing; never a budget figure that was not given; ask whether the budget includes VAT and whether media sits inside it",
+    "media_roles": "one line per medium, at most four and 55 words in all: 'Medium: the job it does for this audience and why', chosen "
+                   "from the job, never from habit; no reach, frequency or cost figure the client or the facts did not give; a medium the "
+                   "client did not name starts 'To confirm:' (list)",
+    "measurement": "how the work is judged and how we will know it worked, one line each, at most five and 70 words in all: Judged by "
+                   "(the client's own criteria, else the objectives it is read against, marked 'To confirm:'); Attribution (a holdout "
+                   "or geo comparison); Before and after (a tracker wave in market before launch, on the attitude the work changes); "
+                   "In flight (the fast reads, one of them the action asked for); The lag (what lands inside the flight, what after). "
+                   "Targets are the objectives' own, never new; a tracker wave or holdout nobody has budgeted starts 'To confirm:' (list)",
     "mandatories": "what must appear or be avoided (list)",
     "open_questions": "what only the client can answer (list)",
 }
+
+
+def _listed(words) -> str:
+    """'a, b and c': names in a sentence."""
+    w = list(words)
+    return w[0] if len(w) == 1 else ", ".join(w[:-1]) + " and " + w[-1]
 
 
 def _obj(props: dict, required=None) -> dict:
@@ -183,7 +202,8 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
    the brief), fix (one sentence)}:
    objectives_quality (a handful at most, benchmarked and time-stamped, the commercial/behavioural/attitudinal
    chain linked), audience_vividness (a vivid picture, not a bare age range; who it is NOT for),
-   single_minded_message (ONE message with relevant proof), evaluation_criteria (how the work will be judged),
+   single_minded_message (ONE message with relevant proof), evaluation_criteria (how the work will be judged and how we will know it worked: the
+   measurement part),
    budget_interlock (budget, objectives and audience feasible together), strategic_clarity (a clear choice,
    including what not to do), language (simple, succinct, no jargon).
 2. chain: does objective -> audience -> insight -> proposition -> reasons to believe hold as one argument?
@@ -199,7 +219,18 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
    from what the brief already holds; never ask her to invent client facts. Never name a part only because a
    claim in it is worked out or marked to confirm.
 6. questions: what only the client can answer.
-7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary."""
+7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary. It is "multiple" when the
+   brief serves more than one problem, audience or message, or when the client's own input was a wish-list of
+   objectives, audiences and messages that was never narrowed to one: say in split_into what the one choice is.
+8. part tests: `tests` holds, for @TESTED@, the planning
+   tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
+   `revise` with one instruction that names the test and the fix. `part_checks` is what code measured (words against
+   the limit, items against the item cap, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
+   fails when it joins two thoughts, and passes when it sits inside one.
+9. anti-patterns, also `revise`: a proposition that is really a tagline, or is the brand's own existing line; two
+   thoughts smuggled into one (an objection holding several doubts, a job asking for several changes); a wish-list
+   (more than one problem, audience or message); a medium whose job is really the creative idea; words a normal person
+   would not say out loud.""".replace("@TESTED@", _listed(checks.TESTED_WORDS.values()))
 
 
 def review_schema(keys):
@@ -279,8 +310,17 @@ class PlannedBriefJob(BriefJob):
                         self.caps.runlog)
 
     def _clean(self, out, ev, stage, keys=None, prior=None):
-        """Dara's parts with what each rests on (provenance.clean_parts): the one cleaner of every path."""
-        return prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
+        """Dara's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
+        An assumption says it is one first, so every sentence and the claim read from it are the same text."""
+        if isinstance(out, dict):
+            marked = checks.mark_assumptions(out, self.whole.get("insight"))
+            if marked:
+                self.caps.runlog.note("assumptions_marked", stage=stage, parts=marked)
+        got = prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
+        late = checks.mark_downgraded(got)  # claimed research or client words with nothing under it
+        if late:
+            self.caps.runlog.note("assumptions_marked", stage=stage + "_downgraded", parts=late)
+        return got
 
     def _prior(self, keys):
         """Each part's claims as it stands: this job's draft, else the decision that wrote it."""
@@ -556,8 +596,15 @@ class PlannedBriefJob(BriefJob):
                 brief[k] = {"value": get(self.W, k), "basis": "person" if self.held.get(k) else "earlier",
                             "cites": [], "claims": earlier.get(k) or []}
         payload = {"brief": brief, "strategy": (self.plan_out or {}).get("strategy"), "facts": ev["facts"],
-                   "findings": ev["findings"], "client_said": self._said()}
+                   "findings": ev["findings"], "client_said": self._said(),
+                   "part_checks": checks.facts(self.whole), "tests": checks.tests(list(self.whole))}
         rv = self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, review_schema(list(KEYS)), max_tokens=8000)
+        if purpose == "review_brief":  # what code can measure goes back with Jude's own list, once
+            named = {x["part"] for x in rv.get("revise") or []}
+            extra = [x for x in checks.revisions(self.whole) if x["part"] not in named]
+            if extra:
+                rv["revise"] = list(rv.get("revise") or []) + extra
+                self.caps.runlog.note("checks_sent_back", parts=[x["part"] for x in extra])
         # Jude grades a worked-out claim on its working: one that recomputes is supported whatever he says;
         # code's own verdicts join his. None of them is a reason to rewrite.
         rv["claims"] = prov.judge_claims(self.whole, rv.get("claims") or [])
@@ -587,32 +634,47 @@ class PlannedBriefJob(BriefJob):
         rv = self._review(ev, "review_brief")
         revise = [x for x in rv.get("revise") or [] if x["part"] in self.whole]
         if revise:
-            parts = [x["part"] for x in revise]
-            self.set_state(parts, "revising", "drafter")
-            prior = self._prior(parts)
-            payload = {"client_said": self._said(), "captured": self._captured(),
-                       "client_words": self._client().payload(), "plan": self.plan_out,
-                       "brief": {k: v["value"] for k, v in self.whole.items()},
-                       "rewrite": {x["part"]: x["instruction"] for x in revise},
-                       "prior_claims": {k: prior.get(k) or [] for k in parts},
-                       "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
-                       "library": self._library(12),
-                       "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in parts}}
-            try:
-                out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, payload,
-                                                 draft_schema(parts), max_tokens=8000)
-                got = self._clean(out, ev, "revise", keys=parts, prior=prior)
-                told = {x["part"]: x["instruction"] for x in revise}
-                for k, v in got.items():
-                    self._sent_back(k, v, told.get(k) or "", self._note_on(rv, k))
-                    self.whole[k] = v
-                rl.note("revised", parts=sorted(got))
-                self.set_state(parts, "judging", "judge")
-                rv = self._review(ev, "review_brief_again")
-            except Exception as e:  # noqa: BLE001 - the first review stands
-                rl.note("revise_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+            rv = self._rewrite(revise, rv, ev, "review_brief_again") or rv
+        # what code can still measure after the one rewrite goes back once more, then Jude reads it again
+        left = checks.revisions(self.whole)
+        if left:
+            rl.note("checks_sent_back_again", parts=[x["part"] for x in left])
+            rv = self._rewrite(left, rv, ev, "review_brief_again") or rv
         self.review_out = rv
         self._place(rv, ev)
+
+    def _rewrite(self, revise, rv, ev, purpose):
+        """Dara rewrites the parts named in `revise`, Jude reads the brief again. -> his new review, or None
+        when the rewrite failed and the review before it stands."""
+        rl = self.caps.runlog
+        parts = [x["part"] for x in revise]
+        before = dict(self.whole)  # the brief the review in hand was written about
+        self.set_state(parts, "revising", "drafter")
+        prior = self._prior(parts)
+        payload = {"client_said": self._said(), "captured": self._captured(),
+                   "client_words": self._client().payload(), "plan": self.plan_out,
+                   "brief": {k: v["value"] for k, v in self.whole.items()},
+                   "rewrite": {x["part"]: x["instruction"] for x in revise},
+                   "prior_claims": {k: prior.get(k) or [] for k in parts},
+                   "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
+                   "library": self._library(12),
+                   "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in parts}}
+        try:
+            out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, payload,
+                                             draft_schema(parts), max_tokens=8000)
+            got = self._clean(out, ev, "revise", keys=parts, prior=prior)
+            told = {x["part"]: x["instruction"] for x in revise}
+            for k, v in got.items():
+                self._sent_back(k, v, told.get(k) or "", self._note_on(rv, k))
+                self.whole[k] = v
+            rl.note("revised", parts=sorted(got))
+            self.set_state(parts, "judging", "judge")
+            return self._review(ev, purpose)
+        except Exception as e:  # noqa: BLE001 - the review before stands, so does the brief it read
+            self.whole.clear()
+            self.whole.update(before)
+            rl.note("revise_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+            return None
 
     def _judge_by_jev(self, ev):
         """The check loop on the whole draft: jev flags, Jude says why, Dara rewrites; then the
@@ -646,7 +708,7 @@ class PlannedBriefJob(BriefJob):
               "claims": prov.code_verdicts(self.whole), "notes": notes, "revise": [],
               "questions": res["questions"],
               "single_mindedness": {"verdict": "single", "split_into": []},
-              "summary": (f"jev checked every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
+              "summary": (f"A quick check read every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
                           f"; Jude sent {len(res['todo'])} back to Dara, who rewrote {len(res['rewritten'])}.")
               if res["before"] else "Checked."}
         self.scores = [x["score"] for x in (res["before"], res["after"]) if x]
@@ -658,8 +720,14 @@ class PlannedBriefJob(BriefJob):
         draft Jude sent back (`first`, when this job drafted it) and his note (`sent_back`).
         The first draft stays in the chain, superseded by this one; nothing is collapsed."""
         v["revised"] = True
-        if k in self.whole:
-            v["first"] = self.whole[k]
+        prev = self.whole.get(k)
+        if prev is not None:
+            # sent back twice (Jude's note, then what code measured): the chain keeps the first draft and both asks
+            v["first"] = prev.get("first") or prev
+            before = prev.get("sent_back") or {}
+            if before.get("instruction"):
+                instruction = f"{before['instruction']} Then: {instruction}"
+                why = before.get("why") or why
         v["sent_back"] = {"instruction": instruction, "why": why}
 
     @staticmethod
@@ -819,12 +887,10 @@ class PlannedBriefJob(BriefJob):
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
-        seen, oq = set(), []
-        for q in qs:
-            key = " ".join(q.lower().split())[:80]
-            if key not in seen:
-                seen.add(key)
-                oq.append(q.strip())
+        qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
+        oq, merged = dedupe(qs)
+        if merged:
+            self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
         oq = clean("open_questions", oq[:12])
         if oq and oq != clean("open_questions", get(self.W, "open_questions")) and "open_questions" not in self.locked:
             r = rsn.make(f"Gathered {len(oq)} question(s) only the client can answer.",

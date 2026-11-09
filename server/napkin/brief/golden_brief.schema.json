@@ -89,7 +89,7 @@
       "max_words": 70,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "Why are we here? The business problem or opportunity that makes this work necessary, in 2–3 sentences. What's going on, and why now? Plain words, no jargon. If there's no marketing strategy behind it, there's no brief yet.",
+      "prompt": "A focused, concise paragraph giving an overview of the CURRENT brief: the business problem or opportunity and enough relevant context to understand why the brief exists and why now (2–3 sentences). Plain words, no jargon. If there's no marketing strategy behind it, there's no brief yet.",
       "good_example": "Sales have plateaued and under-35s see us as 'their dad's beer.' A low-carb variant launches in Q3 — our one shot to feel relevant to a younger drinker.",
       "bad_example": "We want a big, disruptive campaign that goes viral and builds brand love.",
       "bad_reason": "States a wish for advertising, not the business problem; no 'why now'.",
@@ -128,7 +128,7 @@
         "behavioural",
         "attitudinal"
       ],
-      "prompt": "A handful, linked and logical, each measurable and time-stamped. Commercial = the business result; behavioural = what people must DO; attitudinal = what they must think/feel first.",
+      "prompt": "State what this brief is here to achieve. Lead with ONE primary objective, in the level that matters most; the other levels are supporting and only as far as they help it. Commercial = the business result; behavioural = what people must DO; attitudinal = what they must think/feel first. Each measurable and time-stamped where the input allows.",
       "good_example": "Commercial: +8% volume share in 18–34s within 12 months. Behavioural: 100k under-35s trial the variant. Attitudinal: from 'beer for older men' to 'beer for people like me.'",
       "bad_example": "Increase awareness, sales, loyalty and consideration.",
       "bad_reason": "Multiple unranked objectives, none measurable or time-bound; awareness is not a commercial outcome.",
@@ -161,7 +161,7 @@
       "depends_on": [
         "budget_scope"
       ],
-      "prompt": "A vivid picture of the audience built ONLY from the brief's data: who they are (demographics), what they think, feel and want (psychographics, needs), how and where they use the product, and who the brand is NOT for. Keep every audience the brief names, in priority order (primary / secondary); a B2B audience is a buying group, not a person. A group written in a pen-portrait voice is fine. Never invent a named person, an age, a city or habits the brief does not give. Avoid clichés like 'millennials'.",
+      "prompt": "A targeted, specific and succinct picture of the people the work is aimed at, built ONLY from the brief's data, with their relevant motivations, situation and behaviour (not generic demographics): who they are (demographics), what they think, feel and want (psychographics, needs), how and where they use the product, and who the brand is NOT for. Keep every audience the brief names, in priority order (primary / secondary); a B2B audience is a buying group, not a person. A group written in a pen-portrait voice is fine. Never invent a named person, an age, a city or habits the brief does not give. Avoid clichés like 'millennials'.",
       "good_example": "Busy (working) mothers. A 'Life is Sweet' / 'food is love' family where mum tends to over-feed everyone. She keeps the fridge well stocked as family meal-times can be erratic.",
       "bad_example": "ABC1 males 18–34, urban, social, brand-aware.",
       "bad_reason": "A bare data cell: 'Adults 18-64 really doesn't help the creative team' (Weichselbaum p.304). Nothing about how they think, what they want, or who is excluded. The opposite fault is as bad: a named person with an age, a city and habits the brief never gave.",
@@ -198,7 +198,7 @@
       "max_words": 50,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "The money, and the honest ambition it buys. Budget ↔ objectives ↔ audience are linked — move one and the others must move.",
+      "prompt": "The money, and the honest ambition it buys. Budget ↔ objectives ↔ audience are linked — move one and the others must move. State whether the budget includes VAT and whether media sits inside it; if the brief does not say, ask the client (an open question) rather than assuming. Never state a budget figure that was not given. Say in one line what the budget does not buy; that line makes the rest believable.",
       "good_example": "€1.2m working media. National reach unrealistic — prioritise four cities + always-on social.",
       "bad_example": "TBC / as needed.",
       "bad_reason": "No constraint = the backbone can't be balanced.",
@@ -219,7 +219,7 @@
       "max_words": 70,
       "provenance_required": true,
       "depends_on": [],
-      "prompt": "Who are we up against, and what does everyone in the category say/do? Needed to judge whether the SMP is ownable.",
+      "prompt": "Who are we up against, what does each rival claim (their positioning and messaging), and what space has no rival claimed? Needed to judge whether the single thought is ownable.",
       "good_example": "Rivals all claim heritage, mateship and 'the perfect pint.' White space: nobody owns 'the drink that signals your taste.'",
       "bad_example": "Everyone.",
       "bad_reason": "No real category read; can't locate white space.",
@@ -228,6 +228,11 @@
           "id": "names_rivals",
           "test": "Names rivals and the shared category claim.",
           "method": "auto"
+        },
+        {
+          "id": "names_open_space",
+          "method": "llm",
+          "test": "Does it name the space no rival has claimed (a messaging gap or opening), not only who the rivals are?"
         }
       ]
     },
@@ -244,7 +249,7 @@
         "audience",
         "background"
       ],
-      "prompt": "A human tension, not a fact. Reveal WHY, not just WHAT. Shape: 'They [do/believe X] because [deeper motivation], which means [implication].' Survive the 'so what?' test ×3.",
+      "prompt": "A truth about the audience, usually a human tension, that when said out loud makes them feel understood and gives the product a role to play. A surprising, meaningful discovery the client did not already know (cultural, personal, human or industry-based), grounded in evidence rather than obvious statements. Not a fact, a statistic or an observation. Reveal WHY, not just WHAT. Shape: 'They [do/believe X] because [deeper motivation], which means [implication].' Survive the 'so what?' test ×3.",
       "good_example": "Buyers don't reject the Fabia on its engineering — they reject it because 'it's still a Skoda', which means the job is to confront the prejudice, not to prove the car.",
       "bad_example": "The Fabia has brilliant engineering.",
       "bad_reason": "An observation about the product with no motivation and no implication; the creatives' answer was 'Yes, but it's still a Skoda' (Fallon 2006 p.77).",
@@ -270,9 +275,29 @@
           "method": "llm"
         },
         {
+          "id": "rings_true",
+          "method": "llm",
+          "test": "Is it true, and would the audience nod and feel seen?"
+        },
+        {
+          "id": "about_audience",
+          "method": "llm",
+          "test": "Is it about the audience, not a boast about the brand or a fact about the product?"
+        },
+        {
+          "id": "fresh",
+          "method": "llm",
+          "test": "Is it fresh, not a category cliche anyone could have written?"
+        },
+        {
           "id": "has_implication",
-          "test": "Says what the job actually is.",
+          "test": "Does it hand the product a role? Says what the job actually is. An insight that does not set up the proposition is just a nice observation.",
           "method": "llm"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud? No strategist vocabulary."
         }
       ],
       "_example_sources": "Built from Fallon 2006 pp.77-80 (Skoda Fabia, Fallon London 2000): 'the biggest barrier was an irrational prejudice against the brand' (p.80); the good example's wording is ours, its facts are the source's. IPA case: 'It's a Skoda. Honest.' reduced marque rejection from 60% to 42%."
@@ -294,14 +319,14 @@
         "competitor_context",
         "audience"
       ],
-      "prompt": "ONE sentence — the one thing we want the audience to take away. It must follow from the problem and the insight, be true and backed by the reasons to believe, give this audience a reason to care, and be specific to this brand, not a category generic. Written for the creative team: it points to where the idea should be and is not the idea's final wording. Not a tagline, not 'creative', not a list. If you have two, choose.",
+      "prompt": "The single most motivating thing we can say to the defined audience, given the insight and what is honestly true about the product: ONE thought, not a thought with an 'and': a word, a phrase or one sentence, never several thoughts. It must follow from the problem and the insight, be true and backed by the reasons to believe, give this audience a reason to care, and be specific to this brand, not a category generic. Written for the creative team: it points to where the idea should be and is not the idea's final wording. Not a tagline, not 'creative', not a list. If you have two, choose, or find the higher thought that contains both.",
       "good_example": "A smart choice because you don't pay for what you don't need.",
       "bad_example": "Good drinks, fun times, real people.",
       "bad_reason": "'It is not a main idea, but three main ideas' (Steel 1998 p.169); averaged from research, it 'could have fitted any one of a host of other beverages' (p.89).",
       "rubric": [
         {
           "id": "single_sentence",
-          "test": "Exactly one sentence.",
+          "test": "One sentence at most: a word, a phrase or one sentence is fine; several sentences are several thoughts.",
           "method": "auto"
         },
         {
@@ -313,13 +338,18 @@
           "id": "single_minded",
           "method": "llm",
           "tolerance": "hard",
-          "test": "One strategic choice: does it commit to one thing to communicate, rather than offering two or more claims for the creatives to choose between? (An 'and' or a comma is not by itself a fail.)"
+          "test": "One thought, not a thought with an 'and': does it commit to one thing to communicate, rather than joining two claims for the creatives to choose between? If it has an 'and', does the 'and' join two thoughts (fail) or sit inside one thought (pass)? Two clauses joined by a colon, semicolon or dash also count as two thoughts."
         },
         {
           "id": "derives_from",
           "method": "llm",
           "tolerance": "hard",
           "test": "Would a reader who has read only the problem and the insight see why this is the proposition?"
+        },
+        {
+          "id": "true_backed",
+          "method": "llm",
+          "test": "Is it true: supported by a reason to believe the brief actually holds?"
         },
         {
           "id": "not_a_tagline",
@@ -340,6 +370,11 @@
           "id": "room_for_many_ads",
           "method": "llm",
           "test": "Could a creative team write several quite different ads from it?"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud? No strategist vocabulary."
         }
       ],
       "_prompt_sources": "R1 2026-09-24 §1.1: Steel 1998 p.168-169; APG 1997 pp.56-57; BBG p.17; Excellence 1997 p.158; Reeves 1961 p.47; benefit not required (Ogilvy DO, BBH 1992 slide 32, Binet & Field 2007)",
@@ -363,19 +398,19 @@
       "zone": 3,
       "type": "list",
       "required": true,
-      "max_items": 5,
+      "max_items": 3,
       "provenance_required": true,
       "depends_on": [
         "smp"
       ],
-      "prompt": "The few proof points that make the proposition credible — strongest first. Not a shopping list; number flexes by channel.",
+      "prompt": "The two or three validated facts, truths, statistics or sound logic that directly support the proposition: strongest first. A long list means you have not chosen. Validate the premises: logic does not replace empirical proof for a factual or product claim. Never invent supporting evidence; a reason you cannot prove from a fact starts 'To confirm:'.",
       "good_example": "You can stay always up to date · Nicam · widescreen · satellite",
       "bad_example": "Award-winning · trusted · premium · loved by thousands · refreshing · bold.",
       "bad_reason": "Generic, unprovable claims; a shopping list, not proof for the SMP.",
       "rubric": [
         {
           "id": "max_items",
-          "test": "No more than five items.",
+          "test": "No more than three items: the two or three that actually matter.",
           "method": "auto"
         },
         {
@@ -402,7 +437,7 @@
         "feel",
         "do"
       ],
-      "prompt": "The bridge from proposition to behaviour. One line each.",
+      "prompt": "The intended behavioural, attitudinal or other response to the work, clearly tied to the brief objectives: the meaningful change or action we want. One line each.",
       "good_example": "Think: 'this one's actually for me.' Feel: quietly proud to order it. Do: ask for it by name at the bar.",
       "bad_example": "Do: engage with the brand.",
       "bad_reason": "Vague; 'engage' is not an observable behaviour and doesn't ladder to the objective.",
@@ -460,6 +495,275 @@
           "id": "has_deliverables",
           "test": "Lists concrete deliverables or constraints.",
           "method": "auto"
+        }
+      ]
+    },
+    {
+      "id": "job",
+      "label": "The job — what must this work make a person do?",
+      "zone": 1,
+      "type": "text",
+      "required": true,
+      "max_words": 30,
+      "provenance_required": false,
+      "depends_on": [
+        "background",
+        "audience"
+      ],
+      "prompt": "The job in ONE plain sentence, from the audience's side: the business problem reframed as the change in what ONE person thinks, feels or does. Not the task ('make an ad'), the problem ('nobody under 35 thinks of us'). Words a normal person would say out loud.",
+      "good_example": "Get a tired thirty-year-old to think of us first when a plain Tuesday dinner needs lifting.",
+      "bad_example": "Launch a 30-second TV and social campaign to drive awareness.",
+      "bad_reason": "States the task, not the problem or the change in a person (strategic-planning skill: reframe the problem from the audience's side).",
+      "rubric": [
+        {
+          "id": "single_sentence",
+          "test": "Exactly one sentence.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "states_problem_not_task",
+          "method": "llm",
+          "test": "Does it state the problem or the change that is needed, not the task the client asked for?"
+        },
+        {
+          "id": "audience_side",
+          "method": "llm",
+          "test": "Is it written from the audience's side, naming the change in what one person thinks, feels or does?"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud?"
+        },
+        {
+          "id": "one_change",
+          "method": "llm",
+          "test": "Does it name ONE change in ONE person, not several asks joined together?"
+        }
+      ]
+    },
+    {
+      "id": "barrier",
+      "label": "The barrier — what stands in their way?",
+      "zone": 1,
+      "type": "text",
+      "required": true,
+      "max_words": 60,
+      "provenance_required": false,
+      "depends_on": [
+        "audience",
+        "background"
+      ],
+      "prompt": "What stands between this person and the result right now: the belief, habit, fear or rival in their head or routine, in plain words. The strategy usually lives in removing one barrier. Rest it on what the brief holds, or mark it to confirm.",
+      "good_example": "They file the jar under 'my mum's cupboard', and nobody browses their parents' pantry.",
+      "bad_example": "Low awareness among younger people.",
+      "bad_reason": "A symptom a tracker measures, not what is in their heads or habits (strategic-planning skill: the barrier is in their heads or habits).",
+      "rubric": [
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "in_their_heads",
+          "method": "llm",
+          "test": "Does it name a belief, habit, fear or rival in the audience's head or routine, not a media, product or sales fact?"
+        },
+        {
+          "id": "one_barrier",
+          "method": "llm",
+          "test": "Does it name ONE barrier rather than a list of them?"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud?"
+        }
+      ]
+    },
+    {
+      "id": "objection",
+      "label": "The objection — the doubt the single thought must beat",
+      "zone": 3,
+      "type": "text",
+      "required": true,
+      "max_words": 30,
+      "provenance_required": false,
+      "depends_on": [
+        "smp",
+        "audience"
+      ],
+      "prompt": "The doubt already in the audience's head that the single-minded proposition has to beat, in their own words. The work answers it; it does not ignore it. ONE sentence.",
+      "good_example": "It's still a Skoda.",
+      "bad_example": "People may not know about the product.",
+      "bad_reason": "A gap in awareness, not a doubt the audience actually holds.",
+      "rubric": [
+        {
+          "id": "single_sentence",
+          "test": "Exactly one sentence.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "a_real_doubt",
+          "method": "llm",
+          "test": "Is it a doubt this audience actually holds, in their words, not a gap in awareness?"
+        },
+        {
+          "id": "answered_by_proposition",
+          "method": "llm",
+          "test": "Does the single-minded proposition answer this doubt rather than ignore it?",
+          "tolerance": "hard"
+        },
+        {
+          "id": "plain_words",
+          "method": "llm",
+          "test": "Is every word one a normal person would say out loud?"
+        },
+        {
+          "id": "one_doubt",
+          "method": "llm",
+          "test": "Is it ONE doubt (one worry in one sentence), not two or three joined together?"
+        }
+      ]
+    },
+    {
+      "id": "media_roles",
+      "label": "Role of each medium",
+      "zone": 2,
+      "type": "list",
+      "required": true,
+      "max_words": 55,
+      "max_items": 4,
+      "provenance_required": true,
+      "depends_on": [
+        "budget_scope",
+        "mandatories",
+        "audience",
+        "objectives"
+      ],
+      "prompt": "One line per medium: the medium, and the job it does for this audience and why. Choose each medium from the job, not from habit: if you cannot write the reason in one line, cut the medium. Take the media from what the client said (budget and scope, mandatories) and add one only as a proposal that starts 'To confirm:'. Check each against where this audience actually is. Set the medium's job, never the idea. Give no reach, frequency, cost or percentage the client, a pin or the objectives did not give.",
+      "good_example": "Radio: reaches shoppers in the car on the way to the supermarket, when the shopping list is made · Instore: the last reminder at the shelf · Social: cheap repeats of the recipe idea for the under-thirties",
+      "bad_example": "TV, radio, OOH, social, PR, influencers, cinema, sponsorship, email, search.",
+      "bad_reason": "A list of media by habit with no job and no reason; the media plan's test is that a medium whose reason cannot be written is cut.",
+      "rubric": [
+        {
+          "id": "max_items",
+          "test": "No more than four media: one line each.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "reason_in_a_line",
+          "test": "Does every medium have a one-line job and reason, with none that only names the medium?",
+          "method": "llm"
+        },
+        {
+          "id": "from_the_job",
+          "test": "Does each medium follow from the job and the objectives it has to do, not from habit?",
+          "method": "llm"
+        },
+        {
+          "id": "fits_the_audience",
+          "test": "Does each medium match where this audience actually is and what they do there?",
+          "method": "llm",
+          "tolerance": "hard"
+        },
+        {
+          "id": "fits_the_budget",
+          "test": "Can the media named be afforded inside the budget and scope part?",
+          "method": "llm"
+        },
+        {
+          "id": "no_invented_numbers",
+          "test": "Is every reach, frequency, cost or percentage one the client, a pin or the objectives gave?",
+          "method": "llm"
+        },
+        {
+          "id": "plain_words",
+          "test": "Is every word one a normal person would say out loud?",
+          "method": "llm"
+        }
+      ]
+    },
+    {
+      "id": "measurement",
+      "label": "How we will know it worked",
+      "zone": 2,
+      "type": "list",
+      "required": true,
+      "max_words": 70,
+      "max_items": 5,
+      "provenance_required": true,
+      "depends_on": [
+        "objectives",
+        "desired_response",
+        "budget_scope"
+      ],
+      "prompt": "How the work is judged and how we will know it worked, decided before the work is bought. One line each: (1) Judged by: how the work is judged before creative starts, from the client's own criteria if given, else the objectives it will be read against, marked 'To confirm:'. (2) Attribution: a holdout or geo phasing, naming the comparison. (3) Before and after: the attitude the work exists to change, with the first wave in market before launch. (4) In flight: the fast reads, one of them the action the work asks for. (5) The lag: which measures land inside the flight and which after. Targets are the objectives' own numbers, never new ones; a target the client has not given is an open question, not a figure. A tracker wave costs working media: mark it 'To confirm:' when no research budget is given.",
+      "good_example": "Judged by: sales against last year in the test regions, as the client set it · Attribution: two regions on air, two held back · Before and after: a tracker wave before launch and one after, on whether people think of us first · In flight: branded search and shelf-talker coupon use, weekly · The lag: coupons land in the flight, the tracker after it",
+      "bad_example": "Track impressions, clicks and likes, and report monthly.",
+      "bad_reason": "Vanity measures tied to no objective, with no comparison, no start before launch and no word on what arrives after.",
+      "rubric": [
+        {
+          "id": "max_items",
+          "test": "No more than five lines.",
+          "method": "auto"
+        },
+        {
+          "id": "within_limit",
+          "test": "Within the word limit.",
+          "method": "auto"
+        },
+        {
+          "id": "ties_to_objectives",
+          "test": "Does every measure read one of the three objectives or the action the work asks for, not a vanity metric?",
+          "method": "llm"
+        },
+        {
+          "id": "can_attribute",
+          "test": "Does it name a holdout or a geo comparison that could tell the work's effect from the season?",
+          "method": "llm",
+          "tolerance": "hard"
+        },
+        {
+          "id": "starts_before_launch",
+          "test": "Does the before-and-after measure start before launch, not at launch?",
+          "method": "llm"
+        },
+        {
+          "id": "says_the_lag",
+          "test": "Does it say which measures land inside the flight and which after?",
+          "method": "llm",
+          "tolerance": "hard"
+        },
+        {
+          "id": "no_invented_targets",
+          "test": "Is every target one the objectives hold, with none made up?",
+          "method": "llm"
+        },
+        {
+          "id": "fits_the_budget",
+          "test": "If it needs a tracker wave or a holdout, is that affordable inside the budget, or marked to confirm?",
+          "method": "llm"
+        },
+        {
+          "id": "plain_words",
+          "test": "Is every word one a normal person would say out loud?",
+          "method": "llm"
         }
       ]
     }

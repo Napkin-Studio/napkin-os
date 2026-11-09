@@ -1,0 +1,654 @@
+# HAND-BUILT FIXTURE, NOT ENGINE OUTPUT. State "gate2" of the Deck Maker run, on the Ballymaloe Relish sample
+# (a hand-built sample: the brief fields are real Brief Maker output, the research is six web findings, the rest
+# is written by hand). Dev and test only: not packed into the app. Territories, the idea and its executions are
+# our proposals. `fixture` lists what the engine cannot supply yet (run.agent, cost, file sizes); the cost is a
+# placeholder. No time or percentage is shown anywhere.
+inputs:
+  prompt:
+    client: Ballymaloe Relish
+    project: Better With Ballymaloe
+    agency: ''
+    text: 'Client: Ballymaloe Relish (Irish family relish brand). Task: launch a 30s TV and social campaign to get under-35s in Ireland buying it. Budget €150k. Competitors: Heinz, own-label chutneys.'
+  documents: []
+  kind: agency
+  format: pitch
+  library:
+    enabled: false
+upstream:
+  doc_brief_better_with_ballymaloe:
+    title: Better With Ballymaloe brief
+    client: Ballymaloe Relish, an Irish family relish brand.
+    background: Ballymaloe Relish is an Irish family relish brand, trusted as a pantry staple but often seen by younger shoppers as their parents' or grandparents' jar. It is launching a 30s TV and social campaign to reach under-35s in Ireland. The aim is to recruit a younger audience beyond its heritage shoppers. Sales, distribution and awareness figures, and the reason for launching now, still need the client's input.
+    objectives: Get under-35s in Ireland buying Ballymaloe Relish, with a 30s TV and social campaign launch.
+    audience: 'To confirm: a 28-year-old renting in Dublin, Cork or Galway, working full time and cooking for one or two. Quick weeknight meals (sausages, a burger, a cheese toastie) and a weekend sharing board or barbecue. Every habit is an assumption until consumer research confirms it. Not for older loyal buyers or people who never use condiments.'
+    competitor_context: 'To confirm: all competitor claims are to be checked and not stated as fact. Heinz is the familiar everywhere choice and risks reading as generic to under-35s. Own-label chutneys are good value and convenient but a safe, cheaper substitute nobody feels proud of. The open space is real flavour made by an Irish family, without farmhouse nostalgia.'
+    insight: 'To confirm: "I want to feel I''m looking after myself, not just getting fed, but by Tuesday night all my effort has gone into the main bit and the one small thing that would make it better is the thing I skip."'
+    single_minded_proposition: The Irish relish that makes Tuesday's tea taste like you tried.
+    reasons_to_believe:
+    - 'To confirm: family-made Irish heritage'
+    - 'To confirm: the Ballymaloe name and its food credentials'
+    - 'To confirm: a distinctive recipe and flavour'
+    - 'To confirm: any awards or retail listings the client holds'
+    - 'To confirm: claims on ingredients and production, which the client must stand behind'
+    desired_response:
+      do: Pick up a jar on the next shop, use it on a regular meal, then share the moment on social.
+      feel: Warmth, pride in Irish food and appetite, with a sense that this brand is theirs and not just their parents'.
+      think: Ballymaloe is a better, properly Irish choice and worth the small premium over Heinz or own-label.
+    tone_and_world:
+    - Warm, witty and appetising
+    - Irish voice without cliché
+    - Real kitchens and everyday meals
+    - Food shot close and generous
+    - Family heritage worn lightly
+    budget_and_scope: A launch campaign with a 30s TV spot and social content, on a budget of €150k. Channel split, flighting and timing are still to be agreed. As €150k is tight for TV, social and cut-downs should carry reach, and the TV spot should be targeted.
+    mandatories:
+    - 'To confirm: pack shot and brand logo'
+    - 'To confirm: legal and regulatory claims wording, including Irish broadcast clearance for TV'
+    - 'To confirm: any client brand guidelines and things to avoid'
+    open_questions:
+    - What are current sales, distribution and awareness among under-35s, and what growth target do you want over what period? Is a new product, listing or pricing change driving the launch now?
+    - 'What proof points can you stand behind: recipe, ingredients, family story, awards or retail listings?'
+    - What are the campaign dates, the TV versus social split and the retailers involved?
+    - What brand guidelines, mandatory logos, legal wording and clearance requirements apply?
+  doc_research_ballymaloe:
+    title: Ballymaloe Relish research
+    report:
+      headline: Ballymaloe is Ireland's number 1 relish, but growth has slowed and money for blanket marketing is limited.
+      findings:
+      - id: f_w1
+        claim: Ballymaloe Relish was given a rebrand intended to appeal to the 'modern-day consumer'.
+        url: https://www.irishpost.com/business/irelands-iconic-ballymaloe-relish-gets-a-rebrand-to-appeal-to-contemporary-consumer-252210
+        date: undated in search result
+        status: unverified
+        caveat: Only the headline and intro were seen; the design details are unverified.
+      - id: f_w2
+        claim: Bord Bia's Origin Green directory describes Ballymaloe Foods as the number 1 relish brand in Ireland.
+        url: https://www.bordbia.ie/industry/origin-green/members-directory/manufacturers/grocery/ballymaloe-foods/
+        date: undated in search result
+        status: unverified
+        caveat: Directory wording, undated, single source.
+      - id: f_w3
+        claim: Ballymaloe's marketing manager said sales in Ireland have not fallen but growth has slowed, and that exports were about 15% of sales. As a smaller business the company lacks the funds for blanket marketing.
+        url: https://www.agriland.co.uk/farming-news/relish-opportunity
+        date: undated in search result
+        status: unverified
+        caveat: Undated, so the current position is not confirmed; single source.
+      - id: f_w4
+        claim: Ballymaloe Foods won the Love Irish Food Brand Development Award, a funded €85,000 out-of-home campaign (Exterion Media, Owens DDB), aiming to reach a broader audience while highlighting Irish heritage and local ingredients.
+        url: https://www.adworld.ie/2019/01/18/ballymaloe-foods-wins-love-irish-food-brand-development-award/
+        date: '2019-01-18'
+        status: unverified
+        caveat: 2019 news item; single source.
+      - id: f_w5
+        claim: Euromonitor expects Irish sauces, dips and condiments to stay led by Unilever Ireland, HJ Heinz (Ireland) and Mars Ireland. An earlier edition notes private labels gaining ground as price rises continue (2024).
+        url: https://www.euromonitor.com/sauces-dips-and-condiments-in-ireland/report
+        date: 2025-11 (report edition, per search summary)
+        status: unverified
+        caveat: Category figures are paywalled and were not seen.
+      - id: f_w6
+        claim: Heinz Ireland's 2024 pre-tax profit nearly doubled to about €10.19m; it plans to keep growing net sales through pricing and volume.
+        url: https://www.rte.ie/news/business/2025/0909/1532595-heinz-ireland-results
+        date: '2025-09-09'
+        status: unverified
+        caveat: The €10.19m figure was not confirmed on the RTÉ page; the Irish Post article on the same results is the other candidate source. Not used on a slide.
+    campaign:
+      name: Ballymaloe Relish
+    selection:
+      themes:
+      - Number 1 relish, slowing growth
+      - Limited money for blanket marketing
+      - Heinz and own-label pressure
+    materials: {}
+intake:
+  gaps:
+    brief_fields:
+    - field: objectives
+      why: No sales, distribution or awareness baseline, no growth target and no reason for launching now.
+    - field: reasons_to_believe
+      why: Every proof point is still to confirm with the client.
+    - field: budget_and_scope
+      why: €150k is stated; the TV and social split, timing and retailers are not.
+    - field: mandatories
+      why: Logo, legal wording, clearance and brand guidelines are all to confirm.
+    slide_types:
+    - type: team
+      why: No presenter or team details to put on it.
+    - type: investment
+      why: Only the €150k total is known; there is no split to base a budget slide on.
+  questions:
+  - id: q_deck_type
+    text: What kind of deck is this?
+    address: inputs.type
+    allow_text: false
+    options:
+    - id: agency_pitch
+      label: Agency pitch
+      value: agency_pitch
+      origin: proposed
+      source: launch a 30s TV and social campaign to get under-35s in Ireland buying it
+    - id: tender_response
+      label: Tender response
+      value: tender_response
+      origin: asked
+    - id: investor_seed
+      label: Investor seed deck
+      value: investor_seed
+      origin: asked
+    - id: credentials
+      label: Credentials / chemistry meeting
+      value: credentials
+      origin: asked
+  - id: q_baseline
+    text: What are sales and awareness among under-35s today, what is the growth target, and why launch now?
+    address: brief.objectives
+    allow_text: true
+    options:
+    - id: unknown
+      label: Not known yet
+      value: null
+    - id: stated
+      label: I will add the figures myself
+      value: null
+    - id: newthing
+      label: A new product, listing or price change
+      value: null
+  - id: q_proof
+    text: 'Which proof points can the client stand behind: recipe, ingredients, family story, awards, listings?'
+    address: brief.reasons_to_believe
+    allow_text: true
+    options:
+    - id: recipe
+      label: Recipe and ingredients
+      value: null
+    - id: family
+      label: Family story
+      value: null
+    - id: awards
+      label: Awards or retail listings
+      value: null
+    - id: none
+      label: Nothing confirmed yet
+      value: null
+  - id: q_timing
+    text: What are the campaign dates, the TV versus social split and the retailers?
+    address: brief.budget_and_scope
+    allow_text: true
+    options:
+    - id: unknown
+      label: Not decided yet
+      value: null
+    - id: social_led
+      label: Social carries reach, TV targeted
+      value: social-led, targeted TV
+      origin: proposed
+      source: As €150k is tight for TV, social and cut-downs should carry reach
+  - id: q_guidelines
+    text: Are there brand guidelines, a logo or pack shot, legal wording or broadcast clearance to follow?
+    address: brief.mandatories
+    allow_text: true
+    options:
+    - id: guidelines
+      label: Yes, I will add the guidelines
+      value: null
+    - id: clearance
+      label: Irish broadcast clearance applies
+      value: null
+    - id: none
+      label: None that I know of
+      value: null
+run:
+  state: gate
+  stage: territories
+  cost_usd: 0.61
+  stages:
+  - id: inputs
+    name: Read the inputs
+    sub: Brief, research, requirements
+    status: done
+  - id: scans
+    name: Read image-only pages
+    sub: No documents attached
+    status: done
+  - id: storyline
+    name: Storyline
+    sub: You approve it
+    status: done
+  - id: territories
+    name: Territories
+    sub: Needs you · you pick
+    status: now
+  - id: idea
+    name: One idea and its work
+    sub: Executions, channels
+    status: next
+  - id: copy
+    name: Slide copy
+    sub: Every claim gets a source
+    status: next
+  - id: check
+    name: Check
+    sub: Numbers, rules, length
+    status: next
+  - id: review
+    name: You review the deck
+    sub: Then present or export
+    status: next
+  gate:
+    id: territories
+    n: 2
+    of: 3
+    agent: strategy
+    dex: I wrote three territories, our proposals, and a blind judge put one first. The pick is yours.
+    territories:
+    - id: t1
+      n: 1
+      name: The one small thing
+      thought: The jar is the small thing you did not skip on Tuesday night.
+      why: it is the brief's insight (to confirm), made visible.
+    - id: t2
+      n: 2
+      name: Tried, not fussed
+      thought: A quick weeknight or a toastie, lifted without fuss. Irish voice.
+      why: it matches the brief's tone.
+    - id: t3
+      n: 3
+      name: Not your mum's cupboard
+      thought: The jar moves from the parents' shelf to the shared flat.
+      why: it tackles the brief's 'parents' jar' problem.
+    first_pick: t1
+    checks:
+    - ok: true
+      text: Every figure traces to a source or the brief
+    - ok: true
+      text: No rejected finding used
+    - ok: false
+      text: All 3 mandatories are still to confirm with the client
+    - ok: false
+      text: 6 research findings are single-source and unverified
+    - ok: false
+      text: 1 beat needs details only you have
+  approvals:
+    storyline:
+      by: Sai
+      at: '2026-11-03T10:12:00Z'
+      decision: approve
+  agent:
+    key: strategy
+    activity: human
+    step_index: 2
+    step_total: 7
+  decisions:
+  - gate: storyline
+    kind: approve
+    by: Sai
+    at: '2026-11-03T10:12:00Z'
+deck:
+  meta:
+    client: Ballymaloe Relish
+    project: Better With Ballymaloe
+    agency: ''
+    kind: pitch
+    audience: review
+    built_from:
+      type: agency_pitch
+      tier: brief+research
+      documents: []
+      brief: true
+      research: true
+    confirm:
+    - ref: slide:team
+      kind: slide
+      text: Here is who presents and what €150k covers.
+      why: 'still needs a person: nothing supplies the presenter or the split'
+      slide: s06
+      verified: null
+    - ref: proposal:b1e7a904
+      kind: proposal
+      text: Tuesday's tea, but you tried.
+      why: 'a proposal: the brief gives the proposition, not this line'
+      slide: s04
+      verified: null
+    - ref: brief:objectives
+      kind: figure
+      text: Baseline sales, distribution and awareness, the growth target and why now.
+      why: the brief says the client must supply these
+      slide: s02
+      verified: null
+    - ref: brief:audience
+      kind: figure
+      text: The 28-year-old renter is an assumption.
+      why: marked to confirm; needs consumer research
+      slide: s02
+      verified: null
+    - ref: brief:insight
+      kind: figure
+      text: By Tuesday night the one small thing that would help is the thing I skip.
+      why: marked to confirm in the brief
+      slide: s03
+      verified: null
+    - ref: brief:competitor_context
+      kind: figure
+      text: Heinz and own-label claims.
+      why: all competitor claims are to be checked, not stated as fact
+      slide: s03
+      verified: null
+    - ref: brief:reasons_to_believe
+      kind: figure
+      text: 'Proof points: heritage, name, recipe, awards, listings, ingredient claims.'
+      why: every proof point is marked to confirm
+      slide: s04
+      verified: null
+    - ref: brief:budget_and_scope
+      kind: figure
+      text: Timing, the TV and social split and the retailers.
+      why: stated as still to be agreed
+      slide: s05
+      verified: null
+    - ref: brief:mandatories
+      kind: figure
+      text: Pack shot, logo, legal wording, Irish broadcast clearance, brand guidelines.
+      why: all three mandatories are marked to confirm
+      slide: s05
+      verified: null
+    confirm_summary:
+      total: 9
+      verified: 0
+      supplied: 0
+      sourced: 0
+      open: 9
+      needs_person: 1
+  order:
+  - s01
+  - s02
+  - s03
+  - s04
+  - s05
+  - s06
+  - s07
+  requirements:
+    R1:
+      id: R1
+      kind: objective
+      text: Get under-35s in Ireland buying Ballymaloe Relish
+      ref: brief:objectives
+    R2:
+      id: R2
+      kind: message
+      text: A 30s TV and social campaign
+      ref: brief:desired_response
+    R3:
+      id: R3
+      kind: commercial
+      text: Budget of €150k
+      ref: brief:budget_and_scope
+  slides:
+    s01:
+      type: title
+      section: Opening
+      title: 'Better With Ballymaloe: a launch for under-35s in Ireland'
+      status: from_source
+      requirements: []
+      blocks:
+      - kind: text
+        text: A response to the brief.
+        basis: sourced
+        refs:
+        - brief:objectives
+      claims:
+      - text: A response to the brief.
+        refs:
+        - brief:objectives
+        basis: sourced
+      visual:
+        kind: layout
+      notes: Open with the client name and the project. The agency name shows as [Agency] until you give one.
+    s02:
+      type: brief_restated
+      section: Your brief
+      title: Win under-35s in Ireland with a 30s TV and social launch.
+      status: from_source
+      requirements:
+      - R1
+      - R2
+      blocks:
+      - kind: bullets
+        text: The brief asks us to get under-35s buying Ballymaloe.
+        basis: sourced
+        refs:
+        - brief:objectives
+      - kind: bullets
+        text: The work is a 30s TV spot and social.
+        basis: sourced
+        refs:
+        - brief:desired_response
+      - kind: bullets
+        text: 'Sales, awareness, target and why now: still to confirm.'
+        basis: sourced
+        refs:
+        - brief:objectives
+      claims:
+      - text: The brief asks us to get under-35s buying Ballymaloe.
+        refs:
+        - brief:objectives
+        basis: sourced
+      visual:
+        kind: layout
+      notes: Say the aim in the client's own words. Be plain that the baseline and the target are not in the brief yet, and ask for them.
+    s03:
+      type: insight
+      section: Insight
+      title: Ireland's number 1 relish, but growth has slowed and money is tight.
+      status: from_source
+      requirements: []
+      blocks:
+      - kind: bullets
+        text: Described as Ireland's number 1 relish brand (Bord Bia, undated).
+        basis: sourced
+        refs:
+        - f_w2
+      - kind: bullets
+        text: Sales not fallen, growth slowed; no funds for blanket marketing (Agriland, undated).
+        basis: sourced
+        refs:
+        - f_w3
+      - kind: bullets
+        text: Heinz is among the category leaders and own-label is gaining (Euromonitor); claims to confirm.
+        basis: sourced
+        refs:
+        - f_w5
+        - brief:competitor_context
+      - kind: bullets
+        text: 'To confirm: by Tuesday night, the one small thing that would help is the thing we skip.'
+        basis: sourced
+        refs:
+        - brief:insight
+      claims:
+      - text: Described as Ireland's number 1 relish brand.
+        refs:
+        - f_w2
+        basis: sourced
+      - text: Growth has slowed and funds for blanket marketing are limited.
+        refs:
+        - f_w3
+        basis: sourced
+      - text: Heinz is among the category leaders and own-label is gaining.
+        refs:
+        - f_w5
+        basis: sourced
+      visual:
+        kind: layout
+      notes: The research is thin and undated, so say 'described as' and do not claim a current ranking. The Tuesday insight is the brief's own and is still to confirm. The 2019 award and rebrand findings sit in the appendix.
+    s04:
+      type: idea
+      section: The idea
+      title: Tuesday's tea, but you tried.
+      status: drafted
+      requirements:
+      - R2
+      blocks:
+      - kind: bullets
+        text: The Irish relish that makes Tuesday's tea taste like you tried.
+        basis: sourced
+        refs:
+        - brief:single_minded_proposition
+      - kind: bullets
+        text: 'One small jar, one ordinary meal lifted: our proposal.'
+        basis: opinion
+        refs: []
+      - kind: bullets
+        text: Proof points are to confirm with the client.
+        basis: sourced
+        refs:
+        - brief:reasons_to_believe
+      claims:
+      - text: The Irish relish that makes Tuesday's tea taste like you tried.
+        refs:
+        - brief:single_minded_proposition
+        basis: sourced
+      - text: One small jar lifts one ordinary meal.
+        refs: []
+        basis: opinion
+      visual:
+        kind: layout
+      notes: The proposition is the brief's. The line 'Tuesday's tea, but you tried' is our proposal, so it is labelled as one. Do not state recipe, heritage or award claims until the client confirms them.
+    s05:
+      type: channel_roles
+      section: How it runs
+      title: A targeted 30s TV spot, with social and cut-downs carrying reach.
+      status: from_source
+      requirements:
+      - R2
+      - R3
+      blocks:
+      - kind: bullets
+        text: 30s TV, targeted, because €150k is tight for TV.
+        basis: sourced
+        refs:
+        - brief:budget_and_scope
+      - kind: bullets
+        text: Social and cut-downs carry the reach and the sharing.
+        basis: sourced
+        refs:
+        - brief:budget_and_scope
+        - brief:desired_response
+      - kind: bullets
+        text: 'Timing, split and retailers: to confirm.'
+        basis: sourced
+        refs:
+        - brief:budget_and_scope
+      claims:
+      - text: Social and cut-downs should carry reach.
+        refs:
+        - brief:budget_and_scope
+        basis: sourced
+      visual:
+        kind: layout
+      notes: 'Keep to the two channels in the brief: 30s TV and social. Legal wording and Irish broadcast clearance are to confirm before the spot is made.'
+    s06:
+      type: team
+      section: Team and work
+      title: Here is who presents and what €150k covers.
+      status: needs_human
+      requirements:
+      - R3
+      blocks:
+      - kind: text
+        text: '[Presenter name and role]'
+        human: true
+      - kind: text
+        text: 'Budget: €150k, from the brief.'
+        basis: sourced
+        refs:
+        - brief:budget_and_scope
+      - kind: text
+        text: '[Split between TV and social]'
+        human: true
+      claims:
+      - text: The budget is €150k.
+        refs:
+        - brief:budget_and_scope
+        basis: sourced
+      visual:
+        kind: layout
+      notes: 'Who presents: [Presenter name and role], to be supplied. The brief gives only the €150k total, so the split stays a placeholder for you to fill.'
+    s07:
+      type: next_step
+      section: Next step
+      title: Agree the territory, and we start the first cut.
+      status: drafted
+      requirements: []
+      blocks:
+      - kind: text
+        text: 'One decision from you: which territory to take to film and social.'
+        basis: proposal
+        refs: []
+      claims:
+      - text: One decision from you.
+        refs: []
+        basis: proposal
+      visual:
+        kind: layout
+      notes: 'End on the single ask. Close by listing what we need back: baseline, proof points, timing and the brand guidelines.'
+  appendix_count: 5
+evidence:
+  brief:objectives:
+    kind: brief
+    text: Get under-35s in Ireland buying Ballymaloe Relish. Sales, distribution and awareness figures and the reason for launching now need the client's input.
+  brief:desired_response:
+    kind: brief
+    text: Pick up a jar, use it on a regular meal, share the moment on social.
+  brief:single_minded_proposition:
+    kind: brief
+    text: The Irish relish that makes Tuesday's tea taste like you tried.
+  brief:insight:
+    kind: brief
+    text: 'To confirm: the effort goes into the main bit and the one small thing that would make it better is the thing I skip.'
+  brief:competitor_context:
+    kind: brief
+    text: 'To confirm: Heinz and own-label claims are to be checked, not stated as fact.'
+  brief:reasons_to_believe:
+    kind: brief
+    text: 'To confirm: heritage, name, recipe, awards or listings, ingredient and production claims.'
+  brief:budget_and_scope:
+    kind: brief
+    text: 30s TV and social on €150k. Channel split, flighting and timing still to be agreed; social and cut-downs carry reach, TV targeted.
+  f_w2:
+    kind: research finding
+    text: Bord Bia Origin Green directory describes Ballymaloe Foods as the number 1 relish brand in Ireland. https://www.bordbia.ie/industry/origin-green/members-directory/manufacturers/grocery/ballymaloe-foods/ Undated; unverified.
+  f_w3:
+    kind: research finding
+    text: 'Marketing manager: sales not fallen, growth slowed, no funds for blanket marketing. https://www.agriland.co.uk/farming-news/relish-opportunity Undated; unverified.'
+  f_w5:
+    kind: research finding
+    text: 'Euromonitor: category led by Unilever Ireland, HJ Heinz (Ireland) and Mars Ireland; private labels gaining ground (2024 edition). https://www.euromonitor.com/sauces-dips-and-condiments-in-ireland/report Figures paywalled; unverified.'
+validation:
+  errors: 0
+  to_supply: 2
+  findings:
+    s03:
+    - level: warn
+      message: 'Both research lines are undated and single-source: say ''described as'''
+    s04:
+    - level: warn
+      message: The line itself is a proposal, so it has no source
+    s06:
+    - level: warn
+      message: 'Presenter missing: add it'
+    - level: warn
+      message: 'Budget split missing: add it'
+report:
+  seconds: 0
+  tokens: 0
+  cost_usd: 0.61
+fixture:
+  name: gate2
+  label: sample, not engine output
+  engine_cannot_supply_yet:
+  - run.agent
+  - 'run.gate (gates 2 and 3: the engine has no gates; run_deck.py runs straight through)'
+  - 'run.gate.first_pick (from c_territories.json ranking.order[0])'
+  - 'run.gate.dex (our proposed wording)'
+  - run.cost_usd
+  - run.stages[].items
+  - exports.*.bytes
+  - exports.*.url
