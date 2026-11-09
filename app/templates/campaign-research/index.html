@@ -996,6 +996,245 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 @keyframes wk-pace{0%{transform:translateX(16px)}50%{transform:translateX(calc(100vw - 100% - 16px))}100%{transform:translateX(16px)}}
 @keyframes wk-turn{0%{transform:none}50%{transform:scaleX(-1)}}
 @media (prefers-reduced-motion: reduce){.walker .wk-who,.walker .wk-fig{animation:none}}
+
+/* ════════════════════════════════════════════════════════════════════════
+   The approved mock, exactly (features/research-new-ui.clan; gaps.md §6,
+   tokens §13.6). The desk and inspector take the agency's tint (--ag-base,
+   --ag-acc from NapkinAgency); the report is paper in both themes; primary
+   actions are the agency's base in light and its accent in dark.
+   ════════════════════════════════════════════════════════════════════════ */
+:root{
+  --ag-base:#16181D; --ag-acc:#FFD400; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+  --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+  --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --f:var(--font-ui); --mono:var(--font-mono);
+  --r-sm:4px; --r-md:8px; --r-lg:14px;
+  --shadow-card:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);
+  --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  --rs-hl:#F6E36B;
+}
+/* light: the mock's :root (13.0) */
+:root,:root[data-color-scheme="light"]{
+  color-scheme:light;
+  --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7);
+  --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+  --paper-2:#F3ECDC; --card:#FFFFFF;
+  --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+  --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --line-strong:#2A2620;
+  --warn:#B45309; --warn-soft:#FEF3DC; --ok:#1D8A4E; --ok-soft:#E6F6EC; --alert:#C9462A; --alert-soft:#FFF1EE;
+  --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+  --nb-bg:color-mix(in srgb,var(--warn) 5%,var(--card));
+  --band:#141413; --band-fg:var(--paper); --band-2:rgba(255,253,248,.7);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-color-scheme="light"]):not([data-theme="light"]){
+    color-scheme:dark;
+    --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+    --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+    --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6;
+    --warn:#E09A4B; --warn-soft:#3A2A18; --ok:#5DBB83; --ok-soft:#1C2E23;
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --nb-bg:color-mix(in srgb,var(--warn) 12%,var(--card));
+    --band:#0B0A09; --band-fg:#EFE9DE; --band-2:rgba(239,233,222,.65);
+  }
+}
+:root[data-color-scheme="dark"],:root[data-theme="dark"]{
+  color-scheme:dark;
+  --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+  --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+  --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+  --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+  --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6;
+  --warn:#E09A4B; --warn-soft:#3A2A18; --ok:#5DBB83; --ok-soft:#1C2E23;
+  --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+  --nb-bg:color-mix(in srgb,var(--warn) 12%,var(--card));
+  --band:#0B0A09; --band-fg:#EFE9DE; --band-2:rgba(239,233,222,.65);
+}
+/* the research's own names, on the mock's tokens */
+:root,:root[data-color-scheme]{
+  --ink2:var(--ink-soft); --ink3:var(--muted); --soft:var(--paper-2); --line-soft:var(--line);
+  --amber:var(--warn); --amber-soft:var(--warn-soft); --amber-ink:var(--warn);
+  --green:var(--ok); --green-soft:var(--ok-soft); --green-ink:var(--ok);
+  --create-ink:var(--alert); --create-soft:var(--alert-soft);
+  --shadow:var(--shadow-card);
+}
+/* The report is paper, light, in both themes (R9, A3). */
+#doc{
+  color-scheme:light;
+  --paper:#FFFDF8; --paper-2:#F3ECDC; --card:#FFFFFF; --soft:#F3ECDC;
+  --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082; --ink2:#2A2620; --ink3:#6D655A;
+  --line:#E2D9C8; --line-soft:#E2D9C8; --line-strong:#2A2620;
+  --warn:#B45309; --warn-soft:#FEF3DC; --ok:#1D8A4E; --ok-soft:#E6F6EC; --alert:#C9462A; --alert-soft:#FFF1EE;
+  --amber:#B45309; --amber-soft:#FEF3DC; --amber-ink:#B45309; --green:#1D8A4E; --green-soft:#E6F6EC; --green-ink:#1D8A4E; --create-ink:#C9462A; --create-soft:#FFF1EE;
+  color:var(--ink);
+}
+body{background:var(--desk);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.55}
+
+/* ── the workspace: sheet 928 + 24 + inspector 440 ── */
+body.done .ws,body:not(.fresh) .ws{grid-template-columns:minmax(0,1fr) 440px;gap:24px;max-width:none;padding:0 24px}
+body:not(.fresh) .ws > main{padding-top:34px}
+body:not(.fresh) .ws.ws-map{grid-template-columns:minmax(360px,1fr) minmax(440px,744px);gap:0}
+body:not(.no-report) #hero{display:none}
+section.report{margin-top:0}
+.rep{border:1px solid #E2D9C8;border-radius:8px;background:#FFFDF8;box-shadow:var(--shadow-paper);padding:0 0 44px;gap:0;overflow:visible}
+:root[data-color-scheme="dark"] .rep{border-color:transparent;box-shadow:0 24px 60px -24px rgba(0,0,0,.7);color:#2A2620}
+.rep #rp-pre > .rp-band{margin:0;border-radius:8px 8px 0 0;padding:24px 44px 32px;background:var(--band);color:var(--band-fg);box-shadow:inset 0 -6px 0 var(--rs-hl)}
+.rp-band .eyebrow{font:600 11.5px/17.825px var(--font-mono);letter-spacing:1.15px;text-transform:uppercase;color:var(--band-2)}
+.rp-q{margin:10px 0 8px;font:600 34px/38.08px var(--font-ui);letter-spacing:-.85px;max-width:644px;color:var(--band-fg)}
+.rp-meta{font-size:13.5px;line-height:20.925px;color:var(--band-2)}
+.rp-stats{padding:16px 0 14px;font:400 12px var(--font-mono);color:#2A2620;border-bottom:1px solid #E2D9C8}
+.rp-stats > *{padding:0 12px;border-left:1px solid #E2D9C8}
+.rp-need{color:#B45309}
+.rs-h > span{font:700 10.5px var(--font-mono);letter-spacing:1.05px;color:#2A2620}
+.rs-h h3{font:600 20px/1.25 var(--font-ui);letter-spacing:-.3px;color:#141413}
+.rp-sec{padding-top:34px}
+.rep #rp-pre .headline{font:600 26px/33.8px var(--font-ui);letter-spacing:-.52px;color:#141413;margin:6px -6px 0;padding:4px 6px;border-radius:6px}
+.rep-sum li{font-size:17px;line-height:1.5}
+.rep-sum li::before{background:#141413}
+.rp-askgrid{border-color:#E2D9C8;border-radius:6px;background:#FFFFFF}
+.rp-af{background:#FFFFFF}
+.rp-af.wide{background:color-mix(in srgb,var(--rs-hl) 14%,#FFFFFF)}
+
+/* ── the inspector (#r-side) ── */
+.insp{top:calc(var(--clan-top,0px) + 14px);margin-top:34px;max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 30px);background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:none;color:var(--ink)}
+.insp-body{padding:0 18px 18px;gap:16px}
+.insp-sw{margin:0 -18px 16px;display:flex;border:1px solid color-mix(in srgb,var(--ag-act) 45%,var(--line));border-radius:4px;background:var(--card);overflow:hidden}
+.insp-sw button{flex:1;height:32px;padding:0;border:0;background:transparent;font:600 12px/18.6px var(--font-ui);color:var(--muted)}
+:root[data-color-scheme="dark"] .insp-sw button{color:var(--ink-soft)}
+.insp-sw button[aria-pressed="true"],:root[data-color-scheme="dark"] .insp-sw button[aria-pressed="true"]{background:var(--ag-act);color:var(--ag-act-ink)}
+.insp-save{display:flex;gap:2px}
+.insp-save #exportBtn{flex:1;min-height:38px;padding:0 16px;border-radius:4px 0 0 4px;border:1px solid var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui);justify-content:center;box-shadow:none}
+.insp-save .save-more > summary.btn{width:44px;height:38px;min-height:38px;padding:0;justify-content:center;border:0;border-radius:0 6px 6px 0;background:var(--ag-act);color:var(--ag-act-ink);box-shadow:none}
+.btn.primary{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
+/* Your call · N open */
+.insp #judge.needs-box{display:grid;gap:8px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:6px;background:var(--nb-bg);color:var(--ink)}
+#judge .nb-h{font:700 10.5px var(--font-mono);letter-spacing:1.05px;text-transform:uppercase;color:var(--warn)}
+#judge .nb-t{margin:0;font-size:13px;line-height:1.45;color:var(--ink)}
+#judge .nb-act{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#judge .nb-act button{height:28px;padding:0 14px;border-radius:999px;border:1px solid var(--line-strong);background:var(--card);color:var(--ink);font:600 12px var(--font-ui);cursor:pointer}
+#judge .nb-act button:first-child{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+#judge .nb-act button.nb-next{margin-left:auto;border:0;background:none;padding:0;height:auto;text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
+#judge .nb-act button.nb-next:first-child{background:none;color:var(--ink)}
+#judge .nb-sub{margin:0;font-size:11.5px;color:var(--muted)}
+#judge .nb-sub b{color:var(--ink-soft)}
+.insp #judge:not(.needs-box){border:1px solid var(--line);background:var(--card);border-radius:6px;color:var(--ink)}
+/* the Report box */
+.insp-box#rbox{border:1px solid var(--line-strong);border-radius:8px;padding:12px;gap:10px;background:var(--card)}
+.rbox-h{gap:8px;align-items:baseline}
+.rbox-h b{font:700 14px var(--font-ui)}
+.rbox-when{font:400 11px var(--font-mono);color:var(--muted)}
+#rbox-status.pill{border:0;padding:4px 12px;border-radius:999px;font:400 11.5px var(--font-mono);letter-spacing:1.38px;text-transform:uppercase;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
+:root[data-color-scheme="dark"] #rbox-status.pill{background:color-mix(in srgb,var(--warn) 22%,transparent)}
+#rbox-status.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:2px}
+#rbox-status.pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 16%,transparent)}
+.rbox-acts{gap:6px}
+.rbox-acts .btn.sm,#rbox-refresh .btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);box-shadow:none}
+.rbox-acts #lockBtn.btn{height:32px;padding:0 12px;border-color:var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink)}
+.insp-box summary{font:700 10.5px var(--font-mono);letter-spacing:.84px;color:var(--muted)}
+.insp-box details{font-size:12.5px;color:var(--ink)}
+/* Ask the research */
+#insp-ask .rq-box{border:0;background:none;padding:0;border-radius:0;gap:8px;max-width:none}
+#insp-ask .rq-box > label:first-child{font:700 11px var(--font-mono);letter-spacing:.88px;text-transform:uppercase;color:var(--muted)}
+#insp-ask .rq-box .r{flex-wrap:nowrap;align-items:center;gap:8px}
+#insp-ask textarea{flex:1;min-width:0;height:58px;min-height:0;border:1.5px solid var(--ink);border-radius:14px;padding:9px 12px;font:13.5px/1.4 var(--font-ui);background:#FFFFFF;color:#141413;resize:vertical}
+:root[data-color-scheme="dark"] #insp-ask textarea{background:var(--card);color:var(--ink)}
+#insp-ask .ans.primary{display:inline-flex;align-items:center;justify-content:center;height:34px;min-height:34px;padding:0 16px;border-radius:999px;border:0;background:var(--ag-act);color:var(--ag-act-ink);font:600 12.5px var(--font-ui)}
+#insp-ask .rq-about{font-size:12px!important;color:var(--muted)!important}
+#insp-ask .rq-about select{background:var(--card);border-color:var(--line);color:var(--ink)}
+#insp-ask .rq-hint{font-size:12px;color:var(--muted)}
+/* foot: hint, the section nav (kept, §11), who signs */
+.insp-hint{margin:0;font-size:12px;line-height:1.45;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+.insp-nav{font-size:12px;border-top:1px solid var(--line);padding-top:10px}
+.insp-nav a{color:var(--ink-soft)}
+.insp-nav a span{color:var(--muted)}
+.insp-who{margin-top:4px!important;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.insp-who b{font-weight:700}
+.insp-who .linkbtn{font:600 13px var(--font-ui);color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+/* a selection takes the inspector, under the switch, as the mock does */
+.insp.has-sel .insp-save,.insp.has-sel #judge,.insp.has-sel #rbox,.insp.has-sel #insp-ask,.insp.has-sel #insp-hint,.insp.has-sel .insp-nav,.insp.has-sel .insp-who{display:none!important}
+.insp-sel{border-top:0;padding-top:0;gap:0;margin:-18px -18px 0}
+.rb-ibar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--paper)}
+.rb-ibtn{width:28px;height:28px;flex:0 0 auto;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font:600 14px var(--font-ui);display:grid;place-items:center;padding:0}
+.rb-ibtn:hover{border-color:var(--ink)}
+.rb-crumbs{flex:1 1 0%;min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden;white-space:nowrap;font:11.5px var(--font-mono);color:var(--muted);flex-wrap:nowrap}
+.rb-crumbs button{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis}
+.rb-crumbs button:hover{color:var(--ink);text-decoration:underline}
+.rb-crumbs b{color:var(--ink);font-weight:650}
+.rb-part{padding:16px 18px 28px}
+.rb-part .clf-sc{border:0;padding:0;background:none}
+.rbi-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.rbi-kind{display:inline-flex;align-items:center;gap:8px;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.rbi-kind .pin{width:8px;height:8px;border-radius:50%;background:var(--alert)}
+.st-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font:700 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;border:1px solid}
+.st-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentcolor}
+.st-pill.ok{color:var(--ok)} .st-pill.warn{color:var(--warn)} .st-pill.bad{color:var(--alert)} .st-pill.mute{color:var(--muted)}
+.rbi-title{font:600 18px/1.35 var(--font-ui);letter-spacing:-.012em;color:var(--ink);margin:0 0 6px}
+.rbi-big{font:700 30px/1.15 var(--font-ui);letter-spacing:-.02em;color:var(--ink)}
+.rbi-big mark.rs-hl,mark.rs-hl{background:linear-gradient(transparent 38%,var(--rs-hl) 38%,var(--rs-hl) 88%,transparent 88%);color:inherit;padding:0 2px;border-radius:2px}
+:root[data-color-scheme="dark"] .rbi-big mark.rs-hl{color:#151412;background:#F6E36B}
+.rbi-unit{font:11.5px var(--font-mono);color:var(--muted)}
+.rbi-meta{font:11.5px/1.6 var(--font-mono);color:var(--muted);margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.rbi-meta code{font:inherit;background:color-mix(in srgb,var(--ink) 6%,transparent);padding:0 4px;border-radius:3px;overflow-wrap:anywhere}
+.lens-pill,.mk-pill{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border:1px solid var(--line-strong);border-radius:999px;font:600 10.5px var(--font-mono);color:var(--ink-soft)}
+.lens-pill i{width:7px;height:7px;border-radius:50%;background:var(--ink)}
+.rbi-sec{border-top:1px solid var(--line);padding:12px 0 2px;margin-top:12px;display:grid;gap:8px}
+.rbi-sec > h5{margin:0;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.rbi-sec p{font-size:13px;line-height:1.5;margin:0;color:var(--ink-soft)}
+.rbi-q{margin:0;font:450 14.5px/1.5 var(--font-ui);color:var(--ink);border-left:3px solid var(--rs-hl);padding:2px 0 2px 12px}
+.rbi-q.rbi-val{margin:4px 0 2px;font-size:16px;font-weight:600}
+.rbi-srcline{font:11.5px/1.6 var(--font-mono)!important;color:var(--muted)!important}
+.rbi-srcline a,.rbi-srcline button{all:unset;cursor:pointer;color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.rbi-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:0}
+.rbi-grid > div{padding:8px 11px;border-bottom:1px solid var(--line);display:grid;gap:2px}
+.rbi-grid > div:nth-child(2n+1){border-right:1px solid var(--line)}
+.rbi-grid > div.w{grid-column:1/-1;border-right:0}
+.rbi-grid > div:nth-last-child(-n+2):not(.w),.rbi-grid > div.w:last-child{border-bottom:0}
+.rbi-grid dt{font:700 9.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.rbi-grid dd{margin:0;font-size:12.5px;line-height:1.4;color:var(--ink)}
+.rbi-grid dd small{display:block;font:10.5px var(--font-mono);color:var(--muted)}
+.conf{display:inline-grid;grid-template-columns:repeat(3,10px);gap:2px;vertical-align:middle}
+.conf i{height:4px;border-radius:1px;background:var(--line)}
+.conf[data-c="high"] i,.conf[data-c="med"] i:nth-child(-n+2),.conf[data-c="low"] i:first-child{background:var(--ink)}
+.tier{display:inline-block;width:8px;height:8px;margin-right:6px;background:var(--ink);vertical-align:0}
+.rbi-chain{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.rbi-chain li{position:relative;padding:0 0 12px 22px;font-size:12.5px;line-height:1.45;color:var(--ink-soft)}
+.rbi-chain li::before{content:"";position:absolute;left:4px;top:5px;width:9px;height:9px;border-radius:50%;border:2px solid var(--ink);background:var(--paper);box-sizing:border-box}
+.rbi-chain li::after{content:"";position:absolute;left:8px;top:15px;bottom:0;border-left:1px solid var(--line-strong)}
+.rbi-chain li:last-child{padding-bottom:0}
+.rbi-chain li:last-child::after{display:none}
+.rbi-chain li.hl::before{background:var(--rs-hl)}
+.rbi-chain span.k{display:block;font:700 9.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.rbi-uses{display:grid;gap:6px}
+.rbi-use{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:var(--ink-soft);flex-wrap:wrap}
+.rbi-use > span:first-child{font:700 9.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);min-width:82px}
+.rb-fchip,.rb-cchip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;font:600 11px var(--font-mono);color:var(--ink-soft);background:var(--card)}
+.rb-fchip .rb-n{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:9px}
+.rbi-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.rb-btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);cursor:pointer}
+.rb-btn:hover{border-color:var(--ink)}
+.insp-map:not([hidden]){margin:-16px -18px 0;padding:14px 14px 14px;background:var(--card);border-bottom:1px solid var(--line);gap:10px}
+.insp-map .map-h b{font:600 18px var(--font-ui);letter-spacing:-.01em;color:var(--ink)}
+.insp-map .map-h span{font-size:12px;color:var(--muted)}
+.insp-map .map-leg{font:10.5px var(--font-mono);color:var(--muted);padding-bottom:12px;border-bottom:1px solid var(--line);margin:0 -14px;padding-left:14px}
+.insp-map .map-scroll{border:0;border-radius:0;background:transparent}
+.map-svg .col{fill:var(--muted)}
+.map-svg .n rect{fill:var(--card);stroke:var(--ink)}
+.map-svg .n .t{fill:var(--ink)} .map-svg .n .m{fill:var(--muted)}
+.map-svg .e{stroke:var(--muted)}
+.rb-schip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.rb-schip::before{content:"";width:7px;height:7px;background:var(--ink)}
+.rbi-pins{width:100%;border-collapse:collapse;font-size:12.5px}
+.rbi-pins td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+.rbi-pins tr{cursor:pointer}
+.rbi-pins tr:hover td{background:color-mix(in srgb,var(--rs-hl) 16%,transparent)}
+.rbi-pins td:first-child{padding-left:0;white-space:nowrap;font:600 11px var(--font-mono);color:var(--ink)}
+.rbi-pins td:first-child .pin{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--alert);margin-right:6px}
+.rbi-pins td.v{font:600 12px var(--font-mono);color:var(--ink);text-align:right}
+.rbi-pins small.rbi-pq{display:block;margin-top:4px;padding-left:10px;border-left:2px solid var(--ink);font:italic 12.5px/1.45 var(--font-ui);color:var(--ink-soft)}
+.rbi-grid dd a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -1053,6 +1292,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       <button type="button" data-view="map" aria-pressed="false">Evidence map</button>
     </div>
     <section class="insp-map" id="mapview" aria-label="Evidence map" hidden></section>
+    <section class="insp-sel" id="insp-sel" aria-live="polite"></section>
     <div class="insp-save">
       <button type="button" class="btn primary" id="exportBtn">Save · PDF</button>
       <details class="save-more"><summary class="btn" aria-label="More ways to save" title="More ways to save"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></summary>
@@ -1071,7 +1311,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       <div id="rbox-more"></div>
     </section>
     <section class="insp-ask" id="insp-ask" aria-label="Ask the research"></section>
-    <section class="insp-sel" id="insp-sel" aria-live="polite"></section>
+    <p class="insp-hint" id="insp-hint">Click the headline or any sentence in it, a finding, a pin, a source or a decision. It opens here with everything behind it.</p>
     <nav class="insp-nav" aria-label="Sections">
       <a href="#report" id="nav-report-a" hidden>Report</a>
       <a href="#start" id="nav-start-a" hidden>Request</a>
@@ -1942,13 +2182,14 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     var lb=$('lockBtn');
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'; the
     // button says in words why it waits, never with a badge of its own.
-    lb.textContent='Lock and accept';
+    lb.textContent='Lock and accept'+(b.length?' · '+b.length:'');
     lb.title=b.length?b.length+' '+(b.length===1?'settles':'settle')+' before it can lock: open to see '+(b.length===1?'it':'them'):'Nothing blocks the lock';
     // Your name, once known, and a way to change it; asked for only when needed.
     var nm=myName();
     $('who-line').innerHTML=nm?'Checks signed as <b>'+esc(nm)+'</b>'+(WHO.shell?'':' ·'):'';
     $('whoBtn').hidden=!nm||!!WHO.shell;
     var rb=$('researchBtn');
+    rb.textContent=isObj(D().report)?'Run again…':'Run research';
     var ok=gateReached('research');
     rb.setAttribute('aria-disabled', ok?'false':'true');
     rb.title=ok?'research_lens: one run per lens × market ('+(8*arr(camp().markets&&camp().markets.value).length)+' runs)':'Research needs the created and research gates: '+missingFor('created').concat(missingFor('research')).map(function(f){return f.label;}).join(', ');
@@ -3397,8 +3638,24 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     meta.push(np+' fact'+(np===1?'':'s')+' pinned');
     if(nd) meta.push(nd+' decision'+(nd===1?'':'s')+' on the record');
     return '<header class="rp-band'+(lk?' locked':'')+'"><div class="eyebrow">Research'+(org?' · '+esc(org):brand?' · '+esc(brand):'')+'</div>'
-      +'<h1 class="rp-q">'+(name?esc(name):'Campaign research')+'</h1>'
+      +'<h1 class="rp-q">'+esc(bandTitle(r))+'</h1>'
       +'<p class="rp-meta">'+esc(meta.join(' · '))+'</p>'+(lk?'<span class="rp-lock">Locked</span>':'')+'</header>';
+  }
+  // What the report is called on its band (gaps R1): the working name, else the
+  // question the person asked (the first sentence of their request that asks
+  // one), else the headline, else the brand. Never a generic "Campaign research".
+  function askedQuestion(){
+    var M=intakeMsgs(), ks=Object.keys(M).sort(function(a,b){ var x=M[a]||{}, y=M[b]||{}; return String(x.at||'')<String(y.at||'')?-1:String(x.at||'')>String(y.at||'')?1:a<b?-1:1; });
+    for(var i=0;i<ks.length;i++){ var m=M[ks[i]]; if(!isObj(m)||m.role!=='user') continue;
+      var t=String(m.text||'').replace(/\s+/g,' ').trim(), q=t.match(/[^.?!]*\?/);
+      if(q&&q[0].trim().length>12) return q[0].trim();
+      if(t) return t.length>140?t.slice(0,139).replace(/\s+\S*$/,'')+'…':t; }
+    var pr=camp().problem&&camp().problem.value; return typeof pr==='string'?pr.trim():'';
+  }
+  function bandTitle(r){
+    var c=camp(), name=c.name&&c.name.value, brand=c.brand&&c.brand.value&&c.brand.value.name;
+    var hl=isObj(r)&&isObj(r.headline)?String(r.headline.text||'').trim():'';
+    return (typeof name==='string'&&name.trim())||askedQuestion()||hl||(brand?'Research · '+brand:'Research');
   }
   function rpStats(){
     var S=sel(), np=Object.keys(pins()).length, nf=Object.keys(fnds()).length, src=sourceIds().length, open=openChecks();
@@ -3612,7 +3869,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     $('nav-report-a').hidden=!isObj(r);
     if(!isObj(r)){ el.hidden=true; el.innerHTML=''; MOUNTED=null; return; }
     el.hidden=false;
-    var lk=reportLocked(), stale=reportStale(r), layout=typeof r.layout==='string'&&!!window.ClanFields, n=0;
+    var lk=reportLocked(), stale=reportStale(r), layout=typeof r.layout==='string'&&!!window.ClanFields&&!arr(r.sections).length, n=0;
     if(!$('rp-pre')||(layout?!$('rep-layout'):!$('rp-body'))){
       el.innerHTML='<article class="rep" aria-labelledby="h-report"><div id="rp-pre"></div>'+(layout?'<div id="rep-bar"></div><div class="cl-report rep-layout" id="rep-layout" aria-label="Report"></div>':'<div id="rp-body"></div>')+'<div id="rp-post"></div></article>';
       MOUNTED=null;
@@ -3876,32 +4133,95 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(at>=0) VIEW.trail=t.slice(0, at+1); else { if(!push) VIEW.trail=[]; VIEW.trail.push({ref:ref, label:selLabel(ref)}); }
     VIEW.sel=ref; traceSel(); renderSel();
     var ins=$('insp'); if(ins&&window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
-    var sl=$('insp-sel'); if(sl&&sl.scrollIntoView&&VIEW.v!=='map') sl.scrollIntoView({block:'nearest', behavior:calm()?'auto':'smooth'});
   }
   function back(){ VIEW.trail.pop(); var top=VIEW.trail[VIEW.trail.length-1]; VIEW.sel=top?top.ref:null; traceSel(); renderSel(); }
   function selBody(ref){
     var M=VIEW.model, n=M&&M.nodes[ref];
     if(/^sum:/.test(ref)&&n) return '<p style="margin:0;font-size:14px">'+esc(n.label)+'</p><div class="crumbs">Rests on '+n.cites.map(function(c){ return '<button type="button" data-sel="'+esc(c)+'">'+esc(selLabel(c))+'</button>'; }).join('')+'</div>';
     if(n&&n.kind==='gap') return '<p style="margin:0;font-size:13.5px"><b>A gap.</b> '+esc(n.label)+(n.meta?': '+esc(n.meta):'')+'. The map shows only links the document holds.</p>';
+    if(pins()[ref]) return pinCardHtml(ref);
+    if(srcRecs()[ref]) return sourceCardHtml(ref);
     if(window.ClanFields&&CARD_KINDS[window.ClanFields.kindOf(ref)]) return '<div id="insp-card"></div>';
     return '<p class="insp-hint">'+esc(ref)+'</p>';
   }
+  // A pin, in full, in the inspector (the mock's selected pin): what it says,
+  // where it came from, and what uses it. Everything here is the pin's own
+  // record; "Full record" opens the OS's drawer for the rest (decisions, the
+  // source's own card), as "Where this came from" does elsewhere.
+  function pinCardHtml(ref){
+    var p=pins()[ref]||{}, S=srcRecs(), sid=arr(p.sources).filter(function(x){ return /^src_/.test(x); })[0], s=sid?S[sid]||{}:{};
+    var q=isObj(p.quotes)?(p.quotes[sid]||p.quotes[Object.keys(p.quotes)[0]]||''):'';
+    var conf=String(p.confidence||''), cw={high:'high', medium:'med', med:'med', low:'low'}[conf]||'low';
+    var lens=KEY_LENS[String(p.key||'').split('.')[0]]||'', st=p.stale?['warn','Stale']:p.status==='active'||!p.status?['ok','Active']:['mute',String(p.status)];
+    var val=fmtAny(p), text=String(p.unit||'')==='text', label=pinLabel(p)||String(p.key||ref);
+    var used=Object.keys(fnds()).filter(function(id){ return arr(fnds()[id].cites).indexOf(ref)!==-1; });
+    var sums=arr(isObj(D().report)&&D().report.summary).map(function(l,i){ return isObj(l)&&arr(l.cites).some(function(c){ return c===ref||used.indexOf(c)!==-1; })?i:-1; }).filter(function(i){ return i>=0; });
+    var tierW=s.tier?String(s.tier).charAt(0).toUpperCase()+String(s.tier).slice(1):'';
+    var h='<div class="rbi-head"><span class="rbi-kind"><span class="pin" aria-hidden="true"></span>Pin · '+esc(ref)+'</span><span class="st-pill '+st[0]+'">'+esc(st[1])+'</span></div>'
+      +'<p class="rbi-title">'+esc(text?String(p.key||'').split('.').slice(-1)[0].replace(/_/g,' '):label)+'</p>'
+      +(text?'<blockquote class="rbi-q rbi-val">'+esc(val)+'</blockquote>':'<div class="rbi-big"><mark class="rs-hl">'+esc(val)+'</mark></div><div class="rbi-unit">'+esc(label)+'</div>')
+      +'<p class="rbi-meta" style="margin-top:8px"><code>'+esc(p.key||'')+'</code>'+(p.market?'<span class="mk-pill">'+esc(p.market)+'</span>':'')+(lens&&LENS[lens]?'<span class="lens-pill"><i></i>'+esc(lensName(lens))+'</span>':'')+(p.method?'<span>method · '+esc(p.method)+'</span>':'')+'</p>'
+      +'<div class="rbi-sec" style="border:0;padding-top:4px"><dl class="rbi-grid">'
+        +'<div><dt>As of</dt><dd>'+esc(p.as_of?monthOf(p.as_of):'—')+'</dd></div>'
+        +'<div><dt>Learned</dt><dd>'+esc(p.retrieved_at?plainDay(p.retrieved_at):'—')+'<small>retrieved_at</small></dd></div>'
+        +'<div><dt>Confidence</dt><dd><span class="conf" data-c="'+cw+'" title="Confidence: '+esc(conf||'not given')+'"><i></i><i></i><i></i></span> '+esc(conf?conf.charAt(0).toUpperCase()+conf.slice(1):'Not given')+'<small>from source tier and corroboration</small></dd></div>'
+        +'<div><dt>Licence</dt><dd>'+esc(p.licence||s.licence||'—')+'</dd></div>'
+        +'<div class="w"><dt>Source</dt><dd><span class="tier t-'+esc(String(s.tier||''))+'"></span>'+esc(s.publisher||s.domain||'No source record')+(tierW?' · '+esc(tierW):'')+(s.title?'<small>'+esc(s.title)+'</small>':'')+'</dd></div>'
+      +'</dl></div>'
+      +(q?'<section class="rbi-sec"><h5>Source line</h5><blockquote class="rbi-q">'+esc(q)+'</blockquote><p class="rbi-srcline">'+(sid&&S[sid]?'<button type="button" class="rb-schip" data-sel="'+esc(sid)+'" data-sel-push>'+esc(s.publisher||s.domain||'Source')+'</button>':esc(s.publisher||''))+(s.published_at?' · '+esc(monthOf(s.published_at)):'')+(p.licence?' · '+esc(p.licence):'')+' · <button type="button" data-act="pin-full" data-ref="'+esc(ref)+'">Full source →</button></p></section>':'')
+      +'<section class="rbi-sec"><h5>Where it came from</h5><ol class="rbi-chain">'
+        +'<li><span class="k">Source</span>'+esc(s.publisher||s.domain||'No source record')+(tierW?' · '+esc(tierW):'')+(s.retrieved_at?' · read '+esc(plainDay(s.retrieved_at)):'')+'</li>'
+        +'<li><span class="k">Knowledge layer row</span>'+esc((p.layer?p.layer.charAt(0).toUpperCase()+p.layer.slice(1)+' layer':'Layer')+(p.market?' · '+p.market:'')+(p.entity?' → '+p.entity:''))+'</li>'
+        +'<li><span class="k">Frozen pin</span>'+esc(ref+'@v'+(p.version||1)+'. A pin never follows a newer row; you choose when to take one.')+'</li>'
+        +(p.pin_reason?'<li class="hl"><span class="k">Why it was pinned</span>'+esc(p.pin_reason)+'</li>':'')
+      +'</ol></section>'
+      +(used.length||sums.length?'<section class="rbi-sec"><h5>Used by</h5><div class="rbi-uses">'
+        +(used.length?'<div class="rbi-use"><span>Findings</span>'+used.map(function(id){ return '<button type="button" class="rb-fchip" data-sel="'+esc(id)+'"><span class="rb-n">'+(Object.keys(fnds()).indexOf(id)+1)+'</span>Finding '+(Object.keys(fnds()).indexOf(id)+1)+'</button>'; }).join(' ')+'</div>':'')
+        +(sums.length?'<div class="rbi-use"><span>Summary</span>'+sums.map(function(i){ return '<span class="rb-cchip">line '+(i+1)+'</span>'; }).join(' ')+'</div>':'')
+      +'</div></section>':'')
+      +'<div class="rbi-acts"><button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(ref)+'">Full record →</button></div>';
+    return h;
+  }
+  // A source, in full, in the inspector (the mock's selected source): what it
+  // is, the pins it gave with their source lines, and what they reach.
+  function sourceCardHtml(sid){
+    var s=srcRecs()[sid]||{}, P=pins(), mine=Object.keys(P).filter(function(id){ return arr(P[id].sources).indexOf(sid)!==-1; });
+    var F=fnds(), fids=Object.keys(F), reach=fids.filter(function(id){ return arr(F[id].cites).some(function(c){ return mine.indexOf(c)!==-1; }); });
+    var tierW=s.tier?String(s.tier).charAt(0).toUpperCase()+String(s.tier).slice(1):'';
+    var g=[['Published', s.published_at?monthOf(s.published_at):'—'],['Read', s.retrieved_at?plainDay(s.retrieved_at):'—'],['Domain', s.domain||'—'],['Licence', s.licence||'—']];
+    return '<div class="rbi-head"><span class="rbi-kind"><span class="tier" aria-hidden="true"></span>Source'+(tierW?' · '+esc(tierW):'')+'</span><span class="st-pill ok">Read'+(mine.length?' · pinned':'')+'</span></div>'
+      +'<p class="rbi-title">'+esc(s.publisher||s.domain||sid)+'</p>'+(s.title?'<p class="rbi-unit">'+esc(s.title)+'</p>':'')
+      +'<div class="rbi-sec" style="border:0;padding-top:4px"><dl class="rbi-grid">'+g.map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; }).join('')
+        +(s.uri?'<div class="w"><dt>Link</dt><dd><a href="'+esc(s.uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clipT(String(s.uri).replace(/^https?:\/\//,''), 56))+' ↗</a></dd></div>':'')+'</dl></div>'
+      +(mine.length?'<section class="rbi-sec"><h5>Pins it gave</h5><table class="rbi-pins"><tbody>'+mine.map(function(id){ var p=P[id], q=isObj(p.quotes)?p.quotes[sid]:'';
+          return '<tr data-sel="'+esc(id)+'" data-sel-push><td><span class="pin" aria-hidden="true"></span>'+esc(clipT(id, 12))+'</td><td>'+esc(pinLabel(p)||p.key||'')+(q?'<small class="rbi-pq">“'+esc(clipT(q, 160))+'”</small>':'')+'</td><td class="v">'+esc(clipT(fmtAny(p), 18))+'</td></tr>'; }).join('')+'</tbody></table></section>':'')
+      +(reach.length?'<section class="rbi-sec"><h5>Reaches</h5><div class="rbi-uses"><div class="rbi-use"><span>Findings</span>'+reach.map(function(id){ var n=fids.indexOf(id)+1; return '<button type="button" class="rb-fchip" data-sel="'+esc(id)+'" data-sel-push><span class="rb-n">'+n+'</span>Finding '+n+'</button>'; }).join(' ')+'</div></div></section>':'')
+      +'<div class="rbi-acts"><button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(sid)+'">Full record →</button></div>';
+  }
+  // A crumb names what it is the way the record does: f_003, Finding 2, Summary.
+  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return r; if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||r, 28); if(/^sum:/.test(r)) return 'Summary'; return clipT(c&&c.label||r, 34); }
+  function plainDay(s){ var d=new Date(s); if(!s||isNaN(d)) return String(s||''); try{ return d.toLocaleDateString('en-GB',{day:'2-digit', month:'short', year:'numeric'}); }catch(e){ return String(s).slice(0,10); } }
   function renderSel(){
     var el=$('insp-sel'); if(!el) return;
-    if(!VIEW.sel){ el.innerHTML='<p class="insp-hint">Click a figure or a finding in the report, or any box on the evidence map. It opens here with everything behind it.</p>'; return; }
+    var ins=$('insp'); if(ins) ins.classList.toggle('has-sel', !!VIEW.sel);
+    if(!VIEW.sel){ el.innerHTML=''; return; }
     var t=VIEW.trail;
-    el.innerHTML='<div class="crumbs" aria-label="Trail">'+(t.length>1?'<button type="button" class="back" data-sel-back>← Back</button>':'<button type="button" class="back" data-sel-close>Close</button>')
-      +t.map(function(c, i){ return (i?'<span aria-hidden="true">›</span>':'')+'<button type="button" data-crumb="'+i+'"'+(i===t.length-1?' aria-current="true"':'')+' title="'+esc(c.label)+'">'+esc(c.label)+'</button>'; }).join('')+'</div>'
-      +selBody(VIEW.sel);
+    // The trail, as the mock draws it: back, Report › … › where you are, close.
+    el.innerHTML='<div class="rb-ibar">'+(t.length>1?'<button type="button" class="rb-ibtn back" data-sel-back title="Back" aria-label="Back">←</button>':'<button type="button" class="rb-ibtn back" data-sel-close title="Back to the report" aria-label="Back to the report">←</button>')
+      +'<nav class="crumbs rb-crumbs" aria-label="Trail"><button type="button" class="rb-root" data-sel-close>'+(VIEW.v==='map'?'Evidence map':'Report')+'</button>'
+      +t.map(function(c, i){ var last=i===t.length-1; return '<span aria-hidden="true">›</span><button type="button" data-crumb="'+i+'"'+(last?' aria-current="true"':'')+' title="'+esc(c.label)+'">'+(last?'<b>':'')+esc(crumbWord(c))+(last?'</b>':'')+'</button>'; }).join('')+'</nav>'
+      +'<button type="button" class="rb-ibtn" data-sel-close title="Close (Esc)" aria-label="Close">×</button></div>'
+      +'<div class="rb-part">'+selBody(VIEW.sel)+'</div>';
     var cd=$('insp-card'); if(cd&&window.ClanFields&&ClanFields.card){
       // The card arrives after the read: bring the selection into view once it
       // has its height, so it never opens below the inspector's fold.
       var want=VIEW.sel;
       Promise.resolve(ClanFields.card(VIEW.sel, cd)).then(function(){
-        if(VIEW.sel!==want||VIEW.v==='map'||!el.scrollIntoView) return;
-        el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
+        if(VIEW.sel!==want||VIEW.v==='map') return;
+        var ip=$('insp'); if(ip) ip.scrollTop=0;
       });
     }
+    var ip0=$('insp'); if(ip0&&VIEW.v!=='map') ip0.scrollTop=0;
   }
   function openSheet(on){ var i=$('insp'); if(!i) return; i.classList.toggle('open', on); $('insp-grab').setAttribute('aria-expanded', String(on)); }
 
@@ -4088,6 +4408,32 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return 'Used in brief'+(named.length===1?' ':'s ')+listJoin(named)+(u.length>named.length?' and '+(u.length-named.length)+' more':'')+'.';
   }
   var NUM=['No','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve'];
+  // Your call · N open (the mock's inspector card): the check in hand, with
+  // Keep and Cut, and Next check to walk the rest in the report. Keep is the
+  // finding's /verify; Cut opens the reason under its card in the report (a
+  // finding is only taken out with a reason). A contest or anything else is
+  // settled where its card is: Settle it goes there.
+  function yourCallHtml(all, open, N){
+    var list=all.filter(function(c){ return c.open; }), cur=null;
+    if(CHK.at) list.forEach(function(c){ if(chkId(c)===CHK.at) cur=c; });
+    cur=cur||list[0];
+    var q='', acts='', ref=esc(cur.ref||''), busy=!!CHK.busy[cur.ref], off=busy?' disabled':'';
+    var locked=!!(window.ClanFields&&ClanFields.locked&&ClanFields.locked());
+    if(cur.kind==='finding'){
+      var ids=Object.keys(fnds()), f=fnds()[cur.ref]||{}, st=String(f.statement||cur.ref).replace(/\s+/g,' ').trim(), cn=arr(f.cites).length;
+      q='Finding '+(ids.indexOf(cur.ref)+1)+' rests on '+cn+' fact'+(cn===1?'':'s')+(f.confidence?' ('+f.confidence+' confidence)':'')+': “'+(st.length>110?st.slice(0,108).replace(/\s+\S*$/,'')+'…':st)+'” Keep it?';
+      if(!locked) acts='<button type="button" data-act="chk-yes" data-ref="'+ref+'"'+off+'>'+(busy?'Saving…':'Keep')+'</button><button type="button" data-act="yc-cut" data-ref="'+ref+'"'+off+'>Cut</button>';
+    } else if(cur.kind==='contest'){
+      q='Two sources disagree'+(cur.ref?' ('+cur.ref+')':'')+'. Pick the value the report uses.';
+      acts='<button type="button" data-act="chk-next">Settle it</button>';
+    } else {
+      q=String(cur.text||cur.label||'Something here needs a person before the lock.');
+      acts='<button type="button" data-act="chk-next">Show me</button>';
+    }
+    return '<div class="nb-h">Your call · '+open+' open</div><p class="nb-t">'+esc(q)+'</p>'
+      +'<span class="nb-act">'+acts+(open>1||cur.kind==='finding'?'<button type="button" class="nb-next" id="jb-next" data-act="chk-next">Next check ↓</button>':'')+'</span>'
+      +'<p class="nb-sub" role="status"><b>'+(N-open)+' of '+N+'</b> checked</p>';
+  }
   function judgeBarHtml(all){
     var N=all.length, open=all.filter(function(c){ return c.open; }).length, jn=given('judge');
     var L=window.ClanFields&&ClanFields.locked?ClanFields.locked():null;
@@ -4122,6 +4468,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(!N) return h+'<p class="jb-text"><b>'+esc(jn)+' here: your report is ready.</b> Nothing in it needs a person to check.'+usedP+'</p><div class="jb-count">'+lockBtn+'</div></div>';
     // The number said is what is still open, so it agrees with "x of N checked" beside it.
     var on=open<NUM.length?NUM[open]:String(open);
+    if(open) return yourCallHtml(all, open, N);
     if(open) return h+'<p class="jb-text"><b>'+esc(jn)+' here: your report is ready.</b> '+esc(on)+' thing'+(open===1?'':'s')+' in it '+(open<N?'still ':'')+'need'+(open===1?'s':'')+' a person to agree before you share it. '+(open===1?'It’s':'They’re')+' marked below.'+usedP+'</p>'
       +'<div class="jb-count"><span role="status"><b>'+(N-open)+' of '+N+'</b> checked</span><button type="button" class="jb-btn" id="jb-next" data-act="chk-next">Next check ↓</button></div></div>';
     return h+'<p class="jb-text"><b>'+esc(jn)+' here: everything is checked.</b> You can lock the report now, so it can be shared.'+usedP+'</p>'
@@ -4149,6 +4496,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       root.appendChild(r);
     }
     bar.innerHTML=judgeBarHtml(all); bar.hidden=false;
+    bar.classList.toggle('needs-box', all.some(function(c){ return c.open; })&&!(window.ClanFields&&ClanFields.locked&&ClanFields.locked()));
     if(keep){
       var n=$(keep.id)||(keep.card&&$(keep.card));
       if(n){ try{ n.focus({preventScroll:true}); if(keep.s!=null&&n.setSelectionRange) n.setSelectionRange(keep.s, keep.e); }catch(e){} }
@@ -4289,7 +4637,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function askBoxHtml(key, label){
     var ui=ASK.ui[key]||{}, id='rqin-'+slug(key);
     return '<div class="rq-box no-print'+(key==='_new'?' rq-new':'')+'" id="rqbox-'+esc(slug(key))+'"><label for="'+id+'">'+esc(label)+'</label><div class="r">'
-      +'<input type="text" id="'+id+'" data-k="'+esc(key)+'" value="'+esc(ui.draft||'')+'" maxlength="1000" autocomplete="off" placeholder="'+esc(key==='_new'?'What should the research look into?':'What do you want to know?')+'">'
+      +(key==='_new'?'<textarea id="'+id+'" data-k="'+esc(key)+'" rows="2" maxlength="1000" placeholder="e.g. What should the research look into next?">'+esc(ui.draft||'')+'</textarea>'
+        :'<input type="text" id="'+id+'" data-k="'+esc(key)+'" value="'+esc(ui.draft||'')+'" maxlength="1000" autocomplete="off" placeholder="What do you want to know?">')
       +'<button type="button" class="ans primary" data-act="rq-send" data-k="'+esc(key)+'">Ask</button></div>'
       +(key==='_new'?'<label class="rq-about">About <select id="rqlens-_new" data-k="_new"><option value="">anything</option>'+LENSES.map(function(L){ return '<option value="'+esc(L.k)+'"'+(ui.lens===L.k?' selected':'')+'>'+esc(L.l)+'</option>'; }).join('')+'</select></label>':'')
       +(key==='_new'?'<p class="rq-hint">A new question gets a section of its own. The crew answers from what the research found, and looks further only if that isn’t enough.</p>':'')+'</div>';
@@ -4451,7 +4800,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     // The box is a search box: Enter starts the research, Shift+Enter is a new line.
     if((t.id==='cmp-prompt'&&!e.shiftKey)||t.id==='cmp-who'){ e.preventDefault(); doSend(); }
     else if(t.id.indexOf('qtext-')===0){ e.preventDefault(); doAnswer(t.getAttribute('data-q'), null, t.value); }
-    else if(t.id.indexOf('rqin-')===0){ e.preventDefault(); doAsk(t.getAttribute('data-k')); }
+    else if(t.id.indexOf('rqin-')===0&&!(e.shiftKey&&t.tagName==='TEXTAREA')){ e.preventDefault(); doAsk(t.getAttribute('data-k')); }
     else if(t.id.indexOf('chkwhy-')===0){ e.preventDefault(); var cb=t.closest('.rc-chk'), go=cb&&cb.querySelector('[data-act=chk-reject],[data-act=chk-use]'); if(go) go.click(); }
   });
   document.addEventListener('change', function(e){ if(e.target&&e.target.id==='cmp-file'){ addFiles(e.target.files); e.target.value=''; } });
@@ -4544,7 +4893,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       case 'goto-confirm': gotoConfirm(b.getAttribute('data-field')); break;
       case 'chk-yes': case 'chk-no': case 'chk-reject': case 'chk-pick': case 'chk-reason': case 'chk-use': case 'chk-cancel': case 'chk-why': case 'chk-open':
         onCheck(act, b); break;
-      case 'chk-next': nextCheck(); break;
+      case 'pin-full': if(window.ClanFields) ClanFields.open(b.getAttribute('data-ref')); break;
+      case 'chk-next': nextCheck(); var jbx=$('judge'); if(jbx&&jbx.classList.contains('needs-box')) jbx.innerHTML=judgeBarHtml(checks()); break;
+      case 'yc-cut': var yr=b.getAttribute('data-ref')||''; CHK.ui[yr]={mode:'no', why:''}; renderChecks();
+        var yw=$('chkwhy-'+slug(yr)); if(yw){ yw.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); setTimeout(function(){ try{ yw.focus({preventScroll:true}); }catch(x){} }, calm()?0:350); } break;
       case 'lock': doLock(); break;
       case 'goto-field': gotoField(b.getAttribute('data-field')); break;
       case 'goto-records': openRecords(b.getAttribute('data-to')); break;
@@ -4572,7 +4924,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   $('mapview').addEventListener('click', mapPick);
   $('mapview').addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' ') mapPick(e); });
   $('insp-sel').addEventListener('click', function(e){
-    var b=e.target.closest('button'); if(!b) return;
+    var b=e.target.closest('button,tr[data-sel]'); if(!b) return;
     if(b.hasAttribute('data-sel')) select(b.getAttribute('data-sel'), true);
     else if(b.hasAttribute('data-sel-back')) back();
     else if(b.hasAttribute('data-sel-close')){ VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel(); }
