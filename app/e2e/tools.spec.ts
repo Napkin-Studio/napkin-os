@@ -221,7 +221,7 @@ test('a spin-off of a client’s document stays that client’s and the trail fo
 
   // Continue in ▾ is in the app slot now, not in More.
   await page.getByRole('button', { name: /^Continue in/ }).click()
-  await page.getByRole('menuitem', { name: /^Continue in Deck Maker/ }).click()
+  await page.getByRole('menuitem', { name: /^Deck/ }).click()
   await expect(trail(page).getByRole('button', { name: 'Deck Maker' })).toBeVisible({ timeout: 30_000 })
   await expect(trail(page).getByRole('button', { name: 'Client A' })).toBeVisible()
 })

@@ -1701,7 +1701,7 @@ test('the brief’s state pill says Draft, Ready to lock, Locked or Reopened; wh
 test('each OS bar button runs the same handler as its side-tab control', () => {
   const ACTIONS = obj(BM, 'ACTIONS')
   const actionIds = [...ACTIONS.matchAll(/^\s*(\w+):/gm)].map(m => m[1])
-  assert.deepEqual(actionIds.sort(), ['lock', 'pdf', 'redraft', 'reopen'])
+  assert.deepEqual(actionIds.sort(), ['lock', 'pdf', 'redraft', 'reopen', 'unlock'])
   // Every control in the side tab that names an action has one, and is bound through the table.
   const tab = BM.slice(BM.indexOf('<aside class="stab"'), BM.indexOf('</aside>'))
   const acts = [...tab.matchAll(/data-act="([^"]+)"/g)].map(m => m[1])
@@ -1722,7 +1722,9 @@ test('each OS bar button runs the same handler as its side-tab control', () => {
   assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
   const locked = items({ A: true })
-  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'reopen', 'status'], 'a locked brief offers Reopen a part…, not a redraft')
+  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'unlock', 'reopen', 'status'], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
+  assert.match(fn(BM, 'unlockClick'), /hostPost\('\/unapprove',\{rationale:/, 'Unlock calls /unapprove as Lock calls /approve')
+  assert.match(fn(BM, 'lockClick'), /unlockClick\(\)/, 'the side tab’s lock button is Unlock while locked')
   assert.equal(locked.find(i => i.id === 'reopen')!.label, 'Reopen a part…')
   assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', 'lock', 'status'])
   for (const list of [draft, locked]) for (const i of list) {
@@ -1805,14 +1807,16 @@ test('nothing the brief did before is gone: every control is still on the page',
   assert.match(sel, /startRegen\(row,f\)/)
   assert.match(sel, /toggleLock\(f\)/)
   assert.match(sel, /renderBuilt\(\)/, 'Built from is drawn by renderBuilt')
-  assert.match(fn(BM, 'renderBuilt'), /F\.card\(r, b\.querySelector/, 'one OS source card per ref')
+  assert.match(fn(BM, 'renderBuilt'), /F\.cards\(refs\)/, 'one compact row per ref, from the OS source cards')
+  assert.match(fn(BM, 'renderBuilt'), /F\.open\(x\.getAttribute\('data-ref'\)\)/, 'each row opens its source card')
   assert.match(sel, /whyHtml\(f\)/)
 })
 
 test('Built from: one source card per ref the part cites, asked for in one tick, each with the parts it is also used in', () => {
   const src = fn(BM, 'renderBuilt')
-  // All cards are asked for in one synchronous loop, so ClanFields batches them into one /cite call.
-  assert.match(src, /refs\.forEach\(function\(r,i\)\{ F\.card\(r, b\.querySelector\('\.bf-card\[data-n="'\+i\+'"\]'\)\); \}\);/)
+  // All cards are asked for in one call (the mock's compact rows), so ClanFields sends one /cite.
+  assert.match(src, /F\.cards\(refs\)\.then\(function\(m\)\{/)
+  assert.equal((src.match(/F\.cards?\(/g) ?? []).length, 1, 'one lookup for every row')
   assert.match(src, /cites\.length\?cites:\[docId\(\)\+'#'\+f\.key\]/, 'a part that cites nothing shows its own card, as before')
   assert.match(src, /data-go=/)
   assert.match(fn(BM, 'goPart'), /select\(key\)/, 'a used-in chip selects that part')

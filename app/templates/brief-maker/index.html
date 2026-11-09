@@ -3629,10 +3629,10 @@
     var why=wait?lockWhy(n):'';
     // Locked: where the mock has Unlock, the working route — a locked brief reopens one part for a
     // change the client asked for (there is no unlocking an approve, W5-Z1).
-    if(again){ lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; lb.setAttribute('data-act','lock'); }
-    else if(A){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; lb.setAttribute('data-act','unlock'); }
-    else if(L){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; lb.setAttribute('data-act','lock'); }   // a brief locked before /approve
-    else { lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; lb.setAttribute('data-act','lock'); }
+    if(again){ lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
+    else if(A){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; }
+    else if(L){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve
+    else { lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; }
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
     var el=$('lockList'), show=(!L||again)&&n>0;
@@ -3664,7 +3664,7 @@
     var lb=$('lockBtn'), l=lockState(), A=approveLocked();
     // A brief locked by its old flag unlocks as it always did.
     if(legacyLocked()){ patch('locked',false,{actor:'human',pinned:true,action:'unlock brief',rationale:'Brief unlocked'}); return; }
-    if(A&&!(l&&arr(l.reopened).length)) return;
+    if(A&&!(l&&arr(l.reopened).length)){ unlockClick(); return; }   // the mock's Unlock (POST /unapprove)
     if(l&&!l.can_lock){ renderLock(); return; }
     if(!window.clan){ toast('Locking needs the Napkin host.'); return; }
     lb.disabled=true;
@@ -4109,7 +4109,7 @@
     list.innerHTML=ps.length
       ? ps.map(function(p,i){ return '<button type="button" class="lkitem" data-n="'+i+'"><span class="k">'+esc(p.state==='rejected'?'The client said no':'The client asked for a change')+'</span><span class="x">'+esc(addrLabel(p))+'</span></button>'; }).join('')
         +'<p>Reopening a part lets you make that change. Lock the brief again when it’s done.</p>'
-      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Record the client’s answer, below), then reopen the part they mean here.</p>';
+      : '<p>A locked brief changes one part at a time, for something the client asked. Record what they said first (Record the client’s answer, below, or '+esc(clientReviewLabel())+' in the OS bar), then reopen the part they mean here.</p>';
     list.querySelectorAll('[data-n]').forEach(function(b){ b.addEventListener('click', function(){
       var p=ps[+b.getAttribute('data-n')]; b.disabled=true;
       hostPost('/client-review/reopen', {answer:p.decision}).then(function(res){
@@ -4331,7 +4331,7 @@
     menu.addEventListener('keydown', function(e){ if(e.key==='Escape'){ show(false); more.focus(); } });
     document.addEventListener('click', function(e){ if(!menu.hidden&&!menu.contains(e.target)) show(false); });
   })();
-  document.querySelectorAll('#stab [data-act]').forEach(function(b){ b.addEventListener('click', function(){ var a=b.getAttribute('data-act'); if(ACTIONS[a]) ACTIONS[a](); }); });
+  document.querySelectorAll('#stab [data-act]').forEach(function(b){ var a=b.getAttribute('data-act'); if(ACTIONS[a]) b.addEventListener('click', function(){ ACTIONS[a](); }); });
 
   // ---------- the sheet as it prints (features/brief-new-ui.clan) ----------
   // Save · PDF prints the sheet a person sees: the same grid, frame, headings, colour and logos, on A4
