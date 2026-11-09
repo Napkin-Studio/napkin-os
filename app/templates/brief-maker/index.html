@@ -1465,7 +1465,11 @@
   // `key` is any id the middleware or the chain uses (extract, drafter ...): the engine maps it to its role.
   var ROLES=window.NapkinRoles||null;
   if(ROLES){ ROLES.auto(); ROLES.thread(); }
-  function fig(key,o){ o=o||{}; return ROLES?ROLES.tag(key,{state:o.state, label:o.label, decorative:o.decorative, size:o.size}):''; }
+  // The brief's crew keys by role: its "synthesis" step is the Strategy agent planning the brief (the
+  // research's Synthesis agent is another role, and never signs a brief).
+  var CREW_ROLE={extract:'knowledge', synthesis:'strategy', drafter:'brief', judge:'review'};
+  function roleOf(k){ return CREW_ROLE[k]||k; }
+  function fig(key,o){ o=o||{}; return ROLES?ROLES.tag(roleOf(key),{state:o.state, label:o.label, decorative:o.decorative, size:o.size}):''; }
   // Line icons (presentation only): 16-unit grid, 1.5 stroke, currentColor.
   function ic(d){ return '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>'; }
   var IC={
@@ -1608,12 +1612,12 @@
   // Brief agent writes and the Review agent checks.
   var CREW_KEYS=['extract','synthesis','drafter','judge'];
   var ROLE_NAME={extract:'Knowledge', synthesis:'Strategy', drafter:'Brief', judge:'Review'};
-  var AGENT_NAME={}; CREW_KEYS.forEach(function(k){ AGENT_NAME[k]=ROLES?ROLES.name(k):ROLE_NAME[k]+' agent'; });
+  var AGENT_NAME={}; CREW_KEYS.forEach(function(k){ AGENT_NAME[k]=ROLES?ROLES.name(roleOf(k)):ROLE_NAME[k]+' agent'; });
   // In a sentence: "the Knowledge agent" (KNOW), and at its start "The Knowledge agent" (KNOW_).
   var KNOW='the Knowledge agent', STRAT='the Strategy agent', WRITER='the Brief agent', REV='the Review agent';
   var KNOW_='The Knowledge agent', STRAT_='The Strategy agent', WRITER_='The Brief agent', REV_='The Review agent';
   // How an agent signs what it says: "Review agent".
-  function sayer(k){ return AGENT_NAME[k]||(ROLES?ROLES.name(k):''); }
+  function sayer(k){ return AGENT_NAME[k]||(ROLES?ROLES.name(roleOf(k)):''); }
   // A speech bubble: the agent speaks in the first person, signed.
   function say(k, html, cls){ return '<span class="say'+(cls?' '+cls:'')+'"><span class="sayer">'+esc(sayer(k))+'</span>'+html+'</span>'; }
   var NUM=['no','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
@@ -1631,7 +1635,7 @@
     // find_client_parts it replaced) is the Knowledge agent reading the client's words.
     if(/^(client_parts_match|find_client_parts)\b/.test(String(d.handler||d.agent||''))) return 'extract';
     var r=ROLES?ROLES.ofDecision(d):null;
-    return {knowledge:'extract', strategy:'synthesis', research:'synthesis', brief:'drafter', review:'judge'}[r]||'drafter';
+    return {knowledge:'extract', strategy:'synthesis', research:'synthesis', synthesis:'synthesis', brief:'drafter', review:'judge'}[r]||'drafter';
   }
   function whoName(d){ return isHuman(d)?'You':(AGENT_NAME[agentKeyOf(d)]||d.agent); }
   var YOU='<span class="you" aria-hidden="true">you</span>';
@@ -3635,7 +3639,7 @@
     if(el.getAttribute('data-k')===want) return;
     el.setAttribute('data-k', want);
     if(!on){ el.hidden=true; el.innerHTML=''; return; }
-    var nm=ROLES&&ROLES.of(on[0])?ROLES.name(ROLES.of(on[0])):(AGENT_NAME[on[0]]||'An agent');
+    var nm=ROLES&&ROLES.of(roleOf(on[0]))?ROLES.name(ROLES.of(roleOf(on[0]))):(AGENT_NAME[on[0]]||'An agent');
     el.innerHTML=fig(on[0],{state:'working', decorative:true, size:30})+'<span><b>'+esc(nm)+'</b> · '+esc(on[1])+'</span>';
     el.hidden=false;
   }

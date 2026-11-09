@@ -45,7 +45,12 @@ test('a person is "You", a name, or "Someone" for an opaque id', () => {
 
 test('asking again asks the agent who does that work, by name', () => {
   const r = redoOf(block({ action: 'synthesise_finding', kind: 'finding' }, agent('synthesise_findings')))
-  assert.equal(r?.label, 'Ask the Strategy agent again')
+  // The research's findings are the Synthesis agent's (the mock's "Synthesis agent found 3 points").
+  assert.equal(r?.label, 'Ask the Synthesis agent again')
+  const aud = redoOf(block({ action: 'propose_audience' }, agent('synthesise_findings')))
+  assert.equal(aud?.label, 'Ask the Strategy agent to redo the audience', 'the audience stays the Strategy agent’s')
+  const rep = redoOf(block({ action: 'compose_report' }, agent('compose_report')))
+  assert.equal(rep?.label, 'Ask the Synthesis agent to write the report again')
   const lens = redoOf(block({ action: 'research_run', targets: ['lenses_run[rhythm_moments/IE]'] }, agent('research_lens')))
   assert.equal(lens?.label, 'Ask the Research agent to look again at timing')
 })
@@ -60,7 +65,7 @@ test('a run is titled by who worked in it, in the order they started', () => {
     ],
   }
   const [run] = runsOf(view)
-  assert.equal(run.title, 'Knowledge agent and Strategy agent')
+  assert.equal(run.title, 'Knowledge agent and Synthesis agent')
 })
 
 test('where a decision landed reads in words, never an id', () => {
@@ -168,7 +173,9 @@ test('a link, its update and its unlink each say what they did, to which documen
 // B4 leftovers (final retest): handlers read as the agents, keys and ids as words.
 test('a step no one agent owns is the agents’, never its job’s name', () => {
   assert.equal(whoOf(block({ action: 'reconsider' }, agent('reconsider'))).name, 'The agents')
-  assert.equal(whoOf(block({ action: 'report' }, agent('start_campaign'))).name, 'Brief agent')
+  // The research report is composed by the Synthesis agent (the mock's answer card); a brief stays the Brief agent's.
+  assert.equal(whoOf(block({ action: 'report' }, agent('start_campaign'))).name, 'Synthesis agent')
+  assert.equal(whoOf(block({ action: 'draft' }, agent('draft_brief'))).name, 'Brief agent')
   const contest = whoOf(block({ action: 'open_contest', kind: 'contest' }, agent('start_campaign')))
   assert.equal(contest.name, 'Research agent')
   assert.equal(contest.person, false)

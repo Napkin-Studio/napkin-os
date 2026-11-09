@@ -1069,7 +1069,7 @@ var ClanFields=(function(){
     var g=gap(el.getAttribute('ref')||'');
     if(!g){ el.innerHTML=missing('This is no longer in the document'); return; }
     var tried=arr(g.sources_tried||g.tried);
-    el.innerHTML='<button type="button" class="clf-gap" data-ref="'+esc(g.id)+'"><span class="ic" aria-hidden="true">?</span><span><b>'+esc(g.wanted||g.key||g.id)+'</b><span>'+esc(g.note||'')+(tried.length?' We looked in '+tried.length+' place'+(tried.length===1?'':'s')+', but found nothing we could quote.':'')+'</span></span></button>';
+    el.innerHTML='<button type="button" class="clf-gap" data-ref="'+esc(g.id)+'"><span class="ic" aria-hidden="true">?</span><span><b>'+esc(gapWords(g.wanted||g.searched||g.key||g.id))+'</b><span>'+esc(gapWords(g.note||''))+(tried.length?' We looked in '+tried.length+' place'+(tried.length===1?'':'s')+', but found nothing we could quote.':'')+'</span></span></button>';
   }
   function renderSources(el){
     var S=sources(), ids=Object.keys(S), used={};
@@ -1147,6 +1147,7 @@ var ClanFields=(function(){
   // this document; a contest, a gap or a list of cites has no card.
   function cardRef(ref,k){ return !ref?'':k==='path'?docId()+'#'+ref:/^(?:pin|finding|source|passage|capture|material)$/.test(k||'')?ref:''; }
   // Render the source card for `ref` into `el`; resolves when it is shown.
+  var NEEDS=null;
   function card(ref,el,compact){
     if(!el) return Promise.resolve(null);
     if(!compact&&RICH[kindOf(ref)]) return richCard(ref,el);
@@ -1339,7 +1340,10 @@ var ClanFields=(function(){
     var h='<div class="rv-head"><span class="rv-kind"><span class="rv-n'+(f.status==='proposed'?' p':'')+'">'+n+'</span>Finding '+n+' of '+all+'</span>'+stPill(f)+'</div>'
       +'<p class="rv-title'+(gone?' gone':'')+'">'+esc(f.statement)+'</p>'
       +'<p class="rv-meta">'+(f.lens?'<span class="rv-lens">'+esc(String(f.lens).replace(/_/g,' '))+'</span>':'')+(f.market?'<span class="rv-lens">'+esc(f.market)+'</span>':'')+'Worked out by <b>'+esc(wb?whoDid(wb):'the agents')+'</b> · derived from '+plural(ps.length,'pin')+'</p>';
-    if(f.status==='proposed') h+='<div class="rv-needs"><b>Your call</b><p>Nobody has checked this yet. Verify it, or reject it with a reason.</p><div><button type="button" class="rv-btn" data-clf-sc="open" data-ref="'+esc(id)+'">Verify or reject…</button></div></div>';
+    // An app that answers checks itself (the research's Your call) draws this box: needsWith(fn).
+    var nh=f.status==='proposed'&&NEEDS?NEEDS(id):null;
+    if(nh!=null) h+='<div class="rv-needs" data-clf-needs="'+esc(id)+'">'+nh+'</div>';
+    else if(f.status==='proposed') h+='<div class="rv-needs"><b>Your call</b><p>Nobody has checked this yet. Verify it, or reject it with a reason.</p><div><button type="button" class="rv-btn" data-clf-sc="open" data-ref="'+esc(id)+'">Verify or reject…</button></div></div>';
     var ev=ps.map(function(p){ return {p:p, q:quoteOf(pins()[p])}; }).filter(function(x){ return x.q.q; }).slice(0,2);
     if(ev.length) h+=sec('Evidence',ev.map(function(x){ return '<blockquote class="rv-q">'+esc(clip(x.q.q,320))+'</blockquote><p class="rv-src">'+srcBits(x.q.s)+'</p>'; }).join(''),plural(ev.length,'source'));
     var rsn=wb?reasonHTML(obj(wb.decision.reasoning),whoDid(wb),wb.decision.rationale||''):'';
@@ -1363,12 +1367,12 @@ var ClanFields=(function(){
   }
   function viewGap(id){
     var g=gap(id); if(!g) return '<p class="rv-none">This gap is no longer in the document.</p>';
-    var tried=arr(g.sources_tried||g.tried), what=g.searched||g.wanted||keyWords(g.key||'')||'Something we looked for';
+    var tried=arr(g.sources_tried||g.tried), what=gapWords(g.searched||g.wanted||g.key||'')||'Something we looked for';
     return '<div class="rv-head"><span class="rv-kind">Gap · '+(tried.length?'not found':'not looked up')+'</span><span class="rv-pill mute">No source</span></div>'
       +'<p class="rv-title">'+esc(noIds(what))+'</p>'
       +'<p class="rv-meta">'+(g.lens?'<span class="rv-lens">'+esc(String(g.lens).replace(/_/g,' '))+'</span>':'')+(g.market?'<span class="rv-lens">'+esc(g.market)+'</span>':'')+'Nothing here is a fact: it is what the research could not pin.</p>'
       +sec('Where we looked',tried.length?'<ul class="rv-bec">'+tried.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul>':'<p class="rv-none">Not looked up.</p>')
-      +(g.note?sec('Note','<p>'+esc(noIds(g.note))+'</p>'):'');
+      +(g.note?sec('Note','<p>'+esc(noIds(gapWords(g.note)))+'</p>'):'');
   }
   function viewItem(ref){
     var it=itemOf(ref); if(!it) return '<p class="rv-none">This line is no longer in the document.</p>';
@@ -1710,6 +1714,15 @@ var ClanFields=(function(){
       .replace(/\b[a-z]+(?:_[a-z]+)+\b/g,function(k){ return n[k]||k.replace(/_/g,' '); })
       .replace(/\b(the (?:new|old) )the /gi,'$1').replace(/\b([Tt]he) the\b/g,'$1')
       .replace(/\b(a|A) (?=(?:[ai]|o(?!n[ce])|e(?!u)|u(?!n[iy]|s[eu]|r[aeiou]|tili))[a-z])/g,'$1n ');
+  }
+  // A gap's category or measure key in words, as the research's own list says
+  // it: "category/qsr.fast_food" and "qsr.fast_food" are fast food,
+  // "market.size_value" size value, "brand/bulmers" Bulmers. A web address stays.
+  var GAP_TLD={com:1, ie:1, uk:1, org:1, net:1, io:1, gov:1, eu:1, co:1, edu:1, info:1, html:1, pdf:1};
+  function gapWords(s){
+    return String(s==null?'':s)
+      .replace(/(^|[\s(])([a-z]+)\/([a-z0-9][a-z0-9._\-]*[a-z0-9])(?=[\s,.;:)]|$)/g,function(m,b,k,e){ var w=e.split('.').pop().replace(/^x_/,'').replace(/[-_]/g,' '); return b+(k==='category'||k==='measure'?w:w.replace(/\b[a-z]/g,function(c){ return c.toUpperCase(); })); })
+      .replace(/(^|[^\w\/.:@-])([a-z][a-z0-9]+(?:\.[a-z][a-z0-9_]+)+)(?![\w\/@-])/g,function(m,b,k){ var last=k.split('.').pop(); if(GAP_TLD[last]) return m; return b+last.replace(/^x_/,'').replace(/_/g,' '); });
   }
   function becauseList(rs){ var bs=arr(obj(rs).because).filter(function(p){ return p&&p.point; });
     return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(noIds(p.point))+'</span></li>'; }).join('')+'</ul>':''; }
@@ -2549,7 +2562,7 @@ var ClanFields=(function(){
           // The source card (OS-layer contract §8.3): card(ref, el) renders it
           // into el; cards(refs) is the same lookup without the markup; the
           // drawer's trail of refs, oldest first, is stack().
-          card:function(ref,el){ return card(ref,el,false); }, cards:cardsFor, stack:stack,
+          card:function(ref,el){ return card(ref,el,false); }, needsWith:function(fn){ NEEDS=typeof fn==='function'?fn:null; }, cards:cardsFor, stack:stack,
           // A line's view (answer, line, finding, gap, item, chart) as markup, and
           // what kind of line it is: derived from its cites, never asked of a model.
           lineView:function(ref){ return viewOf(ref); }, lineKind:function(ref){ var l=lineOf(ref); return l?lineKind(l):null; }, named:named,

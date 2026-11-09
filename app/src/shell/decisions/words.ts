@@ -665,9 +665,9 @@ export function redoOf(block: DecisionBlock): Redo | null {
     const m = (d.targets ?? []).map(t => /lenses_run\[([a-z_]+)\/([A-Z]{2})\]/.exec(t)).find(Boolean)
     return m ? { label: `Ask ${givenFor('research')} to look again at ${(LENS_NAME[m[1]] ?? m[1]).toLowerCase()}`, task: 'research_lens', input: { lenses: [m[1]], markets: [m[2]] } } : null
   }
-  if (d.action === 'propose_audience') return { label: `Ask ${givenFor('synthesise')} to redo the audience`, task: 'synthesise_findings', input: { redo: 'audience' } }
+  if (d.action === 'propose_audience') return { label: `Ask ${givenFor('propose_audience')} to redo the audience`, task: 'synthesise_findings', input: { redo: 'audience' } }
   if (d.action === 'synthesise_finding' || d.kind === 'finding') return { label: `Ask ${givenFor('synthesise')} again`, task: 'synthesise_findings', input: {} }
-  if (d.action === 'report' || d.action === 'compose_report') return { label: `Ask ${givenFor('draft')} to write the report again`, task: 'compose_report', input: {} }
+  if (d.action === 'report' || d.action === 'compose_report') return { label: `Ask ${givenFor('compose_report')} to write the report again`, task: 'compose_report', input: {} }
   return null
 }
 

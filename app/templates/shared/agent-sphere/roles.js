@@ -1,6 +1,6 @@
 // roles.js: the one agent engine's front door, for the template apps and the shell alike.
 //
-// Napkin's agents are named by role (Knowledge, Strategy, Research, Brief, Review, Deck), each drawn as its
+// Napkin's agents are named by role (Knowledge, Strategy, Research, Synthesis, Brief, Review, Deck), each drawn as its
 // sphere (agent-view.js: AG, MAT_OF). This file holds:
 //   - THE one lookup from anything a run, a step or a stored decision calls an agent (a stage id, a handler,
 //     an old crew key or crew name kept in older documents) to its role: NapkinRoles.of / forStage / ofDecision;
@@ -18,6 +18,9 @@
     knowledge: { name: 'Knowledge', job: 'reads what you sent' },
     strategy: { name: 'Strategy', job: 'plans the work' },
     research: { name: 'Research', job: 'finds evidence' },
+    // The mock's research report is "Composed by Synthesis agent": it turns pins into findings and writes the
+    // report from them. Its sphere is ceramic (extra.js), a material no research stage uses.
+    synthesis: { name: 'Synthesis', job: 'finds the points' },
     brief: { name: 'Brief', job: 'writes the brief' },
     review: { name: 'Review', job: 'checks every claim' },
     deck: { name: 'Deck', job: 'builds the deck' },
@@ -33,10 +36,12 @@
   var ALIAS = {
     extract: 'knowledge', ellis: 'knowledge', read: 'knowledge', capture: 'knowledge', extract_ask: 'knowledge', identify: 'knowledge',
     lookup: 'knowledge', transcribe: 'knowledge', knowledge: 'knowledge',
-    synthesis: 'strategy', sam: 'strategy', context: 'strategy', plan: 'strategy', think: 'strategy', synthesise: 'strategy',
-    synthesise_findings: 'strategy', synthesise_finding: 'strategy', propose_audience: 'strategy', planner: 'strategy',
-    drafter: 'brief', dara: 'brief', draft: 'brief', write: 'brief', draft_brief: 'brief', regenerate_field: 'brief',
-    report: 'brief', compose_report: 'brief', fill: 'brief',
+    sam: 'strategy', context: 'strategy', plan: 'strategy', think: 'strategy', propose_audience: 'strategy', planner: 'strategy',
+    // The research's findings and its report: the Synthesis agent's. (Brief Maker's own "synthesis" crew key is
+    // its Strategy step; it maps its keys to roles itself.)
+    synthesise: 'synthesis', synthesise_findings: 'synthesis', synthesise_finding: 'synthesis',
+    report: 'synthesis', compose_report: 'synthesis', 'report.compose': 'synthesis',
+    drafter: 'brief', dara: 'brief', draft: 'brief', write: 'brief', draft_brief: 'brief', regenerate_field: 'brief', fill: 'brief',
     judge: 'review', jude: 'review', check: 'review', verdict: 'review', select: 'review', golden_critic: 'review', critic: 'review',
     score: 'review',
     research: 'research', research_lens: 'research', research_run: 'research', research_merge: 'research', search: 'research',
@@ -47,7 +52,7 @@
   // What each app's run stages are (the job's own stage ids), per the mock's RUN_PLANS.
   var STAGES = {
     brief: { extract: 'knowledge', context: 'strategy', draft: 'brief', judge: 'review', check: 'review' },
-    research: { extract: 'strategy', identify: 'strategy', select: 'strategy', research: 'research', synthesise: 'knowledge', report: 'review' },
+    research: { extract: 'strategy', identify: 'strategy', select: 'strategy', research: 'research', synthesise: 'synthesis', report: 'review' },
     deck: {}
   };
   var APP_ROLE = { brief: 'brief', research: 'research', deck: 'deck' };
@@ -76,7 +81,7 @@
     var who = String(d.agent || d.actor || ''), act = String(d.action || '').toLowerCase();
     if (!who || who === 'human' || /^human:/.test(who)) return null;
     if (d.kind === 'verdict' || d.polarity) return 'review';
-    if (d.kind === 'finding') return 'strategy';
+    if (d.kind === 'finding') return 'synthesis';
     if (act === 'score') return 'review';
     var r = of(who) || of(act);
     if (r) return r;
@@ -151,7 +156,7 @@
   }
   var live = [];
   function restyle() { var L = look(); for (var i = 0; i < live.length; i++) { var v = live[i].view; if (v) { v.setAccent(L.accent, L.inkAccent); v.setBg(L.bg, L.dark); } } }
-  var KIND = { knowledge: 'read', strategy: 'think', research: 'search', brief: 'write', review: 'check', deck: 'write', orchestrator: 'work' };
+  var KIND = { knowledge: 'read', strategy: 'think', research: 'search', synthesis: 'think', brief: 'write', review: 'check', deck: 'write', orchestrator: 'work' };
   function envelope(o) {
     var r = of(o.agent) || 'orchestrator', st = o.state || 'idle', kind = o.kind || KIND[r] || 'work';
     var pr = o.progress, n = 20, at = 0;

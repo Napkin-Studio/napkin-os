@@ -373,7 +373,7 @@ test('a locked report is the version agreed to: never out of date, Refresh not o
 
 // A review changes only the document; the crew then brings what rests on it
 // in step with one reconsider job at a time, holding reviews made meanwhile.
-const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'walk', 'reconsider', 'roles', 'agentName', 'theAgent', 'TheAgent', 'sphereTag']
+const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'walk', 'sideAgent', 'reconsider', 'roles', 'agentName', 'theAgent', 'TheAgent', 'sphereTag']
 /** The one agent engine's front door (agent-sphere/roles.js), loaded into a window of its own. */
 function rolesWindow(): Record<string, unknown> {
   const w: Record<string, unknown> = {}
@@ -387,9 +387,15 @@ function reconEnv(locked = false) {
   const RECON = { queue: [] as unknown[], job: null as Job | null }
   const classes = new Set<string>()
   const walker = { innerHTML: '', classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } } }
+  // The agent at work, at the top of the side panel (owner: the agent stays in the main screen or moves to the side panel).
+  const sattr: Record<string, string> = {}
+  const side = { innerHTML: '', hidden: true, getAttribute: (k: string) => sattr[k] ?? null, setAttribute: (k: string, v: string) => { sattr[k] = v } }
   const env = {
     RECON, arr, walker, esc, ROLE_NM: {},
-    $: (id: string) => (id === 'walker' ? walker : null),
+    $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
+    document: { body: { classList: { contains: () => false } } },
+    isObj: (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v), D: () => ({ report: {} }),
+    ASK: { jobs: [] }, JOBS: [], CHAT: {}, LENS: {}, lensName: (l: string) => l, clipT: (t: string) => t,
     calm: () => false,
     setTimeout: () => 0, clearTimeout: () => {},
     pathOf: (a: string) => (a.includes('#') ? a.slice(a.indexOf('#') + 1) : a),
@@ -400,7 +406,7 @@ function reconEnv(locked = false) {
     runTask: (task: string, input: Job['input'], then: Job['then'], quiet?: boolean) => { const j = { task, input, then, quiet }; runs.push(j); return j },
   }
   type F = { reviewed(route: string, body: unknown, res: unknown): void; reviewEvent(route: string, body: unknown, res: unknown): unknown }
-  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON, walker }
+  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON, walker, side }
 }
 /** The job is over: the view tells whoever started it, once. */
 const finish = (j: Job, how: Partial<Job> = { jobId: 'job_1' }) => { Object.assign(j, how); const t = j.then; j.then = null; t?.(j) }
@@ -479,23 +485,26 @@ test('reviews a reconsider job never started wait for the next one', () => {
   assert.equal(RECON.queue.length, 0)
 })
 
-test('a review leaves the page where it is, and the Strategy agent works at the bottom edge while the agents do', () => {
-  const { f, runs, walker } = reconEnv()
+test('a review leaves the page where it is, and the Strategy agent works in the side panel while the agents do', () => {
+  const { f, runs, walker, side } = reconEnv()
   const on = () => walker.classList.contains('on')
-  assert.ok(!on())
+  assert.ok(side.hidden)
   f.reviewed('/verdict', { polarity: 'good' }, { ok: true, decision: 'd_1', targets: ['doc1#facts[f_01A]'] })
   assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
-  assert.ok(on(), 'the Strategy agent shows while the job runs')
-  assert.match(walker.innerHTML, /<span class="nk-ag" data-nk-agent="strategy" data-nk-state="working" data-nk-size="44"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working (the static frame until it is hydrated)')
-  assert.match(walker.innerHTML, /The Strategy agent is bringing the report in step with your review…/)
-  assert.doesNotMatch(walker.innerHTML, /agent-figure|walking/)
+  assert.ok(!side.hidden, 'the Strategy agent shows in the side panel while the job runs')
+  assert.ok(!on(), 'not on the bottom edge: the agent has moved to the side panel')
+  assert.match(side.innerHTML, /<span class="nk-ag" data-nk-agent="strategy" data-nk-state="working" data-nk-size="30"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working (the static frame until it is hydrated)')
+  assert.match(side.innerHTML, /<b>Strategy agent<\/b> · bringing the report in step with your review/)
+  assert.doesNotMatch(side.innerHTML, /agent-figure|walking/)
   finish(runs[0])
-  assert.ok(!on(), 'and leaves when nothing is pending')
+  assert.ok(side.hidden, 'and leaves when nothing is pending')
+  assert.equal(side.innerHTML, '')
   // A job a person starts still brings the jobs panel into view.
   assert.match(fn(RT, 'runTask'), /if\(!quiet&&el&&el\.scrollIntoView\) el\.scrollIntoView/)
   assert.match(RT, /<div class="walker" id="walker" role="status" aria-live="polite"><\/div>/)
   assert.match(RT, /@media \(prefers-reduced-motion: reduce\)\{\.walker\{transition:none\}\}/)
   assert.doesNotMatch(RT, /wk-pace|wk-turn/, 'the sphere stands; nothing walks')
+  assert.match(RT, /<div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden><\/div>/, 'the side panel holds the agent at work')
 })
 
 // The agents are named by role and drawn as their sphere (owner, 2026-11-09): no figure, no crew name.
@@ -513,10 +522,13 @@ test('the research names its agents by role, draws them as spheres, and asks on 
   assert.match(RT, /if\(window\.NapkinRoles\)\{ NapkinRoles\.auto\(\); NapkinRoles\.thread\(\); \}/)
   // The run's stage follows PLAN, the engine's stages for research; the words about a stage's work name its role.
   const { runRole, TheAgent } = lift<{ runRole(s: string): string; TheAgent(r: string): string }>(RT, ['roles', 'agentName', 'theAgent', 'TheAgent', 'runRole'], { window: rolesWindow(), ROLE_NM: {}, PLAN: [] })
-  assert.deepEqual(['extract', 'identify', 'select', 'research', 'synthesise', 'report'].map(runRole), ['strategy', 'strategy', 'strategy', 'research', 'knowledge', 'review'])
+  // Finding the points is the Synthesis agent's (the mock's "Synthesis agent found 3 points").
+  assert.deepEqual(['extract', 'identify', 'select', 'research', 'synthesise', 'report'].map(runRole), ['strategy', 'strategy', 'strategy', 'research', 'synthesis', 'review'])
+  assert.equal(TheAgent('synthesis'), 'The Synthesis agent')
   assert.equal(TheAgent('knowledge'), 'The Knowledge agent')
   assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('review'\)\+' picks what to look into'/s)
-  assert.match(fn(RT, 'stageLabel'), /synthesise:TheAgent\('strategy'\)\+' finds the points', report:TheAgent\('brief'\)\+' writes the report'/)
+  assert.match(fn(RT, 'stageLabel'), /synthesise:TheAgent\('synthesis'\)\+' finds the points', report:TheAgent\('synthesis'\)\+' writes the report'/)
+  assert.match(fn(RT, 'rpBand'), /' by '\+theAgent\('synthesis'\)/, 'the report is written by the Synthesis agent')
   assert.match(fn(RT, 'questionCard'), /k=runRole\(Q\.stage\)/)
   // The stage: a thread from each rail card to the sphere; the question under the caption, inside the stage.
   const work = fn(RT, 'workHtml')
@@ -745,7 +757,7 @@ test('a part judged after the page drew it gets its mark when the chain comes', 
 
 // A note on a brief, fixed by the crew: one fix_parts job, the page left where
 // it is, and whoever is working walks the bottom edge meanwhile.
-test('a note on a brief can be fixed by the crew, and the worker walks the bottom edge', () => {
+test('a note on a brief can be fixed by the crew, and the worker shows in the side panel', () => {
   const FIX_SAY = new Function('STRAT_', 'WRITER_', 'REV_', `${obj(BM, 'FIX_SAY')} return FIX_SAY;`)('The Strategy agent', 'The Brief agent', 'The Review agent')
   const classes = new Set<string>()
   const attrs: Record<string, string> = {}
@@ -754,13 +766,17 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
     classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } },
     getAttribute: (k: string) => attrs[k] ?? null, setAttribute: (k: string, v: string) => { attrs[k] = v }, removeAttribute: (k: string) => { delete attrs[k] },
   }
+  const sattr: Record<string, string> = {}
+  const side = { innerHTML: '', hidden: true, getAttribute: (k: string) => sattr[k] ?? null, setAttribute: (k: string, v: string) => { sattr[k] = v } }
   type J = { task: string; verdict: string; stage?: string; summary?: string; error?: string | null; onUpdate(j: J): void; onEnd(j: J): void }
   const runs: { j: J; input: unknown }[] = []
   const said: string[] = []
   let locked = false
   const env = {
     FIX: null, DRAFT: null, FIX_SAY, walker, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
-    $: (id: string) => (id === 'walker' ? walker : null),
+    $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
+    REGEN: {}, fieldOf: () => null, ROLES: null, roleOf: (k: string) => k,
+    AGENT_NAME: { synthesis: 'Strategy agent', drafter: 'Brief agent', judge: 'Review agent' },
     esc: (s: string) => String(s), docLocked: () => locked, noMiddleware: () => false,
     window: { clan: { apiProxy: () => Promise.resolve() } },
     fig: (k: string, o: { walking?: boolean }) => `<svg data-agent="${k}"${o.walking ? ' data-walking="true"' : ''}></svg>`,
@@ -769,7 +785,7 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
     setTimeout: () => 0, clearTimeout: () => {},
   }
   type F = { fixBtn(d: { id: string } | null): string; fixParts(vid: string, resumeId?: string): void; walk(): void }
-  const f = lift<F>(BM, ['fixBtn', 'fixParts', 'walk'], env)
+  const f = lift<F>(BM, ['fixBtn', 'fixParts', 'walk', 'sideAgent'], env)
   assert.match(f.fixBtn({ id: 'd_note' }), /<button type="button" class="save act-fix" data-v="d_note" title="The Strategy agent looks up what it needs, the Brief agent rewrites the parts, the Review agent checks them">Fix this with the agents<\/button>/)
   locked = true
   assert.equal(f.fixBtn({ id: 'd_note' }), '', 'a locked brief has nothing to fix')
@@ -778,18 +794,20 @@ test('a note on a brief can be fixed by the crew, and the worker walks the botto
   assert.equal(runs.length, 1)
   assert.deepEqual(runs[0].input, { verdict: 'd_note' })
   assert.equal(runs[0].j.task, 'fix_parts')
-  assert.ok(classes.has('on'))
-  assert.match(walker.innerHTML, /data-agent="synthesis"><\/svg>/, 'the Strategy agent\'s sphere, working')
-  assert.match(walker.innerHTML, /The Strategy agent is looking up what the fix needs/)
+  assert.ok(!classes.has('on'), 'not on the bottom edge: the worker is in the side panel')
+  assert.ok(!side.hidden)
+  assert.match(side.innerHTML, /data-agent="synthesis"><\/svg>/, 'the brief\'s synthesis step: the Strategy agent\'s sphere, working')
+  assert.match(side.innerHTML, /<b>Strategy agent<\/b> · looking up what the fix needs/)
   assert.match(f.fixBtn({ id: 'd_note' }), / disabled /, 'one fix at a time')
   f.fixParts('d_other')
   assert.equal(runs.length, 1, 'a second fix waits for the first')
   runs[0].j.stage = 'draft'; runs[0].j.onUpdate(runs[0].j)
-  assert.match(walker.innerHTML, /data-agent="drafter"[^>]*>.*The Brief agent is rewriting the parts together/)
+  assert.match(side.innerHTML, /data-agent="drafter"[^>]*>.*<b>Brief agent<\/b> · rewriting the parts the note names/)
   runs[0].j.stage = 'judge'; runs[0].j.onUpdate(runs[0].j)
-  assert.match(walker.innerHTML, /The Review agent is checking the fix/)
+  assert.match(side.innerHTML, /<b>Review agent<\/b> · checking the fix/)
   runs[0].j.summary = 'Fixed 3 of 3 part(s), 0 proposed, 4 new fact(s) found.'
   runs[0].j.onEnd(runs[0].j)
+  assert.ok(side.hidden, 'gone when the job ends')
   assert.ok(!classes.has('on'))
   assert.equal(said[said.length - 1], 'Fixed 3 of 3 part(s), 0 proposed, 4 new fact(s) found.')
   // The page does not move, both notes offer it, and a reload picks the job up.
@@ -2341,4 +2359,153 @@ test('a line’s kind and certainty come from what it cites, never from a model'
   // A rejected finding or a figure marked wrong flags the line, and it is low.
   assert.deepEqual([k('x', ['fi_c']).flag, k('x', ['fi_c']).lv], [true, 1])
   assert.equal(k('12 of them.', ['f_3']).flag, true)
+})
+
+// ── checks in the side panel, not the report body (research-new-ui, the mock's needs-box) ──
+
+/** The research's checks with a stand-in record: two proposed findings and an open contest. */
+function checksEnv(o: { locked?: boolean; ui?: Record<string, unknown>; busy?: Record<string, boolean>; at?: string; excluded?: string[] } = {}) {
+  const F: Record<string, { statement: string; status: string; cites: string[] }> = {
+    fi_A: { statement: 'Treats are bought on impulse', status: 'proposed', cites: ['f_1', 'f_2'] },
+    fi_B: { statement: 'Delivery is growing', status: 'verified', cites: ['f_3'] },
+    fi_C: { statement: 'Sharing is the ritual', status: 'proposed', cites: ['f_3'] },
+  }
+  const ct = { id: 'ct_1', status: 'open', key: 'category/qsr.fast_food:market.size_value@IE', values: [{ fact_id: 'f_4', value: 0.23, unit: 'percent', from: 'x', sources: ['src_a'] }, { fact_id: 'f_5', value: 0.31, unit: 'percent', from: 'y', sources: ['src_b'] }] }
+  const CHK = { ui: o.ui ?? {}, busy: o.busy ?? {}, at: o.at ?? '' }
+  const env = {
+    CHK, arr, esc, isObj, listJoin,
+    slug: (s: string) => String(s).replace(/[^A-Za-z0-9_-]+/g, '-'),
+    fnds: () => F, sel: () => ({ contested: [ct] }), fview: () => ({ attention: [] }),
+    refOfAddress: (a: string) => a, contestById: (id: string) => (id === 'ct_1' ? ct : null),
+    pinSource: () => 'Mintel', excludedIds: () => Object.fromEntries((o.excluded ?? []).map(id => [id, {}])),
+    srcRecs: () => ({}), fmtAny: (v: { value: number }) => `${Math.round(v.value * 100)}%`, fromName: (v: { from: string }) => (v.from === 'x' ? 'Kantar' : 'Mintel'),
+    contestWhat: () => 'Market size', decidedBy: () => 'You', TheAgent: (r: string) => `The ${r.charAt(0).toUpperCase()}${r.slice(1)} agent`,
+    window: { ClanFields: { locked: () => (o.locked ? { who: { you: true } } : null) } },
+  }
+  Object.assign(env, { ClanFields: env.window.ClanFields })
+  type C = { checks(): { ref: string; kind: string; open: boolean }[]; yourCallHtml(all: unknown[], open: number, N: number): string; findingNeeds(ref: string): string | null; chkTag(c: unknown, shown: boolean): string }
+  return { f: lift<C>(RT, ['checks', 'chkId', 'chkById', 'chkLocked', 'chkStatus', 'chkKindWord', 'chkTag', 'chkRests', 'chkGone', 'chkAnswers', 'chkQuestion', 'findingNeeds', 'yourCallHtml'], { ...env, CHK_WHY: ['It’s newer'] }), CHK }
+}
+
+test('the report carries no decision UI: a finding that needs a call reads in the flow, proposed, with a quiet tag', () => {
+  // No card in the body any more: the old in-body buttons are gone.
+  assert.doesNotMatch(RT, /function checkCard|Yes, keep it|No, take it out|rc-chk|yc-cut/)
+  assert.match(fn(RT, 'rpFinding'), /'proposed', to=replacedBy\(id\)/, 'a proposed finding is tagged proposed, not "needs your call"')
+  assert.match(RT, /\.rp-fp\.s-proposed\{border:1px dashed/, 'the mock’s dashed proposed outline')
+  const { f } = checksEnv()
+  const open = f.checks().filter(c => c.open)
+  const tag = f.chkTag(open[0], true)
+  assert.match(tag, /^<button type="button" class="rc-need" id="chk-fi_A" data-act="chk-sel" data-chk="chk-fi_A">Needs your call<\/button>$/)
+  assert.match(f.chkTag(open.find(c => c.kind === 'contest'), true), />Two sources disagree · Needs your call</)
+  // Settled: a quiet line beside it.
+  assert.equal(f.chkTag(f.checks().find(c => c.ref === 'fi_B'), true), '<span class="rc-st" id="chk-fi_B" tabindex="-1">✓ You agreed</span>')
+  // The stats row's "N need your call" selects the check in hand; the tags and the box's Finding n select too.
+  assert.match(fn(RT, 'rpStats'), /class="rp-need" data-act="chk-go"/)
+  assert.match(fn(RT, 'renderChecks'), /host\.appendChild\(box\)/, 'beside the finding, in its line')
+})
+
+test('Your call · N open holds the question, Keep and Cut, Next check and n of N checked', () => {
+  const { f } = checksEnv()
+  const all = f.checks(), open = all.filter(c => c.open).length
+  const h = f.yourCallHtml(all, open, all.length)
+  assert.match(h, /<div class="nb-h">Your call · 3 open<\/div>/)
+  assert.match(h, /<p class="nb-t"><button type="button" class="nb-link" data-act="chk-sel" data-chk="chk-fi_A">Finding 1<\/button> rests on 2 facts, both from Mintel\. Keep it\?<\/p>/)
+  assert.match(h, /<button type="button" class="pri" data-act="chk-yes" data-ref="fi_A" data-where="box">Keep<\/button><button type="button" data-act="chk-no" data-ref="fi_A" data-where="box">Cut<\/button>/)
+  assert.match(h, /data-act="chk-next">Next check ↓<\/button>/)
+  assert.match(h, /<b>1 of 4<\/b> checked/)
+})
+
+test('Cut asks what is wrong before taking it out, inline where it was pressed, with Keep it for now', () => {
+  const { f } = checksEnv({ ui: { fi_A: { mode: 'no', why: '', where: 'box', err: true } } })
+  const all = f.checks()
+  const h = f.yourCallHtml(all, 3, 4)
+  assert.match(h, /<label for="chkwhy-fi_A">What’s wrong with it\? The Synthesis agent will use this to fix it\.<\/label>/)
+  assert.match(h, /aria-invalid="true"/)
+  assert.match(h, /Add a reason: say what’s wrong with it, so it can be fixed\./)
+  assert.match(h, /data-act="chk-reject" data-ref="fi_A" data-where="box">Take it out<\/button><button type="button" data-act="chk-cancel" data-ref="fi_A" data-where="box">Keep it for now<\/button>/)
+  // The card asks the same, with its own field, and shows Keep and Cut while the box asks why.
+  const card = f.findingNeeds('fi_A')!
+  assert.match(card, /<b>Your call · 1 open<\/b><p>It rests on 2 facts, both from Mintel\. Keep it, or cut it\?<\/p>/)
+  assert.match(card, /data-act="chk-yes" data-ref="fi_A" data-where="card">Keep</)
+  assert.doesNotMatch(card, /chkwhy/)
+  const c2 = checksEnv({ ui: { fi_A: { mode: 'no', why: 'old', where: 'card' } } }).f.findingNeeds('fi_A')!
+  assert.match(c2, /<input type="text" id="chkwhyc-fi_A" data-ref="fi_A" value="old"/)
+  assert.equal(f.findingNeeds('fi_B'), null, 'a finding agreed to needs no call')
+  // Busy and error states.
+  const busy = checksEnv({ busy: { fi_A: true }, ui: { fi_A: { where: 'box', fail: 'Not saved: the host refused' } } }).f
+  const bh = busy.yourCallHtml(busy.checks(), 3, 4)
+  assert.match(bh, /data-act="chk-yes" data-ref="fi_A" data-where="box" disabled>Saving…<\/button>/)
+  assert.match(bh, /<p class="rc-err" role="alert">Not saved: the host refused<\/p>/)
+})
+
+test('the note on a fact marked wrong, a contest’s own answers, and a locked report with no answers', () => {
+  const ex = checksEnv({ excluded: ['f_1'] }).f
+  assert.match(ex.yourCallHtml(ex.checks(), 3, 4), /<p class="nb-note">It rests on a fact someone marked wrong\. If there is a new point/)
+  const ct = checksEnv({ at: 'chk-ct_1' }).f
+  const h = ct.yourCallHtml(ct.checks(), 3, 4)
+  assert.match(h, /Market size<\/button>: two sources disagree\. Which should the report use\?/)
+  assert.match(h, /<p class="nb-from">Kantar says 23%\. Mintel says 31%\.<\/p>/)
+  assert.match(h, /data-act="chk-pick" data-ref="ct_1" data-fid="f_4" data-where="box"><span>23%<\/span><small>Kantar<\/small>/)
+  const pick = checksEnv({ at: 'chk-ct_1', ui: { ct_1: { mode: 'pick', fid: 'f_5', where: 'box' } } }).f
+  assert.match(pick.yourCallHtml(pick.checks(), 3, 4), /Why 31%\? Pick a reason, or say it\..*data-act="chk-reason".*Use 31%<\/button>.*>Back<\/button>/s)
+  const lk = checksEnv({ locked: true }).f
+  const lh = lk.yourCallHtml(lk.checks(), 3, 4)
+  assert.doesNotMatch(lh, /data-act="chk-(yes|no|pick)"/, 'locked: no answers')
+  assert.doesNotMatch(lk.findingNeeds('fi_A')!, /data-act="chk-/)
+})
+
+test('answering moves focus to the next check; the selected finding’s card is the same Your call', () => {
+  const d = fn(RT, 'chkDecide')
+  assert.match(d, /nx=chkAfter\(id0\)/)
+  assert.match(d, /CHK\.at=nx; CHK\.picked=!!nx; renderChecks\(\); focusCall\(\);/)
+  assert.match(fn(RT, 'focusCall'), /\.nb-ans button:not\(\[disabled\]\)/)
+  assert.match(CLF, /var nh=f\.status==='proposed'&&NEEDS\?NEEDS\(id\):null;/)
+  assert.match(CLF, /needsWith:function\(fn\)\{ NEEDS=typeof fn==='function'\?fn:null; \}/)
+  assert.match(RT, /ClanFields\.needsWith\(findingNeeds\)/)
+  const ord = lift<{ chkAfter(id: string): string }>(RT, ['chkAfter'], { chkOrder: () => ['a', 'b', 'c'] })
+  assert.equal(ord.chkAfter('a'), 'b')
+  assert.equal(ord.chkAfter('c'), 'a')
+  assert.equal(lift<{ chkAfter(id: string): string }>(RT, ['chkAfter'], { chkOrder: () => ['a'] }).chkAfter('a'), '')
+})
+
+// ── gaps read in words ─────────────────────────────────────────────────────
+
+test('a gap’s category or measure key reads in words, the same in the report, Not researched and the gap field', () => {
+  const GT = { GAP_TLD: { com: 1, ie: 1, uk: 1, org: 1, net: 1, io: 1, gov: 1, eu: 1, co: 1, edu: 1, info: 1, html: 1, pdf: 1 } }
+  const r = lift<{ gapWords(s: string): string }>(RT, ['entityWords', 'gapWords'], GT)
+  const c = lift<{ gapWords(s: string): string }>(CLF, ['gapWords'], GT)
+  for (const [raw, want] of [
+    ['Size value for qsr.fast_food in Ireland', 'Size value for fast food in Ireland'],
+    ['size value for category/qsr.fast_food in Ireland', 'Size value for fast food in Ireland'],
+    ['market.size_value for brand/bulmers in Ireland', 'Size value for Bulmers in Ireland'],
+  ]) {
+    assert.equal(r.gapWords(raw), want)
+    assert.equal(c.gapWords(raw).replace(/^[a-z]/, x => x.toUpperCase()), want)
+  }
+  assert.equal(r.gapWords('See mintel.com, e.g. the report.'), 'See mintel.com, e.g. the report.', 'a web address and e.g. stay')
+  assert.match(fn(CLF, 'renderGap'), /gapWords\(g\.wanted\|\|g\.searched\|\|g\.key\|\|g\.id\)/)
+  assert.match(fn(CLF, 'viewGap'), /what=gapWords\(/)
+  assert.match(fn(RT, 'rpNotResearched'), /reason:gapWords\(/)
+})
+
+// ── the Synthesis agent ───────────────────────────────────────────────────
+
+test('the research report is composed by the Synthesis agent; the brief stays the Brief agent’s', () => {
+  const R = (rolesWindow() as { NapkinRoles: { of(x: string): string; name(r: string): string; ofDecision(d: unknown): string | null; forStage(a: string, s: string): string } }).NapkinRoles
+  assert.equal(R.name('synthesis'), 'Synthesis agent')
+  for (const a of ['compose_report', 'report', 'report.compose', 'synthesise_findings', 'synthesise_finding', 'synthesise']) assert.equal(R.of(a), 'synthesis', a)
+  assert.equal(R.ofDecision({ agent: 'start_campaign', action: 'compose_report', kind: 'edit' }), 'synthesis')
+  assert.equal(R.ofDecision({ agent: 'start_campaign', action: 'synthesise_finding', kind: 'finding' }), 'synthesis')
+  assert.equal(R.ofDecision({ agent: 'start_campaign', action: 'propose_audience', kind: 'edit' }), 'strategy')
+  assert.equal(R.forStage('research', 'synthesise'), 'synthesis')
+  // The brief: drafted by the Brief agent; its own "synthesis" step is the Strategy agent planning.
+  assert.equal(R.ofDecision({ agent: 'draft_brief', action: 'draft', kind: 'edit' }), 'brief')
+  assert.equal(R.forStage('brief', 'draft'), 'brief')
+  assert.equal(R.forStage('brief', 'context'), 'strategy')
+  assert.match(BM, /var CREW_ROLE=\{extract:'knowledge', synthesis:'strategy', drafter:'brief', judge:'review'\};/)
+  assert.match(BM, /AGENT_NAME\[k\]=ROLES\?ROLES\.name\(roleOf\(k\)\)/)
+  // A ceramic sphere, which no research stage uses.
+  const X = page('shared/agent-sphere/extra.js')
+  assert.match(X, /MAT_OF\.Synthesis = 'ceramic'/)
+  assert.match(X, /"name": "Synthesis"/)
 })
