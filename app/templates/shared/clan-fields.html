@@ -1005,9 +1005,21 @@ var ClanFields=(function(){
     return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
       return d.kind==='approve'&&!b.superseded&&!d.superseded_by&&(arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; }))); })[0]||null; }
   function reopenedParts(){ return arr(obj(VIEW&&VIEW.lock).reopened); }
+  // What needs a person before the lock: the host's view, one item per place
+  // and reason (the shell's needsOf keys them the same way, code:address), so
+  // the tray, an app's own lock button and the OS's Decisions count agree.
+  function needs(){
+    var seen={};
+    return arr(VIEW&&VIEW.attention).filter(function(a){
+      if(!a||!a.blocks_lock) return false;
+      var k=a.code+':'+(a.address!=null?a.address:a.text);
+      if(seen[k]) return false;
+      seen[k]=1; return true;
+    });
+  }
   function renderTray(el){
     if(!VIEW){ el.innerHTML=''; return; }
-    var lock=lockDecision(), items=arr(VIEW.attention).filter(function(a){ return a.blocks_lock; }), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
+    var lock=lockDecision(), items=needs(), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
     var h='<div class="clf-tray" role="region" aria-label="What needs you"><div class="clf-tray-in">';
     if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span>'; }
     else {
@@ -2022,7 +2034,7 @@ var ClanFields=(function(){
   return {refresh:refresh, reload:function(){ return loadView().then(refresh); }, open:open, layout:layout, mount:mount,
           format:fmt, label:label, kindOf:kindOf, stateOf:stateOf,
           // The host's decision view as last read (null until it is), and the lock.
-          view:function(){ return VIEW; }, locked:lockDecision,
+          view:function(){ return VIEW; }, locked:lockDecision, needs:needs,
           // The source card (OS-layer contract §8.3): card(ref, el) renders it
           // into el; cards(refs) is the same lookup without the markup; the
           // drawer's trail of refs, oldest first, is stack().

@@ -1983,3 +1983,50 @@ test('a list of sentences reads as sentences in the OS fields, a list of names w
   assert.equal(textOf(['IE', 'GB']), 'IE, GB')
   assert.equal(textOf([{ name: 'Lidl' }, { name: 'Tesco' }]), 'Lidl, Tesco')
 })
+
+// ── one needs count: the host's view (Tester B 7 / 14 / 12) ───────────────
+
+test('the shared fields count what blocks the lock once per place and reason, as the shell does', () => {
+  const at = (a: Record<string, unknown>) => ({ blocks_lock: true, text: 'Nobody has checked it', ...a })
+  const VIEW = {
+    attention: [
+      at({ code: 'unverified_finding', address: 'd#findings[fi_1]' }),
+      at({ code: 'unverified_finding', address: 'd#findings[fi_1]', decision: 'd_2' }),  // the same need, twice
+      at({ code: 'bad_verdict', address: 'd#findings[fi_1]' }),                           // another reason, same place
+      at({ code: 'low_certainty', address: 'd#campaign.brand', blocks_lock: false }),     // does not block
+      at({ code: 'unmerged_branch', text: 'A copy was not brought back' }),               // no address: keyed by its words
+    ],
+  }
+  const { needs } = lift<{ needs: () => unknown[] }>(CLF, ['needs'], { VIEW, arr })
+  assert.equal(needs().length, 3)
+})
+
+test('the research lock counts the host’s needs, and lists unfilled parts apart', () => {
+  const R = page('campaign-research/index.html')
+  const host = [
+    { code: 'unverified_finding', address: 'd#findings[fi_1]', text: 'Nobody has checked it', blocks_lock: true },
+    { code: 'open_contest', address: 'd#selection.contested[ct_1]', text: 'Two values, nothing picked', blocks_lock: true },
+  ]
+  const env = (view: unknown) => ({
+    window: { ClanFields: { view: () => view, needs: () => host } },
+    arr, esc, isObj,
+    pathOf: (a: string) => { const i = String(a).indexOf('#'); return i < 0 ? String(a) : String(a).slice(i + 1) },
+    fnds: () => ({ fi_1: { statement: 'Gen Z drink less', status: 'proposed' } }),
+    FIELD: { brand: { label: 'Brand' } },
+    clipT: (t: string) => t,
+    NEED_K: { open_contest: 'Open contest', unverified_finding: 'Unverified finding' },
+    blockers: () => [{ k: 'page', html: 'its own' }, { k: 'page', html: 'reading' }, { k: 'page', html: 'of 3' }],
+    missingFor: (g: string) => (g === 'created' ? [{ k: 'client_org', label: 'Client' }] : []),
+  })
+  const names = ['hostNeeds', 'needHtml', 'lockItems', 'unfilled']
+  const f = lift<{ lockItems: () => { k: string; html: string }[]; unfilled: () => unknown[] }>(R, names, env({ attention: host }))
+  const items = f.lockItems()
+  assert.equal(items.length, 2, 'the host’s count, not the page’s own 3')
+  assert.equal(items[0].k, 'Unverified finding')
+  assert.match(items[0].html, /href="#finding-fi_1">Gen Z drink less<\/a> — Nobody has checked it/)
+  assert.match(items[1].html, /#contest-ct_1/)
+  assert.equal(f.unfilled().length, 1, 'a gate’s missing field is listed apart, not counted')
+  // No host view (a problem, or none yet): the page’s own reading stands in.
+  assert.equal(lift<{ lockItems: () => unknown[] }>(R, names, env({ problem: 'no chain' })).lockItems().length, 3)
+  assert.equal(lift<{ lockItems: () => unknown[] }>(R, names, env(null)).lockItems().length, 3)
+})
