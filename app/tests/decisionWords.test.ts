@@ -138,3 +138,16 @@ test('an agent’s own line in an irregular past reads as done, not “decided t
   assert.equal(said('Went on without the judge stage.'), 'went on without the judge stage')
   assert.equal(said('Keep the audience as written.'), 'decided to keep the audience as written')
 })
+
+test('a link, its update and its unlink each say what they did, to which document', () => {
+  const you = { kind: 'person', id: 'x', name: 'x', you: true } as DecisionBlock['who']
+  const at = ['d1#upstream.fd7f207f-af73-4c24-9d1e-000000000001']
+  const attach = block({ id: 'a', action: 'attach', targets: at, rationale: 'Took "Guinness 0.0 · Ireland" (ie.napkin.campaign-research) at v1: its data frozen …' }, you)
+  const update = block({ id: 'u', action: 'update_from_research', targets: at, rationale: 'Took "Guinness 0.0 · Ireland" (ie.napkin.campaign-research) at v2: …' }, you)
+  const detach = block({ id: 'x', action: 'detach', targets: at, rationale: 'Let go of ie.napkin.campaign-research fd7f207f-af73: its frozen copy removed.' }, you)
+  const view = { ...VIEW0, decisions: [detach, update, attach] }
+  assert.equal(didWhat(attach, view), 'linked “Guinness 0.0 · Ireland”')
+  assert.equal(didWhat(update, view), 'took the newer “Guinness 0.0 · Ireland”')
+  assert.equal(didWhat(detach, view), 'unlinked “Guinness 0.0 · Ireland”', 'the unlink finds the title its link named')
+  assert.equal(didWhat(detach, { ...VIEW0, decisions: [detach] }), 'unlinked a linked document')
+})

@@ -166,12 +166,41 @@ function steerOf(rationale: string): string {
  * lenses …". A person's decision is said from its kind; an agent's from what
  * it decided.
  */
+/** The title a link decision names: its own ("Took "…""), else the attach or update on the same upstream that did. */
+function linkedTitle(block: DecisionBlock, view: DecisionsView): string | null {
+  const titled = (r: string) => /^Took (?:the newer [^"]* )?"([^"]+)"/.exec(r)?.[1] ?? null
+  const own = titled(block.decision.rationale ?? '')
+  if (own) return own
+  const target = block.decision.targets?.[0]
+  for (const b of view.decisions) {
+    if (b === block || !target || !b.decision.targets?.includes(target)) continue
+    const t = titled(b.decision.rationale ?? '')
+    if (t) return t
+  }
+  return null
+}
+
+/** A link between documents (attach, update, replace, detach), said by what it did and to which document. */
+function linkLine(block: DecisionBlock, view: DecisionsView): string | null {
+  const a = block.decision.action
+  if (a !== 'attach' && a !== 'detach' && a !== 'replace' && !/^update_from_/.test(a)) return null
+  if (!block.decision.targets?.some(t => /#upstream\./.test(t))) return null
+  const title = linkedTitle(block, view)
+  const it = title ? `“${clip(title, 80)}”` : 'a linked document'
+  if (a === 'attach') return `linked ${it}`
+  if (a === 'detach') return `unlinked ${it}`
+  if (a === 'replace') return `replaced the link with ${it}`
+  return `took the newer ${it}`
+}
+
 export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   const d = block.decision
   const t = mainTarget(block)
   const what = t ? strip(t.label) : 'the document'
   const client = clientLineOf(block, view)
   if (client) return client.rest
+  const link = linkLine(block, view)
+  if (link) return link
   if (block.who.kind === 'person') {
     // Accepting a proposal is the person's write of the part, credited to
     // whoever proposed it: the drafter when the proposal has left the chain.
