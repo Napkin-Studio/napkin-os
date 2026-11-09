@@ -1095,36 +1095,141 @@
   /* New brief lives in Continue in › Start fresh (gaps.md §7 L2) */
   #structured #newDraft{display:none}
 
-  /* Brief Maker's identity at the start (mock phase 2 "Brief / Research identity"): the
-     serif of a written brief, the terracotta mark and rule, and the dog-eared sheet the
-     ask is written on (a ruled, serif page). Identity only: the crew and the box stay. */
-  .intake .ident svg{color:#C9462A}
-  .intake .h1{font-family:var(--font-serif,"Newsreader",Georgia,serif);font-weight:600;letter-spacing:-.02em}
-  .intake .composer{border-radius:4px;clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
-  .intake .composer::after{content:"";position:absolute;top:0;right:0;width:20px;height:20px;background:linear-gradient(225deg,transparent 50%,var(--line,#EAE1CF) 50%);pointer-events:none}
-  .intake .composer textarea{font-family:var(--font-serif,"Newsreader",Georgia,serif);font-size:17px}
+  /* ── The start, to the mock's prompt (design/new-ui/napkin-app-v1.html #brief-screen-prompt, its
+     .app-head and phase 2 "Brief prompt: one sheet, one action"; gaps.md H2, §13): the tool's header
+     with its three steps, "What's the brief?", and one paper sheet holding the research it starts
+     from, the ruled notes with their word count and examples, the files on the desk, + and the one
+     action. The crew stand under step 2. ── */
+  .app.p-start{max-width:1180px;padding:0 24px 48px}
+  .ahead{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:24px;padding:30px 0 22px;border-bottom:1px solid var(--nd-line);color:var(--nd-ink);font-family:var(--font-ui)}
+  .ahead-eye{font:600 11.5px/1.55 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-ink);margin-bottom:10px;min-height:17.8px}
+  .ahead-eye::before{content:"";display:inline-block;width:18px;height:2px;background:#C9462A;vertical-align:middle;margin-right:8px}
+  .ahead-title{font-family:var(--font-serif);font-size:clamp(34px,4.2vw,50px);font-weight:600;letter-spacing:-.02em;line-height:.96;color:var(--nd-ink);margin:0 0 8px}
+  .ahead-title .pdot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:#C9462A;margin-left:.04em;vertical-align:baseline}
+  .ahead-sub{font-size:14.5px;line-height:1.5;color:var(--nd-ink-soft);max-width:62ch;margin:0}
+  .ahead-right{display:flex;align-items:center;gap:22px}
+  .flow{list-style:none;display:flex;align-items:center;gap:0;margin:0;padding:0}
+  .flow > li{display:flex;align-items:center;position:relative}
+  .flow > li + li::before{content:"";width:28px;height:1px;background:var(--nd-line-strong);margin:0 4px 18px}
+  .flow button{display:grid;justify-items:center;gap:6px;background:none;border:0;padding:0;cursor:pointer;color:var(--nd-muted);font:600 11px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;box-shadow:none;min-height:0}
+  .flow button[aria-disabled="true"]{cursor:default}
+  /* steps not reached yet are faint (the mock's disabled steps); Agents still shows the crew */
+  .flow button[aria-disabled="true"]:not([aria-current]),.flow button.ahead-dim:not([aria-current]){opacity:.45}
+  .flow i{font-style:normal;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--nd-line-strong);background:var(--nd-paper);color:var(--nd-ink-soft);font:700 12px var(--font-mono);transition:background .15s,color .15s,border-color .15s}
+  .flow button[aria-current="step"]{color:var(--nd-ink)}
+  .flow button[aria-current="step"] i{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
+  .flow button.done i{background:var(--nd-ink);border-color:var(--nd-ink);color:var(--nd-paper)}
+  /* the crew, under step 2: Ellis greets, Dara and Jude say what they do */
+  .crewpop{position:absolute;top:calc(100% + 12px);right:-74px;z-index:30;width:max-content;max-width:min(560px,92vw);padding:18px 18px 8px;background:var(--nd-paper);border:1px solid var(--nd-line);border-radius:8px;box-shadow:var(--shadow-paper);opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .15s,transform .15s,visibility 0s .15s}
+  .fl-crew:hover .crewpop,.fl-crew:focus-within .crewpop,.fl-crew.open .crewpop{opacity:1;visibility:visible;transform:none;transition:opacity .15s,transform .15s}
+  .crewpop .onbox{gap:28px;min-height:0;padding:0;align-items:flex-start}
+  .crewpop .onbox .m{flex-direction:column-reverse;align-items:flex-start;gap:8px;width:160px}
+  .crewpop .onbox .first,.crewpop .onbox .tip{position:static;transform:none;opacity:1;max-width:none;width:auto;pointer-events:auto}
+  .crewpop .onbox .first{opacity:1!important}
+  .crewpop .onbox .say{font-size:13px;line-height:1.4}
+  .crewpop .onbox .say::after{display:none}
+  .crewpop .onbox .agent-figure{width:44px;height:58px;margin:0}
+  .intake.isheet{display:block;padding:28px 0;flex:none}
+  .isec{font-family:var(--font-serif);font-size:28px;font-weight:600;letter-spacing:-.01em;line-height:1.15;color:var(--nd-ink);margin:0 0 16px}
+  .paperc{width:100%;max-width:760px;display:flex;flex-direction:column;gap:18px;padding:24px;background:var(--nd-paper);color:var(--nd-ink);border:1px solid var(--nd-line);border-radius:8px;box-shadow:var(--shadow-paper);clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
+  :root[data-color-scheme="dark"] .paperc{background:var(--nd-card)}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .paperc{background:var(--nd-card)} }
+  .plabel{display:flex;justify-content:space-between;align-items:baseline;font:400 11px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted)}
+  .plabel label{cursor:text}
+  #wordCount{white-space:nowrap;margin-left:12px}
+  .ifiles .plabel{margin-bottom:8px}
+  .pta{display:inline-block;vertical-align:baseline;width:100%;min-height:190px;height:190px;margin:0;border:1px solid var(--nd-line);border-radius:4px;padding:16px 16px 16px 44px;font:400 17px/27px var(--font-serif);color:var(--nd-ink);resize:vertical;outline:none;
+    background:#FFFDF8 repeating-linear-gradient(transparent 0 26px,color-mix(in srgb,#7A9CC6 22%,transparent) 26px 27px);background-position:0 14px;background-attachment:local;box-shadow:inset 30px 0 0 -29px #C9462A}
+  .pta::placeholder{color:var(--nd-faint);font-style:italic}
+  .pta:focus{border-color:color-mix(in srgb,var(--ag-act) 55%,var(--nd-line))}
+  :root[data-color-scheme="dark"] .pta{background-color:var(--nd-card);background-image:repeating-linear-gradient(transparent 0 26px,rgba(122,156,198,.18) 26px 27px)}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .pta{background-color:var(--nd-card);background-image:repeating-linear-gradient(transparent 0 26px,rgba(122,156,198,.18) 26px 27px)} }
+  .iex{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;line-height:1.55;color:var(--nd-muted)}
+  .iex #examples{display:contents}
+  .iex button{border:1px solid var(--nd-line);border-radius:99px;padding:4px 11px;background:var(--nd-card);color:var(--nd-ink-soft);font:400 12.5px/1.55 var(--font-ui);cursor:pointer;box-shadow:none;min-height:0}
+  .iex button:hover{border-color:var(--nd-ink)}
+  /* files on the desk: manila slips; their × shows on hover or focus */
+  .ifiles .chips{display:flex;flex-wrap:wrap;gap:8px;padding:0;flex-basis:auto}
+  .ifiles .chip{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;background:#F3E8CC;border:1px solid #C4AA75;border-radius:4px;box-shadow:none;font:400 11.5px/1.55 var(--font-mono);color:#5A4A2A;max-width:100%}
+  .ifiles .chip .ic{display:none}
+  .ifiles .chip .x{width:auto;height:auto;padding:0;border-radius:0;font-size:12px;line-height:1.55;color:var(--nd-muted);opacity:0;transition:opacity .12s}
+  .ifiles .chip:hover .x,.ifiles .chip .x:focus-visible{opacity:1}
+  .ifiles .chip .x:hover{background:none;color:var(--nd-alert)}
+  .cfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--nd-line)}
+  .cfoot-l{display:flex;align-items:center;gap:10px}
+  .cfoot-hint{display:none}
+  .paperc .attach{width:40px;height:40px;border-radius:50%;border:1.5px dashed var(--nd-muted);background:none;box-shadow:none;color:var(--nd-muted);font:400 18px/1.55 var(--font-ui);display:inline-grid;place-items:center;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+  .paperc .attach:hover{border-style:solid;border-color:var(--nd-ink);color:var(--nd-ink);background:var(--nd-desk);box-shadow:none}
+  .paperc .go{min-height:44px;padding:0 24px;border:1px solid var(--ag-act);border-radius:4px;background:var(--ag-act);color:var(--ag-act-ink);font:600 15px/1.55 var(--font-ui);letter-spacing:0;text-shadow:none;box-shadow:none;gap:7px}
+  .paperc .go:hover{box-shadow:none;filter:brightness(1.08)}
+  .paperc .go:active{transform:translateY(1px);box-shadow:none}
+  .paperc #intakeStatus{margin:0;text-align:left}
+  .paperc .nomw{margin:0}
+  /* the research it starts from: one line, and what came with it on a click */
+  .paperc .fromup{margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none;display:block;color:var(--nd-muted);font-size:13px;line-height:1.55}
+  .fromup > details > summary{list-style:none;cursor:pointer;width:max-content;max-width:100%}
+  .fromup > details > summary::-webkit-details-marker{display:none}
+  .fromup > details > summary:hover{color:var(--nd-ink)}
+  .fromup .fu-body{display:grid;gap:12px;margin-top:12px;padding:14px 16px;border:1px solid var(--nd-line);border-radius:4px;background:var(--nd-card);color:var(--nd-ink);font-size:14px}
+  .fromup .fu-t{font-size:16px}
+  /* while the crew work: the same header, compact (the mock's loading step) */
+  .ahead.compact{padding:14px 0 12px;align-items:center}
+  .ahead.compact .ahead-title{font-size:30px;margin-bottom:0}
+  .ahead.compact .ahead-sub{display:none}
+  .ahead.compact .ahead-eye{margin-bottom:4px}
+  .app.p-start > .proc{padding-top:28px}
+  /* the start's own line is the header's ("Turn client notes … on a single sheet of paper"); the
+     footer's line stays under the working crew */
+  .app.p-intake > .foot{display:none}
+  @media (max-width:880px){ .paperc{max-width:none} }
+  @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} .crewpop{left:0;right:0;top:calc(100% - 8px);max-width:none;width:auto} }
+  @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} .crewpop .onbox{flex-direction:column;gap:14px} .crewpop .onbox .m{width:auto} }
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
 </head>
 <body>
 <div class="app">
-  <!-- PHASE 1 — START: one question, one box, the crew standing on it -->
-  <section class="intake" id="intake">
-    <div class="ident"><svg viewBox="0 0 44 44" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 8.5h14.2l5.8 5.8v21.2H12z M16.5 18h11v2.6h-11z M16.5 23h11v2.6h-11z M16.5 28h7v2.6h-7z"/><path fill="currentColor" opacity=".5" d="M27.4 7.6 33 13.2h-5.6z"/></svg>Brief Maker<span class="kind">Plan</span></div>
-    <div class="hello">
-      <h1 class="h1" id="introH">What’s the brief?</h1>
-      <p class="lede"><span id="ledeText">Paste the client’s words, or drop in their notes, deck or voice memo.</span></p>
+  <!-- The tool's header over the start and the working steps (the mock's .app-head): where you
+       are, the tool's name, what it does, and the three steps. Brief Maker's mark and its Plan
+       zone are the title's tooltip; the crew are under step 2 (gaps.md H2, §11). -->
+  <header class="ahead" id="appHead">
+    <div class="ahead-text">
+      <div class="ahead-eye" id="headEye"></div>
+      <h1 class="ahead-title" id="headTitle" title="Brief Maker · a Plan tool">Brief Maker<span class="pdot" aria-hidden="true"></span></h1>
+      <p class="ahead-sub">Turn client notes, call transcripts, and verified research into a structured creative brief on a single sheet of paper.</p>
     </div>
-    <div class="stage">
+    <div class="ahead-right">
+      <ol class="flow" aria-label="Steps">
+        <li><button type="button" id="stepAsk" data-step="intake"><i>1</i><span>Ask</span></button></li>
+        <li class="fl-crew"><button type="button" id="stepCrew" data-step="proc" aria-expanded="false" aria-controls="crewPop"><i>2</i><span>Agents</span></button>
+          <div class="crewpop" id="crewPop" role="group" aria-label="Your crew"><div class="onbox" id="introCrew"></div></div></li>
+        <li><button type="button" id="stepBrief" data-step="doc"><i>3</i><span>Brief</span></button></li>
+      </ol>
+    </div>
+  </header>
+
+  <!-- PHASE 1 — START: one sheet, one action (the mock's prompt: "Brief prompt: one sheet, one action") -->
+  <section class="intake isheet" id="intake">
+    <h2 class="isec" id="introH">What’s the brief?</h2>
+    <div class="paperc" id="paperc">
       <div class="fromup" id="fromUp" hidden></div>
-      <div class="onbox" id="introCrew"></div>
-      <div class="composer">
-        <label class="sr" for="prompt">The brief, in your words</label>
-        <textarea id="prompt" rows="1" placeholder="Paste what the client said, or tell us about the brief"></textarea>
-        <label class="attach" title="Add the client’s files"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 7.6 8.3 12.8a3.2 3.2 0 0 1-4.6-4.6l5.4-5.4a2.1 2.1 0 0 1 3 3L6.8 11a1.1 1.1 0 0 1-1.5-1.5l4.9-4.9"/></svg><span class="sr">Add the client’s files</span><input type="file" class="sr" id="addAny" multiple /></label>
-        <button type="button" class="go" id="genBtn">Write the brief</button>
+      <div class="iarea">
+        <div class="plabel"><label for="prompt">Raw notes, client call, or direction</label><span id="wordCount" aria-live="off">0 words</span></div>
+        <textarea id="prompt" class="pta" rows="6" aria-describedby="ledeText" placeholder="Paste what the client said, drop in the call notes, or write what you need…"></textarea>
+        <span class="sr" id="ledeText">Paste the client’s words, or drop in their notes, deck or voice memo.</span>
+        <div class="iex" role="group" aria-labelledby="exLabel"><span id="exLabel">Try an example</span><span id="examples"></span></div>
+      </div>
+      <div class="ifiles" id="filesBox" hidden>
+        <div class="plabel"><span>Attached files on the desk</span></div>
         <div class="chips" id="chips"></div>
+      </div>
+      <div class="cfoot">
+        <div class="cfoot-l">
+          <label class="attach" title="Add the client’s files"><span aria-hidden="true">+</span><span class="sr">Add the client’s files</span><input type="file" class="sr" id="addAny" multiple /></label>
+          <span class="cfoot-hint">Drop decks, PDFs, brand books, or voice notes.</span>
+        </div>
+        <button type="button" class="go" id="genBtn">Write the brief</button>
       </div>
       <div class="note" id="intakeStatus" role="status"></div>
       <div class="nomw" id="noMw" hidden></div>
@@ -2358,17 +2463,21 @@
   // Ellis's words and the button on the start screen.
   function syncKind(){
     var fed=isResearchFed(), hi=fed?researchHi():'Hi, I’m '+ELLIS+'! Paste what the client said, or add their files. I’ll read it all, and we’ll write the brief together.';
-    $('genBtn').textContent=fed?'Draft from the research':'Write the brief';
+    // One action, as the mock: Write the brief (from the research too, with or without new words).
+    $('genBtn').textContent='Write the brief'; $('genBtn').title=fed?'Draft it from the research, and anything you add':'';
     var l=$('ellisLine'); if(l&&l.textContent!==hi) l.textContent=hi;
   }
 
   // ---------- phase routing ----------
   function setPhase(p){
     phase=p;
-    $('intake').style.display = p==='intake'?'flex':'none';
+    $('intake').style.display = p==='intake'?'block':'none';
     $('proc').classList.toggle('on', p==='proc');
+    syncHead();
     $('structured').style.display = p==='doc'?'block':'none';
     document.querySelector('.app').classList.toggle('wide', p==='doc');
+    document.querySelector('.app').classList.toggle('p-start', p!=='doc');
+    document.querySelector('.app').classList.toggle('p-intake', p==='intake');
     if(p!=='doc') SEL=null;
     sendBar();
   }
@@ -2401,16 +2510,76 @@
       nm.innerHTML=fig('drafter',{decorative:true})+say('drafter', esc(NO_MW)+'<span class="answers"><button type="button" id="handBtn">Write it by hand</button></span>','left');
       $('handBtn').addEventListener('click',function(){ handWrite=true; forceIntake=false; render(); });
     }
+    renderHeadEye(); renderExamples(); countWords();
     var chips=$('chips'); chips.innerHTML='';
-    (data().reference_assets||[]).forEach(function(a,i){
+    var assets=data().reference_assets||[], mats=isResearchFed()?upMaterials():[];
+    $('filesBox').hidden=!(assets.length||mats.length);
+    // What came with the research is on the desk too; it is the research's, so it has no ×.
+    mats.forEach(function(m){
+      var c=document.createElement('span'); c.className='chip'; c.title='Came with the research';
+      c.innerHTML=IC.doc+'<span>'+esc(m.label||m.name)+'</span>'; chips.appendChild(c);
+    });
+    assets.forEach(function(a,i){
       var c=document.createElement('span'); c.className='chip';
       c.innerHTML=(a.type==='image'?IC.image:a.type==='audio'?IC.audio:a.type==='video'?IC.video:IC.doc)+'<span>'+esc(a.label||a.name)+'</span><button type="button" class="x" title="Take it out" aria-label="Take out '+esc(a.label||a.name)+'">×</button>';
       c.querySelector('.x').addEventListener('click',function(){var n=(data().reference_assets||[]).slice();n.splice(i,1);patch('reference_assets',n);});
       chips.appendChild(c);
     });
   }
+  // ---------- the tool's header: where you are, and the three steps ----------
+  // "CLIENT · PROJECT" over the tool's name; a brief nobody has named yet is a new brief.
+  function renderHeadEye(){
+    var pn=String(get('project_name')||'').trim();
+    $('headEye').textContent=[clientName(), pn||'New brief'].filter(Boolean).join(' · ');
+  }
+  // 1 Ask, 2 Agents, 3 Brief: the step you are on is current. Ask goes back from a crew that has
+  // stopped; Agents shows the crew; Brief opens the written brief once there is one.
+  function stepOn(el, on, why){ if(on){ el.removeAttribute('aria-disabled'); el.removeAttribute('title'); } else { el.setAttribute('aria-disabled','true'); el.title=why; } }
+  function syncHead(){
+    var head=$('appHead'); if(!head) return;
+    head.hidden=phase==='doc'; head.classList.toggle('compact', phase==='proc');
+    var ask=$('stepAsk'), crew=$('stepCrew'), br=$('stepBrief');
+    [ask,crew,br].forEach(function(b){ b.removeAttribute('aria-current'); b.classList.remove('done'); });
+    (phase==='proc'?crew:ask).setAttribute('aria-current','step');
+    if(phase==='proc') ask.classList.add('done');
+    stepOn(ask, phase==='intake'||!!$('procBack'), 'The crew are working on it');
+    stepOn(br, hasContent(), 'The brief is written here once the crew have drafted it');
+    crew.classList.toggle('ahead-dim', phase==='intake'); crew.title=phase==='intake'?'Your crew: who works on the brief':'';
+    if(phase!=='intake') crewPop(false);
+    renderHeadEye();
+  }
+  function crewPop(on){ var li=$('stepCrew').parentNode; li.classList.toggle('open', !!on); $('stepCrew').setAttribute('aria-expanded', on?'true':'false'); }
+  $('stepAsk').addEventListener('click',function(){ if(phase==='proc'){ var b=$('procBack'); if(b) b.click(); } });
+  $('stepCrew').addEventListener('click',function(){ if(phase==='intake') crewPop(!$('stepCrew').parentNode.classList.contains('open')); });
+  $('stepBrief').addEventListener('click',function(){
+    if(!hasContent()) return;
+    if(phase==='proc'){ var s=$('procSee'); if(s) s.click(); return; }
+    forceIntake=false; render();
+  });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('stepCrew').parentNode.classList.contains('open')){ crewPop(false); $('stepCrew').focus(); } });
+  document.addEventListener('click',function(e){ if(!e.target.closest||!e.target.closest('.fl-crew')) crewPop(false); });
+
+  // Three made-up asks, shown as examples (as the Research Tool does). They fill the box;
+  // nothing is sent until you press Write the brief.
+  var EXAMPLES=[
+    ['Summer ice cream', 'We need our soft-serve dessert to own summer for 16–24s. Volume has been flat for two summers while frozen drinks and delivery desserts grew. The product is loved, but nobody plans to go for one; they just end up getting one.\n\nCommercial target: +12% unit growth June to August with no price promotion. No "limited time" language; €140k production budget.'],
+    ['A relish for younger kitchens', 'Our relish is a much-loved pantry jar, but under-35 households see it as their parents’ brand. We want them to reach for it on an ordinary weeknight, not only at Christmas. €150k across TV and social.'],
+    ['Alcohol-free pints in the pub', 'Our alcohol-free stout is now on draught in 400 pubs, but drinkers still buy it by the can at home. We want autumn pub visits where the alcohol-free pint is the first round, not the last resort. €90k for on-trade and social.']
+  ];
+  function renderExamples(){
+    var el=$('examples'); if(el.childNodes.length) return;
+    el.innerHTML=EXAMPLES.map(function(x,i){ return '<button type="button" data-ex="'+i+'" title="Put this example in the box">'+esc(x[0])+'</button>'; }).join('');
+    el.addEventListener('click',function(e){
+      var b=e.target.closest('[data-ex]'); if(!b) return;
+      var t=$('prompt'); t.value=EXAMPLES[+b.getAttribute('data-ex')][1]; growPrompt(); t.focus();
+      try{ t.setSelectionRange(t.value.length, t.value.length); }catch(x){}
+    });
+  }
+  function countWords(){ var w=String($('prompt').value||'').trim(), n=w?w.split(/\s+/).length:0; $('wordCount').textContent=n+' '+(n===1?'word':'words'); }
+
   // The box grows with what is pasted into it; Ctrl/⌘+Enter writes the brief.
-  function growPrompt(){ var t=$('prompt'); t.style.height='auto'; t.style.height=Math.min(Math.max(t.scrollHeight,52),320)+'px'; }
+  // The sheet's 190px holds six ruled lines; past a seventh it grows, up to 480px.
+  function growPrompt(){ var t=$('prompt'); t.style.height=''; var h=t.scrollHeight+2; t.style.height=(h>220?Math.min(h,480):190)+'px'; countWords(); }
   $('prompt').addEventListener('input', growPrompt);
   $('prompt').addEventListener('keydown',function(e){ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); $('genBtn').click(); } });
 
@@ -2673,6 +2842,7 @@
     var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
     var see=$('procSee'); if(see) see.addEventListener('click',function(){ DRAFT=null; forceIntake=false; setPhase('doc'); render(); });
     var back=$('procBack'); if(back) back.addEventListener('click',function(){ DRAFT=null; forceIntake=true; setPhase('intake'); render(); });
+    syncHead();
   }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
@@ -2860,17 +3030,23 @@
       +(n?'I’ll read the client’s own words that came with it':'I’ll read the ask that started it')
       +'. Add anything else they said, then draft it.';
   }
+  // Closed, as the mock's one line, unless something there needs the person (open items to
+  // settle, or the research changed); then open until they close it.
+  var FU_OPEN=null;
   function renderFromUp(){
     var el=$('fromUp'), on=isResearchFed()&&phase==='intake';
-    $('introH').textContent=on?'Start from the research':'What’s the brief?';
+    // The mock asks the same question either way; the line under it says it starts from research.
+    $('introH').textContent='What’s the brief?';
     $('ledeText').textContent=on?'The client’s words came with it. Add anything else they said, or draft it now.':'Paste the client’s words, or drop in their notes, deck or voice memo.';
-    $('prompt').placeholder=on?'Anything else the client said? (optional)':'Paste what the client said, or tell us about the brief';
+    $('prompt').placeholder=on?'Anything else the client said? (optional)':'Paste what the client said, drop in the call notes, or write what you need…';
     el.hidden=!on; if(!on){ el.innerHTML=''; return; }
     var t=upTitle(), hl=upHeadline(), c=upCounts(), mats=upMaterials(), items=lockItems(), n=[];
     if(c.findings) n.push('<b>'+c.findings+'</b> '+(c.findings===1?'finding':'findings')+(c.checked?' ('+c.checked+' checked)':''));
     if(c.pins) n.push('<b>'+c.pins+'</b> '+(c.pins===1?'fact':'facts'));
     if(c.sources) n.push('<b>'+c.sources+'</b> '+(c.sources===1?'source':'sources'));
     var ue=upEntry(), up_=ue&&ue.path;
+    // The mock's one line ("From research: Irish summer treats · 12 facts"); what came with it opens under it.
+    var nf=c.pins||c.findings, line='From research: '+(t||'the research this brief started from')+(nf?' · '+nf+' '+(c.pins?(nf===1?'fact':'facts'):(nf===1?'finding':'findings')):'');
     var h='<div><div class="fu-k">From research</div><div class="fu-t">'+esc(t||'The research this brief started from')+'</div>'
       +(up_?'<button type="button" class="linkbtn" id="openUpIn">Open the research ↗</button>':'')+'</div>'
       +(hl?'<blockquote>'+esc(hl)+'</blockquote>':'')
@@ -2880,7 +3056,11 @@
         :'None of the client’s files came with the research, so '+ELLIS+' reads the ask that started it. Add the client’s words below if you have them.')+'</p>';
     if(items.length) h+='<div class="locklist">'+lockListHtml(items, lockWhy(items.length)+'. Settle '+(items.length===1?'it':'them')+' now, or once the brief is drafted.')+'</div>';
     var up=upNoteInner(); if(up) h+='<div class="upnote" role="status">'+up+'</div>';
+    var open_=FU_OPEN===null?!!(items.length||up):FU_OPEN;
+    h='<details id="fuMore"'+(open_?' open':'')+'><summary title="What came with the research">'+esc(line)+'</summary><div class="fu-body">'
+      +'<p class="fu-n">'+esc($('ledeText').textContent)+'</p>'+h+'</div></details>';
     el.innerHTML=h; bindLkItems(el);
+    $('fuMore').addEventListener('toggle',function(){ FU_OPEN=this.open; });
     var oi=$('openUpIn'); if(oi) oi.addEventListener('click',function(){
       fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:up_})}); });
   }
