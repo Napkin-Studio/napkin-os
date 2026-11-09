@@ -289,6 +289,12 @@ export default function App() {
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
 
+  // Continue in › Start fresh: the same app, for the same client, from new notes.
+  const startFresh = useCallback(() => {
+    const m = runningRef.current?.open.manifest
+    if (m?.app?.app_id) void launchApp(m.app.app_id, m.client?.id)
+  }, [launchApp])
+
   // Save/export the open .clan. Shared by the toolbar Save As button and the
   // in-app "lock also saves" request. Reads the latest running app via a ref so
   // the once-registered event listener never goes stale (runningRef).
@@ -556,6 +562,7 @@ export default function App() {
           ) : undefined}
           onExport={exportCurrent}
           onSpinoff={spinOff}
+          onStartFresh={startFresh}
           // In the studio (or the desktop's files) each change is kept as it
           // is made; on the device it stays in the tab (DeviceBanner says so).
           saved={!device && !running.open.is_template}

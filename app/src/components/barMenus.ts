@@ -44,6 +44,8 @@ export interface DocBar {
   /** "Continue in ▾": the apps that take this document as a spin-off source (host.spinoffTargets()). */
   targets: SpinoffTarget[]
   onSpinoff: (appId: string) => void
+  /** Continue in › Start fresh: a new document of the same app for the same client. */
+  onStartFresh?: () => void
   /** What it was made from (`GET /upstream`); absent when it was made from nothing the host holds. */
   madeFrom?: MadeFrom | null
   /** Take the newer version of what it was made from (`POST /upstream/update`). Absent on a locked document. */
@@ -174,8 +176,8 @@ export interface MenuItem {
 
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
 export function continueItems(
-  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'> & Partial<Pick<DocBar, 'tool'>>,
-): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[] } {
+  doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'> & Partial<Pick<DocBar, 'tool' | 'onStartFresh'>>,
+): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[]; fresh: MenuItem[] } {
   const from = doc.madeFrom
   const since = from?.decisionsSince
   const noun = nounOfTool(doc.tool?.name)
@@ -187,6 +189,10 @@ export function continueItems(
       run: () => doc.onSpinoff(t.app_id),
     })),
     link: linkItems(doc),
+    // Start fresh (gaps.md §7 L2): the same app, the same client, new notes.
+    fresh: doc.onStartFresh
+      ? [{ label: `New ${noun === 'one' ? 'document' : noun} for this client`, hint: 'From new notes; this one stays as it is', run: doc.onStartFresh }]
+      : [],
     // A spin-off may take its parent's newer version (owner, 2026-11-09).
     update: from?.changed && doc.onUpdateFromUpstream
       ? [{

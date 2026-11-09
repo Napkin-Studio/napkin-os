@@ -43,6 +43,8 @@ interface Props {
   banner?: ReactNode
   onExport: (kind: 'html' | 'pdf') => void
   onSpinoff: (appId: string) => void
+  /** Continue in › Start fresh: a new document of this app for this client. */
+  onStartFresh?: () => void
   /** Where the document sits below the agency (Clients > Client > Tool); absent for a document with no client. */
   trail?: ReactNode
   /** The signed-in agency, on the bar's pill, and its page. */
@@ -66,7 +68,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, onStartFresh, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
@@ -346,6 +348,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onExport,
           targets,
           onSpinoff,
+          onStartFresh,
           madeFrom,
           madeInto,
           linked,
