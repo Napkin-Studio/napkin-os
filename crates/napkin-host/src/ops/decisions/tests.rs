@@ -1354,6 +1354,30 @@ fn a_card_is_the_decision_views_cite_with_the_latest_review() {
 }
 
 #[test]
+fn a_report_line_is_an_address_that_says_its_words_and_cites() {
+    let doc = example();
+    let id = doc.clan().document_id().to_string();
+    let line = format!("{id}#report.summary[0]");
+    let para = format!("{id}#report.sections[s_market].blocks[0]");
+    let c = cards(&doc, &[&line, &para, &format!("{id}#report.summary[9]")]);
+    let l = &c[&line];
+    assert_eq!(l.cite.kind, "address");
+    assert_eq!(
+        l.cite.detail.as_deref(),
+        Some("No/low value is growing about twice as fast in Ireland as in GB.")
+    );
+    assert_eq!(
+        l.cite.cites,
+        ["f_01JA0B4A1B", "f_01JA0B4A2C", "fi_01JA0F3C"]
+    );
+    // A section's paragraph, by the section's id and the block's place.
+    assert_eq!(c[&para].cite.cites, ["f_01JA0B4A1B", "f_01JA0B4A2C"]);
+    // Past the end: nothing to say, and no cites.
+    let past = &c[&format!("{id}#report.summary[9]")];
+    assert!(past.cite.detail.is_none() && past.cite.cites.is_empty());
+}
+
+#[test]
 fn origin_is_what_the_record_says_or_what_its_kind_settles_never_a_guess() {
     let facts = r#"facts:
   - id: f_01BRAND1
