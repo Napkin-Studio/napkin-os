@@ -359,7 +359,7 @@ var NapkinAgency=(function(){
   function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
   function apply(c){
     if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
-    now={base:c.base, accent:c.accent};
+    now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null};
     var r=document.documentElement;
     r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
     r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', inkOn(c.accent));

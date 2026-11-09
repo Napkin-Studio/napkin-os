@@ -1080,6 +1080,15 @@
   #structured .sheettab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:16px}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok,#structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok{color:#141413}
+  .bf-row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bf-also > summary{cursor:pointer;font:500 10.5px var(--font-mono);color:var(--nd-muted);list-style:none}
+  .bf-also > summary::before{content:"▸ "}
+  .bf-also[open] > summary::before{content:"▾ "}
+  .bf-also .bf-used{margin:6px 0 0}
+  .sheet.a4 .pgrid > .row.meta-version{cursor:default}
+  .sheet.a4 .pgrid > .row.meta-version:hover{background-color:transparent}
+  .sheet.a4 .pgrid > .row.k-cell .val.empty{font-style:normal;font-weight:600;color:var(--b-muted)}
+  .side-link:disabled{opacity:.45;cursor:not-allowed;text-decoration-color:var(--nd-line)}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -2776,7 +2785,8 @@
   function upKeys(){ var u=get('upstream'); return u&&typeof u==='object'&&!Array.isArray(u)?Object.keys(u).filter(function(k){ return !isBrandKit(u[k]); }):[]; }
   function isResearchFed(){ return upKeys().length>0; }
   var UP={state:'idle', res:null, t:null};
-  function upEntry(){ var r=UP.res; return r?arr(r.upstream).filter(function(e){ return e&&e.direct; })[0]||null:null; }
+  // The research this brief was made from; else the one it is linked to (how:'linked').
+  function upEntry(){ var r=UP.res, ups=r?arr(r.upstream):[]; return ups.filter(function(e){ return e&&e.direct; })[0]||ups.filter(function(e){ return e&&e.how==='linked'&&e.noun!=='brand'; })[0]||null; }
   // The direct parent: the one lineage.carried names, else the only one there.
   function directUpId(){ var ks=upKeys(), c=UP.res&&UP.res.carried&&UP.res.carried.document_id; return c&&ks.indexOf(c)!==-1?c:ks[0]||''; }
   function upData(){ var id=directUpId(), u=get('upstream')||{}; return id&&u[id]&&typeof u[id]==='object'?u[id]:{}; }
@@ -2930,7 +2940,9 @@
   var AGENCY_NAME={wk:'Wieden+Kennedy', tbwa:'TBWA\\Dublin', ogilvy:'Ogilvy', droga:'Droga5', harbour:'Harbour', napkin:'Napkin Studio'};
   var ME=null;
   function agencyId(){ var id=ME&&ME.id||''; var at=id.indexOf('@'); return at<0?'':id.slice(at+1).toLowerCase(); }
-  function agencyName(){ var a=agencyId(); return AGENCY_NAME[a]||(a?a.charAt(0).toUpperCase()+a.slice(1):''); }
+  // The agency's display name from its registry entry (clan:me carries it with the colours); the map is a fallback.
+  function agencyName(){ var g=(window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now())||(ME&&ME.agency)||{}; if(typeof g.name==='string'&&g.name.trim()) return g.name.trim();
+    var a=agencyId(); return AGENCY_NAME[a]||(a?a.charAt(0).toUpperCase()+a.slice(1):''); }
   function initialsOf(n){ n=String(n||'').replace(/[^A-Za-z0-9+ ]/g,' ').trim(); var w=n.split(/[\s+]+/).filter(Boolean); if(!w.length) return ''; if(/^mc/i.test(w[0])) return 'Mc'; if(w[0].length>2&&w[0]===w[0].toUpperCase()&&/[A-Z]/.test(w[0])) return w[0].slice(0,2); return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0].slice(0,2).toUpperCase(); }
   // A logo tile for a name with no picture: the client's in the brief's colour, the agency's in its own.
   function tileOf(kind){
@@ -2959,7 +2971,8 @@
   function renderStructured(){
     $('docIdent').innerHTML=IDENT;
     renderMadeFrom();
-    $('redraft').hidden=approveLocked();
+    // Locked, Draft it again stays where the mock has it, off, and says why.
+    var rd=$('redraft'); rd.hidden=false; rd.disabled=approveLocked(); rd.title=approveLocked()?'The brief is locked. Unlock it to draft it again.':'Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them.';
     var pn=String(get('project_name')||'').trim(), dt=pn?'':derivedTitle();
     $('hProj').textContent=pn||dt||'Untitled campaign';
     $('hProj').classList.toggle('derived', !pn&&!!dt);
@@ -2976,15 +2989,17 @@
       // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
       // Where the printed sheet starts a new page, a guide takes a row of its own (SHEET_BREAKS, measured
       // on the sheet as it prints, so the screen breaks where the PDF does).
-      var headRow=0, guided={}, packed=layoutPack(layoutItems()), firstRow=null;
+      var headRow=0, guided={}, packed=packSheet(layoutItems()), firstRow=null;
       packed.forEach(function(p){ if(!p.head&&(firstRow===null||p.row<firstRow)) firstRow=p.row; });
       packed.forEach(function(p){
         var pg=SHEET_BREAKS.starts[p.row];
         if(pg&&!guided[p.row]){ guided[p.row]=1; var g=document.createElement('div'); g.className='pbreak'; g.setAttribute('aria-hidden','true');
           g.style.gridRow=String(guideRow(p.row)-1); g.innerHTML='<span>Page '+pg+' of '+SHEET_BREAKS.total+'</span>'; host.appendChild(g); }
+        if(p.version){ var vc=document.createElement('div'); vc.className='row k-cell r1 meta-version'; vc.style.gridColumn=p.col+' / span '+p.w; vc.style.gridRow=String(guideRow(p.row));
+          vc.innerHTML='<div class="lab"><span>Version</span></div><div class="val">'+esc(versionLine())+'</div>'; host.appendChild(vc); return; }
         if(p.head){ var h=document.createElement('div'); h.className='sechead'; h.textContent=p.head; h.style.gridRow=String(guideRow(p.row)); host.appendChild(h); headRow=p.row; return; }
         var i=fieldIndex(p.key), f=FIELDS[i];
-        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); if(p.row===firstRow) row.classList.add('r1'); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w}); host.appendChild(row);   // Studio tints the parts in turn
+        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); if(p.row===firstRow) row.classList.add('r1'); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w, meta:!!p.meta}); host.appendChild(row);   // Studio tints the parts in turn
         if(p.row===headRow+1) row.classList.add('afterhead');   // the heading's rule is the first row's
       });
     }
@@ -3022,7 +3037,7 @@
     // on a tap. Without the snippet the words show as they always did.
     var clf=f.type!=='list'&&opensPath(f.key), opens=f.type==='list'&&opensPath(f.key);
     var reo=reopenedOf(f.key), writable=canWrite(f.key);
-    var valHtml = !has ? '<div class="val empty">'+(writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
+    var valHtml = !has ? '<div class="val empty">'+(isMeta(f.key)?'not given':writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
       : f.type==='list' ? '<div class="'+cls+(opens?' opens':'')+'"'+sa+(opens?' role="button" tabindex="0" title="Where this came from" aria-label="'+esc(f.label+': where this came from')+'"':'')+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul></div>'
       : '<div class="'+cls+'"'+sa+'>'+(clf?'<clan-field ref="'+esc(f.key)+'" as="block" caption="'+esc(partLabel(f))+'">'+esc(String(v))+'</clan-field>':esc(String(v)))+'</div>';
     var locked=isLocked(f.key), conf=isConf(f.key);
@@ -3571,9 +3586,9 @@
     var el=$('madeFrom'); if(!el) return;
     if(!isResearchFed()){ el.hidden=true; el.innerHTML=''; return; }
     var e=upEntry(), t=upTitle()||'the research', p=e&&e.path, c=upCounts&&upCounts();
-    var facts=c&&typeof c==='object'&&c.pins?c.pins:null, ver=e&&e.version?('research v'+String(e.version).replace(/^v/,'')):'';
+    var facts=c&&typeof c==='object'&&c.pins?c.pins:null, ver=e&&e.taken!=null?((e.noun||'research')+' v'+e.taken):e&&e.version&&!/^sha/.test(String(e.version))?('research v'+String(e.version).replace(/^v/,'')):'';
     el.hidden=false;
-    el.innerHTML='<span>Made from</span>'+(p?'<button type="button" class="side-link" id="openUp">'+esc(t)+' ↗</button>':'<b>'+esc(t)+'</b>'+(UP.state==='ok'?' <span class="muted">· not in this workspace</span>':''))
+    el.innerHTML='<span>'+(e&&e.how==='linked'?'Linked to':'Made from')+'</span>'+(p?'<button type="button" class="side-link" id="openUp">'+esc(t)+' ↗</button>':'<b>'+esc(t)+'</b>'+(UP.state==='ok'?' <span class="muted">· not in this workspace</span>':''))
       +((facts!=null||ver)?'<small>'+esc([facts!=null?facts+' pinned '+(facts===1?'fact':'facts'):'', ver].filter(Boolean).join(' · '))+'</small>':'');
     var o=$('openUp'); if(o) o.addEventListener('click',function(){
       fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:p})}); });
@@ -3788,6 +3803,19 @@
     });
     return out;
   }
+  // The sheet's meta row (the mock): Client, Project, Budget & scope and Version, always four cells
+  // across the top; every other part packs below it. The three parts stay parts (select, edit,
+  // Confidential); they are not moved or resized, and Version is the sheet's own.
+  var META_KEYS=['client','project_name','budget_and_scope'];
+  function isMeta(key){ return META_KEYS.indexOf(key)!==-1; }
+  function packSheet(items){
+    var have={}; items.forEach(function(it){ have[it.key]=1; });
+    var out=META_KEYS.filter(function(k){ return have[k]; }).map(function(k,i){ return {key:k, sec:'Identity', col:1+i*3, row:1, w:3, h:1, meta:true}; });
+    out.push({version:true, col:1+out.length*3, row:1, w:3, h:1});
+    layoutPack(items.filter(function(it){ return !isMeta(it.key); })).forEach(function(p){ var q={}; for(var k in p) q[k]=p[k]; q.row=p.row+1; out.push(q); });
+    return out;
+  }
+  function versionLine(){ var n=isResearchFed()?(upCounts().pins||0):0; return docVersion()+(n?' · '+n+' '+(n===1?'fact':'facts')+' attached':''); }
   // What layout.parts holds for these items: every part, so a later read needs nothing else.
   function layoutParts(items){
     var parts={};
@@ -3841,7 +3869,7 @@
     row.style.gridColumn=p.col+' / span '+p.w; row.style.gridRow=String(p.row);
     row.setAttribute('data-w', String(p.w));
     if(SEL===f.key) row.classList.add('sel');
-    if(!docLocked()){
+    if(!docLocked()&&!p.meta){
       var g=document.createElement('button'); g.type='button'; g.className='grip';
       g.title='Drag to move. Arrow keys move it too.'; g.setAttribute('aria-label','Move '+partLabel(f));
       g.innerHTML='<svg class="ic" viewBox="0 0 8 16" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="4" r="1.1"/><circle cx="6" cy="4" r="1.1"/><circle cx="2" cy="8" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/></g></svg>';
@@ -3954,7 +3982,7 @@
         +'<div class="notes">'+notes+'</div></div>':'')
       +'<div class="sp-built" id="spBuilt"></div>'
       +'<details class="sp-w"'+(OPEN_WHY['sp:'+f.key]?' open':'')+'><summary>Why it says this</summary><div class="why">'+whyHtml(f)+'</div></details>'
-      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
+      +(!docLocked()&&!isMeta(f.key)?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
         +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
         +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(at<=0?' disabled':'')+'>↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>↓ Move down</button></div></details>':'');
     var row=rowOf(f.key);
@@ -4002,6 +4030,29 @@
   // Built from: one OS source card per ref the part cites (ClanFields.card, os-source-card; the cards
   // asked for in one tick go to the host in one /cite call), each with the other parts it is used in.
   // A part that cites nothing shows its own field's card, as before.
+  // One Built from row in the mock's words: what it is, a value when it has one, and where it is from.
+  // Never a raw id: the crew by name, the person's own words as such, a fact by its short key.
+  var CREW_OF={judge:'judge', drafter:'drafter', extract:'extract', synthesis:'synthesis', context:'synthesis', review:'judge'};
+  var CREW_DID={judge:'checked the draft', drafter:'wrote it', extract:'read it from your material', synthesis:'planned it'};
+  function shortDay(t){ var d=new Date(t); return isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+  function builtRow(r, c, f){
+    c=c||{}; var k=c.kind||'unknown', id=String(r).split('#').pop(), det=String(c.detail||'');
+    if(k==='fact'||k==='pin'||k==='finding'){
+      var key=/^f_\d+$/.test(id)?id:'';
+      return {fact:true, title:c.title||c.label||'A fact', small:[key, c.publisher||(c.from&&c.from.title)||''].filter(Boolean).join(' · '), value:c.value||'',
+        tone:c.review&&c.review.verdict==='verified'?'ok':c.review&&c.review.verdict==='rejected'?'':'warn'};
+    }
+    if(k==='capture'){ var bits=det.split(' · '), what=bits[0]||'', inPrompt=/in prompt/.test(det);
+      return {title:c.label||'From your material', small:[what, inPrompt?'from your words':(bits[2]||'from your material')].filter(Boolean).join(' · ')}; }
+    if(k==='material'){ var prompt=/^prompt$/i.test(String(c.label||'')), when=(/received (\S+)/.exec(det)||[])[1];
+      return {title:prompt?'Your words, the ask':String(c.label||'Your material'), small:[prompt?'what you wrote':'', when?'received '+shortDay(when):'', /confidential/.test(det)?'client confidential':''].filter(Boolean).join(' · ')}; }
+    if(k==='decision'){ var lab=String(c.label||''), who=lab.split(/\s+—\s+/)[0].toLowerCase(), ck=CREW_OF[who]||'';
+      return {title:ck?(AGENT_NAME[ck]||lab)+' '+CREW_DID[ck]:(lab||'A decision'), small:short(det,64)}; }
+    if(k==='address'){ var g=fieldOf(id); return {title:g?headOf(g):headOf(f), small:'written in this brief'}; }
+    if(k==='source') return {title:c.title||c.publisher||c.label||'A source', small:[c.publisher, c.published_at?shortDay(c.published_at):''].filter(Boolean).join(' · ')};
+    if(k==='passage') return {title:c.title||c.label||'A library passage', small:c.publisher||'knowledge library'};
+    return {title:c.label||c.title||'Not found', small:k==='unknown'?'not in the document any more':''};
+  }
   function renderBuilt(){
     var b=$('spBuilt'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f) return;
     var head='<span class="rsp-k">Built from</span>';
@@ -4013,20 +4064,20 @@
     if(b.getAttribute('data-sig')===sig&&b.childNodes.length>1) return;   // drawn already
     b.setAttribute('data-sig', sig);
     b.innerHTML=head+'<p class="muted">Finding what it was built from…</p>';
-    // One compact row per ref (the cards asked for in one tick go to the host in one /cite call);
-    // a click opens its source card, the OS's "Where this came from".
+    // One compact row per ref (all asked for in one /cite call); a click opens its source card.
     F.cards(refs).then(function(m){
       if(b.getAttribute('data-sig')!==sig) return;
-      b.innerHTML=head+refs.map(function(r,i){
-        var c=m[r]||{}, used=cites.length?usedIn(r, f.key):[], k=c.kind||'unknown', fact=k==='fact'||k==='finding'||k==='pin';
-        var id=String(r).split('#').pop(), small=[k==='address'?'this brief':id, c.publisher||(c.from&&c.from.title)||''].filter(Boolean).join(' · ');
-        var tone=c.review&&c.review.verdict==='verified'?' ok':c.review&&c.review.verdict==='rejected'?'':' warn';
-        return '<button type="button" class="bf-row '+(fact?'bf-fact':'bf-doc')+'" data-ref="'+esc(r)+'" title="Where this came from">'
-          +(fact?'<span class="pin'+tone+'"></span>':'<span class="bf-ico" aria-hidden="true">▤</span>')
-          +'<span><b>'+esc(short(c.title&&k!=='source'?c.title:(c.label||headOf(f)),60))+'</b><small>'+esc(small)+'</small></span>'
-          +(c.value&&fact?'<span class="bf-val">'+esc(short(c.value,14))+'</span>':'<span class="bf-go">Source →</span>')+'</button>'
-          +(used.length?'<div class="bf-used"><span class="tk2">Also used in</span>'+used.map(function(k2){ var g=fieldOf(k2); return '<button type="button" class="bf-chip" data-go="'+esc(k2)+'">'+esc(g?headOf(g):k2)+'</button>'; }).join('')+'</div>':'');
-      }).join('');
+      var also={};
+      refs.forEach(function(r){ (cites.length?usedIn(r, f.key):[]).forEach(function(k2){ also[k2]=1; }); });
+      var al=layoutItems().map(function(it){ return it.key; }).filter(function(k2){ return also[k2]; });
+      b.innerHTML=head+refs.map(function(r){
+        var x=builtRow(r, m[r], f);
+        return '<button type="button" class="bf-row '+(x.fact?'bf-fact':'bf-doc')+'" data-ref="'+esc(r)+'" title="Where this came from">'
+          +(x.fact?'<span class="pin'+(x.tone?' '+x.tone:'')+'"></span>':'<span class="bf-ico" aria-hidden="true">▤</span>')
+          +'<span><b>'+esc(short(x.title,58))+'</b>'+(x.small?'<small>'+esc(x.small)+'</small>':'')+'</span>'
+          +(x.value?'<span class="bf-val">'+esc(short(x.value,14))+'</span>':'<span class="bf-go">Source →</span>')+'</button>';
+      }).join('')
+        +(al.length?'<details class="bf-also"><summary>Also used in '+al.length+' other '+(al.length===1?'part':'parts')+'</summary><div class="bf-used">'+al.map(function(k2){ var g=fieldOf(k2); return '<button type="button" class="bf-chip" data-go="'+esc(k2)+'">'+esc(g?headOf(g):k2)+'</button>'; }).join('')+'</div></details>':'');
       b.querySelectorAll('.bf-row').forEach(function(x){ x.addEventListener('click', function(){ F.open(x.getAttribute('data-ref')); }); });
       b.querySelectorAll('[data-go]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-go')); }); });
     });
@@ -4063,6 +4114,7 @@
   var REDRAFT_ARMED=null;
   function redraftClick(){
     var b=$('redraft');
+    if(approveLocked()){ toast('The brief is locked. Unlock it to draft it again.'); return; }
     if(!REDRAFT_ARMED){
       b.classList.add('armed'); b.lastChild.textContent='Click again to redraft';
       REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; b.classList.remove('armed'); b.lastChild.textContent='Draft it again'; sendBar(); }, 4000);
@@ -4372,10 +4424,11 @@
     return cells.filter(function(c){ return map[c.row]; }).map(function(c){
       var at='grid-column:'+c.col+' / span '+c.w+';grid-row:'+map[c.row], r=' data-r="'+c.row+'"';
       if(c.head){ headRow=c.row; return '<div class="sechead"'+r+' style="'+at+'">'+esc(c.head)+'</div>'; }
+      if(c.version) return '<div class="row k-cell r1"'+r+' style="'+at+';--w:'+c.w+'"><div class="lab"><span>Version</span></div><div class="val">'+esc(ctx.version||'')+'</div></div>';
       var f=ctx.fieldOf(c.key); if(!f) return '';
       var v=ctx.get(f.key), has=hasVal(v), conf=arr(ctx.conf).indexOf(f.key)!==-1, mk=exportMarkHtml((ctx.marks||{})[f.key]);
       var st=ctx.styleOf?ctx.styleOf(f.key):'', sa=st?' style="'+st+'"':'';
-      var val=!has?'<div class="val empty">Not written yet.</div>'
+      var val=!has?'<div class="val empty">'+(isMeta(f.key)?'not given':'Not written yet.')+'</div>'
         :f.type==='list'?'<div class="val"'+sa+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){ return '<li>'+esc(String(x))+'</li>'; }).join('')+'</ul>'+mk+'</div>'
         :'<div class="val'+(f.hero?' spp':'')+'"'+sa+'>'+esc(String(v))+mk+'</div>';
       return '<div class="row k-'+kindOf(f)+(conf?' conf':'')+(c.row===headRow+1?' afterhead':'')+(c.row===ctx.cells.filter(function(x){ return !x.head; }).reduce(function(m,x){ return Math.min(m,x.row); },1e9)?' r1':'')+'"'+r+' style="'+at+';--w:'+c.w+'">'
@@ -4468,7 +4521,7 @@
   // The context sheetDoc needs, from the brief as it is now. logos/boards are inlined by the caller.
   function sheetCtx(copy, extra){
     var items=sheetItems(copy), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
-    var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:layoutPack(items), items:items,
+    var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:packSheet(items), items:items, version:versionLine(),
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
       look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
       names:[clientName(), agencyName()].filter(Boolean).join(' · '), meta:[clientName(), docVersion(), fmtDay(lastWhen())].filter(Boolean).join(' · '),

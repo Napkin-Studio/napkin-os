@@ -1884,7 +1884,8 @@ test('the screen and the PDF are one sheet: one builder, one measure, guides whe
   assert.match(build, /LAST_SHEET_PAGES=sheetPaginate\(blocks\)/)
   assert.match(build, /return sheetDoc\(ctx, LAST_SHEET_PAGES\)/)
   assert.match(fn(BM, 'sheetCtx'), /css:pageCss\(\)/)
-  assert.match(fn(BM, 'sheetCtx'), /cells:layoutPack\(items\)/, 'the same grid the screen packs')
+  assert.match(fn(BM, 'sheetCtx'), /cells:packSheet\(items\)/, 'the same grid the screen packs')
+  assert.match(fn(BM, 'renderStructured'), /packed=packSheet\(layoutItems\(\)\)/, 'the screen packs it the same way, meta row first')
   assert.match(fn(BM, 'sheetMeasure'), /width:794px;visibility:hidden/, 'measured A4 wide, in this page (a frame in a sandboxed app cannot be read)')
   assert.doesNotMatch(fn(BM, 'sheetMeasure'), /iframe/)
   // A phone's rules shape the screen's sheet only, never the printed one or its probe.
@@ -2215,4 +2216,18 @@ test('a sign-in id reads as the person’s name on a source card', () => {
   assert.equal(f.nameOfId('sam@wk'), 'Sam')
   assert.equal(f.nameOfId('ann.lee@napkin'), 'Ann Lee')
   assert.equal(f.nameOfId('ana-maria'), 'ana maria')
+})
+
+test('the brief sheet opens with the mock’s meta row: Client, Project, Budget & scope, Version, four cells across', () => {
+  const S = lift<{ packSheet(items: { key: string; sec: string; w: number }[]): { key?: string; version?: boolean; col: number; row: number; w: number }[] }>(
+    BM, ['packSheet', 'isMeta', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], GRID_COLS: 12 })
+  const out = S.packSheet([
+    { key: 'project_name', sec: 'Identity', w: 6 }, { key: 'client', sec: 'Identity', w: 6 }, { key: 'job', sec: 'The brief', w: 12 },
+    { key: 'budget_and_scope', sec: 'Execution', w: 12 },
+  ])
+  const top = out.filter(c => c.row === 1)
+  assert.deepEqual(top.map(c => c.key ?? (c.version ? 'version' : '?')), ['client', 'project_name', 'budget_and_scope', 'version'])
+  assert.deepEqual(top.map(c => [c.col, c.w]), [[1, 3], [4, 3], [7, 3], [10, 3]])
+  assert.ok(out.filter(c => c.key === 'job').every(c => c.row > 1), 'every other part packs below it')
+  assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?'not given'/, 'an empty meta cell says “not given”')
 })
