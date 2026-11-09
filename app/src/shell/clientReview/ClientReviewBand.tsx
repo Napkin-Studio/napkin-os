@@ -60,7 +60,8 @@ export default function ClientReviewBand({ view, noun, matched, onChanged }: Pro
   }
 
   const you = !!view.decisions.find(b => b.decision.id === a.decision)?.who.you
-  const who = firstName(a.client.name) || 'The client'
+  // Every use is mid-sentence: lower case when there is no name.
+  const who = firstName(a.client.name) || 'the client'
   const suggestions = c.suggestions.filter(s => s.review === a.decision)
   // Answered ones stay in the list, dimmed, with what was said to them.
   const done = settledSuggestions(view, a.decision)

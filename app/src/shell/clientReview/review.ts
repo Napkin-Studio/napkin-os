@@ -79,8 +79,11 @@ export const isEvidenceFile = (name: string) => /\.(eml|pdf)$/i.test(name)
 
 /** "Mary" from "Mary Kelly"; the client, when no name is typed yet. */
 export function firstName(name: string): string {
+  // A record whose client is only "Client" or "The client" names nobody.
+  if (/^(the )?client$/i.test(name.trim())) return ''
   return name.trim().split(/\s+/)[0] || ''
 }
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const whose = (name: string) => (firstName(name) ? `${firstName(name)}’s` : 'the client’s')
 
 /** Something worth saying: more than whitespace. The text itself is kept as typed. */
@@ -292,9 +295,10 @@ export function afterLine(view: DecisionsView | null, noun: string, noMatch = fa
   const c = view?.client
   const a = c?.answer
   if (!c || !a) return null
-  const who = firstName(a.client.name) || 'The client'
+  // Said mid-sentence, so lower case when there is no name.
+  const who = firstName(a.client.name) || 'the client'
   const ellis = AGENTS.extract.given
-  if (a.answer === 'accepted') return { agent: 'judge', state: 'idle', text: `${who} accepted the whole ${noun} on the locked version. It’s signed off.` }
+  if (a.answer === 'accepted') return { agent: 'judge', state: 'idle', text: `${upperFirst(who)} accepted the whole ${noun} on the locked version. It’s signed off.` }
   const reopened = view?.lock.reopened?.length ?? 0
   if (reopened) return { agent: 'judge', state: 'needs-you', text: `${reopened === 1 ? 'A part is' : `${reopened} parts are`} open for the change ${who} asked for. Lock it again when it’s done.` }
   if (c.suggestions.some(s => s.review === a.decision)) {
@@ -314,7 +318,7 @@ export function afterLine(view: DecisionsView | null, noun: string, noMatch = fa
   }
   const open = openParts(c)
   const parts = `${open} part${open === 1 ? '' : 's'}`
-  if (open) return { agent: 'judge', state: 'needs-you', text: `${who} ${a.answer === 'rejected' ? `rejected ${parts}` : `asked for changes on ${parts}`}. Tap a part’s mark on the ${noun}, then Make this change.` }
+  if (open) return { agent: 'judge', state: 'needs-you', text: `${upperFirst(who)} ${a.answer === 'rejected' ? `rejected ${parts}` : `asked for changes on ${parts}`}. Tap a part’s mark on the ${noun}, then Make this change.` }
   return { agent: 'judge', state: 'idle', text: `Every change ${who} asked for is made. Lock it again and send the new version.` }
 }
 
