@@ -22,6 +22,7 @@ import Toolbar from './components/Toolbar'
 import { signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
 import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
+import { spinoffTitle } from './shell/docTitle'
 import { applyAgency, markOf } from './shell/agency/palette'
 import DeskDecisions from './shell/decisions/DeskDecisions'
 import { useRoute } from './shell/useRoute'
@@ -272,22 +273,25 @@ export default function App() {
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
 
+  // The latest running app, for callbacks registered once.
+  const runningRef = useRef<RunningApp | null>(null)
+  useEffect(() => { runningRef.current = running }, [running])
+
   // Branch the open document into another app. The source is untouched — this
   // opens a new document that carries its data and its decisions.
   const spinOff = useCallback(async (appId: string) => {
     const n = nextOpen()
     setLoading(true); setError(null)
     try {
-      const result = await host.spinoffDocument(appId, null, null)
+      const src = runningRef.current?.open.manifest
+      const result = await host.spinoffDocument(appId, spinoffTitle(src?.title, src?.app?.app_id, appId), null)
       await runArtifact(n, result)
     } catch (e) { setError(String(e)) } finally { setLoading(false) }
   }, [runArtifact])
 
   // Save/export the open .clan. Shared by the toolbar Save As button and the
   // in-app "lock also saves" request. Reads the latest running app via a ref so
-  // the once-registered event listener never goes stale.
-  const runningRef = useRef<RunningApp | null>(null)
-  useEffect(() => { runningRef.current = running }, [running])
+  // the once-registered event listener never goes stale (runningRef).
   const saveCurrent = useCallback(async () => {
     const r = runningRef.current
     if (!r) return

@@ -4377,7 +4377,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   // the rule writes it — never "Lunasa · Summer push", which a person chose.
   function titleIsOurs(t){
     t=String(t||'').trim(); var b=brandName();
-    return !t||/^(untitled.*|new .*|campaign[ -]research.*|research( tool)?|x)$/i.test(t)||t===TITLE.last||t===workName()
+    // "<source> · Research" is the shell's first name for a spin-off, not a person's.
+    return !t||/^(untitled.*|new .*|campaign[ -]research.*|research( tool)?|x)$/i.test(t)||/ · Research$/.test(t)||t===TITLE.last||t===workName()
       ||(!!b&&(t===b||(t.indexOf(b+' · ')===0&&isMarketList(t.slice(b.length+3)))));
   }
   function syncTitle(){

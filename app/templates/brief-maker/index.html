@@ -3169,7 +3169,8 @@
     document.title=t+' · Brief';
     if(TITLE.done===t||m.title===t||!(window.clan&&window.clan.setTitle)) return;
     var cur=String(m.title||'').trim(), fed=isResearchFed(), ut=fed?upTitle():'', st=fed?upStoreTitle():'';
-    var ours=!cur||/^(untitled.*|new .*|brief( maker)?.*|creative brief.*|x)$/i.test(cur)||cur===TITLE.last||cur===derivedTitle()||(!!ut&&cur===ut)||(!!st&&cur===st);
+    // "<source> · Brief" is the shell's first name for a spin-off, not a person's.
+    var ours=!cur||/^(untitled.*|new .*|brief( maker)?.*|creative brief.*|x)$/i.test(cur)||/ · Brief$/.test(cur)||cur===TITLE.last||cur===derivedTitle()||(!!ut&&cur===ut)||(!!st&&cur===st);
     if(!ours) return;
     TITLE.done=t;
     window.clan.setTitle(t).then(function(res){ if(res&&res.ok!==false){ m.title=t; TITLE.last=t; } else TITLE.done=''; }, function(){ TITLE.done=''; });
