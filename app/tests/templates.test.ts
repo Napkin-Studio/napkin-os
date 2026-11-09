@@ -2063,3 +2063,19 @@ test('a research job another poll applied first reads as applied and the chain i
   r.afterApplied(j)
   assert.equal(chains, 1)
 })
+
+test('a new version re-reads the brief’s lock view with its chain, so the lock never says Ready over open needs', () => {
+  let reloads = 0
+  const CHAIN = { state: 'ok', decisions: [{ id: 'd_1' }] }
+  type C = { chainMoved(): boolean }
+  const c = lift<C>(BM, ['chainSig', 'chainMoved'], {
+    CHAIN, CHAIN_SIG: null, arr, OSF: () => ({ reload: () => { reloads += 1 } }),
+  })
+  assert.equal(c.chainMoved(), false, 'the first read is the page opening: the view is already being read')
+  assert.equal(c.chainMoved(), false, 'the same chain again')
+  CHAIN.decisions = [{ id: 'd_2' }, { id: 'd_1' }]
+  assert.equal(c.chainMoved(), true, 'a job landed')
+  assert.equal(reloads, 1)
+  assert.equal(c.chainMoved(), false)
+  assert.equal(reloads, 1)
+})

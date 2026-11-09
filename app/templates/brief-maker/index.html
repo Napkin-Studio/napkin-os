@@ -1014,10 +1014,22 @@
       fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
         .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
         .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-        .then(function(){ if(phase!=='doc') return; refreshWhy();
+        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy();
           // The selected part's calls follow the chain, unless someone is typing in the panel.
           var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderBuilt(); else renderSelPart(); });
     }, 120);
+  }
+  // A new version arrived (a job landed, a call settled): the chain has a new
+  // head, and the host's lock view (what can lock, what it waits for) is read
+  // again with it, so the lock never says Ready while Jude lists needs.
+  var CHAIN_SIG=null;
+  function chainSig(ds){ return ds.length+'|'+ds.map(function(d){ return d&&d.id||''; }).join(','); }
+  function chainMoved(){
+    if(CHAIN.state!=='ok') return false;
+    var sig=chainSig(CHAIN.decisions), was=CHAIN_SIG; CHAIN_SIG=sig;
+    if(was===null||was===sig) return false;
+    var F=OSF(); if(F&&F.reload) F.reload();
+    return true;
   }
   function docId(){ var m=(window.__CLAN__&&window.__CLAN__.manifest)||{}; return m.document_id||m.id||''; }
   // The dotted path an address names on this document (`#materials[mat_1]` is
