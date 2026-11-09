@@ -30,11 +30,8 @@
 .nui .tba-line[disabled] { cursor: default; }
 @media (max-width: 1180px) { .nui .tb-tools .ch-chip { display: none; } }
 
-/* napkin-app-v1.html:3877-3878, 1169: the agent in the crew, with its spinning ring. */
-.nui .tb-crew .cw.ag { background: radial-gradient(circle at 35% 30%, #F2F0EA, #9A968E 70%); position: relative; }
-.nui .tb-crew .cw.ag::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--ag-act); animation: orb-spin 1.1s linear infinite; }
-@keyframes orb-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .nui .tb-crew .cw.ag::after { animation: none; } }
+/* The agent at work in the crew: its own sphere (the one engine, agents/AgentSphere), not a grey ball. */
+.nui .tb-crew .cw.ag { background: var(--desk); position: relative; overflow: visible; }
 
 /* napkin-app-v1.html:3516, 3519 */
 .nui .p33-pop > button[aria-disabled="true"], .nui .p33-pop button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }

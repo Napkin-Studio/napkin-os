@@ -248,7 +248,7 @@ run:
   - ok: false
     text: 6 research findings are single-source and unverified
   agent:
-    key: brief
+    key: knowledge
     activity: read
     step_index: 1
     step_total: 7

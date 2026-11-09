@@ -90,7 +90,8 @@ def test_a_running_stage_shows_its_items_the_agent_and_no_time(tmp_path):
 
 def test_the_agent_follows_the_step_and_a_long_step_is_flagged_slow_not_timed(tmp_path):
     d = folder(tmp_path)
-    for step, agent in (("a0", "brief"), ("b", "strategy"), ("d", "idea"), ("e", "copy"), ("validate", "review")):
+    # the inputs are read by the Knowledge agent (roles, not the Brief agent: a deck has no brief writer)
+    for step, agent in (("a0", "knowledge"), ("b", "strategy"), ("d", "idea"), ("e", "copy"), ("validate", "review")):
         assert rs.run_object(state="building", stages=d, current=step)["agent"]["key"] == agent
     assert rs.run_object(state="building", stages=d, current="b", slow=True)["agent"]["slow"] is True
     assert rs.is_slow("b", 137) and not rs.is_slow("b", 100) and not rs.is_slow("nonsense", 1e9)

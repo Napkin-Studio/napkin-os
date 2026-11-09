@@ -262,7 +262,7 @@ function Views({ focus, view, onView, busy, act }: {
         {quiet.length > 0 && (
           <div>
             <h5>Worth a look · {quiet.length}</h5>
-            <p className="pp-sub" style={{ marginBottom: 6 }}>The crew noticed these; nothing waits on them.</p>
+            <p className="pp-sub" style={{ marginBottom: 6 }}>The agents noticed these; nothing waits on them.</p>
             {quiet.map(q => (
               <QuietItem key={q.block.decision.id} block={q.block} text={q.text} busy={busy === q.block.decision.id}
                 onLooksRight={id => { if (focus.acknowledge) void act(id, () => focus.acknowledge!(id)) }} />

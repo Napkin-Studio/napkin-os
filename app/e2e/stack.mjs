@@ -49,8 +49,6 @@ function cleanup() {
 if (process.env.NAPKIN_E2E_SKIP_BUILD !== '1') {
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--logLevel', 'warn'], { cwd: app })
 }
-// The apps inline the shared agent figures; generate them as `npm run apps` does.
-run(process.execPath, ['scripts/agent-figures.mjs'], { cwd: app })
 const example = (name, ...out) => run('cargo', ['run', '-q', '-p', 'clan-sdk', '--example', name, '--', ...out])
 example('make_campaign_research', join(seed, 'campaign-research.app.clan'), join(scratch, 'research.example.clan'))
 example('make_brief_maker', join(seed, 'brief-maker.app.clan'), join(scratch, 'research.example.clan'))

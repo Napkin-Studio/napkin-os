@@ -518,7 +518,10 @@ fn a_rejection_with_parts_unknown_blocks_until_a_suggestion_is_confirmed_and_edi
         .find(|b| b["decision"]["id"] == json!(s.id))
         .cloned()
         .unwrap();
-    assert_eq!(block["who"]["name"], "Ellis", "shown as Ellis");
+    assert_eq!(
+        block["who"]["name"], "Knowledge agent",
+        "shown as the Knowledge agent"
+    );
 
     // A suggestion: it counts for nothing yet.
     assert_eq!(

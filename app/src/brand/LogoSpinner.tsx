@@ -3,13 +3,13 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import type { CSSProperties } from 'react'
-import { StudioMark } from './StudioMark'
+import { DeepOMark } from './DeepOMark'
 import './LogoSpinner.css'
 
 export type LogoSpinnerSize = 'xs' | 'sm' | 'md' | 'lg'
 
 /** Pixel size of the mark for each named size. */
-const LOGO_SPINNER_PX: Record<LogoSpinnerSize, number> = { xs: 14, sm: 18, md: 28, lg: 44 }
+const LOGO_SPINNER_PX: Record<LogoSpinnerSize, number> = { xs: 16, sm: 20, md: 32, lg: 64 }
 
 export interface LogoSpinnerProps {
   /** A named size, or pixels. Default `md`. */
@@ -24,11 +24,12 @@ export interface LogoSpinnerProps {
 }
 
 /**
- * The shell's one loading sign: the studio mark turning a quarter at a time
- * (a gentle pulse under prefers-reduced-motion). Use it for anything the OS
- * layer waits on — opening a document, loading a list, an export.
+ * The shell's one loading sign: Deep O working, its arc going round while the
+ * length of the wait is unknown (it breathes under prefers-reduced-motion), in
+ * the agency's colours (DeepOMark). Use it for anything the OS layer waits on:
+ * opening a document, loading a list, an export.
  *
- * For a page with no React, use the markup in `logoSpinnerMarkup.ts`.
+ * For a page with no React, use `staticMarkSvg` and `DEEP_O_CSS` (deepOSvg.ts).
  */
 export function LogoSpinner({ size = 'md', label, stack = false, className, style }: LogoSpinnerProps) {
   const px = typeof size === 'number' ? size : LOGO_SPINNER_PX[size]
@@ -36,7 +37,7 @@ export function LogoSpinner({ size = 'md', label, stack = false, className, styl
   return (
     <span className={cls} style={style} role="status" aria-live="polite">
       <span className="logo-spinner-mark" aria-hidden>
-        <StudioMark size={px} />
+        <DeepOMark size={px} state="working" />
       </span>
       {label
         ? <span className="logo-spinner-label">{label}</span>

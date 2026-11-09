@@ -1,0 +1,4 @@
+/* The static frame shows until the live sphere takes the box (and always without WebGL). */
+.nk-ag > .nk-ag-still { display: block; line-height: 0; }
+.nk-ag > .nk-ag-still > svg { display: block; }
+.nk-ag[data-live] > .nk-ag-still { visibility: hidden; }

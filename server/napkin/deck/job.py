@@ -143,7 +143,7 @@ class DeckJob:
                     s["status"], s["sub"] = "failed", "Stopped"
                 stages.append(s)
             run = {"state": "failed", "stage": row, "stages": stages or None, "gate": None, "error": {"stage": row, "message": message, "retryable": True},
-                   "agent": {"key": ((old.get("agent") or {}).get("key") or "brief"), "activity": "error"}}
+                   "agent": {"key": ((old.get("agent") or {}).get("key") or "knowledge"), "activity": "error"}}
             self._add({k: v for k, v in run.items() if v is not None or k == "gate"}, {}, f"the engine failed: {message}")
             self.state, self.error, self.finished_at = "failed", {"type": etype, "message": message}, iso()
 

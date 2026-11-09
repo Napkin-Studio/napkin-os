@@ -209,7 +209,8 @@
                 "deck",
                 "approval",
                 "review",
-                "dex"
+                "dex",
+                "knowledge"
               ],
               "description": "The circle at the gate; Strategy for gates 1 and 2, Idea for gate 3 when absent."
             },
@@ -387,7 +388,8 @@
                 "deck",
                 "approval",
                 "review",
-                "dex"
+                "dex",
+                "knowledge"
               ]
             },
             "activity": {
@@ -419,7 +421,8 @@
                 "deck",
                 "approval",
                 "review",
-                "dex"
+                "dex",
+                "knowledge"
               ],
               "description": "Hand-off: the agent the work passes to."
             },

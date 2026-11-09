@@ -53,7 +53,7 @@ test('the desk: medallion, the agency pill with its account menu, the client chi
   assert.doesNotMatch(html, />More </, 'no More ▾ on the desk: its actions are in the account and desk menus')
   // The account menu: who you are, All tools, the crew, Offline copies, Open…, Install, Change password, Sign out.
   const acct = labels(accountItems({ name: 'Sam', initials: 'SA', line: 'Studio A', onAllTools: noop, onCrew: noop, onOffline: noop, offlineCount: 2, onInstall: null }, 'sam@studio-a', noop, noop))
-  assert.deepEqual(acct, ['All tools', 'Your crew', 'Offline copies', 'Open…', 'Install the app', 'Change password', 'Sign out'])
+  assert.deepEqual(acct, ['All tools', 'Your agents', 'Offline copies', 'Open…', 'Install the app', 'Change password', 'Sign out'])
   assert.deepEqual(labels(accountItems(undefined, null, noop)), [], 'no accounts, no Sign out')
   assert.deepEqual(labels(deskItems('sam@studio-a', noop)), ['Sign out'])
   assert.deepEqual(deskItems(null, noop), [], 'no accounts, no Sign out')
@@ -218,6 +218,12 @@ test('lineage chips beside the name, and the crew before Decisions with an agent
   assert.match(html, /aria-label="In this document: Sam \(you\); an agent is writing"/)
   assert.match(html, /data-testid="agent-working"/)
   assert.ok(html.indexOf('data-testid="crew"') < html.indexOf('data-testid="decisions"'), 'the crew sits before Decisions')
+  // the real working agent, as its sphere (the one engine), never a grey ball
+  const knowing = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: 'reading', agent: 'knowledge', progress: [1, 4] } }) })
+  assert.match(knowing, /aria-label="In this document: Sam \(you\); the Knowledge agent is reading"/)
+  assert.match(knowing, /data-testid="agent-working"[^>]*data-agent="knowledge"/)
+  assert.match(knowing, /class="nk-ag" data-agent="knowledge" data-state="working"/)
+  assert.match(knowing, /<svg class="nk-still"[^>]*width="26"/, 'the static frame of the same sphere shows before (and without) WebGL')
   const idle = bar({ doc: doc({ crew: { people: [{ name: 'Sam', initials: 'SA', you: true }], working: null } }) })
   assert.doesNotMatch(idle, /agent-working/, 'no agent works: no status dot')
   assert.doesNotMatch(bar({ doc: doc() }), /tba-line/, 'made from nothing: no chips')

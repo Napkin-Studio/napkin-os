@@ -22,16 +22,16 @@ tasks:
       - materials, with host-extracted text (the client's words, the only thing capture reads)
       - the retrieval port, per drafter, for the packs of its loop
       - shared/facts.yaml and shared/findings.yaml, per drafter, the selection of §10.13 only
-      - "the context stage (Sam): the brief's pins and findings, a research spin-off's audience and headline,
+      - "the context stage (the Strategy agent): the brief's pins and findings, a research spin-off's audience and headline,
         and the library, to plan the whole brief part by part; then the research the plan asks for, pinned
         with its sources, and facts outside the measure list kept as document pins (kept_in_document), never
         written to the layers"
-      - "the draft stage (Dara): every part at once, from the plan, the client's words, the facts and the
+      - "the draft stage (the Brief agent): every part at once, from the plan, the client's words, the facts and the
         library, each part saying what it rests on (the client, the research, the library or an assumption)"
       - "after every draft and rewrite, the provenance cleaner: each part's claims tied to the facts, capture
         items and passages that support them, worked-out figures recomputed, the basis derived from the claims
         (§10.3, §10.7)"
-      - "the judge stage (Jude): jev flags the parts that need rewriting, Jude says why, Dara rewrites them"
+      - "the judge stage (the Review agent): jev flags the parts that need rewriting, the Review agent says why, the Brief agent rewrites them"
     never:
       - feeds a pin, finding, contest, report or upstream value to capture
       - "labels a part the client's words without a capture item mapped to it, or cites a pin, finding or
@@ -53,11 +53,11 @@ tasks:
     reads:
       - "a bad verdict still standing on the brief (input.verdict): the parts it names, its words, and the
         words of people's bad verdicts on the same parts"
-      - "the context stage (Sam): the brief as it stands, every fact it holds, and the research the fix
+      - "the context stage (the Strategy agent): the brief as it stands, every fact it holds, and the research the fix
         lacks, as draft_brief's (capped at two runs), pinned with its sources"
-      - "the draft stage (Dara): the named parts together, from the problem and Sam's instructions, each part's
+      - "the draft stage (the Brief agent): the named parts together, from the problem and the Strategy agent's instructions, each part's
         prior claims, then the provenance cleaner, with the client's words from data.capture.items"
-      - "the judge stage (Jude): draft_brief's check, on the named parts only"
+      - "the judge stage (the Review agent): draft_brief's check, on the named parts only"
     never:
       - writes a part the verdict does not name (the open questions only gain the client's new ones)
       - writes a part a person wrote last (it proposes), or uses a fact a person marked wrong

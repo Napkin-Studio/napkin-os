@@ -32,7 +32,7 @@ SCORECARD_DIMENSIONS = ["objectives_quality", "audience_vividness", "single_mind
 OBJECTIVE_TYPES = ["commercial", "behavioural", "attitudinal"]
 IMAGE_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
 MAX_IMAGE = 5 * 1024 * 1024
-MAX_CHARS = 200000  # all the client's material Ellis reads in one capture (decks and reports run long)
+MAX_CHARS = 200000  # all the client's material the Knowledge agent reads in one capture (decks and reports run long)
 
 TRANSCRIBE_SYSTEM = (
     "Transcribe this document image into clean, faithful text for an advertising-brief pipeline.\n"

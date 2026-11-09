@@ -11,7 +11,7 @@
 //! document answer ([`CLIENT_ANSWER`]), a part answer ([`CLIENT_ANSWER_PART`]),
 //! a suggestion of a part the words were about ([`SUGGEST_PART`]) — found by
 //! the host's own word match ([`client_match`](super::client_match)), shown as
-//! Ellis's — and a person dismissing one ([`DISMISS_PART`]). "Make this change" writes an
+//! the Knowledge agent's — and a person dismissing one ([`DISMISS_PART`]). "Make this change" writes an
 //! `unlock` that reopens one part ([`REOPEN_PART`]) and nothing else, so the
 //! part can be edited while every other part stays exactly as the client saw
 //! it; the next `approve` closes it.
@@ -69,7 +69,7 @@ pub const REASONS: &[&str] = &[
 pub const CHANNELS: &[&str] = &["pasted_email", "file", "call", "none"];
 
 /// The agent a suggestion is recorded as: the host's word match, which the
-/// shell shows as Ellis (§7.5.2a).
+/// shell shows as the Knowledge agent (§7.5.2a).
 pub const MATCHER: &str = "client_parts_match";
 
 const MAX_PARTS: usize = 100;
@@ -126,7 +126,7 @@ pub struct ClientReview {
     pub marked: Vec<Marked>,
 }
 
-/// `POST /client-review/confirm`: settle one of Ellis's suggestions, or mark a
+/// `POST /client-review/confirm`: settle one of the Knowledge agent's suggestions, or mark a
 /// part by hand after the review was recorded. `said` is what the client said
 /// about the part, verbatim, when the recorder typed it.
 #[derive(Debug, Clone)]
@@ -1083,7 +1083,9 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
                     vec![address],
                     vec![id.clone()],
                     if rationale.is_empty() {
-                        format!("Dismissed Ellis's suggestion that {name} meant {label}.")
+                        format!(
+                            "Dismissed the Knowledge agent's suggestion that {name} meant {label}."
+                        )
                     } else {
                         format!("Dismissed: {rationale}")
                     },
@@ -1226,7 +1228,7 @@ pub(crate) fn closed_by_lock(
             vec![s.address.clone()],
             vec![s.decision.clone(), lock.to_string()],
             format!(
-                "Closed by the new lock: Ellis's suggestion that {name} meant {} was not confirmed before the document was locked again.",
+                "Closed by the new lock: the Knowledge agent's suggestion that {name} meant {} was not confirmed before the document was locked again.",
                 s.label
             ),
             now,

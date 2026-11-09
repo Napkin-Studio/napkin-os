@@ -71,7 +71,7 @@ export interface AppHome {
   line?: string
   /** The button's words. */
   start?: string
-  /** Shared figure keys. */
+  /** The app's agents, by id (older apps list crew keys); the shell draws each as its role (shell/agents/engine.ts). */
   crew?: string[]
   /** What one document is called, and many. */
   noun?: string[]
@@ -441,7 +441,7 @@ export interface ClientPartView {
   reopened: boolean
 }
 
-/** One of Ellis's suggestions nobody has confirmed or dismissed yet. */
+/** One of the Knowledge agent's suggestions nobody has confirmed or dismissed yet. */
 export interface ClientSuggestionView {
   decision: string
   review: string
@@ -731,10 +731,10 @@ export interface Host {
   /**
    * Record a client's answer to the locked document: `POST /client-review`.
    * The host's matcher suggests which parts it was about in the same reply
-   * (shown as Ellis's; nothing waits on a model).
+   * (shown as the Knowledge agent's; nothing waits on a model).
    */
   clientReview(body: ClientReviewBody): Promise<ClientReviewReply>
-  /** Confirm or dismiss one of Ellis's suggestions, or mark a part after the fact. */
+  /** Confirm or dismiss one of the Knowledge agent's suggestions, or mark a part after the fact. */
   clientReviewConfirm(body: ClientConfirmBody): Promise<ClientConfirmReply>
   /** "Make this change": reopen the one part a client's answer asked about. */
   clientReviewReopen(answer: string): Promise<ClientReopenReply>

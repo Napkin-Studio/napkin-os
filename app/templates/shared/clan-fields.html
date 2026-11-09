@@ -153,7 +153,7 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .clf-tray{position:sticky;top:var(--clan-top,0px);z-index:19;background:var(--clf-paper);border-bottom:1px solid var(--clf-line);box-shadow:0 1px 2px rgba(20,32,64,.06),0 8px 24px rgba(40,64,120,.07)}
 .clf-tray-in{max-width:1120px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .clf-tray .who{display:flex;align-items:center;gap:10px;min-width:0}
-.clf-tray .who .agent-figure{width:30px;height:40px}
+.clf-tray .who .nk-ag{width:32px;height:32px}
 .clf-tray .count{font-weight:700;font-size:14.5px;white-space:nowrap}
 .clf-tray .count.zero{color:var(--clf-green-ink)}
 .clf-tray .items{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 300px;min-width:0}
@@ -212,7 +212,7 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .clf-by a:hover{text-decoration:underline}
 /* The agent that recorded a thing says so, in its own words and signed. */
 .clf-say-row{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:end}
-.clf-say-row .agent-figure{width:40px;height:53px}
+.clf-say-row .nk-ag{width:42px;height:42px}
 .clf-say{position:relative;margin:0 0 14px;background:var(--clf-paper);border:1.5px solid var(--clf-ink);border-radius:16px;padding:10px 14px;font-size:15px;line-height:1.4;box-shadow:3px 3px 0 var(--clf-ink);color:var(--clf-ink)}
 .clf-say::after{content:"";position:absolute;left:-8px;bottom:12px;width:12px;height:12px;background:var(--clf-paper);border-left:1.5px solid var(--clf-ink);border-bottom:1.5px solid var(--clf-ink);transform:rotate(45deg)}
 .clf-say .who{display:block;font-family:var(--clf-mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--clf-ink3);margin-bottom:2px}
@@ -422,7 +422,7 @@ var ClanFields=(function(){
   function docId(){ if(VIEW&&VIEW.document_id) return VIEW.document_id; var m=obj((window.__CLAN__||{}).manifest); return m.document_id||m.id||''; }
   function yr(d){ return d?String(d).slice(0,4):''; }
   // Dates in plain words: 'March 2025' for when a source came out, '28 Sept'
-  // for when the crew read it. What is not a date is shown as it is.
+  // for when the agents read it. What is not a date is shown as it is.
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var MON=['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
   function dparts(d){ var m=/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:[T ].*)?$/.exec(String(d||'').trim()); return m&&(!m[2]||+m[2]>=1&&+m[2]<=12)?{y:+m[1],m:m[2]?+m[2]:0,d:m[3]?+m[3]:0,t:(/[T ](\d{2}:\d{2})/.exec(String(d))||[])[1]||''}:null; }
@@ -514,46 +514,48 @@ var ClanFields=(function(){
     return [pubName(rec.publisher)||rec.domain||'',rec.published_at?monthYear(rec.published_at):'',read?'we read it on '+dayMonth(read):''].filter(Boolean).join(' · ');
   }
 
-  // ── who in the crew recorded a thing ────────────────────────────────
-  // The agent that made the newest decision on the path, as the crew names it
-  // (the judge checks things and never records them, so it is passed over);
-  // failing that, the researcher whose lens the key's namespace names (the
+  // ── which agent recorded a thing ────────────────────────────────
+  // The agent that made the newest decision on the path, by role (the Review
+  // agent checks things and never records them, so it is passed over);
+  // failing that, the Research agent when the key's namespace names a lens (the
   // server's KEY_LENS: a namespace is a word of its lens's name, and these
-  // extra namespaces map as it maps them).
+  // extra namespaces map as it maps them). Roles, words and spheres are the one
+  // engine's (NapkinRoles, inlined at the agent-sphere marker).
   var NS_EXTRA={share:'market_structure',awareness:'brands_positioning',launch:'brands_positioning',product:'brands_positioning'};
-  function crew(){ return typeof NapkinAgents==='object'&&NapkinAgents?NapkinAgents:null; }
-  // The crew member a decision is by. A client-review suggestion is the host's
+  var LENS_IDS=['market_structure','brands_positioning','consumer_culture','category_codes','rhythm_moments','media_spend','regulation_clearance','effectiveness_evidence'];
+  var WORK_ROLE={read:'knowledge', synthesise:'strategy', draft:'brief', judge:'review', research:'research'};
+  function crew(){
+    var R=typeof NapkinRoles==='object'&&NapkinRoles?NapkinRoles:null; if(!R) return null;
+    var given={}; Object.keys(R.ROLES).forEach(function(k){ given[k]=R.name(k); });
+    return { lenses:LENS_IDS, given:given, forWork:function(w){ return WORK_ROLE[w]||''; }, ofDecision:function(d){ return R.ofDecision(d); },
+      who:function(k){ return R.name(k); }, figure:function(w,o){ return R.tag(WORK_ROLE[w]||w,o); } };
+  }
+  // The agent a decision is by. A client-review suggestion is the host's
   // matcher (process:host, handler client_parts_match; in an older chain the
-  // middleware's find_client_parts): shown as the extract agent's reading of
+  // middleware's find_client_parts): shown as the Knowledge agent's reading of
   // the client's words.
-  function ellisKey(){ var A=crew(); return A?A.forWork('read')||'':''; }
+  function ellisKey(){ return crew()?'knowledge':''; }
   function crewKey(d){
     var A=crew(); d=d||{}; if(!A) return null;
     if(/^(client_parts_match|find_client_parts)\b/.test(d.handler||'')||d.agent==='find_client_parts'||d.agent==='client_parts_match'||d.action==='suggest_part') return ellisKey()||null;
-    return A.ofDecision?A.ofDecision(d):null;
+    return A.ofDecision(d);
   }
   function lensOfKey(key){
     // A contest's key carries its entity first: "category/x.y:codes.dominant_code".
-    var A=crew(), ns=String(key||'').split(':').pop().split('.')[0]; if(!A||!ns) return '';
-    return NS_EXTRA[ns]||arr(A.lenses).filter(function(l){ return l.split('_').indexOf(ns)!==-1; })[0]||'';
+    var ns=String(key||'').split(':').pop().split('.')[0]; if(!ns) return '';
+    return NS_EXTRA[ns]||LENS_IDS.filter(function(l){ return l.split('_').indexOf(ns)!==-1; })[0]||'';
   }
   function agentOf(path,key,work){
     var A=crew(); if(!A) return '';
     var ds=arr(VIEW&&VIEW.decisions);
     for(var i=0;i<ds.length;i++){ if(!arr(ds[i].targets).some(function(t){ return t.path===path; })) continue;
-      var k=crewKey(ds[i].decision); if(k&&k!=='judge'&&A.given[k]) return k; }
+      var k=crewKey(ds[i].decision); if(k&&k!=='review'&&A.given[k]) return k; }
     if(work) return A.forWork(work)||'';
-    var l=lensOfKey(key); return l?A.forWork('research',l)||'':'';
+    return lensOfKey(key)?'research':'';
   }
-  // A figure by agent key, through the crew's own work names.
-  function figOf(k,o){
-    var A=crew(); if(!A||!k) return '';
-    var ws=['read','synthesise','draft','judge'];
-    for(var i=0;i<ws.length;i++) if(A.forWork(ws[i])===k) return A.figure(ws[i],o);
-    var l=arr(A.lenses).filter(function(x){ return A.forWork('research',x)===k; })[0];
-    return l?A.figure('research',o,l):'';
-  }
-  // The agent says it, in first person, signed by name.
+  // The agent's sphere, by role.
+  function figOf(k,o){ var R=typeof NapkinRoles==='object'?NapkinRoles:null; return R&&k?R.tag(k,o):''; }
+  // The agent says it, in first person, signed by its role.
   function say(k,text,state){
     var A=crew(); if(!A||!k||!A.given[k]) return '';
     return '<div class="clf-say-row">'+figOf(k,{decorative:true,state:state||'idle'})+'<div class="clf-say"><span class="who">'+esc(A.who(k))+'</span><p>'+text+'</p></div></div>';
@@ -701,7 +703,7 @@ var ClanFields=(function(){
   function drafterKey(){ var A=crew(); return A?A.forWork('draft')||'':''; }
   // Who proposed what a person accepted, by name: the drafter when the
   // proposal itself is no longer in the chain.
-  function proposerOf(b){ var pb=acceptOf(b); return givenOf(pb?crewKey(pb.decision):drafterKey())||'the crew'; }
+  function proposerOf(b){ var pb=acceptOf(b); return givenOf(pb?crewKey(pb.decision):drafterKey())||'the agents'; }
   // A person's reason as they gave it: an older accept began with the
   // decision's id, which is nobody's words.
   function saidWords(d){ return String(d&&d.rationale||'').replace(/^Accepted d_[A-Za-z0-9_-]+:\s*/,'Accepted ').replace(/^Used proposal d_[A-Za-z0-9_-]+\.?$/,'Used the proposal.'); }
@@ -714,7 +716,7 @@ var ClanFields=(function(){
     if(act==='extract') return 'from your material';
     if(act==='draft'||act==='regenerate'){ var g=givenOf(crewKey(d)); return 'drafted by '+(g||'the agent'); }
     if(act==='seed') return 'carried over';
-    // Not the client's words: what the research gave, or the crew's assumption.
+    // Not the client's words: what the research gave, or the agents' assumption.
     if(act==='from_research') return 'from the research';
     if(act==='assume') return 'assumed: confirm with the client';
     return '';
@@ -755,7 +757,7 @@ var ClanFields=(function(){
   // ── rendering ───────────────────────────────────────────────────────
   // What cannot be shown says so in plain words; the record's ids stay out of it.
   function missing(why){ return '<span class="clf-missing" title="'+esc(why)+'">'+esc(why.charAt(0).toLowerCase()+why.slice(1))+'</span>'; }
-  // A verified finding the crew checked again after a review, quietly.
+  // A verified finding the agents checked again after a review, quietly.
   function recheckWords(r){ return /correction/.test(r&&r.note||'')?'Re-checked after a correction: it still holds.':'Re-checked after a review: it still holds.'; }
   function tagFor(st){
     return st==='check'?'<span class="tag">please check</span>':st==='verified'?'<span class="tag">'+TICK+'checked</span>'
@@ -833,7 +835,7 @@ var ClanFields=(function(){
     el.innerHTML='<div class="clf-ed" role="group" aria-label="Edit '+esc(opts.label||el.getAttribute('caption')||words(path))+'">'
       +(long?'<textarea>'+esc(t)+'</textarea>':'<input type="text" value="'+esc(t)+'">')
       +(list?'<span class="hint">Put a comma between each one.</span>':'')
-      +whyRow()+'<div class="clf-err" hidden></div><div class="row"><button type="button" class="clf-btn big primary" data-clf-save>Save</button><button type="button" class="clf-btn big quiet" data-clf-cancel>Cancel</button><span class="hint">Once you save, the crew will not write over it.</span></div></div>';
+      +whyRow()+'<div class="clf-err" hidden></div><div class="row"><button type="button" class="clf-btn big primary" data-clf-save>Save</button><button type="button" class="clf-btn big quiet" data-clf-cancel>Cancel</button><span class="hint">Once you save, the agents will not write over it.</span></div></div>';
     wireWhy(el.querySelector('.clf-ed'));
     if(opts.why){ var w0=el.querySelector('[data-why]'); w0.value=opts.why; w0.dispatchEvent(new Event('input')); }
     var box=el.querySelector('.clf-ed textarea, .clf-ed > input'); box.focus(); if(box.setSelectionRange) box.setSelectionRange(box.value.length,box.value.length);
@@ -976,10 +978,10 @@ var ClanFields=(function(){
     }
     return Promise.all(refs.map(function(r){ return CARDS[r]; })).then(function(list){ var o={}; refs.forEach(function(r,i){ o[r]=list[i]; }); return o; });
   }
-  // Who reviewed it: you, a person by name, or the crew member whose verdict it
-  // is ("Jude"), never the job that ran it ("regenerate field").
+  // Who reviewed it: you, a person by name, or the agent whose verdict it
+  // is ("Review agent"), never the job that ran it ("regenerate field").
   function reviewLine(r){ var agent=r.actor&&!/^human(?::|$)/.test(r.actor), rb=agent&&r.decision?blockOf(r.decision):null;
-    var by=r.actor&&isYou(r.actor)?'you':agent?(rb?whoDid(rb):givenOf(judgeKey())||'the crew'):r.by?(r.by==='You'?'you':personName(/^human:/.test(r.by)?r.by:'human:'+r.by)):'';
+    var by=r.actor&&isYou(r.actor)?'you':agent?(rb?whoDid(rb):givenOf(judgeKey())||'the agents'):r.by?(r.by==='You'?'you':personName(/^human:/.test(r.by)?r.by:'human:'+r.by)):'';
     return esc(VERDICT_WORD[r.verdict]||r.verdict)+(by?' by '+esc(by):'')+(r.at?' · '+esc(plainDate(r.at)):''); }
   // The card's markup, from what the host said of `ref`. `compact` is the
   // drawer's: the drawer shows the value and the words below it already.
@@ -1065,7 +1067,7 @@ var ClanFields=(function(){
     var h='<div class="clf-tray" role="region" aria-label="What needs you"><div class="clf-tray-in">';
     if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span><button type="button" class="clf-btn" data-clf-unlock>Unlock</button>'; }
     else {
-      var fig=typeof NapkinAgents==='object'?NapkinAgents.figure('judge',{state:items.length?'needs-you':'idle',decorative:true}):'';
+      var fig=figOf('review',{state:items.length?'needs':'idle',decorative:true});
       h+='<span class="who">'+fig+'<span class="count'+(items.length?'':' zero')+'">'+(items.length?items.length+' thing'+(items.length===1?'':'s')+' need'+(items.length===1?'s':'')+' you':'Nothing needs you')+'</span></span>';
       h+='<span class="items">'+(open.length&&!items.length?'<span class="clf-muted">'+esc(andList(open.map(function(r){ return r.label; })))+(open.length===1?' is':' are')+' open for the change the client asked for. Lock it again when you are done.</span>':'')
         +items.map(function(a){ var ref=refOfAddress(a.address), shown=!!document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
@@ -1194,7 +1196,7 @@ var ClanFields=(function(){
     var pp=pins()[ref], ps=pp&&srcOf(pp), byPerson=ps&&ps.rec&&ps.rec.tier==='reviewer-verified';
     if(byPerson&&st==='sourced') st='by-person';
     if(st==='contest'&&carriedAt(ref).length) st='contest-carried';  // nothing here to pick: only to set aside
-    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the crew · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>',superseded:'<span class="clf-pill">Replaced after a review</span>'}[st]||'';
+    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the agents · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>',superseded:'<span class="clf-pill">Replaced after a review</span>'}[st]||'';
     if(confidential(ref)) h+='<span class="clf-pill conf">'+LOCK+'Private</span>';
     var p=pins()[ref]; if(p&&p.confidence&&p.confidence!=='high') h+='<span class="clf-pill warn">'+esc(SURE[p.confidence]?SURE[p.confidence].replace(/^./,function(c){ return c.toUpperCase(); }):p.confidence)+'</span>';
     if(p&&p.stale) h+='<span class="clf-pill warn">Out of date: a newer number is saved</span>';
@@ -1208,10 +1210,10 @@ var ClanFields=(function(){
     var d=b.decision||{}, A=crew(), k=crewKey(d);
     if(b.who&&b.who.you) return 'You';
     if(k&&A.given[k]) return A.given[k];
-    // A step none of the crew owns is the crew's, never its job's name as a person.
-    if((b.who&&b.who.kind==='agent')||(!isPerson(d)&&!(b.who&&b.who.kind==='person'))) return 'The crew';
+    // A step no one agent owns is the agents', never its job's name as a person.
+    if((b.who&&b.who.kind==='agent')||(!isPerson(d)&&!(b.who&&b.who.kind==='person'))) return 'The agents';
     var n=b.who&&b.who.name||(/^human:/.test(d.actor||'')?d.actor:'');
-    return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The crew';
+    return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The agents';
   }
   // What a decision did, in words: the redraft loop's steps (a first draft
   // the Judge sent back, the version that replaced it, the person's accept),
@@ -1219,7 +1221,7 @@ var ClanFields=(function(){
   function didWords(b){
     var d=b.decision||{};
     if(d.action==='propose') return 'proposed a '+(b.superseded||d.superseded_by?'first':'new')+' version';
-    if(isAccept(b)) return 'accepted '+proposerOf(b)+'’s new version';
+    if(isAccept(b)) return 'accepted '+(/^the /.test(proposerOf(b))?'':'the ')+proposerOf(b)+'’s new version';
     return DID_ACTION[d.action]||(d.kind==='verdict'?(d.polarity==='bad'?'said it is wrong':'said it is right'):DID[d.kind]||'changed it');
   }
   function history(path){
@@ -1295,7 +1297,7 @@ var ClanFields=(function(){
     return out;
   }
   function lowerWord(l){ return /^[A-Z][a-z]/.test(l)?l.charAt(0).toLowerCase()+l.slice(1):l; }
-  // Part keys and the crew's words in a sentence, for a person: a known part by
+  // Part keys and the agents' words in a sentence, for a person: a known part by
   // its label, any other key in words, a length check's "background 99/70" as
   // "background (99 words, 70 at most)", and "a"/"an" settled.
   function keyWords(s){
@@ -1315,7 +1317,7 @@ var ClanFields=(function(){
 
   // Where a bare value came from: its current writing decision, with what it
   // cites — the client's words, the library's passages, the facts with what
-  // their source says, the points the crew worked out — and why.
+  // their source says, the points the agents worked out — and why.
   // The person's ask, when a drafter kept it as a point of its reasoning
   // ("Your ask: “…”", middleware-api §10.10): the words inside the quotes.
   function askOf(p){ var m=/^Your ask:\s*[“"]?([\s\S]*?)[”"]?\s*$/.exec(String(p&&p.point||'')); return m?m[1].trim():''; }
@@ -1329,7 +1331,7 @@ var ClanFields=(function(){
     var viaCap={}; caps.forEach(function(c){ viaCap[captures()[c].material_id]=1; });
     var mats=ids.filter(function(i){ return kindOf(i)==='material'&&materials()[i]&&!viaCap[i]; });
     if(ab){ var pd=ab.decision;
-      h+='<p class="clf-by"><b>'+esc(givenOf(crewKey(pd))||'The crew')+'</b> wrote this'+(pd.timestamp?' on '+esc(dayMonth(pd.timestamp,true)):'')+(/your ask/.test(String(pd.rationale||''))?', on your ask':'')
+      h+='<p class="clf-by"><b>'+esc(givenOf(crewKey(pd))||'The agents')+'</b> wrote this'+(pd.timestamp?' on '+esc(dayMonth(pd.timestamp,true)):'')+(/your ask/.test(String(pd.rationale||''))?', on your ask':'')
         +'; <b>'+esc(whoDid(b))+'</b> accepted it'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'.</p>'; }
     else if(isAccept(b)) h+='<p class="clf-by"><b>'+esc(proposerOf(b))+'</b> wrote this; <b>'+esc(whoDid(b))+'</b> accepted it'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'.</p>';
     else if(isPerson(d)) h+='<p class="clf-by"><b>'+esc(whoDid(b))+'</b> wrote this'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(saidWords(d)?' — “'+esc(clip(saidWords(d),200))+'”':'')+'</p>';
@@ -1338,7 +1340,7 @@ var ClanFields=(function(){
       if(caps.length||mats.length) from.push('your material');
       if(psgs.length) from.push(plural(psgs.length,'passage')+' from the library');
       if(fs.length) from.push(plural(fs.length,'fact'));
-      if(fis.length) from.push(plural(fis.length,'point')+' the crew worked out');
+      if(fis.length) from.push(plural(fis.length,'point')+' the agents worked out');
       var line=act==='extract'?'I took this from your material.'
         :act==='seed'?'This came over from '+upTitle(String(arr(d.cites)[0]||'').split('#')[0])+' when this document started from it.'
         :(act==='draft'||act==='regenerate'?'I drafted this':'I wrote this')+(from.length?' from '+andList(from):'')+'.';
@@ -1361,7 +1363,7 @@ var ClanFields=(function(){
       return '<button type="button" class="clf-row" data-open="'+esc(p)+'"><span>'+esc(pg.citation||'A passage')+(pg.text?'<small>“'+esc(clip(pg.text,180))+'”</small>':'')+'</span><b></b></button>'; }).join('')+'</div></div>';
     if(fs.length) h+='<div class="clf-sec"><h3>The facts it uses</h3><div class="clf-rows">'+fs.map(function(f){ var p=pins()[f], s=srcOf(p), q=s&&obj(p.quotes)[s.id];
       return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(label(p))+'<small>'+(q?'“'+esc(clip(q,160))+'” · ':'')+esc(srcShort(p))+'</small></span><b>'+(confidential(f)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
-    if(fis.length) h+='<div class="clf-sec"><h3>Points the crew worked out</h3><div class="clf-rows">'+fis.map(function(f){ var fi=findings()[f];
+    if(fis.length) h+='<div class="clf-sec"><h3>Points the agents worked out</h3><div class="clf-rows">'+fis.map(function(f){ var fi=findings()[f];
       return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(fi.statement)+'<small>'+(fi.status==='proposed'?'derived by the agent · not checked yet':esc(STATUS_WORD[fi.status]||fi.status||''))+'</small></span><b></b></button>'; }).join('')+'</div></div>';
     var why=becauseList({because:arr(rs.because).filter(function(p){ return !askOf(p); })}), sure=obj(rs.certainty);
     if(why) h+='<details class="clf-more"><summary>Why it says this</summary>'+why+'</details>';
@@ -1369,7 +1371,7 @@ var ClanFields=(function(){
     attnOf(rs).forEach(function(a){ h+='<p class="clf-muted">'+esc(a)+'</p>'; });
     return h;
   }
-  // A proposal the crew made for a value a person holds: shown, never applied.
+  // A proposal the agents made for a value a person holds: shown, never applied.
   function proposalBlock(ref){
     var pb=proposalOf(ref); if(!pb) return '';
     var d=pb.decision, w=writerOf(ref), mine=w&&w.block.who&&w.block.who.you;
@@ -1392,7 +1394,7 @@ var ClanFields=(function(){
       return (d.kind==='verdict'||d.polarity)&&!b.superseded&&d.action!=='looks_right'&&!isPerson(d)&&arr(d.targets).some(function(t){ return qualify(t)===me; }); });
     if(!vs.length) return '';
     var shown=vs.filter(function(b,i){ return i===0||openVerdict(b,me); }).slice(0,3), jk=judgeKey();
-    return '<div class="clf-sec"><h3>What '+esc(givenOf(jk)||'the Judge')+' thinks</h3>'+shown.map(function(b){
+    return '<div class="clf-sec"><h3>What '+esc(givenOf(jk)?'the '+givenOf(jk):'the Review agent')+' thinks</h3>'+shown.map(function(b){
       var d=b.decision, bad=d.polarity==='bad', open=openVerdict(b,me), k=crewKey(d)||jk, at=attnOf(d.reasoning)[0];
       var text=bad?'I think this needs work'+(RC[d.reason_code]?': '+RC[d.reason_code]:'')+'.'+(d.rationale?' '+clip(noIds(d.rationale),280):'')
         :'I checked it and it holds up.'+(at?' '+at:'');
@@ -1418,7 +1420,7 @@ var ClanFields=(function(){
     return '<div class="clf-sec" data-clf-anchor><h3 class="ask">'+(by?esc(by.charAt(0).toUpperCase()+by.slice(1))+' marked this wrong':'Marked wrong')+'</h3>'
       +(why?'<blockquote class="clf-q said">'+esc(why)+'</blockquote>':'')
       +'<p class="clf-ex">'+(ex?'It is taken out: nothing in the research uses it now. What rested on it was checked again without it, and anything that changed is in “What happened”.'
-        :'The crew is taking it out and checking everything that rested on it. That takes a minute or two; this changes when it is done.')+'</p></div>';
+        :'The agents are taking it out and checking everything that rested on it. That takes a minute or two; this changes when it is done.')+'</p></div>';
   }
   // What else needs a person on a path: a field resting on a point someone
   // marked wrong, or a person's own "it's wrong" nobody has answered.
@@ -1427,7 +1429,7 @@ var ClanFields=(function(){
       if(a.code==='flagged_field'){ var fid=(/\b(fi_[A-Za-z0-9_-]+)/.exec(a.text||'')||[])[1], f=fid&&findings()[fid];
         return '<div class="clf-sec"><h3 class="ask">This needs changing</h3><p class="clf-ex">It rests on a point someone marked wrong. Change it so it no longer uses that point, then lock the '+esc(trayNoun())+'.</p>'
           +(f?'<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(fid)+'"><span>'+esc(f.statement)+'<small>marked wrong</small></span><b></b></button></div>':'')+'</div>'; }
-      if(a.code==='bad_verdict'){ var vb=blockOf(a.decision); if(vb&&!isPerson(vb.decision)) return ''; // the crew's: in its verdict below
+      if(a.code==='bad_verdict'){ var vb=blockOf(a.decision); if(vb&&!isPerson(vb.decision)) return ''; // the agents's: in its verdict below
         return '<div class="clf-sec"><h3 class="ask">Someone said this is wrong</h3>'+(vb&&vb.decision.rationale?'<blockquote class="clf-q said">'+esc(vb.decision.rationale)+'</blockquote>':'')
           +'<p class="clf-ex">Change it, or say why it is right as it is.</p>'+(!locked()?'<div class="clf-answers"><button type="button" class="clf-btn big" data-clf="override">Keep it, and say why</button></div>':'')+'</div>'; }
       return '';
@@ -1472,7 +1474,7 @@ var ClanFields=(function(){
         b+=say(agentOf('findings['+ref+']',null,'synthesise'),'I worked this out from '+cs.length+' fact'+(cs.length===1?'':'s')+(fp.length?(fp.length===1&&cs.length>1?(cs.length===2?', both':', all')+' from ':', from ')+bolds(fp):'')+'.');
         b+='<div class="clf-sec"><h3>The facts it rests on</h3><div class="clf-rows">'+cs.map(function(c){ var p=pins()[c];
           return '<button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(p?label(p):'A fact')+'<small>'+esc(p?srcShort(p):'no longer in the document')+'</small></span><b>'+(confidential(c)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
-        if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the crew’s own.</p>';
+        if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the agents’ own.</p>';
         var nf=f.status==='superseded'&&f.superseded_by&&f.superseded_by.finding;
         if(nf) b+='<div class="clf-sec"><h3>Replaced after a review</h3><div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(nf)+'"><span>'+esc((findings()[nf]||{}).statement||'The finding that replaces it')+'<small>worked out again from what the review left</small></span><b></b></button></div></div>';
         if(f.status==='verified'&&f.recheck) b+='<p class="clf-muted" title="'+esc(f.recheck.note||'')+'">'+recheckWords(f.recheck)+'</p>';
@@ -1517,7 +1519,7 @@ var ClanFields=(function(){
         var pm=[pg.source?['From',pg.source]:null, pg.section?['Section',pg.section]:null, pg.pack?['Pack',pg.pack+(pg.pack_version?' · '+pg.pack_version:'')]:null, ['Whose library',scopeWord(pg.scope)],
           pg.licence?['Licence',pg.licence]:null, pg.retrieved_at?['We read it',dayMonth(pg.retrieved_at,true)]:null].filter(Boolean);
         b+='<div class="clf-card"><dl>'+pm.map(function(x){ return '<dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd>'; }).join('')+'</dl>'+openLink(pg.uri)+'</div>';
-        b+='<p class="clf-muted">A passage is an example the crew learned from, not evidence about this client.</p>'; }
+        b+='<p class="clf-muted">A passage is an example the agents learned from, not evidence about this client.</p>'; }
     } else if(k==='capture'){
       var ci=captures()[ref], cm=ci&&materials()[ci.material_id];
       if(!ci) b+=gone();
@@ -1548,7 +1550,7 @@ var ClanFields=(function(){
     } else if(k==='cite'){
       b+='<div class="clf-rows">'+ref.slice(5).split(',').map(function(r){ var kk=kindOf(r), t='', v='';
         if(kk==='pin'){ var p=pins()[r]; t=p?label(p):'A fact'; v=fmt(p); }
-        else if(kk==='finding'){ var f=findings()[r]||{}; t=f.statement||'A point the crew worked out'; v=STATUS_WORD[f.status]||''; }
+        else if(kk==='finding'){ var f=findings()[r]||{}; t=f.statement||'A point the agents worked out'; v=STATUS_WORD[f.status]||''; }
         else if(kk==='contest'){ t=named(r); v=stateOf(r)==='contest'?'sources disagree':'picked'; }
         else if(kk==='passage'){ var pg=passages()[r]||{}; t=pg.citation||'A passage'; v='library'; }
         else if(kk==='capture'){ var ci=captures()[r]||{}; t=textOf(ci.value)||'Something your material says'; v=ci.status==='assumption'?'assumed':'your material'; }
@@ -1865,14 +1867,14 @@ var ClanFields=(function(){
       :'Recorded by '+rec+'. Nothing attached';
     return '<span class="clf-strength'+(strong?'':' weak')+'"><i aria-hidden="true"></i>'+esc((strong?'Strong record: ':'Weaker record: ')+line+'.')+'</span>';
   }
-  // The chip beside a part: the client's answer on it, or Ellis's guess.
+  // The chip beside a part: the client's answer on it, or the Knowledge agent's guess.
   function chipOf(path){
     var p=clientPart(path), sg=!p&&clientSugg(path)[0], cls, text;
     if(p){
       if(p.state==='accepted'){ cls=p.stale?'stale':'ok'; text=p.stale?'Client accepted an earlier version':'✓ Client accepted'; }
       else if(p.answered){ cls='ok'; text='✓ Changed as '+firstName(p.client)+' asked · to send back'; }
       else { cls=p.state==='rejected'?'rj':'chg'; text=(p.state==='rejected'?'✕ Client rejected':'✎ Client asked for a change')+(p.stale?' · changed since':''); }
-    } else if(sg){ cls='sug'; text=(givenOf(ellisKey())||'The crew')+' thinks this part · check it'; }
+    } else if(sg){ cls='sug'; text=(givenOf(ellisKey())||'The agents')+' thinks this part · check it'; }
     else return '';
     return '<button type="button" class="clf-chip '+cls+'" data-clf-cr="chip" data-part="'+esc(path)+'" aria-expanded="'+(OPEN_PART===path)+'">'+esc(text)+'</button>';
   }
@@ -1892,7 +1894,7 @@ var ClanFields=(function(){
       else if(p.found_by!=='document') h+='<p class="clf-muted">No words for this part.</p>';
       if(arr(an.reasons).length) h+='<p class="clf-ex">Reason: '+esc(arr(an.reasons).map(function(r){ return REASON_WORD[r]||r; }).join(', '))+'</p>';
       h+=strengthLine(an);
-      h+='<p class="clf-ex">'+esc(p.found_by==='agent'?'Part found by '+(givenOf(ellisKey())||'the crew')+' in '+possessive(fn)+' words, confirmed by '+by.replace(/^You$/,'you')
+      h+='<p class="clf-ex">'+esc(p.found_by==='agent'?'Part found by '+(givenOf(ellisKey())||'the agents')+' in '+possessive(fn)+' words, confirmed by '+by.replace(/^You$/,'you')
         :p.found_by==='document'?clientName(p.client||an.client)+' accepted the whole '+trayNoun()
         :'Part marked by '+by.replace(/^You$/,'you'))+(an.at?' · recorded by '+recorderOf(an)+' on '+dayMonth(an.at):'')+'.</p>';
       if(p.stale&&!p.answered) h+='<p class="clf-muted">This part has changed since '+esc(fn)+' saw it.</p>';
@@ -1901,7 +1903,7 @@ var ClanFields=(function(){
         +(p.reopened?'<p class="clf-muted">It is open for this change now.</p>':'');
     } else if(sg){
       var sa=clientAnswerOf(sg.review)||{}, sn=firstName(sa.client);
-      h='<b>'+esc((givenOf(ellisKey())||'The crew')+' thinks '+sn+' meant this part')+'</b>'
+      h='<b>'+esc((givenOf(ellisKey())||'The agents')+' thinks '+sn+' meant this part')+'</b>'
         +(sg.quote?'<blockquote class="clf-q said">'+esc(sg.quote)+'</blockquote>':'')
         +'<p class="clf-ex">'+esc(ANSWER_WORD[sg.answer]||sg.answer)+'. Only a suggestion until someone confirms it.</p>'+strengthLine(sa)
         +'<div class="clf-acts"><button type="button" class="clf-btn big primary" data-clf-cr="yes" data-s="'+esc(sg.decision)+'">Yes, this part</button><button type="button" class="clf-btn big quiet" data-clf-cr="no" data-s="'+esc(sg.decision)+'">Not this part</button></div>';

@@ -167,7 +167,22 @@ export function applyAgency(personId: string | null | undefined, doc: Document =
     doc.head.appendChild(sl)
   }
   if (sl.textContent !== surface) sl.textContent = surface
+  setAppliedMark(markOf(personId))
 }
+
+// The agency whose layer is on the page, for every Deep O mark that is not told
+// its colours (brand/DeepOMark.tsx useAgencyMark): loading signs, the veil.
+let appliedMark: { base: string; accent: string } | null = null
+const appliedSubs = new Set<() => void>()
+function setAppliedMark(m: { base: string; accent: string }): void {
+  if (appliedMark && appliedMark.base === m.base && appliedMark.accent === m.accent) return
+  appliedMark = m
+  appliedSubs.forEach(f => f())
+}
+/** The mark colours of the agency layer on the page; null before any is applied. */
+export function appliedAgencyMark(): { base: string; accent: string } | null { return appliedMark }
+/** Be told when the applied agency changes; returns the unsubscribe. */
+export function onAppliedAgency(f: () => void): () => void { appliedSubs.add(f); return () => { appliedSubs.delete(f) } }
 
 /** Napkin's own kit: the medallion's colours for an agency an admin has not coloured. */
 export const NAPKIN_COLOURS: AgencyColours = AGENCY_COLOURS.napkin

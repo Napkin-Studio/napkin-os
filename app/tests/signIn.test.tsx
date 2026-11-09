@@ -37,3 +37,18 @@ test('the account name is name@agency, trimmed and lower case', () => {
   for (const bad of ['engineer', 'engineer@', '@napkin', 'a@b@c', ''])
     assert.ok(!isAccountName(bad), bad)
 })
+
+test('the screen is the mock card: medallion, heading, Napkin before any agency is known', () => {
+  const html = render(true)
+  assert.match(html, /class="nui p33-signin"/)
+  assert.match(html, /data-agency="none"/)
+  assert.match(html, /class="si-card"/)
+  assert.match(html, /data-testid="medallion-mark"/)
+  assert.match(html, /Sign in to Napkin Studio\./)
+  assert.match(html, /class="btn-rect primary"/)
+  assert.match(html, /Forgot your password\?/)
+})
+
+test('a roster studio offers no forgotten password', () => {
+  assert.doesNotMatch(render(false), /Forgot your password/)
+})

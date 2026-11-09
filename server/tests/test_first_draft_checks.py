@@ -1,5 +1,5 @@
 """First-draft checks (feature brief-first-draft-checks, ADR 0035): what code measures, the marking of
-assumptions, and Jude given the planning skill's tests on a first draft."""
+assumptions, and the Review agent given the planning skill's tests on a first draft."""
 
 from napkin.brief import checks
 from napkin.brief.fields import RUBRIC_FIELDS
@@ -91,11 +91,11 @@ def test_the_first_draft_goes_to_jude_with_the_tests_and_what_code_measured_and_
     assert first["part_checks"]["single_minded_proposition"]["words"] > 20
     assert first["part_checks"]["job"]["sentences"] == 2
     assert set(first["tests"]) == {"insight", "single_minded_proposition", "job", "barrier", "objection"}
-    # what code can measure went back with Jude's own list, once, with the instruction that says why
+    # what code can measure went back with the Review agent's own list, once, with the instruction that says why
     told = seen["rewrite"]["rewrite"]
     assert "single_minded_proposition" in told and "at most 20 words" in told["single_minded_proposition"]
     assert "job" in told and "2 sentences" in told["job"]
-    # the draft's assumptions said so before Jude read them, the proposition following the insight
+    # the draft's assumptions said so before the Review agent read them, the proposition following the insight
     brief = first["brief"]
     assert brief["insight"]["value"] == "To confirm: An assumed insight."
     assert brief["single_minded_proposition"]["value"].startswith("To confirm: ")

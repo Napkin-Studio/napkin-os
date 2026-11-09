@@ -4,10 +4,10 @@
 
 // What the account menu opens (mock phase 33): All tools (every tool, live or
 // coming, with Idea and Ads, which the dial has no room for, and the app
-// library the Launcher shows) and Your crew (the agents, as the figures draw them).
+// library the Launcher shows) and Your agents (by role, each as its sphere).
 
 import { TOOLS, type Tool } from '../landing/tools'
-import FigureGallery from '../../studio/FigureGallery'
+import AgentGallery from '../agents/AgentGallery'
 import { Modal } from './Pop'
 
 const WHAT: Record<string, string> = {
@@ -57,10 +57,10 @@ export function AllToolsModal({ live, onClose, onSoon, onLibrary }: {
 
 export function CrewModal({ agency, onClose }: { agency: string; onClose: () => void }) {
   return (
-    <Modal onClose={onClose} label="Your crew">
-      <h2>Your crew</h2>
-      <p className="m-sub">The agents that work for {agency}. Each one signs what it does on the record.</p>
-      <FigureGallery />
+    <Modal onClose={onClose} label="Your agents">
+      <h2>Your agents</h2>
+      <p className="m-sub">The agents that work for {agency}, by role. Each one signs what it does on the record.</p>
+      <AgentGallery />
     </Modal>
   )
 }

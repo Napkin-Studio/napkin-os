@@ -408,7 +408,7 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
 .cl-add-form:where(.nui, .nui *) { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 22px; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-md); }
 .cl-add-form[hidden]:where(.nui, .nui *) { display: none; }
 .cl-add-form:where(.nui, .nui *) label { display: grid; gap: 5px; font: 600 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.cl-add-form:where(.nui, .nui *) input { height: 38px; min-width: 220px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; font: 14px var(--font-ui); color: var(--ink); text-transform: none; letter-spacing: 0; }
+.cl-add-form:where(.nui, .nui *) input { height: 38px; min-width: 220px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--card); font: 14px var(--font-ui); color: var(--ink); text-transform: none; letter-spacing: 0; }
 .cl-row:where(.nui, .nui *) { align-items: flex-start; position: relative; }
 .cl-circle.is-open:where(.nui, .nui *) { visibility: hidden; }
 .cl-row:where(.nui, .nui *) .cl-circle { transition: opacity .2s; }

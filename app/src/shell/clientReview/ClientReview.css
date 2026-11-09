@@ -2,7 +2,7 @@
    shows the client's answer above the document once it is saved. Colours
    come from the tokens in index.css, plus the answer colours of the owner's
    prototype (version 4) defined here for both themes: amber for a change
-   asked, red for rejected, green for accepted, Ellis's blue for what he
+   asked, red for rejected, green for accepted, the Knowledge agent's blue for what it
    suggests. */
 
 :root,
@@ -317,7 +317,7 @@ label.cr-drop { justify-content: center; }
   .cr-row { grid-template-columns: 1fr; }
   .cr-band { padding: 10px 16px; max-height: 50vh; }
   .cr-ellis { grid-template-columns: 1fr; }
-  .cr-ellis > .agent-figure, .cr-ellis > svg { display: none; }
+  .cr-ellis > .nk-ag { display: none; }
   .ch-bar-mode .ch-modetag { order: 3; }
 }
 

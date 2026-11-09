@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The medallion's numbers (components/Medallion.tsx), apart so a test can read
+// The medallion's numbers (brand/DeepOMark.tsx), apart so a test can read
 // them with no DOM: the approved mock's mountH1Mark/tickH1Mark colours and
 // geometry, eased fully to each state.
 

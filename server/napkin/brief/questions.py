@@ -1,5 +1,5 @@
 """The client questions, each gap asked once (brief/planned.py gathers them from the plan, the
-draft and Jude; job.py from the capture and the verdicts).
+draft and the Review agent; job.py from the capture and the verdicts).
 
 Two questions that ask for the same thing in different words ("What is the launch budget?",
 "What budget has been set for this?") are one question. The check is by rule, not by a model

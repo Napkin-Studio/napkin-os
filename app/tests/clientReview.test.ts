@@ -6,7 +6,7 @@
 // OS-layer contract (§7.5, §8.2) give them: how strong a record the evidence
 // makes, the body the host is sent (the client's words verbatim, reasons only
 // for a rejection, no parts marked on an acceptance), which parts an app may
-// declare, and what Jude and Ellis say, by their own names.
+// declare, and what the Review and Knowledge agents say, by role.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -18,7 +18,6 @@ import {
 } from '../src/shell/clientReview/review.ts'
 import type { Draft } from '../src/shell/clientReview/review.ts'
 import { clientLineOf, didWhat, whoOf } from '../src/shell/decisions/words.ts'
-import { AGENTS } from '../src/studio/model.ts'
 
 const draft = (over: Partial<Draft>): Draft => ({ ...emptyDraft({ name: 'Mary Kelly' }), ...over })
 const PARTS = [
@@ -174,7 +173,7 @@ test('a part’s aliases are words: trimmed, no repeats, the app’s order, sent
   }
 })
 
-// ── what the crew says ─────────────────────────────────────────────────────
+// ── what the agents say ─────────────────────────────────────────────────────
 
 const answerView = (over: Partial<ClientAnswerView>): ClientAnswerView => ({
   decision: 'd_A', answer: 'rejected', client: { name: 'Mary Kelly' }, channel: 'pasted_email',
@@ -189,25 +188,26 @@ function viewWith(client: DecisionsView['client'], lock: Partial<DecisionsView['
   }
 }
 
-test('Jude asks for the whole answer, and Ellis is named from the crew', () => {
-  assert.equal(modeLine(draft({}), 'brief').agent, 'judge')
+test('the Review agent asks for the whole answer, and the Knowledge agent is named by role', () => {
+  assert.equal(modeLine(draft({}), 'brief').agent, 'review')
+  assert.equal(modeLine(draft({}), 'brief').state, 'needs')
   assert.match(modeLine(draft({}), 'brief').text, /about the brief as a whole/)
-  assert.match(modeLine(draft({ answer: 'rejected' }), 'brief').text, new RegExp(`${AGENTS.extract.given} will look for the parts it names`))
+  assert.match(modeLine(draft({ answer: 'rejected' }), 'brief').text, /the Knowledge agent will look for the parts it names/)
   // Nothing to wait for: the host's matcher answers in Save's own reply.
   assert.equal(afterLine(null, 'brief'), null)
 })
 
-test('after Save, Jude says what is left to do', () => {
+test('after Save, the Review agent says what is left to do', () => {
   const noParts = viewWith({ available: true, answer: answerView({}), answers: [], parts: [], suggestions: [] })
   assert.match(afterLine(noParts, 'brief')!.text, /don’t know which parts Mary meant yet\. Mark them before it can be locked again/)
   // The host looked in her words and no part was named: the answer is for the whole brief.
   assert.equal(afterLine(noParts, 'brief', true)!.text,
-    `${AGENTS.extract.given} found no part named in Mary’s words, so the answer stands for the whole brief. If you know which parts they meant, mark them before it can be locked again.`)
+    `The Knowledge agent found no part named in Mary’s words, so the answer stands for the whole brief. If you know which parts they meant, mark them before it can be locked again.`)
   const changesNoParts = viewWith({ available: true, answer: answerView({ answer: 'accepted_with_changes' }), answers: [], parts: [], suggestions: [] })
   assert.match(afterLine(changesNoParts, 'brief', true)!.text, /stands for the whole brief\. If you know which parts they meant, mark them\.$/)
   const suggested = viewWith({ available: true, answer: answerView({}), answers: [], parts: [],
     suggestions: [{ decision: 'd_S', review: 'd_A', address: 'doc#audience', label: 'Audience', answer: 'rejected', quote: 'q' }] })
-  assert.match(afterLine(suggested, 'brief')!.text, new RegExp(`^${AGENTS.extract.given} found the parts`))
+  assert.match(afterLine(suggested, 'brief')!.text, /^The Knowledge agent found the parts/)
   const part = { address: 'doc#audience', label: 'Audience', state: 'rejected' as const, decision: 'd_P', review: 'd_A',
     found_by: 'person' as const, client: { name: 'Mary Kelly' }, at: '', stale: false, answered: false, reopened: false }
   const open = viewWith({ available: true, answer: answerView({ parts_known: true }), answers: [], parts: [part], suggestions: [] })
@@ -264,7 +264,7 @@ test('a client’s answer reads as the client’s, recorded by you from what', (
   assert.equal(clientLineOf(r, viewWith(undefined, {}, [r]))!.rest, 'rejected it (off brief, tone) · recorded by you from Mary’s email, attached')
 })
 
-test('Ellis’s suggestion is signed Ellis, and a confirmation names the client from the answer', () => {
+test('the Knowledge agent’s suggestion is signed by it, and a confirmation names the client from the answer', () => {
   const a = block({ id: 'd_A', kind: 'client_review', action: 'client_answer', answer: 'rejected', client: { name: 'Mary Kelly' } }, you)
   const s = block({ id: 'd_S', kind: 'client_review', action: 'suggest_part', handler: 'find_client_parts@1.0', review: 'd_A',
     label: 'Audience', answer: 'rejected', actor: 'process:middleware' }, { kind: 'agent', id: 'find_client_parts', name: 'Find client parts' })
@@ -274,14 +274,14 @@ test('Ellis’s suggestion is signed Ellis, and a confirmation names the client 
     rationale: 'Mary Kelly asked: The audience is wrong.' }, you)
   const e = block({ id: 'd_E', kind: 'edit', action: 'edit_field', answers: 'd_P' }, you)
   const view = viewWith(undefined, {}, [e, u, p, s, a])
-  assert.equal(whoOf(s).name, AGENTS.extract.given)
-  // The host's matcher, which replaced the middleware call: Ellis too.
+  assert.equal(whoOf(s).name, 'Knowledge agent')
+  // The host's matcher, which replaced the middleware call: the Knowledge agent too.
   const h = block({ id: 'd_S2', kind: 'client_review', action: 'suggest_part', handler: 'client_parts_match@1', review: 'd_A',
     label: 'Audience', answer: 'rejected', actor: 'process:host' }, { kind: 'agent', id: 'client_parts_match', name: 'Client parts match' })
-  assert.equal(whoOf(h).name, AGENTS.extract.given)
+  assert.equal(whoOf(h).name, 'Knowledge agent')
   assert.match(didWhat(h, view), /^thinks Mary Kelly’s answer is about Audience/)
   assert.match(didWhat(s, view), /^thinks Mary Kelly’s answer is about Audience/)
-  assert.equal(didWhat(p, view), `confirmed ${AGENTS.extract.given}’s suggestion: Mary Kelly rejected Audience`)
+  assert.equal(didWhat(p, view), `confirmed the Knowledge agent’s suggestion: Mary Kelly rejected Audience`)
   assert.equal(didWhat(u, view), 'reopened Audience to make the change: Mary Kelly asked: The audience is wrong.')
   assert.match(didWhat(e, view), /, as Mary Kelly asked$/)
 })
@@ -303,7 +303,7 @@ test('the clients on record are offered most recent first, the carried one too, 
   assert.deepEqual(knownClients(null), [])
 })
 
-test('Ellis’s answered suggestions stay listed, in his order, and one a lock closed does not', () => {
+test('the Knowledge agent’s answered suggestions stay listed, in its order, and one a lock closed does not', () => {
   const agent: DecisionBlock['who'] = { kind: 'agent', id: 'find_client_parts', name: 'Find client parts' }
   const s1 = block({ id: 'd_S1', kind: 'client_review', action: 'suggest_part', review: 'd_A', label: 'Audience', answer: 'rejected', quote: 'Wrong people.' }, agent)
   const s2 = block({ id: 'd_S2', kind: 'client_review', action: 'suggest_part', review: 'd_A', label: 'Tone & world', answer: 'rejected', quote: 'Flat.' }, agent)
@@ -314,5 +314,5 @@ test('Ellis’s answered suggestions stay listed, in his order, and one a lock c
   const view = viewWith(undefined, {}, [shut, no, yes, s3, s2, s1])
   assert.deepEqual(settledSuggestions(view, 'd_A').map(x => [x.label, x.confirmed, x.quote]),
     [['Audience', false, 'Wrong people.'], ['Tone & world', true, 'Flat.']])
-  assert.match(didWhat(shut, view), new RegExp(`^locked it again; ${AGENTS.extract.given}’s suggestion about Budget was left unanswered and is closed$`))
+  assert.match(didWhat(shut, view), /^locked it again; the Knowledge agent’s suggestion about Budget was left unanswered and is closed$/)
 })

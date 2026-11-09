@@ -40,13 +40,14 @@ GATE_ROW = {"storyline": "storyline", "territories": "territories", "idea": "ide
 STEP_ROW = {"load": "inputs", "a0": "inputs", "a": "inputs", "b": "storyline", "i": "storyline", "insight_judge": "storyline",
             "c": "territories", "d": "idea", "fit": "copy", "e": "copy", "red_team": "copy",
             "validate": "check", "render_pptx": "check", "render_web": "check", "pdf": "check", "png": "check", "qa": "check"}
-#: The agent and what it is doing at each step, and the order the agents are numbered in.
-STEP_AGENT = {"load": ("brief", "read"), "a0": ("brief", "read"), "a": ("brief", "read"), "b": ("strategy", "write"),
+#: The agent and what it is doing at each step, and the order the agents are numbered in. Agents are named by role
+#: (app/templates/shared/agent-sphere/roles.js): the Knowledge agent reads the inputs.
+STEP_AGENT = {"load": ("knowledge", "read"), "a0": ("knowledge", "read"), "a": ("knowledge", "read"), "b": ("strategy", "write"),
               "i": ("strategy", "write"), "insight_judge": ("strategy", "check"), "c": ("strategy", "write"), "d": ("idea", "write"),
               "fit": ("copy", "check"), "e": ("copy", "write"), "red_team": ("copy", "check"), "validate": ("review", "check"),
               "render_pptx": ("deck", "work"), "render_web": ("deck", "work"), "pdf": ("deck", "work"), "png": ("deck", "work"),
               "qa": ("review", "check")}
-STEP_OF = {"brief": 1, "strategy": 2, "idea": 3, "copy": 4, "deck": 5, "review": 6, "approval": 7}
+STEP_OF = {"knowledge": 1, "strategy": 2, "idea": 3, "copy": 4, "deck": 5, "review": 6, "approval": 7}
 STEP_TOTAL = 7
 DONE_SUB = {"inputs": "Read", "scans": "Read", "storyline": "Approved", "territories": "Picked", "idea": "Approved", "copy": "Done", "check": "Done"}
 #: Seconds each stage took in the recorded live runs: (min, max). A step running past the max is flagged slow, never timed.
@@ -301,7 +302,7 @@ def run_object(*, state: str, stages: Path, summary: dict | None = None, current
         rows.append(row)
     agent = None
     if state == "building":
-        key, act = STEP_AGENT.get(current or "load", ("brief", "read"))
+        key, act = STEP_AGENT.get(current or "load", ("knowledge", "read"))
         agent = {"key": key, "activity": act, "step_index": STEP_OF[key], "step_total": STEP_TOTAL}
         if slow:
             agent["slow"] = True

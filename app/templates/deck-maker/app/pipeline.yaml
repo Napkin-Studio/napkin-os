@@ -4,7 +4,7 @@
 # hard error, never a fall-through (M4). Contract: docs/contracts/middleware-api.md §12, docs/contracts/deck-maker.md.
 #
 # The host applies a middleware reply's change only for request_kind: middleware, so that is what the Deck declares (it said
-# `agent` until the server existed). The old approve_gate task is gone: Approve, Edit and Ask Dex are decisions the app writes
+# `agent` until the server existed). The old approve_gate task is gone: Approve, Edit and Ask the Deck agent are decisions the app writes
 # into run.approvals, run.decisions and run.gate_requests, and the next build_deck carries them. ask_change (rewrite one
 # slide's words, refs stay) has no handler yet: the app records the request and says it waits for the engine.
 pipeline: napkin-deck

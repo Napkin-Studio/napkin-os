@@ -4,14 +4,14 @@
 
 // The pieces of the decision panel: a "Needs you" card, a "Worth a look"
 // item, and one line of history that opens to the decision itself. Every
-// line is signed the way the crew signs in the apps: the figure, then the
-// name and the job ("Jude · checks"); a person's line is "You" or their name.
+// line is signed the way agents sign in the apps: the agent's sphere, then its
+// role ("Review agent"); a person's line is "You" or their name.
 
 import type { ReactNode } from 'react'
 import type { AttentionItem, DecisionBlock, DecisionsView } from '../../host'
-import { AgentFigure } from '../../studio/AgentFigure'
+import AgentSphere from '../agents/AgentSphere'
 import { ResultThumbs } from '../../dogfood/Dogfood'
-import { AGENTS } from '../../studio/model'
+import { roles } from '../agents/engine'
 import { canRun, openInApp, runInApp } from '../appExport'
 import {
   changeOf, chipOf, citesOf, clientLineOf, didWhat, hhmm, mainTarget, opensInApp, partNamesOf, plain, redoOf, refOfAddress, signOf, skippedOf,
@@ -19,16 +19,16 @@ import {
 } from './words'
 import type { WhoIs } from './words'
 
-/** The agent's figure, or a person's initial. */
+/** The agent's sphere, or a person's initial. */
 export function Face({ block, size = 30, needs = false }: { block?: DecisionBlock; size?: number; needs?: boolean }) {
   const w = block ? whoOf(block) : null
-  if (w?.agent) return <span className="dp-fig" aria-hidden><AgentFigure agent={w.agent} size={size} state={needs ? 'needs-you' : 'idle'} /></span>
+  if (w?.agent) return <span className="dp-fig" aria-hidden><AgentSphere agent={w.agent} size={size} state={needs ? 'needs' : 'idle'} label="" /></span>
   return <span className="dp-av" aria-hidden>{(w?.name[0] ?? '?').toUpperCase()}</span>
 }
 
 /**
- * Who says it, as the crew signs its bubbles in the apps: "Jude · checks".
- * A person has no job to add, and their line already starts "You…".
+ * Who says it, as agents sign their bubbles in the apps: "Review agent".
+ * A person's line already starts "You…".
  */
 function Sign({ who }: { who: WhoIs }) {
   if (who.person) return null
@@ -83,7 +83,7 @@ export function NeedsCard({ item, block, actions, aside }: { item: AttentionItem
       <div className="dp-acts">
         {item.address && <button className="dp-btn dp-btn-primary" onClick={() => openInApp(ref, path)}>Open</button>}
         {item.code === 'flagged_field' && /campaign\.audience/.test(path ?? '') && canRun('synthesise_findings') && (
-          <button className="dp-btn" onClick={() => runInApp('synthesise_findings', { redo: 'audience' })}>Ask {AGENTS.synthesis.given} to redo it</button>
+          <button className="dp-btn" onClick={() => runInApp('synthesise_findings', { redo: 'audience' })}>Ask {roles.the('strategy')} to redo it</button>
         )}
         <span className="dp-hint">{item.code === 'open_contest' ? 'you’ll pick one against its sources'
           : item.code === 'unverified_finding' ? 'you’ll check it against its sources'

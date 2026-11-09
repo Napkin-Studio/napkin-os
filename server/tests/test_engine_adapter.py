@@ -152,7 +152,7 @@ def check_engine_change(host, extra_ok=()):
                 assert f"{DOC}#{path}" in targets, f"{path} written without a decision naming it"
         for d in ch["decisions"]:
             assert problems(d["reasoning"]) == [], (d["id"], problems(d["reasoning"]))
-            # the engine's brief is Dara's; the check loop's review is Jude's (brief_judge=jev)
+            # the engine's brief is the Brief agent's; the check loop's review is the Review agent's (brief_judge=jev)
             assert d["agent"] in ("draft_brief@1.0/drafter", "draft_brief@1.0/judge") and \
                 d["handler"] == "draft_brief@1.0"
             for c in list(d["cites"]) + [c for p in d["reasoning"]["because"] for c in p.get("cites") or []]:
@@ -318,7 +318,7 @@ def test_the_reply_lands_as_the_middlewares_change(eserver, stub):
     for x in host.chain:
         for t in x["targets"]:
             by_target.setdefault(t.split("#", 1)[1], []).append(x)
-    # one draft decision per written field, by the drafter (Dara), marked as the engine's
+    # one draft decision per written field, by the drafter (the Brief agent), marked as the engine's
     for k in ("background", "objectives.commercial", "insight", "reasons_to_believe", "desired_response.think",
               "desired_response.feel", "tone_and_world"):
         ds = [x for x in by_target[k] if x["action"] == "draft"]
@@ -565,7 +565,7 @@ def test_a_reply_that_cannot_be_mapped_falls_back_with_nothing_of_it_left(eserve
 
 
 def test_the_engine_brief_goes_through_the_check_loop(tmp_path, stub):
-    # Sai's engine writes; jev flags; Jude explains; Dara rewrites the flagged part and fills one the
+    # Sai's engine writes; jev flags; the Review agent explains; the Brief agent rewrites the flagged part and fills one the
     # engine left empty; the review is jev's reading.
     from fakes import FakeModel
     from test_planned_brief import FakeJev

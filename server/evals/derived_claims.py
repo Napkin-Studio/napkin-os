@@ -1,6 +1,6 @@
 """The derived-claims guard (brief-fact-provenance, owner answer 3, 2026-10-19). Opt-in, never in CI.
 
-Does the new prompt, or the rewrite step, cost Dara her worked-out conclusions? Over recorded planned
+Does the new prompt, or the rewrite step, cost the Brief agent its worked-out conclusions? Over recorded planned
 draft inputs from non-client test briefs (public topics shaped like the Lidl case), it counts the
 derived claims (recomputed or stated) the tie pass finds:
 

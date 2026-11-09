@@ -21,9 +21,9 @@ NAPKIN_LAYERS_URL=http://127.0.0.1:8797
 ```
 
 Which drafter writes a brief is one setting. With `NAPKIN_BRIEF_ENGINE_URL` unset (the
-default), `draft_brief` runs the middleware's own crew: Ellis captures, Sam fills what the
-client left open from the research (or Dara proposes it as an assumption), Dara drafts and
-Jude judges. Set it to the engine's agent server (`python3 serve.py --claude-code` listens on
+default), `draft_brief` runs the middleware's own crew: the Knowledge agent captures, the Strategy agent fills what the
+client left open from the research (or the Brief agent proposes it as an assumption), the Brief agent drafts and
+the Review agent judges. Set it to the engine's agent server (`python3 serve.py --claude-code` listens on
 :8787) and the engine writes the brief instead, falling back to the middleware's crew when it
 cannot; the capture decision's attention note says which ran and why:
 
