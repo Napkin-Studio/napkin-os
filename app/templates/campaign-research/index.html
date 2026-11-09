@@ -1314,6 +1314,60 @@ body.fresh .ws > main{padding:0 24px 80px}
 .rt-side .rs-m .agent-figure{width:34px;height:45px;margin-bottom:0}
 .rt-side .rs-m.big .agent-figure{width:40px;height:53px}
 @media (max-width:900px){ .rt-cols{grid-template-columns:1fr} .rt-side{padding-top:0} .rt-head{flex-direction:column;align-items:flex-start} .rt-h1{font-size:40px} }
+
+.rs-work.rt-work{display:block;max-width:1132px;margin:0 auto;padding:24px 0 40px}
+.rt-panel{border:1px solid var(--line);border-radius:8px;background:var(--paper);overflow:hidden}
+.rt-pbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+.rt-pills{display:flex;flex-wrap:wrap;gap:6px}
+.rt-pill{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border:1px solid var(--line);border-radius:999px;font:500 13px var(--font-ui);color:var(--ink-soft);background:var(--paper)}
+.rt-pill i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.rt-pill.done i{background:var(--ink)}
+.rt-pill.now{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.rt-pill.now i{background:var(--paper)}
+.rt-pill.wait{border-color:var(--warn);color:var(--warn)} .rt-pill.wait i{background:var(--warn)}
+.rt-pill.fail{color:var(--alert)} .rt-pill.skip{opacity:.6}
+.rt-lens{display:inline-flex;align-items:center;gap:8px;font:700 10.5px var(--font-mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-soft)}
+.rt-dots{display:inline-flex;gap:5px}
+.rt-dots i{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--ink)}
+.rt-dots i.done{background:var(--ink)} .rt-dots i.run{background:color-mix(in srgb,var(--ink) 35%,transparent)} .rt-dots i.off{border-style:dotted;opacity:.45}
+.rt-pbody{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:24px;align-items:center;min-height:620px;padding:24px}
+.rt-colh{font:700 10.5px var(--font-mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-soft);border-left:2px solid var(--ink);padding-left:8px;margin-bottom:8px}
+.rt-card{display:grid;gap:4px;margin-bottom:8px;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--card);font:400 14px/1.4 var(--font-serif);color:var(--ink);box-shadow:var(--shadow-card)}
+.rt-card small{font:500 10px var(--font-mono);letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.rt-card.done{opacity:.6}
+.rt-more{margin:0;font-size:12px;color:var(--muted)}
+.rt-mid{display:grid;gap:16px;justify-items:center;text-align:center}
+.rt-mid .rs-now{display:grid;justify-items:center;gap:14px;border:0;background:none;box-shadow:none;padding:0}
+.rt-mid .rs-now > .agent-figure,.rt-mid .rs-now > svg{width:110px;height:auto}
+.rt-mid .say.left{text-align:center;max-width:420px}
+.rt-mid .say.left::after{display:none}
+.rt-mid .q-card,.rt-mid #qcard{text-align:left;width:100%}
+.rt-pfoot{margin-top:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:14px 16px;display:grid;gap:10px}
+.rt-frow{display:flex;align-items:center;gap:10px}
+.rt-frow .sp{flex:1}
+.rt-back{font:600 13.5px var(--font-ui);color:var(--ink)}
+.rt-frow .rs-cancel{margin:0}
+.rt-frow .rs-stop{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--ink);font:600 12.5px var(--font-ui);cursor:pointer}
+.rs-go.rt-skip{height:38px;min-height:38px;border-radius:4px;padding:0 16px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui)}
+.rt-pfoot .activity,.rt-pfoot .rs-asked{margin:0;border:0;background:none;box-shadow:none}
+@media (max-width:900px){ .rt-pbody{grid-template-columns:1fr;min-height:0} .rt-pbar{flex-direction:column;align-items:flex-start} }
+
+body.working.no-report .insp,body.working.no-report #hero,body.working.no-report #gates{display:none!important}
+@media (min-width:901px){ body.working.no-report .ws{grid-template-columns:minmax(0,1fr)} body.working.no-report .ws > main{padding-top:0} }
+.rt-mid .rs-now > div{width:100%;max-width:460px}
+.rt-mid .say,.rt-mid .say.left{border:0;background:none;box-shadow:none;padding:0;font:600 21px/1.3 var(--font-ui);letter-spacing:-.3px;color:var(--ink)}
+.rt-mid .say::before,.rt-mid .say::after{display:none}
+.rt-mid .say .who{display:block;margin-bottom:8px;font:700 11px var(--font-mono);letter-spacing:1.6px;text-transform:uppercase;color:var(--ink)}
+.rt-mid .say b{font-weight:600}
+.rt-mid .rs-lines{text-align:left;font-size:13.5px}
+.rt-mid .rs-lensrow{justify-content:center}
+
+.rt-mid .rs-now,.rt-mid .rs-now:has(> .rs-lensrow){display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:14px}
+.rt-mid .rs-now > .rs-lensrow + div{width:100%;max-width:460px;flex:none}
+#start:has(> .rt-work){margin-top:0}
+.rs-work.rt-work{padding-top:26px}
+
+.rt-qrow{grid-column:1/-1;justify-self:center;width:min(760px,100%)}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -3196,9 +3250,30 @@ body.fresh .ws > main{padding:0 24px 80px}
       if(CHAT.job&&CHAT.job.state==='cancelled') toast('Stopped. What was found so far stays.');
     }, function(e){ CHAT.cancelling=false; toast('Not stopped: the middleware could not be reached ('+(e&&e.message||e)+').'); renderChat(); });
   }
+  // The loading step, as the mock draws it (gaps R12): the stages as pills and
+  // the lenses as dots along the top; the question asked on the left, the agent
+  // at work (and any question it asks) in the middle, the lenses queued on the
+  // right; Back, Stop and the run's log underneath. Every part of it is the
+  // job's own: there are no sub-questions in the record, so the right column
+  // lists the researchers Jude picked, each with what it looks into.
   function workHtml(T, Q){
-    return '<div class="rs-work">'+stepsHtml()+nowCardHtml(T)+cancelHtml()+(Q?questionCard(Q, T):'')+laterHtml(T)+activityHtml(T)
-      +'<details class="rs-asked" id="asked"'+(CHAT.sheetOpen?' open':'')+'><summary><span>What you asked for</span><span class="chev" aria-hidden="true">'+ICON.chev+'</span></summary>'+sheetHtml(T)+'</details></div>';
+    var st=stageStates(), plan=lensPlan(), j=CHAT.job, running=jobActive()&&j&&j.stage==='research';
+    var pills=STAGES.map(function(S, i){ var x=st[S.k]; return '<span class="rt-pill '+(x==='todo'?'':x==='stop'?'fail':x)+'"'+(x==='now'||x==='wait'?' aria-current="step"':'')+'><i></i>'+(i+1)+'. '+esc(stageLabel(S.k))+'</span>'; }).join('');
+    var dots='<span class="rt-dots" aria-label="Researchers: '+plan.filter(function(x){ return x.done; }).length+' of '+plan.filter(function(x){ return !x.off; }).length+' done">'+plan.map(function(x){ return '<i class="'+(x.off?'off':x.done?'done':running?'run':'')+'" title="'+esc(given(x.k)+' · '+lensName(x.lens))+'"></i>'; }).join('')+'</span>';
+    var q=askedQuestion(), mk=marketNames(), org=camp().client_org&&camp().client_org.value&&camp().client_org.value.name;
+    var left='<div class="rt-colh">Research question</div><div class="rt-card"><small>Primary ask</small>'+esc(q||'Reading what you sent…')+'</div>'
+      +((org||mk.length)?'<div class="rt-card"><small>Scope</small>'+esc([org, listJoin(mk)].filter(Boolean).join(' · '))+'</div>':'');
+    var on=plan.filter(function(x){ return !x.off; });
+    var right=on.length&&st.select==='done'?'<div class="rt-colh">Lenses queued</div>'+on.slice(0,4).map(function(x, i){
+        return '<div class="rt-card'+(x.done?' done':'')+'"><small>Q'+(i+1)+' · '+esc(lensName(x.lens))+(x.done?' · done':'')+'</small>'+esc((SAYS[x.k]||[])[1]||given(x.k))+'</div>'; }).join('')
+        +(on.length>4?'<p class="rt-more">+ '+(on.length-4)+' more</p>':''):'';
+    return '<div class="rs-work rt-work">'+toolHeadHtml(2, true)
+      +'<section class="rt-panel"><div class="rt-pbar"><span class="rt-pills">'+pills+'</span><span class="rt-lens">Lenses '+dots+'</span></div>'
+      +'<div class="rt-pbody"><div class="rt-left">'+left+'</div><div class="rt-mid">'+nowCardHtml(T)+'</div><div class="rt-right">'+right+'</div>'+(Q?'<div class="rt-qrow">'+questionCard(Q, T)+'</div>':'')+'</div></section>'
+      +'<section class="rt-pfoot no-print"><div class="rt-frow"><button type="button" class="linkbtn rt-back" data-act="rt-back">← Back to the ask</button><span class="sp"></span>'+cancelHtml()
+      +(isObj(D().report)?'<button type="button" class="rs-go rt-skip" data-act="show-run">Back to the finished report →</button>':'')+'</div>'
+      +laterHtml(T)+activityHtml(T)
+      +'<details class="rs-asked" id="asked"'+(CHAT.sheetOpen?' open':'')+'><summary><span>What you asked for</span><span class="chev" aria-hidden="true">'+ICON.chev+'</span></summary>'+sheetHtml(T)+'</details></section></div>';
   }
 
   // ── the agent asks: one card, signed by whoever asks, answers as buttons ──
@@ -5069,6 +5144,7 @@ body.fresh .ws > main{padding:0 24px 80px}
       case 'q-send': var qi=$('qtext-'+b.getAttribute('data-q')); doAnswer(b.getAttribute('data-q'), null, qi?qi.value:''); break;
       case 'q-resend': doResend(b.getAttribute('data-q')); break;
       case 'report-refresh': doRefreshReport(); break;
+      case 'rt-back': var ak=$('asked'); if(ak){ ak.open=true; CHAT.sheetOpen=true; ak.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
       case 'show-run': document.body.classList.toggle('show-run'); var st=$('start'); if(st&&document.body.classList.contains('show-run')) st.scrollIntoView({block:'start',behavior:'smooth'}); break;
       case 'goto-confirm': gotoConfirm(b.getAttribute('data-field')); break;
       case 'chk-yes': case 'chk-no': case 'chk-reject': case 'chk-pick': case 'chk-reason': case 'chk-use': case 'chk-cancel': case 'chk-why': case 'chk-open':
