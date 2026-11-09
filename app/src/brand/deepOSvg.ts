@@ -173,7 +173,7 @@ export function smallInner(p: MarkPalette, size: number, surface: string, c: Mar
 
 /** The stylesheet the static cut needs: the ring turns while it waits; under reduced motion it only breathes. */
 export const DEEP_O_CSS = '.deep-o-static{display:block;flex-shrink:0;overflow:visible}'
-  + `.deep-o-static .deep-o-spin{transform-box:view-box;transform-origin:50% 50%;animation:deep-o-turn ${SPIN_PERIOD}s linear infinite}`
+  + `.deep-o-static .deep-o-spin{transform-box:fill-box;transform-origin:center;animation:deep-o-turn ${SPIN_PERIOD}s linear infinite}`
   + `.deep-o-static .deep-o-dash{animation:deep-o-dash ${SPIN_PERIOD}s linear infinite}`
   + '@keyframes deep-o-turn{to{transform:rotate(360deg)}}'
   + '@keyframes deep-o-dash{to{stroke-dashoffset:-1}}'
@@ -221,7 +221,7 @@ export function appIconSvg(size: number): string {
 }
 
 /** The pre-JS boot splash's mark: working, the length unknown, in Napkin's colours (never an agency's). */
-export function bootMarkSvg(size = 56): string {
+export function bootMarkSvg(size = 64): string {
   return staticMarkSvg({ size, state: 'working', uid: 'boot' })
 }
 
