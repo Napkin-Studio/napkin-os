@@ -1089,7 +1089,31 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
       .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
       .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-      .then(function(){ render(); reconsider(); });
+      .then(function(){ render(); reconsider(); askFromBrief(); });
+  }
+  // ── a research started from a brief, or with one linked ────────────────
+  // With no prompt and no material, the brief's ask is all there is to read:
+  // on open, extract_ask proposes the client, audience, problem and objective
+  // from it (origin proposed, citing the brief), and the confirm step still
+  // gates them (features/spinoff-and-links). Once per document: never when
+  // anything of the ask is filled, a run of the ask is recorded, or the
+  // intake has begun.
+  var ASK_FIELDS=['client','audience','background','objectives'];
+  function briefUpstream(){
+    var up=isObj(D().upstream)?D().upstream:{};
+    return Object.keys(up).filter(function(id){ var c=up[id];
+      return isObj(c)&&!isObj(c.campaign)&&ASK_FIELDS.some(function(k){ return c[k]!=null&&c[k]!==''; }); })[0]||null;
+  }
+  function askFromBrief(){
+    if(CHAIN.state!=='ok'||!(window.clan&&window.clan.apiProxy)) return;
+    if(!briefUpstream()||Object.keys(mats()).length||thread().length||JOBS.length) return;
+    var asked=['client_org','audience_stated','problem','objective'].some(function(k){ var e=camp()[k]; return isObj(e)&&e.value!=null&&e.value!==''; });
+    var ran=decs().some(function(d){ return /^extract_ask@/.test(String(d.handler||''))||d.action==='extract_ask'||d.action==='extract'; });
+    var key='clan.research.askedFromBrief.'+docId();
+    if(asked||ran||stored(key)) return;
+    store(key, '1');
+    runTask('extract_ask', {prompt:'', attachments:[]}, null, true);
+    toast('Reading the ask from the brief this research started from.');
   }
   // ── a review: bring what rests on it in step ───────────────────────────
   // A person's review (a fact marked right or wrong, a finding verified or
@@ -4126,8 +4150,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   loadChain();
   // The host injects the bridge after this script, so window.clan exists only
   // once the document has parsed.
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ readShellWho(); resumeJob(); resumeAsks(); render(); });
-  else setTimeout(function(){ readShellWho(); resumeJob(); resumeAsks(); render(); }, 0);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ readShellWho(); resumeJob(); resumeAsks(); render(); askFromBrief(); });
+  else setTimeout(function(){ readShellWho(); resumeJob(); resumeAsks(); render(); askFromBrief(); }, 0);
 })();
 </script>
 </body>
