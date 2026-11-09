@@ -449,7 +449,6 @@
   .lock:active{transform:translateY(2px);box-shadow:inset 0 2px 3px rgba(0,0,0,.2)}
   .lock.locked{background:var(--green-soft);color:var(--green-ink);border-color:transparent;text-shadow:none;box-shadow:inset 0 1px 2px rgba(40,60,20,.18)}
   .lock:disabled{opacity:.55;cursor:default;box-shadow:none;transform:none}
-  .lock .n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:11px;padding:0 6px;font-size:12px;background:color-mix(in srgb,var(--goText) 22%,transparent)}
   /* What the lock waits for (the host's lock list): Jude names each, and a
      tap opens it where it is settled — the part, or the evidence drawer. */
   .locklist{flex-basis:100%;display:flex;gap:12px;align-items:flex-start;margin-top:10px}
@@ -2408,7 +2407,7 @@
       +'<p class="note">'+esc(mats.length
         ?ELLIS+' reads the client’s own words that came with it ('+listWords(mats.map(function(m){ return m.label; }))+') and the ask that started the research. The research’s findings can back the insight and the proposition; they never stand in for what the client said.'
         :'None of the client’s files came with the research, so '+ELLIS+' reads the ask that started it. Add the client’s words below if you have them.')+'</p>';
-    if(items.length) h+='<div class="locklist">'+lockListHtml(items, 'Before the brief can lock, '+(items.length===1?'this needs':'these need')+' you. Settle '+(items.length===1?'it':'them')+' now, or once the brief is drafted.')+'</div>';
+    if(items.length) h+='<div class="locklist">'+lockListHtml(items, lockWhy(items.length)+'. Settle '+(items.length===1?'it':'them')+' now, or once the brief is drafted.')+'</div>';
     var up=upNoteInner(); if(up) h+='<div class="upnote" role="status">'+up+'</div>';
     el.innerHTML=h; bindLkItems(el);
     var oi=$('openUpIn'); if(oi) oi.addEventListener('click',function(){
@@ -3115,6 +3114,8 @@
       if(F&&ref) F.open(ref, false, F.kindOf&&F.kindOf(ref)?'':b.getAttribute('data-note'));
     }); });
   }
+  // Why the lock waits, in plain words: "2 settle before it can lock".
+  function lockWhy(n){ return n>0?n+' '+(n===1?'settles':'settle')+' before it can lock':'Everything listed has to be settled first'; }
   function lockListHtml(items, lead){
     var more=items.length>8?items.length-8:0;
     return fig('judge',{state:'needs-you',decorative:true})+'<div class="lb"><div><b>'+esc(JUDE)+':</b> '+esc(lead)+'</div>'
@@ -3126,13 +3127,16 @@
     var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
     $('lockedBadge').style.display=L&&!again?'inline':'none';
     lb.classList.toggle('locked', L&&!again);
-    if(again){ lb.disabled=wait; lb.innerHTML='Lock the brief again'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
+    // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
+    // button carries no badge of its own; why it waits is said in words.
+    var why=wait?lockWhy(n):'';
+    if(again){ lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
     else if(A){ lb.disabled=true; lb.textContent='✓ Locked'; lb.title='Locked. A change from here makes a new version.'; }
     else if(L){ lb.disabled=false; lb.textContent='✓ Locked'; lb.title='Unlock this brief'; }   // a brief locked before /approve
-    else { lb.disabled=wait; lb.innerHTML='Lock the brief'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
+    else { lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; }
     var el=$('lockList'), show=(!L||again)&&n>0;
     el.hidden=!show; if(!show){ el.innerHTML=''; return; }
-    el.innerHTML=lockListHtml(items, 'Before the brief can lock, '+(n===1?'this needs':'these need')+' you. Tap one to settle it.');
+    el.innerHTML=lockListHtml(items, lockWhy(n)+'. Tap one to settle it.');
     bindLkItems(el);
   }
   function lockClick(){
@@ -3516,7 +3520,7 @@
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});
     if(A&&!re) items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'});
-    else items.push({kind:'button', id:'lock', label:re?'Lock the brief again':'Lock the brief', disabled:!!(lb&&lb.disabled)});
+    else items.push({kind:'button', id:'lock', label:re?'Lock the brief again':'Lock the brief', disabled:!!(lb&&lb.disabled), title:lb&&lb.disabled&&lb.title||undefined});
     items.push({kind:'status', label:st.label, tone:st.tone, locked:st.locked});
     return items;
   }

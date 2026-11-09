@@ -1912,8 +1912,10 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function renderTop(){
     var b=lockItems();
     var lb=$('lockBtn');
-    lb.innerHTML='Lock and accept'+(b.length?' <span class="n" aria-label="'+b.length+' blockers">'+b.length+'</span>':'');
-    lb.title=b.length?b.length+' items block the lock — open to see them':'Nothing blocks the lock';
+    // One needs indicator (owner, 9 Nov 2026): the count is Decisions'; the
+    // button says in words why it waits, never with a badge of its own.
+    lb.textContent='Lock and accept';
+    lb.title=b.length?b.length+' '+(b.length===1?'settles':'settle')+' before it can lock: open to see '+(b.length===1?'it':'them'):'Nothing blocks the lock';
     // Your name, once known, and a way to change it; asked for only when needed.
     var nm=myName();
     $('who-line').innerHTML=nm?'Checks signed as <b>'+esc(nm)+'</b>'+(WHO.shell?'':' ·'):'';

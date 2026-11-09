@@ -2079,3 +2079,11 @@ test('a new version re-reads the brief’s lock view with its chain, so the lock
   assert.equal(c.chainMoved(), false)
   assert.equal(reloads, 1)
 })
+
+test('the lock carries no count badge of its own: Decisions holds the one count, the lock says why in words', () => {
+  for (const src of [BM, RT]) assert.doesNotMatch(src, /class="n"/, 'no badge on a lock button')
+  const w = lift<{ lockWhy(n: number): string }>(BM, ['lockWhy'], {})
+  assert.equal(w.lockWhy(2), '2 settle before it can lock')
+  assert.equal(w.lockWhy(1), '1 settles before it can lock')
+  assert.doesNotMatch(fn(BM, 'renderLockBtn'), /need you|lb\.innerHTML/)
+})
