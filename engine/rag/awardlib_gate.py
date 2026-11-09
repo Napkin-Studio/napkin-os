@@ -104,3 +104,25 @@ def decide(store, category: str | None, mode: str | None = None) -> Decision:
     if have >= limit:
         return Decision(False, f"awardlib: not needed, {category} has {have} cases (limit {limit})")
     return Decision(True, f"awardlib: admitted for {category} ({have} cases < {limit})")
+
+
+# ---- the retrieval service's side (napkin.retrieval/1, docs/contracts/peripherals.md section 3) ----
+def pack_visible(gated: bool, mode: str | None = None) -> bool:
+    """Whether /v1/packs lists a pack. A gated pack is hidden while the flag is off, so a client
+    that asks every case pack it is told about (the Brief Maker does) never learns it exists."""
+    return (not gated) or (awardlib_mode() if mode is None else mode) != "off"
+
+
+def library_where(store, category: str | None, mode: str | None = None) -> tuple[dict | None, str]:
+    """The search filter for the library pack, or None when it must return nothing.
+
+    A gated pack needs a category from the request (`where.category`) whatever the mode: a
+    request without one gets an empty answer, never an error, so an older client cannot break
+    its other precedent lookups. Otherwise decide() rules, and a thin-category brief is pinned
+    to its category."""
+    if not category:
+        return None, "awardlib: withheld, the request has no category"
+    d = decide(store, category, mode)
+    if not d.admit:
+        return None, d.note
+    return {"source": AWARDLIB_SOURCE, "category": category}, d.note

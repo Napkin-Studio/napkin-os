@@ -31,6 +31,7 @@ import engine_env  # noqa: E402
 
 engine_env.load()
 import retrieve  # noqa: E402
+import awardlib_gate  # noqa: E402  (one rule for the award library, shared with brief_context)
 
 API = "napkin.retrieval/1"
 MAX_TEXT = 4000
@@ -38,12 +39,28 @@ LOCK = json.loads((ENGINE / "rag" / "packs.lock").read_text())
 LABEL = retrieve.index_label()
 PACKS = [{"tag": p["tag"], "id": p["id"], "kind": p["kind"], "scope": "house", "licence": "licensed-internal",
           "k": int(p.get("k") or 2), "loops": list(p.get("loops") or []), "passages": int(p.get("chunks") or 0),
-          "filterable": [], "version": "sha256:" + hashlib.sha256(f"{LABEL}|{LOCK.get('embed_model')}|{p['id']}"
+          "gated": bool(p.get("gated")), "filterable": ["category"] if p.get("gated") else [], "version": "sha256:" + hashlib.sha256(f"{LABEL}|{LOCK.get('embed_model')}|{p['id']}"
                                                                   .encode()).hexdigest()}
          for p in LOCK["packs"]]
 BY_TAG = {p["tag"]: p for p in PACKS}
 # the index's metadata `source` for each pack tag
 SOURCE = {"template": "template", "cannes": "cannes", "dandad": "dandad", "ipa": "ipa", "playbook": "playbook"}
+
+
+def visible_packs():
+    """/v1/packs: a gated pack is listed only while RAG_AWARDLIB is not off."""
+    return [p for p in PACKS if awardlib_gate.pack_visible(p["gated"])]
+
+
+def pack_hits(tag, q, k, category):
+    """One pack's hits. A gated pack goes through awardlib_gate and may return nothing; every
+    other pack is searched exactly as before."""
+    if BY_TAG[tag]["gated"]:
+        import rag
+        where, note = awardlib_gate.library_where(rag.open_store(retrieve.DEFAULT_INDEX), category)
+        log(f"{tag}: {note}")
+        return [] if where is None else retrieve.retrieve(q, k=k, where=where)
+    return retrieve.retrieve(q, k=k, where={"source": SOURCE.get(tag, tag)})
 
 
 def log(msg):
@@ -79,7 +96,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.rstrip("/") == "/v1/packs":
-            return self._send(200, {"packs": PACKS, "embed_model": LOCK.get("embed_model"), "backend": f"qdrant:{LABEL}"})
+            return self._send(200, {"packs": visible_packs(), "embed_model": LOCK.get("embed_model"), "backend": f"qdrant:{LABEL}"})
         if self.path.rstrip("/") == "/health":
             return self._send(200, {"ok": True, "index": LABEL})
         self._send(404, {"error": {"type": "not_found", "message": "no such route"}})
@@ -89,42 +106,53 @@ class H(BaseHTTPRequestHandler):
             return self._send(404, {"error": {"type": "not_found", "message": "no such route"}})
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-            q = re.sub(r"\s+", " ", str(body.get("query") or "")).strip()
-            k = max(1, min(20, int(body.get("k") or 5)))
-            tags = [t for t in (body.get("packs") or list(BY_TAG)) if t in BY_TAG]
-            if not q:
-                return self._send(400, {"error": {"type": "invalid_request", "message": "query is empty"}})
-        except (ValueError, TypeError) as e:
+        except ValueError as e:
             return self._send(400, {"error": {"type": "invalid_request", "message": str(e)[:200]}})
-        t0, out = time.monotonic(), []
-        try:
-            for t in tags:
-                for attempt in (1, 2, 3):  # a read cut short by the store or the embedder is retried
-                    try:
-                        hits = retrieve.retrieve(q, k=k, where={"source": SOURCE.get(t, t)})
-                        break
-                    except Exception as e:  # noqa: BLE001
-                        if attempt == 3:
-                            raise
-                        log(f"retrieve {t} attempt {attempt}: {type(e).__name__}; retrying")
-                        time.sleep(1.5 * attempt)
-                for h in hits:
-                    p = passage(t, h)
-                    if p["text"]:
-                        out.append(p)
-        except Exception as e:  # noqa: BLE001 - the store failed: a 502, never an empty success
-            log(f"retrieve failed: {type(e).__name__}: {str(e)[:200]}")
-            return self._send(502, {"error": {"type": "upstream", "message": f"{type(e).__name__}"}})
-        seen, best = set(), []
-        for p in sorted(out, key=lambda x: -x["score"]):
-            if p["id"] not in seen:
-                seen.add(p["id"])
-                best.append({k_: v for k_, v in p.items() if k_ != "score"})
-        best = best[:k]
-        log(f"retrieve {body.get('purpose') or '-'} packs={','.join(tags)} k={k}: {len(best)} passage(s) "
-            f"in {time.monotonic() - t0:.1f}s")
-        self._send(200, {"passages": best, "trace": {"backend": f"qdrant:{LABEL}",
-                                                     "packs": {t: BY_TAG[t]["version"] for t in tags}}})
+        self._send(*answer(body))
+
+
+def answer(body):
+    """POST /v1/retrieve as (status, json). Plain data in and out so it can be tested."""
+    try:
+        q = re.sub(r"\s+", " ", str(body.get("query") or "")).strip()
+        k = max(1, min(20, int(body.get("k") or 5)))
+        shown = {p["tag"] for p in visible_packs()}
+        tags = [t for t in (body.get("packs") or list(BY_TAG)) if t in BY_TAG and t in shown]
+        where_in = body.get("where") if isinstance(body.get("where"), dict) else {}
+        category = where_in.get("category") if isinstance(where_in.get("category"), str) else None
+        if not q:
+            return 400, {"error": {"type": "invalid_request", "message": "query is empty"}}
+    except (ValueError, TypeError) as e:
+        return 400, {"error": {"type": "invalid_request", "message": str(e)[:200]}}
+    t0, out = time.monotonic(), []
+    try:
+        for t in tags:
+            for attempt in (1, 2, 3):  # a read cut short by the store or the embedder is retried
+                try:
+                    hits = pack_hits(t, q, k, category)
+                    break
+                except Exception as e:  # noqa: BLE001
+                    if attempt == 3:
+                        raise
+                    log(f"retrieve {t} attempt {attempt}: {type(e).__name__}; retrying")
+                    time.sleep(1.5 * attempt)
+            for h in hits:
+                p = passage(t, h)
+                if p["text"]:
+                    out.append(p)
+    except Exception as e:  # noqa: BLE001 - the store failed: a 502, never an empty success
+        log(f"retrieve failed: {type(e).__name__}: {str(e)[:200]}")
+        return 502, {"error": {"type": "upstream", "message": f"{type(e).__name__}"}}
+    seen, best = set(), []
+    for p in sorted(out, key=lambda x: -x["score"]):
+        if p["id"] not in seen:
+            seen.add(p["id"])
+            best.append({k_: v for k_, v in p.items() if k_ != "score"})
+    best = best[:k]
+    log(f"retrieve {body.get('purpose') or '-'} packs={','.join(tags)} k={k}: {len(best)} passage(s) "
+        f"in {time.monotonic() - t0:.1f}s")
+    return 200, {"passages": best, "trace": {"backend": f"qdrant:{LABEL}",
+                                             "packs": {t: BY_TAG[t]["version"] for t in tags}}}
 
 
 if __name__ == "__main__":

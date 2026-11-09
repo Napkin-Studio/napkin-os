@@ -130,7 +130,8 @@ def main() -> int:
     r.check(st == 200 and isinstance(listed, list) and set(body) == {"packs", "embed_model", "backend"},
             f"-> {st}, {{packs, embed_model, backend}}")
     listed = listed or []
-    r.check(all(isinstance(p, dict) and set(p) == PACK_KEYS for p in listed), "every pack has the documented keys")
+    r.check(all(isinstance(p, dict) and (set(p) - {"gated"}) == PACK_KEYS for p in listed),
+            "every pack has the documented keys (`gated` is the one optional key)")
     r.check(all(VERSION_RE.match(str(p.get("version"))) for p in listed), "every pack has a version")
     tags = [p.get("tag") for p in listed]
     r.check(len(tags) == len(set(tags)), "tags unique")
@@ -138,6 +139,18 @@ def main() -> int:
                 for p in listed), "kind and scope from the documented sets")
     house = [p["tag"] for p in listed if p.get("scope") == "house"]
     asked = a.packs.split(",") if a.packs else house[:5]
+
+    gated = [p for p in listed if p.get("gated") is True]
+    if gated:
+        r.section("gated packs (§3.7)")
+        r.check(all("category" in (p.get("filterable") or []) for p in gated),
+                "a gated pack is filterable by category")
+        st, body, _, _ = retrieve({"query": "x", "k": 1, "packs": [gated[0]["tag"]]})
+        r.check(st == 200 and isinstance(body, dict) and body.get("passages") == [],
+                f"a gated pack asked without a category -> 200 with no passages, never an error ({st})")
+        st, body, _, _ = retrieve({"query": "x", "k": 1, "packs": [gated[0]["tag"]], "where": {"category": "no_such_category"}})
+        r.check(st == 200 and isinstance(body, dict) and isinstance(body.get("passages"), list),
+                f"a gated pack asked with a category answers with a passages list ({st})")
 
     r.section("scope and closed requests")
     st, body, _, _ = packs(None)

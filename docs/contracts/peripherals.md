@@ -574,6 +574,11 @@ partitions per agency, not per brand).
   embed (the mock).
 - The list is exactly what the caller may search: house packs plus the
   packs of `X-Napkin-Org`. Another agency's pack is never listed.
+- `gated` (optional, `true` only when set): a **gated pack** is served only
+  through its gate and only for a request that names a category (§3.7). It is
+  listed only while the service's gate is on, so a client that asks every
+  `case` pack it is told about never learns of it while the gate is off. Its
+  `filterable` is `["category"]`.
 
 ### 3.2 `POST /v1/retrieve`
 
@@ -593,7 +598,8 @@ Scoped as §3.1.
 | `where` | optional, `{key: string \| number \| boolean}`, **exact** match on passage metadata, ANDed; every key must be in the `filterable` of every named pack, else `400 invalid_input`. (Exact, as the engine made it, so local and remote stores return the same set) |
 | `purpose` | optional slug, for the trace and log only; it never changes the result |
 
-Any other field is `400 invalid_input`.
+Any other field is `400 invalid_input`. A gated pack (§3.7) adds one rule to
+`packs` and `where`: it needs `where.category`.
 
 ```json
 { "passages": [
@@ -718,6 +724,31 @@ Honest limits, which the mock's health and `trace.backend`
   Determinism comes from the cache.
 
 ---
+
+### 3.7 Gated packs (the award case library)
+
+A pack with `"gated": true` in §3.1 is shown only where the corpus it holds has
+earned its place. The first is `awardlib`: short, Napkin-reconstructed award
+cases (`features/award-data-fit.clan`, ADR 0033), useful as precedent only where
+the house corpus is thin.
+
+| Rule | Behaviour |
+|---|---|
+| Listing | Not in `GET /v1/packs` while the service's gate is `off` (the default). `thin` and `on` list it. |
+| Category | The request names one in `where.category` (a value of the engine's client `category` enum, `engine/schema/rag_metadata.v1.json`). The client chooses it; the service does not guess. |
+| No category, or a category the gate does not admit | **`200` with no passages from that pack. Never an error.** An older client that asks every case pack, and sends no `where`, must keep its other precedent lookups. |
+| `thin` | Admitted only when the house corpus holds fewer than `RAG_AWARDLIB_THIN_MAX` (30) cases of that category, counted from the store. A store that cannot count withholds the pack (fails closed). |
+| `on` | Admitted for any named category (no thin test). |
+| Search | Pinned to `{source: awardlib, category}`. Every other pack is searched exactly as before. |
+
+The decision is one function, `engine/rag/awardlib_gate.py` `decide()`, shared
+with the engine's own `brief_context`, so the two paths cannot disagree. The
+passages are Napkin's paraphrase labelled "reconstructed strategy,
+entrant-reported results"; a caller shows them as reasoning and never as the
+entrant's words, and a client-facing export carries facts and the source link
+only. `engine/packs.py` reads `gated: true` from `pack.yaml`, `napkin-packs
+sync` writes it to `packs.lock`, and `parse_brief` and `distil_pack` skip gated
+packs.
 
 ## 4. Layers port — `napkin.layers/1`
 
