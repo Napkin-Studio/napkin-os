@@ -693,11 +693,14 @@ class Researcher:
             if s:
                 rec = {"id": sid, "uri": s["url"], "title": s["title"], "publisher": s["publisher"],
                        "published_at": s["published_at"], "retrieved_at": s["retrieved_at"],
-                       "tier": s["tier"], "domain": s["domain"], "licence": s.get("licence") or "open"}
+                       "tier": s["tier"], "domain": s["domain"], "licence": s.get("licence") or "open",
+                       # the source card's origin: read by this run, or the client's own material
+                       origin.KEY: origin.CLIENT if str(s.get("url") or "").startswith("material:") else origin.RESEARCH}
             elif sid in from_layer and from_layer[sid].get("uri"):
                 r = from_layer[sid]
                 rec = {"id": sid, **{k: r[k] for k in ("uri", "title", "publisher", "published_at", "retrieved_at",
-                                                        "tier", "domain", "licence") if r.get(k) is not None}}
+                                                        "tier", "domain", "licence") if r.get(k) is not None},
+                       origin.KEY: origin.LAYER}
             else:
                 continue
             out.append({k: v for k, v in rec.items() if v not in (None, "")})

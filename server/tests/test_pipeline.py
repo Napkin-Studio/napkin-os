@@ -661,6 +661,8 @@ def test_a_pin_found_by_research_says_research_and_one_reused_from_the_layers_sa
     _, change, _ = Researcher(DOC, "3", rclan(), "t@1.0", caps, ["market_structure", "media_spend"],
                               ["IE", "GB"], ["automotive.ev_charging"]).run()
     assert change["facts_append"] and all(p["origin_kind"] == "research" for p in change["facts_append"])
+    # the sources it read say so too, so /cite on a source answers research, not document
+    assert change["sources_append"] and all(s["origin_kind"] == "research" for s in change["sources_append"])
     # a second campaign pins the same rows from the layers, researching nothing
     _, again, _ = Researcher("22222222-2222-4333-8444-555555555555", "1", rclan(), "t@1.0",
                              caps_for(store, research=FakeResearch()), ["market_structure", "media_spend"],
