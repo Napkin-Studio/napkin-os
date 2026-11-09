@@ -4,7 +4,7 @@
 
 // Client review, as words and a request: what the recorder has filled in, how
 // strong a record it makes, the body `POST /client-review` takes, and what
-// Jude and Ellis say about it afterwards (OS-layer contract §7.5, §8.2). No
+// the Review and Knowledge agents say about it afterwards (OS-layer contract §7.5, §8.2). No
 // React and no host here, so the rules are tested as they are.
 //
 // The owner's prototype (client review, version 4) is the reference: the
@@ -12,7 +12,7 @@
 // other two open an optional evidence area. A part is marked on the document
 // itself, by the app's fields; this only carries what was marked.
 
-import { AGENTS } from '../../studio/model'
+import { roles } from '../agents/engine'
 import type {
   ClientAnswerKind, ClientAnswerView, ClientChannel, ClientPartRef, ClientReason, ClientReviewBody, ClientView,
   ClientWho, DecisionsView,
@@ -266,27 +266,28 @@ export function openParts(client: ClientView): number {
 }
 
 export interface Say {
-  agent: 'judge' | 'extract'
-  state: 'idle' | 'working' | 'needs-you'
+  /** The role speaking: 'review' or 'knowledge'. */
+  agent: 'review' | 'knowledge'
+  state: 'idle' | 'working' | 'needs'
   text: string
 }
 
 /**
- * What the crew says while the mode is on: Jude asks for the whole
+ * What the agents say while the mode is on: the Review agent asks for the whole
  * document's answer, then says what Save will do with it.
  */
 export function modeLine(d: Draft, noun: string): Say {
-  const jude = 'judge' as const
-  if (!d.answer) return { agent: jude, state: 'needs-you', text: `What did the client say about the ${noun} as a whole?` }
-  if (d.answer === 'accepted') return { agent: jude, state: 'needs-you', text: 'All accepted: just save. I’ll mark every part as accepted on this version.' }
+  const review = 'review' as const
+  if (!d.answer) return { agent: review, state: 'needs', text: `What did the client say about the ${noun} as a whole?` }
+  if (d.answer === 'accepted') return { agent: review, state: 'needs', text: 'All accepted: just save. I’ll mark every part as accepted on this version.' }
   return {
-    agent: jude, state: 'needs-you',
-    text: `If you know which parts, mark them on the ${noun}. If you don’t, add what they sent and ${AGENTS.extract.given} will look for the parts it names.`,
+    agent: review, state: 'needs',
+    text: `If you know which parts, mark them on the ${noun}. If you don’t, add what they sent and ${roles.the('knowledge')} will look for the parts it names.`,
   }
 }
 
 /**
- * What the crew says once an answer is recorded, from the host's view: Jude
+ * What the agents say once an answer is recorded, from the host's view: the Review agent
  * on what is left to do. Null when there is no client answer to speak of.
  * `noMatch`: the host looked in the client's words on Save and no part was
  * named, so the answer stands for the whole document.
@@ -297,32 +298,32 @@ export function afterLine(view: DecisionsView | null, noun: string, noMatch = fa
   if (!c || !a) return null
   // Said mid-sentence, so lower case when there is no name.
   const who = firstName(a.client.name) || 'the client'
-  const ellis = AGENTS.extract.given
-  if (a.answer === 'accepted') return { agent: 'judge', state: 'idle', text: `${upperFirst(who)} accepted the whole ${noun} on the locked version. It’s signed off.` }
+  const knowledge = roles.The('knowledge')
+  if (a.answer === 'accepted') return { agent: 'review', state: 'idle', text: `${upperFirst(who)} accepted the whole ${noun} on the locked version. It’s signed off.` }
   const reopened = view?.lock.reopened?.length ?? 0
-  if (reopened) return { agent: 'judge', state: 'needs-you', text: `${reopened === 1 ? 'A part is' : `${reopened} parts are`} open for the change ${who} asked for. Lock it again when it’s done.` }
+  if (reopened) return { agent: 'review', state: 'needs', text: `${reopened === 1 ? 'A part is' : `${reopened} parts are`} open for the change ${who} asked for. Lock it again when it’s done.` }
   if (c.suggestions.some(s => s.review === a.decision)) {
-    return { agent: 'judge', state: 'needs-you', text: `${ellis} found the parts ${who} may have meant. Check each one: only the parts you confirm get the client’s answer.` }
+    return { agent: 'review', state: 'needs', text: `${knowledge} found the parts ${who} may have meant. Check each one: only the parts you confirm get the client’s answer.` }
   }
   if (!a.parts_known && noMatch) {
     return {
-      agent: 'judge', state: 'needs-you',
-      text: `${ellis} found no part named in ${firstName(a.client.name) ? `${firstName(a.client.name)}’s` : 'the client’s'} words, so the answer stands for the whole ${noun}. If you know which parts they meant, mark them${a.answer === 'rejected' ? ' before it can be locked again' : ''}.`,
+      agent: 'review', state: 'needs',
+      text: `${knowledge} found no part named in ${firstName(a.client.name) ? `${firstName(a.client.name)}’s` : 'the client’s'} words, so the answer stands for the whole ${noun}. If you know which parts they meant, mark them${a.answer === 'rejected' ? ' before it can be locked again' : ''}.`,
     }
   }
   if (!a.parts_known) {
     return {
-      agent: 'judge', state: 'needs-you',
+      agent: 'review', state: 'needs',
       text: `We don’t know which parts ${who} meant yet. Mark them${a.answer === 'rejected' ? ' before it can be locked again' : ''}.`,
     }
   }
   const open = openParts(c)
   const parts = `${open} part${open === 1 ? '' : 's'}`
-  if (open) return { agent: 'judge', state: 'needs-you', text: `${upperFirst(who)} ${a.answer === 'rejected' ? `rejected ${parts}` : `asked for changes on ${parts}`}. Tap a part’s mark on the ${noun}, then Make this change.` }
-  return { agent: 'judge', state: 'idle', text: `Every change ${who} asked for is made. Lock it again and send the new version.` }
+  if (open) return { agent: 'review', state: 'needs', text: `${upperFirst(who)} ${a.answer === 'rejected' ? `rejected ${parts}` : `asked for changes on ${parts}`}. Tap a part’s mark on the ${noun}, then Make this change.` }
+  return { agent: 'review', state: 'idle', text: `Every change ${who} asked for is made. Lock it again and send the new version.` }
 }
 
-/** One of Ellis's suggestions a person has already answered, as the band keeps it. */
+/** One of the Knowledge agent's suggestions a person has already answered, as the band keeps it. */
 export interface SettledSuggestion {
   suggestion: string
   label: string
@@ -334,7 +335,7 @@ export interface SettledSuggestion {
 }
 
 /**
- * Ellis's suggestions on this answer that a person has said yes or no to,
+ * The Knowledge agent's suggestions on this answer that a person has said yes or no to,
  * oldest first like the open ones, so the recorder still sees what they just
  * did: a part answer naming its `suggestion` confirmed it, a `dismiss_part`
  * turned it down. One closed by a new lock is not shown (it was not answered).

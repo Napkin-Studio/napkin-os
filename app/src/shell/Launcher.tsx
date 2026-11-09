@@ -7,8 +7,8 @@ import type { CSSProperties } from 'react'
 import { host } from '../host'
 import type { AppHome, RecentDoc, RecentState } from '../host'
 import { PoweredByClan } from '../brand/PoweredByClan'
-import { AgentFigure } from '../studio/AgentFigure'
-import { AGENTS, type AgentKey } from '../studio/model'
+import AgentSphere from './agents/AgentSphere'
+import { roles } from './agents/engine'
 import type { InstalledApp } from './types'
 import { docTitle } from './docTitle'
 import { greeting, lastTouched } from './when'
@@ -44,15 +44,16 @@ const RECENT_SHOWN = 6
 /** A filter by tool once the list is long enough to need one. */
 const FILTER_FROM = 5
 
-/** The crew the OS can draw: known figure keys only, at most six. */
-function crewOf(home?: AppHome | null): AgentKey[] {
-  return (home?.crew ?? []).filter((k): k is AgentKey => k in AGENTS).slice(0, 6)
+/** The agents an app works with, by role (the one lookup reads its manifest's ids), at most six. */
+function crewOf(home?: AppHome | null): string[] {
+  return [...new Set((home?.crew ?? []).map(k => roles.of(k)).filter(Boolean))].slice(0, 6)
 }
 
-/** "Ellis, Dara and Jude": the crew by the names they introduce themselves by. */
-function names(crew: readonly AgentKey[]): string {
-  const n = crew.map(k => AGENTS[k].given)
-  return n.length < 2 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`
+/** "the Knowledge, Strategy and Review agents": an app's agents by role. */
+function names(crew: readonly string[]): string {
+  if (crew.length === 1) return roles.the(crew[0])
+  const n = crew.map(k => roles.ROLES[k].name)
+  return n.length < 1 ? '' : `the ${n.slice(0, -1).join(', ')} and ${n[n.length - 1]} agents`
 }
 
 /** Napkin's own tools wear their identity (mock phase 2: Brief Maker's manila and terracotta, Research's ink), not the colour of their name. */
@@ -250,7 +251,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
                   {app.icon && <Mark app={app} className="ln-ghost" />}
                   {crew.length > 0 && (
                     <span className="ln-crew">
-                      {crew.map(k => <AgentFigure key={k} agent={k} size={46} />)}
+                      {crew.map(k => <AgentSphere key={k} agent={k} size={46} label="" />)}
                     </span>
                   )}
                 </span>
@@ -283,7 +284,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
 
       {installed.length === 0 && !loading && (
         <div className="ln-note">
-          <AgentFigure agent="extract" size={52} />
+          <AgentSphere agent="knowledge" size={52} label="" />
           <span><b>We couldn’t load your tools just now.</b> Nothing is lost. You can still open your recent work, or a file from your computer.</span>
         </div>
       )}
@@ -316,13 +317,13 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
           </>
         ) : recentFailed ? (
           <div className="ln-note">
-            <AgentFigure agent="drafter" size={52} />
+            <AgentSphere agent="brief" size={52} label="" />
             <span><b>We couldn’t load your recent work.</b> It’s all still saved.</span>
             <button className="ln-retry" onClick={loadRecent}>Try again</button>
           </div>
         ) : visible.length === 0 ? (
           <div className="ln-empty">
-            <AgentFigure agent="drafter" size={52} />
+            <AgentSphere agent="brief" size={52} label="" />
             <span><b>Nothing here yet.</b> Your work will wait for you here.</span>
           </div>
         ) : (

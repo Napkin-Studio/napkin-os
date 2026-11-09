@@ -80,7 +80,7 @@
 .ln-mono { -webkit-mask: none; mask: none; background: none; color: var(--tdeep); font-weight: 800; text-align: center; }
 .ln-big.ln-mono { font-size: 54px; line-height: 64px; }
 .ln-crew { position: absolute; right: 14px; bottom: -4px; display: flex; align-items: flex-end; }
-.ln-crew .agent-figure { margin-left: -3px; }
+.ln-crew .nk-ag { margin-left: -3px; }
 
 .ln-body { display: flex; flex: 1; flex-direction: column; gap: 4px; padding: 16px 20px 20px; }
 .ln-app-name { color: var(--tdeep); font-weight: 500; }

@@ -47,6 +47,7 @@ import './components/chrome.css'
 import './shell/nui/tokens.css'
 import './shell/nui/nui.css'
 import './shell/nui/shell.css'
+import { roles } from './shell/agents/engine'
 
 // Theme keys an immersive app may recolor → CSS variables on the shell root.
 // These are the design tokens; the legacy names (--bg, --surface, --text,
@@ -584,6 +585,8 @@ export default function App() {
   const crew = running && !device ? {
     people: user ? [{ name: whoIs(landing.data?.person ?? null).first ?? user, initials: initialsOf(whoIs(landing.data?.person ?? null).first ?? user), you: true }] : [],
     working: docItem?.run?.state === 'working' ? runWords(docItem).toLowerCase() : null,
+    agent: docItem?.run?.state === 'working' ? roles.forStage(docItem.app_id ?? running.open.manifest.app?.app_id, docItem.run.stage) : null,
+    progress: docItem?.run?.progress ?? null,
     waiting: docItem?.run?.state === 'waiting',
   } : undefined
 

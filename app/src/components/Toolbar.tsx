@@ -27,6 +27,8 @@ import { modeOf } from '../shell/appBar'
 import { useEngaged } from './markStore'
 import { markOf } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
+import AgentSphere from '../shell/agents/AgentSphere'
+import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { BarButtons, BarChips } from './AppBarItems'
 import { Pop } from '../shell/nui/Pop'
@@ -182,11 +184,16 @@ const crewColour = (name: string) => CREW_COLOURS[[...name].reduce((h, c) => (h 
 /** Who is in the document: the people, then an agent orb with a spinning ring only while one works. */
 function CrewHere({ crew }: { crew: Crew }) {
   const names = crew.people.map(p => (p.you ? `${p.name} (you)` : p.name))
-  const said = `In this document: ${names.join(', ') || 'nobody yet'}${crew.working ? `; an agent is ${crew.working}` : ''}`
+  const who = crew.agent ? roles.the(crew.agent) : 'an agent'
+  const said = `In this document: ${names.join(', ') || 'nobody yet'}${crew.working ? `; ${who} is ${crew.working}` : ''}`
   return (
     <span className="tb-crew" id="tb-crew" role="group" aria-label={said} title={said} data-testid="crew">
       {crew.people.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
-      {crew.working && <i className="cw ag" data-testid="agent-working" aria-hidden />}
+      {crew.working && (
+        <i className="cw ag" data-testid="agent-working" data-agent={roles.of(crew.agent) || 'orchestrator'} title={`${roles.name(crew.agent ?? '')} · ${crew.working}`} aria-hidden>
+          <AgentSphere agent={crew.agent ?? 'orchestrator'} size={26} state="working" progress={crew.progress ?? undefined} label="" />
+        </i>
+      )}
     </span>
   )
 }

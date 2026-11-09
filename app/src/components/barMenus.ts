@@ -130,6 +130,10 @@ export interface Crew {
   people: { name: string; initials: string; you?: boolean }[]
   /** What the agent working on it is doing, in words; null when none works. The status dot shows only then. */
   working?: string | null
+  /** The agent at work (a role key from the one lookup, agents/engine.ts), drawn as its sphere while `working`. */
+  agent?: string | null
+  /** Steps done of all, when the run says: the sphere's ring. */
+  progress?: readonly [number, number] | null
   /** The run stopped to ask the person something (a question in the document). It needs them, though nothing blocks the lock. */
   waiting?: boolean
 }
@@ -329,7 +333,7 @@ export function accountItems(account: Account | undefined, user?: string | null,
   const n = account?.offlineCount
   return [
     ...(account?.onAllTools ? [{ label: 'All tools', hint: 'Every tool and template, and what is coming', run: account.onAllTools }] : []),
-    ...(account?.onCrew ? [{ label: 'Your crew', hint: 'The agents and what each one does', run: account.onCrew }] : []),
+    ...(account?.onCrew ? [{ label: 'Your agents', hint: 'The agents, by role, and what each one does', run: account.onCrew }] : []),
     ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
     ...(onOpenFile ? [{ label: 'Open…', hint: 'Open a .clan file from this computer', run: onOpenFile }] : []),
     ...(account && account.onInstall !== undefined
