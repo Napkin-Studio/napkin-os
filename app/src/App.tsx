@@ -21,6 +21,7 @@ import { initialsOf, needsYou, routeOfDocument, runWords, whoIs } from './shell/
 import Toolbar from './components/Toolbar'
 import { signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
+import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
 import { applyAgency, markOf } from './shell/agency/palette'
 import DeskDecisions from './shell/decisions/DeskDecisions'
 import { useRoute } from './shell/useRoute'
@@ -55,8 +56,7 @@ function resetTheme() {
 }
 
 /** The history entry an open document stands on, so Back leaves it and lands where it was opened. */
-const DOC_ENTRY = { napkinDoc: true }
-const isDocEntry = () => (window.history.state as { napkinDoc?: boolean } | null)?.napkinDoc === true
+const isDocEntry = () => isDocEntryState(window.history.state)
 /**
  * The URL of an open studio document: `?open=<path>` (what Share's Copy link
  * gives, read back by host/http.ts takeLaunchFile), so a reload reopens it, and
@@ -104,8 +104,10 @@ export default function App() {
     screen === 'app' ? running?.artifactPath ?? null : null)
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
+  // Who the history entries the shell writes are for (lastOpen.ts).
+  const person = useRef<string | null>(null)
   // A read from the server: the state is set when it answers.
-  useEffect(() => { void signedInUser().then(u => setUser(u ? u.username : null)) }, [])
+  useEffect(() => { void signedInUser().then(u => { person.current = u ? u.username : null; setUser(person.current) }) }, [])
   // The agency's admin-set colours on the chrome (shell/agency/palette.ts), or
   // the neutral pair; a layer of its own that resetTheme never clears.
   const personId = landing.data?.person?.id ?? null
@@ -183,8 +185,8 @@ export default function App() {
     const route = routeOfDocument(open.manifest)
     const url = hasServer && !source && !open.is_template && !onDevice()
       ? docUrl(open.path, route ? formatRoute(route) : null) : window.location.href
-    if (!isDocEntry()) window.history.pushState(DOC_ENTRY, '', url)
-    else window.history.replaceState(DOC_ENTRY, '', url)
+    if (!isDocEntry()) window.history.pushState(docEntry(person.current), '', url)
+    else window.history.replaceState(docEntry(person.current), '', url)
   }, [])
 
   // A .clan from this device — dropped, chosen, handed over by the OS, or an
@@ -237,7 +239,9 @@ export default function App() {
   }, [openHome])
 
   // Open a .clan path: templates → install prompt; documents → run.
-  const openPath = useCallback(async (path: string) => {
+  // `remembered`: the document the page's URL named on load. One that is not
+  // there (another person's, or gone) is let go quietly, and home stays.
+  const openPathAs = useCallback(async (path: string, remembered: boolean) => {
     const n = nextOpen()
     setLoading(true); setError(null)
     try {
@@ -245,8 +249,12 @@ export default function App() {
       if (!isLatest(n)) return
       if (result.is_template) setPendingLaunch(result)
       else await runArtifact(n, result)
-    } catch (e) { setError(String(e)) } finally { setLoading(false) }
+    } catch (e) {
+      if (remembered && isNotFound(e)) retireDocEntry()
+      else setError(String(e))
+    } finally { setLoading(false) }
   }, [runArtifact])
+  const openPath = useCallback((path: string) => openPathAs(path, false), [openPathAs])
 
   const handleOpenFile = useCallback(async () => {
     // On the device, "Open" never means upload.
@@ -335,8 +343,12 @@ export default function App() {
     // rule explicitly allows, not derived state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     openHome()
-    host.takeLaunchFile().then(p => { if (p) openPath(p) }).catch(() => {})
-  }, [openHome, openPath])
+    // Read before the launch file is taken (taking it rewrites the entry).
+    const entry = window.history.state as unknown
+    void Promise.all([host.takeLaunchFile(), hasServer ? signedInUser() : Promise.resolve(null)]).then(([p, u]) => {
+      if (p && launchIsMine(entry, u ? u.username : null)) void openPathAs(p, true)
+    }).catch(() => {})
+  }, [openHome, openPathAs])
 
   useEffect(() => {
     // Re-subscribed whenever the page changes host (`device`): events come

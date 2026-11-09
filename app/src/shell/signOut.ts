@@ -5,5 +5,11 @@
 /** Sign out of the studio (napkin-web clears the session cookie), then start over at sign-in. */
 export async function signOut() {
   await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' }).catch(() => {})
+  // The open document and the place in the studio were this person's: the
+  // next person to sign in starts at their own home (shell/lastOpen.ts).
+  const params = new URLSearchParams(location.search)
+  params.delete('open')
+  const q = params.toString()
+  history.replaceState(null, '', location.pathname + (q ? `?${q}` : ''))
   location.reload()
 }

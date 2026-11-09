@@ -29,6 +29,7 @@ import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
 import '../components/chrome.css'
 import './clientReview/ClientReview.css'
+import { afterLock, editOn, setEditFor, type EditState } from './editMode'
 
 interface Props {
   /** The installed tool this document belongs to, when it is one (its app.home names it). */
@@ -68,10 +69,16 @@ interface Props {
 export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
-  // Edit mode is the OS's: the app's fields become editable while it is on.
-  const [editMode, setEditMode] = useState(running.editMode)
   const { open } = running
   const docPath = open.path
+  // Edit mode is the OS's: the app's fields become editable while it is on.
+  // It is kept with the document it was turned on in: another document (a
+  // spin-off, a link) opens out of it, and a lock ends it.
+  const [edit, setEdit] = useState<EditState>({ docPath, on: running.editMode })
+  const editMode = editOn(edit, docPath)
+  const setEditMode = useCallback((v: boolean | ((was: boolean) => boolean)) => {
+    setEdit(e => setEditFor(e, docPath, v))
+  }, [docPath])
   // The host's view of the document, read once: the panel renders it, and
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
@@ -142,6 +149,12 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const clientOn = review?.docPath === docPath
   const parts = useMemo(() => (declared.docPath === docPath ? declared.parts : []), [declared, docPath])
   const reviewable = canReview(decisions.view)
+  // Locked (nothing reopened): there is nothing left to edit, so edit mode ends.
+  const [lockSeen, setLockSeen] = useState(reviewable)
+  if (lockSeen !== reviewable) {
+    setLockSeen(reviewable)
+    setEdit(e => afterLock(e, docPath, lockSeen, reviewable))
+  }
 
   const startReview = useCallback(() => {
     setEditMode(false)
@@ -150,7 +163,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     const known = knownClients(decisions.view, [...lastWho.current.values()])
     const who = lastWho.current.get(docPath) ?? decisions.view?.client?.answer?.client ?? known[0] ?? null
     setReview({ docPath, draft: emptyDraft(who), marks: {}, known })
-  }, [docPath, decisions.view])
+  }, [docPath, decisions.view, setEditMode])
 
   const endReview = useCallback(() => {
     setReview(null)
@@ -226,7 +239,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const onEditRequest = useCallback(() => {
     setReview(null)
     setEditMode(true)
-  }, [])
+  }, [setEditMode])
 
   const marked = review ? markedOf(review.draft, parts, review.marks).length : 0
   const authored = open.render_model === 'authored'
