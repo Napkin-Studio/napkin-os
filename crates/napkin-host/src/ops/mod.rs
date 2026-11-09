@@ -14,6 +14,7 @@
 //! write and the server as one Postgres transaction without either copy of the
 //! operation knowing which.
 
+pub mod app_update;
 pub mod assemble;
 pub mod client_match;
 pub mod client_review;

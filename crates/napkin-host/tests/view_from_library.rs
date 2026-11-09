@@ -102,12 +102,26 @@ fn template_with(
     assets: &[(&str, &[u8])],
     spinoff: Option<clan_sdk::SpinoffSpec>,
 ) -> Vec<u8> {
+    template_full(version, assets, spinoff, None)
+}
+
+/// [`template`], with `schema` as its output schema.
+fn template_schema(version: &str, schema: &str) -> Vec<u8> {
+    template_full(version, &[], None, Some(schema))
+}
+
+fn template_full(
+    version: &str,
+    assets: &[(&str, &[u8])],
+    spinoff: Option<clan_sdk::SpinoffSpec>,
+    schema: Option<&str>,
+) -> Vec<u8> {
     let base = create(CreateOptions {
         title: "Brief Maker".into(),
         brief: "fixture".into(),
         document_type: None,
         no_render: false,
-        schema: None,
+        schema: schema.map(String::from),
     })
     .unwrap();
     let clan = ClanFile::from_bytes(base).unwrap();
@@ -457,7 +471,7 @@ fn a_write_keeps_the_library_view() {
         .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
         .unwrap();
     assert!(f.session.human_html().unwrap().contains("VIEW 1.2.0"));
-    // The write landed on the document, whose own view is still 1.0.0.
+    // The write landed on the document, which now carries 1.2.0 itself.
     let stored = ClanFile::from_bytes(f.stored()).unwrap();
     assert!(stored
         .read_entry_string("shared/data.yaml")
@@ -466,8 +480,9 @@ fn a_write_keeps_the_library_view() {
     assert!(stored
         .read_entry_string("human/index.html")
         .unwrap()
-        .contains("VIEW 1.0.0"));
-    // served_archive of a snapshot is the same transform the session uses.
+        .contains("VIEW 1.2.0"));
+    // served_archive of a snapshot is the same transform the session uses:
+    // with the app caught up it hands out the stored page as it is.
     let doc = Document::from_bytes(f.doc.clone(), f.stored()).unwrap();
     assert_eq!(&*served_archive(&doc).unwrap(), f.stored().as_slice());
 }
@@ -558,4 +573,325 @@ fn a_spun_off_brief_is_shown_with_the_library_view_and_reading_upstream_writes_n
         before,
         "neither the brief nor its research is written"
     );
+}
+
+// ── doc-app-upgrade: locked documents keep their page; unlocked ones catch up ──
+
+/// A schema with `tone`, and `budget` when `budget` is set; nothing else.
+fn schema(budget: bool) -> String {
+    format!(
+        r#"{{"type":"object","additionalProperties":false,"properties":{{"tone":{{"type":"string"}}{}}}}}"#,
+        if budget {
+            r#","budget":{"type":"string"}"#
+        } else {
+            ""
+        }
+    )
+}
+
+fn post(session: &Session, path: &str, body: serde_json::Value) -> (u16, serde_json::Value) {
+    let r = napkin_host::handle(
+        session,
+        &napkin_host::NoConfig,
+        napkin_host::HostRequest::new(path, "", body.to_string().into_bytes()),
+    );
+    (
+        r.status,
+        serde_json::from_slice(&r.body).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+fn chain_of(bytes: &[u8]) -> clan_sdk::DecisionChain {
+    let clan = ClanFile::from_bytes(bytes.to_vec()).unwrap();
+    clan_sdk::DecisionChain::from_yaml(&clan.read_entry("agent/decision-chain.yaml").unwrap())
+        .unwrap()
+}
+
+fn app_updates(bytes: &[u8]) -> Vec<clan_sdk::Decision> {
+    chain_of(bytes)
+        .decisions
+        .into_iter()
+        .filter(|d| d.kind.as_deref() == Some("app_update"))
+        .collect()
+}
+
+fn lock_id(bytes: &[u8]) -> Option<String> {
+    let clan = ClanFile::from_bytes(bytes.to_vec()).unwrap();
+    napkin_host::ops::review::lock_of(&chain_of(bytes), clan.document_id())
+        .and_then(|d| d.id.clone())
+}
+
+impl Fixture {
+    /// A document of `old`, given some data and locked, and then `now`
+    /// installed over it.
+    fn locked(old: Vec<u8>, now: Vec<u8>) -> Self {
+        let f = Fixture::new(old.clone(), Some(old));
+        f.session.open(f.doc.clone()).unwrap();
+        f.session
+            .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
+            .unwrap();
+        let (status, v) = post(&f.session, "/approve", serde_json::json!({}));
+        assert_eq!(status, 200, "{v}");
+        install_app(&*f.store, now).unwrap();
+        f
+    }
+}
+
+#[test]
+fn a_locked_document_shows_its_own_page_and_is_offered_the_update() {
+    let f = Fixture::locked(v1(), template("1.2.0", &[]));
+    let open = f.session.open(f.doc.clone()).unwrap();
+    assert_eq!(open.view_source, ViewSource::Document);
+    assert_eq!(open.view_version.as_deref(), Some("1.0.0"));
+    let u = open.app_update.as_ref().expect("an update is offered");
+    assert!(u.available);
+    assert_eq!(u.name, "Brief Maker");
+    assert_eq!(u.from.version, "1.0.0");
+    assert_eq!(u.to.version, "1.2.0");
+    assert!(u.blocked.is_none());
+    let json = serde_json::to_value(&open).unwrap();
+    assert_eq!(json["app_update"]["to"]["version"], "1.2.0");
+
+    assert!(f.session.human_html().unwrap().contains("VIEW 1.0.0"));
+    // Export and every handoff carry the page the client approved.
+    let (html, _) = f.session.compose_export(false, true).unwrap();
+    assert!(html.contains("VIEW 1.0.0") && !html.contains("VIEW 1.2.0"));
+    assert_eq!(f.session.raw_bytes().unwrap(), f.stored());
+}
+
+#[test]
+fn an_unlocked_document_shows_the_installed_page_and_says_it_is_behind() {
+    let f = Fixture::new(v1(), Some(template("1.2.0", &[])));
+    let open = f.session.open(f.doc.clone()).unwrap();
+    assert_eq!(open.view_source, ViewSource::Library);
+    assert_eq!(open.app_update.as_ref().unwrap().to.version, "1.2.0");
+    // Nothing newer: nothing offered.
+    let f = Fixture::new(v1(), Some(v1()));
+    assert!(f.session.open(f.doc.clone()).unwrap().app_update.is_none());
+}
+
+#[test]
+fn the_first_write_catches_an_unlocked_document_up_once() {
+    let f = Fixture::new(
+        template_schema("1.0.0", &schema(false)),
+        Some(template_schema("1.2.0", &schema(true))),
+    );
+    f.session.open(f.doc.clone()).unwrap();
+    // A field only the newer schema allows is taken: page and schema move together.
+    f.session
+        .patch_data(r#"{"patch":{"budget":"lots"},"agent":"human"}"#)
+        .unwrap();
+    let stored = ClanFile::from_bytes(f.stored()).unwrap();
+    assert!(stored
+        .read_entry_string("human/index.html")
+        .unwrap()
+        .contains("VIEW 1.2.0"));
+    assert_eq!(stored.manifest().app.as_ref().unwrap().version, "1.2.0");
+    assert!(stored
+        .read_entry_string("shared/data.yaml")
+        .unwrap()
+        .contains("lots"));
+
+    let ups = app_updates(&f.stored());
+    assert_eq!(ups.len(), 1);
+    let d = &ups[0];
+    assert_eq!(d.action, "update_app");
+    assert_eq!(d.agent, "napkin-host");
+    assert_eq!(d.actor.as_deref(), Some("human:local"));
+    assert!(d.pinned);
+    assert_eq!(d.targets, vec![stored.document_id().to_string()]);
+    assert_eq!(d.extra["trigger"], serde_yaml::Value::from("save"));
+    assert_eq!(d.extra["from"]["version"], serde_yaml::Value::from("1.0.0"));
+    assert_eq!(d.extra["to"]["version"], serde_yaml::Value::from("1.2.0"));
+    // The edit is the newest decision, the catch-up just before it.
+    let chain = chain_of(&f.stored());
+    assert_eq!(chain.decisions[1].kind.as_deref(), Some("app_update"));
+
+    // A second write does not catch up again.
+    f.session
+        .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
+        .unwrap();
+    assert_eq!(app_updates(&f.stored()).len(), 1);
+    // A reopen finds nothing to offer.
+    assert!(f.session.open(f.doc.clone()).unwrap().app_update.is_none());
+}
+
+#[test]
+fn a_write_that_changes_nothing_does_not_catch_up() {
+    let f = Fixture::new(v1(), Some(template("1.2.0", &[])));
+    f.session.open(f.doc.clone()).unwrap();
+    f.session
+        .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
+        .unwrap();
+    let before = f.stored();
+    // Reopened against an even newer install: a no-op write writes nothing.
+    install_app(&*f.store, template("1.3.0", &[])).unwrap();
+    f.session.open(f.doc.clone()).unwrap();
+    let reply = f
+        .session
+        .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
+        .unwrap();
+    assert_eq!(reply["noop"], true);
+    assert_eq!(f.stored(), before);
+}
+
+#[test]
+fn data_that_does_not_fit_blocks_the_catch_up_and_the_write_still_lands() {
+    let f = Fixture::new(
+        template_schema("1.0.0", &schema(true)),
+        Some(template_schema("1.2.0", &schema(false))),
+    );
+    // Written while 1.0.0 was all there was.
+    install_app(&*f.store, template_schema("1.0.0", &schema(true))).unwrap();
+    f.session.open(f.doc.clone()).unwrap();
+    f.session
+        .patch_data(r#"{"patch":{"budget":"lots"},"agent":"human"}"#)
+        .unwrap();
+    install_app(&*f.store, template_schema("1.2.0", &schema(false))).unwrap();
+
+    let open = f.session.open(f.doc.clone()).unwrap();
+    assert_eq!(
+        open.app_update.as_ref().unwrap().blocked,
+        Some(vec!["budget".to_string()])
+    );
+    f.session
+        .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
+        .unwrap();
+    let stored = ClanFile::from_bytes(f.stored()).unwrap();
+    assert!(stored
+        .read_entry_string("shared/data.yaml")
+        .unwrap()
+        .contains("warm"));
+    assert_eq!(stored.manifest().app.as_ref().unwrap().version, "1.0.0");
+    assert!(app_updates(&f.stored()).is_empty());
+}
+
+#[test]
+fn update_on_a_locked_document_keeps_the_lock_and_the_clients_answer() {
+    let f = Fixture::locked(v1(), template("1.2.0", &[]));
+    f.session.open(f.doc.clone()).unwrap();
+    let (status, v) = post(
+        &f.session,
+        "/client-review",
+        serde_json::json!({ "answer": "accepted", "client": { "name": "Jane Murphy" },
+            "channel": "none", "parts": [{ "address": "tone", "label": "Tone" }] }),
+    );
+    assert_eq!(status, 200, "{v}");
+    let lock = lock_id(&f.stored()).expect("locked");
+    let answer_current = |f: &Fixture| {
+        let view = f
+            .session
+            .read(napkin_host::ops::decisions::decisions)
+            .unwrap();
+        let v = serde_json::to_value(view).unwrap();
+        (
+            v["lock"]["locked"].clone(),
+            v["client"]["answer"]["current"].clone(),
+        )
+    };
+    assert_eq!(answer_current(&f), (true.into(), true.into()));
+    let attention = |f: &Fixture| {
+        f.session
+            .read(napkin_host::ops::decisions::decisions)
+            .unwrap()
+            .attention
+            .len()
+    };
+    let asks = attention(&f);
+
+    let (status, v) = post(&f.session, "/app/update", serde_json::json!({}));
+    assert_eq!(status, 200, "{v}");
+    assert_eq!(v["kind"], "app_update");
+    assert_eq!(v["to"]["version"], "1.2.0");
+
+    // The same lock, still locked, and the client's answer still counts.
+    assert_eq!(lock_id(&f.stored()).as_deref(), Some(lock.as_str()));
+    assert_eq!(answer_current(&f), (true.into(), true.into()));
+    let ups = app_updates(&f.stored());
+    assert_eq!(ups.len(), 1);
+    assert_eq!(ups[0].agent, "human:local");
+    assert_eq!(ups[0].extra["trigger"], serde_yaml::Value::from("update"));
+    assert!(ups[0]
+        .rationale
+        .starts_with("Brought the locked version up to Brief Maker 1.2.0"));
+    assert!(ups[0].superseded_by.is_none());
+    assert_eq!(attention(&f), asks, "an update asks nothing of anyone");
+
+    // The page shown is the new one, now the document's own.
+    assert!(f.session.human_html().unwrap().contains("VIEW 1.2.0"));
+    let open = f.session.open(f.doc.clone()).unwrap();
+    assert_eq!(open.view_source, ViewSource::Document);
+    assert_eq!(open.view_version.as_deref(), Some("1.2.0"));
+    assert!(open.app_update.is_none());
+
+    // Pressing it again: nothing to update to.
+    assert_eq!(
+        post(&f.session, "/app/update", serde_json::json!({})).0,
+        409
+    );
+}
+
+#[test]
+fn update_is_refused_to_anyone_but_a_person_and_when_the_data_does_not_fit() {
+    // A process is not a person.
+    let f = Fixture::locked(v1(), template("1.2.0", &[]));
+    let before = f.stored();
+    let job = Session::with_ctx(
+        f.store.clone() as Arc<dyn DocStore>,
+        napkin_host::Ctx::new(napkin_host::Actor::process("job-1").unwrap()),
+    );
+    job.open(f.doc.clone()).unwrap();
+    assert_eq!(post(&job, "/app/update", serde_json::json!({})).0, 403);
+    assert_eq!(f.stored(), before);
+
+    // Data the new schema refuses: 422, naming the field, nothing written.
+    let store = Arc::new(MemStore::default());
+    install_app(&*store, template_schema("1.0.0", &schema(true))).unwrap();
+    let doc = create_instance(&*store, APP, None).unwrap();
+    let session = Session::new(store.clone() as Arc<dyn DocStore>);
+    session.open(doc.clone()).unwrap();
+    session
+        .patch_data(r#"{"patch":{"budget":"lots"},"agent":"human"}"#)
+        .unwrap();
+    assert_eq!(post(&session, "/approve", serde_json::json!({})).0, 200);
+    install_app(&*store, template_schema("1.2.0", &schema(false))).unwrap();
+    let open = session.open(doc.clone()).unwrap();
+    assert_eq!(
+        open.app_update.unwrap().blocked,
+        Some(vec!["budget".to_string()])
+    );
+    let before = store.read(&doc).unwrap();
+    let (status, v) = post(&session, "/app/update", serde_json::json!({}));
+    assert_eq!(status, 422, "{v}");
+    assert!(v.to_string().contains("budget"), "{v}");
+    assert_eq!(store.read(&doc).unwrap(), before);
+    assert!(session.human_html().unwrap().contains("VIEW 1.0.0"));
+}
+
+#[test]
+fn trust_follows_the_document_after_an_update() {
+    let (private, public) = clan_sdk::generate_keypair();
+    let signed = sign_app(
+        &ClanFile::from_bytes(template("1.2.0", &[])).unwrap(),
+        &private,
+        None,
+    )
+    .unwrap();
+    let f = Fixture::locked(v1(), signed);
+    let doc = Document::from_bytes_with_key(f.doc.clone(), f.stored(), &public).unwrap();
+    let doc = resolve(&*f.store, doc, &public);
+    assert_eq!(doc.view_source(), ViewSource::Document, "locked");
+    assert!(!doc.trusted(), "its own 1.0.0 is unsigned");
+
+    let ctx = napkin_host::Ctx::local();
+    let out = napkin_host::ops::app_update::update(&ctx, &doc, &*f.store, &public).unwrap();
+    let change = &out.changes[0];
+    let version = f.store.apply(change).unwrap();
+    let after = doc.advance(change, version).unwrap();
+    assert!(
+        after.document_trusted(),
+        "it carries the signed template's code and signature"
+    );
+    assert!(after.trusted());
+    assert!(after.app_update().is_none());
 }

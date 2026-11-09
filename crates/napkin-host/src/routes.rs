@@ -350,6 +350,16 @@ pub fn dispatch(
             Err(e) => e.into(),
         },
 
+        // A person brings the document up to the installed app (§7.1).
+        "/app/update" => match session.update_app_as(ctx) {
+            Ok(done) => {
+                let mut reply = done.reply;
+                reply["clan"] = session.document_now().unwrap_or(Value::Null);
+                HostResponse::json(200, &reply).with_events(done.events)
+            }
+            Err(e) => e.into(),
+        },
+
         "/fork" => match session.fork_as(ctx, &req.body_str()) {
             Ok(done) => HostResponse::json(200, &done.reply).with_events(done.events),
             Err(e) => e.into(),

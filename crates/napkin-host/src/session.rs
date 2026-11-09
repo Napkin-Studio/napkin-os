@@ -21,13 +21,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::ctx::Ctx;
-use crate::document::{Change, Document, Version};
+use crate::document::{Base, Change, Document, Version};
 use crate::error::{HostError, HostResult};
 use crate::event::HostEvent;
 use crate::library::{self, Backref, BackrefWritten};
-use crate::ops::{edit, middleware, read, Outcome};
+use crate::ops::{app_update, edit, middleware, read, Outcome};
 use crate::store::{DocId, DocStore};
-use crate::view::{self, ViewSource};
+use crate::view::{self, AppUpdate, ViewSource};
 
 pub use crate::ops::{attribute, content_type_for, sanitize_asset_name};
 
@@ -103,6 +103,13 @@ pub struct OpenResult {
     /// instance of an app.
     #[serde(default)]
     pub view_version: Option<String>,
+    /// The installed app differs from the copy the document carries: the
+    /// name and the versions it would move from and to, and `blocked` (the
+    /// fields that do not fit) when an update would be refused. A locked
+    /// document offers it as Update; an unlocked one catches up on its next
+    /// write (OS-layer contract §7.1). Absent when there is nothing newer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_update: Option<AppUpdate>,
 }
 
 /// What a write did, once its changes are in the store: the reply for the
@@ -202,14 +209,52 @@ impl Session {
     /// has taken its changes, so two writes through one session cannot
     /// interleave. That serialises this process only; another writer to the
     /// same store is what `Change::base` — checked at apply, W2-A4 — is for.
+    ///
+    /// An unlocked document shown with an installed app that differs from
+    /// its own catches up here, once, on a write that changes it
+    /// ([`app_update::catch_up`]): the operation runs against the caught-up
+    /// snapshot, and the catch-up is committed just before its changes — or
+    /// not at all, when the operation fails or changes nothing.
     pub fn perform(
         &self,
         ctx: &Ctx,
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
+        self.perform_with(ctx, true, op)
+    }
+
+    fn perform_with(
+        &self,
+        ctx: &Ctx,
+        catch_up: bool,
+        op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
+    ) -> HostResult<Applied> {
         let mut view = self.view.lock().unwrap();
         let doc = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
-        let outcome = op(ctx, doc)?;
+        let id = doc.id().clone();
+        let caught = match catch_up.then(|| app_update::catch_up(ctx, doc)).flatten() {
+            Some(change) => {
+                let next = doc.advance(&change, change.archive_version())?;
+                Some((change, next))
+            }
+            None => None,
+        };
+        let mut outcome = op(ctx, caught.as_ref().map_or(doc, |(_, d)| d))?;
+        if let Some((change, next)) = caught {
+            if outcome.changes.iter().any(|c| c.doc == id) {
+                self.commit(&mut view.open, &change)?;
+                // The operation's changes were based on the caught-up
+                // snapshot; the store may name that version its own way.
+                let now = view.open.as_ref().map(|d| d.version().clone());
+                if let Some(now) = now {
+                    for c in outcome.changes.iter_mut() {
+                        if c.doc == id && c.base == Base::At(next.version().clone()) {
+                            c.base = Base::At(now.clone());
+                        }
+                    }
+                }
+            }
+        }
         let events = outcome.events();
         let noop = outcome.is_noop();
         for change in &outcome.changes {
@@ -471,6 +516,16 @@ impl Session {
     pub fn patch_schema_as(&self, ctx: &Ctx, body: &str) -> HostResult<Applied> {
         let schema = body.to_string();
         self.perform(ctx, |c, d| edit::patch_schema(c, d, &schema))
+    }
+
+    /// `POST /app/update` — a person moves the open document onto the
+    /// installed version of its app ([`app_update::update`]); a locked
+    /// document keeps its lock. Never itself preceded by a catch-up.
+    pub fn update_app_as(&self, ctx: &Ctx) -> HostResult<Applied> {
+        let store = self.store.clone();
+        self.perform_with(ctx, false, |c, d| {
+            app_update::update(c, d, &*store, NAPKIN_PUBLIC_KEY)
+        })
     }
 
     /// `POST /fork` — fork into ≥2 branch siblings written next to the parent.

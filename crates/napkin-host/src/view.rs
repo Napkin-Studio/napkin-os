@@ -35,10 +35,24 @@
 //! view into the outgoing bytes. That is a transform of what leaves, not a
 //! write — the stored document never changes because of it, and no decision
 //! is recorded.
+//!
+//! **Locked documents** (owner, 2026-11-09). A document under a lock
+//! ([`crate::ops::review::lock_of`]) is shown with its own copy: the version
+//! a client approved stays as it was approved, in the page, the export and
+//! every handoff. When the installed app differs from the copy it carries,
+//! the open result says so ([`AppUpdate`]) and a person may bring it up to
+//! date with `POST /app/update` ([`crate::ops::app_update`]), which keeps the
+//! lock.
+//!
+//! **Catching up.** An unlocked document shown with a library view whose app
+//! differs from its own carries the installed app from its next write on:
+//! [`crate::session::Session::perform`] applies [`clan_sdk::upgrade_app`]
+//! before the write, with one `app_update` decision. Opening never writes.
+//! "Differs" is [`clan_sdk::app_digest`], not the version string.
 
 use std::borrow::Cow;
 
-use clan_sdk::{ClanBuilder, ClanFile, FileEntry, MANIFEST_PATH};
+use clan_sdk::{ClanBuilder, ClanFile, DecisionChain, FileEntry, MANIFEST_PATH};
 use serde::{Deserialize, Serialize};
 
 use crate::document::Document;
@@ -94,6 +108,77 @@ impl LibraryView {
     }
 }
 
+/// One app as a document or the library carries it: what an `app_update`
+/// decision moves from and to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppRef {
+    pub app_id: String,
+    pub version: String,
+    /// [`clan_sdk::app_digest`] of the app-owned entries.
+    pub digest: String,
+    /// The app's name, for words ("Brief Maker").
+    pub name: String,
+}
+
+/// The installed app differs from the copy the document carries (OS-layer
+/// contract §7.1): `OpenResult.app_update`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppUpdate {
+    /// Always true when present; there for the shell to read plainly.
+    pub available: bool,
+    /// The installed app's name.
+    pub name: String,
+    pub from: AppRef,
+    pub to: AppRef,
+    /// The fields of the document's data or members the installed app's
+    /// schemas reject. Present means the update would be refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked: Option<Vec<String>>,
+}
+
+fn app_ref(clan: &ClanFile) -> Option<AppRef> {
+    let app = clan.manifest().app.as_ref()?;
+    Some(AppRef {
+        app_id: app.app_id.clone(),
+        version: app.version.clone(),
+        digest: clan_sdk::app_digest(clan).ok()?,
+        name: app.name.clone(),
+    })
+}
+
+/// What moving `doc` onto `template`'s app would be, or `None` when it
+/// already carries exactly that app.
+pub fn app_update_of(doc: &ClanFile, template: &ClanFile) -> Option<AppUpdate> {
+    let from = app_ref(doc)?;
+    let to = app_ref(template)?;
+    if from.digest == to.digest {
+        return None;
+    }
+    let blocked = match clan_sdk::upgrade_misfits(doc, template) {
+        Ok(v) if v.is_empty() => None,
+        Ok(v) => Some(v),
+        Err(e) => Some(vec![e.to_string()]),
+    };
+    Some(AppUpdate {
+        available: true,
+        name: to.name.clone(),
+        from,
+        to,
+        blocked,
+    })
+}
+
+/// Whether a lock holds on `clan` (an unsuperseded `approve` of it).
+pub fn is_locked(clan: &ClanFile) -> bool {
+    let Ok(bytes) = clan.read_entry("agent/decision-chain.yaml") else {
+        return false;
+    };
+    let Ok(chain) = DecisionChain::from_yaml(&bytes) else {
+        return false;
+    };
+    crate::ops::review::lock_of(&chain, clan.document_id()).is_some()
+}
+
 /// The major of a `MAJOR[.MINOR[.PATCH]]` version, every part plain digits.
 /// Anything else — a pre-release tag, a `v` prefix, a fourth part — is `None`,
 /// and a `None` on either side means the library view is not used.
@@ -123,9 +208,25 @@ fn triple(version: &str) -> Option<(u64, u64, u64)> {
 /// it may use, else as it is. `public_key` is the publisher key the library
 /// template's trust is verified against — [`crate::session::NAPKIN_PUBLIC_KEY`]
 /// for every shell today.
+///
+/// A locked document keeps its own view whatever is installed, and carries
+/// the [`AppUpdate`] it is offered.
 pub fn resolve(store: &dyn DocStore, doc: Document, public_key: &str) -> Document {
-    match find(store, &doc, public_key) {
+    match installed(store, &doc, public_key) {
         Ok(view) => {
+            let update = app_update_of(doc.clan(), view.template());
+            if is_locked(doc.clan()) {
+                log(&format!(
+                    "view: {} shown with its own view: it is locked{}",
+                    doc.id(),
+                    if update.is_some() {
+                        format!(" (installed {} differs)", view.version)
+                    } else {
+                        String::new()
+                    }
+                ));
+                return doc.with_app_update(update);
+            }
             log(&format!(
                 "view: {} shown with library view {}@{} (from {})",
                 doc.id(),
@@ -133,7 +234,7 @@ pub fn resolve(store: &dyn DocStore, doc: Document, public_key: &str) -> Documen
                 view.version,
                 view.template_id
             ));
-            doc.with_library_view(view)
+            doc.with_library_view(view).with_app_update(update)
         }
         Err(why) => {
             log(&format!(
@@ -145,8 +246,13 @@ pub fn resolve(store: &dyn DocStore, doc: Document, public_key: &str) -> Documen
     }
 }
 
-/// The library view `doc` may be shown with, or why not.
-fn find(store: &dyn DocStore, doc: &Document, public_key: &str) -> Result<LibraryView, String> {
+/// The installed app `doc` may be shown with — and, unlocked, catch up to —
+/// or why not. The lock is not looked at here: see [`resolve`].
+pub fn installed(
+    store: &dyn DocStore,
+    doc: &Document,
+    public_key: &str,
+) -> Result<LibraryView, String> {
     let clan = doc.clan();
     let m = clan.manifest();
     if m.document_type.as_deref() == Some("template") {

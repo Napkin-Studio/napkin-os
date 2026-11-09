@@ -72,6 +72,7 @@ pub fn describe(doc: &Document) -> OpenResult {
         trusted: doc.trusted(),
         view_source: doc.view_source(),
         view_version: doc.view_version().map(String::from),
+        app_update: doc.app_update().cloned(),
     }
 }
 

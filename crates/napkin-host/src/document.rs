@@ -26,7 +26,7 @@ use crate::error::HostResult;
 use crate::event::HostEvent;
 use crate::session::NAPKIN_PUBLIC_KEY;
 use crate::store::{DocId, PartStore};
-use crate::view::{LibraryView, ViewSource};
+use crate::view::{AppUpdate, LibraryView, ViewSource};
 
 const CHAIN: &str = "agent/decision-chain.yaml";
 
@@ -94,6 +94,13 @@ pub struct Document {
     // library has one it may use (see `crate::view`). Chosen at open and
     // carried through the document's own changes, like `trusted`.
     library_view: Option<Arc<LibraryView>>,
+    // The installed app differs from the copy this document carries: what an
+    // update would move it from and to. Chosen at open; cleared once a change
+    // moves the document onto another app.
+    app_update: Option<AppUpdate>,
+    // The publisher key trust was verified against, so a change that moves
+    // the document onto another app can verify again.
+    public_key: Arc<str>,
 }
 
 impl Document {
@@ -119,7 +126,20 @@ impl Document {
             clan,
             trusted,
             library_view: None,
+            app_update: None,
+            public_key: Arc::from(public_key),
         })
+    }
+
+    /// This snapshot, offered `update` (see [`crate::view::AppUpdate`]).
+    pub fn with_app_update(mut self, update: Option<AppUpdate>) -> Self {
+        self.app_update = update;
+        self
+    }
+
+    /// The installed app differs from this document's own copy, when it does.
+    pub fn app_update(&self) -> Option<&AppUpdate> {
+        self.app_update.as_ref()
     }
 
     /// This snapshot, shown with `view` — the installed app's — instead of its
@@ -225,15 +245,26 @@ impl Document {
     }
 
     /// The snapshot this document becomes once `change` has been applied and
-    /// the store reported `version` for it. Trust carries over: see the field.
+    /// the store reported `version` for it. Trust carries over (see the
+    /// field), unless the change moved the document onto another app — its
+    /// app block or signature changed ([`clan_sdk::upgrade_app`]) — when the
+    /// code it now carries is verified, and the update it was offered is
+    /// spent.
     pub fn advance(&self, change: &Change, version: Version) -> HostResult<Self> {
         let clan = ClanFile::from_bytes(change.bytes.clone())?;
+        let moved = app_identity(&clan) != app_identity(&self.clan);
         Ok(Self {
             id: change.doc.clone(),
             version,
+            trusted: if moved {
+                clan_sdk::verify_app(&clan, &self.public_key)
+            } else {
+                self.trusted
+            },
             clan,
-            trusted: self.trusted,
             library_view: self.library_view.clone(),
+            app_update: if moved { None } else { self.app_update.clone() },
+            public_key: self.public_key.clone(),
         })
     }
 }
@@ -303,6 +334,17 @@ impl Change {
     pub fn archive_version(&self) -> Version {
         Version::of_archive(&self.bytes)
     }
+}
+
+/// The app block and signature of an archive, as text: what changes when a
+/// document is moved onto another app, and nothing else does.
+fn app_identity(clan: &ClanFile) -> String {
+    let m = clan.manifest();
+    format!(
+        "{}|{}",
+        serde_json::to_string(&m.app).unwrap_or_default(),
+        serde_json::to_string(&m.signature).unwrap_or_default()
+    )
 }
 
 /// The decision chain inside a packed archive; empty when it has none.
