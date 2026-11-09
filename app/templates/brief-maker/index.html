@@ -1316,7 +1316,7 @@
        and its words, then Back, Stop, Skip to the finished brief and each part as it is written. -->
   <section class="proc" id="proc">
     <div class="pwrap">
-      <div class="ptop"><div class="apills" id="apills" role="list" aria-label="The crew’s steps"></div></div>
+      <div class="ptop"><div class="apills" id="apills" role="list" aria-label="The agents’ steps"></div></div>
       <div class="sstage" id="meet" data-nk-stage>
         <div class="rail" id="railL"></div>
         <div class="score">
@@ -2311,7 +2311,7 @@
       +'<p>'+esc(rf.reason)+'</p>'
       +(rf.fix?'<p class="fix"><b>Fix:</b> '+esc(rf.fix)+'</p>':'')
       +(rf.rule?'<p class="muted">The rule: '+esc(rf.rule)+'</p>':'')
-      +'<span class="muted">Change any of these parts, or ask the crew to fix them. Someone answers this before the brief is locked.</span>'
+      +'<span class="muted">Change any of these parts, or ask the agents to fix them. Someone answers this before the brief is locked.</span>'
       // Or answer it with a reason: one reasoned good verdict on each part it
       // still waits on, as the drawer's override records on one.
       +fixBtn(d)+(!docLocked()&&OSF()?'<div class="editrow"><button type="button" class="cancel act-override" data-keys="'+esc(openPartsOf(d).map(function(x){ return x.key; }).join(' '))+'">Keep them as they are, and say why</button></div>':'')
@@ -2634,8 +2634,8 @@
     (phase==='proc'?crew:ask).setAttribute('aria-current','step');
     if(phase==='proc') ask.classList.add('done');
     stepOn(ask, true, '');
-    stepOn(br, hasContent(), 'The brief is written here once the crew have drafted it');
-    crew.classList.toggle('ahead-dim', phase==='intake'&&!draftLive()); crew.title=phase==='intake'?(draftLive()?'The crew are at work: see them':'Your crew: who works on the brief'):'';
+    stepOn(br, hasContent(), 'The brief is written here once the agents have drafted it');
+    crew.classList.toggle('ahead-dim', phase==='intake'&&!draftLive()); crew.title=phase==='intake'?(draftLive()?'The agents are at work: see them':'Your agents: who works on the brief'):'';
     if(phase!=='intake') crewPop(false);
     renderHeadEye();
   }
@@ -2718,7 +2718,7 @@
       .catch(function(){});
   }
   function noMiddleware(){ return MW.configured===false; }
-  var NO_MW='This workspace has no middleware set up, so the crew can’t write here. You can still write the brief by hand.';
+  var NO_MW='This workspace has no middleware set up, so the agents can’t write here. You can still write the brief by hand.';
   function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
   function hostErr(res){
     if(!res) return 'Empty reply from the host.';
@@ -2907,7 +2907,7 @@
   // A rail section holds four slips, as the mock's: the ones at work first; the count says the rest.
   function wsec(h, cards){
     var now=cards.filter(function(c){ return c.indexOf('wchk now')!==-1; }), rest=cards.filter(function(c){ return c.indexOf('wchk now')===-1; }), shown=now.concat(rest).slice(0,4);
-    return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip('Nothing yet', 'It fills as the crew work.', '', true))+'</div>'; }
+    return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip('Nothing yet', 'It fills as the agents work.', '', true))+'</div>'; }
   function valText(v){ return Array.isArray(v)?v.join(' · '):v&&typeof v==='object'?Object.keys(v).map(function(k){ return v[k]; }).filter(Boolean).join(' · '):String(v==null?'':v); }
   // A part on a rail: its value once written, else what is happening to it.
   function partSlip(f, fs){ var x=fs[f.key]||{state:'waiting'}, v=get(f.key), busy=!!BUSY[x.state];
@@ -4114,7 +4114,7 @@
     if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; if(was&&!CLIENT.on&&phase==='doc') render(); return; }
     if(m.type!=='clan:run'||RUNNABLE.indexOf(m.task)===-1) return;
     var input=m.input&&typeof m.input==='object'?m.input:{};
-    if(docLocked()){ toast('The brief is locked, so the crew can’t write it again.'); return; }
+    if(docLocked()){ toast('The brief is locked, so the agents can’t write it again.'); return; }
     if(noMiddleware()){ toast(NO_MW); return; }
     if(m.task==='draft_brief'){ if(!DRAFT) draftNow(String(input.prompt||'').trim()); return; }
     var f=FIELDS.filter(function(x){ return x.key===input.field; })[0]; if(!f||REGEN[f.key]) return;
@@ -4353,7 +4353,7 @@
       +'<div class="sp-acts">'
       +(wr?'<button type="button" class="sp-btn sp-edit" data-sp="edit">Edit</button>':'')
       +(!A?'<button type="button" class="sp-btn" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(WRITER)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
-      +(!A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the crew change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':'')
+      +(!A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':'')
       +'<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'
       +'</div>'
       +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
