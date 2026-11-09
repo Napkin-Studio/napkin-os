@@ -146,10 +146,9 @@ body.fresh .insp{display:none}
 .insp-who:has(#who-line:empty){display:none}
 .linkbtn{border:0;background:none;padding:0;font:inherit;color:var(--ink);text-decoration:underline;cursor:pointer}
 .linkbtn[hidden]{display:none}
-/* Jude's bar is the inspector's "Your call" box */
+/* The Review agent's bar is the inspector's "Your call" box */
 .insp .judgebar{position:static;border:1px solid var(--amber);background:var(--amber-soft);border-radius:10px;box-shadow:none}
 .insp .jb-in{padding:12px 14px;gap:10px;max-width:none}
-.insp .jb-in > .agent-figure{width:26px;height:34px}
 .insp .jb-text{font-size:13.5px;min-width:0}
 .insp .jb-count{font-size:13px;width:100%}
 .insp .jb-btn{min-height:36px;padding:7px 14px;font-size:13px}
@@ -437,27 +436,24 @@ footer.doc-foot{margin-top:80px;padding-top:18px;border-top:1px solid var(--line
 @media (max-width:640px){
   main{padding:24px 16px 96px}
 }
-/* ---------- agent figures: the shell's, from the shared snippet (see <head>) ---------- */
-.agent-figure{width:27px;height:36px}
+/* ---------- agent spheres: NapkinRoles.tag() sizes each (the engine inlined at @napkin:agent-sphere) ---------- */
+.nk-ag{flex:none}
 
 /* ---------- the Plan band ----------
    The Research Tool is a Plan tool: its identity is the Plan ground, ink,
-   inverting in dark like the studio's other ink. On it the figures are drawn
-   for the ground, the way the design draws them on Plan: ink bodies and legs
-   go light, their eyes go to the ground; slate and mist keep their tone.
-   Orange stays the accent for needs-you, never the app's colour. */
+   inverting in dark like the studio's other ink. Orange stays the accent for
+   needs-you, never the app's colour. */
 .band{background:var(--zone-bg);color:var(--zone-fg);--ink:var(--zone-fg);--plan:var(--zone-fg);--plan-eye:var(--zone-bg)}
-.band .agent-figure .af-shadow{opacity:.18}
 .band .eyebrow{color:var(--zone-3)}
 .ident{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;color:var(--ink)}
 .ident svg{width:22px;height:22px;flex:none;display:block}
 .ident .kind{font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-left:3px}
 
 section.start{margin-top:40px}
-/* ---------- the crew does the talking (owner, 2026-09-29) ----------
+/* ---------- the agents do the talking (owner, 2026-09-29) ----------
    Every screen asks one question, with one big box and one orange action.
-   The agents stand on it and speak in first person, signed with the name
-   they introduce themselves by in every app (NapkinAgents.who). */
+   The agents speak in first person, signed with their role, the same in
+   every app (NapkinRoles). */
 .say{position:relative;display:block;background:var(--paper);color:var(--ink);border:1.5px solid var(--ink);border-radius:16px;padding:10px 14px;font-size:15px;line-height:1.45;box-shadow:3px 3px 0 var(--ink);max-width:340px;text-align:left}
 .say::after{content:"";position:absolute;left:22px;bottom:-8.5px;width:14px;height:14px;background:var(--paper);border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);transform:rotate(45deg)}
 .say.left::after{left:-8.5px;bottom:auto;top:20px;transform:rotate(135deg)}
@@ -483,17 +479,15 @@ section.start{margin-top:40px}
 .rc-src q{font-style:italic}
 .rc-src a{color:var(--ink);text-underline-offset:3px;white-space:nowrap}
 
-/* the start: one question, one box, the crew standing on it */
+/* the start: one question, one box */
 .rs-start{min-height:calc(100vh - 110px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:12px 0 40px;text-align:center}
 .rs-hello{display:grid;gap:8px;justify-items:center}
 .rs-hello h1{margin:0;font-size:clamp(30px,4.6vw,48px);font-weight:800;letter-spacing:-.035em;line-height:1.05;text-wrap:balance}
 .rs-hello p{margin:0;color:var(--ink2);font-size:17px;max-width:560px}
 .rs-stage{width:min(760px,100%);display:flex;flex-direction:column}
 .rs-hi{order:-2;align-self:flex-start;margin:0 0 12px 12px}
-.rs-crew{order:-1;display:flex;justify-content:space-between;align-items:flex-end;padding:0 28px;position:relative;z-index:2}
 .rs-m{position:relative;display:flex;flex-direction:column;align-items:center;border-radius:10px}
-.rs-m .agent-figure{width:52px;height:69px;margin-bottom:-7px}
-.rs-m.big .agent-figure{width:64px;height:85px}
+.rs-m .nk-ag{margin-bottom:-7px}
 .rs-m:focus-visible{outline:3px solid var(--create);outline-offset:3px}
 .rs-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);opacity:0;pointer-events:none;transition:opacity .15s var(--ease);z-index:5}
 .rs-tip .say{width:max-content;max-width:min(260px,70vw);font-size:14px}
@@ -536,7 +530,6 @@ body.dragging::after{content:"Drop it here to add it";position:fixed;inset:10px;
 .rs-work{display:grid;gap:22px;max-width:900px;margin:8px auto 0}
 .rs-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-items:start;margin:0;padding:0;list-style:none}
 .rs-stp{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;font-size:13px;line-height:1.3;color:var(--ink3)}
-.rs-stp .agent-figure{width:44px;height:59px}
 .rs-lane{display:block;width:100%;height:6px;border-radius:6px;background:var(--line-soft)}
 .rs-stp .tick{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
 .rs-stp.done{color:var(--ink2)}
@@ -549,15 +542,13 @@ body.dragging::after{content:"Drop it here to add it";position:fixed;inset:10px;
 .rs-stp.skip .tick{color:var(--amber-ink)}
 .rs-stp.skip .rs-lane{background:repeating-linear-gradient(90deg,var(--ink3) 0 4px,transparent 4px 8px)}
 .rs-now{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;border:1px solid var(--line);border-radius:20px;padding:22px;background:var(--paper)}
-.rs-now > .agent-figure{width:56px;height:75px}
 .rs-now .say{max-width:none}
 .rs-lensrow{display:flex;flex-wrap:wrap;gap:2px 4px;align-items:flex-end;max-width:380px}
-/* The researchers' row and their words wrap onto two lines when the column is
+/* The Research agent's row of lenses and its words wrap onto two lines when the column is
    narrow (the Decisions drawer open), never squeezing the words to one per line. */
 .rs-now:has(> .rs-lensrow){display:flex;flex-wrap:wrap;align-items:center}
 .rs-now > .rs-lensrow + div{flex:1 1 260px;min-width:0}
 .rs-lensrow .nm{display:flex;flex-direction:column;align-items:center;gap:2px}
-.rs-lensrow .agent-figure{width:40px;height:53px}
 .rs-lensrow small{font-size:12px;color:var(--ink2);font-weight:500}
 .rs-lensrow .nm.off{opacity:.4}
 .rs-lines{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px;font-size:14.5px;color:var(--ink2)}
@@ -614,7 +605,6 @@ ol.act li .pill{margin-left:6px}
 .rs-ask{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start;border:2px solid var(--create);border-radius:20px;padding:22px;background:var(--paper);animation:qin .35s var(--ease);scroll-margin-top:110px}
 .rs-ask:focus{outline:none}
 .rs-ask:focus-visible{outline:3px solid var(--create);outline-offset:3px}
-.rs-ask > .agent-figure{width:56px;height:75px}
 .rs-ask h3{margin:2px 0 6px;font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.25}
 .rs-ask .qtext{margin:0;font-size:17px;line-height:1.45;color:var(--ink);text-wrap:pretty}
 .rs-ask .qc-ctx{margin:6px 0 0;color:var(--ink2);font-size:14.5px;line-height:1.55;max-width:70ch}
@@ -644,21 +634,17 @@ body.fresh main{padding-top:24px}
 .hero.band .pill{background:transparent;border-color:var(--zone-line);color:var(--zone-fg)}
 @media (max-width:640px){.hero.band{padding:18px 16px 18px}}
 @media (max-width:720px){
-  .rs-crew{padding:0 10px}
-  .rs-m .agent-figure{width:34px;height:45px;margin-bottom:-5px}
-  .rs-m.big .agent-figure{width:44px;height:59px}
+  .rs-m .nk-ag{margin-bottom:-5px}
   .rs-box{flex-wrap:wrap;border-radius:24px;padding:8px 8px 8px 16px}
   .rs-box textarea{flex-basis:100%;font-size:17px}
   .rs-go{flex:1}
   .rs-steps{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:18px}
   .rs-now,.rs-ask{grid-template-columns:1fr;padding:18px 16px}
   .rs-now .say.left::after{left:22px;top:-8.5px;transform:rotate(225deg)}
-  .rs-lensrow .agent-figure{width:32px;height:43px}
   .rs-lensrow small{font-size:11px}
 }
 @media (max-width:440px){
-  .rs-m .agent-figure{width:27px;height:36px;margin-bottom:-4px}
-  .rs-m.big .agent-figure{width:36px;height:48px}
+  .rs-m .nk-ag{margin-bottom:-4px}
   .rs-hi{margin-left:0}
 }
 @media (max-width:640px){
@@ -669,7 +655,7 @@ body.fresh main{padding-top:24px}
 }
 /* ---------- the report ---------- */
 section.report{margin-top:36px}
-/* Two modes (owner, 2026-09-28). Working: the crew, the stages and the
+/* Two modes (owner, 2026-09-28). Working: the agents, the stages and the
    question; no half-built document. Done: the report the agent laid out, what
    needs you at the top, and everything recorded behind one disclosure. */
 body.working #report,body.working #records,body.working #hero,body.working #gates,body.working #jobs,body.working #judge,body.working #docfoot,
@@ -679,17 +665,17 @@ body.done #hero,body.done #gates{display:none!important}
 /* With no report yet (a job that stopped, or never started) the run is what
    there is to show, so it stays. */
 body.done:not(.show-run):not(.no-report) #start{display:none}
-/* ---------- the report's checks: Jude's bar, each check under its sentence ---------- */
+/* ---------- the report's checks: the Review agent's bar, each check under its sentence ---------- */
 .judgebar{position:sticky;top:calc(var(--clan-top,0px) + var(--top-h,0px));z-index:30;background:var(--paper);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
 .jb-in{max-width:1180px;margin:0 auto;padding:10px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
-.jb-in > .agent-figure{width:34px;height:45px;flex:none}
+.jb-in > .nk-ag{flex:none}
 .jb-text{flex:1;min-width:min(240px,100%);margin:0;font-size:15px;line-height:1.45}
 .jb-count{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:14px;color:var(--ink2)}
 .jb-count b{color:var(--ink);font-variant-numeric:tabular-nums}
 .jb-btn{border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);border-radius:999px;padding:9px 16px;min-height:42px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
 .jb-btn.go{background:var(--create);border-color:var(--create);color:#fff}
 .jb-done{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--green-ink)}
-/* A layout that asks for the OS tray gets Jude's bar instead. */
+/* A layout that asks for the OS tray gets the Review agent's bar instead. */
 #report clan-tray{display:none}
 .rc-checks{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin:4px 0 12px}
 #rep-layout > .rc-checks{padding:0 clamp(20px,5vw,64px);margin:14px 0}
@@ -699,7 +685,6 @@ body.done:not(.show-run):not(.no-report) #start{display:none}
 .rc-chk::before{content:"";position:absolute;top:-9px;left:36px;width:14px;height:14px;background:var(--paper);border-left:2px solid var(--create);border-top:2px solid var(--create);transform:rotate(45deg)}
 .rc-chk:focus{outline:none}
 .rc-chk:focus-visible{outline:3px solid var(--create);outline-offset:3px}
-.rc-chk > .agent-figure{width:36px;height:48px}
 .rc-chk .q{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--create-ink)}
 .rc-chk .t{margin:2px 0 0;font-weight:500;font-size:15.5px}
 .rc-chk .claim{margin:6px 0 0;padding-left:12px;border-left:3px solid var(--create);font-size:15.5px}
@@ -752,7 +737,7 @@ body.done:not(.show-run):not(.no-report) #start{display:none}
 .cl-band .rc-chk{--plan:var(--ink);--plan-eye:var(--paper)}
 /* What a person agreed to turns green; what waits is marked. */
 #rep-layout .clf.claim.s-verified{background:var(--green-soft);box-shadow:inset 0 -2px 0 var(--green);border-radius:3px}
-@media (max-width:640px){.jb-in{padding:8px 16px}.jb-text{font-size:14.5px}.rc-chk{grid-template-columns:1fr;padding:14px}.rc-chk > .agent-figure{width:30px;height:40px}}
+@media (max-width:640px){.jb-in{padding:8px 16px}.jb-text{font-size:14.5px}.rc-chk{grid-template-columns:1fr;padding:14px}}
 .rep-layout{margin-top:14px}
 .rep-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink3)}
 .rep-bar .sp{flex:1}
@@ -984,18 +969,16 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   a{text-decoration:none}
   @page{margin:16mm}
 }
-/* While the crew brings the document in step with a review, Sam walks the
-   bottom edge of the window (features/review-busy-agent.clan). It never takes
-   a click; with reduced motion Sam stands still. */
+/* While the agents bring the document in step with a review, the Strategy
+   agent's sphere works at the bottom edge of the window
+   (features/review-busy-agent.clan). It never takes a click and never moves. */
 .walker{position:fixed;left:0;right:0;bottom:var(--clan-bottom,0px);height:72px;pointer-events:none;z-index:80;overflow:hidden;opacity:0;transition:opacity .3s var(--ease)}
 .walker.on{opacity:1}
-.walker .wk-who{position:absolute;bottom:0;left:0;display:flex;align-items:flex-end;gap:8px;animation:wk-pace 16s linear infinite}
-.walker .wk-fig{display:block;width:44px;animation:wk-turn 16s steps(1,end) infinite}
-.walker .wk-fig .agent-figure{width:44px;height:auto;display:block}
-.walker .wk-say{margin-bottom:26px;background:var(--ink);color:var(--paper);font-size:12px;padding:5px 11px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadow-lg)}
-@keyframes wk-pace{0%{transform:translateX(16px)}50%{transform:translateX(calc(100vw - 100% - 16px))}100%{transform:translateX(16px)}}
-@keyframes wk-turn{0%{transform:none}50%{transform:scaleX(-1)}}
-@media (prefers-reduced-motion: reduce){.walker .wk-who,.walker .wk-fig{animation:none}}
+.walker .wk-who{position:absolute;bottom:12px;left:16px;display:flex;align-items:center;gap:8px}
+.walker .wk-fig{display:block;line-height:0}
+.walker .wk-fig .nk-ag{display:block}
+.walker .wk-say{background:var(--ink);color:var(--paper);font-size:12px;padding:5px 11px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadow-lg)}
+@media (prefers-reduced-motion: reduce){.walker{transition:none}}
 
 /* ════════════════════════════════════════════════════════════════════════
    The approved mock, exactly (features/research-new-ui.clan; gaps.md §6,
@@ -1321,7 +1304,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 #start:has(> .rt-work){margin-top:0}
 .rs-work.rt-work{padding-top:26px}
 
-/* ── The crew at work, to the mock's live agent stage (?tool=research&step=loading, body[data-step=loading],
+/* ── The agents at work, to the mock's live agent stage (?tool=research&step=loading, body[data-step=loading],
    .p33-runbar, .p33-askcard): one paper panel, the step pills and the lens dots on a white strip, the desk
    with two rails and the agent's sphere, the caption under it; the agent's question; then the run bar. ── */
 .rt-head.compact{padding:14px 0 12px;margin-bottom:0;align-items:center}
@@ -1345,12 +1328,29 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rs-load-lens .cov.none{border-style:dashed;opacity:.5}
 .rt-work .sstage{position:relative;background:var(--desk);display:grid;grid-template-columns:minmax(240px,310px) minmax(320px,440px) minmax(240px,310px);justify-content:center;align-items:center;gap:16px;padding:12px 16px;height:clamp(420px,calc(100vh - 338px),640px)}
 .rt-work .rail{display:flex;flex-direction:column;gap:8px;z-index:4;max-height:100%;overflow-y:auto;padding:4px}
-.rt-work .score{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.rt-work .aglbox{width:min(360px,44vh);height:min(340px,40vh);position:relative;display:grid;place-items:center}
+.rt-work .score{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;min-width:0;max-height:100%}
+.rt-work .aglbox{width:min(360px,44vh);height:min(340px,40vh);position:relative;display:grid;place-items:center;transition:height .55s cubic-bezier(.2,.7,.2,1)}
+/* The agent asks on the desk (owner, 2026-11-09): NapkinRoles.ask() sets nk-asking on the stage, the sphere's
+   box eases to under half its height so the sphere rises, and the question opens under the caption. Answered,
+   the card goes and the box eases back down. The score scrolls only if a long question cannot fit. */
+.rt-work .nk-asking .aglbox{height:calc(min(340px,40vh) * .46)}
+.rt-work .nk-asking .score{overflow-y:auto;scrollbar-width:thin}
+.rt-work .nk-asking .scap{min-height:0}
+.rt-work .nk-asking .scap .l1{font-size:17px}
+.rt-work .rt-askwrap{display:grid;grid-template-rows:0fr;width:100%;transition:grid-template-rows .55s cubic-bezier(.2,.7,.2,1)}
+.rt-work .nk-asking .rt-askwrap{grid-template-rows:1fr}
+.rt-work .rt-askin{min-height:0;overflow:hidden;padding:2px}
+.rt-work .rt-askin > .p33-askcard{margin-top:8px;opacity:0;transform:translateY(8px);transition:opacity .35s var(--ease) .15s,transform .35s var(--ease) .15s;animation:none;scroll-margin:0;text-align:left;padding:10px 12px;gap:5px;font-size:12.5px;border-radius:10px}
+.rt-work .nk-asking .rt-askin > .p33-askcard{opacity:1;transform:none}
+.rt-work .rt-askin .aq-q{font-size:14px;line-height:1.35}
+.rt-work .rt-askin .aq-ctx{font-size:12.5px;line-height:1.4}
+.rt-work .rt-askin .aq-opts{display:flex;flex-wrap:wrap;gap:6px}
+.rt-work .rt-askin .aq-opt{flex:0 1 auto;max-width:100%;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;padding:6px 10px;font-size:12.5px;border-radius:7px}
+.rt-work .rt-askin .aq-opt small{text-align:left;font-size:9.5px}
+.rt-work .rt-askin .aq-own input{padding:6px 9px;font-size:12.5px}
+.rt-work .rt-askin .q-note{font-size:11.5px}
 .rt-work .aglbox .aglv{position:absolute;inset:0}
-.rt-work .aglbox .agent-figure{width:96px;height:128px}
 .rt-work .aglbox .rs-lensrow{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 10px}
-.rt-work .aglbox .rs-lensrow .agent-figure{width:40px;height:53px}
 .rt-work .aglbox .rs-lensrow .nm{display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--muted)}
 .rt-work .aglbox .rs-lensrow .nm.off{opacity:.4}
 .rt-work .scap{text-align:center;min-height:64px;z-index:4;display:grid}
@@ -1361,7 +1361,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .scap .rs-acts{display:flex;justify-content:center;gap:8px;margin-top:10px}
 .rt-work .wsec{display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
 .rt-work .wsec-h{font:700 10.5px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-left:8px;border-left:2px solid var(--ink)}
-.rt-work .wcard{position:relative;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:8px 11px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
+.rt-work .wcard{position:relative;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:8px 11px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08);transition:transform .15s,border-color .15s,box-shadow .15s;cursor:default}
+/* Hovering a card lifts it and draws the thread to the sphere (NapkinRoles.thread, napkin-app-v1 5983-6002). */
+.rt-work .wcard:hover{transform:translateY(-1.5px);border-color:var(--ink)}
 :root[data-color-scheme="dark"] .rt-work .wcard,:root[data-theme="dark"] .rt-work .wcard{background:var(--card)}
 @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]):not([data-theme="light"]) .rt-work .wcard{background:var(--card)} }
 .rt-work .wcard .wlab{font:600 10px/1.55 var(--font-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:6px;padding-right:16px}
@@ -1371,7 +1373,6 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .wcard .wchk{position:absolute;top:7px;right:8px;font-size:12px;font-weight:800;color:var(--ok)}
 .rt-work .wcard .wchk.now{color:var(--ag-base)}
 .rt-work .wcard .wchk.bad{color:var(--alert)}
-.rt-qrow{margin-top:12px}
 .rs-ask.p33-askcard{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start;border:1px solid color-mix(in srgb,var(--ag-acc) 40%,var(--line));border-radius:12px;background:var(--paper);padding:14px 16px;font-size:13.5px;scroll-margin-bottom:72px}
 .p33-askcard .aq-k{font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ag-base)}
 :root[data-color-scheme="dark"] .p33-askcard .aq-k,:root[data-theme="dark"] .p33-askcard .aq-k{color:var(--ag-acc)}
@@ -1406,7 +1407,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .runbar > .activity > summary,.rt-work .runbar > .rs-asked > summary{font-size:12.5px;color:var(--muted);padding:0;min-height:0}
 .rt-work .runbar > .activity,.rt-work .runbar > .rs-asked{padding:0}
 @media (max-width:980px){ .rt-work .sstage{grid-template-columns:1fr;height:auto} }
-@media (prefers-reduced-motion:reduce){ .rs-load-lens .cov{transition:none} }
+@media (prefers-reduced-motion:reduce){ .rs-load-lens .cov{transition:none} .rt-work .aglbox,.rt-work .rt-askwrap,.rt-work .rt-askin > .p33-askcard,.rt-work .wcard{transition:none} }
 /* The ask, to the mock (?tool=research&step=prompt): one column, the box, examples, lens chips (filled when
    picked, outlined when not), three market circles, the window, then the attach line and Start research. */
 .rt-prompt .rs-stage{max-width:760px}
@@ -1444,7 +1445,6 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-prompt .rs-go.rt-go{min-height:44px;height:44px;padding:0 24px;font:600 15px var(--font-ui);border-radius:999px}
 .rt-prompt .rs-name{margin-top:14px}
 </style>
-<!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
 </head>
 <body>
@@ -1491,7 +1491,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 </main>
 
 <!-- The inspector (features/research-new-ui.clan): everything the old header
-     and Jude's bar held, beside the report; a bottom sheet on a phone. -->
+     and the Review agent's bar held, beside the report; a bottom sheet on a phone. -->
 <aside class="insp no-print" id="insp" aria-label="Inspector">
   <button type="button" class="insp-grab" id="insp-grab" aria-expanded="false" aria-controls="insp-body"><span class="insp-handle" aria-hidden="true"></span><span class="insp-peek" id="insp-peek">Report and what needs you</span></button>
   <div class="insp-body" id="insp-body">
@@ -1730,7 +1730,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
   // ── a review: bring what rests on it in step ───────────────────────────
   // A person's review (a fact marked right or wrong, a finding verified or
-  // rejected, a fact corrected) changes only the document. The crew then
+  // rejected, a fact corrected) changes only the document. The agents then
   // works out again whatever rests on what was reviewed: confidence, the
   // findings, the answers and the report sections that cite it (reconsider).
   // One job per document at a time: reviews made while one runs wait, and go
@@ -1753,15 +1753,16 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     RECON.queue.push(ev); keepRecon(); reconsider();
   }
   function keepRecon(){ store('clan.research.reconsider.'+docId(), RECON.queue.length?JSON.stringify(RECON.queue):null); walk(); }
-  // While a reconsider job runs, Sam walks the bottom edge of the window, so
-  // the person sees the crew at work without the page moving.
+  // While a reconsider job runs, the Strategy agent's sphere works at the
+  // bottom edge of the window, so the person sees the agents at work without
+  // the page moving.
   function walk(){
     var w=$('walker'); if(!w) return;
     var on=!!RECON.job, was=w.classList.contains('on');
     if(on&&!was){
       clearTimeout(walk._t);
-      w.innerHTML='<div class="wk-who"><span class="wk-fig">'+(CREW_OK?agentFigure('synthesis', {state:'working', walking:!calm(), decorative:true}):'')+'</span>'
-        +'<span class="wk-say">Sam is bringing the report in step with your review…</span></div>';
+      w.innerHTML='<div class="wk-who"><span class="wk-fig">'+sphereTag('strategy', 44, 'working')+'</span>'
+        +'<span class="wk-say">'+esc(TheAgent('strategy'))+' is bringing the report in step with your review…</span></div>';
     }
     w.classList.toggle('on', on);
     if(!on&&was){ clearTimeout(walk._t); walk._t=setTimeout(function(){ if(!w.classList.contains('on')) w.innerHTML=''; }, 400); }
@@ -1935,7 +1936,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(c.campaign_type) bits.push('<span class="pill">'+esc(TYPES[c.campaign_type.value]||c.campaign_type.value)+'</span>');
     $('hero').innerHTML='<div class="eyebrow">Campaign research</div>'
       +'<h1 class="'+(name?'':'empty')+'">'+(name?esc(name):started?'A new campaign':'A campaign with no ask yet')+'</h1>'
-      +'<div class="sub">'+(bits.length?bits.join('<span class="sep" aria-hidden="true">/</span>'):'<span class="muted">'+(started?given('extract')+' is reading your message. The ask fills in below as each stage lands.':'Nothing has been extracted. Open it from the client’s brief, then extract the ask.')+'</span>')+'</div>';
+      +'<div class="sub">'+(bits.length?bits.join('<span class="sep" aria-hidden="true">/</span>'):'<span class="muted">'+(started?TheAgent('knowledge')+' is reading your message. The ask fills in below as each stage lands.':'Nothing has been extracted. Open it from the client’s brief, then extract the ask.')+'</span>')+'</div>';
   }
   function renderGates(){
     var h='<div class="gates" role="list" aria-label="Gates">';
@@ -2051,7 +2052,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     });
     if(arr(v.synthesis_finding_ids).length){
       h+='<div class="row"><span class="eyebrow">Syntheses</span><div class="cards">'+arr(v.synthesis_finding_ids).map(function(id){ var f=fnds()[id];
-        return '<div style="display:grid;gap:4px"><span class="derived">'+ICON.agent+'worked out by '+esc(given('synthesis'))+' · '+esc(f?f.status:'?')+'</span><div style="font-size:13.5px">'+esc(f?f.statement:id)+'</div>'+findingChip(id)+'</div>'; }).join('')+'</div></div>';
+        return '<div style="display:grid;gap:4px"><span class="derived">'+ICON.agent+'worked out by '+esc(theAgent('strategy'))+' · '+esc(f?f.status:'?')+'</span><div style="font-size:13.5px">'+esc(f?f.statement:id)+'</div>'+findingChip(id)+'</div>'; }).join('')+'</div></div>';
     }
     return h+'</div>';
   }
@@ -2193,7 +2194,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var counts={proposed:0,verified:0,rejected:0,superseded:0}; ids.forEach(function(id){ counts[F[id].status]=(counts[F[id].status]||0)+1; });
     $('findings-count').textContent=ids.length?(counts.verified+' verified · '+counts.proposed+' proposed · '+counts.rejected+' rejected'+(counts.superseded?' · '+counts.superseded+' replaced':'')):'';
     $('nav-findings').textContent=ids.length||'';
-    if(!ids.length){ $('findings-body').innerHTML='<div class="empty-state"><b>No findings yet.</b> '+esc(given('synthesis'))+' works them out from the pins once the research is in.</div>'; return; }
+    if(!ids.length){ $('findings-body').innerHTML='<div class="empty-state"><b>No findings yet.</b> '+esc(TheAgent('strategy'))+' works them out from the pins once the research is in.</div>'; return; }
     var order={proposed:0,rejected:1,verified:2,superseded:3};
     ids.sort(function(a,b){ return (order[F[a].status]-order[F[b].status])||a.localeCompare(b); });
     $('findings-body').innerHTML='<div class="cards">'+ids.map(function(id){
@@ -2205,7 +2206,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       var citing=fieldsCiting(id);
       var st=f.status, out=st==='rejected'||st==='superseded';
       var h='<article class="card s-'+esc(st)+'" id="finding-'+esc(id)+'" data-address="'+esc(A)+'">'
-        +'<div class="fh"><span class="derived">'+ICON.agent+'Worked out by '+esc(given('synthesis'))+'</span>'
+        +'<div class="fh"><span class="derived">'+ICON.agent+'Worked out by '+esc(theAgent('strategy'))+'</span>'
         +(st==='verified'?'<span class="pill ok"><span class="d"></span>verified</span>':st==='rejected'?'<span class="pill alert"><span class="d"></span>rejected</span>':st==='superseded'?'<span class="pill">replaced after a review</span>':'<span class="pill dash">proposed · not yet verified</span>')
         +'<span class="sp" style="flex:1"></span><span class="path">'+esc(id)+'</span></div>'
         +'<div class="stmt">'+esc(f.statement)+'</div>'
@@ -2406,9 +2407,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     $('docfoot').innerHTML='<span>document '+esc(docId())+'</span><span>'+esc((m.app&&m.app.name)||'campaign-research')+(m.app&&m.app.version?' '+esc(m.app.version):'')+'</span><span>contract campaign-clan/1</span><span>'+stalePins().length+' stale pin'+(stalePins().length===1?'':'s')+' (accepted as frozen at lock)</span>'+(usedIn().length?'<span>'+esc(usedText(usedIn()))+'</span>':'');
     var sb=$('synthBtn'), hasPins=Object.keys(pins()).length>0;
     sb.setAttribute('aria-disabled', hasPins?'false':'true');
-    sb.title=hasPins?'Ask '+given('synthesis')+' to find the points in the pinned facts':given('synthesis')+' reads the pins; there are none yet';
-    $('extractBtn').title='Ask '+given('extract')+' to read the ask again';
-    $('findings-lede').textContent=given('synthesis')+'’s points, drawn from the pins. Each stays a proposal until a person agrees to it; nothing unverified enters the layers.';
+    sb.title=hasPins?'Ask '+theAgent('strategy')+' to find the points in the pinned facts':TheAgent('strategy')+' reads the pins; there are none yet';
+    $('extractBtn').title='Ask '+theAgent('knowledge')+' to read the ask again';
+    $('findings-lede').textContent=TheAgent('strategy')+'’s points, drawn from the pins. Each stays a proposal until a person agrees to it; nothing unverified enters the layers.';
   }
 
   function mode(){
@@ -2419,7 +2420,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var rec=$('records'), hasLayout=isObj(D().report)&&typeof D().report.layout==='string';
     // Opened for you only while there is no report to read but research to
     // read in its place (pins or findings). A job that stopped before any
-    // (the crew unreachable) leaves the ask's empty fields closed under its
+    // (the agents unreachable) leaves the ask's empty fields closed under its
     // message. Once you open or close it yourself, it stays as you left it.
     var readable=Object.keys(pins()).length>0||Object.keys(fnds()).length>0, auto=!hasLayout&&readable;
     if(rec&&!rec.dataset.touched&&rec.open!==auto){ rec.dataset.auto=String(auto); rec.open=auto; }
@@ -2773,10 +2774,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var np=Object.keys(pins()).length, F=fnds(), nf=Object.keys(F).length;
     var open=Object.keys(F).filter(function(id){ return F[id]&&F[id].status==='proposed'; }).length;
     var line={
-      research_lens:['The researchers', 'We now have '+s(np,'fact')+' pinned.'],
-      synthesise_findings:[given('synthesis'), 'I’ve found '+s(nf,'point')+' in all. '+(open?open+' '+(open===1?'waits':'wait')+' for you to check.':'None waits for you.')],
-      extract_ask:[given('extract'), 'I’ve read the ask. '+Object.keys(camp()).length+' of its '+FIELDS.length+' parts are filled.'],
-      reconsider:[given('judge'), 'I went through what rested on your review. '+String(j.summary||'')]
+      research_lens:[TheAgent('research'), 'We now have '+s(np,'fact')+' pinned.'],
+      synthesise_findings:[TheAgent('strategy'), 'I’ve found '+s(nf,'point')+' in all. '+(open?open+' '+(open===1?'waits':'wait')+' for you to check.':'None waits for you.')],
+      extract_ask:[TheAgent('knowledge'), 'I’ve read the ask. '+Object.keys(camp()).length+' of its '+FIELDS.length+' parts are filled.'],
+      reconsider:[TheAgent('review'), 'I went through what rested on your review. '+String(j.summary||'')]
     }[j.task];
     return line&&line[0]?'<b>'+esc(line[0])+':</b> '+esc(line[1]):'';
   }
@@ -2855,7 +2856,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
   function doExtract(){
     var protectedF=FIELDS.filter(function(f){ var e=camp()[f.k]; return isObj(e)&&(e.origin==='confirmed'||e.origin==='stated'||verdictState('campaign.'+f.k).unanswered.length); });
-    openDialog('<h2 id="dlg-title">Ask '+esc(given('extract'))+' to read the ask again</h2>'
+    openDialog('<h2 id="dlg-title">Ask '+esc(theAgent('knowledge'))+' to read the ask again</h2>'
       +'<p style="margin:0">One grounded extraction over your prompt, the attached material and what the brand and category layers already know. It abstains where nothing supports a value — it never fills a field because it was empty.</p>'
       +'<label style="display:grid;gap:4px;font-size:12.5px;color:var(--ink2)">Your prompt<textarea name="prompt" placeholder="What has the client asked for? The attached brief is the source of record."></textarea></label>'
       +'<fieldset><legend>Material it reads</legend>'+(attachments().length?attachments().map(function(a){ return '<div class="srcline">'+esc(a.name)+' · '+esc(String(a.sha256).slice(0,19))+'…</div>'; }).join(''):'<div class="muted" style="font-size:12.5px">No attached material. Open the campaign from the client’s brief or email first.</div>')+'</fieldset>'
@@ -2888,9 +2889,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       });
   }
   function doSynthesise(){
-    if(!Object.keys(pins()).length){ toast(given('synthesis')+' reads the pins; there are none yet. Run research first.'); return; }
-    openDialog('<h2 id="dlg-title">Ask '+esc(given('synthesis'))+' to find the points</h2>'
-      +'<p style="margin:0">Findings are drawn from the pins only, never the raw layer. Each comes back <b>proposed</b>, marked as worked out by '+esc(given('synthesis'))+', with its confidence computed from the pins it cites.</p>'
+    if(!Object.keys(pins()).length){ toast(TheAgent('strategy')+' reads the pins; there are none yet. Run research first.'); return; }
+    openDialog('<h2 id="dlg-title">Ask '+esc(theAgent('strategy'))+' to find the points</h2>'
+      +'<p style="margin:0">Findings are drawn from the pins only, never the raw layer. Each comes back <b>proposed</b>, marked as worked out by '+esc(theAgent('strategy'))+', with its confidence computed from the pins it cites.</p>'
       +'<fieldset><legend>Lenses</legend>'+LENSES.map(function(L){ return '<label class="opt"><input type="checkbox" name="lens" value="'+L.k+'" checked><span>'+esc(L.l)+'</span></label>'; }).join('')+'</fieldset>'
       +'<div id="dlg-prev"></div>'
       +'<div class="foot"><span class="why">The host applies what comes back; this view writes nothing.</span><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Find them</button></div>',
@@ -2919,26 +2920,35 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     {k:'report',     l:'Report',           who:'Report'}
   ];
   var STAGE={}; STAGES.forEach(function(S,i){ S.i=i; STAGE[S.k]=S; });
-  // Who does each stage comes from the shared crew (NapkinAgents, in the
-  // snippet the packer inlines; see <head>): a stage says what kind of work it
-  // is, and gets the agent every app uses for that work. Reading the ask and
-  // working out the brand is Extract's; picking the lenses is the Judge's;
-  // research is one agent per lens.
-  var STAGE_WORK={extract:'read', identify:'read', select:'judge', research:'research', synthesise:'synthesise', report:'draft'};
-  var CREW_OK=typeof NapkinAgents==='object';
-  function stageAgent(k,lens){ return CREW_OK?NapkinAgents.forWork(STAGE_WORK[k]||'read',lens):''; }
-  // A stage is signed by the name its agent introduces itself by, the same in
-  // every app (Ellis reads, Jude picks, Sam finds the points, Dara writes).
-  if(CREW_OK) STAGES.forEach(function(S){ S.who=S.k==='research'?'The researchers':(NapkinAgents.given[stageAgent(S.k)]||S.who); });
-  function given(k){ return CREW_OK&&NapkinAgents.given[k]||''; }
-  function whoOf(k){ return CREW_OK?NapkinAgents.who(k):''; }
-  function figK(k, state){ return CREW_OK&&k?agentFigure(k, {state:state, decorative:true}):''; }
-  function fig(stage, state, lens){ return figK(stageAgent(stage,lens)||'extract', state); }
-  // The researcher for each lens, in the taxonomy's order.
-  function lensAgent(l){ return CREW_OK?NapkinAgents.forWork('research', l):''; }
+  // Who does each stage, by role (NapkinRoles, the agent engine the packer
+  // inlines at the agent-sphere marker). The words about a stage's own work
+  // name the role that does it: reading what was sent is the Knowledge
+  // agent's, picking the lenses (and the checks) the Review agent's, each lens
+  // the Research agent's, finding the points the Strategy agent's, writing the
+  // report the Brief agent's. The run's stage on the desk (the pills, the
+  // caption, the sphere, the question's signature) follows PLAN: runRole().
+  var WORK_ROLE={extract:'knowledge', identify:'knowledge', select:'review', research:'research', synthesise:'strategy', report:'brief'};
+  var ROLE_NM={knowledge:'Knowledge', strategy:'Strategy', research:'Research', brief:'Brief', review:'Review'};
+  function roles(){ return window.NapkinRoles||null; }
+  // 'Review agent'; 'the Review agent', and with a capital to start a sentence.
+  function agentName(r){ var R=roles(); return R?R.name(r):(ROLE_NM[r]||'An')+' agent'; }
+  function theAgent(r){ var R=roles(); return R?R.the(r):'the '+agentName(r); }
+  function TheAgent(r){ var t=theAgent(r); return t.charAt(0).toUpperCase()+t.slice(1); }
+  // 'Review agent · checks every claim', for a title.
+  function agentLine(r){ var R=roles(), j=R?R.job(r):''; return agentName(r)+(j?' · '+j:''); }
+  // The agent at work on a run stage, as the desk shows it (PLAN = NapkinRoles.forStage).
+  function runRole(stage){
+    var R=roles(); if(R) return R.forStage('research', stage);
+    for(var i=0;i<PLAN.length;i++) if(PLAN[i].st.indexOf(stage)!==-1) return PLAN[i].agent;
+    return 'strategy';
+  }
+  // A role's sphere at about the old figure's size: the static frame now, a live
+  // sphere once NapkinRoles.auto() hydrates it (without WebGL the frame stays).
+  function sphereTag(r, size, state){ var R=roles(); return R?R.tag(r, {size:size, state:state||'idle', decorative:true}):''; }
+  STAGES.forEach(function(S){ S.who=TheAgent(WORK_ROLE[S.k]); });
   function lensOf(from){ var m=/^([a-z_]+)(\/|$)/.exec(String(from||'')); return m&&LENS[m[1]]?m[1]:''; }
-  // What each agent says it will do, and what a researcher looks into, in
-  // plain words. The names come from the crew; only the lines are the app's.
+  // What the Research agent says it will do on each lens, and what it looks
+  // into, in plain words.
   var SAYS={
     market_structure:['I\u2019ll size the market.', 'how big the market is, and who leads it'],
     positioning:['I\u2019ll see what each brand claims.', 'what the brands say about themselves'],
@@ -3121,7 +3131,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return out;
   }
   function whoLabel(by){ var id=String(by||'').replace(/^human:/,''); return id&&id===me()?'you':(human(by)||'a person'); }
-  function stageWho(k){ return (STAGE[k]||{who:'The crew'}).who; }
+  function stageWho(k){ return (STAGE[k]||{who:'The agents'}).who; }
+  // Who asks at a run stage: the agent the desk shows there (the card's signature).
+  function askerOf(k){ return STAGE[k]?TheAgent(runRole(k)):'The agents'; }
 
   // ── the submitted form: the prompt, the files, the name, then each answer ──
   // One row per field asked about: the latest answer, with any earlier words
@@ -3141,7 +3153,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       badge='<span class="pill">in '+esc(who==='you'?'your':who+'’s')+' own words</span>';
     }
     return '<div class="srow ans" id="ans-'+esc(q.id)+'"><dt>'+esc(label)+'</dt><dd><span class="aval">'+val+badge+'</span>'
-      +'<span class="asked">'+esc(stageWho(Q.stage))+' asked <q>'+esc(q.text)+'</q>'+(a.text?' — '+esc(stageWho(Q.stage))+' turns your words into choices and asks again.':'')+'</span>'
+      +'<span class="asked">'+esc(askerOf(Q.stage))+' asked <q>'+esc(q.text)+'</q>'+(a.text?' — '+esc(askerOf(Q.stage))+' turns your words into choices and asks again.':'')+'</span>'
       +arr(earlier).map(function(t){ return '<span class="asked">Before that, in your own words: <q>'+esc(t)+'</q></span>'; }).join('')+'</dd></div>';
   }
   function sheetHtml(T){
@@ -3166,7 +3178,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       if((ans&&isObj(ans.m.answer))||byAddr[Q.q.address||Q.q.id]) return;
       if(!(lq&&lq.id===Q.q.id)){
         var k=qField(Q.q);
-        h+='<div class="srow open"><dt>'+esc(k&&FIELD[k]?FIELD[k].label:'A question')+'</dt><dd><span class="none">Not answered</span><span class="asked">'+esc(stageWho(Q.stage))+' asked <q>'+esc(Q.q.text)+'</q> — '
+        h+='<div class="srow open"><dt>'+esc(k&&FIELD[k]?FIELD[k].label:'A question')+'</dt><dd><span class="none">Not answered</span><span class="asked">'+esc(askerOf(Q.stage))+' asked <q>'+esc(Q.q.text)+'</q> — '
           +esc(CHAT.job&&CHAT.job.state==='checking'?'checking whether the job still waits on it…':CHAT.job&&CHAT.job.id?'the question is no longer open.':'the job that asked is not running here.')+'</span></dd></div>';
       }
     });
@@ -3183,8 +3195,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
   // Each stage, signed by the agent who does it.
   function stageLabel(k){
-    return {extract:given('extract')+' reads what you sent', identify:given('extract')+' finds the brand', select:given('judge')+' picks what to look into',
-      research:'The researchers look it up', synthesise:given('synthesis')+' finds the points', report:given('drafter')+' writes the report'}[k]
+    return {extract:TheAgent('knowledge')+' reads what you sent', identify:TheAgent('knowledge')+' finds the brand', select:TheAgent('review')+' picks what to look into',
+      research:TheAgent('research')+' looks it up', synthesise:TheAgent('strategy')+' finds the points', report:TheAgent('brief')+' writes the report'}[k]
       ||(STAGE[k]||{}).l||k;
   }
   function stepsHtml(){
@@ -3192,11 +3204,11 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return '<ol class="rs-steps" aria-label="How far we are">'+STAGES.map(function(S){
       var s=st[S.k], tick={done:'Done', skip:'Skipped', now:'Now', wait:'Needs you', fail:'Stopped', stop:'You stopped it', todo:'Next'}[s];
       return '<li class="rs-stp '+(s==='todo'?'':s==='stop'?'fail':s)+'"'+(s==='now'||s==='wait'?' aria-current="step"':'')+'>'
-        +fig(S.k, s==='now'?'working':s==='wait'?'needs-you':'idle')+'<span class="rs-lane" aria-hidden="true"></span>'
+        +sphereTag(WORK_ROLE[S.k], 44, s==='now'?'working':s==='wait'?'needs':'idle')+'<span class="rs-lane" aria-hidden="true"></span>'
         +'<span>'+esc(stageLabel(S.k))+'</span><span class="tick">'+esc(tick)+'</span></li>';
     }).join('')+'</ol>';
   }
-  // Each researcher's lens, from the record: skipped by the select stage,
+  // Each lens the Research agent looks into, from the record: skipped by the select stage,
   // run (selection.lenses_run), or still to come.
   function lensPlan(){
     var ms=arr(camp().markets&&camp().markets.value), S=sel(), skip=arr(S.lenses_skipped), runs=arr(S.lenses_run);
@@ -3205,7 +3217,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       var off=sk.some(function(x){ return !x.market; })||(ms.length>0&&ms.every(function(m){ return sk.some(function(x){ return x.market===m; }); }));
       var need=ms.length?ms.filter(function(m){ return !sk.some(function(x){ return x.market===m; }); }).length:1;
       var ran=runs.filter(function(r){ return r&&r.lens===L.k; }).length;
-      return {lens:L.k, k:lensAgent(L.k), off:off, done:!off&&ran>0&&ran>=need};
+      return {lens:L.k, k:'research', off:off, done:!off&&ran>0&&ran>=need};
     });
   }
   // A finished job with no report says so (no stage halts the job, so it can
@@ -3223,10 +3235,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // What the agent at work says, in first person, from the job as it stands.
   function speech(T){
     var j=CHAT.job, lq=liveQuestion(), active=jobActive(), rep=isObj(D().report);
-    var stage=(j&&STAGE[j.stage])?j.stage:'extract', k=stageAgent(stage)||'extract';
+    var stage=(j&&STAGE[j.stage])?j.stage:'extract', k=runRole(stage);
     var started=!!firstPrompt(), anyAgent=T.some(function(x){ return x.m.role==='agent'; });
-    var sp={stage:stage, k:k, mood:'working', hello:'Hi, I’m '+given(k)+'.', text:'', err:'', acts:''};
-    if(j&&j.state==='sending'){ sp.stage='extract'; sp.k='extract'; sp.hello='Hi, I’m '+given('extract')+'.'; sp.text='I’ve got your request. I’m passing it to the crew now.'; return sp; }
+    var sp={stage:stage, k:k, mood:'working', hello:'Hi, I’m '+theAgent(k)+'.', text:'', err:'', acts:''};
+    if(j&&j.state==='sending'){ sp.stage='extract'; sp.k=runRole('extract'); sp.hello='Hi, I’m '+theAgent(sp.k)+'.'; sp.text='I’ve got your request. I’m passing it to the agents now.'; return sp; }
     if(j&&j.state==='checking'){ sp.text='Let me see where we got to.'; return sp; }
     if(j&&active){
       if(stage==='research'){ sp.k='research'; return sp; }
@@ -3234,13 +3246,13 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       sp.text={
         extract:'I’m reading what you sent'+(n?': your note and '+n+' file'+(n===1?'':'s')+'.':'.'),
         identify:'I’m working out which brand this is about, and its category.'+(isObj(b)&&b.value&&b.value.name?' So far: '+b.value.name+'.':''),
-        select:'I’m picking which of our '+LENSES.length+' researchers this ask needs.',
-        synthesise:'I’m reading '+(np?'the '+np+' facts':'what')+' the researchers found, to find the points that matter.',
+        select:'I’m picking which of our '+LENSES.length+' lenses this ask needs.',
+        synthesise:'I’m reading '+(np?'the '+np+' facts':'what')+' the Research agent found, to find the points that matter.',
         report:'I’m writing the report. Every line will say where it came from.'
       }[stage]||'';
       return sp;
     }
-    if(lq){ sp.mood='needs-you'; sp.text='I need you for a moment. My question is just below.'; return sp; }
+    if(lq){ sp.mood='needs'; sp.text='I need you for a moment.'; return sp; }
     sp.mood='idle';
     if(j&&j.state==='cancelled'){
       sp.text='You stopped the research'+(STAGE[j.stage]?' at the '+j.stage+' step':'')+'. What we’d already found stays in the document.';
@@ -3248,24 +3260,24 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       return sp;
     }
     if(j&&(j.state==='failed'||j.error)){
-      sp.mood='needs-you';
-      sp.text=j.state==='failed'?'I had to stop. What we already found stays in the document.':'I can’t reach the crew right now.';
+      sp.mood='needs';
+      sp.text=j.state==='failed'?'I had to stop. What we already found stays in the document.':'I can’t reach the agents right now.';
       sp.err=j.error||'';
       if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>';
       else if(!j.id&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Try again</button>';
       return sp;
     }
     if(rep||(j&&j.state==='done')){
-      sp.stage='report'; sp.k='drafter'; sp.hello='Hi, I’m '+given('drafter')+'.'; sp.text=doneWords(rep, sel().gaps);
+      sp.stage='report'; sp.k=runRole('report'); sp.hello='Hi, I’m '+theAgent(sp.k)+'.'; sp.text=doneWords(rep, sel().gaps);
       if(document.body.classList.contains('show-run')) sp.acts='<button type="button" class="ans" data-act="show-run">Back to the report</button>';
       return sp;
     }
     if(started&&!anyAgent&&!CHAT.sending&&!j){
-      sp.stage='extract'; sp.k='extract'; sp.hello='Hi, I’m '+given('extract')+'.'; sp.text='Your request is saved, but the research hasn’t started yet.';
+      sp.stage='extract'; sp.k=runRole('extract'); sp.hello='Hi, I’m '+theAgent(sp.k)+'.'; sp.text='Your request is saved, but the research hasn’t started yet.';
       sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Start the research</button>';
       return sp;
     }
-    var ln=lastNarration(T); if(ln&&STAGE[ln.stage]){ sp.stage=ln.stage; sp.k=stageAgent(ln.stage)||'extract'; sp.hello='Hi, I’m '+given(sp.k)+'.'; }
+    var ln=lastNarration(T); if(ln&&STAGE[ln.stage]){ sp.stage=ln.stage; sp.k=runRole(ln.stage); sp.hello='Hi, I’m '+theAgent(sp.k)+'.'; }
     sp.text='I’m not working on this right now.';
     return sp;
   }
@@ -3280,7 +3292,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var acts=T.filter(function(x){ return x.m.role==='agent'&&x.m.text; });
     if(!acts.length) return '';
     return '<details class="activity no-print" id="activity"'+(CHAT.open?' open':'')+'><summary><span>What we’ve done so far</span><span class="pct">'+acts.length+'</span><span class="chev" aria-hidden="true">'+ICON.chev+'</span></summary><ol class="act">'
-      +acts.map(function(x){ var m=x.m; return '<li>'+(m.at?'<time datetime="'+esc(m.at)+'">'+esc(fmtDate(m.at))+'</time>':'')+'<b>'+esc(stageWho(m.stage))+'</b>'+esc(m.text)+(x.stored?'':'<span class="pill dash" title="From the job’s reply; the host has not written it yet">in flight</span>')+'</li>'; }).join('')
+      +acts.map(function(x){ var m=x.m; return '<li>'+(m.at?'<time datetime="'+esc(m.at)+'">'+esc(fmtDate(m.at))+'</time>':'')+'<b>'+esc(askerOf(m.stage))+'</b>'+esc(m.text)+(x.stored?'':'<span class="pill dash" title="From the job’s reply; the host has not written it yet">in flight</span>')+'</li>'; }).join('')
       +'</ol></details>';
   }
   // Stop the research: a person may cancel the job at any step. What it
@@ -3312,7 +3324,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     {agent:'knowledge', name:'Knowledge', mat:'ONYX',     kind:'read',   l1:'Reading sources & pinning facts',          st:['synthesise']},
     {agent:'review',    name:'Review',    mat:'PEARL',    kind:'check',  l1:'Checking every fact & resolving conflicts', st:['report']}];
   var MAT_C={ONYX:'#16191D', GRAPHITE:'#3B4254', PEARL:'#D8D4CA', GLASS:'#93B4E8'};
-  // The standing question each researcher asks (server/napkin/pipeline/research.py LENS_QUESTIONS),
+  // The standing question the Research agent asks on each lens (server/napkin/pipeline/research.py LENS_QUESTIONS),
   // as a question: the sub-questions the run queues, one per lens it picked.
   var LENS_Q={
     market_structure:'Who is in the market, and how big is it?',
@@ -3334,8 +3346,11 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
   // The agent sphere (identity-v4/agents, inlined as NapkinSpheres): one, made on the first run, kept
   // in its own element across renders and told each step as the job reports it; a step that moves on
-  // is a handoff, as the mock's renderStageStep. Without WebGL the crew stand there instead.
+  // is a handoff, as the mock's renderStageStep. While the agent asks, its step's kind is 'human' (the
+  // engine's needs-you look). Without WebGL the agent's static sphere frame stands there instead.
   var SPH={view:null, tried:false, key:'', el:null};
+  // Whether the stage was asking at the last render (the stage is drawn anew each time).
+  var ASKING=false;
   function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
   function hexMix(a, b, t){ var p=function(h){ h=String(h).replace('#',''); return [0,2,4].map(function(i){ return parseInt(h.slice(i,i+2),16)||0; }); }, x=p(a), y=p(b);
     return '#'+x.map(function(v,i){ return ('0'+Math.round(v+(y[i]-v)*t).toString(16)).slice(-2); }).join(''); }
@@ -3357,15 +3372,15 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return SPH.view;
   }
   // After each render: the sphere's element back in the new box (the scene finds its clip again).
-  function placeSphere(at, figHtml){
+  function placeSphere(at, figHtml, asking){
     var box=$('aglBox'); if(!box) return;
     var v=sphere();
     if(!v){ box.innerHTML=figHtml; box.classList.add('figs'); return; }
     if(SPH.el.parentNode!==box){ box.appendChild(SPH.el); SPH.el._nkClip=undefined; if(window.NapkinScene&&NapkinScene.wake) NapkinScene.wake(true); }
-    var j=CHAT.job||{}, live=jobActive(), phase=j.state==='done'?'hold':'run', key=at+':'+phase+':'+(j.state==='failed'?'e':'')+':'+(live?1:0);
+    var j=CHAT.job||{}, live=jobActive(), phase=j.state==='done'?'hold':'run', key=at+':'+phase+':'+(j.state==='failed'?'e':'')+':'+(live?1:0)+':'+(asking?'q':'');
     if(key===SPH.key) return;
     var prev=SPH.key?+SPH.key.split(':')[0]:-1; SPH.key=key;
-    var steps=PLAN.map(function(p){ return {label:p.l1, kind:p.kind}; });
+    var steps=PLAN.map(function(p, i){ return {label:p.l1, kind:asking&&i===at?'human':p.kind}; });
     if(live&&prev>=0&&at>prev) v.setEnvelope({agentKey:PLAN[prev].agent, nextAgentKey:PLAN[at].agent, phase:'handoff', steps:steps, step:{index:prev}, stepStartedAt:Date.now(), streaming:true});
     v.setEnvelope({agentKey:PLAN[at].agent, nextAgentKey:PLAN[Math.min(at+1,3)].agent, phase:phase, steps:steps, step:{index:phase==='hold'?steps.length:at},
       stepStartedAt:Date.now(), streaming:live, errorRetrying:j.state==='failed'});
@@ -3375,7 +3390,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // A rail section holds four slips, as the mock's: the ones at work first; the count says the rest.
   function wsec(h, cards, none, counted){
     var now=cards.filter(function(c){ return c.indexOf('wchk now')!==-1; }), rest=cards.filter(function(c){ return c.indexOf('wchk now')===-1; }), shown=now.concat(rest).slice(0,4);
-    return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4&&!counted?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip(none&&none[0]||'Nothing yet', none&&none[1]||'It fills as the crew work.', '', true))+'</div>'; }
+    return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4&&!counted?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip(none&&none[0]||'Nothing yet', none&&none[1]||'It fills as the agents work.', '', true))+'</div>'; }
   function srcSlip(sid, mark){ var s=srcRecs()[sid]||{}; return slip(s.domain||s.publisher||'Source', s.title||srcName(sid)||sid, mark); }
   function pinSlip(id, mark){ var p=pins()[id]||{}, src=pinSource(id);
     return slip(id+(p.confidence?' · '+(p.confidence==='low'?'Thin':p.confidence.charAt(0).toUpperCase()+p.confidence.slice(1)):src?' · '+src:''), clipT(String(p.key||'').split(':').pop().replace(/@.*$/,'').replace(/[._]/g,' ')+': '+fmtPinValue(p), 110), mark, false, p.confidence==='low'?'thin sample':''); }
@@ -3390,10 +3405,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       if(tags) left.push(slip('Scope tags', tags));
       var picked=st.select==='done'||st.select==='skip'||on.length<plan.length;
       var right=picked?on.map(function(x, i){ return slip('Q'+(i+1)+' · '+lensName(x.lens), LENS_Q[x.lens]||lensName(x.lens), x.done?'ok':''); }):[];
-      return [wsec('Research question', left), wsec('Sub-questions queued', right, ['Not picked yet', given('judge')?given('judge')+' picks what to look into, one question per lens.':'The lenses are picked next.'])];
+      return [wsec('Research question', left), wsec('Sub-questions queued', right, ['Not picked yet', TheAgent('review')+' picks what to look into, one question per lens.'])];
     }
     if(at===1){
-      return [wsec('Sources discovered', srcIds.map(function(s){ return srcSlip(s, 'ok'); }), ['Searching', 'Sources land here as the researchers find them.']),
+      return [wsec('Sources discovered', srcIds.map(function(s){ return srcSlip(s, 'ok'); }), ['Searching', 'Sources land here as the Research agent finds them.']),
         wsec('Early signals', pids.slice(-4).reverse().map(function(id){ return pinSlip(id, ''); }), ['Nothing pinned yet', 'Each fact lands here with its source.'])];
     }
     if(at===2){
@@ -3406,7 +3421,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         ['No contests', 'No two sources gave different values for the same figure.']),
       wsec('Synthesised findings', fids.map(function(id, i){ var f=F[id], s=f.status||'proposed';
         return slip('Finding '+(i+1)+' · '+s.charAt(0).toUpperCase()+s.slice(1), clipT(f.statement, 110), s==='verified'?'ok':s==='rejected'?'bad':'', false, s==='proposed'?'needs you':''); }),
-        [live?'Finding the points':'No findings', live?given('synthesis')+' is turning the facts into points.':'Nothing was found to make a point from.'])];
+        [live?'Finding the points':'No findings', live?TheAgent('strategy')+' is turning the facts into points.':'Nothing was found to make a point from.'])];
   }
   // Each section as it is written: one per lens and market the run looks into, then the points and
   // the report itself, each ticked as the record holds it.
@@ -3435,15 +3450,17 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var l2=(j&&j.state==='done'?'':'Step '+(at+1)+' of '+PLAN.length+' · ')+said;
     var R=railsFor(at), tiles=sectionTiles(), wN=tiles.filter(function(t){ return t.c==='done'; }).length;
     return '<div class="rs-work rt-work">'+toolHeadHtml(2, true)
-      +'<div class="pwrap"><div class="ptop"><div class="apills" role="list" aria-label="The crew’s steps">'+pills+'</div>'+dots+'</div>'
-      +'<div class="sstage"><div class="rail">'+R[0]+'</div>'
-        +'<div class="score"><div class="aglbox" id="aglBox" title="'+esc(whoOf(sp.k)||'')+'"></div>'
-          +'<div class="scap" role="status" aria-live="polite"><span class="abadge">'+esc(P.name.toUpperCase()+' AGENT · '+P.mat+' SPHERE')+'</span><span class="l1" title="'+esc(whoOf(sp.k)||'')+'">'+esc(l1)+'</span><span class="l2'+(sp.err?' err':'')+'">'+esc(l2)+'</span>'
+      +'<div class="pwrap"><div class="ptop"><div class="apills" role="list" aria-label="The agents’ steps">'+pills+'</div>'+dots+'</div>'
+      // the stage as it stood at the last render (ASKING): renderChat moves it only on a change
+      +'<div class="sstage'+(ASKING?' nk-asking':'')+'" id="rt-stage" data-nk-stage><div class="rail">'+R[0]+'</div>'
+        +'<div class="score"><div class="aglbox" id="aglBox" title="'+esc(agentLine(sp.k))+'"></div>'
+          +'<div class="scap" role="status" aria-live="polite"><span class="abadge">'+esc(P.name.toUpperCase()+' AGENT · '+P.mat+' SPHERE')+'</span><span class="l1" title="'+esc(agentLine(sp.k))+'">'+esc(l1)+'</span><span class="l2'+(sp.err?' err':'')+'">'+esc(l2)+'</span>'
           +(sp.err?'<span class="l2 err">'+esc(sp.err)+'</span>':'')
           +(j&&live&&j.applied===false&&j.reason&&j.reason!=='already applied'?'<span class="l2 err">The host did not apply the last change: '+esc(j.reason)+'</span>':'')
-          +(sp.acts?'<span class="rs-acts no-print">'+sp.acts+'</span>':'')+'</div></div>'
+          +(sp.acts?'<span class="rs-acts no-print">'+sp.acts+'</span>':'')+'</div>'
+          // the agent's question, under its caption on the desk
+          +(Q?'<div class="rt-askwrap"><div class="rt-askin">'+questionCard(Q, T)+'</div></div>':'')+'</div>'
         +'<div class="rail">'+R[1]+'</div></div></div>'
-      +(Q?'<div class="rt-qrow">'+questionCard(Q, T)+'</div>':'')
       +'<div class="runbar no-print"><button type="button" class="linkbtn rt-back" data-act="rt-back">← Back to the ask</button><span class="sp"></span>'+cancelHtml()
       +(isObj(D().report)&&!live?'<button type="button" class="go rt-skip" data-act="rt-skip">Open the finished report →</button>':'')
       +'<details class="ptiles"'+(CHAT.tilesOpen?' open':'')+'><summary data-act="rt-tiles">See each section as it is written · '+wN+' of '+tiles.length+'</summary><div class="tiles">'
@@ -3451,18 +3468,19 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +laterHtml(T)+activityHtml(T)
       +'<details class="rs-asked" id="asked"'+(CHAT.sheetOpen?' open':'')+'><summary><span>What you asked for</span><span class="chev" aria-hidden="true">'+ICON.chev+'</span></summary>'+sheetHtml(T)+'</details></div></div>';
   }
-  // The researchers' line while they work: who is looking into what, and how many are done.
+  // The Research agent's line while it works: what it is looking into, and how much is done.
   function researchersLine(plan){
     var on=plan.filter(function(x){ return !x.off; }), done=on.filter(function(x){ return x.done; }).length, mk=marketNames();
-    if(!on.length) return 'The researchers are starting.';
-    return 'The researchers are looking into '+on.length+' lens'+(on.length===1?'':'es')+(mk.length?' in '+listJoin(mk):'')+(done?': '+done+' of '+on.length+' done.':'.');
+    if(!on.length) return TheAgent('research')+' is starting.';
+    return TheAgent('research')+' is looking into '+on.length+' lens'+(on.length===1?'':'es')+(mk.length?' in '+listJoin(mk):'')+(done?': '+done+' of '+on.length+' done.':'.');
   }
-  // Without WebGL the crew stand on the desk: the agent at work, or the researchers on their lenses.
+  // Without WebGL the desk shows the agent at work as its static sphere frame: one Research sphere
+  // per lens while the Research agent works, else the run stage's agent.
   function stageFigs(T){
     var sp=speech(T), j=CHAT.job;
     if(sp.k==='research'){ var plan=lensPlan(), running=jobActive()&&j&&j.stage==='research';
-      return '<div class="rs-lensrow" aria-hidden="true">'+plan.map(function(x){ return '<span class="nm'+(x.off?' off':'')+'">'+figK(x.k, running&&!x.off&&!x.done?'working':'idle')+'<small>'+esc(given(x.k))+'</small></span>'; }).join('')+'</div>'; }
-    return figK(sp.k, sp.mood);
+      return '<div class="rs-lensrow" aria-hidden="true">'+plan.map(function(x){ return '<span class="nm'+(x.off?' off':'')+'">'+sphereTag('research', 40, running&&!x.off&&!x.done?'working':'idle')+'<small>'+esc(LENS_SHORT[x.lens]||lensName(x.lens))+'</small></span>'; }).join('')+'</div>'; }
+    return sphereTag(sp.k, 96, sp.mood);
   }
 
   // ── the agent asks: one card, signed by whoever asks, answers as buttons ──
@@ -3474,7 +3492,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return '';
   }
   function questionCard(Q, T){
-    var q=Q.q, ans=answerTo(q.id, T), busy=CHAT.answering===q.id, hid='qh-'+slug(q.id), k=stageAgent(Q.stage)||'extract';
+    var q=Q.q, ans=answerTo(q.id, T), busy=CHAT.answering===q.id, hid='qh-'+slug(q.id), k=runRole(Q.stage);
     // What I have to go on, from the question itself; the narration around it
     // stays in the log.
     var fk=qField(q), what=fk&&FIELD[fk]?FIELD[fk].label.toLowerCase():'', nOpt=arr(q.options).filter(function(o){ return o.value!==undefined; }).length;
@@ -3482,7 +3500,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       :'I couldn’t tell '+(what?'the '+what:'this')+' from what you sent.';
     var pi=0; PLAN.forEach(function(p, i){ if(p.st.indexOf(Q.stage)!==-1) pi=i; });
     var h='<div class="rs-ask p33-askcard no-print" id="qcard" tabindex="-1" role="group" aria-labelledby="'+hid+'" data-q="'+esc(q.id)+'">'
-      +'<span class="aq-k" title="'+esc(whoOf(k)||stageWho(Q.stage))+'">The '+esc(PLAN[pi].name)+' agent asks</span>'
+      +'<span class="aq-k" title="'+esc(agentLine(k))+'">'+esc(TheAgent(k))+' asks</span>'
       +'<span class="aq-q qtext" id="'+hid+'">'+esc(q.text)+'</span>'+(ctx?'<span class="aq-ctx qc-ctx">'+esc(ctx)+'</span>':'');
     if(ans&&!busy){
       return h+'<p class="q-note">You answered “'+esc(ans.m.text)+'”, but it hasn’t reached us yet. <button type="button" class="linkbtn" data-act="q-resend" data-q="'+esc(q.id)+'">Send it again</button></p></div>';
@@ -3504,7 +3522,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return h+'</div>';
   }
 
-  // ── the start: one question, one box, the crew standing on it ─────────────
+  // ── the start: one question, one box ─────────────────────────────────────
   // Two made-up asks, shown as examples. They fill the box; nothing is sent
   // until you press go.
   var TRY=[{l:'Plant-based yoghurt, NL & BE', t:'plant-based yoghurt in the Netherlands and Belgium'}, {l:'Mobile switching in Spain', t:'why young people switch mobile network in Spain'}];
@@ -3534,7 +3552,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'<nav class="rt-steps" aria-label="Steps">'+st+'</nav></header>';
   }
   // Lenses, markets and a window before the run (gaps R11). The ask has no
-  // field for them until Ellis reads it, so what is picked is said in the
+  // field for them until the Knowledge agent reads it, so what is picked is said in the
   // request itself, under the question; nothing is picked unless a person does.
   var MK_OFFER=['IE','GB','NI','US','DE','FR'], MK_FIRST=3;
   // The chips' short names, as the mock's row; each says its full lens in its title.
@@ -3552,7 +3570,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var P=picks(), more=CHAT.mkMore||P.markets.some(function(m){ return MK_OFFER.indexOf(m)>=MK_FIRST; });
     var mks=more?MK_OFFER:MK_OFFER.slice(0, MK_FIRST);
     return '<div class="rt-picks">'
-      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(given('judge')||'the crew')+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
+      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(theAgent('review'))+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
         return '<button type="button" class="rt-chip'+(on?' on':'')+'" data-act="pk-lens" data-k="'+esc(L.k)+'" aria-pressed="'+on+'" title="'+esc(L.l)+'" aria-label="'+esc(L.l)+'"'+off+'>'+esc(LENS_SHORT[L.k]||L.l)+'</button>'; }).join('')+'</span></div>'
       +'<div class="rt-pk"><span class="rt-pl">Markets</span><span class="rt-chips">'+mks.map(function(m){ var on=P.markets.indexOf(m)!==-1; return '<button type="button" class="rt-mk'+(on?' on':'')+'" data-act="pk-mk" data-k="'+m+'" aria-pressed="'+on+'" title="'+esc(MARKET[m]||m)+'"'+off+'>'+m+'</button>'; }).join('')
         +(more?'':'<button type="button" class="rt-mk rt-mkmore" data-act="pk-mkmore" aria-label="More markets" title="More markets"'+off+'>+</button>')+'</span></div>'
@@ -3560,10 +3578,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'</div>';
   }
   function startHtml(){
-    // Ellis speaks here only when there is something to say: starting, asking your name, or
-    // starting from a brief. The greeting and the crew are on the working screen.
+    // The Knowledge agent speaks here only when there is something to say: starting, asking your
+    // name, or starting from a brief. The greeting and the agents are on the working screen.
     var hi=CHAT.sending?CHAT.sendStep:CHAT.askWho&&!me()?'Before I start: what’s your name? It goes on everything you send.'
-      :briefUpstream()?'Hi, I’m '+given('extract')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.':'';
+      :briefUpstream()?'Hi, I’m '+theAgent('knowledge')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.':'';
     var off=CHAT.sending?' disabled':'', nm=myName();
     var named=CHAT.showName||CHAT.name;
     return '<div class="rs-start rt-prompt">'
@@ -3574,7 +3592,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         +'<label class="sr" for="cmp-prompt">What do you need to find out?</label>'
         +'<textarea id="cmp-prompt" rows="5" placeholder="The client, the brand and the market, and the question you need answered"'+off+'>'+esc(CHAT.draft)+'</textarea>'
       +'</div>'
-      +(hi?'<p class="rt-hi" aria-live="polite"><b>'+esc(whoOf('extract'))+'</b> '+esc(hi)+'</p>':'')
+      +(hi?'<p class="rt-hi" aria-live="polite"><b>'+esc(agentName('knowledge'))+'</b> '+esc(hi)+'</p>':'')
       +'<div class="rs-under" role="group" aria-labelledby="rs-eg"><span class="rs-eg" id="rs-eg">Try an example</span>'+TRY.map(function(t){ return '<button type="button" class="rs-try" data-act="cmp-try" data-text="'+esc(t.t)+'" title="'+esc(t.t)+'"'+off+'>'+esc(t.l)+'</button>'; }).join('')+'</div>'
       +picksHtml(off)
       +askNameHtml()
@@ -3600,20 +3618,24 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     el.hidden=false;
     var lq=null;
     if(fresh && !CHAT.job){
-      el.innerHTML=startHtml();
+      el.innerHTML=startHtml(); ASKING=false;
     } else {
       lq=liveQuestion();
       var Q=lq?questions(T).filter(function(x){ return x.q.id===lq.id; })[0]:null;
       el.innerHTML=workHtml(T, Q);
-      placeSphere(runStep(), stageFigs(T));
+      // The agent asks on the desk: the sphere rises and the card opens under the caption; answered,
+      // it comes back down. The stage was drawn as it stood, so only a change moves it.
+      var asking=!!Q, stg=$('rt-stage');
+      placeSphere(runStep(), stageFigs(T), asking);
+      if(stg&&asking!==ASKING){ void stg.offsetHeight; if(window.NapkinRoles) NapkinRoles.ask(stg, asking); else stg.classList.toggle('nk-asking', asking); }
+      ASKING=asking;
     }
     if(keep){ var n=$(keep.id); if(n){ try{ n.focus({preventScroll:true}); if(keep.s!=null) n.setSelectionRange(keep.s, keep.e); }catch(e){} } }
     // A question that has just opened takes the focus, once: the agent is asking.
     if(lq&&CHAT.focusedQ!==lq.id){
       var qc=$('qcard');
       if(qc){ CHAT.focusedQ=lq.id;
-        try{ qc.focus({preventScroll:true}); }catch(e){}
-        if(qc.scrollIntoView) qc.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); }
+        try{ qc.focus({preventScroll:true}); }catch(e){} }
     }
     var ta=$('cmp-prompt'); if(ta) grow(ta);
     refreshBar();
@@ -3657,7 +3679,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function doSend(){
     if(CHAT.sending) return;
     var ta=$('cmp-prompt'), prompt=String(ta?ta.value:CHAT.draft).trim();
-    // A research started from a brief can start from the brief alone: the crew
+    // A research started from a brief can start from the brief alone: the agents
     // reads its client, audience, background and objectives (features/spinoff-and-links).
     if(!prompt&&briefUpstream()&&!CHAT.files.length) prompt=FROM_BRIEF_PROMPT;
     if(!prompt){ toast('Say what the client needs: the research starts from your prompt.'); if(ta) ta.focus(); return; }
@@ -3960,7 +3982,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var f=fnds()[id];
     if(!f) return '<p class="rp-fp"><span class="tag">'+esc(id)+' · not in the projection</span></p>';
     var st=f.status, tag=st==='verified'?'verified':st==='rejected'?'rejected':st==='superseded'?'replaced after a review':'needs your call', to=replacedBy(id);
-    return '<p class="rp-fp s-'+esc(st)+'" data-anchor="'+esc(id)+'"><button type="button" class="rp-fs" data-rsel="'+esc(id)+'" title="'+esc('Worked out by '+(given('synthesis')||'the crew')+' from '+arr(f.cites).length+' pin'+(arr(f.cites).length===1?'':'s'))+'">'+esc(f.statement)+'</button> '
+    return '<p class="rp-fp s-'+esc(st)+'" data-anchor="'+esc(id)+'"><button type="button" class="rp-fs" data-rsel="'+esc(id)+'" title="'+esc('Worked out by '+theAgent('strategy')+' from '+arr(f.cites).length+' pin'+(arr(f.cites).length===1?'':'s'))+'">'+esc(f.statement)+'</button> '
       +'<span class="tag">Finding '+esc(fno(id))+' · '+esc(tag)+'</span>'+(to?' <button type="button" class="rp-f" data-rsel="'+esc(to)+'">Replaced by F'+esc(fno(to))+'</button>':'')+'</p>';
   }
   // A gap as a person reads it: no entity ids ("category/alcohol.cider" is
@@ -4011,7 +4033,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function rpBand(r, lk){
     var c=camp(), name=c.name&&c.name.value, org=c.client_org&&c.client_org.value&&c.client_org.value.name, brand=c.brand&&c.brand.value&&c.brand.value.name;
     var nd=CHAIN.state==='ok'?decs().length:0, src=sourceIds().length, np=Object.keys(pins()).length;
-    var meta=['Written '+(fmtWhen(r.built_at)||'—')+' by '+(given('drafter')||'the crew')];
+    var meta=['Written '+(fmtWhen(r.built_at)||'—')+' by '+theAgent('brief')];
     if(src) meta.push(src+' source'+(src===1?'':'s')+' read');
     meta.push(np+' fact'+(np===1?'':'s')+' pinned');
     if(nd) meta.push(nd+' decision'+(nd===1?'':'s')+' on the record');
@@ -4069,7 +4091,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var from=Object.keys(mats()).map(function(id){ return mats()[id]; }).filter(function(m){ return m&&m.kind!=='prompt'; }).map(function(m){ return m.name||m.kind; });
     var h='<section class="rp-sec rp-ask" id="rp-ask">'+rpHead(n, 'The ask', 'What the client asked')
       +'<div class="rp-askgrid">'+ASK_GRID.map(function(x){ return askCell(x[0], x[1]); }).join('')+askCell('problem', 'The problem', true)+'</div>'
-      +'<p class="rp-src">'+(from.length?'Read from '+esc(listJoin(from))+' · ':'')+filled+' of '+FIELDS.length+' fields filled · <button type="button" class="linkbtn no-print" data-act="extract" title="'+esc('Ask '+(given('extract')||'the crew')+' to read the ask again')+'">Read the ask again</button></p>';
+      +'<p class="rp-src">'+(from.length?'Read from '+esc(listJoin(from))+' · ':'')+filled+' of '+FIELDS.length+' fields filled · <button type="button" class="linkbtn no-print" data-act="extract" title="'+esc('Ask '+theAgent('knowledge')+' to read the ask again')+'">Read the ask again</button></p>';
     // The gates, as a strip: what the document has reached, and what the brief still waits on.
     var prev=true, miss=[];
     h+='<div class="rp-gates" role="list" aria-label="Gates">'+GATES.map(function(G, i){
@@ -4194,7 +4216,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         return '<div class="rp-ex"><span class="rp-ex-k">pinned · context only</span><span><button type="button" class="rp-pid" data-rsel="'+esc(id)+'">'+esc(id)+'</button> · '+esc(String(p.key||'').replace(/[._]/g,' '))+' '+esc(clipT(fmtPinValue(p), 40))+'. Neither a finding nor the report cites it.</span><small></small></div>'; }).join('')
       +'</div></section>';
   }
-  // 13 — how it ran: the crew's steps, oldest first, from the chain.
+  // 13 — how it ran: the agents' steps, oldest first, from the chain.
   var RUN_STAGE={extract:'extract', identify:'identify', answer_question:'', lookup:'research', merge_research:'research', research_run:'research', research_merge:'research', contest:'research', open_contest:'research',
     select:'select', synthesise:'synthesise', synthesise_finding:'synthesise', propose_audience:'synthesise', report:'report', compose_report:'report'};
   var RUN_VERB={extract:'read the ask', identify:'worked out the brand and markets', select:'picked the lenses', research:'looked things up and pinned facts', synthesise:'worked out the points', report:'wrote the report'};
@@ -4214,11 +4236,11 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var na=Object.keys(who).length;
     var t=(na?(na<NUM.length?NUM[na]:String(na))+' step'+(na===1?'':'s'):'The run')+(runs?', '+runs+' lens run'+(runs===1?'':'s'):'')+(src?', '+src+' source'+(src===1?'':'s'):'');
     var h='<section class="rp-sec" id="rp-ran">'+rpHead(n, 'How it ran', t);
-    if(!steps.length) h+='<p class="muted">'+(CHAIN.state==='ok'?'No steps by the crew are on the record.':'The record is not available here.')+'</p>';
+    if(!steps.length) h+='<p class="muted">'+(CHAIN.state==='ok'?'No steps by the agents are on the record.':'The record is not available here.')+'</p>';
     else h+='<ol class="rp-run">'+steps.map(function(s){
       var a=s.ds[0], z=s.ds[s.ds.length-1], hs=[];
       s.ds.forEach(function(d){ var x=d.handler||d.agent; if(x&&hs.indexOf(x)===-1) hs.push(x); });
-      var nm=s.k==='other'?'The crew':s.k==='research'?'The researchers':stageWho(s.k);
+      var nm=s.k==='other'?'The agents':stageWho(s.k);
       var t1=fmtWhen(a.timestamp), t2=fmtWhen(z.timestamp);
       return '<li><div><b>'+esc(nm)+'</b> '+esc(RUN_VERB[s.k]||s.ds.map(function(d){ return d.action; }).join(', '))+'<small>'+esc(hs.join(', '))+(hs.length?' · ':'')+s.ds.map(function(d){ return d.id?'<span class="mono">'+esc(d.id)+'</span>':''; }).filter(Boolean).join(' ')+'</small></div><span class="t">'+esc(t1===t2?t1:t1+' – '+t2)+'</span></li>';
     }).join('')+'</ol>';
@@ -4269,7 +4291,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     $('rp-pre').innerHTML=pre;
     if(layout){
       // The agent's layout, over the record: the OS renders every figure in it.
-      $('rep-bar').innerHTML='<div class="rep-bar no-print"><span class="derived">'+ICON.agent+(r.layout_by==='agent'?'laid out by '+esc(given('drafter')):'laid out from the report')+'</span><span>written '+esc(fmtWhen(r.built_at))+'</span><span class="sp"></span>'
+      $('rep-bar').innerHTML='<div class="rep-bar no-print"><span class="derived">'+ICON.agent+(r.layout_by==='agent'?'laid out by '+esc(theAgent('brief')):'laid out from the report')+'</span><span>written '+esc(fmtWhen(r.built_at))+'</span><span class="sp"></span>'
         +(stale.length?'<span style="color:var(--create-ink)">'+esc(staleText(stale))+' Refresh it from the Report box.</span>':'')+'</div>';
       var key=r.built_at+'|'+r.layout.length;
       if(MOUNTED!==key){ ClanFields.mount($('rep-layout'), r.layout); MOUNTED=key; }
@@ -4381,7 +4403,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var md=barMode(); if(md) items.unshift(md);
     return items;
   }
-  // The mock's bar per step: the name alone at the ask; the name and the run's step while the crew
+  // The mock's bar per step: the name alone at the ask; the name and the run's step while the agents
   // work (and what became of a run that left no report); the report's own bar once there is one.
   function barMode(){
     var j=CHAT.job, fresh=!thread().length&&!Object.keys(camp()).length;
@@ -4699,8 +4721,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // ── the report's checks: each sits under the sentence it is about ─────────
   // What needs a person is the host's (clan://decisions, read by the OS's
   // fields); the findings and contests are the record's. A check is signed by
-  // the agent who made it: Sam for a finding, the lens's researcher for a
-  // contest, Jude for anything else. Answers are the review routes the OS's
+  // the agent who made it: the Strategy agent for a finding, the Research
+  // agent for a contest, the Review agent for anything else. Answers are the review routes the OS's
   // drawer uses; "Where did this come from?" opens that drawer.
   var CHK={ui:{}, busy:{}, at:''};
   function fview(){ return window.ClanFields&&ClanFields.view?ClanFields.view():null; }
@@ -4726,18 +4748,18 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function pinSource(fid){ var p=pins()[fid], s=arr(p&&p.sources).filter(function(x){ return /^src_/.test(x); })[0]; return s?srcName(s):''; }
   // The OS's money and counts; this view's own percent units.
   function fmtAny(v){ return window.ClanFields&&ClanFields.format&&!/^percent/.test(v&&v.unit||'')?ClanFields.format(v):fmtPinValue(v); }
-  // Who a contest value came from, in words: its source, or the researcher.
+  // Who a contest value came from, in words: its source, or the Research agent's lens.
   function fromName(v){
     var s=srcName(arr(v.sources).filter(function(x){ return /^src_/.test(x); })[0]||'');
     if(s) return s;
     var l=lensOf(v.from), m=String(v.from||'').split('/')[1];
-    if(l) return given(lensAgent(l))+'’s research'+(m?' ('+(MARKET[m]||m)+')':'');
+    if(l) return TheAgent('research')+' ('+lensName(l)+(m?', '+(MARKET[m]||m):'')+')';
     return human(v.from)||'a source';
   }
   function contestAgent(c){
     var vs=arr(c&&c.values);
-    for(var i=0;i<vs.length;i++){ var l=lensOf(vs[i].from)||(pins()[vs[i].fact_id]||{}).lens; if(l&&LENS[l]) return lensAgent(l); }
-    return 'judge';
+    for(var i=0;i<vs.length;i++){ var l=lensOf(vs[i].from)||(pins()[vs[i].fact_id]||{}).lens; if(l&&LENS[l]) return 'research'; }
+    return 'review';
   }
   function contestWhat(c){
     var v=arr(c.values)[0]||{}, p=pins()[v.fact_id];
@@ -4806,12 +4828,12 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       cites.forEach(function(x){ var s=pinSource(x); if(s&&pubs.indexOf(s)===-1) pubs.push(s); });
       var from='I worked this out from '+cites.length+' fact'+(cites.length===1?'':'s')
         +(pubs.length?(pubs.length===1&&cites.length>1?(cites.length===2?', both from ':', all from '):', from ')+listJoin(pubs):'')+'.';
-      var h='<div class="rc-chk open" id="'+id+'" tabindex="-1" role="group" aria-label="'+esc(given('synthesis')+' asks: is this right?')+'">'+figK('synthesis','needs-you')
-        +'<div><span class="q">'+esc(given('synthesis'))+' · is this right?</span>'
+      var h='<div class="rc-chk open" id="'+id+'" tabindex="-1" role="group" aria-label="'+esc(TheAgent('strategy')+' asks: is this right?')+'">'+sphereTag('strategy', 36, 'needs')
+        +'<div><span class="q">'+esc(TheAgent('strategy'))+' · is this right?</span>'
         +(shown?'':'<p class="claim">'+esc(f.statement||c.ref)+'</p>')+'<p class="t">'+esc(from)+'</p>'
         +(gone.length?'<p class="t" style="color:var(--create-ink)">'+esc('It rests on a fact someone marked wrong'+(gone.length>1?' ('+gone.length+' of them)':'')+'. If there is a new point in its place, check that one and take this one out.')+'</p>':'');
       if(ui.mode==='no'){
-        h+='<div class="rc-why"><label for="chkwhy-'+slug(c.ref)+'">What’s wrong with it? '+esc(given('synthesis'))+' will use this to fix it.</label>'
+        h+='<div class="rc-why"><label for="chkwhy-'+slug(c.ref)+'">What’s wrong with it? '+esc(TheAgent('strategy'))+' will use this to fix it.</label>'
           +'<div class="r"><input type="text" id="chkwhy-'+slug(c.ref)+'" data-ref="'+ref+'" value="'+esc(ui.why||'')+'" autocomplete="off"'+(ui.err?' aria-invalid="true" aria-describedby="chkerr-'+slug(c.ref)+'"':'')+off+'>'
           +'<button type="button" class="ans primary" data-act="chk-reject" data-ref="'+ref+'"'+off+'>'+(busy?'Saving…':'Take it out')+'</button>'
           +'<button type="button" class="ans" data-act="chk-cancel" data-ref="'+ref+'"'+off+'>Keep it for now</button></div>'
@@ -4830,8 +4852,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         return '<span class="rc-ok" id="'+id+'" tabindex="-1">✓ '+esc((who?(who==='You'?'You picked ':who+' picked '):'Settled: ')+(ch?fmtAny(ch):''))+'</span>';
       }
       var dis=vs.length>2?'the sources disagree':'two sources disagree';
-      var h2='<div class="rc-chk open" id="'+id+'" tabindex="-1" role="group" aria-label="'+esc(given(k)+': '+dis)+'">'+figK(k,'needs-you')
-        +'<div><span class="q">'+esc(given(k))+' · '+dis+'</span>'
+      var h2='<div class="rc-chk open" id="'+id+'" tabindex="-1" role="group" aria-label="'+esc(TheAgent(k)+': '+dis)+'">'+sphereTag(k, 36, 'needs')
+        +'<div><span class="q">'+esc(TheAgent(k))+' · '+dis+'</span>'
         +'<p class="t">'+esc(contestWhat(ct))+': which one should the report use?</p>'
         +'<p class="from">'+esc(vs.map(function(v){ return fromName(v)+' says '+fmtAny(v); }).join('. ')+'.')+'</p>';
       if(ui.mode==='pick'){
@@ -4852,8 +4874,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       }
       return h2+'</div></div>';
     }
-    return '<div class="rc-chk open" id="'+id+'" tabindex="-1" role="group" aria-label="'+esc(given('judge')+': this needs a look')+'">'+figK('judge','needs-you')
-      +'<div><span class="q">'+esc(given('judge'))+' · this needs a look</span>'+(c.label?'<p class="t">'+esc(c.label)+'</p>':'')+'<p class="from">'+esc(c.text||'')+'</p>'
+    return '<div class="rc-chk open" id="'+id+'" tabindex="-1" role="group" aria-label="'+esc(TheAgent('review')+': this needs a look')+'">'+sphereTag('review', 36, 'needs')
+      +'<div><span class="q">'+esc(TheAgent('review'))+' · this needs a look</span>'+(c.label?'<p class="t">'+esc(c.label)+'</p>':'')+'<p class="from">'+esc(c.text||'')+'</p>'
       +'<div class="answers sm"><button type="button" class="ans" data-act="chk-open" data-ref="'+ref+'" data-note="'+esc(c.text||'')+'">Show me</button></div></div></div>';
   }
   // ── what was made from it (Contract 4 §7.4) ─────────────────────────────
@@ -4906,10 +4928,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'<p class="nb-sub" role="status"><b>'+(N-open)+' of '+N+'</b> checked</p>';
   }
   function judgeBarHtml(all){
-    var N=all.length, open=all.filter(function(c){ return c.open; }).length, jn=given('judge');
+    var N=all.length, open=all.filter(function(c){ return c.open; }).length, jn=TheAgent('review');
     var L=window.ClanFields&&ClanFields.locked?ClanFields.locked():null;
     var lockBtn=window.ClanFields?'<button type="button" class="jb-btn go" data-clf-lock>Lock the report</button>':'<button type="button" class="jb-btn go" data-act="lock">Lock the report</button>';
-    var h='<div class="jb-in">'+figK('judge', !L&&open?'needs-you':'idle');
+    var h='<div class="jb-in">'+sphereTag('review', 32, !L&&open?'needs':'idle');
     var used=usedIn(), usedP=used.length?' '+esc(usedText(used)):'';
     // A part reopened for the client's change: the report is locked again
     // once it is changed (the host's lock view says when it may be).
@@ -5021,7 +5043,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // A question asked at the end of a section is answered there; one asked at
   // the end of the report, about something it does not cover, gets a section
   // of its own. The middleware answers from the facts the document holds, and
-  // its researchers search only when jev says that answer does not answer it.
+  // the Research agent searches only when jev says that answer does not answer it.
   // The answers are the document's (data.asks); this view asks and shows them.
   var ASK={ui:{}, jobs:[]};
   var KEY_LENS={market:'market_structure', positioning:'brands_positioning', consumer:'consumer_culture', codes:'category_codes',
@@ -5101,7 +5123,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var i=ASK.jobs.indexOf(j);
     return '<div class="rq-a busy no-print" role="status"><p class="rq-q">'+esc(j.question)+'</p>'
       +(j.error?'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(j.error)+'</span></p><div class="answers sm"><button type="button" class="ans" data-act="rq-retry" data-i="'+i+'">Ask again</button><button type="button" class="ans" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div>'
-        :'<p class="rq-how">Looking into it… the researchers search only if what’s here doesn’t answer it.</p>'
+        :'<p class="rq-how">Looking into it… the Research agent searches only if what’s here doesn’t answer it.</p>'
           +(j.jobId?'<div class="answers sm"><button type="button" class="ans" data-act="rq-stop" data-i="'+i+'"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Stop')+'</button></div>':''))+'</div>';
   }
   // Always open: the place to ask is a box you can type in, not a link to find.
@@ -5112,7 +5134,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         :'<input type="text" id="'+id+'" data-k="'+esc(key)+'" value="'+esc(ui.draft||'')+'" maxlength="1000" autocomplete="off" placeholder="What do you want to know?">')
       +'<button type="button" class="ans primary" data-act="rq-send" data-k="'+esc(key)+'">Ask</button></div>'
       +(key==='_new'?'<label class="rq-about">About <select id="rqlens-_new" data-k="_new"><option value="">anything</option>'+LENSES.map(function(L){ return '<option value="'+esc(L.k)+'"'+(ui.lens===L.k?' selected':'')+'>'+esc(L.l)+'</option>'; }).join('')+'</select></label>':'')
-      +(key==='_new'?'<p class="rq-hint">A new question gets a section of its own. The crew answers from what the research found, and looks further only if that isn’t enough.</p>':'')+'</div>';
+      +(key==='_new'?'<p class="rq-hint">A new question gets a section of its own. The agents answer from what the research found, and looks further only if that isn’t enough.</p>':'')+'</div>';
   }
   function renderAsks(){
     var root=$('report'), side=$('insp-ask'); if(!root) return;
@@ -5469,7 +5491,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(m.task==='compose_report'){ doRefreshReport(); toast('Writing the report again.'); return; }
     runTask(m.task, input);
     toast(m.task==='research_lens'?'Researching again: '+arr(input.lenses).map(function(l){ return (LENS[l]||{}).l||l; }).join(', ')+'.'
-      :input.redo==='audience'?'Asking '+given('synthesis')+' to propose the audience again.':'Asking '+given('synthesis')+' again.');
+      :input.redo==='audience'?'Asking '+theAgent('strategy')+' to propose the audience again.':'Asking '+theAgent('strategy')+' again.');
   });
   window.addEventListener('clan:focus', function(e){
     var p=String((e.detail&&e.detail.path)||''), m=/^campaign\.([a-z_]+)/.exec(p);
@@ -5495,6 +5517,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   askGlass();
   window.addEventListener('clan:colorscheme', function(){ setTimeout(askGlass, 0); });
   readShellWho();
+  // The role spheres: every NapkinRoles.tag() placeholder becomes a live sphere as it lands, and a
+  // rail card on the run's desk draws its thread to the sphere when hovered.
+  if(window.NapkinRoles){ NapkinRoles.auto(); NapkinRoles.thread(); }
   render();
   loadChain();
   // The host injects the bridge after this script, so window.clan exists only

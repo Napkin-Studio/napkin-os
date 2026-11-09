@@ -373,7 +373,13 @@ test('a locked report is the version agreed to: never out of date, Refresh not o
 
 // A review changes only the document; the crew then brings what rests on it
 // in step with one reconsider job at a time, holding reviews made meanwhile.
-const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'walk', 'reconsider']
+const RECON_FNS = ['reviewEvent', 'reviewed', 'keepRecon', 'walk', 'reconsider', 'roles', 'agentName', 'theAgent', 'TheAgent', 'sphereTag']
+/** The one agent engine's front door (agent-sphere/roles.js), loaded into a window of its own. */
+function rolesWindow(): Record<string, unknown> {
+  const w: Record<string, unknown> = {}
+  new Function('window', page('shared/agent-sphere/roles.js'))(w)
+  return w
+}
 type Job = { task: string; input: { events: { kind: string; id: string; decision: string; replaced_by?: string }[] }; then: ((j: Job) => void) | null; error?: string; jobId?: string; quiet?: boolean }
 function reconEnv(locked = false) {
   const runs: Job[] = []
@@ -382,17 +388,15 @@ function reconEnv(locked = false) {
   const classes = new Set<string>()
   const walker = { innerHTML: '', classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } } }
   const env = {
-    RECON, arr, walker,
+    RECON, arr, walker, esc, ROLE_NM: {},
     $: (id: string) => (id === 'walker' ? walker : null),
-    CREW_OK: true,
-    agentFigure: (k: string, o: { walking?: boolean }) => `<svg data-agent="${k}"${o.walking ? ' data-walking="true"' : ''}></svg>`,
     calm: () => false,
     setTimeout: () => 0, clearTimeout: () => {},
     pathOf: (a: string) => (a.includes('#') ? a.slice(a.indexOf('#') + 1) : a),
     store: (_k: string, v: string | null) => { kept.push(v) },
     docId: () => 'doc1',
     reportLocked: () => locked,
-    window: { clan: { apiProxy: () => Promise.resolve() } },
+    window: { ...rolesWindow(), clan: { apiProxy: () => Promise.resolve() } },
     runTask: (task: string, input: Job['input'], then: Job['then'], quiet?: boolean) => { const j = { task, input, then, quiet }; runs.push(j); return j },
   }
   type F = { reviewed(route: string, body: unknown, res: unknown): void; reviewEvent(route: string, body: unknown, res: unknown): unknown }
@@ -475,21 +479,49 @@ test('reviews a reconsider job never started wait for the next one', () => {
   assert.equal(RECON.queue.length, 0)
 })
 
-test('a review leaves the page where it is, and Sam walks the bottom edge while the crew works', () => {
+test('a review leaves the page where it is, and the Strategy agent works at the bottom edge while the agents do', () => {
   const { f, runs, walker } = reconEnv()
   const on = () => walker.classList.contains('on')
   assert.ok(!on())
   f.reviewed('/verdict', { polarity: 'good' }, { ok: true, decision: 'd_1', targets: ['doc1#facts[f_01A]'] })
   assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
-  assert.ok(on(), 'Sam shows while the job runs')
-  assert.match(walker.innerHTML, /data-agent="synthesis" data-walking="true"/)
-  assert.match(walker.innerHTML, /Sam is bringing the report in step with your review/)
+  assert.ok(on(), 'the Strategy agent shows while the job runs')
+  assert.match(walker.innerHTML, /<span class="nk-ag" data-nk-agent="strategy" data-nk-state="working" data-nk-size="44"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working (the static frame until it is hydrated)')
+  assert.match(walker.innerHTML, /The Strategy agent is bringing the report in step with your review…/)
+  assert.doesNotMatch(walker.innerHTML, /agent-figure|walking/)
   finish(runs[0])
   assert.ok(!on(), 'and leaves when nothing is pending')
   // A job a person starts still brings the jobs panel into view.
   assert.match(fn(RT, 'runTask'), /if\(!quiet&&el&&el\.scrollIntoView\) el\.scrollIntoView/)
   assert.match(RT, /<div class="walker" id="walker" role="status" aria-live="polite"><\/div>/)
-  assert.match(RT, /@media \(prefers-reduced-motion: reduce\)\{\.walker \.wk-who,\.walker \.wk-fig\{animation:none\}\}/)
+  assert.match(RT, /@media \(prefers-reduced-motion: reduce\)\{\.walker\{transition:none\}\}/)
+  assert.doesNotMatch(RT, /wk-pace|wk-turn/, 'the sphere stands; nothing walks')
+})
+
+// The agents are named by role and drawn as their sphere (owner, 2026-11-09): no figure, no crew name.
+test('the research names its agents by role, draws them as spheres, and asks on the desk', () => {
+  assert.doesNotMatch(RT, /agentFigure|agent-figure|NapkinAgents|AGENT_FIGURES|@napkin:agent-figures|CREW_OK/)
+  assert.doesNotMatch(RT, /\b(Ellis|Dara|Jude|Sam|Dex|Max|Bo|Cam|Cody|Remy|Mo|Lex|Eden)\b/)
+  assert.match(RT, /if\(window\.NapkinRoles\)\{ NapkinRoles\.auto\(\); NapkinRoles\.thread\(\); \}/)
+  // The run's stage follows PLAN, the engine's stages for research; the words about a stage's work name its role.
+  const { runRole, TheAgent } = lift<{ runRole(s: string): string; TheAgent(r: string): string }>(RT, ['roles', 'agentName', 'theAgent', 'TheAgent', 'runRole'], { window: rolesWindow(), ROLE_NM: {}, PLAN: [] })
+  assert.deepEqual(['extract', 'identify', 'select', 'research', 'synthesise', 'report'].map(runRole), ['strategy', 'strategy', 'strategy', 'research', 'knowledge', 'review'])
+  assert.equal(TheAgent('knowledge'), 'The Knowledge agent')
+  assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('review'\)\+' picks what to look into'/s)
+  assert.match(fn(RT, 'stageLabel'), /synthesise:TheAgent\('strategy'\)\+' finds the points', report:TheAgent\('brief'\)\+' writes the report'/)
+  assert.match(fn(RT, 'questionCard'), /k=runRole\(Q\.stage\)/)
+  // The stage: a thread from each rail card to the sphere; the question under the caption, inside the stage.
+  const work = fn(RT, 'workHtml')
+  assert.match(work, /<div class="sstage'\+\(ASKING\?' nk-asking':''\)\+'" id="rt-stage" data-nk-stage>/)
+  assert.ok(work.indexOf('class="scap"') < work.indexOf('rt-askwrap') && work.indexOf('rt-askwrap') < work.indexOf("'<div class=\"rail\">'+R[1]"), 'the card sits in the score column, under the caption')
+  assert.doesNotMatch(RT, /rt-qrow/)
+  const chat = fn(RT, 'renderChat')
+  assert.match(chat, /if\(stg&&asking!==ASKING\)\{ void stg\.offsetHeight; if\(window\.NapkinRoles\) NapkinRoles\.ask\(stg, asking\);/, 'only a change moves the sphere')
+  assert.doesNotMatch(chat, /scrollIntoView/, 'a question never scrolls the page')
+  assert.match(fn(RT, 'placeSphere'), /kind:asking&&i===at\?'human':p\.kind/, 'the sphere needs the person while it asks')
+  assert.match(RT, /\.rt-work \.nk-asking \.aglbox\{height:calc\(min\(340px,40vh\) \* \.46\)\}/)
+  assert.match(RT, /\.rt-work \.wcard:hover\{transform:translateY\(-1\.5px\);border-color:var\(--ink\)\}/)
+  assert.match(RT, /@media \(prefers-reduced-motion:reduce\)\{[^\n]*\.rt-work \.aglbox,\.rt-work \.rt-askwrap,\.rt-work \.rt-askin > \.p33-askcard,\.rt-work \.wcard\{transition:none\}/)
 })
 
 test('a locked report starts no reconsider job', () => {
