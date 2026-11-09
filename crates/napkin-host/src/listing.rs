@@ -80,6 +80,12 @@ pub struct LibraryItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<RecentState>,
     pub run: Option<RunInfo>,
+    /// The last person who changed it: the actor of the newest decision a
+    /// person made (`human:<id>` without the prefix, e.g. `sam@wk`). What the
+    /// desk's "Pick up where you left off → Me" filters on. Absent when no
+    /// person has written a decision yet (owner, 2026-11-09).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_editor: Option<String>,
     /// The middleware jobs on this document the host has not seen finish
     /// ([`crate::runs::RunTracker::unsettled`]): the shell polls each through
     /// the document, so a job that ends after its page closed still lands.
@@ -110,6 +116,7 @@ struct Core {
     client: Option<ClientRef>,
     state: Option<RecentState>,
     run: Option<RunInfo>,
+    last_editor: Option<String>,
 }
 
 type Key = (String, usize);
@@ -228,6 +235,7 @@ pub fn scan_library(
             // What the host heard of a job first, else what the document records.
             run: cache.runs.run_for(&id).or(core.run),
             jobs: cache.runs.unsettled(&id),
+            last_editor: core.last_editor,
         });
     }
     // A document that is gone must not be remembered.
@@ -263,7 +271,16 @@ fn work_out(store: &dyn DocStore, id: &DocId, clan: &ClanFile) -> Option<Core> {
         client: m.client.clone(),
         state: recent_state(id.clone(), clan.raw_bytes().to_vec()),
         run: run_of(clan),
+        last_editor: last_editor(clan),
     })
+}
+
+/// The newest decision a person made, by its actor (`human:<id>` → `<id>`).
+fn last_editor(clan: &ClanFile) -> Option<String> {
+    crate::library::chain_of(clan)
+        .decisions
+        .iter()
+        .find_map(|d| d.actor.as_deref()?.strip_prefix("human:").map(String::from))
 }
 
 /// A run the document itself records: Deck Maker's `data.run` (schema
