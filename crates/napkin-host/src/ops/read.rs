@@ -1022,6 +1022,9 @@ fn build_clan_context(doc: &Document, data: &serde_yaml::Value) -> Value {
             "app_id": a.app_id,
             "version": a.version,
         })),
+        // Who the document is for: a view names its client before its own data does
+        // (Brief Maker's header, "McDonald's Ireland · New brief").
+        "client": m.client.as_ref().map(|c| serde_json::json!({ "id": c.id, "name": c.name })),
     });
 
     serde_json::json!({
@@ -1349,6 +1352,16 @@ mod tests {
         assert_eq!(
             clan_context_for_agent(&with)["workspace_client"],
             serde_json::json!({ "id": "cli_0b19a78d", "name": "Guinness" })
+        );
+        // The view is told too (window.__CLAN__.manifest.client), before its data names one.
+        let view = build_clan_context(&with, &serde_yaml::Value::Null);
+        assert_eq!(
+            view["manifest"]["client"],
+            serde_json::json!({ "id": "cli_0b19a78d", "name": "Guinness" })
+        );
+        assert!(
+            build_clan_context(&open(&research()), &serde_yaml::Value::Null)["manifest"]["client"]
+                .is_null()
         );
     }
 
