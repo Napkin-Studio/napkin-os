@@ -44,6 +44,8 @@ interface Props {
   onChrome?: (mode: 'glass' | 'solid', tint: string | null) => void
   /** What the app asks the OS bar to show (`clan:bar`): its whole list, each time. */
   onBar?: (items: BarItem[]) => void
+  /** The app's own Decisions button (`clan:decisions`): open the OS's Decisions drawer on this document. */
+  onDecisions?: () => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
 }
@@ -56,7 +58,7 @@ interface Props {
  */
 export default function AppRuntime({
   htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, insets,
+  onChrome, onBar, onDecisions, insets,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -163,8 +165,8 @@ export default function AppRuntime({
   // What the app says about its parts. Its contentWindow is the frame's for
   // the frame's whole life, loads included, so nothing it posts before its
   // load event is missed. Only our own frame is heard.
-  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar })
-  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar } })
+  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, onDecisions })
+  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, onDecisions } })
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const frame = iframeRef.current?.contentWindow
@@ -180,6 +182,7 @@ export default function AppRuntime({
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
       else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
+      else if (m?.type === 'clan:decisions') handlers.current.onDecisions?.()
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',

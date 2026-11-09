@@ -6,45 +6,68 @@
 <title>Deck Maker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" />
 <style>
 /* The studio palette, copied from app/src/index.css (a template is its own page, so it
    cannot import the shell's sheet). Light is the default; the shell pushes
    data-color-scheme, and with none set we follow the OS. --tool is the Deck tool's identity,
    as in production-tool/web/src/styles.css. --create is the one action colour. */
 :root{
-  --paper:#FFFFFF; --card:#FFFFFF; --soft:#F5F6F8; --soft-2:#F2F3F6; --frost:rgba(255,255,255,.82);
-  --line:#D6DAE2; --line-soft:#E7E9EE; --dots:#D6DAE2; --canvas:#FAFAFB;
-  --ink:#14161B; --ink2:#4A4F5C; --ink3:#737987;
+  /* The new UI (design/new-ui/napkin-app-v1.html, features/deck-studio-new-ui.clan): the mock's paper, desk and ink, tinted by
+     the agency's base and accent (--ag-base, --ag-acc, set from clan.me), so every screen reads as the mock's Deck Studio. */
+  --ag-base:#515BFF; --ag-acc:#C8CBFF; --ink-light:#FFFFFF; --ink-dark:#141413; --ag-base-ink:var(--ink-light); --ag-acc-ink:var(--ink-dark);
+  --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+  --card:#FFFDF8; --canvas:#F6F1E7; --soft:#F3ECDC; --line-base:#E2D9C8; --line-strong:#2A2620; --dots:transparent;
+  --ink:#141413; --ink2:#2A2620; --ink3:#9A9082; --muted:#6D655A; --on-ink:rgba(255,253,248,.68);
   --create:#FF4F2E; --create-fg:#FFFFFF; --on-fill:#FFFFFF;
   --tool:#2F64F5; --tool-ink:color-mix(in oklab,var(--tool) 78%,var(--ink)); --tool-soft:color-mix(in oklab,var(--tool) 10%,transparent);
-  --ok-bg:#e7f6ed; --ok-fg:#15803d; --warn-bg:#fdf3e3; --warn-fg:#b45309;
-  --shadow-soft:0 10px 30px rgba(20,30,60,.08); --shadow-lift:0 12px 32px rgba(20,30,60,.16),0 2px 6px rgba(20,30,60,.08);
+  --ok-bg:#E6F6EC; --ok-fg:#17773F; --warn-bg:#FEF3DC; --warn-fg:#A44A08;
+  --shadow-soft:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08); --shadow-lift:0 24px 60px -24px rgba(50,38,18,.28),0 1px 3px rgba(50,38,18,.08);
+  --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  --r-md:8px; --r-sm:4px;
   /* the agent circle's ring: one colour per activity, the state also said in words */
   --ring-work:#FF4F2E; --ring-think:#7A5AF8; --ring-read:#B87100; --ring-check:#238A55; --ring-human:#E0560C; --ring-error:#16191D;
   --ring-wait:#9EA3AB; --ring-track:#D3D6DC; --ring-edge:#D3D6DC;
-  --f-display:'Geist','Helvetica Neue',Arial,sans-serif; --f-mono:'Geist Mono',ui-monospace,Menlo,monospace;
+  --f-display:'Geist',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif; --f-mono:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --f-serif:'Newsreader',Georgia,'Iowan Old Style',serif;
 }
 :root[data-color-scheme="dark"]{
-  --paper:#0F1114; --card:#161A1F; --soft:#1B1F25; --soft-2:#22262D; --frost:rgba(15,17,20,.8);
-  --line:#2A2F38; --line-soft:#22262D; --dots:#22262D; --canvas:#0F1114;
-  --ink:#F2F3F5; --ink2:#A6ACB8; --ink3:#7A808C;
+  --ag-act:var(--ag-acc); --ag-act-ink:var(--ag-acc-ink);
+  --card:#1B1A18; --canvas:#121110; --soft:#262320; --line-base:#34302A; --line-strong:#CFC6B6; --dots:transparent;
+  --ink:#EFE9DE; --ink2:#D6CEC0; --ink3:#7B7367; --muted:#A49B8D; --on-ink:color-mix(in srgb,var(--paper) 72%,transparent);
   --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
-  --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
-  --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+  --ok-bg:#1C2E23; --ok-fg:#5DBB83; --warn-bg:#3A2A18; --warn-fg:#E09A4B;
+  --shadow-lift:0 24px 60px -24px rgba(0,0,0,.7);
   --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
   --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
-    --paper:#0F1114; --card:#161A1F; --soft:#1B1F25; --soft-2:#22262D; --frost:rgba(15,17,20,.8);
-    --line:#2A2F38; --line-soft:#22262D; --dots:#22262D; --canvas:#0F1114;
-    --ink:#F2F3F5; --ink2:#A6ACB8; --ink3:#7A808C;
+    --ag-act:var(--ag-acc); --ag-act-ink:var(--ag-acc-ink);
+    --card:#1B1A18; --canvas:#121110; --soft:#262320; --line-base:#34302A; --line-strong:#CFC6B6; --dots:transparent;
+    --ink:#EFE9DE; --ink2:#D6CEC0; --ink3:#7B7367; --muted:#A49B8D; --on-ink:color-mix(in srgb,var(--paper) 72%,transparent);
     --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
-    --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
-    --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+    --ok-bg:#1C2E23; --ok-fg:#5DBB83; --warn-bg:#3A2A18; --warn-fg:#E09A4B;
+    --shadow-lift:0 24px 60px -24px rgba(0,0,0,.7);
     --ring-work:#FF6A4D; --ring-think:#9F86FA; --ring-read:#E0A030; --ring-check:#3DBA75; --ring-human:#FF7A3D; --ring-error:#E6E8EC;
     --ring-wait:#7A808C; --ring-track:#2F3540; --ring-edge:#3A404B;
+  }
+}
+/* The agency's tint over the paper, the desk and the rules (the mock: 2.5, 6 and 10 in light; 9, 12 and 16 in dark). The plain
+   values above are what the contrast checks read; the tint moves them by a few points only. */
+:root{
+  --paper:color-mix(in srgb,var(--ag-base) 2.5%,var(--card)); --desk:color-mix(in srgb,var(--ag-base) 6%,var(--canvas));
+  --line:color-mix(in srgb,var(--ag-base) 10%,var(--line-base)); --line-soft:var(--line); --frost:var(--paper);
+  --soft-2:color-mix(in srgb,var(--ink) 5%,var(--paper));
+}
+:root[data-color-scheme="dark"]{
+  --paper:color-mix(in srgb,var(--ag-base) 9%,var(--card)); --desk:color-mix(in srgb,var(--ag-base) 12%,var(--canvas));
+  --line:color-mix(in srgb,var(--ag-base) 16%,var(--line-base)); --soft-2:color-mix(in srgb,var(--ink) 6%,var(--paper));
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
+    --paper:color-mix(in srgb,var(--ag-base) 9%,var(--card)); --desk:color-mix(in srgb,var(--ag-base) 12%,var(--canvas));
+    --line:color-mix(in srgb,var(--ag-base) 16%,var(--line-base)); --soft-2:color-mix(in srgb,var(--ink) 6%,var(--paper));
   }
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -341,6 +364,160 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .ld-strip{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;max-width:1180px;margin:14px auto 0;padding:10px 20px;font-size:14px;color:var(--ink2)}
 .ld-strip b{color:var(--ink);font-weight:600}
 @media (max-width:640px){.ld-h{font-size:32px}.ld-bar{border-radius:24px}}
+
+/* ── The new UI: the approved mock's Deck Studio (design/new-ui/napkin-app-v1.html #view-deck; features/deck-studio-new-ui.clan) ──
+   The mock's studio shell (1180 wide, 24 in), its header, numbered rows, rectangular controls and paper cards, ported onto the
+   deck's own screens. Colours are the tokens above, so the agency's tint and the dark room follow. */
+body{background:var(--desk);background-image:none;font-family:var(--f-display);font-size:15px;line-height:1.55;color:var(--ink);padding-bottom:48px}
+.nd{max-width:1180px;margin:0 auto;padding:0 24px}
+.app-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:24px;padding:30px 0 22px;border-bottom:1px solid var(--line)}
+.app-head .eyebrow{font:600 11.5px/1.55 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin-bottom:10px;min-height:17.8px}
+.hero-title{font-family:var(--f-display);font-size:clamp(34px,4.2vw,50px);font-weight:800;letter-spacing:-.04em;line-height:.96;color:var(--ink);margin:0 0 8px}
+.hero-title .period-dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--muted);margin-left:.04em;vertical-align:baseline}
+.hero-sub{font-size:14.5px;line-height:1.5;color:var(--ink2);max-width:620px}
+.app-head-right{display:flex;align-items:center;gap:22px}
+.flow{list-style:none;display:flex;align-items:center;gap:0;margin:0;padding:0}
+.flow li{display:flex;align-items:center}
+.flow li + li::before{content:"";width:28px;height:1px;background:var(--line-strong);margin:0 4px 18px}
+.flow button{display:grid;justify-items:center;gap:6px;background:none;border:0;padding:0;cursor:pointer;color:var(--muted);font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.flow i{font-style:normal;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line-strong);background:var(--paper);color:var(--ink2);font:700 12px var(--f-mono);transition:background .15s,color .15s,border-color .15s}
+.flow button.done i{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.flow button[aria-current="step"]{color:var(--ink)}
+.flow button[aria-current="step"] i{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
+@media (max-width:760px){.app-head{grid-template-columns:1fr}.app-head-right{justify-content:space-between}}
+.section-block{padding:28px 0}
+.action-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;margin-bottom:18px}
+.action-left,.action-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sec-num{font:700 11.5px/1.55 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.btn-rect{min-height:38px;padding:0 16px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:13.5px;font-weight:600;line-height:1.55;display:inline-flex;align-items:center;gap:7px;transition:border-color .15s,background .15s,color .15s}
+.btn-rect:hover{border-color:var(--ink)}
+.btn-rect.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+/* the storyboard: three across, the cover in ink, the rest paper */
+.deck-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+@media (max-width:920px){.deck-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:620px){.deck-grid{grid-template-columns:1fr}}
+.slide-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-paper);padding:20px;display:flex;flex-direction:column;justify-content:space-between;min-height:240px;gap:14px;position:relative;cursor:pointer;color:var(--ink);transition:border-color .15s}
+.slide-card:hover{border-color:var(--muted)}
+.slide-card:focus-visible{outline:3px solid var(--ag-act);outline-offset:2px}
+.slide-card.on{box-shadow:var(--shadow-paper),0 0 0 2px var(--ag-act)}
+.slide-card.hero-slide{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.slide-card.hero-slide .slide-num,.slide-card.hero-slide .slide-foot,.slide-card.hero-slide .prov-pill{color:var(--on-ink)}
+.slide-num{display:flex;justify-content:space-between;align-items:center;gap:10px;font:700 10.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.slide-num span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slide-num span:first-child{flex:0 1 auto}
+.slide-num span:last-child{text-align:right;flex:0 0 auto;max-width:50%}
+.slide-h{font:600 22px/1.2 var(--f-serif);letter-spacing:-.015em;margin:0}
+.slide-card.hero-slide .slide-h{font-size:28px}
+.slide-p{font-size:13.5px;line-height:1.45;opacity:.88;margin-top:6px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.slide-foot{border-top:1px solid color-mix(in srgb,currentColor 16%,transparent);padding-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font:11px var(--f-mono);color:var(--muted)}
+.slide-card:not(.hero-slide) .slide-foot{border-top-color:color-mix(in srgb,var(--muted) 16%,transparent)}
+.slide-foot>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prov-pill{display:inline-flex;align-items:center;gap:5px;flex:none;border:0;border-radius:999px;padding:2px 8px;font:500 10.5px/1.3 var(--f-mono);color:var(--muted);background:transparent;cursor:pointer}
+.prov-pill:hover{color:var(--ink)}
+.prov-pill .q{font-weight:700;text-decoration:underline;text-underline-offset:2px;padding:0;border-top:0}
+.prov-pill.needs{background:var(--warn-bg);color:var(--warn-fg)}
+.slide-card.hero-slide .prov-pill.needs{background:var(--warn-bg);color:var(--warn-fg)}
+.sb{padding-bottom:10px}
+.sb-strip{margin-top:10px}
+
+/* the deck's own screens in the mock's materials: paper cards at 8, rectangular controls at 4, mono labels, serif heads */
+.card,.frost,.lib{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-paper);-webkit-backdrop-filter:none;backdrop-filter:none}
+.frost{box-shadow:none}
+.btn{min-height:38px;height:auto;padding:0 16px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--paper);font-size:13.5px;font-weight:600;color:var(--ink);box-shadow:none}
+.btn:hover{border-color:var(--ink)}
+.btn.sm{min-height:32px;padding:0 12px;font-size:12.5px}
+.btn.go,.ld-go{background:var(--ag-act);color:var(--ag-act-ink);border:1px solid var(--ag-act);box-shadow:none;border-radius:var(--r-sm)}
+.btn.big{min-height:44px;padding:0 22px;font-size:14.5px}
+.btn.tall{height:44px}
+.btn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+button:focus-visible,input:focus-visible{outline-color:var(--ag-act)}
+.pill{font:600 10.5px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 9px}
+.chip{border-radius:999px}
+h1{font-family:var(--f-serif);font-weight:600;letter-spacing:-.015em;font-size:34px;line-height:1.1}
+h1.sm{font-size:28px}
+.lede{font-size:14.5px;color:var(--ink2)}
+.eyebrow{font-family:var(--f-mono);letter-spacing:.08em;color:var(--muted)}
+.inp{border-radius:var(--r-sm);background:var(--paper)}
+.pick{border-radius:var(--r-md);background:var(--paper);border:1px solid var(--line)}
+.pick[aria-pressed="true"]{border-color:var(--ag-act);background:color-mix(in srgb,var(--ag-act) 8%,var(--paper));box-shadow:inset 0 0 0 1px var(--ag-act)}
+.types .tag{color:var(--ink)}
+.bf,.hint,.doc,.upnote,.callout{border-radius:var(--r-sm)}
+.bf{background:var(--soft-2)}
+.status.hero.centre{background:transparent;border-color:transparent;box-shadow:none}
+
+/* Start: the mock's prompt (a serif question over one paper sheet), left on the desk like the brief's */
+.ld{align-items:flex-start;text-align:left;padding:28px 0 64px}
+.ld-in{max-width:760px;align-items:flex-start}
+.ld-h{font:600 28px/1.15 var(--f-serif);letter-spacing:-.01em;margin:0 0 6px}
+.ld-sub{font-size:14.5px;color:var(--ink2);max-width:62ch}
+.ld-bar{margin-top:18px;max-width:760px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--paper);box-shadow:var(--shadow-paper);padding:14px 14px 14px 20px;align-items:flex-end}
+.ld-bar:focus-within{border-color:var(--ink)}
+.ld-bar textarea{font-size:16px;min-height:72px}
+.ld-attach{border-radius:50%;border:1px dashed var(--line-strong);background:transparent}
+.ld-go{height:44px;padding:0 22px;font-weight:600;font-size:14.5px}
+.ld-files,.ld-eg{justify-content:flex-start}
+.ld-file{border-radius:var(--r-sm);background:var(--soft);font:12px var(--f-mono);border:1px solid var(--line)}
+.ld-eg{font-size:13px;color:var(--muted)}
+.ld-eg button{border:1px solid var(--line);border-style:solid;background:var(--paper);border-radius:999px;color:var(--ink);font-size:13px}
+.ld-eg button:hover{border-color:var(--ink);background:var(--paper)}
+.ld-drop{font-size:13.5px}
+.ld-read{max-width:860px;margin:0}
+.ld-rc{border-radius:var(--r-sm);background:var(--paper);box-shadow:none}
+.ld-rc.ph{background:var(--warn-bg)}
+.ld-ed,.ld-q{border-radius:var(--r-md);background:var(--paper);box-shadow:var(--shadow-paper)}
+.ld-q h3{font:600 22px/1.2 var(--f-serif);letter-spacing:-.01em}
+.ld-q .n{font-weight:700}
+.ld-opts button,.ld-qtext input{border-radius:var(--r-sm)}
+.ld-ed .opt,.ld-ed input[type=text]{border-radius:var(--r-sm)}
+.ld-strip{max-width:none;margin:0;padding:14px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+
+/* Build, Review and Present inside the studio's width */
+.start{max-width:none;margin:0;padding:28px 0 56px;grid-template-columns:minmax(0,1fr) 340px;gap:32px}
+.build{max-width:none;margin:0;padding:28px 0 56px;grid-template-columns:250px minmax(0,1fr) 300px;gap:28px}
+.review{max-width:none;margin:0;padding:0 0 48px;grid-template-columns:224px minmax(0,1fr) 300px;gap:24px}
+.present{max-width:none;margin:0;padding:28px 0 48px;grid-template-columns:minmax(0,1fr) 220px 300px;gap:28px}
+.present .mini{width:100%}
+.summary .t{font:600 24px/1.2 var(--f-serif);letter-spacing:-.01em}
+.dot{background:var(--ink)}
+.rail,.side,.lcol{top:20px}
+.lcol,.rail{max-height:calc(100vh - 40px)}
+.thumb{border-radius:var(--r-sm)}
+.thumb[aria-current="true"]{border-color:var(--ag-act);background:color-mix(in srgb,var(--ag-act) 8%,var(--paper))}
+.ring.now{border-color:var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink)}
+.ring.failed{border-color:var(--warn-fg);background:var(--warn-fg)}
+.terr[aria-pressed="true"]{background:color-mix(in srgb,var(--ag-act) 8%,var(--paper));box-shadow:inset 3px 0 0 var(--ag-act)}
+.terr[aria-pressed="true"] .sel{border-color:var(--ag-act)}
+.terr[aria-pressed="true"] .sel::after{background:var(--ag-act)}
+.terr .tn{font:600 19px/1.25 var(--f-serif)}
+.iline .il{font:600 26px/1.2 var(--f-serif);letter-spacing:-.01em}
+.dex,.cbox-h{background:var(--soft-2)}
+.cbox-h{font:700 11px var(--f-mono);letter-spacing:.08em}
+.crow .t,.beat .t{font-weight:600}
+.cslide{border-radius:var(--r-sm);background:var(--paper)}
+.cslide.now{border-color:var(--ag-act)}
+.slide,.pslide{background:var(--paper);border-radius:var(--r-md);box-shadow:var(--shadow-paper)}
+.slide .kick,.pslide .kick,.mini .k{color:var(--muted);font-weight:700}
+.slide h2,.pslide h2,.mini .t{font-family:var(--f-serif);font-weight:600;letter-spacing:-.015em}
+.tabs{border-radius:var(--r-sm)}
+.tabs button{border-radius:3px}
+.tabs button[aria-selected="true"]{box-shadow:0 0 0 1px var(--line)}
+.ev,.fmt{border-radius:var(--r-sm);background:var(--paper)}
+.ev .id{color:var(--muted);font-weight:700}
+.controls{border-radius:var(--r-md);background:var(--paper);box-shadow:none}
+.circ{border-radius:50%}
+.prog span{background:var(--ag-act)}
+.mini{border-radius:var(--r-sm);background:var(--paper)}
+.appx{color:var(--ink)}
+.appx[aria-expanded="true"]{background:var(--soft-2)}
+.slide sup{color:var(--muted)}
+.toast{border-radius:var(--r-sm)}
+@media (max-width:1100px){.start,.build,.review,.present{grid-template-columns:minmax(0,1fr);padding:20px 0 48px}}
+@media (max-width:640px){.nd{padding:0 16px}}
+.slide{container-type:inline-size}
+.slide h2{font-size:clamp(18px,5.2cqi,34px)}
+.slide ul{margin-top:3.5cqi;gap:1.6cqi}
+.slide li{font-size:clamp(11px,2.25cqi,17px)}
+.slide li .dot{margin-top:.6em}
 </style>
 </head>
 <body>
@@ -1581,6 +1758,7 @@ var DeckLogic = (function () {
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
   var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
   var upLoaded = false;
+  var upBack = null; // the document this deck was made from, as the host names it ({ path, noun }), for "Back to the brief"
   var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
 
   // ── the engine, through the middleware (docs/contracts/middleware-api.md section 12) ──
@@ -1698,24 +1876,46 @@ var DeckLogic = (function () {
     return out;
   }
 
-  // The deck's steps, as its own buttons (data-go). In the OS the bar is the OS's and has no tabs (owner removal,
-  // features/new-ui-shell.clan), so the steps stand at the top of the page instead: no step loses its home.
-  function stepsNav(scr) {
-    return '<nav class="steps" aria-label="Deck steps">' + STEPS.map(function (st) {
-      return '<button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : '') + '>' + st[1] + '</button>';
-    }).join('') + '</nav>';
+  // The tool's header (the mock's .app-head, design/new-ui/napkin-app-v1.html): where you are, Deck Studio. and what it does, with
+  // the deck's four steps as the mock's flow circles on the right. In the OS this is the page's only header (the OS bar is above it).
+  var NUM_WORDS = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen'];
+  function headEyebrow(s) {
+    var m = (window.__CLAN__ || {}).manifest || {}, mc = m.client && typeof m.client === 'object' ? String(m.client.name || '').trim() : '';
+    var p = s.inputs.prompt || {}, meta = s.deck.meta || {};
+    var client = mc || String(p.client || meta.client || '').trim();
+    // a project the read left as its placeholder ("[Project]") or a document nobody named yet is not a name
+    var named = function (v) { v = String(v || '').trim(); return /^\[.*\]$/.test(v) || /^untitled\b/i.test(v) ? '' : v; };
+    var proj = named(p.project) || named(meta.project) || named(m.title) || 'New deck';
+    return [client, proj].filter(Boolean).join(' · ');
+  }
+  function headSub(s) {
+    var n = L.presented(s.deck).length, up = L.upstreamSummary(s.raw);
+    var lead = n ? (NUM_WORDS[n] || String(n)) + ' board-ready pitch slides' : 'Board-ready pitch slides';
+    var from = up.brief && up.research ? 'your verified creative brief and pinned research facts'
+      : up.brief ? 'your verified creative brief' : up.research ? 'your pinned research facts' : 'your prompt and the documents you attached';
+    return lead + ' generated directly from ' + from + '.';
+  }
+  function flowSteps(scr) {
+    var at = STEPS.map(function (x) { return x[0]; }).indexOf(scr);
+    return '<ol class="flow" aria-label="Deck steps">' + STEPS.map(function (st, i) {
+      return '<li><button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : i < at ? ' class="done"' : '') + '><i>' + (i + 1) + '</i><span>' + st[1] + '</span></button></li>';
+    }).join('') + '</ol>';
+  }
+  function appHead(s, scr) {
+    return '<header class="app-head"><div class="app-head-text"><div class="eyebrow hd-eye">' + esc(headEyebrow(s)) + '</div>' +
+      '<h1 class="hero-title">Deck Studio<span class="period-dot" aria-hidden="true"></span></h1>' +
+      '<p class="hero-sub">' + esc(headSub(s)) + '</p></div><div class="app-head-right">' + flowSteps(scr) + '</div></header>';
   }
 
   function bar(s, scr) {
-    if (inShell) return '<div class="shell-steps">' + stepsNav(scr) + '</div>';
+    if (inShell) return '';
     var p = s.inputs.prompt;
     var title = (p.client && p.project) ? esc(p.client) + ' · ' + esc(p.project) : 'New deck';
     var chips = barChips(s, scr);
     function spans(list) { return list.map(function (c) { return '<span class="' + c.cls + '">' + esc(c.text) + '</span>'; }).join(''); }
     var first = spans(chips.filter(function (c) { return c.cls !== 'chip cost'; })), cost = spans(chips.filter(function (c) { return c.cls === 'chip cost'; }));
     return '<header class="bar"><span class="crumb">' + title + '</span>' + first +
-      '<div class="spacer"></div>' + cost +
-      stepsNav(scr) + '</header>';
+      '<div class="spacer"></div>' + cost + '</header>';
   }
 
   // What the OS bar is asked to show (clan:bar): the chips (the steps are the page's own, above). The whole list each
@@ -2267,7 +2467,10 @@ var DeckLogic = (function () {
         '<div class="mono eyebrow" style="margin-top:10px;text-transform:none;letter-spacing:0">Answers ' + (sl.requirements && sl.requirements.length ? esc(sl.requirements.join(', ')) : 'no requirement') + '</div>';
     }
     var s1 = slideHtml(id, s, n, ids.length);
-    return '<main class="review">' + (ds ? '<div class="lcol">' + nav + deckSide(s, ds) + '</div>' : nav) +
+    return storyboard(s, ids, ds) +
+      '<div class="action-strip sb-strip" id="slide-view"><div class="action-left"><span class="sec-num">02 / ' + (inAx ? 'Appendix A' + n : 'Slide ' + String(n).padStart(2, '0')) + ' · ' + esc(inAx ? (sl.title || sl.section) : sl.section) + '</span></div>' +
+        '<div class="action-right"><button class="btn-rect" data-go-board>↑ Storyboard</button></div></div>' +
+      '<main class="review">' + (ds ? '<div class="lcol">' + nav + deckSide(s, ds) + '</div>' : nav) +
       '<section><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">' + (inAx ? 'Appendix ' : 'Slide ') + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
         (inAx ? '' : '<button class="btn sm" data-act="appendix">Move to appendix</button>') + '<button class="btn sm" data-tab="evidence">Why this slide</button>' + approve + '</div>' +
       (ds ? approveNote(ds) : '') +
@@ -2279,6 +2482,48 @@ var DeckLogic = (function () {
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
         [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
       '</div><p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">Only the words on this slide change. Its sources stay.</p></div></aside></main>';
+  }
+
+  // ── the storyboard (the mock's Deck Studio: design/new-ui/napkin-app-v1.html #view-deck) ──
+  /** What a ref is, in words, for a card's source line: "Brief · insight", "Requirement R4", "Your prompt". */
+  function sourceWords(ref, ev) {
+    var k = String(ref || ''), c = k.indexOf(':'), kind = c > 0 ? k.slice(0, c) : '', id = c > 0 ? k.slice(c + 1) : k;
+    if (kind === 'brief') return 'Brief · ' + id.replace(/_/g, ' ');
+    if (kind === 'req') return 'Requirement ' + id;
+    if (kind === 'prompt') return 'Your prompt';
+    var e = ev && ev[ref], what = e && e.kind ? String(e.kind) : kind || 'Source';
+    return what.charAt(0).toUpperCase() + what.slice(1) + (id && id !== k ? ' · ' + id : '');
+  }
+  /** One slide as the mock's card: the mono label (slide number and section; what it cites, or that it needs a call), the serif
+   *  headline, the first line of its body, and the source line with its verified, drafted or needs-you pill. Pressing the card
+   *  opens the slide below; "why?" opens it on its evidence. */
+  function slideCard(s, id, i, cover) {
+    var sl = s.deck.slides[id], st = L.statusOf(sl), refs = L.refsOf(sl), ev = s.evidence;
+    // what it cites, short: a fact or finding by its id (f_007), a brief field or requirement by its kind (brief, req), once each
+    var short = []; refs.forEach(function (r) { var c = r.indexOf(':'), k = c > 0 ? r.slice(0, c) : r; if (short.indexOf(k) < 0) short.push(k); });
+    var cite = short.length ? 'Cites ' + short.slice(0, 2).join(', ') + (short.length > 2 ? ' +' + (short.length - 2) : '') : '';
+    var client = (s.deck.meta && s.deck.meta.client) || (s.inputs.prompt || {}).client || '';
+    var right = cover ? client : [cite, st === 'need' ? 'Needs call' : ''].filter(Boolean).join(' · ');
+    var b = (sl.blocks || [])[0], body = b ? (L.isPlaceholder(b) ? 'To supply: ' + b.text : b.text) : (sl.notes || '');
+    var src = refs.length ? sourceWords(refs[0], ev) : st === 'need' ? 'Needs you to supply it' : 'No source: creative or proposal';
+    var pill = st === 'need' ? '<button type="button" class="prov-pill needs" data-why="' + esc(id) + '"><span>needs you</span> <span class="q">why?</span></button>'
+      : '<button type="button" class="prov-pill" data-why="' + esc(id) + '"><span>' + (st === 'src' ? 'verified ✓' : 'drafted') + '</span> <span class="q">why?</span></button>';
+    return '<article class="slide-card' + (cover ? ' hero-slide' : '') + (view.picked && view.slide === id ? ' on' : '') + '" data-card="' + esc(id) + '" tabindex="0" aria-label="Slide ' + (i + 1) + ': ' + esc(sl.title) + '">' +
+      '<div class="slide-num"><span>Slide ' + String(i + 1).padStart(2, '0') + ' · ' + esc(sl.section) + '</span><span>' + esc(right) + '</span></div>' +
+      '<div><h3 class="slide-h">' + esc(sl.title) + '</h3>' + (body ? '<p class="slide-p">' + esc(body) + '</p>' : '') + '</div>' +
+      '<div class="slide-foot"><span>' + esc(src) + '</span>' + pill + '</div></article>';
+  }
+  /** The storyboard row and grid: 01 / PITCH STORYBOARD · N SLIDES (linked to the brief it came from), Decisions, Approve the deck
+   *  while it is open, and the way back to the brief or research it was made from. */
+  function storyboard(s, ids, ds) {
+    var up = L.upstreamSummary(s.raw), full = s.inputs.format === 'full';
+    var label = '01 / ' + (full ? 'Full storyboard' : 'Pitch storyboard') + ' · ' + ids.length + (ids.length === 1 ? ' slide' : ' slides') +
+      (up.brief ? ' linked to ' + (up.brief.name && up.brief.name !== 'Brief' ? (/\bbrief\b/i.test(up.brief.name) ? up.brief.name : 'brief ' + up.brief.name) : 'the brief') : up.research ? ' linked to the research' : '');
+    var back = upBack ? '<button type="button" class="btn-rect primary" data-up-open>← Back to the ' + upBack.noun + '</button>' : '';
+    var appr = ds && ds.state === 'open' ? '<button type="button" class="btn-rect" data-approve="deck">Approve the deck</button>' : '';
+    return '<section class="section-block sb" aria-label="Storyboard"><div class="action-strip"><div class="action-left"><span class="sec-num">' + esc(label) + '</span></div>' +
+      '<div class="action-right"><button type="button" class="btn-rect" data-decisions>Decisions</button>' + appr + back + '</div></div>' +
+      '<div class="deck-grid">' + ids.map(function (id, i) { return slideCard(s, id, i, i === 0); }).join('') + '</div></section>';
   }
 
   // ── 4 · Present and export ────────────────────────────────────────────
@@ -2928,7 +3173,7 @@ return {
     stashDraft();
     var before = cardBefore();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
-    document.getElementById('app').innerHTML = bar(s, scr) + readStrip(scr) + body;
+    document.getElementById('app').innerHTML = bar(s, scr) + '<div class="nd" data-screen="' + scr + '">' + appHead(s, scr) + readStrip(scr) + body + '</div>';
     sendBar(s, scr);
     grow(document.getElementById('ptext'));
     Orbs.scan(document.getElementById('app'), L.agentState(s.run)); // the flat circles become the 3D ones where the browser can draw them
@@ -2972,7 +3217,11 @@ return {
       Promise.resolve(fetch(clanScheme + '/upstream')).then(function (r) { return r && r.ok ? r.json() : null; })
         .then(function (v) {
           var next = L.upstreamChanged(v);
-          if (next.length) { upChanged = next; render(); }
+          var list = v && Array.isArray(v.upstream) ? v.upstream : [];
+          var e = list.filter(function (x) { return x && typeof x.path === 'string' && x.path && x.direct; })[0] || list.filter(function (x) { return x && typeof x.path === 'string' && x.path; })[0];
+          if (e) upBack = { path: e.path, noun: e.noun === 'research' ? 'research' : 'brief' };
+          if (next.length) upChanged = next;
+          if (next.length || e) render();
         }, function () { /* no host: no notice */ }).catch(function () { /* never throw */ });
     } catch (e) { /* no host: no notice */ }
   }
@@ -2997,9 +3246,23 @@ return {
 
   function now() { return new Date().toISOString(); }
 
+  /** Bring the slide view (section 02, under the storyboard) into sight after a card or a "why?" picked a slide. */
+  function toSlideView() {
+    setTimeout(function () { var el = document.getElementById('slide-view'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }); }, 0);
+  }
+  function openCard(id) { view.slide = id; view.picked = true; render(); toSlideView(); }
+  document.addEventListener('keydown', function (e) {
+    var c = e.target && e.target.closest ? e.target.closest('[data-card]') : null;
+    if (c && (e.key === 'Enter' || e.key === ' ') && e.target === c) { e.preventDefault(); openCard(c.dataset.card); }
+  });
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('button'); if (!t) return;
+    var t = e.target.closest('button');
+    if (!t) { var card = e.target.closest('[data-card]'); if (card) openCard(card.dataset.card); return; }
     var s = d(), a = t.dataset;
+    if (a.why) { view.slide = a.why; view.picked = true; view.tab = 'evidence'; render(); toSlideView(); return; }
+    if (a.decisions !== undefined) { if (inShell) window.parent.postMessage({ type: 'clan:decisions', v: 1 }, '*'); else toast('Decisions open in the OS, from its bar.'); return; }
+    if (a.upOpen !== undefined) { if (upBack && typeof fetch === 'function') fetch(clanScheme + '/open', { method: 'POST', body: JSON.stringify({ path: upBack.path }) }).catch(function () {}); return; }
+    if (a.goBoard !== undefined) { var sb = document.querySelector && document.querySelector('.sb'); if (sb && sb.scrollIntoView) sb.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }); return; }
     if (a.orb !== undefined) return pressOrb(t, e.detail === 0);
     if (a.go) { view.screen = a.go; return render(); }
     if (a.dtype || a.dtskip) {
@@ -3211,6 +3474,21 @@ return {
     // The bridge fires these when the document's data changes or loads, and sets data-color-scheme itself.
     window.addEventListener('clan:dataupdated', render);
     window.addEventListener('napkin:ready', render);
+    // The agency's colours (the shell answers clan.me with its admin-set base and accent): they tint the paper, the desk and the
+    // primary actions, as in the brief and research (features/brief-new-ui.clan). Without a host the default tint stays.
+    window.addEventListener('load', function () {
+      if (!(window.clan && typeof window.clan.me === 'function')) return;
+      Promise.resolve(window.clan.me()).then(function (m) {
+        var c = m && m.agency, HEX = /^#[0-9a-f]{6}$/i, r = document.documentElement;
+        if (!c || !HEX.test(c.base || '') || !HEX.test(c.accent || '') || !r || !r.style) return;
+        var inkOn = function (h) {
+          var n = parseInt(h.slice(1), 16), l = [n >> 16, (n >> 8) & 255, n & 255].map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+          return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2] > 0.3 ? 'var(--ink-dark)' : 'var(--ink-light)';
+        };
+        r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
+        r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', inkOn(c.accent));
+      }, function () { /* no agency: the default tint */ }).catch(function () {});
+    });
     // The centred circle follows the window's size.
     window.addEventListener('resize', function () {
       var app = document.getElementById('app');

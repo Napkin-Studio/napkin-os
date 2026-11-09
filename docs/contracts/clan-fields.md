@@ -207,10 +207,13 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
 - `clan:bar?` (shell → app, on every frame load) — send it again.
 - `clan:bar-action {id}` (shell → app) — a button was pressed. The app
   does what its own button did; the shell runs nothing.
+- `clan:decisions {v: 1}` (app → shell) — the app's own Decisions button was
+  pressed: the shell opens its Decisions drawer on this document, as the bar's
+  Decisions button does (Deck Studio's storyboard row, features/deck-studio-new-ui.clan).
 
 An app in the shell (its frame has a parent) draws no second bar of its own;
-on its own it keeps one. Deck Maker sends its chips and keeps its steps at the
-top of its page; Research and Brief Maker keep their bars until they adopt it.
+on its own it keeps one. Deck Maker sends its chips and keeps its steps in its
+header, as the mock's flow circles; Research and Brief Maker keep their bars until they adopt it.
 
 Judging a value is the drawer's; who did what and why is the panel's. The
 panel's "Needs you" only points at where to settle an item.

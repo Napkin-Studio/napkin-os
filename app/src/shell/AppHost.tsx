@@ -121,6 +121,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       return { docPath, open: typeof o === 'function' ? o(was) : o }
     })
   }, [docPath])
+  // The app's own Decisions button (clan:decisions) opens the same drawer as the bar's.
+  const openDecisions = useCallback(() => setDecisionsOpen(true), [setDecisionsOpen])
   // "Approve all and lock": the document's own /approve, refused in the host's words while its lock list holds.
   const approveDoc = useCallback(async () => {
     if (typeof host.docOps !== 'function') throw new Error('Lock it from the document itself here.')
@@ -454,6 +456,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onEditRequest={onEditRequest}
             onChrome={onChrome}
             onBar={onBar}
+            onDecisions={openDecisions}
             insets={shown}
           />
         </main>

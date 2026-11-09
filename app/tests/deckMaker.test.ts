@@ -1161,7 +1161,7 @@ test('Build, deck: a grid of slides with the one being built marked, and the app
 
 test('Build, failed: a failed run opens on Build with the failure, the failed row and a retry that writes nothing', () => {
   const f = fixture('failed'), m = mount(f), h = m.app.innerHTML
-  assert.ok(h.includes('aria-current="step">Build<'), 'failed routes to Build, not Start')
+  assert.ok(h.includes('aria-current="step"><i>2</i><span>Build<'), 'failed routes to Build, not Start')
   assert.ok(h.includes('>Something failed</h1>') && h.includes(f.run.error.message))
   assert.match(rightAside(h), /data-status="error"[\s\S]*aria-hidden="true" data-agent="review"[\s\S]*>Review</)
   assert.ok(rightAside(h).includes('<div class="sword err">Failed, retrying</div>'))
@@ -1177,7 +1177,7 @@ test('Build, failed: a failed run opens on Build with the failure, the failed ro
 
 test('Build, done: the deck is ready, what to supply is listed, and Open the deck goes to Review', () => {
   const m = mount(fixture('done'))
-  assert.ok(m.app.innerHTML.includes('aria-current="step">Review<'), 'done still opens on Review')
+  assert.ok(m.app.innerHTML.includes('aria-current="step"><i>3</i><span>Review<'), 'done still opens on Review')
   m.click({ go: 'build' })
   const h = m.app.innerHTML
   assert.ok(h.includes('>The deck is ready for you</h1>'))
@@ -2213,4 +2213,71 @@ test('with no middleware the landing page still reads and saves, and says the en
   assert.equal(m.writes.length, 2)
   assert.equal(p.calls.length, 0)
   assert.match(m.toastEl.textContent, /needs the engine server/)
+})
+
+// ── Deck Studio, the new UI (features/deck-studio-new-ui.clan): the mock's header and storyboard ──────────────────────
+test('every screen opens under the mock\'s header: eyebrow, Deck Studio. and its line, the four steps as flow circles', () => {
+  for (const n of ['gate1', 'done', 'failed']) {
+    const h = review(n).app.innerHTML
+    assert.match(h, /<header class="app-head"><div class="app-head-text"><div class="eyebrow hd-eye">Ballymaloe Relish · Better With Ballymaloe<\/div>/, n)
+    assert.ok(h.includes('<h1 class="hero-title">Deck Studio<span class="period-dot" aria-hidden="true"></span></h1>'), n)
+    assert.ok(h.includes('<ol class="flow" aria-label="Deck steps">'), n)
+    for (const id of ['start', 'build', 'review', 'present']) assert.ok(h.includes(`data-go="${id}"`), `${n}: step ${id}`)
+  }
+  assert.ok(review('done').app.innerHTML.includes('generated directly from your verified creative brief and pinned research facts.'))
+  // a placeholder project is not a name
+  const ph = fixture('done'); ph.inputs.prompt.project = '[Project]'; ph.deck.meta.project = ''
+  assert.ok(review(ph).app.innerHTML.includes('<div class="eyebrow hd-eye">Ballymaloe Relish · New deck</div>'))
+})
+
+test('Review opens on the storyboard: the 01 row, one card per pitch slide, the cover in ink, then the slide view as 02', () => {
+  const f = fixture('done'), h = review(f).app.innerHTML, ids = L.presented(f.deck)
+  assert.match(h, /<span class="sec-num">01 \/ Pitch storyboard · \d+ slides linked to [^<]+<\/span>/)
+  assert.ok(h.includes('<button type="button" class="btn-rect" data-decisions>Decisions</button>'))
+  assert.equal((h.match(/<article class="slide-card/g) || []).length, ids.length)
+  assert.equal((h.match(/class="slide-card hero-slide"/g) || []).length, 1, 'one cover')
+  assert.ok(h.indexOf('class="slide-card hero-slide"') < h.indexOf('<article class="slide-card"'), 'the cover is the first card')
+  const first = f.deck.slides[ids[0]]
+  assert.ok(h.includes('<span>Slide 01 · ' + first.section + '</span>'))
+  assert.ok(h.includes('<h3 class="slide-h">'))
+  assert.ok(h.indexOf('class="deck-grid"') < h.indexOf('<span class="sec-num">02 / '), 'the slide view sits under the storyboard')
+  assert.ok(h.indexOf('<span class="sec-num">02 / ') < h.indexOf('<main class="review">'))
+  // a slide that needs a person says so on its card
+  const need = ids.filter((id: string) => f.deck.slides[id].status === 'needs_human')
+  assert.ok(need.length > 0)
+  assert.ok(h.includes(`<button type="button" class="prov-pill needs" data-why="${need[0]}"><span>needs you</span> <span class="q">why?</span></button>`))
+  // the deck is open: Approve the deck is in the row, and still in the slide view's head
+  assert.ok(h.includes('<button type="button" class="btn-rect" data-approve="deck">Approve the deck</button>'))
+  assert.ok(head(h).includes('id="approve-deck"'))
+})
+
+test('a card or its why? opens that slide below; why? opens it on its evidence', () => {
+  const f = fixture('done'), ids = L.presented(f.deck), m = review(f)
+  m.click({ why: ids[1] })
+  assert.ok(m.app.innerHTML.includes(`<span class="sec-num">02 / Slide 02 · ${f.deck.slides[ids[1]].section}</span>`))
+  assert.ok(m.app.innerHTML.includes('data-tab="evidence" aria-selected="true"'))
+  assert.ok(m.app.innerHTML.includes(`class="slide-card on" data-card="${ids[1]}"`), 'the picked card is marked')
+})
+
+test('Decisions asks the OS to open its drawer; with no OS it says where it is', () => {
+  const m = review('done')
+  m.click({ decisions: '' })
+  assert.match(m.toastEl.textContent, /Decisions open in the OS/)
+})
+
+test('Back to the brief shows only once the host names the document this deck was made from', async () => {
+  const f = fixture('done')
+  assert.equal(review(f).app.innerHTML.includes('data-up-open'), false)
+  const up = { upstream: [{ path: 'docs/brief.clan', direct: true, noun: 'brief', title: 'Better With Ballymaloe', status: 'current' }] }
+  const m = mount(f, () => Promise.resolve({ ok: true, json: () => Promise.resolve(up) }))
+  await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0))
+  assert.ok(m.app.innerHTML.includes('<button type="button" class="btn-rect primary" data-up-open>← Back to the brief</button>'))
+})
+
+test('the storyboard\'s styles are the mock\'s, in tokens', () => {
+  assert.match(css, /\.deck-grid\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);gap:18px\}/)
+  assert.match(css, /\.slide-card\.hero-slide\{background:var\(--ink\);color:var\(--paper\);border-color:var\(--ink\)\}/)
+  assert.match(css, /\.slide-h\{font:600 22px\/1\.2 var\(--f-serif\)/)
+  assert.match(css, /\.btn-rect\.primary\{background:var\(--ag-act\)/)
+  assert.match(html, /family=Newsreader/)
 })
