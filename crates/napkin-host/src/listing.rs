@@ -80,6 +80,11 @@ pub struct LibraryItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<RecentState>,
     pub run: Option<RunInfo>,
+    /// The middleware jobs on this document the host has not seen finish
+    /// ([`crate::runs::RunTracker::unsettled`]): the shell polls each through
+    /// the document, so a job that ends after its page closed still lands.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub jobs: Vec<String>,
 }
 
 /// The library route's answer.
@@ -222,6 +227,7 @@ pub fn scan_library(
             state: core.state,
             // What the host heard of a job first, else what the document records.
             run: cache.runs.run_for(&id).or(core.run),
+            jobs: cache.runs.unsettled(&id),
         });
     }
     // A document that is gone must not be remembered.

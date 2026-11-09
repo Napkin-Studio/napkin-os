@@ -176,6 +176,8 @@ export interface LibraryItem {
   client: ClientRef | null
   state?: RecentState | null
   run: RunInfo | null
+  /** Middleware jobs on it the host has not seen finish: the shell polls each (`settleJob`). */
+  jobs?: string[]
 }
 
 export interface LibraryListing {
@@ -762,6 +764,12 @@ export interface Host {
    * then keeps the Launcher as home).
    */
   listLibrary(filter?: LibraryFilter): Promise<LibraryListing>
+  /**
+   * Poll one middleware job of a document, open or not, the way its page
+   * does (`job_status`), so the host lands a change that finished after the
+   * page closed. Absent on a host with one document at a time.
+   */
+  settleJob?(path: string, jobId: string): Promise<unknown>
   /** The client registry. */
   readonly clients: ClientsApi
 

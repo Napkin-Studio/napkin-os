@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { addClient, adoptNames, loadArchived, loadLegacy, loadLanding, renameClient, setArchived, type LandingData, type LandingHost, type ManageHost } from './store'
+import { makeSettler, type SettleHost } from './settle'
 import type { ClientMaterial, ClientRecord, LegacyName } from '../../host'
 
 export type LandingState = 'loading' | 'ready' | 'unavailable'
@@ -26,11 +27,13 @@ export interface Manage {
   adopt: (names: string[]) => Promise<{ words: string } | { error: string }>
 }
 
-export function useLanding(host: LandingHost & ManageHost, active: boolean, enabled = true) {
+export function useLanding(host: LandingHost & ManageHost & SettleHost, active: boolean, enabled = true) {
   const [state, setState] = useState<LandingState>('loading')
   const [data, setData] = useState<LandingData | null>(null)
   const seq = useRef(0)
   const apps = useRef<string[] | undefined>(undefined)
+  // Jobs that finished after their page closed land on the next read (settle.ts).
+  const settler = useMemo(() => makeSettler(host), [host])
 
   const reload = useCallback(async () => {
     const n = ++seq.current
@@ -40,12 +43,13 @@ export function useLanding(host: LandingHost & ManageHost, active: boolean, enab
       apps.current = d.apps
       setData(d)
       setState('ready')
+      void settler.settle(d.items)
     } catch {
       if (n !== seq.current) return
       // Only the first read decides the home; a blip later keeps what is on screen.
       setState(s => (s === 'loading' ? 'unavailable' : s))
     }
-  }, [host])
+  }, [host, settler])
 
   // The initial read, and the slow poll while the landing is the screen.
   useEffect(() => {

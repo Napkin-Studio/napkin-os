@@ -2827,3 +2827,141 @@ async fn one_tenants_job_is_never_another_tenants_run() {
     );
     assert_eq!(library(&s, &m, "").await["items"][0]["run"], Value::Null);
 }
+
+// ── A job that ends after its page closed still lands (features/new-ui-shell) ──
+
+/// A middleware with one job, `job_0abc`: `running`, or `done` with a change
+/// that writes `answer` (echoing the document and version it was sent), or
+/// unknown (404) — whatever the test last set.
+async fn settling_middleware() -> (String, Arc<std::sync::Mutex<&'static str>>) {
+    let now = Arc::new(std::sync::Mutex::new("running"));
+    let seen = now.clone();
+    let app = Router::new().route(
+        "/v1/tasks",
+        axum::routing::post(move |axum::Json(req): axum::Json<Value>| {
+            let seen = seen.clone();
+            async move {
+                let state = *seen.lock().unwrap();
+                if state == "lost" {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        axum::Json(serde_json::json!({
+                            "api": "napkin.middleware/1", "task": "job_status",
+                            "error": {"type": "unknown_job", "message": "no such job for this document"},
+                        })),
+                    );
+                }
+                let doc = req["clan"]["id"].as_str().unwrap_or_default().to_string();
+                let change = (state == "done").then(|| serde_json::json!({
+                    "doc": doc, "base_version": req["clan"]["version"],
+                    "data_patch": {"answer": "Gen Z own the late pint"},
+                    "decisions": [{"id": "d_01JB0SETTLE01", "kind": "edit", "agent": "ask_research@1.0",
+                                   "action": "ask_answer", "rationale": "answered",
+                                   "targets": [format!("{doc}#answer")]}],
+                }));
+                (
+                    StatusCode::OK,
+                    axum::Json(serde_json::json!({
+                        "api": "napkin.middleware/1", "task": "ask_research", "handler": "ask_research@1.0",
+                        "job": {"id": "job_0abc", "state": state, "started_at": "2026-11-09T06:00:00Z"},
+                        "result": {}, "change": change, "trace": {},
+                    })),
+                )
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1/tasks", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (url, now)
+}
+
+async fn settle_count(s: &Server, b: &Browser, path: &str) -> usize {
+    let uri = format!("/api/t/{}/d/{}/entry/chain", b.tenant, path);
+    String::from_utf8_lossy(&get(s, &uri, Some(&b.cookie)).await.body)
+        .matches("d_01JB0SETTLE01")
+        .count()
+}
+
+#[tokio::test]
+async fn the_shell_lands_a_job_that_finished_after_its_page_closed_once() {
+    let (url, now) = settling_middleware().await;
+    let s = server_with(Arc::new(WithMiddleware(url)));
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let d = new_doc(&s, &b, "ie.napkin.test", "Research", None)
+        .await
+        .json();
+    let path = d["path"].as_str().unwrap().to_string();
+    let jobs_of = |lib: &Value| lib["items"][0]["jobs"].clone();
+
+    // The page asks, sees it running, and closes.
+    let proxy = format!("/s/{}/api-proxy", d["token"].as_str().unwrap());
+    post(&s, &proxy, &b.cookie, middleware_task("ask_research")).await;
+    assert_eq!(
+        jobs_of(&library(&s, &b, "").await),
+        serde_json::json!(["job_0abc"])
+    );
+
+    // Still running: settling changes nothing and keeps it listed.
+    let settle = format!("/api/t/{}/d/{}/jobs/job_0abc/settle", b.tenant, path);
+    let r = post(&s, &settle, &b.cookie, Body::empty()).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json()["data"]["job"]["state"], "running");
+    assert_eq!(
+        jobs_of(&library(&s, &b, "").await),
+        serde_json::json!(["job_0abc"])
+    );
+
+    // Done: the shell's poll lands the change, as the page's would have.
+    *now.lock().unwrap() = "done";
+    let r = post(&s, &settle, &b.cookie, Body::empty()).await.json();
+    assert_eq!(r["data"]["change"]["applied"], true, "{r}");
+    let data = get(
+        &s,
+        &format!("/api/t/{}/d/{}/entry/data", b.tenant, path),
+        Some(&b.cookie),
+    )
+    .await;
+    assert!(String::from_utf8_lossy(&data.body).contains("Gen Z own the late pint"));
+    let once = settle_count(&s, &b, &path).await;
+    assert!(once >= 1);
+    assert_eq!(
+        jobs_of(&library(&s, &b, "").await),
+        Value::Null,
+        "a done job is settled"
+    );
+
+    // The page polls the same job afterwards: nothing is applied twice.
+    let r = post(&s, &proxy, &b.cookie, middleware_task("job_status"))
+        .await
+        .json();
+    assert_ne!(r["data"]["change"]["applied"], true, "{r}");
+    let r = post(&s, &settle, &b.cookie, Body::empty()).await.json();
+    assert_ne!(r["data"]["change"]["applied"], true, "{r}");
+    assert_eq!(settle_count(&s, &b, &path).await, once);
+}
+
+#[tokio::test]
+async fn a_job_the_middleware_lost_is_no_longer_offered_to_settle() {
+    let (url, now) = settling_middleware().await;
+    let s = server_with(Arc::new(WithMiddleware(url)));
+    let b = browser(&s).await;
+    install_app(&s, &b, "ie.napkin.test", "Test App").await;
+    let d = new_doc(&s, &b, "ie.napkin.test", "Research", None)
+        .await
+        .json();
+    let path = d["path"].as_str().unwrap();
+    let proxy = format!("/s/{}/api-proxy", d["token"].as_str().unwrap());
+    post(&s, &proxy, &b.cookie, middleware_task("ask_research")).await;
+    *now.lock().unwrap() = "lost";
+    let settle = format!("/api/t/{}/d/{}/jobs/job_0abc/settle", b.tenant, path);
+    post(&s, &settle, &b.cookie, Body::empty()).await;
+    assert_eq!(library(&s, &b, "").await["items"][0]["jobs"], Value::Null);
+    // Not a job id: refused before anything is asked.
+    let bad = format!("/api/t/{}/d/{}/jobs/..%2Fx/settle", b.tenant, path);
+    assert_eq!(
+        post(&s, &bad, &b.cookie, Body::empty()).await.status,
+        StatusCode::BAD_REQUEST
+    );
+}

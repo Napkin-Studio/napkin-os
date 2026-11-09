@@ -358,6 +358,8 @@ export const httpHost: Host = {
   listRecent: () => json<RecentDoc[]>('/recent'),
 
   listLibrary: (filter?: LibraryFilter) => json<LibraryListing>(`/library${libraryQuery(filter)}`),
+  settleJob: (path: string, jobId: string) =>
+    json<unknown>(`/d/${encodeURIComponent(path)}/jobs/${encodeURIComponent(jobId)}/settle`, { method: 'POST' }),
   clients: {
     list: (includeArchived = false) => json<ClientRecord[]>(`/clients${includeArchived ? '?archived=1' : ''}`),
     create: (name, material) => json<ClientRecord>('/clients', postJson({ name, ...(material ? { material } : {}) })),

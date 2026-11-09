@@ -38,6 +38,8 @@ use crate::store::DocId;
 
 /// A job that has not been heard from for this long is not reported as running.
 pub const STALE_AFTER_SECS: i64 = 10 * 60;
+/// How long an unfinished job is offered for settling after it was last heard.
+pub const SETTLE_FOR_SECS: i64 = 24 * 60 * 60;
 /// How long a failure stays on the landing.
 pub const FAILED_FOR_SECS: i64 = 24 * 60 * 60;
 /// Documents the tracker remembers before it sheds the least recently heard.
@@ -204,6 +206,41 @@ impl RunTracker {
         })
     }
 
+    /// The ids of `doc`'s jobs that have not been seen to finish: queued,
+    /// running or waiting, heard within [`SETTLE_FOR_SECS`], sorted. Unlike
+    /// [`Self::run_at`] a job nobody has polled lately is still here: whoever
+    /// polls it next (the shell's watcher) lands its change.
+    pub fn unsettled(&self, doc: &DocId) -> Vec<String> {
+        self.unsettled_at(doc, Utc::now())
+    }
+
+    pub fn unsettled_at(&self, doc: &DocId, now: DateTime<Utc>) -> Vec<String> {
+        let docs = self.docs.lock().unwrap_or_else(|e| e.into_inner());
+        let mut ids: Vec<String> = docs
+            .get(doc)
+            .into_iter()
+            .flat_map(|jobs| jobs.iter())
+            .filter(|(_, j)| {
+                j.phase != Phase::Failed && now - j.heard < Duration::seconds(SETTLE_FOR_SECS)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// Forget one job: the middleware no longer knows it (a restart lost
+    /// it), so nobody can land it.
+    pub fn forget_job(&self, doc: &DocId, id: &str) {
+        let mut docs = self.docs.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(jobs) = docs.get_mut(doc) {
+            jobs.remove(id);
+            if jobs.is_empty() {
+                docs.remove(doc);
+            }
+        }
+    }
+
     /// Forget a document (it was deleted). Nothing else needs to.
     pub fn forget(&self, doc: &DocId) {
         self.docs
@@ -242,6 +279,31 @@ mod tests {
             job["progress"] = json!({"done": d, "total": n});
         }
         json!({"api": "napkin.middleware/1", "job": job, "change": null})
+    }
+
+    #[test]
+    fn an_unfinished_job_stays_unsettled_after_it_goes_stale_until_it_is_done() {
+        let r = RunTracker::new();
+        let d = doc("a.clan");
+        assert!(r.unsettled_at(&d, t(0)).is_empty());
+        r.record_at(&d, &reply("job_2", "running", Some("ask"), None), t(0));
+        r.record_at(&d, &reply("job_1", "needs_input", None, None), t(0));
+        assert_eq!(r.unsettled_at(&d, t(1)), vec!["job_1", "job_2"]);
+        // Nobody polled for longer than STALE_AFTER_SECS: no longer shown as
+        // running, but still there to settle.
+        let later = t(STALE_AFTER_SECS + 5);
+        assert!(r.run_at(&d, later).is_none());
+        assert_eq!(r.unsettled_at(&d, later), vec!["job_1", "job_2"]);
+        // Done: gone. Failed: not something to land.
+        r.record_at(&d, &reply("job_2", "done", None, None), t(2));
+        r.record_at(&d, &reply("job_1", "failed", None, None), t(2));
+        assert!(r.unsettled_at(&d, t(3)).is_empty());
+        // A day later an unheard job is let go.
+        r.record_at(&d, &reply("job_3", "running", None, None), t(0));
+        assert!(r.unsettled_at(&d, t(SETTLE_FOR_SECS + 1)).is_empty());
+        // A job the middleware lost is forgotten.
+        r.forget_job(&d, "job_3");
+        assert!(r.unsettled_at(&d, t(1)).is_empty());
     }
 
     #[test]
