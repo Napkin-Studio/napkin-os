@@ -208,7 +208,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.2: the Plan-zone identity; figures from the shared snippet.
             // 0.4: its card on the OS home (app.home).
             // 0.5: a brief can start a research, carried whole (app.spinoff).
-            version: "0.5.1".into(),
+            // 0.6: every report line a clan field, the new UI; versions now
+            // locked in app/templates/campaign-research/app.lock.
+            version: "0.6.0".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),

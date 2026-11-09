@@ -1,0 +1,4 @@
+# Each released version of this app, oldest first: <version> <digest of its sources>.
+# Change the app (its page, schemas, pipeline or app block) and app/tests/appLock.test.ts
+# fails until its version in crates/clan-sdk/examples/make_*.rs is bumped and a line added.
+0.6.0 sha256:ee891dfd472e167083d8bea18410dd4812e4f172181d899490e162df0f29bd69

@@ -243,7 +243,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.6: a brief can start from research, carried whole.
             // 0.7: its card on the OS home (app.home).
             // 0.8: how the brief looks is one rolling entry (x-clan-appearance).
-            version: "0.9.5".into(),
+            // 0.10: every line a clan field, the new UI; versions now locked
+            // in app/templates/brief-maker/app.lock (doc-app-upgrade).
+            version: "0.10.0".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some(SCHEMA_PATH.into()),
