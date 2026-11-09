@@ -832,7 +832,7 @@ test('the drawer quotes the words the planner typed', () => {
     mat_f: { kind: 'client_brief', name: 'Lidl brief.pdf' },
   }
   const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
-  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
+  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
     arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
     writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
     materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
@@ -885,7 +885,7 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
   const givenOf = (k: string | null) => ({ drafter: 'Dara', judge: 'Jude' } as Record<string, string>)[String(k)] || ''
   const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
   const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
-  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
+  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
     'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history', 'writerBlock'], {
     arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION,
     docId: () => 'brief', upstreams: () => ({}), valueAt: () => value, envAt: () => null, ORIGIN: {}, personName: () => 'ana',
@@ -1448,8 +1448,9 @@ test('a part the draft marks "To confirm:" prints a corner tag, not the words in
 function cardKit() {
   // The page's esc holds a quote in a regex the lifter cannot read past; the
   // stand-in escapes the same characters.
-  const names = ['obj', 'arr', 'clip', 'tierWord', 'reviewLine', 'cardHTML']
+  const names = ['obj', 'arr', 'clip', 'tierWord', 'isYou', 'nameOfId', 'personName', 'reviewLine', 'cardHTML']
   const vars = ['ORIGIN_WORD', 'VERDICT_WORD', 'CARD_KIND'].map(n => obj(CLF, n)).join('\n')
+    + '\nvar VIEW=null; var OPAQUE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;'
   const body = `${vars}\n${names.map(n => fn(CLF, n)).join('\n')}\nreturn {cardHTML};`
   const plainDate = (d: string) => `on ${String(d).slice(0, 10)}`
   return new Function('plainDate', 'esc', body)(plainDate, esc) as { cardHTML(c: unknown, compact?: boolean): string }
@@ -1470,12 +1471,12 @@ test('the source card says where a fact came from, its latest verdict, and folds
   const h = cardHTML(carriedPin)
   assert.match(h, /^<div class="clf-sc" data-card="f_01JA0B3P4Q" data-origin="research">/)
   assert.match(h, /<span class="clf-sc-k o-research">Research<\/span>/)
-  assert.match(h, /<span class="clf-sc-r v-rejected">Marked wrong by You · on 2026-11-08<\/span>/)
+  assert.match(h, /<span class="clf-sc-r v-rejected">Marked wrong by you · on 2026-11-08<\/span>/)
   assert.match(h, /<span class="clf-sc-v">23%<\/span><p class="clf-sc-t">Orchard Hill · share<\/p>/)
   assert.match(h, /From <b>Lúnasa launch<\/b><small>campaign research<\/small>/)
   // The history is folded, newest first, the replaced one marked.
   const rec = h.slice(h.indexOf('<details class="clf-more clf-sc-rec"><summary>Record</summary>'))
-  assert.ok(rec.indexOf('Marked wrong by You') < rec.indexOf('Verified by mary'), rec)
+  assert.ok(rec.indexOf('Marked wrong by you') < rec.indexOf('Verified by mary'), rec)
   assert.match(rec, /Verified by mary · on 2026-11-01 · replaced/)
   assert.match(h, /data-clf-sc="open" data-ref="f_01JA0B3P4Q">Where this came from/)
   assert.match(h, /data-clf-sc="from" data-path="docs\/r1\.clan">Open Lúnasa launch/)
@@ -1903,7 +1904,7 @@ test('research: a figure the sentence states becomes its field where it stands',
 
 type MapNode = { id: string; col: string; kind: string; used: boolean; out?: boolean; order: number; label: string; meta?: string }
 type MapModel = { nodes: Record<string, MapNode>; edges: { from: string; to: string; kind: string }[]; cols: Record<string, MapNode[]>; gaps: MapNode[] }
-const mapModel = (r: unknown, p: unknown, s: unknown) => lift<{ mapModel(r: unknown, p: unknown, s: unknown): MapModel }>(RT, ['mapModel'], { arr, isObj }).mapModel(r, p, s)
+const mapModel = (r: unknown, p: unknown, s: unknown) => lift<{ mapModel(r: unknown, p: unknown, s: unknown): MapModel }>(RT, ['pinLabel', 'mapModel'], { arr, isObj, MARKET: {} }).mapModel(r, p, s)
 const pin = (sources?: string[]) => ({ key: 'k', value: 1, unit: 'count', confidence: 'high', ...(sources ? { sources } : {}) })
 
 test('research: the evidence map draws only the edges the document carries, left to right', () => {
@@ -2107,4 +2108,33 @@ test('taking a point out with no reason says “Add a reason” at the box, not 
   assert.doesNotMatch(src, /toast\('Say what/)
   assert.match(src, /ui\.err=true/)
   assert.match(RT, /Add a reason: say what’s wrong with it/)
+})
+
+// ── B4: what people read carries no keys or ids ────────────────────────────
+
+test('Jude’s words lose their ids; a finding is named by what it says', () => {
+  const F = { fi_DSEQGHSPHSY6: { statement: 'Christmas is the busiest period for cider' } }
+  const b = lift<{ noIds(s: string): string }>(BM, ['noIds'], { get: (k: string) => (k === 'projection' ? { findings: F } : undefined) })
+  assert.equal(b.noIds('below 1.2% ABV (f_RPH5UFCVDCUV). At 0.5% (f_TKL7YLB7DEEQ, f_VLB4EBQYKK4T) it is.'), 'below 1.2% ABV. At 0.5% it is.')
+  assert.equal(b.noIds('Objective cites finding fi_DSEQGHSPHSY6.'), 'Objective cites the finding “Christmas is the busiest period for cider”.')
+  assert.equal(b.noIds('A person verified: fi_UNKNOWN99'), 'A person verified: a finding')
+  const r = lift<{ noIds(s: string): string }>(RT, ['noIds'], { fnds: () => ({}) })
+  assert.equal(r.noIds('Rests on Christmas (f_64) and spring (fi_1).'), 'Rests on Christmas and spring.')
+  assert.doesNotMatch(r.noIds('cites finding fi_ABCDEF12'), /fi_/)
+})
+
+test('a pin reads by its key in words, never the key itself, and the report header carries no campaign id', () => {
+  const r = lift<{ pinLabel(p: unknown): string }>(RT, ['pinLabel'], { MARKET: { GB: 'Great Britain' } })
+  assert.equal(r.pinLabel({ key: 'rhythm.key_moment.christmas_the_busiest', unit: 'text', market: 'GB' }), 'Key moment · Great Britain')
+  assert.equal(r.pinLabel({ key: 'regulation.mandatory_copy', unit: 'text', market: 'GB' }), 'Mandatory copy · Great Britain')
+  assert.equal(r.pinLabel({ key: 'consumer.penetration_young_adults', unit: 'proportion' }), 'Penetration young adults')
+  assert.doesNotMatch(fn(RT, 'pinChip'), /esc\(p\.key\)/)
+  assert.doesNotMatch(RT, /c\.id\?' · '\+esc\(c\.id\.value\)/)
+})
+
+test('a sign-in id reads as the person’s name on a source card', () => {
+  const f = lift<{ nameOfId(n: string): string }>(CLF, ['nameOfId'], {})
+  assert.equal(f.nameOfId('sam@wk'), 'Sam')
+  assert.equal(f.nameOfId('ann.lee@napkin'), 'Ann Lee')
+  assert.equal(f.nameOfId('ana-maria'), 'ana maria')
 })

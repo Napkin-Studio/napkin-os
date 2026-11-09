@@ -21,3 +21,12 @@ def test_two_captured_objectives_read_as_one_line():
     got = working_brief(items, {})["objectives.commercial"]["value"]
     assert ".;" not in got
     assert got == "Launch the new dry cider in the UK this spring; Reach 3% share of UK no/low cider within 12 months."
+
+
+def test_judes_note_loses_the_ids_people_never_read():
+    from napkin.brief.planned import _no_ids
+    said = "Under ASA/CAP, 'low alcohol' means above 0.5% and below 1.2% ABV (f_RPH5UFCVDCUV). At 0.5% it is " \
+           "an 'alcohol alternative' (f_TKL7YLB7DEEQ, f_VLB4EBQYKK4T)."
+    assert _no_ids(said) == "Under ASA/CAP, 'low alcohol' means above 0.5% and below 1.2% ABV. At 0.5% it is " \
+                            "an 'alcohol alternative'."
+    assert _no_ids("Spring launch (the plan says so).") == "Spring launch (the plan says so)."

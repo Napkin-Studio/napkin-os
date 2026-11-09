@@ -24,6 +24,7 @@ Every call, search, decision and stage is in the job's run log (napkin.runlog).
 from __future__ import annotations
 
 import copy
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
@@ -252,6 +253,15 @@ def score_of(review) -> int:
 def _short(s, n=220):
     s = " ".join(str(s or "").split())
     return s if len(s) <= n else s[:n - 1] + "…"
+
+
+_IDS = re.compile(r"\s*\((?:(?:see |cites? )?(?:f|fi|fnd|src|cap|psg|d)_[0-9A-Za-z]{2,}(?:,\s*|\s+and\s+)?)+\)")
+
+
+def _no_ids(s) -> str:
+    """Jude's words as people read them: "… 1.2% ABV (f_RPH5UFCVDCUV)" loses the id. What a
+    note rests on is in its cites, not its sentence."""
+    return re.sub(r"\s+([.,;:])", r"\1", _IDS.sub("", str(s or "")))
 
 
 class PlannedBriefJob(BriefJob):
@@ -878,7 +888,8 @@ class PlannedBriefJob(BriefJob):
                 continue
             cites = [self.writer[p] for p in parts if p in self.writer] or [f"{self.doc}#{parts[0]}"]
             fix = n["severity"] == "fix"
-            r = rsn.make(_short(n["note"], 300), [rsn.point(_short(n["note"], 400), cites)],
+            said = _no_ids(n["note"])
+            r = rsn.make(_short(said, 300), [rsn.point(_short(said, 400), cites)],
                          rsn.certainty("medium", "a model judged the brief as a whole"),
                          "the parts it names change", only_option="one note for one issue",
                          attention=("Jude suggests a change." if fix else None))
@@ -933,7 +944,7 @@ class PlannedBriefJob(BriefJob):
                              ("failed" if any(n["severity"] == "fix" for n in ns) else "passed"),
                              "checks": [{"check": "whole_brief_review", "method": "llm",
                                          "status": "review" if n["severity"] == "fix" else "pass",
-                                         "note": _short(n["note"], 300)} for n in ns[:3]]
+                                         "note": _short(_no_ids(n["note"]), 300)} for n in ns[:3]]
                              + [{"check": "claim_supported", "method": "auto" if c.get("by") == "code" else "llm",
                                  "status": "pass" if c["verdict"] == "supported" else "review",
                                  "note": _short(f"{c['claim']}: {c['note']}", 300)}

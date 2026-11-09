@@ -57,6 +57,9 @@ export function whoOf(block: DecisionBlock): WhoIs {
 function personName(name: string): string {
   const n = String(name ?? '').trim()
   if (!n || n === 'someone' || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(n)) return 'Someone'
+  // A sign-in id ("sam@wk") reads as the first name, never the id.
+  const at = /^([^@\s]+)@[^@\s]+$/.exec(n)
+  if (at) return at[1].split(/[._-]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
   return n.split('-').map(w => (/^(\.[0-9a-f]{2,4})+$/.test(w)
     ? w.slice(1).split('.').map(h => String.fromCharCode(parseInt(h, 16))).join('') : w)).join(' ')
 }

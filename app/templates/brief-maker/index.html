@@ -1127,13 +1127,28 @@
   // The codes stay in the decision, and in a title for whoever debugs it. An
   // attention opens with "<part> fails <checks>." when the part failed.
   var CODES='[a-z0-9]+(?:_[a-z0-9]+)*(?:, [a-z0-9]+(?:_[a-z0-9]+)*)*';
+  // Ids are for Technical details, never for people (B4): a server's text
+  // ("… 1.2% ABV (f_RPH5UFCVDCUV)", "cites finding fi_…") loses its ids here.
+  // A finding is named by what it says when the page holds it.
+  function noIds(s){
+    var F=(function(){ try{ return (get('projection')||{}).findings||{}; }catch(e){ return {}; } })();
+    function finding(id){ var f=F[id], t=f&&String(f.statement||'').replace(/\s+/g,' ').trim(); return t?'the finding “'+(t.length>70?t.slice(0,69).replace(/\s+\S*$/,'')+'…':t)+'”':'a finding'; }
+    return String(s==null?'':s)
+      .replace(/\s*\((?:(?:from |in |see |cites? )?(?:f|fi|fnd|src|mat|msg|d|psg)_[0-9A-Za-z]+(?:,\s*|\s+and\s+)?)+\)/g,'')
+      .replace(/\b(?:the )?finding ((?:fi|fnd)_[0-9A-Za-z]{2,})/g,function(_,id){ return finding(id); })
+      .replace(/\b(?:fi|fnd)_[0-9A-Za-z]{4,}\b/g,function(id){ return finding(id); })
+      .replace(/\b(?:the )?fact f_[0-9A-Za-z]{2,}/g,'a fact')
+      .replace(/\bf_[0-9A-Z]{6,}\b/g,'a fact')
+      .replace(/\bd_[0-9A-Z]{10,}\b/g,'a decision')
+      .replace(/\s+([.,;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
+  }
   function plainJudge(s, attn){
-    return String(s||'')
+    return noIds(String(s||'')
       .replace(new RegExp('^\\s*[a-z0-9]+(?:_[a-z0-9]+)* \\((?:llm|auto|rule)\\):\\s*'),'')
       .replace(attn?new RegExp('^.*? fails '+CODES+'\\.\\s*'):/$^/,'')
       .replace(new RegExp('Left for a person: '+CODES+'(?: \\([^)]*\\))?\\.'),'Some of it needs a person to judge.')
       .replace(/the rubric \([a-z0-9_]+\)/,'the rubric')
-      .trim().replace(/^[a-z]/,function(c){ return c.toUpperCase(); });
+      ).trim().replace(/^[a-z]/,function(c){ return c.toUpperCase(); });
   }
   // A proposal waits for the person while nothing has written the field since,
   // no decision names it, and nobody dismissed it. The newest one only.
@@ -1559,7 +1574,7 @@
       +'<div class="wh">'+fig('judge',{state:v.open?'needs-you':'idle',decorative:true})+'<b>'+esc(JUDE)+'</b>'
       +(v.bad?'<span class="pill alert"'+(d.reason_code?' title="'+esc(d.reason_code)+'"':'')+'>failed</span>':'<span class="pill ok">passed</span>')
       +'<time datetime="'+esc(d.timestamp)+'">'+esc(fmtDate(d.timestamp))+'</time></div>'
-      +(r?reasoningBlock(r):(d.rationale?'<p class="rsn">'+esc(d.rationale)+'</p>':''))
+      +(r?reasoningBlock(r):(d.rationale?'<p class="rsn">'+esc(noIds(d.rationale))+'</p>':''))
       +(look?'<div class="flag">'+fig('judge',{state:'needs-you',decorative:true})+'<div><b>Look at this:</b> '+esc(look)+'</div></div>':'')
       +'</div>';
   }

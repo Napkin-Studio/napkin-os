@@ -451,7 +451,9 @@ var ClanFields=(function(){
   }
   function label(p){
     if(!p) return '';
-    var k=String(p.key||'').split('.').slice(1).join(' ')||String(p.key||'');
+    // A text pin's key ends in a slug of its own value ("key_moment.christmas_the_busiest…"):
+    // its label is the kind of thing it is, and the value says the rest.
+    var seg=String(p.key||'').split('.'), k=(seg.length>1?(p.unit==='text'?seg[1]:seg.slice(1).join(' ')):seg[0])||'';
     k=k.replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year');
     return k.charAt(0).toUpperCase()+k.slice(1)+(p.market?' · '+country(p.market):'');
   }
@@ -469,7 +471,11 @@ var ClanFields=(function(){
   var OPAQUE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // A person's id back as their name: hyphens were spaces, and a word held
   // wholly as letter codes (a name in another script) is spelt out again.
-  function nameOfId(n){ return String(n||'').split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
+  // A sign-in id ("sam@wk", "ann.lee@napkin") reads as the person's first
+  // name, capitalised, never the id itself.
+  function nameOfId(n){ n=String(n||''); var at=/^([^@\s]+)@[^@\s]+$/.exec(n);
+    if(at) return at[1].split(/[._-]+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase()+w.slice(1); }).join(' ');
+    return n.split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
   function personName(uri){ if(isYou(uri)) return 'you'; var n=String(uri).replace(/^human:/,''); return OPAQUE.test(n)?'someone':nameOfId(n); }
   // What a person wrote, without the "<their id>: " an older note began with.
   function saidBy(q,rec){ var id=String(rec&&rec.publisher||''); q=String(q); return id&&q.indexOf(id+': ')===0?q.slice(id.length+2):q; }
@@ -946,7 +952,8 @@ var ClanFields=(function(){
     }
     return Promise.all(refs.map(function(r){ return CARDS[r]; })).then(function(list){ var o={}; refs.forEach(function(r,i){ o[r]=list[i]; }); return o; });
   }
-  function reviewLine(r){ return esc(VERDICT_WORD[r.verdict]||r.verdict)+(r.by?' by '+esc(r.by):'')+(r.at?' · '+esc(plainDate(r.at)):''); }
+  function reviewLine(r){ var by=r.actor&&isYou(r.actor)?'you':r.by?(r.by==='You'?'you':personName(/^human:/.test(r.by)?r.by:'human:'+r.by)):'';
+    return esc(VERDICT_WORD[r.verdict]||r.verdict)+(by?' by '+esc(by):'')+(r.at?' · '+esc(plainDate(r.at)):''); }
   // The card's markup, from what the host said of `ref`. `compact` is the
   // drawer's: the drawer shows the value and the words below it already.
   function cardHTML(c,compact){
@@ -1072,7 +1079,7 @@ var ClanFields=(function(){
   function asideDone(b){ var d=b.decision||{};
     return '<div class="clf-dv"><span class="stmt">'+esc(arr(b.targets).map(function(t){ return t.label; })[0]||'Carried over')+'</span><div class="clf-pills"><span class="clf-pill ok">'+TICK+' Set aside</span></div></div>'
       +'<p class="clf-by"><b>'+esc(whoDid(b))+'</b> set it aside'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'</p>'
-      +(d.rationale?'<blockquote class="clf-q said">'+esc(d.rationale)+'</blockquote>':''); }
+      +(d.rationale?'<blockquote class="clf-q said">'+esc(noIds(d.rationale))+'</blockquote>':''); }
 
   // ── the drawer ──────────────────────────────────────────────────────
   function ensureDrawer(){
@@ -1222,9 +1229,24 @@ var ClanFields=(function(){
   function uniq(xs){ var s={}; return xs.filter(function(x){ if(!x||s[x]) return false; s[x]=1; return true; }); }
   function clip(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; }
   function plural(n,w){ return n+' '+w+(n===1?'':'s'); }
+  // Ids are for Technical details, never for people (B4): a server's text
+  // ("… 1.2% ABV (f_RPH5UFCVDCUV)", "cites finding fi_…") loses its ids here.
+  // A finding is named by what it says when the page holds it.
+  function noIds(s){
+    var F=(function(){ try{ return findings()||{}; }catch(e){ return {}; } })();
+    function finding(id){ var f=F[id], t=f&&String(f.statement||'').replace(/\s+/g,' ').trim(); return t?'the finding “'+(t.length>70?t.slice(0,69).replace(/\s+\S*$/,'')+'…':t)+'”':'a finding'; }
+    return String(s==null?'':s)
+      .replace(/\s*\((?:(?:from |in |see |cites? )?(?:f|fi|fnd|src|mat|msg|d|psg)_[0-9A-Za-z]+(?:,\s*|\s+and\s+)?)+\)/g,'')
+      .replace(/\b(?:the )?finding ((?:fi|fnd)_[0-9A-Za-z]{2,})/g,function(_,id){ return finding(id); })
+      .replace(/\b(?:fi|fnd)_[0-9A-Za-z]{4,}\b/g,function(id){ return finding(id); })
+      .replace(/\b(?:the )?fact f_[0-9A-Za-z]{2,}/g,'a fact')
+      .replace(/\bf_[0-9A-Z]{6,}\b/g,'a fact')
+      .replace(/\bd_[0-9A-Z]{10,}\b/g,'a decision')
+      .replace(/\s+([.,;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
+  }
   function becauseList(rs){ var bs=arr(obj(rs).because).filter(function(p){ return p&&p.point; });
-    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(p.point)+'</span></li>'; }).join('')+'</ul>':''; }
-  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }); }
+    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(noIds(p.point))+'</span></li>'; }).join('')+'</ul>':''; }
+  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }).map(noIds); }
 
   // Where a bare value came from: its current writing decision, with what it
   // cites — the client's words, the library's passages, the facts with what

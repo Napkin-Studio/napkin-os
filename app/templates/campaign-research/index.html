@@ -1216,13 +1216,25 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(typeof v==='boolean') return v?'yes':'no';
     return String(v);
   }
+  // What a person calls a pin: its key in words, never the key itself
+  // ("rhythm.key_moment.christmas_the_busiest…" is "Key moment · Great
+  // Britain"; a text pin's value says the rest). The OS's fields say it the
+  // same way (ClanFields.label); this is the page's own copy for before they load.
+  function pinLabel(p){
+    if(!p) return '';
+    if(typeof window!=='undefined'&&window.ClanFields&&ClanFields.label) return ClanFields.label(p);
+    var seg=String(p.key||'').split('.'), k=(seg.length>1?(p.unit==='text'?seg[1]:seg.slice(1).join(' ')):seg[0])||'';
+    k=k.replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year');
+    var mk=p.market?(typeof MARKET==='object'&&MARKET[p.market])||p.market:'';
+    return k.charAt(0).toUpperCase()+k.slice(1)+(mk?' · '+mk:'');
+  }
   function pinChip(id){
     var p=pins()[id];
     if(!p) return '<a class="pinc missing" href="#facts" title="Not in the projection — the host rebuilds it from shared/facts.yaml"><span class="id">'+esc(id)+'</span><span class="k">not in projection</span></a>';
     var v=fmtPinValue(p); var shortV=v.length>34?v.slice(0,32)+'…':v;
     return '<a class="pinc" href="#fact-'+esc(id)+'" title="'+esc(p.entity+' · '+p.key+(p.market?' · '+p.market:'')+' = '+v+' (as of '+p.as_of+', '+p.confidence+' confidence'+(p.stale?', STALE':'')+')')+'">'
       +(p.stale?'<span class="st" aria-label="stale"></span>':'')
-      +'<span class="k">'+esc(p.key)+(p.market?' · '+esc(p.market):'')+'</span><span class="v">'+esc(shortV)+'</span></a>';
+      +'<span class="k">'+esc(pinLabel(p))+'</span><span class="v">'+esc(shortV)+'</span></a>';
   }
   function pinChips(ids){ ids=arr(ids); if(!ids.length) return ''; return '<div class="pins">'+ids.map(pinChip).join('')+'</div>'; }
   function findingChip(id){
@@ -1472,7 +1484,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(c.client_org) bits.push('<span class="muted">for '+esc(c.client_org.value&&c.client_org.value.name)+'</span>');
     if(c.markets) bits.push(arr(c.markets.value).map(function(m){ return '<span class="pill">'+esc(m)+'</span>'; }).join(' '));
     if(c.campaign_type) bits.push('<span class="pill">'+esc(TYPES[c.campaign_type.value]||c.campaign_type.value)+'</span>');
-    $('hero').innerHTML='<div class="eyebrow">Campaign research'+(c.id?' · '+esc(c.id.value):'')+'</div>'
+    $('hero').innerHTML='<div class="eyebrow">Campaign research</div>'
       +'<h1 class="'+(name?'':'empty')+'">'+(name?esc(name):started?'A new campaign':'A campaign with no ask yet')+'</h1>'
       +'<div class="sub">'+(bits.length?bits.join('<span class="sep" aria-hidden="true">/</span>'):'<span class="muted">'+(started?given('extract')+' is reading your message. The ask fills in below as each stage lands.':'Nothing has been extracted. Open it from the client’s brief, then extract the ask.')+'</span>')+'</div>';
   }
@@ -1866,17 +1878,32 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     return '<code title="cites">'+esc(pathOf(c))+'</code>';
   }
   // decided / because (with cite chips) / rejected / certainty / would change if.
+  // Ids are for Technical details, never for people (B4): a server's text
+  // ("… 1.2% ABV (f_RPH5UFCVDCUV)", "cites finding fi_…") loses its ids here.
+  // A finding is named by what it says when the page holds it.
+  function noIds(s){
+    var F=(function(){ try{ return fnds()||{}; }catch(e){ return {}; } })();
+    function finding(id){ var f=F[id], t=f&&String(f.statement||'').replace(/\s+/g,' ').trim(); return t?'the finding “'+(t.length>70?t.slice(0,69).replace(/\s+\S*$/,'')+'…':t)+'”':'a finding'; }
+    return String(s==null?'':s)
+      .replace(/\s*\((?:(?:from |in |see |cites? )?(?:f|fi|fnd|src|mat|msg|d|psg)_[0-9A-Za-z]+(?:,\s*|\s+and\s+)?)+\)/g,'')
+      .replace(/\b(?:the )?finding ((?:fi|fnd)_[0-9A-Za-z]{2,})/g,function(_,id){ return finding(id); })
+      .replace(/\b(?:fi|fnd)_[0-9A-Za-z]{4,}\b/g,function(id){ return finding(id); })
+      .replace(/\b(?:the )?fact f_[0-9A-Za-z]{2,}/g,'a fact')
+      .replace(/\bf_[0-9A-Z]{6,}\b/g,'a fact')
+      .replace(/\bd_[0-9A-Z]{10,}\b/g,'a decision')
+      .replace(/\s+([.,;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
+  }
   function reasoningBlock(r){
     var rej=arr(r.rejected);
     return '<div class="rsn">'
-      +'<p><span class="rl">Decided</span>'+esc(r.decided)+'</p>'
+      +'<p><span class="rl">Decided</span>'+esc(noIds(r.decided))+'</p>'
       +'<div><span class="rl">Because</span><ul>'+arr(r.because).map(function(b){ var cs=arr(b.cites);
-        return '<li>'+esc(b.point)+(cs.length?'<span class="cites">'+cs.map(citeChip).join('')+'</span>':'')+'</li>'; }).join('')+'</ul></div>'
+        return '<li>'+esc(noIds(b.point))+(cs.length?'<span class="cites">'+cs.map(citeChip).join('')+'</span>':'')+'</li>'; }).join('')+'</ul></div>'
       +(rej.length?'<div><span class="rl">Rejected</span><ul>'+rej.map(function(x){ return '<li>'+esc(x.option)+' <span class="muted">— '+esc(x.why)+'</span></li>'; }).join('')+'</ul></div>'
         :(r.only_option?'<p><span class="rl">Only option</span><span class="muted">'+esc(r.only_option)+'</span></p>':''))
       +(r.certainty?'<p><span class="rl">Certainty</span><span class="pill'+(r.certainty.level==='high'?' ok':r.certainty.level==='low'?' alert':'')+'">'+esc(r.certainty.level)+'</span> <span class="muted">'+esc(r.certainty.why||'')+'</span></p>':'')
       +(r.would_change_if?'<p><span class="rl">Would change if</span>'+esc(r.would_change_if)+'</p>':'')
-      +(r.attention?'<div class="flag amber"><div><b>Look at this:</b> '+esc(r.attention)+'</div></div>':'')
+      +(r.attention?'<div class="flag amber"><div><b>Look at this:</b> '+esc(noIds(r.attention))+'</div></div>':'')
       +'</div>';
   }
   function hasReasoning(d){ return d.reasoning&&typeof d.reasoning==='object'&&d.reasoning.decided; }
@@ -1887,7 +1914,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
       +'<div class="tlh"><time datetime="'+esc(d.timestamp)+'">'+esc(fmtDate(d.timestamp))+'</time>'
       +'<span class="pill'+(k==='verdict'&&d.polarity==='bad'||k==='contest'?' alert':k==='verify'||k==='resolve'||(k==='verdict'&&d.polarity==='good')?' ok':'')+'">'+esc(k)+(d.polarity?' · '+esc(d.polarity):'')+'</span>'
       +'<span class="actor">'+esc(actorOf(d))+'</span><span class="muted">'+esc(d.action||'')+'</span>'+(d.id?'<span class="mono muted" style="font-size:10.5px">'+esc(d.id)+'</span>':'')+(hl?'<span class="pill solid">set the current value</span>':'')+'</div>'
-      +(why&&hasReasoning(d)?reasoningBlock(d.reasoning):d.rationale?'<p class="tlr">'+esc(d.rationale)+'</p>':'')
+      +(why&&hasReasoning(d)?reasoningBlock(d.reasoning):d.rationale?'<p class="tlr">'+esc(noIds(d.rationale))+'</p>':'')
       +((arr(d.targets).length||arr(d.cites).length)?'<div class="tlt">'+arr(d.targets).map(function(a){ return '<code title="target">→ '+esc(pathOf(a))+'</code>'; }).join('')+arr(d.cites).map(function(c){ return '<code title="cites">'+esc(c)+'</code>'; }).join('')+'</div>':'')
       +((!d.targets&&arr(d.fields_changed).length)?'<div class="tlt">'+arr(d.fields_changed).map(function(c){ return '<code title="fields changed">'+esc(c)+'</code>'; }).join('')+'</div>':'')
       +'</li>';
@@ -2202,7 +2229,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function doPin(a){
     var id=/facts\[(.+)\]$/.exec(a); id=id&&id[1]; var p=pins()[id]; if(!p) return;
     openDialog('<h2 id="dlg-title">Take the current version</h2><div class="addr">'+esc(a)+'</div>'
-      +'<p style="margin:0">Pinned <b>'+esc(fmtPinValue(p))+'</b> ('+esc(p.key)+(p.market?', '+esc(p.market):'')+', as of '+esc(p.as_of)+'). The layer is now at v'+esc(p.current_version||'?')+'. Taking it is a new pin the lease holder makes; the old one is superseded, not edited.</p>'
+      +'<p style="margin:0">Pinned <b>'+esc(fmtPinValue(p))+'</b> ('+esc(pinLabel(p))+', as of '+esc(p.as_of)+'). The layer is now at v'+esc(p.current_version||'?')+'. Taking it is a new pin the lease holder makes; the old one is superseded, not edited.</p>'
       +'<div id="dlg-prev"></div>'+stubFoot(STUB.pin),
       function(){ $('dlg-prev').innerHTML=preview('The decision this will record (W2-O2)', {kind:'pin', targets:[a], cites:[id], rationale:'Take v'+(p.current_version||'?')+' of '+p.entity+' '+p.key}); });
   }
@@ -2232,7 +2259,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     }
     if(un.length) h+='<ul class="blockers">'+un.map(function(x){ return '<li><span class="k">'+esc(x.k)+'</span><span>'+x.html+'</span></li>'; }).join('')+'</ul>';
     h+='<ul class="blockers"><li class="info"><span class="k">Branches</span><span>Unmerged agent branches are checked by the host at lock.</span></li>'
-      +(st.length?'<li class="info"><span class="k">Stale pins</span><span>'+st.length+' stale pin'+(st.length===1?'':'s')+' ('+st.map(function(id){ return '<a href="#fact-'+esc(id)+'">'+esc(pins()[id].key)+'</a>'; }).join(', ')+') will be accepted as frozen.</span></li>':'')+'</ul>';
+      +(st.length?'<li class="info"><span class="k">Stale pins</span><span>'+st.length+' stale pin'+(st.length===1?'':'s')+' ('+st.map(function(id){ return '<a href="#fact-'+esc(id)+'">'+esc(pinLabel(pins()[id]))+'</a>'; }).join(', ')+') will be accepted as frozen.</span></li>':'')+'</ul>';
     var held=b.length+un.length;
     h+='<div class="foot"><span class="why" id="dlg-err">'+esc(held?'Disabled while anything above is open.':'One approve decision records this exact version.')+'</span><button type="button" class="btn" data-close>Close</button><button type="submit" class="btn primary"'+(held?' disabled':'')+'>Accept and lock</button></div>';
     openDialog(h, function(fm){ fm.onsubmit=function(e){ e.preventDefault(); if(lockItems().length||(hostNeeds()&&unfilled().length)) return; submitDecision('/approve', {}, 'Locked: this version is accepted.'); }; });
@@ -3355,7 +3382,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(src) meta.push(src+' source'+(src===1?'':'s')+' read');
     meta.push(np+' fact'+(np===1?'':'s')+' pinned');
     if(nd) meta.push(nd+' decision'+(nd===1?'':'s')+' on the record');
-    return '<header class="rp-band'+(lk?' locked':'')+'"><div class="eyebrow">Research'+(org?' · '+esc(org):brand?' · '+esc(brand):'')+(c.id?' · '+esc(c.id.value):'')+'</div>'
+    return '<header class="rp-band'+(lk?' locked':'')+'"><div class="eyebrow">Research'+(org?' · '+esc(org):brand?' · '+esc(brand):'')+'</div>'
       +'<h1 class="rp-q">'+(name?esc(name):'Campaign research')+'</h1>'
       +'<p class="rp-meta">'+esc(meta.join(' · '))+'</p>'+(lk?'<span class="rp-lock">Locked</span>':'')+'</header>';
   }
@@ -3546,7 +3573,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   var REC={kind:'', who:''};
   // One decision, one line; its reasons and what it touched open under it.
   function recRow(d){
-    var k=kindOf(d), a=actorOf(d), hu=/^human:/.test(a), body=hasReasoning(d)?reasoningBlock(d.reasoning):d.rationale?'<p class="tlr">'+esc(d.rationale)+'</p>':'';
+    var k=kindOf(d), a=actorOf(d), hu=/^human:/.test(a), body=hasReasoning(d)?reasoningBlock(d.reasoning):d.rationale?'<p class="tlr">'+esc(noIds(d.rationale))+'</p>':'';
     var tg=arr(d.targets).map(function(x){ return '<code title="target">→ '+esc(pathOf(x))+'</code>'; }).join('')+arr(d.cites).map(function(c){ return '<code title="cites">'+esc(c)+'</code>'; }).join('')
       +(!d.targets?arr(d.fields_changed).map(function(c){ return '<code title="fields changed">'+esc(c)+'</code>'; }).join(''):'');
     return '<details class="rp-dec k-'+esc(k)+'"><summary><span class="t">'+esc(fmtWhen(d.timestamp))+'</span><span class="pill'+(k==='verdict'&&d.polarity==='bad'||k==='contest'?' alert':k==='verify'||k==='resolve'||(k==='verdict'&&d.polarity==='good')?' ok':'')+'">'+esc(k)+(d.polarity?' · '+esc(d.polarity):'')+'</span>'
@@ -3727,7 +3754,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     Object.keys(finds).forEach(function(id){ var f=finds[id];
       node(id, 'finding', {kind:'finding', ref:id, label:String(f.statement||''), status:f.status, confidence:f.confidence, out:f.status==='rejected'||f.status==='superseded'}); });
     Object.keys(pinsM).forEach(function(id){ var p=pinsM[id];
-      node(id, 'pin', {kind:'pin', ref:id, pin:p, label:String(p.key||id), out:!!(losers[id]||excluded[id]), why:losers[id]?'not chosen':excluded[id]?'excluded':''}); });
+      node(id, 'pin', {kind:'pin', ref:id, pin:p, label:pinLabel(p)||'A fact', out:!!(losers[id]||excluded[id]), why:losers[id]?'not chosen':excluded[id]?'excluded':''}); });
     var nosrc=[];
     Object.keys(pinsM).forEach(function(id){
       var ss=arr(pinsM[id].sources).filter(function(x){ return /^src_/.test(x); });
@@ -3825,7 +3852,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
   function selLabel(ref){
     var M=VIEW.model, n=M&&M.nodes[ref];
     if(n) return clipT(mapLines(n)[0], 40);
-    if(pins()[ref]) return clipT(fmtAny(pins()[ref])+' · '+pins()[ref].key, 40);
+    if(pins()[ref]) return clipT(fmtAny(pins()[ref])+' · '+pinLabel(pins()[ref]), 40);
     if(fnds()[ref]) return clipT(fnds()[ref].statement, 40);
     return ref;
   }
