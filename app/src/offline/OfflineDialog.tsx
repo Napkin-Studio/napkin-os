@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import { useEffect } from 'react'
 import OfflineList from './OfflineList'
 import { LogoSpinner } from '../brand/LogoSpinner'
 import { useOfflineCopies } from './useOfflineCopies'
@@ -16,6 +17,17 @@ interface Props {
 /** The Offline section, from the studio's top bar. */
 export default function OfflineDialog({ onOpen, onClose }: Props) {
   const copies = useOfflineCopies()
+  // Escape closes it, and only it: the page's own Escape (up one level) waits.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
   return (
     <div className="ch-scrim" style={{ zIndex: 100 }} onClick={onClose}>
       <div
