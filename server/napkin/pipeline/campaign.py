@@ -47,7 +47,7 @@ from ..rules import markets as market_rules
 from ..rules.confidence import fact_confidence
 from ..rules.quotes import find_quote
 from ..util import TaskError, iso, lid, slug, uid, ulid_like
-from .. import reasoning as rsn
+from .. import origin, reasoning as rsn
 from . import extract as extract_stage
 from . import report as report_stage
 from . import synthesise as synth_stage
@@ -996,7 +996,8 @@ class CampaignJob:
                                   "decision": pin_did, "pinned_at": t,
                                   "pin_reason": f"Roster row ({r['key']}) from the brand layer, for campaign."
                                                 f"{'categories' if 'categories' in r['key'] else 'client_org'}",
-                                  "layer": "brand", "method": r.get("method") or "report"})
+                                  "layer": "brand", "method": r.get("method") or "report",
+                                  origin.KEY: origin.LAYER})
                 lv = rsn.lowest(f["confidence"] for f in facts)
                 tiers = sorted({x.get("tier", "?") for r in row["facts"] for x in r["source_records"]})
                 decs.append(decision(self.doc, pin_did, "pin", self.handler, "lookup",

@@ -19,7 +19,7 @@ from ..rules.cite import clean_claim
 from ..rules.confidence import finding_confidence
 from ..rules.figures import NUM
 from ..util import bad, iso, lid, uid
-from .. import reasoning as rsn
+from .. import origin, reasoning as rsn
 from ..aliases import Aliases
 
 log = logging.getLogger("napkin.synthesise")
@@ -122,7 +122,7 @@ def run_synthesis(doc, base, clan, inp, handler, caps, seed=None, with_audience=
                     {f["market"] for f in cited if f.get("market")})
         fi = {"id": fid, "statement": cleaned["text"], "cites": cites, "method": "synthesis", "status": "proposed",
               "derived_by": handler, "confidence": finding_confidence(cited), "derived_at": t, "decision": did,
-              "lens": lens}
+              "lens": lens, origin.KEY: origin.RESEARCH}
         if mk:
             fi["markets"] = mk
         findings.append(fi)

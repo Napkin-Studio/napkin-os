@@ -267,6 +267,18 @@
                 "description": "Id of a decision in agent/decision-chain.yaml."
               }
             }
+          },
+          "origin_kind": {
+            "type": "string",
+            "enum": [
+              "research",
+              "client",
+              "brand",
+              "layer",
+              "person",
+              "document"
+            ],
+            "description": "Where it came from, as the source card says it (OS-layer contract §8.3): research (found by a research lens, or derived from such pins), layer (a row the knowledge layers already held), client, brand, person or document. Written by the middleware on each new entry; absent on older ones."
           }
         },
         "anyOf": [

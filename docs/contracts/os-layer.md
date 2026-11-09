@@ -1623,8 +1623,16 @@ address. A card is that `Cite` — the same resolver, so the same words — with
   envelope's `extracted|proposed|confirmed|stated`). Without a marker only
   what the kind settles is said — a client's material or what was read from
   it is `client` (a typed prompt is `person`), a library passage is `layer`,
-  `human:` is `person` — and anything else is `document`, never a guess. No
-  writer sets `origin_kind` yet.
+  `human:` is `person` — and anything else is `document`, never a guess.
+  *Writers (2026-11-09, `server/napkin/origin.py`):* the middleware sets it
+  on each new pin and finding — `research` for a pin a research lens found
+  and filed (`pipeline/research.py`) and every synthesised or reworked
+  finding (`synthesise.py`, `reconsider.py`); `layer` for a row the layers
+  already held, pinned as it was (a reused row, a roster row in
+  `campaign.py`). A client's material and a typed prompt carry no marker:
+  the kind settles them. `brand` is written by the Brand Clan's copy
+  (feat/brand-clan). The engine writes no member entries. The member
+  schemas (`facts.schema.json`, `findings.schema.json`) take the key.
 - `from {document_id, title?, app_id?, version?, path?}` — for something
   carried from an ancestor: a pin or finding a carried decision names on that
   ancestor, material or a passage found only in a frozen copy, an address on
