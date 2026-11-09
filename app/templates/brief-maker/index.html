@@ -1313,7 +1313,7 @@
 
   <!-- PHASE 2 — WORKING: the mock's live agent stage (napkin-app-v1 #brief-screen-loading and phase 33's
        run bar): the four steps as pills, the desk filling on two rails, the active agent's sphere
-       and its words, then Back, Stop, Skip to the finished brief and each part as it is written. -->
+       and its words, then Back, Stop and each part as it is written. -->
   <section class="proc" id="proc">
     <div class="pwrap">
       <div class="ptop"><div class="apills" id="apills" role="list" aria-label="The agents’ steps"></div></div>
@@ -1335,7 +1335,6 @@
       <button type="button" class="side-link" id="procBackL">← Back to the ask</button>
       <span class="sp"></span>
       <span class="procActs" id="procActs"></span>
-      <button type="button" class="go" id="procOpen">Skip to the finished brief →</button>
       <details class="ptiles"><summary id="tilesSum">See each part as it is written</summary><div class="tiles" id="tiles"></div></details>
     </div>
   </section>
@@ -2644,7 +2643,7 @@
   $('stepCrew').addEventListener('click',function(){ if(phase!=='intake') return; if(draftLive()){ setPhase('proc'); renderProc(); } });
   $('stepBrief').addEventListener('click',function(){
     if(!hasContent()) return;
-    if(phase==='proc'){ $('procOpen').click(); return; }
+    if(phase==='proc') return; // no skipping a live run (owner, 2026-11-09)
     forceIntake=false; render();
   });
     
@@ -3030,9 +3029,8 @@
     if(!live) DRAFT=null;
     forceIntake=true; setPhase('intake'); render();
   });
-  // Skip to the finished brief: what is written so far, and the rest as it lands.
+  // (No skipping a live run: the sheet opens when the run ends.)
   // (the mock's Skip: the sheet at once, its parts arriving as the crew write them)
-  $('procOpen').addEventListener('click',function(){ DRAFT=null; forceIntake=false; if(!hasContent()) handWrite=true; setPhase('doc'); render(); window.scrollTo(0,0); });
   function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input'); }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
