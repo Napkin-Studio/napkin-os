@@ -107,7 +107,7 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
               title={isAside ? 'Back into the count' : 'Out of the count for now. It still stops the lock.'}
               onClick={() => g.onToggleAside!(needKey(item))}>{isAside ? 'Bring back' : 'Set aside'}</button>
           )}
-          {item.address && <button type="button" className="side-link" data-testid="call-open" onClick={() => g.open(item)}>Open</button>}
+          {item.address && <button type="button" className="side-link" data-np-open data-testid="call-open" onClick={() => g.open(item)}>Open</button>}
         </span>
       </div>
     )
@@ -158,7 +158,7 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
                         <b style={{ fontSize: 13.5 }}>{p.title}</b><span className="pp-sub" style={{ display: 'block' }}>{p.sub}</span>
                       </button>
                       <span className="pp-acts" style={{ justifyContent: 'flex-start', marginTop: 6 }}>
-                        <button type="button" className="side-link" onClick={p.onOpen}>Open</button>
+                        <button type="button" className="side-link" data-np-open onClick={p.onOpen}>Open</button>
                       </span>
                     </div>
                   ))}

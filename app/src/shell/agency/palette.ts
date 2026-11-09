@@ -19,6 +19,8 @@
 
 /** What an admin sets for an agency: its colour (`accent`) and its darker base. */
 export interface AgencyColours {
+  /** The agency's display name, on the pill and the desk (admin-set; the session carries the id only). */
+  name?: string
   /** The agency's colour on the chrome (the mock's `acc`). */
   accent: string
   /** Its base colour (the mock's `base`): kept for the dial and future use. */
@@ -31,29 +33,17 @@ export interface AgencyColours {
  * change, like the roster. Seeded from the approved mock's agency kits.
  */
 export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
-  wk: { base: '#1E22AA', accent: '#FFB800' },
-  tbwa: { base: '#16181D', accent: '#FFD400' },
+  wk: { name: 'Wieden+Kennedy', base: '#1E22AA', accent: '#FFB800' },
+  tbwa: { name: 'TBWA\\Dublin', base: '#16181D', accent: '#FFD400' },
   ogilvy: { base: '#E4002B', accent: '#FFD6DD' },
   harbour: { base: '#0F6B5C', accent: '#9FE6D8' },
   droga: { base: '#16181D', accent: '#C6F432' },
   napkin: { base: '#515BFF', accent: '#C8CBFF' },
 }
 
-/**
- * The agencies' display names on the pill, by the same id, where an admin has
- * set one (the mock's kits). No backend serves an agency's name yet (the
- * session and the roster carry the id only): an agency with none keeps the
- * id's own label.
- */
-export const AGENCY_NAMES: Readonly<Record<string, string>> = {
-  wk: 'Wieden+Kennedy',
-  tbwa: 'TBWA\\Dublin',
-}
-
-/** The agency's name for a signed-in person: the admin-set one, else `fallback` (the id, title-cased). */
+/** The agency's name for a signed-in person: the registry's, else `fallback` (the id, title-cased). */
 export function agencyNameOf(personId: string | null | undefined, fallback: string): string {
-  const id = agencyIdOf(personId)
-  return (id && AGENCY_NAMES[id]) || fallback
+  return coloursOf(agencyIdOf(personId))?.name || fallback
 }
 
 /** One theme's agency tokens. */

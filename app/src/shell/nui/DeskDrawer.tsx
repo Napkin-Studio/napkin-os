@@ -13,7 +13,7 @@ import { host } from '../../host'
 import type { DecisionsView, LibraryItem, RelatedView } from '../../host'
 import { read as readAside, write as writeAside } from '../decisions/useSetAside'
 import { needsReason, toolName } from '../landing/model'
-import { deskCallDocs, type Facts } from './deskData'
+import { clientName, deskCallDocs, type Facts } from './deskData'
 import { DecisionsDrawer, type CallGroup, type DrawerView } from './DecisionsDrawer'
 
 const NOUN: Record<string, string> = { brief: 'brief', research: 'research', deck: 'deck', prod: 'production', ads: 'ad', idea: 'idea' }
@@ -68,9 +68,9 @@ export function DeskDrawer({ items, facts, agency, onOpen, onClose, onChanged }:
   const shown = focus && focus.path === focusPath ? focus : null
   return (
     <DecisionsDrawer
-      title={first ? `${first.client?.name ? `${first.client.name} · ` : ''}${first.title || 'Untitled'}` : `${agency} · every client`}
+      title={first ? `${first.client ? `${clientName(first.client)} · ` : ''}${first.title || 'Untitled'}` : `${agency} · every client`}
       groups={groups}
-      pending={unread.map(i => ({ key: i.path, title: i.title || 'Untitled', sub: `${i.client?.name ?? 'No client'} · ${needsReason(i)}`, onOpen: () => onOpen(i.path) }))}
+      pending={unread.map(i => ({ key: i.path, title: i.title || 'Untitled', sub: `${i.client ? clientName(i.client) : 'No client'} · ${needsReason(i)}`, onOpen: () => onOpen(i.path) }))}
       focus={first ? {
         title: first.title || 'Untitled',
         noun: NOUN[toolName(first)?.id ?? ''] ?? 'document',

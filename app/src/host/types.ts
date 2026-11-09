@@ -176,6 +176,8 @@ export interface LibraryItem {
   client: ClientRef | null
   state?: RecentState | null
   run: RunInfo | null
+  /** Who last wrote it: the signed-in account's username (`name@agency`). Absent from an older host. */
+  last_editor?: string
   /** Middleware jobs on it the host has not seen finish: the shell polls each (`settleJob`). */
   jobs?: string[]
 }

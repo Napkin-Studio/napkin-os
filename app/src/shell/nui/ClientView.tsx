@@ -15,7 +15,7 @@ import { needsYou } from '../landing/model'
 import { toolById, toolOfApp, type Tool } from '../landing/tools'
 import { isTyping } from '../landing/keys'
 import { BRAND_APP } from '../landing/BrandClanCard'
-import { clientLine, clientLook, monogramOf, stateWords, callsIn, type Facts } from './deskData'
+import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, type Facts } from './deskData'
 import { ToolIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
@@ -59,7 +59,9 @@ interface Props {
 export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, onOpenTool, onSoon, onDecisions, onRename, onArchive }: Props) {
   const pop = usePop<'more' | 'deck'>()
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
-  const look = clientLook(c.id)
+  const look = clientLook(c.id, c.name)
+  // The registry's display name where it shows; Rename still edits the stored name.
+  const name = clientName(c)
   const work = items.filter(i => i.app_id !== BRAND_APP)
   const brand = items.filter(i => i.app_id === BRAND_APP)
   const needing = work.filter(needsYou)
@@ -121,11 +123,11 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
             <span className="cl-disc cp-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: look.ink }}><b>{monogramOf(c)}</b></span>
             <div>
               <div className="eyebrow">CLIENT{sinceWords}</div>
-              <h1 className="hero-title" tabIndex={-1}>{c.name}<span className="period-dot" aria-hidden /></h1>
+              <h1 className="hero-title" tabIndex={-1}>{name}<span className="period-dot" aria-hidden /></h1>
               <p className="hero-sub" data-testid="client-line">{line}</p>
             </div>
             {(onRename || onArchive) && (
-              <button type="button" className="p33-more cp-more-btn" id="p33-cp-more" title="Client options" aria-label={`Options for ${c.name}`}
+              <button type="button" className="p33-more cp-more-btn" id="p33-cp-more" title="Client options" aria-label={`Options for ${name}`}
                 aria-haspopup="menu" aria-expanded={pop.open?.key === 'more'} data-testid="client-more"
                 onClick={e => pop.toggle('more', e.currentTarget)}>⋯</button>
             )}
@@ -134,24 +136,24 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
           {mode === 'archive' && onArchive && <ArchiveConfirm name={c.name} onArchive={onArchive} onClose={() => setMode('idle')} />}
 
           {needing.length > 0 && (
-            <section className="cp-sec" aria-label={`Needs you for ${c.name}`} data-testid="client-needs">
+            <section className="cp-sec" aria-label={`Needs you for ${name}`} data-testid="client-needs">
               <h2 className="cp-h">Needs you</h2>
               <div className="cp-box">{needing.map(row)}</div>
             </section>
           )}
 
-          {work.length === 0 && <p className="cp-none" data-testid="no-work">No work yet. Start the first brief or research for {c.name} with its +.</p>}
+          {work.length === 0 && <p className="cp-none" data-testid="no-work">No work yet. Start the first brief or research for {name} with its +.</p>}
 
           {groups.map(g => {
             const t = toolById(g.tool)!
             const on = live.has(t.id)
             return (
-              <section key={g.tool} className={`cp-sec cp-group k-${g.icon}`} data-testid={`group-${g.tool}`} aria-label={`${g.label} for ${c.name}`}>
+              <section key={g.tool} className={`cp-sec cp-group k-${g.icon}`} data-testid={`group-${g.tool}`} aria-label={`${g.label} for ${name}`}>
                 <div className="cp-hrow">
                   <h2 className="cp-h"><span className={`cp-ico k-${g.icon}`}><ToolIcon tool={g.icon} /></span>{g.label}<small>{g.docs.length}</small></h2>
                   <span className="cp-new">
                     <button type="button" className="cp-plus" data-new={g.tool} data-testid={`new-${g.tool}`}
-                      title={on ? `New ${t.noun[0]}` : `${t.full} is coming soon`} aria-label={on ? `New ${t.noun[0]} for ${c.name}` : `${t.full} is coming soon`}
+                      title={on ? `New ${t.noun[0]}` : `${t.full} is coming soon`} aria-label={on ? `New ${t.noun[0]} for ${name}` : `${t.full} is coming soon`}
                       aria-disabled={on ? undefined : true}
                       onClick={e => {
                         if (!on) { onSoon(t); return }
@@ -171,13 +173,13 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
             </section>
           )}
 
-          <section className="cp-sec" aria-label={`Brand Clan for ${c.name}`} data-testid="brand-clan">
+          <section className="cp-sec" aria-label={`Brand Clan for ${name}`} data-testid="brand-clan">
             <h2 className="cp-h">Brand Clan</h2>
             {brand.length > 0 ? <div className="cp-box">{brand.map(row)}</div> : (
               <div className="cp-box cp-clan">
                 <div>
                   <b>Brand Clan · not started</b>
-                  <p>Its logos, colours and voice will live here, and every document for {c.name} can use them.</p>
+                  <p>Its logos, colours and voice will live here, and every document for {name} can use them.</p>
                   <p className="mono">voice 0 · rules 0 · assets 0 · approved work 0</p>
                 </div>
                 <div>
@@ -200,7 +202,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
       </div>
 
       {pop.open?.key === 'more' && (
-        <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label={`Options for ${c.name}`} testid="client-menu">
+        <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label={`Options for ${name}`} testid="client-menu">
           {onRename && <button type="button" role="menuitem" onClick={() => { pop.close(false); setMode('rename') }}>Rename<small>How the client shows across the studio</small></button>}
           {onArchive && <button type="button" role="menuitem" onClick={() => { pop.close(false); setMode('archive') }}>Archive<small>Off the desk; restore it any time</small></button>}
         </Pop>

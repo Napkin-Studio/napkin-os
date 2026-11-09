@@ -27,7 +27,8 @@ import { agencyNameOf, applyAgency, markOf } from './shell/agency/palette'
 import { DeskDrawer } from './shell/nui/DeskDrawer'
 import { AllToolsModal, CrewModal } from './shell/nui/AccountModals'
 import { useDeskFacts } from './shell/nui/useDeskFacts'
-import { callsIn, clientLook, monogramOf, sectorOf, setSector } from './shell/nui/deskData'
+import { callsIn, clientLook, clientName, monogramOf, sectorOf, setSector } from './shell/nui/deskData'
+import { setClientAgency } from './shell/agency/clients'
 import type { Account, ClientChip } from './components/barMenus'
 import { flatPref, setFlatPref } from './orbs/prefs'
 import { useInstall } from './pwa/pwa'
@@ -122,6 +123,8 @@ export default function App() {
   // The agency's admin-set colours on the chrome (shell/agency/palette.ts), or
   // the neutral pair; a layer of its own that resetTheme never clears.
   const personId = landing.data?.person?.id ?? null
+  // Whose client registry applies (agency/clients.ts): set before anything below reads a client's look.
+  setClientAgency(personId)
   useEffect(() => { applyAgency(personId) }, [personId])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
@@ -509,7 +512,7 @@ export default function App() {
   const agency = agencyNameOf(landing.data?.person?.id, who.agency)
   const live = new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string))
   const chipOf = (c: { id?: string; name: string; initials?: string }): Omit<ClientChip, 'onOpen'> => ({
-    name: c.name, mono: monogramOf({ name: c.name, initials: c.initials ?? '' }), look: clientLook(c.id ?? c.name),
+    name: c.id ? clientName({ id: c.id, name: c.name }) : c.name, mono: monogramOf({ name: c.name, initials: c.initials ?? '' }), look: clientLook(c.id ?? c.name, c.name),
   })
   const pageClient = onLanding && landing.data && (route.level === 'client' || route.level === 'tool')
     ? landing.data.clients.find(c => c.id === route.client) ?? null
@@ -517,7 +520,7 @@ export default function App() {
   const deskChip: ClientChip | null = pageClient && landing.data ? {
     ...chipOf(pageClient),
     ...(route.level === 'tool' ? { onOpen: () => go({ level: 'client', client: pageClient.id }) } : {
-      switcher: landing.data.clients.map(c => ({ id: c.id, name: c.name, sub: sectorOf(c.id) ?? `${landing.data!.items.filter(i => i.client?.id === c.id).length} open` })),
+      switcher: landing.data.clients.map(c => ({ id: c.id, name: clientName(c), sub: sectorOf(c.id) ?? `${landing.data!.items.filter(i => i.client?.id === c.id).length} open` })),
       onSwitch: (id: string) => go({ level: 'client', client: id }),
     }),
   } : null

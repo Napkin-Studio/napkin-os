@@ -21,7 +21,7 @@ import type { Manage } from '../landing/useLanding'
 import { AdoptPanel } from '../landing/Registry'
 import type { LandingData } from '../landing/store'
 import { greeting } from '../when'
-import { deskClients, pickRows, sectorOf, worthItems, type DeskClient, type Facts } from './deskData'
+import { clientName, deskClients, pickRows, sectorOf, worthItems, type DeskClient, type Facts } from './deskData'
 import { Dial } from './Dial'
 import { ToolIcon, SearchIcon } from './icons'
 import { Pop } from './Pop'
@@ -138,7 +138,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   }
 
   const hello = first ? `${greeting().replace(/\.$/, '')}, ${first}.` : greeting()
-  const picks = useMemo(() => pickRows(data.items, facts, from), [data.items, facts, from])
+  const picks = useMemo(() => pickRows(data.items, facts, from, data.person?.id ?? null), [data.items, facts, from, data.person?.id])
   const worth = useMemo(() => worthItems(data.items, facts), [data.items, facts])
   const open = dial ? all.find(c => c.id === dial) ?? null : null
   const none = data.clients.length === 0
@@ -323,8 +323,8 @@ function ArchivedRow({ c, onRestore }: { c: ClientRecord; onRestore: () => Promi
   const when = c.archived_at ? new Date(c.archived_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''
   return (
     <div className="pp-row">
-      <span><b>{c.name}</b><span className="pp-sub">{error ?? (when ? `Archived ${when}` : 'Archived')}</span></span>
-      <button type="button" className="sp-btn" disabled={busy} aria-label={`Restore ${c.name}`}
+      <span><b>{clientName(c)}</b><span className="pp-sub">{error ?? (when ? `Archived ${when}` : 'Archived')}</span></span>
+      <button type="button" className="sp-btn" disabled={busy} aria-label={`Restore ${clientName(c)}`}
         onClick={async () => { setBusy(true); setError(await onRestore()); setBusy(false) }}>{busy ? 'Restoring…' : 'Restore'}</button>
     </div>
   )

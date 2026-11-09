@@ -66,3 +66,13 @@
 
 /* A heading takes focus on arrival for screen readers; it draws no ring for it. */
 .nui h1[tabindex="-1"]:focus { outline: none; }
+
+/* SaveStatus inside the saved line is plain words (chrome.css draws it as a chip elsewhere). */
+.nui .tba-saved .ch-saved { display: inline; padding: 0; gap: 0; font: inherit; color: inherit; }
+.nui .tba-saved .ch-saved::before { content: none; }
+
+/* napkin-app-v1.html:2349: the badge's ring is var(--bg, #F6F1E7); the mock has no --bg, so the fallback. */
+.nui .cl-badge { box-shadow: 0 0 0 3px #F6F1E7; }
+
+/* The drawer's Close is outlined in ink (gaps.md §13.7: 1px solid ink). */
+.nui #dtree-close-btn { border-color: var(--ink); }

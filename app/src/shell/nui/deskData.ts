@@ -8,19 +8,22 @@
 // (gaps.md §12) the fallback is deterministic and named here, so the owner can
 // decide on a backend without hunting for it:
 //
-//   client colour   hashed from the client id onto the mock's palette (CLIENT_LOOKS)
+//   client colour   the admin's client registry (agency/clients.ts), else hashed
+//                   from the client id onto the mock's palette (CLIENT_LOOKS)
 //   client sector   kept in this browser only (sectorOf / setSector)
-//   last editor     the newest decision in the document's chain, when the desk
-//                   has read it (DocFacts.editor); otherwise unknown, and "Me" is empty
+//   last editor     the library's last_editor (the signed-in account that last
+//                   wrote it); an entry without it is not "Me". The chain's newest
+//                   decision names someone else's edit in the row's second line
 //   worth a look    finished research from the library's run state, plus thin
 //                   findings and upstream changes of recent documents (DocFacts);
-//                   knowledge-layer updates have no source and are never shown
+//                   knowledge-layer updates wait for the layers service (decided scope)
 //   desk calls      per-document /decisions of recent documents (DocFacts.calls)
 
 import type { AttentionItem, ClientRecord, LibraryItem } from '../../host'
 import { initialsOf, needsYou, summarise, type ClientSummary } from '../landing/model'
 import { toolOfApp } from '../landing/tools'
 import type { ToolId } from '../route'
+import { clientBrand } from '../agency/clients'
 
 /** A client's colour on the desk: the disc's fill and the ink of its monogram. */
 export interface ClientLook { cl: string; ink: string }
@@ -42,8 +45,17 @@ export const CLIENT_LOOKS: readonly ClientLook[] = [
   { cl: '#9A3412', ink: '#FED7AA' },
 ]
 
+/** A client's colours: the admin's registry entry, else the hashed palette colour (hashLook). */
+export function clientLook(id: string, name = ''): ClientLook {
+  const b = clientBrand({ id, name })
+  return b ? { cl: b.base, ink: b.accent } : hashLook(id)
+}
+
+/** The name a client shows under: the registry's display name, else its stored name. */
+export const clientName = (c: { id: string; name: string }): string => clientBrand(c)?.name || c.name
+
 /** FNV-1a over the id: the same id, the same colour, everywhere. */
-export function clientLook(id: string): ClientLook {
+export function hashLook(id: string): ClientLook {
   let h = 0x811c9dc5
   for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
   return CLIENT_LOOKS[h % CLIENT_LOOKS.length]
@@ -124,9 +136,9 @@ export function deskClients(clients: readonly ClientRecord[], items: readonly Li
     const mine = items.filter(i => i.client?.id === c.id)
     return {
       id: c.id,
-      name: c.name,
+      name: clientName(c),
       mono: monogramOf(c),
-      look: clientLook(c.id),
+      look: clientLook(c.id, c.name),
       badge: mine.reduce((n, i) => n + callsIn(i), 0),
       line: clientLine(mine),
       summary: summarise(c, items),
@@ -177,25 +189,33 @@ export function stateWords(item: LibraryItem): { text: string; needs: boolean; w
 }
 
 /** The second line: whose it is, and who last touched it, as far as the desk knows. */
-function pickSub(item: LibraryItem, facts: DocFacts | undefined, now: Date): string {
-  const client = item.client?.name ?? 'No client'
+function pickSub(item: LibraryItem, facts: DocFacts | undefined, me: string | null, now: Date): string {
+  const client = item.client ? clientName(item.client) : 'No client'
   const e = facts?.editor
   if (item.run?.state === 'done' && (!e || e.at <= item.updated_at)) return `${client} · finished ${ago(item.updated_at, now)}`
+  if (item.last_editor) {
+    if (me && item.last_editor === me) return `${client} · edited by you ${ago(item.updated_at, now)}`
+    const who = item.last_editor.split('@')[0]
+    return `${client} · ${who.charAt(0).toUpperCase()}${who.slice(1)}, ${ago(item.updated_at, now)}`
+  }
   if (e?.you) return `${client} · edited by you ${ago(e.at, now)}`
   if (e) return `${client} · ${e.name.split(/\s+/)[0]}, ${ago(e.at, now)}`
   return `${client} · ${ago(item.updated_at, now)}`
 }
 
-/** The newest work, three at most; "Me" keeps only what this person touched last. */
-export function pickRows(items: readonly LibraryItem[], facts: Facts, from: 'all' | 'me', now = new Date(), max = 3): PickRow[] {
-  const list = from === 'me' ? items.filter(i => facts[i.path]?.editor?.you) : items
+/** Whether this person last wrote it: the library's last_editor; an entry without one is not theirs. */
+export const isMine = (item: LibraryItem, me: string | null): boolean => !!me && !!item.last_editor && item.last_editor === me
+
+/** The newest work, three at most; "Me" keeps only what this person (`name@agency`) wrote last. */
+export function pickRows(items: readonly LibraryItem[], facts: Facts, from: 'all' | 'me', me: string | null = null, now = new Date(), max = 3): PickRow[] {
+  const list = from === 'me' ? items.filter(i => isMine(i, me)) : items
   return list.slice(0, max).map(i => {
     const st = stateWords(i)
     return {
       path: i.path,
       title: i.title || 'Untitled',
       icon: toolOfApp(i.app_id)?.id ?? 'other',
-      sub: pickSub(i, facts[i.path], now),
+      sub: pickSub(i, facts[i.path], me, now),
       state: st.text,
       needs: st.needs,
     }
@@ -239,7 +259,7 @@ export function worthItems(items: readonly LibraryItem[], facts: Facts, max = 3)
       out.push({ key: `up:${i.path}`, title: `${f.upstreamChanged.title} changed`, sub: `touches ${title}`, path: i.path })
     }
     if (i.app_id === RESEARCH && i.run?.state === 'done' && !needsYou(i)) {
-      out.push({ key: `done:${i.path}`, title: `${i.client ? `${i.client.name}: ` : ''}${title} is done`, sub: `Ready to brief from · finished ${ago(i.updated_at)}`, path: i.path })
+      out.push({ key: `done:${i.path}`, title: `${i.client ? `${clientName(i.client)}: ` : ''}${title} is done`, sub: `Ready to brief from · finished ${ago(i.updated_at)}`, path: i.path })
     }
     if (out.length >= max) break
   }

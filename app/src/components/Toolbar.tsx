@@ -176,7 +176,7 @@ function CrewHere({ crew }: { crew: Crew }) {
   const said = `In this document: ${names.join(', ') || 'nobody yet'}${crew.working ? `; an agent is ${crew.working}` : ''}`
   return (
     <span className="tb-crew" id="tb-crew" role="group" aria-label={said} title={said} data-testid="crew">
-      {crew.people.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
+      {crew.people.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
       {crew.working && <i className="cw ag" data-testid="agent-working" aria-hidden />}
     </span>
   )
@@ -414,9 +414,9 @@ export default function Toolbar({
             <DocName doc={doc} open={pop.open?.key === 'doc'} onMenu={el => pop.toggle('doc', el)} renaming={renaming} setRenaming={setRenaming} />
             <Lineage doc={doc} />
             <span className="tba-acts">
-              <button type="button" className="tba-btn tba-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
+              <button type="button" className="tba-btn tba-cont" data-tba="b-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
                 onClick={e => pop.toggle('cont', e.currentTarget)}>Continue in ▾</button>
-              <button type="button" className="tba-btn tba-share" aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
+              <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
                 onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>
             </span>
           </div>
