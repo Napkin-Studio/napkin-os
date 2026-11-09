@@ -2035,7 +2035,8 @@ test('research: the evidence map draws an empty or partial document without brea
 test('research: the report box and the OS bar say the report’s state in the same words', () => {
   type F = { reportStatus(r: unknown, locked: boolean, stale: boolean, open: number): { label: string; tone: string | null; locked: boolean }
     barItems(st: unknown, has: boolean, lk: boolean): { kind: string; id?: string; label: string; disabled?: boolean; primary?: boolean }[] }
-  const f = lift<F>(RT, ['reportStatus', 'barItems'], { isObj, CHAT: { reportBusy: false } })
+  const gate = { t: '' }
+  const f = lift<F>(RT, ['reportStatus', 'barItems'], { isObj, CHAT: { reportBusy: false }, gateWords: () => gate.t })
   assert.equal(f.reportStatus(null, false, false, 0).label, 'No report yet')
   assert.deepEqual(f.reportStatus({}, true, true, 3), { label: 'Locked', tone: 'ok', locked: true })
   assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
@@ -2046,6 +2047,11 @@ test('research: the report box and the OS bar say the report’s state in the sa
   const st = f.reportStatus({}, false, false, 1)
   assert.deepEqual(f.barItems(st, true, false), [{ kind: 'status', label: 'Draft', tone: 'warn', locked: false }])
   assert.deepEqual(f.barItems(f.reportStatus({}, true, false, 0), true, true), [{ kind: 'status', label: 'Locked', tone: 'ok', locked: true }])
+  // Not brief-ready: Continue in begins with the gate line (gaps.md §7 L3); never once it is locked.
+  gate.t = 'Not brief-ready yet: 1 call open (Finding 3). You can still start; the brief flags what is open.'
+  assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'gate', label: gate.t, tone: 'warn' })
+  assert.equal(f.barItems(f.reportStatus({}, true, false, 0), true, true).length, 1)
+  gate.t = ''
   const box = RT.slice(RT.indexOf('<section class="insp-box" id="rbox"'), RT.indexOf('</section>', RT.indexOf('id="rbox"')))
   for (const id of ['rbox-status', 'rbox-refresh', 'lockBtn', 'researchBtn', 'synthBtn']) assert.match(box, new RegExp(`id="${id}"`), `${id} is in the Report box`)
   // A bar action from an older shell still does what the page's button does.
