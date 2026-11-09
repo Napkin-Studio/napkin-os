@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Toolbar, { type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
-import { useLinks, useMadeFrom, useSpinoffTargets } from '../components/ContinueIn'
+import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
 import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
@@ -22,7 +22,8 @@ import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
 import { statusOf, type BarItem } from './appBar'
 import { host } from '../host'
-import type { ClientPartRef, ClientWho, InstalledApp } from '../host'
+import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem } from '../host'
+import { listedTitle, othersStamp } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
@@ -59,10 +60,12 @@ interface Props {
   onCopyLink?: () => void
   /** Who is in the document (the bar's crew). */
   crew?: Crew
+  /** The library as the shell last read it: the document's current name, and when others changed. */
+  library?: LibraryItem[] | null
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, trail, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   // Edit mode is the OS's: the app's fields become editable while it is on.
@@ -94,8 +97,13 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     colour: tool?.home?.colour ?? null,
     font: tool?.home?.brand_font ?? null,
   } : null
+  // The name the library has now: the app may have renamed it since it opened.
   const barTitle = open.is_template ? open.manifest.title
-    : docTitle(open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text
+    : docTitle(listedTitle(library, docPath) ?? open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text
+  // Read links and the source again when another document changes, or the page is back in view.
+  const wake = useWakeTick()
+  const others = othersStamp(library, docPath)
+  const stamp = `${wake}:${others}`
   // The tab says it too: "Napkin Studio Research — Bulmers · Ireland".
   const brandName = brand?.name
   // the dogfood build records where people go (a no-op elsewhere)
@@ -173,7 +181,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const [upError, setUpError] = useState<{ docPath: string; message: string } | null>(null)
   const onUpError = useCallback((message: string) => setUpError({ docPath, message }), [docPath])
   const onUpTaken = useCallback(() => { setUpError(null); changed() }, [changed])
-  const { madeFrom, update: updateFromUpstream } = useMadeFrom(docPath, onUpTaken, onUpError)
+  const { madeFrom, update: updateFromUpstream } = useMadeFrom(docPath, onUpTaken, onUpError, stamp)
 
   // Links (os-layer §5.7): link an existing document, take a linked one's
   // newer version, let go of one. A refusal (a locked document) is said where
@@ -181,7 +189,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const [linkError, setLinkError] = useState<{ docPath: string; message: string } | null>(null)
   const onLinkError = useCallback((message: string) => setLinkError({ docPath, message }), [docPath])
   const onLinked = useCallback(() => { setLinkError(null); changed() }, [changed])
-  const links = useLinks(docPath, onLinked, onLinkError)
+  const links = useLinks(docPath, onLinked, onLinkError, stamp)
   const { linked, madeInto } = linksOf(links.related)
   const changedLinks = linked.filter(l => l.dir === 'in' && l.changed)
 

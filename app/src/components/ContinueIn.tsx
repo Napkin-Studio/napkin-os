@@ -9,6 +9,25 @@ import type { AttachTarget, RelatedView, SpinoffTarget, UpstreamView } from '../
 import { madeFromOf } from './barMenus'
 
 /**
+ * A count that goes up when the page comes back into view or the window is
+ * focused: links and what a document was made from change in other documents
+ * (another tab, another person), so they are read again then.
+ */
+export function useWakeTick(): number {
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const wake = () => { if (!document.hidden) setTick(t => t + 1) }
+    window.addEventListener('focus', wake)
+    document.addEventListener('visibilitychange', wake)
+    return () => {
+      window.removeEventListener('focus', wake)
+      document.removeEventListener('visibilitychange', wake)
+    }
+  }, [])
+  return tick
+}
+
+/**
  * "Continue in…": the apps that have declared they will take the open document
  * as a spin-off source, carrying its data and its decisions across. The bar
  * lists them in its More menu.
@@ -40,7 +59,7 @@ export function useSpinoffTargets(docPath: string): SpinoffTarget[] {
  * spin-offs on 2026-11-09). `onTaken` runs after the update is written, so the
  * app's fields and the decisions read it again.
  */
-export function useMadeFrom(docPath: string, onTaken: () => void, onError: (message: string) => void) {
+export function useMadeFrom(docPath: string, onTaken: () => void, onError: (message: string) => void, stamp = '') {
   const [got, setGot] = useState<{ docPath: string; view: UpstreamView | null; tick: number } | null>(null)
   const [tick, setTick] = useState(0)
 
@@ -52,7 +71,9 @@ export function useMadeFrom(docPath: string, onTaken: () => void, onError: (mess
       // offers nothing: chrome, never the document.
       .catch(() => { if (live) setGot({ docPath, view: null, tick }) })
     return () => { live = false }
-  }, [docPath, tick])
+    // `stamp` changes when another document changed (the library's versions):
+    // the source may have a newer version to offer.
+  }, [docPath, tick, stamp])
 
   const madeFrom = got?.docPath === docPath ? madeFromOf(got.view) : null
   const update = useCallback(() => {
@@ -71,7 +92,7 @@ export function useMadeFrom(docPath: string, onTaken: () => void, onError: (mess
  * the app's fields and the decisions read it again; `onError` gets the host's
  * own words for a refusal (a locked document says why).
  */
-export function useLinks(docPath: string, onChanged: () => void, onError: (message: string) => void) {
+export function useLinks(docPath: string, onChanged: () => void, onError: (message: string) => void, stamp = '') {
   const [got, setGot] = useState<{ docPath: string; targets: AttachTarget[]; related: RelatedView | null } | null>(null)
   const [tick, setTick] = useState(0)
 
@@ -83,7 +104,8 @@ export function useLinks(docPath: string, onChanged: () => void, onError: (messa
       host.related().catch(() => null),
     ]).then(([targets, related]) => { if (live) setGot({ docPath, targets, related }) })
     return () => { live = false }
-  }, [docPath, tick])
+    // `stamp`: a linked document changed, was unlinked or renamed elsewhere.
+  }, [docPath, tick, stamp])
 
   const run = useCallback((write: () => Promise<unknown>, then?: (reply: unknown) => void) => {
     write()
