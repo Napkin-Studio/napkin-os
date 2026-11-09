@@ -18,6 +18,11 @@ import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
 import type {
   ClientConfirmReply,
+  Adopted,
+  LegacyName,
+  ClientRecord,
+  LibraryFilter,
+  LibraryListing,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
@@ -29,7 +34,12 @@ import type {
   SpinoffTarget,
   Unlisten,
   UploadedAsset,
+  UpstreamUpdateReply,
   UpstreamView,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
+  SourceCard,
 } from './types'
 
 interface SessionInfo {
@@ -43,6 +53,15 @@ interface SessionInfo {
 /** The signed-in person, when the server has accounts; null when it is anonymous. */
 export async function signedInUser(): Promise<SessionInfo['user'] | null> {
   try { return (await session()).user ?? null } catch { return null }
+}
+
+/** `?client=<id>&app=<app_id>`, or nothing: only what the filter names. */
+export function libraryQuery(filter?: LibraryFilter): string {
+  const q = new URLSearchParams()
+  if (filter?.client) q.set('client', filter.client)
+  if (filter?.app) q.set('app', filter.app)
+  const s = q.toString()
+  return s ? `?${s}` : ''
 }
 
 /** An opened document, plus what the frame needs to talk to the host. */
@@ -241,8 +260,8 @@ export const httpHost: Host = {
 
   openClan: path => adopt(json<OpenView>(`/d/${encodeURIComponent(path)}`)),
   openHome: () => adopt(json<OpenView>('/home')),
-  newDocumentFromApp: async (appId, title) =>
-    adopt(json<OpenView>('/documents', postJson({ app_id: appId, title }))),
+  newDocumentFromApp: async (appId, title, clientId) =>
+    adopt(json<OpenView>('/documents', postJson({ app_id: appId, title, ...(clientId ? { client_id: clientId } : {}) }))),
 
   // A shared link — `?open=<document>` — is the web's answer to double-clicking
   // a .clan. Consumed once, then cleared so a reload does not re-open it.
@@ -252,7 +271,7 @@ export const httpHost: Host = {
     if (!doc) return null
     params.delete('open')
     const query = params.toString()
-    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''))
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash)
     return doc
   },
 
@@ -269,7 +288,17 @@ export const httpHost: Host = {
     if (!resp.ok) throw new Error(((await resp.json().catch(() => null)) as { error?: string } | null)?.error ?? `acknowledge: ${resp.status}`)
   },
 
+  verify: async (finding, rationale) => { await clanPost<unknown>('/verify', { finding, rationale }) },
+
   upstream: () => clanCall<UpstreamView>('/upstream'),
+  updateFromUpstream: () => clanPost<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => clanCall<AttachTarget[]>('/attach-targets'),
+  attach: documentId => clanPost<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => clanPost<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => clanPost<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => clanCall<RelatedView>('/related'),
+  setTitle: async (title: string) => { await clanPost<unknown>('/set-title', { title }) },
+  cites: async refs => (await clanPost<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   clientReview: body => clanPost<ClientReviewReply>('/client-review', body),
   clientReviewConfirm: body => clanPost<ClientConfirmReply>('/client-review/confirm', body),
@@ -328,6 +357,42 @@ export const httpHost: Host = {
   // The tenant's own /recent (napkin-web api.rs), not the frame's clan://
   // origin: that one needs an open document's token, and home has none.
   listRecent: () => json<RecentDoc[]>('/recent'),
+
+  listLibrary: (filter?: LibraryFilter) => json<LibraryListing>(`/library${libraryQuery(filter)}`),
+  settleJob: (path: string, jobId: string) =>
+    json<unknown>(`/d/${encodeURIComponent(path)}/jobs/${encodeURIComponent(jobId)}/settle`, { method: 'POST' }),
+  docOps: async (path: string) => {
+    const view = await json<OpenView>(`/d/${encodeURIComponent(path)}`)
+    const origin = `${view.sandbox_origin ?? window.location.origin}/s/${view.token}`
+    const call = async <T,>(route: string, init?: RequestInit): Promise<T> => {
+      const resp = await fetch(`${origin}${route}`, init)
+      const body = await resp.text()
+      let parsed: unknown = null
+      try { parsed = body ? JSON.parse(body) : null } catch { /* not JSON */ }
+      if (!resp.ok) throw new Error((parsed as { error?: string } | null)?.error ?? (body || `${route}: ${resp.status}`))
+      return parsed as T
+    }
+    const post = (route: string, body: unknown) => call<unknown>(route, { method: 'POST', body: JSON.stringify(body) })
+    return {
+      decisions: () => call<DecisionsView>('/decisions'),
+      related: () => call<RelatedView>('/related'),
+      upstream: () => call<UpstreamView>('/upstream'),
+      verify: async (finding: string, rationale: string) => { await post('/verify', { finding, rationale }) },
+      acknowledge: async (decision: string) => { await post('/acknowledge', { decision }) },
+      data: () => text(`/d/${encodeURIComponent(path)}/entry/data`),
+      approve: async (rationale: string) => { await post('/approve', { rationale }) },
+    }
+  },
+  clients: {
+    list: (includeArchived = false) => json<ClientRecord[]>(`/clients${includeArchived ? '?archived=1' : ''}`),
+    create: (name, material) => json<ClientRecord>('/clients', postJson({ name, ...(material ? { material } : {}) })),
+    update: (id, patch) =>
+      json<ClientRecord>(`/clients/${encodeURIComponent(id)}`, { ...postJson(patch), method: 'PATCH' }),
+    archive: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/archive`, { method: 'POST' }),
+    restore: id => json<ClientRecord>(`/clients/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
+    legacy: () => json<LegacyName[]>('/clients/legacy'),
+    adopt: names => json<Adopted>('/clients/adopt', postJson({ names })),
+  },
 
   spinoffTargets: () => json<SpinoffTarget[]>(`/d/${requireDoc()}/spinoff-targets`),
   spinoffDocument: (appId, title, map) =>

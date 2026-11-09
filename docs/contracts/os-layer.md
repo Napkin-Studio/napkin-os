@@ -456,12 +456,15 @@ on append-only rows, and `GET /upstream` (§8) compares them with the parent.
 - Open items travel open. They show at the field if the target app shows that
   address, otherwise in the decision tree under **open items carried from
   upstream**, and they are on the target's lock list (§7).
-- **When the parent changes, the carried copy stays frozen.** The child shows
-  "The research has changed since this brief started" (each app in its own
-  nouns) and lists what changed — pins, findings, contests, and findings
-  rejected upstream — from `GET /upstream`. Taking the newer upstream is an
-  explicit, later action; it is not built. (Owner default, 2026-09-29; may be
-  reversed.)
+- **When the parent changes, the carried copy stays frozen until a person
+  takes the newer one.** The child shows "The research has changed since
+  this brief started" (each app in its own nouns) and lists what changed —
+  pins, findings, contests, and findings rejected upstream — from
+  `GET /upstream`. *Changed 2026-11-09 (owner, reversing the 2026-09-29
+  default for spin-offs):* taking the newer upstream is an explicit action,
+  `POST /upstream/update` (§8.1, item 8), offered in Continue in ▾ under
+  **Made from**. It is refused on a locked document: a locked version keeps
+  what it was made from.
 - No address is ever remapped: a carried decision on
   `<campaign>#selection.contested[ct_…]` means the same contest in the brief
   and in the deck.
@@ -485,6 +488,15 @@ pub struct Lineage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<Carried>,
 }
+
+pub struct AttachSpec {                       // §5.7
+    pub accepts: Vec<String>,
+    pub lift: BTreeMap<String, String>,
+    pub many: Vec<String>,
+}
+// AppInfo gains `attach: Option<AttachSpec>`; SpinoffSpec gains
+// `by_source: BTreeMap<String, SourceCarry {map, lift, upstream}>`; Lineage
+// gains `attached: Vec<Attached>`, copied by every rewrite as `carried` is.
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Carried {
@@ -515,6 +527,62 @@ record for an upstream `spinoff()`. `Lineage` in `pack.rs`, `render.rs` and
 a document keeps the record of its hop on every later write, or the first
 edit would erase it and `GET /upstream` and backrefs (§7.4) would have
 nothing to compare or address.
+
+### 5.7 Linking an existing document (attach)
+
+*Added 2026-11-09 (features/spinoff-and-links.clan).* A spin-off makes a new
+document; a **link** carries a document into one that already exists, beside
+its own work: a research into a brief, a brief into a research, either into a
+deck or a production. It is the same carry (§5.2) applied to an existing
+document, so the rules of this section hold for it, and it is the mechanism
+the Brand Clan uses (`docs/contracts/brand-clan.md` on feat/brand-clan); the
+names and shapes below are that branch's, so it merges onto them.
+
+1. **Opting in: `app.attach`**, declared by the *target* app:
+   `{accepts: [app_id…], lift: {from: to}, many: [app_id…]}`. `accepts` names
+   the source apps; empty takes nothing. `many` names the apps a document may
+   hold several of at once (several research in one brief, owner
+   2026-11-09); any other app is one at a time and linking another of it
+   **replaces** the first. One research may feed many briefs: nothing limits
+   how many documents link the same source. `lift` seeds a field only where
+   it is empty, or still holds what the previous copy seeded.
+2. **What lands** (`clan_sdk::attach`): the source's data frozen at
+   `data.upstream.<source document_id>` (less `projection`; its own
+   `upstream` hoisted beside it), its pins, findings and sources merged by id
+   into the document's own, its assets and branches copied, its decisions
+   carried pinned after a boundary entry, and one record in
+   `lineage.attached[]`: `{app_id, version?, at, title, revision, taken,
+   document_id, data_sha256, facts_sha256?, findings_sha256?,
+   sources_sha256?, last_decision?}`. `revision` is the source's revision
+   taken — the version kept — and `taken` counts how many times this document
+   took it (1 on link, one more on each update); `version` is the source's
+   `kit.version` when it declares one, else `taken`.
+3. **Versions and the update notice.** The frozen copy never moves by
+   itself. `GET /upstream` lists each linked document with `how: linked` and
+   `status: current | changed`, compared as for the direct parent (§8.1 item
+   6); the shell shows the notice and offers **Update**, which takes the
+   newer version (`POST /attach/update`, or `POST /upstream/update
+   {document_id}`). An update replaces the frozen copy and adds only what the
+   document does not hold yet.
+4. **Decisions on both sides.** The document gets one decision per hop,
+   `action: attach | update_from_<source noun> | replace | detach`, kind
+   `edit`, as the person in `Ctx`, targeting `<this id>#upstream.<source
+   id>`. The source gets a backref (§7.4): `linked` (on link and update) or
+   `unlinked` (on detach), targeting the source's id, `from` naming the
+   document and its decision.
+5. **Refused**: a context that is not a person (`403`), a locked document
+   (`409`, with the reason: a locked version keeps what it holds), another
+   workspace's source (`403`), a source app not in `accepts` (`422`),
+   linking what is linked already or updating what has not moved (`409`).
+6. **Detach** lets go of one source: its frozen copy, its record and the
+   seeds still holding the seeded value go; pins, findings and assets already
+   merged stay as the document's own.
+7. **A spin-off target may carry one source app its own way**
+   (`app.spinoff.by_source: {<app_id>: {map?, lift, upstream}}`). Advertising
+   Studio grafts a brief at `brief` and carries a research whole under
+   `upstream` with `campaign.name.value → project.name` and
+   `campaign.client_org.value → project.client` (owner, 2026-11-09: research
+   to production is upstream + lift). Each `by_source` key is accepted.
 
 ---
 
@@ -629,7 +697,7 @@ child holds has nothing for `/resolve` to take.
 | A contest carried open in a frozen copy, none of whose values is a pin this document holds or carries a frozen `pin` (*added 2026-09-30*) | 1 | `<id>#selection.contested[<ct>]` |
 
 1. Each is merged or revised in the document it came from, and reaches the
-   child only when it takes the newer upstream (§5.5, not built). Until then
+   child only when it takes the newer upstream (§5.5, §8.1 item 8). Until then
    a person may **set it aside with a written reason**:
    `/acknowledge {target, rationale}` (§8.1, item 7). `/decisions` marks each
    such item `can_set_aside: true`, with its address.
@@ -700,13 +768,15 @@ else: a `backref` is the only thing a child ever writes to a parent.
    | `/approve` | every document in `data.upstream` | `used` | `["<parent id>"]` |
    | `/resolve` of a carried contest | the document the contest is on | `resolved` | `["<parent id>#selection.contested[<ct>]"]` |
    | `/verify` of a finding the direct parent holds | the direct parent | `verified` | `["<parent id>#findings[<fi>]"]` |
+   | `/attach`, `/attach/update` (§5.7) | the linked document | `linked` | `["<source id>"]` |
+   | `/attach/detach` (§5.7) | the unlinked document | `unlinked` | `["<source id>"]` |
 
 2. **Shape.**
 
    ```yaml
    - id: d_…
      kind: backref
-     action: used | resolved | verified
+     action: used | resolved | verified | linked | unlinked
      agent: napkin-host
      actor: human:<id>             # the person in the child's Ctx
      targets: [ … as above … ]
@@ -1055,8 +1125,8 @@ nothing else:
    sends backrefs as any `/approve` does (§7.4). The newest unsuperseded
    `approve` is the lock; the older one is not rewritten. The new `approve`
    closes every reopened part, edited or not.
-4. **Nothing else changes.** §7.1 is unchanged; there is no whole-document
-   unlock (what unsealing means stays W5-Z1's).
+4. **Nothing else changes.** §7.1 is unchanged. The whole-document unlock is
+   §7.6, a separate route.
 
 Why this, and not an `/edit` permitted on a locked document for a part with
 an open request:
@@ -1074,8 +1144,9 @@ an open request:
   the next lock (item 6a) until it is edited; an `accepted_with_changes` part
   does not, and the next lock closes it.
 
-Rejected: unlocking the whole document (superseding the `approve`). It reopens
-every part, including those the client accepted, for a request about one.
+Rejected for a client's request: unlocking the whole document. It reopens
+every part, including those the client accepted, for a request about one. A
+person who means to unlock the whole document uses §7.6.
 
 #### 7.5.7 Spin-off
 
@@ -1119,6 +1190,37 @@ words reach the match (§7.5.2a) only when the recorder pastes them as `said`.
 
 ---
 
+
+### 7.6 Unlocking the whole document: `/unapprove`
+
+Owner, 2026-11-09: a person can unlock a locked document (settles W5-Z1's
+whole-document unlock; what an exported seal means is unchanged).
+
+```yaml
+- id: d_01K…X
+  kind: unlock
+  action: unlock_document
+  agent: human:aoife
+  actor: human:aoife
+  targets: ["3f2a…"]                    # the document id, no part
+  cites: [d_01K…LOCK]
+  lock: d_01K…LOCK                      # the approve it ends
+  unlocks_version: "v3"                 # the version that lock accepted
+  rationale: "The client moved the launch."
+```
+
+1. `POST /unapprove {rationale}`: a person, holding the lease (§6), on a
+   locked document, with a non-empty reason. Not locked is `409`; no reason
+   is `400`.
+2. **The lock predicate (§7.1) gains one clause:** the newest unsuperseded
+   decision targeting the document that is an `approve` or an
+   `unlock_document` decides. An `approve` locks; an `unlock_document` means
+   nothing holds. The `approve` is never rewritten or superseded.
+3. After it every write is allowed again, as on a document never locked.
+   Parts reopened under the ended lock (§7.5.6) stop counting as reopened.
+   Client answers stay in the chain, on the version they answered.
+4. The next `/approve` runs the whole §7.2 list and is a new lock.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed
@@ -1136,9 +1238,9 @@ freely, never redefine.
 - A body `agent` field on `/patch-data` is kept as `claimed_agent` on the
   decision. The actor always comes from `Ctx`.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
-  `/verify`, `/approve`, `/history`, `/timeline`, `/open`, `/stale`,
-  `/upstream` (§8.1), and `/client-review`, `/client-review/confirm` and
-  `/client-review/reopen` (§8.2).
+  `/verify`, `/approve`, `/unapprove` (§7.6), `/history`, `/timeline`, `/open`, `/stale`,
+  `/upstream` (§8.1), `/client-review`, `/client-review/confirm` and
+  `/client-review/reopen` (§8.2), and `/cite` (§8.3).
 - Landed (2026-09-28), each a person's decision — a process is refused `403` —
   recording one decision as the person in `Ctx` with what it changes, in one
   generation; refused `409` once the document is locked (a reopened part's
@@ -1187,6 +1289,9 @@ freely, never redefine.
   - `/approve {rationale?}` — refused while anything on the §7 list is open;
     otherwise one `approve` decision naming the exact version accepted. What
     locking does to other writes (`/patch-data`, a job) is W5-Z1's.
+  - `/unapprove {rationale}` — a person, on a locked document, with a reason:
+    one `unlock` decision (`action: unlock_document`) that ends the lock
+    (§7.6). `409` when not locked, `400` without a reason.
 - `/decisions` (landed): every decision, newest first, with who made it, its
   targets as labels, its cites resolved, and what needs a person — derived by
   the host from the chain, the members and the data: `reasoning.attention`,
@@ -1324,6 +1429,63 @@ body or reply changes meaning.
      when false), and a target `kind` gains `branch` (`<id>#agents[…]`); a
      merge conflict's address is labelled `Merge conflict · <key>`, kind
      `contest`.
+8. **`POST /upstream/update`** — take the direct parent's newer version
+   (§5.5, *added 2026-11-09*). Body ignored; any actor that may write.
+   - `409` when the document has no `lineage.carried` ("not made from another
+     one"), when it is locked (an `approve` not superseded targets it: a
+     locked version keeps what it was made from; a new version takes the
+     update), or when `GET /upstream` says the direct parent is `current`.
+   - `404` when the store does not hold the parent for `Ctx`.
+   - Otherwise one write (`clan_sdk::take_upstream`): `data.upstream.<parent>`
+     is the parent's data now (less `projection` and `upstream`; the
+     parent's own upstream entries replace the hoisted siblings it holds);
+     the parent's facts, findings and sources replace the child's copies by
+     id, **except an entry the child reviewed itself** (a decision of its own
+     targets `<this id>#facts[…]`, `#findings[…]` or `#sources[…]`) and the
+     child's own entries, which stay; the parent's decisions above
+     `carried.last_decision` that the child does not hold are carried,
+     pinned; new branches, merge reports and assets are copied;
+     `lineage.carried` moves on to what was taken; the projection is rebuilt.
+     The child's own fields are not touched and no address is remapped.
+   - The decision, newest of all, as the person in `Ctx`:
+
+     ```yaml
+     - id: d_…
+       kind: edit
+       agent: napkin-host
+       action: update_from_<parent noun>   # app.home.noun[0], else the app's name, snake_case
+       version: <the parent's version taken>
+       targets: ["<this id>#upstream.<parent id>"]
+       cites: [<the parent's newest decision id>]
+       rationale: Took the newer research "<title>" (<version>): N decision(s) since this was made from it.
+       was: { data_sha256: <carried before>, last_decision: <carried before> }
+     ```
+
+   - Reply: `{ok, decision, action, document_id, version, decisions_taken,
+     clan}`. No backref (the parent is not changed).
+   - *Added 2026-11-09:* with `{document_id}` naming a document linked to
+     this one (§5.7), it takes that one's newer version instead: the reply
+     and refusals of `/attach/update`.
+9. **Links** (§5.7, *added 2026-11-09*). Writes as the person in `Ctx`; the
+   reply carries `clan` and `backrefs` as the review routes do.
+   - `GET /attach-targets` — `[{app_id, app_name, document_id, title,
+     version, path, updated_at, attached, many, locked}]`, by title: this
+     tenant's documents the open document's app accepts, never a fork, a
+     template, itself or what it was made from. `locked` says a link would be
+     refused, so the shell says why instead of offering it.
+   - `POST /attach {document_id}` — link it. Reply `{ok, verb: attached |
+     replaced, decision, action, document_id, attached: <record>, seeded,
+     kept, carried_decisions, backrefs, clan}`.
+   - `POST /attach/update {document_id}` — take its newer version; `verb:
+     updated`, `action: update_from_<noun>`.
+   - `POST /attach/detach {document_id}` (or `{app_id}` naming the one source
+     of that app) — let go. Reply `{ok, decision, action: detach,
+     document_id, detached, unseeded, backrefs, clan}`.
+   - `GET /related` — `{document_id, upstream: [{document_id, title, app_id,
+     path, how: made_from | linked, version, taken, status}], downstream:
+     [{document_id, title, app_id, noun, path, how: made_into | linked_in,
+     updated_at}]}`, downstream newest first. A read of the store's
+     manifests; the shell's lineage chips draw it.
 
 ### 8.2 Client review routes
 
@@ -1472,6 +1634,53 @@ process), records as the person in `Ctx`, and writes one change.
      part's, `decision` the answer's; an open suggestion's item names the
      suggestion.
 
+### 8.3 The source card: `/cite`
+
+One answer to "where did this come from?" for any ref a page shows, whichever
+app shows it (feature `os-source-card`, 2026-11-09). A read, for any actor,
+locked or not; every host answers it from the same routing table.
+
+- `GET /cite?ref=<ref>` — one card. `400` without a ref; `404` when the
+  document holds nothing by that ref.
+- `POST /cite {refs: [<ref>, ...]}` — `{cites: {<ref>: card}}`, at most 500
+  refs a call (`400` beyond). A ref the document does not hold is in the map
+  with `kind: unknown`. A page asks for a section's cards in one call.
+
+A ref is anything `/decisions` resolves in `cites`: a pin, finding or source
+id, a material, passage or capture id, a decision id, `human:<id>`, or an
+address. A card is that `Cite` — the same resolver, so the same words — with:
+
+- `ref` — as asked.
+- `origin` — `research`, `client`, `brand`, `layer`, `person` or `document`.
+  The writer's marker is `origin_kind` on the member entry (a pin, finding,
+  source, material, capture item or passage); `origin` itself is already
+  taken (a pin's layer row `fact://…`, Contract campaign-clan §4; a field
+  envelope's `extracted|proposed|confirmed|stated`). Without a marker only
+  what the kind settles is said — a client's material or what was read from
+  it is `client` (a typed prompt is `person`), a library passage is `layer`,
+  `human:` is `person` — and anything else is `document`, never a guess.
+  *Writers (2026-11-09, `server/napkin/origin.py`):* the middleware sets it
+  on each new pin and finding — `research` for a pin a research lens found
+  and filed (`pipeline/research.py`) and every synthesised or reworked
+  finding (`synthesise.py`, `reconsider.py`); `layer` for a row the layers
+  already held, pinned as it was (a reused row, a roster row in
+  `campaign.py`). A client's material and a typed prompt carry no marker:
+  the kind settles them. `brand` is written by the Brand Clan's copy
+  (feat/brand-clan). The engine writes no member entries. The member
+  schemas (`facts.schema.json`, `findings.schema.json`) take the key.
+- `from {document_id, title?, app_id?, version?, path?}` — for something
+  carried from an ancestor: a pin or finding a carried decision names on that
+  ancestor, material or a passage found only in a frozen copy, an address on
+  an ancestor. `title` and `app_id` come from the store's copy when it holds
+  one (else the frozen copy's name); `version` is the revision carried, for
+  the direct parent; `path` is what `POST /open` takes.
+- `review {verdict, by, actor?, at?, decision?, note?}` — the newest review
+  verdict that still stands: `verified` (a `verify`, a good `verdict`),
+  `rejected` (a bad `verdict`) or `set_aside`. `history` holds every one,
+  newest first, each `superseded` when replaced; with none in the chain, the
+  record's own `review`, `verification` or `rejection`. "Looks right" is not
+  a review of a fact.
+
 ---
 
 ## 9. Retrieval scope
@@ -1517,3 +1726,226 @@ Checked against the nine questions in `campaign-flow-usecases.clan`.
 
 Amended by this contract: W1-C1, W1-C3, W1-C4, W1P-I5, W2-A3, W2-A4, W2-A5,
 W2-C4, W2-C6, W2-D1, W3-J3, W4-V1, W4-V2, W5-Z1.
+
+---
+
+## 12. Clients, the library listing and the landing
+
+Feature `landing-circles`. Agencies work by client; before this, "client" was
+free text inside three tools. This section gives a client an identity the OS
+owns, and gives the shell one read that answers "what is open, for whom, and
+what needs me". Everything below is additive: an older shell on a newer host,
+and a newer shell on an older host, both keep working (the shell falls back to
+the Launcher when `/library` answers 404).
+
+### 12.1 The client registry
+
+One CLAN document per tenant (desktop: per data directory, browser: per tab),
+`document_type: client-registry`, whose `shared/data.yaml` holds
+`clients: [ClientRecord]`. It lives beside the home app (`Library::home("clients-v1")`),
+never in `Library::documents()`, so it is not work and never appears in the
+recent list or the library. It is created by the first write; a tenant with no
+registry has an empty list. Every write is a `Change` through
+`PartStore::apply`, based on the version just read (a lost race is a `409`,
+never an overwrite). Code: `crates/napkin-host/src/clients.rs`, which uses only
+the store traits, so it is the same on `FsStore`, `TenantStore` and the
+browser's `MemStore`.
+
+```
+ClientRecord {
+  id:          "cli_" + 8 lowercase hex   minted by the host, never from a name
+  name:        1..60 chars, whitespace collapsed, no control characters
+  initials:    1..3 chars; derived from the name unless set by hand
+  material:    pearl | ceramic | stone | graphite   (a look, not a permission)
+  owner:       the actor who opened it ("human:name@agency"); informational
+  created_at:  RFC 3339
+  archived_at: RFC 3339, absent while live
+}
+```
+
+Rules. Names are unique per tenant ignoring case and spacing, archived ones
+included (`409`). A rename changes the registry only; initials follow the name
+unless hand-set. Archive hides a client from the circles and keeps every
+document linked to it; archive and restore are idempotent; an archived client
+takes no new work (`409`). Every person in a tenant sees every client: there
+are no per-client permissions in this feature.
+
+### 12.2 `manifest.client`
+
+An optional manifest block `client: {id, name}` (spec/CLAN-SPEC.md section 5;
+`clan_sdk::ClientRef`). `id` is the link. `name` is the name when the document
+was attached; the registry is the truth and the library always answers with the
+registry's current name (a rename never rewrites documents). Absent on every
+earlier file; the field is not written when empty, and a reader that does not
+know it ignores it. Every write carries it, and a spin-off takes its source's
+client. `clan_sdk::with_client` is the one function that sets it on existing
+bytes (new revision id; `updated_at` unchanged, because attaching a document to
+a client is not work done in it).
+
+`POST /documents` takes an optional `client_id`. An id this tenant's registry
+does not hold is `404` (so another tenant's id is a `404`, never a link). A
+blank document is reused only for the same client (or for none): a blank made
+for one client is never handed to another.
+
+### 12.3 Routes (napkin-web, tenant-addressed under `/api/t/{tenant}`)
+
+Errors keep the existing `{ok:false, error:"message"}` shape.
+
+| Route | Does |
+|---|---|
+| `GET /clients[?archived=1]` | The clients in the order made; archived ones only with the flag. |
+| `POST /clients {name, material?}` | `201` + the record. `400` bad name or material, `409` duplicate. |
+| `PATCH /clients/{id} {name?, initials?, material?}` | The record. `404`, `409` (name clash), `400`. |
+| `POST /clients/{id}/archive`, `/restore` | The record. Idempotent. `404`. |
+| `GET /clients/legacy` | `[{name, documents}]`: the free-text client names (Brief and Advertising `client`, Research `campaign.brand`, `client_org`) that documents without a client carry and no client has yet, most documents first. Reads every document, so the shell asks when the clients page opens and after a change, never on its poll. Tauri `legacy_client_names`, wasm `legacyClientNames`. |
+| `POST /clients/adopt {names[]}` | `{created: [record], linked: n}`. Makes a client for each chosen free-text name (reusing one that exists) and links the documents with no client whose own data names it (`client`, `client_org`, `campaign.client_org`, `campaign.brand`). Nothing is guessed: only the names sent are adopted. |
+| `GET /library[?client=<id>][&app=<app_id>]` | `{items: [LibraryItem], clients_unassigned: n}`; below. |
+
+`LibraryItem` is `{path, app_id, title, updated_at, client: {id,name}|null,
+state: {needs_you, locked}|null, run: {state, label, stage?, since?}|null}`, newest
+first, uncapped. It leaves out documents nobody has worked in and installed
+templates. `needs_you`/`locked` are `recent_state`, exactly what `/recent`
+reports. `run` is, first, what the host has heard of a middleware job on that
+document (below), else the document's own `data.run` (Deck Maker: `building`
+is `working`, `gate` is `waiting`, `failed`, `done`, `draft` is `idle`; anything
+else is none). `stage` is the stage the run names; the shell turns it into the
+ring's verb.
+`clients_unassigned` counts documents with no client whatever the filter.
+`/recent` is unchanged (capped at 12, same fields).
+
+Cost. The listing opens every document, so `napkin_host::LibraryCache` (one per
+tenant workspace) keeps what a scan worked out per document, keyed on the
+document's id, `updated_at` and size. Every write mints a new revision, so a
+changed document is a different key and no invalidation hook is needed. The
+client's name is resolved from the registry on every call, never cached.
+
+#### Looking after the registry from the shell (P5)
+
+Only the shell's landing writes the registry (never a document's app, which
+reaches the host through `clan://` and has no route to it). The clients page
+shows **Adopt clients (n)** when `GET /clients/legacy` offers n names: a panel
+of ticked names with their document counts; the chosen ones go to
+`POST /clients/adopt`, which says `Added x clients, linked y documents.`
+Nothing is guessed: a name left unticked changes nothing. A client's page has
+**Rename** (`PATCH`; a name in use is refused with the host's words, and its
+work keeps its link because documents follow the id) and **Archive** (asks
+first; the work is kept and the client leaves the circles). **Archived clients**
+on the clients page lists them with **Restore**. A `registry_error` on the
+library listing is shown as a banner. Escape closes whichever of these is open
+before it goes up a level. Adopt rewrites each linked document's manifest; a
+host session that holds one of those documents open can write its older
+snapshot over the link (open question on the record).
+
+#### Running, from the middleware's replies (`napkin_host::RunTracker`)
+
+Brief and Research jobs live in the middleware's memory; the host sees them only
+in `settle_middleware`, where every `napkin.middleware/1` reply carries
+`job {id, state, stage?, progress?, started_at?}` (middleware-api.md section 2).
+A `RunTracker` held beside the tenant's `LibraryCache` and fed by that function
+keeps the last word per document and job id: `queued`/`running` is `working`
+(label `Working: <stage> (<done> of <total>)`), `needs_input` is `waiting` ("Waiting
+for you"), `failed` is `failed`, `done` drops the job. A new job on a document clears
+its old failure. It never starts, polls or cancels anything, restarts empty, and
+adds no middleware route. Two limits, on purpose: a job nobody has polled for 10
+minutes (the document was closed) is not reported, and a failure is reported for a
+day. The contract has no `cancelled` state, so there is none here. `Session::with_runs`
+connects a session to the tracker; napkin-web, the Tauri host and napkin-wasm all do.
+
+The shell reads this one listing for Needs you (document `needs_you`, or a run
+`waiting`), Running and Failed, per client and for the studio, and rings each
+circle with the strongest of: needs you, failed, working, thinking, reading,
+checking, idle (`app/src/shell/landing/model.ts`). The verb comes from the run's
+stage (`extract`/`research` read, `select`/`synthesise`/`report` think, a check or gate
+checks, anything else works). Every state is also said in words. The landing re-reads
+on focus and every 5 s while it is the screen.
+
+### 12.4 The three hosts
+
+The shell reads and writes through `Host` only (`app/src/host/types.ts`):
+`listLibrary(filter?)`, `clients.{list, create, update, archive, restore, adopt}`,
+and `newDocumentFromApp(appId, title, clientId?)`. They are implemented in
+`http.ts` (the routes above), `tauri.ts` (Tauri commands `list_library`,
+`list_clients`, `create_client`, `update_client`, `set_client_archived`,
+`adopt_clients`; `new_document_from_app` takes `client_id`) and `wasm.ts`
+(`NapkinHost.listLibrary`, `listClients`, `createClient`, `updateClient`,
+`setClientArchived`, `adoptClients`, `newDocument(.., clientId)`). All three call the same
+`napkin_host::{clients, scan_library}` code. The client writes are deliberately
+not `clan://` routes: those are reachable by the app inside a document, and an
+app must not be able to open or archive the studio's clients.
+
+### 12.5 The shell route (read by the shell only)
+
+`#agency` (the landing), `#clients`, `#client-<id>`, `#tool-<id>-<tool>`, where
+`<id>` is a client id (`cli_` + 8 hex, ASCII) and `<tool>` is `brief | research |
+idea | deck | prod | ads`. Anything else falls back to `#agency`. Written from
+the shell's screen state, never the other way round: `hashchange` only reads.
+Parsed and formatted in `app/src/shell/route.ts` (pure, table-tested).
+The shell serves all four levels:
+
+- `#client-<id>`: the client's six tools round it, in fixed places (a hexagon, Brief
+  at the top, then Research, Idea, Deck, Prod, Ads clockwise). Idea and Prod, and any
+  tool whose app is not installed, are dimmed "Soon" and go nowhere.
+- `#tool-<id>-<tool>`: that tool for that client: the client's documents of the tool
+  (from `GET /library`, the same listing the counts come from) and "New", which is
+  `POST /documents {app_id, client_id}`, so the document is the client's from birth
+  (`manifest.client`). A document opened from here runs the app as before.
+- Corrections, so the page, the trail and the URL agree: a client that is not here
+  (archived, another studio's, mistyped) is `#clients`; a tool that is not live is its
+  client's page (`correctRoute` in `route.ts`).
+- Escape goes up one level (`up`); the browser's Back and Forward walk the levels; a
+  document takes one history entry of its own, so Back from it lands where it was
+  opened from.
+- The trail (Agency > Clients > Client > Tool) is drawn in the OS bar while a landing
+  screen shows, and **in an open document's bar** in place of the studio-home button,
+  before the title (the app's own tabs and buttons follow it unchanged, appBar.ts). In
+  a document the trail comes from the document itself (`manifest.client`, and the tool
+  its `app_id` is in the tool table), not from the route, so it is right for a document
+  opened from a strip and after a spin-off, which carries `manifest.client`. A document
+  with no client keeps the plain home button.
+- Keyboard: the six tools are one tab stop (roving tabindex); arrows, Home and End
+  move, `1` to `6` pick a tool, Enter opens it; a live region says each level on
+  arrival and "coming soon" for a Soon tool (`app/src/shell/landing/keys.ts`).
+
+### 12.6 The circles in 3D: the Orbs module (read by the shell; later by the templates)
+
+Feature `landing-circles`, phase 4. **Not final until Shrey signs off** (open questions
+in the feature record). The sphere + ring shader is Shrey's and is not changed here.
+
+`app/src/orbs/` is the shell's source of truth for the engine that the Deck Maker
+template also carries inline (its `Orbs` block). The template keeps its own copy,
+because a sandboxed single file cannot import a shell module; `app/tests/orbsDrift.test.ts`
+reads the template's block and fails on any difference in the shader, the tables or the
+pose maths that is not marked `PORT` on the shell's side.
+
+- `engine.ts`: `createOrbs()` (and `shared()`, the shell's one). `attach({wrap, canvas}, spec)`
+  returns a handle (`update`, `kick`, `press`, `detach`) or `null` when the circle must stay
+  flat; `scan(root, stateFor)` does the same for every `[data-orb-host]` under a root;
+  `kick(el)` is the keyboard press. One WebGL context for the page: circles are drawn into
+  one atlas and each cell copied to the circle's own 2D canvas. The circle's markup is the
+  caller's (React): the flat `<svg>` is the fallback and stays; the engine never moves a node.
+- A circle's state is kept by **slot** (where it lives, never its size), so a re-render or a
+  new size does not reset its ring or turn. Two live circles never share a slot.
+- **Flat SVG stays** whenever: no WebGL, a shader that will not compile, reduced data
+  (`prefers-reduced-data`, `saveData`), the context is lost (3D returns on restore), an
+  unknown material, more than `MAX_LIVE` (40) circles, or the person's "Flat circles"
+  (`prefs.ts`, kept in this browser only). `<html data-orbs="gl|flat" data-orbs-gl="1|0"
+  data-orbs-why="...">` says which, for people and the smoke test.
+- **Client, tool and studio circles are pseudo-agents** (`agents.ts`): a blank sphere in one
+  of the materials in `tables.ts` (the client's `material`, stored on its record), no arcs and
+  no emblem circles, the initials as DOM text over it. The clan's agents are not changed.
+- **The ring** is the shader's travelling arc, in the landing's `--lc-ring-*` tokens read from
+  the circle's own element (light and dark follow the page). Length says activity, not
+  progress the shell does not have: needs you a quarter, failed 0.62 with a broken end,
+  working/thinking/reading/checking a fixed 0.34 arc (several jobs or none reporting steps),
+  idle a whole thin still ring. Priority across a client's work is the shell's `strongest`
+  (needs you, failed, working, thinking, reading, checking, idle).
+- **Budget:** only visible circles draw (IntersectionObserver); idle, untouched ones redraw about
+  15 times a second; a software renderer (SwiftShader, llvmpipe) draws at 1 pixel per CSS pixel,
+  any other at the device ratio capped at 2 and eased down when frames run long.
+- **Pointer:** every 3D circle leans toward the pointer across the whole window, with no click
+  and no distance limit. A press squishes and ripples; the click that goes on follows about
+  250 ms after the press (at least 100 ms after a release, so press, drag and release is play)
+  (`gate.ts`). Enter and Space go straight on with the ripple. Flat circles, no WebGL and
+  reduced motion get the plain click.
+- **Reduced motion:** the sphere and ring are still pictures (no turn, wobble or breath), redrawn
+  only when something changes; the flat-to-3D cross-fade is the only motion.

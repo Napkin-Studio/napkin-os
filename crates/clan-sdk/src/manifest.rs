@@ -64,6 +64,15 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app: Option<AppInfo>,
 
+    /// The studio's client this document is for (Napkin Studio OS client
+    /// registry). `id` is the registry's `cli_<8 hex>` id and the link that
+    /// matters; `name` is the name as the registry had it when this was last
+    /// written, kept so the file still says who it is for when it travels.
+    /// Absent on every earlier file, so older readers ignore it. Carried
+    /// verbatim by every write and by a spin-off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<ClientRef>,
+
     /// Publisher signature over the app's code (the trust gate for granting an
     /// app direct host access). Asymmetric (ed25519): signed with the
     /// publisher's private key, verified against the viewer's embedded public
@@ -76,6 +85,30 @@ pub struct Manifest {
     pub external: Vec<ExternalRef>,
 
     pub files: Vec<FileEntry>,
+}
+
+/// Who a document is for: a client of the studio (see [`Manifest::client`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClientRef {
+    /// The registry's id, `cli_` and eight lowercase hex digits.
+    pub id: String,
+    /// The client's name when this document was last written.
+    pub name: String,
+}
+
+/// A fresh client id: `cli_` and eight lowercase hex digits. Minted by the
+/// host, never derived from a name, so a rename never breaks a link.
+pub fn new_client_id() -> String {
+    format!("cli_{}", &uuid::Uuid::new_v4().simple().to_string()[..8])
+}
+
+/// Whether `id` has the shape [`new_client_id`] makes.
+pub fn is_client_id(id: &str) -> bool {
+    id.strip_prefix("cli_").is_some_and(|h| {
+        h.len() == 8
+            && h.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
 }
 
 /// An ed25519 signature over an app's code entries + identity (spec §29, v1.2).
@@ -123,6 +156,10 @@ pub struct AppInfo {
     /// knows its own schema — a caller should not have to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spinoff: Option<SpinoffSpec>,
+    /// What this app lets be linked to (attached to) an existing document of
+    /// it (`os-layer.md` §5.7). Absent, nothing attaches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach: Option<AttachSpec>,
     /// How the app presents itself on the OS home (Napkin Studio OS
     /// extension). Absent, the home shows the app's name and "Start".
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -201,6 +238,77 @@ pub struct SpinoffSpec {
     /// `map`. Off by default, so an app that does not opt in grafts as before.
     #[serde(default, skip_serializing_if = "is_false")]
     pub upstream: bool,
+    /// How a source of one particular app is carried, when it differs from
+    /// the rest (`source app_id -> carry`): Advertising Studio grafts a brief
+    /// at `brief` but carries a research whole under `upstream` (owner,
+    /// 2026-11-09). Each key is accepted besides `accepts`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub by_source: BTreeMap<String, SourceCarry>,
+}
+
+/// How a spin-off from one source app is carried: [`SpinoffSpec`]'s `map`,
+/// `lift` and `upstream`, for that source only.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SourceCarry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub map: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lift: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub upstream: bool,
+}
+
+impl SpinoffSpec {
+    /// Whether a source of `app_id` is accepted: an empty `accepts` with no
+    /// `by_source` takes anything.
+    pub fn accepts_source(&self, app_id: Option<&str>) -> bool {
+        if self.accepts.is_empty() && self.by_source.is_empty() {
+            return true;
+        }
+        app_id.is_some_and(|id| {
+            self.accepts.iter().any(|a| a == id) || self.by_source.contains_key(id)
+        })
+    }
+
+    /// The spec a source of `app_id` is carried by: `by_source`'s entry for
+    /// it in place of `map`, `lift` and `upstream`, when it has one.
+    pub fn for_source(&self, app_id: Option<&str>) -> SpinoffSpec {
+        let mut spec = self.clone();
+        if let Some(c) = app_id.and_then(|id| self.by_source.get(id)) {
+            spec.map = c.map.clone();
+            spec.lift = c.lift.clone();
+            spec.upstream = c.upstream;
+            if let Some(id) = app_id {
+                if !spec.accepts.iter().any(|a| a == id) {
+                    spec.accepts.push(id.to_string());
+                }
+            }
+        }
+        spec
+    }
+}
+
+/// Declares what may be linked to an existing document of this app: another
+/// document carried in whole, frozen under `data.upstream.<id>`, beside the
+/// document's own work (`os-layer.md` §5.7). It is the spin-off carry applied
+/// to a document that already exists. `accepts` names app ids; nothing here
+/// names one app.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct AttachSpec {
+    /// Source `app_id`s this app lets be attached. Empty attaches nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accepts: Vec<String>,
+    /// `source dotted key -> this document's dotted key`: seeds, copied from
+    /// the frozen source. A seed lands only where the field is still empty,
+    /// and an update re-seeds only a field that still holds the value the
+    /// previous copy seeded, so a person's edit is never overwritten.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lift: BTreeMap<String, String>,
+    /// Source `app_id`s of which a document may hold more than one at once
+    /// (several research in one brief, owner 2026-11-09). Any other app is
+    /// one per document: attaching another of it replaces the first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub many: Vec<String>,
 }
 
 // Hand-written so an absent `spinoff:` block and a declared one that omits
@@ -214,6 +322,7 @@ impl Default for SpinoffSpec {
             lift: BTreeMap::new(),
             pin_source_decisions: true,
             upstream: false,
+            by_source: BTreeMap::new(),
         }
     }
 }
@@ -245,6 +354,37 @@ pub struct Lineage {
     /// Absent on every other file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<Carried>,
+    /// The documents linked (attached) to this one (`os-layer.md` §5.7), one
+    /// record per source, so a host can tell later whether a source has
+    /// moved on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attached: Vec<Attached>,
+}
+
+/// One attached document: what [`Carried`] records for a spin-off parent, plus
+/// which app it is and the version it was at.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attached {
+    /// The source's `app_id`.
+    pub app_id: String,
+    /// The source's `kit.version` when it declares one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<u64>,
+    /// When it was attached or last updated, RFC 3339.
+    pub at: String,
+    /// The source's title when it was attached or last updated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The source's revision id taken (`manifest.id`): the version kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
+    /// How many times this document has taken it: 1 on attach, one more on
+    /// each update.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taken: Option<u64>,
+    /// The source's `document_id` and the hashes taken, as for a spin-off.
+    #[serde(flatten)]
+    pub carried: Carried,
 }
 
 /// The state of the direct parent an upstream spin-off was taken from
@@ -384,6 +524,11 @@ impl Manifest {
     /// keeps it: it describes the document, not the last write.
     pub fn carried(&self) -> Option<&Carried> {
         self.lineage.as_ref().and_then(|l| l.carried.as_ref())
+    }
+
+    /// The documents attached to this one (`os-layer.md` §5.7).
+    pub fn attached(&self) -> &[Attached] {
+        self.lineage.as_ref().map_or(&[], |l| l.attached.as_slice())
     }
 
     /// Turn this (cloned) manifest into the next revision of the same
@@ -614,6 +759,7 @@ mod tests {
             fork: None,
             merge_policies: None,
             app: None,
+            client: None,
             signature: None,
             external: vec![],
             files: vec![FileEntry {
@@ -630,5 +776,42 @@ mod tests {
         assert_eq!(back.id, m.id);
         assert_eq!(back.files[0].content_type, "application/yaml");
         assert!(m.validate().is_ok());
+        // Absent client: the field is not written, so older readers see the
+        // same manifest they always did.
+        assert!(!String::from_utf8(bytes).unwrap().contains("client"));
+    }
+
+    #[test]
+    fn a_client_survives_a_round_trip_and_an_old_manifest_reads_without_one() {
+        let yaml =
+            "clan_version: 1\nclan_version_minor: 2\nid: 550e8400-e29b-41d4-a716-446655440000\n\
+                    title: T\ncreated_at: a\nupdated_at: b\nfiles: []\n";
+        let old = Manifest::from_yaml(yaml.as_bytes()).unwrap();
+        assert!(old.client.is_none());
+
+        let mut m = old.clone();
+        m.client = Some(ClientRef {
+            id: "cli_deadbeef".into(),
+            name: "Client A".into(),
+        });
+        let back = Manifest::from_yaml(&m.to_yaml().unwrap()).unwrap();
+        assert_eq!(back.client, m.client);
+        // Unknown keys are ignored, which is how an older reader treats this one.
+        let extra = format!("{yaml}client:\n  id: cli_deadbeef\n  name: Client A\nfuture: 1\n");
+        assert_eq!(
+            Manifest::from_yaml(extra.as_bytes()).unwrap().client,
+            m.client
+        );
+    }
+
+    #[test]
+    fn client_ids_have_one_shape() {
+        let id = new_client_id();
+        assert!(is_client_id(&id), "{id}");
+        assert_ne!(id, new_client_id());
+        assert!(!is_client_id("Client A"));
+        assert!(!is_client_id("cli_DEADBEEF"));
+        assert!(!is_client_id("cli_dead"));
+        assert!(!is_client_id("cli_deadbeef0"));
     }
 }

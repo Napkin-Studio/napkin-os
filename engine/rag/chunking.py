@@ -6,7 +6,7 @@ One vector store, many document shapes. Each file is chunked by the strategy tha
 suits its shape, chosen from its frontmatter `source`/`category` (or inferred from
 its directory when a file has no frontmatter). Every chunk carries:
 
-    metadata.source      corpus (ipa | cannes | dandad | effie | playbook | template)
+    metadata.source      corpus (ipa | cannes | dandad | effie | awardlib | playbook | template)
     metadata.doc_id      stable per-file id (framework_id or file stem)
     metadata.level       parent | child | chunk
     metadata.parent_id   the parent chunk id for children (else null)
@@ -19,7 +19,8 @@ is what lets a 40-word Results paragraph be found by a query about B2B software.
 Strategies
   case_parent_child  award cases with a fixed template (IPA, Effie): ONE whole-case
                      parent + one child per section. Loops 4/6 retrieve parents.
-  case_whole         award cases with variable sections (Cannes): whole case only.
+  case_whole         award cases with variable sections: whole case only. The award case
+                     library (awardlib) uses it: short reconstructed cases, one chunk each.
   skip               too thin to embed (D&AD title+overview) — kept out of vectors.
   sections           playbooks: one chunk per H1/H2 section, split at paragraphs
                      above SECTION_MAX_WORDS, no overlap, framework name prefixed.
@@ -52,15 +53,16 @@ STRATEGY_BY_SOURCE = {
     "effie": "case_parent_child",
     "cannes": "case_parent_child",   # v2: each entry-form answer is a self-contained child
     "dandad": "group",               # v2: too thin alone; grouped by discipline+year in chunk_corpus()
+    "awardlib": "case_whole",        # v1.4: one reconstructed case per chunk (see ingest_awardlib.py)
     "playbook": "sections",
     "template": "sections",          # v2: sections never split a table; windows did
 }
 DEFAULT_STRATEGY = "sections"
-_CASE_SOURCES = {"ipa", "effie", "cannes", "dandad"}   # sources whose `year` is the award year
+_CASE_SOURCES = {"ipa", "effie", "cannes", "dandad", "awardlib"}   # sources whose `year` is the award year
 
 # directory -> source, for files with no frontmatter (37 in the corpus today)
 DIR_SOURCE = [("ipa", "ipa"), ("cannes", "cannes"), ("dandad", "dandad"), ("effie", "effie"),
-              ("playbooks", "playbook"), ("briefing-template", "template")]
+              ("awardlib", "awardlib"), ("playbooks", "playbook"), ("briefing-template", "template")]
 
 
 # ---- frontmatter (shared with rag.py) -----------------------------------
@@ -199,6 +201,16 @@ def context_header(source: str | None, meta: dict, title: str, strategy: str = "
                   f"client {g('client')}" if g("client") else "", g("agency")]
     elif source == "dandad":
         parts += [f"D&AD {g('award_tier')}".strip(), g("client")]
+    elif source == "awardlib":
+        # The header is embedded, read first by the validator and prefixed on every rendered
+        # hit, so the label travels with the text: this is a reconstruction, not the entrant's words.
+        show = " ".join(x for x in (g("award_show"), g("year")) if x)
+        won = g("award_tier_raw")
+        if len(won) > 32 or (g("award_show") and g("award_show").lower() in won.lower()):
+            won = ""                                        # long wording repeats the show and year
+        won = won or (g("award_outcome") if g("award_outcome") != "unknown" else "").replace("_", " ")
+        parts += [f"{show}: {won}" if show and won else (show or won), g("client_category").replace("_", " "),
+                  g("country"), "reconstructed strategy · entrant-reported results"]
     elif source == "playbook":
         parts += ["planning framework", g("category") or g("type"), g("stage")]
     else:
@@ -265,9 +277,13 @@ def _finalise_md(md: dict, *, source: str | None, heading: str, level: str, path
     # Free-text labels -> contract enums. normalise.py is the only place the spelling
     # tables live; here we just call it. None means "unknown", which the contract allows.
     raw_tier = md.get("award_tier")
-    md["award_tier_raw"] = str(raw_tier) if raw_tier else None
+    shown = md.get("award_tier_raw") or raw_tier       # a source may carry the awarding body's wording apart from the label it resolved
+    md["award_tier_raw"] = str(shown) if shown else None
     md["award_tier"] = normalise.award_tier(raw_tier)
-    md.setdefault("category", normalise.category_for(md.get("sector"), md.get("client")))
+    # `client_category` is a category a source already derived (the award library's reviewed
+    # brand table); it is checked against the closed list like any other, never trusted raw.
+    derived = normalise.category_value(md.pop("client_category", None))
+    md.setdefault("category", derived or normalise.category_for(md.get("sector"), md.get("client")))
     md["effectiveness_type"] = normalise.effectiveness_type(md.get("effectiveness_type"))
     md["strategic_territory"] = normalise.strategic_territory(md.get("strategic_territory"))
     md["discipline"] = normalise.discipline(md.get("doc_kind")) if source == "playbook" else None

@@ -1231,3 +1231,59 @@ fn a_bad_verdict_on_an_empty_declared_part_is_overridden_with_a_reason() {
     assert!(f.view().lock.can_lock);
     f.post_ok("/approve", json!({}));
 }
+
+// ── whole-document unlock: /unapprove (§7.6) ────────────────────────────────
+
+#[test]
+fn unapprove_ends_the_lock_with_a_reason_and_the_next_approve_locks_again() {
+    let f = locked();
+    assert_eq!(f.edit("audience.primary", "Adults", None).0, 409, "locked");
+    let lock = f.chain().decisions[0].id.clone().unwrap();
+
+    // A reason is required.
+    assert_eq!(f.refused("/unapprove", json!({})), 400);
+    f.post_ok(
+        "/unapprove",
+        json!({ "rationale": "The client moved the launch." }),
+    );
+
+    let d = &f.chain().decisions[0];
+    assert_eq!(d.kind.as_deref(), Some("unlock"));
+    assert_eq!(d.action, review::UNLOCK_DOCUMENT);
+    assert_eq!(d.extra["lock"].as_str(), Some(lock.as_str()));
+    assert!(d.cites.contains(&lock), "the unlock cites the lock it ends");
+    assert_eq!(d.rationale, "The client moved the launch.");
+    let approve = f
+        .chain()
+        .decisions
+        .iter()
+        .find(|d| d.id.as_deref() == Some(lock.as_str()))
+        .cloned()
+        .unwrap();
+    assert!(approve.superseded_by.is_none(), "the lock is not rewritten");
+
+    assert_eq!(f.json_view()["lock"]["locked"], false);
+    assert_eq!(
+        f.edit("audience.primary", "Adults", None).0,
+        200,
+        "it can change again"
+    );
+    // Not locked: nothing to unlock.
+    assert_eq!(
+        f.refused("/unapprove", json!({ "rationale": "again" })),
+        409
+    );
+
+    f.post_ok("/approve", json!({}));
+    assert_eq!(f.json_view()["lock"]["locked"], true, "locked again");
+    assert_eq!(f.edit("audience.primary", "Teens", None).0, 409);
+}
+
+#[test]
+fn unapprove_on_a_document_never_locked_is_refused() {
+    let f = open();
+    assert_eq!(
+        f.refused("/unapprove", json!({ "rationale": "why not" })),
+        409
+    );
+}

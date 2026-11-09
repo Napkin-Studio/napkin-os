@@ -51,7 +51,7 @@ from ..rules.figures import quote_supports
 from ..rules.quotes import verbatim
 from ..rules.tiering import registrable, tier_for
 from ..util import bad, iso, lid, slug, today, uid
-from .. import reasoning as rsn
+from .. import origin, reasoning as rsn
 
 log = logging.getLogger("napkin.research")
 # How much of the client's material one extraction call reads: excerpts of at
@@ -693,11 +693,14 @@ class Researcher:
             if s:
                 rec = {"id": sid, "uri": s["url"], "title": s["title"], "publisher": s["publisher"],
                        "published_at": s["published_at"], "retrieved_at": s["retrieved_at"],
-                       "tier": s["tier"], "domain": s["domain"], "licence": s.get("licence") or "open"}
+                       "tier": s["tier"], "domain": s["domain"], "licence": s.get("licence") or "open",
+                       # the source card's origin: read by this run, or the client's own material
+                       origin.KEY: origin.CLIENT if str(s.get("url") or "").startswith("material:") else origin.RESEARCH}
             elif sid in from_layer and from_layer[sid].get("uri"):
                 r = from_layer[sid]
                 rec = {"id": sid, **{k: r[k] for k in ("uri", "title", "publisher", "published_at", "retrieved_at",
-                                                        "tier", "domain", "licence") if r.get(k) is not None}}
+                                                        "tier", "domain", "licence") if r.get(k) is not None},
+                       origin.KEY: origin.LAYER}
             else:
                 continue
             out.append({k: v for k, v in rec.items() if v not in (None, "")})
@@ -747,7 +750,7 @@ class Researcher:
              "retrieved_at": c["retrieved_at"], "sources": list(c["sources"]), "confidence": fact_confidence(recs),
              "licence": lic, "status": "active", "decision": did, "pinned_at": t_now,
              "pin_reason": "kept in this brief only", "layer": c["layer"], "method": c.get("method") or "report",
-             "kept_in_document": {"why": why, "measure_proposed": bool(proposed)}}
+             "kept_in_document": {"why": why, "measure_proposed": bool(proposed)}, origin.KEY: origin.RESEARCH}
         quotes = {s: q for s, q in (c.get("quotes") or {}).items()
                   if s in f["sources"] and isinstance(q, str) and q.strip()}
         if quotes:
@@ -813,7 +816,9 @@ class Researcher:
                             f"{len(row['sources'])} source(s), tiers "
                             f"{'/'.join(sorted({r.get('tier', '?') for r in recs}))}"
                             + (" (reused from the layer)" if c.get("row") else "")),
-             "layer": row["layer"], "method": row.get("method") or "report"}
+             "layer": row["layer"], "method": row.get("method") or "report",
+             # a row the layers already held is the layer's; one this run found and filed is research's
+             origin.KEY: origin.LAYER if c.get("row") else origin.RESEARCH}
         quotes = {**_row_quotes(row), **(c.get("quotes") or {})}
         quotes = {s: q for s, q in quotes.items() if s in f["sources"] and isinstance(q, str) and q.strip()}
         if quotes:

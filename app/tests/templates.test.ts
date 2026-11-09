@@ -205,6 +205,7 @@ test('a carried item nothing here can settle is set aside, with a reason', () =>
   attention.push(pinless)
   assert.equal(f.carriedAt('ct_nopin').length, 1)
   assert.equal(f.carriedName({ ...pinless, label: 'Contest · brand/orchard-hill:product.abv@IE' }), 'Sources disagree on abv')
+  assert.equal(f.carriedName({ ...pinless, label: 'Contest · Export value · IE' }), 'Sources disagree on export value')
   assert.match(f.carriedBlock([pinless]), /The sources “Lúnasa launch” used disagree here, and this copy holds none of their values to pick from\./)
   assert.match(f.carriedBlock([attention[1]]), /Two agents working on/)
   assert.match(fn(CLF, 'draw'), /c\.status==='open'&&\(ca\.length\|\|sa\)/)
@@ -498,6 +499,51 @@ test('a locked report starts no reconsider job', () => {
   assert.equal(RECON.queue.length, 1)
 })
 
+// A research started from a brief, or with one linked (features/spinoff-and-links):
+// with nothing else to read, the brief's ask is read once, on open.
+function askEnv(over: { data?: Record<string, unknown>; chain?: unknown[]; thread?: unknown[]; jobs?: unknown[]; asked?: boolean; bridge?: boolean } = {}) {
+  const runs: { task: string; input: unknown; quiet?: boolean }[] = []
+  const toasts: string[] = []
+  const kept: Record<string, string> = over.asked ? { 'clan.research.askedFromBrief.doc1': '1' } : {}
+  const data = over.data ?? { upstream: { b1: { client: 'Orchard Hill Cider', audience: 'Irish adults' } }, campaign: {} }
+  const env = {
+    ASK_FIELDS: ['client', 'audience', 'background', 'objectives'],
+    CHAIN: { state: 'ok', decisions: over.chain ?? [] },
+    window: over.bridge === false ? {} : { clan: { apiProxy: () => Promise.resolve() } },
+    isObj, D: () => data,
+    camp: () => (isObj(data.campaign) ? data.campaign : {}),
+    mats: () => (isObj(data.materials) ? data.materials : {}),
+    thread: () => over.thread ?? [], JOBS: over.jobs ?? [],
+    decs: () => over.chain ?? [],
+    docId: () => 'doc1',
+    stored: (k: string) => kept[k] ?? null,
+    store: (k: string, v: string) => { kept[k] = v },
+    runTask: (task: string, input: unknown, _then: unknown, quiet?: boolean) => { runs.push({ task, input, quiet }) },
+    toast: (t: string) => { toasts.push(t) },
+  }
+  return { f: lift<{ askFromBrief(): void; briefUpstream(): string | null }>(RT, ['briefUpstream', 'askFromBrief'], env), runs, toasts, kept }
+}
+
+test('a research from a brief reads the brief’s ask once on open, and never over anything already there', () => {
+  const { f, runs, toasts } = askEnv()
+  assert.equal(f.briefUpstream(), 'b1')
+  f.askFromBrief()
+  assert.deepEqual(runs, [{ task: 'extract_ask', input: { prompt: '', attachments: [] }, quiet: true }])
+  assert.match(toasts[0], /brief/)
+  f.askFromBrief()
+  assert.equal(runs.length, 1, 'once per document')
+  const none = (over: Parameters<typeof askEnv>[0]) => { const e = askEnv(over); e.f.askFromBrief(); return e.runs.length }
+  assert.equal(none({ data: { upstream: { r1: { campaign: {} } }, campaign: {} } }), 0, 'a research upstream is not a brief')
+  assert.equal(none({ data: { campaign: {} } }), 0, 'made from nothing')
+  assert.equal(none({ data: { upstream: { b1: { client: 'A' } }, campaign: { client_org: { value: 'A', origin: 'stated' } } } }), 0, 'the ask is begun')
+  assert.equal(none({ data: { upstream: { b1: { client: 'A' } }, campaign: {}, materials: { mat_0001: {} } } }), 0, 'material to read: the person runs it')
+  assert.equal(none({ chain: [{ handler: 'extract_ask@1.0', action: 'extract_ask' }] }), 0, 'the ask was read already')
+  assert.equal(none({ thread: [{ id: 'm1' }] }), 0, 'the intake has begun')
+  assert.equal(none({ jobs: [{ task: 'research_lens' }] }), 0, 'a job is running')
+  assert.equal(none({ asked: true }), 0, 'asked already in this session')
+  assert.equal(none({ bridge: false }), 0, 'no bridge yet: it waits for it')
+})
+
 test('the Research Tool’s parts declare their aliases', () => {
   const PART_ALIASES = new Function(`${obj(RT, 'PART_ALIASES')} return PART_ALIASES;`)() as Record<string, string>
   assert.equal(PART_ALIASES.audience_stated, 'audience, target, who')
@@ -572,12 +618,57 @@ test('a part the Judge failed can be kept with a reason, empty or not', () => {
   assert.match(notes, /act-override/)
   assert.match(notes, /'Leave it empty, and say why'/)
   assert.match(notes, /'Keep it as it is, and say why'/)
-  // It opens the OS's drawer on the part, where the override is recorded.
-  assert.match(fn(BM, 'bindNotes'), /act-override'\); if\(o\) o\.addEventListener\('click',function\(\)\{ var F=OSF\(\); if\(F\) F\.open\(f\.key\); \}\)/)
+  // It is answered where it was asked: a reason box in place, recorded as the
+  // drawer's override is (a reasoned good verdict on the part), never the drawer.
+  assert.match(fn(BM, 'bindNotes'), /\.act-override'\)\.forEach\(function\(o\)\{ o\.addEventListener\('click'/)
+  assert.match(fn(BM, 'bindNotes'), /overrideHere\(o, f, ks\.length\?ks:null\)/)
+  const here = fn(BM, 'overrideHere')
+  assert.match(here, /var ks=keys&&keys\.length\?keys:\[f\.key\]/)
+  assert.match(here, /hostPost\('\/verdict',\{target:left\.shift\(\), polarity:'good', rationale:why\}\)/)
+  assert.match(here, /if\(!why\)/, 'a reason is needed')
+  assert.doesNotMatch(here, /type="submit"/, 'an app frame has no allow-forms: Save acts on its click')
   // The drawer offers the override on a path whatever its value.
   const vb = fn(CLF, 'verdictBlock')
   assert.match(vb, /data-clf="override"/)
   assert.doesNotMatch(vb.slice(0, vb.indexOf('data-clf="override"')), /editableValue|textOf/)
+})
+
+// One check across parts, answered on one of them already (the Judge passed
+// that part's redraft): the card sits on a part that still waits on it, and
+// the note on every other part points there (final retest, HIGH 1).
+test('a check across parts shows its card on a part it still waits on', () => {
+  const D = 'doc1'
+  const FIELDS = [
+    { key: 'budget_and_scope', label: 'Budget & scope', sec: 'Budget' },
+    { key: 'mandatories', label: 'Mandatories', sec: 'Budget' },
+    { key: 'open_questions', label: 'Open questions', sec: 'Budget' },
+  ]
+  const cross = { id: 'd_x', kind: 'verdict', polarity: 'bad', agent: 'judge_brief', targets: FIELDS.map(f => `${D}#${f.key}`), rationale: 'Legal asks are split across three parts.' }
+  // newest first: a later reasoned pass of another check that names budget_and_scope
+  const pass = { id: 'd_g', kind: 'verdict', polarity: 'good', agent: 'judge_brief', targets: [`${D}#audience`, `${D}#budget_and_scope`], rationale: 'Holds.' }
+  const CHAIN = { state: 'ok', decisions: [pass, cross] }
+  type F = {
+    homeOf(d: unknown): { key: string } | null; openPartsOf(d: unknown): { key: string }[]
+    crossNoteHtml(c: unknown, f: { key: string }): string; crossVerdictsOf(k: string): { d: unknown; open: boolean }[]
+  }
+  const f = lift<F>(BM, ['pathOf', 'names', 'about', 'isVerdict', 'isHuman', 'isWrite', 'newer', 'reasonedGood', 'verdictState', 'topsOf', 'isCross',
+    'crossVerdictsOf', 'partsOf', 'openPartsOf', 'homeOf', 'acrossOf', 'listWords', 'crossNoteHtml'], {
+    CHAIN, FIELDS, TOP_LABEL: {}, JUDE: 'Jude', arr, esc, docId: () => D, hasReasoning: () => false,
+    fig: (k: string) => `<fig ${k}>`, fixBtn: (d: { id: string }) => `<fix ${d.id}>`, docLocked: () => false, OSF: () => ({}),
+    reasonFix: (d: { rationale: string }) => ({ reason: d.rationale, fix: '', rule: '' }),
+  })
+  assert.deepEqual(f.openPartsOf(cross).map(x => x.key), ['mandatories', 'open_questions'])
+  assert.equal(f.homeOf(cross)?.key, 'mandatories')
+  assert.equal(f.crossVerdictsOf('budget_and_scope')[0].open, false, 'answered on budget by the pass')
+  const home = f.crossNoteHtml(f.crossVerdictsOf('mandatories')[0], FIELDS[1])
+  assert.match(home, /Jude found a problem across budget &#38; scope, mandatories and open questions/)
+  assert.match(home, /<fix d_x>/)
+  assert.match(home, /data-keys="mandatories open_questions">Keep them as they are, and say why/)
+  const other = f.crossNoteHtml(f.crossVerdictsOf('open_questions')[0], FIELDS[2])
+  assert.match(other, /see <a href="#" class="act-goto" data-k="mandatories">Mandatories<\/a>/)
+  // Nothing answered yet: the first part it names carries it, as before.
+  CHAIN.decisions = [cross]
+  assert.equal(f.homeOf(cross)?.key, 'budget_and_scope')
 })
 
 test("a person's verdict on a part is theirs, not the Judge's", () => {
@@ -782,13 +873,14 @@ test('the drawer quotes the words the planner typed', () => {
     mat_f: { kind: 'client_brief', name: 'Lidl brief.pdf' },
   }
   const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
-  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
+  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
     arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/,
     writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
     materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
     MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
     STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '', confidential: () => false, LOCK: '', fmt: () => '',
     dayMonth: () => '', whoDid: () => '', blockOf: () => null, givenOf: () => 'Dara', proposerOf: () => 'Dara',
+    VIEW: { decisions: [] }, declaredParts: () => [],
   })
   const h = w.writerBlock('background')
   assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">A brief for Lidl Connect: win back switchers\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
@@ -835,9 +927,9 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
   const givenOf = (k: string | null) => ({ drafter: 'Dara', judge: 'Jude' } as Record<string, string>)[String(k)] || ''
   const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
   const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
-  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
+  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
     'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history', 'writerBlock'], {
-    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION,
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION, declaredParts: () => [],
     docId: () => 'brief', upstreams: () => ({}), valueAt: () => value, envAt: () => null, ORIGIN: {}, personName: () => 'ana',
     crew: () => ({ forWork: (w: string) => (w === 'draft' ? 'drafter' : '') }), crewKey, givenOf,
     whoDid: (b: { who: { you?: boolean }; decision: { agent?: string } }) => (b.who.you ? 'You' : givenOf(crewKey(b.decision)) || 'The crew'),
@@ -847,6 +939,38 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
     confidential: () => false, LOCK: '', fmt: () => '',
   })
 }
+
+// B4: the drawer says a part by its label, never its key (final retest).
+test('the drawer names a part by its label in the crew’s words, never its key', () => {
+  type K = { keyWords(s: string): string; noIds(s: string): string }
+  const VIEW = { decisions: [{ targets: [
+    { here: true, kind: 'field', path: 'budget_and_scope', label: 'Budget & scope' },
+    { here: true, kind: 'field', path: 'competitor_context', label: 'Competitor context' },
+    { here: true, kind: 'field', path: 'background', label: 'Background' },
+  ] }] }
+  const k = lift<K>(CLF, ['keyWords', 'partNames', 'lowerWord', 'noIds'], {
+    arr, VIEW, findings: () => ({}),
+    declaredParts: () => [{ address: 'single_minded_proposition', label: 'Single-minded proposition' }],
+  })
+  assert.equal(k.keyWords('Mandatories name Sections 15 and 16, budget_and_scope asks legal which apply.'),
+    'Mandatories name Sections 15 and 16, budget & scope asks legal which apply.')
+  assert.equal(k.keyWords('Over length: background 99/70, competitor_context 120/70.'),
+    'Too long: background (99 words, 70 at most), competitor context (120 words, 70 at most).')
+  assert.equal(k.keyWords('It contradicts single_minded_proposition.'), 'It contradicts single-minded proposition.')
+  assert.equal(k.keyWords('an unknown_key_here'), 'an unknown key here')
+  assert.equal(k.keyWords('Checked the new the barrier: it answers the note.'), 'Checked the new barrier: it answers the note.')
+  assert.equal(k.keyWords('Proposed a effectiveness evidence finding, a useful one and a one-off.'), 'Proposed an effectiveness evidence finding, a useful one and a one-off.')
+  assert.equal(k.noIds('budget_and_scope (d_01ABCDEFGHJK) holds.'), 'budget & scope holds.')
+  // The verdict and the history read through it; a reviewer that is not a person is the crew member.
+  assert.match(fn(CLF, 'verdictBlock'), /clip\(noIds\(d\.rationale\),280\)/)
+  assert.match(fn(CLF, 'history'), /said=isPerson\(d\)\?saidWords\(d\):noIds\(saidWords\(d\)\)/)
+  const rl = lift<{ reviewLine(r: Record<string, string>): string }>(CLF, ['reviewLine'], {
+    esc, isYou: () => false, personName: (n: string) => n.replace(/^human:/, ''), plainDate: (d: string) => d,
+    VERDICT_WORD: { rejected: 'Marked wrong' }, blockOf: () => ({ decision: { agent: 'judge' } }), whoDid: () => 'Jude', givenOf: () => 'Jude', judgeKey: () => 'judge',
+  })
+  assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'Regenerate field', actor: 'process:middleware', decision: 'd_1' }), 'Marked wrong by Jude')
+  assert.equal(rl.reviewLine({ verdict: 'rejected', by: 'ana', actor: 'human:ana' }), 'Marked wrong by ana')
+})
 
 test('the drawer shows a chain’s times in the viewer’s own zone', () => {
   type D = { dayMonth(d: string, time?: boolean): string }
@@ -958,7 +1082,7 @@ test('the brief maker’s proposal is answered by the write that cites it', () =
 test('the brief’s export cites its sources: one number a publisher, links only for open web sources', () => {
   type Cit = { marks: Record<string, number[]>; notes: { n: number; name: string; items: { text: string; uri: string | null }[] }[] }
   type F = { exportCitations(parts: unknown[], env: unknown): Cit; exportMarkHtml(n?: number[]): string; exportSourcesHtml(c: Cit | null): string }
-  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesHtml'], { arr, esc })
+  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesList', 'exportSourcesHtml'], { arr, esc })
   const think = 'https://www.thinkbusiness.ie/articles/ballymaloe-foods-new-generation'
   const env = {
     sources: {
@@ -1014,12 +1138,1102 @@ test('the brief’s export cites its sources: one number a publisher, links only
   assert.equal(f.exportMarkHtml([1, 3]), '<sup class="fn">1,3</sup>')
 })
 
-test('the brief’s export waits for the decision chain and says so when it cannot read it', () => {
+test('the brief’s exports wait for the decision chain and say so when it cannot read it', () => {
   const src = fn(BM, 'chainForExport')
   assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
   assert.match(src, /CHAIN=\{state:'unavailable'/)
-  const build = fn(BM, 'buildExportHTML')
-  assert.match(build, /Promise\.all\(\[inlineImages\(\), chainForExport\(\)\]\)/)
-  assert.match(build, /Sources could not be read for this export\./)
-  assert.match(build, /CHAIN\.state==='ok'\?exportCitations/)
+  const plain = fn(BM, 'buildPlainExportHTML')
+  assert.match(plain, /Promise\.all\(\[inlineImages\(\), chainForExport\(\), inlineLogos\(\)\]\)/)
+  assert.match(plain, /Sources could not be read for this export\./)
+  assert.match(plain, /CHAIN\.state==='ok'\?exportCitations/)
+  const grid = fn(BM, 'buildGridExportHTML')
+  assert.match(grid, /return inlineLogos\(\)\.then\(function\(l\)\{ logos=l; return chainForExport\(\); \}\)\.then/)
+  assert.match(grid, /Sources could not be read for this export\./)
+  assert.match(grid, /CHAIN\.state==='ok'\?exportCitations\(exportParts\(gridKeys\(\)\)/)
+})
+
+// ── the grid export ────────────────────────────────────────────────────────
+
+type GridCell = { num: string; label: string; key: string; kind: string; big: boolean }
+type Grid = {
+  gridSheets(): { appendix?: boolean; title?: string; rows: GridCell[][] }[]
+  gridKeys(): string[]
+  gridLimit(key: string): number
+  gridWords(v: unknown): number
+  gridText(v: unknown): string
+  gridItems(v: unknown): string[]
+  gridHas(v: unknown): boolean
+  gridStep(words: number, limit: number): number
+  gridGaps(ctx: unknown): { key: string; label: string }[]
+  gridHeld(ctx: unknown): number
+  gridGrounded(ctx: unknown): number
+  gridHollow(ctx: unknown): boolean
+  gridFlag(v: unknown): boolean
+  gridHeaderInfo(e: unknown): string[][]
+  gridBody(ctx: unknown): { html: string; sheets: number; contentSheets: number; appendixSheets: number; warnings: { key: string; label: string; words: number; limit: number; step: number }[] }
+  gridContentSheets(): number
+  gridCss(): string
+}
+const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeld', 'gridGrounded', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
+const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
+const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
+const ctxOf = (vals: Record<string, unknown>, cit: unknown = { marks: {}, notes: [] }) => ({
+  get: (k: string) => vals[k], hasVal, cit, project: 'Better With Ballymaloe', client: 'Ballymaloe Relish', version: '1.2',
+  info: [['Client', 'Ballymaloe Relish'], ['Project', 'Better With Ballymaloe'], ['Version', '1.2'], ['Date', '29 October 2026'], ['Reference', ''], ['Prepared by', ''], ['Agency lead', ''], ['Client lead', '']],
+})
+
+test('the grid numbers its sections once, in one sequence, and starts with the job', () => {
+  const g = grid()
+  const nums = g.gridSheets().flatMap(s => s.rows.flat()).map(c => c.num).filter(n => /^\d+$/.test(n))
+  assert.deepEqual([...new Set(nums)], ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13'])
+  assert.deepEqual(nums.filter(n => n === '05').length, 3, 'the three objectives share one number')
+  assert.equal(g.gridKeys()[0], 'job')
+  assert.ok(g.gridKeys().includes('objection') && !g.gridKeys().includes('sources'))
+  assert.equal(g.gridSheets().at(-1)?.appendix, true, 'the evidence and the questions sit on an appendix sheet')
+})
+
+test('a box’s word limit is the brief schema’s, and a long part steps its own type down', () => {
+  const g = grid()
+  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; max_words?: number }[] }
+  const key: Record<string, string> = { background: 'background', audience: 'audience', budget_scope: 'budget_and_scope', competitor_context: 'competitor_context',
+    insight: 'insight', smp: 'single_minded_proposition', tone_world_assets: 'tone_and_world', mandatories: 'mandatories' }
+  for (const f of schema.fields) if (key[f.id]) assert.equal(g.gridLimit(key[f.id]), f.max_words, `${f.id} keeps the schema's limit`)
+  assert.equal(g.gridLimit('job'), 0, 'a part with no limit is never stepped down')
+  assert.equal(g.gridWords(words(7)), 7)
+  assert.equal(g.gridWords(['a b', 'c']), 3)
+  assert.equal(g.gridWords(null), 0)
+  assert.deepEqual([[70, 70], [71, 70], [88, 70], [112, 70], [120, 70], [9, 0]].map(([w, l]) => g.gridStep(w, l)), [0, 1, 2, 2, 3, 0])
+})
+
+test('the grid prints a header, an info grid and a footer as the sheets need them, and places each part in its box', () => {
+  const g = grid()
+  const vals = { job: 'Make an ordinary person ring.', background: 'Where we are.', audience: 'Who.', 'objectives.commercial': 'C', 'objectives.behavioural': 'B', 'objectives.attitudinal': 'A',
+    budget_and_scope: 'Budget.', insight: 'The insight.', single_minded_proposition: 'One thought.', reasons_to_believe: ['r1', 'r2'], competitor_context: 'Rivals.',
+    'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['warm'], mandatories: ['logo'], open_questions: ['What is the budget?'] }
+  const out = g.gridBody(ctxOf(vals, { marks: { single_minded_proposition: [1] }, notes }))
+  // The page rule: two content sheets, and the appendix is outside that count. The footer still numbers every page.
+  assert.equal(out.sheets, 3)
+  assert.equal(out.contentSheets, 2)
+  assert.equal(out.appendixSheets, 1)
+  for (const n of [1, 2]) assert.match(out.html, new RegExp(`SHEET<b>${n}/2</b>`))
+  assert.match(out.html, /APPENDIX<b>1\/1<\/b>/)
+  assert.doesNotMatch(out.html, /SHEET<b>3\//, 'the appendix is not a third sheet')
+  for (const n of [1, 2, 3]) assert.match(out.html, new RegExp(`<span>${n} of 3</span>`))
+  assert.equal((out.html.match(/class="hd"/g) || []).length, 3, 'a header on every sheet')
+  assert.equal((out.html.match(/class="info"/g) || []).length, 1, 'the info grid on the first sheet only')
+  assert.equal((out.html.match(/class="foot"/g) || []).length, 3, 'a footer on every sheet')
+  assert.match(out.html, /Napkin \/ Ballymaloe Relish \/ Better With Ballymaloe \/ Creative brief 1\.2 \/ Confidential/)
+  assert.match(out.html, /<b>01<\/b>The job<\/div><div class="bd"><p class="job">Make an ordinary person ring\.<\/p>/)
+  assert.match(out.html, /<div class="box dark"><div class="lab"><b>08<\/b>The single thought<\/div><div class="bd"><p class="big">One thought\.<sup class="fn">1<\/sup><\/p>/)
+  assert.match(out.html, /<b>09<\/b>Why they should believe it<\/div><div class="bd"><ul><li>r1<\/li><li>r2<\/li><\/ul>/)
+  assert.match(out.html, /<div class="src"><ol><li value="1"><b>ThinkBusiness<\/b>: A title · 2024 — <a href="https:\/\/example\.com\/a">/)
+  assert.deepEqual(out.warnings, [])
+  // A part nobody has written reads as missing, never as a quiet blank (the export writes it before it prints).
+  assert.match(out.html, /<b>03<\/b>The barrier<\/div><div class="bd"><p class="todo">Missing: ask Dara to write this part\.<\/p>/)
+  assert.match(out.html, /The objection it has to beat: <i>missing: ask Dara to write it<\/i>/)
+  assert.doesNotMatch(out.html, /To be written|Not written yet/)
+})
+
+test('the grid names a part that ran over its box, drops an appendix with nothing in it, and escapes what it prints', () => {
+  const g = grid()
+  const vals = { single_minded_proposition: words(30), audience: '<script>alert(1)</script>', background: words(120) }
+  const out = g.gridBody(ctxOf(vals))
+  assert.equal(out.sheets, 3, 'the appendix is always there, and says so when it has nothing to list')
+  assert.match(out.html, /No outside sources were cited\. Every claim rests on the client’s brief and on proposals marked to confirm\./)
+  assert.match(out.html, /<p>No open questions: the brief holds what it needs\.<\/p>/)
+  assert.deepEqual(out.warnings.map(w => [w.key, w.step]).sort(), [['background', 3], ['single_minded_proposition', 2]])
+  assert.match(out.html, /class="box dark fit2"/, 'the single thought steps down inside its own box')
+  assert.match(out.html, /class="box fit3"/)
+  assert.doesNotMatch(out.html, /<script>/)
+  assert.match(out.html, /&#60;script&#62;alert\(1\)&#60;\/script&#62;/)
+  assert.match(out.html, /<p class="todo">Missing: ask Dara to write this part\.<\/p>/, 'a part nobody has written yet is not left blank')
+})
+
+test('a brief leaves with nothing empty: the gate names every empty part, the header holds suggestions, and Dara writes first', () => {
+  const g = grid()
+  const all = { job: 'J.', background: 'B.', barrier: 'Ba.', audience: 'A.', 'objectives.commercial': 'c', 'objectives.behavioural': 'b', 'objectives.attitudinal': 'a',
+    budget_and_scope: 'x', insight: 'I.', single_minded_proposition: 'S.', objection: 'O.', reasons_to_believe: ['r'], competitor_context: 'k',
+    'desired_response.think': 't', 'desired_response.feel': 'f', 'desired_response.do': 'd', tone_and_world: ['w'], mandatories: ['m'] }
+  assert.deepEqual(g.gridGaps({ get: (k: string) => (all as Record<string, unknown>)[k], hasVal }), [], 'a complete brief has no gap')
+  const thin = { ...all, job: '', barrier: undefined, objection: ' ', mandatories: [] }
+  assert.deepEqual(g.gridGaps({ get: (k: string) => (thin as Record<string, unknown>)[k], hasVal }).map(x => x.key), ['job', 'barrier', 'mandatories', 'objection'])
+  const at = (o: object) => ({ get: (k: string) => (o as Record<string, unknown>)[k], hasVal })
+  assert.equal(g.gridHollow(at(all)), false)
+  assert.equal(g.gridHollow(at(thin)), false, 'a brief missing four parts is still a brief')
+  assert.equal(g.gridHollow(at({})), true, 'an empty brief is not exported')
+  assert.equal(g.gridHollow(at({ single_minded_proposition: 'Just one thing.' })), true)
+  assert.equal(g.gridHollow(at({ job: 'J.', background: 'B.', audience: 'A.', insight: 'I.' })), false)
+  assert.match(BM, /Not exported: there is hardly anything/)
+  assert.match(BM, /Not exported: almost everything here is a guess/)
+  // A one-word brief: every part comes back, every text part marked, the lists invented. Complete-looking and hollow.
+  const guess = Object.fromEntries(Object.keys(all).map(k => [k, Array.isArray((all as Record<string, unknown>)[k]) ? ['x'] : 'To confirm: A guess.']))
+  assert.deepEqual(g.gridGaps(at(guess)), [], 'nothing is empty')
+  assert.equal(g.gridGrounded(at(guess)), 0)
+  assert.equal(g.gridHollow(at(guess)), true, 'a brief of guesses is not exported as a grid')
+  // Ballymaloe: the client's own words in several parts, the rest proposed.
+  const rooted = { ...guess, job: 'Make an ordinary person ring.', audience: 'Families who cook.', budget_and_scope: '40k, Irish retail.' }
+  assert.equal(g.gridHollow(at(rooted)), false)
+  assert.equal(g.gridHollow(at({ ...rooted, audience: 'To confirm: A.' })), true, 'two grounded parts are not enough')
+  assert.equal(g.gridHollow(at({ goal: 'make me a brief' })), true)
+  // The header: a value, a suggestion marked as one, or a prompt for what only a person knows. Never a blank.
+  const info = g.gridHeaderInfo({ client: 'Ballymaloe Relish, an Irish family relish brand.', project: 'Better With Ballymaloe', version: '1.2', date: '29 October 2026',
+    me: 'Sai', today: new Date(2026, 9, 29) })
+  assert.deepEqual(info.map(p => p[0]), ['Client', 'Project', 'Version', 'Date', 'Reference', 'Prepared by', 'Agency lead', 'Client lead'])
+  assert.equal(info.find(p => p[0] === 'Reference')?.[1], 'BAL-261029 (suggested)')
+  assert.deepEqual([info[5][1], info[6][1], info[7][1]], ['Sai', 'Sai', '[client lead, to confirm]'])
+  const blank = g.gridHeaderInfo({ date: '29 October 2026', today: new Date(2026, 9, 29) })
+  assert.ok(blank.every(p => String(p[1]).trim() !== ''), 'even a brief with no client, project or signed-in person has no empty cell')
+  assert.equal(blank.find(p => p[0] === 'Prepared by')?.[1], 'Napkin Studio')
+  // The export: the grid asks Dara for what is missing and stops, saying so, if it is still missing; the plain export never waits.
+  const ex = fn(BM, 'exportOnce')
+  assert.match(ex, /style==='plain'\)\s*return runExport\(kind, style\)/)
+  assert.match(ex, /gridGaps\(ctx\)/)
+  assert.match(ex, /fillParts\(gaps\.map/)
+  assert.match(ex, /Not exported: /)
+  assert.match(fn(BM, 'fillParts'), /regenField\(f,guidanceFor\?guidanceFor\(k\):null,null,function\(j\)\{/)
+  assert.match(fn(BM, 'regenField'), /if\(done\) done\(j\)/)
+  // A fill that cannot start still finishes, so an export waiting on it never hangs; one export runs at a time.
+  assert.match(fn(BM, 'regenField'), /if\(!window\.clan\)\{ if\(done\) done\(\); return; \}/)
+  assert.match(fn(BM, 'regenField'), /setStatus\(esc\(NO_MW\)\); if\(done\) done\(\); return;/)
+  assert.match(fn(BM, 'doExport'), /if\(EXPORTING\)\{ toast\('An export is already running\.'\); return; \}/)
+  assert.match(fn(BM, 'doExport'), /EXPORTING=false/)
+  // Sideways overflow counts, and when no part is over a limit the longest parts are the ones tightened.
+  assert.match(fn(BM, 'gridOverflow'), /scrollWidth>b\.clientWidth/)
+  assert.match(fn(BM, 'runExport'), /if\(!long\.length\) long=gridLongest\(2\)/)
+  assert.match(BM, /overflow-wrap:anywhere/)
+  // The three new parts are on the form beside the others, and the page can find them by the words a person uses.
+  assert.match(BM, /key:'job',label:'The job'[\s\S]*key:'background'[\s\S]*key:'barrier',label:'The barrier'/)
+  assert.match(BM, /key:'single_minded_proposition'[\s\S]*key:'objection',label:'The objection to beat'/)
+  assert.match(BM, /job:'job, the job, task'/)
+  assert.match(BM, /objection:'objection, the objection, doubt'/)
+})
+
+test('bad data never prints as junk: text and numbers print, anything else counts as empty', () => {
+  const g = grid()
+  assert.equal(g.gridText({ a: 1 }), '')
+  assert.equal(g.gridText(true), '')
+  assert.equal(g.gridText(null), '')
+  assert.equal(g.gridText(42), '42')
+  assert.equal(g.gridText('  hi  '), 'hi')
+  assert.equal(g.gridText(['a', { b: 1 }, ' ', 'c']), 'a; c')
+  assert.deepEqual(g.gridItems('one'), ['one'])
+  assert.deepEqual(g.gridItems(['a', null, { x: 1 }, 'b']), ['a', 'b'])
+  assert.equal(g.gridHas({}), false)
+  assert.equal(g.gridHas('   '), false)
+  const bad = { job: { nested: 'object' }, background: true, audience: [['a', 'b'], 'c'], insight: 12345, reasons_to_believe: 'a string, not a list', mandatories: 7 }
+  const out = g.gridBody({ ...ctxOf(bad), project: undefined, client: undefined })
+  assert.doesNotMatch(out.html, /\[object Object\]|undefined|>null<|>true<|>false</)
+  assert.match(out.html, /Creative brief\. Untitled brief/, 'a brief with no project name is not called undefined')
+  const gaps = g.gridGaps({ get: (k: string) => (bad as Record<string, unknown>)[k], hasVal }).map(x => x.key)
+  assert.ok(gaps.includes('job') && gaps.includes('background'), 'an object or a boolean is empty, so the export writes it')
+  assert.ok(!gaps.includes('insight') && !gaps.includes('mandatories'), 'a number is text')
+})
+
+test('the appendix runs on over as many sheets as it needs, and nothing in it is cut or repeated', () => {
+  const g = grid()
+  const many = Array.from({ length: 25 }, (_, i) => ({ n: i + 1, name: `Publisher ${i + 1}`, items: [{ text: `Article title number ${i + 1} · 2025`, uri: `https://example.com/a-${i + 1}/with/a/long/path/to/read` }] }))
+  const qs = Array.from({ length: 40 }, (_, i) => `Question ${i} about something only the client knows, in a sentence of a fair length?`)
+  const out = g.gridBody(ctxOf({ open_questions: qs }, { marks: {}, notes: many }))
+  const sheets = g.gridSheets().filter(s => !s.appendix).length
+  assert.ok(out.sheets > sheets + 1, 'more than one appendix sheet')
+  for (let i = 0; i < qs.length; i++) assert.equal((out.html.match(new RegExp(`Question ${i} about`, 'g')) || []).length, 1, `question ${i} printed once`)
+  for (let i = 1; i <= 25; i++) assert.equal((out.html.match(new RegExp(`<b>Publisher ${i}</b>`, 'g')) || []).length, 1, `source ${i} printed once`)
+  assert.match(out.html, /Appendix \(continued\)\. Sources and questions to settle\./)
+  assert.match(out.html, new RegExp(`APPENDIX<b>${out.appendixSheets}/${out.appendixSheets}</b>`))
+  assert.equal(out.contentSheets, 2, 'a long appendix never adds a content sheet')
+  // The same numbers a footnote carries, in order, across the sheets.
+  const nums = [...out.html.matchAll(/<li value="(\d+)"><b>Publisher/g)].map(m => +m[1])
+  assert.deepEqual(nums, Array.from({ length: 25 }, (_, i) => i + 1))
+  // A short list beside a long one says so, instead of an empty box.
+  const lopsided = g.gridBody(ctxOf({ open_questions: qs }, { marks: {}, notes: many.slice(0, 2) }))
+  assert.match(lopsided.html, /All listed on the previous sheet\./)
+  // A brief with nothing to list still has its appendix, saying so.
+  const none = g.gridBody(ctxOf({}))
+  assert.equal(none.sheets, sheets + 1)
+  assert.match(none.html, /No outside sources were cited\./)
+})
+
+test('the page rule: a brief is two content sheets however long its parts run, and the appendix is outside the count', () => {
+  const g = grid()
+  assert.equal(g.gridContentSheets(), 2)
+  assert.ok(g.gridSheets().filter(s => !s.appendix).length <= g.gridContentSheets(), 'the sheet list holds at most two content sheets')
+  // Every part three times past its box, a long reasons list and a long appendix: the content stays on two sheets.
+  const long: Record<string, unknown> = {}
+  for (const s of g.gridSheets()) for (const r of s.rows) for (const c of r) long[c.key] = (g.gridLimit(c.key) ? words(g.gridLimit(c.key) * 3) : words(60))
+  long.reasons_to_believe = Array.from({ length: 12 }, (_, i) => `Reason ${i} ${words(25)}`)
+  long.open_questions = Array.from({ length: 40 }, (_, i) => `Question ${i} about something only the client knows, in a sentence of a fair length?`)
+  const out = g.gridBody(ctxOf(long, { marks: {}, notes }))
+  assert.equal(out.contentSheets, 2, 'long content never becomes a third content sheet')
+  assert.ok(out.warnings.length > 0, 'a part that ran over its box is named, not spilled')
+  assert.doesNotMatch(out.html, /SHEET<b>[3-9]\//)
+  // The appendix may run to several sheets, each labelled as appendix and numbered after the content sheets.
+  assert.equal(out.sheets, out.contentSheets + out.appendixSheets)
+  for (let n = 1; n <= out.appendixSheets; n++) assert.match(out.html, new RegExp(`APPENDIX<b>${n}/${out.appendixSheets}</b>`))
+})
+
+test('an export never prints a clipped sheet: it is measured, Dara tightens the long parts once, and otherwise it stops', () => {
+  assert.match(fn(BM, 'gridOverflow'), /createElement\('iframe'\)/)
+  assert.match(fn(BM, 'gridOverflow'), /rows\[rows\.length-1\]\.getBoundingClientRect\(\)\.bottom>ft\.getBoundingClientRect\(\)\.top/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)\.then\(function\(bad\)\{ LAST_GRID_OVERFLOW=bad; return doc; \}\)/)
+  const run = fn(BM, 'runExport')
+  assert.match(run, /LAST_GRID_OVERFLOW\.length/)
+  assert.match(run, /Rewrite this part in at most '\+gridLimit\(k\)\+' words/)
+  assert.match(run, /!retried&&long\.length/)
+  assert.match(run, /Not exported: sheet '\+LAST_GRID_OVERFLOW\[0\]\+' is too full\./)
+  // the guard returns before exportDoc is called
+  assert.ok(run.indexOf('Not exported: sheet') < run.indexOf('window.clan.exportDoc'))
+})
+
+test('a sheet that cannot be measured is never exported: one retry with a longer wait, then the plain buttons are offered', async () => {
+  assert.match(fn(BM, 'gridOverflow'), /setTimeout\(function\(\)\{ end\(null\); \},wait\)/)
+  assert.match(fn(BM, 'measureGrid'), /gridOverflow\(doc,4000\)[\s\S]*gridOverflow\(doc,8000\)/)
+  assert.match(fn(BM, 'buildGridExportHTML'), /return measureGrid\(doc\)/)
+  const run = fn(BM, 'runExport')
+  assert.ok(run.indexOf('LAST_GRID_OVERFLOW===null') < run.indexOf('LAST_GRID_OVERFLOW.length'), 'null is read before the length')
+  assert.match(run, /Try again, or use Plain PDF or Plain HTML/)
+  // run it: a frame that never loads must not reach exportDoc, and the wait doubles once
+  const waits: number[] = []
+  const timers: Array<() => void> = []
+  const doc = { createElement: () => ({ setAttribute() {}, style: {} }), body: { appendChild() {}, removeChild() {} } }
+  const g = lift<{ gridOverflow: (d: string, w: number) => Promise<unknown>; measureGrid: (d: string) => Promise<unknown> }>(
+    BM, ['gridOverflow', 'measureGrid'],
+    { document: doc, setTimeout: (cb: () => void, ms: number) => { waits.push(ms); timers.push(cb) } })
+  const p = g.measureGrid('<html>')
+  timers[0]()
+  await new Promise(r => setImmediate(r))
+  timers[1]()
+  assert.equal(await p, null)
+  assert.deepEqual(waits, [4000, 8000])
+  let printed = 0, said = ''
+  const env = {
+    LAST_GRID_OVERFLOW: null, LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m },
+    buildExportHTML: () => Promise.resolve('<html>'), listWords: (a: string[]) => a.join(', '), gridLongest: () => [],
+    docLocked: () => false, noMiddleware: () => false, DARA: 'Dara', fillParts: () => Promise.resolve(), gridLimit: () => 0,
+    get: () => 'x', window: { clan: { exportDoc: () => { printed++; return Promise.resolve({ ok: true }) } } },
+  }
+  const r = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], env)
+  await r.runExport('pdf', 'grid')
+  assert.equal(printed, 0, 'an unmeasured grid never reaches print')
+  assert.match(said, /^Not exported: .*Plain PDF or Plain HTML/)
+  await r.runExport('pdf', 'plain')
+  assert.equal(printed, 1, 'the plain export is unaffected')
+  // The sheet (Save · PDF): a sheet that could not be laid out on its pages comes back null and is not printed.
+  said = ''
+  const s2 = lift<{ runExport: (k: string, s?: string) => Promise<unknown> }>(BM, ['runExport'], { ...env, buildExportHTML: () => Promise.resolve(null) })
+  await s2.runExport('pdf')
+  assert.equal(printed, 1, 'an unmeasured sheet never reaches print')
+  assert.match(said, /^Not exported: this browser could not lay the sheet out/)
+  await r.runExport('pdf')
+  assert.equal(printed, 2, 'a measured sheet prints, with no grid overflow rule')
+})
+
+test('a part Jude rejected is exported as to confirm, and the export says it was written, not approved', async () => {
+  const mark = lift<{ confirmMarked(v: unknown): unknown }>(BM, ['confirmMarked'], {}).confirmMarked
+  assert.equal(mark('Families who cook.'), 'To confirm: Families who cook.')
+  assert.equal(mark('To confirm: Families.'), 'To confirm: Families.', 'a part already marked is left alone')
+  assert.deepEqual(mark(['a', 'b']), ['To confirm: a', 'b'], 'a list marks its first line')
+  assert.equal(mark(''), '')
+  // fillParts: Jude passes one part and rejects the other. Only the rejected one is marked in the brief.
+  const data: Record<string, unknown> = { audience: 'Families who cook.', insight: 'People skip dinner.' }
+  const patched: Array<[string, unknown]> = []
+  const FIELDS = [{ key: 'audience', label: 'Audience' }, { key: 'insight', label: 'The insight' }]
+  const state: Record<string, string> = { audience: 'done', insight: 'failed' }
+  const env = {
+    FIELDS, JUDE: 'Jude', hasVal, confirmMarked: mark, get: (k: string) => data[k],
+    patch: (k: string, v: unknown) => { patched.push([k, v]); data[k] = v; return Promise.resolve({ ok: true }) },
+    regenField: (f: { key: string }, _g: unknown, _r: unknown, done: (j: unknown) => void) => done({ fields: { [f.key]: { state: state[f.key] } } }),
+  }
+  const fill = lift<{ fillParts(keys: string[]): Promise<string[]> }>(BM, ['fillParts'], env)
+  assert.deepEqual(await fill.fillParts(['audience', 'insight']), ['The insight'])
+  assert.deepEqual(patched, [['insight', 'To confirm: People skip dinner.']])
+  // what prints: the sheet draws the mark as the box's corner tag, and the sentence reads clean
+  const g = grid()
+  const out = g.gridBody(ctxOf({ audience: data.audience, insight: data.insight }))
+  assert.equal((out.html.match(/<span class="tc">to confirm<\/span>/g) || []).length, 1, 'only the rejected part carries the tag')
+  assert.match(out.html, /People skip dinner\./)
+  assert.doesNotMatch(out.html, /To confirm: People/)
+  // the toast names it
+  const words = lift<{ notApprovedWords(l: string[]): string }>(BM, ['notApprovedWords'], { JUDE: 'Jude', listWords: listJoin }).notApprovedWords
+  assert.equal(words(['The insight', 'Audience']), 'Written, not approved by Jude: the insight and audience.')
+  assert.equal(words([]), '')
+  // the export passes them on and says so once the export has started
+  let said = ''
+  const run = lift<{ runExport(k: string, s: string, r?: boolean, rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
+    LAST_GRID_OVERFLOW: [], LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m }, buildExportHTML: () => Promise.resolve('<html>'),
+    get: () => 'x', notApprovedWords: words, window: { clan: { exportDoc: () => Promise.resolve({ ok: true }) } },
+  })
+  await run.runExport('pdf', 'grid', false, ['The insight'])
+  assert.equal(said, 'Written, not approved by Jude: the insight.')
+  await run.runExport('pdf', 'grid', false, [])
+  assert.equal(said, 'Preparing PDF…', 'nothing rejected: nothing extra is said')
+  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, rejected\)/)
+})
+
+test('the footer names the client, not its descriptor, and the page count never wraps', () => {
+  const g = grid()
+  const ctx = { ...ctxOf({ audience: 'Who.' }), client: 'Ballymaloe Relish, an Irish family relish brand.' }
+  const out = g.gridBody(ctx)
+  assert.match(out.html, /Napkin \/ Ballymaloe Relish \/ Better With Ballymaloe \/ Creative brief 1\.2 \/ Confidential/)
+  assert.doesNotMatch(out.html, /class="foot"><span>[^<]*an Irish/)
+  assert.match(g.gridCss(), /\.foot span:last-child\{white-space:nowrap\}/)
+  assert.match(g.gridCss(), /\.fit3 \.bd\{font-size:10px\}/, 'the smallest step stays readable')
+})
+
+test('the grid prints on A4 sheets that break cleanly, and stays in the Save menu beside the sheet and a plain one', () => {
+  const css = grid().gridCss()
+  assert.match(css, /@page\{size:A4;margin:0\}/)
+  assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
+  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):style==='grid'\?buildGridExportHTML\(\):buildSheetExportHTML\(style==='client'\?'client':'agency'\)/)
+  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
+  // Save · PDF is the side tab's main button; the others are in its menu (features/brief-new-ui.clan).
+  assert.match(BM, /id="exPdf"[\s\S]*id="exClient"[\s\S]*id="exHtml"[\s\S]*id="exGridPdf"[\s\S]*id="exGridHtml"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
+  assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
+  assert.match(BM, /\$\('exHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html'\); \}\);/, 'the HTML button is the sheet')
+  assert.match(BM, /\$\('exGridPdf'\)\.addEventListener\('click',function\(\)\{ doExport\('pdf','grid'\); \}\);/, 'the grid template is still a PDF')
+  assert.match(BM, /\$\('exGridHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html','grid'\); \}\);/)
+  assert.match(BM, /\$\('exClient'\)\.addEventListener\('click',function\(\)\{ doExport\('pdf','client'\); \}\);/)
+  assert.match(BM, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the side tab and the OS bar, is the sheet')
+  // The grid's fit rules apply to the grid only; the sheet flows onto as many pages as it needs.
+  const run = fn(BM, 'runExport')
+  assert.match(run, /style==='grid'&&LAST_GRID_OVERFLOW===null/)
+  assert.match(run, /style==='grid'&&LAST_GRID_OVERFLOW\.length/)
+  assert.match(fn(BM, 'exportOnce'), /style==='client'&&!docLocked\(\)/, 'the client copy is of a locked brief')
+})
+
+
+test('a part the draft marks "To confirm:" prints a corner tag, not the words in the sentence', () => {
+  const g = grid()
+  assert.equal(g.gridText('To confirm: Easy.'), 'Easy.')
+  assert.equal(g.gridText(['To confirm: a', 'b']), 'a; b')
+  assert.equal(g.gridFlag('To confirm: Easy.'), true)
+  assert.equal(g.gridFlag(['x', 'to confirm: y']), true)
+  assert.equal(g.gridFlag('Easy. To confirm: later'), false, 'only a leading mark counts')
+  const ctx = (v: Record<string, unknown>) => ({ get: (k: string) => v[k], hasVal, cit: { marks: {}, notes: [] }, info: [], project: 'P', client: 'C', version: '1' })
+  const marked = g.gridBody(ctx({ insight: 'To confirm: Tension here.', background: 'Plain fact.' })).html
+  assert.match(marked, /class="tc">to confirm</)
+  assert.doesNotMatch(marked, /To confirm: Tension/)
+  assert.equal((marked.match(/class="tc"/g) || []).length, 1, 'one tag, only on the marked box')
+})
+
+// ── the shared fields snippet: the source card (OS-layer contract §8.3) ─────
+
+/** The card's renderer, lifted with the page's own helpers and words. */
+function cardKit() {
+  // The page's esc holds a quote in a regex the lifter cannot read past; the
+  // stand-in escapes the same characters.
+  const names = ['obj', 'arr', 'clip', 'tierWord', 'isYou', 'nameOfId', 'personName', 'reviewLine', 'cardHTML']
+  const vars = ['ORIGIN_WORD', 'VERDICT_WORD', 'CARD_KIND'].map(n => obj(CLF, n)).join('\n')
+    + '\nvar VIEW=null; var OPAQUE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;'
+  const body = `${vars}\n${names.map(n => fn(CLF, n)).join('\n')}\nreturn {cardHTML};`
+  const plainDate = (d: string) => `on ${String(d).slice(0, 10)}`
+  return new Function('plainDate', 'esc', body)(plainDate, esc) as { cardHTML(c: unknown, compact?: boolean): string }
+}
+
+const carriedPin = {
+  ref: 'f_01JA0B3P4Q', kind: 'fact', label: 'Orchard Hill · share', value: '23%', detail: 'Bord Bia · high confidence',
+  origin: 'research', from: { document_id: 'r1', title: 'Lúnasa launch', app_id: 'ie.napkin.campaign-research', path: 'docs/r1.clan' },
+  review: { verdict: 'rejected', by: 'You', at: '2026-11-08T10:00:00Z', note: 'The panel was revised' },
+  history: [
+    { verdict: 'rejected', by: 'You', at: '2026-11-08T10:00:00Z', note: 'The panel was revised' },
+    { verdict: 'verified', by: 'mary', at: '2026-11-01T10:00:00Z', superseded: true },
+  ],
+}
+
+test('the source card says where a fact came from, its latest verdict, and folds the rest under Record', () => {
+  const { cardHTML } = cardKit()
+  const h = cardHTML(carriedPin)
+  assert.match(h, /^<div class="clf-sc" data-card="f_01JA0B3P4Q" data-origin="research">/)
+  assert.match(h, /<span class="clf-sc-k o-research">Research<\/span>/)
+  assert.match(h, /<span class="clf-sc-r v-rejected">Marked wrong by you · on 2026-11-08<\/span>/)
+  assert.match(h, /<span class="clf-sc-v">23%<\/span><p class="clf-sc-t">Orchard Hill · share<\/p>/)
+  assert.match(h, /From <b>Lúnasa launch<\/b><small>campaign research<\/small>/)
+  // The history is folded, newest first, the replaced one marked.
+  const rec = h.slice(h.indexOf('<details class="clf-more clf-sc-rec"><summary>Record</summary>'))
+  assert.ok(rec.indexOf('Marked wrong by you') < rec.indexOf('Verified by mary'), rec)
+  assert.match(rec, /Verified by mary · on 2026-11-01 · replaced/)
+  assert.match(h, /data-clf-sc="open" data-ref="f_01JA0B3P4Q">Where this came from/)
+  assert.match(h, /data-clf-sc="from" data-path="docs\/r1\.clan">Open Lúnasa launch/)
+
+  // Every origin has its words; one the host never sends is this document.
+  const o = (origin: string) => /clf-sc-k o-[a-z]+">([^<]+)</.exec(cardHTML({ ...carriedPin, origin }))?.[1]
+  assert.deepEqual(['research', 'client', 'brand', 'layer', 'person', 'document', 'rumour'].map(o),
+    ['Research', 'Client upload', 'Brand Clan', 'Knowledge layer', 'A person', 'This document', 'This document'])
+
+  // Unreviewed: no verdict, no Record. Hostile words are escaped.
+  const bare = cardHTML({ ref: 'fi_1', kind: 'finding', label: '<img src=x onerror=alert(1)>', origin: 'document' })
+  assert.doesNotMatch(bare, /clf-sc-r|Record|<img/)
+  assert.match(bare, /&#60;img src=x onerror=alert\(1\)&#62;/)
+  // Gone from the document: said so.
+  assert.match(cardHTML({ ref: 'f_X', kind: 'unknown', label: 'f_X', origin: 'document' }), /not in the document any more/)
+})
+
+test('the drawer shows the same card, compact, from the same renderer', () => {
+  const { cardHTML } = cardKit()
+  const c = cardHTML(carriedPin, true)
+  assert.match(c, /^<div class="clf-sc compact" data-card="f_01JA0B3P4Q" data-origin="research">/)
+  // The drawer shows the value and words itself; the provenance is the card's.
+  assert.doesNotMatch(c, /clf-sc-v|clf-sc-t|data-clf-sc="open"/)
+  const head = (x: string) => x.slice(0, x.indexOf('</div>'))
+  assert.equal(head(c).replace(' compact', ''), head(cardHTML(carriedPin)))
+  assert.match(c, /<summary>Record<\/summary>/)
+  // One renderer: the drawer and ClanFields.card both go through card(), which
+  // is the only caller of cardHTML.
+  assert.match(fn(CLF, 'draw'), /card\(cref,slot,true\)/)
+  assert.match(CLF, /card:function\(ref,el\)\{ return card\(ref,el,false\); \}/)
+  assert.equal(CLF.split('cardHTML(').length - 1, 2) // its definition and card()'s call
+  assert.match(CLF, /stack:stack/)
+})
+
+test('cards a page asks for in one tick are one POST /cite, kept until the document changes', async () => {
+  const asked: string[][] = []
+  let version = 'v1'
+  let missing = new Set<string>(['f_GONE'])
+  const fetchCites = (refs: string[]) => {
+    asked.push(refs)
+    return Promise.resolve(Object.fromEntries(refs.filter(r => !missing.has(r)).map(r => [r, { ref: r, kind: 'fact' }])))
+  }
+  const uniqFn = new Function(`${fn(CLF, 'uniq')}; return uniq;`)()
+  const body = `${fn(CLF, 'cardsFor')}\nreturn {cardsFor};`
+  const { cardsFor } = new Function('CARDS', 'CARDS_AT', 'CARD_BATCH', 'cardVer', 'fetchCites', 'uniq', 'arr', body)(
+    {}, null, null, () => version, fetchCites, uniqFn, arr) as { cardsFor(refs: string[]): Promise<Record<string, unknown>> }
+
+  const [a, b] = await Promise.all([cardsFor(['f_1', 'fi_2']), cardsFor(['f_1', 'f_GONE'])])
+  assert.deepEqual(asked, [['f_1', 'fi_2', 'f_GONE']])
+  assert.deepEqual(Object.keys(a), ['f_1', 'fi_2'])
+  assert.equal(b.f_GONE, null)
+  // Kept: asking again asks nothing — except what came back empty.
+  await cardsFor(['f_1', 'fi_2'])
+  assert.equal(asked.length, 1)
+  missing = new Set()
+  const again = await cardsFor(['f_GONE'])
+  assert.deepEqual(asked.at(-1), ['f_GONE'])
+  assert.deepEqual(again.f_GONE, { ref: 'f_GONE', kind: 'fact' })
+  // The document changed: asked afresh.
+  version = 'v2'
+  await cardsFor(['f_1'])
+  assert.deepEqual(asked.at(-1), ['f_1'])
+})
+
+
+// ── Brief Maker on the new UI (features/brief-new-ui.clan) ──────────────────
+
+type Item = { key: string; sec: string; w: number }
+type Cell = { key?: string; head?: string; col: number; row: number; w: number; h: number; order?: number }
+type Lay = {
+  layoutOrder(fields: { key: string; sec: string }[], stored: unknown): Item[]
+  layoutPack(items: Item[]): Cell[]
+  layoutParts(items: Item[]): Record<string, { col: number; row: number; w: number; h: number; order: number }>
+  layoutMove(items: Item[], key: string, target: string, after: boolean): Item[]
+  layoutStep(items: Item[], key: string, d: number): Item[]
+  layoutResize(items: Item[], key: string, w: number): Item[]
+}
+const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
+const lay = () => lift<Lay>(BM, ['clampW', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize'],
+  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)() })
+const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
+
+test('a brief with no layout sits in the schema’s order at the default widths', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  assert.deepEqual(keysOf(items), BM_FIELDS.map(f => f.key), 'every part, in the schema’s order')
+  const cells = L.layoutPack(items)
+  const at = (k: string) => cells.find(c => c.key === k)!
+  // The job is a full row; background and barrier share one; the three objectives share one.
+  assert.deepEqual([at('job').col, at('job').w], [1, 12])
+  assert.equal(at('background').row, at('barrier').row)
+  assert.deepEqual([at('background').col, at('barrier').col], [1, 7])
+  assert.deepEqual(['objectives.commercial', 'objectives.behavioural', 'objectives.attitudinal'].map(k => at(k).col), [1, 5, 9])
+  // A section heading takes a row of its own where the section changes, and nothing shares a cell.
+  const heads = cells.filter(c => c.head).map(c => c.head)
+  assert.deepEqual(heads, ['Identity', 'The brief', 'Objectives', 'Strategy', 'Desired response', 'Execution'])
+  const taken = new Set<string>()
+  for (const c of cells) for (let x = c.col; x < c.col + c.w; x++) {
+    const k = `${c.row}:${x}`; assert.ok(!taken.has(k), `cell ${k} is used once`); taken.add(k)
+    assert.ok(x >= 1 && x <= 12)
+  }
+})
+
+test('a part moved or resized keeps its place in data, and the rest keep theirs', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, {})
+  // Move the insight after the audience: only the insight changes place.
+  const moved = L.layoutMove(items, 'insight', 'audience', true)
+  const k = keysOf(moved)
+  assert.equal(k.indexOf('insight'), k.indexOf('audience') + 1)
+  assert.deepEqual(k.filter(x => x !== 'insight'), keysOf(items).filter(x => x !== 'insight'))
+  // Stored, read back: the same order and widths, every part written.
+  const parts = L.layoutParts(L.layoutResize(moved, 'barrier', 4))
+  assert.equal(Object.keys(parts).length, BM_FIELDS.length)
+  assert.deepEqual(parts.barrier, { col: 7, row: parts.background.row, w: 4, h: 1, order: k.indexOf('barrier') })
+  const again = L.layoutOrder(BM_FIELDS, parts)
+  assert.deepEqual(keysOf(again), k)
+  assert.equal(again.find(x => x.key === 'barrier')!.w, 4)
+  // Widths stay on the grid: never under three columns, never over twelve, never fractional.
+  assert.equal(L.layoutResize(items, 'job', 1).find(x => x.key === 'job')!.w, 3)
+  assert.equal(L.layoutResize(items, 'job', 40).find(x => x.key === 'job')!.w, 12)
+  assert.equal(L.layoutResize(items, 'job', 6.4).find(x => x.key === 'job')!.w, 6)
+  // A part too wide for what is left of a row starts the next one.
+  const wide = L.layoutPack(L.layoutResize(items, 'barrier', 8))
+  const bg = wide.find(c => c.key === 'background')!, br = wide.find(c => c.key === 'barrier')!
+  assert.deepEqual([br.row, br.col], [bg.row + 1, 1])
+  // The keyboard's step: one place earlier or later; nothing moves past either end.
+  assert.deepEqual(keysOf(L.layoutStep(items, 'client', -1)).slice(0, 2), ['client', 'project_name'])
+  assert.deepEqual(keysOf(L.layoutStep(items, 'project_name', -1)), keysOf(items))
+  assert.deepEqual(keysOf(L.layoutStep(items, 'open_questions', 1)), keysOf(items))
+  // An older brief's layout naming a part only by width keeps its schema place; a stray entry is ignored.
+  const partial = L.layoutOrder(BM_FIELDS, { audience: { w: 12 }, nonsense: { order: 0 } })
+  assert.deepEqual(keysOf(partial), keysOf(items))
+  assert.equal(partial.find(x => x.key === 'audience')!.w, 12)
+})
+
+test('the brief’s state pill says Draft, Ready to lock, Locked or Reopened; what needs a call is counted on Decisions only', () => {
+  const { briefStatus } = lift<{ briefStatus(s: unknown): { label: string; tone: string | null; locked: boolean } }>(BM, ['briefStatus'], {})
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 0, canLock: false }), { label: 'Draft', tone: null, locked: false })
+  // One needs indicator (owner, 9 Nov 2026): a count here disagreed with Decisions after Set aside.
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 2, canLock: false }), { label: 'Draft', tone: null, locked: false })
+  assert.deepEqual(briefStatus({ locked: false, reopened: false, needs: 0, canLock: true }), { label: 'Ready to lock', tone: 'ok', locked: false })
+  assert.deepEqual(briefStatus({ locked: true, reopened: false, needs: 0, canLock: false }), { label: 'Locked', tone: 'ok', locked: true })
+  assert.deepEqual(briefStatus({ locked: true, reopened: true, needs: 1, canLock: false }), { label: 'Reopened', tone: 'warn', locked: false })
+  for (const s of ['Draft', 'Ready to lock', 'Locked', 'Reopened']) assert.ok(s.length <= 28, 'a bar label is at most 28 characters')
+})
+
+test('each OS bar button runs the same handler as its side-tab control', () => {
+  const ACTIONS = obj(BM, 'ACTIONS')
+  const actionIds = [...ACTIONS.matchAll(/^\s*(\w+):/gm)].map(m => m[1])
+  assert.deepEqual(actionIds.sort(), ['lock', 'pdf', 'redraft', 'reopen', 'unlock'])
+  // Every control in the side tab that names an action has one, and is bound through the table.
+  const tab = BM.slice(BM.indexOf('<aside class="stab"'), BM.indexOf('</aside>'))
+  const acts = [...tab.matchAll(/data-act="([^"]+)"/g)].map(m => m[1])
+  assert.deepEqual([...new Set(acts)].sort(), ['lock', 'pdf', 'redraft', 'reopen'])
+  assert.match(BM, /document\.querySelectorAll\('#stab \[data-act\]'\)\.forEach\(function\(b\)\{ var a=b\.getAttribute\('data-act'\); if\(ACTIONS\[a\]\) b\.addEventListener\('click', function\(\)\{ ACTIONS\[a\]\(\); \}\); \}\);/)
+  assert.match(BM, /if\(m\.type==='clan:bar-action'\)\{ if\(phase==='doc'&&ACTIONS\.hasOwnProperty\(m\.id\)\) ACTIONS\[m\.id\]\(\); return; \}/)
+  assert.match(BM, /if\(m\.type==='clan:bar\?'\)\{ sendBar\(true\); return; \}/)
+  // The bar's list: only ids the table has, at most six buttons and one status, labels the bar takes.
+  type BarI = { kind: string; id?: string; label: string; disabled?: boolean }
+  const el = (disabled = false) => ({ disabled })
+  const items = (o: { phase?: string; A?: boolean; reopened?: string[]; armed?: boolean; st?: unknown }) => lift<{ barItems(): BarI[] }>(BM, ['barItems'], {
+    phase: o.phase ?? 'doc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
+    statusNow: () => o.st ?? { label: 'Draft', tone: null, locked: false }, $: () => el(), REDRAFT_ARMED: o.armed ? 1 : null,
+  }).barItems()
+  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: no buttons, and the state is Draft (never the host’s guess)')
+  assert.deepEqual(items({ phase: 'proc' }).map(i => i.label), ['Draft'], 'the crew at work: still a draft')
+  const draft = items({})
+  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
+  assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
+  const locked = items({ A: true })
+  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'unlock', 'reopen', 'status'], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
+  assert.match(fn(BM, 'unlockClick'), /hostPost\('\/unapprove',\{rationale:/, 'Unlock calls /unapprove as Lock calls /approve')
+  assert.match(fn(BM, 'lockClick'), /unlockClick\(\)/, 'the side tab’s lock button is Unlock while locked')
+  assert.equal(locked.find(i => i.id === 'reopen')!.label, 'Reopen a part…')
+  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', 'lock', 'status'])
+  for (const list of [draft, locked]) for (const i of list) {
+    assert.ok(i.label.length <= 28, i.label)
+    if (i.kind === 'button') assert.ok(actionIds.includes(i.id!), `bar button ${i.id} has a handler`)
+  }
+})
+
+test('a locked brief reopens one part for a client’s change, through /client-review/reopen', () => {
+  const src = fn(BM, 'renderReopen')
+  assert.match(src, /hostPost\('\/client-review\/reopen', \{answer:p\.decision\}\)/)
+  assert.match(fn(BM, 'reopenable'), /!p\.reopened&&p\.decision&&\(p\.state==='rejected'\|\|p\.state==='accepted_with_changes'\)/)
+  assert.match(BM, />Reopen a part…<\/button>/)
+})
+
+test('the grid export’s header carries the brief’s logos, never a hard-coded NAPKIN', () => {
+  const g = grid()
+  const none = g.gridBody(ctxOf({ job: 'J' })).html
+  assert.doesNotMatch(none, /NAPKIN/)
+  assert.doesNotMatch(none, /class="logo"/, 'no logos, no logo cell')
+  const png = 'data:image/png;base64,iVBORw0KGgo='
+  const svg = 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
+  const withLogos = g.gridBody({ ...ctxOf({ job: 'J' }), logos: [{ src: png, alt: 'Client' }, { src: svg, alt: 'Agency' }, { src: 'javascript:alert(1)', alt: 'x' }, { src: 'https://x.test/a.png', alt: 'y' }] }).html
+  assert.equal((withLogos.match(/<div class="logo">/g) || []).length, 3, 'on every sheet')
+  assert.match(withLogos, new RegExp(`<div class="logo"><img src="${png.replace(/[+/]/g, '\\$&')}" alt="Client"><img src="${svg.replace(/[+/]/g, '\\$&')}" alt="Agency"></div>`))
+  assert.doesNotMatch(withLogos, /javascript:|x\.test/, 'only inlined pictures print')
+  assert.doesNotMatch(BM, /class="logo">NAPKIN/)
+})
+
+test('logos come from uploads now and a Brand Clan later, ordered client, agency, partner', () => {
+  const LOGOS = [{ slot: 'partner', ref: { asset: 'p.png' } }, { slot: 'client', ref: { asset: 'c.png' } }, { slot: 'agency', ref: { brand: 'brand-wk', asset: 'logo-primary' } }, { slot: 'client' }]
+  const KIT = { brand: { name: { value: 'Lumen Water' } }, kit: { version: 5 }, visual: { logos: {
+    'lumen-primary': { name: 'Lumen mark', variants: { mono: { asset: 'assets/lumen-mono.svg', colour: 'mono', on: 'dark' }, 'full-light': { asset: 'assets/lumen-mark.svg', colour: 'full', on: 'light' } } },
+    wordmark: { name: 'Wordmark', variants: { a: { asset: 'assets/../../etc/passwd.png' } } },
+    nofile: { name: 'No file', variants: {} } } } }
+  const lifted = (vals: Record<string, unknown>) => lift<{ logoSrc(l: unknown): string; nextSlot(ls: unknown[]): string; sheetLogos(): { slot: string }[]; kitLogos(k: unknown): { id: string; asset: string }[]; brandAttached(): { id: string } | null; upKeys(): string[] }>(BM,
+    ['logoSrc', 'slotRank', 'sheetLogos', 'nextSlot', 'logosOf', 'items', 'brandAttached', 'kitLogos', 'isBrandKit', 'upKeys'], {
+      LOGO_SLOTS: [['client', 'Client'], ['agency', 'Agency'], ['partner', 'Partner']], arr, assetUrl: (n: string) => `clan://localhost/assets/${n}`,
+      get: (k: string) => vals[k],
+    })
+  const L = lifted({ logos: LOGOS })
+  assert.equal(L.logoSrc({ ref: { asset: 'c.png' } }), 'clan://localhost/assets/c.png')
+  assert.equal(L.logoSrc({ ref: { brand: 'b', asset: 'x' } }), '', 'a Brand Clan logo with no kit attached has no picture')
+  assert.deepEqual(L.sheetLogos().map(l => l.slot), ['client', 'agency', 'partner'], 'a logo with no ref is left out')
+  assert.equal(L.nextSlot([]), 'client')
+  assert.equal(L.nextSlot([{ slot: 'client' }]), 'agency')
+  assert.equal(L.nextSlot([{ slot: 'client' }, { slot: 'agency' }]), 'partner')
+  // A Brand Clan attached (data.upstream.<its id>, feat/brand-clan's carry): its logos are offered, a full-colour
+  // variant for light paper first; a logo pointing out of the assets folder, or with no picture, is not.
+  const K = lifted({ logos: LOGOS, upstream: { 'brand-wk': KIT, 'res-1': { findings: {} } } })
+  assert.deepEqual(K.brandAttached()!.id, 'brand-wk')
+  assert.deepEqual(K.kitLogos(KIT), [{ id: 'lumen-primary', name: 'Lumen mark', asset: 'lumen-mark.svg' }])
+  assert.equal(K.logoSrc({ ref: { brand: 'brand-wk', asset: 'lumen-primary' } }), 'clan://localhost/assets/lumen-mark.svg')
+  assert.equal(K.logoSrc({ ref: { brand: 'other', asset: 'lumen-primary' } }), '', 'only the kit that is attached')
+  assert.deepEqual(K.upKeys(), ['res-1'], 'a Brand Clan is not research')
+  assert.match(fn(BM, 'renderLogos'), /kitOffers\(\)/, 'the Logos box offers the kit’s logos')
+  assert.match(fn(BM, 'kitOffers'), /ref:\{brand:x\.brandId, asset:x\.id\}|brandId:b\.id/)
+  assert.match(fn(BM, 'renderLook'), /renderBrandLine\(\)/)
+})
+
+test('the look is appearance: layout and logos are schema appearance keys, and Reset look clears them with the theme', () => {
+  const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: Record<string, { 'x-clan-appearance'?: boolean }> }
+  for (const k of ['theme', 'layout', 'logos']) assert.equal(schema.properties[k]['x-clan-appearance'], true, k)
+  assert.match(fn(BM, 'resetLook'), /patch\(\{theme:null, layout:null, logos:null\}/)
+})
+
+test('nothing the brief did before is gone: every control is still on the page', () => {
+  // Owner rule: no feature that exists today is removed or hidden by the new UI.
+  for (const id of ['prompt', 'addAny', 'genBtn', 'chips', 'intakeStatus', 'dropveil', 'fromUp', 'proc', 'meet', 'procActs', 'tiles',
+    'fields', 'review', 'crewline', 'upNote', 'madeFrom', 'boards', 'redraft', 'newDraft', 'lockBtn', 'lockList', 'lockedBadge', 'status',
+    'saveBtn', 'exHtml', 'exPdf', 'exHtmlPlain', 'exPdfPlain', 'toast', 'walker', 'docIdent', 'hProj', 'hCli'])
+    assert.match(BM, new RegExp(`id="${id}"`), `#${id} is on the page`)
+  assert.match(BM, /See each part as it’s written/)
+  // Per-part controls: edit, write again, keep as is (locked_fields), and the way into why.
+  const row = fn(BM, 'fieldRow')
+  for (const c of ['act-edit', 'act-regen', 'act-lock', 'prov']) assert.match(row + fn(BM, 'provHtml'), new RegExp(c))
+  // The selected part offers the same, through the same functions.
+  const sel = fn(BM, 'renderSelPart')
+  assert.match(sel, /startEdit\(row,f\)/)
+  assert.match(sel, /startRegen\(row,f\)/)
+  assert.match(sel, /toggleLock\(f\)/)
+  assert.match(sel, /renderBuilt\(\)/, 'Built from is drawn by renderBuilt')
+  assert.match(fn(BM, 'renderBuilt'), /F\.cards\(refs\)/, 'one compact row per ref, from the OS source cards')
+  assert.match(fn(BM, 'renderBuilt'), /F\.open\(x\.getAttribute\('data-ref'\)\)/, 'each row opens its source card')
+  assert.match(sel, /whyHtml\(f\)/)
+})
+
+test('Built from: one source card per ref the part cites, asked for in one tick, each with the parts it is also used in', () => {
+  const src = fn(BM, 'renderBuilt')
+  // All cards are asked for in one call (the mock's compact rows), so ClanFields sends one /cite.
+  assert.match(src, /F\.cards\(refs\)\.then\(function\(m\)\{/)
+  assert.equal((src.match(/F\.cards?\(/g) ?? []).length, 1, 'one lookup for every row')
+  assert.match(src, /cites\.length\?cites:\[docId\(\)\+'#'\+f\.key\]/, 'a part that cites nothing shows its own card, as before')
+  assert.match(src, /data-go=/)
+  assert.match(fn(BM, 'goPart'), /select\(key\)/, 'a used-in chip selects that part')
+  const decisions: Record<string, { cites: string[] }> = { background: { cites: ['f_1', 'f_2'] }, audience: { cites: ['f_2'] }, insight: { cites: ['f_2', 'f_bad'] }, barrier: { cites: ['f_1'] } }
+  const vals: Record<string, unknown> = { background: 'B', audience: 'A', insight: 'I', barrier: '' }
+  const U = lift<{ partCites(k: string): string[]; usedIn(r: string, but: string): string[] }>(BM, ['partCites', 'usedIn'], {
+    decisionsFor: (k: string) => (decisions[k] ? [decisions[k]] : []), claimDecision: () => null,
+    citesOf: (ds: ({ cites: string[] } | null | undefined)[]) => [...new Set(ds.flatMap(d => (d ? d.cites : [])))],
+    wrongPin: (id: string) => id === 'f_bad', hasVal: (v: unknown) => !!v, get: (k: string) => vals[k],
+    layoutItems: () => ['background', 'barrier', 'audience', 'insight'].map(key => ({ key })),
+  })
+  assert.deepEqual(U.partCites('insight'), ['f_2'], 'a pin marked wrong is not something it was built from')
+  assert.deepEqual(U.usedIn('f_2', 'background'), ['audience', 'insight'], 'in reading order, never the part itself')
+  assert.deepEqual(U.usedIn('f_1', 'background'), [], 'an empty part is not using anything')
+})
+
+// ── per-part Confidential (owner, 9 Nov) ─────────────────────────────────────
+
+test('a part marked Confidential is hatched and tagged, kept in the agency copy and left out of the client copy', () => {
+  const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: Record<string, { type?: string; 'x-clan-appearance'?: boolean }> }
+  assert.equal(schema.properties.confidential_fields.type, 'array')
+  assert.equal(schema.properties.confidential_fields['x-clan-appearance'], undefined, 'who may read a part is not its look: Reset look keeps it')
+  const sel = fn(BM, 'renderSelPart')
+  assert.match(sel, /data-sp="keep"[\s\S]*data-sp="conf"/, 'beside Keep as is')
+  assert.match(sel, /else if\(a==='conf'\) toggleConf\(f\);/)
+  assert.match(fn(BM, 'toggleConf'), /patch\('confidential_fields', next/)
+  assert.match(fn(BM, 'toggleConf'), /if\(!canWrite\(f\.key\)\)/, 'a locked brief changes a reopened part only')
+  assert.match(fn(BM, 'fieldRow'), /row\.classList\.toggle\('conf', conf\)/)
+  assert.match(fn(BM, 'fieldRow'), /class="conftag"/)
+  assert.match(BM, /\.pgrid > \.row\.conf\{background-image:repeating-linear-gradient\(135deg/)
+  // The client copy prints no confidential part; the agency copy prints them hatched and tagged.
+  assert.match(fn(BM, 'sheetItems'), /copy!=='client'\|\|c\.indexOf\(it\.key\)===-1/)
+  const g = grid()
+  const out = g.gridBody({ ...ctxOf({ budget_and_scope: 'Secret money.' }), conf: ['budget_and_scope'] }).html
+  assert.match(out, /class="box conf"><div class="lab"><b>06<\/b>Budget and scope<span class="cf">Confidential<\/span>/)
+  assert.match(fn(BM, 'exportField'), /class="cf">Confidential</)
+})
+
+// ── the sheet as it prints ───────────────────────────────────────────────────
+
+type Block = { id: number | string; top: number; bottom: number; head: boolean }
+const sheet = () => lift<{ sheetPaginate(b: Block[], o?: unknown): (number | string)[][] }>(BM, ['sheetPaginate'], { arr, A4: { h: 1123, top: 56, bottom: 64 } })
+
+test('the sheet breaks into A4 pages between whole rows, a heading going with the row under it', () => {
+  const P = sheet().sheetPaginate
+  const b = (id: number | string, top: number, bottom: number, head = false): Block => ({ id, top, bottom, head })
+  // Everything fits on one page.
+  assert.deepEqual(P([b(1, 300, 330, true), b(2, 330, 600), b(3, 600, 1000)]), [[1, 2, 3]])
+  // Row 3 runs past the page's bottom margin (1123 - 64): it starts page 2, at the top margin.
+  const two = P([b(1, 300, 330, true), b(2, 330, 900), b(3, 900, 1100), b(4, 1100, 1500)])
+  assert.deepEqual(two, [[1, 2], [3, 4]], 'row 4 fits under row 3 once page 2 starts at row 3 (1500 - (900 - 56) < 1059)')
+  // A heading at the foot of a page moves on with its row.
+  assert.deepEqual(P([b(1, 300, 900), b(2, 900, 930, true), b(3, 930, 1200)]), [[1], [2, 3]])
+  // A row taller than a page gets a page to itself, and the next row starts the one after.
+  assert.deepEqual(P([b(1, 300, 400), b(2, 400, 2000), b(3, 2000, 2100)]), [[1], [2], [3]])
+  // The pictures follow the grid as one block.
+  assert.deepEqual(P([b(1, 300, 1000), b('boards', 1000, 1300)]), [[1], ['boards']])
+  assert.deepEqual(P([]), [])
+})
+
+test('the screen and the PDF are one sheet: one builder, one measure, guides where the pages break', () => {
+  // Save · PDF builds the sheet from the page's own styles, measures it at A4 width, and prints the pages it measured.
+  const build = fn(BM, 'buildSheetExportHTML')
+  assert.match(build, /sheetMeasure\(sheetDoc\(ctx, null\), 8000\)/)
+  assert.match(build, /LAST_SHEET_PAGES=sheetPaginate\(blocks\)/)
+  assert.match(build, /return sheetDoc\(ctx, LAST_SHEET_PAGES\)/)
+  assert.match(fn(BM, 'sheetCtx'), /css:pageCss\(\)/)
+  assert.match(fn(BM, 'sheetCtx'), /cells:packSheet\(items\)/, 'the same grid the screen packs')
+  assert.match(fn(BM, 'renderStructured'), /packed=packSheet\(layoutItems\(\)\)/, 'the screen packs it the same way, meta row first')
+  assert.match(fn(BM, 'sheetMeasure'), /width:794px;visibility:hidden/, 'measured A4 wide, in this page (a frame in a sandboxed app cannot be read)')
+  assert.doesNotMatch(fn(BM, 'sheetMeasure'), /iframe/)
+  // A phone's rules shape the screen's sheet only, never the printed one or its probe.
+  assert.match(BM, /#sheet \.pgrid > \.row,#sheet \.pgrid > \.sechead\{grid-column:1 \/ -1!important/)
+  // The screen measures the agency copy the same way, and draws a guide before each page's first row.
+  assert.match(fn(BM, 'scheduleBreaks'), /sheetMeasure\(sheetDoc\(ctx, null\), 6000\)[\s\S]*sheetPaginate\(blocks\)/)
+  assert.match(fn(BM, 'renderStructured'), /class(Name)?='pbreak'/)
+  assert.match(fn(BM, 'renderStructured'), /scheduleBreaks\(\)/)
+  // No phone/PDF switch (owner removal), and the type on the sheet does not follow the window.
+  assert.doesNotMatch(BM, /data-format=|Phone view|phone\/PDF/i)
+  assert.match(BM, /\.sheet\.a4 \.val\.spp\{font-size:28px\}/)
+  // Documents stay paper: the sheet keeps the light stock in a dark room, as it prints.
+  assert.match(BM, /\.sheet\.a4\{color-scheme:light;\s*--paper:#FBF7EE;/)
+  // The last page ends the document: no blank page after it.
+  assert.match(BM, /\.sheet\.a4\.page:last-child\{break-after:auto;page-break-after:auto\}/)
+  // Place on page stays open while its buttons rewrite the panel.
+  assert.match(fn(BM, 'renderSelPart'), /OPEN_WHY\['spl:'\+f\.key\]/)
+})
+
+// ── the Research Tool on the new UI (features/research-new-ui.clan) ─────────
+
+test('research: every action the old header and Jude’s bar held is in the inspector, and the sections stay', () => {
+  const at = RT.indexOf('<aside class="insp'), end = RT.indexOf('</aside>', at)
+  assert.ok(at > 0 && end > at, 'the inspector is in the page')
+  const insp = RT.slice(at, end)
+  assert.doesNotMatch(RT, /<header class="top/, 'the header bar is gone')
+  // The buttons keep their ids, so their handlers are the ones they had.
+  for (const [id, label] of [['whoBtn', 'change'], ['extractBtn', 'Read the ask again'], ['researchBtn', 'Run research'],
+    ['synthBtn', 'Find the points'], ['exportBtn', 'Save · PDF'], ['lockBtn', 'Lock and accept']]) {
+    assert.match(insp, new RegExp(`id="${id}"[^>]*>${label}<`), `${id} is in the inspector`)
+    assert.match(RT, new RegExp(`\\$\\('${id}'\\)\\.addEventListener\\('click'`), `${id} is wired`)
+  }
+  for (const id of ['judge', 'viewsw', 'mapview', 'rbox', 'rbox-refresh', 'insp-ask', 'insp-sel', 'nav-report-a', 'nav-start-a', 'nav-ask', 'nav-facts', 'nav-findings'])
+    assert.match(insp, new RegExp(`id="${id}"`), `${id} is in the inspector`)
+  for (const href of ['#report', '#start', '#ask', '#facts', '#findings', '#selection']) assert.ok(insp.includes(`href="${href}"`), href)
+  assert.match(insp, /data-view="report"[^>]*>Report</)
+  assert.match(insp, /data-view="map"[^>]*>Evidence map</)
+  // The report's own parts are where they were.
+  const doc = RT.slice(RT.indexOf('<main id="doc">'), RT.indexOf('</main>'))
+  for (const id of ['report', 'start', 'gates', 'jobs', 'walker', 'records', 'ask', 'legend', 'facts', 'findings', 'selection', 'docfoot'])
+    assert.match(doc, new RegExp(`id="${id}"`), `${id} is in the document`)
+  // Refresh, How it ran and Ask the research are the inspector's, each still a button.
+  assert.match(fn(RT, 'renderInspector'), /refreshBtn\(stale/)
+  assert.match(fn(RT, 'renderInspector'), /data-act="show-run"/)
+  assert.match(fn(RT, 'renderAsks'), /askBoxHtml\('_new', 'Ask the research'\)/)
+  // Owner removals stay removed.
+  for (const gone of ['show-findings', 'source-mix', 'rb-outline', 'answer formed']) assert.ok(!RT.includes(gone), gone)
+  // Continue in is the OS bar's: the panel starts no brief of its own (same POST /spinoff).
+  assert.doesNotMatch(RT, /data-act="spin-brief"|function doSpinBrief/)
+  assert.match(fn(RT, 'judgeBarHtml'), /Continue in ▾/)
+  // Save · PDF keeps its other ways to save behind ▾.
+  assert.match(insp, /data-act="export-html"[^>]*>HTML file</)
+})
+
+test('research: the report body is the mock’s, and every section of the record is drawn in it', () => {
+  const r = fn(RT, 'renderReport')
+  // band, stats, 00 the ask, headline and summary, lens × market sections, then the record
+  for (const part of ['rpBand(r, lk)', 'rpStats()', 'rpAsk(0)', 'h2 class="headline"', 'rep-sum', 'rpBlock', 'rpConfirm(r', 'rpNotResearched(r',
+    'rpContests(k)', 'rpGaps(k)', 'rpPinned(r, k)', 'rpCoverage(k)', 'rpExcluded(r, k)', 'rpHowRan(k)', 'rpRecord(k)', 'rp-asks-at', 'rep-foot'])
+    assert.ok(r.includes(part), part)
+  // Read the ask again sits under the ask; All 19 fields and Your request open what they name.
+  const ask = fn(RT, 'rpAsk')
+  assert.match(ask, /data-act="extract"[^>]*>Read the ask again</)
+  assert.match(ask, /data-act="goto-records" data-to="ask"/)
+  assert.match(ask, /data-act="show-run">Your request and answers</)
+  // Contests keep Resolve and Why; gaps offer Research this, which only fills the ask box.
+  assert.match(fn(RT, 'rpContest'), /data-act="resolve"/)
+  assert.match(fn(RT, 'rpContest'), /data-act="why"/)
+  assert.match(fn(RT, 'rpGaps'), /data-act="gap-ask"/)
+  assert.doesNotMatch(fn(RT, 'gapAsk'), /doAsk|sendAsk|apiProxy/)
+  // One Ask the research box; a lens-scoped question is asked from it with About.
+  assert.doesNotMatch(fn(RT, 'renderAsks'), /askBoxHtml\(L\.k/)
+  assert.match(fn(RT, 'askBoxHtml'), /id="rqlens-_new"/)
+  assert.match(fn(RT, 'doAsk'), /rqlens-/)
+})
+
+test('research: a figure the sentence states becomes its field where it stands', () => {
+  const P: Record<string, { value: unknown; unit: string }> = { f_A: { value: 0.24, unit: 'proportion' }, f_B: { value: 0.11, unit: 'proportion' }, f_T: { value: 'long words that are not a figure at all', unit: 'text' } }
+  const env = {
+    arr, isObj, esc: (x: unknown) => String(x ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`), pins: () => P, fnds: () => ({ fi_X: { statement: 'X' } }),
+    window: { ClanFields: {} }, fmtAny: (p: { value: number }) => `${Math.round(p.value * 100)}%`,
+    pinChip: (id: string) => `[chip ${id}]`,
+  }
+  const f = lift<{ inlineCited(t: string, c: string[]): { html: string; left: string[] }; claimHtml(t: string, c: string[]): string }>(RT, ['inlineFig', 'fno', 'inlineCited', 'restCites', 'claimHtml'], env)
+  const x = f.inlineCited('Ireland grew 24% and GB 11% & more.', ['f_A', 'f_B', 'fi_X'])
+  assert.equal(x.html, 'Ireland grew <clan-field ref="f_A"></clan-field> and GB <clan-field ref="f_B"></clan-field> &#38; more.')
+  assert.deepEqual(x.left, ['fi_X'])
+  // Not inside a longer number, and a figure the sentence does not state follows it.
+  const y = f.inlineCited('Up 124% on 2024.', ['f_A'])
+  assert.deepEqual(y.left, ['f_A'])
+  const c = f.claimHtml('Growth is real.', ['f_A', 'f_T', 'fi_X'])
+  assert.match(c, /^Growth is real\. <span class="rp-cites"><clan-field ref="f_A"><\/clan-field>\[chip f_T\]<button type="button" class="rp-f" data-rsel="fi_X"[^>]*>F1<\/button><span class="rp-n">2 pins<\/span><\/span>$/)
+  assert.match(f.claimHtml('Nothing cited.', []), /no cite/)
+})
+
+type MapNode = { id: string; col: string; kind: string; used: boolean; out?: boolean; order: number; label: string; meta?: string }
+type MapModel = { nodes: Record<string, MapNode>; edges: { from: string; to: string; kind: string }[]; cols: Record<string, MapNode[]>; gaps: MapNode[] }
+const mapModel = (r: unknown, p: unknown, s: unknown) => lift<{ mapModel(r: unknown, p: unknown, s: unknown): MapModel }>(RT, ['pinLabel', 'mapModel'], { arr, isObj, MARKET: {} }).mapModel(r, p, s)
+const pin = (sources?: string[]) => ({ key: 'k', value: 1, unit: 'count', confidence: 'high', ...(sources ? { sources } : {}) })
+
+test('research: the evidence map draws only the edges the document carries, left to right', () => {
+  const P = {
+    sources: { src_aaaa: { publisher: 'Kantar' }, src_bbbb: { publisher: 'CSO' }, src_unus: { publisher: 'Nobody cites' } },
+    pins: { f_000001: pin(['src_aaaa']), f_000002: pin(['src_bbbb', 'src_gone']), f_000003: pin(), f_000004: pin(['src_aaaa']), f_000005: pin(['src_aaaa']) },
+    findings: { fi_A: { statement: 'A', status: 'verified', cites: ['f_000001', 'f_000002'] }, fi_R: { statement: 'R', status: 'rejected', cites: ['f_000004'] },
+      fi_M: { statement: 'M', status: 'proposed', cites: ['f_MISSING'] } },
+  }
+  const S = { contested: [{ id: 'ct_1', status: 'resolved', chosen: 'f_000001', values: [{ fact_id: 'f_000001' }, { fact_id: 'f_000005' }] }] }
+  const r = { summary: [{ text: 'One', cites: ['fi_A', 'f_000003'] }, { text: 'Two', cites: ['fi_GONE'] }] }
+  const M = mapModel(r, P, S)
+  const has = (a: string, b: string) => M.edges.find(e => e.from === a && e.to === b)
+  // sources → pins → findings → summary
+  assert.ok(has('src_aaaa', 'f_000001') && has('f_000001', 'fi_A') && has('fi_A', 'sum:0') && has('f_000003', 'sum:0'))
+  assert.equal(M.edges.filter(e => M.nodes[e.from].col === 'summary').length, 0, 'nothing comes out of the summary')
+  // Links to what the document lacks are gaps, never guessed.
+  assert.equal(has('gap:src_gone', 'f_000002')?.kind, 'feeds')
+  assert.equal(has('gap:f_MISSING', 'fi_M')?.kind, 'gap')
+  assert.equal(has('gap:fi_GONE', 'sum:1')?.kind, 'gap')
+  assert.equal(M.nodes['gap:nosource'].label, '1 pin with no source record')
+  assert.equal(has('gap:nosource', 'f_000003')?.kind, 'gap')
+  assert.deepEqual(M.gaps.map(g => g.col).sort(), ['finding', 'pin', 'source', 'source'])
+  // A rejected finding and a value not chosen are considered, not chosen; what feeds only them is not used.
+  assert.ok(M.nodes.fi_R.out && M.nodes.f_000005.out)
+  assert.equal(has('f_000004', 'fi_R')?.kind, 'out')
+  assert.equal(M.nodes.f_000004.used, false)
+  assert.equal(M.nodes.src_unus.used, false)
+  assert.equal(M.nodes.fi_M.used, false, 'a finding no summary line cites is not used')
+  assert.ok(M.nodes.f_000001.used && M.nodes.src_aaaa.used && M.nodes.fi_A.used)
+  // Each column is ordered by what it feeds: the used before the rest.
+  assert.deepEqual(M.cols.summary.map(n => n.id), ['sum:0', 'sum:1'])
+  assert.equal(M.cols.finding[0].id, 'fi_A')
+  assert.deepEqual(M.cols.pin.slice(0, 3).map(n => n.id).sort(), ['f_000001', 'f_000002', 'f_000003'])
+})
+
+test('research: the evidence map draws an empty or partial document without breaking', () => {
+  const empty = mapModel(null, null, null)
+  assert.deepEqual(Object.keys(empty.nodes), [])
+  assert.deepEqual(empty.edges, [])
+  const noReport = mapModel(undefined, { pins: { f_000001: pin() }, findings: {} }, {})
+  assert.equal(noReport.nodes.f_000001.used, false)
+  assert.equal(noReport.cols.summary.length, 0)
+  // The example document: every summary cite resolves, and the pins carry no source record yet.
+  const ex = mapModel({ summary: [{ text: 'x', cites: ['f_000001'] }] }, { pins: { f_000001: pin() }, findings: {} }, {})
+  assert.equal(ex.nodes['gap:nosource'].meta, 'pinned before sources travelled')
+})
+
+test('research: the report box and the OS bar say the report’s state in the same words', () => {
+  type F = { reportStatus(r: unknown, locked: boolean, stale: boolean, open: number): { label: string; tone: string | null; locked: boolean }
+    barItems(st: unknown, has: boolean, lk: boolean): { kind: string; id?: string; label: string; disabled?: boolean; primary?: boolean }[] }
+  const gate = { t: '' }
+  const f = lift<F>(RT, ['reportStatus', 'barItems'], { isObj, CHAT: { reportBusy: false }, gateWords: () => gate.t })
+  assert.equal(f.reportStatus(null, false, false, 0).label, 'No report yet')
+  assert.deepEqual(f.reportStatus({}, true, true, 3), { label: 'Locked', tone: 'ok', locked: true })
+  assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
+  assert.equal(f.reportStatus({}, false, false, 2).label, 'Draft')
+  assert.equal(f.reportStatus({}, false, false, 0).label, 'Ready to lock')
+  // The OS bar takes the state only (decision 9 Nov): Continue in, Share and Export are
+  // the bar's own; Refresh, Lock and accept and Run research are the Report box's.
+  const st = f.reportStatus({}, false, false, 1)
+  assert.deepEqual(f.barItems(st, true, false), [{ kind: 'status', label: 'Draft', tone: 'warn', locked: false }])
+  assert.deepEqual(f.barItems(f.reportStatus({}, true, false, 0), true, true), [{ kind: 'status', label: 'Locked', tone: 'ok', locked: true }])
+  // Not brief-ready: Continue in begins with the gate line (gaps.md §7 L3); never once it is locked.
+  gate.t = 'Not brief-ready yet: 1 call open (Finding 3). You can still start; the brief flags what is open.'
+  assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'gate', label: gate.t, tone: 'warn' })
+  assert.equal(f.barItems(f.reportStatus({}, true, false, 0), true, true).length, 1)
+  gate.t = ''
+  const box = RT.slice(RT.indexOf('<section class="insp-box" id="rbox"'), RT.indexOf('</section>', RT.indexOf('id="rbox"')))
+  for (const id of ['rbox-status', 'rbox-refresh', 'lockBtn', 'researchBtn', 'synthBtn']) assert.match(box, new RegExp(`id="${id}"`), `${id} is in the Report box`)
+  // A bar action from an older shell still does what the page's button does.
+  const onBar = fn(RT, 'onBarAction')
+  assert.match(onBar, /'refresh'\) doRefreshReport\(\)/)
+  assert.match(onBar, /'lock'\) doLock\(\)/)
+  assert.match(onBar, /'export'\) doExport\('pdf'\)/)
+  assert.match(RT, /m\.type==='clan:bar-action'\)\{ onBarAction/)
+  assert.match(RT, /m\.type==='clan:bar\?'\)\{ BAR\.last=''/)
+})
+
+test('a list of sentences reads as sentences in the OS fields, a list of names with commas', () => {
+  const { textOf } = lift<{ textOf(v: unknown): string }>(CLF, ['textOf'], {})
+  assert.equal(textOf(['A €4 deal that gets you both.', 'To confirm: baked every morning.']), 'A €4 deal that gets you both. To confirm: baked every morning.')
+  assert.equal(textOf(['IE', 'GB']), 'IE, GB')
+  assert.equal(textOf([{ name: 'Lidl' }, { name: 'Tesco' }]), 'Lidl, Tesco')
+})
+
+// ── one needs count: the host's view (Tester B 7 / 14 / 12) ───────────────
+
+test('the shared fields count what blocks the lock once per place and reason, as the shell does', () => {
+  const at = (a: Record<string, unknown>) => ({ blocks_lock: true, text: 'Nobody has checked it', ...a })
+  const VIEW = {
+    attention: [
+      at({ code: 'unverified_finding', address: 'd#findings[fi_1]' }),
+      at({ code: 'unverified_finding', address: 'd#findings[fi_1]', decision: 'd_2' }),  // the same need, twice
+      at({ code: 'bad_verdict', address: 'd#findings[fi_1]' }),                           // another reason, same place
+      at({ code: 'low_certainty', address: 'd#campaign.brand', blocks_lock: false }),     // does not block
+      at({ code: 'unmerged_branch', text: 'A copy was not brought back' }),               // no address: keyed by its words
+    ],
+  }
+  const { needs } = lift<{ needs: () => unknown[] }>(CLF, ['needs'], { VIEW, arr })
+  assert.equal(needs().length, 3)
+})
+
+test('the research lock counts the host’s needs, and lists unfilled parts apart', () => {
+  const R = page('campaign-research/index.html')
+  const host = [
+    { code: 'unverified_finding', address: 'd#findings[fi_1]', text: 'Nobody has checked it', blocks_lock: true },
+    { code: 'open_contest', address: 'd#selection.contested[ct_1]', text: 'Two values, nothing picked', blocks_lock: true },
+  ]
+  const env = (view: unknown) => ({
+    window: { ClanFields: { view: () => view, needs: () => host } },
+    arr, esc, isObj,
+    pathOf: (a: string) => { const i = String(a).indexOf('#'); return i < 0 ? String(a) : String(a).slice(i + 1) },
+    fnds: () => ({ fi_1: { statement: 'Gen Z drink less', status: 'proposed' } }),
+    FIELD: { brand: { label: 'Brand' } },
+    clipT: (t: string) => t,
+    NEED_K: { open_contest: 'Open contest', unverified_finding: 'Unverified finding' },
+    blockers: () => [{ k: 'page', html: 'its own' }, { k: 'page', html: 'reading' }, { k: 'page', html: 'of 3' }],
+    missingFor: (g: string) => (g === 'created' ? [{ k: 'client_org', label: 'Client' }] : []),
+  })
+  const names = ['hostNeeds', 'needHtml', 'lockItems', 'unfilled']
+  const f = lift<{ lockItems: () => { k: string; html: string }[]; unfilled: () => unknown[] }>(R, names, env({ attention: host }))
+  const items = f.lockItems()
+  assert.equal(items.length, 2, 'the host’s count, not the page’s own 3')
+  assert.equal(items[0].k, 'Unverified finding')
+  assert.match(items[0].html, /href="#finding-fi_1">Gen Z drink less<\/a> — Nobody has checked it/)
+  assert.match(items[1].html, /#contest-ct_1/)
+  assert.equal(f.unfilled().length, 1, 'a gate’s missing field is listed apart, not counted')
+  // No host view (a problem, or none yet): the page’s own reading stands in.
+  assert.equal(lift<{ lockItems: () => unknown[] }>(R, names, env({ problem: 'no chain' })).lockItems().length, 3)
+  assert.equal(lift<{ lockItems: () => unknown[] }>(R, names, env(null)).lockItems().length, 3)
+})
+
+// ── a job another poll applied first (N1) ──────────────────────────────────
+
+test('a done job another poll applied first still redraws the brief from what it wrote', () => {
+  let chains = 0, renders = 0, ended = 0
+  type B = { landed(c: unknown): boolean; onJobReply(j: Record<string, unknown>, r: unknown): void }
+  const b = lift<B>(BM, ['landed', 'onJobReply'], {
+    hostErr: () => null, mwBody: (r: unknown) => r, store: () => {}, jobKey: () => 'k',
+    loadChain: () => { chains += 1 }, render: () => { renders += 1 }, endJob: () => { ended += 1 }, pollJob: () => {},
+  })
+  assert.equal(b.landed({ applied: true }), true)
+  assert.equal(b.landed({ applied: false, reason: 'already applied' }), true)
+  assert.equal(b.landed({ applied: false, reason: 'stale base' }), false)
+  assert.equal(b.landed(null), false)
+  const j: Record<string, unknown> = { task: 'draft_brief', onUpdate: () => {}, onEnd: () => {} }
+  b.onJobReply(j, { api: 'napkin.middleware/1', job: { id: 'job_1', state: 'done' }, change: { applied: false, reason: 'already applied' } })
+  assert.equal(j.applied, true, 'the job reads as landed, not as failed')
+  assert.ok(chains >= 1 && renders >= 1, 'the chain is read again and the page redrawn')
+  assert.equal(ended, 1)
+})
+
+test('a research job another poll applied first reads as applied and the chain is read again', () => {
+  let chains = 0
+  type R = { landed(c: unknown): boolean; jobFrom(j: Record<string, unknown>, r: unknown): void; afterApplied(j: Record<string, unknown>): void }
+  const r = lift<R>(RT, ['landed', 'jobFrom', 'afterApplied'], {
+    loadChain: () => { chains += 1 }, render: () => {}, ended: () => {},
+  })
+  const j: Record<string, unknown> = {}
+  r.jobFrom(j, { job: { id: 'job_2', state: 'done' }, change: { applied: false, reason: 'already applied' } })
+  assert.equal(j.applied, true)
+  r.afterApplied(j)
+  assert.equal(chains, 1)
+})
+
+test('a new version re-reads the brief’s lock view with its chain, so the lock never says Ready over open needs', () => {
+  let reloads = 0
+  const CHAIN = { state: 'ok', decisions: [{ id: 'd_1' }] }
+  type C = { chainMoved(): boolean }
+  const c = lift<C>(BM, ['chainSig', 'chainMoved'], {
+    CHAIN, CHAIN_SIG: null, arr, OSF: () => ({ reload: () => { reloads += 1 } }),
+  })
+  assert.equal(c.chainMoved(), false, 'the first read is the page opening: the view is already being read')
+  assert.equal(c.chainMoved(), false, 'the same chain again')
+  CHAIN.decisions = [{ id: 'd_2' }, { id: 'd_1' }]
+  assert.equal(c.chainMoved(), true, 'a job landed')
+  assert.equal(reloads, 1)
+  assert.equal(c.chainMoved(), false)
+  assert.equal(reloads, 1)
+})
+
+test('the lock carries no count badge of its own: Decisions holds the one count, the lock says why in words', () => {
+  for (const src of [BM, RT]) assert.doesNotMatch(src, /class="n"/, 'no badge on a lock button')
+  const w = lift<{ lockWhy(n: number): string }>(BM, ['lockWhy'], {})
+  assert.equal(w.lockWhy(2), '2 settle before it can lock')
+  assert.equal(w.lockWhy(1), '1 settles before it can lock')
+  assert.doesNotMatch(fn(BM, 'renderLockBtn'), /need you|lb\.innerHTML/)
+})
+
+test('a list printed in one line loses each item’s closing stop before the join', () => {
+  const g = lift<{ gridText(v: unknown): string }>(BM, ['gridText'], {})
+  assert.equal(g.gridText(['Launch in the UK this spring.', 'Reach 3% share.']), 'Launch in the UK this spring; Reach 3% share.')
+})
+
+test('the reopen help names the client review button as the OS bar reads it now', () => {
+  const view = { v: null as unknown }
+  const f = lift<{ clientReviewLabel(): string }>(BM, ['clientReviewLabel'], { osView: () => view.v })
+  assert.equal(f.clientReviewLabel(), 'Client review')
+  view.v = { client: { answer: { current: true } } }
+  assert.equal(f.clientReviewLabel(), 'New client answer')
+  assert.match(fn(BM, 'renderReopen'), /clientReviewLabel\(\)/)
+})
+
+test('taking a point out with no reason says “Add a reason” at the box, not in a toast', () => {
+  const src = fn(RT, 'onCheck')
+  assert.doesNotMatch(src, /toast\('Say what/)
+  assert.match(src, /ui\.err=true/)
+  assert.match(RT, /Add a reason: say what’s wrong with it/)
+})
+
+// ── B4: what people read carries no keys or ids ────────────────────────────
+
+test('Jude’s words lose their ids; a finding is named by what it says', () => {
+  const F = { fi_DSEQGHSPHSY6: { statement: 'Christmas is the busiest period for cider' } }
+  const b = lift<{ noIds(s: string): string }>(BM, ['noIds'], { get: (k: string) => (k === 'projection' ? { findings: F } : undefined) })
+  assert.equal(b.noIds('below 1.2% ABV (f_RPH5UFCVDCUV). At 0.5% (f_TKL7YLB7DEEQ, f_VLB4EBQYKK4T) it is.'), 'below 1.2% ABV. At 0.5% it is.')
+  assert.equal(b.noIds('Objective cites finding fi_DSEQGHSPHSY6.'), 'Objective cites the finding “Christmas is the busiest period for cider”.')
+  assert.equal(b.noIds('A person verified: fi_UNKNOWN99'), 'A person verified: a finding')
+  const r = lift<{ noIds(s: string): string }>(RT, ['noIds'], { fnds: () => ({}) })
+  assert.equal(r.noIds('Rests on Christmas (f_64) and spring (fi_1).'), 'Rests on Christmas and spring.')
+  assert.doesNotMatch(r.noIds('cites finding fi_ABCDEF12'), /fi_/)
+})
+
+test('a pin reads by its key in words, never the key itself, and the report header carries no campaign id', () => {
+  const r = lift<{ pinLabel(p: unknown): string }>(RT, ['pinLabel'], { MARKET: { GB: 'Great Britain' } })
+  assert.equal(r.pinLabel({ key: 'rhythm.key_moment.christmas_the_busiest', unit: 'text', market: 'GB' }), 'Key moment · Great Britain')
+  assert.equal(r.pinLabel({ key: 'regulation.mandatory_copy', unit: 'text', market: 'GB' }), 'Mandatory copy · Great Britain')
+  assert.equal(r.pinLabel({ key: 'consumer.penetration_young_adults', unit: 'proportion' }), 'Penetration young adults')
+  assert.doesNotMatch(fn(RT, 'pinChip'), /esc\(p\.key\)/)
+  assert.doesNotMatch(RT, /c\.id\?' · '\+esc\(c\.id\.value\)/)
+})
+
+test('a sign-in id reads as the person’s name on a source card', () => {
+  const f = lift<{ nameOfId(n: string): string }>(CLF, ['nameOfId'], {})
+  assert.equal(f.nameOfId('sam@wk'), 'Sam')
+  assert.equal(f.nameOfId('ann.lee@napkin'), 'Ann Lee')
+  assert.equal(f.nameOfId('ana-maria'), 'ana maria')
+})
+
+test('the brief sheet opens with the mock’s meta row: Client, Project, Budget & scope, Version, four cells across', () => {
+  const S = lift<{ packSheet(items: { key: string; sec: string; w: number }[]): { key?: string; version?: boolean; col: number; row: number; w: number }[] }>(
+    BM, ['packSheet', 'isMeta', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], GRID_COLS: 12 })
+  const out = S.packSheet([
+    { key: 'project_name', sec: 'Identity', w: 6 }, { key: 'client', sec: 'Identity', w: 6 }, { key: 'job', sec: 'The brief', w: 12 },
+    { key: 'budget_and_scope', sec: 'Execution', w: 12 },
+  ])
+  const top = out.filter(c => c.row === 1)
+  assert.deepEqual(top.map(c => c.key ?? (c.version ? 'version' : '?')), ['client', 'project_name', 'budget_and_scope', 'version'])
+  assert.deepEqual(top.map(c => [c.col, c.w]), [[1, 3], [4, 3], [7, 3], [10, 3]])
+  assert.ok(out.filter(c => c.key === 'job').every(c => c.row > 1), 'every other part packs below it')
+  assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?'not given'/, 'an empty meta cell says “not given”')
 })

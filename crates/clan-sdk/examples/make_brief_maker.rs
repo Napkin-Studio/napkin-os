@@ -31,8 +31,8 @@
 use clan_sdk::hash::sha256_prefixed;
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, spinoff,
-    validate, AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, DecisionChain, FileEntry,
-    InstantiateOptions, MakeTemplateOptions, SpinoffOptions, SpinoffSpec,
+    validate, AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, DecisionChain,
+    FileEntry, InstantiateOptions, MakeTemplateOptions, SpinoffOptions, SpinoffSpec,
 };
 use serde_yaml::Value;
 use std::fs;
@@ -45,6 +45,8 @@ mod app_ui;
 const APP_ID: &str = "ie.napkin.brief-maker";
 /// The one app a brief is spun off from, whole.
 const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
+/// The Brand Clan (feat/brand-clan): one per brief.
+const BRAND_APP_ID: &str = "ie.napkin.brand";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const SCHEMA_PATH: &str = "agent/output-schema.json";
 const FACTS_PATH: &str = "shared/facts.yaml";
@@ -241,7 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.6: a brief can start from research, carried whole.
             // 0.7: its card on the OS home (app.home).
             // 0.8: how the brief looks is one rolling entry (x-clan-appearance).
-            version: "0.9.4".into(),
+            version: "0.9.5".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some(SCHEMA_PATH.into()),
@@ -268,6 +270,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 untitled: Some("Untitled brief".into()),
                 // "Napkin Studio Brief" in the OS bar; it shares the OS's face (Geist).
                 brand: Some("Brief".into()),
+                ..Default::default()
+            }),
+            // Link an existing research (several at once, owner 2026-11-09)
+            // or the agency's Brand Clan (one) into a brief that exists.
+            attach: Some(AttachSpec {
+                accepts: vec![BRAND_APP_ID.into(), RESEARCH_APP_ID.into()],
+                many: vec![RESEARCH_APP_ID.into()],
                 ..Default::default()
             }),
         },

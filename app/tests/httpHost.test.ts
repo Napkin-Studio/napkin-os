@@ -84,3 +84,38 @@ test('the signed-in person is the tenant, as the host acts for it', async () => 
   // napkin-web's TenantId::ctx runs as human:<tenant>; apps are told the same.
   assert.deepEqual(await httpHost.whoAmI(), { actor: `human:${TENANT}`, id: TENANT, name: null })
 })
+
+test('source cards for a section come back from one POST /cite on the open document', async () => {
+  const seen = serve({})
+  await httpHost.openClan('doc-d')
+  const card = { ref: 'f_1', kind: 'fact', label: 'Share', origin: 'document', review: { verdict: 'verified', by: 'You' } }
+  const asked: { url: string; body: unknown }[] = []
+  const real = globalThis.fetch
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (!url.endsWith('/cite')) return real(input, init)
+    asked.push({ url, body: JSON.parse(String(init?.body)) })
+    return new Response(JSON.stringify({ cites: { f_1: card } }), { status: 200 })
+  }) as typeof fetch
+  const cards = await httpHost.cites(['f_1', 'fi_2'])
+  assert.deepEqual(asked, [{ url: 'https://studio.test/s/doc-d-token/cite', body: { refs: ['f_1', 'fi_2'] } }])
+  assert.deepEqual(cards, { f_1: card })
+  assert.ok(seen.length > 0)
+})
+
+test('settling a job polls it through the shell API by its document, without opening it', async () => {
+  serve({})
+  await httpHost.openClan('doc-open')
+  const asked: { url: string; method?: string }[] = []
+  const real = globalThis.fetch
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (!url.includes('/jobs/')) return real(input, init)
+    asked.push({ url, method: init?.method })
+    return new Response(JSON.stringify({ ok: true, data: { job: { state: 'done' } } }), { status: 200 })
+  }) as typeof fetch
+  await httpHost.settleJob!('doc-closed', 'job_0abc')
+  assert.deepEqual(asked, [{ url: `/api/t/${TENANT}/d/doc-closed/jobs/job_0abc/settle`, method: 'POST' }])
+  // the open document is still the one the shell opened
+  assert.equal(httpHost.clanOrigin(), 'https://studio.test/s/doc-open-token')
+})

@@ -39,7 +39,7 @@ from ..util import TaskError, iso, uid
 from . import capture as cap_stage
 from . import fill as fill_stage
 from .drafters import DraftContext, Drafter, _query, run_drafters
-from .fields import (KEYS, LABELS, RUBRIC_FIELDS, address, clean, drafter_of, field_map, field_paths, filled, get,
+from .fields import (KEYS, LABELS, RUBRIC_FIELDS, bare, address, clean, drafter_of, field_map, field_paths, filled, get,
                      group_keys, holder, last_writer, locked, put, read_of, rubric_groups)
 from .judge import FIX_MAX, clip, coherence, definition_of_done, failures, judge_field, sentence
 from .questions import same_ask
@@ -411,12 +411,12 @@ class BriefJob:
         f = fields.get(self.field, {})
         st = f.get("state")
         if st == "done":
-            return f"Redrafted the {LABELS[self.field]}."
+            return f"Redrafted the {bare(self.field)}."
         if st == "proposed":
-            return f"Proposed a new {LABELS[self.field]}: a person holds it, so it was not written."
+            return f"Proposed a new {bare(self.field)}: a person holds it, so it was not written."
         if st == "failed":
-            return f"The {LABELS[self.field]} failed the Judge twice and was not written: {'; '.join(self.notes) or 'see the verdict'}."
-        return f"Nothing supports the {LABELS[self.field]}: {'; '.join(self.notes) or 'the capture holds nothing for it'}."
+            return f"The {bare(self.field)} failed the Judge twice and was not written: {'; '.join(self.notes) or 'see the verdict'}."
+        return f"Nothing supports the {bare(self.field)}: {'; '.join(self.notes) or 'the capture holds nothing for it'}."
 
     # =============================================================================
     # extract

@@ -1,0 +1,89 @@
+Code map for moving `/home/batunii/Documents/Code/napkin-studio-new-ui` (branch `feat/new-ui`, no commits ahead of develop yet) onto the new UI. Paths are relative to that repo unless given in full.
+
+**1. Top bar / OS bar.** Size: L.
+- **Files:** `app/src/components/Toolbar.tsx`, `components/AppBarItems.tsx`, `components/ContinueIn.tsx`, `components/ThemeToggle.tsx`, `shell/AppHost.tsx`, `shell/appBar.ts`, `shell/landing/Trail.tsx`, `studio/StudioShell.tsx`, `App.tsx`, `components/chrome.css`.
+- **What it does now:**
+  - With no document open, `StudioShell` shows a `Trail` (agency > client > tool) and an Offline button.
+  - With a document open, `Toolbar` shows, in order: the Trail (or a "Napkin Studio <tool>" logo from `BarBrand`), the title, chips (Template, Trusted, invalid file), the app's bar items, Client review or Done editing, Saved, Share and **More ▾**.
+  - More ▾ holds Edit, Open…, Save as…, Present offline, Export, Where it came from, `Continue in <app>` (from `useSpinoffTargets` → `host.spinoffTargets()`), Show the file's details, Sign out. `DogfoodBadge` and `ThemeToggle` sit at the end.
+  - The tool name comes from `AppHome.brand`, `brand_font` and `brand_font_url` (`host/types.ts` lines 65-86), resolved in `AppHost.tsx` from `tool?.home`.
+  - App-to-shell publishing already exists:
+    - **`clan:bar`** (`shell/appBar.ts`): the app sends `{v:1, items:[tab|button|chip]}`, the shell asks again with `clan:bar?`, and presses come back as `clan:bar-action`. Deck Maker uses it; brief-maker and campaign-research don't.
+    - **`clan:chrome`** (glass mode and tint): brief and research both use it.
+    - **`clan:can-run`** feeds the Decisions panel's "run again".
+    - Host events: `clan-title-changed`, `clan-theme-changed`, `napkin-notify`.
+- **Change needed:**
+  - Rebuild `Toolbar` as one bar used both on the desk and in a document: medallion plus an agency-name pill, a client chip, the OS app slot (document name with **Continue in ▾**), a needs-your-call count, the theme toggle and a Decisions button.
+  - Move Continue in out of More and into the app slot, with two halves: spin off, and link (link needs a backend, see section 8).
+  - Bar tabs (top tabs) are an owner removal, so `BarTabs` goes. The `clan:bar` buttons and chips stay.
+  - **Must keep a visible home:** Open…, Save as/Share, Present offline, Export, Where it came from (`WorkspaceView.tsx`), file details (`Sidebar.tsx`), Sign out, Client review / New client answer, Edit / Done editing, the client-review mode bar with Cancel, Saved status, the Template/Trusted/invalid chips, DogfoodBadge, Offline (`OfflineDialog`), the device banner, the update toast, the install prompt and the drop veil. A trimmed More ▾ in the slot menu can carry the rare ones.
+  - Add `agency` to `clan:bar` v1 as an optional field, or add `clan:doc {name, state}`. Unknown kinds are already dropped, so it stays compatible.
+- **Risks:** the bar is shared with deck-maker and advertising-studio, which already send `clan:bar` tabs. Removing tabs means those steps need another home inside the app.
+
+**2. Client desk, dial and client page.** Size: L.
+- **Files:** `shell/landing/LandingHome.tsx` (254 lines, the router), `LandingPage.tsx` (agency circle with needs-you strips), `ClientsPage.tsx` (client circles, add, search, show all, adopt), `ClientPage.tsx` (one client with a 6-tool wheel, number keys and roving tabindex), `ToolPage.tsx` (documents of one tool, New), `Circle.tsx` with `orbs/*` (3D shader orbs), `Registry.tsx` (AdoptPanel, ArchivedList, ClientActions rename/archive), `tools.ts` (TOOLS: brief, research, idea, deck, prod, ads), `model.ts`, `store.ts`, `useLanding.ts`, `shell/route.ts` (`#agency`, `#clients`, `#client-<id>`, `#tool-<id>-<tool>`), `Launcher.tsx` (fallback home), `landing.css`.
+- **What exists:** a separate agency → clients → client → tool flow. There is no in-place dial. Idea and Prod are "Soon"; Ads is live as `ie.napkin.film`. `project-home` (status building) lives on `feat/project-home-build` and is a Production Tool home. It is not this desk.
+- **Change needed:**
+  - Merge `ClientsPage` and `ClientPage` into a desk where clicking a circle opens an in-place dial (Brief, Research, Deck, Production).
+  - Turn `ClientPage` into the client page: documents grouped by tool (reuse the `ToolPage` lists), a Brand Clan card, and needs-you (from `LandingPage` Strip / `model.needsYou`).
+  - Routes can stay as they are, with a dial state added.
+- **Must keep:** Idea and Ads (the dial shows four, so Idea, Ads and Soon need a home, for example "More tools" on the dial), add client, search, show all, adopt, archive, restore, rename, the number-key and arrow navigation, the orbs' activity rings, the Launcher fallback, DeviceHome, and "all tools".
+- **Risks:** Brand Clan has no shell code (no matches in `app/src`), so it needs a data source (see the brand-clan-decisions memory). Orb performance with many circles. The keyboard tests on `ClientPage` and `route`.
+
+**3. Agency theming.** Size: M.
+- **Files:** `theme.ts` (light/dark only, `data-theme`, Token type), `index.css` (tokens; `--create: #FF4F2E` is the single accent, with legacy aliases), `App.tsx` `THEME_VARS`, `applyTheme` and `resetTheme` (an app may recolour accent, bg, surface, text, border and muted through `clan-theme-changed`).
+- **Change needed:**
+  - Add an agency palette layer: `--agency`, `--agency-fg`, `--agency-soft` for light and dark, set from the signed-in agency. `whoIs(person).agency` in `landing/model.ts` gives the name, but there is no colour source yet.
+  - Document surfaces stay paper. Inside the iframe they already have their own palettes, and `clan:colorscheme` passes dark mode through.
+- **Risks:** `resetTheme` runs on every open, and the agency layer must survive it. `--create` is the department colour and must not become the agency colour. The tokens need a contrast check (`readsWithChromeInk` exists in `AppHost`).
+
+**4. Brief: A4 page, side tab, part select/edit/move/resize.** Size: L.
+- **Files:** `app/templates/brief-maker/index.html` (2955 lines; `renderStructured` around line 2196, `renderBoards` 2495, `renderLock` 2838, `renderMadeFrom` 2781, `renderRegen` 2435, `renderReview` 1579, intake 535, proc 557, export buttons 594-595, `clan:chrome` 2948), `schema.json`, `crates/clan-sdk/examples/make_brief_maker.rs`, shared `clan-fields.html`.
+- **What it does now:**
+  - Flowing structured fields with Draft it again (`#redraft`), crewline, review, mood boards, status, lock, Made from, and per-field regen with a note.
+  - Exports: HTML/PDF, plus plain HTML/PDF without the grid.
+  - Edit mode comes from the shell (`clan:editmode`, `structuredEditBridge.ts`).
+  - There is no A4 sheet and no drag or resize. **`feat/brief-free-layout` has no code**: the worktree at `/home/batunii/Documents/Code/napkin-studio-brief-layout` is level with develop, the record is `status: exploring` and unapproved, and the design is in `docs/brief-maker/free-layout-design.md` with five spikes still to run.
+- **Change needed:**
+  - An A4 sheet render.
+  - A side tab: Save·PDF, Draft it again, a status pill with Lock, brand line, Layout (frame/headings), Colour, Logos, Reset look.
+  - The Selected-part panel: Edit, Redraft with note (wire to `renderRegen`), Your call, Built from with the OS source card, Why it says this, Layout.
+  - Hover tint, click select, double-click edit, drag grip, right-edge resize. This needs `brief_layout` in the schema, per the free-layout design.
+- **Must keep:** the intake composer with chips and file drop, the proc/meet "see each part as it's written" view, mood boards, plain exports, the review, the crewline, the upstream note (`renderFromUp`), the walker and the toast.
+- **Risks:**
+  - The CLAUDE.md workflow requires owner approval of brief-free-layout before any layout code.
+  - Pointer drag inside a sandboxed iframe on a phone.
+  - Redraft must keep `brief_layout`.
+  - The host PDF renderer must handle the sheet.
+
+**5. Research report, inspector and evidence map.** Size: L.
+- **Files:** `app/templates/campaign-research/index.html` (3824 lines; its own `header.top` with ident, nav for Report/Request/Ask/Facts/Findings/Selection, and buttons for who, Read the ask again, Run research, Find the points, Export, Lock and accept; `#judge` judgebar, hero, `#report`, `#start`, gates, jobs, walker, `details#records` holding the ask, facts, findings and selection), `schema.json` (2591 lines), `make_campaign_research.rs` (`spinoff: None`).
+- **What it does now:** a single column. The evidence drawer comes from `clan-fields`. There is no evidence map (no hits for "evidence map").
+- **Change needed:**
+  - A wide report: headline, summary lines with inline clan fields, lens×market sections, confirm, not researched, contests, gaps, pinned facts, coverage, excluded, how it ran, on the record.
+  - A 440px inspector: Report/Evidence-map switch, Save, Your call (the judgebar moves here), a Report box (status pill, Refresh = Run research, Lock and accept, confirm, how it ran), Ask the research, breadcrumb and back.
+  - The evidence map is new, drawn in the widened panel.
+  - The top header moves out, and its actions go into the inspector or `clan:bar`.
+- **Must keep:** "who" (the name on checks), Read the ask again, Find the points, Export, the Request/start section, the gates and jobs progress, and Everything recorded (the ask, facts, findings, selection with its ledes and legend). The left outline nav is an owner removal, but its sections must stay reachable, for example through the inspector breadcrumb.
+- **Risks:** the largest template, with tests in `campaign-research/tools/check_example.py`. Sizing the inspector against the shell's `DecisionPanel` rail (AppHost measures `.dp-rail` / `.dp-panel` for glass insets).
+
+**6. OS source card / drawer.** Size: M.
+- **Files:** `app/templates/shared/clan-fields.html` (1917 lines; `.clf-drawer` fixed at 460px on the right, with `ensureDrawer`, `open(ref, push)` stack, `onDrawerClick`/`onDrawerSubmit`, toast, tray, cite/quote/gap/chart elements). It is inlined via `<!-- @napkin:clan-fields -->` by `crates/clan-sdk/examples/shared/app_ui.rs`.
+- **Change needed:**
+  - An embeddable source-card mode: `ClanFields.card(ref, el)` rendering into the brief's "Built from" and the research inspector instead of the slide-over.
+  - The drawer stays as the fallback, with the push stack becoming the inspector breadcrumb.
+- **Risks:** one change ships to every app (brief, research, deck). The `--clan-top` / `--clan-right` insets depend on shell glass.
+
+**7. Decisions drawer.** Size: M.
+- **Files:** `shell/decisions/DecisionPanel.tsx` (collapsible rail, by-run/by-section, needs, quiet "looks right", history), `DecisionBlock.tsx`, `words.ts`, `useDecisions.ts`, `DecisionPanel.css`. `ClientReviewPanel` replaces it while client review is on. `ClientReviewBand` sits above the app.
+- **Change needed:**
+  - Open it from the top-bar Decisions button as a drawer. Today it is a permanent rail.
+  - Expose the `needsOf(view)` count to the bar's needs-your-call.
+  - The Your call items inside apps duplicate it; keep both.
+- **Risks:** the glass-inset measurement keys on `.dp-rail` / `.dp-panel` class names.
+
+**8. Features with no backend.**
+- **Brief → research spin-off.** Research has `spinoff: None` in `make_campaign_research.rs`. Today only research → brief works (`make_brief_maker.rs`: `accepts: [RESEARCH_APP_ID]`, `upstream: true`). It needs a `SpinoffSpec` on research accepting the brief, with upstream or a map, plus schema `upstream` and research reading the brief's fields. Size: M.
+- **Link existing research to an existing brief.** No operation exists: `crates/napkin-host/src/library.rs` `spinoff_from` only creates a new document. It needs a host op, `link_upstream(child, source)`, that freezes the source into `data.upstream.<id>` on an existing document, plus a route in `routes.rs`, a `host/types.ts` method, http/wasm/tauri adapters, and a decision entry. It must keep `napkin-host` wasm32-clean. Size: L.
+
+**Cross-cutting.** Each area needs its own record under `features/`, with an approved design before code, per CLAUDE.md. Today the only relevant records are `app-bar-actions`, `project-home` and brief-free-layout (on the other branch).

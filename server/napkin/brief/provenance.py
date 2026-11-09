@@ -889,7 +889,9 @@ def because(v: dict, client: ClientWords, *, extra_attention=(), writer_note=Non
         pts.append(writer_note)
     tc = [c for c in claims if c["kind"] == "to_confirm"]
     if tc:
-        attn.append("To confirm: " + " ".join(_short(c["text"], 160) for c in tc[:4]))
+        # each claim once, without the "To confirm:" its own text already carries
+        attn.append("To confirm: " + " ".join(_short(re.sub(r"^\s*to confirm:\s*", "", c["text"], flags=re.I), 160)
+                                             for c in tc[:4]))
     for c in claims:
         if c.get("check") == "false":
             attn.append(f"Check the working: {c['working']}, but the part says “{_short(c['text'], 120)}”."

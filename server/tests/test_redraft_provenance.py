@@ -2,7 +2,7 @@
 what steered it. The draft Jude sent back stays in the chain, superseded; his note is the
 verdict it was; the rewrite cites it. A redraft on a planned brief names the person's ask."""
 
-from napkin.brief.fields import LABELS, last_writer
+from napkin.brief.fields import LABELS, bare, last_writer
 
 from conftest import Server
 from test_brief import DOC, Host, check_change_rules, retrieval, run
@@ -42,7 +42,8 @@ def test_the_loop_is_recorded_as_it_happened(tmp_path):
     assert sent["id"] in final["cites"]
     assert {"point": "Jude's note: add a measure", "cites": [sent["id"]]} in final["reasoning"]["because"]
     # the rewrite is what the brief holds and what wrote the part; the first draft is history
-    assert host.data["objectives"]["commercial"].startswith("Grow under-30 visits")
+    # a rewritten assumption says it is one (feature brief-first-draft-checks)
+    assert host.data["objectives"]["commercial"].startswith("To confirm: Grow under-30 visits")
     assert last_writer(DOC, host.chain, K) == final["id"]
     # Jude still notes the objectives in his second review, so no pass is recorded on the part
     assert not any(d["kind"] == "verdict" and d["polarity"] == "good" and ADDR in d["targets"] for d in host.chain)
@@ -63,7 +64,7 @@ def test_a_rewrite_jude_passes_is_marked_answered(tmp_path):
                  if d.get("action") == "draft" and ADDR in d["targets"] and not d.get("superseded_by"))
     ok = next(d for d in host.chain if d["kind"] == "verdict" and d["polarity"] == "good" and ADDR in d["targets"])
     assert ok["cites"] == [final["id"]]
-    assert ok["reasoning"]["decided"] == f"Checked the new {LABELS[K]}: it answers the note."
+    assert ok["reasoning"]["decided"] == f"Checked the new {bare(K)}: it answers the note."
     check_change_rules(host)
 
 

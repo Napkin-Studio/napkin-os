@@ -37,7 +37,8 @@ name the stand-in, its port, or branch on which implementation answered.
             "app": { "app_id": "...", "version": "..." },
             "schema": {}, "data": {}, "facts": [], "findings": [], "pipeline": {},
             "decision_chain": {}, "context": "...", "lineage": {},
-            "upstream_payload"?: {}, "upstream_skipped"?: [] }
+            "upstream_payload"?: {}, "upstream_skipped"?: [], "upstream_ask"?: {},
+            "workspace_client"?: { "id": "cli_…", "name": "..." } }
 }
 ```
 
@@ -70,6 +71,33 @@ name the stand-in, its port, or branch on which implementation answered.
   document's own members and arrive in `clan.facts` and `clan.findings`. The
   frozen data reaches a model only as §10.13 says. `upstream` is read-only:
   a `data_patch` that names it is refused (Contract 4 §8.1).
+- **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
+  whose pipeline declares `extract_ask`, the ask of the brief it carries:
+  `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
+  `project_name`, `client`, `audience`, `background` and
+  `objectives.{commercial,behavioural,attitudinal}` (a field's text, or its
+  `value`; empty ones left out). Nothing the brief's agents drafted (insight,
+  proposition, reasons to believe) is sent. `extract_ask@1` proposes
+  `client_org`, `audience_stated`, `problem` and `objective` from it where
+  the material and the roster gave nothing: origin `proposed`, citing
+  `upstream_refs: ["<brief id>#<path>"]`, never over a `stated`, `confirmed`
+  or `extracted` field. With no prompt or attachment, the brief is read
+  alone and no model is called. `start_campaign`'s identify reads the same
+  ask beside the material (2026-11-09): its one model call is given each
+  path as a text `brief:<path>`, and a brand, client or category read only
+  from the brief is proposed with `upstream_refs`, never extracted. When the
+  material names no brand and the model read none from the brief, the
+  brief's `client` paragraph becomes a name (the workspace client's name if
+  the paragraph names it, else its first proper-noun phrase) and is
+  proposed as the brand and the client. The material always wins; the
+  confirm step gates every proposal.
+- **`workspace_client`** (2026-11-09, features/research-new-ui): the client
+  the document belongs to, its manifest's `client` (`{id, name}`, `id` is
+  `cli_` and eight hex digits). Absent when the document has no client.
+  `start_campaign`'s identify proposes `campaign.client_org` from it when
+  neither the roster, the material nor a carried brief names one: origin
+  `proposed`, with `workspace_ref: "<id>"` in place of `fact_ids` /
+  `upstream_refs` (Contract 3, client_org only).
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the
@@ -232,6 +260,10 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
 - A job belongs to the tenant (from auth) and the document it was started on.
   Polling it from another tenant or another `clan.id` is `404`, the same as an
   id that never existed.
+- The host also reads `job` for the landing's Running and Needs you: `queued` and
+  `running` are working, `needs_input` is waiting on a person, `failed` is failed,
+  `done` is finished (os-layer.md section 12.3, `RunTracker`). It adds no route and
+  no field here; there is no `cancelled` state to report.
 - `failed` carries `job.error: { type, message }`. For the tasks that send no
   staged changes it carries no change; a failed `start_campaign` carries the
   change for any stages finished since the previous reply, plus an agent
@@ -885,9 +917,11 @@ merge_policies:
   "*": ask
 ```
 
-`rubric` names a field of the golden-brief rubric
-(`engine/golden-brief/golden_brief.schema.json`), bundled with the handler
-and versioned with it (Contract 5 §9, O9). The three `desired_response`
+`rubric` names a field of the golden-brief rubric, bundled with the handler
+and versioned with it (Contract 5 §9, O9). The Brief Maker reads the server's
+copy, `server/napkin/brief/golden_brief.schema.json`, which differs from
+`engine/golden-brief/golden_brief.schema.json` on purpose (ADR 0034, 0035): it
+has the job, barrier and objection fields and the planning skill's tests. The three `desired_response`
 leaves share one drafter: they are a ladder.
 
 ### 10.3 The flow

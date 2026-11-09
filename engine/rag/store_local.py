@@ -156,6 +156,11 @@ class LocalStore(VectorStore):
         self._write(list(rows))
         return len(rows)
 
+    def count_where(self, where: dict | None) -> int:
+        """How many rows pass the filter. The award-library gate asks it how many cases a
+        category already has, so the thin-category set comes from the index, not a list."""
+        return len(self._filtered(where))
+
     WHERE_CACHE_MAX = 512
 
     def _filtered(self, where: dict | None) -> list[int]:

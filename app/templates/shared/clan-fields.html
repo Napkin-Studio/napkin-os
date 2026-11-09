@@ -29,6 +29,8 @@ clan-tray{display:block}
 .clf.in{display:inline;padding:0 2px;font-weight:600;font-variant-numeric:tabular-nums;border-bottom:1.5px solid color-mix(in srgb,var(--clf-ink) 22%,transparent)}
 .clf.in .clf-src{margin-left:4px}
 .clf.in.txt{font-weight:inherit;border-bottom-style:dotted}
+/* inline, the tag is text: a full stop after the field stays on its line, never alone under it */
+.clf.in .tag{display:inline;white-space:nowrap}
 .clf.big,.clf.stat{display:grid;gap:4px;padding:6px;margin:-6px}
 .clf.big .v{font-size:clamp(34px,5vw,54px);font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
 .clf.stat .v{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums}
@@ -309,6 +311,31 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
 .cl-list > li::before{counter-increment:m;content:counter(m);font-family:var(--clf-mono);font-size:12px;color:var(--clf-ink3);padding-top:2px}
 .cl-foot{padding:32px clamp(20px,5vw,64px) 40px;border-top:1px solid var(--clf-line2);background:var(--clf-soft)}
 @media (max-width:860px){.cl-cols,.cl-split,.cl-grid{grid-template-columns:minmax(0,1fr)}.cl-grid > * + *{border-left:0;border-top:1px solid var(--clf-line2)}}
+/* The source card (ClanFields.card): one card for a fact from any origin,
+   the same markup inline in any app and at the top of the drawer. */
+.clf-sc{display:grid;gap:8px;border:1px solid var(--clf-line);border-radius:10px;padding:14px 16px;background:var(--clf-paper);color:var(--clf-ink);font-size:13.5px;line-height:1.45;min-width:0}
+.clf-sc.compact{border:0;border-radius:0;padding:0 0 12px;border-bottom:1px solid var(--clf-line2);background:none}
+.clf-sc-h{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.clf-sc-k,.clf-sc-r{font-family:var(--clf-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.clf-sc-k{border:1px solid var(--clf-line);color:var(--clf-ink2)}
+.clf-sc-r.v-verified{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf-sc-r.v-rejected{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf-sc-r.v-set_aside{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf-sc-v{font-size:22px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.clf-sc-t{margin:0;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.clf-sc-d{margin:0;color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-sc-from{display:flex;gap:6px;align-items:baseline;padding:7px 10px;border-radius:8px;background:var(--clf-soft);color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-sc-from b{color:var(--clf-ink);font-weight:600}
+.clf-sc .clf-q{font-size:14px;padding:10px 12px 10px 14px}
+.clf-sc-g{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:0}
+.clf-sc-g dt{font-family:var(--clf-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-sc-g dd{margin:1px 0 0;overflow-wrap:anywhere}
+.clf-sc-g a{color:var(--clf-chart);text-decoration:none}
+.clf-sc-f{display:flex;flex-wrap:wrap;gap:8px}
+.clf-sc-f button{all:unset;cursor:pointer;font-size:13px;font-weight:500;color:var(--clf-ink);border:1px solid var(--clf-line);border-radius:999px;padding:4px 12px}
+.clf-sc-f button:hover{border-color:var(--clf-ink3)}
+.clf-sc-f button:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-sc.loading{color:var(--clf-ink3)}
 /* On a phone a long publisher breaks rather than push the column past the card. */
 @media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
   .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
@@ -321,6 +348,28 @@ html::after{bottom:0;height:var(--clan-bottom,0px)}
    (clan://decisions): the kind of field and what it asks of a person are the
    record's, never the tag's. Every action is one host route; the reply
    carries the document as it now stands, which replaces the page's copy. */
+/* The agency's colours on a document's own controls (features/brief-new-ui.clan).
+   The shell answers clan:me with the agency's admin-set base and accent; they
+   land on :root as --ag-base and --ag-acc, with the ink that reads on each.
+   An app derives its primary actions from them (base in light, accent in
+   dark) and keeps its documents on paper. Nothing here is the document's. */
+var NapkinAgency=(function(){
+  var HEX=/^#[0-9a-f]{6}$/i, now=null;
+  function lum(h){ var n=parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255].map(function(v){ v/=255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); }).reduce(function(a,v,i){ return a+v*[.2126,.7152,.0722][i]; },0); }
+  function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
+  function apply(c){
+    if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
+    now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null};
+    var r=document.documentElement;
+    r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
+    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', inkOn(c.accent));
+    r.setAttribute('data-agency', '');
+    try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
+  }
+  function start(){ if(window.clan&&typeof window.clan.me==='function') window.clan.me().then(function(m){ if(m&&m.agency) apply(m.agency); }, function(){}); }
+  if(document.readyState==='complete') setTimeout(start,0); else window.addEventListener('load', start);
+  return {apply:apply, now:function(){ return now; }};
+})();
 var ClanFields=(function(){
   var SCHEME=(navigator.userAgent.indexOf('Windows')!==-1)?'http://clan.localhost':'clan://localhost';
   var VIEW=null, STACK=[], DRAWER=null, EDIT=false;
@@ -426,7 +475,9 @@ var ClanFields=(function(){
   }
   function label(p){
     if(!p) return '';
-    var k=String(p.key||'').split('.').slice(1).join(' ')||String(p.key||'');
+    // A text pin's key ends in a slug of its own value ("key_moment.christmas_the_busiest…"):
+    // its label is the kind of thing it is, and the value says the rest.
+    var seg=String(p.key||'').split('.'), k=(seg.length>1?(p.unit==='text'?seg[1]:seg.slice(1).join(' ')):seg[0])||'';
     k=k.replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year');
     return k.charAt(0).toUpperCase()+k.slice(1)+(p.market?' · '+country(p.market):'');
   }
@@ -444,7 +495,11 @@ var ClanFields=(function(){
   var OPAQUE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   // A person's id back as their name: hyphens were spaces, and a word held
   // wholly as letter codes (a name in another script) is spelt out again.
-  function nameOfId(n){ return String(n||'').split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
+  // A sign-in id ("sam@wk", "ann.lee@napkin") reads as the person's first
+  // name, capitalised, never the id itself.
+  function nameOfId(n){ n=String(n||''); var at=/^([^@\s]+)@[^@\s]+$/.exec(n);
+    if(at) return at[1].split(/[._-]+/).filter(Boolean).map(function(w){ return w.charAt(0).toUpperCase()+w.slice(1); }).join(' ');
+    return n.split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
   function personName(uri){ if(isYou(uri)) return 'you'; var n=String(uri).replace(/^human:/,''); return OPAQUE.test(n)?'someone':nameOfId(n); }
   // What a person wrote, without the "<their id>: " an older note began with.
   function saidBy(q,rec){ var id=String(rec&&rec.publisher||''); q=String(q); return id&&q.indexOf(id+': ')===0?q.slice(id.length+2):q; }
@@ -568,7 +623,11 @@ var ClanFields=(function(){
     if(v==null||v==='') return '';
     if(typeof v==='string'||typeof v==='number') return String(v);
     if(typeof v==='boolean') return v?'yes':'no';
-    if(Array.isArray(v)) return v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean).join(', ');
+    if(Array.isArray(v)){
+      var xs=v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean);
+      // A list of sentences reads as sentences ("… together. Made by …"), never "together., Made by".
+      return xs.join(xs.length&&xs.every(function(x){ return /[.!?\u2026][\u0022\u201d\u2019\u0029]?\s*$/.test(x); })?' ':', ');
+    }
     return v.name||v.definition||v.statement||v.label||'';
   }
   // What a person can type: a string, a number, a list of plain values, a named thing.
@@ -886,6 +945,80 @@ var ClanFields=(function(){
     el.innerHTML='<section class="clf-sources"><h2>'+esc(el.getAttribute('title')||'Sources')+' ('+order.length+')</h2><ol>'+rows.join('')+'</ol></section>';
   }
 
+
+  // ── the source card (OS-layer contract §8.3) ────────────────────────
+  // One card for a fact from any origin, whatever app shows it: the host
+  // resolves it (`POST /cite`, every ref a page asks for in the same tick in
+  // one call), and the card is kept per ref until the document changes.
+  var ORIGIN_WORD={research:'Research',client:'Client upload',brand:'Brand Clan',layer:'Knowledge layer',person:'A person',document:'This document'};
+  var VERDICT_WORD={verified:'Verified',rejected:'Marked wrong',set_aside:'Set aside'};
+  var CARD_KIND={fact:'Fact',finding:'Finding',source:'Source',material:'Material',passage:'Library passage',capture:'From material',decision:'Decision',person:'Person',address:'Field',unknown:'Not found'};
+  var CARDS={}, CARDS_AT=null, CARD_BATCH=null, CITE_MAX=500;
+  function cardVer(){ return VIEW&&VIEW.version||''; }
+  function fetchCites(refs){
+    var parts=[]; for(var i=0;i<refs.length;i+=CITE_MAX) parts.push(refs.slice(i,i+CITE_MAX));
+    return Promise.all(parts.map(function(rs){
+      return fetch(SCHEME+'/cite',{method:'POST',body:JSON.stringify({refs:rs})}).then(function(r){ return r.ok?r.json():null; }).then(function(v){ return v&&v.cites?v.cites:null; }).catch(function(){ return null; });
+    })).then(function(ms){ var out={}; ms.forEach(function(m){ if(!m) return; for(var k in m) out[k]=m[k]; }); return out; });
+  }
+  // The cards for `refs`, by ref; a ref the host could not be asked about
+  // is null and asked again next time.
+  function cardsFor(refs){
+    refs=uniq(arr(refs).map(String).filter(Boolean));
+    var v=cardVer(); if(v!==CARDS_AT){ CARDS={}; CARDS_AT=v; }
+    var need=refs.filter(function(r){ return !CARDS[r]; });
+    if(need.length){
+      if(!CARD_BATCH){ var b={refs:[]}; CARD_BATCH=b;
+        b.done=new Promise(function(ok){ setTimeout(function(){ if(CARD_BATCH===b) CARD_BATCH=null; ok(fetchCites(b.refs)); },0); }); }
+      var batch=CARD_BATCH, at=CARDS;
+      need.forEach(function(r){ batch.refs.push(r);
+        at[r]=batch.done.then(function(m){ var c=m[r]||null; if(!c&&at[r]&&CARDS===at) delete at[r]; return c; }); });
+    }
+    return Promise.all(refs.map(function(r){ return CARDS[r]; })).then(function(list){ var o={}; refs.forEach(function(r,i){ o[r]=list[i]; }); return o; });
+  }
+  // Who reviewed it: you, a person by name, or the crew member whose verdict it
+  // is ("Jude"), never the job that ran it ("regenerate field").
+  function reviewLine(r){ var agent=r.actor&&!/^human(?::|$)/.test(r.actor), rb=agent&&r.decision?blockOf(r.decision):null;
+    var by=r.actor&&isYou(r.actor)?'you':agent?(rb?whoDid(rb):givenOf(judgeKey())||'the crew'):r.by?(r.by==='You'?'you':personName(/^human:/.test(r.by)?r.by:'human:'+r.by)):'';
+    return esc(VERDICT_WORD[r.verdict]||r.verdict)+(by?' by '+esc(by):'')+(r.at?' · '+esc(plainDate(r.at)):''); }
+  // The card's markup, from what the host said of `ref`. `compact` is the
+  // drawer's: the drawer shows the value and the words below it already.
+  function cardHTML(c,compact){
+    c=obj(c); var ref=String(c.ref||''), o=ORIGIN_WORD[c.origin]?c.origin:'document', rv=c.review, hs=arr(c.history), f=c.from, h='';
+    h+='<div class="clf-sc-h"><span class="clf-sc-k">'+esc(CARD_KIND[c.kind]||CARD_KIND.unknown)+'</span><span class="clf-sc-k o-'+o+'">'+esc(ORIGIN_WORD[o])+'</span>'
+      +(rv&&VERDICT_WORD[rv.verdict]?'<span class="clf-sc-r v-'+esc(rv.verdict)+'">'+reviewLine(rv)+'</span>':'')+'</div>';
+    if(!compact){
+      if(c.kind==='unknown') return '<div class="clf-sc" data-card="'+esc(ref)+'" data-origin="'+o+'">'+h+'<p class="clf-sc-d">This is not in the document any more.</p></div>';
+      if(c.value) h+='<span class="clf-sc-v">'+esc(c.value)+'</span>';
+      h+='<p class="clf-sc-t">'+esc(c.title&&c.kind!=='source'?c.title:c.label)+'</p>';
+      if(c.detail) h+='<p class="clf-sc-d">'+esc(c.detail)+'</p>';
+      if(c.quote) h+='<blockquote class="clf-q said">'+esc(c.quote)+'</blockquote>';
+    }
+    if(f&&f.document_id) h+='<p class="clf-sc-from">From <b>'+esc(f.title||'another document')+'</b>'+(f.app_id?'<small>'+esc(String(f.app_id).split('.').pop().replace(/-/g,' '))+'</small>':'')+'</p>';
+    var g=[['Link',c.uri&&/^https?:[/][/]/.test(c.uri)?'<a href="'+esc(c.uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clip(String(c.uri).replace(/^https?:[/][/]/,''),60))+' ↗</a>':''],['Publisher',esc(c.publisher||'')],['Published',c.published_at?esc(plainDate(c.published_at)):''],['Tier',c.tier?esc(tierWord(c.tier)):'']].filter(function(x){ return x[1]; });
+    if(g.length&&!compact) h+='<dl class="clf-sc-g">'+g.map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+x[1]+'</dd></div>'; }).join('')+'</dl>';
+    if(hs.length) h+='<details class="clf-more clf-sc-rec"><summary>Record</summary><ul class="clf-hist">'+hs.map(function(r){ return '<li><span>'+reviewLine(r)+(r.superseded?' · replaced':'')+(r.note?' — “'+esc(r.note)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
+    var acts=(!compact?'<button type="button" data-clf-sc="open" data-ref="'+esc(ref)+'">Where this came from</button>':'')
+      +(f&&f.path?'<button type="button" data-clf-sc="from" data-path="'+esc(f.path)+'">Open '+esc(clip(f.title||'the original',40))+'</button>':'');
+    if(acts) h+='<div class="clf-sc-f">'+acts+'</div>';
+    return '<div class="clf-sc'+(compact?' compact':'')+'" data-card="'+esc(ref)+'" data-origin="'+o+'">'+h+'</div>';
+  }
+  // What the host calls a ref the drawer shows: a data path is an address on
+  // this document; a contest, a gap or a list of cites has no card.
+  function cardRef(ref,k){ return !ref?'':k==='path'?docId()+'#'+ref:/^(?:pin|finding|source|passage|capture|material)$/.test(k||'')?ref:''; }
+  // Render the source card for `ref` into `el`; resolves when it is shown.
+  function card(ref,el,compact){
+    if(!el) return Promise.resolve(null);
+    el.innerHTML='<div class="clf-sc loading'+(compact?' compact':'')+'" aria-busy="true">Finding where this came from…</div>';
+    return cardsFor([ref]).then(function(m){ var c=m[ref];
+      if(el.isConnected===false) return c;
+      el.innerHTML=c?cardHTML(c,compact):'<div class="clf-sc'+(compact?' compact':'')+'"><p class="clf-sc-d">Where this came from could not be read. Try again in a moment.</p></div>';
+      return c; });
+  }
+  // The drawer's trail, oldest first: what the research inspector shows as
+  // breadcrumbs.
+  function stack(){ return STACK.map(function(s){ return {ref:s.ref, label:named(s.ref)||s.ref}; }); }
+
   // ── the tray ────────────────────────────────────────────────────────
   function refOfAddress(a){
     var p=String(a||'').split('#')[1]||'', m=p.match(/^(?:findings|facts|materials)\[([^\]]+)\]$/)||p.match(/^selection\.contested\[([^\]]+)\]$/);
@@ -902,15 +1035,35 @@ var ClanFields=(function(){
   // The lock: an approve, not superseded, on THIS document (Contract 4 §7.1).
   // A carried approve targets the parent: history, not the lock. The newest
   // is the lock when a document was locked again after a part was reopened.
-  function lockDecision(){ var id=docId();
-    return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
-      return d.kind==='approve'&&!b.superseded&&!d.superseded_by&&(arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; }))); })[0]||null; }
+  // The newest unsuperseded approve or unlock_document on this document decides (POST /unapprove,
+  // 9 Nov 2026): an approve locks it; an unlock that is newer than it means it is not locked.
+  function onThisDoc(b){ var d=b.decision||{}, id=docId(); return arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; })); }
+  function isUnlockDoc(d){ return d.action==='unlock_document'||(d.kind==='unlock'&&!!d.lock); }
+  function lockDecision(){
+    var ds=arr(VIEW&&VIEW.decisions), live=function(b){ var d=b.decision||{}; return !b.superseded&&!d.superseded_by&&onThisDoc(b); };
+    var lock=ds.filter(function(b){ return (b.decision||{}).kind==='approve'&&live(b); })[0]||null;
+    if(!lock) return null;
+    var at=function(b){ var t=Date.parse(String((b.decision||{}).timestamp||'')); return isNaN(t)?0:t; };
+    var un=ds.filter(function(b){ var d=b.decision||{}; return isUnlockDoc(d)&&live(b)&&(d.lock===lock.decision.id||arr(d.cites).indexOf(lock.decision.id)!==-1||at(b)>at(lock)); })[0]||null;
+    return un?null:lock; }
   function reopenedParts(){ return arr(obj(VIEW&&VIEW.lock).reopened); }
+  // What needs a person before the lock: the host's view, one item per place
+  // and reason (the shell's needsOf keys them the same way, code:address), so
+  // the tray, an app's own lock button and the OS's Decisions count agree.
+  function needs(){
+    var seen={};
+    return arr(VIEW&&VIEW.attention).filter(function(a){
+      if(!a||!a.blocks_lock) return false;
+      var k=a.code+':'+(a.address!=null?a.address:a.text);
+      if(seen[k]) return false;
+      seen[k]=1; return true;
+    });
+  }
   function renderTray(el){
     if(!VIEW){ el.innerHTML=''; return; }
-    var lock=lockDecision(), items=arr(VIEW.attention).filter(function(a){ return a.blocks_lock; }), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
+    var lock=lockDecision(), items=needs(), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
     var h='<div class="clf-tray" role="region" aria-label="What needs you"><div class="clf-tray-in">';
-    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span>'; }
+    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span><button type="button" class="clf-btn" data-clf-unlock>Unlock</button>'; }
     else {
       var fig=typeof NapkinAgents==='object'?NapkinAgents.figure('judge',{state:items.length?'needs-you':'idle',decorative:true}):'';
       h+='<span class="who">'+fig+'<span class="count'+(items.length?'':' zero')+'">'+(items.length?items.length+' thing'+(items.length===1?'':'s')+' need'+(items.length===1?'s':'')+' you':'Nothing needs you')+'</span></span>';
@@ -936,7 +1089,9 @@ var ClanFields=(function(){
   function carriedName(a){ var p=String(a.address||'').split('#')[1]||'', m;
     if(a.code==='unmerged_branch') return 'Work not brought back into '+carriedFrom(a.address);
     if((m=/^merge-report\[(.*)\]$/.exec(p))) return /^decisions\[/.test(m[1])?'Agents disagree on a call':'Agents disagree on '+words(m[1]).toLowerCase();
-    if(/^selection\.contested\[/.test(p)){ var k=String(a.label||'').replace(/^Contest · /,'').split(':').pop().split('@')[0]; return k?'Sources disagree on '+words(k).toLowerCase():'Sources disagree'; }
+    // The host names a contest by its fact ("Contest · Export value · IE"); an older one by its key.
+    if(/^selection\.contested\[/.test(p)){ var l=String(a.label||'').replace(/^Contest · /,''), k=/[:@]/.test(l)?words(l.split(':').pop().split('@')[0]):l.replace(/ · [A-Z]{2}$/,'');
+      return k?'Sources disagree on '+k.toLowerCase():'Sources disagree'; }
     return a.label||words(p); }
   var CARRIED_WHY={
     flagged_field:'It rests on a point marked wrong here. It belongs to {from}, so it cannot be changed here.',
@@ -961,7 +1116,7 @@ var ClanFields=(function(){
   function asideDone(b){ var d=b.decision||{};
     return '<div class="clf-dv"><span class="stmt">'+esc(arr(b.targets).map(function(t){ return t.label; })[0]||'Carried over')+'</span><div class="clf-pills"><span class="clf-pill ok">'+TICK+' Set aside</span></div></div>'
       +'<p class="clf-by"><b>'+esc(whoDid(b))+'</b> set it aside'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'</p>'
-      +(d.rationale?'<blockquote class="clf-q said">'+esc(d.rationale)+'</blockquote>':''); }
+      +(d.rationale?'<blockquote class="clf-q said">'+esc(noIds(d.rationale))+'</blockquote>':''); }
 
   // ── the drawer ──────────────────────────────────────────────────────
   function ensureDrawer(){
@@ -1048,11 +1203,13 @@ var ClanFields=(function(){
   // What happened to a thing, in plain words: who did what, when, and why.
   var DID={verdict:'checked it',verify:'said it is right',classify:'set who may see it',edit:'changed it',correct:'corrected it',resolve:'picked a value',approve:'locked it',finding:'worked it out',pin:'saved it',claim:'saved it',
     client_review:'recorded the client’s answer',unlock:'opened it for the client’s change',backref:'noted it was used'};
-  var DID_ACTION={propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
+  var DID_ACTION={unlock_document:'unlocked it',propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
   function whoDid(b){
     var d=b.decision||{}, A=crew(), k=crewKey(d);
     if(b.who&&b.who.you) return 'You';
     if(k&&A.given[k]) return A.given[k];
+    // A step none of the crew owns is the crew's, never its job's name as a person.
+    if((b.who&&b.who.kind==='agent')||(!isPerson(d)&&!(b.who&&b.who.kind==='person'))) return 'The crew';
     var n=b.who&&b.who.name||(/^human:/.test(d.actor||'')?d.actor:'');
     return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The crew';
   }
@@ -1068,7 +1225,7 @@ var ClanFields=(function(){
   function history(path){
     var ds=arr(VIEW&&VIEW.decisions).filter(function(b){ return arr(b.targets).some(function(t){ return t.path===path; }); });
     if(!ds.length) return '';
-    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{}, said=saidWords(d);
+    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{}, said=isPerson(d)?saidWords(d):noIds(saidWords(d));
       return '<li><span><b>'+esc(whoDid(b))+'</b> '+didWords(b)+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(said?' — “'+esc(said.length>160?said.slice(0,157)+'…':said)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
   }
   function wrote(ref){
@@ -1111,9 +1268,50 @@ var ClanFields=(function(){
   function uniq(xs){ var s={}; return xs.filter(function(x){ if(!x||s[x]) return false; s[x]=1; return true; }); }
   function clip(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; }
   function plural(n,w){ return n+' '+w+(n===1?'':'s'); }
+  // Ids are for Technical details, never for people (B4): a server's text
+  // ("… 1.2% ABV (f_RPH5UFCVDCUV)", "cites finding fi_…") loses its ids here.
+  // A finding is named by what it says when the page holds it.
+  function noIds(s){
+    var F=(function(){ try{ return findings()||{}; }catch(e){ return {}; } })();
+    function finding(id){ var f=F[id], t=f&&String(f.statement||'').replace(/\s+/g,' ').trim(); return t?'the finding “'+(t.length>70?t.slice(0,69).replace(/\s+\S*$/,'')+'…':t)+'”':'a finding'; }
+    return String(s==null?'':s)
+      .replace(/\s*\((?:(?:from |in |see |cites? )?(?:f|fi|fnd|src|mat|msg|d|psg)_[0-9A-Za-z]+(?:,\s*|\s+and\s+)?)+\)/g,'')
+      .replace(/\b(?:the )?finding ((?:fi|fnd)_[0-9A-Za-z]{2,})/g,function(_,id){ return finding(id); })
+      .replace(/\b(?:fi|fnd)_[0-9A-Za-z]{4,}\b/g,function(id){ return finding(id); })
+      .replace(/\b(?:the )?fact f_[0-9A-Za-z]{2,}/g,'a fact')
+      .replace(/\bf_[0-9A-Z]{6,}\b/g,'a fact')
+      .replace(/\bd_[0-9A-Z]{10,}\b/g,'a decision')
+      .replace(/\s+([.,;:])/g,'$1').replace(/\s{2,}/g,' ').trim()
+      .replace(/^[\s\S]*$/,function(t){ return keyWords(t); });
+  }
+  // This document's parts by their key, in the words the page gives them
+  // (data-clan-part-label) or the host does: an agent's sentence that names a
+  // part by its key ("budget_and_scope asks…") reads with its label.
+  function partNames(){
+    var out={};
+    arr(VIEW&&VIEW.decisions).forEach(function(b){ arr(b.targets).forEach(function(t){
+      if(t&&t.here&&t.kind==='field'&&/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?$/.test(t.path||'')&&!out[t.path]){ var l=String(t.label||'').split(' › ').pop().trim(); if(l) out[t.path]=lowerWord(l); } }); });
+    try{ declaredParts().forEach(function(p){ var a=p.address.replace(/^campaign\./,''); if(p.label){ out[p.address]=lowerWord(p.label); if(!out[a]) out[a]=out[p.address]; } }); }catch(e){}
+    return out;
+  }
+  function lowerWord(l){ return /^[A-Z][a-z]/.test(l)?l.charAt(0).toLowerCase()+l.slice(1):l; }
+  // Part keys and the crew's words in a sentence, for a person: a known part by
+  // its label, any other key in words, a length check's "background 99/70" as
+  // "background (99 words, 70 at most)", and "a"/"an" settled.
+  function keyWords(s){
+    var n=partNames();
+    function name(k){ return n[k]||(k.indexOf('_')!==-1&&k.indexOf('.')===-1?k.replace(/_/g,' '):null); }
+    return String(s==null?'':s)
+      .replace(/^Over length:\s*/,'Too long: ')
+      .replace(/\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?) (\d+)\/(\d+)\b/g,function(m,k,a,b){ var w=name(k); return w?w+' ('+a+' words, '+b+' at most)':m; })
+      .replace(/\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b/g,function(k){ return n[k]||k; })
+      .replace(/\b[a-z]+(?:_[a-z]+)+\b/g,function(k){ return n[k]||k.replace(/_/g,' '); })
+      .replace(/\b(the (?:new|old) )the /gi,'$1').replace(/\b([Tt]he) the\b/g,'$1')
+      .replace(/\b(a|A) (?=(?:[ai]|o(?!n[ce])|e(?!u)|u(?!n[iy]|s[eu]|r[aeiou]|tili))[a-z])/g,'$1n ');
+  }
   function becauseList(rs){ var bs=arr(obj(rs).because).filter(function(p){ return p&&p.point; });
-    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(p.point)+'</span></li>'; }).join('')+'</ul>':''; }
-  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }); }
+    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(noIds(p.point))+'</span></li>'; }).join('')+'</ul>':''; }
+  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }).map(noIds); }
 
   // Where a bare value came from: its current writing decision, with what it
   // cites — the client's words, the library's passages, the facts with what
@@ -1196,7 +1394,7 @@ var ClanFields=(function(){
     var shown=vs.filter(function(b,i){ return i===0||openVerdict(b,me); }).slice(0,3), jk=judgeKey();
     return '<div class="clf-sec"><h3>What '+esc(givenOf(jk)||'the Judge')+' thinks</h3>'+shown.map(function(b){
       var d=b.decision, bad=d.polarity==='bad', open=openVerdict(b,me), k=crewKey(d)||jk, at=attnOf(d.reasoning)[0];
-      var text=bad?'I think this needs work'+(RC[d.reason_code]?': '+RC[d.reason_code]:'')+'.'+(d.rationale?' '+clip(d.rationale,280):'')
+      var text=bad?'I think this needs work'+(RC[d.reason_code]?': '+RC[d.reason_code]:'')+'.'+(d.rationale?' '+clip(noIds(d.rationale),280):'')
         :'I checked it and it holds up.'+(at?' '+at:'');
       var h=say(k,esc(text),bad&&open?'needs-you':'idle')||'<p class="clf-by">'+esc(text)+'</p>';
       if(!bad&&acked(d.id)) h+='<p class="clf-muted">'+TICK+' Someone said it looks right.</p>';
@@ -1249,6 +1447,7 @@ var ClanFields=(function(){
     if((ca.length||sa)&&(!k||(k==='path'&&valueAt(ref)==null))){
       DRAWER.crumb.textContent='Carried over'; DRAWER.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
     if(t.note) b+='<p class="clf-err" style="background:var(--clf-soft);color:var(--clf-ink2)">'+esc(t.note)+'</p>';
+    var cref=cardRef(ref,k); if(cref) b+='<div class="clf-sc-slot"></div>';
     if(k==='pin'){
       var p=pins()[ref];
       if(!p){ b+=gone(); }
@@ -1363,6 +1562,9 @@ var ClanFields=(function(){
     }
     if(k&&k!=='source'&&k!=='cite') b+=wrote(ref);
     DRAWER.crumb.textContent=crumb; DRAWER.body.innerHTML=b;
+    // The source card's provenance at the top: the same renderer as inline.
+    var slot=cref&&DRAWER.body.querySelector('.clf-sc-slot');
+    if(slot) card(cref,slot,true).then(function(c){ if(!c||c.kind==='unknown') slot.innerHTML=''; });
   }
   function showError(form,msg){ var e=form&&form.querySelector('.clf-err'); if(e){ e.textContent=msg; e.hidden=false; } else toast(msg); }
   function act(route,body,form,done){
@@ -1837,6 +2039,11 @@ var ClanFields=(function(){
   }
   document.addEventListener('click',function(e){
     var cr=e.target.closest&&e.target.closest('[data-clf-cr]'); if(cr&&onClientClick(cr)){ e.preventDefault(); return; }
+    var cb=e.target.closest&&e.target.closest('[data-clf-sc]');
+    if(cb){ e.preventDefault();
+      if(cb.getAttribute('data-clf-sc')==='from') post('/open',{path:cb.getAttribute('data-path')});
+      else open(cb.getAttribute('data-ref'),!!(DRAWER&&DRAWER.el.contains(cb)&&STACK.length));
+      return; }
     if(DRAWER&&DRAWER.el.contains(e.target)) return;
     if(e.target.closest('.clf-part')) return; // a part's own controls
     if(EDIT&&!locked()){
@@ -1844,6 +2051,8 @@ var ClanFields=(function(){
       if(tx&&tx.__clfEditing&&!e.target.closest('[data-ref]')) return; // typing
       if(tx&&!e.target.closest('[data-ref]')&&!e.target.closest('.clf-textbar')){ e.preventDefault(); editText(tx); return; }
     }
+    var ub=e.target.closest('[data-clf-unlock]');
+    if(ub){ var tu=ub.closest('clan-tray'), nu=tu&&tu.getAttribute('noun')||'report'; act('/unapprove',{rationale:'Unlocked to change the '+nu},null,'Unlocked.'); return; }
     var lb=e.target.closest('[data-clf-lock]');
     if(lb){ var tr=lb.closest('clan-tray'), noun=tr&&tr.getAttribute('noun')||'report'; act('/approve',{},null,'The '+noun+' is locked. This version is the final one.'); return; }
     var t=e.target.closest('[data-ref]'); if(!t) return;
@@ -1901,7 +2110,11 @@ var ClanFields=(function(){
     var el=ref&&document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});
     // A data path no field on the page shows is the app's to show.
-    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)) open(ref);
+    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)){
+      open(ref);
+      // The app may follow along (the brief selects the part, so its panel shows it).
+      if(kindOf(ref)==='path') window.dispatchEvent(new CustomEvent('clan:opened',{detail:{path:ref}}));
+    }
     else window.dispatchEvent(new CustomEvent('clan:focus',{detail:{path:m.path||ref}}));
   });
   function start(){ watchParts(); loadView().then(refresh); }
@@ -1910,7 +2123,11 @@ var ClanFields=(function(){
   return {refresh:refresh, reload:function(){ return loadView().then(refresh); }, open:open, layout:layout, mount:mount,
           format:fmt, label:label, kindOf:kindOf, stateOf:stateOf,
           // The host's decision view as last read (null until it is), and the lock.
-          view:function(){ return VIEW; }, locked:lockDecision,
+          view:function(){ return VIEW; }, locked:lockDecision, needs:needs,
+          // The source card (OS-layer contract §8.3): card(ref, el) renders it
+          // into el; cards(refs) is the same lookup without the markup; the
+          // drawer's trail of refs, oldest first, is stack().
+          card:function(ref,el){ return card(ref,el,false); }, cards:cardsFor, stack:stack,
           // The parts this page declares for client review, as sent to the shell.
           parts:function(){ return declaredParts().map(partRef); }};
 })();

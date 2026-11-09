@@ -18,7 +18,11 @@
 import init, { NapkinHost } from '../wasm/napkin_wasm'
 import { prepareFrameHtml } from './wasmFrame'
 import type {
+  Adopted,
+  LegacyName,
   ClientConfirmReply,
+  ClientRecord,
+  LibraryListing,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
@@ -30,7 +34,12 @@ import type {
   SpinoffTarget,
   Unlisten,
   UploadedAsset,
+  UpstreamUpdateReply,
   UpstreamView,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
+  SourceCard,
 } from './types'
 
 /** Bytes out of wasm arrive as an Array unless they already are a view. */
@@ -231,8 +240,8 @@ export const wasmHost: Host = {
   whoAmI: async () => ({ actor: 'human:local', id: 'local', name: null }),
   openClan: async path => (await boot()).open(path) as OpenResult,
   openHome: async () => (await boot()).openHome() as OpenResult,
-  newDocumentFromApp: async (appId, title) =>
-    (await boot()).newDocument(appId, title) as OpenResult,
+  newDocumentFromApp: async (appId, title, clientId) =>
+    (await boot()).newDocument(appId, title ?? undefined, clientId ?? undefined) as OpenResult,
 
   // A shared link cannot carry a document, because there is no server holding
   // one. Nothing to take.
@@ -252,7 +261,16 @@ export const wasmHost: Host = {
     dispatch(resp)
   },
 
+  verify: async (finding, rationale) => { await post<unknown>('/verify', { finding, rationale }) },
+
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
+  updateFromUpstream: () => post<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => route<AttachTarget[]>('/attach-targets', '', new Uint8Array()),
+  attach: documentId => post<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => post<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => post<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => route<RelatedView>('/related', '', new Uint8Array()),
+  cites: async refs => (await post<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   // Answered by the route table in the page, as on every host: the parts
   // the client's words name are found by the host's own matcher, in the
@@ -313,6 +331,18 @@ export const wasmHost: Host = {
   },
 
   listRecent: async () => (await boot()).listRecent() as RecentDoc[],
+
+  listLibrary: async filter =>
+    (await boot()).listLibrary(filter?.client ?? undefined, filter?.app ?? undefined) as LibraryListing,
+  clients: {
+    list: async (includeArchived = false) => (await boot()).listClients(includeArchived) as ClientRecord[],
+    create: async (name, material) => (await boot()).createClient(name, material ?? undefined) as ClientRecord,
+    update: async (id, patch) => (await boot()).updateClient(id, JSON.stringify(patch)) as ClientRecord,
+    archive: async id => (await boot()).setClientArchived(id, true) as ClientRecord,
+    restore: async id => (await boot()).setClientArchived(id, false) as ClientRecord,
+    legacy: async () => (await boot()).legacyClientNames() as LegacyName[],
+    adopt: async names => (await boot()).adoptClients(JSON.stringify(names)) as Adopted,
+  },
 
   spinoffTargets: async () => (await boot()).spinoffTargets() as SpinoffTarget[],
   spinoffDocument: async (appId, title, map) =>

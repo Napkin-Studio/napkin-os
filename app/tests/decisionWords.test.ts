@@ -131,3 +131,70 @@ test('a proposal reads as a first or a new version, steered as its reason says',
   bare.targets = smp
   assert.equal(didWhat(bare, VIEW0), 'proposed a new single-minded proposition')
 })
+
+test('an agent’s own line in an irregular past reads as done, not “decided to …”', () => {
+  const said = (rationale: string) => didWhat(block({ id: 'd_X', action: 'draft_field', rationale }, agent('draft_brief@1.0/drafter')), VIEW0)
+  assert.equal(said('Rewrote the audience on your ask.'), 'rewrote the audience on your ask')
+  assert.equal(said('Went on without the judge stage.'), 'went on without the judge stage')
+  assert.equal(said('Keep the audience as written.'), 'decided to keep the audience as written')
+})
+
+test('a line that is not a verb phrase reads as it is, never “decided to the …”', () => {
+  const said = (rationale: string) => didWhat(block({ id: 'd_X', action: 'judge_field', rationale }, agent('draft_brief@1.0/judge')), VIEW0)
+  assert.equal(said('The audience section turns into a product pitch.'), 'the audience section turns into a product pitch')
+  assert.equal(said('Ferryman Light answers the doubt.'), 'Ferryman Light answers the doubt')
+  assert.equal(said('Two parts disagree on the budget.'), 'two parts disagree on the budget')
+  assert.equal(said('Use the research’s audience.'), 'decided to use the research’s audience')
+})
+
+test('a link, its update and its unlink each say what they did, to which document', () => {
+  const you = { kind: 'person', id: 'x', name: 'x', you: true } as DecisionBlock['who']
+  const at = ['d1#upstream.fd7f207f-af73-4c24-9d1e-000000000001']
+  const attach = block({ id: 'a', action: 'attach', targets: at, rationale: 'Took "Guinness 0.0 · Ireland" (ie.napkin.campaign-research) at v1: its data frozen …' }, you)
+  const update = block({ id: 'u', action: 'update_from_research', targets: at, rationale: 'Took "Guinness 0.0 · Ireland" (ie.napkin.campaign-research) at v2: …' }, you)
+  const detach = block({ id: 'x', action: 'detach', targets: at, rationale: 'Let go of ie.napkin.campaign-research fd7f207f-af73: its frozen copy removed.' }, you)
+  const view = { ...VIEW0, decisions: [detach, update, attach] }
+  assert.equal(didWhat(attach, view), 'linked “Guinness 0.0 · Ireland”')
+  assert.equal(didWhat(update, view), 'took the newer “Guinness 0.0 · Ireland”')
+  assert.equal(didWhat(detach, view), 'unlinked “Guinness 0.0 · Ireland”', 'the unlink finds the title its link named')
+  assert.equal(didWhat(detach, { ...VIEW0, decisions: [detach] }), 'unlinked a linked document')
+})
+
+// B4 leftovers (final retest): handlers read as the crew, keys and ids as words.
+test('a step no one of the crew owns is the crew’s, never its job’s name', () => {
+  assert.equal(whoOf(block({ action: 'reconsider' }, agent('reconsider'))).name, 'The crew')
+  assert.equal(whoOf(block({ action: 'report' }, agent('start_campaign'))).name, AGENTS.drafter.given)
+  const contest = whoOf(block({ action: 'open_contest', kind: 'contest' }, agent('start_campaign')))
+  assert.equal(contest.name, 'The researchers')
+  assert.equal(contest.person, false)
+})
+
+test('a contest’s key, a spin-off and a reconsider read as sentences without ids', () => {
+  const view = { document_id: 'd', version: 'v', attention: [], cites: {}, lock: { can_lock: true, blockers: 0 }, decisions: [] } as unknown as DecisionsView
+  assert.equal(plain('Opened a contest on category/alcohol.cider:market.export_value@IE; nothing is picked'),
+    'Opened a contest on the export value in Ireland; nothing is picked')
+  const spin = block({
+    action: 'spin off "Dry Run" into Research Tool',
+    rationale: 'Carried its data, frozen under upstream.a3eba7f3-def2-499a-bcb9-24df86b92c25, its facts, findings, sources, branches and assets, and 90 decision(s) from "Dry Run" (a3eba7f3). Everything below this entry was decided in that document.',
+  }, agent('napkin-spinoff'))
+  const said = didWhat(spin, view)
+  assert.equal(said, 'started this from “Dry Run”, carrying in its facts, findings and sources and 90 decisions made there')
+  const why = plain(spin.decision.rationale)
+  assert.doesNotMatch(why, /upstream|a3eba7f3/)
+  const rec = block({
+    action: 'reconsider',
+    rationale: "Brought the document in step with a person's review: 1 review(s): 0 finding(s) checked, 0 still stand, 0 superseded by what they were worked out again as, 0 no longer stand. Because: A person verified it",
+  }, agent('reconsider'))
+  assert.equal(didWhat(rec, view), 'went over the findings after a person’s review; none of them needed changing')
+  const rec2 = block({ ...rec.decision, rationale: "Brought the document in step with a person's review: 2 review(s): 3 finding(s) checked, 2 still stand, 1 superseded by what they were worked out again as, 0 no longer stand." }, agent('reconsider'))
+  assert.equal(didWhat(rec2, view), 'went over the findings after 2 reviews by a person: 3 findings checked again, 2 findings still stand, 1 finding was worked out again')
+})
+
+test('a part named by its key reads by the label the host gives it', () => {
+  const parts = { budget_and_scope: 'budget & scope', background: 'background', competitor_context: 'competitor context' }
+  assert.equal(plain('budget_and_scope asks legal which sections apply', parts), 'budget & scope asks legal which sections apply')
+  assert.equal(plain('Over length: background 99/70, competitor_context 120/70', parts),
+    'Too long: background (99 words, 70 at most), competitor context (120 words, 70 at most)')
+  assert.equal(plain('Checked the new the barrier: it answers the note.'), 'Checked the new barrier: it answers the note.')
+  assert.equal(plain('Proposed a effectiveness_evidence finding for a person to verify'), 'Proposed an effectiveness point for you to check')
+})

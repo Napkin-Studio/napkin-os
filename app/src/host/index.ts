@@ -49,12 +49,22 @@ const deviceSync: Partial<Host> = {
   frameLoad: 'srcdoc',
 }
 
+/** `host.clients.*` on the device: a namespace, so each member forwards on its own. */
+const deviceClients = new Proxy({} as Host['clients'], {
+  get(_, member: keyof Host['clients']) {
+    if ((member as string) === 'then') return undefined
+    return (...args: unknown[]) =>
+      loadWasm().then(m => (m.wasmHost.clients[member] as (...a: unknown[]) => unknown)(...args))
+  },
+})
+
 /** The device host, standing in for itself until its module has loaded. */
 const deviceHost = new Proxy({} as Host, {
   get(_, key: keyof Host) {
     if (key in deviceSync) return deviceSync[key]
     // Not a promise, whatever awaits it.
     if ((key as string) === 'then') return undefined
+    if (key === 'clients') return deviceClients
     return (...args: unknown[]) =>
       loadWasm().then(m => (m.wasmHost[key] as (...a: unknown[]) => unknown)(...args))
   },

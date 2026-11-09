@@ -49,6 +49,10 @@ def test_bmw_subject_categories_as_buttons_then_reuse(server):
     assert cats["origin"] == "proposed" and cats["value"] == ["automotive.ev_charging", "automotive.hybrid"]
     assert len(server.research.calls) == calls  # nothing re-researched
     assert {f["id"] for f in host.facts} & {f["id"] for f in host2.facts}
+    # where each pin came from (origin_kind): found by research the first time; the layers' own rows,
+    # roster and reused research alike, the second
+    assert all(f.get("origin_kind") == "research" for f in host.facts if f["layer"] != "brand"), host.facts
+    assert host2.facts and all(f.get("origin_kind") == "layer" for f in host2.facts)
 
 
 def test_typed_vertical_offers_its_leaves(server):

@@ -24,6 +24,15 @@ def bad(message: str, etype: str = "invalid_input") -> TaskError:
     return TaskError(400, etype, message)
 
 
+def join_list(values, sep: str = "; ") -> str:
+    """Items said in one line: each but the last loses its closing punctuation
+    first, so two sentences read "this spring; Reach 3%…", never "spring.; Reach"."""
+    xs = [str(v).strip() for v in values if str(v or "").strip()]
+    if not xs:
+        return ""
+    return sep.join([re.sub(r"[\s.;,:]+$", "", x) for x in xs[:-1]] + [xs[-1]])
+
+
 def _digest(*parts) -> bytes:
     h = hashlib.sha256()
     for p in parts:

@@ -53,6 +53,9 @@ pub struct ManifestInfo {
     pub file_count: usize,
     pub lineage: Option<LineageInfo>,
     pub app: Option<AppMeta>,
+    /// Who the document is for, when it has a client (`manifest.client`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<clan_sdk::ClientRef>,
 }
 
 /// App metadata surfaced to the shell (launcher cards, "running an app" chrome).
@@ -143,6 +146,9 @@ pub struct Session {
     /// per-request [`Ctx`] to the `_as` operations instead.
     ctx: Ctx,
     view: Mutex<ViewState>,
+    /// Where the jobs a middleware reply names are noted, so the library can say
+    /// what is running. Absent for a session nobody lists (tests, one-offs).
+    runs: Option<Arc<crate::runs::RunTracker>>,
 }
 
 /// Counts the legacy patches that reached the store, so tests can assert that
@@ -163,7 +169,15 @@ impl Session {
             store,
             ctx,
             view: Mutex::new(ViewState::default()),
+            runs: None,
         }
+    }
+
+    /// Note every middleware job this session sees in `runs` (the tenant's
+    /// [`crate::LibraryCache::runs`]).
+    pub fn with_runs(mut self, runs: Arc<crate::runs::RunTracker>) -> Self {
+        self.runs = Some(runs);
+        self
     }
 
     pub fn store(&self) -> &Arc<dyn DocStore> {
@@ -526,7 +540,8 @@ impl Session {
     /// applied here, by the host, and the app gets the envelope back with
     /// `change` replaced by `{applied: true, version, base_stale, applied_fields,
     /// contested_fields, contests}` or
-    /// `{applied: false, reason}`. When a change landed, the envelope also
+    /// `{applied: false, reason}`. When a change landed, or was `already
+    /// applied` by another poll, the envelope also
     /// carries `clan: {id, revision, version, data}` — the document as it now stands —
     /// so the view can refresh without writing anything. The app never writes
     /// middleware output itself; what it is handed is informational. Returns
@@ -552,6 +567,10 @@ impl Session {
                 Vec::new(),
             );
         }
+        // Whatever else it carries, the reply says what the job is doing.
+        if let (Some(runs), Some(doc)) = (&self.runs, self.current_id()) {
+            runs.record(&doc, &data);
+        }
         if data.get("change").map_or(true, Value::is_null) {
             return (envelope, Vec::new());
         }
@@ -569,6 +588,10 @@ impl Session {
         };
         let landed = settled.get("applied").and_then(Value::as_bool) == Some(true)
             && settled.get("noop").is_none();
+        // Someone else's poll (the shell's job watcher, another tab) applied
+        // this change first: the page asking now holds data from before it,
+        // so it is handed the document too, or it never redraws.
+        let caught_up = settled.get("reason").and_then(Value::as_str) == Some("already applied");
         envelope["data"]["change"] = settled;
         // The view holds its own copy of the data (`window.__CLAN__.data`) and
         // nothing re-reads the archive into it after a host-side write — a
@@ -577,7 +600,7 @@ impl Session {
         // in the same shape the request's `clan` had, for the bridge to swap
         // in and announce with `clan:dataupdated`. Outside `data`: that is the
         // middleware's body, and this is the host's.
-        if landed {
+        if landed || caught_up {
             if let Some(clan) = self.document_now() {
                 envelope["clan"] = clan;
             }

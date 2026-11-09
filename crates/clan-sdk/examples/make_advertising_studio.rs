@@ -16,14 +16,38 @@
 
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, spinoff,
-    validate, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions, SpinoffOptions, SpinoffSpec,
+    validate, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions, SourceCarry, SpinoffOptions, SpinoffSpec,
 };
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
+
+/// How a research is carried into a production: whole, frozen under
+/// `upstream.<research id>`, with the campaign's name and client seeded.
+fn research_carry() -> BTreeMap<String, SourceCarry> {
+    let mut lift = BTreeMap::new();
+    lift.insert(
+        "campaign.name.value".to_string(),
+        "project.name".to_string(),
+    );
+    lift.insert(
+        "campaign.client_org.value".to_string(),
+        "project.client".to_string(),
+    );
+    let mut by_source = BTreeMap::new();
+    by_source.insert(
+        "ie.napkin.campaign-research".to_string(),
+        SourceCarry {
+            upstream: true,
+            lift,
+            ..Default::default()
+        },
+    );
+    by_source
+}
 
 fn template_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -88,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             home: None,
             name: "Advertising Studio".into(),
             app_id: "ie.napkin.film".into(),
-            version: "0.1.0".into(),
+            version: "0.2.0".into(),
             icon: None,
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -100,6 +124,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 lift,
                 pin_source_decisions: true,
                 upstream: false,
+                // A research is carried whole under upstream.<id>, its name
+                // and client seeded into the project (owner, 2026-11-09:
+                // research to production is upstream + lift).
+                by_source: research_carry(),
+            }),
+            // Link an existing brief (one) or research (several) into a
+            // production that exists.
+            attach: Some(AttachSpec {
+                accepts: vec![
+                    "ie.napkin.brief-maker".into(),
+                    "ie.napkin.campaign-research".into(),
+                ],
+                many: vec!["ie.napkin.campaign-research".into()],
+                ..Default::default()
             }),
         },
         MakeTemplateOptions::default(),
@@ -206,6 +244,7 @@ fn brief_maker_stub() -> Result<ClanFile, Box<dyn std::error::Error>> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )?;

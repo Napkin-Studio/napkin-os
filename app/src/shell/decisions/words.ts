@@ -44,8 +44,13 @@ export function whoOf(block: DecisionBlock): WhoIs {
   if (a) return { agent: a, name: AGENTS[a].given, job: AGENTS[a].job, person: false }
   // Research that names no lens (the merge across lenses) is the researchers',
   // together: no one of them did it.
-  if (/^research/.test(block.decision.action)) return { agent: 'market_structure', name: 'The researchers', job: '', person: false }
-  return { agent: null, name: block.who.name, job: '', person: false }
+  // So is a contest they opened between their runs.
+  if (/^research/.test(block.decision.action) || block.decision.action === 'open_contest' || block.decision.kind === 'contest') {
+    return { agent: 'market_structure', name: 'The researchers', job: '', person: false }
+  }
+  // A step no one of the crew owns (a job's own bookkeeping: "start_campaign",
+  // "reconsider") is the crew's, never a person's name made of its handler.
+  return { agent: null, name: 'The crew', job: '', person: false }
 }
 
 /**
@@ -57,6 +62,9 @@ export function whoOf(block: DecisionBlock): WhoIs {
 function personName(name: string): string {
   const n = String(name ?? '').trim()
   if (!n || n === 'someone' || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(n)) return 'Someone'
+  // A sign-in id ("sam@wk") reads as the first name, never the id.
+  const at = /^([^@\s]+)@[^@\s]+$/.exec(n)
+  if (at) return at[1].split(/[._-]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
   return n.split('-').map(w => (/^(\.[0-9a-f]{2,4})+$/.test(w)
     ? w.slice(1).split('.').map(h => String.fromCharCode(parseInt(h, 16))).join('') : w)).join(' ')
 }
@@ -74,15 +82,37 @@ const fixPlurals = (s: string) =>
  * agent wrote them ("Research 2 lenses…; skip 6", "Asked the person…"); a
  * line reads in the past, to you.
  */
+const IRREGULAR_PAST = new Set(['ran', 'read', 'set', 'found', 'wrote', 'made', 'took', 'chose', 'kept', 'left', 'held', 'gave',
+  'went', 'drew', 'built', 'sent', 'told', 'did', 'put', 'thought', 'brought', 'saw', 'got', 'began', 'came', 'said', 'spent', 'cut', 'split', 'met'])
 function pastTense(s: string): string {
   const m = /^Research (\d+) lens(?:\(es\)|es)? (?:across|in) (.+?); skip (\d+)/i.exec(s)
   if (m) return `chose ${m[1]} thing${m[1] === '1' ? '' : 's'} to look into in ${m[2]} and left out ${m[3]}`
-  let out = s.replace(/\bthe person\b/g, 'you').replace(/^ran (?=\S)/i, 'looked into ')
+  const out = s.replace(/\bthe person\b/g, 'you').replace(/^ran (?=\S)/i, 'looked into ')
   const first = out.split(' ')[0].toLowerCase()
-  const past = /ed$/.test(first) || ['ran', 'read', 'set', 'found', 'wrote', 'made', 'took', 'chose', 'kept', 'left', 'held', 'gave'].includes(first)
-  if (!past) out = `decided to ${lower(out)}`
-  return out
+  // Irregular past forms, with or without re- ("rewrote", "redrew").
+  const bare = /^re(?=wrote|drew|made|built|ran|read|set|took|sent|told|did|put|thought|wrote)/.test(first) ? first.slice(2) : first
+  const past = /ed$/.test(first) || IRREGULAR_PAST.has(bare)
+  // "Keep the audience as written" was a choice: "decided to keep …". A line
+  // that is not a verb phrase ("The audience section turns into …") reads as
+  // it is, never "decided to the audience …".
+  if (past) return lower(out)
+  if (BARE_VERBS.has(first.replace(/[^a-z-]/g, ''))) return `decided to ${lower(out)}`
+  // As it is: a name keeps its capital ("Ferryman Light answers …").
+  return COMMON_START.has(first) ? lower(out) : out
 }
+
+/** Words a sentence starts with that are not names: lower-cased mid-line. */
+const COMMON_START = new Set(['the', 'a', 'an', 'this', 'that', 'these', 'those', 'it', 'its', 'there', 'some', 'all', 'no', 'each',
+  'every', 'one', 'two', 'three', 'four', 'five', 'both', 'nothing', 'none', 'only', 'most', 'many', 'several', 'any', 'their', 'our'])
+
+/** Verbs an agent's line starts with when it says what it chose to do. */
+const BARE_VERBS = new Set(['accept', 'add', 'adjust', 'answer', 'ask', 'avoid', 'bring', 'build', 'carry', 'change', 'check', 'choose',
+  'cite', 'clarify', 'combine', 'compose', 'confirm', 'correct', 'cut', 'draft', 'drop', 'expand', 'explain', 'extract', 'fill', 'find',
+  'fix', 'flag', 'focus', 'follow', 'give', 'go', 'hold', 'include', 'keep', 'lead', 'leave', 'link', 'list', 'look', 'make', 'mark',
+  'merge', 'move', 'name', 'narrow', 'note', 'omit', 'open', 'pin', 'prefer', 'propose', 'pull', 'put', 'raise', 'read', 'rebuild',
+  'redraft', 'reframe', 'reject', 'remove', 'rename', 'reopen', 'replace', 'research', 'resolve', 'restate', 'rewrite', 'run', 'say',
+  'search', 'send', 'set', 'shorten', 'show', 'skip', 'split', 'start', 'state', 'stop', 'summarise', 'summarize', 'swap', 'synthesise',
+  'take', 'tighten', 'treat', 'trim', 'turn', 'update', 'use', 'verify', 'wait', 'weigh', 'write'])
 
 const lower = (s: string) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s)
 /** A line that starts a sentence: "Proposed …" under a signature. */
@@ -162,12 +192,41 @@ function steerOf(rationale: string): string {
  * lenses …". A person's decision is said from its kind; an agent's from what
  * it decided.
  */
+/** The title a link decision names: its own ("Took "…""), else the attach or update on the same upstream that did. */
+function linkedTitle(block: DecisionBlock, view: DecisionsView): string | null {
+  const titled = (r: string) => /^Took (?:the newer [^"]* )?"([^"]+)"/.exec(r)?.[1] ?? null
+  const own = titled(block.decision.rationale ?? '')
+  if (own) return own
+  const target = block.decision.targets?.[0]
+  for (const b of view.decisions) {
+    if (b === block || !target || !b.decision.targets?.includes(target)) continue
+    const t = titled(b.decision.rationale ?? '')
+    if (t) return t
+  }
+  return null
+}
+
+/** A link between documents (attach, update, replace, detach), said by what it did and to which document. */
+function linkLine(block: DecisionBlock, view: DecisionsView): string | null {
+  const a = block.decision.action
+  if (a !== 'attach' && a !== 'detach' && a !== 'replace' && !/^update_from_/.test(a)) return null
+  if (!block.decision.targets?.some(t => /#upstream\./.test(t))) return null
+  const title = linkedTitle(block, view)
+  const it = title ? `“${clip(title, 80)}”` : 'a linked document'
+  if (a === 'attach') return `linked ${it}`
+  if (a === 'detach') return `unlinked ${it}`
+  if (a === 'replace') return `replaced the link with ${it}`
+  return `took the newer ${it}`
+}
+
 export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   const d = block.decision
   const t = mainTarget(block)
   const what = t ? strip(t.label) : 'the document'
   const client = clientLineOf(block, view)
   if (client) return client.rest
+  const link = linkLine(block, view)
+  if (link) return link
   if (block.who.kind === 'person') {
     // Accepting a proposal is the person's write of the part, credited to
     // whoever proposed it: the drafter when the proposal has left the chain.
@@ -208,6 +267,13 @@ export function didWhat(block: DecisionBlock, view: DecisionsView): string {
     if (d.kind === 'verdict') return `marked ${what} ${d.polarity === 'bad' ? 'wrong' : 'right'}`
     return `changed ${t ? partOf(t.label) : what}`
   }
+  // The document this one was started from, carried in whole.
+  if (/^spin off /.test(d.action)) {
+    const from = /^spin off "(.+)" into /.exec(d.action)?.[1]
+    const n = /\band (\d+) decision\(s\)/.exec(d.rationale)?.[1]
+    return `started this from ${from ? `“${clip(from, 80)}”` : 'another document'}, carrying in its facts, findings and sources${n ? ` and ${n} decision${n === '1' ? '' : 's'} made there` : ''}`
+  }
+  if (d.action === 'reconsider') return reconsiderLine(d.rationale)
   if (d.action === 'research_merge') {
     const facts = (d.cites ?? []).filter(c => view.cites[c]?.kind === 'fact').length
     const n = sourcesOf(block, view).length
@@ -217,7 +283,29 @@ export function didWhat(block: DecisionBlock, view: DecisionsView): string {
   // Judge sent it back and a second replaced it, else a new one.
   if (d.action === 'propose') return `proposed a ${d.superseded_by ? 'first' : 'new'} ${t ? partOf(t.label) : what}${steerOf(d.rationale)}`
   const said = d.reasoning?.decided || d.rationale.split(/\. Because/)[0] || d.action.replace(/_/g, ' ')
-  return lower(pastTense(plain(said.replace(/\.$/, ''))))
+  return pastTense(plain(said.replace(/\.$/, ''), partNamesOf(view)))
+}
+
+/**
+ * The crew going over its work after a person's review, from the counts its
+ * summary gives ("1 review(s): 0 finding(s) checked, 0 still stand, …"): only
+ * what moved, in words.
+ */
+function reconsiderLine(rationale: string): string {
+  const s = String(rationale ?? '')
+  const n = (re: RegExp) => Number(re.exec(s)?.[1] ?? 0)
+  const reviews = n(/(\d+) review\(s\)/)
+  const parts = [
+    [n(/(\d+) finding\(s\) checked/), 'checked again', 'checked again'],
+    [n(/(\d+) still stand/), 'still stands', 'still stand'],
+    [n(/(\d+) superseded by/), 'was worked out again', 'were worked out again'],
+    [n(/(\d+) no longer stand/), 'no longer stands', 'no longer stand'],
+  ].filter(([c]) => (c as number) > 0).map(([c, one, many]) => `${c} finding${c === 1 ? '' : 's'} ${c === 1 ? one : many}`)
+  const after = reviews > 1 ? `${reviews} reviews by a person` : 'a person’s review'
+  const redone = /the report parts resting on it were written again/.test(s) ? '; the report parts resting on them were written again' : ''
+  return parts.length
+    ? `went over the findings after ${after}: ${parts.join(', ')}${redone}`
+    : `went over the findings after ${after}; none of them needed changing${redone}`
 }
 
 // ── client review (OS-layer contract §7.5) ──────────────────────────────────
@@ -345,22 +433,69 @@ const LENS_WORDS: Record<string, string> = {
  * and decision ids dropped (the chips carry them), "(s)" plurals settled, and
  * the crew's working words said the way a person would ("pins" are facts).
  */
-export function plain(text: string): string {
-  return fixPlurals(String(text ?? ''))
+export function plain(text: string, parts?: Readonly<Record<string, string>>): string {
+  return partWords(fixPlurals(String(text ?? '')), parts)
     // An older accept of a proposal named the decision's id in its words.
     .replace(/^Accepted d_[0-9A-Za-z_-]+:\s*/, 'Accepted ')
     .replace(/^Used proposal d_[0-9A-Za-z_-]+\.?$/, 'Used the proposal.')
     .replace(/\s*\((?:from |in )?(?:mat|d|msg|src|f|fi)_[0-9A-Za-z]{6,}\)/g, '')
+    // A fact's key with its scope and market ("category/alcohol.cider:market.export_value@IE").
+    .replace(/\b[a-z]+\/[a-z0-9._-]+:([a-z0-9_]+(?:\.[a-z0-9_]+)*)(?:@([A-Z]{2}))?(?![\w.@-]*[\w@])/g, (_: string, k: string, m?: string) =>
+      `the ${k.split('.').pop()!.replace(/^x_/, '').replace(/_/g, ' ')}${m ? ` in ${countryOf(m)}` : ''}`)
+    // A spin-off's marker names where the parent's data sits and its short id.
+    .replace(/\bits data, frozen under upstream\.[0-9a-f-]{8,}, /g, '')
+    .replace(/\bupstream\.[0-9a-f]{8}-[0-9a-f-]{27,}/g, 'the document it came from')
+    .replace(/\s*\([0-9a-f]{8}\)/g, '')
     .replace(/\b(?:mat|msg)_[0-9A-Z]{8,}\b/g, 'your request')
-    .replace(/\b([a-z]+_[a-z]+)\b/g, (w: string) => LENS_WORDS[w] ?? w)
+    .replace(/\b[a-z]+(?:_[a-z]+)+\b/g, (w: string) => parts?.[w] ?? LENS_WORDS[w] ?? w.replace(/_/g, ' '))
     .replace(/\bfinding for (?:a person|the person|you) to (?:verify|check)\b/g, 'point for you to check')
     .replace(/\bfor (?:a person|the person) to (?:verify|check)\b/g, 'for you to check')
     .replace(/\b(?:the )?client org\b/g, 'the client')
     .replace(/\bcoverage (?:was )?thin\b/g, 'found little')
     .replace(/\bpins\b/g, 'facts')
     .replace(/\bpin\b/g, 'fact')
+    // "Checked the new the barrier": a label that starts with its own article.
+    .replace(/\b(the (?:new|old) )the /gi, '$1')
+    .replace(/\b([Tt]he) the\b/g, '$1')
+    .replace(/\b(a|A) (?=(?:[ai]|o(?!n[ce])|e(?!u)|u(?!n[iy]|s[eu]|r[aeiou]|tili))[a-z])/g, (_: string, a: string) => `${a}n `)
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+/**
+ * The document's own parts by key, as the host labels them for this view
+ * ("budget_and_scope" → "budget & scope"), for an agent's words that name a
+ * part by its key.
+ */
+const PARTS_OF = new WeakMap<DecisionsView, Record<string, string>>()
+export function partNamesOf(view: DecisionsView): Record<string, string> {
+  const known = PARTS_OF.get(view)
+  if (known) return known
+  const out: Record<string, string> = {}
+  for (const b of view.decisions ?? []) {
+    for (const t of b.targets ?? []) {
+      if (!t.here || t.kind !== 'field' || !t.path || !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?$/.test(t.path) || out[t.path]) continue
+      const name = String(t.label ?? '').split(' › ').pop()!.trim()
+      if (name) out[t.path] = lower(name)
+    }
+  }
+  PARTS_OF.set(view, out)
+  return out
+}
+
+/**
+ * Part keys in an agent's sentence, in words: a known part by its label, and
+ * a length check's "background 99/70" as "background (99 words, 70 at most)".
+ */
+function partWords(text: string, parts?: Readonly<Record<string, string>>): string {
+  const name = (k: string) => parts?.[k] ?? (k.includes('_') && !k.includes('.') ? k.replace(/_/g, ' ') : null)
+  return text
+    .replace(/^Over length:\s*/, 'Too long: ')
+    .replace(/\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?) (\d+)\/(\d+)\b/g, (m: string, k: string, n: string, max: string) => {
+      const w = name(k)
+      return w ? `${w} (${n} words, ${max} at most)` : m
+    })
+    .replace(/\b[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\b/g, (k: string) => parts?.[k] ?? k)
 }
 
 /** "Unsure", "Fairly sure", "Confident" — one scale, words only. */

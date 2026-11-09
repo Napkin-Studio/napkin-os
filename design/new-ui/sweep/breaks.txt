@@ -1,0 +1,129 @@
+**Breakage sweep: napkin-app-v1.html**
+
+I clicked through every screen and state on the list, at 1600×1000 and 1280×800, in light and dark, for brands wk and tbwa. No page errors appeared in any run. All screenshots are in `/tmp/claude-1000/napkin-shots/sweep/` (paths below are relative to that folder).
+
+### P0: broken function or hidden feature
+
+1. **Brief output overflows at 1280.**
+   - Steps: `?tool=brief&step=output`, viewport 1280×800.
+   - What's wrong: `#brief-workspace` is a fixed `860px 440px` grid plus gap, which is wider than 1280. The page starts at x=-26 and the side tab touches the edge. The inspector is cut off on the right ("edited 2 days ag…", buttons clipped) and the page scrolls sideways (scrollWidth 1306).
+   - Shot: `m-1280-wk-light-brief-output.png`, `m-1280-tbwa-dark-brief-output.png`
+   - Fix: `#brief-workspace{grid-template-columns:minmax(0,860px) minmax(320px,440px)}`, plus a `@media (max-width:1360px)` step that narrows the inspector to 360px.
+
+2. **"Ask the research" shows no answer.**
+   - Steps: type a question, click Ask.
+   - What's wrong: the toast says "Answered with 2 cited pins", but the answer is written into `.r-ans-q`, which is hidden (it sits in the "answer formed" card the owner removed). Nothing visible changes.
+   - Shot: `r-asked.png`
+   - Fix: render the question and answer as a thread under the Ask box in `#r-side`.
+
+3. **Research "Lock and accept" does nothing.**
+   - Steps: (a) click it while one call is open: no toast, nothing happens. (b) Click Keep first, then Lock: the chip stays "Draft".
+   - Shot: `r-locked2.png`
+   - Fix: in the `#r-lock` handler, show a toast while calls are open (the brief already does this: "1 part needs your call…"). Otherwise set `#r-rep-chip` to Locked, swap the button to Unlock, and set the status pill.
+
+4. **Keep and Cut don't update the report.**
+   - Steps: click Keep, or click Cut.
+   - What's wrong: the stats bar updates. But the sentence pills still say "needs you" (3 of them), "Confirm before the brief" still lists Finding 3, and after Cut summary line 5 and the Finding 3 sentence are still there.
+   - Shot: `r-kept.png`, `r-cut.png`
+   - Fix: re-render `#r-answer`, `.prov-pill.needs` and `#rb-cont` from the call state.
+
+5. **Decisions drawer "Approve both & lock brief" doesn't reach the brief.**
+   - What's wrong: after approving, the brief is still DRAFT and its panel still says "Your call · 2 open". The Decisions badge shows 1 instead of 0, and the status pill reads "DONE · VERIFIED".
+   - Shot: `decisions-approved.png`
+   - Fix: send the approval through the same state function the brief's Yes/No buttons use, then run the lock.
+
+6. **Brief inspector slides under the top bar when you scroll.**
+   - What's wrong: `#look-inspector` is `position:sticky; top:20px`, but the top bar is about 63px tall. Save·PDF is cut off, and the source card's "← back" link and red dot are hidden.
+   - Shot: `brief-srccard.png`, `brief-resized.png`
+   - Fix: `#look-inspector{top:calc(var(--tb-h,63px) + 16px);max-height:calc(100vh - var(--tb-h,63px) - 32px)}`
+
+7. **"Needs your call" is hidden whenever the agent status shows.**
+   - What's wrong: both share `#bar-status`. On the desk, the client page and the prompt screens it reads "SLEEPING · IDLE" even though McDonald's has 2 calls waiting. It also disappears during runs and redrafts.
+   - Shot: `p-desk-home.png`, `brief-redraft-after.png`
+   - Fix: make the needs pill its own element that always shows when the count is above 0, and give the agent status a separate chip.
+
+8. **Client page rows open the wrong thing.**
+   - "Spoon trial" (a Draft brief) opens the "New brief" prompt.
+   - "Delivery desserts" (research, agents working) shows the Irish summer treats run: same question, same eyebrow.
+   - Decks "+" silently opens the existing Q3 deck.
+   - "38 brand facts · 112 category facts · 61 decisions" is a dead link.
+   - Shot: `client-delivery-desserts.png`
+   - Fix: give each `.cp-row` its own doc id and state, and make Decks "+" create a new deck.
+
+9. **A newly added client doesn't work.**
+   - Clicking the Tayto circle opens no dial.
+   - The eyebrow stays at "4 clients" after adding a fifth.
+   - Submitting the form empty does nothing and shows no message.
+   - Shot: `added-client.png`, `added-client-dial.png`
+   - Fix: wire the dial for new `.cl-circle` elements, recount `#hero-eyebrow` after adding, and validate `#cl-add-name`.
+
+10. **A locked brief can still be edited.**
+    - What's wrong: after "Brief locked", double-click still makes the part editable, and Edit, Redraft… and Move up/down are still shown. It also says "Locked by Siobhán Ryan", but she is the client contact named in the call notes.
+    - Fix: check the lock state in the dblclick, `sp-edit`, redraft and move handlers, and disable those buttons while locked.
+
+11. **"Back to prompt" and "Open finished brief" never appear.**
+    - What's wrong: `#proc-back-btn` and `#proc-open-output-btn` exist but are always hidden on the loading screens. That breaks the no-hiding rule.
+    - Fix: show them in the loading card footer.
+
+### P1: stale state, inconsistent data or labels
+
+12. **Brief edits and answers leave stale text.**
+    - Editing, redrafting or answering a call never updates "edited 2 days ago".
+    - Questions you've answered stay on the page part with no answered mark.
+    - Redraft pastes the note itself into the copy: "…in spoons — make it warmer."
+
+13. **Counts disagree.**
+    - The top pill counts documents while the panel counts questions. Answering 1 of 2 leaves "2 need your call".
+    - The client header says "2 need you", but the Needs you list has one row, and Irish summer treats (which has an open call) is listed as "Done".
+
+14. **Research data contradicts itself.**
+    - "How it ran" says "Knowledge pinned 6 facts", but the report shows 8 pins.
+    - The Research→Brief toast says "12 verified facts", but the menu says "8 pinned facts".
+    - The f_011 pin card says "BRIEF not cited", but its source card lists 5 brief parts.
+    - f_014 is marked "not used" and "left out", yet its +18% is cited in section 01 (The market).
+
+15. **Section numbers repeat in the research report.** "03 Audience" and "03 Where sources disagree" share a number, as do "04 Culture" and "04 Gaps". "Confirm" has no number. Shot: `r-sections.png`, `r-contests.png`. Fix: number the lens sections separately (for example "Lens 1–5") and run the report sections in one sequence.
+
+16. **Research prompt lenses are unlabeled.** They are 8 bare dots with names only in tooltips. All 8 start selected, but the run lights 2 and the report says Channels and Brand "not run". Shot: `p-research-prompt.png`, `client-delivery-desserts.png`. Fix: show them as labeled chips with a real selected state.
+
+17. **The deck is out of step with the other tools.**
+    - On `tool=deck` the top bar slot reads "Research" (with the deck icon).
+    - The title is "Q3 Board Pitch" in one place and "Q3 board narrative" on the client page.
+    - There is no "Continue in" menu.
+    - Labels use old Title Case: "Inspect Decision Tree (2)", "← Back to Brief Sheet".
+    - Brief → "Turn it into Deck" opens the existing deck with no toast.
+    - Shot: `p-deck-home.png`
+
+18. **Moving a part leaves holes in the grid.** It looks ragged in the Boxed frame. Shot: `brief-boxed-tab.png`. Fix: `.b-grid{grid-auto-flow:row dense}`, or reflow the spans after a move.
+
+19. **"Reset look" doesn't bring back a removed logo** (McDonald's stays removed).
+
+20. **A pink page-break line runs through parts mid-text**, at about y=632 across the Response row. Shot: `brief-answered.png`. Fix: show it as a gutter tick, or use `break-inside:avoid` and push the part below.
+
+21. **Decisions drawer: inline bold values break onto their own lines.** For example "Chose Kantar's / +23.4% YoY / (f_007)…". It also uses old-UI wording ("H1 MARK", Title Case). Shot: `decisions.png`. Fix: `#dtree-drawer b{display:inline}`.
+
+22. **Top bar crowding and font mismatch.**
+    - When a doc is linked, both the name and the link chip are cut short ("Irish Summer T…", "↔ Summer McFlurry…") at 1280 and 1600. Shot: `1280-linked.png`, `cont-research-x.png`. Fix: raise `#tb-app` max-width and cut the link chip first.
+    - The research doc name is in the monospace font, the brief's in serif.
+    - Research "Save · PDF" is a text link, while the brief's is the primary button.
+
+23. **The client page has no client chip in the top bar**, though the owner's top bar includes one. Opening a client also doesn't change the URL, so the browser Back button and deep links don't work.
+
+24. **Loading screens.** There is about 200px of empty space above the cards. The step indicator stays on "2 Agents" after DONE. Shot: `b-load-12.png`.
+
+25. **Dial.** The status arc is cut off at the top-left, and the open dial fully covers Ballymaloe. Shot: `desk-dial.png`.
+
+### P2: dark mode and polish
+
+26. **Dark deck: the cover slide's meta text is invisible** ("SLIDE 01 · COVER", "Linked to Brief Block", d_046 are cream on cream). Shot: `m-1600-tbwa-dark-deck-home.png`. Fix: in dark mode, give `.slide.cover` a dark meta colour.
+
+27. **Dark desk:** the Guinness 0.0 disc and the rings around the client circles almost vanish on the dark background (`m-1600-wk-dark-desk-home.png`). Fix: lighten the `.cl-track` stroke in dark mode.
+    - The black swatch's ring is hard to see in tbwa dark.
+    - On the evidence map, boxes outside the selected trace fade to about 20% and are hard to read (`d-r-map-sel.png`).
+
+28. **Small layout issues.**
+    - The ask table has an empty 4th cell in row 2.
+    - The open mock controls panel covers page content at the bottom left (the "Production" heading on the client page).
+    - "Layout" appears twice in the brief inspector (the part's Layout fold and the document's Layout section).
+
+**Checked and working:** dial open and close (Esc and click outside), part select, hover, edit, the redraft agent card, "Your call" Yes/No/Answer, Built from → source card → used-in chips → back, Open in Research, Copy citation, resizing parts, frame and headings, colour swatches, removing and adding logos, the Continue in spin-off and link menus (toasts and link chip), research inline fields, contest, finding pills, pin, source and decision chips, fact rows, evidence map switch and trace, Refresh, the needs popover (it opens items and closes on outside click), the theme toggle (it persists), and both full loading runs.

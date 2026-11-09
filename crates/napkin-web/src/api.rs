@@ -12,15 +12,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Bytes;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query, RawQuery, State};
 use axum::http::{header, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, patch as patch_method, post};
 use axum::{Extension, Json, Router};
 use futures_core::Stream;
 use napkin_host::{
-    export, library, proxy, Change, DocId, InstalledApp, OpenResult, RecentDoc, SpinoffTarget,
+    clients, export, library, proxy, Change, DocId, InstalledApp, LibraryFilter, LibraryListing,
+    OpenResult, RecentDoc, SpinoffTarget,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -52,6 +53,13 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/apps", get(list_apps))
         .route("/t/{tenant}/apps/from/{doc}", post(install_from_document))
         .route("/t/{tenant}/recent", get(recent))
+        .route("/t/{tenant}/library", get(library_listing))
+        .route("/t/{tenant}/clients", get(list_clients).post(create_client))
+        .route("/t/{tenant}/clients/legacy", get(legacy_clients))
+        .route("/t/{tenant}/clients/adopt", post(adopt_clients))
+        .route("/t/{tenant}/clients/{id}", patch_method(update_client))
+        .route("/t/{tenant}/clients/{id}/archive", post(archive_client))
+        .route("/t/{tenant}/clients/{id}/restore", post(restore_client))
         .route("/t/{tenant}/home", get(home))
         .route("/t/{tenant}/documents", post(new_document))
         .route("/t/{tenant}/documents/upload", post(upload_document))
@@ -63,6 +71,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/patch", post(patch))
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
+        .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
         .route("/t/{tenant}/d/{doc}/download", get(download))
         .route("/t/{tenant}/d/{doc}/export", post(export_document))
         .route("/t/{tenant}/export/{handle}", get(export_download))
@@ -278,6 +287,112 @@ async fn recent(State(ctx): Ctx, Tenant(tenant): Tenant) -> Json<Vec<RecentDoc>>
     Json(library::scan_recent(&*ctx.workspace(&tenant).store))
 }
 
+/// Every piece of work in the tenant, by client (`?client=<id>&app=<app_id>`).
+/// Uncapped and additive: `/recent` above is unchanged.
+async fn library_listing(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    RawQuery(query): RawQuery,
+) -> Json<LibraryListing> {
+    let ws = ctx.workspace(&tenant);
+    let filter = LibraryFilter::from_query(query.as_deref().unwrap_or(""));
+    Json(napkin_host::scan_library(&*ws.store, &ws.library, &filter))
+}
+
+// ── Clients ──────────────────────────────────────────────────────────────────
+
+async fn list_clients(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    RawQuery(query): RawQuery,
+) -> ApiResult<Json<Vec<clients::ClientRecord>>> {
+    let archived = napkin_host::routes::query_param(query.as_deref().unwrap_or(""), "archived")
+        .is_some_and(|v| v == "1" || v == "true");
+    Ok(Json(clients::list(
+        &*ctx.workspace(&tenant).store,
+        archived,
+    )?))
+}
+
+#[derive(Deserialize)]
+struct NewClient {
+    name: String,
+    #[serde(default)]
+    material: Option<String>,
+}
+
+async fn create_client(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Json(body): Json<NewClient>,
+) -> ApiResult<(StatusCode, Json<clients::ClientRecord>)> {
+    let ws = ctx.workspace(&tenant);
+    let c = clients::create_client(&*ws.store, &acting, &body.name, body.material.as_deref())?;
+    Ok((StatusCode::CREATED, Json(c)))
+}
+
+async fn update_client(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Path((_t, id)): Path<(String, String)>,
+    Json(body): Json<clients::ClientPatch>,
+) -> ApiResult<Json<clients::ClientRecord>> {
+    let ws = ctx.workspace(&tenant);
+    Ok(Json(clients::update_client(
+        &*ws.store, &acting, &id, body,
+    )?))
+}
+
+async fn archive_client(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Path((_t, id)): Path<(String, String)>,
+) -> ApiResult<Json<clients::ClientRecord>> {
+    let ws = ctx.workspace(&tenant);
+    Ok(Json(clients::set_archived(&*ws.store, &acting, &id, true)?))
+}
+
+async fn restore_client(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Path((_t, id)): Path<(String, String)>,
+) -> ApiResult<Json<clients::ClientRecord>> {
+    let ws = ctx.workspace(&tenant);
+    Ok(Json(clients::set_archived(
+        &*ws.store, &acting, &id, false,
+    )?))
+}
+
+/// The free-text client names the documents carry that no client has yet:
+/// what "Adopt clients" offers.
+async fn legacy_clients(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+) -> ApiResult<Json<Vec<clients::LegacyName>>> {
+    Ok(Json(clients::legacy_offer(&*ctx.workspace(&tenant).store)?))
+}
+
+#[derive(Deserialize)]
+struct Adopt {
+    names: Vec<String>,
+}
+
+/// Turn the free-text client names a person picked into clients, and link
+/// the documents that name them.
+async fn adopt_clients(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Json(body): Json<Adopt>,
+) -> ApiResult<Json<clients::Adopted>> {
+    let ws = ctx.workspace(&tenant);
+    Ok(Json(clients::adopt(&*ws.store, &acting, &body.names)?))
+}
+
 /// Install a template the user has already uploaded — the web's answer to
 /// "open a .clan, then install it", where the desktop passes a file path.
 async fn install_from_document(
@@ -295,6 +410,11 @@ struct NewDocument {
     app_id: String,
     #[serde(default)]
     title: Option<String>,
+    /// The client the document is for: a registry id. Unknown ids (and ids of
+    /// another tenant's clients, which this tenant's registry does not hold)
+    /// are `404`.
+    #[serde(default)]
+    client_id: Option<String>,
 }
 
 async fn new_document(
@@ -304,7 +424,8 @@ async fn new_document(
     Json(body): Json<NewDocument>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
-    let doc = library::create_instance(&*ws.store, &body.app_id, body.title)?;
+    let client = clients::get_named(&*ws.store, body.client_id.as_deref())?;
+    let doc = library::create_instance_for(&*ws.store, &body.app_id, body.title, client.as_ref())?;
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
@@ -497,6 +618,57 @@ async fn patch(
     let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
     session.save_patch_as(&acting, &body.id, &body.content)?;
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+/// Poll one middleware job of a document the person may not have open, the
+/// way its page polls it (`clan://api-proxy`, task `job_status`), so a job
+/// that finished after the page closed still lands: the host applies its
+/// change exactly as for the page, once (a change it already holds is
+/// `already applied`). The shell's library watcher calls this for every job
+/// the listing says is unsettled (`LibraryItem.jobs`). A job the middleware
+/// no longer knows is forgotten. Not metered: `job_status` waits on work
+/// already charged.
+async fn settle_job(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc, job)): Path<(String, String, String)>,
+) -> ApiResult<Response> {
+    if job.is_empty()
+        || job.len() > 128
+        || !job
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(ApiError::new(400, "not a job id"));
+    }
+    let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+    let body = serde_json::json!({
+        "request_kind": "middleware",
+        "payload": { "task": "job_status", "input": { "job_id": job } },
+    });
+    let resp = napkin_host::dispatch_async(
+        &tenant.ctx_for(&person),
+        &session,
+        &*ctx.config,
+        napkin_host::HostRequest::new("/api-proxy", "", body.to_string().into_bytes()),
+    )
+    .await;
+    for e in &resp.events {
+        ctx.events.publish(&tenant, e);
+    }
+    let reply: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
+    let lost = reply["data"]["error"]["type"] == "unknown_job"
+        || (reply["ok"] == false && reply["status"] == 404);
+    if lost {
+        ws.library.runs().forget_job(&id, &job);
+    }
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        resp.body,
+    )
+        .into_response())
 }
 
 /// The single-file handoff: the packed archive, exactly as stored.

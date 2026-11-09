@@ -49,3 +49,27 @@ def test_the_eleven_questions_of_a_repetitive_run_come_down_to_the_distinct_asks
     kept, _ = dedupe(eleven)
     assert len(kept) == 7
     assert "What is the media budget?" in kept
+
+
+def test_a_question_that_asks_two_things_is_matched_by_each_ask():
+    # Škoda / DAA Skybridge run, 30 Oct: the same budget question came back in two compound wordings
+    a = "Is the €70k production budget inclusive of VAT, and does it cover only production, with media and DAA site costs sitting elsewhere?"
+    b = "Is the 70k production budget in euro, inclusive or exclusive of VAT, and do media and DAA site costs sit outside it?"
+    kept, merged = dedupe([a, b])
+    assert kept == [a]
+    assert merged and merged[0][0] == a
+    assert same_ask("Is the €70k budget inclusive of VAT?", "Is the 70k budget inclusive of VAT?"), "a currency sign is not a different figure"
+
+
+def test_a_leftover_ask_that_leans_on_the_dropped_half_keeps_its_whole_question():
+    first = "Who are the main competitors you track in Ireland, and which cars should lead on the Skybridge?"
+    second = "Which competitors do you track, and what do they run in the airport?"
+    kept, _ = dedupe([first, second])
+    assert second in kept, "'what do they run' means nothing alone"
+
+
+def test_a_leftover_ask_that_stands_alone_is_kept_without_the_repeat():
+    first = "What is the launch budget?"
+    second = "What is the budget, and when is the tender due?"
+    kept, merged = dedupe([first, second])
+    assert kept == [first, "When is the tender due?"] and merged

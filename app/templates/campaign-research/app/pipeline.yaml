@@ -18,9 +18,11 @@ tasks:
       - materials, with host-extracted text (the client's brief, deck or email is the source of record)
       - brand layer — the roster row (category array, markets, client), performance facts
       - category layer — the competitor set for the leaf, codes, rhythm
+      - clan.upstream_ask — the ask of the brief this research started from (client, audience, background, objectives), when it carries one
     order:
       - deterministic layer lookups; each value found is written origin proposed, citing the fact ids it pinned
       - ONE enum-constrained structured-output call over the prompt and the materials; abstain where nothing supports a value
+      - what the material and the roster left open, proposed from clan.upstream_ask (origin proposed, upstream_refs <brief id>#<path>); never over an extracted, stated or confirmed field
       - confirm a short list only — category pick, market, subject vs comparator brands
       - write back roster corrections to the brand layer
     writes: campaign.* envelopes (origin extracted or proposed), shared/facts.yaml pins, materials

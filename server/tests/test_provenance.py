@@ -446,7 +446,8 @@ def test_regenerate_field_on_a_planned_brief_is_a_one_part_fix(tmp_path):
     assert {r["job"]["stage"] for r in replies} <= {"context", "draft", "judge"}
     assert seen["plan_fix"]["planner_guidance"] == "Make it about 10 days"
     assert list(seen["fix"]["rewrite"]) == ["insight"]
-    assert host.data["insight"] == "Summer starts with an iced oat latte."
+    # a rewritten assumption says it is one (feature brief-first-draft-checks)
+    assert host.data["insight"] == "To confirm: Summer starts with an iced oat latte."
     check_change_rules(host)
 
 
@@ -683,6 +684,10 @@ def test_the_writers_to_confirm_line_stays_to_confirm():
     tbc = [c for c in got["claims"] if c["text"].startswith("To confirm")]
     assert len(tbc) == 2 and all(c["kind"] == "to_confirm" and c["cites"] == [] and c["by"] == "writer"
                                  for c in tbc)
+    # the attention says "To confirm:" once, not again for each claim that already starts with it
+    attn = placed(got, ctx.client)["attention"]
+    assert attn.startswith("To confirm: you can buy") and "To confirm: To confirm:" not in attn
+    assert attn.count("To confirm:") == 1, attn
 
 
 def test_a_brand_named_in_digits_is_not_a_figure():

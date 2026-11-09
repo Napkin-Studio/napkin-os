@@ -1,6 +1,6 @@
 {
-  "$comment": "RAG chunk metadata contract, version 1. Shared by Track A (CLAN OS layer), Track B (dossier export) and Track C (RAG). Every chunk payload in every vector store carries exactly these keys under `metadata`. Adding a field = new minor version + backfill; renaming or removing = new major version. Enum lists are closed: a value not listed here is a validation error, never a new filter value. v1.1.0 adds bucket, section_role, effectiveness_type, strategic_territory, discipline, lions_category (all derivable from existing frontmatter) and turns award_tier into a closed enum with the raw spelling kept in award_tier_raw. v1.2.0 is the creative-director sign-off: adds gambling_betting, luxury and b2b, tightens the fmcg/food_drink and technology descriptions, and sets locked:true. Ruling recorded in engine/schema/REVIEW-cannes-categories.md. v1.3.0 adds `tenant` (default `house`), the field the retrieval scope filter partitions on once an agency's own dossiers share the index with the licensed corpus — additive, filtered never embedded, so retag backfills it without re-embedding. It also corrects the reason_code description, which asserted a reprocessing cost for ADDING a code that decision L2 explicitly removes. The three new reason codes L1 settles (unfeasible, not_single_minded, weak_branding) are NOT in this version: they await the creative director's redline, which open[] assigns to Shrey plus a CD, and the enum stays closed until then.",
-  "version": "1.3.0",
+  "$comment": "RAG chunk metadata contract, version 1. Shared by Track A (CLAN OS layer), Track B (dossier export) and Track C (RAG). Every chunk payload in every vector store carries exactly these keys under `metadata`. Adding a field = new minor version + backfill; renaming or removing = new major version. Enum lists are closed: a value not listed here is a validation error, never a new filter value. v1.1.0 adds bucket, section_role, effectiveness_type, strategic_territory, discipline, lions_category (all derivable from existing frontmatter) and turns award_tier into a closed enum with the raw spelling kept in award_tier_raw. v1.2.0 is the creative-director sign-off: adds gambling_betting, luxury and b2b, tightens the fmcg/food_drink and technology descriptions, and sets locked:true. Ruling recorded in engine/schema/REVIEW-cannes-categories.md. v1.3.0 adds `tenant` (default `house`), the field the retrieval scope filter partitions on once an agency's own dossiers share the index with the licensed corpus — additive, filtered never embedded, so retag backfills it without re-embedding. It also corrects the reason_code description, which asserted a reprocessing cost for ADDING a code that decision L2 explicitly removes. The three new reason codes L1 settles (unfeasible, not_single_minded, weak_branding) are NOT in this version: they await the creative director's redline, which open[] assigns to Shrey plus a CD, and the enum stays closed until then. v1.4.0 adds one `source` value, `awardlib` (the award case library: short Napkin-reconstructed cases, public facts only). It is an additive enum value with no new field, so nothing is backfilled and no chunk is reprocessed; chunks written under 1.3.0 stay valid. See features/award-data-fit.clan.",
+  "version": "1.4.0",
   "locked": true,
   "fields": {
     "schema_version": {
@@ -210,9 +210,10 @@
         "effie",
         "playbook",
         "template",
-        "dossier"
+        "dossier",
+        "awardlib"
       ],
-      "description": "Which corpus the chunk belongs to. `dossier` is the new one Track B emits."
+      "description": "Which corpus the chunk belongs to. `dossier` is the one Track B emits. `awardlib` (1.4.0) is the award case library: reconstructed strategy, entrant-reported results, public facts only. It is hidden from retrieval unless RAG_AWARDLIB admits it."
     },
     "doc_id": {
       "type": "string",

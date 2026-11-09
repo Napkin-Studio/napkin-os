@@ -35,6 +35,8 @@ export interface ManifestInfo {
   file_count: number
   lineage?: LineageInfo
   app?: AppMeta
+  /** Who the document is for (`manifest.client`), when it has a client. */
+  client?: ClientRef
 }
 
 export interface OpenResult {
@@ -109,6 +111,108 @@ export interface RecentState {
   /** Things a person must check before the lock, one per place (the document’s own "Needs you"). */
   needs_you: number
   locked: boolean
+}
+
+// ── Clients and the library listing (`napkin_host::{clients, listing}`) ──────
+
+/** Who a document is for: the registry's id, and the name it has now. */
+export interface ClientRef {
+  /** `cli_` and eight lowercase hex digits. */
+  id: string
+  name: string
+}
+
+/** One client of the studio, as the registry holds it. */
+export interface ClientRecord {
+  id: string
+  name: string
+  /** One to three characters for the circle. */
+  initials: string
+  material: ClientMaterial
+  /** Who opened it (`human:name@agency`): informational, never a permission. */
+  owner: string
+  created_at: string
+  /** When it was archived; absent while it is live. */
+  archived_at?: string | null
+}
+
+export type ClientMaterial = 'pearl' | 'ceramic' | 'stone' | 'graphite'
+
+/** What a person may change on a client. */
+export interface ClientPatch {
+  name?: string
+  initials?: string
+  material?: ClientMaterial
+}
+
+/** A free-text client name the documents carry, offered to `clients.adopt`. */
+export interface LegacyName {
+  name: string
+  /** How many documents carry it. */
+  documents: number
+}
+
+/** What `clients.adopt` did. */
+export interface Adopted {
+  created: ClientRecord[]
+  linked: number
+}
+
+/** A tool running on a document, as the landing says it. */
+export interface RunInfo {
+  state: 'idle' | 'working' | 'waiting' | 'failed' | 'done'
+  label: string
+  /** The stage it is at (`research`, `Layout`), when it says: what the ring shows. */
+  stage?: string
+  since?: string
+  /** Steps done and steps in all, when the job says. */
+  progress?: [number, number]
+}
+
+/** One piece of work in the library, with who it is for. */
+export interface LibraryItem {
+  path: string
+  app_id: string | null
+  title: string
+  updated_at: string
+  client: ClientRef | null
+  state?: RecentState | null
+  run: RunInfo | null
+  /** Who last wrote it: the signed-in account's username (`name@agency`). Absent from an older host. */
+  last_editor?: string
+  /** Middleware jobs on it the host has not seen finish: the shell polls each (`settleJob`). */
+  jobs?: string[]
+}
+
+export interface LibraryListing {
+  /** Newest first, uncapped, after the filter. */
+  items: LibraryItem[]
+  /** Documents with no client, whatever the filter. */
+  clients_unassigned: number
+  /** Set when the client registry could not be read; the names shown are then the documents' own. */
+  registry_error?: string
+}
+
+export interface LibraryFilter {
+  /** A client id. */
+  client?: string
+  /** An app id. */
+  app?: string
+}
+
+/** The client registry, through the host. */
+export interface ClientsApi {
+  /** Live clients in the order made; archived ones too with `includeArchived`. */
+  list(includeArchived?: boolean): Promise<ClientRecord[]>
+  /** Open a client. A name already in use is refused with the host's words. */
+  create(name: string, material?: ClientMaterial): Promise<ClientRecord>
+  update(id: string, patch: ClientPatch): Promise<ClientRecord>
+  archive(id: string): Promise<ClientRecord>
+  restore(id: string): Promise<ClientRecord>
+  /** Free-text client names in the documents that no client has yet. */
+  legacy(): Promise<LegacyName[]>
+  /** Turn chosen free-text names into clients and link the documents that name them. */
+  adopt(names: string[]): Promise<Adopted>
 }
 
 // ── The decision view (`napkin_host::ops::decisions`) ─────────────────────────
@@ -193,7 +297,17 @@ export interface DecisionBlock {
 
 /** What a cite names, resolved by the host. */
 export interface CiteInfo {
-  kind: 'fact' | 'finding' | 'source' | 'material' | 'decision' | 'person' | 'address' | 'unknown'
+  kind:
+    | 'fact'
+    | 'finding'
+    | 'source'
+    | 'material'
+    | 'passage'
+    | 'capture'
+    | 'decision'
+    | 'person'
+    | 'address'
+    | 'unknown'
   label: string
   detail?: string
   quote?: string
@@ -206,6 +320,34 @@ export interface CiteInfo {
   title?: string
   published_at?: string
   tier?: string
+}
+
+/** Where a fact came from (OS-layer contract §8.3). `document` when nothing recorded it. */
+export type SourceOrigin = 'research' | 'client' | 'brand' | 'layer' | 'person' | 'document'
+
+/** One review verdict on a fact, finding or field. */
+export interface SourceReview {
+  verdict: 'verified' | 'rejected' | 'set_aside'
+  /** Who, as a person would say it. */
+  by: string
+  actor?: string
+  at?: string
+  decision?: string
+  note?: string
+  /** A later decision replaced it. */
+  superseded?: boolean
+}
+
+/** The source card for one ref (`GET /cite?ref=`, `POST /cite {refs}`). */
+export interface SourceCard extends CiteInfo {
+  ref: string
+  origin: SourceOrigin
+  /** Carried from an upstream document: which one. */
+  from?: { document_id: string; title?: string; app_id?: string; version?: string; path?: string }
+  /** The latest review that still stands. */
+  review?: SourceReview
+  /** Every review, newest first: what the card folds under Record. */
+  history?: SourceReview[]
 }
 
 export interface DecisionsView {
@@ -407,6 +549,10 @@ export interface UpstreamEntry {
   version?: string
   locked?: boolean
   status: 'current' | 'changed' | 'not_compared' | 'unknown'
+  /** `made_from` (the direct parent), `linked` (attached, os-layer §5.7) or `carried` (further upstream). */
+  how?: 'made_from' | 'linked' | 'carried'
+  /** A linked document: how many times this one took it (1 on link, one more on each update). */
+  taken?: number | null
   changed?: { data: boolean; facts: boolean; findings: boolean; sources: boolean }
   decisions_since?: number | null
   pins?: { id: string; change: 'added' | 'replaced' | 'changed'; label: string; replaced_by?: string }[]
@@ -418,6 +564,65 @@ export interface UpstreamView {
   document_id: string
   carried: UpstreamCarried | null
   upstream: UpstreamEntry[]
+}
+
+// ── Links (os-layer §5.7, §8.1 item 9) ─────────────────────────────────────────
+
+/** A document the open one could link (`GET /attach-targets`). */
+export interface AttachTarget {
+  app_id: string
+  app_name: string
+  document_id: string
+  title: string
+  version?: number | null
+  path: string
+  updated_at: string
+  /** Linked to the open document now. */
+  attached: boolean
+  /** The open document may hold several of this app at once. */
+  many: boolean
+  /** The open document is locked, so a link would be refused. */
+  locked: boolean
+}
+
+/** `POST /attach`, `/attach/update` or `/attach/detach`: what was written. */
+export interface AttachReply {
+  ok: true
+  verb?: 'attached' | 'updated' | 'replaced'
+  decision: string | null
+  action: string
+  document_id: string
+}
+
+/** One document related to the open one (`GET /related`). */
+export interface RelatedDoc {
+  document_id: string
+  title?: string | null
+  app_id?: string | null
+  path?: string | null
+  how: 'made_from' | 'linked' | 'made_into' | 'linked_in'
+  noun?: string | null
+  taken?: number | null
+  status?: UpstreamEntry['status'] | null
+}
+
+export interface RelatedView {
+  document_id: string
+  upstream: RelatedDoc[]
+  downstream: RelatedDoc[]
+}
+
+/** `POST /upstream/update`: the parent's newer version, taken (Contract 4 §5.5, §8.1 item 8). */
+export interface UpstreamUpdateReply {
+  ok: true
+  /** The one decision written: `update_from_<noun>`. */
+  decision: string
+  action: string
+  /** The parent taken from, and the version taken. */
+  document_id: string
+  version: string
+  /** How many of the parent's decisions were new here. */
+  decisions_taken: number
 }
 
 /**
@@ -455,6 +660,21 @@ export interface Person {
   name: string | null
 }
 
+/** A stored document's own routes (`Host.docOps`), on a token of its own. */
+export interface DocOps {
+  decisions(): Promise<DecisionsView>
+  related(): Promise<RelatedView>
+  upstream(): Promise<UpstreamView>
+  /** "Looks right" on a finding: `POST /verify`. */
+  verify(finding: string, rationale: string): Promise<void>
+  /** "Looks right" on an agent's call: `POST /acknowledge`. */
+  acknowledge(decision: string): Promise<void>
+  /** Its data entry as stored (YAML or JSON text): what a tool home reads its lens coverage from. */
+  data(): Promise<string>
+  /** Lock it: `POST /approve`. Refused, in the host's words, while its lock list holds. */
+  approve(rationale: string): Promise<void>
+}
+
 export interface Host {
   // ── Who is here ───────────────────────────────────────────────────────────
   /** The signed-in person, as the host acts for them. Read-only. */
@@ -463,7 +683,8 @@ export interface Host {
   // ── Documents ─────────────────────────────────────────────────────────────
   openClan(path: string): Promise<OpenResult>
   openHome(): Promise<OpenResult>
-  newDocumentFromApp(appId: string, title: string | null): Promise<OpenResult>
+  /** A new document of `appId`, for `clientId` when one is given (`manifest.client`). */
+  newDocumentFromApp(appId: string, title: string | null, clientId?: string | null): Promise<OpenResult>
   /** The .clan path the app was launched with, if any. Cleared by reading it. */
   takeLaunchFile(): Promise<string | null>
 
@@ -477,8 +698,34 @@ export interface Host {
   getDecisions(): Promise<DecisionsView>
   /** A person accepts an agent's call ("Looks right"): `/acknowledge`. */
   acknowledge(decision: string): Promise<void>
+  /**
+   * A person checks an agent's finding and finds it right: `POST /verify`, the
+   * same verification the app's own Verify records ("Looks right" on the
+   * Decisions card).
+   */
+  verify(finding: string, rationale: string): Promise<void>
   /** What changed upstream since this document was spun off (`GET /upstream`). */
   upstream(): Promise<UpstreamView>
+  /**
+   * Take the direct parent's newer version into this spin-off
+   * (`POST /upstream/update`). Refused on a locked document, and when the
+   * parent has not changed.
+   */
+  updateFromUpstream(): Promise<UpstreamUpdateReply>
+  /** The documents the open one could link (`GET /attach-targets`); empty when its app links nothing. */
+  attachTargets(): Promise<AttachTarget[]>
+  /** Link an existing document into the open one (`POST /attach`). Refused on a locked document, in the host's words. */
+  attach(documentId: string): Promise<AttachReply>
+  /** Take a linked document's newer version (`POST /upstream/update {document_id}`). */
+  updateLinked(documentId: string): Promise<AttachReply>
+  /** Let go of a linked document (`POST /attach/detach`). */
+  detach(documentId: string): Promise<AttachReply>
+  /** What it was made from and links, and what was made from it or links it (`GET /related`). */
+  related(): Promise<RelatedView>
+  /** Rename the open document (`POST /set-title`). Absent on a host that cannot. */
+  setTitle?(title: string): Promise<void>
+  /** The source card for each ref, in one call (`POST /cite`). */
+  cites(refs: string[]): Promise<Record<string, SourceCard>>
 
   // ── Client review (OS-layer contract §7.5) ────────────────────────────────
   /**
@@ -532,6 +779,26 @@ export interface Host {
   installApp(srcPath: string): Promise<InstalledApp>
   /** Documents in the store, most recently updated first (the host keeps 12). */
   listRecent(): Promise<RecentDoc[]>
+  /**
+   * Every piece of work, by client: uncapped, newest first, optionally narrowed
+   * to a client and/or an app. Rejects on a host that predates it (the shell
+   * then keeps the Launcher as home).
+   */
+  listLibrary(filter?: LibraryFilter): Promise<LibraryListing>
+  /**
+   * Poll one middleware job of a document, open or not, the way its page
+   * does (`job_status`), so the host lands a change that finished after the
+   * page closed. Absent on a host with one document at a time.
+   */
+  settleJob?(path: string, jobId: string): Promise<unknown>
+  /** The client registry. */
+  readonly clients: ClientsApi
+  /**
+   * One stored document's own routes, open or not (the desk's Decisions and
+   * its Worth a look read and settle calls across documents with it). Absent
+   * on a host with one document at a time.
+   */
+  docOps?(path: string): Promise<DocOps>
 
   // ── Branching one document into another app ───────────────────────────────
   /**

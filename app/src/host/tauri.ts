@@ -13,13 +13,23 @@ import { listen } from '@tauri-apps/api/event'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 
 import type {
+  Adopted,
+  LegacyName,
+  ClientRecord,
   Host,
   HostEvents,
   InstalledApp,
+  LibraryListing,
   OpenResult,
   RecentDoc,
+  SourceCard,
   SpinoffTarget,
   Unlisten,
+  UpstreamView,
+  UpstreamUpdateReply,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
 } from './types'
 
 /**
@@ -32,14 +42,27 @@ function clanScheme(): string {
     : 'clan://localhost'
 }
 
+/** A clan:// route on the desktop: its reply, or the host's own words as the error. */
+async function clanRoute<T>(path: string, body?: unknown): Promise<T> {
+  const resp = await fetch(`${clanScheme()}${path}`, body === undefined ? undefined : { method: 'POST', body: JSON.stringify(body) })
+  const text = await resp.text()
+  let parsed: unknown = null
+  try { parsed = JSON.parse(text) } catch { /* not JSON: the body is the message */ }
+  if (!resp.ok) {
+    const err = (parsed as { error?: unknown } | null)?.error
+    throw new Error((typeof err === 'string' ? err : '') || text || `${path.slice(1)}: ${resp.status}`)
+  }
+  return parsed as T
+}
+
 export const tauriHost: Host = {
   // One person, on their own machine: the host runs as Ctx::local()
   // (napkin-host ctx.rs, LOCAL_HUMAN), which the decision view shows as "You".
   whoAmI: async () => ({ actor: 'human:local', id: 'local', name: null }),
   openClan: path => invoke<OpenResult>('open_clan', { path }),
   openHome: () => invoke<OpenResult>('open_home'),
-  newDocumentFromApp: (appId, title) =>
-    invoke<OpenResult>('new_document_from_app', { appId, title }),
+  newDocumentFromApp: (appId, title, clientId) =>
+    invoke<OpenResult>('new_document_from_app', { appId, title, clientId: clientId ?? null }),
   takeLaunchFile: () => invoke<string | null>('take_launch_file'),
 
   getHumanHtml: () => invoke<string>('get_human_html'),
@@ -47,8 +70,22 @@ export const tauriHost: Host = {
   // The desktop viewer is parked; the web shell is where the panel lives.
   getDecisions: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   acknowledge: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
+  verify: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   // Nor client review, which is read and answered from that view.
-  upstream: () => Promise.reject(new Error('what changed upstream is not available on the desktop yet')),
+  // The clan:// route table answers these, as it answers the frame.
+  upstream: () => clanRoute<UpstreamView>('/upstream'),
+  updateFromUpstream: () => clanRoute<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => clanRoute<AttachTarget[]>('/attach-targets'),
+  attach: documentId => clanRoute<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => clanRoute<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => clanRoute<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => clanRoute<RelatedView>('/related'),
+  // The clan:// route answers it, as for the frame.
+  cites: async refs => {
+    const resp = await fetch(`${clanScheme()}/cite`, { method: 'POST', body: JSON.stringify({ refs }) })
+    if (!resp.ok) throw new Error(`cite: ${resp.status}`)
+    return ((await resp.json()) as { cites: Record<string, SourceCard> }).cites
+  },
   clientReview: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewConfirm: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewReopen: () => Promise.reject(new Error('client review is not available on the desktop yet')),
@@ -71,6 +108,18 @@ export const tauriHost: Host = {
     const resp = await fetch(`${clanScheme()}/recent`)
     if (!resp.ok) throw new Error(`recent: ${resp.status}`)
     return resp.json() as Promise<RecentDoc[]>
+  },
+
+  listLibrary: filter =>
+    invoke<LibraryListing>('list_library', { client: filter?.client ?? null, appId: filter?.app ?? null }),
+  clients: {
+    list: (includeArchived = false) => invoke<ClientRecord[]>('list_clients', { includeArchived }),
+    create: (name, material) => invoke<ClientRecord>('create_client', { name, material: material ?? null }),
+    update: (id, patch) => invoke<ClientRecord>('update_client', { id, patch }),
+    archive: id => invoke<ClientRecord>('set_client_archived', { id, archived: true }),
+    restore: id => invoke<ClientRecord>('set_client_archived', { id, archived: false }),
+    legacy: () => invoke<LegacyName[]>('legacy_client_names'),
+    adopt: names => invoke<Adopted>('adopt_clients', { names }),
   },
 
   spinoffTargets: () => invoke<SpinoffTarget[]>('spinoff_targets'),

@@ -255,6 +255,7 @@ mod tests {
             fork: None,
             merge_policies: None,
             app: None,
+            client: None,
             signature: None,
             external: vec![],
             files: vec![FileEntry {

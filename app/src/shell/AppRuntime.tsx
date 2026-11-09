@@ -11,6 +11,7 @@ import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
 import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
 import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
+import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
 
 interface Props {
@@ -132,7 +133,9 @@ export default function AppRuntime({
       const frame = iframeRef.current?.contentWindow
       if (!frame || e.source !== frame || (e.data as { type?: string })?.type !== 'clan:me?') return
       host.whoAmI().then(
-        me => frame.postMessage({ type: 'clan:me', actor: me.actor, id: me.id, name: me.name }, '*'),
+        // The agency's admin-set colours ride along (features/brief-new-ui.clan):
+        // a document wears its agency's base and accent on its own controls.
+        me => frame.postMessage({ type: 'clan:me', actor: me.actor, id: me.id, name: me.name, agency: coloursOf(agencyIdOf(me.id)) }, '*'),
         () => frame.postMessage({ type: 'clan:me', actor: null, id: null, name: null }, '*'),
       )
     }

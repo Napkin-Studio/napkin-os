@@ -43,3 +43,23 @@ export function docTitle(
   if (!generic) return { text: t, untitled: false }
   return { text: untitled || UNTITLED[appId ?? ''] || 'Untitled document', untitled: true }
 }
+
+/** What a spin-off is, after its source's name: "Ferryman Light · Research". */
+const KIND: Readonly<Record<string, string>> = {
+  'ie.napkin.campaign-research': 'Research',
+  'ie.napkin.brief-maker': 'Brief',
+}
+
+/**
+ * A spin-off's first title: its source's, with what it is after it ("<source>
+ * · Research", "· Brief"), never the source's title alone (which read "X from
+ * X" beside the lineage chip). A source with no title of its own, or a tool
+ * the shell has no word for, leaves it to the host (null).
+ */
+export function spinoffTitle(source: string | null | undefined, sourceAppId: string | null | undefined, targetAppId: string): string | null {
+  const kind = KIND[targetAppId]
+  const t = docTitle(source, sourceAppId)
+  if (!kind || t.untitled) return null
+  const base = t.text.replace(/ · (Research|Brief)$/, '')
+  return `${base} · ${kind}`
+}

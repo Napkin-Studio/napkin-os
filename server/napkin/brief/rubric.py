@@ -115,6 +115,7 @@ def rubric_value(rid: str, values: dict):
         return {k: values.get(f"desired_response.{k}") or "" for k in ("think", "feel", "do")}
     app = {"background": "background", "audience": "audience", "budget_scope": "budget_and_scope",
            "competitor_context": "competitor_context", "insight": "insight", "smp": "single_minded_proposition",
+           "job": "job", "barrier": "barrier", "objection": "objection",
            "reasons_to_believe": "reasons_to_believe", "tone_world_assets": "tone_and_world",
            "mandatories": "mandatories"}[rid]
     v = values.get(app)

@@ -23,8 +23,13 @@ client clients brief briefs campaign campaigns project projects
 launch set sets planned intended expected available existing current
 """.split())
 
+# "Is the budget inclusive of VAT, and does it cover only production?" is two asks in one question.
+_JOIN = re.compile(r",?\s+and\s+(?=(?:which|what|who|whom|how|when|where|why|does|do|did|is|are|was|were|should|can|could|will|would|has|have)\b)", re.I)
+# a leftover ask that leans on the half that was dropped ("what do they run?") is kept with its question
+_LEANS = re.compile(r"\b(they|them|their|it|its|this|that|those|these|he|she|him|her)\b", re.I)
 _PRIORITY = re.compile(r"^\s*\[[^\]]*\]\s*")
 _WORD = re.compile(r"[a-z0-9€£$%]+")
+_CURRENCY = re.compile(r"^[€£$]")
 
 
 def terms(question: str) -> frozenset[str]:
@@ -35,6 +40,7 @@ def terms(question: str) -> frozenset[str]:
     for w in _WORD.findall(text):
         if w in _GLUE:
             continue
+        w = _CURRENCY.sub("", w)  # "€70k" and "70k" are the same figure
         if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
             w = w[:-1]
         out.add(w)
@@ -53,21 +59,50 @@ def same_ask(a: str, b: str) -> bool:
     if len(small) < 2:
         return False
     inter = len(ta & tb)
-    return inter / len(small) >= 0.75 or inter / len(ta | tb) >= 0.6
+    # a longer ask needs less of its words to match: five shared words are not a coincidence
+    return inter / len(small) >= (0.6 if len(small) >= 5 else 0.75) or inter / len(ta | tb) >= 0.6
+
+
+def _asks(question: str) -> list[str]:
+    """The separate asks inside one question, each ending with its own question mark."""
+    body = question.strip().rstrip("?").strip()
+    why = ""
+    if " — " in body:
+        body, why = body.split(" — ", 1)
+        why = " — " + why
+    asks = [a.strip() for a in _JOIN.split(body) if a.strip()]
+    return [a[0].upper() + a[1:] + "?" for a in asks] if len(asks) > 1 else [question.strip()] if not why else [question.strip()]
 
 
 def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
     """The questions with each ask once, in order, and the pairs that were merged as
-    `(kept, dropped)` so a wrong merge can be seen in the run log."""
+    `(kept, dropped)` so a wrong merge can be seen in the run log. A question that asks two things, one of
+    them already asked, keeps only the new one."""
     kept: list[str] = []
+    asked: list[str] = []  # every single ask kept so far
     merged: list[tuple[str, str]] = []
     for q in questions:
         q = (q or "").strip()
         if not q:
             continue
         twin = next((k for k in kept if same_ask(k, q)), None)
-        if twin is None:
+        if twin is not None:
+            if twin != q:
+                merged.append((twin, q))
+            continue
+        asks = _asks(q)
+        fresh = []
+        for a in asks:
+            hit = next((k for k in asked if same_ask(k, a)), None)
+            if hit is None:
+                fresh.append(a)
+            else:
+                merged.append((hit, a))
+        if not fresh:
+            continue
+        if len(fresh) == len(asks) or any(_LEANS.search(f) for f in fresh):
             kept.append(q)
-        elif twin != q:
-            merged.append((twin, q))
+        else:
+            kept.append(" and ".join(f[0].lower() + f[1:] if i else f for i, f in enumerate(f.rstrip("?") for f in fresh)) + "?")
+        asked.extend(fresh)
     return kept, merged

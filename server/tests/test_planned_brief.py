@@ -101,7 +101,8 @@ def test_the_planned_brief_plans_researches_writes_whole_and_reviews_once(tmp_pa
     assert by["competitor_context"]["basis"] == "research" and by["competitor_context"]["cites"][0].startswith("f_")
     assert by["mandatories"]["basis"] == "assumption"
     assert by["competitor_context"]["reasoning"]["attention"].startswith("Check:"), "Jude's partly-supported claim"
-    assert host.data["objectives"]["commercial"].startswith("Grow under-30 visits"), "Dara rewrote it on Jude's note"
+    # Dara rewrote it on Jude's note; it is her proposal, so it says it is one (feature brief-first-draft-checks)
+    assert host.data["objectives"]["commercial"] == "To confirm: Grow under-30 visits by a measured share this summer"
     # Jude: one note per issue (two notes, not one per part), the fix marked bad. His note on the
     # draft he sent back is the loop's own verdict (test_the_loop_is_recorded_as_it_happened).
     back = {d["id"] for d in host.chain if d.get("superseded_by")}
@@ -261,7 +262,8 @@ def test_a_missing_dimension_reaches_dara_and_client_is_only_what_ellis_captured
         s.stop()
     assert seen["explain"]["missing_dimensions"].keys() == {"evaluation_criteria"}
     assert seen["rewrite"]["rewrite"] == {"desired_response.do": "say how the work will be judged"}
-    assert host.data["desired_response"]["do"].startswith("Visit twice in June")
+    # Dara's proposal says it is one (feature brief-first-draft-checks)
+    assert host.data["desired_response"]["do"].startswith("To confirm: Visit twice in June")
     bg = next(d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#background"))
     assert bg["basis"] == "assumption", "the client said nothing about sales: not the client's words"
 
@@ -335,3 +337,52 @@ def test_a_brief_from_research_sees_every_fact_with_its_source_and_does_not_sear
     assert ("market_structure", "IE") not in research_calls and ("consumer_culture", "IE") in research_calls
     held = [d for d in host.chain if d.get("action") == "research_held"]
     assert held and "jev" in json.dumps(held[0]["reasoning"])
+
+
+def test_the_job_the_barrier_and_the_objection_are_drafted_with_the_other_parts(tmp_path):
+    seen = {}
+    s = Server(tmp_path, model=planned_model(seen), retrieval=retrieval(),
+               settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    assert replies[-1]["job"]["state"] == "done"
+    drafted = {t.split("#", 1)[1] for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
+    for k in ("job", "barrier", "objection"):
+        assert k in seen["draft"]["parts"], f"Dara is asked for {k}"
+        assert str(host.data.get(k) or "").strip(), f"{k} is written, not left empty"
+        assert k in drafted, f"{k} carries a draft decision with its reasons"
+
+
+def test_the_judge_has_room_for_a_full_brief_and_a_cut_off_review_is_asked_again(tmp_path):
+    """mw.log, 9 Nov: review_brief cut off at max_tokens, the judge stage failed and only 10 of
+    21 parts were written. Jude's whole-brief review asks for room for every part, and one still
+    cut off is asked once more with twice the room."""
+    from napkin.brief.planned import REVIEW_MAX_TOKENS
+    seen = {}
+    m = planned_model(seen)
+    orig, cut = m.create, {"n": 0}
+
+    def create(**kw):
+        r = orig(**kw)
+        if m.calls[-1][0] == "review_brief" and cut["n"] == 0:
+            cut["n"] += 1
+            r.stop_reason = "max_tokens"
+        return r
+
+    m.create = create
+    s = Server(tmp_path, model=m, retrieval=retrieval(),
+               settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    asks = [kw["max_tokens"] for p, _, kw in m.calls if p == "review_brief"]
+    assert REVIEW_MAX_TOKENS >= 16000, "a full brief's review runs past 8000 tokens"
+    assert asks == [REVIEW_MAX_TOKENS, REVIEW_MAX_TOKENS * 2]
+    assert replies[-1]["job"]["state"] == "done"
+    assert [e for e in replies[-1].get("result", {}).get("skipped", []) if "judge" in str(e)] == []
+    assert len(seen["reviews"]) >= 1, "the judge stage finished on the second ask"
