@@ -393,6 +393,15 @@
   .note-p .pv{font-family:var(--fieldFont);font-size:15px;line-height:1.55;white-space:pre-wrap}
   .note-p .pv ul{margin:0;padding-left:18px;white-space:normal}
   .note-v .agent-figure,.note-p .agent-figure{width:18px;height:24px;flex:none}
+  /* A part in a narrow column (a third of a sheet the Decisions drawer has
+     narrowed): the figure goes above the words, so the words keep a sane
+     width and never wrap one to a line. */
+  .pgrid .notes{container-type:inline-size}
+  .note-v > div,.note-p .pb{min-width:min(100%,9rem);overflow-wrap:break-word}
+  @container (max-width:260px){
+    .note-v,.note-p{flex-direction:column;gap:6px;padding:10px;font-size:12.5px;hyphens:auto}
+    .note-v ul,.note-p .pv ul{padding-left:14px}
+  }
   .review{margin-top:8px}
   .review[hidden]{display:none}
   .dims{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;font-size:13.5px;max-width:72ch}
@@ -1146,6 +1155,8 @@
       .replace(/\b(?:the )?fact f_[0-9A-Za-z]{2,}/g,'a fact')
       .replace(/\bf_[0-9A-Z]{6,}\b/g,'a fact')
       .replace(/\bd_[0-9A-Z]{10,}\b/g,'a decision')
+      // "Checked the new the barrier": a label that brings its own article.
+      .replace(/\b(the (?:new|old) )the /gi,'$1').replace(/\b([Tt]he) the\b/g,'$1')
       .replace(/\s+([.,;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
   }
   function plainJudge(s, attn){
