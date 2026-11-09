@@ -17,8 +17,6 @@ import { isTyping } from '../landing/keys'
 import { BRAND_APP } from '../landing/BrandClanCard'
 import { clientLine, clientLook, clientName, monogramOf, stateWords, callsIn, type Facts } from './deskData'
 import { ToolIcon } from './icons'
-import { Circle } from '../landing/Circle'
-import { use3D } from './use3D'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
 
@@ -62,7 +60,6 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
   const pop = usePop<'more' | 'deck'>()
   const [mode, setMode] = useState<'idle' | 'rename' | 'archive'>('idle')
   const look = clientLook(c.id, c.name)
-  const three = use3D()
   // The registry's display name where it shows; Rename still edits the stored name.
   const name = clientName(c)
   const work = items.filter(i => i.app_id !== BRAND_APP)
@@ -143,7 +140,8 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
         <main id="view-client">
           <header className="cp-head">
             <span className="cl-disc cp-disc" style={{ ['--cl' as string]: look.cl, ['--cl-ink' as string]: look.ink }}>
-              {three ? <span className="cl-orb"><Circle size={84} material={c.material} initials={monogramOf(c)} slot={`client:${c.id}`} orb /></span> : <b>{monogramOf(c)}</b>}
+              {/* the mock's flat disc: the client's colour and monogram (the desk keeps its circles) */}
+              <b>{monogramOf(c)}</b>
             </span>
             <div>
               <div className="eyebrow">CLIENT{sinceWords}</div>

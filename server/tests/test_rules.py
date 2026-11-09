@@ -358,3 +358,19 @@ def test_bodies_verified_on_their_own_sites_have_the_tier_their_type_implies():
         assert tier_for(url) == "secondary", url
     # a domain that was not verified stays where it was
     assert tier_for("https://www.bundesnetzagentur.de/DE/Fachthemen/Digitales/KI/") == "tertiary"
+
+
+def test_a_headline_may_name_the_audience_the_ask_states():
+    # "16–24s" is who the work is for: no pin holds 16 and 24, and the headline that names them was dropped,
+    # so the report headed itself with a finding instead (local McFlurry run, 9 Nov).
+    from napkin.pipeline.report import claim_names
+    from napkin.rules.cite import clean_claim
+    pins = {"f_1": {"value": 0.68, "unit": "proportion", "key": "consumer.unplanned_share", "as_of": "2026-06"}}
+    text = "Irish 16–24s treat a McFlurry as an unplanned stop: 68% of their occasions are unplanned."
+    camp = {"name": {"value": "Irish summer treats"}, "brand": {"value": {"name": "McFlurry"}},
+            "audience_stated": {"value": "16–24s in Ireland"}}
+    assert clean_claim(text, ["f_1"], pins, {}, claim_names({k: v for k, v in camp.items() if k != "audience_stated"}))[0] is None
+    c, why = clean_claim(text, ["f_1"], pins, {}, claim_names(camp))
+    assert why is None and c["text"] == text
+    # a figure the audience does not hold is still a figure
+    assert clean_claim("16–24s spend 40% more in summer.", ["f_1"], pins, {}, claim_names(camp))[0] is None

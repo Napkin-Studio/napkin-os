@@ -68,17 +68,22 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await panel.locator('.sp-l summary').click()
   await panel.locator('.sp-l [data-w="12"]').click()
   await expect(mand).toHaveAttribute('data-w', '12')
+  type Parts = Record<string, { order: number; w: number }>
+  const parts = async () => ((await order(page)) as { layout?: { parts?: Parts } }).layout?.parts ?? {}
+  await expect.poll(async () => (await parts()).mandatories?.w).toBe(12)
+  const was = (await parts()).mandatories.order
+  const keysBefore = await app.locator('#fields .row[data-clan-part]').evaluateAll(rs => rs.map(r => r.getAttribute('data-clan-part')))
+  const before = keysBefore[keysBefore.indexOf('mandatories') - 1]
   await panel.locator('[data-sp="up"]').click()
-  await expect.poll(async () => {
-    const d = await order(page) as { layout?: { parts?: Record<string, { order: number; w: number }> } }
-    const p = d.layout?.parts ?? {}
-    return p.mandatories && p.tone_and_world ? [p.mandatories.w, p.mandatories.order < p.tone_and_world.order] : null
-  }).toEqual([12, true])
+  await expect.poll(async () => { const p = await parts(); return [p.mandatories.w, p.mandatories.order < was] }).toEqual([12, true])
 
   // A reload keeps all of it: the layout, the width and the confidential part.
   await page.reload()
-  // The shell reopens on the tool's page; the brief is opened again from its list.
-  await page.getByTestId('work-item').first().click()
+  // The shell reopens the brief itself (it remembers the open document); on the tool's page it is
+  // opened again from its list.
+  const item = page.getByTestId('work-item').first()
+  await expect(item.or(page.locator('[data-where="document"]'))).toBeVisible({ timeout: 30_000 })
+  if (await item.isVisible()) await item.click()
   const again = page.frameLocator('iframe').first()
   await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
   const b2 = again.locator('#fields .row[data-clan-part="budget_and_scope"]')
@@ -86,7 +91,7 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   const m2 = again.locator('#fields .row[data-clan-part="mandatories"]')
   await expect(m2).toHaveAttribute('data-w', '12')
   const keys = await again.locator('#fields .row').evaluateAll(rs => rs.map(r => r.getAttribute('data-clan-part')))
-  expect(keys.indexOf('mandatories')).toBeLessThan(keys.indexOf('tone_and_world'))
+  expect(keys.indexOf('mandatories')).toBeLessThan(keys.indexOf(before!)) // it moved past the part before it on the sheet
   // Save · PDF and the menu's other ways to save are all there.
   for (const id of ['exPdf', 'exClient', 'exHtml', 'exGridPdf', 'exGridHtml', 'exHtmlPlain', 'exPdfPlain', 'saveBtn']) await expect(again.locator(`#${id}`)).toHaveCount(1)
 })

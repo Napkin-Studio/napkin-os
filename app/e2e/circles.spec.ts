@@ -56,7 +56,9 @@ test('every screen draws its circles in 3D through one context', async ({ page }
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(/#client-/)
   await expect(page.getByTestId('tool-brief')).toBeVisible()
-  await expect(page.locator(ON)).toHaveCount(1) // the client's own sphere at the head of its page
+  // The client page's head is the mock's flat disc (the client's colour and monogram), not a sphere.
+  await expect(page.locator(ON)).toHaveCount(0)
+  await expect(page.locator('.cp-disc b')).toHaveText(/\S/)
   await shot(page, 'p4-03-client-3d')
 
   // one WebGL context for all of them: the page's one drawing canvas is not in the document

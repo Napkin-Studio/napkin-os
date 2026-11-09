@@ -1713,11 +1713,11 @@ test('each OS bar button runs the same handler as its side-tab control', () => {
   type BarI = { kind: string; id?: string; label: string; disabled?: boolean }
   const el = (disabled = false) => ({ disabled })
   const items = (o: { phase?: string; A?: boolean; reopened?: string[]; armed?: boolean; st?: unknown }) => lift<{ barItems(): BarI[] }>(BM, ['barItems'], {
-    phase: o.phase ?? 'doc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
+    phase: o.phase ?? 'doc', DRAFT: o.phase === 'proc' ? { stage: 'context', state: 'running' } : null, STAGES: ['extract', 'context', 'draft', 'judge'], PLAN: [1, 2, 3, 4], draftLive: () => o.phase === 'proc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
     statusNow: () => o.st ?? { label: 'Draft', tone: null, locked: false }, $: () => el(), REDRAFT_ARMED: o.armed ? 1 : null,
   }).barItems()
-  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: no buttons, and the state is Draft (never the host’s guess)')
-  assert.deepEqual(items({ phase: 'proc' }).map(i => i.label), ['Draft'], 'the crew at work: still a draft')
+  assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
+  assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'the crew at work: the run’s step for the bar, still a draft')
   const draft = items({})
   assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
@@ -1797,10 +1797,12 @@ test('nothing the brief did before is gone: every control is still on the page',
     'fields', 'review', 'crewline', 'upNote', 'madeFrom', 'boards', 'redraft', 'newDraft', 'lockBtn', 'lockList', 'lockedBadge', 'status',
     'saveBtn', 'exHtml', 'exPdf', 'exHtmlPlain', 'exPdfPlain', 'toast', 'walker', 'docIdent', 'hProj', 'hCli'])
     assert.match(BM, new RegExp(`id="${id}"`), `#${id} is on the page`)
-  assert.match(BM, /See each part as it’s written/)
-  // Per-part controls: edit, write again, keep as is (locked_fields), and the way into why.
+  assert.match(BM, /See each part as it is written/)
+  // Per-part: the way into why stays on the part; edit, write again and keep as is (locked_fields)
+  // are the Selected part panel's, as the mock (no hover icons on the part).
   const row = fn(BM, 'fieldRow')
-  for (const c of ['act-edit', 'act-regen', 'act-lock', 'prov']) assert.match(row + fn(BM, 'provHtml'), new RegExp(c))
+  assert.match(row + fn(BM, 'provHtml'), /prov/)
+  assert.doesNotMatch(row, /class="ctrls"|act-edit|act-regen|act-lock/, 'no hover cluster on the part')
   // The selected part offers the same, through the same functions.
   const sel = fn(BM, 'renderSelPart')
   assert.match(sel, /startEdit\(row,f\)/)
@@ -2036,7 +2038,12 @@ test('research: the report box and the OS bar say the report’s state in the sa
   type F = { reportStatus(r: unknown, locked: boolean, stale: boolean, open: number): { label: string; tone: string | null; locked: boolean }
     barItems(st: unknown, has: boolean, lk: boolean): { kind: string; id?: string; label: string; disabled?: boolean; primary?: boolean }[] }
   const gate = { t: '' }
-  const f = lift<F>(RT, ['reportStatus', 'barItems'], { isObj, CHAT: { reportBusy: false }, gateWords: () => gate.t })
+  // the run's state, for the bar's mode (the name alone at the ask; the run's step while it works)
+  const run = { fresh: false, job: null as null | { state: string }, active: false, step: 0, report: true }
+  const f = lift<F>(RT, ['reportStatus', 'barItems', 'barMode'], {
+    isObj, CHAT: { reportBusy: false, get job() { return run.job } }, gateWords: () => gate.t,
+    thread: () => (run.fresh ? [] : [{}]), camp: () => (run.fresh ? {} : { name: {} }), jobActive: () => run.active,
+    liveQuestion: () => null, runStep: () => run.step, PLAN: [{}, {}, {}, {}], D: () => (run.report ? { report: {} } : {}) })
   assert.equal(f.reportStatus(null, false, false, 0).label, 'No report yet')
   assert.deepEqual(f.reportStatus({}, true, true, 3), { label: 'Locked', tone: 'ok', locked: true })
   assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
@@ -2052,6 +2059,14 @@ test('research: the report box and the OS bar say the report’s state in the sa
   assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'gate', label: gate.t, tone: 'warn' })
   assert.equal(f.barItems(f.reportStatus({}, true, false, 0), true, true).length, 1)
   gate.t = ''
+  // The mock's bar per step: the ask shows the name alone, a run its step, a run that left no report how it ended.
+  run.fresh = true
+  assert.deepEqual(f.barItems(f.reportStatus(null, false, false, 0), false, false)[0], { kind: 'mode', mode: 'ask' })
+  run.fresh = false; run.job = { state: 'running' }; run.active = true; run.step = 1
+  assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'mode', mode: 'working', label: 'Working · Step 2/4' })
+  run.active = false; run.job = { state: 'cancelled' }; run.report = false
+  assert.deepEqual(f.barItems(f.reportStatus(null, false, false, 0), false, false)[0], { kind: 'mode', mode: 'working', label: 'Stopped' })
+  run.job = null; run.report = true
   const box = RT.slice(RT.indexOf('<section class="insp-box" id="rbox"'), RT.indexOf('</section>', RT.indexOf('id="rbox"')))
   for (const id of ['rbox-status', 'rbox-refresh', 'lockBtn', 'researchBtn', 'synthBtn']) assert.match(box, new RegExp(`id="${id}"`), `${id} is in the Report box`)
   // A bar action from an older shell still does what the page's button does.

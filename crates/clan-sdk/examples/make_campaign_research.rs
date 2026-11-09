@@ -150,13 +150,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "campaign-research.example.clan".to_string());
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
-    // The agent figures and the OS's fields are inlined at build (one
-    // snippet each, every app).
-    let index_html = app_ui::inline_fields(
+    // The agent figures, the OS's fields and the agent sphere are inlined at
+    // build (one snippet each, every app).
+    let index_html = app_ui::inline_sphere(
         &dir.join(".."),
-        &app_ui::inline_figures(
+        &app_ui::inline_fields(
             &dir.join(".."),
-            &fs::read_to_string(dir.join("index.html"))?,
+            &app_ui::inline_figures(
+                &dir.join(".."),
+                &fs::read_to_string(dir.join("index.html"))?,
+            )?,
         )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;

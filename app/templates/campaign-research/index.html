@@ -1270,6 +1270,10 @@ body.fresh .ws > main{padding:0 24px 80px}
 .rt-dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--rs-hl,#F6E36B);margin-left:.04em;box-shadow:0 0 0 1.5px var(--ink)}
 .rt-sub{margin:14px 0 0;max-width:600px;font-size:15px;line-height:1.5;color:var(--ink-soft)}
 .rt-steps{display:flex;align-items:flex-start;gap:0}
+.rt-steps .rt-st{width:auto;min-width:34px;gap:6px}
+.rt-steps .rt-st small{font:600 11px var(--font-mono);letter-spacing:.06em}
+.rt-steps .rt-ln{width:28px;margin:17px 4px 0}
+.rt-steps .rt-st.on b{background:var(--ag-act);border-color:var(--ag-act);color:var(--ag-act-ink)}
 .rt-st{display:grid;justify-items:center;gap:8px;width:58px}
 .rt-st b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);font:700 12px var(--font-mono);color:var(--muted);background:transparent}
 .rt-st small{font:600 10.5px var(--font-mono);letter-spacing:1.3px;text-transform:uppercase;color:var(--faint)}
@@ -1277,7 +1281,6 @@ body.fresh .ws > main{padding:0 24px 80px}
 .rt-st.on small{color:var(--ink)}
 .rt-st.done b{background:var(--muted);border-color:var(--muted);color:var(--paper)}
 .rt-ln{width:28px;height:1px;background:var(--ink-soft);margin-top:17px}
-.rt-cols{display:grid;grid-template-columns:minmax(0,760px) minmax(0,1fr);gap:40px;align-items:start}
 .rt-prompt .rs-stage{width:auto;display:block}
 .rt-q{margin:0 0 16px;font:700 26px/1.2 var(--font-mono);letter-spacing:-.5px;color:var(--ink)}
 .rs-box.rt-box{display:block;border:2px solid var(--ink);border-radius:22px;background:var(--paper);padding:20px 26px;box-shadow:none}
@@ -1298,7 +1301,6 @@ body.fresh .ws > main{padding:0 24px 80px}
 .rt-mk.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .rt-win{font:700 13px var(--font-mono);color:var(--ink)}
 .rt-win input{width:52px;border:0;border-bottom:1px dashed var(--line-strong);background:transparent;font:inherit;color:inherit;padding:2px 0;text-align:center}
-.rt-pnote{margin:0 0 0 66px;font-size:12px;color:var(--muted)}
 .rt-foot{display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
 .rs-clip.rt-add{width:40px;height:40px;border:1px dashed var(--ink-soft);background:transparent;color:var(--muted);font:400 18px var(--font-ui)}
 .rt-files{flex:1;min-width:0;font-size:13px;color:var(--muted)}
@@ -1308,66 +1310,139 @@ body.fresh .ws > main{padding:0 24px 80px}
 .rs-go.rt-go{background:var(--ag-act);color:var(--ag-act-ink);height:44px;min-height:44px;padding:0 26px;font:600 15.5px var(--font-ui);box-shadow:none}
 .rt-prompt .rs-more{justify-content:flex-start;margin-top:14px}
 .rt-prompt .rs-name{justify-content:flex-start}
-.rt-side{display:grid;gap:10px;padding-top:52px}
-.rt-side .rs-hi{order:0;margin:0}
-.rt-side .rs-crew{order:0;padding:0;justify-content:flex-start;flex-wrap:wrap;gap:4px 2px}
-.rt-side .rs-m .agent-figure{width:34px;height:45px;margin-bottom:0}
-.rt-side .rs-m.big .agent-figure{width:40px;height:53px}
-@media (max-width:900px){ .rt-cols{grid-template-columns:1fr} .rt-side{padding-top:0} .rt-head{flex-direction:column;align-items:flex-start} .rt-h1{font-size:40px} }
+@media (max-width:900px){ .rt-head{flex-direction:column;align-items:flex-start} .rt-h1{font-size:40px} }
 
 .rs-work.rt-work{display:block;max-width:1132px;margin:0 auto;padding:24px 0 40px}
-.rt-panel{border:1px solid var(--line);border-radius:8px;background:var(--paper);overflow:hidden}
-.rt-pbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card)}
-.rt-pills{display:flex;flex-wrap:wrap;gap:6px}
-.rt-pill{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border:1px solid var(--line);border-radius:999px;font:500 13px var(--font-ui);color:var(--ink-soft);background:var(--paper)}
-.rt-pill i{width:7px;height:7px;border-radius:50%;background:var(--line)}
-.rt-pill.done i{background:var(--ink)}
-.rt-pill.now{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-.rt-pill.now i{background:var(--paper)}
-.rt-pill.wait{border-color:var(--warn);color:var(--warn)} .rt-pill.wait i{background:var(--warn)}
-.rt-pill.fail{color:var(--alert)} .rt-pill.skip{opacity:.6}
-.rt-lens{display:inline-flex;align-items:center;gap:8px;font:700 10.5px var(--font-mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-soft)}
-.rt-dots{display:inline-flex;gap:5px}
-.rt-dots i{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--ink)}
-.rt-dots i.done{background:var(--ink)} .rt-dots i.run{background:color-mix(in srgb,var(--ink) 35%,transparent)} .rt-dots i.off{border-style:dotted;opacity:.45}
-.rt-pbody{display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:24px;align-items:center;min-height:620px;padding:24px}
-.rt-colh{font:700 10.5px var(--font-mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-soft);border-left:2px solid var(--ink);padding-left:8px;margin-bottom:8px}
-.rt-card{display:grid;gap:4px;margin-bottom:8px;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--card);font:400 14px/1.4 var(--font-serif);color:var(--ink);box-shadow:var(--shadow-card)}
-.rt-card small{font:500 10px var(--font-mono);letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
-.rt-card.done{opacity:.6}
-.rt-more{margin:0;font-size:12px;color:var(--muted)}
-.rt-mid{display:grid;gap:16px;justify-items:center;text-align:center}
-.rt-mid .rs-now{display:grid;justify-items:center;gap:14px;border:0;background:none;box-shadow:none;padding:0}
-.rt-mid .rs-now > .agent-figure,.rt-mid .rs-now > svg{width:110px;height:auto}
-.rt-mid .say.left{text-align:center;max-width:420px}
-.rt-mid .say.left::after{display:none}
-.rt-mid .q-card,.rt-mid #qcard{text-align:left;width:100%}
-.rt-pfoot{margin-top:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:14px 16px;display:grid;gap:10px}
-.rt-frow{display:flex;align-items:center;gap:10px}
-.rt-frow .sp{flex:1}
 .rt-back{font:600 13.5px var(--font-ui);color:var(--ink)}
-.rt-frow .rs-cancel{margin:0}
-.rt-frow .rs-stop{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--ink);font:600 12.5px var(--font-ui);cursor:pointer}
-.rs-go.rt-skip{height:38px;min-height:38px;border-radius:4px;padding:0 16px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui)}
-.rt-pfoot .activity,.rt-pfoot .rs-asked{margin:0;border:0;background:none;box-shadow:none}
-@media (max-width:900px){ .rt-pbody{grid-template-columns:1fr;min-height:0} .rt-pbar{flex-direction:column;align-items:flex-start} }
 
 body.working.no-report .insp,body.working.no-report #hero,body.working.no-report #gates{display:none!important}
 @media (min-width:901px){ body.working.no-report .ws{grid-template-columns:minmax(0,1fr)} body.working.no-report .ws > main{padding-top:0} }
-.rt-mid .rs-now > div{width:100%;max-width:460px}
-.rt-mid .say,.rt-mid .say.left{border:0;background:none;box-shadow:none;padding:0;font:600 21px/1.3 var(--font-ui);letter-spacing:-.3px;color:var(--ink)}
-.rt-mid .say::before,.rt-mid .say::after{display:none}
-.rt-mid .say .who{display:block;margin-bottom:8px;font:700 11px var(--font-mono);letter-spacing:1.6px;text-transform:uppercase;color:var(--ink)}
-.rt-mid .say b{font-weight:600}
-.rt-mid .rs-lines{text-align:left;font-size:13.5px}
-.rt-mid .rs-lensrow{justify-content:center}
 
-.rt-mid .rs-now,.rt-mid .rs-now:has(> .rs-lensrow){display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:14px}
-.rt-mid .rs-now > .rs-lensrow + div{width:100%;max-width:460px;flex:none}
 #start:has(> .rt-work){margin-top:0}
 .rs-work.rt-work{padding-top:26px}
 
-.rt-qrow{grid-column:1/-1;justify-self:center;width:min(760px,100%)}
+/* ── The crew at work, to the mock's live agent stage (?tool=research&step=loading, body[data-step=loading],
+   .p33-runbar, .p33-askcard): one paper panel, the step pills and the lens dots on a white strip, the desk
+   with two rails and the agent's sphere, the caption under it; the agent's question; then the run bar. ── */
+.rt-head.compact{padding:14px 0 12px;margin-bottom:0;align-items:center}
+.rt-head.compact .rt-h1{font-size:30px;line-height:.96;letter-spacing:-.05em;margin:0}
+.rt-head.compact .rt-eb{margin-bottom:4px}
+.rs-work.rt-work{display:block;max-width:1132px;margin:0 auto;padding:0 0 40px}
+.rt-work .pwrap{margin-top:14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow-paper);overflow:hidden;position:relative}
+.rt-work .ptop{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap;position:relative;z-index:15}
+:root[data-color-scheme="dark"] .rt-work .ptop,:root[data-theme="dark"] .rt-work .ptop{background:var(--paper)}
+@media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]):not([data-theme="light"]) .rt-work .ptop{background:var(--paper)} }
+.rt-work .apills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rt-work .apill{min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--paper);font:600 12.5px/1.55 var(--font-ui);color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.rt-work .apill .mdot{width:8px;height:8px;border-radius:50%}
+.rt-work .apill[aria-current="step"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.rt-work .apill.done{border-color:var(--ok);color:var(--ok)}
+.rs-load-lens{display:inline-flex;align-items:center;gap:6px}
+.rs-load-lens small{font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.rs-load-lens .cov{display:inline-block;width:13px;height:13px;border-radius:50%;border:1.5px solid var(--ink);background:transparent;box-sizing:border-box;transition:background .4s}
+.rs-load-lens .cov.filled{background:var(--ink)}
+.rs-load-lens .cov.thin{background:linear-gradient(90deg,var(--ink) 50%,transparent 50%)}
+.rs-load-lens .cov.none{border-style:dashed;opacity:.5}
+.rt-work .sstage{position:relative;background:var(--desk);display:grid;grid-template-columns:minmax(240px,310px) minmax(320px,440px) minmax(240px,310px);justify-content:center;align-items:center;gap:16px;padding:12px 16px;height:clamp(420px,calc(100vh - 338px),640px)}
+.rt-work .rail{display:flex;flex-direction:column;gap:8px;z-index:4;max-height:100%;overflow-y:auto;padding:4px}
+.rt-work .score{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.rt-work .aglbox{width:min(360px,44vh);height:min(340px,40vh);position:relative;display:grid;place-items:center}
+.rt-work .aglbox .aglv{position:absolute;inset:0}
+.rt-work .aglbox .agent-figure{width:96px;height:128px}
+.rt-work .aglbox .rs-lensrow{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 10px}
+.rt-work .aglbox .rs-lensrow .agent-figure{width:40px;height:53px}
+.rt-work .aglbox .rs-lensrow .nm{display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.rt-work .aglbox .rs-lensrow .nm.off{opacity:.4}
+.rt-work .scap{text-align:center;min-height:64px;z-index:4;display:grid}
+.rt-work .abadge{display:inline-block;font:700 11px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ag-base);margin-bottom:3px}
+.rt-work .scap .l1{display:block;font:700 20px/1.55 var(--font-ui);letter-spacing:-.015em;color:var(--ink)}
+.rt-work .scap .l2{display:block;font-size:13.5px;line-height:1.55;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.rt-work .scap .l2.err{color:var(--alert)}
+.rt-work .scap .rs-acts{display:flex;justify-content:center;gap:8px;margin-top:10px}
+.rt-work .wsec{display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
+.rt-work .wsec-h{font:700 10.5px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-left:8px;border-left:2px solid var(--ink)}
+.rt-work .wcard{position:relative;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:8px 11px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
+:root[data-color-scheme="dark"] .rt-work .wcard,:root[data-theme="dark"] .rt-work .wcard{background:var(--card)}
+@media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]):not([data-theme="light"]) .rt-work .wcard{background:var(--card)} }
+.rt-work .wcard .wlab{font:600 10px/1.55 var(--font-mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:6px;padding-right:16px}
+.rt-work .wcard .wtag{font:600 9.5px var(--font-mono);letter-spacing:.04em;padding:1px 6px;border-radius:999px;border:1px solid var(--warn);color:var(--warn);white-space:nowrap}
+.rt-work .wcard .wsnip{font:13.5px/1.4 var(--font-serif);color:var(--ink);margin-top:3px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.rt-work .wcard .wsnip.wait{color:var(--faint);font-style:italic}
+.rt-work .wcard .wchk{position:absolute;top:7px;right:8px;font-size:12px;font-weight:800;color:var(--ok)}
+.rt-work .wcard .wchk.now{color:var(--ag-base)}
+.rt-work .wcard .wchk.bad{color:var(--alert)}
+.rt-qrow{margin-top:12px}
+.rs-ask.p33-askcard{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start;border:1px solid color-mix(in srgb,var(--ag-acc) 40%,var(--line));border-radius:12px;background:var(--paper);padding:14px 16px;font-size:13.5px;scroll-margin-bottom:72px}
+.p33-askcard .aq-k{font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ag-base)}
+:root[data-color-scheme="dark"] .p33-askcard .aq-k,:root[data-theme="dark"] .p33-askcard .aq-k{color:var(--ag-acc)}
+@media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]):not([data-theme="light"]) .p33-askcard .aq-k{color:var(--ag-acc)} }
+.p33-askcard .aq-q{font-weight:600;font-size:15px;color:var(--ink)}
+.p33-askcard .aq-ctx{color:var(--muted)}
+.p33-askcard .aq-opts{display:grid;gap:6px}
+.p33-askcard .aq-opt{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:var(--card);color:var(--ink);font:500 13.5px var(--font-ui);min-height:0;box-shadow:none;cursor:pointer}
+.p33-askcard .aq-opt:hover{border-color:var(--ink)}
+.p33-askcard .aq-opt.escape{border-style:dashed}
+.p33-askcard .aq-opt small{font:600 10px var(--font-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right}
+.p33-askcard .aq-own{display:flex;gap:8px}
+.p33-askcard .aq-own input{flex:1;min-height:0;border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:var(--card);color:var(--ink);font:13.5px var(--font-ui)}
+.p33-askcard .q-note{margin:0;font-size:12px;color:var(--muted)}
+.rt-work .sp-btn{height:28px;min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer}
+.rt-work .runbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:12px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:13px}
+.rt-work .runbar .sp{flex:1 1 0%}
+.rt-work .rt-back{font:600 13.5px var(--font-ui);color:var(--ink)}
+.rt-work .runbar .rs-cancel{margin:0;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rt-work .runbar .rs-cancel > span{color:var(--ink-soft)}
+.rt-work .runbar .rs-stop,.rt-work .runbar .rs-cancel .ans{height:28px;min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer}
+.rt-work .runbar .go{min-height:38px;height:38px;padding:0 16px;border:1px solid var(--ag-act);border-radius:4px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px/1.55 var(--font-ui);cursor:pointer}
+.rt-work .ptiles{flex-basis:100%;order:9}
+.rt-work .ptiles summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+.rt-work .ptiles .tiles{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rt-work .ptiles .tile{font-size:12px;padding:5px 10px;border-radius:6px;border:1px dashed var(--line);color:var(--faint);background:transparent;display:inline-block}
+.rt-work .ptiles .tile.done{border-style:solid;color:var(--ink-soft);background:var(--card)}
+.rt-work .ptiles .tile.done::before{content:"✓ ";color:var(--ok)}
+.rt-work .ptiles .tile.now{border-style:solid;border-color:var(--ag-base);color:var(--ag-base)}
+.rt-work .runbar > .rs-later,.rt-work .runbar > .activity,.rt-work .runbar > .rs-asked{flex-basis:100%;order:10;margin:0;border:0;background:none;box-shadow:none}
+.rt-work .runbar > .rs-later{text-align:left;font-size:12.5px;color:var(--muted);padding:0}
+.rt-work .runbar > .activity > summary,.rt-work .runbar > .rs-asked > summary{font-size:12.5px;color:var(--muted);padding:0;min-height:0}
+.rt-work .runbar > .activity,.rt-work .runbar > .rs-asked{padding:0}
+@media (max-width:980px){ .rt-work .sstage{grid-template-columns:1fr;height:auto} }
+@media (prefers-reduced-motion:reduce){ .rs-load-lens .cov{transition:none} }
+/* The ask, to the mock (?tool=research&step=prompt): one column, the box, examples, lens chips (filled when
+   picked, outlined when not), three market circles, the window, then the attach line and Start research. */
+.rt-prompt .rs-stage{max-width:760px}
+.rs-start.rt-prompt{padding-top:30px}
+.rt-prompt .rt-sub{margin-top:8px}
+.rt-prompt .rt-win input{width:4ch}
+.rt-prompt .rt-hi{margin:10px 0 0;font-size:13.5px;color:var(--ink-soft)}
+.rt-prompt .rt-hi b{font:700 10.5px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:6px}
+.rt-prompt .rs-under{margin-top:10px;gap:6px;font-size:12.5px}
+.rt-prompt .rs-eg{font-size:12.5px;color:var(--muted)}
+.rt-prompt .rs-try{border:1px solid var(--line);border-radius:99px;padding:4px 11px;min-height:0;background:var(--card);color:var(--ink-soft);font-size:12.5px}
+.rt-prompt .rs-try:hover{border-color:var(--ink)}
+.rt-prompt .rt-picks{gap:12px;margin-top:20px}
+.rt-prompt .rt-pk{display:flex;align-items:center;gap:12px}
+.rt-prompt .rt-pl{font:600 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex:none}
+.rt-prompt .rt-chips{gap:6px}
+.rt-prompt .rt-chip{box-sizing:border-box;height:auto;min-height:0;font:500 12.5px var(--font-ui);padding:4px 11px 4px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted);background:transparent;display:inline-flex;align-items:center;gap:6px}
+.rt-prompt .rt-chip::before{content:"";width:8px;height:8px;border-radius:50%;border:1.5px solid;box-sizing:border-box}
+.rt-prompt .rt-chip.on{color:var(--ink);border-color:var(--ink);background:var(--card)}
+.rt-prompt .rt-chip.on::before{background:currentColor}
+.rt-prompt .rt-mk{width:30px;height:30px;min-height:0;border-radius:50%;border:1.5px solid var(--ink);display:inline-grid;place-items:center;font:600 11px var(--font-mono);color:var(--ink);background:transparent;padding:0}
+.rt-prompt .rt-mk.on{background:var(--ink);color:var(--paper)}
+.rt-prompt .rt-mkmore{border-style:dashed;border-color:var(--muted);color:var(--muted);font-size:14px}
+.rt-prompt .rt-win{font:600 13px var(--font-mono);color:var(--ink)}
+.rt-prompt .rt-win input{width:4.6ch;border:0;border-bottom:1px dashed transparent;background:transparent;font:inherit;color:inherit;padding:0;text-align:left;min-height:0;border-radius:0;box-shadow:none}
+.rt-prompt .rt-win input::placeholder{color:var(--ink);opacity:1}
+.rt-prompt .rt-win input:hover,.rt-prompt .rt-win input:focus{border-bottom-color:var(--ink-soft);outline:none}
+.rt-prompt .rt-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:20px;padding-top:12px;border-top:1px solid var(--line);flex-wrap:wrap}
+.rt-prompt .rs-clip.rt-add{width:40px;height:40px;border-radius:50%;border:1.5px dashed var(--muted);color:var(--muted);font-size:18px}
+.rt-prompt .rs-clip.rt-add:hover{border-style:solid;border-color:var(--ink);color:var(--ink);background:var(--desk)}
+.rt-prompt .rt-files{flex:1;font-size:12.5px;color:var(--muted)}
+.rt-prompt .rt-files b{color:var(--ink-soft);font-weight:600}
+.rt-prompt .rt-files .linkbtn{font-size:12.5px;color:var(--muted)}
+.rt-prompt .rt-files .signas{font-size:12.5px}
+.rt-prompt .rs-go.rt-go{min-height:44px;height:44px;padding:0 24px;font:600 15px var(--font-ui);border-radius:999px}
+.rt-prompt .rs-name{margin-top:14px}
 </style>
 <!-- @napkin:agent-figures -->
 <!-- @napkin:clan-fields -->
@@ -1461,6 +1536,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 <dialog id="dlg" aria-labelledby="dlg-title"><form method="dialog" class="dlg" id="dlg-form"></form></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- @napkin:agent-sphere -->
 <script>
 (function(){
   'use strict';
@@ -3193,32 +3269,6 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     sp.text='I’m not working on this right now.';
     return sp;
   }
-  function nowCardHtml(T){
-    // The host's narration stays in the log below; the card speaks plainly.
-    var sp=speech(T), j=CHAT.job, h='';
-    if(sp.k==='research'){
-      var plan=lensPlan(), on=plan.filter(function(x){ return !x.off; }), done=on.filter(function(x){ return x.done; }).length;
-      var mk=marketNames(), running=jobActive()&&j&&j.stage==='research';
-      h+='<div class="rs-now" role="status" aria-live="polite"><div class="rs-lensrow" aria-hidden="true">'+plan.map(function(x){
-        return '<span class="nm'+(x.off?' off':'')+'">'+figK(x.k, running&&!x.off&&!x.done?'working':'idle')+'<small>'+esc(given(x.k))+'</small></span>'; }).join('')+'</div>'
-        +'<div><div class="say left"><span class="who">'+esc(listJoin(on.map(function(x){ return given(x.k); })))+' · the researchers</span>'
-        +'<b>Hi, we’re the researchers.</b> Each of us looks into one thing'+(mk.length?' in '+esc(listJoin(mk)):'')+'.'
-        +(on.length<plan.length?' '+(plan.length-on.length)+' of us aren’t needed for this ask.':'')
-        +(done?' '+(done===on.length?'We’re all done.':done+' of us '+(done===1?'is':'are')+' done.'):'')+'</div>'
-        +'<ul class="rs-lines">'+plan.map(function(x){
-          var ic=x.off?'–':x.done?'✓':running?'…':'·';
-          return '<li class="'+(x.off?'off':x.done?'ok':'')+'"><i aria-hidden="true">'+ic+'</i><span>'+esc(given(x.k))+': '+esc(x.off?'not needed this time':(SAYS[x.k]||[])[1]||'')+'</span></li>'; }).join('')+'</ul>'
-        +'</div></div>';
-      return h;
-    }
-    h+='<div class="rs-now" role="status" aria-live="polite">'+figK(sp.k, sp.mood)
-      +'<div><div class="say left"><span class="who">'+esc(whoOf(sp.k))+'</span><b>'+esc(sp.hello)+'</b> '+esc(sp.text)+'</div>'
-      +(sp.err?'<div class="flag" style="margin-top:12px"><div>'+esc(sp.err)+'</div></div>':'')
-      +(j&&jobActive()&&j.applied===false&&j.reason&&j.reason!=='already applied'?'<div class="flag amber" style="margin-top:12px"><div>The host did not apply the last change: '+esc(j.reason)+'</div></div>':'')
-      +(sp.acts?'<div class="rs-acts no-print">'+sp.acts+'</div>':'')
-      +'</div></div>';
-    return h;
-  }
   // Only true when it is: the job runs on the middleware, outlives this page,
   // and a job the document itself records is picked up again on open.
   function laterHtml(T){
@@ -3240,7 +3290,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(CHAT.cancelAsk) return '<div class="rs-cancel no-print" role="group" aria-label="Stop the research"><span>Stop the research? What’s been found so far stays.</span>'
       +'<button type="button" class="ans primary" data-act="chat-cancel-yes"'+(CHAT.cancelling?' disabled':'')+'>'+(CHAT.cancelling?'Stopping…':'Yes, stop it')+'</button>'
       +'<button type="button" class="ans" data-act="chat-cancel-no"'+(CHAT.cancelling?' disabled':'')+'>Keep going</button></div>';
-    return '<div class="rs-cancel no-print"><button type="button" class="rs-stop" data-act="chat-cancel">Stop the research</button></div>';
+    return '<div class="rs-cancel no-print"><button type="button" class="rs-stop" data-act="chat-cancel" aria-label="Stop the research">Stop</button></div>';
   }
   function doCancelJob(){
     var j=CHAT.job; if(!(j&&j.id)||CHAT.cancelling) return;
@@ -3250,30 +3300,169 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       if(CHAT.job&&CHAT.job.state==='cancelled') toast('Stopped. What was found so far stays.');
     }, function(e){ CHAT.cancelling=false; toast('Not stopped: the middleware could not be reached ('+(e&&e.message||e)+').'); renderChat(); });
   }
-  // The loading step, as the mock draws it (gaps R12): the stages as pills and
-  // the lenses as dots along the top; the question asked on the left, the agent
-  // at work (and any question it asks) in the middle, the lenses queued on the
-  // right; Back, Stop and the run's log underneath. Every part of it is the
-  // job's own: there are no sub-questions in the record, so the right column
-  // lists the researchers Jude picked, each with what it looks into.
+  // The loading step, to the mock's live agent stage (napkin-app-v1 ?tool=research&step=loading,
+  // RUN_PLANS.research; gaps §6): the four steps as pills and the lenses as dots on a white strip;
+  // the desk with two rails and the agent's sphere, its caption under it; the agent's question under
+  // the desk; then Back, Stop, Skip to the finished report and each section as it is written. Every
+  // part is the job's own: the six stages of the run map onto the mock's four steps, and the rails
+  // fill from the record as the job writes it.
+  var PLAN=[
+    {agent:'strategy',  name:'Strategy',  mat:'GRAPHITE', kind:'think',  l1:'Scoping the question',                     st:['extract','identify','select']},
+    {agent:'research',  name:'Research',  mat:'GLASS',    kind:'search', l1:'Searching the open web & panels',          st:['research']},
+    {agent:'knowledge', name:'Knowledge', mat:'ONYX',     kind:'read',   l1:'Reading sources & pinning facts',          st:['synthesise']},
+    {agent:'review',    name:'Review',    mat:'PEARL',    kind:'check',  l1:'Checking every fact & resolving conflicts', st:['report']}];
+  var MAT_C={ONYX:'#16191D', GRAPHITE:'#3B4254', PEARL:'#D8D4CA', GLASS:'#93B4E8'};
+  // The standing question each researcher asks (server/napkin/pipeline/research.py LENS_QUESTIONS),
+  // as a question: the sub-questions the run queues, one per lens it picked.
+  var LENS_Q={
+    market_structure:'Who is in the market, and how big is it?',
+    brands_positioning:'What does each brand claim and stand for?',
+    consumer_culture:'Who buys, and what is moving them?',
+    category_codes:'What does every ad in the category do, and what is worn out?',
+    rhythm_moments:'When does it happen: the peaks, cycles and moments?',
+    media_spend:'Where does the money go: channels and share of spend?',
+    regulation_clearance:'What can’t the ads say, and what must they?',
+    effectiveness_evidence:'What has worked before in this category?'
+  };
+  // Which of the four steps the run is on: the stage the job reports, else what the record shows.
+  function runStep(){
+    var j=CHAT.job, st=stageStates();
+    if(j&&j.state==='done') return 3;
+    var at=0; PLAN.forEach(function(p, i){ p.st.forEach(function(k){ if(st[k]&&st[k]!=='todo') at=Math.max(at, i); }); });
+    if(j&&STAGE[j.stage]) PLAN.forEach(function(p, i){ if(p.st.indexOf(j.stage)!==-1) at=i; });
+    return at;
+  }
+  // The agent sphere (identity-v4/agents, inlined as NapkinSpheres): one, made on the first run, kept
+  // in its own element across renders and told each step as the job reports it; a step that moves on
+  // is a handoff, as the mock's renderStageStep. Without WebGL the crew stand there instead.
+  var SPH={view:null, tried:false, key:'', el:null};
+  function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function hexMix(a, b, t){ var p=function(h){ h=String(h).replace('#',''); return [0,2,4].map(function(i){ return parseInt(h.slice(i,i+2),16)||0; }); }, x=p(a), y=p(b);
+    return '#'+x.map(function(v,i){ return ('0'+Math.round(v+(y[i]-v)*t).toString(16)).slice(-2); }).join(''); }
+  function lumOf(h){ var c=String(h).replace('#',''); return (0.299*parseInt(c.slice(0,2),16)+0.587*parseInt(c.slice(2,4),16)+0.114*parseInt(c.slice(4,6),16))/255; }
+  function isDark(){ var a=document.documentElement.getAttribute('data-color-scheme')||document.documentElement.getAttribute('data-theme'); return a==='dark'||(!a&&!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)); }
+  function sphere(){
+    if(SPH.view||SPH.tried) return SPH.view;
+    SPH.tried=true;
+    var S=window.NapkinScene, A=window.NapkinSpheres;
+    if(!S||!A||!S.gl) return null;
+    try{
+      SPH.el=document.createElement('div'); SPH.el.className='aglv';
+      var base=cssVar('--ag-base')||'#515BFF', acc=cssVar('--ag-acc')||'#C8CBFF';
+      // the ring is the agency's base; a near-black base rings in its accent, deepened (the mock's TBWA ring)
+      var ring=lumOf(base)<0.15?hexMix(acc,'#000000',0.23):base;
+      $('aglBox').appendChild(SPH.el);
+      SPH.view=A.create(S, SPH.el, {level:4, accent:ring, inkAccent:base, bg:'#F6F1E7', dark:isDark(), rFrac:[0.27,0.24], cyFrac:0.45});
+    }catch(e){ SPH.view=null; }
+    return SPH.view;
+  }
+  // After each render: the sphere's element back in the new box (the scene finds its clip again).
+  function placeSphere(at, figHtml){
+    var box=$('aglBox'); if(!box) return;
+    var v=sphere();
+    if(!v){ box.innerHTML=figHtml; box.classList.add('figs'); return; }
+    if(SPH.el.parentNode!==box){ box.appendChild(SPH.el); SPH.el._nkClip=undefined; if(window.NapkinScene&&NapkinScene.wake) NapkinScene.wake(true); }
+    var j=CHAT.job||{}, live=jobActive(), phase=j.state==='done'?'hold':'run', key=at+':'+phase+':'+(j.state==='failed'?'e':'')+':'+(live?1:0);
+    if(key===SPH.key) return;
+    var prev=SPH.key?+SPH.key.split(':')[0]:-1; SPH.key=key;
+    var steps=PLAN.map(function(p){ return {label:p.l1, kind:p.kind}; });
+    if(live&&prev>=0&&at>prev) v.setEnvelope({agentKey:PLAN[prev].agent, nextAgentKey:PLAN[at].agent, phase:'handoff', steps:steps, step:{index:prev}, stepStartedAt:Date.now(), streaming:true});
+    v.setEnvelope({agentKey:PLAN[at].agent, nextAgentKey:PLAN[Math.min(at+1,3)].agent, phase:phase, steps:steps, step:{index:phase==='hold'?steps.length:at},
+      stepStartedAt:Date.now(), streaming:live, errorRetrying:j.state==='failed'});
+  }
+  function slip(lab, text, mark, wait, tag){ return '<div class="wcard"><div class="wlab"><span>'+esc(lab)+'</span>'+(tag?'<span class="wtag">'+esc(tag)+'</span>':'')+'</div><div class="wsnip'+(wait?' wait':'')+'">'+esc(text)+'</div>'
+    +(mark?'<span class="wchk'+(mark==='now'?' now':mark==='bad'?' bad':'')+'" aria-hidden="true">'+(mark==='now'?'…':mark==='bad'?'!':'✓')+'</span>':'')+'</div>'; }
+  // A rail section holds four slips, as the mock's: the ones at work first; the count says the rest.
+  function wsec(h, cards, none, counted){
+    var now=cards.filter(function(c){ return c.indexOf('wchk now')!==-1; }), rest=cards.filter(function(c){ return c.indexOf('wchk now')===-1; }), shown=now.concat(rest).slice(0,4);
+    return '<div class="wsec"><div class="wsec-h">'+esc(h+(cards.length>4&&!counted?' · '+cards.length:''))+'</div>'+(shown.length?shown.join(''):slip(none&&none[0]||'Nothing yet', none&&none[1]||'It fills as the crew work.', '', true))+'</div>'; }
+  function srcSlip(sid, mark){ var s=srcRecs()[sid]||{}; return slip(s.domain||s.publisher||'Source', s.title||srcName(sid)||sid, mark); }
+  function pinSlip(id, mark){ var p=pins()[id]||{}, src=pinSource(id);
+    return slip(id+(p.confidence?' · '+(p.confidence==='low'?'Thin':p.confidence.charAt(0).toUpperCase()+p.confidence.slice(1)):src?' · '+src:''), clipT(String(p.key||'').split(':').pop().replace(/@.*$/,'').replace(/[._]/g,' ')+': '+fmtPinValue(p), 110), mark, false, p.confidence==='low'?'thin sample':''); }
+  // What each step puts on the desk: the mock's rails for that step, filled from the record.
+  function railsFor(at){
+    var plan=lensPlan(), on=plan.filter(function(x){ return !x.off; }), st=stageStates(), j=CHAT.job, live=jobActive();
+    var R0=srcRecs(), srcIds=sourceIds().filter(function(k){ return R0[k]; }), P=pins(), pids=Object.keys(P), F=fnds(), fids=Object.keys(F);
+    if(at===0){
+      var q=askedQuestion(), c=camp(), org=c.client_org&&c.client_org.value&&c.client_org.value.name, br=c.brand&&c.brand.value&&c.brand.value.name;
+      var tags=[org, br&&!(org&&org.indexOf(br)!==-1)?br:'', listJoin(marketNames())].filter(Boolean).join(' · ');
+      var left=[slip('Primary ask', q||'Reading what you sent…', '', !q)];
+      if(tags) left.push(slip('Scope tags', tags));
+      var picked=st.select==='done'||st.select==='skip'||on.length<plan.length;
+      var right=picked?on.map(function(x, i){ return slip('Q'+(i+1)+' · '+lensName(x.lens), LENS_Q[x.lens]||lensName(x.lens), x.done?'ok':''); }):[];
+      return [wsec('Research question', left), wsec('Sub-questions queued', right, ['Not picked yet', given('judge')?given('judge')+' picks what to look into, one question per lens.':'The lenses are picked next.'])];
+    }
+    if(at===1){
+      return [wsec('Sources discovered', srcIds.map(function(s){ return srcSlip(s, 'ok'); }), ['Searching', 'Sources land here as the researchers find them.']),
+        wsec('Early signals', pids.slice(-4).reverse().map(function(id){ return pinSlip(id, ''); }), ['Nothing pinned yet', 'Each fact lands here with its source.'])];
+    }
+    if(at===2){
+      return [wsec(srcIds.length+' source'+(srcIds.length===1?'':'s')+' read', srcIds.map(function(s){ return srcSlip(s, 'ok'); }), ['No sources', 'Nothing was read for this ask.'], true),
+        wsec('Pinned facts on the record', pids.map(function(id){ return pinSlip(id, 'ok'); }), ['No facts pinned', 'Nothing found could be cited.'])];
+    }
+    var ct=arr(sel().contested);
+    return [wsec('Conflict resolution', ct.map(function(c){ var open=c.status==='open', won=arr(c.values).filter(function(v){ return v.fact_id===c.chosen; })[0];
+        return slip('Contest · '+keyWords(c.key), open?'Two sources disagree. Nothing is picked until you do.':'Chose '+(won?fmtPinValue(won)+(won.from?' from '+won.from:''):c.chosen)+(c.reason?': '+c.reason:''), open?'bad':'ok', false, open?'needs you':''); }),
+        ['No contests', 'No two sources gave different values for the same figure.']),
+      wsec('Synthesised findings', fids.map(function(id, i){ var f=F[id], s=f.status||'proposed';
+        return slip('Finding '+(i+1)+' · '+s.charAt(0).toUpperCase()+s.slice(1), clipT(f.statement, 110), s==='verified'?'ok':s==='rejected'?'bad':'', false, s==='proposed'?'needs you':''); }),
+        [live?'Finding the points':'No findings', live?given('synthesis')+' is turning the facts into points.':'Nothing was found to make a point from.'])];
+  }
+  // Each section as it is written: one per lens and market the run looks into, then the points and
+  // the report itself, each ticked as the record holds it.
+  function sectionTiles(){
+    var plan=lensPlan(), ms=arr(camp().markets&&camp().markets.value), runs=arr(sel().lenses_run), j=CHAT.job, live=jobActive();
+    var ranAt=function(l, m){ return runs.some(function(r){ return r&&r.lens===l&&(!m||r.market===m); }); };
+    var t=[];
+    plan.filter(function(x){ return !x.off; }).forEach(function(x){ (ms.length?ms:['']).forEach(function(m){
+      var done=ranAt(x.lens, m); t.push({l:lensName(x.lens)+(m?' · '+m:''), c:done?'done':live&&j&&j.stage==='research'?'now':''}); }); });
+    var rep=isObj(D().report), nf=Object.keys(fnds()).length;
+    t.push({l:'Findings', c:nf?'done':live&&j&&j.stage==='synthesise'?'now':''});
+    t.push({l:'Headline and summary', c:rep?'done':live&&j&&j.stage==='report'?'now':''});
+    t.push({l:'Gaps and contests', c:rep?'done':''});
+    return t;
+  }
   function workHtml(T, Q){
-    var st=stageStates(), plan=lensPlan(), j=CHAT.job, running=jobActive()&&j&&j.stage==='research';
-    var pills=STAGES.map(function(S, i){ var x=st[S.k]; return '<span class="rt-pill '+(x==='todo'?'':x==='stop'?'fail':x)+'"'+(x==='now'||x==='wait'?' aria-current="step"':'')+'><i></i>'+(i+1)+'. '+esc(stageLabel(S.k))+'</span>'; }).join('');
-    var dots='<span class="rt-dots" aria-label="Researchers: '+plan.filter(function(x){ return x.done; }).length+' of '+plan.filter(function(x){ return !x.off; }).length+' done">'+plan.map(function(x){ return '<i class="'+(x.off?'off':x.done?'done':running?'run':'')+'" title="'+esc(given(x.k)+' · '+lensName(x.lens))+'"></i>'; }).join('')+'</span>';
-    var q=askedQuestion(), mk=marketNames(), org=camp().client_org&&camp().client_org.value&&camp().client_org.value.name;
-    var left='<div class="rt-colh">Research question</div><div class="rt-card"><small>Primary ask</small>'+esc(q||'Reading what you sent…')+'</div>'
-      +((org||mk.length)?'<div class="rt-card"><small>Scope</small>'+esc([org, listJoin(mk)].filter(Boolean).join(' · '))+'</div>':'');
-    var on=plan.filter(function(x){ return !x.off; });
-    var right=on.length&&st.select==='done'?'<div class="rt-colh">Lenses queued</div>'+on.slice(0,4).map(function(x, i){
-        return '<div class="rt-card'+(x.done?' done':'')+'"><small>Q'+(i+1)+' · '+esc(lensName(x.lens))+(x.done?' · done':'')+'</small>'+esc((SAYS[x.k]||[])[1]||given(x.k))+'</div>'; }).join('')
-        +(on.length>4?'<p class="rt-more">+ '+(on.length-4)+' more</p>':''):'';
+    var at=runStep(), P=PLAN[at], j=CHAT.job, live=jobActive(), sp=speech(T), plan=lensPlan();
+    var pills=PLAN.map(function(p, i){ var done=i<at||(j&&j.state==='done'), cur=i===at&&!(j&&j.state==='done');
+      return '<span class="apill'+(done?' done':'')+'" role="listitem"'+(cur?' aria-current="step"':'')+'><span class="mdot" style="background:'+MAT_C[p.mat]+'"></span><span>'+(done?'✓ ':'')+(i+1)+'. '+p.name+' ('+p.kind+')</span></span>'; }).join('');
+    var nOn=plan.filter(function(x){ return !x.off; }).length, nDone=plan.filter(function(x){ return x.done; }).length;
+    var dots='<span class="rs-load-lens" role="img" aria-label="Lenses: '+nDone+' of '+nOn+' researched"><small>Lenses</small>'+plan.map(function(x){
+      return '<i class="cov'+(x.done?' filled':x.off?' none':live&&j&&j.stage==='research'?' thin':'')+'" title="'+esc(lensName(x.lens)+(x.off?' · not needed':x.done?' · done':''))+'"></i>'; }).join('')+'</span>';
+    var H={done:isObj(D().report)?'Your report is ready':'The run is done', failed:'We had to stop', cancelled:'You stopped the research', stalled:'We lost touch with the work'};
+    var l1=liveQuestion()?'Quick question before we go on':j&&H[j.state]||P.l1;
+    var said=sp.text||(sp.k==='research'?researchersLine(plan):'');
+    var l2=(j&&j.state==='done'?'':'Step '+(at+1)+' of '+PLAN.length+' · ')+said;
+    var R=railsFor(at), tiles=sectionTiles(), wN=tiles.filter(function(t){ return t.c==='done'; }).length;
     return '<div class="rs-work rt-work">'+toolHeadHtml(2, true)
-      +'<section class="rt-panel"><div class="rt-pbar"><span class="rt-pills">'+pills+'</span><span class="rt-lens">Lenses '+dots+'</span></div>'
-      +'<div class="rt-pbody"><div class="rt-left">'+left+'</div><div class="rt-mid">'+nowCardHtml(T)+'</div><div class="rt-right">'+right+'</div>'+(Q?'<div class="rt-qrow">'+questionCard(Q, T)+'</div>':'')+'</div></section>'
-      +'<section class="rt-pfoot no-print"><div class="rt-frow"><button type="button" class="linkbtn rt-back" data-act="rt-back">← Back to the ask</button><span class="sp"></span>'+cancelHtml()
-      +(isObj(D().report)?'<button type="button" class="rs-go rt-skip" data-act="show-run">Back to the finished report →</button>':'')+'</div>'
+      +'<div class="pwrap"><div class="ptop"><div class="apills" role="list" aria-label="The crew’s steps">'+pills+'</div>'+dots+'</div>'
+      +'<div class="sstage"><div class="rail">'+R[0]+'</div>'
+        +'<div class="score"><div class="aglbox" id="aglBox" title="'+esc(whoOf(sp.k)||'')+'"></div>'
+          +'<div class="scap" role="status" aria-live="polite"><span class="abadge">'+esc(P.name.toUpperCase()+' AGENT · '+P.mat+' SPHERE')+'</span><span class="l1" title="'+esc(whoOf(sp.k)||'')+'">'+esc(l1)+'</span><span class="l2'+(sp.err?' err':'')+'">'+esc(l2)+'</span>'
+          +(sp.err?'<span class="l2 err">'+esc(sp.err)+'</span>':'')
+          +(j&&live&&j.applied===false&&j.reason&&j.reason!=='already applied'?'<span class="l2 err">The host did not apply the last change: '+esc(j.reason)+'</span>':'')
+          +(sp.acts?'<span class="rs-acts no-print">'+sp.acts+'</span>':'')+'</div></div>'
+        +'<div class="rail">'+R[1]+'</div></div></div>'
+      +(Q?'<div class="rt-qrow">'+questionCard(Q, T)+'</div>':'')
+      +'<div class="runbar no-print"><button type="button" class="linkbtn rt-back" data-act="rt-back">← Back to the ask</button><span class="sp"></span>'+cancelHtml()
+      +'<button type="button" class="go rt-skip" data-act="rt-skip">'+(isObj(D().report)&&!live?'Open the finished report →':'Skip to the finished report →')+'</button>'
+      +'<details class="ptiles"'+(CHAT.tilesOpen?' open':'')+'><summary data-act="rt-tiles">See each section as it is written · '+wN+' of '+tiles.length+'</summary><div class="tiles">'
+        +tiles.map(function(t){ return '<span class="tile'+(t.c?' '+t.c:'')+'">'+esc(t.l)+'</span>'; }).join('')+'</div></details>'
       +laterHtml(T)+activityHtml(T)
-      +'<details class="rs-asked" id="asked"'+(CHAT.sheetOpen?' open':'')+'><summary><span>What you asked for</span><span class="chev" aria-hidden="true">'+ICON.chev+'</span></summary>'+sheetHtml(T)+'</details></section></div>';
+      +'<details class="rs-asked" id="asked"'+(CHAT.sheetOpen?' open':'')+'><summary><span>What you asked for</span><span class="chev" aria-hidden="true">'+ICON.chev+'</span></summary>'+sheetHtml(T)+'</details></div></div>';
+  }
+  // The researchers' line while they work: who is looking into what, and how many are done.
+  function researchersLine(plan){
+    var on=plan.filter(function(x){ return !x.off; }), done=on.filter(function(x){ return x.done; }).length, mk=marketNames();
+    if(!on.length) return 'The researchers are starting.';
+    return 'The researchers are looking into '+on.length+' lens'+(on.length===1?'':'es')+(mk.length?' in '+listJoin(mk):'')+(done?': '+done+' of '+on.length+' done.':'.');
+  }
+  // Without WebGL the crew stand on the desk: the agent at work, or the researchers on their lenses.
+  function stageFigs(T){
+    var sp=speech(T), j=CHAT.job;
+    if(sp.k==='research'){ var plan=lensPlan(), running=jobActive()&&j&&j.stage==='research';
+      return '<div class="rs-lensrow" aria-hidden="true">'+plan.map(function(x){ return '<span class="nm'+(x.off?' off':'')+'">'+figK(x.k, running&&!x.off&&!x.done?'working':'idle')+'<small>'+esc(given(x.k))+'</small></span>'; }).join('')+'</div>'; }
+    return figK(sp.k, sp.mood);
   }
 
   // ── the agent asks: one card, signed by whoever asks, answers as buttons ──
@@ -3291,33 +3480,34 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var fk=qField(q), what=fk&&FIELD[fk]?FIELD[fk].label.toLowerCase():'', nOpt=arr(q.options).filter(function(o){ return o.value!==undefined; }).length;
     var ctx=nOpt?'I found '+(nOpt===1?'one':String(NUM[nOpt]||nOpt).toLowerCase())+' that could fit.'
       :'I couldn’t tell '+(what?'the '+what:'this')+' from what you sent.';
-    var h='<div class="rs-ask no-print" id="qcard" tabindex="-1" role="group" aria-labelledby="'+hid+'" data-q="'+esc(q.id)+'">'+figK(k,'needs-you')
-      +'<div><span class="rs-who">'+esc(whoOf(k)||stageWho(Q.stage))+'</span><h3>Quick question before I go on</h3>'
-      +'<p class="qtext" id="'+hid+'">'+esc(q.text)+'</p>'+(ctx?'<p class="qc-ctx">'+esc(ctx)+'</p>':'');
+    var pi=0; PLAN.forEach(function(p, i){ if(p.st.indexOf(Q.stage)!==-1) pi=i; });
+    var h='<div class="rs-ask p33-askcard no-print" id="qcard" tabindex="-1" role="group" aria-labelledby="'+hid+'" data-q="'+esc(q.id)+'">'
+      +'<span class="aq-k" title="'+esc(whoOf(k)||stageWho(Q.stage))+'">The '+esc(PLAN[pi].name)+' agent asks</span>'
+      +'<span class="aq-q qtext" id="'+hid+'">'+esc(q.text)+'</span>'+(ctx?'<span class="aq-ctx qc-ctx">'+esc(ctx)+'</span>':'');
     if(ans&&!busy){
-      return h+'<p class="q-note">You answered “'+esc(ans.m.text)+'”, but it hasn’t reached me yet. <button type="button" class="linkbtn" data-act="q-resend" data-q="'+esc(q.id)+'">Send it again</button></p></div></div>';
+      return h+'<p class="q-note">You answered “'+esc(ans.m.text)+'”, but it hasn’t reached us yet. <button type="button" class="linkbtn" data-act="q-resend" data-q="'+esc(q.id)+'">Send it again</button></p></div>';
     }
     var opts=arr(q.options);
     if(opts.length){
-      h+='<div class="answers" role="group" aria-labelledby="'+hid+'">'+opts.map(function(o){
+      h+='<div class="aq-opts answers" role="group" aria-labelledby="'+hid+'">'+opts.map(function(o){
         var own=o.value===undefined, note=own?'Say it in your own words':optNote(o);
-        return '<button type="button" class="ans'+(own?' escape':'')+'" data-act="q-opt" data-q="'+esc(q.id)+'" data-opt="'+esc(o.id)+'"'+(busy?' disabled':'')+'>'
+        return '<button type="button" class="aq-opt ans'+(own?' escape':'')+'" data-act="q-opt" data-q="'+esc(q.id)+'" data-opt="'+esc(o.id)+'"'+(busy?' disabled':'')+'>'
           +'<span>'+esc(o.label)+'</span>'+(note?'<small>'+esc(note)+'</small>':'')+'</button>';
       }).join('')+'</div>';
     }
     if(q.allow_text||!opts.length){
       var v=CHAT.qdraft[q.id]||'', tid='qtext-'+q.id;
-      h+='<div class="q-text"><label for="'+esc(tid)+'">'+(opts.length?'Or type your answer':'Your answer')+'</label><div class="r"><input type="text" id="'+esc(tid)+'" data-q="'+esc(q.id)+'" value="'+esc(v)+'" autocomplete="off"'+(busy?' disabled':'')+'><button type="button" class="btn primary" data-act="q-send" data-q="'+esc(q.id)+'"'+(busy?' disabled':'')+'>Answer</button></div>'
-        +'<p class="q-note">I’ll turn what you type into choices for you to pick from.</p></div>';
+      h+='<div class="aq-own q-text"><label class="sr" for="'+esc(tid)+'">'+(opts.length?'Or type your answer':'Your answer')+'</label><input type="text" id="'+esc(tid)+'" data-q="'+esc(q.id)+'" value="'+esc(v)+'" placeholder="'+(opts.length?'Or type your answer':'Your answer')+'" autocomplete="off"'+(busy?' disabled':'')+'><button type="button" class="sp-btn" data-act="q-send" data-q="'+esc(q.id)+'"'+(busy?' disabled':'')+'>Send</button></div>'
+        +'<p class="q-note">We’ll turn what you type into choices for you to pick from.</p>';
     }
     if(busy) h+='<p class="q-note" role="status">Saving your answer…</p>';
-    return h+'</div></div>';
+    return h+'</div>';
   }
 
   // ── the start: one question, one box, the crew standing on it ─────────────
   // Two made-up asks, shown as examples. They fill the box; nothing is sent
   // until you press go.
-  var TRY=['plant-based yoghurt in the Netherlands and Belgium', 'why young people switch mobile network in Spain'];
+  var TRY=[{l:'Plant-based yoghurt, NL & BE', t:'plant-based yoghurt in the Netherlands and Belgium'}, {l:'Mobile switching in Spain', t:'why young people switch mobile network in Spain'}];
   // `by` needs the person. The shell may say who that is; else the chain may
   // (an upload is attributed to them); else we ask their name, and only once
   // the research is about to start without either.
@@ -3331,22 +3521,11 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return '<div class="rs-name rs-askname no-print"><label for="cmp-who">What’s your name?</label><input type="text" id="cmp-who" value="'+esc(CHAT.who)+'" autocomplete="name"'+(CHAT.sending?' disabled':'')+'>'
       +'<p>We put it on what you send, and on the checks you make. This device remembers it.</p></div>';
   }
-  // Who stands on the box, left to right: Ellis greets; the researchers, Sam
-  // and Dara say what they will do when you point at them.
-  function crewBar(){
-    var keys=['extract'].concat(LENSES.map(function(L){ return lensAgent(L.k); }), ['synthesis','drafter']);
-    return '<div class="rs-crew">'+keys.map(function(k, i){
-      if(i===0) return '<span class="rs-m big">'+figK(k, CHAT.sending?'working':'idle')+'</span>';
-      var line='I’m '+given(k)+'. '+((SAYS[k]||[])[0]||''), who=whoOf(k);
-      return '<span class="rs-m'+(k==='drafter'?' big':'')+(i<3?' tl':i>keys.length-4?' tr':'')+'" tabindex="0" role="img" aria-label="'+esc(who+': '+line)+'">'+figK(k,'idle')
-        +'<span class="rs-tip" aria-hidden="true"><span class="say"><span class="who">'+esc(who)+'</span>'+esc(line)+'</span></span></span>';
-    }).join('')+'</div>';
-  }
   var FROM_BRIEF_PROMPT='Research for the brief this started from.';
   // The tool's header, as the mock draws every step: eyebrow, "Research.",
   // what it does, and the 1 Ask · 2 Agents · 3 Report stepper.
   function toolHeadHtml(step, compact){
-    var org=camp().client_org&&camp().client_org.value&&camp().client_org.value.name, nm=CHAT.name||(camp().name&&camp().name.value)||'';
+    var mc=((window.__CLAN__||{}).manifest||{}).client, org=camp().client_org&&camp().client_org.value&&camp().client_org.value.name||(mc&&typeof mc==='object'&&String(mc.name||'').trim())||'', mt=String(((window.__CLAN__||{}).manifest||{}).title||'').trim(), nm=CHAT.name||(camp().name&&camp().name.value)||(titleIsOurs(mt)?'':mt);
     var eb=[org, nm||(step===1?'New question':'')].filter(Boolean).join(' · ');
     var st=['Ask','Agents','Report'].map(function(t, i){ var n=i+1, c=n<step?'done':n===step?'on':'';
       return (i?'<i class="rt-ln" aria-hidden="true"></i>':'')+'<span class="rt-st '+c+'"'+(n===step?' aria-current="step"':'')+'><b>'+n+'</b><small>'+t+'</small></span>'; }).join('');
@@ -3357,7 +3536,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // Lenses, markets and a window before the run (gaps R11). The ask has no
   // field for them until Ellis reads it, so what is picked is said in the
   // request itself, under the question; nothing is picked unless a person does.
-  var MK_OFFER=['IE','GB','NI','US','DE','FR'];
+  var MK_OFFER=['IE','GB','NI','US','DE','FR'], MK_FIRST=3;
+  // The chips' short names, as the mock's row; each says its full lens in its title.
+  var LENS_SHORT={market_structure:'Market', brands_positioning:'Brands', consumer_culture:'Consumer', category_codes:'Codes',
+    rhythm_moments:'Moments', media_spend:'Media', regulation_clearance:'Regulation', effectiveness_evidence:'Effectiveness'};
   function picks(){ return CHAT.picks||(CHAT.picks={lenses:[], markets:[], from:'', to:''}); }
   function picksText(){
     var P=picks(), t=[];
@@ -3367,39 +3549,44 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return t.length?'\n\n'+t.join(' '):'';
   }
   function picksHtml(off){
-    var P=picks();
+    var P=picks(), more=CHAT.mkMore||P.markets.some(function(m){ return MK_OFFER.indexOf(m)>=MK_FIRST; });
+    var mks=more?MK_OFFER:MK_OFFER.slice(0, MK_FIRST);
     return '<div class="rt-picks">'
-      +'<div class="rt-pk"><span class="rt-pl">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1; return '<button type="button" class="rt-chip'+(on?' on':'')+'" data-act="pk-lens" data-k="'+esc(L.k)+'" aria-pressed="'+on+'"'+off+'><i></i>'+esc(L.l)+'</button>'; }).join('')+'</span></div>'
-      +'<div class="rt-pk"><span class="rt-pl">Markets</span><span class="rt-chips">'+MK_OFFER.map(function(m){ var on=P.markets.indexOf(m)!==-1; return '<button type="button" class="rt-mk'+(on?' on':'')+'" data-act="pk-mk" data-k="'+m+'" aria-pressed="'+on+'"'+off+'>'+m+'</button>'; }).join('')+'</span></div>'
+      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(given('judge')||'the crew')+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
+        return '<button type="button" class="rt-chip'+(on?' on':'')+'" data-act="pk-lens" data-k="'+esc(L.k)+'" aria-pressed="'+on+'" title="'+esc(L.l)+'" aria-label="'+esc(L.l)+'"'+off+'>'+esc(LENS_SHORT[L.k]||L.l)+'</button>'; }).join('')+'</span></div>'
+      +'<div class="rt-pk"><span class="rt-pl">Markets</span><span class="rt-chips">'+mks.map(function(m){ var on=P.markets.indexOf(m)!==-1; return '<button type="button" class="rt-mk'+(on?' on':'')+'" data-act="pk-mk" data-k="'+m+'" aria-pressed="'+on+'" title="'+esc(MARKET[m]||m)+'"'+off+'>'+m+'</button>'; }).join('')
+        +(more?'':'<button type="button" class="rt-mk rt-mkmore" data-act="pk-mkmore" aria-label="More markets" title="More markets"'+off+'>+</button>')+'</span></div>'
       +'<div class="rt-pk"><span class="rt-pl">Window</span><span class="rt-win"><input type="text" id="pk-from" inputmode="numeric" maxlength="4" placeholder="2024" value="'+esc(P.from)+'" aria-label="From year"'+off+'> – <input type="text" id="pk-to" inputmode="numeric" maxlength="4" placeholder="2026" value="'+esc(P.to)+'" aria-label="To year"'+off+'></span></div>'
-      +'<p class="rt-pnote">Leave these and Jude picks the lenses from your question. Whatever you pick goes in with it.</p></div>';
+      +'</div>';
   }
   function startHtml(){
+    // Ellis speaks here only when there is something to say: starting, asking your name, or
+    // starting from a brief. The greeting and the crew are on the working screen.
     var hi=CHAT.sending?CHAT.sendStep:CHAT.askWho&&!me()?'Before I start: what’s your name? It goes on everything you send.'
-      :briefUpstream()?'Hi, I’m '+given('extract')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.'
-      :'Hi, I’m '+given('extract')+'! Tell me who the client is and the market. I’ll read anything you add.';
-    var off=CHAT.sending?' disabled':'';
+      :briefUpstream()?'Hi, I’m '+given('extract')+'! I’ll start from the brief this came from: its client, audience and background. Add the market or anything else, or just start.':'';
+    var off=CHAT.sending?' disabled':'', nm=myName();
+    var named=CHAT.showName||CHAT.name;
     return '<div class="rs-start rt-prompt">'
       +toolHeadHtml(1)
-      +'<div class="rt-cols"><div class="rs-stage">'
+      +'<div class="rs-stage">'
       +'<h2 class="rt-q" id="rt-q">What do you need to find out?</h2>'
       +'<div class="rs-box rt-box" id="composer">'
         +'<label class="sr" for="cmp-prompt">What do you need to find out?</label>'
         +'<textarea id="cmp-prompt" rows="5" placeholder="The client, the brand and the market, and the question you need answered"'+off+'>'+esc(CHAT.draft)+'</textarea>'
       +'</div>'
-      +'<div class="rs-under" role="group" aria-labelledby="rs-eg"><span class="rs-eg" id="rs-eg">Try an example</span>'+TRY.map(function(t){ return '<button type="button" class="rs-try" data-act="cmp-try" data-text="'+esc(t)+'" title="Put this example in the box"'+off+'>'+esc(t)+'</button>'; }).join('')+'</div>'
+      +(hi?'<p class="rt-hi" aria-live="polite"><b>'+esc(whoOf('extract'))+'</b> '+esc(hi)+'</p>':'')
+      +'<div class="rs-under" role="group" aria-labelledby="rs-eg"><span class="rs-eg" id="rs-eg">Try an example</span>'+TRY.map(function(t){ return '<button type="button" class="rs-try" data-act="cmp-try" data-text="'+esc(t.t)+'" title="'+esc(t.t)+'"'+off+'>'+esc(t.l)+'</button>'; }).join('')+'</div>'
       +picksHtml(off)
       +askNameHtml()
-      +(CHAT.showName||CHAT.name?'<div class="rs-name"><label for="cmp-name">Working name</label><input type="text" id="cmp-name" value="'+esc(CHAT.name)+'" placeholder="optional" autocomplete="off"></div>':'')
+      +(named?'<div class="rs-name"><label for="cmp-name">Working name</label><input type="text" id="cmp-name" value="'+esc(CHAT.name)+'" placeholder="optional" autocomplete="off"></div>':'')
       +(CHAT.sendErr?'<div class="flag rs-err" role="alert"><div>'+esc(CHAT.sendErr)+'</div></div>':'')
       +'<div class="rt-foot">'
-        +'<button type="button" class="rs-clip rt-add" data-act="cmp-attach" aria-label="Add the client’s files" title="Add the client’s files"'+off+'>+</button><input type="file" id="cmp-file" multiple hidden>'
-        +'<span class="rt-files">'+(CHAT.files.length?CHAT.files.length+' file'+(CHAT.files.length===1?'':'s')+' attached: '+CHAT.files.map(function(f,i){ return '<span class="att"><b>'+esc(f.name)+'</b><button type="button" data-act="cmp-rm" data-i="'+i+'" aria-label="Remove '+esc(f.name)+'"'+off+'>×</button></span>'; }).join(' '):'<b>Got a brief, an email or a deck?</b> Add it, or drop it anywhere on this page.')+'</span>'
-        +'<button type="button" class="rs-go rt-go" data-act="cmp-send"'+off+'>'+(CHAT.sending?'Starting…':'Start research')+'</button>'
+        +'<button type="button" class="rs-clip rt-add" data-act="cmp-attach" aria-label="Add the client’s files" title="Add the client’s brief, email or deck, or drop it anywhere on this page"'+off+'>+</button><input type="file" id="cmp-file" multiple hidden>'
+        +'<span class="rt-files">'+(CHAT.files.length?CHAT.files.length+' file'+(CHAT.files.length===1?'':'s')+' attached: '+CHAT.files.map(function(f,i){ return '<span class="att"><b>'+esc(f.name)+'</b><button type="button" data-act="cmp-rm" data-i="'+i+'" aria-label="Remove '+esc(f.name)+'"'+off+'>×</button></span>'; }).join(' '):'No files attached')
+          +(named?'':' · <button type="button" class="linkbtn" data-act="cmp-name">Give it a working name</button>')
+          +(nm&&!WHO.shell?' · '+signAsHtml():'')+'</span>'
+        +'<button type="button" class="rs-go rt-go" data-act="cmp-send"'+(nm?' title="'+esc('Starts as '+nm)+'"':'')+off+'>'+(CHAT.sending?'Starting…':'Start research')+'</button>'
       +'</div>'
-      +'<div class="rs-more">'+(CHAT.showName||CHAT.name?'':'<button type="button" class="linkbtn" data-act="cmp-name">Give it a working name</button>')+signAsHtml()+'</div>'
-      +'</div>'
-      +'<aside class="rt-side"><div class="rs-hi" aria-live="polite"><span class="say"><span class="who">'+esc(whoOf('extract'))+'</span>'+esc(hi)+'</span></div>'+crewBar()+'</aside>'
       +'</div></div>';
   }
   function renderChat(){
@@ -3418,6 +3605,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       lq=liveQuestion();
       var Q=lq?questions(T).filter(function(x){ return x.q.id===lq.id; })[0]:null;
       el.innerHTML=workHtml(T, Q);
+      placeSphere(runStep(), stageFigs(T));
     }
     if(keep){ var n=$(keep.id); if(n){ try{ n.focus({preventScroll:true}); if(keep.s!=null) n.setSelectionRange(keep.s, keep.e); }catch(e){} } }
     // A question that has just opened takes the focus, once: the agent is asking.
@@ -3428,6 +3616,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         if(qc.scrollIntoView) qc.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); }
     }
     var ta=$('cmp-prompt'); if(ta) grow(ta);
+    refreshBar();
   }
   function calm(){ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
   // The box reads as one line and grows with a long ask, to a few lines.
@@ -4189,7 +4378,21 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var items=[{kind:'status', label:st.label, tone:st.tone, locked:st.locked}], g=has&&!lk?gateWords():'';
     // Continue in begins with why the report is not brief-ready yet (the mock, gaps L3).
     if(g) items.unshift({kind:'gate', label:g, tone:'warn'});
+    var md=barMode(); if(md) items.unshift(md);
     return items;
+  }
+  // The mock's bar per step: the name alone at the ask; the name and the run's step while the crew
+  // work (and what became of a run that left no report); the report's own bar once there is one.
+  function barMode(){
+    var j=CHAT.job, fresh=!thread().length&&!Object.keys(camp()).length;
+    if(fresh&&!j) return {kind:'mode', mode:'ask'};
+    if(j&&(jobActive()||liveQuestion())) return {kind:'mode', mode:'working', label:liveQuestion()?'Needs you · Step '+(runStep()+1)+'/'+PLAN.length:'Working · Step '+(runStep()+1)+'/'+PLAN.length};
+    if(j&&!isObj(D().report)) return {kind:'mode', mode:'working', label:j.state==='done'?'Done':'Stopped'};
+    return null;
+  }
+  function refreshBar(){
+    try{ var r=D().report, has=isObj(r), lk=reportLocked(), stale=has?reportStale(r):[];
+      sendBar(reportStatus(r, lk, stale.length>0, has?openChecks():0), has, lk); }catch(e){}
   }
   function gateWords(){
     var ids=Object.keys(fnds()), open=checks().filter(function(c){ return c.open; });
@@ -4275,15 +4478,31 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return [n.label, n.meta||'gap'];
   }
   function mapSvg(M){
-    var NW=158, NH=40, GX=44, GY=8, TOP=26, PAD=8;
-    var tallest=Math.max.apply(null, MAP_COLS.map(function(c){ return M.cols[c[0]].length; }).concat([1]));
-    var H=TOP+tallest*(NH+GY)+PAD, W=PAD*2+MAP_COLS.length*NW+(MAP_COLS.length-1)*GX, pos={};
-    var h='';
+    var NW=148, NH=40, GX=30, GY=8, TOP=26, PAD=8, ROW=NH+GY;
+    var pos={}, h='', bottom=TOP;
+    // Pins are the spine, in the order of what they feed (used first). Each other box sits level with
+    // what it is joined to (the mean of its links), never over another: findings and summary beside the
+    // pins they rest on, sources beside the pins they gave, as the mock's map reads left to right.
+    var up={}, dn={}; M.edges.forEach(function(e){ (dn[e.from]=dn[e.from]||[]).push(e.to); (up[e.to]=up[e.to]||[]).push(e.from); });
+    function colX(ci){ return PAD+ci*(NW+GX); }
+    function place(list, want){
+      var y=TOP; list.map(function(n, i){ return {n:n, w:want(n, i), i:i}; })
+        .sort(function(a, b){ return a.w-b.w||a.i-b.i; })
+        .forEach(function(o){ y=isFinite(o.w)?Math.max(y, o.w):y; pos[o.n.id]={y:y}; y+=ROW; bottom=Math.max(bottom, y); });
+    }
+    function mean(ids){ var ys=(ids||[]).map(function(k){ return pos[k]&&pos[k].y; }).filter(function(v){ return v!=null; });
+      return ys.length?ys.reduce(function(a, b){ return a+b; }, 0)/ys.length:Infinity; }
+    place(M.cols.pin, function(n, i){ return TOP+i*ROW; });
+    place(M.cols.finding, function(n){ return mean(up[n.id]); });
+    place(M.cols.summary, function(n){ return mean(up[n.id]); });
+    place(M.cols.source, function(n){ return mean(dn[n.id]); });
     MAP_COLS.forEach(function(c, ci){
-      var list=M.cols[c[0]], x=PAD+ci*(NW+GX), y0=TOP+(tallest-list.length)*(NH+GY)/2;
-      h+='<text class="col" x="'+x+'" y="14">'+esc(c[1])+' · '+list.filter(function(n){ return n.kind!=='gap'; }).length+'</text>';
-      list.forEach(function(n, i){ pos[n.id]={x:x, y:y0+i*(NH+GY)}; });
+      var list=M.cols[c[0]], real=list.filter(function(n){ return n.kind!=='gap'; }), used=real.filter(function(n){ return n.used&&!n.out; }).length;
+      var cnt=c[0]==='summary'?real.length+' line'+(real.length===1?'':'s'):used<real.length&&c[0]!=='pin'?used+' of '+real.length:String(real.length);
+      h+='<text class="col" x="'+colX(ci)+'" y="14">'+esc(c[1])+' · '+esc(cnt)+'</text>';
+      list.forEach(function(n){ pos[n.id].x=colX(ci); });
     });
+    var H=bottom+PAD, W=PAD*2+MAP_COLS.length*NW+(MAP_COLS.length-1)*GX;
     var e='';
     M.edges.forEach(function(ed, i){ var a=pos[ed.from], b=pos[ed.to]; if(!a||!b) return;
       var x1=a.x+NW, y1=a.y+NH/2, x2=b.x, y2=b.y+NH/2, mx=(x1+x2)/2;
@@ -4292,7 +4511,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     Object.keys(pos).forEach(function(id){ var n=M.nodes[id], p=pos[id], L=mapLines(n);
       var cls='n'+(n.kind==='gap'?' gap':n.out?' out':!n.used?' unused':'')+(VIEW.sel===id?' sel':'');
       nn+='<g class="'+cls+'" tabindex="0" role="button" data-map="'+esc(id)+'" transform="translate('+p.x+' '+p.y+')" aria-label="'+esc(L[0]+' — '+L[1])+'"><title>'+esc(n.label)+'</title>'
-        +'<rect width="'+NW+'" height="'+NH+'" rx="4"/><text class="t" x="8" y="16">'+esc(clipT(L[0], 24))+'</text><text class="m" x="8" y="31">'+esc(clipT(L[1], 30))+'</text></g>'; });
+        +'<rect width="'+NW+'" height="'+NH+'" rx="4"/><text class="t" x="8" y="16">'+esc(clipT(L[0], 22))+'</text><text class="m" x="8" y="31">'+esc(clipT(L[1], 28))+'</text></g>'; });
     return '<svg class="map-svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="group" aria-label="Evidence map">'+h+e+nn+'</svg>';
   }
   function renderMap(){
@@ -5131,6 +5350,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       case 'cmp-rm': CHAT.files.splice(+b.getAttribute('data-i'),1); renderChat(); break;
       case 'cmp-send': doSend(); break;
       case 'cmp-try': var tp=$('cmp-prompt'); CHAT.draft=b.getAttribute('data-text')||''; if(tp){ tp.value=CHAT.draft; grow(tp); tp.focus(); try{ tp.setSelectionRange(tp.value.length, tp.value.length); }catch(x){} } break;
+      case 'pk-mkmore': CHAT.mkMore=true; renderChat(); var mm=document.querySelector('[data-act=pk-mk][data-k="'+MK_OFFER[MK_FIRST]+'"]'); if(mm) mm.focus(); break;
       case 'pk-lens': case 'pk-mk': var PK=picks(), pl=act==='pk-lens'?PK.lenses:PK.markets, pkk=b.getAttribute('data-k'), pix=pl.indexOf(pkk); if(pix===-1) pl.push(pkk); else pl.splice(pix,1); renderChat(); break;
       case 'cmp-name': CHAT.showName=true; renderChat(); var ni=$('cmp-name'); if(ni) ni.focus(); break;
       case 'chat-retry': doRetry(); break;
@@ -5144,6 +5364,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       case 'q-send': var qi=$('qtext-'+b.getAttribute('data-q')); doAnswer(b.getAttribute('data-q'), null, qi?qi.value:''); break;
       case 'q-resend': doResend(b.getAttribute('data-q')); break;
       case 'report-refresh': doRefreshReport(); break;
+      case 'rt-skip': if(isObj(D().report)&&!jobActive()&&!liveQuestion()){ document.body.classList.remove('show-run'); var rp=$('report'); if(rp&&!rp.hidden) rp.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); }
+        else toast(isObj(D().report)?'The report opens here as soon as this run ends.':'The report isn’t written yet. It opens here by itself as soon as it is.'); break;
+      case 'rt-tiles': var td=b.closest('details'); CHAT.tilesOpen=!(td&&td.open); break;
       case 'rt-back': var ak=$('asked'); if(ak){ ak.open=true; CHAT.sheetOpen=true; ak.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
       case 'show-run': document.body.classList.toggle('show-run'); var st=$('start'); if(st&&document.body.classList.contains('show-run')) st.scrollIntoView({block:'start',behavior:'smooth'}); break;
       case 'goto-confirm': gotoConfirm(b.getAttribute('data-field')); break;
