@@ -63,3 +63,26 @@ export function loadScene(): Promise<void> {
     : import('../../../templates/shared/agent-sphere/scene.js').then(() => undefined, () => undefined)
   return scene
 }
+
+// The scene's one canvas is fixed over the page, so it must sit above the
+// layer each sphere lives in (the bar is z 30-50, the Decisions drawer 85, a
+// modal 130), or that layer hides it. Each mounted sphere says its layer; the
+// canvas takes the highest, plus one.
+const layers = new Map<HTMLElement, number>()
+function layerOf(el: HTMLElement): number {
+  let z = 0
+  for (let a: HTMLElement | null = el; a && a !== document.body; a = a.parentElement) {
+    const n = parseInt(getComputedStyle(a).zIndex, 10)
+    if (!Number.isNaN(n)) z = Math.max(z, n)
+  }
+  return z
+}
+function lift() {
+  const c = (globalThis as unknown as { NapkinScene?: { canvas?: HTMLCanvasElement } }).NapkinScene?.canvas
+  if (c) c.style.zIndex = String(Math.max(3, ...layers.values()) + 1)
+}
+/** A sphere mounted in `el` (or gone, `on` false): the canvas follows the layers in use. */
+export function layer(el: HTMLElement, on: boolean) {
+  if (on) layers.set(el, layerOf(el)); else layers.delete(el)
+  lift()
+}

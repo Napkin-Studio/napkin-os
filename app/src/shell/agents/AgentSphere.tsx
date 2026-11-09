@@ -9,7 +9,7 @@
 
 import { useEffect, useRef } from 'react'
 import './AgentSphere.css'
-import { loadScene, roles, type SphereHandle, type SphereState } from './engine'
+import { layer, loadScene, roles, type SphereHandle, type SphereState } from './engine'
 
 export interface AgentSphereProps {
   /** A role, or anything that names an agent (a stage id, a stored actor). */
@@ -38,9 +38,9 @@ export default function AgentSphere({ agent, size = 28, state = 'idle', progress
     void loadScene().then(() => {
       if (gone || !box.current) return
       const h = roles.mount(el, { agent: role, state, progress, next, size })
-      if (h.live) { el.setAttribute('data-live', ''); view.current = h } else h.destroy()
+      if (h.live) { el.setAttribute('data-live', ''); view.current = h; layer(el, true) } else h.destroy()
     })
-    return () => { gone = true; view.current?.destroy(); view.current = null; el.removeAttribute('data-live') }
+    return () => { gone = true; if (view.current) layer(el, false); view.current?.destroy(); view.current = null; el.removeAttribute('data-live') }
     // a new size is a new view; the rest is told to the live one below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size])

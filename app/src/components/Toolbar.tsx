@@ -190,7 +190,7 @@ function CrewHere({ crew }: { crew: Crew }) {
     <span className="tb-crew" id="tb-crew" role="group" aria-label={said} title={said} data-testid="crew">
       {crew.people.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
       {crew.working && (
-        <i className="cw ag" data-testid="agent-working" data-agent={roles.of(crew.agent) || 'orchestrator'} title={`${roles.name(crew.agent ?? '')} · ${crew.working}`} aria-hidden>
+        <i className="cw ag" data-testid="agent-working" data-agent={roles.of(crew.agent) || 'orchestrator'} title={`${roles.name(crew.agent ?? '')} at work`} aria-hidden>
           <AgentSphere agent={crew.agent ?? 'orchestrator'} size={26} state="working" progress={crew.progress ?? undefined} label="" />
         </i>
       )}
