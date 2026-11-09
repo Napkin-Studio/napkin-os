@@ -1523,3 +1523,29 @@ upstream:
         v.attention
     );
 }
+
+// B4: a link's address is `<doc>#upstream.<id>`; it reads by the linked
+// document's name, never as "Upstream › 9dcfb8d6 09a8…".
+#[test]
+fn a_linked_document_reads_by_its_name_never_its_id() {
+    let chain = format!(
+        "decisions:
+- id: d_attach
+  kind: edit
+  agent: human
+  actor: human:u_a
+  action: attach
+  targets: ['{DOC}#upstream.{UP}']
+  rationale: Took it at v1.
+  timestamp: 2026-11-09T02:00:00Z
+"
+    );
+    let data = format!("upstream:\n  {UP}:\n    project_name: Ferryman Light launch\n");
+    let doc = doc_with(&[(CHAIN_PATH, &chain), ("shared/data.yaml", &data)]);
+    let v = decisions(&doc).unwrap();
+    assert_eq!(
+        v.decisions[0].targets[0].label,
+        "Linked · “Ferryman Light launch”"
+    );
+    assert!(!v.decisions[0].targets[0].label.contains(UP));
+}

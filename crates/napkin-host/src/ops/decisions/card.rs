@@ -121,6 +121,7 @@ pub fn source_cards(
         sources: members_by_id(clan, members::SOURCES),
         chain: &chain,
         carried: super::carried_home(clan, &chain),
+        titles: super::upstream_titles(clan),
     };
 
     let carried = clan.manifest().carried().cloned();

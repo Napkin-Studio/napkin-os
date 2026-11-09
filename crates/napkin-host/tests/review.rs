@@ -1971,7 +1971,13 @@ fn a_field_citing_a_superseded_finding_is_flagged_until_it_moves() {
     };
     let t = flags();
     assert_eq!(t.len(), 1, "{t:?}");
-    assert!(t[0].contains("superseded with fi_01JA0F3C"), "{}", t[0]);
+    // Named by what each finding says, never by its id (B4).
+    assert!(
+        t[0].contains("replaced with the finding “Frozen is growing in value”"),
+        "{}",
+        t[0]
+    );
+    assert!(!t[0].contains("fi_"), "{}", t[0]);
     // Moved to the replacement: no longer flagged.
     cite(&["fi_01JA0F3C"]);
     assert!(flags().is_empty());

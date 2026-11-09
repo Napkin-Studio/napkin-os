@@ -327,6 +327,7 @@ pub fn decisions_for(doc: &Document, viewer: Option<&str>) -> HostResult<Decisio
         sources: members_by_id(clan, members::SOURCES),
         chain: &chain,
         carried: carried_home(clan, &chain),
+        titles: upstream_titles(clan),
     };
 
     // Newest first, as the chain is written. A stamp is shown, never used to
@@ -446,6 +447,33 @@ struct Lookup<'a> {
     /// (`lineage.carried.last_decision`). A bare path on a decision from there
     /// is the parent's, not this document's.
     carried: Option<(String, usize)>,
+    /// What each document this one carries or links is called, by document
+    /// id: a link's title as taken (`lineage.attached`), the spun-off-from
+    /// title the hop recorded. An address under `upstream.<id>` reads by it.
+    titles: BTreeMap<String, String>,
+}
+
+/// [`Lookup::titles`] from the manifest.
+fn upstream_titles(clan: &clan_sdk::ClanFile) -> BTreeMap<String, String> {
+    let m = clan.manifest();
+    let mut out = BTreeMap::new();
+    if let (Some(c), Some(l)) = (m.carried(), m.lineage.as_ref()) {
+        // `spun off from "<title>" into …`, as the SDK writes the hop.
+        if let Some(t) = l
+            .delta
+            .strip_prefix("spun off from \"")
+            .and_then(|r| r.split_once("\" into").map(|(t, _)| t))
+            .filter(|t| !t.trim().is_empty())
+        {
+            out.insert(c.document_id.clone(), t.to_string());
+        }
+    }
+    for a in m.attached() {
+        if let Some(t) = a.title.as_deref().filter(|t| !t.trim().is_empty()) {
+            out.insert(a.carried.document_id.clone(), t.to_string());
+        }
+    }
+    out
 }
 
 /// Where the parent's decisions start in `chain`, for [`Lookup::carried`].
@@ -624,6 +652,27 @@ impl<'a> Lookup<'a> {
         }
         if let Some(id) = whole("agents") {
             return (format!("Agent branch · {id}"), "branch");
+        }
+        // A linked or carried document as a whole: by its title, never its id.
+        if let Some(id) = path.strip_prefix(&format!("{UPSTREAM_KEY}.")) {
+            if !id.contains(['.', '[']) {
+                // Its frozen copy names it too: a brief's project, a research's campaign.
+                let frozen = self.data_for(id).and_then(|d| {
+                    d.get("project_name")
+                        .and_then(Value::as_str)
+                        .or_else(|| d.pointer("/campaign/name/value").and_then(Value::as_str))
+                        .filter(|t| !t.trim().is_empty())
+                        .map(String::from)
+                });
+                let name = self
+                    .titles
+                    .get(id)
+                    .cloned()
+                    .or(frozen)
+                    .map(|t| format!("“{t}”"))
+                    .unwrap_or_else(|| "the document it rests on".to_string());
+                return (format!("Linked · {name}"), "field");
+            }
         }
         let segs = segments(path);
         match segs.as_slice() {
@@ -957,6 +1006,7 @@ pub(crate) fn fields_citing(
         sources: BTreeMap::new(),
         chain: &chain,
         carried: carried_home(clan, &chain),
+        titles: upstream_titles(clan),
     };
     let wanted: BTreeMap<&str, &Value> = findings
         .iter()
@@ -1317,14 +1367,22 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
                 .filter(|d| ctx.index_of(d).is_some())
                 .map(String::from)
         };
+        // A finding by what it says, never its id (people read this).
+        let said = |x: &str| {
+            ctx.findings
+                .get(x)
+                .and_then(|f| str_of(f, "statement"))
+                .map(|t| format!("the finding “{}”", clip_words(t, 80)))
+                .unwrap_or_else(|| "a finding".to_string())
+        };
         match f.pointer("/superseded_by/finding").and_then(Value::as_str) {
             Some(to) if str_of(f, "status") == Some("superseded") => (
                 by("superseded_by"),
-                format!("finding {id}, which a review superseded with {to}"),
+                format!("{}, which a review replaced with {}", said(id), said(to)),
             ),
             _ => (
                 by("rejection"),
-                format!("finding {id}, which a reviewer rejected"),
+                format!("{}, which a reviewer rejected", said(id)),
             ),
         }
     };
@@ -2365,3 +2423,14 @@ pub use card::{source_cards, CarriedFrom, Review, SourceCard, ORIGINS};
 
 #[cfg(test)]
 mod tests;
+
+/// `s` cut at a word to at most `n` characters, with an ellipsis when cut.
+fn clip_words(s: &str, n: usize) -> String {
+    let s = s.trim();
+    if s.chars().count() <= n {
+        return s.to_string();
+    }
+    let cut: String = s.chars().take(n).collect();
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(a, _)| a);
+    format!("{}…", cut.trim_end_matches([',', ';', ':', '.']))
+}
