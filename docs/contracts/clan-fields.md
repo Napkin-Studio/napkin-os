@@ -218,7 +218,7 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
   `{kind: 'status', label, tone?: 'ok' | 'warn', locked?}` (the document's
   state in the app's own words: "Draft", "Ready to lock"; the OS bar's app slot
   shows it in its pill, in place of the one the shell words from the lock).
-  Text only, never markup; a label is at most 28 characters; at most 6
+  Text only, never markup; a label is at most 28 characters; at most 10
   buttons, 4 chips and 1 status; ids are unique strings. An item the bar would
   refuse, or a kind it does not know, is left out and the rest are drawn, so a
   kind added later does not break an older shell. The bar draws the first two

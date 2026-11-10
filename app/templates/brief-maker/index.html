@@ -422,20 +422,7 @@
   .earlier li{font-size:12.5px;color:var(--muted)}
   .earlier li b{color:var(--text);font-weight:600}
 
-  .edit{margin-top:8px;display:flex;flex-direction:column;gap:8px}
-  .edit textarea,.edit input[type=text]{width:100%;background:var(--surface);border:1px solid var(--faint);border-radius:var(--r-card);padding:10px 12px;color:var(--text);font-size:15px;outline:none;transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
-  .edit textarea:focus,.edit input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
-  .edit textarea{min-height:76px;resize:vertical;font-family:var(--fieldFont);line-height:1.55}
-  .edit .rat{border-color:var(--border);font-size:13px}
-  .edit textarea.rat{min-height:64px;font-family:inherit}
-  .ratlab{display:flex;flex-direction:column;gap:4px}
-  .ratlab>span{font-size:12.5px;font-weight:600;color:var(--muted)}
   .editrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .editrow label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
-  .editrow input[type=color]{width:26px;height:26px;border:1px solid var(--border);border-radius:50%;padding:1px;background:none;cursor:pointer}
-  .save{font-size:12.5px;font-weight:600;border-radius:var(--r-pill);padding:7px 15px;cursor:pointer;border:none;background:var(--primary);color:var(--primaryText)}
-  .cancel{font-size:12.5px;font-weight:500;border-radius:var(--r-pill);padding:6px 13px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted)}
-  .cancel:hover{color:var(--text);border-color:var(--faint)}
   .muted{color:var(--faint);font-size:12.5px}
 
   .boards{display:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px}
@@ -633,13 +620,6 @@
   /* Nothing in the side tab is wider than it: a long chip ("Verified by … · 9 November 2026") wraps. */
   .stab>*{min-width:0}
   .stab .clf-sc-k,.stab .clf-sc-r{white-space:normal;overflow-wrap:anywhere}
-  .splitbtn{position:relative;display:flex;gap:2px}
-  .sb-main{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;border:1px solid var(--go-2);border-radius:8px 0 0 8px;background:var(--go);color:var(--goText);font-weight:600;cursor:pointer}
-  .sb-more{width:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--go-2);border-radius:0 8px 8px 0;background:var(--go);color:var(--goText);cursor:pointer}
-  .smenu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:220px;display:grid;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:var(--lift)}
-  .smi{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 10px;border:0;border-radius:6px;background:none;text-align:left;cursor:pointer}
-  .smi:hover,.smi:focus-visible{background:var(--tint)}
-  .tabacts{display:flex;gap:16px;flex-wrap:wrap}
   .tlink{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0;border:0;background:none;color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
   .tlink.armed{color:var(--create-ink)}
   .tsec{display:grid;gap:10px;padding-top:14px;border-top:1px solid var(--rule)}
@@ -663,8 +643,6 @@
   .sp-acts button{min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-weight:600;font-size:13px;cursor:pointer}
   .sp-acts button[aria-pressed="true"]{background:var(--amber-soft);color:var(--amber-ink);border-color:transparent}
   .sp-acts button:disabled{opacity:.5;cursor:default}
-  .selpart > details{border-top:1px solid var(--rule);padding-top:8px}
-  .selpart > details > summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);min-height:28px;display:flex;align-items:center}
   .tk{font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);margin-top:6px}
   .tk2{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
   .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -923,17 +901,6 @@
   #structured .upnote{display:block;margin:0;padding:0;border:1px solid color-mix(in srgb,var(--ag-base) 50%,var(--nd-line));border-radius:9px;background:color-mix(in srgb,var(--ag-base) 5%,var(--nd-paper));font-size:13px;line-height:1.55;box-shadow:none}
   #structured .upnote .nk-ag{display:none}
   /* Save · PDF, split */
-  #structured .splitbtn{display:grid;grid-template-columns:1fr 44px;gap:2px}
-  #structured .sb-main{min-height:38px;height:38px;gap:7px;padding:0 16px;border:1px solid var(--ag-act);border-radius:4px 0 0 4px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px/1.55 var(--font-ui);box-shadow:none}
-  #structured .sb-main .ic{display:none}
-  #structured .sb-more{width:auto;min-height:38px;border:0;border-radius:0 6px 6px 0;background:var(--ag-act);color:var(--ag-act-ink);box-shadow:none}
-  #structured .sb-more:hover,#structured .sb-main:hover{filter:brightness(1.08)}
-  #structured .sb-more .ic{width:16px;height:16px}
-  #structured .smenu{border-color:var(--nd-line);background:var(--nd-card);border-radius:8px;box-shadow:0 1px 2px rgba(20,20,19,.06),0 4px 12px -4px rgba(20,20,19,.08)}
-  #structured .smi{font-size:13px;min-height:34px}
-  #structured .smi .ic{display:none}
-  #structured .tabacts{display:flex;gap:16px}
-  #structured .tabacts .ic{display:none}
   /* the state: Brief · chip · version line */
   .b-state{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:12px;border-top:1px solid var(--nd-line)}
   .b-state > b{display:flex;align-items:center;font:700 13.5px var(--font-ui);color:var(--nd-ink)}
@@ -949,7 +916,6 @@
   #structured .stab .lock:hover:not(:disabled){border-color:var(--nd-ink)}
   #structured .stab .lock:disabled{cursor:default;opacity:1}
   #structured .stab .lock.locked{background:var(--nd-paper);color:var(--nd-ink)}
-  #lockedBadge{display:none!important}
   /* the gate: what has to settle before it can lock */
   #structured .locklist{display:block;margin:0;padding:2px 0 2px 12px;border-left:2px solid var(--nd-warn);font-size:13px;line-height:1.55}
   #structured .locklist > .nk-ag{display:none}
@@ -1035,7 +1001,6 @@
   #structured .side-part .sp-acts{display:flex;flex-wrap:wrap;gap:6px}
   .sp-btn,#structured .side-part .sp-acts button{display:inline-flex;align-items:center;gap:5px;height:28px;min-height:28px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:600 12px var(--font-ui);cursor:pointer;box-shadow:none}
   .sp-btn:hover,#structured .side-part .sp-acts button:hover:not(:disabled){border-color:var(--nd-ink)}
-  #structured .side-part .sp-acts button.sp-edit{color:var(--nd-alert);border-color:color-mix(in srgb,var(--nd-alert) 40%,transparent)}
   #structured .side-part .sp-acts button[aria-pressed="true"]{background:var(--nd-ink);color:var(--nd-card);border-color:var(--nd-ink)}
   #structured .side-part .sp-acts button:disabled{opacity:.45;cursor:not-allowed}
   #structured .side-part .sp-acts .ic{width:12px;height:12px}
@@ -1064,12 +1029,6 @@
   .needs-box .note-v p,.needs-box .note-v ul{font-size:12.5px;color:var(--nd-ink-soft);margin:2px 0}
   .needs-box .note-v .muted{font-size:12px;color:var(--nd-muted)}
   .needs-box .note-v .editrow,.needs-box .note-p .editrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-  .needs-box button.act-fix,.needs-box .note-p .save{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;margin-top:4px}
-  .needs-box .act-override,.needs-box .note-p .cancel{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--nd-line-strong);background:var(--nd-card);color:var(--nd-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;text-decoration:none}
-  /* A list part's line, selected: lit on the sheet; in the panel only its words and where it sits */
-  .sp-line{display:grid;gap:4px;padding:4px 0 2px}
-  .sp-line .rsp-k{display:flex;align-items:baseline}
-  .sp-line .rsp-k em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:.02em;text-transform:none}
   /* Where it came from (ClanFields.partView), in the shell's tokens, light and dark */
   .selpart .clf-rv,.selpart .clf-insp{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper);--clf-mono:var(--font-mono)}
   :root[data-color-scheme="dark"] .selpart .clf-rv,:root[data-color-scheme="dark"] .selpart .clf-insp{--clf-paper:var(--nd-card)}
@@ -1077,12 +1036,9 @@
   .selpart .clf-insp{background:var(--nd-card);--clf-soft:color-mix(in srgb,var(--nd-ink) 5%,var(--nd-card))}
   .selpart .clf-insp .clf-rv{min-width:0;max-width:100%}
   .selpart .clf-insp .clf-rv .rv-title{font-size:17px}
-  .sp-line .clf-rv .rv-title{font-size:15px;margin:0}
-  .sp-head .rv-pname{font:700 14px var(--font-ui);letter-spacing:-.01em;color:var(--nd-ink)}
-  .sp-head .rv-meta{margin:0}
   .sp-prov:empty{display:none}
   .selpart > *{min-width:0}
-  .sp-prov .clf-rv,.sp-head .clf-rv{min-width:0;max-width:100%}
+  .sp-prov .clf-rv{min-width:0;max-width:100%}
   .sp-prov .clf-rv > .rv-sec:first-child,.sp-prov .clf-rv > .rv-none:first-child{margin-top:0}
   .sp-prov .rv-none{font-size:12.5px;margin:0}
   #fields clan-field.clf-ln[as="item"].sp-on{background:color-mix(in srgb,var(--clf-hl) 55%,transparent);box-shadow:0 2px 0 currentColor}
@@ -1134,7 +1090,7 @@
   .nb-in:focus{outline:2px solid var(--ag-act);outline-offset:0}
   .b-gate-l .lkitem .x{text-decoration:inherit}
   .b-gate-l .lkitem small.k{display:inline;margin:0 0 0 6px;text-decoration:none;font:500 9.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
-  #structured .tabacts:not(:has(> :not([hidden]))),#structured .b-lockacts:not(:has(> :not([hidden]))){display:none}
+  #structured .b-lockacts:not(:has(> :not([hidden]))){display:none}
   #structured .b-lockacts{display:grid;gap:10px;justify-items:start}
   #structured .b-reopen{font-size:12.5px}
   #structured .side-part .sp-acts button.sp-conf[aria-pressed="true"]::before{content:"● ";white-space:pre}
@@ -1147,6 +1103,108 @@
   #structured .sheettab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:16px}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok,#structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok{color:#141413}
+  /* ── the side tab design, "one thing at a time" (features/brief-new-ui.clan) ──
+     The BRIEF view while nothing is selected, the PART view while a part is: never both. One
+     primary per view (Lock, Edit or Done: .btn-primary); every other button is the shell's .sp-btn,
+     every quiet link a .side-link. */
+  #structured .bview{display:flex;flex-direction:column;gap:16px;min-width:0}
+  #structured .bview[hidden],#structured .bview > [hidden],#structured .b-lockslot > [hidden]{display:none!important}
+  #stab:has(> #selPart:not([hidden])) > #briefView{display:none!important}
+  .b-head{display:grid;gap:2px}
+  #structured .b-head .b-state{padding-top:0;border-top:0}
+  .b-head .status{font-size:12px;line-height:1.45;color:var(--nd-muted)}
+  .b-head .status:empty{display:none}
+  .b-lockslot{display:grid;gap:8px}
+  .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;min-height:28px;padding:0 14px;border:1px solid var(--ag-act);border-radius:6px;background:var(--ag-act);color:var(--ag-act-ink);font:600 12.5px var(--font-ui);cursor:pointer;box-shadow:none;text-shadow:none}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.08)}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary:focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
+  #structured .stab .lock.btn-primary{height:38px;min-height:38px;border:1px solid var(--ag-act);border-radius:6px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui)}
+  #structured .stab .lock.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  #structured .stab .lock.btn-primary.locked{background:var(--nd-paper);color:var(--nd-ink);border-color:var(--nd-line)}
+  .b-lockwhy{font-size:12px;color:var(--nd-muted);text-align:center}
+  .b-locked{font:600 13px var(--font-ui);color:var(--nd-ok)}
+  #structured .b-lockacts{display:flex;flex-wrap:wrap;gap:6px}
+  #structured .b-fold{display:block;padding:0;border:0}
+  #structured .b-fold > summary{cursor:pointer;font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .b-fold > summary small{text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;font-size:.95em}
+  #structured .b-fold-b{display:grid;gap:14px;margin-top:12px}
+  #structured .b-fold .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #structured .b-fold .lgrid + .lgrid{margin-top:10px}
+  #structured .b-fold .tk2{margin:0 0 5px;font:600 10.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .b-fold .seg{display:flex;border:1px solid var(--nd-line);border-radius:4px;background:var(--nd-card);overflow:hidden}
+  #structured .b-fold .seg button{flex:1;height:30px;min-height:30px;padding:0 4px;border:0;background:transparent;color:var(--nd-muted);font:600 12px/1.55 var(--font-ui)}
+  #structured .b-fold .seg button[aria-pressed="true"]{background:var(--ag-act);color:var(--ag-act-ink)}
+  .side-hint[hidden]{display:none}
+  /* the part view: crumb, chips, actions, Place on page, Your call, Built from, Why, History */
+  /* The part view is the tab itself, not a card inside it. */
+  #structured .selpart.side-part{gap:12px;padding:0;border:0;border-radius:0;background:none}
+  .sp-crumb{display:flex;align-items:center;gap:6px;min-width:0;font:12px var(--font-mono);color:var(--nd-muted)}
+  .sp-back{all:unset;box-sizing:border-box;cursor:pointer;font:600 12.5px var(--font-ui);color:var(--nd-ink);white-space:nowrap;text-decoration:underline;text-decoration-color:var(--nd-line);text-underline-offset:3px}
+  .sp-back:hover{text-decoration-color:currentColor}
+  .sp-back:focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
+  .sp-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 12.5px var(--font-ui);color:var(--nd-ink)}
+  .sp-saved{font:600 11px var(--font-ui);color:var(--nd-ok)}
+  .sp-saved[hidden]{display:none}
+  #structured .sp-calls{font-size:11.5px;white-space:nowrap;color:var(--nd-warn)}
+  .sp-ready{margin:0;font-size:12.5px;color:var(--nd-ok)}
+  .sp-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .sp-chips:empty{display:none}
+  .sp-chip-c{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1px solid var(--nd-line);font:600 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted);white-space:nowrap}
+  .sp-chip-c.ok{color:var(--nd-ok);border-color:color-mix(in srgb,var(--nd-ok) 45%,transparent)}
+  .sp-chip-c.warn{color:var(--nd-warn);border-color:color-mix(in srgb,var(--nd-warn) 45%,transparent)}
+  .sp-chip-c.on{background:var(--nd-ink);color:var(--nd-card);border-color:var(--nd-ink)}
+  #structured .side-part .sp-acts button.btn-primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+  #structured .side-part .sp-acts button.btn-primary:hover:not(:disabled){border-color:var(--ag-act);filter:brightness(1.08)}
+  .sp-keys{align-self:center;font:11px var(--font-mono);color:var(--nd-muted)}
+  .sp-reason{display:grid;gap:4px;font:600 12px var(--font-ui);color:var(--nd-muted)}
+  .sp-reason textarea,.sp-regen textarea{width:100%;box-sizing:border-box;min-height:48px;padding:6px 8px;border:1px solid var(--nd-line-strong,var(--nd-line));border-radius:6px;background:var(--nd-card);color:var(--nd-ink);font:400 13px/1.45 var(--font-ui);resize:vertical}
+  .sp-reason textarea:focus,.sp-regen textarea:focus,.sp-lf select:focus{outline:2px solid var(--ag-act);outline-offset:0}
+  .sp-note{margin:0;font-size:12px;line-height:1.45;color:var(--nd-muted)}
+  .sp-err{margin:0;font-size:12.5px;color:var(--nd-alert)}
+  .sp-regen{display:grid;gap:6px;padding:10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper)}
+  .sp-regen label{font:600 12px var(--font-ui);color:var(--nd-ink)}
+  .sp-regen label .muted{font-weight:400;color:var(--nd-muted)}
+  .sp-presets{display:flex;flex-wrap:wrap;gap:4px}
+  .sp-regen .sp-btn.sp-chip{height:24px;min-height:24px;padding:0 8px;font-size:11.5px}
+  .sp-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .sp-row .muted{font-size:11.5px;color:var(--nd-muted)}
+  .sp-l{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0;padding:8px 0;border-top:1px solid var(--nd-line);border-bottom:1px solid var(--nd-line)}
+  .sp-lf{display:flex;align-items:center;gap:5px;min-width:0;font:600 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted);white-space:nowrap}
+  .sp-lf select{height:28px;min-width:0;max-width:104px;padding:0 4px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-card);color:var(--nd-ink);font:600 12px var(--font-ui);letter-spacing:0;text-transform:none}
+  .sp-mv{margin-left:auto;display:flex;gap:4px;flex:none}
+  #structured .sp-mv .sp-btn{width:28px;padding:0;justify-content:center}
+  .sp-hist{justify-self:start}
+  .sp-hist[hidden]{display:none!important}
+  /* Built from, compact: a row per thing it rests on, a value badge, the top five then All n. */
+  .sp-prov .pv-bfl{display:grid;gap:4px}
+  .sp-prov .pv-bf{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;align-items:center;width:100%;box-sizing:border-box;text-align:left;padding:6px 8px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:500 12.5px/1.35 var(--font-ui);cursor:pointer}
+  .sp-prov .pv-bf:hover{border-color:var(--nd-ink)}
+  .sp-prov .pv-bf:focus-visible{outline:2px solid var(--ag-act);outline-offset:1px}
+  .sp-prov .pv-bf-t{grid-column:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .sp-prov .pv-bf small{grid-column:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 10.5px var(--font-mono);color:var(--nd-muted)}
+  .sp-prov .pv-bf-v{grid-column:2;grid-row:1 / span 2;font:700 11px var(--font-mono);padding:1px 4px;background:color-mix(in srgb,var(--clf-hl,#FFE45C) 70%,transparent);color:#141413}
+  .sp-prov .pv-all > summary{cursor:pointer;list-style:none;margin-top:6px;font:600 12px var(--font-ui);color:var(--nd-ink);text-decoration:underline;text-underline-offset:3px}
+  .sp-prov .pv-all > summary::-webkit-details-marker{display:none}
+  .sp-prov .pv-all[open] > summary{display:none}
+  .sp-prov .pv-all[open] > .pv-bfl{margin-top:4px}
+  .sp-prov .pv-also-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:10px;font:600 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
+  .sp-prov .pv-also-row > span{margin-right:2px}
+  .sp-prov .pv-why{margin-top:12px;padding-top:8px;border-top:1px solid var(--nd-line)}
+  .sp-prov .pv-why > summary{cursor:pointer;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
+  .sp-prov .pv-why[open] > summary{margin-bottom:8px}
+  .sp-hist-v .pv-hist .rv-meta{margin:0 0 8px}
+  /* Your call's buttons are the shell's set too (no filled or black pills). */
+  #stab .needs-box button.act-fix,#stab .needs-box .act-override,#stab .needs-box .save,#stab .needs-box .cancel,#stab .nb-act button,#stab .nb-act button.nb-primary{height:28px;min-height:28px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer}
+  #stab .needs-box button.act-fix:hover:not(:disabled),#stab .needs-box .act-override:hover,#stab .needs-box .save:hover,#stab .needs-box .cancel:hover,#stab .nb-act button:hover{border-color:var(--nd-ink);background:var(--nd-paper);color:var(--nd-ink)}
+  #stab .nb-act button.nb-why{height:auto;border:0;background:none;padding:0 2px;color:var(--nd-muted);text-decoration:underline;text-underline-offset:3px}
+  /* Writing in place on the sheet: a thin accent outline and a faint tint, on screen only. */
+  .sheet .val.editing{cursor:text}
+  .ined{outline:1.5px solid color-mix(in srgb,var(--brief-accent,var(--ag-act)) 75%,transparent);outline-offset:4px;border-radius:1px;background:color-mix(in srgb,var(--brief-accent,var(--ag-act)) 6%,transparent);white-space:pre-wrap;overflow-wrap:anywhere;min-height:1.5em;cursor:text;caret-color:var(--brief-accent,currentColor)}
+  .ined:focus{outline-width:2px}
+  .ined:empty::before{content:attr(data-ph);color:var(--ink3,#8a857a)}
+  .ined[contenteditable="false"]{opacity:.7}
+  @media print{.ined{outline:0;background:none}}
   /* a cell's value shows two lines at most on screen, its whole text in the row's tooltip and in the
      Selected part panel; the PDF keeps every word. The clamp sits on the box that holds the words: a
      written part's words are inside the clan-field's button (its own formatting context, which a clamp
@@ -1162,7 +1220,6 @@
   .sheet.a4 .pgrid > .row.k-cell.needs .lab{padding-right:0}
   .sheet.a4 .pgrid > .row.k-cell.needs .ctrls{right:6px;top:40px}
   /* New brief lives in Continue in › Start fresh (gaps.md §7 L2) */
-  #structured #newDraft{display:none}
 
   /* ── The start, to the mock's prompt (design/new-ui/napkin-app-v1.html #brief-screen-prompt, its
      .app-head and phase 2 "Brief prompt: one sheet, one action"; gaps.md H2, §13): the tool's header
@@ -1419,69 +1476,61 @@
 
       <aside class="stab" id="stab" aria-label="The brief’s controls">
         <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
-        <div class="upnote" id="upNote" role="status" hidden></div>
-        <div class="splitbtn" id="saveSplit">
-          <button class="sb-main" data-act="pdf" id="exPdf" title="The page as it prints, on A4"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg><span>Save · PDF</span></button>
-          <button type="button" class="sb-more" id="saveMore" aria-haspopup="menu" aria-expanded="false" aria-controls="saveMenu" title="More ways to save"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg><span class="sr">More ways to save</span></button>
-          <div class="smenu" id="saveMenu" role="menu" hidden>
-            <button class="smi" role="menuitem" id="exClient" title="The sheet without the parts marked Confidential, for the client. Lock the brief first."><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Client copy · PDF</button>
-            <button class="smi" role="menuitem" id="exHtml" title="The sheet as a standalone web page"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>HTML</button>
-            <button class="smi" role="menuitem" id="exGridPdf" title="The grid template: two sheets of boxes, as before the new page"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Grid PDF</button>
-            <button class="smi" role="menuitem" id="exGridHtml" title="The grid template as a web page"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Grid HTML</button>
-            <button class="smi" role="menuitem" id="exHtmlPlain" title="Export the plain layout, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain HTML</button>
-            <button class="smi" role="menuitem" id="exPdfPlain" title="Export the plain layout as a PDF, without the grid"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>Plain PDF</button>
-            <button class="smi" role="menuitem" id="saveBtn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5A1 1 0 0 1 4 2.5h6.3L13 5.2V12.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Save as…</button>
+        <!-- One thing at a time (features/brief-new-ui.clan, the side tab design): the BRIEF view while
+             nothing is selected, the PART view (#selPart) while a part is. Never both. -->
+        <div class="bview" id="briefView">
+          <div class="b-head">
+            <div class="b-state" id="bState"><b>Brief<span class="pill" id="statusPill" role="status"></span></b><span class="b-state-t" id="stateLine"></span></div>
+            <span class="muted status" id="status" role="status"></span>
           </div>
-        </div>
-        <div class="tabacts">
-          <button type="button" class="side-link" data-act="redraft" id="redraft" title="Run every agent again on the same ask: the Knowledge, Strategy, Brief and Review agents. Parts you wrote yourself are kept, with a suggestion beside them."><span>Draft it again</span></button>
-          <button type="button" class="side-link" id="newDraft" title="Start again from a new brief">New brief</button>
-        </div>
+          <div class="upnote" id="upNote" role="status" hidden></div>
+          <div class="locklist" id="lockList" hidden></div>
+          <div class="b-lockslot">
+            <button class="lock btn-primary" id="lockBtn" data-act="lock">Lock the brief</button>
+            <span class="b-lockwhy" id="lockWhy" hidden></span>
+            <span class="b-locked" id="lockedBadge" hidden>Locked for handoff</span>
+            <div class="b-lockacts" id="lockActs" hidden>
+              <button type="button" class="sp-btn b-crbtn" id="crOpen" aria-expanded="false" aria-controls="clientAnswer">Record the client’s answer</button>
+              <button type="button" class="sp-btn b-reopen" id="reopenBtn" data-act="reopen" aria-expanded="false" aria-controls="reopenList" title="A part reopens for a change the client asked for; the rest stays locked">Reopen a part…</button>
+            </div>
+            <div class="reopen" id="reopenBox" hidden>
+              <div class="reolist" id="reopenList" hidden></div>
+            </div>
+            <section class="b-cr" id="clientAnswer" hidden aria-label="The client’s answer"></section>
+          </div>
 
-        <div class="b-state" id="bState"><b>Brief<span class="pill" id="statusPill" role="status"></span></b><span class="b-state-t" id="stateLine"></span></div>
-        <button class="lock" id="lockBtn" data-act="lock">Lock the brief</button>
-        <span class="muted" id="lockedBadge" style="display:none">Locked for handoff</span>
-        <div class="locklist" id="lockList" hidden></div>
-        <div class="b-lockacts" id="lockActs" hidden>
-          <button type="button" class="sp-btn b-crbtn" id="crOpen" aria-expanded="false" aria-controls="clientAnswer">Record the client’s answer</button>
-          <button type="button" class="side-link b-reopen" id="reopenBtn" data-act="reopen" aria-expanded="false" aria-controls="reopenList" title="A part reopens for a change the client asked for; the rest stays locked">Reopen a part…</button>
-        </div>
-        <div class="reopen" id="reopenBox" hidden>
-          <div class="reolist" id="reopenList" hidden></div>
-        </div>
-        <section class="b-cr" id="clientAnswer" hidden aria-label="The client’s answer"></section>
-        <span class="muted status" id="status" role="status"></span>
+          <details class="review b-review" id="review" hidden><summary>Review<small id="reviewSum"></small></summary><div id="reviewBody"></div><div class="b-rev-crew"><div class="bcrew" id="crewline" aria-live="polite"></div></div></details>
 
-        <div class="brand-line" id="brandLine" hidden></div>
-        <div class="madefrom b-made" id="madeFrom" hidden></div>
+          <div class="brand-line" id="brandLine" hidden></div>
+          <div class="madefrom b-made" id="madeFrom" hidden></div>
+
+          <!-- Set once (owner, 2026-11-11): the brief-wide look and the logos stay low, folded, each with its summary. -->
+          <details class="b-fold look" id="lookFold" aria-label="How the brief looks"><summary>Look<small id="lookSum"></small></summary>
+            <div class="b-fold-b">
+              <div class="lay-row">
+                <div class="lgrid">
+                  <div><div class="tk2" id="lkFrame">Frame</div><div class="seg" role="group" aria-labelledby="lkFrame" data-look="frame"><button type="button" data-v="open">Open</button><button type="button" data-v="boxed">Boxed</button></div></div>
+                  <div><div class="tk2" id="lkHead">Headings</div><div class="seg" role="group" aria-labelledby="lkHead" data-look="headings"><button type="button" data-v="label">Label</button><button type="button" data-v="tab">Tab</button></div></div>
+                </div>
+                <div class="lgrid">
+                  <div><div class="tk2" id="lkCover">Cover</div><div class="seg" role="group" aria-labelledby="lkCover" data-look="cover"><button type="button" data-v="plain">Plain</button><button type="button" data-v="band">Band</button></div></div>
+                  <div><div class="tk2" id="lkWhy">Why notes</div><div class="seg" role="group" aria-labelledby="lkWhy" data-look="why"><button type="button" data-v="hide">Hide</button><button type="button" data-v="show">Show all</button></div></div>
+                </div>
+              </div>
+              <div>
+                <div class="tk2">Colour</div>
+                <div class="swatches" id="swatches" role="group" aria-label="The brief’s colour"></div>
+              </div>
+              <button type="button" class="side-link" id="resetLook">Reset look</button>
+            </div>
+          </details>
+          <details class="b-fold" id="logoFold"><summary>Logos<small id="logoSum"></small></summary>
+            <div class="b-fold-b"><div class="logos" id="logoList"></div></div>
+          </details>
+          <p class="side-hint" id="sideHint">Click a part to work on it. Double-click to write. Drag ⋮⋮ to move it, its right edge to resize.</p>
+        </div>
 
         <section class="selpart side-part" id="selPart" hidden aria-label="Selected part"></section>
-
-        <details class="review b-review" id="review" hidden><summary>Review<small id="reviewSum"></small></summary><div id="reviewBody"></div><div class="b-rev-crew"><div class="bcrew" id="crewline" aria-live="polite"></div></div></details>
-
-        <section class="tsec look" aria-label="How the brief looks">
-          <div class="lay-row">
-            <h3 class="tk">Layout</h3>
-            <div class="lgrid">
-              <div><div class="tk2" id="lkFrame">Frame</div><div class="seg" role="group" aria-labelledby="lkFrame" data-look="frame"><button type="button" data-v="open">Open</button><button type="button" data-v="boxed">Boxed</button></div></div>
-              <div><div class="tk2" id="lkHead">Headings</div><div class="seg" role="group" aria-labelledby="lkHead" data-look="headings"><button type="button" data-v="label">Label</button><button type="button" data-v="tab">Tab</button></div></div>
-            </div>
-            <div class="lgrid">
-              <div><div class="tk2" id="lkCover">Cover</div><div class="seg" role="group" aria-labelledby="lkCover" data-look="cover"><button type="button" data-v="plain">Plain</button><button type="button" data-v="band">Band</button></div></div>
-              <div><div class="tk2" id="lkWhy">Why notes</div><div class="seg" role="group" aria-labelledby="lkWhy" data-look="why"><button type="button" data-v="hide">Hide</button><button type="button" data-v="show">Show all</button></div></div>
-            </div>
-          </div>
-          <div>
-            <h3 class="tk">Colour</h3>
-            <div class="swatches" id="swatches" role="group" aria-label="The brief’s colour"></div>
-          </div>
-          <div>
-            <h3 class="tk">Logos</h3>
-            <div class="logos" id="logoList"></div>
-          </div>
-          <button type="button" class="side-link" id="resetLook">Reset look</button>
-        </section>
-        <p class="side-hint">Click a part to see its why and options here. Double-click to edit. Drag ⋮⋮ to move it, its right edge to resize.</p>
       </aside>
     </div>
   </section>
@@ -2456,7 +2505,6 @@
     if(f.sec==='Desired response') return 'what they should '+f.label.toLowerCase();
     return 'the '+f.label.toLowerCase().replace(/^the /,'');   // "The insight" is not "the the insight"
   }
-  var SHOW_ME='<span class="answers"><button type="button" class="act-show">Show me</button></span>';
   // The client's answer on the locked brief, when it answers this version
   // (os-layer §7.5.3); the shell's band says it in full, the header only
   // agrees with it.
@@ -2502,10 +2550,11 @@
     dt=esc(dt);
     if(dNeeds) dt+=' <b>I’ve a new version of '+esc(listWords(props.map(partName)))+' for you.</b> You hold '+(props.length===1?'that part':'those parts')+', so I didn’t change '+(props.length===1?'it':'them')+'.';
     var h='<div class="pair">'+fig('drafter',{state:dNeeds?'needs-you':'idle',decorative:true})
-      +say('drafter', dt+(dNeeds?SHOW_ME.replace('act-show','act-show" data-k="'+esc(props[0].key)):''), 'left'+(dNeeds?' warn':''))+'</div>';
+      +say('drafter', dt, 'left'+(dNeeds?' warn':''))+'</div>';
     // The Review agent: what the checks found, and what else the lock waits for (the
-    // host's lock list: what the research left open comes with the brief)
-    var others=lockOthers(), lockBy=approveLocked()?lockDecisionHere():null, LIST='<span class="answers"><button type="button" class="act-locklist">Show me</button></span>';
+    // host's lock list: what the research left open comes with the brief). No "Show me": Needs you,
+    // right above Review in the brief view, is the list (the side tab design).
+    var others=lockOthers(), lockBy=approveLocked()?lockDecisionHere():null, LIST='';
     if(re.length){
       // A part reopened for the client's change: what is open, and what the
       // next lock still waits for (the host's list, which renderLock shows).
@@ -2525,8 +2574,7 @@
       h+='<div class="pair">'+fig('judge',{decorative:true})+say('judge', esc('This brief is locked. '+lw+' agreed to it'+(lt?' on '+fmtDate(lt):'')+'. A change from here makes a new version.'), 'left')+'</div>';
     } else if(ok||others.length){
       var jt, jNeeds=!locked&&failed.length>0, jOthers=!locked&&others.length>0, gaps=ok?scoreGaps().length:0, jGaps=!locked&&gaps>0;
-      if(jNeeds) jt=esc(Num(failed.length)+' '+(failed.length===1?'part needs':'parts need')+' you: '+listWords(failed.map(partName))+'.')
-        +SHOW_ME.replace('act-show','act-show" data-k="'+esc(failed[0].key));
+      if(jNeeds) jt=esc(Num(failed.length)+' '+(failed.length===1?'part needs':'parts need')+' you: '+listWords(failed.map(partName))+'.');
       else if(!ok) jt='';
       else if(passed) jt=esc(holdsLine(passed,jOthers,jGaps?gaps:0));
       else jt=esc(filled?'I haven’t checked this brief. Ask '+WRITER+' to write a part again and I’ll check it.':'When there’s something written, I’ll check it.');
@@ -2535,10 +2583,6 @@
       h+='<div class="pair">'+fig('judge',{state:jNeeds||jOthers||jGaps?'needs-you':'idle',decorative:true})+say('judge', jt, 'left'+(jNeeds||jOthers||jGaps?' warn':''))+'</div>';
     }
     el.innerHTML=h;
-    el.querySelectorAll('.act-show').forEach(function(b){ b.addEventListener('click',function(){ gotoField(b.getAttribute('data-k')); }); });
-    el.querySelectorAll('.act-locklist').forEach(function(b){ b.addEventListener('click',function(){
-      var l=$('lockList'); if(!l||l.hidden) return; l.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
-      var first=l.querySelector('.lkitem'); if(first) first.focus({preventScroll:true}); }); });
   }
   // The Judge's review of the brief (review.judge) and the scorecard, in place
   // of the old context panel.
@@ -3339,11 +3383,11 @@
     return '<details class="b-up"><summary><i aria-hidden="true"></i>The research changed<small>'+li.length+'</small></summary>'
       +'<p class="b-up-m">'+esc('This brief keeps the research as it was then; it doesn’t take the newer one on its own.'+ds)+'</p>'
       +(li.length?'<ul>'+li.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>':'')
-      +(approveLocked()?'':'<div class="b-up-acts"><button type="button" class="sp-btn" data-up="redraft">Draft it again</button></div>')+'</details>';
+      +(approveLocked()?'':'<p class="b-up-m">To write it from the newer research, use Draft it again in the bar at the top.</p>')+'</details>';
   }
   function renderUpNote(el){ if(!el) return; var h=upNoteInner(), was=el.querySelector('details.b-up'), open=!!(was&&was.open); el.hidden=!h; el.innerHTML=h;
     var d=el.querySelector('details.b-up'); if(d&&open) d.open=true;
-    var r=el.querySelector('[data-up=redraft]'); if(r) r.addEventListener('click', function(){ redraftClick(); }); }
+}
   // Read when the brief opens and after each write (a read, any actor, locked or not).
   function loadUpstream(){
     if(!isResearchFed()) return;
@@ -3428,8 +3472,6 @@
     try{ sideAgent(); }catch(e){}
     $('docIdent').innerHTML=IDENT;
     renderMadeFrom();
-    // Locked, Draft it again stays where the mock has it, off, and says why.
-    var rd=$('redraft'); rd.hidden=false; rd.disabled=approveLocked(); rd.title=approveLocked()?'The brief is locked. Unlock it to draft it again.':'Run every agent again on the same ask: the Knowledge, Strategy, Brief and Review agents. Parts you wrote yourself are kept, with a suggestion beside them.';
     var pn=String(get('project_name')||'').trim(), dt=pn?'':derivedTitle();
     $('hProj').textContent=pn||dt||'Untitled campaign';
     $('hProj').classList.toggle('derived', !pn&&!!dt);
@@ -3439,8 +3481,9 @@
     renderSheetHead();
     syncKind();
     // While the shell records a client's answer, the parts stay as they are:
-    // the fields snippet has put its marks under them.
-    var host=$('fields'), keep=CLIENT.on&&host.childNodes.length;
+    // the fields snippet has put its marks under them. While a part is being
+    // written in place, the sheet stays too, so a redraw never takes the words.
+    var host=$('fields'), keep=(CLIENT.on||!!EDIT)&&host.childNodes.length;
     if(!keep){
       host.innerHTML='';
       // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
@@ -3469,7 +3512,6 @@
     $('boardsNote').hidden=!showBoards;
     $('boards').classList.toggle('on',showBoards);
     if(showBoards) renderBoards(false);
-    $('newDraft').hidden=approveLocked();
     renderLock(); renderUpNote($('upNote'));
     renderCrewline(); renderReview();
     renderLook(); renderSelPart(); scheduleBreaks();
@@ -3517,7 +3559,6 @@
       regenLine(f)+
       '<div class="notes">'+notesHtml(f)+'</div>'+
       (OPEN_WHY[f.key]?'<div class="why">'+whyHtml(f)+'</div>':'');
-    var sb=row.querySelector('.act-style'); if(sb) sb.addEventListener('click',function(){startStyle(row,f);});
     var pb=row.querySelector('.prov'); if(pb) pb.addEventListener('click',function(){toggleWhy(row,f);});
     var ov=row.querySelector('.val.opens');
     if(ov){
@@ -3538,96 +3579,110 @@
     return row;
   }
 
-  function openInline(row, html){
-    if(row.querySelector('.edit')) return null;
-    var ctrls=row.querySelector('.ctrls'); if(ctrls) ctrls.style.visibility='hidden';
-    var valEl=row.querySelector('.val'); valEl.style.display='none';
-    var wrap=document.createElement('div'); wrap.className='edit'; wrap.innerHTML=html;
-    valEl.insertAdjacentElement('afterend',wrap);
-    wrap.__close=function(){wrap.remove();valEl.style.display='';if(ctrls)ctrls.style.visibility='';};
-    var c=wrap.querySelector('.cancel'); if(c) c.addEventListener('click',wrap.__close);
-    return wrap;
+  // ---------- writing a part, in place on the sheet (the side tab design, state c) ----------
+  // The part's own words become editable where they stand, in their own type: a thin accent outline
+  // and a faint tint, both screen-only. No form on the paper: the tab's Edit turns into Done (with
+  // Cancel and the reason) in the same spot. Done, ⌘↵ or a click elsewhere saves through the edit path
+  // with the reason recorded; Esc or Cancel puts back exactly what was there. A list is one item per
+  // line, a name one line. On a locked brief it is the client's change to a reopened part (os-layer
+  // §7.5.5): an /edit that must say why (the reason comes pre-filled) and answers the client's request.
+  var EDIT=null;
+  function isLine(f){ return f.key.indexOf('name')!==-1; }
+  // Plain text where the browser has it (no pasted styles), else contenteditable with paste made plain.
+  function canType(el){ try{ el.contentEditable='plaintext-only'; }catch(e){} if(el.contentEditable!=='plaintext-only') el.contentEditable='true'; }
+  function draftKey(f){ return 'napkin.brief.draft:'+docId()+':'+f.key; }
+  // An unsent edit is kept on this device, a convenience only: storage can be missing or refuse.
+  function draftGet(f){ try{ var v=window.localStorage.getItem(draftKey(f)); var d=v?JSON.parse(v):null; return d&&typeof d==='object'?d:null; }catch(e){ return null; } }
+  function draftPut(f,d){ try{ if(d) window.localStorage.setItem(draftKey(f), JSON.stringify(d)); else window.localStorage.removeItem(draftKey(f)); }catch(e){} }
+  function editText(el){ return String(el.innerText!=null?el.innerText:el.textContent||'').replace(/ /g,' ').replace(/\r/g,''); }
+  // The words as typed -> the part's value: a list one item per line, a name one line, prose as written.
+  function editValue(f, text){
+    var t=String(text==null?'':text);
+    if(f.type==='list') return t.split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+    if(isLine(f)) return t.replace(/\s*\n\s*/g,' ').trim();
+    return t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
   }
-
-  // per-field font / size / colour (immersive)
-  function startStyle(row,f){
-    var fs=(get('field_styles')||{})[f.key]||{};
-    var fonts=[['','Default'],['var(--serif)','Serif'],['var(--ui)','Sans'],['var(--mono)','Mono'],["Georgia,serif",'Georgia']];
-    var sizes=[['','Default'],['13px','S'],['15px','M'],['18px','L'],['22px','XL'],['28px','XXL']];
-    function opts(list,cur){ return list.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+'>'+o[1]+'</option>';}).join(''); }
-    var wrap=openInline(row,
-      '<div class="editrow">'+
-        '<label>Font <select class="sfont">'+opts(fonts,fs.font)+'</select></label>'+
-        '<label>Size <select class="ssize">'+opts(sizes,fs.size)+'</select></label>'+
-        '<label>Colour <input type="color" class="scolor" value="'+(fs.color||get('theme.text')||DEF.text)+'" /></label>'+
-      '</div>'+
-      '<div class="editrow"><button class="save">Apply</button><button class="cancel">Cancel</button>'+
-      '<button class="cancel sreset">Reset field</button></div>');
-    if(!wrap) return;
-    function commit(reset){
-      var styles=Object.assign({},get('field_styles')||{});
-      if(reset){ delete styles[f.key]; }
-      else { var ns={}; var fo=wrap.querySelector('.sfont').value,sz=wrap.querySelector('.ssize').value,co=wrap.querySelector('.scolor').value;
-        if(fo)ns.font=fo; if(sz)ns.size=sz; if(co)ns.color=co; styles[f.key]=ns; }
-      patch('field_styles',styles,{actor:'human',pinned:false,action:'look',rationale:(reset?'Plain ':'Restyled ')+f.label});
-      wrap.__close();
-    }
-    wrap.querySelector('.save').addEventListener('click',function(){commit(false);});
-    wrap.querySelector('.sreset').addEventListener('click',function(){commit(true);});
-  }
-
-  // edit value + rationale + optional pin(=lock). On a locked brief it is the
-  // client's change to a reopened part (os-layer §7.5.5): an /edit that says
-  // why — the reason comes pre-filled — and answers the client's request.
   function startEdit(row,f,given){
+    if(!f) return;
+    if(EDIT){ if(EDIT.key===f.key){ if(EDIT.el) EDIT.el.focus(); return; } if(!commitEdit()) return; }
     var reo=approveLocked()?(reopenedOf(f.key)||(given&&given.answers?{answers:given.answers}:null)):null;
     if(approveLocked()&&!reo) return;
-    var cur=valToText(get(f.key),f.type);
-    var ctl = (f.type==='list')?'<textarea class="valctl" placeholder="one per line">'+esc(cur)+'</textarea>'
-      : (f.key.indexOf('name')===-1)?'<textarea class="valctl">'+esc(cur)+'</textarea>'
-      : '<input type="text" class="valctl" value="'+esc(cur)+'" />';
-    var reason=(given&&given.reason)||(reo?reopenReason(reo):'');
-    var wrap=openInline(row, ctl+
-      // The client's reason, shown whole under a label that says where it came from; still editable.
-      (reo?'<label class="ratlab"><span>'+(reason?'Reason, filled in for you':'Why this change? (needed)')+'</span><textarea class="rat" rows="3">'+esc(reason)+'</textarea></label>'
-        :'<input type="text" class="rat" placeholder="Why this change? (optional — recorded in the decision chain)" />')+
-      '<div class="editrow"><button class="save">Save</button><button class="cancel">Cancel</button>'+
-      (reo?'<span class="muted">The rest of the brief stays as the client saw it.</span>'
-        :'<label><input type="checkbox" class="pin" '+(isLocked(f.key)?'checked':'')+' /> Pin &amp; lock this field</label>')+
-      (f.type==='list'?'<span class="muted">one item per line</span>':'')+'</div>'+
-      (reo?'<div class="note err" hidden></div>':''));
-    if(!wrap) return;
-    wrap.querySelector('.valctl').focus();
-    if(reo){ wrap.querySelector('.save').addEventListener('click',function(){ saveClientChange(wrap,f,reo,(given&&given.answers)||reo.answers); }); return; }
-    wrap.querySelector('.save').addEventListener('click',function(){
-      var raw=wrap.querySelector('.valctl').value;
-      var value=f.type==='list'?raw.split('\n').map(function(s){return s.trim();}).filter(Boolean):raw;
-      var oldText=valToText(get(f.key),f.type), newText=valToText(value,f.type);
-      var changed=oldText!==newText;
-      var note=wrap.querySelector('.rat').value.trim();
-      var pinned=wrap.querySelector('.pin').checked;
-      if(changed){
-        var rationale=note||('Changed from "'+short(oldText)+'" to "'+short(newText)+'"');
-        window.clan.patchData(f.key,value,{actor:'human',pinned:pinned,action:'edit '+f.key,rationale:rationale});
-        if(f.key==='project_name'&&value) window.clan.setTitle(value);
-      }
-      setLock(f.key,pinned);
-      wrap.__close();
+    if(!window.clan){ toast('Writing needs the Napkin host.'); return; }
+    if(REGEN_OPEN) REGEN_OPEN=null;
+    if(SEL!==f.key||SEL_ITEM!=null){ SEL=f.key; SEL_ITEM=null; markItem(); document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); }); }
+    row=rowOf(f.key)||row; var val=row&&row.querySelector('.val'); if(!val) return;
+    row.classList.add('sel','is-editing');
+    var cur=valToText(get(f.key),f.type), dr=draftGet(f), back=!!(dr&&typeof dr.text==='string'&&dr.text!==cur);
+    var ed=document.createElement('div');
+    ed.className='ined'+(f.type==='list'?' ined-list':'')+(isLine(f)?' ined-line':'');
+    canType(ed);
+    ed.setAttribute('role','textbox'); ed.setAttribute('aria-multiline', String(!isLine(f)));
+    ed.setAttribute('aria-label','Write '+partLabel(f)+(f.type==='list'?', one item per line':''));
+    ed.setAttribute('data-ph', f.type==='list'?'One item per line':'Write it here');
+    ed.spellcheck=true;
+    ed.textContent=back?dr.text:cur;
+    val.classList.remove('empty'); val.classList.add('editing'); val.innerHTML=''; val.appendChild(ed);
+    var why=(given&&given.reason)||(reo?reopenReason(reo):'');
+    EDIT={key:f.key, f:f, el:ed, orig:cur, reo:reo, answers:(given&&given.answers)||(reo&&reo.answers)||null,
+      reason:why||(back&&dr.reason)||'', filled:!!why, err:'', saving:false};
+    ed.addEventListener('input', function(){ if(EDIT&&EDIT.el===ed) draftPut(f,{text:editText(ed), reason:EDIT.reason}); });
+    ed.addEventListener('keydown', editKeys);
+    // Paste is plain text, in the part's own type; a name stays on one line.
+    ed.addEventListener('paste', function(e){
+      var t=e.clipboardData&&e.clipboardData.getData('text/plain'); if(t==null) return;
+      e.preventDefault(); if(isLine(f)) t=t.replace(/\s*\n\s*/g,' ');
+      try{ document.execCommand('insertText', false, t); }catch(x){}
     });
+    renderSelPart();
+    ed.focus();
+    try{ var r=document.createRange(); r.selectNodeContents(ed); r.collapse(false); var sl=window.getSelection(); sl.removeAllRanges(); sl.addRange(r); }catch(e){}
+    row.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+    if(back) toast('Your unsaved words are back. Cancel puts back what was there.');
   }
-  function saveClientChange(wrap,f,reo,answers){
-    var raw=wrap.querySelector('.valctl').value, btn=wrap.querySelector('.save'), err=wrap.querySelector('.note.err');
-    var value=f.type==='list'?raw.split('\n').map(function(s){return s.trim();}).filter(Boolean):raw;
-    var why=wrap.querySelector('.rat').value.trim();
-    function fail(m){ err.textContent=m; err.hidden=false; btn.disabled=false; }
-    if(valToText(value,f.type)===valToText(get(f.key),f.type)){ wrap.__close(); return; }
-    if(!why){ fail('Say why you are changing it.'); wrap.querySelector('.rat').focus(); return; }
-    btn.disabled=true;
-    hostPost('/edit',{path:f.key, value:value, rationale:why, answers:answers}).then(function(res){
-      if(res&&res.ok){ toast('Saved. Lock the brief again when it’s ready.'); var F=OSF(); if(F) F.reload(); if(wrap.isConnected) wrap.__close(); return; }
-      fail('That did not save. '+hostErrText(res));
+  // ⌘↵ (or Ctrl+Enter) is Done, Esc is Cancel; Enter on a one-line name is Done too.
+  function editKeys(e){
+    if(!EDIT) return;
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); cancelEdit(); }
+    else if(e.key==='Enter'&&(e.metaKey||e.ctrlKey||(isLine(EDIT.f)&&e.target===EDIT.el))){ e.preventDefault(); commitEdit(); }
+  }
+  // The text goes back to what the record holds: the sheet is drawn again from the data.
+  function endEdit(){ EDIT=null; if(phase==='doc') renderStructured(); }
+  function cancelEdit(){ if(!EDIT||EDIT.saving) return; draftPut(EDIT.f,null); endEdit(); }
+  // Done. -> false only when it cannot go yet (a reopened part with no reason): the edit stays open.
+  function commitEdit(){
+    if(!EDIT) return true; if(EDIT.saving) return true;
+    var E=EDIT, f=E.f, value=editValue(f, editText(E.el)), oldText=valToText(get(f.key),f.type), newText=valToText(value,f.type), why=String(E.reason||'').trim();
+    if(oldText===newText){ draftPut(f,null); endEdit(); return true; }
+    if(E.reo&&!why){ E.err='Say why you are changing it.'; renderSelPart(); var rt=$('spRat'); if(rt) rt.focus(); return false; }
+    E.saving=true; E.err=''; E.el.contentEditable='false'; renderSelPart();
+    var fail=function(m){ E.saving=false; E.err=m; if(EDIT===E){ canType(E.el); renderSelPart(); } };
+    var done=function(){ draftPut(f,null); if(EDIT===E) endEdit(); savedTick(); };
+    if(E.reo){
+      hostPost('/edit',{path:f.key, value:value, rationale:why, answers:E.answers}).then(function(res){
+        if(res&&res.ok){ done(); toast('Saved. Lock the brief again when it’s ready.'); var F=OSF(); if(F) F.reload(); return; }
+        fail('That did not save. '+hostErrText(res));
+      },function(){ fail('That did not go through. Check your connection and try again.'); });
+      return true;
+    }
+    // Keep as is is the one flag for "hold this part" (the old per-edit pin was the same flag): it rides along.
+    var rationale=why||('Changed from "'+short(oldText)+'" to "'+short(newText)+'"');
+    Promise.resolve(window.clan.patchData(f.key,value,{actor:'human',pinned:isLocked(f.key),action:'edit '+f.key,rationale:rationale})).then(function(res){
+      if(res&&res.ok===false){ fail('That did not save. '+hostErrText(res)); return; }
+      if(f.key==='project_name'&&value) window.clan.setTitle(value);
+      done();
     },function(){ fail('That did not go through. Check your connection and try again.'); });
+    return true;
   }
+  // A quiet "Saved" tick in the crumb, for a change made from the tab.
+  var SAVED_T=null;
+  function savedTick(){ var t=$('spSaved'); if(!t) return; t.hidden=false; clearTimeout(SAVED_T); SAVED_T=setTimeout(function(){ var x=$('spSaved'); if(x) x.hidden=true; }, 1600); }
+  // A click anywhere but the part being written and the tab saves it (the one save model).
+  document.addEventListener('pointerdown', function(e){
+    if(!EDIT||EDIT.saving) return;
+    var t=e.target; if(!t||!t.closest) return;
+    if(EDIT.el.contains(t)||t.closest('#stab,.toast,.clf-drawer,.clf-scrim')) return;
+    commitEdit();
+  }, true);
   // "Make this change" (the fields snippet, after /client-review/reopen) on a
   // part it cannot edit in place — a list — opens the brief's own editor with
   // the returned reason and the part answer it answers.
@@ -3641,15 +3696,17 @@
     startEdit(row, FIELDS[i], {reason:d.reason, answers:d.answers});
   });
 
-  // regenerate with OPTIONAL guidance (transient)
-  function startRegen(row,f){
-    var wrap=openInline(row,
-      '<textarea placeholder="Anything for '+esc(WRITER)+'? (optional) — e.g. punchier, lean into humour"></textarea>'+
-      '<div class="editrow"><button class="save">Write it again</button><button class="cancel">Cancel</button>'+
-      '<span class="muted">extra guidance is used for this redraft only</span></div>');
-    if(!wrap) return;
-    var ta=wrap.querySelector('textarea'); ta.focus();
-    wrap.querySelector('.save').addEventListener('click',function(){ var g=ta.value.trim(); wrap.__close(); regenField(f,g); });
+  // Redraft…: asking the writer again, with an optional note, opens inside the tab under the actions,
+  // never as a form on the sheet. The note is used for this redraft only.
+  var REGEN_OPEN=null, REGEN_NOTE='';
+  var REGEN_PRESETS=['Shorter','Plainer','Punchier','More specific'];
+  function startRegen(row,f){ if(!f) return; if(EDIT&&!commitEdit()) return; REGEN_OPEN=REGEN_OPEN===f.key?null:f.key; REGEN_NOTE=''; renderSelPart(); var t=$('spRegenNote'); if(t) t.focus(); }
+  function regenHtml(f){
+    if(REGEN_OPEN!==f.key) return '';
+    return '<div class="sp-regen" id="spRegen"><label for="spRegenNote">Anything for '+esc(WRITER)+'? <span class="muted">optional</span></label>'
+      +'<div class="sp-presets">'+REGEN_PRESETS.map(function(p){ return '<button type="button" class="sp-btn sp-chip" data-preset="'+esc(p)+'">'+esc(p)+'</button>'; }).join('')+'</div>'
+      +'<textarea id="spRegenNote" rows="2" placeholder="e.g. lean into humour">'+esc(REGEN_NOTE)+'</textarea>'
+      +'<div class="sp-row"><button type="button" class="sp-btn" data-sp="regen-go">Write it again</button><button type="button" class="side-link" data-sp="regen-x">Cancel</button><span class="muted">Used for this redraft only.</span></div></div>';
   }
   function setStatus(html){ $('status').innerHTML=html||''; }
   // Redraft one field: a regenerate_field job (middleware-api §10.10) — one
@@ -4046,12 +4103,8 @@
         else if(rejected.length) toast(notApprovedWords(rejected)); });
     }).catch(function(e){ toast('Export failed: '+e); });
   }
-  $('exHtml').addEventListener('click',function(){ doExport('html'); });
-  $('exGridPdf').addEventListener('click',function(){ doExport('pdf','grid'); });
-  $('exGridHtml').addEventListener('click',function(){ doExport('html','grid'); });
-  $('exClient').addEventListener('click',function(){ doExport('pdf','client'); });
-  $('exHtmlPlain').addEventListener('click',function(){ doExport('html','plain'); });
-  $('exPdfPlain').addEventListener('click',function(){ doExport('pdf','plain'); });
+  // Save · PDF and its other ways to save are the OS bar's (the side tab design): each is an ACTIONS
+  // entry, sent in barItems; past the two the bar shows, they sit in the document menu.
 
   // The shell's Export offers us the job before composing one from our markup —
   // which, since this view renders from data at runtime, would be the empty
@@ -4061,8 +4114,6 @@
     doExport((e.detail&&e.detail.kind)==='html'?'html':'pdf');
   });
 
-  // ---------- footer actions ----------
-  $('newDraft').addEventListener('click',function(){ forceIntake=true; handWrite=false; render(); });
   // Draft it again: the whole crew on the same ask and the same files. One click arms it, a second runs it,
   // so a stray click never redrafts a brief (redraftClick, the side tab's and the OS bar's).
   // "Made from" the research this brief started from, with a way back to it.
@@ -4077,7 +4128,6 @@
     var o=$('openUp'); if(o) o.addEventListener('click',function(){
       fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:p})}); });
   }
-  $('saveBtn').addEventListener('click',function(){ if(window.clan&&window.clan.requestSave) window.clan.requestSave(); toast('Saving a copy of this .clan…'); });
   // ---------- the lock: the shared one (os-layer §7) ----------
   // Lock brief is /approve, which the host refuses while its lock list holds
   // anything (carried items included); the button waits on lock.can_lock and
@@ -4107,26 +4157,36 @@
   function lockSig(){ var l=lockState(); return l?[l.locked, l.can_lock, arr(l.reopened).map(function(r){ return r.address; }).join(',')].join('|'):''; }
   var LOCK_SIG='';
   function lkItemHtml(x){
-    return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'">'
-      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(KIND_WORD[x.code]||'Needs you')+'</small></button>';
+    return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'"'+(x.key?' data-key="'+esc(x.key)+'"':'')+'>'
+      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||KIND_WORD[x.code]||'Needs you')+'</small></button>';
   }
-  // A part of this brief is settled at the part; anything else (a carried
-  // contest, a finding) in the OS's evidence drawer.
+  // A part of this brief is settled at the part: the row selects it (the part view, Your call first);
+  // anything else (a carried contest, a finding) opens where it came from, in the panel.
   function bindLkItems(el){
     el.querySelectorAll('.lkitem').forEach(function(b){ b.addEventListener('click',function(){
-      var f=fieldOfAddress(b.getAttribute('data-addr')), F=OSF(), ref=b.getAttribute('data-ref');
-      if(f&&phase==='doc'){ gotoField(f.key); return; }
+      var k=b.getAttribute('data-key'), f=k?fieldOf(k):fieldOfAddress(b.getAttribute('data-addr')), F=OSF(), ref=b.getAttribute('data-ref');
+      if(f&&phase==='doc'){ goPart(f.key); return; }
       if(F&&ref) F.open(ref, false, F.kindOf&&F.kindOf(ref)?'':b.getAttribute('data-note'));
     }); });
   }
-  // Why the lock waits, in plain words: "2 settle before it can lock".
-  function lockWhy(n){ return n>0?n+' '+(n===1?'settles':'settle')+' before it can lock':'Everything listed has to be settled first'; }
-  function lockListHtml(items, lead){
+  // Why the lock waits, in plain words: "Settle 2 first".
+  function lockWhy(n){ return n>0?'Settle '+n+' first':'Everything listed has to be settled first'; }
+  // NEEDS YOU · n: the one settle-before-lock list. What the host's lock waits on, merged with the open
+  // questions nobody has answered; each row names a part and its tag, never the part's words.
+  function needsRows(){
+    var rows=lockItems().slice(), q=docLocked()?0:openQsLeft().length, f=fieldOf('open_questions');
+    if(q&&f) rows.push({code:'open_question', key:f.key, field:f, address:'', ref:'', text:'', tag:q===1?'Open question':q+' open questions'});
+    return rows;
+  }
+  function lockListHtml(items){
     var more=items.length>8?items.length-8:0;
-    return '<div class="b-gate-h">'+esc(lead)+'</div><ul class="b-gate-l">'+items.slice(0,8).map(function(x){ return '<li>'+lkItemHtml(x)+'</li>'; }).join('')+'</ul>'
+    return '<div class="b-gate-h">Needs you · '+items.length+'</div><ul class="b-gate-l">'+items.slice(0,8).map(function(x){ return '<li>'+lkItemHtml(x)+'</li>'; }).join('')+'</ul>'
       +(more?'<span class="b-gate-more">and '+more+' more, in Decisions</span>':'');
   }
   function renderLock(){ renderLockBtn(); renderPill(); renderReopen(); renderClientAnswer(); sendBar(); }
+  // Slot 4 of the brief view: Lock the brief (the view's one primary), and why it waits; locked, it holds
+  // "Locked for handoff · v2", Record the client's answer and Reopen a part…. Unlock is the OS bar's.
+  var NEEDS_N=null, READY_NUDGE=false;
   function renderLockBtn(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
     var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
@@ -4134,17 +4194,21 @@
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
     // button carries no badge of its own; why it waits is said in words.
     var why=wait?lockWhy(n):'';
-    // Locked: where the mock has Unlock, the working route — a locked brief reopens one part for a
-    // change the client asked for (there is no unlocking an approve, W5-Z1).
-    if(again){ lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
-    else if(A){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; }
-    else if(L){ lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve
-    else { lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; }
+    if(again){ lb.hidden=false; lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
+    else if(A){ lb.hidden=true; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; }   // Unlock: the OS bar
+    else if(L){ lb.hidden=false; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve
+    else { lb.hidden=false; lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; }
+    var w=$('lockWhy'); if(w){ w.hidden=!(why&&!lb.hidden); w.textContent=why; }
+    var lk=$('lockedBadge'); if(lk){ lk.hidden=!(A&&!again); lk.textContent='Locked for handoff'+(docVersion()?' · '+docVersion():''); }
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
-    var el=$('lockList'), show=(!L||again)&&n>0;
+    // The last call settled while a part is selected: a one-line nudge under the crumb (Lock is out of view).
+    var rows=needsRows();
+    if(NEEDS_N!==null&&NEEDS_N>0&&rows.length===0&&SEL&&!wait) READY_NUDGE=true;
+    NEEDS_N=rows.length;
+    var el=$('lockList'), show=(!L||again)&&rows.length>0;
     el.hidden=!show; if(!show){ el.innerHTML=''; return; }
-    el.innerHTML=lockListHtml(items, lockWhy(n));
+    el.innerHTML=lockListHtml(rows);
     bindLkItems(el);
   }
   // "v1.3 · edited 2 days ago", or "v1.3 · locked by Tia Test, today".
@@ -4472,11 +4536,15 @@
     patch('layout', n, {actor:'human', pinned:false, action:'set the brief’s '+k});
   }
 
-  // The part the side tab is showing (a click selects it; Escape or Done lets go).
-  var SEL=null, SEL_ITEM=null;
+  // The part the side tab is showing (a click selects it; Esc, ← or "← Brief" lets go).
+  var SEL=null, SEL_ITEM=null, HIST=null, PANEL_SCROLL=null;
   function select(key, item){
-    // Another part (or none) ends a look at where something came from.
+    // Writing another part (or none) saves the one being written first; a reopened part with no reason stays.
+    if(EDIT&&EDIT.key!==key&&!commitEdit()) return;
+    // Another part (or none) ends a look at where something came from, or at its History.
     if(PROV_INSPECT){ PROV_INSPECT=false; var F=OSF(); if(F&&F.closePanel) F.closePanel(true); }
+    if(key!==SEL){ HIST=null; REGEN_OPEN=null; READY_NUDGE=false; PANEL_SCROLL=null; }
+    if(key) hintSeen();
     SEL=key||null; SEL_ITEM=SEL&&item!=null?item:null; markItem();
     document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
     var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
@@ -4509,7 +4577,7 @@
       row.appendChild(g); row.appendChild(r);
     }
     row.addEventListener('click', function(e){
-      if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov')) return;
+      if(e.target.closest('.grip,.redge,.ined,.ctrls,.notes,.why,.prov')) return;
       if(SEL!==f.key) select(f.key);
     });
     // A part's text is a clan-field button whose tap opens "Where this came
@@ -4518,7 +4586,7 @@
     // A tap from the keyboard (detail 0) goes straight through.
     row.addEventListener('click', function(e){
       var c=e.target.closest&&e.target.closest('.clf');
-      if(row.__clfPass||!e.detail||!c||!row.contains(c)||e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov')) return;
+      if(row.__clfPass||!e.detail||!c||!row.contains(c)||e.target.closest('.grip,.redge,.ined,.ctrls,.notes,.why,.prov')) return;
       e.stopPropagation(); e.preventDefault();
       if(SEL!==f.key) select(f.key);
       clearTimeout(row.__clfT);
@@ -4531,7 +4599,7 @@
     // (in the OS's edit mode a text part's clan-field takes the tap itself).
     row.addEventListener('dblclick', function(e){
       clearTimeout(row.__clfT);
-      if(e.target.closest('.grip,.redge,.edit,.ctrls,.notes,.why,.prov,button:not(.clf)')) return;
+      if(e.target.closest('.grip,.redge,.ined,.ctrls,.notes,.why,.prov,button:not(.clf)')) return;
       if(!canWrite(f.key)||(EDIT_MODE&&row.querySelector('clan-field[as="block"]'))) return;
       if(window.getSelection) try{ window.getSelection().removeAllRanges(); }catch(x){}
       startEdit(row, f);
@@ -4634,70 +4702,174 @@
     }
     h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
   }
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&!e.defaultPrevented&&SEL&&!document.querySelector('#fields .edit')) select(null); });
+  // Back to the brief: Esc or ← (outside a field), "← Brief", or a click on empty paper. Esc steps
+  // back one level first: an edit is cancelled, History or the redraft ask closes.
+  function typing(t){ return !!(t&&t.closest&&t.closest('input,textarea,select,[contenteditable="true"],[contenteditable="plaintext-only"]')); }
+  document.addEventListener('keydown', function(e){
+    if(e.defaultPrevented||phase!=='doc') return;
+    if(e.key==='Escape'){
+      if(EDIT){ e.preventDefault(); cancelEdit(); return; }
+      if(PROV_INSPECT) return;
+      if(HIST){ e.preventDefault(); closeHist(); return; }
+      if(REGEN_OPEN&&typing(e.target)){ e.preventDefault(); REGEN_OPEN=null; renderSelPart(); return; }
+      if(SEL) select(null);
+      return;
+    }
+    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)&&EDIT){ e.preventDefault(); commitEdit(); return; }
+    if(typing(e.target)||e.altKey||e.metaKey||e.ctrlKey) return;
+    if(e.key==='ArrowLeft'&&SEL&&!EDIT&&!PROV_INSPECT&&!e.target.closest('.grip,.redge,.seg,[role="radiogroup"]')){
+      if(HIST){ closeHist(); return; }
+      select(null); return;
+    }
+    // Enter on a selected part writes it (as Edit and a double-click do).
+    if(e.key==='Enter'&&SEL&&!EDIT&&!PROV_INSPECT&&!e.target.closest('button,a,summary,[role="button"],clan-field')){
+      var f=fieldOf(SEL), r=rowOf(SEL); if(f&&r&&canWrite(f.key)){ e.preventDefault(); startEdit(r,f); }
+    }
+  });
+  // A click on the paper outside any part is a click on nothing: back to the brief.
+  (function(){ var sh=$('sheet'); if(sh) sh.addEventListener('click', function(e){
+    if(phase!=='doc'||!SEL||EDIT) return;
+    if(e.target.closest('#fields > .row,button,a,input,label,select,textarea,.boards,.board,[contenteditable]')) return;
+    select(null);
+  }); })();
+  // The hint shows until the first selection, then never again on this device.
+  function hintSeen(){ try{ window.localStorage.setItem('napkin.brief.hinted','1'); }catch(e){} var h=$('sideHint'); if(h) h.hidden=true; }
+  function hintShown(){ try{ return window.localStorage.getItem('napkin.brief.hinted')!=='1'; }catch(e){ return true; } }
 
   // The selected part: what can be done to it, what it was built from, why it says it, and its place.
   // The decision a look change records: "show Background as bullets", "show Background in the tint tone".
   function lookWhat(f, prop, v){ return 'show '+partLabel(f)+(prop==='as'?' as '+AS_WORDS[v].toLowerCase():' in the '+v+' tone'); }
+  // The PART view (the side tab design, state b), in its fixed order: 1 the crumb, 2 the state chips,
+  // 3 the actions (Edit, the view's one primary; Done and Cancel while writing), 4 Place on page,
+  // one row that never folds, 5 Your call, 6 Built from (with Also in), 7 Why it says this, folded,
+  // 8 History · n ›. Fixed-height controls sit above what can grow, and nothing quotes the sheet.
   function renderSelPart(){
     var el=$('selPart'), f=SEL?fieldOf(SEL):null;
     if(!el||PROV_INSPECT) return;   // the panel is showing where something came from
-
-    if(!f||phase!=='doc'){ el.hidden=true; el.innerHTML=''; return; }
-    var A=approveLocked(), kept=isLocked(f.key), conf=isConf(f.key), wr=canWrite(f.key), items=layoutItems(), at=layoutIndex(items,f.key), lk=at>=0?items[at]:{}, can=layoutCanStep(items, f.key), kd=kindOf(f, lk.as), tone=lk.tone||'plain';
+    var bv=$('briefView'), hint=$('sideHint'); if(hint) hint.hidden=!hintShown();
+    if(!f||phase!=='doc'){ el.hidden=true; el.innerHTML=''; if(bv) bv.hidden=false; return; }
+    el.hidden=false; if(bv) bv.hidden=true;   // the brief view or the part view, never both
+    if(HIST===f.key){ renderHist(el, f); return; }
+    var A=approveLocked(), kept=isLocked(f.key), conf=isConf(f.key), wr=canWrite(f.key), reo=A&&!!reopenedOf(f.key), items=layoutItems(), at=layoutIndex(items,f.key), lk=at>=0?items[at]:{}, can=layoutCanStep(items, f.key), kd=kindOf(f, lk.as), tone=lk.tone||'plain';
+    var E=EDIT&&EDIT.key===f.key?EDIT:null;
     var notes=notesHtml(f), qs=f.key==='open_questions'?openQs():[], ql=qs.filter(function(o){ return !o.kind; }).length;
     var ov=CHAIN.state==='ok'?ownVerdictOf(f.key):null, nOpen=ql+(CHAIN.state==='ok'?crossVerdictsOf(f.key).filter(function(c){ return c.open; }).length+(ov&&ov.open?1:0)+(proposalOf(f.key)&&!docLocked()?1:0):0);
-    el.hidden=false;
-    el.innerHTML='<h4>Selected part<button type="button" class="side-link" data-sp="done" title="Let go of this part (Esc)">Done</button></h4>'
-      // the part's name, its certainty and who wrote it from what (ClanFields.partView's head)
-      +'<div class="sp-head" id="spHead"><div class="clf-rv pv"><div class="rv-head"><span class="rv-pname">'+esc(headOf(f))+'</span></div></div></div>'
-      +'<div class="sp-acts">'
-      +(wr?'<button type="button" class="sp-btn sp-edit" data-sp="edit">Edit</button>':'')
-      +(!A?'<button type="button" class="sp-btn" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(WRITER)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
-      +(!A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':'')
-      +'<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'
-      +'</div>'
-      // Place on page sits under the actions, near the top (owner, 2026-11-10). No Width presets (owner,
-      // 11 Nov): a part is sized by dragging its edge on the sheet.
-      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary>'
-        // how the part looks (the mock's Show as and Tone): the kind it is drawn as, and what sits behind it
-        +'<div class="tk2">Show as</div><div class="seg seg-as" role="group" aria-label="Show as">'
-        +AS_KINDS.map(function(k){ return '<button type="button" data-as="'+k+'" aria-pressed="'+(kd===k)+'">'+AS_WORDS[k]+'</button>'; }).join('')+'</div>'
-        +'<div class="tk2" style="margin-top:10px">Tone</div><div class="seg" role="group" aria-label="Tone">'
-        +TONES.map(function(t){ return '<button type="button" data-tone="'+t+'" aria-pressed="'+(tone===t)+'">'+TONE_WORDS[t]+'</button>'; }).join('')+'</div>'
-        +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(can[0]?'':' disabled')+' title="Up a row: out of its row into one of its own, or above the row before">↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(can[1]?'':' disabled')+' title="Down a row: out of its row into one of its own, or below the row after">↓ Move down</button></div></details>':'')
+    var calls=NEEDS_N||0, line=lineCrumb(f);
+    var h='<div class="sp-crumb"><button type="button" class="sp-back" data-sp="back" title="Back to the brief (Esc)">← Brief</button><span aria-hidden="true">›</span>'
+      +'<span class="sp-name">'+esc(headOf(f))+(line?' <span aria-hidden="true">›</span> '+esc(line):'')+(E?' · editing':'')+'</span>'
+      +'<span class="sp-saved" id="spSaved" hidden>Saved ✓</span>'
+      +(calls&&!E?'<button type="button" class="side-link sp-calls" data-sp="back" title="What needs you before the brief can lock">'+calls+(calls===1?' call':' calls')+'</button>':'')+'</div>'
+      +(READY_NUDGE&&!E?'<p class="sp-ready">Brief is ready to lock · <button type="button" class="side-link" data-sp="back">← Brief</button></p>':'')
+      +'<div class="sp-chips" id="spChips">'+chipsHtml(f)+'</div>';
+    if(E){
+      // Editing: Done where Edit was, Cancel beside it, the keys, and why (needed for a reopened part).
+      var need=!!E.reo, why=String(E.reason||'').trim();
+      h+='<div class="sp-acts sp-editing"><button type="button" class="btn-primary sp-done" data-sp="done"'+((need&&!why)||E.saving?' disabled':'')+'>'+(E.saving?'Saving…':'Done')+'</button>'
+        +'<button type="button" class="sp-btn" data-sp="cancel"'+(E.saving?' disabled':'')+'>Cancel</button><span class="sp-keys">⌘↵ done · Esc cancel</span></div>'
+        +'<label class="sp-reason"><span>'+(E.filled&&need?'Reason, filled in for you':'Why this change? '+(need?'(needed)':'(optional)'))+'</span>'
+        +'<textarea class="sp-rat" id="spRat" rows="'+(need?3:2)+'"'+(need?' required':'')+' placeholder="'+(need?'What the client asked for':'Recorded with the change')+'">'+esc(E.reason)+'</textarea></label>'
+        +(need?'<p class="sp-note">The rest of the brief stays as the client saw it.</p>':'')
+        +(E.err?'<p class="sp-err" role="alert">'+esc(E.err)+'</p>':'')
+        +'<div class="sp-acts">'+keepBtn(f,A,kept)+confBtn(f,wr,conf)+'</div>';
+    } else if(A&&!reo){
+      // Locked: one way in, for a change the client asked for.
+      h+='<div class="sp-acts"><button type="button" class="btn-primary" data-sp="reopen" title="A part reopens for a change the client asked for; the rest stays locked">Reopen this part…</button>'+confBtn(f,wr,conf)+'</div>';
+    } else {
+      h+='<div class="sp-acts">'
+        +(wr?'<button type="button" class="btn-primary sp-edit" data-sp="edit" title="Write it here, on the sheet (or double-click it, or press Enter)">Edit</button>':'')
+        +(!A?'<button type="button" class="sp-btn" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' aria-expanded="'+(REGEN_OPEN===f.key)+'" title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(WRITER)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
+        +keepBtn(f,A,kept)+confBtn(f,wr,conf)
+        +'</div>'+regenHtml(f);
+    }
+    // Place on page: one fixed row, always open (owner, 2026-11-11). No Width: a part is sized by
+    // dragging its edge on the sheet (the rows model). Hidden when locked.
+    h+=(!docLocked()?'<div class="sp-l" role="group" aria-label="Place on page">'
+        +'<label class="sp-lf"><span>Show as</span><select aria-label="Show as" data-l="as">'+AS_KINDS.map(function(k){ return '<option value="'+k+'"'+(kd===k?' selected':'')+'>'+AS_WORDS[k]+'</option>'; }).join('')+'</select></label>'
+        +'<label class="sp-lf"><span>Tone</span><select aria-label="Tone" data-l="tone">'+TONES.map(function(t){ return '<option value="'+t+'"'+(tone===t?' selected':'')+'>'+TONE_WORDS[t]+'</option>'; }).join('')+'</select></label>'
+        +'<span class="sp-mv"><button type="button" class="sp-btn" data-sp="up"'+(can[0]?'':' disabled')+' aria-label="Move up" title="Up a row: out of its row into one of its own, or above the row before">↑</button><button type="button" class="sp-btn" data-sp="down"'+(can[1]?'':' disabled')+' aria-label="Move down" title="Down a row: out of its row into one of its own, or below the row after">↓</button></span></div>':'')
       +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
         +qs.map(function(o){ return '<div class="nb-q'+(o.kind?' done':'')+'" data-q="'+o.i+'"><span class="nb-t">'+esc(o.q)+'</span>'
           +(o.kind?'<span class="nb-a'+(o.kind==='left'?' left':'')+'">'+esc((o.kind==='left'?'Left open: ':'')+o.a)+'</span>'
             :(A&&!wr?'':'<span class="nb-act"><button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button><button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
           +'</div>'; }).join('')
         +'<div class="notes">'+notes+'</div></div>':'')
-      +lineHtml(f)
-      +'<div class="sp-prov" id="spProv"></div>';
+      +'<div class="sp-prov" id="spProv"></div>'
+      +'<button type="button" class="sp-hist side-link" id="spHist" data-sp="hist" hidden>History ›</button>';
+    var keepScroll=$('stab')?$('stab').scrollTop:0;
+    el.innerHTML=h;
+    if($('stab')) $('stab').scrollTop=keepScroll;
     var row=rowOf(f.key);
     el.querySelectorAll('[data-sp]').forEach(function(b){ b.addEventListener('click', function(){
       var a=b.getAttribute('data-sp');
-      if(a==='done') select(null);
-      else if(a==='edit'&&row){ startEdit(row,f); row.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
-      else if(a==='regen'&&row){ startRegen(row,f); row.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
+      if(a==='back') select(null);
+      else if(a==='edit'&&row) startEdit(row,f);
+      else if(a==='done') commitEdit();
+      else if(a==='cancel') cancelEdit();
+      else if(a==='regen') startRegen(row,f);
+      else if(a==='regen-x'){ REGEN_OPEN=null; renderSelPart(); }
+      else if(a==='regen-go'){ var g=String(($('spRegenNote')||{}).value||'').trim(); REGEN_OPEN=null; REGEN_NOTE=''; regenField(f,g); }
       else if(a==='keep') toggleLock(f);
       else if(a==='conf') toggleConf(f);
+      else if(a==='reopen') reopenPart(f);
+      else if(a==='hist') openHist(f);
       else if(a==='up'||a==='down') saveLayout(layoutStep(layoutItems(), f.key, a==='up'?-1:1), 'move '+headOf(f)+' '+a);
     }); });
-    el.querySelectorAll('.sp-l [data-as]').forEach(function(b){ b.addEventListener('click', function(){ var k=b.getAttribute('data-as'); if(k===kd) return; saveLayout(layoutLook(layoutItems(), f.key, 'as', k), lookWhat(f, 'as', k)); }); });
-    el.querySelectorAll('.sp-l [data-tone]').forEach(function(b){ b.addEventListener('click', function(){ var t=b.getAttribute('data-tone'); if(t===tone) return; saveLayout(layoutLook(layoutItems(), f.key, 'tone', t), lookWhat(f, 'tone', t)); }); });
-    // Place on page stays open while its buttons rewrite the panel.
-    var ld=el.querySelector('.sp-l'); if(ld) ld.addEventListener('toggle', function(){ OPEN_WHY['spl:'+f.key]=ld.open; });
+    el.querySelectorAll('[data-preset]').forEach(function(b){ b.addEventListener('click', function(){
+      var t=$('spRegenNote'); if(!t) return; var p=b.getAttribute('data-preset').toLowerCase();
+      t.value=t.value.trim()?t.value.trim().replace(/[.,;]?$/,', ')+p:b.getAttribute('data-preset'); REGEN_NOTE=t.value; t.focus(); }); });
+    var rn=$('spRegenNote'); if(rn) rn.addEventListener('input', function(){ REGEN_NOTE=rn.value; });
+    var as=el.querySelector('.sp-l [data-l="as"]'); if(as) as.addEventListener('change', function(){ var k=as.value; if(k===kd) return; if(EDIT&&!commitEdit()) return; saveLayout(layoutLook(layoutItems(), f.key, 'as', k), lookWhat(f, 'as', k)); });
+    var tn=el.querySelector('.sp-l [data-l="tone"]'); if(tn) tn.addEventListener('change', function(){ var t=tn.value; if(t===tone) return; if(EDIT&&!commitEdit()) return; saveLayout(layoutLook(layoutItems(), f.key, 'tone', t), lookWhat(f, 'tone', t)); });
+    var rat=$('spRat'); if(rat&&E){
+      rat.addEventListener('input', function(){ E.reason=rat.value; E.err=''; draftPut(f,{text:editText(E.el), reason:E.reason}); var d=el.querySelector('.sp-done'); if(d) d.disabled=!!E.reo&&!rat.value.trim();
+        var lab=el.querySelector('.sp-reason > span'); if(lab&&E.reo&&!rat.value.trim()) lab.textContent='Why this change? (needed)'; });
+      rat.addEventListener('keydown', function(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); cancelEdit(); } else if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); commitEdit(); } });
+    }
     var n=el.querySelector('.sp-call .notes'); if(n) bindNotes(n, f);
     bindAnswers(el);
     renderProv();
   }
-  // A selected list line: its words and where it sits, nothing more (the part's view says where it came from).
-  function lineHtml(f){
+  function keepBtn(f,A,kept){ return !A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':''; }
+  function confBtn(f,wr,conf){ return '<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'; }
+  // The state chips, one line: how sure the writing is and how many facts it rests on (from the
+  // record), and Kept, Confidential or Open for the client's change only when they are on.
+  function chipsHtml(f){
+    var F=OSF(), x=F&&F.partFacts?F.partFacts(f.key):null, out=[];
+    if(x&&x.level) out.push('<span class="sp-chip-c'+(x.tone?' '+x.tone:'')+'">'+esc(x.level)+'</span>');
+    if(x&&x.facts) out.push('<span class="sp-chip-c q">'+x.facts+(x.facts===1?' fact':' facts')+'</span>');
+    if(isLocked(f.key)&&!approveLocked()) out.push('<span class="sp-chip-c on">Kept</span>');
+    if(isConf(f.key)) out.push('<span class="sp-chip-c on">Confidential</span>');
+    if(approveLocked()&&reopenedOf(f.key)) out.push('<span class="sp-chip-c warn">Open for the client’s change</span>');
+    return out.join('');
+  }
+  // Reopen this part…: straight to /client-review/reopen when the client asked for a change on it;
+  // otherwise the brief view's Reopen a part…, which says what to record first.
+  function reopenPart(f){
+    var p=reopenable().filter(function(x){ var g=fieldOfAddress(x.address); return g&&g.key===f.key; })[0];
+    if(!p){ select(null); toggleReopen(true); return; }
+    hostPost('/client-review/reopen', {answer:p.decision}).then(function(res){
+      if(!(res&&res.ok)){ toast(hostErrText(res)); return; }
+      var F=OSF(); if(F) F.reload();
+      toast(headOf(f)+' is open for the client’s change.');
+    }, function(){ toast('That did not go through. Check your connection and try again.'); });
+  }
+  // History · n ›, opened inside the panel (level 2): who wrote it, when, its decision's id, and the
+  // decisions on the record. Back (←, Esc, the crumb) puts the part view back where it was scrolled.
+  function openHist(f){ var st=$('stab'); PANEL_SCROLL=st?st.scrollTop:null; HIST=f.key; renderSelPart(); if(st) st.scrollTop=0; }
+  function closeHist(){ HIST=null; renderSelPart(); var st=$('stab'); if(st&&PANEL_SCROLL!=null) st.scrollTop=PANEL_SCROLL; PANEL_SCROLL=null; }
+  function renderHist(el, f){
+    var F=OSF();
+    el.innerHTML='<div class="clf-insp sp-hist-v"><div class="clf-ibar"><button type="button" class="clf-ibtn back" data-h="back" title="Back to '+esc(headOf(f))+'" aria-label="Back">←</button>'
+      +'<nav class="clf-crumbs" aria-label="Trail"><button type="button" data-h="brief" title="The brief">Brief</button><span aria-hidden="true">›</span><button type="button" data-h="back">'+esc(headOf(f))+'</button><span aria-hidden="true">›</span><b>History</b></nav>'
+      +'<button type="button" class="clf-ibtn" data-h="back" title="Close (Esc)" aria-label="Close">×</button></div>'
+      +'<div class="clf-insp-b">'+(F&&F.partHistory?F.partHistory(f.key):'<p class="muted">The history shows in the Napkin host.</p>')+'</div></div>';
+    el.querySelectorAll('[data-h]').forEach(function(b){ b.addEventListener('click', function(){ if(b.getAttribute('data-h')==='brief') select(null); else closeHist(); }); });
+  }
+  // A selected list line: the crumb says which ("line 3 of 7"); the line stays lit on the sheet.
+  function lineCrumb(f){
     if(SEL_ITEM==null||f.type!=='list') return '';
-    var v=get(f.key), list=Array.isArray(v)?v:v==null?[]:[v], x=list[SEL_ITEM];
-    if(x==null) return '';
-    return '<div class="sp-line" id="spLine"><div class="clf-rv"><span class="rsp-k">This line<em>line '+(SEL_ITEM+1)+' of '+list.length+'</em></span><p class="rv-title">“'+esc(String(x))+'”</p></div></div>';
+    var v=get(f.key), list=Array.isArray(v)?v:v==null?[]:[v];
+    return list[SEL_ITEM]==null?'':'line '+(SEL_ITEM+1)+' of '+list.length;
   }
   // The line of a list part that is selected is lit on the sheet.
   function markItem(){
@@ -4737,12 +4909,17 @@
   }
   function renderProv(){
     var b=$('spProv'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f||PROV_INSPECT) return;
+    var ch=$('spChips'); if(ch) ch.innerHTML=chipsHtml(f);
     if(!(F&&F.partView)){ b.innerHTML='<p class="muted">Where this came from shows in the Napkin host.</p>'; return; }
     if(CHAIN.state==='idle') loadChain();
-    var also=alsoOf(f), sig=f.key+'|'+((osView()||{}).version||'')+'|'+(osView()?1:0)+'|'+CHAIN.state+'|'+also.map(function(a){ return a.key; }).join(',')+'|'+JSON.stringify(get(f.key));
+    // What the panel shows already (Your call): Why leaves out a Because line that repeats it.
+    var call=$('selPart')&&$('selPart').querySelector('.sp-call'), seen=call?call.textContent:'', sheet=valToText(get(f.key), f.type);
+    var also=alsoOf(f), sig=f.key+'|'+((osView()||{}).version||'')+'|'+(osView()?1:0)+'|'+CHAIN.state+'|'+also.map(function(a){ return a.key; }).join(',')+'|'+JSON.stringify(get(f.key))+'|'+seen.length;
+    var hb=$('spHist'), facts=F.partFacts?F.partFacts(f.key):null;
+    if(hb){ var n=facts?facts.decisions:0; hb.hidden=!n; hb.textContent='History · '+n+' ›'; }
     if(b.getAttribute('data-sig')===sig&&b.childNodes.length) return;   // drawn already
     b.setAttribute('data-sig', sig);
-    F.partView(f.key, b, {panel:true, name:headOf(f), head:$('spHead'), also:also});
+    F.partView(f.key, b, {panel:true, compact:true, name:headOf(f), sheet:sheet, seen:seen, also:also});
     b.querySelectorAll('[data-clf-part]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-clf-part')); }); });
   }
   // Where something came from opens here, in the side tab, never in a drawer
@@ -4758,15 +4935,20 @@
     f=FIELDS.filter(function(x){ return x.key===p||p.indexOf(x.key+'.')===0; })[0];
     return f?{key:f.key, item:null}:null;
   }
+  // A drill-down (level 2) takes the panel under its own crumb, "← The job › Fact": the panel scrolls
+  // to its top, and back puts the part view where it was scrolled. Never a drawer.
   function provHost(ref, kind){
-    if(ref==null){ if(PROV_INSPECT){ PROV_INSPECT=false; renderSelPart(); } return null; }
+    var st=$('stab');
+    if(ref==null){ if(PROV_INSPECT){ PROV_INSPECT=false; renderSelPart(); if(st&&PANEL_SCROLL!=null) st.scrollTop=PANEL_SCROLL; PANEL_SCROLL=null; } return null; }
     var el=$('selPart'); if(phase!=='doc'||!el) return null;
     if(kind==='path'||kind==='item'){
       var at=provPartOf(ref);
       if(at){ PROV_INSPECT=false; if(SEL!==at.key||SEL_ITEM!==at.item) select(at.key, at.item); else renderSelPart(); return true; }
     }
     var f=SEL?fieldOf(SEL):null;
+    if(!PROV_INSPECT&&st){ PANEL_SCROLL=st.scrollTop; st.scrollTop=0; }
     PROV_INSPECT=true; el.hidden=false; el.removeAttribute('data-sig');
+    var bv=$('briefView'); if(bv) bv.hidden=true;
     return {el:el, root:f?headOf(f):'Brief'};
   }
   (function(){ var F=OSF(); if(F&&F.setPanelHost) F.setPanelHost(provHost); })();
@@ -4800,15 +4982,15 @@
 
   // ---------- one handler per action: the side tab's controls and the OS bar's buttons ----------
   var REDRAFT_ARMED=null;
+  // Draft it again lives in the OS bar only (the side tab design): one press arms it ("Click again to
+  // redraft", 4 s), a second runs the whole crew, so a stray click never redrafts a brief.
   function redraftClick(){
-    var b=$('redraft');
     if(approveLocked()){ toast('The brief is locked. Unlock it to draft it again.'); return; }
     if(!REDRAFT_ARMED){
-      b.classList.add('armed'); b.lastChild.textContent='Click again to redraft';
-      REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; b.classList.remove('armed'); b.lastChild.textContent='Draft it again'; sendBar(); }, 4000);
+      REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; sendBar(); }, 4000);
       sendBar(); return;
     }
-    clearTimeout(REDRAFT_ARMED); REDRAFT_ARMED=null; b.classList.remove('armed'); b.lastChild.textContent='Draft it again';
+    clearTimeout(REDRAFT_ARMED); REDRAFT_ARMED=null;
     sendBar();
     draftNow('');
   }
@@ -4817,10 +4999,18 @@
     redraft:redraftClick,
     lock:function(){ lockClick(); },
     reopen:function(){ toggleReopen(); },
-    unlock:function(){ unlockClick(); }
+    unlock:function(){ unlockClick(); },
+    client:function(){ doExport('pdf','client'); },
+    html:function(){ doExport('html'); },
+    gridPdf:function(){ doExport('pdf','grid'); },
+    gridHtml:function(){ doExport('html','grid'); },
+    plainHtml:function(){ doExport('html','plain'); },
+    plainPdf:function(){ doExport('pdf','plain'); }
   };
-  // What the OS bar shows for the brief (clan:bar, docs/contracts/clan-fields.md):
-  // its buttons are the side tab's, by the same ids, and the pill is the state.
+  // What the OS bar shows for the brief (clan:bar, docs/contracts/clan-fields.md). The document's
+  // commands are the bar's alone: Save · PDF, Draft it again, the other ways to save (past the two
+  // the bar shows, in the document menu), and while locked Unlock and Reopen a part…. Lock and the
+  // state pill are the side tab's brief view, so the bar does not repeat them (the side tab design).
   function barItems(){
     // Before the sheet (the ask, the crew at work) the bar has no buttons, but
     // still the brief's own word for its state, so the OS never guesses it.
@@ -4830,12 +5020,16 @@
       var mode=phase==='intake'?{kind:'mode', mode:'ask'}:{kind:'mode', mode:'working', label:!j?'Working':draftLive()?'Working · Step '+(at+1)+'/'+PLAN.length:j.state==='done'?'Done':'Stopped'};
       return [mode, {kind:'status', label:'Draft', tone:null, locked:false}];
     }
-    var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, st=statusNow(), lb=$('lockBtn');
-    var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'Export a print-ready PDF'}];
-    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again'});
+    var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, L=docLocked();
+    var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
+    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
-    else items.push({kind:'button', id:'lock', label:re?'Lock the brief again':'Lock the brief', disabled:!!(lb&&lb.disabled), title:lb&&lb.disabled&&lb.title||undefined});
-    items.push({kind:'status', label:st.label, tone:st.tone, locked:st.locked});
+    items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The sheet without the parts marked Confidential, for the client':'Lock the brief first: the client sees the version you lock'});
+    items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});
+    items.push({kind:'button', id:'gridPdf', label:'Grid PDF', title:'The grid template: two sheets of boxes, as before the new page'});
+    items.push({kind:'button', id:'gridHtml', label:'Grid HTML', title:'The grid template as a web page'});
+    items.push({kind:'button', id:'plainPdf', label:'Plain PDF', title:'The plain layout as a PDF, without the grid'});
+    items.push({kind:'button', id:'plainHtml', label:'Plain HTML', title:'The plain layout, without the grid'});
     return items;
   }
   var BAR_LAST=null;
@@ -4979,6 +5173,8 @@
     sh.classList.toggle('frame-boxed', frame==='boxed'); sh.classList.toggle('head-tab', head==='tab');
     sh.classList.toggle('cover-band', cover==='band'); sh.classList.toggle('why-show', why==='show');
     var LOOK={frame:frame, headings:head, cover:cover, why:why};
+    // The folded Look's summary: Frame · Headings · Cover, in the buttons' words.
+    var ls=$('lookSum'); if(ls) ls.textContent=[frame==='boxed'?'Boxed':'Open', head==='tab'?'Tab':'Label', cover==='band'?'Band':'Plain'].join(' · ');
     document.querySelectorAll('#stab .seg[data-look]').forEach(function(s){
       var cur=LOOK[s.getAttribute('data-look')];
       s.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-v')===cur)); });
@@ -5000,7 +5196,8 @@
     var tab=$('sheetTab'), pn=String(get('project_name')||'').trim()||derivedTitle(); tab.textContent=pn;
   }
   function renderLogos(){
-    var ls=logosOf(), box=$('logoList');
+    var ls=logosOf(), box=$('logoList'), sm=$('logoSum');
+    if(sm) sm.textContent=String(ls.length);
     if($('sheetNames')) renderSheetHead();
     // With no picture uploaded for the client or the agency, their tiles stand in (initials on
     // their colours), as on the sheet; Change uploads the real one into that slot.
@@ -5075,15 +5272,6 @@
   document.querySelectorAll('#stab .seg[data-look] button').forEach(function(b){ b.addEventListener('click', function(){
     lookSet(b.parentNode.getAttribute('data-look'), b.getAttribute('data-v')); }); });
   $('resetLook').addEventListener('click', resetLook);
-  // Save · PDF's other ways to save, in its menu.
-  (function(){
-    var more=$('saveMore'), menu=$('saveMenu');
-    function show(on){ menu.hidden=!on; more.setAttribute('aria-expanded', String(on)); if(on){ var f=menu.querySelector('.smi'); if(f) f.focus(); } }
-    more.addEventListener('click', function(e){ e.stopPropagation(); show(menu.hidden); });
-    menu.addEventListener('click', function(){ show(false); });
-    menu.addEventListener('keydown', function(e){ if(e.key==='Escape'){ show(false); more.focus(); } });
-    document.addEventListener('click', function(e){ if(!menu.hidden&&!menu.contains(e.target)) show(false); });
-  })();
   document.querySelectorAll('#stab [data-act]').forEach(function(b){ var a=b.getAttribute('data-act'); if(ACTIONS[a]) b.addEventListener('click', function(){ ACTIONS[a](); }); });
 
   // ---------- the sheet as it prints (features/brief-new-ui.clan) ----------

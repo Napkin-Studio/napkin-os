@@ -37,7 +37,7 @@ export type BarItem =
 export type BarStatus = Extract<BarItem, { kind: 'status' }>
 
 /** What one bar takes. The rest of an app's list is dropped, in order. */
-export const BAR_LIMITS = { button: 6, chip: 4, status: 1, gate: 1, mode: 1, label: 28, gateLabel: 200, id: 64, title: 140 } as const
+export const BAR_LIMITS = { button: 10, chip: 4, status: 1, gate: 1, mode: 1, label: 28, gateLabel: 200, id: 64, title: 140 } as const
 
 /** The buttons drawn in the bar itself; any more go into More. */
 export const BAR_BUTTONS_SHOWN = 2
@@ -49,7 +49,7 @@ function text(v: unknown, max: number): string {
 /**
  * The items an app asked for, as the bar will take them: text only (never
  * markup), a string id each (unique), a label of at most 28 characters, at
- * most 6 buttons, 4 chips and 1 status. An item the bar would
+ * most 10 buttons, 4 chips and 1 status. An item the bar would
  * refuse is left out with a word in the console for the app's author, not
  * allowed to break the rest.
  */

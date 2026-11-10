@@ -1913,6 +1913,7 @@ var ClanFields=(function(){
     if(!VIEW) return {head:head(), body:'<p class="rv-none">Reading the record…</p>'};
     if(!textOf(valueAt(path))) return {head:head(), body:'<p class="rv-none">Nothing is written here yet.</p>'};
     var also=arr(opts.also), alsoSec=also.length?sec('Also used in','<details class="rv-more pv-also"><summary>Show '+(also.length===1?'it':'them')+'</summary><div class="rv-uses"><div class="rv-use">'+also.map(function(a){ return '<button type="button" class="rv-cchip" data-clf-part="'+esc(a.key)+'">'+esc(a.label||words(a.key))+'</button>'; }).join(' ')+'</div></div></details>',plural(also.length,'part')):'';
+    if(opts.compact) return {head:head(x?pvPill(x.rs):'', x?pvMeta(x):''), body:x?pvCompact(path,x,opts,also):'<p class="rv-none">Nothing on the record wrote this yet.</p>'+pvAlso(also)};
     var decs=decsSec(pvDecs(path));
     if(!x) return {head:head(), body:'<p class="rv-none">Nothing on the record wrote this yet.</p>'+alsoSec+decs};
     var h='', said=[];
@@ -1941,12 +1942,69 @@ var ClanFields=(function(){
     return {head:head(pvPill(x.rs),pvMeta(x)), body:h+alsoSec+decs};
   }
   function partHTML(path,opts){ var p=partParts(path,opts); return p.head+p.body; }
+  // ── the compact part view (opts.compact: the brief's side tab, features/brief-new-ui.clan) ──
+  // Built from as compact rows (your words, the library, facts, points), the top five, then "All n ›";
+  // a your-words row that says what the sheet already says (opts.sheet) is left out, so the panel never
+  // quotes the part back. Then "Also in" as part chips, and Why it says this folded, without the
+  // certainty (the state chips carry it) and without a Because line the panel already shows (opts.seen).
+  function normText(t){ return String(t==null?'':t).toLowerCase().replace(/[\u2018\u2019\u201C\u201D"'`.,;:!?()\[\]\-–—…]/g,' ').replace(/\s+/g,' ').trim(); }
+  function echoes(quote,sheet){ var q=normText(quote), sh=normText(sheet); return !!q&&!!sh&&(q===sh||sh.indexOf(q)!==-1); }
+  function pvRow(ref,title,meta,val){ return go(ref,'pv-bf','<span class="pv-bf-t">'+esc(clip(title,90))+'</span>'+(meta?'<small>'+esc(meta)+'</small>':'')+(val?'<b class="pv-bf-v">'+esc(clip(val,18))+'</b>':'')); }
+  function pvRows(path,x,sheet){
+    var rows=[]; rows.echoed=0;
+    x.caps.forEach(function(c){ var ci=captures()[c], m=materials()[ci.material_id], q=ci.quote||textOf(ci.value); if(echoes(q,sheet)){ rows.echoed++; return; }
+      rows.push(pvRow(c,'“'+q+'”',matCap(m)+(ci.status==='assumption'?' · assumed, not said':''),'')); });
+    x.mats.forEach(function(m){ var mt=materials()[m]; if(!mt) return; var typed=mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text;
+      if(typed&&echoes(mt.text,sheet)){ rows.echoed++; return; }
+      rows.push(pvRow(m,typed?'“'+mt.text+'”':(mt.name||'A file'),typed?'your prompt':'your file','')); });
+    x.psgs.forEach(function(p){ var pg=passages()[p]; rows.push(pvRow(p,pg.text?'“'+pg.text+'”':(pg.citation||'A passage'),(pg.citation||'A passage')+' · knowledge library','')); });
+    x.fs.forEach(function(id){ var P=pins()[id]; if(!P) return; var sr=srcOf(P), r=sr&&sr.rec;
+      rows.push(pvRow(id,(confidential(id)?'🔒 ':'')+label(P),[id, r?pubName(r.publisher)||r.domain||'':''].filter(Boolean).join(' · '),fmt(P))); });
+    x.fis.forEach(function(i){ var f=findings()[i]; rows.push(pvRow(i,f.statement,'Finding '+fno(i)+' · a point the agents worked out','')); });
+    return rows;
+  }
+  function pvAlso(also){ return also.length?'<div class="pv-also-row"><span>Also in</span>'+also.map(function(a){ return '<button type="button" class="rv-cchip" data-clf-part="'+esc(a.key)+'">'+esc(a.label||words(a.key))+'</button>'; }).join(' ')+'</div>':''; }
+  function pvCompact(path,x,opts,also){
+    var rows=pvRows(path,x,opts.sheet), top=rows.slice(0,5), rest=rows.slice(5), h='';
+    // Everything it rests on is your own words, as the sheet has them: said once, not quoted back.
+    if(rows.length) h+=sec('Built from','<div class="pv-bfl">'+top.join('')+'</div>'
+      +(rest.length?'<details class="pv-all" data-pv-facts="'+esc(path)+'"'+(PV_OPEN[path]?' open':'')+'><summary>All '+rows.length+' ›</summary><div class="pv-bfl">'+rest.join('')+'</div></details>':''));
+    else h+='<p class="rv-none">'+(rows.echoed?'From your words, as the sheet has them.':'Written without anything to cite.')+'</p>';
+    h+=pvAlso(also);
+    // Why, folded: no certainty (the chips say it), no Because the panel shows already, none twice.
+    var seen=normText(opts.seen||''), d=x.d, src=x.src, rs={}, k, kept={};
+    for(k in x.rs) rs[k]=x.rs[k];
+    delete rs.certainty;
+    rs.because=arr(x.rs.because).filter(function(p){ if(!p||askOf(p)) return false;
+      var t=normText(noIds(p.point||'')).replace(/^the review agent s note /,''); if(!t||kept[t]) return false; kept[t]=1;
+      return !(seen&&t.length>12&&seen.indexOf(t)!==-1); });
+    if(isPerson(d)&&!x.ab&&saidWords(d)) rs.decided=saidWords(d);
+    var why=reasonHTML(rs,'',src.rationale||'');
+    if(why) h+='<details class="pv-why" data-pv-why="'+esc(path)+'"'+(PV_OPEN['why:'+path]?' open':'')+'><summary>Why it says this</summary>'+why+'</details>';
+    return h;
+  }
+  // The state chips' facts (ClanFields.partFacts): the writing decision's certainty and how many facts it rests on.
+  function partFacts(path){
+    var x=docId()&&VIEW?writeOf(path):null; if(!x) return {level:'', tone:'', facts:0, decisions:VIEW?pvDecs(path).length:0};
+    var ce=obj(x.rs.certainty), lv=lvOf(ce.level);
+    return {level:lv>=3?'High':lv===2?'Medium'+(/infer/i.test(String(ce.why||''))?' · inference':''):lv===1?'Low · thin':'', tone:lv>=3?'ok':lv?'warn':'', facts:x.fs.length, decisions:pvDecs(path).length};
+  }
+  // History, opened inside the panel (ClanFields.partHistory): who wrote it, when, its decision's id,
+  // and the decisions on the record about it.
+  function partHistory(path){
+    var x=docId()&&VIEW?writeOf(path):null, bs=VIEW?pvDecs(path):[];
+    return '<div class="clf-rv pv pv-panel pv-hist" data-card="'+esc(path)+'">'+(x?'<p class="rv-meta"><span>'+pvMeta(x)+'</span></p>':'')
+      +(bs.length?decsSec(bs,bs.length):'<p class="rv-none">Nothing on the record about this part yet.</p>')+'</div>';
+  }
   // ClanFields.partView(ref, el, {panel, name, head, also}): the view into el.
   // In the brief's panel the head goes to its own element (opts.head), by the
   // part's name and above its actions; elsewhere it leads the view.
   function partView(ref,el,opts){
     opts=opts||{}; if(!el) return;
     var p=partParts(ref,opts);
+    if(opts.compact){ el.innerHTML='<div class="clf-rv pv pv-panel pv-compact" data-card="'+esc(ref)+'">'+p.body+'</div>';
+      [].forEach.call(el.querySelectorAll('details[data-pv-facts],details[data-pv-why]'),function(dt){ dt.addEventListener('toggle',function(){ var k=dt.getAttribute('data-pv-why'); PV_OPEN[k!=null?'why:'+k:dt.getAttribute('data-pv-facts')]=dt.open; }); });
+      return; }
     if(opts.head){ opts.head.innerHTML='<div class="clf-rv pv">'+p.head+'</div>'; el.innerHTML='<div class="clf-rv pv'+(opts.panel?' pv-panel':'')+'" data-card="'+esc(ref)+'">'+p.body+'</div>'; }
     else el.innerHTML='<div class="clf-rv pv'+(opts.panel?' pv-panel':'')+'" data-card="'+esc(ref)+'">'+p.head+p.body+'</div>';
   }
@@ -2818,6 +2876,8 @@ var ClanFields=(function(){
           // what kind of line it is: derived from its cites, never asked of a model.
           // A part's one provenance view (where-it-came-from): partView(ref, el, {panel, name, head, also}).
           partView:partView,
+          // The compact view's state chips and its History (the brief's side tab).
+          partFacts:partFacts, partHistory:partHistory,
           // A page with its own side panel shows provenance there, never in the drawer:
           // setPanelHost(fn), fn(ref, kind) -> true (the app showed it itself), {el, root}
           // (the inspector goes into el, its trail starting at root) or null (the drawer);

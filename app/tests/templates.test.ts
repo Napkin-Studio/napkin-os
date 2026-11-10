@@ -1659,20 +1659,22 @@ test('the footer names the client, not its descriptor, and the page count never 
   assert.match(g.gridCss(), /\.fit3 \.bd\{font-size:10px\}/, 'the smallest step stays readable')
 })
 
-test('the grid prints on A4 sheets that break cleanly, and stays in the Save menu beside the sheet and a plain one', () => {
+test('the grid prints on A4 sheets that break cleanly, and stays among the OS bar’s ways to save beside the sheet and a plain one', () => {
   const css = grid().gridCss()
   assert.match(css, /@page\{size:A4;margin:0\}/)
   assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
   assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):style==='grid'\?buildGridExportHTML\(\):buildSheetExportHTML\(style==='client'\?'client':'agency'\)/)
   assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
-  // Save · PDF is the side tab's main button; the others are in its menu (features/brief-new-ui.clan).
-  assert.match(BM, /id="exPdf"[\s\S]*id="exClient"[\s\S]*id="exHtml"[\s\S]*id="exGridPdf"[\s\S]*id="exGridHtml"[\s\S]*id="exHtmlPlain"[\s\S]*id="exPdfPlain"/)
-  assert.match(BM, /doExport\('html','plain'\)[\s\S]*doExport\('pdf','plain'\)/)
-  assert.match(BM, /\$\('exHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html'\); \}\);/, 'the HTML button is the sheet')
-  assert.match(BM, /\$\('exGridPdf'\)\.addEventListener\('click',function\(\)\{ doExport\('pdf','grid'\); \}\);/, 'the grid template is still a PDF')
-  assert.match(BM, /\$\('exGridHtml'\)\.addEventListener\('click',function\(\)\{ doExport\('html','grid'\); \}\);/)
-  assert.match(BM, /\$\('exClient'\)\.addEventListener\('click',function\(\)\{ doExport\('pdf','client'\); \}\);/)
-  assert.match(BM, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the side tab and the OS bar, is the sheet')
+  // Save · PDF and its other ways to save are the OS bar's (the side tab design): one ACTIONS entry each.
+  const A = obj(BM, 'ACTIONS')
+  assert.match(A, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the OS bar, is the sheet')
+  assert.match(A, /client:function\(\)\{ doExport\('pdf','client'\); \}/)
+  assert.match(A, /html:function\(\)\{ doExport\('html'\); \}/, 'Save · HTML is the sheet')
+  assert.match(A, /gridPdf:function\(\)\{ doExport\('pdf','grid'\); \}/, 'the grid template is still a PDF')
+  assert.match(A, /gridHtml:function\(\)\{ doExport\('html','grid'\); \}/)
+  assert.match(A, /plainHtml:function\(\)\{ doExport\('html','plain'\); \}/)
+  assert.match(A, /plainPdf:function\(\)\{ doExport\('pdf','plain'\); \}/)
+  assert.match(fn(BM, 'barItems'), /id:'pdf'[\s\S]*id:'client'[\s\S]*id:'html'[\s\S]*id:'gridPdf'[\s\S]*id:'gridHtml'[\s\S]*id:'plainPdf'[\s\S]*id:'plainHtml'/)
   // The grid's fit rules apply to the grid only; the sheet flows onto as many pages as it needs.
   const run = fn(BM, 'runExport')
   assert.match(run, /style==='grid'&&LAST_GRID_OVERFLOW===null/)
@@ -2088,38 +2090,47 @@ test('the brief’s state pill says Draft, Ready to lock, Locked or Reopened; wh
   for (const s of ['Draft', 'Ready to lock', 'Locked', 'Reopened']) assert.ok(s.length <= 28, 'a bar label is at most 28 characters')
 })
 
-test('each OS bar button runs the same handler as its side-tab control', () => {
+test('each OS bar button runs the same handler as its side-tab control; the document commands are the bar’s alone', () => {
   const ACTIONS = obj(BM, 'ACTIONS')
   const actionIds = [...ACTIONS.matchAll(/^\s*(\w+):/gm)].map(m => m[1])
-  assert.deepEqual(actionIds.sort(), ['lock', 'pdf', 'redraft', 'reopen', 'unlock'])
+  assert.deepEqual(actionIds.sort(), ['client', 'gridHtml', 'gridPdf', 'html', 'lock', 'pdf', 'plainHtml', 'plainPdf', 'redraft', 'reopen', 'unlock'])
   // Every control in the side tab that names an action has one, and is bound through the table.
+  // Save · PDF, its other ways to save and Draft it again are not in the tab any more (the side tab design).
   const tab = BM.slice(BM.indexOf('<aside class="stab"'), BM.indexOf('</aside>'))
   const acts = [...tab.matchAll(/data-act="([^"]+)"/g)].map(m => m[1])
-  assert.deepEqual([...new Set(acts)].sort(), ['lock', 'pdf', 'redraft', 'reopen'])
+  assert.deepEqual([...new Set(acts)].sort(), ['lock', 'reopen'])
+  for (const gone of ['id="exPdf"', 'id="saveMore"', 'id="saveMenu"', 'id="redraft"', 'id="newDraft"', 'Save · PDF', 'Draft it again']) assert.ok(!tab.includes(gone), `${gone} left the side tab`)
   assert.match(BM, /document\.querySelectorAll\('#stab \[data-act\]'\)\.forEach\(function\(b\)\{ var a=b\.getAttribute\('data-act'\); if\(ACTIONS\[a\]\) b\.addEventListener\('click', function\(\)\{ ACTIONS\[a\]\(\); \}\); \}\);/)
   assert.match(BM, /if\(m\.type==='clan:bar-action'\)\{ if\(phase==='doc'&&ACTIONS\.hasOwnProperty\(m\.id\)\) ACTIONS\[m\.id\]\(\); return; \}/)
   assert.match(BM, /if\(m\.type==='clan:bar\?'\)\{ sendBar\(true\); return; \}/)
-  // The bar's list: only ids the table has, at most six buttons and one status, labels the bar takes.
+  // The bar's list: only ids the table has, at most ten buttons, labels the bar takes.
   type BarI = { kind: string; id?: string; label: string; disabled?: boolean }
-  const el = (disabled = false) => ({ disabled })
-  const items = (o: { phase?: string; A?: boolean; reopened?: string[]; armed?: boolean; st?: unknown }) => lift<{ barItems(): BarI[] }>(BM, ['barItems'], {
-    phase: o.phase ?? 'doc', DRAFT: o.phase === 'proc' ? { stage: 'context', state: 'running' } : null, STAGES: ['extract', 'context', 'draft', 'judge'], PLAN: [1, 2, 3, 4], draftLive: () => o.phase === 'proc', approveLocked: () => !!o.A, lockState: () => ({ reopened: o.reopened ?? [] }), arr,
-    statusNow: () => o.st ?? { label: 'Draft', tone: null, locked: false }, $: () => el(), REDRAFT_ARMED: o.armed ? 1 : null,
+  const items = (o: { phase?: string; A?: boolean; L?: boolean; reopened?: string[]; armed?: boolean }) => lift<{ barItems(): BarI[] }>(BM, ['barItems'], {
+    phase: o.phase ?? 'doc', DRAFT: o.phase === 'proc' ? { stage: 'context', state: 'running' } : null, STAGES: ['extract', 'context', 'draft', 'judge'], PLAN: [1, 2, 3, 4], draftLive: () => o.phase === 'proc', approveLocked: () => !!o.A, docLocked: () => !!(o.A || o.L), lockState: () => ({ reopened: o.reopened ?? [] }), arr,
+    REDRAFT_ARMED: o.armed ? 1 : null,
   }).barItems()
   assert.deepEqual(items({ phase: 'intake' }), [{ kind: 'mode', mode: 'ask' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'before there is a brief: the name alone (mode ask), no buttons, and the state is Draft (never the host’s guess)')
   assert.deepEqual(items({ phase: 'proc' }), [{ kind: 'mode', mode: 'working', label: 'Working · Step 2/4' }, { kind: 'status', label: 'Draft', tone: null, locked: false }], 'the crew at work: the run’s step for the bar, still a draft')
+  const SAVES = ['client', 'html', 'gridPdf', 'gridHtml', 'plainPdf', 'plainHtml']
   const draft = items({})
-  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', 'lock', 'status'])
+  // No lock and no status item: Lock and the state pill are the side tab's brief view (no duplicates).
+  assert.deepEqual(draft.map(i => i.id ?? i.kind), ['pdf', 'redraft', ...SAVES])
+  assert.ok(!draft.some(i => i.kind === 'status' || i.id === 'lock'), 'the bar repeats neither the lock nor the state')
+  assert.equal(draft.find(i => i.id === 'client')!.disabled, true, 'the client copy waits for the lock')
   assert.equal(items({ armed: true }).find(i => i.id === 'redraft')!.label, 'Click again to redraft')
   const locked = items({ A: true })
-  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'unlock', 'reopen', 'status'], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
+  assert.deepEqual(locked.map(i => i.id ?? i.kind), ['pdf', 'unlock', 'reopen', ...SAVES], 'a locked brief offers Unlock (POST /unapprove) and Reopen a part…, not a redraft')
+  assert.equal(locked.find(i => i.id === 'client')!.disabled, false)
   assert.match(fn(BM, 'unlockClick'), /hostPost\('\/unapprove',\{rationale:/, 'Unlock calls /unapprove as Lock calls /approve')
-  assert.match(fn(BM, 'lockClick'), /unlockClick\(\)/, 'the side tab’s lock button is Unlock while locked')
+  assert.match(fn(BM, 'lockClick'), /unlockClick\(\)/, 'a lock pressed while locked still unlocks')
   assert.equal(locked.find(i => i.id === 'reopen')!.label, 'Reopen a part…')
-  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', 'lock', 'status'])
-  for (const list of [draft, locked]) for (const i of list) {
-    assert.ok(i.label.length <= 28, i.label)
-    if (i.kind === 'button') assert.ok(actionIds.includes(i.id!), `bar button ${i.id} has a handler`)
+  assert.deepEqual(items({ A: true, reopened: ['x'] }).map(i => i.id ?? i.kind), ['pdf', ...SAVES], 'reopened: Lock the brief again is the side tab’s')
+  for (const list of [draft, locked]) {
+    assert.ok(list.filter(i => i.kind === 'button').length <= 10, 'at most the ten buttons a bar takes')
+    for (const i of list) {
+      assert.ok(i.label.length <= 28, i.label)
+      if (i.kind === 'button') assert.ok(actionIds.includes(i.id!), `bar button ${i.id} has a handler`)
+    }
   }
 })
 
@@ -2184,9 +2195,16 @@ test('the look is appearance: layout and logos are schema appearance keys, and R
 test('nothing the brief did before is gone: every control is still on the page', () => {
   // Owner rule: no feature that exists today is removed or hidden by the new UI.
   for (const id of ['prompt', 'addAny', 'genBtn', 'chips', 'intakeStatus', 'dropveil', 'fromUp', 'proc', 'meet', 'procActs', 'tiles',
-    'fields', 'review', 'crewline', 'upNote', 'madeFrom', 'boards', 'redraft', 'newDraft', 'lockBtn', 'lockList', 'lockedBadge', 'status',
-    'saveBtn', 'exHtml', 'exPdf', 'exHtmlPlain', 'exPdfPlain', 'toast', 'walker', 'docIdent', 'hProj', 'hCli'])
+    'fields', 'review', 'crewline', 'upNote', 'madeFrom', 'boards', 'lockBtn', 'lockList', 'lockedBadge', 'status',
+    'crOpen', 'reopenBtn', 'clientAnswer', 'brandLine', 'swatches', 'logoList', 'resetLook', 'sideHint',
+    'toast', 'walker', 'docIdent', 'hProj', 'hCli'])
     assert.match(BM, new RegExp(`id="${id}"`), `#${id} is on the page`)
+  // What left the side tab is in the OS bar, by the same handlers (the side tab design): Save · PDF,
+  // Draft it again (two clicks), the client copy, HTML, the grid and the plain layout. Save as… and a
+  // new brief are the shell's own (the document menu's Save as…, Continue in › Start fresh).
+  const bar = fn(BM, 'barItems')
+  for (const id of ['pdf', 'redraft', 'client', 'html', 'gridPdf', 'gridHtml', 'plainPdf', 'plainHtml', 'unlock', 'reopen']) assert.match(bar, new RegExp(`id:'${id}'`), `${id} is in the OS bar`)
+  assert.match(fn(BM, 'redraftClick'), /if\(!REDRAFT_ARMED\)\{[\s\S]*draftNow\(''\);/, 'Draft it again still takes two clicks')
   assert.match(BM, /See each part as it is written/)
   // Per-part: the way into why stays on the part; edit, write again and keep as is (locked_fields)
   // are the Selected part panel's, as the mock (no hover icons on the part).
@@ -2195,31 +2213,37 @@ test('nothing the brief did before is gone: every control is still on the page',
   assert.doesNotMatch(row, /class="ctrls"|act-edit|act-regen|act-lock/, 'no hover cluster on the part')
   // The selected part offers the same, through the same functions.
   const sel = fn(BM, 'renderSelPart')
-  assert.match(sel, /startEdit\(row,f\)/)
-  assert.match(sel, /startRegen\(row,f\)/)
-  assert.match(sel, /toggleLock\(f\)/)
-  // Where it came from is the OS's one part view (where-it-came-from), not Built from and a Why details.
+  assert.match(sel, /else if\(a==='edit'&&row\) startEdit\(row,f\);/)
+  assert.match(sel, /else if\(a==='regen'\) startRegen\(row,f\);/)
+  assert.match(sel, /else if\(a==='regen-go'\)\{[\s\S]{0,160}?regenField\(f,g\); \}/)
+  assert.match(sel, /else if\(a==='keep'\) toggleLock\(f\);/)
+  assert.match(sel, /else if\(a==='hist'\) openHist\(f\);/)
+  assert.match(sel, /else if\(a==='reopen'\) reopenPart\(f\);/)
+  // Where it came from is the OS's one part view (where-it-came-from), compact, not the brief's own Built from.
   assert.match(sel, /renderProv\(\)/, 'the part view is drawn by renderProv')
-  assert.match(sel, /id="spHead"/, 'its head sits by the part’s name, above the actions')
+  assert.match(sel, /id="spChips"/, 'its certainty and facts are the state chips, under the crumb')
   assert.match(sel, /<div class="sp-prov" id="spProv"><\/div>/)
-  assert.doesNotMatch(sel, /whyHtml|sp-w|spBuilt|spLineCard|F\.card\(/)
+  assert.doesNotMatch(sel, /whyHtml|sp-w|spBuilt|spLineCard|F\.card\(|id="spHead"/)
 })
 
-test('the selected part shows the OS part view; a selected line only its words and where it sits', () => {
+test('the selected part shows the OS part view, compact; a selected line only where it sits', () => {
   const src = fn(BM, 'renderProv')
-  assert.match(src, /F\.partView\(f\.key, b, \{panel:true, name:headOf\(f\), head:\$\('spHead'\), also:also\}\)/)
+  assert.match(src, /F\.partView\(f\.key, b, \{panel:true, compact:true, name:headOf\(f\), sheet:sheet, seen:seen, also:also\}\)/)
+  assert.match(src, /sheet=valToText\(get\(f\.key\), f\.type\)/, 'the sheet’s words, so Built from does not quote them back')
+  assert.match(src, /hb\.textContent='History · '\+n\+' ›'/, 'History · n ›, counted from the record')
   assert.match(src, /data-sig/, 'drawn once per part and version, so picking a line does not redraw it')
   assert.match(src, /goPart\(c\.getAttribute\('data-clf-part'\)\)/, 'an Also used in chip selects that part')
   assert.doesNotMatch(BM, /function renderBuilt\(|function builtRow\(|class="bf-row|class="sp-w"/)
   // while someone types in the panel, only the part view follows the chain
   assert.match(fn(BM, 'loadChain'), /if\(sp&&sp\.contains\(document\.activeElement\)\) renderProv\(\); else renderSelPart\(\);/)
-  // a list line: its text and line n of N, nothing else
-  const L = lift<{ lineHtml(f: { key: string; type: string }): string }>(BM, ['lineHtml'], {
-    SEL_ITEM: 1, get: () => ['No price promotion', 'No “limited time” language', 'Under-15s'], esc,
+  // a list line: the crumb says line n of N, and the line stays lit on the sheet; it is not quoted
+  const L = lift<{ lineCrumb(f: { key: string; type: string }): string }>(BM, ['lineCrumb'], {
+    SEL_ITEM: 1, get: () => ['No price promotion', 'No “limited time” language', 'Under-15s'],
   })
-  assert.equal(L.lineHtml({ key: 'mandatories', type: 'list' }),
-    '<div class="sp-line" id="spLine"><div class="clf-rv"><span class="rsp-k">This line<em>line 2 of 3</em></span><p class="rv-title">“No “limited time” language”</p></div></div>')
-  assert.equal(L.lineHtml({ key: 'background', type: 'text' }), '')
+  assert.equal(L.lineCrumb({ key: 'mandatories', type: 'list' }), 'line 2 of 3')
+  assert.equal(L.lineCrumb({ key: 'background', type: 'text' }), '')
+  assert.match(fn(BM, 'renderSelPart'), /\(line\?' <span aria-hidden="true">›<\/span> '\+esc\(line\):''\)/)
+  assert.doesNotMatch(BM, /This line<em>/)
   assert.match(fn(BM, 'goPart'), /select\(key\)/, 'a used-in chip selects that part')
   const decisions: Record<string, { cites: string[] }> = { background: { cites: ['f_1', 'f_2'] }, audience: { cites: ['f_2'] }, insight: { cites: ['f_2', 'f_bad'] }, barrier: { cites: ['f_1'] } }
   const vals: Record<string, unknown> = { background: 'B', audience: 'A', insight: 'I', barrier: '' }
@@ -2241,7 +2265,9 @@ test('a part marked Confidential is hatched and tagged, kept in the agency copy 
   assert.equal(schema.properties.confidential_fields.type, 'array')
   assert.equal(schema.properties.confidential_fields['x-clan-appearance'], undefined, 'who may read a part is not its look: Reset look keeps it')
   const sel = fn(BM, 'renderSelPart')
-  assert.match(sel, /data-sp="keep"[\s\S]*data-sp="conf"/, 'beside Keep as is')
+  assert.match(sel, /keepBtn\(f,A,kept\)\+confBtn\(f,wr,conf\)/, 'beside Keep as is')
+  assert.match(fn(BM, 'keepBtn'), /data-sp="keep"/)
+  assert.match(fn(BM, 'confBtn'), /data-sp="conf"/)
   assert.match(sel, /else if\(a==='conf'\) toggleConf\(f\);/)
   assert.match(fn(BM, 'toggleConf'), /patch\('confidential_fields', next/)
   assert.match(fn(BM, 'toggleConf'), /if\(!canWrite\(f\.key\)\)/, 'a locked brief changes a reopened part only')
@@ -2302,8 +2328,8 @@ test('the screen and the PDF are one sheet: one builder, one measure, guides whe
   assert.match(BM, /\.sheet\.a4\{color-scheme:light;\s*--paper:#FBF7EE;/)
   // The last page ends the document: no blank page after it.
   assert.match(BM, /\.sheet\.a4\.page:last-child\{break-after:auto;page-break-after:auto\}/)
-  // Place on page stays open while its buttons rewrite the panel.
-  assert.match(fn(BM, 'renderSelPart'), /OPEN_WHY\['spl:'\+f\.key\]/)
+  // Place on page is one row that never folds, so nothing has to remember it open (owner, 2026-11-11).
+  assert.doesNotMatch(fn(BM, 'renderSelPart'), /<details class="sp-l"|OPEN_WHY\['spl:'/)
 })
 
 // ── the Research Tool on the new UI (features/research-new-ui.clan) ─────────
@@ -2800,8 +2826,8 @@ test('a new version re-reads the brief’s lock view with its chain, so the lock
 test('the lock carries no count badge of its own: Decisions holds the one count, the lock says why in words', () => {
   for (const src of [BM, RT]) assert.doesNotMatch(src, /class="n"/, 'no badge on a lock button')
   const w = lift<{ lockWhy(n: number): string }>(BM, ['lockWhy'], {})
-  assert.equal(w.lockWhy(2), '2 settle before it can lock')
-  assert.equal(w.lockWhy(1), '1 settles before it can lock')
+  assert.equal(w.lockWhy(2), 'Settle 2 first')
+  assert.equal(w.lockWhy(1), 'Settle 1 first')
   assert.doesNotMatch(fn(BM, 'renderLockBtn'), /need you|lb\.innerHTML/)
 })
 
@@ -2884,7 +2910,7 @@ test('the header’s rows move and resize like every other part; the version is 
   for (const gone of ['function packSheet', 'function metaLong', 'META_SHORT', 'meta-version', 'versionLine', 'p.meta', "<span>Version</span>"]) assert.ok(!BM.includes(gone), `${gone} is gone`)
   // The grip, the right edge, and Place on page (Show as, Tone, up and down) are on every part.
   assert.match(fn(BM, 'placeRow'), /if\(!docLocked\(\)\)\{\s*var g=document\.createElement\('button'\); g\.type='button'; g\.className='grip'/)
-  assert.match(fn(BM, 'renderSelPart'), /\+\(!docLocked\(\)\?'<details class="sp-l"/)
+  assert.match(fn(BM, 'renderSelPart'), /\+=\(!docLocked\(\)\?'<div class="sp-l"/)
   assert.doesNotMatch(fn(BM, 'layoutStep'), /isMeta|meta\(/)
   // A moved or resized header part is saved in layout.parts like the others and read back in place.
   const L = lay()
@@ -2995,17 +3021,17 @@ test('the panel’s Show as and Tone save through saveLayout with a decision tha
   assert.deepEqual([o.action, o.actor], ['show Background as bullets', 'human'])
   assert.equal((calls[1] as [string, unknown, { action: string }])[2].action, 'show Insight in the tint tone')
   assert.equal((calls[2] as [string, unknown, { action: string }])[2].action, 'show Client / brand as field')
-  // The panel: Show as and Tone in Place on page (no Width presets), as segmented buttons, pressed on the current value.
+  // The panel: Show as and Tone in Place on page (no Width presets), as dropdowns on one row, set to the current value.
   const sp = fn(BM, 'renderSelPart')
   assert.ok(!sp.includes('aria-label="Width"') && sp.indexOf('aria-label="Show as"') < sp.indexOf('aria-label="Tone"'))
-  assert.ok(sp.indexOf('aria-label="Tone"') < sp.indexOf('data-sp="up"'), 'above Move up and down')
-  assert.match(sp, /AS_KINDS\.map\(function\(k\)\{ return '<button type="button" data-as="'\+k\+'" aria-pressed="'\+\(kd===k\)\+'">'\+AS_WORDS\[k\]/)
-  assert.match(sp, /TONES\.map\(function\(t\)\{ return '<button type="button" data-tone="'\+t\+'" aria-pressed="'\+\(tone===t\)\+'">'/)
+  assert.ok(sp.indexOf('aria-label="Tone"') < sp.indexOf('data-sp="up"'), 'before Move up and down')
+  assert.match(sp, /AS_KINDS\.map\(function\(k\)\{ return '<option value="'\+k\+'"'\+\(kd===k\?' selected':''\)\+'>'\+AS_WORDS\[k\]/)
+  assert.match(sp, /TONES\.map\(function\(t\)\{ return '<option value="'\+t\+'"'\+\(tone===t\?' selected':''\)\+'>'/)
   assert.match(sp, /saveLayout\(layoutLook\(layoutItems\(\), f\.key, 'as', k\), lookWhat\(f, 'as', k\)\)/)
   assert.match(sp, /saveLayout\(layoutLook\(layoutItems\(\), f\.key, 'tone', t\), lookWhat\(f, 'tone', t\)\)/)
   assert.match(obj(BM, 'AS_WORDS'), /cell:'Field'/)
   // Locked: Place on page, with them, is not offered.
-  assert.match(sp, /\+\(!docLocked\(\)\?'<details class="sp-l"/)
+  assert.match(sp, /\+=\(!docLocked\(\)\?'<div class="sp-l"/)
   // The sheet on screen draws the stored kind and tone.
   assert.match(fn(BM, 'fieldRow'), /kd=kindOf\(f, lk\.as\)/)
   assert.match(fn(BM, 'fieldRow'), /row\.className='row k-'\+kd\+toneClass\(lk\.tone\)/)

@@ -58,13 +58,13 @@ test('an item with no label, or a button with no usable or a repeated id, is lef
   assert.deepEqual(got.map(i => (i.kind === 'button' ? i.id : '')), ['a', 'c'])
 })
 
-test('a bar takes at most 6 buttons and 4 chips', () => {
+test('a bar takes at most 10 buttons and 4 chips', () => {
   const items = [
-    ...Array.from({ length: 9 }, (_, i) => btn(`b${i}`)),
+    ...Array.from({ length: 13 }, (_, i) => btn(`b${i}`)),
     ...Array.from({ length: 9 }, (_, i) => ({ kind: 'chip', label: `c${i}` })),
   ]
   const got = barFrom({ v: 1, items })
-  assert.equal(got.filter(i => i.kind === 'button').length, 6)
+  assert.equal(got.filter(i => i.kind === 'button').length, 10)
   assert.equal(got.filter(i => i.kind === 'chip').length, 4)
 })
 
