@@ -52,3 +52,32 @@ structure is a decision for Laurence and Sai.
   `test_planned_brief.py`); no test was removed.
 - A proposition that restates the brand's own line is told to Jude as a fail, but Jude cannot know the
   line without research.
+
+## Addendum 2026-11-10 (brief-jev-checks): the checks run on both judge paths
+
+The checks above were built into the whole-brief review only. Staging runs `NAPKIN_BRIEF_JUDGE=jev`,
+where `PlannedBriefJob.stage_judge` returned through jev's check loop before the review, so Laurence's
+tests and code's send-backs never ran there. They now run whichever judge reads the brief:
+
+- **One source for the rules.** `checks.py` holds the measures (`facts`, `revisions`, `tests`) and the
+  wording of how Jude uses them (`TESTS_GUIDE`, `ANTI_PATTERNS`, `tests_guide`). The review prompt and
+  the loop's Jude prompt are both built from it. `REVIEW_SYSTEM` is byte-identical to before.
+- **Jev path.** The loop's Jude call (`explain_flags`) carries `tests` and `part_checks` for the tested
+  parts the job wrote, whether or not jev flagged anything, and answers under an optional `tests` key
+  (an answer without it is valid; an unanswered part is logged as `tests_unanswered`). A part he fails
+  goes to Dara on his instruction; what code measures goes in the same rewrite, and for a part Jude
+  already named code's instruction is left out, as on the review path. What code still measures after
+  that rewrite goes back once more, from the rewritten text (`checks_sent_back_again`). jev reads
+  before and after the first rewrite only.
+- **Cost.** With jev answering: one Jude call and no Dara call when nothing fails, at most one Jude and
+  two Dara calls otherwise, and no whole-brief review. When jev does not answer, or the loop raises
+  (`check_loop_failed`), the brief gets the whole review path; the first draft is never lost to a judge
+  stage error.
+- **What code measures** (as `checks.revisions` does): words over the limit by more than 15 percent,
+  items over the item cap, more than one sentence in the proposition, job or objection, and a standalone
+  "and" (ADR 0034, amended 2026-11-10).
+- **The record.** A part only a check sent back is recorded as sent back by a check, with code's reason,
+  not as Jude's note, and the jev path writes no "Jude reviewed the brief again" verdict.
+- **Not changed.** The engine-checked job (`EngineCheckedBriefJob`, only with `NAPKIN_BRIEF_ENGINE_URL`;
+  staging does not set it) passes no `whole` and behaves as before. The review path's own recording of a
+  code-only send-back as "Jude sent it back" is left alone.

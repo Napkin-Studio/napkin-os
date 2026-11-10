@@ -897,7 +897,8 @@ fidelity to the client's own words, and injected text craters it.
 default flow (`NAPKIN_BRIEF_FLOW=planned`) runs `extract → context → draft →
 judge`: Sam plans the brief and runs the research it lacks, Dara drafts every
 part at once, and Jude (or jev's check loop) has the parts that need it
-rewritten. Capture stays RAG-free and research-free as above. What changes is
+rewritten; the planning tests and code's measures (words, items, sentences, a
+standalone "and") apply on both judge paths. Capture stays RAG-free and research-free as above. What changes is
 where a part's value may come from: in the planned engine every part,
 captured-class parts included, may rest on the client, the research (`f_`,
 `fi_`), the library (`psg_`) or an assumption, and its decision says which.
