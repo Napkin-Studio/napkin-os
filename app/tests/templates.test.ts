@@ -493,7 +493,7 @@ test('a review leaves the page where it is, and the Strategy agent works in the 
   assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
   assert.ok(!side.hidden, 'the Strategy agent shows in the side panel while the job runs')
   assert.ok(!on(), 'not on the bottom edge: the agent has moved to the side panel')
-  assert.match(side.innerHTML, /<span class="nk-ag" data-nk-agent="strategy" data-nk-state="working" data-nk-size="30"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working (the static frame until it is hydrated)')
+  assert.match(side.innerHTML, /<span class="nk-ag nk-side" data-nk-agent="strategy" data-nk-state="working" data-nk-size="44"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working, at the shared size (the static frame until it is hydrated)')
   assert.match(side.innerHTML, /<b>Strategy agent<\/b> · bringing the report in step with your review/)
   assert.doesNotMatch(side.innerHTML, /agent-figure|walking/)
   finish(runs[0])
@@ -775,7 +775,8 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
   const env = {
     FIX: null, DRAFT: null, FIX_SAY, walker, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
-    REGEN: {}, fieldOf: () => null, ROLES: null, roleOf: (k: string) => k,
+    REGEN: {}, fieldOf: () => null, roleOf: (k: string) => k,
+    ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', side: (k: string, t: string) => `<svg data-agent="${k}"></svg><span class="nk-side-t"><b>${({ synthesis: 'Strategy agent', drafter: 'Brief agent', judge: 'Review agent' } as Record<string, string>)[k]}</b> · ${t}</span>`, auto: () => {} },
     AGENT_NAME: { synthesis: 'Strategy agent', drafter: 'Brief agent', judge: 'Review agent' },
     esc: (s: string) => String(s), docLocked: () => locked, noMiddleware: () => false,
     window: { clan: { apiProxy: () => Promise.resolve() } },
@@ -3359,7 +3360,7 @@ test('Your call · N open holds the question, Keep and Cut, Next check and n of 
   const all = f.checks(), open = all.filter(c => c.open).length
   const h = f.yourCallHtml(all, open, all.length)
   assert.match(h, /<div class="nb-h">Your call · 3 open<\/div>/)
-  assert.match(h, /<p class="nb-t"><button type="button" class="nb-link" data-act="chk-sel" data-chk="chk-fi_A">Finding 1<\/button> rests on 2 facts, both from Mintel\. Keep it\?<\/p>/)
+  assert.match(h, /<p class="nb-t"><button type="button" class="nb-link" data-act="chk-sel" data-chk="chk-fi_A">Finding 1<\/button> rests on 2 facts from one source\. Keep it\?<\/p>/)
   assert.match(h, /<button type="button" class="pri" data-act="chk-yes" data-ref="fi_A" data-where="box">Keep<\/button><button type="button" data-act="chk-no" data-ref="fi_A" data-where="box">Cut<\/button>/)
   assert.match(h, /data-act="chk-next">Next check ↓<\/button>/)
   assert.match(h, /<b>1 of 4<\/b> checked/)
@@ -3375,7 +3376,7 @@ test('Cut asks what is wrong before taking it out, inline where it was pressed, 
   assert.match(h, /data-act="chk-reject" data-ref="fi_A" data-where="box">Take it out<\/button><button type="button" data-act="chk-cancel" data-ref="fi_A" data-where="box">Keep it for now<\/button>/)
   // The card asks the same, with its own field, and shows Keep and Cut while the box asks why.
   const card = f.findingNeeds('fi_A')!
-  assert.match(card, /<b>Your call · 1 open<\/b><p>It rests on 2 facts, both from Mintel\. Keep it, or cut it\?<\/p>/)
+  assert.match(card, /<b>Your call · 1 open<\/b><p>It rests on 2 facts from one source\. Keep it, or cut it\?<\/p>/)
   assert.match(card, /data-act="chk-yes" data-ref="fi_A" data-where="card">Keep</)
   assert.doesNotMatch(card, /chkwhy/)
   const c2 = checksEnv({ ui: { fi_A: { mode: 'no', why: 'old', where: 'card' } } }).f.findingNeeds('fi_A')!
@@ -3506,6 +3507,7 @@ test('research: Confirm opens in the side panel in plain words, and writes the v
   assert.equal((h.match(/class="cf-fact" data-sel="f_/g) || []).length, 3, 'the facts are tappable rows')
   assert.match(h, /Yes, that’s right/); assert.match(h, /Change it…/); assert.match(h, /Not now/)
   assert.match(h, /<details class="cf-note"><summary>Add a note<\/summary>/, 'the note stays folded')
+  assert.doesNotMatch(h, /cf-who|Your name/, 'signed in, no name is asked: the check is the signed-in person’s')
   for (const bad of [/org\//, /#campaign/, /patch-data/i, /pinned/i, /\bpins?\b/, /inference/i, /[0-9a-f]{8}-[0-9a-f]{4}-/, /What will be written/])
     assert.doesNotMatch(h, bad, `no developer text: ${bad}`)
   f.confirmWrite('client_org')
@@ -3514,10 +3516,29 @@ test('research: Confirm opens in the side panel in plain words, and writes the v
   assert.equal(path, 'campaign.client_org')
   assert.deepEqual([value.origin, value.confirmed_from, value.by, (value.value as { name: string }).name], ['confirmed', 'proposed', 'human:tia@tbwa', 'Guinness'])
   assert.deepEqual([dec.action, dec.pinned, dec.rationale], ['confirm', true, 'Confirmed the client: Guinness — It is their brand'])
+  // With no shell (offline), a name is asked once: remembered, the next confirm does not ask again.
+  const off = lift<{ confirmViewHtml(k: string): string }>(RT, ['confirmViewHtml', 'plainValue', 'askQuestion', 'codeText'], { ...env, WHO: { shell: null, ask: null }, reviewer: () => '' })
+  assert.match(off.confirmViewHtml('client_org'), /class="cf-who"/)
+  const known = lift<{ confirmViewHtml(k: string): string }>(RT, ['confirmViewHtml', 'plainValue', 'askQuestion', 'codeText'], { ...env, WHO: { shell: null, ask: null }, reviewer: () => 'Tia' })
+  assert.doesNotMatch(known.confirmViewHtml('client_org'), /cf-who/)
 })
 
 test('research: nothing the person sees names an address, a code, patch-data or a contract id', () => {
   for (const bad of ['W1P-I5', 'W2-O2', 'W5-Z1', 'W2-A3', 'via patch-data', 'Heads up.', 'What will be written', 'class="addr"', "class=\"path\"", 'contract campaign-clan/1', 'this view writes nothing', "preview('Request'"])
     assert.ok(!RT.includes(bad), bad)
   assert.doesNotMatch(fn(RT, 'renderValue'), /esc\(v&&v\.ref\)|esc\(x\.ref\)|sha256/, 'no entity code or hash beside a value')
+})
+
+// The side panel's job line is one shared helper (owner, 2026-11-11): the brief and the research draw the
+// working agent at the same size, on the same card, from the agent-sphere engine.
+test('the side panel’s job line: research and brief use the one shared helper and size', () => {
+  const roles = page('shared/agent-sphere/roles.js')
+  const size = Number(/var SIDE = (\d+);/.exec(roles)?.[1])
+  assert.ok(size >= 40 && size <= 48, `the job-line sphere is 40-48px, got ${size}`)
+  assert.match(roles, /side: side, SIDE: SIDE/)
+  assert.match(fn(RT, 'sideAgent'), /R\.side\(on\[0\], on\[1\]\)/)
+  assert.match(fn(page('brief-maker/index.html'), 'sideAgent'), /ROLES\.side\(roleOf\(on\[0\]\), on\[1\]\)/)
+  for (const src of [RT, page('brief-maker/index.html')]) assert.doesNotMatch(src, /\.side-agent \.nk-ag\{width:/, 'no app sizes the job line itself')
+  // Your call names the finding and counts what it rests on; the sources are a tap away, never listed.
+  assert.match(fn(RT, 'chkRests'), /pubs\.length===1\?'one source':pubs\.length\+' sources'/)
 })

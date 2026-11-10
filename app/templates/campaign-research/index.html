@@ -114,7 +114,9 @@ body.fresh .ws > main{padding:36px 24px 120px}
 body.fresh .insp{display:none}
 .insp{position:sticky;top:calc(var(--clan-top,0px) + 20px);margin-top:28px;max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 40px);overflow:auto;overscroll-behavior:contain;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:30}
 .insp-grab{display:none}
-.insp-body{display:grid;gap:16px;padding:16px 18px 18px}
+.insp-body{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding:16px 18px 18px}
+/* Nothing in the panel is wider than the panel (owner, 2026-11-11: the tabs and the job card clipped at its edge). */
+.insp{overflow-x:hidden}.insp-body>*{min-width:0;max-width:100%}
 .insp-sw{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--ink);border-radius:8px;overflow:hidden}
 .insp-sw button{border:0;background:var(--paper);padding:8px 10px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink2)}
 .insp-sw button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
@@ -973,17 +975,12 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 @media (prefers-reduced-motion: reduce){.walker{transition:none}}
 /* The agent at work on the open report (owner, 2026-11-09: the agent stays on the run's stage or moves
    to the side panel, nowhere else): its sphere, small, at the top of the right panel, with one line. */
-.side-agent{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:13px;line-height:1.35;color:var(--ink)}
-.side-agent[hidden]{display:none}
 /* The one scene canvas draws above the sticky inspector (z 30), so a sphere in it shows; drawers and sheets stay above. */
 #napkin-gl{z-index:31!important}
-.side-agent .nk-ag{width:30px;height:30px}
-.side-agent b{font-weight:600}
 /* Nowhere else in the inspector or on the report: no sphere beside a check, a note or a finding (owner, 2026-11-09:
    an agent shows in one place only). A placeholder carries display:inline-block inline, so only !important hides it. */
 .insp .nk-ag,#report .nk-ag{display:none!important}
 .insp .side-agent .nk-ag{display:inline-block!important}
-.side-agent span{min-width:0;overflow-wrap:anywhere}
 
 /* ════════════════════════════════════════════════════════════════════════
    The approved mock, exactly (features/research-new-ui.clan; gaps.md §6,
@@ -1948,7 +1945,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(el.getAttribute('data-k')===want) return;
     el.setAttribute('data-k', want);
     if(!on){ el.hidden=true; el.innerHTML=''; return; }
-    el.innerHTML=sphereTag(on[0], 30, 'working')+'<span><b>'+esc(TheAgent(on[0]).replace(/^The /,''))+'</b> · '+esc(on[1])+'</span>';
+    var R=roles(); el.innerHTML=R&&R.side?R.side(on[0], on[1]):'<span><b>'+esc(TheAgent(on[0]).replace(/^The /,''))+'</b> · '+esc(on[1])+'</span>';
+    if(R&&R.auto) R.auto();
     el.hidden=false;
   }
   function reconsider(){
@@ -2748,7 +2746,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(ids.length) h+='<div class="cf-facts">'+ids.map(function(id){ var pp=pins()[id]; return '<button type="button" class="cf-fact" data-sel="'+esc(id)+'"><span>'+esc(clipT(pinLabel(pp)||'A fact', 60))+'</span><b>'+esc(clipT(fmtAny(pp), 40))+'</b></button>'; }).join('')+'</div>';
     if(bad.length) h+='<p class="cf-warn" role="note">'+esc(human(bad[0].actor||bad[0].agent)||'Someone')+' said this is wrong: “'+esc(bad[0].rationale||'')+'”. If it’s right, say why below.</p>';
     if(can&&!reportLocked()){
-      if(!WHO.shell&&!reviewer()) h+='<label class="cf-who">Your name <input type="text" id="cf-who-'+esc(k)+'" autocomplete="name" value="'+esc(ui.who||'')+'"></label>';
+      // Signed in, the check is the person's own; only a page with no shell asks a name, once (it is remembered).
+      if(!WHO.shell&&!WHO.ask&&!reviewer()) h+='<label class="cf-who">Your name <input type="text" id="cf-who-'+esc(k)+'" autocomplete="name" value="'+esc(ui.who||'')+'"></label>';
       h+='<details class="cf-note"'+(bad.length||ui.note?' open':'')+'><summary>Add a note</summary><textarea id="cf-note-'+esc(k)+'" rows="2" placeholder="'+(bad.length?'Why it’s right (needed)':'Anything to add? (optional)')+'">'+esc(ui.note||'')+'</textarea></details>'
         +(ui.err?'<p class="cf-warn" role="alert">'+esc(ui.err)+'</p>':'')
         +'<div class="cf-acts"><button type="button" class="btn primary" data-act="cf-yes" data-field="'+esc(k)+'"'+(busy?' disabled':'')+'>'+(busy?'Saving…':'Yes, that’s right')+'</button>'
@@ -2764,7 +2763,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(wt){ ui.who=wt.value.trim(); if(!byOf(ui.who)){ ui.err='Say your name, so the check carries it.'; renderSel(); return; } setReviewer(ui.who); }
     if(bad.length&&!note){ ui.err='Say why it’s right: someone marked it wrong.'; renderSel(); return; }
     if(!hasHost()){ toast('Confirming needs the host.'); return; }
-    var by=byOf(ui.who||''), next=JSON.parse(JSON.stringify(env));
+    if(!WHO.shell&&WHO.ask){ WHO.ask.then(function(){ confirmWrite(k); }); return; }
+    var by=WHO.shell?WHO.shell.id:byOf(ui.who||reviewer()), next=JSON.parse(JSON.stringify(env));
     next.confirmed_from=env.origin; next.origin='confirmed'; next.by='human:'+(by||'someone'); next.decision=mintDecisionId();
     var rationale='Confirmed the '+f.label.toLowerCase()+(plainValue(env)?': '+clipT(plainValue(env), 80):'')+(note?' — '+note:'');
     ui.busy=true; renderSel();
@@ -5292,7 +5292,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function chkRests(f){
     var cites=arr(f.cites), pubs=[];
     cites.forEach(function(x){ var s=pinSource(x); if(s&&pubs.indexOf(s)===-1) pubs.push(s); });
-    return cites.length+' fact'+(cites.length===1?'':'s')+(pubs.length?(pubs.length===1&&cites.length>1?(cites.length===2?', both from ':', all from '):', from ')+listJoin(pubs):'');
+    // Counted, never listed (the design's Your call rows): the sources are a tap away, in the finding's view.
+    return cites.length+' fact'+(cites.length===1?'':'s')+(pubs.length?' from '+(pubs.length===1?'one source':pubs.length+' sources'):'');
   }
   function chkGone(f){
     var g=arr(f.cites).filter(function(x){ return excludedIds()[x]; });

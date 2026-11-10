@@ -180,8 +180,8 @@
         var L = look(), small = size < 72;
         h.view = A.create(S, el, {
           level: 4, accent: L.accent, inkAccent: L.inkAccent, bg: L.bg, dark: L.dark, interactive: !small && o.interactive !== false,
-          rFrac: small ? [0.31, 0.31] : (o.rFrac || [0.27, 0.24]), cyFrac: small ? 0.47 : (o.cyFrac || 0.45),
-          ringGap: small ? Math.max(2, size * 0.1) : o.ringGap, ringScale: small ? Math.max(0.3, size / 110) : o.ringScale, fps: small ? 30 : undefined
+          rFrac: small ? [0.33, 0.33] : (o.rFrac || [0.27, 0.24]), cyFrac: small ? 0.47 : (o.cyFrac || 0.45),
+          ringGap: small ? Math.max(2, size * 0.07) : o.ringGap, ringScale: small ? Math.max(0.55, size / 80) : o.ringScale, fps: small ? 30 : undefined
         });
         live.push(h);
       } catch (e) { h.view = null; }
@@ -245,6 +245,29 @@
     hydrate();
   }
 
+  // ── the side panel's job line, one for every app (owner, 2026-11-11: the brief's and the research's were
+  // different sizes): the working agent's sphere at SIDE px, its name and what it is doing, on a card that
+  // keeps inside the panel. Below 72px a sphere is drawn small (mount): larger in its box, a firmer ring;
+  // the card gives it a rim and a floor shadow so a pale material still reads on paper.
+  var SIDE = 44;
+  function sideCss() {
+    if (!root.document || document.getElementById('nk-side-css')) return;
+    var st = document.createElement('style'); st.id = 'nk-side-css';
+    st.textContent = '.side-agent{display:flex;align-items:center;gap:12px;box-sizing:border-box;max-width:100%;min-width:0;padding:10px 14px;margin:0 0 12px;'
+      + 'border:1px solid var(--nd-line,var(--line,rgba(20,20,19,.14)));border-radius:12px;background:var(--nd-card,var(--card,var(--paper,#fff)));'
+      + 'font:500 13.5px/1.35 var(--font-ui,var(--f,inherit));color:var(--nd-ink,var(--ink,inherit))}'
+      + '.side-agent[hidden]{display:none}.side-agent b{font-weight:600}.side-agent .nk-side-t{min-width:0;overflow-wrap:anywhere}'
+      + '.side-agent .nk-side{width:' + SIDE + 'px;height:' + SIDE + 'px;border-radius:50%;'
+      + 'background:radial-gradient(ellipse 34% 8% at 50% 88%,rgba(20,20,19,.22),transparent 72%),'
+      + 'radial-gradient(circle at 50% 47%,transparent 0 33%,rgba(20,20,19,.16) 33.5% 35.5%,transparent 36.5%)}';
+    document.head.appendChild(st);
+  }
+  /** The job line's markup: `<sphere><span><b>Synthesis agent</b> · writing the report again</span>`, into a .side-agent. */
+  function side(r, text) {
+    sideCss();
+    return tag(r, { state: 'working', decorative: true, size: SIDE, cls: 'nk-side' }) + '<span class="nk-side-t"><b>' + esc(name(r)) + '</b> · ' + esc(text) + '</span>';
+  }
+
   // ── the run stage: the thread from a rail card to the sphere, and the sphere rising to ask ──
   // A stage is any element with data-nk-stage holding the rail cards (.wcard) and the sphere's box (.aglbox).
   function css() {
@@ -292,7 +315,7 @@
   }
 
   root.NapkinRoles = {
-    thread: thread, ask: ask,
+    thread: thread, ask: ask, side: side, SIDE: SIDE,
     ROLES: ROLES, KIND: KIND, of: of, forStage: forStage, ofDecision: ofDecision, name: name, the: the, The: The,
     job: function (r) { var m = meta(r); return m ? m.job : ''; }, mat: matOf, caption: caption,
     still: still, mount: mount, tag: tag, hydrate: hydrate, auto: auto, configure: configure, envelope: envelope

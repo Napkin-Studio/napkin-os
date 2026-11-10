@@ -347,15 +347,10 @@
   .regen-now .nk-ag{width:22px;height:22px}
   /* The agent at work on the open sheet (owner, 2026-11-09: the agent stays on the run's stage or
      moves to the side panel, nowhere else): its sphere, small, at the top of the side tab. */
-  .side-agent{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 12px;border:1px solid var(--nd-line,var(--line));border-radius:10px;background:var(--nd-card,var(--bg));font-size:13px;line-height:1.35;color:var(--nd-ink,var(--text))}
-  .side-agent[hidden]{display:none}
-  .side-agent .nk-ag{width:30px;height:30px}
-  .side-agent b{font-weight:600}
   /* Nowhere else on the open sheet or its side tab: no sphere beside a note, a check, a why or the review's crew.
      (A placeholder carries display:inline-block inline, so only !important hides it; the scene skips hidden views.) */
   #structured .nk-ag{display:none!important}
   #structured .side-agent .nk-ag{display:inline-block!important}
-  .side-agent span{min-width:0;overflow-wrap:anywhere}
 
   /* why: the decision behind the field, in the spec's reasoning shape */
   .why{margin-top:10px;border-left:2px solid var(--border);padding:4px 0 4px 14px;display:grid;gap:8px;max-width:72ch}
@@ -3793,7 +3788,8 @@
     el.setAttribute('data-k', want);
     if(!on){ el.hidden=true; el.innerHTML=''; return; }
     var nm=ROLES&&ROLES.of(roleOf(on[0]))?ROLES.name(ROLES.of(roleOf(on[0]))):(AGENT_NAME[on[0]]||'An agent');
-    el.innerHTML=fig(on[0],{state:'working', decorative:true, size:30})+'<span><b>'+esc(nm)+'</b> · '+esc(on[1])+'</span>';
+    el.innerHTML=ROLES&&ROLES.side?ROLES.side(roleOf(on[0]), on[1]):'<span><b>'+esc(nm)+'</b> · '+esc(on[1])+'</span>';
+    if(ROLES&&ROLES.auto) ROLES.auto();
     el.hidden=false;
   }
   function renderRegen(f){
