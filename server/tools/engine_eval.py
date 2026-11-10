@@ -68,7 +68,8 @@ CFG = {
     # reserve held per rater call before it is made; a failed call is logged at it. Set from the measured cost
     # (rater_measure.json) if the defaults are wrong; the cap is never exceeded whatever they are.
     "RATER_RESERVE_USD": {"sonnet": 0.25, "opus": 0.50},
-    # Idea 3 is included (owner). False skips J0, J0', J1 and their rewrites everywhere.
+    # Idea 3 is included (owner). False skips J1 and idea 3's comparisons; J0 and J0' still run, because they are the
+    # survival reviews' baseline (F2).
     "INCLUDE_IDEA3": True,
     # Idea 3's counter_argument pass rule: "reviewer" (default: the reviewer's alternative wording) or "protocol"
     # (the protocol's original wording).
@@ -1247,10 +1248,22 @@ def arm_specs() -> list[tuple]:
     if CFG["INCLUDE_PLAIN_BEST_OF_8"]:
         specs += [("H1p", (), arm_H1p), ("T1p", ("H1p",), arm_T1p)]
     specs += [("L", ("B",), arm_L), ("L2", ("B",), arm_L2), ("S", ("B",), arm_S)]
+    # J0 and J0' are the survival reviews' baseline (R10: "B's counts are J0's", J0 v J0' is Jude's own noise), so they
+    # run whether or not idea 3 is included (F2); only J1 belongs to idea 3 alone
+    specs += [("J0", ("B",), arm_J0), ("J0p", ("B",), arm_J0p)]
     if CFG["INCLUDE_IDEA3"]:
-        specs += [("J0", ("B",), arm_J0), ("J0p", ("B",), arm_J0p), ("J1", ("B",), arm_J1)]
+        specs += [("J1", ("B",), arm_J1)]
     specs += [("SV1", ("B", "T1"), arm_SV1), ("SV2", ("B", "S"), arm_SV2)]
     return specs
+
+
+def effective_skip(skip: tuple = ()) -> tuple:
+    """The arms a run leaves out. Dropping the survival reviews (R5) also drops J0 and J0' when idea 3 is not included:
+    they are then nobody's baseline."""
+    skip = tuple(skip)
+    if set(SURVIVAL_ARMS) <= set(skip) and not CFG["INCLUDE_IDEA3"]:
+        skip += ("J0", "J0p")
+    return skip
 
 
 OK_STATUS = ("ok", "no_gate")
@@ -1311,6 +1324,7 @@ def process_brief(out: Path, inp: dict, make_caller, force: bool = False, skip: 
     arms: dict = {}
     d = out / "arms" / inp["id"]
     d.mkdir(parents=True, exist_ok=True)
+    skip = effective_skip(skip)
     for name, dep_names, fn in arm_specs():
         if name in skip:
             continue
@@ -1594,8 +1608,7 @@ def cmd_packets(a):
     out = Path(a.out)
     inputs = load_inputs(out)
     arms_by = load_arms(out, [i["id"] for i in inputs])
-    expected = {n for n, _, _ in arm_specs()} - set(SURVIVAL_ARMS if (out / "pilot.json").exists()
-                                                    and json.loads((out / "pilot.json").read_text())["decision"] == "drop_survival" else ())
+    expected = {n for n, _, _ in arm_specs()} - set(effective_skip(SURVIVAL_ARMS if _survival_dropped(out) else ()))
     short = [f"{i['id']}:{n}" for i in inputs for n in expected
              if (arms_by.get(i["id"], {}).get(n) or {}).get("status") not in OK_STATUS + ("FAILED_final",)]
     if short:
@@ -1874,6 +1887,12 @@ def verdict_of(gates: dict, go_conds: dict, drop_conds: dict, confounded: bool, 
     return {"verdict": "INCONCLUSIVE", "why": ["not every GO condition holds and no DROP condition does: " + ", ".join(k for k, v in go_conds.items() if not v)]}
 
 
+def _within(treatment, baseline) -> bool:
+    """A send-back guard: the treatment's count is at most 2 above the baseline's. A guard that was not measured (None)
+    is not met: it never reads as 0 against 0."""
+    return treatment is not None and baseline is not None and treatment - baseline <= EXTRA_MAX
+
+
 def idea1_rules(d: dict) -> dict:
     """Idea 1 (7, R4, R8). `d` holds the tallies and measures; see `measures` for where they come from."""
     p, c, prop, ship = d["T1vC1.ins"], d["C1vB.ins"], d["T1vC1.prop"], d["T1vB.ins"]
@@ -1885,13 +1904,14 @@ def idea1_rules(d: dict) -> dict:
           "median distinct ideas among the 9 >= 5": d["median_ideas"] is not None and d["median_ideas"] >= MEDIAN_IDEAS_MIN,
           "T1 over 57 words in at most 2 more briefs than C1": d["over57_t1"] - d["over57_c1"] <= EXTRA_MAX,
           "cost line": d["cost_ok"],
-          "Jude fails T1's insight in at most 2 more briefs than B's (J0)": d["jude_fail_ins_t1"] - d["jude_fail_ins_b"] <= EXTRA_MAX,
+          "Jude fails T1's insight in at most 2 more briefs than B's (J0)": _within(d["jude_fail_ins_t1"], d["jude_fail_ins_b"]),
           "code sends T1's insight or proposition back in at most 2 more briefs than C1's": d["code_sb_t1"] - d["code_sb_c1"] <= EXTRA_MAX}
     drop = {"net(T1 v C1, insight) <= 2": p["net"] <= 2,
             "C1 passes SR against T1 on the proposition": sign_rule(prop["L"], prop["W"])}
-    block = [] if d["survival_measured"] else ["the survival reviews were not measured (R5 cut): at most INCONCLUSIVE"]
+    block = [] if d["survival_measured"] else ["the survival reviews were not measured (cut, or J0 or the review missing): at most INCONCLUSIVE"]
     r = verdict_of(d["gates"], go, drop, d["confounded"], block)
     r.update(go_conditions=go, drop_conditions=drop,
+             guards_not_measured=[] if d["survival_measured"] else ["Jude fails T1's insight (v J0)"],
              plan_edit_alone_moves_the_draft={"C1vB.prop_SR_either_way": sign_rule(d["C1vB.prop"]["W"], d["C1vB.prop"]["L"]) or sign_rule(d["C1vB.prop"]["L"], d["C1vB.prop"]["W"]),
                                               "C1vB.ins_SR_either_way": sign_rule(c["W"], c["L"]) or sign_rule(c["L"], c["W"])})
     return r
@@ -1907,13 +1927,14 @@ def idea2_rules(d: dict) -> dict:
           "S's first-4-plus-O median at least 1 above L's": d["median_s4"] is not None and d["median_l4"] is not None
           and d["median_s4"] - d["median_l4"] >= SUB_POOL_GAIN,
           "S winners fail a code check in at most 2 more briefs than O": d["code_fail_s"] - d["code_fail_o"] <= EXTRA_MAX,
-          "Jude or code sends S's winner back in at most 2 more briefs than O": d["sendback_s"] - d["sendback_o"] <= EXTRA_MAX,
+          "Jude or code sends S's winner back in at most 2 more briefs than O": _within(d["sendback_s"], d["sendback_o"]),
           "cost line": d["cost_ok"]}
     drop = {"net(S v O) <= 2": s["net"] <= 2,
             "S's first-4-plus-O median no higher than L's": d["median_s4"] is not None and d["median_l4"] is not None and d["median_s4"] <= d["median_l4"]}
-    block = [] if d["survival_measured"] else ["the survival reviews were not measured (R5 cut): at most INCONCLUSIVE"]
+    block = [] if d["survival_measured"] else ["the survival reviews were not measured (cut, or J0 or the review missing): at most INCONCLUSIVE"]
     r = verdict_of(d["gates"], go, drop, d["confounded"], block)
-    r.update(go_conditions=go, drop_conditions=drop)
+    r.update(go_conditions=go, drop_conditions=drop,
+             guards_not_measured=[] if d["survival_measured"] else ["Jude or code sends S's winner back (v J0)"])
     return r
 
 
@@ -2123,22 +2144,26 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
     # ---------------- idea 1
     h1, h1p = "H1", "H1p"
     v9 = variety(key, ratings, "H1")
-    over57 = lambda arm: sum(1 for b in ids if (arms_by[b].get(arm) or {}).get("status") == "ok"
-                             and words(tidy(arms_by[b][arm]["insight"])) > INSIGHT_MAX_WORDS * SENT_BACK_MARGIN)
-    sv_ok = all((arms_by[b].get("SV1") or {}).get("status") in OK_STATUS + ("FAILED_final",) for b in ids) and bool(ids)
-    sv1 = [arms_by[b]["SV1"] for b in ids if (arms_by[b].get("SV1") or {}).get("status") == "ok"]
-    j0s = [arms_by[b]["J0"] for b in ids if (arms_by[b].get("J0") or {}).get("status") == "ok"]
-    c1_sb = sum(1 for b in ids if (arms_by[b].get("C1") or {}).get("status") == "ok" and (INS in code_sendbacks(arms_by[b]["C1"]["whole"]) or PROP in code_sendbacks(arms_by[b]["C1"]["whole"])))
-    t1_sb = sum(1 for b in ids if (arms_by[b].get("T1") or {}).get("status") == "ok" and (INS in code_sendbacks(arms_by[b]["T1"]["whole"]) or PROP in code_sendbacks(arms_by[b]["T1"]["whole"])))
+    ok_ = lambda b, arm: (arms_by[b].get(arm) or {}).get("status") == "ok"
+    over57_of = lambda arm, bs: sum(1 for b in bs if words(tidy(arms_by[b][arm]["insight"])) > INSIGHT_MAX_WORDS * SENT_BACK_MARGIN)
+    over57 = lambda arm: over57_of(arm, [b for b in ids if ok_(b, arm)])
+    # every guard compares a treatment with its baseline over the SAME briefs: those where both sides are ok (F1)
+    pair_t1c1 = [b for b in ids if ok_(b, "T1") and ok_(b, "C1")]
+    pair_sv1 = [b for b in ids if ok_(b, "SV1") and ok_(b, "J0")]
+    sv1 = [arms_by[b]["SV1"] for b in ids if ok_(b, "SV1")]
+    j0s = [arms_by[b]["J0"] for b in ids if ok_(b, "J0")]
+    sb_any = lambda arm, bs: sum(1 for b in bs if {INS, PROP} & set(code_sendbacks(arms_by[b][arm]["whole"])))
     cost1 = cost_line_ok([step_cost(arms_by[b]["H1"]) for b in ids if (arms_by[b].get("H1") or {}).get("status") in OK_STATUS])
     # a step ran to a result when the hypotheses were ranked AND the T1 draft exists or is a no_gate
     steps1 = sum(1 for b in ids if (arms_by[b].get("H1") or {}).get("status") in OK_STATUS and (arms_by[b].get("T1") or {}).get("status") in OK_STATUS)
-    g1 = gate_failures(failed_final_briefs=failed_final(("B", "C1", "H1", "T1")), missing=g1_missing(T, v9, ["T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"]),
+    sv1_measured = survival_measured(arms_by, ids, "SV1", out)
+    g1 = gate_failures(failed_final_briefs=failed_final(("B", "C1", "H1", "T1", "SV1")), missing=g1_missing(T, v9, ["T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"]),
                        x_share=x_shares({"T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"}), steps_ran=steps1, n=n)
     d1 = {**{c: T[c] for c in ("T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop")}, "median_ideas": v9["median"],
-          "over57_t1": over57("T1"), "over57_c1": over57("C1"), "cost_ok": cost1["ok"],
-          "jude_fail_ins_t1": sum(bool(x["jude_fails_insight"]) for x in sv1), "jude_fail_ins_b": sum(bool(x["jude_fails_insight"]) for x in j0s),
-          "code_sb_t1": t1_sb, "code_sb_c1": c1_sb, "survival_measured": sv_ok and not _survival_dropped(out),
+          "over57_t1": over57_of("T1", pair_t1c1), "over57_c1": over57_of("C1", pair_t1c1), "cost_ok": cost1["ok"],
+          "jude_fail_ins_t1": sum(bool(arms_by[b]["SV1"]["jude_fails_insight"]) for b in pair_sv1) if sv1_measured else None,
+          "jude_fail_ins_b": sum(bool(arms_by[b]["J0"]["jude_fails_insight"]) for b in pair_sv1) if sv1_measured else None,
+          "code_sb_t1": sb_any("T1", pair_t1c1), "code_sb_c1": sb_any("C1", pair_t1c1), "survival_measured": sv1_measured,
           "confounded": length_for("T1vC1.ins")["confounded"], "gates": g1}
     res["idea1"] = {"rules": idea1_rules(d1), "length": length_for("T1vC1.ins"), "variety_9": v9, "cost": cost1,
                     "order_agreement": order_ag("T1vC1.ins"), "x_share": x_shares({"T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"}),
@@ -2153,26 +2178,33 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                     "hypotheses_cite_nothing": sum(1 for b in ids for h in (arms_by[b].get("H1") or {}).get("hypotheses", []) if not h["cites"]),
                     "hypotheses_none_in_input": sum(1 for b in ids for h in (arms_by[b].get("H1") or {}).get("hypotheses", []) if "none in the input" in (h["counter_evidence"] or "").lower()),
                     "dangling_cites": sum(1 for b in ids for h in (arms_by[b].get("H1") or {}).get("hypotheses", []) if h["cites_dangling"]),
-                    "survival": {"T1": _sv_counts(sv1), "B_via_J0": _sv_counts(j0s)}, "step_ran": steps1,
+                    "survival": {"T1": _sv_counts(sv1), "B_via_J0": _sv_counts(j0s),
+                                 "paired_briefs": len(pair_sv1), "paired_T1": _sv_counts([arms_by[b]["SV1"] for b in pair_sv1]),
+                                 "paired_B_via_J0": _sv_counts([arms_by[b]["J0"] for b in pair_sv1])},
+                    "guard_pairs": {"T1_C1_code_checks": len(pair_t1c1), "SV1_J0": len(pair_sv1)}, "step_ran": steps1,
                     "plain_best_of_8": T.get("T1vT1p.ins"), "D0vB": T.get("D0vB")}
     # ---------------- idea 2
     vs8, vl8, vl28 = variety(key, ratings, "S"), variety(key, ratings, "L"), variety(key, ratings, "L2")
     vs4, vl4, vl24 = variety(key, ratings, "S", True), variety(key, ratings, "L", True), variety(key, ratings, "L2", True)
-    sv2 = [(b, arms_by[b]["SV2"]) for b in ids if (arms_by[b].get("SV2") or {}).get("status") == "ok"]
+    sv2 = [(b, arms_by[b]["SV2"]) for b in ids if ok_(b, "SV2")]
+    pair_sv2 = [b for b in ids if ok_(b, "SV2") and ok_(b, "J0")]
+    pair_so = [b for b in ids if ok_(b, "S") and ok_(b, "B")]
     s_win = per_arm_text("S", PROP, lambda t: code_flags(t, "smp"))
     o_win = per_arm_text("B", PROP, lambda t: code_flags(t, "smp"))
     sb = lambda x: bool(x["jude_fails_proposition"] or x["code_sends_proposition"])
-    j0_sb = sum(1 for b in ids if (arms_by[b].get("J0") or {}).get("status") == "ok" and (arms_by[b]["J0"]["jude_fails_proposition"] or PROP in arms_by[b]["J0"]["code_sendbacks_B"]))
-    s_sb = sum(sb(x) for _, x in sv2)
+    j0_sb_of = lambda b: bool(arms_by[b]["J0"]["jude_fails_proposition"] or PROP in arms_by[b]["J0"]["code_sendbacks_B"])
+    j0_sb = sum(j0_sb_of(b) for b in pair_sv2)          # O's send-backs, on the briefs where S's survival review also ran
+    s_sb = sum(sb(arms_by[b]["SV2"]) for b in pair_sv2)
     cost2 = cost_line_ok([step_cost(arms_by[b]["S"]) for b in ids if (arms_by[b].get("S") or {}).get("status") in OK_STATUS])
     steps2 = ran("S")
     c2 = ["SvO", "LvO", "L2vO"]
-    g2 = gate_failures(failed_final_briefs=failed_final(("B", "S", "L", "L2")), missing=g1_missing(T, vs8, c2) + [f"{b}:L pool" for b in vl8["missing"]],
+    sv2_measured = survival_measured(arms_by, ids, "SV2", out)
+    g2 = gate_failures(failed_final_briefs=failed_final(("B", "S", "L", "L2", "SV2")), missing=g1_missing(T, vs8, c2) + [f"{b}:L pool" for b in vl8["missing"]],
                        x_share=x_shares(set(c2)), steps_ran=steps2, n=n)
     d2 = {"SvO": T["SvO"], "LvO": T["LvO"], "L2vO": T["L2vO"], "median_s8": vs8["median"], "median_s4": vs4["median"], "median_l4": vl4["median"],
-          "code_fail_s": sum(1 for f in s_win.values() if f["fails_code_check"]), "code_fail_o": sum(1 for f in o_win.values() if f["fails_code_check"]),
-          "sendback_s": s_sb, "sendback_o": j0_sb, "cost_ok": cost2["ok"], "survival_measured": bool(sv2) and not _survival_dropped(out) if ids else False,
-          "confounded": length_for("SvO")["confounded"], "gates": g2}
+          "code_fail_s": sum(1 for b in pair_so if s_win[b]["fails_code_check"]), "code_fail_o": sum(1 for b in pair_so if o_win[b]["fails_code_check"]),
+          "sendback_s": s_sb if sv2_measured else None, "sendback_o": j0_sb if sv2_measured else None, "cost_ok": cost2["ok"],
+          "survival_measured": sv2_measured, "confounded": length_for("SvO")["confounded"], "gates": g2}
     seeds = {}
     for b in ids:
         a = arms_by[b].get("S") or {}
@@ -2186,8 +2218,11 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                     "winners_by_seed": seeds, "share_identity_or_social": ((seeds.get(2, 0) + seeds.get(5, 0)) / sum(seeds.values())) if seeds else None,
                     "code_checks": {"S": _count_flags(s_win), "O": _count_flags(o_win)},
                     "candidates_citing_nothing": sum(1 for b in ids for p in (arms_by[b].get("S") or {}).get("pool", []) if p["source"] != "first_draft" and not p.get("cites")),
-                    "send_backs": {"S_winner_in_B": s_sb, "O_via_J0": j0_sb},
-                    "survival": {"S_winner": _sv_counts([x for _, x in sv2]), "B_via_J0": _sv_counts(j0s)}, "step_ran": steps2}
+                    "send_backs": {"S_winner_in_B": s_sb, "O_via_J0": j0_sb, "paired_briefs": len(pair_sv2)},
+                    "survival": {"S_winner": _sv_counts([x for _, x in sv2]), "B_via_J0": _sv_counts(j0s),
+                                 "paired_briefs": len(pair_sv2), "paired_S_winner": _sv_counts([arms_by[b]["SV2"] for b in pair_sv2]),
+                                 "paired_B_via_J0": _sv_counts([arms_by[b]["J0"] for b in pair_sv2])},
+                    "guard_pairs": {"S_O_code_checks": len(pair_so), "SV2_J0": len(pair_sv2)}, "step_ran": steps2}
     # ---------------- idea 3
     if CFG["INCLUDE_IDEA3"]:
         c3 = ["R1vR0", "R0pvR0", "R1vO", "R0vO"]
@@ -2206,12 +2241,13 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                 c0_, s0_ = step_cost(arms_by[b]["J0"])
                 extra_costs.append((c1_ - c0_, s1_ - s0_))
         cost3 = cost_line_ok(extra_costs)
-        un = lambda j: sum(1 for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok" and arms_by[b][j]["unanswered_proposition"])
+        pair_r = [b for b in ids if ok_(b, "J1") and ok_(b, "J0")]       # F1: every guard on the briefs where both sides ran
+        un = lambda j, bs=pair_r: sum(1 for b in bs if arms_by[b][j]["unanswered_proposition"])
         steps3 = sum(1 for b in ids if (arms_by[b].get("J1") or {}).get("status") == "ok")
         g3 = gate_failures(failed_final_briefs=failed_final(("B", "J0", "J0p", "J1")), missing=g1_missing(T, {"missing": []}, c3),
                            x_share=x_shares(set(c3)), steps_ran=steps3, n=n)
         d3 = {"R1vR0": T["R1vR0"], "R0pvR0": T["R0pvR0"], "R1vO": T["R1vO"], "R0vO": T["R0vO"],
-              "code_fail_r1": sum(1 for f in flags["R1"].values() if f["fails_code_check"]), "code_fail_r0": sum(1 for f in flags["R0"].values() if f["fails_code_check"]),
+              "code_fail_r1": sum(1 for b in pair_r if flags["R1"][b]["fails_code_check"]), "code_fail_r0": sum(1 for b in pair_r if flags["R0"][b]["fails_code_check"]),
               "cost_ok": cost3["ok"], "unanswered_j1": un("J1"), "unanswered_j0": un("J0"), "split": rewrite_split(rw),
               "confounded": length_for("R1vR0")["confounded"], "gates": g3}
         fail = lambda j, key_: sum(1 for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok" and arms_by[b][j][key_])
@@ -2221,7 +2257,7 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                         "code_checks": {a: _count_flags(f) for a, f in flags.items()},
                         "jude_fails_proposition": {j: fail(j, "jude_fails_proposition") for j in ("J0", "J0p", "J1")},
                         "code_alone_sends_back": {j: sum(1 for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok" and arms_by[b][j]["sent_by"] == "code") for j in ("J0", "J0p", "J1")},
-                        "unanswered": {"J0": un("J0"), "J0p": un("J0p"), "J1": un("J1")},
+                        "unanswered": {j: un(j, [b for b in ids if ok_(b, j)]) for j in ("J0", "J0p", "J1")}, "guard_pairs": {"J1_J0": len(pair_r)},
                         "jude_noise_J0_vs_J0p": {"disagree_on_failing_proposition": dis("jude_fails_proposition"), "disagree_on_failing_insight": dis("jude_fails_insight")},
                         "rewrites_per_arm": {j: sum(len(arms_by[b][j]["rewrites"]) for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok") for j in ("J0", "J0p", "J1")},
                         "client_questions": {j: sum(len(arms_by[b][j]["questions"]) for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok") for j in ("J0", "J0p", "J1")},
@@ -2254,6 +2290,15 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                                                   "secs": _med([step_cost(arms_by[b][name])[1] for b in ids if name in arms_by[b]])}
                                            for name in sorted({k for b in ids for k in arms_by[b]})}
     return res
+
+
+def survival_measured(arms_by: dict, ids: list, sv_arm: str, out: Path) -> bool:
+    """F1, F2: the send-back guards are measured only when the survival reviews were not cut (R5) and every brief's
+    survival arm AND its baseline J0 are settled (ran to a result, or FAILED-final). A FAILED-final one is missing
+    data under R6, counted by the gate's FAILED-final list, never read as 'measured and found nothing'."""
+    done = OK_STATUS + ("FAILED_final",)
+    return bool(ids) and not _survival_dropped(out) and all(
+        (arms_by[b].get(a) or {}).get("status") in done for b in ids for a in (sv_arm, "J0"))
 
 
 def g1_missing(T, v, comps):

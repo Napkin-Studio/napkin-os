@@ -1046,7 +1046,9 @@ def test_the_replay_run_is_force_free_of_survival_when_skipped_and_idea3_is_a_sw
     assert "SV1" not in arms and "J1" in arms
     ee.CFG["INCLUDE_IDEA3"] = False
     try:
-        assert not {"J0", "J0p", "J1"} & {n for n, *_ in ee.arm_specs()} and not any(c[1] == 3 for c in ee.comparisons())
+        # J0 and J0' are the survival reviews' baseline, so they stay; only J1 and idea 3's comparisons go (F2)
+        names = {n for n, *_ in ee.arm_specs()}
+        assert {"J0", "J0p"} <= names and "J1" not in names and not any(c[1] == 3 for c in ee.comparisons())
     finally:
         ee.CFG["INCLUDE_IDEA3"] = True
 
@@ -1564,3 +1566,96 @@ def test_a_rater_answered_by_another_model_fails_loudly_and_is_never_scored(tmp_
     monkeypatch.setenv("FAKE_NO_MODEL_USAGE", "1")      # no usage to check: said so in the log, not silently passed
     ee.rater_call("opus", "p", log, "j")
     assert ee.read_log(tmp_path / "rater_cost_log.jsonl")[-1]["model_checked"] is False
+
+
+# =============================================================================================== F1, F2: the send-back guards
+def twenty(tmp_path, bids=None):
+    return packets_for(tmp_path, bids or [f"c{i:02d}" for i in range(1, 21)])
+
+
+GATE_T1_INSIGHT = "Jude fails T1's insight in at most 2 more briefs than B's (J0)"
+
+
+def test_the_idea1_survival_guard_counts_both_sides_over_the_briefs_where_both_ran(tmp_path):
+    out, inputs, arms_by, packets, key = twenty(tmp_path)
+    # Jude fails B's insight in the three briefs where the survival review has no result (no_gate, FAILED, no_gate) ...
+    for b in ("c03", "c05"):
+        arms_by[b]["T1"], arms_by[b]["SV1"] = {"status": "no_gate"}, {"status": "no_gate"}
+    arms_by["c04"]["SV1"] = {"status": "FAILED_final", "calls": [], "failed_runs": [], "runs": 2}
+    for b in ("c03", "c04", "c05"):
+        arms_by[b]["J0"]["jude_fails_insight"] = True
+    # ... and fails T1's insight in three briefs where B's passes
+    for b in ("c10", "c11", "c12"):
+        arms_by[b]["SV1"]["jude_fails_insight"] = True
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))["idea1"]
+    # over different sets T1 would read 3 against 3 (a pass); over the paired 17 briefs it is 3 against 0
+    assert r["survival"]["paired_briefs"] == 17 and r["survival"]["paired_T1"]["jude_fails_insight"] == 3
+    assert r["survival"]["paired_B_via_J0"]["jude_fails_insight"] == 0 and r["survival"]["B_via_J0"]["jude_fails_insight"] == 3
+    assert r["rules"]["go_conditions"][GATE_T1_INSIGHT] is False
+    assert r["rules"]["go_conditions"]["code sends T1's insight or proposition back in at most 2 more briefs than C1's"] is True
+    assert r["guard_pairs"]["T1_C1_code_checks"] == 18          # T1 ran in 18 briefs; C1's count is over those 18 only
+
+
+def test_a_failed_final_survival_arm_is_missing_data_under_r6_never_measured_and_clean(tmp_path):
+    out, inputs, arms_by, packets, key = twenty(tmp_path)
+    failed = {"status": "FAILED_final", "calls": [], "failed_runs": [], "runs": 2}
+    arms_by["c04"]["SV1"] = failed
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    assert r["failed_final"]["SV1"] == ["c04"] and r["idea1"]["rules"]["verdict"] != "INCOMPLETE"      # one is within R6's two
+    for b in ("c05", "c06"):
+        arms_by[b]["SV1"] = failed
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    assert r["idea1"]["rules"]["verdict"] == "INCOMPLETE" and "FAILED-final in 3 briefs" in " ".join(r["idea1"]["rules"]["why"])
+    assert r["idea2"]["rules"]["verdict"] != "INCOMPLETE"                  # SV1 is idea 1's arm
+    arms_by["c07"]["SV2"], arms_by["c08"]["SV2"], arms_by["c09"]["SV2"] = failed, failed, failed
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    assert r["idea2"]["rules"]["verdict"] == "INCOMPLETE"
+    # an unsettled survival arm (no file at all) is not 'measured' either
+    del arms_by["c10"]["SV1"]
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    assert r["idea1"]["rules"]["go_conditions"][GATE_T1_INSIGHT] is False and r["idea1"]["rules"]["guards_not_measured"]
+
+
+def test_the_idea2_send_back_guard_is_paired_and_survival_is_measured_only_when_every_brief_is_settled(tmp_path):
+    out, inputs, arms_by, packets, key = twenty(tmp_path)
+    arms_by["c03"]["S"], arms_by["c03"]["SV2"] = {"status": "no_gate"}, {"status": "no_gate"}
+    arms_by["c03"]["J0"]["jude_fails_proposition"] = True            # O is sent back here, but S has no winner to compare
+    arms_by["c04"]["SV2"]["jude_fails_proposition"] = True            # S's winner is sent back here, O is not
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))["idea2"]
+    assert r["send_backs"] == {"S_winner_in_B": 1, "O_via_J0": 0, "paired_briefs": 19}
+    assert r["guard_pairs"] == {"S_O_code_checks": 19, "SV2_J0": 19}
+    # before F1 an SV2 that ran in a single brief counted as measured
+    for b in [f"c{i:02d}" for i in range(2, 21)]:
+        del arms_by[b]["SV2"]
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))["idea2"]
+    assert r["rules"]["guards_not_measured"] and r["rules"]["verdict"] in ("INCONCLUSIVE", "DROP", "INCOMPLETE")
+    assert r["rules"]["go_conditions"]["Jude or code sends S's winner back in at most 2 more briefs than O"] is False
+
+
+def test_j0_runs_whether_or_not_idea_3_is_included_and_the_guards_say_not_measured_when_it_is_absent(tmp_path, monkeypatch):
+    monkeypatch.setitem(ee.CFG, "INCLUDE_IDEA3", False)
+    names = [n for n, *_ in ee.arm_specs()]
+    assert "J0" in names and "J0p" in names and "J1" not in names
+    arms = ee.process_brief(tmp_path / "a", make_inp(), lambda j, a: Fake(standard_handlers()))
+    assert arms["J0"]["status"] == "ok" and arms["J0p"]["status"] == "ok" and "J1" not in arms and arms["SV1"]["status"] == "ok"
+    # the survival reviews cut (R5) and idea 3 off: J0 and J0' are nobody's baseline, so they are cut too
+    cut = ee.process_brief(tmp_path / "b", make_inp(), lambda j, a: Fake(standard_handlers()), skip=ee.SURVIVAL_ARMS)
+    assert "J0" not in cut and "J0p" not in cut and "SV1" not in cut
+    monkeypatch.setitem(ee.CFG, "INCLUDE_IDEA3", True)
+    kept = ee.process_brief(tmp_path / "c", make_inp(), lambda j, a: Fake(standard_handlers()), skip=ee.SURVIVAL_ARMS)
+    assert "J0" in kept and "J1" in kept and "SV2" not in kept
+
+
+def test_with_idea_3_off_the_baseline_is_measured_from_j0_and_with_j0_absent_it_is_not_measured_rather_than_zero(tmp_path, monkeypatch):
+    monkeypatch.setitem(ee.CFG, "INCLUDE_IDEA3", False)
+    out, inputs, arms_by, packets, key = twenty(tmp_path)
+    assert all("J0" in a and "J1" not in a for a in arms_by.values())
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    assert "idea3" not in r and r["idea1"]["survival"]["B_via_J0"]["briefs"] == 20 and r["idea1"]["rules"]["guards_not_measured"] == []
+    for a in arms_by.values():          # what the old code did: J0 never ran, so B's baseline read 0
+        a.pop("J0"), a.pop("J0p")
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    for k, gate in (("idea1", GATE_T1_INSIGHT), ("idea2", "Jude or code sends S's winner back in at most 2 more briefs than O")):
+        assert r[k]["rules"]["guards_not_measured"] and r[k]["rules"]["go_conditions"][gate] is False
+        assert r[k]["rules"]["verdict"] in ("INCONCLUSIVE", "DROP") and "not measured" in " ".join(r[k]["rules"]["why"] + ["not measured"])
+    assert ee.idea1_rules(idea1_base(jude_fail_ins_t1=None, jude_fail_ins_b=None, survival_measured=False))["go_conditions"][GATE_T1_INSIGHT] is False
