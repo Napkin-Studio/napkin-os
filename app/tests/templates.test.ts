@@ -1797,24 +1797,34 @@ test('cards a page asks for in one tick are one POST /cite, kept until the docum
 
 // ── Brief Maker on the new UI (features/brief-new-ui.clan) ──────────────────
 
-type Item = { key: string; sec: string; w: number; as?: string; tone?: string }
+type Item = { key: string; sec: string; w: number; r?: number; as?: string; tone?: string }
 type Cell = { key?: string; head?: string; col: number; row: number; w: number; h: number; order?: number; as?: string; tone?: string }
 type Lay = {
-  layoutOrder(fields: { key: string; sec: string }[], stored: unknown): Item[]
+  layoutOrder(fields: { key: string; sec: string }[], stored: unknown, rows?: boolean): Item[]
   layoutPack(items: Item[]): Cell[]
   layoutParts(items: Item[]): Record<string, { col: number; row: number; w: number; h: number; order: number; as?: string; tone?: string }>
-  layoutMove(items: Item[], key: string, target: string, after: boolean): Item[]
+  layoutRows(items: Item[]): Item[][]
   layoutStep(items: Item[], key: string, d: number): Item[]
-  layoutDrop(items: Item[], key: string, target: string, after: boolean): Item[]
+  layoutShift(items: Item[], key: string, d: number): Item[]
+  layoutJoin(items: Item[], key: string, target: string, after: boolean): Item[]
+  layoutNewRow(items: Item[], key: string, target: string, below: boolean): Item[]
+  layoutWithout(items: Item[], keys: string[]): Item[]
+  layoutCanStep(items: Item[], key: string): [boolean, boolean]
   layoutResize(items: Item[], key: string, w: number): Item[]
   layoutLook(items: Item[], key: string, prop: string, v: string): Item[]
   boxGaps(cells: Cell[]): { row: number; col: number; w: number }[]
 }
 const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
-const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutDrop', 'layoutResize', 'layoutLook', 'boxGaps'],
-  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'],
+const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'partCopy', 'layoutOrder', 'layoutFlow', 'layoutRows', 'fitRow', 'fromRows', 'rowsFit', 'rowAt', 'takeOut', 'layoutPack', 'layoutParts', 'layoutIndex',
+  'layoutResize', 'layoutJoin', 'layoutNewRow', 'layoutStep', 'layoutShift', 'layoutWithout', 'layoutCanStep', 'layoutLook', 'boxGaps'],
+  { GRID_COLS: 12, MIN_W: 3, ROW_MAX: 4, arr, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'],
     AS_KINDS: ['prose', 'bullets', 'callout', 'statement', 'cell'], TONES: ['plain', 'tint', 'inverse'] })
 const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
+// The sheet's rows as keys and widths: [['background:6', 'barrier:6'], …]
+const rowsOf = (L: Lay, xs: Item[]) => L.layoutRows(xs).map(r => r.map(p => `${p.key}:${p.w}`))
+const rowWith = (L: Lay, xs: Item[], k: string) => rowsOf(L, xs).find(r => r.some(x => x.startsWith(k + ':')))!
+// What the document returns after a save, read back as the sheet reads it.
+const reload = (L: Lay, xs: Item[]) => L.layoutOrder(BM_FIELDS, JSON.parse(JSON.stringify(L.layoutParts(xs))), true)
 
 test('a brief with no layout sits in the schema’s order at the default widths, the header’s rows first', () => {
   const L = lay()
@@ -1841,40 +1851,230 @@ test('a brief with no layout sits in the schema’s order at the default widths,
   }
 })
 
-test('a part moved or resized keeps its place in data, and the rest keep theirs', () => {
+test('rows stay rows: dragging the edge two parts share trades columns between them, and no part changes row', () => {
   const L = lay()
-  const items = L.layoutOrder(BM_FIELDS, {})
-  // Move the insight after the audience: only the insight changes place.
-  const moved = L.layoutMove(items, 'insight', 'audience', true)
-  const k = keysOf(moved)
-  assert.equal(k.indexOf('insight'), k.indexOf('audience') + 1)
-  assert.deepEqual(k.filter(x => x !== 'insight'), keysOf(items).filter(x => x !== 'insight'))
-  // Stored, read back: the same order and widths, every part written.
-  const parts = L.layoutParts(L.layoutResize(moved, 'barrier', 4))
-  assert.equal(Object.keys(parts).length, BM_FIELDS.length)
-  assert.deepEqual(parts.barrier, { col: 7, row: parts.background.row, w: 4, h: 1, order: k.indexOf('barrier') })
-  const again = L.layoutOrder(BM_FIELDS, parts)
-  assert.deepEqual(keysOf(again), k)
-  assert.equal(again.find(x => x.key === 'barrier')!.w, 4)
-  // Widths stay on the grid: never under three columns, never over twelve, never fractional.
-  assert.equal(L.layoutResize(items, 'job', 1).find(x => x.key === 'job')!.w, 3)
-  assert.equal(L.layoutResize(items, 'job', 40).find(x => x.key === 'job')!.w, 12)
-  assert.equal(L.layoutResize(items, 'job', 6.4).find(x => x.key === 'job')!.w, 6)
-  // A part too wide for what is left of a row starts the next one.
-  const wide = L.layoutPack(L.layoutResize(items, 'barrier', 8))
-  const bg = wide.find(c => c.key === 'background')!, br = wide.find(c => c.key === 'barrier')!
-  assert.deepEqual([br.row, br.col], [bg.row + 1, 1])
-  // The keyboard's step: one place earlier or later; nothing moves past either end. The header's
-  // parts step like any other (owner, 10 Nov): no part is skipped.
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  const before = rowsOf(L, items)
+  assert.deepEqual(rowWith(L, items, 'background'), ['background:6', 'barrier:6'])
+  const rowOfEach = (xs: Item[]) => Object.fromEntries(L.layoutRows(xs).flatMap((r, n) => r.map(p => [p.key, n])))
+  for (const w of [1, 3, 4, 8, 9, 11, 40]) {
+    const next = L.layoutResize(items, 'background', w)
+    const [bg, br] = rowWith(L, next, 'background').map(x => +x.split(':')[1])
+    assert.equal(bg + br, 12, `${w}: the two trade, the row keeps its twelve columns`)
+    assert.equal(bg, Math.max(3, Math.min(9, w)), `${w}: neither goes under three columns`)
+    assert.deepEqual(rowOfEach(next), rowOfEach(items), `${w}: every part keeps its row`)
+    assert.equal(rowsOf(L, next).length, before.length)
+  }
+  // The three objectives: the middle edge trades between behavioural and attitudinal only.
+  const mid = L.layoutResize(items, 'objectives.behavioural', 6)
+  assert.deepEqual(rowWith(L, mid, 'objectives.commercial'), ['objectives.commercial:4', 'objectives.behavioural:5', 'objectives.attitudinal:3'])
+  // The owner's recording: Client widened next to Project, then Project shrunk and widened again. They
+  // stay on one row the whole time, and the space Project gives up comes back to it.
+  let rows = L.layoutJoin(L.layoutResize(items, 'project_name', 4), 'client', 'project_name', true)
+  assert.deepEqual(rowWith(L, rows, 'client').length, 2)
+  for (const [k, w] of [['project_name', 3], ['project_name', 9], ['project_name', 2], ['project_name', 6]] as const) {
+    rows = L.layoutResize(rows, k, w)
+    const r = rowWith(L, rows, 'client')
+    assert.equal(r.length, 2, `${k} to ${w}: Client and Project share the row`)
+    assert.equal(r.reduce((s, x) => s + +x.split(':')[1], 0), 12)
+  }
+  // Widths stay on the grid: never fractional.
+  assert.deepEqual(rowWith(L, L.layoutResize(items, 'background', 6.4), 'background'), ['background:6', 'barrier:6'])
+})
+
+test('a free outer edge, at the end of a row that does not fill the sheet, sizes only into that free space', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  // Alone on its row: anywhere from three to twelve columns.
+  assert.deepEqual(rowWith(L, L.layoutResize(items, 'job', 1), 'job'), ['job:3'])
+  assert.deepEqual(rowWith(L, L.layoutResize(items, 'job', 40), 'job'), ['job:12'])
+  assert.deepEqual(rowWith(L, L.layoutResize(items, 'job', 7), 'job'), ['job:7'])
+  // A row of four and four (four free): the last part grows into the four free columns, no further, and the
+  // first keeps its width.
+  const two = L.layoutResize(L.layoutResize(items, 'background', 4), 'barrier', 4)
+  assert.deepEqual(rowWith(L, two, 'background'), ['background:4', 'barrier:4'])
+  assert.deepEqual(rowWith(L, L.layoutResize(two, 'barrier', 12), 'background'), ['background:4', 'barrier:8'])
+  assert.deepEqual(rowWith(L, L.layoutResize(two, 'barrier', 6), 'background'), ['background:4', 'barrier:6'])
+  // A full row's last edge has nowhere to go.
+  assert.deepEqual(rowWith(L, L.layoutResize(items, 'barrier', 9), 'background'), ['background:6', 'barrier:6'])
+  // In Boxed the free space is the row's: drawn after the last part, never over it.
+  const cells = L.layoutPack(L.layoutResize(two, 'barrier', 6))
+  const br = cells.find(c => c.key === 'barrier')!
+  assert.deepEqual(L.boxGaps(cells).filter(g => g.row === br.row), [{ row: br.row, col: 11, w: 2 }])
+})
+
+test('dropping a part onto a row joins it; a full row shrinks its parts to fit and none drops out', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  // The job (twelve columns) dropped after the barrier on the full background row: thirds.
+  const three = L.layoutJoin(items, 'job', 'barrier', true)
+  assert.deepEqual(rowWith(L, three, 'job'), ['background:4', 'barrier:4', 'job:4'])
+  // Before a part, in its place.
+  assert.deepEqual(rowWith(L, L.layoutJoin(items, 'job', 'barrier', false), 'job'), ['background:4', 'job:4', 'barrier:4'])
+  // Into a row with room for it: nothing shrinks.
+  const room = L.layoutJoin(L.layoutResize(L.layoutResize(L.layoutResize(items, 'background', 4), 'barrier', 4), 'job', 4), 'job', 'barrier', true)
+  assert.deepEqual(rowWith(L, room, 'job'), ['background:4', 'barrier:4', 'job:4'])
+  // Inside its own row a drop only reorders, widths kept.
+  assert.deepEqual(rowWith(L, L.layoutJoin(items, 'barrier', 'background', false), 'barrier'), ['barrier:6', 'background:6'])
+  // Four parts at most, three columns each: a fifth drop makes a row of its own, and nothing is lost.
+  let s = L.layoutOrder(BM_FIELDS, undefined)
+  for (const k of ['insight', 'single_minded_proposition']) s = L.layoutJoin(s, k, 'audience', true)
+  const four = rowWith(L, s, 'audience')
+  assert.equal(four.length, 4)
+  assert.ok(four.every(x => +x.split(':')[1] === 3))
+  const five = L.layoutJoin(s, 'objection', 'audience', true)
+  assert.deepEqual(rowWith(L, five, 'objection'), ['objection:6'], 'a row of its own, below')
+  assert.equal(rowWith(L, five, 'audience').length, 4)
+  assert.deepEqual(keysOf(five).sort(), BM_FIELDS.map(f => f.key).sort(), 'every part is still on the sheet')
+  // A row is one section: a drop across a section boundary makes a row of its own instead (as before:
+  // a part never shared a row with another section's).
+  const across = L.layoutJoin(items, 'background', 'client', true)
+  assert.deepEqual(rowWith(L, across, 'background'), ['background:6'])
+  assert.deepEqual(rowWith(L, across, 'client'), ['client:12'])
+  assert.deepEqual(rowWith(L, across, 'barrier'), ['barrier:12'], 'its old row gets the width back')
+  const cells = L.layoutPack(across)
+  assert.ok(cells.find(c => c.key === 'background')!.row > cells.find(c => c.key === 'client')!.row)
+})
+
+test('dropping between rows makes a row of its own; dragging a part out gives its width back to the rest of that row', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  const above = L.layoutNewRow(items, 'barrier', 'job', false)
+  const r = rowsOf(L, above)
+  const at = (k: string) => r.findIndex(x => x.some(y => y.startsWith(k + ':')))
+  assert.deepEqual(r[at('barrier')], ['barrier:6'], 'a row of its own, at its own width')
+  assert.equal(at('barrier'), at('job') - 1, 'above the job’s row')
+  assert.deepEqual(r[at('background')], ['background:12'], 'the background takes back the barrier’s six columns')
+  assert.equal(rowsOf(L, L.layoutNewRow(items, 'barrier', 'background', true)).findIndex(x => x[0] === 'barrier:6'), at('job') + 1)
+  // A part alone on its row dropped beside its own row: nothing to do.
+  assert.deepEqual(L.layoutNewRow(items, 'job', 'job', true), items)
+  // Out of a row of three: the two left share the freed columns evenly.
+  const three = L.layoutJoin(items, 'job', 'barrier', true)
+  assert.deepEqual(rowWith(L, L.layoutNewRow(three, 'barrier', 'background', true), 'background'), ['background:6', 'job:6'])
+  // Out of a row with free space: the rest grows by what was freed, the free space stays.
+  const free = L.layoutResize(L.layoutResize(items, 'background', 6), 'barrier', 3)
+  assert.deepEqual(rowWith(L, L.layoutNewRow(free, 'barrier', 'job', true), 'background'), ['background:9'])
+  // The client copy leaves a confidential part out the same way: its row closes up.
+  assert.deepEqual(rowWith(L, L.layoutWithout(items, ['barrier']), 'background'), ['background:12'])
+  assert.ok(!keysOf(L.layoutWithout(items, ['barrier'])).includes('barrier'))
+})
+
+test('Move up / Move down and the arrow keys: out of a shared row into one of its own, or a lone row past its neighbour', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  // Sharing a row: it steps out into a row of its own above (or below), and the row takes its width back.
+  const up = rowsOf(L, L.layoutStep(items, 'barrier', -1))
+  const i = up.findIndex(x => x[0] === 'barrier:6')
+  assert.deepEqual([up[i], up[i + 1]], [['barrier:6'], ['background:12']])
+  const down = rowsOf(L, L.layoutStep(items, 'barrier', 1))
+  const j = down.findIndex(x => x[0] === 'barrier:6')
+  assert.deepEqual([down[j - 1], down[j]], [['background:12'], ['barrier:6']])
+  // Alone: it swaps with the row above (or below); nothing moves past either end.
   assert.deepEqual(keysOf(L.layoutStep(items, 'client', -1)), keysOf(items))
   assert.deepEqual(keysOf(L.layoutStep(items, 'project_name', -1)).slice(0, 3), ['project_name', 'client', 'budget_and_scope'])
   assert.deepEqual(keysOf(L.layoutStep(items, 'job', -1)).slice(0, 4), ['client', 'project_name', 'job', 'budget_and_scope'])
-  assert.deepEqual(keysOf(L.layoutStep(items, 'budget_and_scope', 1)).slice(2, 4), ['job', 'budget_and_scope'])
-  assert.deepEqual(keysOf(L.layoutStep(items, 'open_questions', 1)), keysOf(items))
-  // An older brief's layout naming a part only by width keeps its schema place; a stray entry is ignored.
+  assert.deepEqual(keysOf(L.layoutStep(items, 'open_questions', 1)), keysOf(items).filter(k => k !== 'open_questions').concat('open_questions'))
+  const last = L.layoutStep(L.layoutStep(items, 'open_questions', 1), 'open_questions', 1)
+  assert.deepEqual(rowsOf(L, last), rowsOf(L, L.layoutStep(items, 'open_questions', 1)))
+  // The panel's buttons know when there is nowhere to go.
+  assert.deepEqual(L.layoutCanStep(items, 'client'), [false, true])
+  assert.deepEqual(L.layoutCanStep(items, 'barrier'), [true, true])
+  // Left and right: a place earlier or later inside the row, widths kept; never out of it.
+  const left = L.layoutResize(L.layoutShift(items, 'barrier', -1), 'barrier', 4)
+  assert.deepEqual(rowWith(L, left, 'barrier'), ['barrier:4', 'background:8'])
+  assert.deepEqual(rowsOf(L, L.layoutShift(items, 'background', -1)), rowsOf(L, items))
+  assert.deepEqual(rowsOf(L, L.layoutShift(items, 'job', 1)), rowsOf(L, items))
+  // The grip's keys and the panel's buttons go through these, with a decision that says what moved.
+  const pr = fn(BM, 'placeRow')
+  assert.match(pr, /if\(v\) saveLayout\(layoutStep\(layoutItems\(\), f\.key, v\), 'move '\+headOf\(f\)\+\(v<0\?' up':' down'\)\);/)
+  assert.match(pr, /else saveLayout\(layoutShift\(layoutItems\(\), f\.key, h\), 'move '\+headOf\(f\)\+\(h<0\?' left':' right'\)\);/)
+  assert.match(fn(BM, 'renderSelPart'), /else if\(a==='up'\|\|a==='down'\) saveLayout\(layoutStep\(layoutItems\(\), f\.key, a==='up'\?-1:1\), 'move '\+headOf\(f\)\+' '\+a\);/)
+  assert.match(fn(BM, 'renderSelPart'), /data-sp="up"'\+\(can\[0\]\?'':' disabled'\)/)
+})
+
+test('an older brief’s stored order is packed into rows once, as the old sheet drew it; nothing is written until something changes', () => {
+  const L = lay()
+  // The owner's First Round as stored on 10 Nov (a flow: order and widths; its rows were never read).
+  const old = {
+    project_name: { col: 1, row: 2, w: 4, h: 1, order: 0 }, client: { col: 5, row: 2, w: 8, h: 1, order: 1 },
+    budget_and_scope: { col: 1, row: 4, w: 12, h: 1, order: 2 }, job: { col: 1, row: 6, w: 12, h: 1, order: 3 },
+    background: { col: 1, row: 7, w: 6, h: 1, order: 4 }, barrier: { col: 7, row: 7, w: 6, h: 1, order: 5 },
+  }
+  const items = L.layoutOrder(BM_FIELDS, old)
+  assert.deepEqual(rowsOf(L, items).slice(0, 4), [['project_name:4', 'client:8'], ['budget_and_scope:12'], ['job:12'], ['background:6', 'barrier:6']])
+  // The same flow the old sheet packed: a section starts a row, a part too wide for the rest starts the next.
+  const flow = L.layoutOrder(BM_FIELDS, { client: { w: 6, order: 0 }, project_name: { w: 12, order: 1 } })
+  assert.deepEqual([rowWith(L, flow, 'client'), rowWith(L, flow, 'project_name')], [['client:6'], ['project_name:12']])
+  // A layout naming a part only by width keeps its schema place; a stray entry is ignored.
   const partial = L.layoutOrder(BM_FIELDS, { audience: { w: 12 }, nonsense: { order: 0 } })
-  assert.deepEqual(keysOf(partial), keysOf(items))
+  assert.deepEqual(keysOf(partial), keysOf(L.layoutOrder(BM_FIELDS, undefined)))
   assert.equal(partial.find(x => x.key === 'audience')!.w, 12)
+  // Once saved (layout.model 'rows'), the rows are the places, read as they are: a row with free space
+  // never fills up again from the row below it.
+  const out = L.layoutNewRow(items, 'project_name', 'client', true)
+  assert.deepEqual(rowsOf(L, out).slice(0, 2), [['client:12'], ['project_name:4']])
+  const narrowed = L.layoutResize(out, 'client', 8)
+  assert.deepEqual(rowsOf(L, reload(L, narrowed)).slice(0, 2), [['client:8'], ['project_name:4']], 'Project stays on its own row')
+  assert.deepEqual(rowsOf(L, L.layoutOrder(BM_FIELDS, L.layoutParts(narrowed))).slice(0, 1), [['client:8', 'project_name:4']], 'read as a flow, it would have jumped back up')
+  // saveLayout writes the rows model; reading only (layoutItems) writes nothing, and a save that changes
+  // nothing is not a decision.
+  const calls: unknown[][] = []
+  let stored: Record<string, unknown> = { frame: 'boxed', parts: old }
+  const S = lift<{ saveLayout(items: Item[], what: string): unknown }>(BM, ['saveLayout', 'sameParts'],
+    { layoutData: () => stored, layoutParts: L.layoutParts, patch: (...a: unknown[]) => { calls.push(a); stored = a[1] as Record<string, unknown> } })
+  assert.equal(calls.length, 0)
+  S.saveLayout(L.layoutResize(items, 'client', 8), 'widen Client')
+  assert.equal(calls.length, 1, 'the first save after a read migrates the layout')
+  assert.equal((calls[0][1] as { model: string }).model, 'rows')
+  S.saveLayout(L.layoutOrder(BM_FIELDS, (stored as { parts: unknown }).parts, true), 'nothing')
+  assert.equal(calls.length, 1, 'no change, no decision')
+  assert.match(fn(BM, 'layoutItems'), /layoutOrder\(FIELDS, l\.parts, l\.model==='rows'\)/)
+  const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: { layout: { properties: Record<string, { enum?: string[] }> } } }
+  assert.deepEqual(schema.properties.layout.properties.model.enum, ['rows'])
+})
+
+test('the owner’s sequence holds on reload: Client widened by Project, Project out to a row of its own and back, three on a row', () => {
+  const L = lay()
+  let s = L.layoutOrder(BM_FIELDS, undefined)
+  // Client and Project share a row.
+  s = reload(L, L.layoutJoin(s, 'project_name', 'client', true))
+  assert.deepEqual(rowWith(L, s, 'client'), ['client:6', 'project_name:6'])
+  // Widen Client next to Project: Project gives the columns, and stays.
+  s = reload(L, L.layoutResize(s, 'client', 9))
+  assert.deepEqual(rowWith(L, s, 'client'), ['client:9', 'project_name:3'])
+  // Shrink and widen Project (its left edge is Client's right edge).
+  s = reload(L, L.layoutResize(s, 'client', 5))
+  assert.deepEqual(rowWith(L, s, 'client'), ['client:5', 'project_name:7'])
+  s = reload(L, L.layoutResize(s, 'project_name', 4))
+  assert.deepEqual(rowWith(L, s, 'client'), ['client:5', 'project_name:4'], 'its free outer edge leaves free space, no box, no jump')
+  // Out to its own row, then back beside Client.
+  s = reload(L, L.layoutNewRow(s, 'project_name', 'client', true))
+  assert.deepEqual(rowsOf(L, s).slice(0, 2), [['client:9'], ['project_name:4']])
+  s = reload(L, L.layoutJoin(s, 'project_name', 'client', true))
+  assert.deepEqual(rowWith(L, s, 'client'), ['client:8', 'project_name:4'])
+  // Three parts on one row.
+  s = reload(L, L.layoutJoin(s, 'job', 'barrier', true))
+  assert.deepEqual(rowWith(L, s, 'job'), ['background:4', 'barrier:4', 'job:4'])
+  // Reload: the same rows, cells and widths, and every stored place in the schema's range.
+  const parts = JSON.parse(JSON.stringify(L.layoutParts(s)))
+  assert.deepEqual(L.layoutPack(L.layoutOrder(BM_FIELDS, parts, true)), L.layoutPack(s))
+  for (const p of Object.values(parts) as { col: number; row: number; w: number; h: number; order: number }[]) {
+    for (const n of ['col', 'row', 'w', 'h', 'order'] as const) assert.ok(Number.isInteger(p[n]), n)
+    assert.ok(p.col >= 1 && p.col + p.w - 1 <= 12 && p.w >= 3 && p.row >= 1 && p.order >= 0)
+  }
+  // A part the stored rows do not name sits on a row of its own after the part before it.
+  delete parts.barrier
+  const gap = L.layoutOrder(BM_FIELDS, parts, true)
+  assert.deepEqual(rowWith(L, gap, 'barrier'), ['barrier:6'])
+  assert.deepEqual(rowWith(L, gap, 'background'), ['background:4', 'job:4'])
+})
+
+test('no Width presets: Place on page keeps Show as, Tone and Move up / down', () => {
+  const sp = fn(BM, 'renderSelPart')
+  for (const gone of ['aria-label="Width"', 'data-w=', 'Two-thirds', "'Third'", "'Half'", 'WIDTHS', '.sp-l [data-w]']) assert.ok(!sp.includes(gone), `${gone} is gone from the panel`)
+  assert.ok(!BM.includes('var WIDTHS'), 'no width presets in the page')
+  assert.ok(sp.indexOf('aria-label="Show as"') < sp.indexOf('aria-label="Tone"') && sp.indexOf('aria-label="Tone"') < sp.indexOf('data-sp="up"'))
+  assert.match(sp, /data-sp="down"/)
 })
 
 test('the brief’s state pill says Draft, Ready to lock, Locked or Reopened; what needs a call is counted on Decisions only', () => {
@@ -2049,7 +2249,7 @@ test('a part marked Confidential is hatched and tagged, kept in the agency copy 
   assert.match(fn(BM, 'fieldRow'), /class="conftag"/)
   assert.match(BM, /\.pgrid > \.row\.conf\{background-image:repeating-linear-gradient\(135deg/)
   // The client copy prints no confidential part; the agency copy prints them hatched and tagged.
-  assert.match(fn(BM, 'sheetItems'), /copy!=='client'\|\|c\.indexOf\(it\.key\)===-1/)
+  assert.match(fn(BM, 'sheetItems'), /copy==='client'\?layoutWithout\(items, confList\(\)\):items/)
   const g = grid()
   const out = g.gridBody({ ...ctxOf({ budget_and_scope: 'Secret money.' }), conf: ['budget_and_scope'] }).html
   assert.match(out, /class="box conf"><div class="lab"><b>06<\/b>Budget and scope<span class="cf">Confidential<\/span>/)
@@ -2682,14 +2882,14 @@ test('the brief opens with ruled form rows: Client, Project, Budget & scope, par
 test('the header’s rows move and resize like every other part; the version is the side tab’s, not the sheet’s', () => {
   // No 2×2 packing and no fixed meta row: the sheet is the layout's grid, on screen and in print.
   for (const gone of ['function packSheet', 'function metaLong', 'META_SHORT', 'meta-version', 'versionLine', 'p.meta', "<span>Version</span>"]) assert.ok(!BM.includes(gone), `${gone} is gone`)
-  // The grip, the right edge, and Place on page (width, up and down) are on every part.
+  // The grip, the right edge, and Place on page (Show as, Tone, up and down) are on every part.
   assert.match(fn(BM, 'placeRow'), /if\(!docLocked\(\)\)\{\s*var g=document\.createElement\('button'\); g\.type='button'; g\.className='grip'/)
   assert.match(fn(BM, 'renderSelPart'), /\+\(!docLocked\(\)\?'<details class="sp-l"/)
   assert.doesNotMatch(fn(BM, 'layoutStep'), /isMeta|meta\(/)
   // A moved or resized header part is saved in layout.parts like the others and read back in place.
   const L = lay()
-  const moved = L.layoutResize(L.layoutMove(L.layoutOrder(BM_FIELDS, undefined), 'budget_and_scope', 'tone_and_world', true), 'client', 6)
-  const back = L.layoutOrder(BM_FIELDS, L.layoutParts(moved))
+  const moved = L.layoutResize(L.layoutJoin(L.layoutOrder(BM_FIELDS, undefined), 'budget_and_scope', 'tone_and_world', true), 'client', 6)
+  const back = L.layoutOrder(BM_FIELDS, L.layoutParts(moved), true)
   assert.deepEqual(keysOf(back), keysOf(moved))
   assert.equal(back.find(x => x.key === 'client')!.w, 6)
   const k = keysOf(back)
@@ -2715,7 +2915,7 @@ test('a header row shows its whole text, never truncated (owner, 2026-11-10); th
   assert.match(fn(BM, 'sheetCells'), /kd=kindOf\(f, c\.as\)/)
   assert.doesNotMatch(fn(BM, 'sheetCells'), /c\.version/)
   // The client copy leaves a confidential header part out like any other.
-  assert.match(fn(BM, 'sheetItems'), /copy!=='client'\|\|c\.indexOf\(it\.key\)===-1/)
+  assert.match(fn(BM, 'sheetItems'), /copy==='client'\?layoutWithout\(items, confList\(\)\):items/)
 })
 
 // ── Show as and Tone: how a part looks (owner, 2026-11-10) ──────────────────
@@ -2759,7 +2959,7 @@ test('Show as and Tone are saved in layout.parts beside the place, and read back
   assert.equal(parts.background.tone, 'inverse')
   assert.equal(parts.background.w, 6, 'its width is kept')
   assert.ok(!('as' in parts.barrier) && !('tone' in parts.barrier), 'a part with no look writes none')
-  const back = L.layoutOrder(BM_FIELDS, parts)
+  const back = L.layoutOrder(BM_FIELDS, parts, true)
   const bg = back.find(x => x.key === 'background')!
   assert.deepEqual([bg.as, bg.tone], ['bullets', 'inverse'])
   // Moving and resizing keep the look; an unknown value or property changes nothing.
@@ -2795,9 +2995,9 @@ test('the panel’s Show as and Tone save through saveLayout with a decision tha
   assert.deepEqual([o.action, o.actor], ['show Background as bullets', 'human'])
   assert.equal((calls[1] as [string, unknown, { action: string }])[2].action, 'show Insight in the tint tone')
   assert.equal((calls[2] as [string, unknown, { action: string }])[2].action, 'show Client / brand as field')
-  // The panel: Show as and Tone under Width in Place on page, as segmented buttons, pressed on the current value.
+  // The panel: Show as and Tone in Place on page (no Width presets), as segmented buttons, pressed on the current value.
   const sp = fn(BM, 'renderSelPart')
-  assert.ok(sp.indexOf('aria-label="Width"') < sp.indexOf('aria-label="Show as"') && sp.indexOf('aria-label="Show as"') < sp.indexOf('aria-label="Tone"'))
+  assert.ok(!sp.includes('aria-label="Width"') && sp.indexOf('aria-label="Show as"') < sp.indexOf('aria-label="Tone"'))
   assert.ok(sp.indexOf('aria-label="Tone"') < sp.indexOf('data-sp="up"'), 'above Move up and down')
   assert.match(sp, /AS_KINDS\.map\(function\(k\)\{ return '<button type="button" data-as="'\+k\+'" aria-pressed="'\+\(kd===k\)\+'">'\+AS_WORDS\[k\]/)
   assert.match(sp, /TONES\.map\(function\(t\)\{ return '<button type="button" data-tone="'\+t\+'" aria-pressed="'\+\(tone===t\)\+'">'/)
@@ -2856,12 +3056,16 @@ test('Boxed is a ruled form: cells stretch to their row, neighbours share one 1p
   // Stretch, no gaps, and one opaque line per edge (inside top/left, 1px outside right/bottom, so neighbours overlap).
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid\{column-gap:0;row-gap:0;align-items:stretch/)
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row,\.sheet\.a4\.frame-boxed \.pgrid > \.row\.k-cell\{align-self:stretch;border:0!important/)
-  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row::after,\.sheet\.a4\.frame-boxed \.pgrid > \.boxgap::after\{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var\(--frame-line\)/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row::after,\.sheet\.a4\.frame-boxed \.pgrid > \.rowfree::after\{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var\(--frame-line\)/)
+  // A row's free space is the row's (owner, 11 Nov): its frame closes around it, a dashed line where the last
+  // part ends, so it never reads as an empty part.
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row\.endfree::after\{border-right-color:transparent\}/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.rowfree::after\{border-left:1px dashed /)
   assert.match(BM, /\.sheet\.a4\.frame-boxed\{--frame-line:color-mix\(in srgb,var\(--b-text\) 70%,var\(--b-bg\)\)\}/, 'opaque, so an overlap never darkens')
   assert.doesNotMatch(BM, /frame-boxed \.pgrid\{[^}]*border:1px/, 'no frame on the grid as well as on the cells')
   assert.doesNotMatch(BM, /frame-boxed \.pgrid > \.row[^{]*\{[^}]*inset -1px -1px/, 'no half-drawn per-cell edges')
-  // Every part is drawn at its stored width; a grid row that ends short of the edge closes with an empty
-  // box over the rest, on screen and in print (stretching the last part hid a resize: "it snaps back").
+  // Every part is drawn at its stored width; a grid row that ends short of the edge closes with its free
+  // space over the rest, on screen and in print (stretching the last part hid a resize: "it snaps back").
   const L = lay()
   const items = L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'objection', 6)
   const cells = L.layoutPack(items)
@@ -2871,23 +3075,27 @@ test('Boxed is a ruled form: cells stretch to their row, neighbours share one 1p
   for (const [r, cs] of Object.entries(byRow)) {
     const end = Math.max(...cs.map(c => c.col + c.w - 1)), g = gaps.filter(x => x.row === +r)
     if (end === 12) assert.equal(g.length, 0, `row ${r} is full`)
-    else assert.deepEqual(g, [{ row: +r, col: end + 1, w: 12 - end }], `row ${r} closes with an empty box`)
+    else assert.deepEqual(g, [{ row: +r, col: end + 1, w: 12 - end }], `row ${r} closes with its free space`)
   }
-  // A row of a third and a half: the half keeps its six columns; a box of two closes the row.
+  // A third and a half: the background's edge gives the barrier eight, the barrier's free edge takes it
+  // back to six; the half keeps its six columns and two free columns close the row.
   const odd = L.layoutPack(L.layoutResize(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'background', 4), 'barrier', 6))
   const bar = odd.find(c => c.key === 'barrier')!
   assert.deepEqual(L.boxGaps(odd).filter(g => g.row === bar.row), [{ row: bar.row, col: 11, w: 2 }])
   const boxed = sheetCellsOf().sheetCells(odd, { get: () => 'x', fieldOf: fdef, conf: [], cells: odd, look: { frame: 'boxed' } }, null)
   assert.match(boxed, /<span>The barrier<\/span>/)
   assert.ok(boxed.includes(`grid-column:${bar.col} / span 6;`), 'print draws the stored width')
-  assert.ok(boxed.includes(`<div class="boxgap" aria-hidden="true" data-r="${bar.row}" style="grid-column:11 / span 2;`), 'print closes the row with an empty box')
+  assert.ok(boxed.includes(`<div class="rowfree" aria-hidden="true" data-r="${bar.row}" style="grid-column:11 / span 2;`), 'print closes the row with its free space')
+  assert.match(boxed, new RegExp(`<div class="row k-[^"]* endfree[^"]*" data-r="${bar.row}" style="grid-column:${bar.col} / span 6;`), 'the last part says the free space follows it')
   const open = sheetCellsOf().sheetCells(odd, { get: () => 'x', fieldOf: fdef, conf: [], cells: odd, look: {} }, null)
   assert.ok(open.includes(`grid-column:${bar.col} / span 6;`), 'the open frame keeps the stored width')
-  assert.doesNotMatch(open, /boxgap/, 'the open frame has no boxes to close')
-  // On screen: the same boxes, and no width but the stored one (placeRow's).
+  assert.doesNotMatch(open, /rowfree|endfree/, 'the open frame has no boxes to close in print')
+  // On screen: the same free space in both frames (in Open it is where a dragged part joins the row), and
+  // no width but the stored one (placeRow's).
   const rs = fn(BM, 'renderStructured')
-  assert.match(rs, /gaps=layoutData\(\)\.frame==='boxed'\?boxGaps\(packed\):\[\]/)
-  assert.match(rs, /b\.className='boxgap'/)
+  assert.match(rs, /gaps=boxGaps\(packed\)/)
+  assert.match(rs, /b\.className='rowfree'/)
+  assert.match(rs, /if\(ends\[p\.row\]===p\.col\+p\.w-1\) row\.classList\.add\('endfree'\)/)
   assert.doesNotMatch(rs, /row\.style\.gridColumn=/, 'nothing overrides a part’s width after placeRow')
   // The page estimate: a hidden heading has no box, so it is measured where the last row ended, never at
   // the viewport's top (with the page scrolled, that pushed every heading a scroll's height down the sheet
@@ -2899,19 +3107,20 @@ test('a resize holds: saved, read back and packed again at the new width, the he
   const L = lay()
   // The owner's First Round: Client at nine columns, alone on its row (it used to draw at twelve in Boxed).
   let stored = L.layoutParts(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'client', 9))
+  const read = (p: unknown) => L.layoutOrder(BM_FIELDS, p, true)
   const kinds = ['prose', 'bullets', 'callout', 'statement', 'cell']
   const keys = ['client', 'project_name', 'budget_and_scope', 'job', 'background', 'barrier', 'insight', 'single_minded_proposition', 'objectives.behavioural']
   keys.forEach((k, i) => {
     // Show as first (any kind), then a resize: the write carries both, and a re-render reads both back.
-    let items = L.layoutLook(L.layoutOrder(BM_FIELDS, stored), k, 'as', kinds[i % kinds.length])
+    let items = L.layoutLook(read(stored), k, 'as', kinds[i % kinds.length])
     items = L.layoutResize(items, k, 5)
     stored = JSON.parse(JSON.stringify(L.layoutParts(items)))   // what patch-data writes, as the document returns it
-    const back = L.layoutOrder(BM_FIELDS, stored).find(x => x.key === k)!
+    const back = read(stored).find(x => x.key === k)!
     assert.deepEqual([back.w, back.as], [5, kinds[i % kinds.length]], k)
-    const cell = L.layoutPack(L.layoutOrder(BM_FIELDS, stored)).find(c => c.key === k)!
+    const cell = L.layoutPack(read(stored)).find(c => c.key === k)!
     assert.equal(cell.w, 5, `${k} is drawn at five columns`)
-    // In Boxed, the part's own cell is never widened: the rest of its row is an empty box, not the part.
-    const cells = L.layoutPack(L.layoutOrder(BM_FIELDS, stored))
+    // In Boxed, the part's own cell is never widened: the rest of its row is free space, not the part.
+    const cells = L.layoutPack(read(stored))
     for (const g of L.boxGaps(cells)) assert.ok(!(g.row === cell.row && g.col <= cell.col + cell.w - 1 && g.col + g.w - 1 >= cell.col), `${k}: no box over the part`)
   })
   // The write stays inside the schema every brief carries (documents made before Show as included):
@@ -2922,44 +3131,55 @@ test('a resize holds: saved, read back and packed again at the new width, the he
   }
 })
 
-test('a part moves in both frames: onto a part, into the empty end of a row, by the panel and the keyboard; it holds on reload', () => {
+test('a part moves in both frames: onto a part, into a row’s free space, between rows, by the panel and the keyboard; it holds on reload', () => {
   const L = lay()
-  // The owner's First Round: Client at six columns, the rest of its row empty (Boxed draws an empty box there).
+  // The owner's First Round: Client at six columns, the rest of its row free.
   const stored = L.layoutParts(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'client', 6))
-  const items = L.layoutOrder(BM_FIELDS, stored)
+  const items = L.layoutOrder(BM_FIELDS, stored, true)
   const cellOf = (xs: Item[], k: string) => L.layoutPack(xs).find(c => c.key === k)!
-  // Dropped into the room beside Client, the project row takes that room and sits beside it.
-  const beside = L.layoutDrop(items, 'project_name', 'client', true)
+  // Dropped into the free space beside Client (after its last part), Project joins the row and the row fits.
+  const beside = L.layoutJoin(items, 'project_name', 'client', true)
   const c = cellOf(beside, 'client'), p = cellOf(beside, 'project_name')
   assert.deepEqual([p.row, p.col, p.w], [c.row, 7, 6], 'beside Client, six columns')
   // It holds: written, read back, packed again.
-  const back = L.layoutOrder(BM_FIELDS, JSON.parse(JSON.stringify(L.layoutParts(beside))))
+  const back = reload(L, beside)
   assert.deepEqual([cellOf(back, 'project_name').row, cellOf(back, 'project_name').w], [cellOf(back, 'client').row, 6])
-  // A part that already fits keeps its width; a row with less than three columns left is no room: a plain move.
-  const narrow = L.layoutResize(items, 'budget_and_scope', 4)
-  assert.equal(cellOf(L.layoutDrop(narrow, 'budget_and_scope', 'client', true), 'budget_and_scope').w, 4)
-  const full = L.layoutOrder(BM_FIELDS, L.layoutParts(L.layoutResize(items, 'client', 10)))
-  assert.deepEqual(L.layoutDrop(full, 'project_name', 'client', true), L.layoutMove(full, 'project_name', 'client', true))
-  // Before a part, or onto a part of another section, it moves without changing its width.
-  assert.deepEqual(L.layoutDrop(items, 'barrier', 'background', false), L.layoutMove(items, 'barrier', 'background', false))
-  assert.equal(L.layoutDrop(items, 'job', 'client', true).find(x => x.key === 'job')!.w, 12)
-  const other = L.layoutDrop(items, 'background', 'client', true)
-  assert.deepEqual(other, L.layoutMove(items, 'background', 'client', true), 'another section: order only')
-  // Move up / Move down and the arrow keys: one place, read back the same.
+  // A part that fits the free space keeps its width.
+  const narrow = L.layoutResize(items, 'project_name', 4)
+  assert.equal(cellOf(L.layoutJoin(narrow, 'project_name', 'client', true), 'project_name').w, 4)
+  assert.equal(cellOf(L.layoutJoin(narrow, 'project_name', 'client', true), 'client').w, 6)
+  // Onto a full row: the parts shrink to fit, and both stay.
+  const full = L.layoutResize(items, 'client', 12)
+  const fitted = L.layoutJoin(full, 'project_name', 'client', true)
+  assert.equal(cellOf(fitted, 'project_name').row, cellOf(fitted, 'client').row)
+  assert.equal(cellOf(fitted, 'project_name').w + cellOf(fitted, 'client').w, 12)
+  // Onto a part of another section: a row of its own, its width kept.
+  assert.equal(L.layoutJoin(items, 'job', 'client', true).find(x => x.key === 'job')!.w, 12)
+  assert.deepEqual(rowWith(L, L.layoutJoin(items, 'background', 'client', true), 'background'), ['background:6'])
+  // Move up / Move down: read back the same.
   const up = L.layoutStep(items, 'project_name', -1)
-  assert.deepEqual(keysOf(L.layoutOrder(BM_FIELDS, L.layoutParts(up))).slice(0, 2), ['project_name', 'client'])
-  // The drag: the part under the pointer, else the nearest part on that line of the grid (the empty box in
-  // Boxed is not a part, and once swallowed the drop); the drop goes through layoutDrop.
+  assert.deepEqual(keysOf(reload(L, up)).slice(0, 2), ['project_name', 'client'])
+  // The drag: the free space of a row joins it after its last part; a part's top or bottom edge, or the
+  // space between rows, makes a row of its own; its left or right half joins before or after it.
   const da = fn(BM, 'dropAt')
-  assert.match(da, /el\.closest\('#fields \.row'\)/)
-  assert.match(da, /if\(y<b\.top\|\|y>b\.bottom\) return;/)
-  assert.match(da, /after:x>b\.left\+b\.width\/2/)
+  assert.match(da, /free=el&&el\.closest\?el\.closest\('#fields \.rowfree'\):null/)
+  assert.match(da, /return \{row:line\[line\.length-1\], kind:'join', after:true, free:free\};/)
+  assert.match(da, /if\(y<b\.top\+band\|\|y>b\.bottom-band\)\{/)
+  assert.match(da, /return \{row:r, kind:'join', after:x>b\.left\+b\.width\/2\};/)
+  assert.match(da, /if\(near\)\{ b=near\.getBoundingClientRect\(\); return \{row:near, kind:'row', after:y>b\.bottom\}; \}/)
   const sd = fn(BM, 'startDrag')
-  assert.match(sd, /var d=dropAt\(ev\.clientX, ev\.clientY, row\);/)
-  assert.match(sd, /saveLayout\(layoutDrop\(layoutItems\(\), f\.key, t\.key, after\), 'move '\+partName\(f\)\)/)
-  // The panel's and the keyboard's moves are unchanged.
-  assert.match(fn(BM, 'placeRow'), /saveLayout\(layoutStep\(layoutItems\(\), f\.key, d\), 'move '\+partName\(f\)\)/)
-  assert.match(BM, /else if\(a==='up'\|\|a==='down'\) saveLayout\(layoutStep\(layoutItems\(\), f\.key, a==='up'\?-1:1\), 'move '\+partName\(f\)\);/)
+  assert.match(sd, /drop=dropAt\(ev\.clientX, ev\.clientY, row\);/)
+  assert.match(sd, /next=drop\.kind==='row'\?layoutNewRow\(items, f\.key, t\.key, drop\.after\):layoutJoin\(items, f\.key, t\.key, drop\.after\);/)
+  assert.match(sd, /saveLayout\(next, moveWhat\(next, f\)\);/)
+  // The decision says where it went: "move The barrier beside Where we are", "… to a row of its own".
+  const W = lift<{ moveWhat(items: Item[], f: object): string; resizeWhat(items: Item[], f: object, w: number): string }>(BM, ['moveWhat', 'resizeWhat', 'layoutRows', 'layoutFlow', 'partCopy', 'withLook', 'rowAt'],
+    { GRID_COLS: 12, ROW_MAX: 4, AS_KINDS: AS, TONES: TN, fieldOf: fdef, headOf: (f: FieldDef) => ({ background: 'Where we are', client: 'Client', project_name: 'Project' } as Record<string, string>)[f.key] ?? f.label })
+  const d = L.layoutOrder(BM_FIELDS, undefined)
+  assert.equal(W.moveWhat(L.layoutShift(d, 'barrier', -1), fdef('barrier')), 'move The barrier beside Where we are')
+  assert.equal(W.moveWhat(L.layoutStep(d, 'barrier', -1), fdef('barrier')), 'move The barrier to a row of its own')
+  assert.equal(W.resizeWhat(beside, fdef('client'), 9), 'widen Client, narrowing Project')
+  assert.equal(W.resizeWhat(items, fdef('client'), 4), 'narrow Client')
+  assert.match(fn(BM, 'startResize'), /if\(w!==p\.w\) saveLayout\(next, resizeWhat\(base, f, w\)\);/)
   // The grip is reached in both frames: above its neighbours in Boxed, in the margin in Open.
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.grip\{left:3px;z-index:3\}/)
   assert.match(BM, /\.sheet\.a4 \.grip\{left:-16px;/)
@@ -2980,13 +3200,15 @@ test('every part gets its move grip and width handle, whatever it is shown as, a
   // (outside the box, the next cell covered the width handle, so only a row's last part could be sized).
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.grip\{left:3px;z-index:3\}/)
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.redge\{right:-6px;width:12px;z-index:3\}/)
-  // The Width buttons are offered for every part (Place on page, unless the brief is locked).
-  const sp = fn(BM, 'renderSelPart')
-  assert.match(sp, /WIDTHS\.map\(function\(x\)\{ return '<button type="button" data-w="'\+x\[0\]\+'"/)
-  // While a part is sized, its row's empty box steps aside, and comes back after.
+  // A part is sized by its edge only: Place on page has no Width presets (owner, 11 Nov).
+  assert.doesNotMatch(fn(BM, 'renderSelPart'), /data-w=|WIDTHS/)
+  // While a part is sized, its row redraws as the edge moves (the neighbour trades columns), its free space
+  // steps aside and comes back after; let go unchanged, the row is put back as it was.
   const rz = fn(BM, 'startResize')
-  assert.match(rz, /querySelectorAll\('\.boxgap'\)\.forEach\(function\(b\)\{ if\(b\.style\.gridRowStart===row\.style\.gridRowStart\) b\.hidden=true; \}\)/)
-  assert.match(rz, /querySelectorAll\('\.boxgap\[hidden\]'\)\.forEach\(function\(b\)\{ b\.hidden=false; \}\)/)
+  assert.match(rz, /next=layoutResize\(base, f\.key, Math\.round\(\(ev\.clientX-left\+gap\)\/step\)\);/)
+  assert.match(rz, /querySelectorAll\('\.rowfree'\)\.forEach\(function\(b\)\{ if\(b\.style\.gridRowStart===row\.style\.gridRowStart\) b\.hidden=true; \}\)/)
+  assert.match(rz, /querySelectorAll\('\.rowfree\[hidden\]'\)\.forEach\(function\(b\)\{ b\.hidden=false; \}\)/)
+  assert.match(rz, /else line\.forEach\(function\(c, n\)\{ c\.style\.gridColumn=was\[n\]; \}\);/)
 })
 
 test('a selected line of the report lights as the mock’s claim: the headline, a summary line and a paragraph alike, no grey block, no box', () => {

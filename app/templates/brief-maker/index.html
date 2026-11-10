@@ -599,8 +599,15 @@
   .pgrid > .row.afterhead{border-top-color:transparent}
   .pgrid > .row:hover{--tint-on:color-mix(in srgb,var(--brief-accent) 4%,transparent);background:var(--tint-on);box-shadow:0 0 0 6px var(--tint-on)}
   .pgrid > .row.sel{--tint-on:color-mix(in srgb,var(--brief-accent) 6%,transparent);background:var(--tint-on);box-shadow:0 0 0 6px var(--tint-on),0 0 0 7px color-mix(in srgb,var(--brief-accent) 45%,transparent)}
-  .pgrid > .row.drop-before{box-shadow:-9px 0 0 -6px var(--brief-accent)}
-  .pgrid > .row.drop-after{box-shadow:9px 0 0 -6px var(--brief-accent)}
+  /* where a drag drops, drawn inside the part so no frame or neighbour covers it: a join's side, or a new row's top or bottom */
+  #fields > .row.drop-before{box-shadow:inset 3px 0 0 var(--brief-accent)!important}
+  #fields > .row.drop-after{box-shadow:inset -3px 0 0 var(--brief-accent)!important}
+  #fields > .row.drop-above{box-shadow:inset 0 3px 0 var(--brief-accent)!important}
+  #fields > .row.drop-below{box-shadow:inset 0 -3px 0 var(--brief-accent)!important}
+  .pgrid > .rowfree{position:relative;align-self:stretch;min-height:1px;border-radius:3px}
+  .pgrid > .rowfree[hidden]{display:none}
+  .pgrid.dragging-on > .rowfree{outline:1px dashed color-mix(in srgb,var(--brief-accent) 45%,transparent);outline-offset:-4px}
+  .pgrid > .rowfree.drop-in{background:color-mix(in srgb,var(--brief-accent) 10%,transparent)}
   .pgrid > .row.dragging{opacity:.45}
   .grip{position:absolute;left:-22px;top:16px;width:14px;height:24px;border:0;background:none;color:var(--ink3);cursor:grab;opacity:0;touch-action:none;padding:0;display:flex;align-items:center;justify-content:center;border-radius:3px}
   .grip:active{cursor:grabbing}
@@ -880,16 +887,18 @@
   /* A ruled form (owner, 10 Nov): every cell stretches to its grid row's height, and draws its own
      1px box, inside on its top and left and 1px outside on its right and bottom, so two neighbours'
      lines fall on the same pixel (one line, opaque, never doubled). A row that ends short of the right
-     edge closes with an empty box (boxGaps), so the frame closes and every part keeps its real width;
+     edge closes over its free space (boxGaps, .rowfree), so the frame closes and every part keeps its real width;
      each printed page's grid is closed on its own. */
   .sheet.a4.frame-boxed{--frame-line:color-mix(in srgb,var(--b-text) 70%,var(--b-bg))}
   #sheet.frame-boxed .pgrid{column-gap:0;padding:0;margin:8px 60px 36px}
   .sheet.a4.frame-boxed .pgrid{column-gap:0;row-gap:0;align-items:stretch;padding-right:1px;padding-bottom:1px}
   .sheet.a4.frame-boxed .pgrid > .row,.sheet.a4.frame-boxed .pgrid > .row.k-cell{align-self:stretch;border:0!important;border-radius:0;padding:18px 20px}
   .sheet.a4.frame-boxed .pgrid > .row.k-cell{padding:12px 20px}
-  .sheet.a4.frame-boxed .pgrid > .boxgap{position:relative;align-self:stretch;min-height:1px}
-  .sheet.a4.frame-boxed .pgrid > .boxgap[hidden]{display:none}
-  .sheet.a4.frame-boxed .pgrid > .row::after,.sheet.a4.frame-boxed .pgrid > .boxgap::after{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var(--frame-line);pointer-events:none;z-index:1}
+  .sheet.a4.frame-boxed .pgrid > .row::after,.sheet.a4.frame-boxed .pgrid > .rowfree::after{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var(--frame-line);pointer-events:none;z-index:1}
+  /* A row's free space is the row's, not an empty part: the frame closes around it, and where the last
+     part ends a dashed line says so (rows stay rows, owner 11 Nov). */
+  .sheet.a4.frame-boxed .pgrid > .row.endfree::after{border-right-color:transparent}
+  .sheet.a4.frame-boxed .pgrid > .rowfree::after{border-left:1px dashed color-mix(in srgb,var(--b-text) 28%,var(--b-bg))}
   .sheet.a4.frame-boxed .pgrid > .row.sel{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--brief-accent) 50%,transparent)}
   .sheet.a4.frame-boxed .pbreak{margin:6px -60px}
   /* No gap between boxed cells: a part's handles sit on its own edges, above its neighbours and the frame's
@@ -3437,7 +3446,9 @@
       // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
       // Where the printed sheet starts a new page, a guide takes a row of its own (SHEET_BREAKS, measured
       // on the sheet as it prints, so the screen breaks where the PDF does).
-      var headRow=0, guided={}, packed=layoutPack(layoutItems()), firstRow=null, gaps=layoutData().frame==='boxed'?boxGaps(packed):[];
+      // A row that ends short of the right edge shows its free space as part of the row (rowfree), in both frames.
+      var headRow=0, guided={}, packed=layoutPack(layoutItems()), firstRow=null, gaps=boxGaps(packed), ends={};
+      gaps.forEach(function(g){ ends[g.row]=g.col-1; });
       packed.forEach(function(p){ if(!p.head&&(firstRow===null||p.row<firstRow)) firstRow=p.row; });
       packed.forEach(function(p){
         var pg=SHEET_BREAKS.starts[p.row];
@@ -3446,9 +3457,10 @@
         if(p.head){ var h=document.createElement('div'); h.className='sechead'; h.textContent=p.head; h.style.gridRow=String(guideRow(p.row)); host.appendChild(h); headRow=p.row; return; }
         var i=fieldIndex(p.key), f=FIELDS[i];
         var row=fieldRow(f,i); row.classList.add('t'+(i%4)); if(p.row===firstRow) row.classList.add('r1'); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w}); host.appendChild(row);   // Studio tints the parts in turn
+        if(ends[p.row]===p.col+p.w-1) row.classList.add('endfree');   // the row's free space follows it
         if(p.row===headRow+1) row.classList.add('afterhead');   // the heading's rule is the first row's
       });
-      gaps.forEach(function(g){ var b=document.createElement('div'); b.className='boxgap'; b.setAttribute('aria-hidden','true');
+      gaps.forEach(function(g){ var b=document.createElement('div'); b.className='rowfree'; b.setAttribute('aria-hidden','true');
         b.style.gridColumn=g.col+' / span '+g.w; b.style.gridRow=String(guideRow(g.row)); host.appendChild(b); });
     }
     // The pictures, sound and video the person sent, when there are any.
@@ -4254,15 +4266,31 @@
     'desired_response.think':4, 'desired_response.feel':4, 'desired_response.do':4,
     tone_and_world:6, mandatories:6, open_questions:6};
   function clampW(w){ w=Math.round(+w); return isFinite(w)?Math.max(MIN_W,Math.min(GRID_COLS,w)):GRID_COLS; }
-  // -> [{key, sec, w}] in reading order: a stored place by its order, a part with none where the schema
-  // puts it, except the header's parts (META_KEYS: Client, Project, Budget & scope), which start at the
-  // top, under the title, in that order.
-  function layoutOrder(fields, stored){
+  // Rows stay rows (owner, 11 Nov): the sheet is a list of rows, each a few parts side by side, left to
+  // right. A part never changes row by itself: a resize trades columns inside its row, a drop joins a row
+  // (the row shrinks its parts to fit) or makes a row of its own, and taking a part out gives its width
+  // back to the rest of its row. -> [{key, sec, w, r}] in reading order, r the part's row (1, 2, …).
+  // A brief laid out since then (layout.model 'rows') keeps each part's stored row and col: parts that
+  // share a row number share a row, ordered by col. An older brief stored a flow (its order and widths,
+  // drawn by packing): that order is packed into rows once here, as the old sheet drew it, and nothing is
+  // written until the person changes something. A part with no stored place sits where the schema puts
+  // it, except the header's parts (META_KEYS: Client, Project, Budget & scope), which start at the top.
+  var ROW_MAX=Math.floor(GRID_COLS/MIN_W);   // four parts at most share a row, each at least MIN_W wide
+  function layoutOrder(fields, stored, rows){
     stored=stored&&typeof stored==='object'&&!Array.isArray(stored)?stored:{};
-    return fields.map(function(f,i){
+    var all=fields.map(function(f,i){
       var s=stored[f.key], has=!!s&&typeof s==='object', o=has?Number(s.order):NaN, m=META_KEYS.indexOf(f.key);
-      return withLook({key:f.key, sec:f.sec, w:clampW(has&&s.w!=null?s.w:(DEFAULT_W[f.key]||GRID_COLS)), o:isFinite(o)?o:m!==-1?m-META_KEYS.length:i, i:i}, has?s:null);
-    }).sort(function(a,b){ return a.o-b.o||a.i-b.i; }).map(function(x){ return withLook({key:x.key, sec:x.sec, w:x.w}, x); });
+      var rk=rows&&has&&s.row!=null&&isFinite(Number(s.row))?Number(s.row):null, c=has&&s.col!=null&&isFinite(Number(s.col))?Number(s.col):0;
+      return withLook({key:f.key, sec:f.sec, w:clampW(has&&s.w!=null?s.w:(DEFAULT_W[f.key]||GRID_COLS)), o:isFinite(o)?o:m!==-1?m-META_KEYS.length:i, i:i, rk:rk, c:c}, has?s:null);
+    }).sort(function(a,b){ return a.o-b.o||a.i-b.i; });
+    if(!rows) return layoutFlow(all.map(function(x){ return withLook({key:x.key, sec:x.sec, w:x.w}, x); }));
+    // A part the stored rows do not name (a new part of the schema) takes a row of its own after the
+    // part before it in reading order.
+    var last=0, k=0;
+    all.forEach(function(x){ if(x.rk==null) x.rk=last+0.5+(++k)/1e4; else { last=x.rk; k=0; } });
+    all.sort(function(a,b){ return a.rk-b.rk||a.c-b.c||a.o-b.o||a.i-b.i; });
+    var r=0, prev=null;
+    return rowsFit(all.map(function(x){ if(x.rk!==prev){ r++; prev=x.rk; } return withLook({key:x.key, sec:x.sec, w:x.w, r:r}, x); }));
   }
   // Copy a part's look (as, tone) onto `to` when `from` holds a valid one; nothing is written when it does not.
   function withLook(to, from){
@@ -4270,16 +4298,60 @@
     if(from&&TONES.indexOf(from.tone)!==-1) to.tone=from.tone;
     return to;
   }
-  // Each part's cell on the grid, in reading order; a section heading takes a
-  // row of its own wherever the section changes, and a part too wide for
-  // what is left of a row starts the next. -> [{key|head, col, row, w, h, order}]
+  function partCopy(p, r){ var n=withLook({key:p.key, sec:p.sec, w:p.w}, p); if(r!=null) n.r=r; else if(p.r!=null) n.r=p.r; return n; }
+  // The old flow, packed into rows (an older brief's order, or the defaults): a section starts a row, and
+  // a part too wide for what is left of a row starts the next.
+  function layoutFlow(items){
+    var r=0, used=GRID_COLS, prev=null;
+    return items.map(function(it){
+      if(it.sec!==prev||used+it.w>GRID_COLS){ r++; used=0; prev=it.sec; }
+      used+=it.w;
+      return partCopy(it, r);
+    });
+  }
+  // The items as rows: [[item]], left to right. A row never holds two sections or more than ROW_MAX parts.
+  function layoutRows(items){
+    if(items.some(function(it){ return it.r==null; })) items=layoutFlow(items);
+    var rows=[], cur=null, rk=null;
+    items.forEach(function(it){
+      if(!cur||it.r!==rk||it.sec!==cur[0].sec||cur.length>=ROW_MAX){ cur=[]; rows.push(cur); rk=it.r; }
+      cur.push(partCopy(it));
+    });
+    return rows;
+  }
+  // Shrink to fit: while a row is wider than the sheet, its widest part gives up a column (the first of
+  // equals), never under MIN_W. A row of a third, a half and a half becomes thirds.
+  function fitRow(row){
+    var sum=row.reduce(function(s,p){ return s+p.w; }, 0);
+    while(sum>GRID_COLS){
+      var j=-1; row.forEach(function(p,n){ if(p.w>MIN_W&&(j<0||p.w>row[j].w)) j=n; });
+      if(j<0) break; row[j].w--; sum--;
+    }
+    return row;
+  }
+  // Rows back to items, numbered 1, 2, … (an emptied row is gone), every row fitted to the sheet.
+  function fromRows(rows){
+    var out=[];
+    rows.filter(function(row){ return row.length; }).forEach(function(row, n){ fitRow(row).forEach(function(p){ out.push(partCopy(p, n+1)); }); });
+    return out;
+  }
+  function rowsFit(items){ return fromRows(layoutRows(items)); }
+  function rowAt(rows, key){ for(var i=0;i<rows.length;i++) for(var j=0;j<rows[i].length;j++) if(rows[i][j].key===key) return [i,j]; return null; }
+  // Take the part at `at` out of its row; the columns it frees go back to the rest of the row, one at a
+  // time from the left, so the row keeps the width it had. -> the part
+  function takeOut(rows, at){
+    var row=rows[at[0]], it=row.splice(at[1],1)[0], w=it.w;
+    for(var n=0; w>0&&row.length; n=(n+1)%row.length){ row[n].w++; w--; }
+    return it;
+  }
+  // Each part's cell on the grid, row by row; a section heading takes a row of its own wherever the
+  // section changes. -> [{key|head, col, row, w, h, order}]
   function layoutPack(items){
-    var row=1, col=1, prev=null, out=[];
-    items.forEach(function(it, n){
-      if(it.sec!==prev){ if(col>1){ row++; col=1; } out.push({head:it.sec, col:1, row:row, w:GRID_COLS, h:1}); row++; prev=it.sec; }
-      if(col+it.w-1>GRID_COLS){ row++; col=1; }
-      out.push(withLook({key:it.key, sec:it.sec, col:col, row:row, w:it.w, h:1, order:n}, it));
-      col+=it.w; if(col>GRID_COLS){ row++; col=1; }
+    var row=0, prev=null, out=[], n=0;
+    layoutRows(items).forEach(function(parts){
+      if(parts[0].sec!==prev){ row++; out.push({head:parts[0].sec, col:1, row:row, w:GRID_COLS, h:1}); prev=parts[0].sec; }
+      row++; var col=1;
+      fitRow(parts).forEach(function(it){ out.push(withLook({key:it.key, sec:it.sec, col:col, row:row, w:it.w, h:1, order:n++}, it)); col+=it.w; });
     });
     return out;
   }
@@ -4289,51 +4361,88 @@
   // the row's tooltip and the Selected part panel. The version is the side tab's, not the sheet's.
   var META_KEYS=['client','project_name','budget_and_scope'];
   function isMeta(key){ return META_KEYS.indexOf(key)!==-1; }
-  // What layout.parts holds for these items: every part, so a later read needs nothing else.
+  // What layout.parts holds for these items: every part, so a later read needs nothing else. row and col
+  // are the part's grid cell, and they are its place: a part sharing a row number shares that row.
   function layoutParts(items){
     var parts={};
     layoutPack(items).forEach(function(p){ if(p.key) parts[p.key]=withLook({col:p.col, row:p.row, w:p.w, h:p.h, order:p.order}, p); });
     return parts;
   }
   function layoutIndex(items, key){ for(var i=0;i<items.length;i++) if(items[i].key===key) return i; return -1; }
-  // Move `key` before (or after) `target`; the others keep their order.
-  function layoutMove(items, key, target, after){
-    var from=layoutIndex(items,key); if(from<0||key===target) return items.slice();
-    var list=items.slice(), it=list.splice(from,1)[0], to=layoutIndex(list,target);
-    if(to<0) return items.slice();
-    list.splice(after?to+1:to, 0, it);
-    return list;
-  }
-  // A drag's drop: before or after `target`. Dropped after the last part on a grid row that has room
-  // left (the empty box in Boxed, the blank in Open), the part takes that room when it is wider, so it
-  // lands beside the target instead of flowing onto the next row as if nothing had moved.
-  function layoutDrop(items, key, target, after){
-    var moved=layoutMove(items, key, target, after), i=layoutIndex(items, key), j=layoutIndex(items, target);
-    if(!after||i<0||j<0||key===target||items[i].sec!==items[j].sec) return moved;
-    var cells=layoutPack(items.filter(function(x){ return x.key!==key; })), t=null;
-    cells.forEach(function(c){ if(c.key===target) t=c; });
-    var last=!cells.some(function(c){ return c.key&&c.row===t.row&&c.col>t.col; }), room=GRID_COLS-(t.col+t.w-1);
-    return last&&room>=MIN_W&&items[i].w>room?layoutResize(moved, key, room):moved;
-  }
-  // One step earlier or later in reading order (the keyboard's move, and the panel's).
-  function layoutStep(items, key, d){
-    var i=layoutIndex(items,key), j=i+d;
-    if(i<0||j<0||j>=items.length) return items.slice();
-    return layoutMove(items, key, items[j].key, d>0);
-  }
+  // Drag a part's right edge to width w. Shared with the part to its right, the edge trades columns: one
+  // grows as the other shrinks, both at least MIN_W. At the end of its row the edge is free and moves only
+  // into the row's free space. Nothing changes row.
   function layoutResize(items, key, w){
-    return items.map(function(it){ return it.key===key?withLook({key:it.key, sec:it.sec, w:clampW(w)}, it):it; });
+    var rows=layoutRows(items), at=rowAt(rows, key), want=Math.round(+w);
+    if(!at||!isFinite(want)) return items.slice();
+    var row=rows[at[0]], p=row[at[1]], nb=row[at[1]+1];
+    if(nb){ var d=Math.max(MIN_W-p.w, Math.min(nb.w-MIN_W, want-p.w)); p.w+=d; nb.w-=d; }
+    else { var others=row.reduce(function(s,x){ return s+x.w; }, 0)-p.w; p.w=Math.max(MIN_W, Math.min(GRID_COLS-others, want)); }
+    return fromRows(rows);
+  }
+  // Drop `key` on the part `target`, before or after it: it joins that row, and the row shrinks its parts
+  // to fit (fitRow), so none drops out. Its old row gets its width back. Inside its own row it only changes
+  // place. A row holds one section and ROW_MAX parts at most: a drop across a section, or on a full row,
+  // makes a row of its own beside the target's instead (layoutNewRow).
+  function layoutJoin(items, key, target, after){
+    var rows=layoutRows(items), a=rowAt(rows, key), b=rowAt(rows, target);
+    if(!a||!b||key===target) return items.slice();
+    var it=rows[a[0]][a[1]], t=rows[b[0]][b[1]];
+    if(it.sec!==t.sec||(a[0]!==b[0]&&rows[b[0]].length>=ROW_MAX)) return layoutNewRow(items, key, target, after);
+    if(a[0]===b[0]) rows[a[0]].splice(a[1],1); else takeOut(rows, a);
+    var to=rows[b[0]]; to.splice(to.indexOf(t)+(after?1:0), 0, it);
+    return fromRows(rows);
+  }
+  // Drop `key` between rows, above or below the row of `target`: a row of its own, at its own width.
+  function layoutNewRow(items, key, target, below){
+    var rows=layoutRows(items), a=rowAt(rows, key), b=rowAt(rows, target);
+    if(!a||!b||(a[0]===b[0]&&rows[a[0]].length===1)) return items.slice();
+    var t=rows[b[0]], it=takeOut(rows, a);
+    rows.splice(rows.indexOf(t)+(below?1:0), 0, [it]);
+    return fromRows(rows);
+  }
+  // Move up / Move down, and the arrow keys Up and Down: a part sharing a row steps out of it into a row of
+  // its own just above (or below) it; a part alone on its row swaps rows with the row above (or below).
+  function layoutStep(items, key, d){
+    var rows=layoutRows(items), a=rowAt(rows, key);
+    if(!a) return items.slice();
+    if(rows[a[0]].length>1){ var it=takeOut(rows, a); rows.splice(d<0?a[0]:a[0]+1, 0, [it]); return fromRows(rows); }
+    var j=a[0]+d; if(j<0||j>=rows.length) return items.slice();
+    var t=rows[j]; rows[j]=rows[a[0]]; rows[a[0]]=t;
+    return fromRows(rows);
+  }
+  // The arrow keys Left and Right: one place earlier or later inside the part's row, widths kept.
+  function layoutShift(items, key, d){
+    var rows=layoutRows(items), a=rowAt(rows, key);
+    if(!a) return items.slice();
+    var row=rows[a[0]], j=a[1]+d; if(j<0||j>=row.length) return items.slice();
+    var t=row[j]; row[j]=row[a[1]]; row[a[1]]=t;
+    return fromRows(rows);
+  }
+  // The parts without `keys` (the client copy leaves the confidential ones out): each row closes up.
+  function layoutWithout(items, keys){
+    var rows=layoutRows(items);
+    arr(keys).forEach(function(k){ var a=rowAt(rows, k); if(a) takeOut(rows, a); });
+    return fromRows(rows);
+  }
+  // Can Move up / Move down do anything? -> [up, down]
+  function layoutCanStep(items, key){
+    var rows=layoutRows(items), a=rowAt(rows, key);
+    if(!a) return [false, false];
+    var shared=rows[a[0]].length>1;
+    return [shared||a[0]>0, shared||a[0]<rows.length-1];
   }
   // Show a part as one kind, or in one tone (prop 'as' or 'tone'); an unknown value changes nothing.
   function layoutLook(items, key, prop, v){
     var ok=prop==='as'?AS_KINDS:prop==='tone'?TONES:[];
     if(ok.indexOf(v)===-1) return items.slice();
-    return items.map(function(it){ if(it.key!==key) return it; var n=withLook({key:it.key, sec:it.sec, w:it.w}, it); n[prop]=v; return n; });
+    return items.map(function(it){ if(it.key!==key) return it; var n=partCopy(it); n[prop]=v; return n; });
   }
-  // In the boxed frame the sheet is a ruled form whose frame closes on every row. A row of parts that
-  // ends short of the right edge closes with an empty box over what is left; every part is drawn at its
-  // stored width, so a resize shows (stretching the last part hid its width: a resize "snapped back").
-  // -> [{row, col, w}] one empty box per grid row of parts that ends before the edge
+  // A row of parts that ends short of the sheet's right edge has free space after its last part. It is
+  // drawn as part of that row (class rowfree): in Boxed the row's frame closes around it, with a dashed
+  // line where the last part ends, so the part keeps its real width and the space never reads as an
+  // empty part. On screen it is also where a dragged part can join the row.
+  // -> [{row, col, w}] one per grid row of parts that ends before the edge
   function boxGaps(cells){
     var end={}, out=[];
     cells.forEach(function(c){ if(c.key) end[c.row]=Math.max(end[c.row]||0, c.col+c.w-1); });
@@ -4341,19 +4450,25 @@
     return out.sort(function(a,b){ return a.row-b.row; });
   }
   function layoutData(){ var l=get('layout'); return l&&typeof l==='object'&&!Array.isArray(l)?l:{}; }
-  function layoutItems(){ return layoutOrder(FIELDS, layoutData().parts); }
+  function layoutItems(){ var l=layoutData(); return layoutOrder(FIELDS, l.parts, l.model==='rows'); }
   function partLook(key){ var items=layoutItems(), i=layoutIndex(items, key); return i<0?{}:items[i]; }
   function fieldIndex(key){ for(var i=0;i<FIELDS.length;i++) if(FIELDS[i].key===key) return i; return -1; }
   function fieldOf(key){ return FIELDS[fieldIndex(key)]||null; }
   function rowOf(key){ return document.querySelector('#fields .row[data-i="'+fieldIndex(key)+'"]'); }
   function saveLayout(items, what){
     var l=layoutData(), n={}; for(var k in l) n[k]=l[k];
-    n.parts=layoutParts(items);
+    n.parts=layoutParts(items); n.model='rows';   // rows and cols are the places from now on (layoutOrder)
+    if(l.model==='rows'&&sameParts(n.parts, l.parts)) return Promise.resolve(false);   // nothing moved
     return patch('layout', n, {actor:'human', pinned:false, action:what||'lay out the brief'});
+  }
+  function sameParts(a, b){
+    var ka=Object.keys(a||{}).sort(), kb=Object.keys(b||{}).sort();
+    if(ka.join()!==kb.join()) return false;
+    return ka.every(function(k){ return ['col','row','w','h','order','as','tone'].every(function(p){ return String(a[k][p])===String((b[k]||{})[p]); }); });
   }
   function lookSet(k, v){
     var l=layoutData(), n={}; for(var x in l) n[x]=l[x];
-    n[k]=v; if(!n.parts) n.parts=layoutParts(layoutItems());
+    n[k]=v; if(!n.parts){ n.parts=layoutParts(layoutItems()); n.model='rows'; }
     patch('layout', n, {actor:'human', pinned:false, action:'set the brief’s '+k});
   }
 
@@ -4375,19 +4490,21 @@
     if(SEL===f.key) row.classList.add('sel');
     if(!docLocked()){
       var g=document.createElement('button'); g.type='button'; g.className='grip';
-      g.title='Drag to move. Arrow keys move it too.'; g.setAttribute('aria-label','Move '+partLabel(f));
+      g.title='Drag onto a row to join it, or between rows for a row of its own. Arrow keys: up and down a row, left and right in it.'; g.setAttribute('aria-label','Move '+partLabel(f));
       g.innerHTML='<svg class="ic" viewBox="0 0 8 16" aria-hidden="true"><g fill="currentColor"><circle cx="2" cy="4" r="1.1"/><circle cx="6" cy="4" r="1.1"/><circle cx="2" cy="8" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/></g></svg>';
       g.addEventListener('pointerdown', function(e){ startDrag(e, row, f, g); });
       g.addEventListener('keydown', function(e){
-        var d=e.key==='ArrowUp'||e.key==='ArrowLeft'?-1:e.key==='ArrowDown'||e.key==='ArrowRight'?1:0;
-        if(!d) return; e.preventDefault(); saveLayout(layoutStep(layoutItems(), f.key, d), 'move '+partName(f));
+        var v=e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0, h=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;
+        if(!v&&!h) return; e.preventDefault();
+        if(v) saveLayout(layoutStep(layoutItems(), f.key, v), 'move '+headOf(f)+(v<0?' up':' down'));
+        else saveLayout(layoutShift(layoutItems(), f.key, h), 'move '+headOf(f)+(h<0?' left':' right'));
       });
       var r=document.createElement('button'); r.type='button'; r.className='redge';
-      r.title='Drag to make it wider or narrower. Arrow keys too.'; r.setAttribute('aria-label','Width of '+partLabel(f)+': '+p.w+' of '+GRID_COLS+' columns');
+      r.title='Drag to make it wider or narrower. Beside another part, the two trade width. Arrow keys too.'; r.setAttribute('aria-label','Width of '+partLabel(f)+': '+p.w+' of '+GRID_COLS+' columns');
       r.addEventListener('pointerdown', function(e){ startResize(e, row, f, p, r); });
       r.addEventListener('keydown', function(e){
         var d=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;
-        if(!d) return; e.preventDefault(); saveLayout(layoutResize(layoutItems(), f.key, p.w+d), 'resize '+partName(f));
+        if(!d) return; e.preventDefault(); saveLayout(layoutResize(layoutItems(), f.key, p.w+d), resizeWhat(layoutItems(), f, p.w+d));
       });
       row.appendChild(g); row.appendChild(r);
     }
@@ -4420,64 +4537,106 @@
       startEdit(row, f);
     });
   }
-  function clearDrop(){ document.querySelectorAll('#fields .drop-before,#fields .drop-after').forEach(function(r){ r.classList.remove('drop-before','drop-after'); }); }
-  // Where a drag would drop: the part under the pointer, or, over the empty end of a grid row (Boxed's
-  // empty box, Open's blank), the nearest part on that line, after it when the pointer is past its middle.
-  // -> {row, after} | null
+  // The decisions a move or a resize records: "move The barrier beside Where we are", "widen Client".
+  function moveWhat(items, f){
+    var rows=layoutRows(items), a=rowAt(rows, f.key); if(!a) return 'move '+headOf(f);
+    var row=rows[a[0]], nb=row[a[1]-1]||row[a[1]+1];
+    return nb?'move '+headOf(f)+' beside '+headOf(fieldOf(nb.key)):'move '+headOf(f)+' to a row of its own';
+  }
+  function resizeWhat(items, f, w){
+    var rows=layoutRows(items), a=rowAt(rows, f.key); if(!a) return 'resize '+headOf(f);
+    var p=rows[a[0]][a[1]], nb=rows[a[0]][a[1]+1], wider=w>p.w;
+    return (wider?'widen ':'narrow ')+headOf(f)+(nb?(wider?', narrowing ':', widening ')+headOf(fieldOf(nb.key)):'');
+  }
+  function lineOf(r){ return [].filter.call(document.querySelectorAll('#fields > .row'), function(c){ return c.style.gridRowStart===r.style.gridRowStart; }); }
+  function clearDrop(){
+    var g=$('fields'); if(g) g.classList.remove('dragging-on');
+    document.querySelectorAll('#fields .drop-before,#fields .drop-after,#fields .drop-above,#fields .drop-below,#fields .rowfree.drop-in').forEach(function(r){ r.classList.remove('drop-before','drop-after','drop-above','drop-below','drop-in'); });
+  }
+  // Where a drag would drop. -> {row, kind, after} | null, kind 'join' (onto the part `row`, before or after
+  // it, or into its row's free space: after its last part) or 'row' (a row of its own, above or below the
+  // row of `row`: the pointer is near a part's top or bottom edge, or between rows).
   function dropAt(x, y, self){
-    var el=document.elementFromPoint(x, y), r=el&&el.closest?el.closest('#fields .row'):null, best=null, bd=Infinity;
-    if(r===self) return null;
-    if(!r) document.querySelectorAll('#fields .row').forEach(function(c){
-      if(c===self) return; var b=c.getBoundingClientRect();
-      if(y<b.top||y>b.bottom) return;
-      var dist=x<b.left?b.left-x:x>b.right?x-b.right:0; if(dist<bd){ bd=dist; best=c; }
+    var el=document.elementFromPoint(x, y), free=el&&el.closest?el.closest('#fields .rowfree'):null;
+    if(free){
+      var line=[].filter.call(document.querySelectorAll('#fields > .row'), function(c){ return c!==self&&c.style.gridRowStart===free.style.gridRowStart; });
+      line.sort(function(a,b){ return parseInt(a.style.gridColumnStart,10)-parseInt(b.style.gridColumnStart,10); });
+      if(line.length) return {row:line[line.length-1], kind:'join', after:true, free:free};
+    }
+    var r=el&&el.closest?el.closest('#fields > .row'):null, b;
+    if(r){
+      b=r.getBoundingClientRect();
+      var band=Math.min(16, b.height/4);
+      if(y<b.top+band||y>b.bottom-band){
+        if(r===self&&lineOf(r).length<2) return null;
+        return {row:r, kind:'row', after:y>b.bottom-band};
+      }
+      if(r===self) return null;
+      return {row:r, kind:'join', after:x>b.left+b.width/2};
+    }
+    // Off every part (a heading, the gap between rows): the nearest part on that line joins; with none on
+    // it, the nearest row above or below gets a row of its own beside it.
+    var best=null, bd=Infinity, near=null, nd=Infinity;
+    document.querySelectorAll('#fields > .row').forEach(function(c){
+      var cb=c.getBoundingClientRect();
+      if(y>=cb.top&&y<=cb.bottom){ if(c===self) return; var dx=x<cb.left?cb.left-x:x>cb.right?x-cb.right:0; if(dx<bd){ bd=dx; best=c; } }
+      else { var dy=y<cb.top?cb.top-y:y-cb.bottom; if(dy<nd){ nd=dy; near=c; } }
     });
-    r=r||best; if(!r) return null;
-    var b=r.getBoundingClientRect(); return {row:r, after:x>b.left+b.width/2};
+    if(best){ b=best.getBoundingClientRect(); return {row:best, kind:'join', after:x>b.left+b.width/2}; }
+    if(near){ b=near.getBoundingClientRect(); return {row:near, kind:'row', after:y>b.bottom}; }
+    return null;
   }
   function startDrag(e, row, f, g){
     if(e.button>0) return; e.preventDefault(); e.stopPropagation();
     try{ g.setPointerCapture(e.pointerId); }catch(x){}
-    var over=null, after=false, moved=false, x0=e.clientX, y0=e.clientY;
+    var drop=null, moved=false, x0=e.clientX, y0=e.clientY;
     function mv(ev){
       if(!moved&&Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)<4) return;
-      moved=true; row.classList.add('dragging'); clearDrop();
-      var d=dropAt(ev.clientX, ev.clientY, row);
-      over=d&&d.row; after=!!d&&d.after;
-      if(over) over.classList.add(after?'drop-after':'drop-before');
+      moved=true; row.classList.add('dragging'); clearDrop(); $('fields').classList.add('dragging-on');
+      drop=dropAt(ev.clientX, ev.clientY, row);
+      if(!drop) return;
+      if(drop.kind==='row') lineOf(drop.row).forEach(function(c){ c.classList.add(drop.after?'drop-below':'drop-above'); });
+      else if(drop.free) drop.free.classList.add('drop-in');
+      else drop.row.classList.add(drop.after?'drop-after':'drop-before');
     }
     function up(){
       g.removeEventListener('pointermove', mv); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
       row.classList.remove('dragging'); clearDrop();
-      var t=over&&FIELDS[+over.getAttribute('data-i')];
-      if(moved&&t) saveLayout(layoutDrop(layoutItems(), f.key, t.key, after), 'move '+partName(f));
+      var t=drop&&FIELDS[+drop.row.getAttribute('data-i')];
+      if(!moved||!t) return;
+      var items=layoutItems(), next=drop.kind==='row'?layoutNewRow(items, f.key, t.key, drop.after):layoutJoin(items, f.key, t.key, drop.after);
+      saveLayout(next, moveWhat(next, f));
     }
     g.addEventListener('pointermove', mv); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
   }
+  // Drag the right edge: the parts of the row redraw as it moves (the neighbour gives or takes the same
+  // columns when the edge is shared), and the row's free space steps aside meanwhile.
   function startResize(e, row, f, p, h){
     if(e.button>0) return; e.preventDefault(); e.stopPropagation();
     try{ h.setPointerCapture(e.pointerId); }catch(x){}
     var grid=$('fields'), gb=grid.getBoundingClientRect(), gap=parseFloat(getComputedStyle(grid).columnGap)||0;
-    var step=(gb.width+gap)/GRID_COLS, left=gb.left+(p.col-1)*step, w=p.w;
+    var step=(gb.width+gap)/GRID_COLS, left=gb.left+(p.col-1)*step, w=p.w, base=layoutItems(), next=base;
+    var line=lineOf(row), was=line.map(function(c){ return c.style.gridColumn; });
     var tag=document.createElement('span'); tag.className='wtag'; row.appendChild(tag); row.classList.add('resizing');
-    // in the boxed frame the row's empty box steps aside while the part is sized
-    grid.querySelectorAll('.boxgap').forEach(function(b){ if(b.style.gridRowStart===row.style.gridRowStart) b.hidden=true; });
+    grid.querySelectorAll('.rowfree').forEach(function(b){ if(b.style.gridRowStart===row.style.gridRowStart) b.hidden=true; });
     function mv(ev){
-      w=Math.max(MIN_W, Math.min(GRID_COLS-p.col+1, Math.round((ev.clientX-left+gap)/step)));
-      row.style.gridColumn=p.col+' / span '+w; tag.textContent=w+'/'+GRID_COLS;
+      next=layoutResize(base, f.key, Math.round((ev.clientX-left+gap)/step));
+      var cells=layoutPack(next), mine=null; cells.forEach(function(c){ if(c.key===f.key) mine=c; });
+      cells.forEach(function(c){ if(c.key&&mine&&c.row===mine.row){ var el=rowOf(c.key); if(el) el.style.gridColumn=c.col+' / span '+c.w; } });
+      w=mine?mine.w:p.w; tag.textContent=w+'/'+GRID_COLS;
     }
     function up(){
       h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
       row.classList.remove('resizing'); tag.remove();
-      grid.querySelectorAll('.boxgap[hidden]').forEach(function(b){ b.hidden=false; });
-      if(w!==p.w) saveLayout(layoutResize(layoutItems(), f.key, w), 'resize '+partName(f));
+      grid.querySelectorAll('.rowfree[hidden]').forEach(function(b){ b.hidden=false; });
+      if(w!==p.w) saveLayout(next, resizeWhat(base, f, w));
+      else line.forEach(function(c, n){ c.style.gridColumn=was[n]; });
     }
     h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
   }
   document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&!e.defaultPrevented&&SEL&&!document.querySelector('#fields .edit')) select(null); });
 
   // The selected part: what can be done to it, what it was built from, why it says it, and its place.
-  var WIDTHS=[[4,'Third'],[6,'Half'],[8,'Two-thirds'],[12,'Full']];
   // The decision a look change records: "show Background as bullets", "show Background in the tint tone".
   function lookWhat(f, prop, v){ return 'show '+partLabel(f)+(prop==='as'?' as '+AS_WORDS[v].toLowerCase():' in the '+v+' tone'); }
   function renderSelPart(){
@@ -4485,7 +4644,7 @@
     if(!el||PROV_INSPECT) return;   // the panel is showing where something came from
 
     if(!f||phase!=='doc'){ el.hidden=true; el.innerHTML=''; return; }
-    var A=approveLocked(), kept=isLocked(f.key), conf=isConf(f.key), wr=canWrite(f.key), items=layoutItems(), at=layoutIndex(items,f.key), w=at>=0?items[at].w:GRID_COLS, lk=at>=0?items[at]:{}, kd=kindOf(f, lk.as), tone=lk.tone||'plain';
+    var A=approveLocked(), kept=isLocked(f.key), conf=isConf(f.key), wr=canWrite(f.key), items=layoutItems(), at=layoutIndex(items,f.key), lk=at>=0?items[at]:{}, can=layoutCanStep(items, f.key), kd=kindOf(f, lk.as), tone=lk.tone||'plain';
     var notes=notesHtml(f), qs=f.key==='open_questions'?openQs():[], ql=qs.filter(function(o){ return !o.kind; }).length;
     var ov=CHAIN.state==='ok'?ownVerdictOf(f.key):null, nOpen=ql+(CHAIN.state==='ok'?crossVerdictsOf(f.key).filter(function(c){ return c.open; }).length+(ov&&ov.open?1:0)+(proposalOf(f.key)&&!docLocked()?1:0):0);
     el.hidden=false;
@@ -4498,15 +4657,15 @@
       +(!A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':'')
       +'<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'
       +'</div>'
-      // Place on page sits under the actions, near the top (owner, 2026-11-10)
-      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
-        +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
+      // Place on page sits under the actions, near the top (owner, 2026-11-10). No Width presets (owner,
+      // 11 Nov): a part is sized by dragging its edge on the sheet.
+      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary>'
         // how the part looks (the mock's Show as and Tone): the kind it is drawn as, and what sits behind it
-        +'<div class="tk2" style="margin-top:10px">Show as</div><div class="seg seg-as" role="group" aria-label="Show as">'
+        +'<div class="tk2">Show as</div><div class="seg seg-as" role="group" aria-label="Show as">'
         +AS_KINDS.map(function(k){ return '<button type="button" data-as="'+k+'" aria-pressed="'+(kd===k)+'">'+AS_WORDS[k]+'</button>'; }).join('')+'</div>'
         +'<div class="tk2" style="margin-top:10px">Tone</div><div class="seg" role="group" aria-label="Tone">'
         +TONES.map(function(t){ return '<button type="button" data-tone="'+t+'" aria-pressed="'+(tone===t)+'">'+TONE_WORDS[t]+'</button>'; }).join('')+'</div>'
-        +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(at<=0?' disabled':'')+'>↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>↓ Move down</button></div></details>':'')
+        +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(can[0]?'':' disabled')+' title="Up a row: out of its row into one of its own, or above the row before">↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(can[1]?'':' disabled')+' title="Down a row: out of its row into one of its own, or below the row after">↓ Move down</button></div></details>':'')
       +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
         +qs.map(function(o){ return '<div class="nb-q'+(o.kind?' done':'')+'" data-q="'+o.i+'"><span class="nb-t">'+esc(o.q)+'</span>'
           +(o.kind?'<span class="nb-a'+(o.kind==='left'?' left':'')+'">'+esc((o.kind==='left'?'Left open: ':'')+o.a)+'</span>'
@@ -4523,9 +4682,8 @@
       else if(a==='regen'&&row){ startRegen(row,f); row.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
       else if(a==='keep') toggleLock(f);
       else if(a==='conf') toggleConf(f);
-      else if(a==='up'||a==='down') saveLayout(layoutStep(layoutItems(), f.key, a==='up'?-1:1), 'move '+partName(f));
+      else if(a==='up'||a==='down') saveLayout(layoutStep(layoutItems(), f.key, a==='up'?-1:1), 'move '+headOf(f)+' '+a);
     }); });
-    el.querySelectorAll('.sp-l [data-w]').forEach(function(b){ b.addEventListener('click', function(){ saveLayout(layoutResize(layoutItems(), f.key, +b.getAttribute('data-w')), 'resize '+partName(f)); }); });
     el.querySelectorAll('.sp-l [data-as]').forEach(function(b){ b.addEventListener('click', function(){ var k=b.getAttribute('data-as'); if(k===kd) return; saveLayout(layoutLook(layoutItems(), f.key, 'as', k), lookWhat(f, 'as', k)); }); });
     el.querySelectorAll('.sp-l [data-tone]').forEach(function(b){ b.addEventListener('click', function(){ var t=b.getAttribute('data-tone'); if(t===tone) return; saveLayout(layoutLook(layoutItems(), f.key, 'tone', t), lookWhat(f, 'tone', t)); }); });
     // Place on page stays open while its buttons rewrite the panel.
@@ -4954,7 +5112,8 @@
   // The grid's cells for the rows `rows` (all when null), renumbered from 1 in that order.
   // ctx: {get, fieldOf, conf:[key], styleOf(key), marks:{key:[n]}} — pure.
   function sheetCells(cells, ctx, rows){
-    var map={}, n=0, headRow=0, gaps=(ctx.look||{}).frame==='boxed'?boxGaps(cells):[];
+    var map={}, n=0, headRow=0, gaps=(ctx.look||{}).frame==='boxed'?boxGaps(cells):[], ends={};
+    gaps.forEach(function(g){ ends[g.row]=g.col-1; });
     (rows||cells.map(function(c){ return c.row; })).forEach(function(r){ if(!map[r]) map[r]=++n; });
     return cells.filter(function(c){ return map[c.row]; }).map(function(c){
       var at='grid-column:'+c.col+' / span '+c.w+';grid-row:'+map[c.row], r=' data-r="'+c.row+'"';
@@ -4967,10 +5126,10 @@
         :lines?'<div class="val"'+sa+'>'+(Array.isArray(v)?v:[v]).map(function(x){ return '<p>'+esc(String(x))+'</p>'; }).join('')+mk+'</div>'
         :f.type==='list'||kd==='bullets'?'<div class="val"'+sa+'><ul>'+sentencesOf(v).map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'+mk+'</div>'
         :'<div class="val'+(kd==='statement'?' spp':'')+'"'+sa+'>'+esc(String(v))+mk+'</div>';
-      return '<div class="row k-'+kd+toneClass(c.tone)+(conf?' conf':'')+(c.row===headRow+1?' afterhead':'')+(c.row===ctx.cells.filter(function(x){ return !x.head; }).reduce(function(m,x){ return Math.min(m,x.row); },1e9)?' r1':'')+'"'+r+' style="'+at+';--w:'+c.w+'">'
+      return '<div class="row k-'+kd+toneClass(c.tone)+(conf?' conf':'')+(ends[c.row]===c.col+c.w-1?' endfree':'')+(c.row===headRow+1?' afterhead':'')+(c.row===ctx.cells.filter(function(x){ return !x.head; }).reduce(function(m,x){ return Math.min(m,x.row); },1e9)?' r1':'')+'"'+r+' style="'+at+';--w:'+c.w+'">'
         +'<div class="lab"><span>'+esc(headOf(f))+'</span>'+(conf?' <span class="conftag">Confidential</span>':'')+'</div>'+val+'</div>';
     }).join('')+gaps.filter(function(g){ return map[g.row]; }).map(function(g){
-      return '<div class="boxgap" aria-hidden="true" data-r="'+g.row+'" style="grid-column:'+g.col+' / span '+g.w+';grid-row:'+map[g.row]+'"></div>';
+      return '<div class="rowfree" aria-hidden="true" data-r="'+g.row+'" style="grid-column:'+g.col+' / span '+g.w+';grid-row:'+map[g.row]+'"></div>';
     }).join('');
   }
   // The whole document. pages null: one long sheet, to be measured; else [[block id]] per page, where a
@@ -5025,7 +5184,8 @@
   (function(){ var st=document.createElement('style'); st.id='sheetCss'; st.textContent=SHEET_PRINT_CSS; document.head.appendChild(st); })();
   // What a sheet export prints: the agency's copy (every part; confidential ones hatched and tagged) or
   // the client's (no confidential part, and nothing it cites).
-  function sheetItems(copy){ var c=confList(); return layoutItems().filter(function(it){ return copy!=='client'||c.indexOf(it.key)===-1; }); }
+  // The client copy leaves the confidential parts out, and their rows close up (layoutWithout).
+  function sheetItems(copy){ var items=layoutItems(); return copy==='client'?layoutWithout(items, confList()):items; }
   // Measure one long sheet, A4 wide, off the screen in this page (whose styles it is drawn with; an app
   // frame is sandboxed, so a frame inside it could not be read). -> blocks for sheetPaginate, or null
   // when it could not be measured within `wait` ms: an unmeasured sheet is not printed.

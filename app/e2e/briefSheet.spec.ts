@@ -61,21 +61,20 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(panel.locator('#spProv .clf-rv')).toBeVisible({ timeout: 15_000 })
   await expect(panel.locator('#spHead .rv-pname')).toBeVisible()
 
-  // Place on page: full width, then one place earlier; the keyboard on the grip moves it too.
+  // Place on page (no Width presets): Move up takes Mandatories out of the row it shares with Tone & world
+  // into a row of its own above it, and Tone & world takes its width back.
   const mand = app.locator('#fields .row[data-clan-part="mandatories"]')
   await mand.locator('.lab > span').first().click()
   await expect(mand).toHaveClass(/\bsel\b/)
   await panel.locator('.sp-l summary').click()
-  await panel.locator('.sp-l [data-w="12"]').click()
-  await expect(mand).toHaveAttribute('data-w', '12')
-  type Parts = Record<string, { order: number; w: number }>
+  await expect(panel.locator('.sp-l [data-w]')).toHaveCount(0)
+  type Parts = Record<string, { order: number; row: number; w: number }>
   const parts = async () => ((await order(page)) as { layout?: { parts?: Parts } }).layout?.parts ?? {}
-  await expect.poll(async () => (await parts()).mandatories?.w).toBe(12)
-  const was = (await parts()).mandatories.order
   const keysBefore = await app.locator('#fields .row[data-clan-part]').evaluateAll(rs => rs.map(r => r.getAttribute('data-clan-part')))
   const before = keysBefore[keysBefore.indexOf('mandatories') - 1]
+  expect(before).toBe('tone_and_world')
   await panel.locator('[data-sp="up"]').click()
-  await expect.poll(async () => { const p = await parts(); return [p.mandatories.w, p.mandatories.order < was] }).toEqual([12, true])
+  await expect.poll(async () => { const p = await parts(); return [p.mandatories?.w, p.tone_and_world?.w, p.mandatories?.row < p.tone_and_world?.row] }).toEqual([6, 12, true])
 
   // A reload keeps all of it: the layout, the width and the confidential part.
   await page.reload()
@@ -89,7 +88,8 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   const b2 = again.locator('#fields .row[data-clan-part="budget_and_scope"]')
   await expect(b2).toHaveClass(/\bconf\b/)
   const m2 = again.locator('#fields .row[data-clan-part="mandatories"]')
-  await expect(m2).toHaveAttribute('data-w', '12')
+  await expect(m2).toHaveAttribute('data-w', '6')
+  await expect(again.locator('#fields .row[data-clan-part="tone_and_world"]')).toHaveAttribute('data-w', '12')
   const keys = await again.locator('#fields .row').evaluateAll(rs => rs.map(r => r.getAttribute('data-clan-part')))
   expect(keys.indexOf('mandatories')).toBeLessThan(keys.indexOf(before!)) // it moved past the part before it on the sheet
   // Save · PDF and the menu's other ways to save are all there.

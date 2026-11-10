@@ -87,6 +87,7 @@
       "properties": {
         "frame": { "type": "string", "enum": ["open", "boxed"] },
         "headings": { "type": "string", "enum": ["label", "tab"] },
+        "model": { "description": "rows: each part's row and col in parts are its place (parts sharing a row number sit side by side). Absent (written before 2026-11-11): parts holds a flow, its order packed into rows on read.", "type": "string", "enum": ["rows"] },
         "parts": {
           "description": "Keyed by the part's data path (e.g. objectives.commercial).",
           "type": "object",
