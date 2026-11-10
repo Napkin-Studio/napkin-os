@@ -10,7 +10,7 @@ import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import { DecisionsDrawer, type DrawerView } from './nui/DecisionsDrawer'
-import { openInApp } from './appExport'
+import { openInApp, setBeforeOpen } from './appExport'
 import { refOfAddress } from './decisions/words'
 import { lockWords } from './nui/drawerData'
 import { setScreen } from '../dogfood/recorder'
@@ -123,6 +123,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       return { docPath, open: typeof o === 'function' ? o(was) : o }
     })
   }, [docPath])
+  // Showing an item in the document (Open, Show in document, a source or fact chip) closes the drawer:
+  // the document shows it in its own side panel.
+  useEffect(() => { setBeforeOpen(() => setDecisionsOpen(false)); return () => setBeforeOpen(null) }, [setDecisionsOpen])
   // "Approve all and lock": the document's own /approve, refused in the host's words while its lock list holds.
   const approveDoc = useCallback(async () => {
     if (typeof host.docOps !== 'function') throw new Error('Lock it from the document itself here.')
@@ -497,7 +500,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
               view: decisions.view,
               error: decisions.error,
               related: links.related,
-              onShow: (ref, path) => { setDecisionsOpen(false); openInApp(ref, path) },
+              onShow: (ref, path) => openInApp(ref, path),
               onOpenPath: onOpenDocument,
               acknowledge: id => host.acknowledge(id),
               manifest: open.manifest,

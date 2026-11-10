@@ -493,8 +493,8 @@ test('a review leaves the page where it is, and the Strategy agent works in the 
   assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
   assert.ok(!side.hidden, 'the Strategy agent shows in the side panel while the job runs')
   assert.ok(!on(), 'not on the bottom edge: the agent has moved to the side panel')
-  assert.match(side.innerHTML, /<span class="nk-ag nk-side" data-nk-agent="strategy" data-nk-state="working" data-nk-size="44"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working, at the shared size (the static frame until it is hydrated)')
-  assert.match(side.innerHTML, /<b>Strategy agent<\/b> · bringing the report in step with your review/)
+  assert.match(side.innerHTML, /<span class="nk-ag nk-side" data-nk-agent="strategy" data-nk-state="working" data-nk-size="92"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working, at the shared size (the static frame until it is hydrated)')
+  assert.match(side.innerHTML, /<span class="nk-job-role">STRATEGY AGENT<\/span><span class="nk-job-do">Bringing the report in step with your review<\/span>/)
   assert.doesNotMatch(side.innerHTML, /agent-figure|walking/)
   finish(runs[0])
   assert.ok(side.hidden, 'and leaves when nothing is pending')
@@ -776,7 +776,8 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
     FIX: null, DRAFT: null, FIX_SAY, walker, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
     REGEN: {}, fieldOf: () => null, roleOf: (k: string) => k,
-    ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', side: (k: string, t: string) => `<svg data-agent="${k}"></svg><span class="nk-side-t"><b>${({ synthesis: 'Strategy agent', drafter: 'Brief agent', judge: 'Review agent' } as Record<string, string>)[k]}</b> · ${t}</span>`, auto: () => {} },
+    ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', auto: () => {},
+      sideSet: (el: { hidden: boolean; innerHTML: string }, job: { role: string; doing: string } | null) => { el.hidden = !job; el.innerHTML = job ? `<svg data-agent="${job.role}"></svg><span class="nk-side-t"><b>${({ synthesis: 'Strategy agent', drafter: 'Brief agent', judge: 'Review agent' } as Record<string, string>)[job.role]}</b> · ${job.doing}</span>` : '' } },
     AGENT_NAME: { synthesis: 'Strategy agent', drafter: 'Brief agent', judge: 'Review agent' },
     esc: (s: string) => String(s), docLocked: () => locked, noMiddleware: () => false,
     window: { clan: { apiProxy: () => Promise.resolve() } },
@@ -3531,18 +3532,105 @@ test('research: nothing the person sees names an address, a code, patch-data or 
   assert.doesNotMatch(fn(RT, 'renderValue'), /esc\(v&&v\.ref\)|esc\(x\.ref\)|sha256/, 'no entity code or hash beside a value')
 })
 
-// The side panel's job line is one shared helper (owner, 2026-11-11): the brief and the research draw the
-// working agent at the same size, on the same card, from the agent-sphere engine.
-test('the side panel’s job line: research and brief use the one shared helper and size', () => {
+// The side panel's job block is one shared helper (owner, 2026-11-11): the brief and the research draw the
+// working agent the same, as the panel's own top section, from the agent-sphere engine.
+test('the side panel’s job block: research and brief use the one shared helper and size', () => {
   const roles = page('shared/agent-sphere/roles.js')
-  const size = Number(/var SIDE = (\d+);/.exec(roles)?.[1])
-  assert.ok(size >= 40 && size <= 48, `the job-line sphere is 40-48px, got ${size}`)
-  assert.match(roles, /side: side, SIDE: SIDE/)
-  assert.match(fn(RT, 'sideAgent'), /R\.side\(on\[0\], on\[1\]\)/)
-  assert.match(fn(page('brief-maker/index.html'), 'sideAgent'), /ROLES\.side\(roleOf\(on\[0\]\), on\[1\]\)/)
-  for (const src of [RT, page('brief-maker/index.html')]) assert.doesNotMatch(src, /\.side-agent \.nk-ag\{width:/, 'no app sizes the job line itself')
+  const size = Number(/var SIDE = (\d+)/.exec(roles)?.[1]), narrow = Number(/SIDE_NARROW = (\d+)/.exec(roles)?.[1])
+  assert.ok(size >= 88 && size <= 96, `the job-block sphere is 88-96px, got ${size}`)
+  assert.equal(narrow, 64, 'below 320px the sphere drops to 64px')
+  assert.match(roles, /NARROW = 320/)
+  assert.match(roles, /side: side, sideSet: sideSet, SIDE: SIDE/)
+  const css = fn(roles, 'sideCss')
+  assert.doesNotMatch(css, /\.side-agent\{[^}]*border-radius:1\dpx/, 'no card: no rounded border of its own')
+  assert.match(css, /border-bottom:1px solid/, 'a hairline under it, on the panel’s surface')
+  assert.match(css, /nk-job-well\{[^}]*box-shadow:inset/, 'the sphere sits in an inset well')
+  assert.match(css, /\.side-agent\.nk-job-off\{grid-template-rows:0fr/, 'it folds away by height')
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.side-agent\{transition:none\}/)
+  assert.match(css, /var\(--ag-act/, 'the working hairline is the agency colour')
+  const side = fn(roles, 'side')
+  assert.match(side, /nk-job-role">' \+ esc\(caption\(r\)\)/, 'the role in mono caps')
+  assert.match(side, /nk-job-st/)
+  assert.match(fn(RT, 'sideAgent'), /R2\.sideSet\(el, job\)/)
+  assert.match(fn(page('brief-maker/index.html'), 'sideAgent'), /ROLES\.sideSet\(el, job\)/)
+  for (const src of [RT, page('brief-maker/index.html')]) assert.doesNotMatch(src, /\.side-agent \.nk-ag\{width:/, 'no app sizes the job block itself')
+  // research: under the tabs, edge to edge
+  assert.match(RT, /<div class="insp-sw" id="viewsw"[\s\S]{0,300}<\/div>\s*<div class="side-agent" id="sideAgent"/)
   // Your call names the finding and counts what it rests on; the sources are a tap away, never listed.
   assert.match(fn(RT, 'chkRests'), /pubs\.length===1\?'one source':pubs\.length\+' sources'/)
+})
+
+test('the job block says a question’s gist, the whole question in its tooltip', () => {
+  const f = lift<{ askGist(q: string): string }>(RT, ['askGist'], { clipT: (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t) })
+  assert.equal(f.askGist('Can you find more sources for it?'), 'finding more sources')
+  assert.equal(f.askGist('Please check the GB figure.'), 'checking the GB figure')
+  assert.equal(f.askGist('What do Gen Z spend on treats?'), 'answering “What do Gen Z spend on treats”')
+  assert.match(fn(RT, 'sideAgent'), /title:'Asked: “'\+aj\.question\+'”'/)
+  assert.match(fn(RT, 'sideAgent'), /onGo:function\(\)\{ goTo\(aj\.ref\|\|\(sec\?'sec:'\+sec\.id:null\), aj\.lens\); \}/)
+})
+
+// Report / Evidence map (owner, 2026-11-11: "the map is shown in sources, even after the report is selected"):
+// VIEW.v is the one source of truth; the tabs, the content and the panel's width are drawn from it together.
+function tabsEnv() {
+  type Fake = { hidden: boolean; innerHTML: string; cls: Set<string>; attrs: Record<string, string>; classList: { toggle(c: string, on?: boolean): void; remove(c: string): void; contains(c: string): boolean }; setAttribute(k: string, v: string): void; getAttribute(k: string): string | null; querySelectorAll(): Fake[]; contains(): boolean }
+  const el = (attrs: Record<string, string> = {}): Fake => {
+    const cls = new Set<string>()
+    const e: Fake = { hidden: false, innerHTML: '', cls, attrs, classList: { toggle(c, on) { if (on ?? !cls.has(c)) cls.add(c); else cls.delete(c) }, remove(c) { cls.delete(c) }, contains: c => cls.has(c) },
+      setAttribute(k, v) { attrs[k] = v }, getAttribute: k => attrs[k] ?? null, querySelectorAll: () => [], contains: () => false }
+    return e
+  }
+  const btns = [el({ 'data-view': 'report', 'aria-pressed': 'true' }), el({ 'data-view': 'map', 'aria-pressed': 'false' })]
+  const sw = el(); sw.querySelectorAll = () => btns
+  const els: Record<string, Fake> = { pv: el(), 'pv-foot': el(), 'insp-ask': el(), mapview: el(), ws: el(), viewsw: sw, insp: el() }
+  els.mapview.hidden = true
+  const store: Record<string, string> = {}
+  const env = {
+    $: (id: string) => els[id] ?? null, VIEW: { v: 'report', sel: null as string | null, trail: [] as unknown[] }, PV: { keySeen: true, keyOpen: false, surf: false },
+    D: () => ({ report: {} }), isObj: (x: unknown) => !!x && typeof x === 'object',
+    renderMapV: () => { els.mapview.innerHTML = 'MAP' }, keepScroll: (f: () => void) => f(), markReport: () => {}, endSurf: () => {},
+    reportViewHtml: () => 'REPORT', reportFootHtml: () => '', itemHtml: (r: string) => 'ITEM ' + r, litPage: () => {},
+    docId: () => 'd1', document: { activeElement: null }, window: {}, setTimeout: () => 0, clearTimeout: () => {},
+    localStorage: { setItem() {} }, sessionStorage: { setItem: (k: string, v: string) => { store[k] = v } },
+  }
+  const f = lift<{ setView(v: string): void; renderSel(): void; renderPanel(): void }>(RT, ['setView', 'renderSel', 'renderPanel'], env)
+  const pressed = () => btns.filter(b => b.attrs['aria-pressed'] === 'true').map(b => b.attrs['data-view'])
+  return { f, els, env, pressed, store }
+}
+
+test('research panel: the pressed tab and the content are one state, both ways and after a selection', () => {
+  const { f, els, env, pressed, store } = tabsEnv()
+  f.setView('map')
+  assert.deepEqual(pressed(), ['map']); assert.equal(els.mapview.hidden, false); assert.equal(els.pv.hidden, true)
+  assert.ok(els.ws.cls.has('ws-map'), 'the panel widens for the map')
+  f.setView('report')
+  assert.deepEqual(pressed(), ['report'])
+  assert.equal(els.mapview.hidden, true, 'the map goes when Report is pressed')
+  assert.equal(els.pv.hidden, false); assert.equal(els.pv.innerHTML, 'REPORT')
+  assert.ok(!els.ws.cls.has('ws-map'), 'and the panel narrows with it')
+  assert.equal(store['clan.research.view.d1'], 'report', 'the last tab is kept for a reload')
+  // an item opened from the map keeps the Map tab, shows the item, and Back returns to the map
+  f.setView('map'); env.VIEW.sel = 'f_1'; f.renderSel()
+  assert.deepEqual(pressed(), ['map']); assert.equal(els.pv.innerHTML, 'ITEM f_1'); assert.equal(els.mapview.hidden, true)
+  // the restore on load goes through setView too, so its highlight matches
+  assert.match(RT, /if\(sessionStorage\.getItem\('clan\.research\.view\.'\+docId\(\)\)==='map'\) setView\('map'\);/)
+  assert.doesNotMatch(fn(RT, 'setView'), /aria-pressed|ws-map/, 'setView only changes the state; renderPanel draws it')
+  // only one set of view tabs on the page: the hidden legacy inspector holds none
+  assert.equal((RT.match(/data-view="map"/g) || []).length, 1)
+})
+
+test('research map: the four columns fit the width given, edges inside it', () => {
+  const f = lift<{ mapFit(a: number): { cx: number[]; cw: number[]; w: number; tight: boolean } }>(RT, ['mapFit'], { COLX: [0, 236, 486, 722], COLW: [208, 224, 206, 108] })
+  // the panel's map width at 1280, 1440 and 1600 (744px panel), the 440px panel, and wide
+  for (const avail of [700, 560, 402, 900]) {
+    const m = f.mapFit(avail)
+    assert.equal(m.cx.length, 4); assert.equal(m.cw.length, 4)
+    assert.ok(m.w <= avail, `all four columns fit ${avail}px (got ${m.w})`)
+    assert.equal(m.w, m.cx[3] + m.cw[3], 'Lines’ right edge is the map’s width')
+    for (let i = 0; i < 3; i++) assert.ok(m.cx[i] + m.cw[i] < m.cx[i + 1], `column ${i + 1} ends before column ${i + 2}: room for the edges`)
+  }
+  assert.equal(f.mapFit(402).tight, true, 'smaller type when squeezed')
+  assert.equal(f.mapFit(900).tight, false)
+  assert.match(fn(RT, 'renderMapV'), /fit=mapFit\(avail\), CX=fit\.cx, CW=fit\.cw;/)
 })
 
 // The run stage's sphere on a dark stage (owner, 2026-11-11): it is lit for the stage's own ground, a pale

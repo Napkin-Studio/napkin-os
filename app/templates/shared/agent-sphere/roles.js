@@ -247,27 +247,97 @@
     hydrate();
   }
 
-  // ── the side panel's job line, one for every app (owner, 2026-11-11: the brief's and the research's were
-  // different sizes): the working agent's sphere at SIDE px, its name and what it is doing, on a card that
-  // keeps inside the panel. Below 72px a sphere is drawn small (mount): larger in its box, a firmer ring;
-  // the card gives it a rim and a floor shadow so a pale material still reads on paper.
-  var SIDE = 44;
+  // ── the side panel's job block, one for every app (owner, 2026-11-11: identical in the brief and the research;
+  // then "bigger, embedded in the panel"): the panel's own top section, under its tabs, full width, no card. The
+  // working agent's live sphere sits in a soft inset well, its ring showing progress; beside it (under it on a
+  // narrow panel) the role in mono caps, what it is doing in body type, and a small mono status. A hairline in
+  // the agency colour runs along its foot while it works. Clicking it goes to what the job is about. When the
+  // job ends the block folds away (a height transition; none under reduced motion).
+  var SIDE = 92, SIDE_NARROW = 64, NARROW = 320;
   function sideCss() {
     if (!root.document || document.getElementById('nk-side-css')) return;
     var st = document.createElement('style'); st.id = 'nk-side-css';
-    st.textContent = '.side-agent{display:flex;align-items:center;gap:12px;box-sizing:border-box;max-width:100%;min-width:0;padding:10px 14px;margin:0 0 12px;'
-      + 'border:1px solid var(--nd-line,var(--line,rgba(20,20,19,.14)));border-radius:12px;background:var(--nd-card,var(--card,var(--paper,#fff)));'
-      + 'font:500 13.5px/1.35 var(--font-ui,var(--f,inherit));color:var(--nd-ink,var(--ink,inherit))}'
-      + '.side-agent[hidden]{display:none}.side-agent b{font-weight:600}.side-agent .nk-side-t{min-width:0;overflow-wrap:anywhere}'
-      + '.side-agent .nk-side{width:' + SIDE + 'px;height:' + SIDE + 'px;border-radius:50%;'
-      + 'background:radial-gradient(ellipse 34% 8% at 50% 88%,rgba(20,20,19,.22),transparent 72%),'
-      + 'radial-gradient(circle at 50% 47%,transparent 0 33%,rgba(20,20,19,.16) 33.5% 35.5%,transparent 36.5%)}';
+    st.textContent = ''
+      + '.side-agent{--sb:var(--side-bleed,0px);display:grid;grid-template-rows:1fr;position:relative;box-sizing:border-box;min-width:0;max-width:none;'
+      + 'margin:0 calc(-1 * var(--sb));border-bottom:1px solid var(--nd-line,var(--line,rgba(20,20,19,.14)));background:transparent;'
+      + 'color:var(--nd-ink,var(--ink,inherit));transition:grid-template-rows .36s cubic-bezier(.2,.7,.2,1),opacity .3s,border-color .3s}'
+      + '.side-agent[hidden]{display:none}'
+      + '.side-agent.nk-job-off{grid-template-rows:0fr;opacity:0;border-bottom-color:transparent}'
+      + '.side-agent>.nk-job{min-height:0;overflow:hidden}'
+      + '.side-agent .nk-job-go{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:16px;width:100%;padding:16px var(--sb);cursor:default;border-radius:0}'
+      + '.side-agent .nk-job-go[data-go]{cursor:pointer}.side-agent .nk-job-go[data-go]:hover .nk-job-do{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}'
+      + '.side-agent .nk-job-go:focus-visible{outline:2px solid var(--ag-act,currentColor);outline-offset:-4px}'
+      + '.side-agent .nk-job-well{flex:none;display:grid;place-items:center;width:' + (SIDE + 14) + 'px;height:' + (SIDE + 14) + 'px;border-radius:50%;'
+      + 'background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 3px 8px rgba(0,0,0,.16),inset 0 -1px 0 rgba(255,255,255,.35),inset 0 0 0 1px color-mix(in srgb,currentColor 5%,transparent)}'
+      + ':root[data-color-scheme="dark"] .side-agent .nk-job-well{box-shadow:inset 0 3px 10px rgba(0,0,0,.55),inset 0 -1px 0 rgba(255,255,255,.06)}'
+      + '.side-agent .nk-job-t{display:grid;gap:4px;min-width:0;flex:1}'
+      + '.side-agent .nk-job-role{font:600 11px/1.3 var(--font-mono,ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted,var(--muted,inherit))}'
+      + '.side-agent .nk-job-do{font:500 15.5px/1.35 var(--font-ui,var(--f,inherit));overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+      + '.side-agent .nk-job-st{font:11.5px/1.3 var(--font-mono,ui-monospace,monospace);color:var(--nd-muted,var(--muted,inherit))}'
+      + '.side-agent.nk-job-narrow .nk-job-go{flex-direction:column;align-items:flex-start;gap:10px}'
+      + '.side-agent.nk-job-narrow .nk-job-well{width:' + (SIDE_NARROW + 10) + 'px;height:' + (SIDE_NARROW + 10) + 'px}'
+      + '.side-agent::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;pointer-events:none;'
+      + 'background:linear-gradient(90deg,transparent,var(--ag-act,var(--accent,#C9462A)) 50%,transparent) no-repeat;background-size:38% 100%;'
+      + 'animation:nk-job-run 1.8s linear infinite;transition:opacity .4s}'
+      + '.side-agent.nk-job-off::after{opacity:0}'
+      + '@keyframes nk-job-run{from{background-position:-60% 0}to{background-position:160% 0}}'
+      + '@media (prefers-reduced-motion:reduce){.side-agent{transition:none}.side-agent::after{animation:none;background-size:100% 100%;opacity:.5}}';
     document.head.appendChild(st);
   }
-  /** The job line's markup: `<sphere><span><b>Synthesis agent</b> · writing the report again</span>`, into a .side-agent. */
-  function side(r, text) {
+  function cap1(s) { s = String(s == null ? '' : s); return s.charAt(0).toUpperCase() + s.slice(1); }
+  /** The job block's markup, into a .side-agent: {role, doing, status, title, progress (0-1), size, go (a flag)}. */
+  function side(r, o) {
     sideCss();
-    return tag(r, { state: 'working', decorative: true, size: SIDE, cls: 'nk-side' }) + '<span class="nk-side-t"><b>' + esc(name(r)) + '</b> · ' + esc(text) + '</span>';
+    o = typeof o === 'string' ? { doing: o } : o || {};
+    var size = o.size || SIDE;
+    return '<div class="nk-job"><div class="nk-job-go" role="' + (o.go ? 'button' : 'group') + '"' + (o.go ? ' tabindex="0" data-go="1"' : '') +
+      (o.title ? ' title="' + esc(o.title) + '"' : '') + '><span class="nk-job-well">' +
+      tag(r, { state: 'working', decorative: true, size: size, cls: 'nk-side', progress: o.progress != null ? o.progress : undefined }) +
+      '</span><span class="nk-job-t"><span class="nk-job-role">' + esc(caption(r)) + '</span><span class="nk-job-do">' + esc(cap1(o.doing)) + '</span>' +
+      '<span class="nk-job-st">' + esc(o.status || 'working') + '</span></span></div></div>';
+  }
+  function ago(ms) { var s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + (s % 60 < 10 ? '0' : '') + (s % 60) + 's'; }
+  /** Show `job` in the side block `el`, or fold it away when job is null. job: {role, doing, title, status,
+   *  progress, key, onGo}. Without a status the block counts "working · 40s" from when the job first showed. */
+  function sideSet(el, job) {
+    if (!el) return;
+    sideCss();
+    var want = job ? [job.role, job.doing, job.status || '', job.progress == null ? '' : job.progress, job.title || ''].join('|') : '';
+    el._nkGo = job && job.onGo || null;
+    // Without a page around it (a test's stand-in), no transition: shown or gone at once.
+    if (!el.classList) { el.hidden = !job; el.innerHTML = job ? side(job.role, { doing: job.doing, title: job.title, status: job.status, progress: job.progress, go: !!job.onGo }) : ''; return; }
+    if (!el._nkWired && el.addEventListener) {
+      el._nkWired = true;
+      var go = function (e) { if (!el._nkGo || !e.target.closest || !e.target.closest('.nk-job-go[data-go]')) return; if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return; e.preventDefault(); el._nkGo(); };
+      el.addEventListener('click', go); el.addEventListener('keydown', go);
+    }
+    if (!job) {
+      clearInterval(el._nkTick); el._nkTick = 0;
+      if (el.hidden || el.classList.contains('nk-job-off')) return;
+      el.setAttribute('data-k', '');
+      el.classList.add('nk-job-off');
+      var reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      clearTimeout(el._nkFold); el._nkFold = setTimeout(function () { if (el.classList.contains('nk-job-off')) { el.hidden = true; el.innerHTML = ''; } }, reduce ? 0 : 420);
+      return;
+    }
+    clearTimeout(el._nkFold);
+    var k = job.key || job.role + '|' + job.doing;
+    if (el._nkKey !== k) { el._nkKey = k; el._nkT0 = Date.now(); }
+    var narrow = el.parentNode && el.parentNode.clientWidth > 0 && el.parentNode.clientWidth < NARROW;
+    el.classList.toggle('nk-job-narrow', !!narrow);
+    var stat = function () { return job.status || 'working · ' + ago(Date.now() - el._nkT0); };
+    if (el.getAttribute('data-k') !== want + (narrow ? '|n' : '') || !el.innerHTML) {
+      el.setAttribute('data-k', want + (narrow ? '|n' : ''));
+      el.innerHTML = side(job.role, { doing: job.doing, title: job.title, status: stat(), progress: job.progress, go: !!job.onGo, size: narrow ? SIDE_NARROW : SIDE });
+      auto();
+    }
+    clearInterval(el._nkTick);
+    if (!job.status) el._nkTick = setInterval(function () { var s = el.querySelector('.nk-job-st'); if (!s || !el.isConnected) { clearInterval(el._nkTick); return; } s.textContent = stat(); }, 1000);
+    if (el.hidden || el.classList.contains('nk-job-off')) {
+      el.classList.add('nk-job-off'); el.hidden = false;
+      void el.offsetHeight;
+      el.classList.remove('nk-job-off');
+    }
   }
 
   // ── the run stage: the thread from a rail card to the sphere, and the sphere rising to ask ──
@@ -317,7 +387,7 @@
   }
 
   root.NapkinRoles = {
-    thread: thread, ask: ask, side: side, SIDE: SIDE,
+    thread: thread, ask: ask, side: side, sideSet: sideSet, SIDE: SIDE, SIDE_NARROW: SIDE_NARROW,
     ROLES: ROLES, KIND: KIND, of: of, forStage: forStage, ofDecision: ofDecision, name: name, the: the, The: The,
     job: function (r) { var m = meta(r); return m ? m.job : ''; }, mat: matOf, caption: caption,
     still: still, mount: mount, tag: tag, hydrate: hydrate, auto: auto, configure: configure, envelope: envelope

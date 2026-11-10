@@ -981,6 +981,8 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
    an agent shows in one place only). A placeholder carries display:inline-block inline, so only !important hides it. */
 .insp .nk-ag,#report .nk-ag{display:none!important}
 .insp .side-agent .nk-ag{display:inline-block!important}
+/* the job block is the panel's own top section, under the tabs, edge to edge (shared: NapkinRoles.sideSet) */
+.insp .side-agent{--side-bleed:18px;margin-top:-16px}
 
 /* ════════════════════════════════════════════════════════════════════════
    The approved mock, exactly (features/research-new-ui.clan; gaps.md §6,
@@ -1761,6 +1763,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
 .pv-edge.dim{stroke-opacity:.12}
 .nd{position:absolute;height:34px;display:flex;align-items:center;gap:7px;padding:0 10px;font-size:12.5px;background:var(--paper);border:1.3px solid var(--ink2);cursor:pointer;white-space:nowrap;transition:opacity .15s,background .15s,box-shadow .15s;color:var(--ink);box-sizing:border-box}
 .nd .t{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.pv-mscroll.tight .nd{font-size:11.5px;gap:4px;padding:0 6px}.pv-mscroll.tight .pv-colh{font-size:11px}.pv-mscroll.tight .nd .x2{font-size:10px}
 .nd:hover{box-shadow:0 0 0 3px color-mix(in srgb,var(--ag-acc,var(--amber)) 25%,transparent)}
 .nd:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .nd.src{border-radius:4px;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%)}
@@ -1835,11 +1838,11 @@ details.pv-fold>summary:hover{background:var(--soft)}
 <aside class="insp no-print" id="insp" aria-label="Inspector">
   <button type="button" class="insp-grab" id="insp-grab" aria-expanded="false" aria-controls="insp-body"><span class="insp-handle" aria-hidden="true"></span><span class="insp-peek" id="insp-peek">Report and what needs you</span></button>
   <div class="insp-body" id="insp-body">
-    <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
     <div class="insp-sw" id="viewsw" role="group" aria-label="View">
       <button type="button" data-view="report" aria-pressed="true">Report</button>
       <button type="button" data-view="map" aria-pressed="false">Evidence map</button>
     </div>
+    <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
     <section class="pv" id="pv" aria-live="polite" aria-label="Report and what is selected"></section>
     <section class="insp-map" id="mapview" aria-label="Evidence map" hidden></section>
     <section class="insp-ask" id="insp-ask" aria-label="Ask the research"></section>
@@ -2117,22 +2120,36 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // "<Role> agent · <what it is doing>". Gone when the job ends; on the run screen the stage has it.
   function sideAgent(){
     var el=$('sideAgent'); if(!el) return;
-    var on=null, live=function(j){ return j&&!j.error&&/^(sending|queued|running)$/.test(j.state||'sending'); };
+    var job=null, live=function(j){ return j&&!j.error&&/^(sending|queued|running)$/.test(j.state||'sending'); };
     if(!document.body.classList.contains('working')&&isObj(D().report)){
       var aj=ASK.jobs.filter(live)[0], tj=JOBS.filter(function(j){ return live(j)&&j!==RECON.job; })[0];
-      if(RECON.job) on=['strategy','bringing the report in step with your review'];
-      else if(CHAT.reportBusy) on=['synthesis','writing the report again'];
-      else if(aj) on=['research','answering “'+clipT(aj.question, 60)+'”'+(aj.lens&&LENS[aj.lens]?' in '+lensName(aj.lens):'')];
-      else if(tj){ var R=roles(), k=R&&R.of(tj.task)||'research', ln=tj.input&&tj.input.lens||tj.lens;
-        on=[k, tj.task==='research_lens'?'researching '+(ln&&LENS[ln]?lensName(ln):'a lens')+' again':String(tj.task||'working').replace(/_/g,' ')]; }
+      if(RECON.job) job={role:'strategy', doing:'bringing the report in step with your review'};
+      else if(CHAT.reportBusy) job={role:'synthesis', doing:'writing the report again'};
+      else if(aj){ var sec=aj.lens&&secByLens(aj.lens), about=aj.lens&&LENS[aj.lens]?lensName(aj.lens):aj.ref?selLabel(aj.ref):'';
+        job={role:'research', key:'ask|'+aj.question, doing:askGist(aj.question)+(about?' for '+about:''), title:'Asked: “'+aj.question+'”'+(about?' · '+about:''),
+          onGo:function(){ goTo(aj.ref||(sec?'sec:'+sec.id:null), aj.lens); }}; }
+      else if(tj){ var R=roles(), k=R&&R.of(tj.task)||'research', ln=tj.input&&tj.input.lens||tj.lens, s2=ln&&secByLens(ln);
+        job={role:k, doing:tj.task==='research_lens'?'researching '+(ln&&LENS[ln]?lensName(ln):'a lens')+' again':String(tj.task||'working').replace(/_/g,' '),
+          onGo:s2?function(){ goTo('sec:'+s2.id, ln); }:null}; }
     }
-    var want=on?on.join('|'):'';
-    if(el.getAttribute('data-k')===want) return;
-    el.setAttribute('data-k', want);
-    if(!on){ el.hidden=true; el.innerHTML=''; return; }
-    var R=roles(); el.innerHTML=R&&R.side?R.side(on[0], on[1]):'<span><b>'+esc(TheAgent(on[0]).replace(/^The /,''))+'</b> · '+esc(on[1])+'</span>';
-    if(R&&R.auto) R.auto();
-    el.hidden=false;
+    var R2=roles();
+    if(R2&&R2.sideSet){ R2.sideSet(el, job); return; }
+    el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(TheAgent(job.role).replace(/^The /,''))+'</b> · '+esc(job.doing)+'</span>':'';
+  }
+  // The job block's click: what the job is about, shown in the panel, its section brought into view on the page.
+  function goTo(ref, lens){
+    VIEW.origin=null; if(VIEW.v!=='report') setView('report');
+    if(ref) select(ref, false);
+    var el=lens&&askSections()[lens]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
+  }
+  // A question's gist, for the job block: "Can you find more sources for it?" → "finding more sources".
+  function askGist(q){
+    var s=String(q||'').replace(/\s+/g,' ').trim().replace(/[?.!\s]+$/,'');
+    s=s.replace(/^(hey|hi|ok|okay|so)[,\s]+/i,'').replace(/^(can|could|would|will) you\s+(please\s+)?/i,'').replace(/^please\s+/i,'').replace(/\s+(for|about|on|of) (it|this|that|them)$/i,'');
+    var V={find:'finding', look:'looking', check:'checking', get:'getting', search:'searching', dig:'digging', add:'adding', compare:'comparing', confirm:'confirming',
+      verify:'verifying', research:'researching', explain:'explaining', show:'showing', tell:'telling', list:'listing', count:'counting', estimate:'estimating', update:'updating'};
+    var m=/^(\w+)(.*)$/.exec(s), v=m&&V[m[1].toLowerCase()];
+    return v?clipT(v+m[2], 56):'answering “'+clipT(s||q, 40)+'”';
   }
   function reconsider(){
     if(RECON.job||!RECON.queue.length) return;
@@ -5166,12 +5183,11 @@ details.pv-fold>summary:hover{background:var(--soft)}
   var VIEW={v:'report', sel:null, model:null, trail:[]};
   function setView(v){
     VIEW.v=v==='map'?'map':'report';
-    $('ws').classList.toggle('ws-map', VIEW.v==='map');
     if(VIEW.v==='map'){ if(PV.keySeen) PV.keyOpen=false; PV.keySeen=true; try{ localStorage.setItem('clan.research.mapkey','1'); }catch(e){} }
-    VIEW.sel=null; VIEW.trail=[];
-    Array.prototype.forEach.call($('viewsw').querySelectorAll('button'), function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-view')===VIEW.v)); });
-    if(VIEW.v==='map') renderMap();
+    VIEW.sel=null; VIEW.trail=[]; endSurf();
     try{ sessionStorage.setItem('clan.research.view.'+docId(), VIEW.v); }catch(e){}
+    // One source of truth: VIEW.v. renderPanel draws the tabs, the content and the panel's width from it.
+    renderSel();
   }
 
   // ── what is selected, with its trail and a way back ─────────────────────
@@ -5190,6 +5206,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function select(ref, push){
     if(!ref) return;
+    endSurf();
     // On the map with nothing open, a click on the page lights that item's chain (the design's map).
     if(VIEW.v==='map'&&!VIEW.sel&&!push&&MAPV){ var mid=mapNodeOf(ref); if(mid){ mapSelect(mid); return; } }
     if(!VIEW.sel) PV.root=VIEW.v==='map'?'map':'report';
@@ -5872,7 +5889,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function askStoreKey(){ return 'clan.research.asks.'+docId(); }
   function saveAskJobs(){
-    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens}; });
+    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens, ref:j.ref||null}; });
     store(askStoreKey(), o.length?JSON.stringify(o):null);
   }
   function doAsk(key){
@@ -5881,7 +5898,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(!q){ toast('Type a question first.'); var i=$('rqin-'+slug(key)); if(i) i.focus(); return; }
     if(!(window.clan&&window.clan.apiProxy)){ toast('Asking runs through the host.'); return; }
     var ls=$('rqlens-'+slug(key)), lens=key==='_new'?((ls&&ls.value)||ui.lens||null):key;
-    var j={lens:lens&&LENS[lens]?lens:null, question:q, state:'sending'};
+    var j={lens:lens&&LENS[lens]?lens:null, question:q, ref:VIEW.sel||null, state:'sending'};
     ASK.jobs.push(j); ASK.ui[key]={open:false, draft:''}; renderAsks();
     sendAsk(j);
   }
@@ -5915,7 +5932,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function resumeAsks(){
     if(!(window.clan&&window.clan.apiProxy)) return;
     var o=[]; try{ o=JSON.parse(stored(askStoreKey())||'[]'); }catch(e){}
-    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
+    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, ref:x.ref||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
   }
   function onAskAct(act, b){
     var k=b.getAttribute('data-k')||'', j=ASK.jobs[+b.getAttribute('data-i')];
@@ -6470,7 +6487,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function renderPanel(){
     var pv=$('pv'), foot=$('pv-foot'), ask=$('insp-ask'), map=$('mapview'); if(!pv) return;
-    var sel=VIEW.sel, showMap=VIEW.v==='map'&&!sel;
+    // The OS's inspector is in the panel (provHost): it keeps it until it closes or something else opens.
+    if(PV.surf){ pv.hidden=false; if(map) map.hidden=true; if(ask) ask.hidden=true; if(foot){ foot.hidden=true; } $('ws').classList.remove('ws-map'); return; }
+    var sel=VIEW.sel, showMap=VIEW.v==='map'&&!sel, sw=$('viewsw');
+    if(sw) Array.prototype.forEach.call(sw.querySelectorAll('[data-view]'), function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-view')===VIEW.v)); });
     pv.hidden=showMap; if(map) map.hidden=!showMap; $('ws').classList.toggle('ws-map', showMap);
     if(ask) ask.hidden=!!sel||showMap||!isObj(D().report); if(foot) foot.hidden=!!sel||showMap;
     if(showMap){ renderMapV();
@@ -6557,6 +6577,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
     return {cls:cls.join(' '), inner:inner, tip:tip};
   }
   var MAPV=null, COLX=[0,236,486,722], COLW=[208,224,206,108], NH=34, GAPY=10;
+  // The four columns scaled to fit the width given, Lines' right edge inside it; sideways scroll only below 374px.
+  function mapFit(avail){ var base=COLX[3]+COLW[3], k=Math.max(.45, Math.min(1.2, (avail||base)/base));
+    var cx=COLX.map(function(x){ return Math.floor(x*k); }), cw=COLW.map(function(w){ return Math.floor(w*k); });
+    return {k:k, cx:cx, cw:cw, w:cx[3]+cw[3], tight:k<.82}; }
   function stickyV(G, id){ var n=G.nodes[id]; if(!n) return '';
     if(n.k==='find'){ var s=secOfFinding(n.ref); return '<span class="k">'+FG()+' Finding '+fnum(n.ref)+'</span><span style="font-size:12.5px;color:var(--ink3)">'+esc(s?secWords(s):'')+'</span>'+bars(fndLvOf(fnds()[n.ref]))+fMark(n.ref, true); }
     if(n.k==='ln'){ var o=lineKindOf(n.ref); return '<span class="pv-disc">'+esc(lineDisc(n.ref))+'</span><span class="k">'+esc(o.glyph||'◆').replace(/◗/g, FG())+' '+esc(o.kind)+'</span>'+bars(o.lv); }
@@ -6574,7 +6598,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(!isObj(r)){ el.innerHTML='<div class="pv-map"><div class="pv-mhead"><h3>Evidence map</h3></div><p class="pv-empty">There is no report yet: the map draws once the report is written.</p></div>'; return; }
     var G=mapGraphV(), E=G.E, c=E.counts, edges=edgesV(G);
     // the columns fit the panel: scaled to its width, scrolling sideways only when it is very narrow
-    var cs=getComputedStyle(el), avail=(el.clientWidth||830)-(parseFloat(cs.paddingLeft)||0)-(parseFloat(cs.paddingRight)||0)-8, k=Math.max(.72, Math.min(1.2, avail/830)), CX=COLX.map(function(x){ return Math.round(x*k); }), CW=COLW.map(function(w){ return Math.round(w*k); });
+    var cs=getComputedStyle(el), avail=(el.clientWidth||830)-(parseFloat(cs.paddingLeft)||0)-(parseFloat(cs.paddingRight)||0)-8, fit=mapFit(avail), CX=fit.cx, CW=fit.cw;
     var vis=Object.keys(G.nodes).filter(function(id){ return visV(G, id)===id; });
     var nl=arr(r.summary).length;
     var h='<div class="pv-map"><div class="pv-mhead"><h3>Evidence map</h3><div class="pv-mcounts"><span title="Sources used">▤'+c.feeds.sources+'</span><span title="Facts used">◆'+c.feeds.pins+'</span><span title="Findings in the summary">'+FG()+c.feeds.findings+'</span><span title="Summary lines and headline">'+(nl?'①'+(nl>1?'–'+(CIRC.charAt(nl-1)||nl):''):'')+(isObj(r.headline)?'Ⓗ':'')+'</span></div><label class="pv-mfind"><span aria-hidden="true">⌕</span><input id="pv-mapq" type="search" placeholder="Find in map" aria-label="Find in map" autocomplete="off"></label><button type="button" class="pv-link muted" data-act="pv-key" aria-expanded="'+PV.keyOpen+'">Key '+(PV.keyOpen?'▾':'▸')+'</button></div>';
@@ -6594,8 +6618,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
       list.forEach(function(o){ var y=o.y>=1e9?last+NH+GAPY:Math.max(o.y, last+NH+GAPY); Y[o.id]=y; last=y; });
     }
     var maxY=0; Object.keys(Y).forEach(function(k){ maxY=Math.max(maxY, Y[k]+NH); });
-    var W=CX[3]+CW[3];
-    h+='<div class="pv-mscroll"><div class="pv-colh" style="width:'+W+'px"><span style="left:'+CX[0]+'px">▤ Sources</span><span style="left:'+CX[1]+'px">◆ Facts by section</span><span style="left:'+CX[2]+'px">'+FG()+' Findings</span><span style="left:'+CX[3]+'px">① Lines</span></div>';
+    var W=fit.w;
+    h+='<div class="pv-mscroll'+(fit.tight?' tight':'')+'"><div class="pv-colh" style="width:'+W+'px"><span style="left:'+CX[0]+'px">▤ Sources</span><span style="left:'+CX[1]+'px">◆ Facts by section</span><span style="left:'+CX[2]+'px">'+FG()+' Findings</span><span style="left:'+CX[3]+'px">① Lines</span></div>';
     h+='<div class="pv-canvas" id="pv-canvas" style="height:'+(maxY+56)+'px;width:'+W+'px"><svg id="pv-msvg" width="'+W+'" height="'+(maxY+56)+'" aria-hidden="true"></svg>';
     vis.forEach(function(id){ var n=G.nodes[id], x=nodeV(G, n); h+='<div class="'+x.cls+'" data-node="'+esc(id)+'" title="'+esc(x.tip)+'" tabindex="0" role="button" aria-label="'+esc(x.tip)+'" style="left:'+CX[n.col]+'px;top:'+Y[id]+'px;width:'+CW[n.col]+'px">'+x.inner+'</div>'; });
     var sy=maxY+16, nleft=E.consF.length;
@@ -6827,6 +6851,26 @@ details.pv-fold>summary:hover{background:var(--soft)}
     e.preventDefault(); VIEW.origin=null; select(d.ref, !!VIEW.sel);
   });
   window.addEventListener('clan:cardact', function(e){ if((e.detail||{}).act==='map') setView('map'); });
+  // Nothing in the document opens the OS's floating drawer (owner, 2026-11-11): every fields open, the
+  // shell's ask to show an item (the Decisions drawer's Open), a card's "Where this came from", lands here, in
+  // the panel, with its trail. The panel draws any ref (itemHtml falls back to the OS's own card).
+  // What the panel has its own view for opens as that view; anything else (a contest, a gap, a passage,
+  // your words, a file) gets the OS's inspector inside the panel (PV.surf), under the shared trail.
+  function ownView(ref){ return !!(fnds()[ref]||pins()[ref]||srcRecs()[ref]||ref==='report.headline'||/^report\.(summary|sections)\[/.test(ref)); }
+  function provHost(ref){
+    var pv=$('pv');
+    if(ref==null){ if(PV.surf){ PV.surf=false; renderSel(); } return null; }
+    if(!$('insp')||!pv) return null;
+    if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
+    ref=String(ref);
+    if(ownView(ref)){ VIEW.origin=null; select(ref, !!VIEW.sel); return true; }
+    var root=VIEW.sel?crumbOf(VIEW.sel).replace(/◗/g, ''):VIEW.v==='map'?'Map':'Report';
+    PV.surf=true; renderPanel();
+    var ip=$('insp'); if(ip) ip.scrollTop=0;
+    return {el:pv, root:root};
+  }
+  function endSurf(){ if(!PV.surf) return; PV.surf=false; if(window.ClanFields&&ClanFields.closePanel) ClanFields.closePanel(true); }
+  if(window.ClanFields&&ClanFields.setPanelHost) ClanFields.setPanelHost(provHost);
   $('report').addEventListener('click', function(e){
     var t=e.target.closest&&e.target.closest('[data-rsel]'); if(!t) return;
     e.preventDefault(); VIEW.origin=t; select(t.getAttribute('data-rsel'), false);

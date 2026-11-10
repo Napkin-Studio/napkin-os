@@ -60,8 +60,16 @@ export function askAppToExport(kind: 'html' | 'pdf'): Promise<boolean> {
  * scrolls to it). Fire and forget — an app that shows neither ignores it.
  */
 export function openInApp(ref: string, path?: string) {
+  beforeOpen?.()
   frame?.postMessage({ type: 'clan:open', ref, path }, '*')
 }
+
+// Whatever of the shell's covers the document (the Decisions drawer) gets out of the way first: the
+// document shows the item in its own side panel. The shell never draws provenance itself; the frame's
+// ClanFields opens its own drawer only for a page with no panel host (owner, 2026-11-11).
+let beforeOpen: (() => void) | null = null
+/** The shell's hook, run before each openInApp: AppHost closes the Decisions drawer. */
+export function setBeforeOpen(fn: (() => void) | null) { beforeOpen = fn }
 
 /**
  * Tell the app the document changed under it — a client's answer recorded,

@@ -295,3 +295,56 @@ test('the brief registers its panel and leaves the drawer alone', () => {
   // the shared bar is exported for research to reuse
   assert.match(CLF, /crumbs:crumbsHTML/)
 })
+
+// ── the research: its inspector panel is the host too (owner, 2026-11-11: the old drawer still opened) ──
+const RP = page('campaign-research/index.html')
+
+/** The research's panel host, lifted, over a stand-in panel. */
+function researchHost(data: typeof DATA) {
+  const pv = new El(), calls: string[] = []
+  const P = data.projection as { pins: Record<string, unknown>; findings: Record<string, unknown>; sources: Record<string, unknown> }
+  const env = {
+    $: (id: string) => (id === 'pv' ? pv : id === 'insp' ? new El() : null),
+    fnds: () => P.findings, pins: () => P.pins, srcRecs: () => P.sources,
+    crumbOf: (r: string) => (r === 'f_1' ? '◆ 250k EUR' : r),
+    openSheet: () => {}, window: {},
+  }
+  const body = `var VIEW={v:'report', sel:null, trail:[], origin:null}, PV={surf:false};
+    function select(r){ calls.push('select:'+r); VIEW.sel=r; }
+    function renderPanel(){ calls.push('renderPanel'); }
+    function renderSel(){ calls.push('renderSel'); }
+    ${fn(RP, 'ownView')}
+    ${fn(RP, 'provHost')}
+    return { provHost: provHost, PV: PV, VIEW: VIEW };`
+  const h = new Function(...Object.keys(env), 'calls', 'ClanFields', body)(...Object.values(env), calls, undefined)
+  return { ...h, pv, calls }
+}
+
+test('research registers its inspector as the panel host', () => {
+  assert.match(RP, /if\(window\.ClanFields&&ClanFields\.setPanelHost\) ClanFields\.setPanelHost\(provHost\);/)
+  // and every new selection lets go of the OS's inspector first
+  assert.match(fn(RP, 'select'), /^function select\(ref, push\)\{\s*if\(!ref\) return;\s*endSurf\(\);/)
+})
+
+test('research: a provenance request opens in the panel, never the drawer', () => {
+  const { F, made, posted } = loadFields(DATA)
+  const r = researchHost(DATA)
+  F.setPanelHost(r.provHost)
+  // a fact, a source: the panel's own views, with its trail
+  F.open('f_1', false)
+  F.open('src_a', false)
+  assert.deepEqual(r.calls.filter((c: string) => c.startsWith('select:')), ['select:f_1', 'select:src_a'])
+  // a ref the panel has no view of (the sources behind a line): the OS's inspector, inside the panel
+  r.VIEW.sel = 'f_1'
+  F.open('cite:f_1,src_a', false)
+  assert.equal(r.PV.surf, true)
+  assert.equal(F.inspecting(), true)
+  const box = r.pv.querySelector('.clf-insp')!
+  assert.match(box.querySelector('.clf-insp-bar')!.innerHTML, /data-clf-crumb="-1"[^>]*>◆ 250k EUR<\/button>/)
+  // × hands the panel back to the research's own view
+  F.closePanel(false)
+  assert.equal(r.PV.surf, false)
+  assert.ok(r.calls.includes('renderSel'))
+  assert.ok(!made.includes('aside'), 'no drawer is built')
+  assert.ok(!posted.some(m => /clan:(open|provenance)/.test(String((m as { type?: string }).type))))
+})
