@@ -137,8 +137,9 @@ class DraftContext:
     pins, the retrieval and model capabilities. Never raw material."""
 
     def __init__(self, caps, working: dict, capture_items: dict, clan: dict, guidance: str | None = None,
-                 current: dict | None = None):
+                 current: dict | None = None, category: str | None = None):
         self.caps, self.working, self.guidance = caps, working, guidance
+        self.category = category   # the client category (clientcat.py), or None: gated packs need one
         self.current = current or {}  # every field's value as the document holds it (the SMP's insight, the ladder)
         self.capture = [{"id": cid, "key": it["key"], "value": it["value"], "status": it["status"]}
                         for cid, it in list((capture_items or {}).items())[:40]]
@@ -166,13 +167,20 @@ class DraftContext:
             general = [p["tag"] for p in packs if p.get("kind") != "case" and (not p.get("loops") or loop in p["loops"])]
             asks = []
             if general:
-                asks.append((query, 5, general))
+                asks.append((query, 5, general, None))
             if loop in CASE_LOOPS:
                 for p in packs:
                     if p.get("kind") == "case" and (not p.get("loops") or loop in p["loops"]):
-                        asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]]))
-            for q, k, tags in asks:
-                r = ret.retrieve(q, k, packs=tags, purpose=loop)
+                        if p.get("gated"):
+                            # A gated pack (the award library) is asked only with a category, as its own
+                            # request, so no other pack's request changes and it is never asked blindly.
+                            if self.category:
+                                asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]],
+                                             {"category": self.category}))
+                            continue
+                        asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]], None))
+            for q, k, tags, where in asks:
+                r = ret.retrieve(q, k, packs=tags, where=where, purpose=loop)
                 t = iso()
                 for p in r["passages"]:
                     ver = r["trace"]["packs"].get(p["pack"])

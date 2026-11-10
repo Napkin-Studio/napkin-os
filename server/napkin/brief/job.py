@@ -38,6 +38,7 @@ from ..model import ModelError
 from ..util import TaskError, iso, uid
 from . import capture as cap_stage
 from . import fill as fill_stage
+from .clientcat import plan_category
 from .drafters import DraftContext, Drafter, _query, run_drafters
 from .fields import (KEYS, LABELS, RUBRIC_FIELDS, address, clean, drafter_of, field_map, field_paths, filled, get,
                      group_keys, holder, last_writer, locked, put, read_of, rubric_groups)
@@ -627,7 +628,8 @@ class BriefJob:
     def _context(self):
         items = (self.capture or {}).get("items") or ((self.W.get("capture") or {}).get("items") or {})
         working = {k: v for k, v in self._values().items() if self.fm[k]["class"] == "captured" and filled(v)}
-        return DraftContext(self.caps, working, items, self.clan, guidance=self.guidance, current=self._values())
+        return DraftContext(self.caps, working, items, self.clan, guidance=self.guidance, current=self._values(),
+                            category=plan_category(getattr(self, "plan_out", None)))   # None unless it planned
 
     def stage_draft(self):
         if self.task == "regenerate_field" and self.fm[self.field]["class"] != "drafted":
