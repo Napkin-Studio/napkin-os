@@ -213,7 +213,9 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
 
 - `clan:bar {v: 1, items}` (app → shell, also on `clan:bar?`) — the whole list,
   each time it changes; the shell draws it and keeps nothing else. An item is
-  `{kind: 'button', id, label, primary?, disabled?, title?}`,
+  `{kind: 'button', id, label, primary?, disabled?, title?, menu?}` (`menu`: up to
+  6 `{id, label, title?}` choices the button opens, "Save · PDF ▾"; a choice sends
+  its own id, ids unique across the bar; past the two shown, choices go into More),
   `{kind: 'chip', label, tone?: 'ok' | 'warn', title?}` (a read-only fact) or
   `{kind: 'status', label, tone?: 'ok' | 'warn', locked?}` (the document's
   state in the app's own words: "Draft", "Ready to lock"; the OS bar's app slot

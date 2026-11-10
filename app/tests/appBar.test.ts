@@ -87,3 +87,16 @@ test('buttons and chips are drawn: two buttons shown, the rest for More', () => 
   assert.ok(!html.includes('>Three</button>'))
   assert.deepEqual(overflowButtons(bar).map(b => b.id), ['three'], 'a disabled button is not carried into More')
 })
+
+test('a button may carry a menu: drawn with ▾, its choices unique in the bar, carried into More when past the two', () => {
+  const bar = barFrom({ v: 1, items: [
+    { kind: 'button', id: 'redo', label: 'Redo', menu: [{ id: 'rewrite', label: 'Rewrite from the facts' }, { id: 'rewrite', label: 'Again' }, { id: 'extract', label: 'Read the ask again', title: 'From the start' }] },
+    { kind: 'button', id: 'save', label: 'Save · PDF', primary: true, menu: [{ id: 'pdf', label: 'PDF' }, { id: 'html', label: 'HTML file' }] },
+    { kind: 'button', id: 'more', label: 'More', menu: [{ id: 'clan', label: 'Napkin file (.clan)' }] },
+  ] })
+  const redo = bar[0] as Extract<(typeof bar)[number], { kind: 'button' }>
+  assert.deepEqual(redo.menu?.map(m => m.id), ['rewrite', 'extract'], 'a repeated id is left out')
+  const html = draw(bar)
+  assert.ok(html.includes('aria-haspopup="menu"') && html.includes('Save · PDF<span class="ch-btn-car" aria-hidden="true"> ▾</span>'))
+  assert.deepEqual(overflowButtons(bar).map(b => b.id), ['clan'])
+})

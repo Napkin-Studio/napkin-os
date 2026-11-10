@@ -22,7 +22,7 @@ export type BarTone = 'ok' | 'warn' | null
 
 export type BarItem =
   /** Something to do. Pressing it only tells the app; the app acts. */
-  | { kind: 'button'; id: string; label: string; primary: boolean; disabled: boolean; title: string }
+  | { kind: 'button'; id: string; label: string; primary: boolean; disabled: boolean; title: string; menu?: BarMenuItem[] }
   /** A read-only fact: "0 errors · 2 to supply", "$1.14 so far". */
   | { kind: 'chip'; label: string; tone: BarTone; title: string }
   /** The document's state in the app's words, for the slot's pill. At most one. */
@@ -36,8 +36,11 @@ export type BarItem =
 
 export type BarStatus = Extract<BarItem, { kind: 'status' }>
 
+/** One choice in a button's menu ("Save · PDF ▾" › HTML file): pressing it tells the app its id, as a button does. */
+export interface BarMenuItem { id: string; label: string; title: string }
+
 /** What one bar takes. The rest of an app's list is dropped, in order. */
-export const BAR_LIMITS = { button: 10, chip: 4, status: 1, gate: 1, mode: 1, label: 28, gateLabel: 200, id: 64, title: 140 } as const
+export const BAR_LIMITS = { button: 10, chip: 4, status: 1, gate: 1, mode: 1, label: 28, gateLabel: 200, id: 64, title: 140, menu: 6 } as const
 
 /** The buttons drawn in the bar itself; any more go into More. */
 export const BAR_BUTTONS_SHOWN = 2
@@ -95,7 +98,17 @@ export function barFrom(message: unknown): BarItem[] {
     if (idWhy) { console.warn(`app bar: ${kind} ${JSON.stringify(label)} ${idWhy}; left out`); continue }
     ids.add(id)
     count[kind]++
-    out.push({ kind, id, label, primary: it.primary === true, disabled: it.disabled === true, title })
+    // A button may open a menu of its own (the research's "Redo ▾", "Save · PDF ▾"): its choices take
+    // the same rules as a button (a label, a usable id unique in the whole bar), at most six.
+    const menu: BarMenuItem[] = []
+    for (const m of Array.isArray(it.menu) ? it.menu : []) {
+      const mi = (m ?? {}) as Record<string, unknown>
+      const ml = text(mi.label, BAR_LIMITS.label), mid = typeof mi.id === 'string' ? mi.id.trim() : ''
+      if (!ml || !mid || mid.length > BAR_LIMITS.id || ids.has(mid) || menu.length >= BAR_LIMITS.menu) { console.warn(`app bar: menu item ${JSON.stringify(ml)} of ${JSON.stringify(label)} left out`); continue }
+      ids.add(mid)
+      menu.push({ id: mid, label: ml, title: text(mi.title, BAR_LIMITS.title) })
+    }
+    out.push({ kind, id, label, primary: it.primary === true, disabled: it.disabled === true, title, ...(menu.length ? { menu } : {}) })
   }
   return out
 }
@@ -119,5 +132,7 @@ export function gateOf(bar: BarItem[]): Extract<BarItem, { kind: 'gate' }> | nul
 
 /** The buttons past the ones the bar has room for: More carries them, a disabled one not at all. */
 export function overflowButtons(bar: BarItem[]): Button[] {
+  // A menu button past the two carries its choices into More, each as a button of its own.
   return bar.filter((i): i is Button => i.kind === 'button').slice(BAR_BUTTONS_SHOWN).filter(b => !b.disabled)
+    .flatMap(b => b.menu ? b.menu.map(m => ({ kind: 'button' as const, id: m.id, label: m.label, title: m.title, primary: false, disabled: false })) : [b])
 }
