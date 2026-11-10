@@ -1945,8 +1945,8 @@ test('the screen and the PDF are one sheet: one builder, one measure, guides whe
   assert.match(build, /LAST_SHEET_PAGES=sheetPaginate\(blocks\)/)
   assert.match(build, /return sheetDoc\(ctx, LAST_SHEET_PAGES\)/)
   assert.match(fn(BM, 'sheetCtx'), /css:pageCss\(\)/)
-  assert.match(fn(BM, 'sheetCtx'), /cells:packSheet\(items\)/, 'the same grid the screen packs')
-  assert.match(fn(BM, 'renderStructured'), /packed=packSheet\(layoutItems\(\)\)/, 'the screen packs it the same way, meta row first')
+  assert.match(fn(BM, 'sheetCtx'), /cells:packSheet\(items, get\)/, 'the same grid the screen packs')
+  assert.match(fn(BM, 'renderStructured'), /packed=packSheet\(layoutItems\(\), get\)/, 'the screen packs it the same way, meta row first')
   assert.match(fn(BM, 'sheetMeasure'), /width:794px;visibility:hidden/, 'measured A4 wide, in this page (a frame in a sandboxed app cannot be read)')
   assert.doesNotMatch(fn(BM, 'sheetMeasure'), /iframe/)
   // A phone's rules shape the screen's sheet only, never the printed one or its probe.
@@ -2300,7 +2300,7 @@ test('a sign-in id reads as the person’s name on a source card', () => {
 
 test('the brief sheet opens with the mock’s meta row: Client, Project, Budget & scope, Version, four cells across', () => {
   const S = lift<{ packSheet(items: { key: string; sec: string; w: number }[]): { key?: string; version?: boolean; col: number; row: number; w: number }[] }>(
-    BM, ['packSheet', 'isMeta', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], GRID_COLS: 12 })
+    BM, ['packSheet', 'isMeta', 'metaLong', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], META_SHORT: 40, GRID_COLS: 12 })
   const out = S.packSheet([
     { key: 'project_name', sec: 'Identity', w: 6 }, { key: 'client', sec: 'Identity', w: 6 }, { key: 'job', sec: 'The brief', w: 12 },
     { key: 'budget_and_scope', sec: 'Execution', w: 12 },
@@ -2310,6 +2310,36 @@ test('the brief sheet opens with the mock’s meta row: Client, Project, Budget 
   assert.deepEqual(top.map(c => [c.col, c.w]), [[1, 3], [4, 3], [7, 3], [10, 3]])
   assert.ok(out.filter(c => c.key === 'job').every(c => c.row > 1), 'every other part packs below it')
   assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?'not given'/, 'an empty meta cell says “not given”')
+})
+
+test('a long client or budget turns the meta row two by two; on screen a cell shows two lines, its whole text on hover and in the panel', () => {
+  type Cell = { key?: string; version?: boolean; col: number; row: number; w: number }
+  const S = lift<{ packSheet(items: { key: string; sec: string; w: number }[], valOf?: (k: string) => unknown): Cell[] }>(
+    BM, ['packSheet', 'isMeta', 'metaLong', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], META_SHORT: 40, GRID_COLS: 12 })
+  const items = [{ key: 'client', sec: 'Identity', w: 6 }, { key: 'project_name', sec: 'Identity', w: 6 }, { key: 'budget_and_scope', sec: 'Execution', w: 12 }, { key: 'job', sec: 'The brief', w: 12 }]
+  const name = (c: Cell) => c.key ?? (c.version ? 'version' : '?')
+  const isTop = (c: Cell) => c.version || ['client', 'project_name', 'budget_and_scope'].includes(c.key ?? '')
+  const meta = (out: Cell[]) => out.filter(isTop).map(c => [name(c), c.col, c.row, c.w])
+  // Short values (the mock's): four cells across row 1.
+  const short = S.packSheet(items, k => ({ client: "McDonald's Ireland", project_name: 'Summer McFlurry', budget_and_scope: '€140k prod · OOH, Social, Film' } as Record<string, string>)[k])
+  assert.deepEqual(meta(short), [['client', 1, 1, 3], ['project_name', 4, 1, 3], ['budget_and_scope', 7, 1, 3], ['version', 10, 1, 3]])
+  assert.ok(short.filter(c => !isTop(c)).every(c => c.row >= 2), 'the parts pack below row 1')
+  // One long value (the owner's "Going For One"): two by two, each half the sheet; the parts start below.
+  const long = S.packSheet(items, k => (k === 'budget_and_scope' ? '€140k production budget. Activity runs June to August. Proposed deliverables, to confirm: a social-first video series' : 'Going For One'))
+  assert.deepEqual(meta(long), [['client', 1, 1, 6], ['project_name', 7, 1, 6], ['budget_and_scope', 1, 2, 6], ['version', 7, 2, 6]])
+  assert.ok(long.filter(c => !isTop(c)).every(c => c.row >= 3), 'the parts pack below both meta rows')
+  // A part the client copy leaves out does not count, and no value reader keeps the mock's row.
+  assert.deepEqual(meta(S.packSheet(items)).map(c => c[3]), [3, 3, 3, 3])
+  assert.deepEqual(meta(S.packSheet(items.filter(i => i.key !== 'budget_and_scope'), k => (k === 'budget_and_scope' ? 'x'.repeat(200) : 'ok'))), [['client', 1, 1, 3], ['project_name', 4, 1, 3], ['version', 7, 1, 3]])
+  // The screen clamp reaches the words: the clan-field's button (its own formatting context) and a plain
+  // value; it is screen-only and never on the printed page, which keeps every word.
+  const clamp = /@media screen\{\s*\.sheet\.a4:not\(\.page\) \.pgrid > \.row\.k-cell \.val:not\(:has\(\.clf\)\),\s*\.sheet\.a4:not\(\.page\) \.pgrid > \.row\.k-cell \.val \.clf\.txt-f\{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;/
+  assert.match(BM, clamp)
+  // The whole text: the cell's tooltip, and the Selected part panel when the cell is long.
+  assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?' title="'\+esc\(String\(v\)\)/)
+  assert.match(fn(BM, 'renderSelPart'), /isMeta\(f\.key\)&&metaLong\(\[f\.key\], get\)\?'<p class="sp-full">'/)
+  // Version's cell keeps its top rule on the second row of the 2×2.
+  assert.match(fn(BM, 'sheetCells'), /k-cell'\+\(c\.row===1\?' r1':''\)/)
 })
 
 // ── every line is a field (owner, 2026-11-09) ──────────────────────────────

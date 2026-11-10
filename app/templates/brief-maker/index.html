@@ -1027,6 +1027,7 @@
   .sp-built{display:grid;gap:8px}
   /* A list part's line, selected: lit on the sheet, its view in the panel (the OS's card) */
   .sp-line{display:grid;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--nd-line)}
+  .side-part .sp-full{margin:6px 0 10px;font:400 13.5px/1.5 var(--font-ui);color:var(--nd-ink2,var(--nd-ink));white-space:pre-line;overflow-wrap:anywhere}
   .sp-line .clf-rv{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper)}
   .sp-line .clf-rv .rv-title{font-size:15px}
   #fields clan-field.clf-ln[as="item"].sp-on{background:color-mix(in srgb,var(--clf-hl) 55%,transparent);box-shadow:0 2px 0 currentColor}
@@ -1110,9 +1111,15 @@
   .bf-also > summary::before{content:"▸ "}
   .bf-also[open] > summary::before{content:"▾ "}
   .bf-also .bf-used{margin:6px 0 0}
-  /* the meta row's cells hold short values (the mock): a long one is clamped to the mock's two lines on
-     screen, its whole text in the cell's tooltip and in Edit; the PDF keeps every word */
-  @media screen{ .sheet.a4:not(.page) .pgrid > .row.k-cell:is([data-clan-part="client"],[data-clan-part="project_name"],[data-clan-part="budget_and_scope"]) .val{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden} }
+  /* the meta row's cells hold short values (the mock): a long one is clamped to two lines on screen,
+     its whole text in the cell's tooltip and in the Selected part panel; the PDF keeps every word.
+     The clamp sits on the box that holds the words: a written part's words are inside the clan-field's
+     button (its own formatting context, which a clamp on .val never reaches), a plain one's in .val. */
+  @media screen{
+    .sheet.a4:not(.page) .pgrid > .row.k-cell .val:not(:has(.clf)),
+    .sheet.a4:not(.page) .pgrid > .row.k-cell .val .clf.txt-f{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}
+    .sheet.a4:not(.page) .pgrid > .row.k-cell .val .clf.txt-f{text-align:left;width:calc(100% + 8px)}
+  }
   .sheet.a4 .pgrid > .row.meta-version{cursor:default}
   .sheet.a4 .pgrid > .row.meta-version:hover{background-color:transparent}
   .sheet.a4 .pgrid > .row.k-cell .val.empty{font-style:normal;font-weight:600;color:var(--b-muted)}
@@ -3395,13 +3402,13 @@
       // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
       // Where the printed sheet starts a new page, a guide takes a row of its own (SHEET_BREAKS, measured
       // on the sheet as it prints, so the screen breaks where the PDF does).
-      var headRow=0, guided={}, packed=packSheet(layoutItems()), firstRow=null;
+      var headRow=0, guided={}, packed=packSheet(layoutItems(), get), firstRow=null;
       packed.forEach(function(p){ if(!p.head&&(firstRow===null||p.row<firstRow)) firstRow=p.row; });
       packed.forEach(function(p){
         var pg=SHEET_BREAKS.starts[p.row];
         if(pg&&!guided[p.row]){ guided[p.row]=1; var g=document.createElement('div'); g.className='pbreak'; g.setAttribute('aria-hidden','true');
           g.style.gridRow=String(guideRow(p.row)-1); g.innerHTML='<span>Page '+pg+' of '+SHEET_BREAKS.total+'</span>'; host.appendChild(g); }
-        if(p.version){ var vc=document.createElement('div'); vc.className='row k-cell r1 meta-version'; vc.style.gridColumn=p.col+' / span '+p.w; vc.style.gridRow=String(guideRow(p.row));
+        if(p.version){ var vc=document.createElement('div'); vc.className='row k-cell meta-version'+(p.row===firstRow?' r1':''); vc.style.gridColumn=p.col+' / span '+p.w; vc.style.gridRow=String(guideRow(p.row));
           vc.innerHTML='<div class="lab"><span>Version</span></div><div class="val">'+esc(versionLine())+'</div>'; host.appendChild(vc); return; }
         if(p.head){ var h=document.createElement('div'); h.className='sechead'; h.textContent=p.head; h.style.gridRow=String(guideRow(p.row)); host.appendChild(h); headRow=p.row; return; }
         var i=fieldIndex(p.key), f=FIELDS[i];
@@ -4229,16 +4236,27 @@
     });
     return out;
   }
-  // The sheet's meta row (the mock): Client, Project, Budget & scope and Version, always four cells
-  // across the top; every other part packs below it. The three parts stay parts (select, edit,
+  // The sheet's meta row (the mock): Client, Project, Budget & scope and Version, four cells across
+  // the top; every other part packs below it. The three parts stay parts (select, edit,
   // Confidential); they are not moved or resized, and Version is the sheet's own.
-  var META_KEYS=['client','project_name','budget_and_scope'];
+  // The mock's cells hold a short line. When one holds more than META_SHORT characters (about two
+  // lines at a quarter of the A4 sheet) the four cells go two by two, each half the sheet wide, so
+  // a long client or budget reads in a few lines instead of one narrow column of fifteen. On screen
+  // a cell shows two lines at most (the whole text on hover and in the Selected part panel); the
+  // printed sheet keeps every word on the same 2×2 grid.
+  var META_KEYS=['client','project_name','budget_and_scope'], META_SHORT=40;
   function isMeta(key){ return META_KEYS.indexOf(key)!==-1; }
-  function packSheet(items){
+  function metaLong(keys, valOf){
+    return !!valOf&&keys.some(function(k){ var v=valOf(k); return String(v==null?'':Array.isArray(v)?v.join(' '):v).trim().length>META_SHORT; });
+  }
+  // items: layoutItems(); valOf(key) -> the part's value (to tell a long meta cell), optional.
+  function packSheet(items, valOf){
     var have={}; items.forEach(function(it){ have[it.key]=1; });
-    var out=META_KEYS.filter(function(k){ return have[k]; }).map(function(k,i){ return {key:k, sec:'Identity', col:1+i*3, row:1, w:3, h:1, meta:true}; });
-    out.push({version:true, col:1+out.length*3, row:1, w:3, h:1});
-    layoutPack(items.filter(function(it){ return !isMeta(it.key); })).forEach(function(p){ var q={}; for(var k in p) q[k]=p[k]; q.row=p.row+1; out.push(q); });
+    var keys=META_KEYS.filter(function(k){ return have[k]; }), w=metaLong(keys, valOf)?6:3, per=12/w;
+    var out=keys.map(function(k){ return {key:k, sec:'Identity', h:1, meta:true}; }).concat([{version:true, h:1}]);
+    out.forEach(function(c,i){ c.col=1+(i%per)*w; c.row=1+Math.floor(i/per); c.w=w; });
+    var rows=Math.ceil(out.length/per);
+    layoutPack(items.filter(function(it){ return !isMeta(it.key); })).forEach(function(p){ var q={}; for(var k in p) q[k]=p[k]; q.row=p.row+rows; out.push(q); });
     return out;
   }
   function versionLine(){ var n=isResearchFed()?(upCounts().pins||0):0; return docVersion()+(n?' · '+n+' '+(n===1?'fact':'facts')+' attached':''); }
@@ -4398,6 +4416,8 @@
     el.hidden=false;
     el.innerHTML='<h4>Selected part<button type="button" class="side-link" data-sp="done" title="Let go of this part (Esc)">Done</button></h4>'
       +'<b class="sp-name">'+esc(headOf(f))+'</b>'
+      // a meta cell shows two lines on the sheet: the panel carries its whole text
+      +(isMeta(f.key)&&metaLong([f.key], get)?'<p class="sp-full">'+esc(String(get(f.key)))+'</p>':'')
       +'<div class="sp-acts">'
       +(wr?'<button type="button" class="sp-btn sp-edit" data-sp="edit">Edit</button>':'')
       +(!A?'<button type="button" class="sp-btn" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(WRITER)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
@@ -4866,7 +4886,7 @@
     return cells.filter(function(c){ return map[c.row]; }).map(function(c){
       var at='grid-column:'+c.col+' / span '+c.w+';grid-row:'+map[c.row], r=' data-r="'+c.row+'"';
       if(c.head){ headRow=c.row; return '<div class="sechead"'+r+' style="'+at+'">'+esc(c.head)+'</div>'; }
-      if(c.version) return '<div class="row k-cell r1"'+r+' style="'+at+';--w:'+c.w+'"><div class="lab"><span>Version</span></div><div class="val">'+esc(ctx.version||'')+'</div></div>';
+      if(c.version) return '<div class="row k-cell'+(c.row===1?' r1':'')+'"'+r+' style="'+at+';--w:'+c.w+'"><div class="lab"><span>Version</span></div><div class="val">'+esc(ctx.version||'')+'</div></div>';
       var f=ctx.fieldOf(c.key); if(!f) return '';
       var v=ctx.get(f.key), has=hasVal(v), conf=arr(ctx.conf).indexOf(f.key)!==-1, mk=exportMarkHtml((ctx.marks||{})[f.key]);
       var st=ctx.styleOf?ctx.styleOf(f.key):'', sa=st?' style="'+st+'"':'';
@@ -4963,7 +4983,7 @@
   // The context sheetDoc needs, from the brief as it is now. logos/boards are inlined by the caller.
   function sheetCtx(copy, extra){
     var items=sheetItems(copy), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
-    var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:packSheet(items), items:items, version:versionLine(),
+    var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:packSheet(items, get), items:items, version:versionLine(),
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
       look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
       names:[clientName(), agencyName()].filter(Boolean).join(' · '), meta:[clientName(), docVersion(), fmtDay(lastWhen())].filter(Boolean).join(' · '),
