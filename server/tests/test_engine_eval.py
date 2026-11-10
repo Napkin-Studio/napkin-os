@@ -567,26 +567,31 @@ def test_reserves_by_purpose_are_the_protocols(tmp_path):
         assert log.reserve(p) == r
 
 
-def test_a_failed_call_is_logged_at_its_reserve_not_at_zero_and_an_unknown_cost_too(tmp_path):
+def test_a_call_with_no_cost_figure_is_logged_at_its_reserve_and_one_with_a_figure_at_the_figure(tmp_path):
+    """F3: the reserve stands in only when there is no envelope (no usable figure); a failed call with a figure is that figure."""
     log = ee.replay_cost_log(tmp_path, 24.0)
     h = log.reserve("draft_brief_whole")
-    log.settle(h, {"purpose": "draft_brief_whole", "ok": False, "error": "timeout"}, failed=True)
+    log.settle(h, {"purpose": "draft_brief_whole", "ok": False, "error": "timeout"})
     h = log.reserve("explain_flags")
     log.settle(h, {"purpose": "explain_flags", "ok": True, "cost_usd": None})
     h = log.reserve("rank_smp")
-    log.settle(h, {"purpose": "rank_smp", "ok": False, "cost_usd": 0.02}, failed=True)
+    log.settle(h, {"purpose": "rank_smp", "ok": False, "cost_usd": 0.02})
     h = log.reserve("rank_smp")
     log.settle(h, {"purpose": "rank_smp", "ok": True, "cost_usd": 0.02})
+    h = log.reserve("rank_smp")
+    log.settle(h, {"purpose": "rank_smp", "ok": False, "cost_usd": float("nan")})       # not a usable figure
+    h = log.reserve("rank_smp")
+    log.settle(h, {"purpose": "rank_smp", "ok": False, "cost_usd": True})
     rows = ee.read_log(tmp_path / "cost_log.jsonl")
-    assert [r["cost_usd"] for r in rows] == [0.5, 0.25, 0.10, 0.02]
-    assert [r["cost_assumed_at_reserve"] for r in rows] == [True, True, True, False]
-    assert log.reserved == 0 and abs(log.spent - 0.87) < 1e-9
+    assert [r["cost_usd"] for r in rows] == [0.5, 0.25, 0.02, 0.02, 0.10, 0.10]
+    assert [r["cost_assumed_at_reserve"] for r in rows] == [True, True, False, False, True, True]
+    assert log.reserved == 0 and abs(log.spent - 0.99) < 1e-9
 
 
 def test_a_failed_call_that_reports_more_than_its_reserve_is_logged_at_what_it_reported(tmp_path):
     log = ee.replay_cost_log(tmp_path, 24.0)
     h = log.reserve("rank_smp")
-    log.settle(h, {"purpose": "rank_smp", "ok": False, "cost_usd": 0.4}, failed=True)
+    log.settle(h, {"purpose": "rank_smp", "ok": False, "cost_usd": 0.4})
     assert abs(log.spent - 0.4) < 1e-9
 
 
@@ -1364,3 +1369,198 @@ def test_chosen_in_plans_group_reads_each_raters_grouping():
     assert got == {"briefs": 1, "per_rater": {"sonnet": 1, "opus": 0}, "both_raters": 0}
     r["opus"] = {"groups": "bad"}
     assert ee.chosen_in_plan_group(key, lambda who, item: r[who], arms)["briefs"] == 0
+
+
+# =============================================================================================== F3: infrastructure errors
+def use_fake_cli(monkeypatch, tmp_path):
+    from pathlib import Path
+    monkeypatch.setattr(ee, "CLAUDE", str(Path(__file__).parent / "fake_claude.py"))
+    monkeypatch.setattr(ee, "RATER_CWD", tmp_path / "cwd")
+    monkeypatch.setitem(ee.CFG, "INFRA_BACKOFF_S", 0)
+
+
+SCHEMA_WORD = {"type": "object", "additionalProperties": False, "required": ["word"], "properties": {"word": {"type": "string"}}}
+
+
+def one_call(tmp_path, purpose="rank_smp"):
+    cost = ee.replay_cost_log(tmp_path, 24.0)
+    port, client = ee.make_port(cost)
+    return ee.Caller(port, client, "c01", "B"), cost
+
+
+def test_envelope_classification_separates_the_service_from_the_models_work():
+    reason = ee.infra_reason
+    assert reason({"is_error": True, "result": "API Error: 529 overloaded"}).startswith("is_error")
+    assert reason({"is_error": True, "subtype": "success", "result": "Claude AI usage limit reached"})
+    assert reason({"is_error": True, "result": "Invalid API key"}) and reason({"is_error": False}) and reason({"result": None, "is_error": False})
+    assert reason({"is_error": False, "result": "{}"}) is None and reason({"is_error": False, "result": ""}) is None
+    for sub in ee.MODEL_FAILURE_SUBTYPES:                       # the model's own failures stay model failures
+        assert reason({"is_error": True, "subtype": sub, "result": "x"}) is None
+
+
+def test_an_is_error_envelope_is_infrastructure_logged_at_its_own_figure_and_never_a_model_failure(tmp_path, monkeypatch):
+    use_fake_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "is_error")
+    call, cost = one_call(tmp_path)
+    with pytest.raises(ee.InfraError) as ei:
+        call("rank_smp", "System.", {"x": 1}, SCHEMA_WORD)
+    assert "overloaded" in str(ei.value) and not isinstance(ei.value, ee.StopRun)
+    row = ee.read_log(tmp_path / "cost_log.jsonl")[0]
+    assert row["infra"] and row["ok"] is False and row["cost_usd"] == 0.0 and row["cost_assumed_at_reserve"] is False    # the envelope's figure, not the reserve
+    assert cost.reserved == 0 and call.records[0]["ok"] is False
+
+
+def test_a_crash_with_no_envelope_is_infrastructure_logged_at_the_reserve(tmp_path, monkeypatch):
+    use_fake_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "crash")
+    call, cost = one_call(tmp_path)
+    with pytest.raises(ee.InfraError) as ei:
+        call("draft_brief_whole", "System.", {"x": 1}, SCHEMA_WORD)
+    assert "no envelope" in str(ei.value)
+    row = ee.read_log(tmp_path / "cost_log.jsonl")[0]
+    assert row["infra"] and row["cost_assumed_at_reserve"] is True and row["cost_usd"] == 0.5        # only now is the reserve used
+
+
+def test_a_timeout_is_infrastructure_and_the_process_is_killed(tmp_path, monkeypatch):
+    use_fake_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "hang")
+    monkeypatch.setitem(ee.CFG, "CALL_TIMEOUT_S", 1)
+    call, cost = one_call(tmp_path)
+    with pytest.raises(ee.InfraError) as ei:
+        call("rank_smp", "System.", {"x": 1}, SCHEMA_WORD)
+    assert "timeout" in str(ei.value)
+    row = ee.read_log(tmp_path / "cost_log.jsonl")[0]
+    assert row["infra"] and row["cost_assumed_at_reserve"] is True and row["cost_usd"] == 0.10
+
+
+def test_a_truncation_stays_a_model_failure_logged_at_its_figure_and_resets_the_infra_count(tmp_path, monkeypatch):
+    from napkin.model import ModelError
+    use_fake_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "truncate")
+    call, cost = one_call(tmp_path)
+    cost.gate.streak = 2
+    with pytest.raises(ModelError) as ei:
+        call("rank_smp", "System.", {"x": 1}, SCHEMA_WORD)
+    assert ei.value.kind == "truncated" and not isinstance(ei.value, ee.InfraError)
+    row = ee.read_log(tmp_path / "cost_log.jsonl")[0]
+    assert not row.get("infra") and row["ok"] is True and row["cost_assumed_at_reserve"] is False
+    assert cost.gate.streak == 0                       # the CLI answered: not an outage
+
+
+def test_an_infrastructure_error_does_not_use_up_a_run_and_writes_no_failed_final(tmp_path, monkeypatch):
+    monkeypatch.setitem(ee.CFG, "INFRA_BACKOFF_S", 0)
+    p, seen = tmp_path / "x.json", []
+
+    def fn(caller, deps):
+        seen.append(1)
+        if len(seen) < 3:
+            raise ee.InfraError("overloaded")
+        return {"v": 1}
+    d = ee.execute_arm(p, fn, lambda: Fake({}), {})
+    assert d["status"] == "ok" and d["runs"] == 1 and d["failed_runs"] == [] and len(seen) == 3     # the two outages cost no run
+
+
+def test_an_infra_stop_leaves_the_arm_unsettled_and_never_failed_final(tmp_path, monkeypatch):
+    monkeypatch.setitem(ee.CFG, "INFRA_BACKOFF_S", 0)
+    p = tmp_path / "x.json"
+
+    def fn(caller, deps):
+        raise ee.InfraStop("3 in a row")
+    with pytest.raises(ee.StopRun):
+        ee.execute_arm(p, fn, lambda: Fake({}), {})
+    assert not p.exists()
+
+    def endless(caller, deps):
+        raise ee.InfraError("down")
+    with pytest.raises(ee.InfraStop):
+        ee.execute_arm(p, endless, lambda: Fake({}), {})            # a caller with no gate is still never endless
+    assert not p.exists()
+
+
+def test_three_infra_errors_in_a_row_stop_the_replay_cleanly_and_the_same_command_resumes(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    use_fake_cli(monkeypatch, tmp_path)
+    monkeypatch.setitem(ee.CFG, "REPLAY_WORKERS", 1)
+    src, out = fake_source(tmp_path, ids=("c01", "t01")), tmp_path / "out"
+    A = SimpleNamespace(out=str(out), src=str(src), max_usd=24.0, only=None, force=False, reason=None)
+    ee.cmd_select(A)
+    monkeypatch.setenv("FAKE_MODE", "is_error")
+    cost = ee._run_briefs(A, None)
+    assert "3 infrastructure errors in a row" in cost.stopped and "run the same command again" in cost.stopped
+    rows = ee.read_log(out / "cost_log.jsonl")
+    assert len(rows) == 3 and all(r["infra"] and r["cost_usd"] == 0.0 for r in rows)        # it stopped at the third, not later
+    arms = ee.load_arms(out, ["c01", "t01"])
+    assert not any(a["status"] == "FAILED_final" for b in arms.values() for a in b.values()) and not any(arms.values())
+    stop = json.loads((out / "infra_stop.json").read_text())
+    assert stop["where"] == "replay" and "infrastructure" in stop["message"]
+    monkeypatch.delenv("FAKE_MODE")
+    cost2 = ee._run_briefs(A, None)                  # a fresh process: the service is back
+    assert cost2.stopped is None
+    arms = ee.load_arms(out, ["c01", "t01"])
+    assert all(a["status"] in ee.OK_STATUS and a["runs"] == 1 for b in arms.values() for a in b.values())
+
+
+def test_a_good_answer_between_outages_resets_the_count():
+    g = ee.InfraGate()
+    assert isinstance(g.hit(ee.InfraError("a")), ee.InfraError) and not isinstance(g.hit(ee.InfraError("b")), ee.InfraStop)
+    g.ok()
+    assert not isinstance(g.hit(ee.InfraError("c")), ee.InfraStop) and not isinstance(g.hit(ee.InfraError("d")), ee.InfraStop)
+    stop = g.hit(ee.InfraError("e"))
+    assert isinstance(stop, ee.InfraStop)
+    with pytest.raises(ee.InfraStop):
+        g.check()                                                  # once halted every call refuses at once
+
+
+def test_a_rater_infrastructure_error_uses_no_reask_and_a_run_of_them_stops_without_a_missing_judgement(tmp_path, monkeypatch):
+    monkeypatch.setitem(ee.CFG, "INFRA_BACKOFF_S", 0)
+    seq = iter([ee.InfraError("down"), ee.InfraError("down"), None, {"better": "X"}])
+
+    def caller(*a):
+        v = next(seq)
+        if isinstance(v, Exception):
+            raise v
+        return v
+    got, asks = ee.rate_item("sonnet", {"item": "i", "kind": "pair", "prompt": "p"}, None, caller)
+    assert got == {"better": "X"} and asks == 2                    # two outages, one unusable answer, one good: 2 asks
+    all_down = lambda *a: (_ for _ in ()).throw(ee.InfraError("down"))
+    with pytest.raises(ee.InfraStop):
+        ee.rate_item("sonnet", {"item": "i", "kind": "pair", "prompt": "p"}, None, all_down)
+    stop = lambda *a: (_ for _ in ()).throw(ee.InfraStop("3 in a row"))
+    with pytest.raises(ee.InfraStop):
+        ee.rate_item("sonnet", {"item": "i", "kind": "pair", "prompt": "p"}, None, stop)
+
+
+def test_rater_call_logs_an_is_error_envelope_at_its_figure_and_a_crash_at_the_reserve(tmp_path, monkeypatch):
+    use_fake_cli(monkeypatch, tmp_path)
+    log = ee.rater_cost_log(tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "is_error")
+    with pytest.raises(ee.InfraError):
+        ee.rater_call("sonnet", "p", log, "j")
+    monkeypatch.setenv("FAKE_MODE", "crash")
+    with pytest.raises(ee.InfraError):
+        ee.rater_call("opus", "p", log, "j")
+    rows = ee.read_log(tmp_path / "rater_cost_log.jsonl")
+    assert [(r["cost_usd"], r["cost_assumed_at_reserve"], r["infra"]) for r in rows] == [(0.0, False, True), (0.5, True, True)]
+    monkeypatch.setenv("FAKE_MODE", "truncate")      # a model-side oddity: an answer the CLI gave, so not an outage
+    assert ee.rater_call("sonnet", "p", log, "j") is None
+    assert log.gate.streak == 0
+
+
+def test_a_rater_answered_by_another_model_fails_loudly_and_is_never_scored(tmp_path, monkeypatch):
+    use_fake_cli(monkeypatch, tmp_path)
+    log = ee.rater_cost_log(tmp_path)
+    monkeypatch.setenv("FAKE_MODEL_USAGE", "claude-haiku-4-5")
+    with pytest.raises(ee.ModelMismatch) as ei:
+        ee.rater_call("opus", "p", log, "j")
+    assert "claude-haiku-4-5" in str(ei.value) and "opus" in str(ei.value)
+    with pytest.raises(ee.ModelMismatch):              # rate_item never swallows it as an unusable answer
+        ee.rate_item("opus", {"item": "i", "kind": "pair", "prompt": "p"}, log)
+    row = ee.read_log(tmp_path / "rater_cost_log.jsonl")[0]
+    assert row["ok"] is False and row["error"] == "model mismatch" and row["models_seen"] == ["claude-haiku-4-5"]
+    monkeypatch.delenv("FAKE_MODEL_USAGE")
+    assert ee.rater_call("opus", "p", log, "j") == {"better": "X", "reason": "fake"}
+    good = ee.read_log(tmp_path / "rater_cost_log.jsonl")[-1]
+    assert good["model_checked"] is True and good["models_seen"] == ["claude-opus-5-5"]
+    monkeypatch.setenv("FAKE_NO_MODEL_USAGE", "1")      # no usage to check: said so in the log, not silently passed
+    ee.rater_call("opus", "p", log, "j")
+    assert ee.read_log(tmp_path / "rater_cost_log.jsonl")[-1]["model_checked"] is False

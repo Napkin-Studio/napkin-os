@@ -87,6 +87,10 @@ CFG = {
     "REPLAY_WORKERS": 2,           # calls in flight at once
     "RATER_WORKERS": 2,
     "CALL_TIMEOUT_S": 900,
+    # F3: infrastructure errors (no envelope, is_error, auth, usage limit, overload, timeout) never count against an
+    # arm or a rater; this many in a row stop the run cleanly. The wait between tries grows with the streak.
+    "INFRA_STOP_AFTER": 3,
+    "INFRA_BACKOFF_S": 20,
 }
 REPLAY_MODEL_ID = "claude-sonnet-5-5"
 
@@ -679,14 +683,58 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class StopRun(Exception):
+    """The run stops here and can be resumed (R5 budget, or an outage): not a failed arm."""
+
+
+class InfraError(RuntimeError):
+    """The CLI or the service is down or refusing (no JSON envelope, `is_error` with no model output, auth, usage
+    limit or overload, a timeout). It says nothing about the model's work: it is never an arm failure and never uses
+    up an arm's two runs or a rater's re-asks (R6, R2)."""
+
+
+class InfraStop(StopRun, InfraError):
+    """Too many infrastructure errors in a row (CFG INFRA_STOP_AFTER): the whole run stops, cleanly."""
+
+
+class InfraGate:
+    """Counts infrastructure errors in a row, across threads; any answer from the CLI resets it. At the limit it
+    halts: every later call refuses at once (no spend), so every worker stops."""
+
+    def __init__(self):
+        self.streak, self.halted, self.recent, self.lock = 0, None, [], threading.Lock()
+
+    def ok(self):
+        with self.lock:
+            self.streak = 0
+
+    def check(self):
+        if self.halted:
+            raise InfraStop(self.halted)
+
+    def hit(self, err: InfraError) -> InfraError:
+        """Count one; -> the error to raise (an InfraStop at the limit)."""
+        with self.lock:
+            self.streak += 1
+            self.recent = (self.recent + [str(err)[:200]])[-CFG["INFRA_STOP_AFTER"]:]
+            if self.streak >= CFG["INFRA_STOP_AFTER"]:
+                self.halted = (f"stopped after {self.streak} infrastructure errors in a row (the CLI or the service is not "
+                               f"answering; last: {self.recent[-1]}). Nothing was marked failed and no arm or rating was "
+                               f"used up: run the same command again when the CLI answers, and it resumes.")
+                return InfraStop(self.halted)
+        return err
+
+
 class CostLog:
     """A cost log with a hard cap and reservation (R5): `reserve` refuses a call unless spent + reserved in flight +
-    this call's reserve fits the cap, under the lock; `settle` releases the reserve and logs the call; a call that
-    failed (or whose cost is unknown) is logged at its reserve, not at 0, because the CLI may have spent."""
+    this call's reserve fits the cap, under the lock; `settle` releases the reserve and logs the call. The cost is the
+    envelope's own `total_cost_usd` whenever it is a number, failed call or not; only a call with no envelope (or no
+    usable figure) is logged at its reserve, not at 0, because the CLI may have spent."""
 
     def __init__(self, path: Path, max_usd: float, hard_cap: float, reserve_for):
         self.path, self.cap, self.reserve_for = path, min(max_usd, hard_cap), reserve_for
         self.spent, self.reserved, self.lock = 0.0, 0.0, threading.Lock()
+        self.gate = InfraGate()
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             self.spent = sum(json.loads(l).get("cost_usd") or 0 for l in path.read_text().splitlines() if l.strip())
@@ -700,11 +748,11 @@ class CostLog:
             self.reserved += r
         return r
 
-    def settle(self, held: float, rec: dict, failed: bool = False):
+    def settle(self, held: float, rec: dict):
         cost = rec.get("cost_usd")
-        assumed = failed or not isinstance(cost, (int, float)) or isinstance(cost, bool)
+        assumed = not _is_cost(cost)
         if assumed:
-            cost = max(held, cost if isinstance(cost, (int, float)) and not isinstance(cost, bool) else 0)
+            cost = held
         rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()), **rec, "cost_usd": cost,
                "cost_assumed_at_reserve": bool(assumed), "reserve_usd": held}
         with self.lock:
@@ -811,7 +859,7 @@ def run_claude(argv: list[str], stdin: str, system: str | None, timeout: float, 
                 except ProcessLookupError:
                     pass
                 proc.communicate()
-                raise RuntimeError(f"the claude CLI did not answer within {timeout:g}s") from None
+                raise InfraError(f"the claude CLI did not answer within {timeout:g}s (timeout)") from None
     finally:
         for fd in (rfd, wfd):
             if fd is not None:
@@ -819,10 +867,38 @@ def run_claude(argv: list[str], stdin: str, system: str | None, timeout: float, 
     try:
         env = json.loads(out)
     except json.JSONDecodeError:
-        raise RuntimeError(f"the claude CLI exited {proc.returncode} without a JSON result: {(err or '').strip()[-200:]}") from None
+        raise InfraError(f"the claude CLI exited {proc.returncode} without a JSON result (no envelope): "
+                         f"{(err or '').strip()[-200:]}") from None
     if not isinstance(env, dict):
-        raise RuntimeError("the claude CLI result is not an object")
+        raise InfraError("the claude CLI result is not an object (no envelope)")
     return env
+
+
+# the CLI's own failures that are about the model's output, not the service: kept as model failures
+MODEL_FAILURE_SUBTYPES = ("error_max_turns", "error_max_structured_output_retries")
+
+
+def _is_cost(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0
+
+
+def infra_reason(env: dict) -> str | None:
+    """Why this envelope is an infrastructure error (F3), or None when it carries a model answer (or a failure of the
+    model's own work: validation, truncation and a missing part are judged by the caller, never here). `is_error`
+    with no model output (auth, usage limit, overload, an API error) is infrastructure; so is an envelope with no
+    result at all."""
+    if env.get("is_error"):
+        if env.get("subtype") in MODEL_FAILURE_SUBTYPES:
+            return None
+        return f"is_error: {str(env.get('result') or env.get('subtype') or 'no detail')[:200]}"
+    if not isinstance(env.get("result"), str):
+        return "the envelope carries no result"
+    return None
+
+
+def _models_of(env: dict) -> list[str]:
+    mu = env.get("modelUsage")
+    return sorted(mu) if isinstance(mu, dict) else []
 
 
 def _usage(env: dict) -> tuple[int, int]:
@@ -863,6 +939,7 @@ class CliClient:
         first = messages[0]["content"] if isinstance(messages[0]["content"], str) else ""
         m = re.match(r"Task: (\w+)", first)
         purpose = m.group(1) if m else "unknown"
+        self.cost.gate.check()                  # a halted run (outage) refuses at once, no spend
         held = self.cost.reserve(purpose)       # raises BudgetExceeded before any spend
         sys_text = "".join(b["text"] for b in system) if isinstance(system, list) else system
         argv = [CLAUDE, "-p", "--model", model, "--output-format", "json", "--no-session-persistence", "--setting-sources", "",
@@ -880,16 +957,25 @@ class CliClient:
         try:
             env = run_claude(argv, self._flatten(messages), sys_text, CFG["CALL_TIMEOUT_S"], self.cwd_root)
         except Exception as e:
-            self.cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "ok": False, "error": str(e)[:200]}, failed=True)
-            self._note(rec, held, False, None, str(e)[:200], t0, fe)
-            raise
+            # no envelope: the cost is unknown, so the call is logged at its reserve; infrastructure, not the model
+            err = e if isinstance(e, InfraError) else InfraError(f"{type(e).__name__}: {str(e)[:200]}")
+            self.cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "ok": False, "infra": True, "error": str(err)[:200]})
+            self._note(rec, held, False, None, str(err)[:200], t0, fe)
+            raise self.cost.gate.hit(err) from e
         i, o = _usage(env)
-        ok = not env.get("is_error") and isinstance(env.get("result"), str)
-        cost = env.get("total_cost_usd")
+        cost = env.get("total_cost_usd") if _is_cost(env.get("total_cost_usd")) else None
+        reason = infra_reason(env)
+        if reason:      # the envelope's own figure is logged when there is one; the reserve only when there is none
+            self.cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "in_tokens": i, "out_tokens": o,
+                                    "cost_usd": cost, "ok": False, "infra": True, "error": reason[:200]})
+            self._note(rec, held, False, cost, reason[:200], t0, fe, i, o)
+            raise self.cost.gate.hit(InfraError(reason))
+        self.cost.gate.ok()
+        ok = not env.get("is_error")
         err = None if ok else str(env.get("result") or env.get("subtype"))[:200]
         self.cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "in_tokens": i, "out_tokens": o,
-                                "cost_usd": cost, "ok": ok, "error": err}, failed=not ok)
-        self._note(rec, held, ok, cost if ok else max(held, cost or 0), err, t0, fe, i, o)
+                                "cost_usd": cost, "ok": ok, "error": err})
+        self._note(rec, held, ok, cost, err, t0, fe, i, o)
         if not ok:
             raise RuntimeError(f"claude CLI: {str(env.get('result') or env.get('subtype'))[:300]}")
         text = env["result"]
@@ -941,9 +1027,10 @@ class Caller:
                                   max_tokens=MAX_TOKENS.get(purpose, MAX_TOKENS_DEFAULT))
         except BaseException as e:
             err = f"{type(e).__name__}: {str(e)[:300]}"
-            # the port wraps any client error in a ModelError: a budget stop must stay a budget stop
-            cause = e if isinstance(e, BudgetExceeded) else getattr(e, "__cause__", None)
-            if isinstance(cause, BudgetExceeded):
+            # the port wraps any client error in a ModelError: a budget stop must stay a budget stop, and an
+            # infrastructure error an infrastructure error (never a model failure)
+            cause = e if isinstance(e, (BudgetExceeded, InfraError)) else getattr(e, "__cause__", None)
+            if isinstance(cause, (BudgetExceeded, InfraError)):
                 raise cause from None
             raise
         finally:
@@ -1169,14 +1256,11 @@ def arm_specs() -> list[tuple]:
 OK_STATUS = ("ok", "no_gate")
 
 
-class StopRun(Exception):
-    """The budget stops the run (R5): not a failed arm."""
-
-
 def execute_arm(path: Path, fn, make_caller, deps: dict, force: bool = False, tries: int = 2) -> dict:
     """Run one arm at most twice, each with the port's own retry (R6). A settled arm (ok, no_gate, FAILED_final) is kept
     unless `force`. A budget stop is written as `budget_stopped` and raised as StopRun. An arm whose dependency
-    failed for good is FAILED_final without a call."""
+    failed for good is FAILED_final without a call. An infrastructure error (F3) is not a failed run: it writes
+    nothing, does not use up a run, and is tried again after a wait; INFRA_STOP_AFTER in a row stop the whole run."""
     if path.exists() and not force:
         d = json.loads(path.read_text())
         if d["status"] in OK_STATUS + ("FAILED_final",):
@@ -1187,7 +1271,9 @@ def execute_arm(path: Path, fn, make_caller, deps: dict, force: bool = False, tr
         path.write_text(json.dumps(d, indent=1, ensure_ascii=False))
         return d
     failed, calls = [], []
-    for n in range(1, tries + 1):
+    n, infra_here = 0, 0
+    while n < tries:
+        n += 1
         caller = make_caller()
         try:
             res = fn(caller, deps)
@@ -1196,6 +1282,17 @@ def execute_arm(path: Path, fn, make_caller, deps: dict, force: bool = False, tr
             d = {"status": "budget_stopped", "runs": n, "calls": calls, "failed_runs": failed, "error": str(e)}
             path.write_text(json.dumps(d, indent=1, ensure_ascii=False))
             raise StopRun(str(e)) from e
+        except InfraStop:
+            raise       # the whole run stops; nothing is written: the arm is unsettled, not failed
+        except InfraError as e:
+            # an outage says nothing about the arm: this run does not count, nothing is written, and the same run is
+            # tried again after a wait (F3); the gate has already counted it towards the stop
+            infra_here += 1
+            n -= 1
+            if infra_here >= CFG["INFRA_STOP_AFTER"] + 1:       # a caller with no gate of its own: still never endless
+                raise InfraStop(f"{infra_here} infrastructure errors on one arm: {e}") from e
+            time.sleep(CFG["INFRA_BACKOFF_S"] * infra_here)
+            continue
         except Exception as e:      # noqa: BLE001 - a failed arm: the second run, then FAILED_final
             calls += caller.records
             failed.append({"run": n, "error": f"{type(e).__name__}: {str(e)[:300]}"})
@@ -1289,14 +1386,25 @@ def _run_briefs(a, only, force=False, skip=()):
         except StopRun as e:
             stop.set()
             msg.append(str(e))
-            print(f"{inp['id']}: BUDGET STOP: {e}", flush=True)
+            if isinstance(e, InfraStop):
+                write_infra_stop(out, "replay", str(e), inp["id"])
+            print(f"{inp['id']}: {'INFRASTRUCTURE STOP' if isinstance(e, InfraStop) else 'BUDGET STOP'}: {e}", flush=True)
             return
         print(f"{inp['id']}: " + " ".join(f"{k}={v['status']}" for k, v in arms.items()) + f"  (spent {cost.spent:.2f} USD)", flush=True)
 
     with ThreadPoolExecutor(CFG["REPLAY_WORKERS"]) as ex:
         list(ex.map(one, load_inputs(out, only)))
-    print(f"spent {cost.spent:.2f} USD in the cost log" + (f"; stopped by the budget: {msg[0]}" if msg else ""))
+    print(f"spent {cost.spent:.2f} USD in the cost log" + (f"; STOPPED: {msg[0]}" if msg else ""))
+    cost.stopped = msg[0] if msg else None
     return cost
+
+
+def write_infra_stop(out: Path, where: str, message: str, at: str | None = None):
+    """The resumable state of an outage stop: what stopped, where, when. Settled arms and ratings are untouched; the
+    unsettled one has no file, so the same command run again picks up exactly there."""
+    (out / "infra_stop.json").write_text(json.dumps({"where": where, "at": at, "message": message,
+                                                     "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                                     "resume": "run the same command again"}, indent=1))
 
 
 def read_log(path: Path) -> list[dict]:
@@ -1530,18 +1638,46 @@ def rater_argv(rater: str) -> list[str]:
             "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands", "--effort", CFG["RATER_EFFORT"]]
 
 
+class ModelMismatch(RuntimeError):
+    """The envelope's model usage does not name the model that was asked for (F9): the rating would be by another rater.
+    Never retried, never scored: the run stops."""
+
+
+def model_matches(env: dict, want: str) -> bool | None:
+    """Whether the envelope's `modelUsage` names the requested model; None when it carries no usage to check."""
+    seen = _models_of(env)
+    return None if not seen else any(m == want or m.startswith(want) for m in seen)
+
+
 def rater_call(rater: str, prompt: str, cost: CostLog, job: str, kind: str = "pair", n: int | None = None):
-    """One fresh call. -> (obj or None, the cost record). Raises BudgetExceeded before any spend; a failure is logged at
-    its reserve."""
+    """One fresh call. -> the answer, or None when it is unusable (the caller asks again). Raises BudgetExceeded before
+    any spend; an infrastructure error (F3) as InfraError, which is not an unusable answer; ModelMismatch when another
+    model answered (F9). A call with no envelope is logged at its reserve, one with an envelope at its own figure."""
+    cost.gate.check()
     held = cost.reserve(f"rate:{rater}")
     t0 = time.monotonic()
     rec = {"job": job, "purpose": "rate", "rater": rater, "model": RATERS[rater], "effort": CFG["RATER_EFFORT"], "via": "claude -p"}
     try:
         env = run_claude(rater_argv(rater), prompt, RATER_SYSTEM, 600, RATER_CWD)
     except Exception as e:      # noqa: BLE001
-        cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "ok": False, "error": str(e)[:200]}, failed=True)
-        raise
+        err = e if isinstance(e, InfraError) else InfraError(f"{type(e).__name__}: {str(e)[:200]}")
+        cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "ok": False, "infra": True, "error": str(err)[:200]})
+        raise cost.gate.hit(err) from e
     i, o = _usage(env)
+    c = env.get("total_cost_usd") if _is_cost(env.get("total_cost_usd")) else None
+    reason = infra_reason(env)
+    if reason:
+        cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "in_tokens": i, "out_tokens": o, "cost_usd": c,
+                           "ok": False, "infra": True, "error": reason[:200]})
+        raise cost.gate.hit(InfraError(reason))
+    cost.gate.ok()
+    matched = model_matches(env, RATERS[rater])
+    rec.update(models_seen=_models_of(env), model_checked=matched is not None)
+    if matched is False:
+        cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "in_tokens": i, "out_tokens": o, "cost_usd": c,
+                           "ok": False, "error": "model mismatch"})
+        raise ModelMismatch(f"asked {RATERS[rater]} for the {rater} rating but the envelope's model usage names "
+                            f"{_models_of(env)}: the rating is not the {rater} rater's")
     m = re.search(r"\{.*\}", env.get("result") or "", re.S)
     obj = None
     if m and not env.get("is_error"):
@@ -1551,23 +1687,34 @@ def rater_call(rater: str, prompt: str, cost: CostLog, job: str, kind: str = "pa
             pass
     good = usable(obj, kind, n)
     cost.settle(held, {**rec, "secs": round(time.monotonic() - t0, 2), "in_tokens": i, "out_tokens": o,
-                       "cost_usd": env.get("total_cost_usd"), "ok": good}, failed=bool(env.get("is_error")))
+                       "cost_usd": c, "ok": good})
     return obj if good else None
 
 
 def rate_item(rater: str, it: dict, cost: CostLog, caller=rater_call) -> tuple[dict | None, int]:
-    """Ask, and ask again while the answer is unusable, at most RATER_MAX_REASKS more times (R2). -> (answer, calls)."""
-    for k in range(1, CFG["RATER_MAX_REASKS"] + 2):
+    """Ask, and ask again while the answer is unusable, at most RATER_MAX_REASKS more times (R2). -> (answer, calls).
+    An infrastructure error is not an answer: it uses up no ask, waits and asks again (F3), and INFRA_STOP_AFTER in a
+    row stop the run (InfraStop); a model mismatch or a budget stop goes straight through."""
+    asks, infra = 0, 0
+    while asks < CFG["RATER_MAX_REASKS"] + 1:
         try:
             obj = caller(rater, it["prompt"], cost, it["item"], it["kind"], it.get("n"))
-        except BudgetExceeded:
+        except (BudgetExceeded, ModelMismatch, InfraStop):
             raise
+        except InfraError as e:
+            infra += 1
+            if infra > CFG["INFRA_STOP_AFTER"]:
+                raise InfraStop(f"{infra} infrastructure errors on one judgement: {e}") from e
+            print(f"{rater} {it['item']}: infrastructure error, waiting: {e}", file=sys.stderr)
+            time.sleep(CFG["INFRA_BACKOFF_S"] * infra)
+            continue
         except Exception as e:      # noqa: BLE001
             print(f"{rater} {it['item']}: {e}", file=sys.stderr)
             obj = None
+        asks += 1
         if obj is not None:
-            return obj, k
-    return None, CFG["RATER_MAX_REASKS"] + 1
+            return obj, asks
+    return None, asks
 
 
 MADE_UP_BRIEF = ("Fleetwell makes electric vans for self-employed tradespeople who rent or lease. The vans are quiet, "
@@ -1591,7 +1738,10 @@ def synthetic_item() -> dict:
 def cmd_smoke_rate(a):
     out = Path(a.out)
     cost = rater_cost_log(out)
-    obj = rater_call(a.rater, synthetic_item()["prompt"], cost, "smoke-rate")
+    try:
+        obj = rater_call(a.rater, synthetic_item()["prompt"], cost, "smoke-rate")
+    except (InfraStop, ModelMismatch) as e:
+        sys.exit(f"STOPPED: {e}")
     print(obj, f"{cost.spent:.4f} USD in the rater cost log")
 
 
@@ -1616,9 +1766,12 @@ def cmd_measure_raters(a):
     out = Path(a.out)
     cost = rater_cost_log(out)
     it = synthetic_item()
-    for r in RATERS:
-        for _ in range(3):
-            rater_call(r, it["prompt"], cost, "synthetic")
+    try:
+        for r in RATERS:
+            for _ in range(3):
+                rater_call(r, it["prompt"], cost, "synthetic")
+    except (InfraStop, ModelMismatch) as e:
+        sys.exit(f"STOPPED: {e}")
     m = project_rater(read_log(out / "rater_cost_log.jsonl"), planned_judgements(out))
     (out / "rater_measure.json").write_text(json.dumps(m, indent=1))
     print(json.dumps(m, indent=1))
@@ -1649,6 +1802,7 @@ def cmd_rate(a):
                 if not (out / "ratings" / f"{r}-{it['item']}.json").exists() and (a.retry_missing or not (out / "ratings_failed" / f"{r}-{it['item']}.json").exists()):
                     jobs.append((r, it))
     stop = threading.Event()
+    fatal = []
 
     def one(j):
         r, it = j
@@ -1660,6 +1814,17 @@ def cmd_rate(a):
             stop.set()
             print(f"RATER BUDGET STOP: {e}", file=sys.stderr)
             return
+        except InfraStop as e:      # nothing is written for this judgement: it is unrated, not failed
+            stop.set()
+            fatal.append(str(e))
+            write_infra_stop(out, "rate", str(e), f"{r}-{it['item']}")
+            print(f"INFRASTRUCTURE STOP: {e}", file=sys.stderr)
+            return
+        except ModelMismatch as e:
+            stop.set()
+            fatal.append(f"MODEL MISMATCH: {e}")
+            print(f"MODEL MISMATCH: {e}", file=sys.stderr)
+            return
         if obj is not None:
             (out / "ratings" / f"{r}-{it['item']}.json").write_text(json.dumps({"rater": r, "item": it["item"], **obj}))
         else:       # R2: missing after the re-asks; INCOMPLETE applies
@@ -1668,6 +1833,8 @@ def cmd_rate(a):
     with ThreadPoolExecutor(CFG["RATER_WORKERS"]) as ex:
         list(ex.map(one, jobs))
     print(f"{len(jobs)} judgements attempted, {cost.spent:.2f} USD in the rater cost log")
+    if fatal:
+        sys.exit(f"rate stopped: {fatal[0]}")
 
 
 # ============================================================================ analysis (sections 6-7, R4-R11)
