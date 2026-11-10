@@ -1443,6 +1443,71 @@ def _run_briefs(a, only, force=False, skip=()):
     return cost
 
 
+# ---------------------------------------------------------------------------- the run's configuration (F5)
+# knobs that change how fast or how patiently a run goes, never what it measures: recorded, not compared
+OPERATIONAL_CFG = ("REPLAY_WORKERS", "RATER_WORKERS", "CALL_TIMEOUT_S", "INFRA_STOP_AFTER", "INFRA_BACKOFF_S")
+
+
+def _git(*args: str) -> str | None:
+    try:
+        r = subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def config_snapshot() -> dict:
+    """Every CFG switch, the models, `git rev-parse HEAD`, and a hash of the tracked changes under server/ (uv.lock aside),
+    so a harness edited after the pilot is as visible as a new commit."""
+    head = _git("rev-parse", "HEAD")
+    diff = _git("diff", "HEAD", "--", "server", ":!server/uv.lock")
+    return {"cfg": json.loads(json.dumps(CFG)), "models": {"replay": REPLAY_MODEL_ID, "raters": dict(RATERS)},
+            "git_head": head.strip() if head else None,
+            "git_diff_sha256": hashlib.sha256(diff.encode()).hexdigest() if diff is not None else None,
+            "taken_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
+def config_mismatches(saved: dict, now: dict) -> list[str]:
+    out = []
+    for k in sorted(set(saved["cfg"]) | set(now["cfg"])):
+        if k not in OPERATIONAL_CFG and saved["cfg"].get(k) != now["cfg"].get(k):
+            out.append(f"CFG {k}: the pilot ran with {saved['cfg'].get(k)!r}, now {now['cfg'].get(k)!r}")
+    if saved["models"] != now["models"]:
+        out.append(f"models: the pilot ran with {saved['models']}, now {now['models']}")
+    if saved["git_head"] != now["git_head"] or now["git_head"] is None:
+        out.append(f"git HEAD: the pilot ran at {saved['git_head']}, now {now['git_head']}")
+    if saved["git_diff_sha256"] != now["git_diff_sha256"]:
+        out.append("the harness or the spike's code has uncommitted changes that differ from the pilot's")
+    return out
+
+
+def write_run_config(out: Path, note: str | None = None) -> dict:
+    """The pilot's snapshot (R7's --force rerun writes a new one and keeps the old under `previous`)."""
+    path = out / "run_config.json"
+    snap = config_snapshot()
+    if path.exists():
+        old = json.loads(path.read_text())
+        snap["previous"] = [{k: v for k, v in old.items() if k != "previous"}] + old.get("previous", [])
+        snap["note"] = note
+    path.write_text(json.dumps(snap, indent=1))
+    return snap
+
+
+def check_run_config(out: Path, what: str) -> dict:
+    """Refuse `what` unless the harness is configured exactly as it was at the pilot."""
+    path = out / "run_config.json"
+    if not path.exists():
+        sys.exit(f"{what} refused: no run_config.json. The pilot writes it before its first call (every CFG switch and the "
+                 f"git HEAD); run `pilot` first.")
+    saved = json.loads(path.read_text())
+    bad = config_mismatches(saved, config_snapshot())
+    if bad:
+        sys.exit(f"{what} refused: the harness is not configured as it was at the pilot (run_config.json):\n  - " + "\n  - ".join(bad)
+                 + "\nChange nothing after the pilot but R5's cuts and R7's fault fixes; a fault fix is re-snapshotted by "
+                   "`replay --only c01 t01 --force --reason '<why>'` (it writes changes.md), otherwise restore the setting.")
+    return saved
+
+
 def write_infra_stop(out: Path, where: str, message: str, at: str | None = None):
     """The resumable state of an outage stop: what stopped, where, when. Settled arms and ratings are untouched; the
     unsettled one has no file, so the same command run again picks up exactly there."""
@@ -1479,6 +1544,10 @@ def cmd_pilot(a):
     out = Path(a.out)
     if (out / "pilot.json").exists():
         sys.exit("pilot.json exists: the pilot has run; change nothing but R5's cuts and R7's fault fixes (use replay --force --reason)")
+    if (out / "run_config.json").exists():
+        check_run_config(out, "pilot")
+    else:
+        write_run_config(out)
     cost = _run_briefs(a, set(PILOT_BRIEFS))
     bad = pilot_unsettled(out, PILOT_BRIEFS)
     if bad:
@@ -1502,7 +1571,12 @@ def cmd_replay(a):
     if force:
         if not a.reason or not only:
             sys.exit("--force needs --only <ids> and --reason '<why>' (R7: a fault fix, written to changes.md)")
+        if not (out / "run_config.json").exists():
+            check_run_config(out, "replay")
         _discard(out, sorted(only), a.reason)
+        write_run_config(out, note=f"R7 rerun --force: {a.reason}")      # the fix may have moved HEAD: a new snapshot, the old kept
+    else:
+        check_run_config(out, "replay")
     skip = ()
     if only is None or not only <= set(PILOT_BRIEFS):
         pj = out / "pilot.json"
@@ -1649,6 +1723,7 @@ def rating_prompts_text() -> str:
 
 def cmd_packets(a):
     out = Path(a.out)
+    check_run_config(out, "packets")
     inputs = load_inputs(out)
     arms_by = load_arms(out, [i["id"] for i in inputs])
     expected = {n for n, _, _ in arm_specs()} - set(effective_skip(SURVIVAL_ARMS if _survival_dropped(out) else ()))
@@ -1837,6 +1912,7 @@ def cmd_measure_raters(a):
 
 def cmd_rate(a):
     out = Path(a.out)
+    check_run_config(out, "rate")
     mp = out / "rater_measure.json"
     if not mp.exists():
         sys.exit("run `measure-raters` first: rater cost is measured on a synthetic item before any real item is rated (R5)")
@@ -2431,6 +2507,12 @@ def render_md(r: dict) -> str:
             ("Cost J1 minus J0 (median)", i3["cost_j1_minus_j0"]), ("Length confound (R4)", i3["length"]),
             ("Step ran to a result", i3["step_ran"]),
             ("GO conditions", i3["rules"]["go_conditions"]), ("DROP conditions", i3["rules"]["drop_conditions"])])
+    if r.get("run_config"):
+        rc = r["run_config"]
+        L.append("\n## Run configuration (the pilot's snapshot, F5)\n")
+        L.append(f"git HEAD {rc['git_head']}; uncommitted-changes hash {rc['git_diff_sha256']}; taken {rc['taken_at']}"
+                 + (f"; re-snapshots: {len(rc.get('previous', []))}" if rc.get("previous") else ""))
+        L.append("\n```json\n" + json.dumps({"cfg": rc["cfg"], "models": rc["models"]}, indent=1) + "\n```")
     L.append("\n## Shown texts that still begin with four or fewer words and a colon (R3), per arm\n")
     L.append(str(r["leftover_labels_in_shown_texts"]))
     L.append("\n## Arms FAILED-final (R6): every comparison needing one is a tie\n")
@@ -2444,10 +2526,12 @@ def render_md(r: dict) -> str:
 
 def cmd_analyse(a):
     out = Path(a.out)
+    snapshot = check_run_config(out, "analyse")
     inputs = load_inputs(out)
     arms_by = load_arms(out, [i["id"] for i in inputs])
     key = json.loads((out / "key.json").read_text())
     res = analyse(out, inputs, arms_by, key, lambda r, item: read_rating(out, r, item))
+    res["run_config"] = snapshot
     res["stale_key"] = key.get("results_sha256") != results_hash(out)
     if res["stale_key"]:
         for k in ("idea1", "idea2", "idea3"):

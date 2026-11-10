@@ -1267,6 +1267,7 @@ def test_cmd_analyse_writes_the_two_files_and_a_stale_key_is_incomplete(tmp_path
     for i in inputs:
         (out / "inputs" / f"{i['id']}.json").write_text(json.dumps(i))
     (out / "ratings").mkdir()
+    ee.write_run_config(out)
     key["results_sha256"] = "stale"
     (out / "key.json").write_text(json.dumps(key))
     ee.cmd_analyse(type("A", (), {"out": str(out)})())
@@ -1280,6 +1281,7 @@ def test_cmd_analyse_writes_the_two_files_and_a_stale_key_is_incomplete(tmp_path
 
 def test_cmd_packets_refuses_while_an_arm_is_unsettled_but_not_for_a_failed_final_one(tmp_path):
     out, inputs, arms_by = run_arms(tmp_path, ["c01"])
+    ee.write_run_config(out)
     (out / "inputs").mkdir()
     (out / "inputs/selection.json").write_text(json.dumps({"runs": [{"id": "c01"}]}))
     (out / "inputs/c01.json").write_text(json.dumps(inputs[0]))
@@ -1748,3 +1750,83 @@ def test_no_gate_pilot_arms_count_as_settled_and_a_failed_or_missing_one_does_no
     (out / "arms/c01/S.json").unlink()
     (out / "arms/c01/J1.json").write_text(json.dumps({"status": "budget_stopped"}))
     assert ee.pilot_unsettled(out, ee.PILOT_BRIEFS) == ["c01:S=missing", "c01:J1=budget_stopped", "t01:L=FAILED_final"]
+
+
+# =============================================================================================== F5: the run's configuration is pinned
+def flow_through_pilot(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    ee.cmd_pilot(A)
+    return A, out
+
+
+def test_the_pilot_snapshots_every_cfg_switch_and_the_git_head_before_its_first_call(tmp_path, monkeypatch):
+    A, out = flow_through_pilot(tmp_path, monkeypatch)
+    snap = json.loads((out / "run_config.json").read_text())
+    assert snap["cfg"] == json.loads(json.dumps(ee.CFG)) and set(snap["cfg"]) >= {"INCLUDE_IDEA3", "IDEA3_COUNTER_ARGUMENT_RULE", "INCLUDE_PLAIN_BEST_OF_8",
+                                                                                   "INCLUDE_D0_V_B", "INVESTIGATOR_SEES_STRATEGY", "RATER_HARD_CAP_USD"}
+    head = __import__("subprocess").run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=ee.REPO).stdout.strip()
+    assert snap["git_head"] == head and len(head) == 40 and snap["models"]["raters"] == ee.RATERS
+    assert (out / "run_config.json").stat().st_mtime <= (out / "cost_log.jsonl").stat().st_mtime        # written before the calls
+    with pytest.raises(SystemExit):
+        ee.cmd_pilot(A)                                          # and a second pilot is refused as before
+
+
+def test_replay_packets_rate_and_analyse_refuse_a_changed_switch_with_a_clear_message(tmp_path, monkeypatch):
+    A, out = flow_through_pilot(tmp_path, monkeypatch)
+    ee.cmd_replay(A)
+    ee.cmd_packets(A)
+    for flip in (("INCLUDE_IDEA3", False), ("IDEA3_COUNTER_ARGUMENT_RULE", "protocol"), ("INCLUDE_D0_V_B", True), ("RATER_HARD_CAP_USD", 400.0)):
+        monkeypatch.setitem(ee.CFG, *flip)
+        for name, cmd in (("replay", ee.cmd_replay), ("packets", ee.cmd_packets), ("rate", ee.cmd_rate), ("analyse", ee.cmd_analyse)):
+            with pytest.raises(SystemExit) as e:
+                cmd(A)
+            msg = str(e.value)
+            assert msg.startswith(f"{name} refused") and f"CFG {flip[0]}" in msg and repr(flip[1]) in msg, (name, msg)
+        monkeypatch.setitem(ee.CFG, flip[0], json.loads((out / "run_config.json").read_text())["cfg"][flip[0]])
+    ee.cmd_packets(A)                                           # restored: accepted again
+
+
+def test_a_changed_git_head_or_edited_code_is_refused_and_an_operational_knob_is_not(tmp_path, monkeypatch):
+    A, out = flow_through_pilot(tmp_path, monkeypatch)
+    monkeypatch.setitem(ee.CFG, "REPLAY_WORKERS", 4)
+    monkeypatch.setitem(ee.CFG, "INFRA_BACKOFF_S", 1)
+    ee.cmd_replay(A)                                            # workers and waits are not what a run measures
+    real = ee._git
+    monkeypatch.setattr(ee, "_git", lambda *a: "0" * 40 + "\n" if a[0] == "rev-parse" else real(*a))
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_packets(A)
+    assert "git HEAD" in str(e.value) and "0" * 40 in str(e.value)
+    monkeypatch.setattr(ee, "_git", lambda *a: "diff --git a/x b/x\n" if a[0] == "diff" else real(*a))
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_packets(A)
+    assert "uncommitted changes" in str(e.value)
+    monkeypatch.undo()
+
+
+def test_commands_refuse_without_a_snapshot_and_a_forced_rerun_takes_a_new_one_and_keeps_the_old(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    for cmd in (ee.cmd_replay, ee.cmd_packets, ee.cmd_rate, ee.cmd_analyse):
+        with pytest.raises(SystemExit) as e:
+            cmd(A)
+        assert "no run_config.json" in str(e.value)
+    ee.cmd_pilot(A)
+    monkeypatch.setitem(ee.CFG, "INCLUDE_PLAIN_BEST_OF_8", True)
+    A.only, A.force, A.reason = {"c01", "t01"}, True, "a harness fault"
+    ee.cmd_replay(A)                                            # R7: the fault fix is re-snapshotted, with its reason
+    snap = json.loads((out / "run_config.json").read_text())
+    assert snap["cfg"]["INCLUDE_PLAIN_BEST_OF_8"] is True and snap["note"].endswith("a harness fault")
+    assert len(snap["previous"]) == 1 and snap["previous"][0]["cfg"]["INCLUDE_PLAIN_BEST_OF_8"] is False
+
+
+def test_analysis_carries_the_snapshot_in_json_and_markdown(tmp_path, monkeypatch):
+    A, out = flow_through_pilot(tmp_path, monkeypatch)
+    ee.cmd_replay(A)
+    ee.cmd_packets(A)
+    ee.cmd_measure_raters(A)
+    ee.cmd_rate(A)
+    ee.cmd_analyse(A)
+    snap = json.loads((out / "run_config.json").read_text())
+    res = json.loads((out / "analysis.json").read_text())
+    assert res["run_config"]["cfg"] == snap["cfg"] and res["run_config"]["git_head"] == snap["git_head"]
+    md = (out / "analysis.md").read_text()
+    assert "Run configuration" in md and snap["git_head"] in md and '"INCLUDE_IDEA3": true' in md
