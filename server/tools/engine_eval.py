@@ -2022,14 +2022,18 @@ def gate_failures(*, failed_final_briefs: int, missing: list, x_share: dict, ste
     return {"incomplete": incomplete, "invalid": invalid}
 
 
+NO_VERDICT = "NO VERDICT (validity gate)"
+
+
 def verdict_of(gates: dict, go_conds: dict, drop_conds: dict, confounded: bool, extra_block: list) -> dict:
-    """INCOMPLETE on missing data; INCONCLUSIVE when a validity gate (position bias) fails; GO only when every GO
+    """INCOMPLETE on missing data; NO VERDICT (validity gate) when a rater's position bias trips the gate, per idea as built
+    (F8: it is not INCONCLUSIVE, which is a result); GO only when every GO
     condition holds, no length confound and nothing blocks it (survival not measured); else DROP when a DROP condition
     holds; else INCONCLUSIVE."""
     if gates["incomplete"]:
         return {"verdict": "INCOMPLETE", "why": gates["incomplete"]}
     if gates["invalid"]:
-        return {"verdict": "INCONCLUSIVE", "why": ["validity gate failed, no quality verdict: " + "; ".join(gates["invalid"])]}
+        return {"verdict": NO_VERDICT, "why": ["validity gate failed, no quality verdict: " + "; ".join(gates["invalid"])]}
     if all(go_conds.values()):
         if confounded:
             return {"verdict": "INCONCLUSIVE", "why": ["every GO condition holds but the primary result is confounded by length (R4)"]}
@@ -2138,6 +2142,23 @@ def order_agreement(pairs: list[list]) -> float | None:
     return sum(p[0] == p[1] for p in ok) / len(ok) if ok else None
 
 
+def same_draft_picked(pairs: list[list]) -> float | None:
+    """Share of pairs, where both orders were answered, in which both orders pick the same DRAFT (the same non-zero score:
+    the same side first-named in both). Two 'no real difference' answers agree (order_agreement counts them) but pick no
+    draft."""
+    ok = [p for p in pairs if p[0] is not None and p[1] is not None]
+    return sum(p[0] == p[1] != 0 for p in ok) / len(ok) if ok else None
+
+
+def jude_noise(arms_by: dict, ids: list) -> dict:
+    """R10: Jude's own noise, J0 against J0' (two runs of the same review): how often they disagree on failing the
+    proposition or the insight, over the briefs where both ran. Read beside every send-back condition."""
+    both = [b for b in ids if all((arms_by[b].get(j) or {}).get("status") == "ok" for j in ("J0", "J0p"))]
+    dis = lambda k: sum(1 for b in both if bool(arms_by[b]["J0"][k]) != bool(arms_by[b]["J0p"][k]))
+    return {"briefs": len(both), "disagree_on_failing_proposition": dis("jude_fails_proposition"),
+            "disagree_on_failing_insight": dis("jude_fails_insight")}
+
+
 def rewrite_split(pairs: list[tuple]) -> dict:
     """R10: R1 v R0's wins by (both rewritten, only R1, only R0, neither). `pairs`: [(outcome, r1_rewritten, r0_rewritten)]."""
     out = {"both": 0, "only_R1": 0, "only_R0": 0, "neither": 0}
@@ -2235,7 +2256,9 @@ def step_cost(arm: dict) -> tuple[float, float]:
 def cost_line_ok(costs: list[tuple]) -> dict:
     """The cost line (rule D5): the step's own calls cost at most 0.15 USD a brief at the median and take at most 60 s."""
     mc, ms = _med([c for c, _ in costs]), _med([s for _, s in costs])
-    return {"median_usd": mc, "median_secs": ms, "ok": mc is not None and mc <= COST_LINE_USD and ms <= COST_LINE_SECS}
+    return {"median_usd": mc, "median_secs": ms, "max_usd": max((c for c, _ in costs), default=None),
+            "max_secs": max((s for _, s in costs), default=None),
+            "ok": mc is not None and mc <= COST_LINE_USD and ms <= COST_LINE_SECS}
 
 
 def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) -> dict:
@@ -2295,6 +2318,11 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
             out_[r] = order_agreement([units[comp][b]["scores"][r] for b in units.get(comp, {}) if "scores" in units[comp][b]])
         return out_
 
+    def same_draft(comp):
+        return {r: same_draft_picked([units[comp][b]["scores"][r] for b in units.get(comp, {}) if "scores" in units[comp][b]]) for r in RATERS}
+
+    noise = jude_noise(arms_by, ids)
+
     # ---------------- idea 1
     h1, h1p = "H1", "H1p"
     v9 = variety(key, ratings, "H1")
@@ -2320,7 +2348,7 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
           "code_sb_t1": sb_any("T1", pair_t1c1), "code_sb_c1": sb_any("C1", pair_t1c1), "survival_measured": sv1_measured,
           "confounded": length_for("T1vC1.ins")["confounded"], "gates": g1}
     res["idea1"] = {"rules": idea1_rules(d1), "length": length_for("T1vC1.ins"), "variety_9": v9, "cost": cost1,
-                    "order_agreement": order_ag("T1vC1.ins"), "x_share": x_shares({"T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"}),
+                    "order_agreement": order_ag("T1vC1.ins"), "same_draft_picked": same_draft("T1vC1.ins"), "jude_noise_J0_vs_J0p": noise, "x_share": x_shares({"T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"}),
                     "no_gate": sum(1 for b in ids if (arms_by[b].get("H1") or {}).get("status") == "no_gate"),
                     "ranker_preferred": sum(1 for b in ids if (arms_by[b].get("H1") or {}).get("ranker_preferred")),
                     "ranker_preferred_subset_T1vC1": tally({b: u for b, u in units.get("T1vC1.ins", {}).items() if (arms_by[b].get("H1") or {}).get("ranker_preferred") is True}),
@@ -2366,12 +2394,13 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
             seeds[a["winner_seed"]] = seeds.get(a["winner_seed"], 0) + 1
     res["idea2"] = {"rules": idea2_rules(d2), "length": length_for("SvO"),
                     "variety": {"S8": vs8, "L8": vl8, "L28": vl28, "S4plusO": vs4, "L4plusO": vl4, "L24plusO": vl24},
-                    "cost": cost2, "order_agreement": order_ag("SvO"), "x_share": x_shares(set(c2)),
+                    "cost": cost2, "order_agreement": order_ag("SvO"), "same_draft_picked": same_draft("SvO"), "jude_noise_J0_vs_J0p": noise, "x_share": x_shares(set(c2)),
                     "no_gate": sum(1 for b in ids if (arms_by[b].get("S") or {}).get("status") == "no_gate"),
                     "kept_by_ranker_subset_SvO": _kept_subset(units.get("SvO", {}), arms_by, ids),
                     "winners_by_seed": seeds, "share_identity_or_social": ((seeds.get(2, 0) + seeds.get(5, 0)) / sum(seeds.values())) if seeds else None,
                     "code_checks": {"S": _count_flags(s_win), "O": _count_flags(o_win)},
-                    "candidates_citing_nothing": sum(1 for b in ids for p in (arms_by[b].get("S") or {}).get("pool", []) if p["source"] != "first_draft" and not p.get("cites")),
+                    "candidates_citing_nothing": {a: sum(1 for b in ids for p in (arms_by[b].get(a) or {}).get("pool", []) if p["source"] != "first_draft" and not p.get("cites"))
+                                                  for a in ("S", "L", "L2")},
                     "send_backs": {"S_winner_in_B": s_sb, "O_via_J0": j0_sb, "paired_briefs": len(pair_sv2)},
                     "survival": {"S_winner": _sv_counts([x for _, x in sv2]), "B_via_J0": _sv_counts(j0s),
                                  "paired_briefs": len(pair_sv2), "paired_S_winner": _sv_counts([arms_by[b]["SV2"] for b in pair_sv2]),
@@ -2405,14 +2434,13 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
               "cost_ok": cost3["ok"], "unanswered_j1": un("J1"), "unanswered_j0": un("J0"), "split": rewrite_split(rw),
               "confounded": length_for("R1vR0")["confounded"], "gates": g3}
         fail = lambda j, key_: sum(1 for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok" and arms_by[b][j][key_])
-        dis = lambda k_: sum(1 for b in ids if all((arms_by[b].get(j) or {}).get("status") == "ok" for j in ("J0", "J0p")) and arms_by[b]["J0"][k_] != arms_by[b]["J0p"][k_])
         res["idea3"] = {"rules": idea3_rules(d3), "length": length_for("R1vR0"), "cost_j1_minus_j0": cost3,
-                        "order_agreement": order_ag("R1vR0"), "x_share": x_shares(set(c3)),
+                        "order_agreement": order_ag("R1vR0"), "same_draft_picked": same_draft("R1vR0"), "x_share": x_shares(set(c3)),
                         "code_checks": {a: _count_flags(f) for a, f in flags.items()},
                         "jude_fails_proposition": {j: fail(j, "jude_fails_proposition") for j in ("J0", "J0p", "J1")},
                         "code_alone_sends_back": {j: sum(1 for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok" and arms_by[b][j]["sent_by"] == "code") for j in ("J0", "J0p", "J1")},
                         "unanswered": {j: un(j, [b for b in ids if ok_(b, j)]) for j in ("J0", "J0p", "J1")}, "guard_pairs": {"J1_J0": len(pair_r)},
-                        "jude_noise_J0_vs_J0p": {"disagree_on_failing_proposition": dis("jude_fails_proposition"), "disagree_on_failing_insight": dis("jude_fails_insight")},
+                        "jude_noise_J0_vs_J0p": noise,
                         "rewrites_per_arm": {j: sum(len(arms_by[b][j]["rewrites"]) for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok") for j in ("J0", "J0p", "J1")},
                         "client_questions": {j: sum(len(arms_by[b][j]["questions"]) for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok") for j in ("J0", "J0p", "J1")},
                         "propositions_carrying_the_mark": {j: sum(1 for b in ids if (arms_by[b].get(j) or {}).get("status") == "ok" and str(arms_by[b][j]["whole_proposition_entry"]["value"]).lower().startswith("to confirm")) for j in ("J0", "J0p", "J1")},
@@ -2481,9 +2509,36 @@ def _fmt_tally(t) -> str:
     return s + (f"; MISSING {len(t['missing'])}" if t["missing"] else "")
 
 
+# R11, word for word: how the verdicts are to be read, printed at the head of analysis.md
+R11_TEXT = (
+    "The section 2 power table is for the sign rule alone; GO also needs each rater's W > L and the net margins, so GO's "
+    "power is lower than the table.",
+    "A true 70% effect ends in DROP (net 2 or less) in 11% of runs with no ties, 15% with 20% ties and 24% with 40% ties "
+    "(exact multinomial). DROP therefore means \"no evidence of a large effect on 20 fictional, research-off briefs\", not "
+    "\"the idea does not work\".",
+    "40 briefs give 80% power at a true 70% only with no ties: 70% with 20% ties, 56% with 40%.",
+    "Idea 3 can pass the sign rule only if W is at least 8 among briefs where R1 and R0 differ; where both paths leave the "
+    "proposition alone the brief is a tie. If the paths differ in few briefs, GO is out of reach by construction.")
+POWER_CAVEAT = (
+    "Power (section 2, sign rule alone): with 20 briefs a true share of 60% for the treatment among the briefs raters can "
+    "separate is found 13% of the time, 70% about 4 times in 10, 80% about 8 in 10 (no ties). With three ideas the chance "
+    "that at least one passes by luck is 6% to 9%. A verdict here is a statement about a large effect on 20 fictional "
+    "briefs, not about the idea.")
+
+
+def _cost_cell(c: dict) -> str:
+    f = lambda v, fmt: "-" if v is None else format(v, fmt)
+    return (f"median {f(c.get('median_usd'), '.3f')} USD, {f(c.get('median_secs'), '.1f')} s; "
+            f"max {f(c.get('max_usd'), '.3f')} USD, {f(c.get('max_secs'), '.1f')} s; "
+            f"cost line {'met' if c.get('ok') else 'not met'}")
+
+
 def render_md(r: dict) -> str:
     T = r["tallies"]
-    L = [f"# Analysis ({r['n_briefs']} briefs)\n", "Verdicts are the pre-registered rules of section 7 with R4 to R11; nothing here is a judgement call.\n"]
+    L = [f"# Analysis ({r['n_briefs']} briefs)\n", "Verdicts are the pre-registered rules of section 7 with R4 to R11; nothing here is a judgement call.\n",
+         "## How to read the verdicts (R11)\n"] + [f"- {x}" for x in R11_TEXT] + ["", POWER_CAVEAT, "",
+         f"A position-bias trip is labelled {NO_VERDICT}, not INCONCLUSIVE: no quality verdict exists. It is read per idea as built, "
+         "over each idea's own pair items.\n"]
 
     def table(title, rows):
         L.append(f"\n## {title}\n")
@@ -2498,25 +2553,31 @@ def render_md(r: dict) -> str:
         ("Other: C1 v B proposition", _fmt_tally(T["C1vB.prop"])),
         ("Ranker-preferred subset: briefs / T1 v C1 insight W/L/T", f"{i1['ranker_preferred']} / {_fmt_tally(i1['ranker_preferred_subset_T1vC1'])}"),
         ("Is the chosen hypothesis in the plan's group (rater grouping)", i1["chosen_in_plans_group"]),
-        ("Order agreement per rater (T1 v C1)", i1["order_agreement"]), ("Share of non-tie answers picking X", i1["x_share"]),
+        ("Order agreement per rater (T1 v C1): both orders give the same answer", i1["order_agreement"]),
+        ("Same draft picked in both orders (T1 v C1)", i1["same_draft_picked"]), ("Share of non-tie answers picking X", i1["x_share"]),
         ("Distinct ideas among the 9: median / min / max (lower rater)", f"{i1['variety_9']['median']} / {i1['variety_9']['min']} / {i1['variety_9']['max']}"),
         ("Code checks: insight over 50 / over 57 (B, C1, T1)", f"{i1['insight_over_50']} / {i1['insight_over_57']}"),
         ("Insight basis assumption (B, C1, T1)", i1["insight_basis_assumption"]),
         ("Hypotheses citing nothing / 'none in the input' / dangling cites", f"{i1['hypotheses_cite_nothing']} / {i1['hypotheses_none_in_input']} / {i1['dangling_cites']}"),
-        ("Survival: T1 vs B (via J0)", i1["survival"]), ("Length confound (R4)", i1["length"]),
-        ("Cost of the step's own calls (median)", i1["cost"]), ("Step ran to a result / no_gate", f"{i1['step_ran']} / {i1['no_gate']}"),
+        ("Survival: T1 vs B (via J0)", i1["survival"]),
+        ("Jude's own noise, J0 v J0', beside the send-back conditions", i1["jude_noise_J0_vs_J0p"]),
+        ("Send-back guards not measured", i1["rules"]["guards_not_measured"] or "none"), ("Length confound (R4)", i1["length"]),
+        ("USD and seconds of the step's own calls (median, max)", _cost_cell(i1["cost"])), ("Step ran to a result / no_gate", f"{i1['step_ran']} / {i1['no_gate']}"),
         ("Plan edit alone moves the draft (recorded apart)", i1["rules"]["plan_edit_alone_moves_the_draft"]),
         ("GO conditions", i1["rules"]["go_conditions"]), ("DROP conditions", i1["rules"]["drop_conditions"])])
     table(f"Idea 2: named routes as seeds: {i2['rules']['verdict']}", [
         ("Verdict reasons", "; ".join(i2["rules"]["why"]) or "-"),
         ("Primary W/L/T: S v O", _fmt_tally(T["SvO"])), ("Control: L v O", _fmt_tally(T["LvO"])), ("Control: L2 v O", _fmt_tally(T["L2vO"])),
         ("Other: S v O where the ranker did not keep O", _fmt_tally(i2["kept_by_ranker_subset_SvO"])),
-        ("Order agreement per rater (S v O)", i2["order_agreement"]), ("Share of non-tie answers picking X", i2["x_share"]),
+        ("Order agreement per rater (S v O): both orders give the same answer", i2["order_agreement"]),
+        ("Same draft picked in both orders (S v O)", i2["same_draft_picked"]), ("Share of non-tie answers picking X", i2["x_share"]),
         ("Distinct ideas, 8-pools median/min/max", {k: (v["median"], v["min"], v["max"]) for k, v in i2["variety"].items() if k in ("S8", "L8", "L28")}),
         ("Distinct ideas, first 4 plus O (R9)", {k: (v["median"], v["min"], v["max"]) for k, v in i2["variety"].items() if "4plusO" in k}),
-        ("Code checks (S winners, O)", i2["code_checks"]), ("Candidates citing nothing", i2["candidates_citing_nothing"]),
-        ("Send-backs: S winner v O", i2["send_backs"]), ("Survival", i2["survival"]), ("Length confound (R4)", i2["length"]),
-        ("Cost of the step's own calls (median)", i2["cost"]), ("Step ran to a result / no_gate", f"{i2['step_ran']} / {i2['no_gate']}"),
+        ("Code checks (S winners, O)", i2["code_checks"]), ("Candidates citing nothing (S, L, L2)", i2["candidates_citing_nothing"]),
+        ("Send-backs: S winner v O", i2["send_backs"]), ("Survival", i2["survival"]),
+        ("Jude's own noise, J0 v J0', beside the send-back conditions", i2["jude_noise_J0_vs_J0p"]),
+        ("Send-back guards not measured", i2["rules"]["guards_not_measured"] or "none"), ("Length confound (R4)", i2["length"]),
+        ("USD and seconds of the step's own calls (median, max)", _cost_cell(i2["cost"])), ("Step ran to a result / no_gate", f"{i2['step_ran']} / {i2['no_gate']}"),
         ("Winners by seed / share on identity or social meaning", f"{i2['winners_by_seed']} / {i2['share_identity_or_social']}"),
         ("GO conditions", i2["rules"]["go_conditions"]), ("DROP conditions", i2["rules"]["drop_conditions"])])
     if "idea3" in r:
@@ -2526,13 +2587,14 @@ def render_md(r: dict) -> str:
             ("Primary W/L/T: R1 v R0", _fmt_tally(T["R1vR0"])), ("Control: R0' v R0", _fmt_tally(T["R0pvR0"])),
             ("Other: R1 v O", _fmt_tally(T["R1vO"])), ("Other: R0 v O", _fmt_tally(T["R0vO"])),
             ("R1 v R0 wins by rewrite split (R10)", i3["rules"]["wins_by_rewrite_split"]),
-            ("Order agreement per rater (R1 v R0)", i3["order_agreement"]), ("Share of non-tie answers picking X", i3["x_share"]),
+            ("Order agreement per rater (R1 v R0): both orders give the same answer", i3["order_agreement"]),
+            ("Same draft picked in both orders (R1 v R0)", i3["same_draft_picked"]), ("Share of non-tie answers picking X", i3["x_share"]),
             ("Code checks (O, R0, R0', R1)", i3["code_checks"]), ("Propositions carrying the mark", i3["propositions_carrying_the_mark"]),
             ("Client questions per arm", i3["client_questions"]), ("Jude fails the proposition (J0, J0', J1)", i3["jude_fails_proposition"]),
             ("Code alone sends back", i3["code_alone_sends_back"]), ("Unanswered proposition tests", i3["unanswered"]),
             ("Jude's own noise (J0 v J0')", i3["jude_noise_J0_vs_J0p"]), ("Rewrites per arm", i3["rewrites_per_arm"]),
             ("Changed by R1 but not R0 / reverse", f"{i3['changed_by_R1_not_R0']} / {i3['changed_by_R0_not_R1']}"),
-            ("Cost J1 minus J0 (median)", i3["cost_j1_minus_j0"]), ("Length confound (R4)", i3["length"]),
+            ("USD and seconds, J1 minus J0 (median, max)", _cost_cell(i3["cost_j1_minus_j0"])), ("Length confound (R4)", i3["length"]),
             ("Step ran to a result", i3["step_ran"]),
             ("GO conditions", i3["rules"]["go_conditions"]), ("DROP conditions", i3["rules"]["drop_conditions"])])
     if r.get("run_config"):

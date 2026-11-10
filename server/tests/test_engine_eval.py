@@ -440,7 +440,7 @@ def test_validity_gates_come_first_missing_data_is_incomplete_and_position_bias_
     assert g["incomplete"] and not ee.gate_failures(failed_final_briefs=0, missing=[], x_share={}, steps_ran=18, n=20)["incomplete"]
     g = ee.gate_failures(failed_final_briefs=0, missing=[], x_share={"sonnet": 0.66, "opus": 0.4}, steps_ran=20, n=20)
     r = ee.idea1_rules(idea1_base(gates=g))
-    assert g["invalid"] and r["verdict"] == "INCONCLUSIVE" and "validity" in r["why"][0]
+    assert g["invalid"] and r["verdict"] == "NO VERDICT (validity gate)" and "validity" in r["why"][0]
     assert not ee.gate_failures(failed_final_briefs=0, missing=[], x_share={"sonnet": 0.65, "opus": 0.65}, steps_ran=20, n=20)["invalid"]
     # a verdict that would be a GO is still INCOMPLETE with missing data
     assert ee.verdict_of({"incomplete": ["m"], "invalid": []}, {"a": True}, {}, False, [])["verdict"] == "INCOMPLETE"
@@ -1255,7 +1255,7 @@ def test_analyse_position_bias_leaves_no_quality_verdict(tmp_path):
     bids = [f"c{i:02d}" for i in range(1, 21)]
     out, inputs, arms_by, packets, key = packets_for(tmp_path, bids)
     res = ee.analyse(out, inputs, arms_by, key, lambda who, item: {"better": "X"} if item in key["pairs"] else {"groups": []})
-    assert res["idea2"]["rules"]["verdict"] == "INCONCLUSIVE" and "validity" in res["idea2"]["rules"]["why"][0]
+    assert res["idea2"]["rules"]["verdict"] == "NO VERDICT (validity gate)" and "validity" in res["idea2"]["rules"]["why"][0]
     assert res["idea2"]["x_share"]["sonnet"] == 1.0
 
 
@@ -1905,3 +1905,73 @@ def test_cmd_packets_prints_the_counts_and_refuses_to_write_while_a_primary_text
     assert "packets refused" in str(e.value) and "c01 SvO S proposition" in str(e.value) and "Draft: a plain line" in str(e.value)
     assert (out / "packets" / before[0]).read_text() == "untouched"             # nothing was written or deleted
     assert "primary comparisons T1vC1.ins, SvO, R1vR0: 1" in capsys.readouterr().out
+
+
+# =============================================================================================== F8: what analysis.md says
+def md_for(tmp_path, rating=None, bids=None):
+    out, inputs, arms_by, packets, key = twenty(tmp_path, bids)
+    res = ee.analyse(out, inputs, arms_by, key, rating or rating_for(key, "S"))
+    return res, ee.render_md(res), arms_by
+
+
+def test_analysis_md_prints_r11s_wording_and_the_power_caveat(tmp_path):
+    _, md, _ = md_for(tmp_path)
+    for line in ee.R11_TEXT:
+        assert line in md
+    assert 'DROP therefore means "no evidence of a large effect on 20 fictional, research-off briefs", not "the idea does not work".' in md
+    assert "GO also needs each rater's W > L and the net margins, so GO's power is lower than the table" in md
+    assert "Power (section 2" in md and "found 13% of the time" in md and "6% to 9%" in md
+
+
+def test_analysis_md_reports_max_usd_and_seconds_and_the_cost_line(tmp_path):
+    res, md, _ = md_for(tmp_path)
+    c = res["idea2"]["cost"]
+    assert c["max_usd"] >= c["median_usd"] and c["max_secs"] >= c["median_secs"] and c["max_usd"] is not None
+    assert "max 0." in md and " USD, " in md and "cost line" in md
+    assert res["idea3"]["cost_j1_minus_j0"]["max_secs"] is not None and "USD and seconds, J1 minus J0 (median, max)" in md
+    assert ee.cost_line_ok([])["max_usd"] is None
+
+
+def test_candidates_citing_nothing_are_counted_for_l_and_l2_as_well_as_s(tmp_path):
+    res, md, arms_by = md_for(tmp_path, bids=["c01", "c02"])
+    assert res["idea2"]["candidates_citing_nothing"] == {"S": 14, "L": 14, "L2": 14}              # 7 new candidates a brief, none cites
+    assert "Candidates citing nothing (S, L, L2)" in md
+    for p in arms_by["c01"]["L"]["pool"]:
+        if p["source"] != "first_draft":
+            p["cites"] = ["psg_1"]
+    out, inputs, _, _, key = twenty(tmp_path / "again", ["c01", "c02"])
+    assert ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))["idea2"]["candidates_citing_nothing"]["L"] == 7
+
+
+def test_jude_noise_sits_beside_the_idea_1_and_idea_2_send_back_conditions(tmp_path):
+    out, inputs, arms_by, packets, key = twenty(tmp_path)
+    arms_by["c01"]["J0p"]["jude_fails_proposition"] = True
+    arms_by["c02"]["J0p"]["jude_fails_insight"] = True
+    arms_by["c03"]["J0p"] = {"status": "FAILED_final"}
+    res = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    want = {"briefs": 19, "disagree_on_failing_proposition": 1, "disagree_on_failing_insight": 1}
+    assert res["idea1"]["jude_noise_J0_vs_J0p"] == want and res["idea2"]["jude_noise_J0_vs_J0p"] == want and res["idea3"]["jude_noise_J0_vs_J0p"] == want
+    md = ee.render_md(res)
+    assert md.count("Jude's own noise") == 3
+    i1 = md[md.index("## Idea 1"):md.index("## Idea 2")]
+    assert "Jude's own noise, J0 v J0', beside the send-back conditions" in i1 and "Send-back guards not measured" in i1
+
+
+def test_a_position_bias_trip_is_labelled_no_verdict_not_inconclusive_in_the_md(tmp_path):
+    out, inputs, arms_by, packets, key = twenty(tmp_path)
+    res = ee.analyse(out, inputs, arms_by, key, lambda who, item: {"better": "X"} if item in key["pairs"] else {"groups": []})
+    md = ee.render_md(res)
+    assert res["idea2"]["rules"]["verdict"] == ee.NO_VERDICT == "NO VERDICT (validity gate)"
+    assert "## Idea 2: named routes as seeds: NO VERDICT (validity gate)" in md and "not INCONCLUSIVE" in md
+    assert "INCONCLUSIVE" not in md.split("## Idea 2")[1].split("\n")[0]
+    good_res, good_md, _ = md_for(tmp_path / "ok")
+    assert "NO VERDICT" not in good_res["idea2"]["rules"]["verdict"]
+
+
+def test_same_draft_picked_is_reported_beside_order_agreement(tmp_path):
+    assert ee.same_draft_picked([[1, 1], [-1, -1], [0, 0], [1, -1], [1, None]]) == 2 / 4
+    assert ee.order_agreement([[1, 1], [-1, -1], [0, 0], [1, -1], [1, None]]) == 3 / 4      # two "no real difference" agree but pick no draft
+    assert ee.same_draft_picked([]) is None
+    res, md, _ = md_for(tmp_path)
+    assert res["idea2"]["same_draft_picked"] == {"sonnet": 1.0, "opus": 1.0} and res["idea2"]["order_agreement"] == {"sonnet": 1.0, "opus": 1.0}
+    assert "Same draft picked in both orders (S v O)" in md and "Same draft picked in both orders (T1 v C1)" in md and "(R1 v R0)" in md
