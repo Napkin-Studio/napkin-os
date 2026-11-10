@@ -89,27 +89,42 @@ def generate_system(n: int) -> str:
     return field_system(RID, n, grounds=False, reason_from=REASON_FROM) + "\n" + METHOD_NOTE
 
 
-def generate_payload(*, insight, strategy, parts: dict, facts, findings, client_words, library, n: int) -> dict:
+# The folder's seven proposition routes (napkin-brief-engine proposition-generator, SKILL.md line 8), with our two
+# framing words and no gloss: the folder gives none. Used by the offline engine eval only (ROUTE_SEEDS).
+ROUTE_SEEDS = (
+    "build it on emotional reward",
+    "build it on practical payoff",
+    "build it on identity",
+    "build it on tension resolution",
+    "build it on category reframing",
+    "build it on social meaning",
+    "build it on brand role",
+)
+
+
+def generate_payload(*, insight, strategy, parts: dict, facts, findings, client_words, library, n: int,
+                     seeds=SMP_ANGLE_SEEDS) -> dict:
     """What the candidates are written from. `insight`: Dara's drafted insight (the mark comes off);
     `parts`: her drafted parts by key (values only); `facts`, `findings`: the evidence the draft saw;
     `client_words`: the client's captured words; `library`: the precedent passages the draft saw."""
-    seeds = [SMP_ANGLE_SEEDS[i % len(SMP_ANGLE_SEEDS)] for i in range(n)]
+    angles = [seeds[i % len(seeds)] for i in range(n)]
     return {"insight": unmarked(insight), "plan_strategy": strategy,
             "drafted": {k: unmarked(parts[k]) for k in FROM_PARTS if unmarked(parts.get(k))},
             "facts": facts, "findings": findings, "client_words": client_words, "library": library,
-            "angles": seeds, "write": n}
+            "angles": angles, "write": n}
 
 
-def generate(call, payload: dict, n: int = N_CANDIDATES) -> list[dict]:
-    """One call. -> [{value, angle, rests_on, cites, seed}] cleaned (empty values dropped), in the order the model
-    wrote them; `seed` is the index of the angle seed it was written to (the draft's place in the list)."""
+def generate(call, payload: dict, n: int = N_CANDIDATES, seeds=SMP_ANGLE_SEEDS) -> list[dict]:
+    """One call. -> [{value, angle, rests_on, cites, seed, idx}] cleaned (empty values dropped), in the order the
+    model wrote them; `seed` is the index of the angle seed it was written to (`i % len(seeds)`) and `idx` the
+    draft's place in the list."""
     raw = call("candidates_smp", generate_system(n), payload, candidate_schema(n))
     out = []
     for i, c in enumerate(raw.get("candidates") or []):
         v = _clean_value(RID, unmarked(c.get("value")))
         if v:
             out.append({"value": v, "angle": c.get("angle") or "", "rests_on": c.get("rests_on") or "",
-                        "cites": [x for x in c.get("cites") or [] if isinstance(x, str)], "seed": i % len(SMP_ANGLE_SEEDS)})
+                        "cites": [x for x in c.get("cites") or [] if isinstance(x, str)], "seed": i % len(seeds), "idx": i})
     return out
 
 
@@ -126,7 +141,7 @@ def build_pool(first_value, new: list[dict]) -> list[dict]:
             continue
         seen.add(c["value"])
         pool.append({"value": c["value"], "source": f"seed:{c['seed']}", "angle": c.get("angle", ""),
-                     "rests_on": c.get("rests_on", ""), "cites": c.get("cites", [])})
+                     "rests_on": c.get("rests_on", ""), "cites": c.get("cites", []), "idx": c.get("idx")})
     if first:
         pool.append({"value": first, "source": FIRST_DRAFT})
     for p in pool:
@@ -165,6 +180,19 @@ def choose(pool: list[dict], order: list[int]) -> int | None:
     if pool[top]["and_flag"] and len(ok) > 1 and not pool[ok[1]]["and_flag"]:
         return ok[1]
     return top
+
+
+def choose_new(pool: list[dict], order: list[int]) -> int | None:
+    """The index into `pool` of the winner among the NEW candidates only (the first draft is ranked, never chosen),
+    or None (no_gate). Walk the ranking best first: the first new candidate that clears auto_gate and has no
+    standalone 'and'; when every gate-clearing new candidate carries the flag, the best-ranked of them. Code now
+    sends a flagged proposition back whatever Jude says (ADR 0034 as amended 10 Nov), so a flagged winner is
+    wasted while an unflagged one is available."""
+    ok = [i for i in order if pool[i]["source"] != FIRST_DRAFT and pool[i]["gate_ok"]]
+    if not ok:
+        return None
+    clean = [i for i in ok if not pool[i]["and_flag"]]
+    return clean[0] if clean else ok[0]
 
 
 # ---------------------------------------------------------------------------------------------- pick

@@ -338,24 +338,26 @@ RANK_CONTEXT_NOTE = ("The context holds what the candidates were written from: t
                      "one (leave it).")
 
 
-def rank(call, rid: str, cands: list[dict], context: dict | None = None):
+def rank(call, rid: str, cands: list[dict], context: dict | None = None, note: str | None = None):
     """Rank candidates best first with one call (purpose `rank_<rid>`): Drafter._rank's body, callable without a
     Drafter. `call(purpose, system, payload, schema)` is the drafter's model call. `cands`: [{"value": ...}],
     optionally each with "words" and "and_flag" (shown to the ranker as given). `context`: what the candidates
     were written from, for tests (derives_from, true_backed, ownable) that cannot be judged without it; with none,
-    the payload is what Drafter._rank has always sent. -> (order, why_winner, losers {index: why})."""
+    the payload is what Drafter._rank has always sent. `note`: the sentence added to the system prompt when there is a
+    context (default RANK_CONTEXT_NOTE, byte for byte). A candidate's "counter_evidence" is shown when it has one.
+    -> (order, why_winner, losers {index: why})."""
     f = RUBRIC_FIELDS[rid]
     crit = "; ".join(f"{r['id']}: {r['test']}" for r in f.get("rubric", []) if r["method"] == "llm")
     system = RANK_SYSTEM.format(label=f["label"], crit=crit)
     shown = []
     for i, c in enumerate(cands):
         row = {"index": i, "value": c["value"]}
-        row.update({k: c[k] for k in ("words", "and_flag") if k in c})
+        row.update({k: c[k] for k in ("words", "and_flag", "counter_evidence") if k in c})
         shown.append(row)
     payload = {"field": f["label"], "good_example": f.get("good_example"), "bad_example": f.get("bad_example"),
                "candidates": shown}
     if context is not None:
-        system += "\n" + RANK_CONTEXT_NOTE
+        system += "\n" + (RANK_CONTEXT_NOTE if note is None else note)
         payload["context"] = context
     raw = call(f"rank_{rid}", system, payload,
                _obj({"ranking": {"type": "array", "items": {"type": "integer"}}, "why_winner": {"type": "string"},
