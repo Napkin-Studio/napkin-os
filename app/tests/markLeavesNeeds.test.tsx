@@ -129,3 +129,11 @@ test('the app page tells the shell it is active, at most every 5 s, and the shel
   const rt = readFileSync(new URL('src/shell/AppRuntime.tsx', root), 'utf8')
   assert.match(rt, /m\?\.type === 'clan:activity'\) markActivity\(\)/)
 })
+
+test('the app frame stays sandboxed, and only its popups (source links) open as normal tabs', () => {
+  let root = new URL('.', import.meta.url)
+  while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
+  const rt = readFileSync(new URL('src/shell/AppRuntime.tsx', root), 'utf8')
+  assert.match(rt, /sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"/)
+  assert.doesNotMatch(rt, /allow-same-origin|allow-forms|allow-top-navigation/, 'the frame itself gets nothing more')
+})

@@ -297,7 +297,9 @@ export default function AppRuntime({
       {...(host.frameLoad === 'srcdoc' ? { srcDoc: prepared } : { src: iframeSrc })}
       className="ch-frame"
       style={{ width: '100%', flex: 1, border: 'none', background: 'var(--paper)' }}
-      sandbox="allow-scripts allow-popups"
+      // A source link opens as a normal tab (owner, 2026-11-11: publisher pages need their cookies and
+      // storage, PDFs and decks must download). The frame itself stays sandboxed: no same-origin, no forms.
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       title={manifest.title}
       onLoad={() => {
         postScheme(getTheme())
