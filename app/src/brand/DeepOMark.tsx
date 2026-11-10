@@ -26,7 +26,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createModel, TIMING, type MarkKind, type MarkModel, type MarkState } from './deepO'
 import {
-  defaultProgress, h1Attrs, h1Inner, INDETERMINATE_LEN, paintH1, SMALL_MAX, smallInner, SPIN_PERIOD,
+  defaultProgress, h1Attrs, h1Inner, INDETERMINATE_LEN, nodePainter, paintH1, SMALL_MAX, smallInner, SPIN_PERIOD,
   type MarkPalette,
 } from './deepOSvg'
 import { pointerTarget, stepLook, type Look } from '../components/medallionMotion'
@@ -105,9 +105,7 @@ export function DeepOMark({ size = 38, state = 'awake', progress, kind, stage, p
     if (!el || typeof requestAnimationFrame !== 'function') return
     const getLook = shared ? sharedLook : () => ownLook.current
     const putLook = shared ? setSharedLook : (l: Look) => (ownLook.current = l)
-    const nodes = new Map<string, Element>()
-    el.querySelectorAll('[data-k]').forEach(n => nodes.set(n.getAttribute('data-k')!, n))
-    const set = (k: string, a: Record<string, string | number>) => { const n = nodes.get(k); if (n) for (const [x, v] of Object.entries(a)) n.setAttribute(x, String(v)) }
+    const set = nodePainter(el)
     let surface = surfaceNow(), surfaceAt = 0
     let id = 0
     let lastT = performance.now()
@@ -156,12 +154,17 @@ export function DeepOMark({ size = 38, state = 'awake', progress, kind, stage, p
       : h1Inner(pal, h1Attrs(pal, c, model.S.arcTail, shared ? sharedLook() : REST, 0), uid)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, pal.base, pal.accent, small, size, uid])
+  // The same object while the first paint holds: React 19 writes innerHTML again
+  // whenever this prop is a new object, even with the same markup, and that put the
+  // first paint back over every frame (the mark froze in the state it mounted in;
+  // back from a document that needed you, the desk showed "needs").
+  const html = useMemo(() => ({ __html: inner }), [inner])
 
   return (
     <svg ref={svg} xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="-50 -50 100 100"
       style={{ display: 'block', overflow: 'visible', flexShrink: 0 }}
       aria-hidden data-testid={testId} data-state={state} data-cut={small ? 'small' : 'satin'}
-      dangerouslySetInnerHTML={{ __html: inner }} />
+      dangerouslySetInnerHTML={html} />
   )
 }
 

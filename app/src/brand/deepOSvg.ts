@@ -93,6 +93,27 @@ export function h1Inner(p: MarkPalette, A: H1Attrs, uid: string, opt: { spin?: b
     + (opt.spin ? `<g class="deep-o-spin">${ring}</g>` : ring)
 }
 
+/** A node the painter can write to: an element, or a test's stand-in. */
+export interface PaintNode { setAttribute(name: string, value: string): void; readonly isConnected: boolean }
+export interface PaintRoot { querySelectorAll(sel: string): Iterable<PaintNode & { getAttribute(name: string): string | null }> }
+
+/**
+ * The draw loop's `set` for paintH1: finds each `data-k` node in `el`, and finds
+ * them again once they are gone from the page. Whatever replaces the markup (the
+ * first paint written again by React), the loop paints the nodes that show, never
+ * detached ones, so the mark on screen always follows its model.
+ */
+export function nodePainter(el: PaintRoot): (k: string, a: Record<string, string | number>) => void {
+  const nodes = new Map<string, PaintNode>()
+  const collect = () => { nodes.clear(); for (const n of el.querySelectorAll('[data-k]')) nodes.set(n.getAttribute('data-k')!, n) }
+  collect()
+  return (k, a) => {
+    let n = nodes.get(k)
+    if (!n || !n.isConnected) { collect(); n = nodes.get(k) }
+    if (n) for (const [x, v] of Object.entries(a)) n.setAttribute(x, String(v))
+  }
+}
+
 /** One frame of the satin mark onto its nodes (by `data-k`): attributes only. */
 export function paintH1(set: (k: string, a: Record<string, string | number>) => void, A: H1Attrs): void {
   set('sky-top', { 'stop-color': A.skyTop })

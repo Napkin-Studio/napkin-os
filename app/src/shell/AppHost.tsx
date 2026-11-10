@@ -27,7 +27,7 @@ import { statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
-import { markTarget } from '../components/medallionMotion'
+import { isProductApp, markTarget } from '../components/medallionMotion'
 import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
@@ -111,7 +111,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     setRunSeen({ docPath, last: runState, finished: ended || (same && runSeen.finished && runState !== 'working') })
   }
   const engaged = useEngaged()
-  const mark_ = markTarget({ inDoc: true, needs, run, finished: runSeen.finished, engaged })
+  // Only a product's document (Brief, Research, Deck, Production) moves the mark; any other app keeps it at rest.
+  const product = isProductApp(open.manifest.app?.app_id)
+  const mark_ = markTarget({ inDoc: product, needs, run, finished: runSeen.finished, engaged })
   // The Decisions drawer, opened from the bar. Kept with the document it was opened on.
   const [drawer, setDrawer] = useState<{ docPath: string; open: boolean }>({ docPath, open: false })
   const decisionsOpen = drawer.docPath === docPath && drawer.open
@@ -353,7 +355,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         client={client}
         account={account}
         // The medallion lights only for the document the person is IN (owner, 9 Nov 2026).
-        attention={needs > 0 || !!crew?.waiting}
+        attention={product && (needs > 0 || !!crew?.waiting)}
         markTarget={mark_}
         needs={needs}
         onDecisions={clientOn ? undefined : () => setDecisionsOpen(o => !o)}

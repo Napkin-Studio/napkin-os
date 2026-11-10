@@ -12,10 +12,17 @@ import { wavePath } from './medallionLook'
 
 // ---------- which state the mark is told ----------
 
+/** The products whose documents the mark follows: Brief, Research, Deck and Production. */
+const PRODUCTS = new Set(['brief-maker', 'campaign-research', 'deck-maker', 'production', 'production-tool'])
+/** A product's document (by its app_id, `ie.napkin.brief-maker` or bare): only these ever tell the mark "needs". */
+export function isProductApp(appId: string | null | undefined): boolean {
+  return !!appId && PRODUCTS.has(appId.slice(appId.lastIndexOf('.') + 1))
+}
+
 export interface MarkTarget { state: MarkState; progress: number; kind?: MarkKind; stage?: string | null }
 
 export interface MarkInputs {
-  /** A document is open (the app the person is in). */
+  /** A product's document is open (the app the person is in: isProductApp). Never on the desk, a client or a tool page. */
   inDoc: boolean
   /** That document's open calls for this person (its Decisions count). Desk counts never reach the mark. */
   needs: number
