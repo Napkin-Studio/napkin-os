@@ -2706,9 +2706,10 @@ test('a header row shows its whole text, never truncated (owner, 2026-11-10); th
   // A ruled header row spans the page, so a long value simply wraps: no line clamp, no ellipsis, on screen or in print.
   assert.equal((BM.match(/k-cell[^{}]*\{[^}]*line-clamp/g) || []).length, 0, 'no clamp on a header row')
   assert.doesNotMatch(BM, /k-cell[^{}]*\{[^}]*text-overflow:ellipsis/, 'no ellipsis on a header row')
-  // The whole text: the row's tooltip, and the Selected part panel when the row is clicked.
+  // The whole text sits on the sheet; the row's tooltip keeps it too.
   assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?' title="'\+esc\(String\(v\)\)/)
-  assert.match(fn(BM, 'renderSelPart'), /isMeta\(f\.key\)&&hasVal\(get\(f\.key\)\)\?'<p class="sp-full">'/)
+  // The sheet shows the whole text, so the panel never repeats it (owner, 2026-11-11).
+  assert.doesNotMatch(fn(BM, 'renderSelPart'), /sp-full/)
   // Print draws the same ruled rows from the same parts (kindOf), with every word and no Version row.
   assert.match(fn(BM, 'sheetCells'), /'<div class="row k-'\+kd\+toneClass\(c\.tone\)/)
   assert.match(fn(BM, 'sheetCells'), /kd=kindOf\(f, c\.as\)/)

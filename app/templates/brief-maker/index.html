@@ -1061,7 +1061,6 @@
   .sp-line{display:grid;gap:4px;padding:4px 0 2px}
   .sp-line .rsp-k{display:flex;align-items:baseline}
   .sp-line .rsp-k em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:.02em;text-transform:none}
-  .side-part .sp-full{margin:6px 0 10px;font:400 13.5px/1.5 var(--font-ui);color:var(--nd-ink2,var(--nd-ink));white-space:pre-line;overflow-wrap:anywhere}
   /* Where it came from (ClanFields.partView), in the shell's tokens, light and dark */
   .selpart .clf-rv,.selpart .clf-insp{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper);--clf-mono:var(--font-mono)}
   :root[data-color-scheme="dark"] .selpart .clf-rv,:root[data-color-scheme="dark"] .selpart .clf-insp{--clf-paper:var(--nd-card)}
@@ -4493,8 +4492,6 @@
     el.innerHTML='<h4>Selected part<button type="button" class="side-link" data-sp="done" title="Let go of this part (Esc)">Done</button></h4>'
       // the part's name, its certainty and who wrote it from what (ClanFields.partView's head)
       +'<div class="sp-head" id="spHead"><div class="clf-rv pv"><div class="rv-head"><span class="rv-pname">'+esc(headOf(f))+'</span></div></div></div>'
-      // a header row shows two lines on the sheet: the panel carries its whole text
-      +(isMeta(f.key)&&hasVal(get(f.key))?'<p class="sp-full">'+esc(String(get(f.key)))+'</p>':'')
       +'<div class="sp-acts">'
       +(wr?'<button type="button" class="sp-btn sp-edit" data-sp="edit">Edit</button>':'')
       +(!A?'<button type="button" class="sp-btn" data-sp="regen"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+' title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(WRITER)+' to write this again, with a note if you like')+'">Redraft…</button>':'')
