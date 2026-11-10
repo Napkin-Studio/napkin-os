@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { spinoffTitle } from '../src/shell/docTitle.ts'
+import { docTitle, spinoffTitle } from '../src/shell/docTitle.ts'
 
 const BRIEF = 'ie.napkin.brief-maker', RESEARCH = 'ie.napkin.campaign-research'
 
@@ -22,4 +22,11 @@ test('a source with no title of its own, or a tool with no word, is left to the 
   assert.equal(spinoffTitle('Brief Maker', BRIEF, RESEARCH), null)
   assert.equal(spinoffTitle('', BRIEF, RESEARCH), null)
   assert.equal(spinoffTitle('Ferryman', BRIEF, 'ie.napkin.deck-maker'), null)
+})
+
+test('a new document is called by its tool\'s untitled word: the mock\'s "New brief", "New question"', () => {
+  assert.deepEqual(docTitle('Brief Maker', BRIEF, 'Brief Maker', 'New brief'), { text: 'New brief', untitled: true })
+  assert.deepEqual(docTitle('Research Tool', RESEARCH, 'Research Tool', 'New question'), { text: 'New question', untitled: true })
+  assert.deepEqual(docTitle('', BRIEF), { text: 'New brief', untitled: true }, 'a tool no longer installed says the same')
+  assert.deepEqual(docTitle('Window Open', BRIEF, 'Brief Maker', 'New brief'), { text: 'Window Open', untitled: false })
 })

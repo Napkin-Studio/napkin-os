@@ -21,8 +21,13 @@
 .nui .tb-locked > .tb-spacer { flex: 1 1 0; min-width: 0; }
 .nui .tb-app > * { flex-shrink: 0; }
 .nui .tb-app > .tba-name { flex-shrink: 1; min-width: 72px; }
-.nui .tba-name .tba-n2 { min-width: 0; }
+/* The name's column shrinks with it: its title and saved line end in an
+   ellipsis inside the column, so neither runs under the caret, and the caret
+   keeps its own room before Continue in. */
+.nui .tba-name .tba-n2 { min-width: 0; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .nui .tba-name b { min-width: 0; }
+.nui .tba-name .tba-saved { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nui .tba-name > svg, .nui .tba-name > .tba-caret { flex: none; }
 .nui .tb-tools { display: inline-flex; align-items: center; gap: 8px; }
 .nui .tb-tools:empty { display: none; }
 .nui .tba-primary { background: var(--ag-act) !important; color: var(--ag-act-ink) !important; border-color: var(--ag-act) !important; }

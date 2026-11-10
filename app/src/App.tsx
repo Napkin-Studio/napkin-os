@@ -16,7 +16,7 @@ import { askAppToExport } from './shell/appExport'
 import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
-import { initialsOf, routeOfDocument, runWords, whoIs } from './shell/landing/model'
+import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
 import { TOOLS, isLive, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
 import { signedInUser } from './host/http'
@@ -584,9 +584,9 @@ export default function App() {
   const docItem = running && landing.data ? landing.data.items.find(i => i.path === running.open.path) ?? null : null
   const crew = running && !device ? {
     people: user ? [{ name: whoIs(landing.data?.person ?? null).first ?? user, initials: initialsOf(whoIs(landing.data?.person ?? null).first ?? user), you: true }] : [],
-    working: docItem?.run?.state === 'working' ? runWords(docItem).toLowerCase() : null,
+    working: docItem?.run?.state === 'working' ? jobOf(docItem.run).verb : null,
     agent: docItem?.run?.state === 'working' ? roles.forStage(docItem.app_id ?? running.open.manifest.app?.app_id, docItem.run.stage) : null,
-    progress: docItem?.run?.progress ?? null,
+    progress: docItem?.run?.state === 'working' ? jobOf(docItem.run).step : null,
     waiting: docItem?.run?.state === 'waiting',
   } : undefined
 

@@ -267,7 +267,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 start: Some("Start a brief".into()),
                 crew: vec!["extract".into(), "drafter".into(), "judge".into()],
                 noun: vec!["brief".into(), "briefs".into()],
-                untitled: Some("Untitled brief".into()),
+                untitled: Some("New brief".into()),
                 // "Napkin Studio Brief" in the OS bar; it shares the OS's face (Geist).
                 brand: Some("Brief".into()),
                 ..Default::default()

@@ -232,7 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 start: Some("Start research".into()),
                 crew: vec!["extract".into(), "market_structure".into(), "positioning".into(), "culture".into(), "synthesis".into(), "drafter".into()],
                 noun: vec!["research".into(), "research".into()],
-                untitled: Some("Untitled research".into()),
+                untitled: Some("New question".into()),
                 // "Napkin Studio Research" in the OS bar; it shares the OS's face (Geist).
                 brand: Some("Research".into()),
                 ..Default::default()

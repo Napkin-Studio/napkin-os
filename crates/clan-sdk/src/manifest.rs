@@ -190,7 +190,7 @@ pub struct AppHome {
     /// What one document is called, and many: `["brief", "briefs"]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub noun: Vec<String>,
-    /// A new document's name until it has its own: "Untitled brief".
+    /// A new document's name until it has its own: "New brief".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub untitled: Option<String>,
     /// The app's own name as the OS bar says it after "Napkin Studio":

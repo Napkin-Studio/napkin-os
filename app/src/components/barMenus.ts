@@ -132,7 +132,7 @@ export interface Crew {
   working?: string | null
   /** The agent at work (a role key from the one lookup, agents/engine.ts), drawn as its sphere while `working`. */
   agent?: string | null
-  /** Steps done of all, when the run says: the sphere's ring. */
+  /** The step being worked and all, 1-based (landing/model jobOf), when the run says. */
   progress?: readonly [number, number] | null
   /** The run stopped to ask the person something (a question in the document). It needs them, though nothing blocks the lock. */
   waiting?: boolean

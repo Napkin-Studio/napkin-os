@@ -10,6 +10,9 @@ const props = new Map<string, string>()
 const head: { children: unknown[]; appendChild: (el: unknown) => void } = { children: [], appendChild(el) { head.children.push(el) } }
 const byId = new Map<string, { id: string; textContent: string }>()
 g.window ??= g
+// Modules that listen for the page's messages when they load (the host bridge).
+if (typeof g.addEventListener !== 'function') g.addEventListener = () => {}
+if (typeof g.removeEventListener !== 'function') g.removeEventListener = () => {}
 g.document ??= {
   documentElement: {
     dataset: {} as Record<string, string>,

@@ -14,8 +14,8 @@
  * (`app.home.untitled`).
  */
 const UNTITLED: Readonly<Record<string, string>> = {
-  'ie.napkin.campaign-research': 'Untitled research',
-  'ie.napkin.brief-maker': 'Untitled brief',
+  'ie.napkin.campaign-research': 'New question',
+  'ie.napkin.brief-maker': 'New brief',
 }
 
 /**

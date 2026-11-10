@@ -23,6 +23,9 @@ import '../decisions/DecisionPanel.css'
 
 export type DrawerView = 'graph' | 'part' | 'time' | 'lineage'
 
+/** Open calls on the card before "Show all N" (the mock lists three). */
+export const CALLS_SHOWN = 3
+
 /** One document's calls on the card, and how to settle them. */
 export interface CallGroup {
   key: string
@@ -83,6 +86,13 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
 
   const split = groups.map(g => ({ g, ...splitAside(g.calls, g.aside ?? new Set()) }))
   const n = split.reduce((s, x) => s + x.open.length, 0) + pending.length
+  // The mock's card lists the first few calls, then "Show all N", so Approve all and the views stay in sight.
+  const [showAll, setShowAll] = useState(false)
+  const shown = showAll ? Infinity : CALLS_SHOWN
+  const openRows = split.flatMap(({ g, open }) => open.map(item => ({ g, item })))
+  // Approve buttons for the documents whose calls are in sight (all of them after Show all).
+  const inSight = new Set(openRows.slice(0, shown).map(r => r.g.key))
+  const approvable = groups.filter(g => !g.locked && g.calls.length && (showAll || openRows.length <= CALLS_SHOWN || inSight.has(g.key)))
   const asideN = split.reduce((s, x) => s + x.aside.length, 0)
 
   const act = async (key: string, run: () => Promise<void>) => {
@@ -153,8 +163,8 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.45 }} id="dtree-call-desc">
               {n || asideN ? (
                 <div className="dc-rows">
-                  {split.map(({ g, open }) => open.map(item => row(g, item, false)))}
-                  {pending.map(p => (
+                  {openRows.slice(0, shown).map(({ g, item }) => row(g, item, false))}
+                  {pending.slice(0, Math.max(0, shown - openRows.length)).map(p => (
                     <div className="pp-row" style={{ gridTemplateColumns: '1fr' }} key={p.key} data-testid="call-row">
                       <button type="button" data-np-open style={{ textAlign: 'left' }} onClick={p.onOpen}>
                         <b style={{ fontSize: 13.5 }}>{p.title}</b><span className="pp-sub" style={{ display: 'block' }}>{p.sub}</span>
@@ -164,6 +174,12 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
                       </span>
                     </div>
                   ))}
+                  {n > CALLS_SHOWN && (
+                    <button type="button" className="side-link" data-testid="calls-show-all" aria-expanded={showAll}
+                      style={{ marginTop: 8 }} onClick={() => setShowAll(v => !v)}>
+                      {showAll ? 'Show fewer' : `Show all ${n}`}
+                    </button>
+                  )}
                   {asideN > 0 && <>
                     <hr />
                     <div className="pp-h" data-testid="set-aside-list">Set aside · {asideN}</div>
@@ -174,8 +190,8 @@ export function DecisionsDrawer({ title, groups, pending = [], focus, view, onVi
             </div>
             {groups.map(g => g.lock && <p key={`lock|${g.key}`} className="dp-lock" data-testid="lock-line">{g.lock}</p>)}
             {error && <p className="dp-err" role="alert">{error}</p>}
-            {groups.some(g => !g.locked && g.calls.length) && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} id="dtree-call-actions">{groups.map(approveFor)}</div>
+            {approvable.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} id="dtree-call-actions">{approvable.map(approveFor)}</div>
             )}
           </div>
 

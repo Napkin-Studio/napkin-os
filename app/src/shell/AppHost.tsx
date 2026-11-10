@@ -139,7 +139,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   } : null
   // The name the library has now: the app may have renamed it since it opened.
   const barTitle = open.is_template ? open.manifest.title
-    : docTitle(listedTitle(library, docPath) ?? open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text
+    : docTitle(listedTitle(library, docPath) ?? open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name, tool?.home?.untitled).text
   // Read links and the source again when another document changes, or the page is back in view.
   const wake = useWakeTick()
   const others = othersStamp(library, docPath)

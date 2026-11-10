@@ -240,6 +240,22 @@ export function needsReason(item: LibraryItem): string {
 export const runWords = (item: LibraryItem): string =>
   item.run?.label || (item.run?.state === 'failed' ? 'Failed' : 'Running')
 
+/**
+ * A running job as the bar's chip says it (the mock's "Working · step 1/3"):
+ * a clean verb, never the run's stage key or its "(0 of 3)", and the step being
+ * worked, 1-based for people (the run counts steps done, so 0 of 3 is step 1).
+ * The verb is the label's own first word when that is a plain "-ing" verb with
+ * nothing after it ("Rewriting"); otherwise "working".
+ */
+export function jobOf(run: { label?: string | null; progress?: readonly [number, number] | null } | null | undefined): { verb: string; step: readonly [number, number] | null } {
+  const label = String(run?.label ?? '').trim()
+  const m = /^([A-Za-z]+ing)(?:\s+(?:again|it|the \w+(?: again)?))?\.?$/.exec(label)
+  const verb = m ? m[1].toLowerCase() : 'working'
+  const p = run?.progress
+  const step = p && p[1] > 0 ? [Math.min(Math.max(0, p[0]) + 1, p[1]), p[1]] as const : null
+  return { verb, step }
+}
+
 /** Which tool a document belongs to, for a strip's second line. */
 export const toolName = (item: LibraryItem): Tool | undefined => toolOfApp(item.app_id)
 
