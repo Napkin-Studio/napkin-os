@@ -6473,7 +6473,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var sel=VIEW.sel, showMap=VIEW.v==='map'&&!sel;
     pv.hidden=showMap; if(map) map.hidden=!showMap; $('ws').classList.toggle('ws-map', showMap);
     if(ask) ask.hidden=!!sel||showMap||!isObj(D().report); if(foot) foot.hidden=!!sel||showMap;
-    if(showMap){ renderMapV(); return; }
+    if(showMap){ renderMapV();
+      // the panel widens for the map: draw it again at its new width, and whenever the window resizes
+      clearTimeout(PV.fitT); PV.fitT=setTimeout(function(){ if(VIEW.v==='map'&&!VIEW.sel) keepScroll(renderMapV); }, 320);
+      return; }
     var ae=document.activeElement, keep=ae&&ae.id&&pv.contains(ae)?{id:ae.id, s:ae.selectionStart, e:ae.selectionEnd}:null;
     pv.innerHTML=sel?itemHtml(sel):reportViewHtml();
     if(foot) foot.innerHTML=sel?'':reportFootHtml();
@@ -6571,7 +6574,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(!isObj(r)){ el.innerHTML='<div class="pv-map"><div class="pv-mhead"><h3>Evidence map</h3></div><p class="pv-empty">There is no report yet: the map draws once the report is written.</p></div>'; return; }
     var G=mapGraphV(), E=G.E, c=E.counts, edges=edgesV(G);
     // the columns fit the panel: scaled to its width, scrolling sideways only when it is very narrow
-    var k=Math.max(.72, Math.min(1.2, ((el.clientWidth||830)-4)/830)), CX=COLX.map(function(x){ return Math.round(x*k); }), CW=COLW.map(function(w){ return Math.round(w*k); });
+    var cs=getComputedStyle(el), avail=(el.clientWidth||830)-(parseFloat(cs.paddingLeft)||0)-(parseFloat(cs.paddingRight)||0)-8, k=Math.max(.72, Math.min(1.2, avail/830)), CX=COLX.map(function(x){ return Math.round(x*k); }), CW=COLW.map(function(w){ return Math.round(w*k); });
     var vis=Object.keys(G.nodes).filter(function(id){ return visV(G, id)===id; });
     var nl=arr(r.summary).length;
     var h='<div class="pv-map"><div class="pv-mhead"><h3>Evidence map</h3><div class="pv-mcounts"><span title="Sources used">▤'+c.feeds.sources+'</span><span title="Facts used">◆'+c.feeds.pins+'</span><span title="Findings in the summary">'+FG()+c.feeds.findings+'</span><span title="Summary lines and headline">'+(nl?'①'+(nl>1?'–'+(CIRC.charAt(nl-1)||nl):''):'')+(isObj(r.headline)?'Ⓗ':'')+'</span></div><label class="pv-mfind"><span aria-hidden="true">⌕</span><input id="pv-mapq" type="search" placeholder="Find in map" aria-label="Find in map" autocomplete="off"></label><button type="button" class="pv-link muted" data-act="pv-key" aria-expanded="'+PV.keyOpen+'">Key '+(PV.keyOpen?'▾':'▸')+'</button></div>';
@@ -6755,6 +6758,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(!hit) return; var hn=G.nodes[hit]; if(hn.in&&visV(G, hit)!==hit){ if(G.nodes[hn.in].k==='more') PV.moreSrc=true; else PV.open[hn.in]=true; keepScroll(renderMapV); }
     var el=document.querySelector('#pv-canvas .nd[data-node="'+hit.replace(/"/g,'')+'"]'); if(el){ el.classList.add('hit'); el.scrollIntoView({block:'nearest'}); }
   });
+  window.addEventListener('resize', function(){ if(VIEW.v!=='map'||VIEW.sel) return; clearTimeout(PV.fitT); PV.fitT=setTimeout(function(){ keepScroll(renderMapV); }, 150); });
   // A click on empty paper goes back to the report view.
   $('doc').addEventListener('click', function(e){
     if(!VIEW.sel||!e.target.closest||e.target.closest('[data-rsel],[data-ref],button,a,input,textarea,select,summary,clan-field,details,dialog,.rc-tags')) return;
