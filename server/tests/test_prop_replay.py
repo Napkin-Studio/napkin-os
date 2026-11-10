@@ -221,7 +221,7 @@ def test_distinct_ideas_counts_groups_and_left_out_numbers():
     assert pr.distinct_ideas([[1, 2], [3]], 5) == 4                # {1,2}, {3}, 4, 5
     assert pr.distinct_ideas([[1, 2, 3, 4, 5]], 5) == 1
     assert pr.distinct_ideas([[1, 2], [2, 3]], 4) == 3             # 2 counted once: {1,2}, {3}, 4
-    assert pr.distinct_ideas([[9], []], 3) == 3                    # numbers out of range are ignored
+    assert pr.distinct_ideas([[9], []], 3) is None                 # out of range is unreadable, not ignored
     assert pr.distinct_ideas("nope", 3) is None and pr.distinct_ideas([1, 2], 3) is None
 
 
@@ -268,7 +268,7 @@ def test_replay_packets_rate_and_analyse_run_end_to_end_with_fakes(tmp_path, mon
     assert {p.name for p in (out / "packets").iterdir()} == {"order1.json", "order2.json", "sameidea.json"}
     key = json.loads((out / "key.json").read_text())
 
-    def fake_rater(rater, prompt, cost, job):
+    def fake_rater(rater, prompt, cost, job, kind='pair', n=None):
         if "Put together the ones" in prompt:
             return {"groups": [[1, 2], [3], [4], [5]]}          # 4 ideas of 5
         return {"better": "X", "reason": "x"}                    # always the first position
@@ -284,7 +284,7 @@ def test_replay_packets_rate_and_analyse_run_end_to_end_with_fakes(tmp_path, mon
     # a rater that always prefers the winner, found through the key, wins every pair
     pos = {it: k for it, k in key["pairs"].items()}
 
-    def winner_rater(rater, prompt, cost, job):
+    def winner_rater(rater, prompt, cost, job, kind='pair', n=None):
         if job in pos:
             return {"better": "X" if pos[job]["X"] == "winner" else "Y", "reason": ""}
         return {"better": "no real difference", "reason": ""} if "Put together" not in prompt else {"groups": [[1], [2], [3], [4], [5]]}
@@ -309,10 +309,11 @@ def test_a_failed_run_makes_the_verdict_incomplete(tmp_path, monkeypatch):
     monkeypatch.setattr(pr, "make_port", lambda cost: (None, None))
     monkeypatch.setattr(pr, "make_call", lambda port, client, job, max_tokens=12000: boom)
     pr.main(["--out", str(out), "replay", "--workers", "1"])
-    pr.main(["--out", str(out), "packets"])
+    with pytest.raises(SystemExit):          # packets refuse while any run is FAILED
+        pr.main(["--out", str(out), "packets"])
     pr.main(["--out", str(out), "analyse"])
     a = json.loads((out / "analysis.json").read_text())
-    assert a["verdict"] == "INCOMPLETE" and "c01-off:run failed" in a["missing"]
+    assert a["verdict"] == "INCOMPLETE" and any(m.startswith("c01-off:run failed") for m in a["missing"])
     assert a["not_part_of_the_rule"]["outcomes"] == {"generate_failed": 2}
 
 
@@ -330,3 +331,53 @@ def test_cost_log_stops_calls_at_the_cap(tmp_path):
     with pytest.raises(pr.BudgetExceeded):
         log.check()
     assert pr.CostLog(tmp_path / "c.jsonl", 1.0).spent == pytest.approx(0.06)     # the cap counts earlier runs too
+
+
+def test_distinct_ideas_reads_string_and_float_numbers_and_refuses_what_it_cannot_read():
+    assert pr.distinct_ideas([["1", "2"], ["3", "4", "5"]], 5) == 2
+    assert pr.distinct_ideas([[1.0, 2.0], [3]], 3) == 2
+    assert pr.distinct_ideas([["one", "two"]], 3) is None
+    assert pr.distinct_ideas([[9]], 3) is None
+
+
+def test_pick_is_normalised_and_unusable_answers_are_not_usable():
+    assert pr.normalise_pick(" y. ") == "Y" and pr.normalise_pick("No real difference") == "no real difference"
+    assert pr.normalise_pick("maybe") is None
+    assert pr.usable({"better": "Y."}, "pair") and not pr.usable({"better": "both"}, "pair")
+    assert pr.usable({"groups": [["1", "2"]]}, "sameidea", 3) and not pr.usable({"x": 1}, "sameidea", 3)
+
+
+def test_hard_cap_holds_whatever_max_usd_says(tmp_path):
+    log = pr.CostLog(tmp_path / "c.jsonl", 160.0)
+    log.add({"cost_usd": pr.HARD_CAP_USD})
+    with pytest.raises(pr.BudgetExceeded):
+        log.check()
+
+
+def test_a_rerun_after_packets_makes_analyse_incomplete_and_ids_follow_content(tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    names = _fake_inputs(out, 2)
+    ok = lambda purpose, system, payload, schema: (
+        {"candidates": [{"value": f"Candidate line {i}", "angle": "", "rests_on": "", "cites": []} for i in range(4)]}
+        if purpose == "candidates_smp" else {"ranking": [0, 1, 2, 3, 4], "why_winner": "", "losers": []})
+    monkeypatch.setattr(pr, "make_port", lambda cost: (None, None))
+    monkeypatch.setattr(pr, "make_call", lambda port, client, job, max_tokens=12000: ok)
+    base = ["--out", str(out)]
+    pr.main(base + ["replay", "--workers", "1"])
+    pr.main(base + ["packets"])
+    ids1 = sorted(i["item"] for i in json.loads((out / "packets/order1.json").read_text())["items"])
+    ok2 = lambda purpose, system, payload, schema: (
+        {"candidates": [{"value": f"Another line {i}", "angle": "", "rests_on": "", "cites": []} for i in range(4)]}
+        if purpose == "candidates_smp" else {"ranking": [0, 1, 2, 3, 4], "why_winner": "", "losers": []})
+    monkeypatch.setattr(pr, "make_call", lambda port, client, job, max_tokens=12000: ok2)
+    pr.main(base + ["replay", "--workers", "1", "--force"])      # results rewritten after the key was made
+    pr.main(base + ["analyse"])
+    a = json.loads((out / "analysis.json").read_text())
+    assert a["verdict"] == "INCOMPLETE" and any("different results" in m for m in a["missing"])
+    # same content: same ids; changed winner: a new id, so an old rating is never matched
+    o1, _, _, _ = pr.build_packets(pr._rows(out))
+    assert sorted(i["item"] for i in o1["items"]) != ids1       # the winner changed with the results
+    rows = pr._rows(out)
+    rows[0]["winner"] = "A different winner"
+    o1b, _, _, _ = pr.build_packets(rows)
+    assert sorted(i["item"] for i in o1b["items"]) != ids1
