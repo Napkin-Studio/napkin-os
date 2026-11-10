@@ -36,11 +36,17 @@ from .rubric import auto_gate
 log = logging.getLogger("napkin.brief.draft")
 
 N_CANDIDATES = 4
+# The sourced proposition types, word for word the engine's (engine/parse_brief.py SMP_ANGLE_SEEDS): Ogilvy's
+# "a killer fact, a promise, a straight message, or just a plain and simple big idea" and Weichselbaum p.305
+# (a product point, a practical benefit, an emotional benefit), ADR 0007. The earlier seeds here (what the
+# audience settles for, how they are judged by others, the competitive edge, the brand's craft) were unsourced
+# and pushed drafts toward social-judgement lines. server/ cannot import engine/ (the image never holds it), so
+# tests/test_brief_candidates.py checks the words.
 SMP_ANGLE_SEEDS = (
-    "lead with the contrast between what this audience settles for and what they could deliberately choose",
-    "lead with how this audience is judged or perceived by others — the product as a verdict on their standards",
-    "lead with the competitive edge or advantage the product gives them over rivals",
-    "lead with the brand's own craft / design / engineering equity as the reason to choose it",
+    "build it on a killer fact: one true, specific thing about this brand or product that changes the audience's view",
+    "build it on a promise: the practical benefit this audience gets that rivals do not deliver as well",
+    "build it on an emotional benefit: how this audience feels, or is freed from feeling, because of this brand",
+    "build it on a plain, simple big idea: the single thought that reframes the category for this audience",
 )
 CASE_LOOPS = ("loop4_insight", "loop6_substantiation")
 
@@ -69,18 +75,26 @@ def value_schema(rid: str) -> dict:
     return {"type": "string", "minLength": 1}
 
 
-def field_system(rid: str, n: int = 1) -> str:
-    """engine `_gen_field_system`, schema-driven, without the confidence."""
+_REASON_FROM = ("Reason from the working brief, the client's captured words and the precedent passages given.")
+
+
+def field_system(rid: str, n: int = 1, grounds: bool = True, reason_from: str | None = None) -> str:
+    """engine `_gen_field_system`, schema-driven, without the confidence.
+
+    `grounds=False` leaves out GROUNDS_GUIDE and the n > 1 sentence 'Each draft carries its own grounds'
+    (a caller that wants no grounds back). `reason_from` replaces the head sentence 'Reason from the working
+    brief, ...' (a caller whose input is not the working brief). Both defaults keep the text as it was."""
     f = RUBRIC_FIELDS[rid]
     lim = f"Hard limit: {f['max_words']} words.\n" if f.get("max_words") else ""
     if f.get("max_items"):
         lim += f"At most {f['max_items']} items, strongest first.\n"
     own = ""
     if rid in ("insight", "smp"):
-        own = ("\nOWNABLE TENSION: claim territory the named competitor does NOT own. If every rival in the category "
-               "would nod at your line, it is a category truth and a FAIL — use the competitor context to find the "
-               "white space. Reconcile the WHOLE stated audience. Never restate the brand's own existing vision / "
-               "mission / tagline; that is not a campaign proposition.\n")
+        own = ("\nOWNABLE TENSION: claim territory the named competitor does NOT own. If every rival in the category would nod at "
+               "your line, it is a category truth and a FAIL — use the competitor context to find the "
+               "white space. Reconcile the WHOLE stated audience (if it is split, name the tension that unites the "
+               "segments; a truly split audience may need two briefs). Do not simply restate the brand's standing "
+               "line unless the brief asks for continuity; the proposition is this campaign's choice.\n")
     if f.get("type") == "tfd":
         own += "\n'do' is a concrete, observable behaviour — never 'engage with', 'explore', 'interact with'.\n"
     head = (f"You are a senior strategy planner writing the '{f['label']}' field of a brief for THIS specific brand. "
@@ -90,21 +104,22 @@ def field_system(rid: str, n: int = 1) -> str:
             f"  {f.get('good_example', '')}\n\n"
             f"BAD — never produce anything like this:\n  {f.get('bad_example', '')}  ({f.get('bad_reason', '')})\n"
             f"{own}\n"
-            "Reason from the working brief, the client's captured words and the precedent passages given. The "
+            f"{_REASON_FROM if reason_from is None else reason_from} The "
             "passages are for SHAPE and DEPTH only — do not borrow their words, brands or themes. Be specific to "
             "this brand: a line that could be pasted onto a different brief is a failure. You are synthesising "
             "strategy, never inventing client facts. When the planner gave guidance, follow it.\n")
     if n > 1:
         head += (f"\nWrite {n} GENUINELY DISTINCT drafts — different strategic ideas, not rewordings of one idea. "
-                 f"Make them compete. Each draft carries its own grounds.\n")
-    return head + GROUNDS_GUIDE
+                 f"Make them compete.{' Each draft carries its own grounds.' if grounds else ''}\n")
+    return head + (GROUNDS_GUIDE if grounds else "")
 
 
 RANK_SYSTEM = ("You are a strategy director ranking candidate '{label}' lines for a creative brief. Reward PURITY "
                "and single-mindedness (one thought, not a thought with an 'and': never a list, never two claims joined), ownable territory (a direct rival could "
                "not say the same line), and a real human tension specific to THIS brand. Penalise category truths "
-               "everyone would nod at, restated brand taglines, and anything trying to say two things. Judge each "
-               "on: {crit}. Return the candidate indexes best first, one line on why the winner wins, and one line "
+               "everyone would nod at, lines that try to say two things, and lines written as copy (a pun or double "
+               "meaning, hype standing in for a thought, the brand's sign-off line); short or headline-able is not a "
+               "fault. Judge each on: {crit}. Return the candidate indexes best first, one line on why the winner wins, and one line "
                "on why each other candidate lost.")
 SHARPEN_NOTE = ("REFINE MODE: you are given a strong draft. Make it PURER and more single-minded — one idea only, "
                 "sharper, more ownable. Keep what already works; never add a second idea. If it is already optimal, "
@@ -294,18 +309,7 @@ class Drafter:
         return d
 
     def _rank(self, cands):
-        f = RUBRIC_FIELDS[self.rid]
-        crit = "; ".join(f"{r['id']}: {r['test']}" for r in f.get("rubric", []) if r["method"] == "llm")
-        raw = self._call(f"rank_{self.rid}", RANK_SYSTEM.format(label=f["label"], crit=crit),
-                         {"field": f["label"], "good_example": f.get("good_example"), "bad_example": f.get("bad_example"),
-                          "candidates": [{"index": i, "value": c["value"]} for i, c in enumerate(cands)]},
-                         _obj({"ranking": {"type": "array", "items": {"type": "integer"}}, "why_winner": {"type": "string"},
-                               "losers": {"type": "array", "items": _obj({"index": {"type": "integer"},
-                                                                          "why": {"type": "string"}})}}))
-        order = [i for i in dict.fromkeys(raw["ranking"]) if isinstance(i, int) and 0 <= i < len(cands)]
-        order += [i for i in range(len(cands)) if i not in order]
-        losers = {x["index"]: x["why"].strip() for x in raw.get("losers") or [] if (x.get("why") or "").strip()}
-        return order, raw.get("why_winner") or "", losers
+        return rank(self._call, self.rid, cands)
 
     def revise(self, d: Draft, failures: list[dict], insight: str | None = None) -> Draft:
         """One revision with the Judge's fixes. The drafter keeps its passages;
@@ -325,6 +329,42 @@ class Drafter:
                                      "; ".join(f"{x['check']}" for x in failures)))
         d.value, d.grounds, d.revised = v, raw["grounds"], True
         return d
+
+
+RANK_CONTEXT_NOTE = ("The context holds what the candidates were written from: the insight, the job, the audience, the "
+                     "competitor context and the reasons to believe. Judge derives_from and true_backed against it. Each "
+                     "candidate carries its word count and whether it has a standalone 'and' or '&': a flag, not a "
+                     "fault. Decide for yourself whether the 'and' joins two thoughts (rank it down) or sits inside "
+                     "one (leave it).")
+
+
+def rank(call, rid: str, cands: list[dict], context: dict | None = None):
+    """Rank candidates best first with one call (purpose `rank_<rid>`): Drafter._rank's body, callable without a
+    Drafter. `call(purpose, system, payload, schema)` is the drafter's model call. `cands`: [{"value": ...}],
+    optionally each with "words" and "and_flag" (shown to the ranker as given). `context`: what the candidates
+    were written from, for tests (derives_from, true_backed, ownable) that cannot be judged without it; with none,
+    the payload is what Drafter._rank has always sent. -> (order, why_winner, losers {index: why})."""
+    f = RUBRIC_FIELDS[rid]
+    crit = "; ".join(f"{r['id']}: {r['test']}" for r in f.get("rubric", []) if r["method"] == "llm")
+    system = RANK_SYSTEM.format(label=f["label"], crit=crit)
+    shown = []
+    for i, c in enumerate(cands):
+        row = {"index": i, "value": c["value"]}
+        row.update({k: c[k] for k in ("words", "and_flag") if k in c})
+        shown.append(row)
+    payload = {"field": f["label"], "good_example": f.get("good_example"), "bad_example": f.get("bad_example"),
+               "candidates": shown}
+    if context is not None:
+        system += "\n" + RANK_CONTEXT_NOTE
+        payload["context"] = context
+    raw = call(f"rank_{rid}", system, payload,
+               _obj({"ranking": {"type": "array", "items": {"type": "integer"}}, "why_winner": {"type": "string"},
+                     "losers": {"type": "array", "items": _obj({"index": {"type": "integer"},
+                                                                "why": {"type": "string"}})}}))
+    order = [i for i in dict.fromkeys(raw["ranking"]) if isinstance(i, int) and 0 <= i < len(cands)]
+    order += [i for i in range(len(cands)) if i not in order]
+    losers = {x["index"]: x["why"].strip() for x in raw.get("losers") or [] if (x.get("why") or "").strip()}
+    return order, raw.get("why_winner") or "", losers
 
 
 def _clean_value(rid, v):
