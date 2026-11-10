@@ -2133,8 +2133,8 @@ test('research: every action the old header and the Review agent’s bar held is
 test('research: the report body is the mock’s, and every section of the record is drawn in it', () => {
   const r = fn(RT, 'renderReport')
   // band, stats, 00 the ask, headline and summary, lens × market sections, then the record
-  for (const part of ['rpBand(r, lk)', 'rpStats()', 'rpAsk(0)', 'h2 class="headline"', 'rep-sum', 'rpBlock', 'rpConfirm(r', 'rpNotResearched(r',
-    'rpContests(k)', 'rpGaps(k)', 'rpPinned(r, k)', 'rpCoverage(k)', 'rpExcluded(r, k)', 'rpHowRan(k)', 'rpRecord(k)', 'rp-asks-at', 'rep-foot'])
+  for (const part of ['rpBand(r, lk)', 'rpStats()', 'rpAsk(0)', 'h2 class="headline"', 'rep-sum', 'rpSection(s, n, ms', 'rpConfirm(r', 'rpNotResearched(r',
+    'rp-asks-at', 'evAppendixHtml(evm())', 'rep-foot'])
     assert.ok(r.includes(part), part)
   // Read the ask again sits under the ask; All 19 fields and Your request open what they name.
   const ask = fn(RT, 'rpAsk')
@@ -2144,7 +2144,7 @@ test('research: the report body is the mock’s, and every section of the record
   // Contests keep Resolve and Why; gaps offer Research this, which only fills the ask box.
   assert.match(fn(RT, 'rpContest'), /data-act="resolve"/)
   assert.match(fn(RT, 'rpContest'), /data-act="why"/)
-  assert.match(fn(RT, 'rpGaps'), /data-act="gap-ask"/)
+  assert.match(fn(RT, 'gapRow'), /data-act="gap-ask"/)
   assert.doesNotMatch(fn(RT, 'gapAsk'), /doAsk|sendAsk|apiProxy/)
   // One Ask the research box; a lens-scoped question is asked from it with About.
   assert.doesNotMatch(fn(RT, 'renderAsks'), /askBoxHtml\(L\.k/)
@@ -2153,21 +2153,24 @@ test('research: the report body is the mock’s, and every section of the record
 })
 
 test('research: a figure the sentence states becomes its field where it stands', () => {
-  const P: Record<string, { value: unknown; unit: string }> = { f_A: { value: 0.24, unit: 'proportion' }, f_B: { value: 0.11, unit: 'proportion' }, f_T: { value: 'long words that are not a figure at all', unit: 'text' } }
+  const P: Record<string, { value: unknown; unit: string; sources?: string[] }> = { f_A: { value: 0.24, unit: 'proportion' }, f_B: { value: 0.11, unit: 'proportion' }, f_T: { value: 'long words that are not a figure at all', unit: 'text' } }
   const env = {
     arr, isObj, esc: (x: unknown) => String(x ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`), pins: () => P, fnds: () => ({ fi_X: { statement: 'X' } }),
     window: { ClanFields: {} }, fmtAny: (p: { value: number }) => `${Math.round(p.value * 100)}%`,
-    pinChip: (id: string) => `[chip ${id}]`,
+    srcRecs: () => ({ src_k: { publisher: 'Kantar' } }),
   }
-  const f = lift<{ inlineCited(t: string, c: string[]): { html: string; left: string[] }; claimHtml(t: string, c: string[]): string }>(RT, ['inlineFig', 'fno', 'inlineCited', 'restCites', 'claimHtml'], env)
+  const f = lift<{ inlineCited(t: string, c: string[]): { html: string; left: string[] }; claimHtml(t: string, c: string[]): string }>(RT, ['inlineFig', 'fno', 'inlineCited', 'restCites', 'citeName', 'claimHtml'], env)
   const x = f.inlineCited('Ireland grew 24% and GB 11% & more.', ['f_A', 'f_B', 'fi_X'])
   assert.equal(x.html, 'Ireland grew <clan-field ref="f_A"></clan-field> and GB <clan-field ref="f_B"></clan-field> &#38; more.')
   assert.deepEqual(x.left, ['fi_X'])
   // Not inside a longer number, and a figure the sentence does not state follows it.
   const y = f.inlineCited('Up 124% on 2024.', ['f_A'])
   assert.deepEqual(y.left, ['f_A'])
+  // What the sentence does not state is one quiet tag: its findings, else its publishers, and its pins.
   const c = f.claimHtml('Growth is real.', ['f_A', 'f_T', 'fi_X'])
-  assert.match(c, /^Growth is real\. <span class="rp-cites"><clan-field ref="f_A"><\/clan-field>\[chip f_T\]<button type="button" class="rp-f" data-rsel="fi_X"[^>]*>F1<\/button><span class="rp-n">2 pins<\/span><\/span>$/)
+  assert.match(c, /^Growth is real\. <span class="rp-cites"><span class="clf-src rp-tag" title="[^"]*">F1 · 2 pins<\/span><\/span>$/)
+  P.f_A = { ...P.f_A, sources: ['src_k'] }
+  assert.match(f.claimHtml('Growth is real.', ['f_A']), />Kantar · 1 pin</)
   assert.match(f.claimHtml('Nothing cited.', []), /no cite/)
 })
 
@@ -2220,6 +2223,220 @@ test('research: the evidence map draws an empty or partial document without brea
   // The example document: every summary cite resolves, and the pins carry no source record yet.
   const ex = mapModel({ summary: [{ text: 'x', cites: ['f_000001'] }] }, { pins: { f_000001: pin() }, findings: {} }, {})
   assert.equal(ex.nodes['gap:nosource'].meta, 'pinned before sources travelled')
+})
+
+// ── the evidence panel (design/evidence-panel-final.md) ────────────────────
+
+type EvPin = { group: string; via: string[]; direct: boolean; lines: string[] }
+type EvSection = { id: string; n: number; lens: string; title: string; cited: string[]; backing: string[]; pinned: string[]; more: string[]; gaps: string[] }
+type EvModel = {
+  pin: Record<string, EvPin>; fnd: Record<string, { group: string }>; src: Record<string, { group: string; pins: string[] }>
+  lines: { ref: string; kind: string; cites: string[]; sec: string }[]; usedF: string[]; consF: string[]; sections: EvSection[]
+  counts: { pins: number; sources: number; findings: number; feeds: Record<string, number>; considered: Record<string, number>; unused: Record<string, number>; gaps: number }
+}
+type EvFam = { key: string; label: string; market: string; ids: string[]; rows: { v: string; ids: string[] }[] }
+type EvFns = {
+  evidenceModel(d: unknown): EvModel; closure(E: EvModel, ref: string): Record<string, 1>
+  evFamilies(ids: string[], P: unknown, fmt: (p: unknown) => string): EvFam[]
+  mapShown(M: MapModel, E: EvModel, cons: boolean): MapModel
+}
+/** The research the design was judged on (doc 1711cfd7), its shape only: texts, values and publishers replaced. */
+const EVDOC = JSON.parse(readFileSync(join(dirname(templates()), 'tests', 'fixtures', 'research-evidence.json'), 'utf8'))
+const EV_FNS = ['sectionBacking', 'evidenceModel', 'closure', 'famWords', 'evFamilies', 'mapShown']
+const ev = () => lift<EvFns>(RT, EV_FNS, { arr, isObj })
+const evFmt = (p: { value?: unknown; unit?: string }) => lift<{ fmtPinValue(p: unknown): string }>(RT, ['fmtPinValue'], {}).fmtPinValue(p)
+
+test('research: one evidence model gives the design’s numbers, and its groups add up', () => {
+  const E = ev().evidenceModel(EVDOC)
+  const c = E.counts
+  assert.deepEqual([c.feeds.pins, c.considered.pins, c.unused.pins], [50, 2, 144])
+  assert.deepEqual([c.feeds.sources, c.considered.sources, c.unused.sources], [30, 0, 27])
+  assert.equal(c.feeds.pins + c.considered.pins + c.unused.pins, c.pins)
+  assert.equal(c.pins, 196)
+  assert.equal(c.feeds.sources + c.considered.sources + c.unused.sources, c.sources)
+  assert.equal(c.sources, 57)
+  assert.deepEqual([c.feeds.viaF, c.feeds.direct, c.feeds.findings, c.findings, c.considered.findings, c.feeds.publishers, c.gaps], [28, 22, 4, 7, 3, 25, 37])
+  // The pins block never counts: Clearance lists 120, and 6 are written about.
+  const cl = E.sections.find(s => s.id === 's_regulation_clearance')!
+  assert.deepEqual([cl.n, cl.cited.length, cl.pinned.length, cl.more.length], [7, 6, 120, 114])
+  assert.match(fn(RT, 'evidenceModel'), /sectionBacking\(s\)/)
+  assert.equal(RT.match(/kind==='pins'/g)?.length, 1, 'the pins block is read in sectionBacking only')
+  // Nothing at all, and no report: no throw, nothing feeds.
+  assert.equal(ev().evidenceModel(null).counts.pins, 0)
+  const bare = ev().evidenceModel({ projection: EVDOC.projection })
+  assert.equal(bare.counts.feeds.pins, 0)
+  assert.equal(bare.counts.unused.pins + bare.counts.considered.pins, 196)
+})
+
+test('research: a line’s closure is what it rests on, and nothing else', () => {
+  const f = ev(), E = f.evidenceModel(EVDOC)
+  const line = E.lines.find(l => l.ref === 'report.summary[0]')!
+  const C = f.closure(E, 'report.summary[0]')
+  assert.deepEqual(f.closure(E, 'sum:0'), C, 'the map’s name for the line is the same line')
+  for (const c of line.cites) assert.ok(C[c], c)
+  const fi = line.cites.find(c => /^fi_/.test(c))!
+  for (const p of EVDOC.projection.findings[fi].cites) {
+    assert.ok(C[p], `${p}, under ${fi}`)
+    for (const s of EVDOC.projection.pins[p].sources) assert.ok(C[s], `${s}, under ${p}`)
+  }
+  const unused = Object.keys(E.pin).filter(id => E.pin[id].group === 'unused')
+  assert.ok(unused.length && unused.every(id => !C[id]), 'no unused pin is in a line’s closure')
+  assert.ok(!Object.keys(C).some(k => /^report\.(headline|summary\[[1-9]\])/.test(k)), 'other lines are not')
+  // A section's trace is its sentences' closure; a pin's reaches the lines that cite it.
+  const S = f.closure(E, 'sec:s_regulation_clearance')
+  assert.ok(E.sections.find(s => s.id === 's_regulation_clearance')!.cited.every(id => S[id]))
+  const p0 = line.cites.find(c => /^f_/.test(c))!
+  assert.ok(f.closure(E, p0)['report.summary[0]'])
+})
+
+test('research: families fold the not-used pins, so Clearance’s trace stays short', () => {
+  const f = ev(), E = f.evidenceModel(EVDOC)
+  const cl = E.sections.find(s => s.id === 's_regulation_clearance')!
+  const fams = f.evFamilies(cl.more, EVDOC.projection.pins, evFmt)
+  assert.ok(fams.length > 1 && fams.length < 20, `${fams.length} family rows`)
+  assert.equal(fams.reduce((n, x) => n + x.ids.length, 0), 114)
+  for (const x of fams) {
+    assert.doesNotMatch(x.label + x.market, /_|regulation\./, x.label)
+    assert.equal(x.rows.reduce((n, r) => n + r.ids.length, 0), x.ids.length)
+    assert.equal(new Set(x.rows.map(r => r.v)).size, x.rows.length, 'one row per value')
+  }
+  // A key that is not lens.family.* is Other, last.
+  const odd = f.evFamilies(['a', 'b'], { a: { key: 'loose', value: 1 }, b: { key: 'x.size_value_eur', value: 2, market: 'IE' } }, evFmt)
+  assert.deepEqual(odd.map(x => [x.label, x.market]), [['Size value', 'IE'], ['Other', '']])
+  assert.match(fn(RT, 'secTraceHtml'), /evFamsHtml\('sec:'\+s\.id, fams\)/)
+})
+
+test('research: the report body draws no pins block, one gap per section, and one cite tag per sentence', () => {
+  const E = ev().evidenceModel(EVDOC), P = EVDOC.projection.pins, F = EVDOC.projection.findings, SR = EVDOC.projection.sources
+  const gaps = EVDOC.selection.gaps as { id: string }[]
+  const env = {
+    arr, isObj, esc, pins: () => P, fnds: () => F, srcRecs: () => SR, sel: () => EVDOC.selection, window: {},
+    fmtAny: evFmt, lensName: (l: string) => l, slug: (x: string) => x, pinChip: (id: string) => `<a class="pinc">${id}</a>`,
+    rpFinding: (id: string) => `<p class="rp-fp">${id}</p>`, rpContestLine: () => '', GAP_TLD: {},
+    gapById: (id: string) => gaps.find(g => g.id === id) || null,
+  }
+  type B = { rpSection(s: unknown, n: number, ms: string, es: unknown): string; restCites(c: string[]): string }
+  const f = lift<B>(RT, ['rpSection', 'behindLine', 'rpBlock', 'rpHead', 'pad2', 'lineField', 'claimHtml', 'inlineCited', 'restCites', 'citeName', 'inlineFig', 'fno', 'rpGapNote', 'gapWords', 'entityWords'], env)
+  EVDOC.report.sections.forEach((s: { id: string; blocks: { kind: string }[] }, i: number) => {
+    const es = E.sections.find(x => x.id === s.id)!
+    const h = f.rpSection(s, i + 1, 'IE · GB', es)
+    assert.doesNotMatch(h, /rp-pins|class="pinc/, `${s.id}: no pins block`)
+    assert.ok((h.match(/class="rp-gap"/g) || []).length <= 1, `${s.id}: at most one gap`)
+    assert.equal((h.match(/class="clf-src rp-tag"/g) || []).length, s.blocks.filter(b => b.kind === 'claim').length, `${s.id}: one tag per sentence`)
+    assert.match(h, new RegExp(`class="rs-eye" data-act="ev-sec" data-sec="${s.id}"`))
+    const mg = Math.max(0, es.gaps.length - 1)
+    const parts = [es.cited.length ? `${es.cited.length} cited` : '', es.more.length ? `${es.more.length} more fact${es.more.length === 1 ? '' : 's'}` : '', mg ? `${mg} more gap${mg === 1 ? '' : 's'}` : ''].filter(Boolean)
+    assert.ok(h.includes(`Behind this section · ${parts.join(' · ')} →`), `${s.id}: behind line`)
+    if (s.id === 's_consumer_culture') assert.ok(h.includes('Behind this section · 8 cited · 39 more facts · 1 more gap →'))
+  })
+  // Section 01 had 14 gap notes; it shows one.
+  assert.equal(EVDOC.report.sections[0].blocks.filter((b: { kind: string }) => b.kind === 'gap').length, 14)
+  // More than three names fold to the first and +n; a finding names itself.
+  const five = Object.keys(P).filter(id => P[id].sources.length).slice(0, 40).filter((id, i, a) => a.findIndex(x => SR[P[x].sources[0]]?.publisher === SR[P[id].sources[0]]?.publisher) === i).slice(0, 5)
+  assert.equal(five.length, 5)
+  assert.match(f.restCites(five), new RegExp(`>${SR[P[five[0]].sources[0]].publisher} \\+4 · 5 pins<`))
+  assert.match(f.restCites(five.slice(0, 2)), /> ?Publisher \d+ · Publisher \d+ · 2 pins</)
+  assert.match(f.restCites(['fi_5TNZ2TVZH74B', five[0]]), />F2 · 1 pin</)
+  assert.match(f.restCites([]), /no cite/)
+  assert.doesNotMatch(RT, /function rpPins/)
+})
+
+test('research: no label in the box, a trace, the map or a crumb is a raw key', () => {
+  const E = ev().evidenceModel(EVDOC), P = EVDOC.projection.pins, SR = EVDOC.projection.sources
+  const env = { arr, isObj, esc, pins: () => P, fnds: () => EVDOC.projection.findings, srcRecs: () => SR, window: {}, MARKET: { IE: 'Ireland', GB: 'Great Britain' },
+    evTitle: () => '', lensName: (l: string) => l, evSec: (id: string) => E.sections.find(s => s.id === id) || null }
+  type L = { evRow(id: string): string; crumbWord(c: unknown): string; mapLines(n: unknown): string[]; fmtAny(p: unknown): string }
+  const f = lift<L>(RT, ['evRow', 'pinSid', 'confDots', 'clipT', 'pinLabel', 'fmtAny', 'fmtPinValue', 'crumbWord', 'shortId', 'pad2', 'secName', 'mapLines'], env)
+  const text = (h: string) => h.replace(/<[^>]*>/g, ' ')
+  for (const id of Object.keys(P)) {
+    const p = P[id], keyRe = new RegExp(String(p.key).replace(/\./g, '\\.'))
+    for (const t of [text(f.evRow(id)).replace(f.fmtAny(p), ''), f.crumbWord({ ref: id }), f.mapLines({ kind: 'pin', pin: p, label: '' }).join(' ').replace(f.fmtAny(p), '')]) {
+      assert.doesNotMatch(t, /_/, `${id}: ${t}`)
+      assert.doesNotMatch(t, keyRe, `${id}: ${t}`)
+    }
+  }
+  assert.equal(f.crumbWord({ ref: 'sec:s_regulation_clearance' }), '07 Clearance')
+  assert.match(fn(RT, 'mapLines'), /pinLabel\(n\.pin\)/)
+  assert.doesNotMatch(fn(RT, 'mapLines'), /\.key/)
+})
+
+test('research: the map draws what feeds the report; Show considered adds exactly the considered set', () => {
+  const f = ev(), E = f.evidenceModel(EVDOC)
+  const M = lift<{ mapModel(r: unknown, p: unknown, s: unknown): MapModel }>(RT, ['pinLabel', 'mapModel'], { arr, isObj, MARKET: {} }).mapModel(EVDOC.report, EVDOC.projection, EVDOC.selection)
+  const groupOf = (n: MapNode) => n.kind === 'pin' ? E.pin[n.id]?.group : n.kind === 'finding' ? E.fnd[n.id]?.group : n.kind === 'source' ? E.src[n.id]?.group : n.kind
+  const real = (m: MapModel) => Object.values(m.nodes).filter(n => n.kind !== 'gap')
+  const off = f.mapShown(M, E, false), on = f.mapShown(M, E, true)
+  assert.ok(real(off).every(n => groupOf(n) === 'feeds' || n.kind === 'summary'), 'nothing not used or considered by default')
+  assert.deepEqual([off.cols.pin, off.cols.source, off.cols.finding, off.cols.summary].map(c => c.filter(n => n.kind !== 'gap').length), [50, 30, 4, 5])
+  assert.ok(off.cols.summary.some(n => n.id === 'report.headline'), 'the headline is drawn')
+  const added = real(on).filter(n => !off.nodes[n.id]).map(n => n.id).sort()
+  const considered = [...Object.keys(E.pin).filter(k => E.pin[k].group === 'considered'), ...Object.keys(E.fnd).filter(k => E.fnd[k].group === 'considered'),
+    ...Object.keys(E.src).filter(k => E.src[k].group === 'considered')].sort()
+  assert.deepEqual(added, considered)
+  assert.equal(added.length, 5)
+  assert.ok(added.every(id => on.nodes[id].out), 'drawn as considered, not chosen')
+  assert.ok(on.edges.every(e => on.nodes[e.from] && on.nodes[e.to]))
+  // No "unused" box, no dashed legend; the legend links what is not used to Evidence.
+  assert.doesNotMatch(fn(RT, 'mapSvg'), /unused/)
+  assert.doesNotMatch(RT, /\.n\.unused|<i class="d"><\/i>not used|· not used'/)
+  assert.match(fn(RT, 'renderMap'), /data-act="ev-open" data-g="unused">'\+plural\(c\.unused\.pins, 'fact'\)\+' and '\+plural\(c\.unused\.sources, 'source'\)\+' not used → Evidence/)
+  assert.match(fn(RT, 'renderMap'), /Show considered \('\+nc\+'\)/)
+  assert.match(RT, /try\{ EV\.cons=localStorage\.getItem\('clan\.research\.mapcons'\)==='1'; \}catch\(e\)\{\}/)
+})
+
+test('research: the Evidence box holds what left the body, and the export keeps it as an appendix', () => {
+  const insp = RT.slice(RT.indexOf('<aside class="insp'), RT.indexOf('</aside>'))
+  assert.ok(insp.indexOf('id="evbox"') > insp.indexOf('id="rbox"') && insp.indexOf('id="evbox"') < insp.indexOf('id="insp-ask"'), 'after the Report box, before Ask')
+  assert.match(insp, /id="ev-q" placeholder="Find a fact or source"/)
+  assert.match(RT, /\.insp\.has-sel #evbox,/)
+  const g = fn(RT, 'evGroupsHtml')
+  for (const k of ["'sources', 'Sources'", "'facts', 'Facts'", "'contests', 'Where sources disagree'", "'considered', 'Considered, not chosen'", "'unused', 'Not used'", "'gaps', 'Gaps'"]) assert.ok(g.includes(k), k)
+  assert.match(g, /Nothing was weighed and set aside\./)
+  assert.match(g, /No two sources gave different values for the same figure\./)
+  assert.match(fn(RT, 'renderEvidence'), /Evidence appears once research has pinned facts\./)
+  assert.match(fn(RT, 'renderEvidence'), /Nothing pinned yet\. Run research\./)
+  assert.match(fn(RT, 'gapRow'), /data-act="gap-ask"/)
+  assert.match(fn(RT, 'evGroupsHtml'), /E\.contests\.map\(rpContest\)/)
+  // The body: the band's counts open Evidence; the record's sections are not drawn there any more.
+  assert.match(fn(RT, 'rpStats'), /st\('sources'.*st\('unused', np\+' pin'\+\(np===1\?'':'s'\), true\).*st\('gaps'/s)
+  const r = fn(RT, 'renderReport')
+  for (const gone of ['rpContests', 'rpGaps', 'rpPinned', 'rpCoverage', 'rpExcluded', 'rpHowRan', 'rpRecord']) assert.ok(!RT.includes(`function ${gone}(`), gone)
+  assert.match(r, /post\+=evAppendixHtml\(evm\(\)\)/)
+  // The appendix is print-only on screen, and the HTML export shows it.
+  assert.match(fn(RT, 'evAppendixHtml'), /class="rp-sec ev-appx print-only" id="rp-appx"/)
+  assert.match(RT, /\.print-only\{display:none\}\n@media print\{\.print-only\{display:block!important\}/)
+  assert.match(fn(RT, 'buildExportHTML'), /querySelectorAll\('\.print-only'\)\.forEach\(function\(n\)\{ n\.classList\.remove\('print-only'\); \}\)/)
+  // The groups' open state is remembered per viewer, and storage may be refused.
+  assert.match(RT, /try\{ EV\.open=JSON\.parse\(localStorage\.getItem\('clan\.research\.evopen'\)\|\|'\{\}'\)\|\|\{\}; \}catch\(e\)\{ EV\.open=\{\}; \}/)
+  assert.match(fn(RT, 'evSave'), /^function evSave\(\)\{ try\{ localStorage\.setItem/)
+})
+
+test('research: no tap in the document opens the OS’s drawer; everything opens in the inspector, with its trail', () => {
+  assert.doesNotMatch(RT, /ClanFields\.open\(/, 'the research never calls the drawer')
+  assert.doesNotMatch(RT, /clan:open|clf-drawer['"]?\)\.classList\.add/, 'nor asks the shell or the page to open it')
+  // A link inside a card is always the inspector's, drawer or not.
+  const go = RT.slice(RT.indexOf("window.addEventListener('clan:cardgo'"), RT.indexOf("window.addEventListener('clan:cardact'"))
+  assert.match(go, /e\.preventDefault\(\); VIEW\.origin=null; select\(d\.ref, !!VIEW\.sel\)/)
+  assert.doesNotMatch(go, /d\.drawer/)
+  // Full record, Resolve, Why and Show me open here.
+  for (const [act, call] of [['pin-full', "inspect('rec:'+b.getAttribute('data-ref'), true)"], ['resolve', "inspect(b.getAttribute('data-contest')"], ['chk-why', 'inspect(ref, false)'], ['chk-open', 'inspect(ref, false)']])
+    assert.ok(RT.includes(`case '${act}': ${act === 'chk-open' ? 'if(ref) ' : ''}${call}`), act)
+  assert.match(fn(RT, 'doFinding'), /inspect\(id, false\)/)
+  // The full record is the OS's card, drawn in the inspector.
+  assert.match(fn(RT, 'selBody'), /\/\^rec:\/\.test\(ref\)\) return '<div id="insp-card" data-line="/)
+  // A field anywhere in the page, and a card's own Where-this-came-from button, are caught before the OS's drawer.
+  assert.match(RT, /var sc=e\.target\.closest\('\[data-clf-sc\]'\);/)
+  assert.match(RT, /var host=t\.closest\('clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources'\); if\(!host\) return;/)
+  // Every tap the page handles itself goes to select(), and none posts to the shell for a drawer.
+  const posts = RT.match(/postMessage\(\{type:'[^']+'/g) || []
+  assert.ok(posts.every(p => !/drawer|clan:open/.test(p)), posts.join(', '))
+})
+
+test('research: the evidence panel’s CSS uses the theme’s tokens, never a hex colour', () => {
+  const a = RT.indexOf('/* ── evidence panel'), b = RT.indexOf('/* /evidence panel */')
+  assert.ok(a > 0 && b > a)
+  assert.doesNotMatch(RT.slice(a, b), /#[0-9a-fA-F]{3,8}\b/)
+  assert.doesNotMatch(RT, /\.rp-side\.won \.v\{[^}]*#14161B/, 'the chosen value reads in dark too')
 })
 
 test('research: the report box and the OS bar say the report’s state in the same words', () => {

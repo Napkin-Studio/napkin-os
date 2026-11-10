@@ -161,7 +161,6 @@ body.fresh .insp{display:none}
 .map-leg i{display:inline-block;width:18px;border-top:1.5px solid var(--ink2);vertical-align:middle;margin-right:5px}
 .map-leg i.r{border-top:1.5px dashed var(--create)}
 .map-leg i.g{border-top:1.5px dotted var(--amber)}
-.map-leg i.d{width:12px;height:10px;border:1px dashed var(--ink3)}
 .map-scroll{overflow:auto;border:1px solid var(--line-soft);border-radius:10px;background:var(--soft)}
 .map-svg{display:block}
 .map-svg .col{font-family:var(--mono);font-size:10px;letter-spacing:.1em;fill:var(--ink3);text-transform:uppercase}
@@ -171,7 +170,6 @@ body.fresh .insp{display:none}
 .map-svg .e.hl{stroke:var(--ink);stroke-width:2}
 .map-svg .n{cursor:pointer}
 .map-svg .n rect{fill:var(--paper);stroke:var(--ink);stroke-width:1.2;rx:4}
-.map-svg .n.unused rect{stroke-dasharray:3 3;stroke:var(--ink3)}
 .map-svg .n.out rect{stroke:var(--create);stroke-dasharray:4 3}
 .map-svg .n.gap rect{fill:var(--amber-soft);stroke:var(--amber);stroke-dasharray:3 3}
 .map-svg .n.sel rect,.map-svg .n:focus-visible rect{stroke-width:2.4;fill:var(--soft)}
@@ -866,7 +864,7 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 .rp-vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .rp-side{display:grid;gap:4px;font-size:13px;min-width:0}
 .rp-side .v{font-size:24px;font-weight:700;letter-spacing:-.02em}
-.rp-side.won .v{background:linear-gradient(transparent 40%,var(--rs-hl) 40%,var(--rs-hl) 88%,transparent 88%);justify-self:start;color:#14161B;padding:0 3px}
+.rp-side.won .v{background:linear-gradient(transparent 40%,var(--rs-hl) 40%,var(--rs-hl) 88%,transparent 88%);justify-self:start;color:var(--ag-acc-ink);padding:0 3px}
 .rp-side.lost .v{text-decoration:line-through;color:var(--ink3)}
 .rp-scale{grid-column:1/-1;position:relative;height:24px;border-bottom:1px solid var(--ink);margin:4px 8px 0}
 .rp-scale .tick{position:absolute;bottom:-18px;transform:translateX(-50%);font:10px var(--mono);font-style:normal;color:var(--ink3)}
@@ -1168,7 +1166,7 @@ section.report{margin-top:0}
 .insp-who b{font-weight:700}
 .insp-who .linkbtn{font:600 13px var(--font-ui);color:var(--ink);text-decoration:underline;text-underline-offset:3px}
 /* a selection takes the inspector, under the switch, as the mock does */
-.insp.has-sel .insp-save,.insp.has-sel #judge,.insp.has-sel #rbox,.insp.has-sel #insp-ask,.insp.has-sel #insp-hint,.insp.has-sel .insp-nav,.insp.has-sel .insp-who{display:none!important}
+.insp.has-sel .insp-save,.insp.has-sel #judge,.insp.has-sel #rbox,.insp.has-sel #evbox,.insp.has-sel #insp-ask,.insp.has-sel #insp-hint,.insp.has-sel .insp-nav,.insp.has-sel .insp-who{display:none!important}
 .insp-sel{border-top:0;padding-top:0;gap:0;margin:-18px -18px 0}
 .rb-ibar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--paper)}
 .rb-ibtn{width:28px;height:28px;flex:0 0 auto;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font:600 14px var(--font-ui);display:grid;place-items:center;padding:0}
@@ -1480,6 +1478,104 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-prompt .rt-files .signas{font-size:12.5px}
 .rt-prompt .rs-go.rt-go{min-height:44px;height:44px;padding:0 24px;font:600 15px var(--font-ui);border-radius:999px}
 .rt-prompt .rs-name{margin-top:14px}
+/* ── evidence panel (features/research-new-ui, evidence-panel-final): tokens only, no hex ── */
+.print-only{display:none}
+@media print{.print-only{display:block!important}.ev-appx{break-before:page}}
+#evbox[hidden]{display:none}
+.ev-h{display:flex;align-items:baseline;gap:8px}
+.ev-h b{font:700 10.5px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.ev-h .sp{flex:1}
+.ev-tot{font:11px var(--font-mono);color:var(--muted)}
+.ev-feeds{margin:0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:13px;color:var(--ink-soft)}
+.ev-feeds b{font-weight:650;color:var(--ink)}
+.ev-q{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font:13px var(--font-ui);padding:7px 14px;min-height:34px}
+.ev-q:focus{outline:2px solid var(--ink);outline-offset:1px}
+.ev-q[hidden]{display:none}
+.ev-lens{display:grid;gap:0;border-top:1px solid var(--line)}
+.ev-lh,.ev-lrow{display:grid;grid-template-columns:minmax(0,1fr) 64px 46px 32px 10px;gap:8px;align-items:center}
+.ev-lh{padding:6px 0 4px;font:700 9.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ev-lh span:nth-child(n+2){text-align:right}
+.ev-lrow{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) 64px 46px 32px 10px;gap:8px;align-items:center;cursor:pointer;padding:5px 6px;margin:0 -6px;border-radius:6px;font-size:12.5px;color:var(--ink)}
+.ev-lrow:hover,.ev-lrow:focus-visible{background:var(--paper-2)}
+.ev-lrow:focus-visible{outline:2px solid var(--ink)}
+.ev-lrow .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-lrow .u,.ev-lrow .g{font:11px var(--font-mono);color:var(--ink-soft);text-align:right}
+.ev-lrow .c{display:flex;gap:3px;justify-content:flex-end}
+.ev-lrow .ar{color:var(--muted)}
+.ev-body{display:grid}
+.ev-g{border-top:1px solid var(--line)}
+.ev-g > summary,.ev-fam > summary{list-style:none;display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:8px 0}
+.ev-g > summary::-webkit-details-marker,.ev-fam > summary::-webkit-details-marker,.ev-pubg > summary::-webkit-details-marker{display:none}
+.ev-g > summary::before,.ev-fam > summary::before{content:"\25B8";font-size:10px;color:var(--muted);transition:transform .15s var(--ease)}
+.ev-g[open] > summary::before,.ev-fam[open] > summary::before{transform:rotate(90deg)}
+.insp-box .ev-g > summary{font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.ev-gt{flex:none}
+.ev-gm{margin-left:auto;font:11px var(--font-mono);letter-spacing:0;text-transform:none;color:var(--muted);text-align:right}
+.ev-gb{display:grid;gap:10px;padding:0 0 12px}
+.ev-sub{display:grid;gap:2px}
+.ev-sub h6,.ev-at{margin:6px 0 2px;font:700 9.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ev-note{margin:0;font-size:12.5px;color:var(--muted)}
+.ev-empty{margin:0;font-size:12.5px;color:var(--muted)}
+.ev-fam{border-top:1px dashed var(--line)}
+.ev-fam > summary{padding:6px 0;font-size:12.5px;color:var(--ink)}
+.ev-fb{display:grid;gap:2px;padding:0 0 8px 14px}
+.ev-row,.ev-mh{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(64px,auto) minmax(0,1fr);gap:10px;align-items:baseline;padding:5px 6px;margin:0 -6px;border-radius:6px;cursor:pointer;color:var(--ink)}
+.ev-mh{cursor:default}
+.ev-row:hover,.ev-row:focus-visible,.ev-merged:hover{background:var(--paper-2)}
+.ev-row:focus-visible,.ev-chip:focus-visible,.ev-pub:focus-visible,.ev-doc:focus-visible,.ev-fbtn:focus-visible{outline:2px solid var(--ink)}
+.ev-row .v,.ev-mh .v{font:700 13px var(--font-mono);overflow-wrap:anywhere}
+.ev-row .l,.ev-mh .l{display:grid;gap:1px;font-size:12.5px;line-height:1.35;color:var(--ink-soft);min-width:0;overflow-wrap:anywhere}
+.ev-row small,.ev-mh small{font:11px var(--font-mono);color:var(--muted)}
+.ev-row.rej .v{text-decoration:line-through;color:var(--muted)}
+.ev-merged{display:grid;gap:2px;border-radius:6px;margin:0 -6px;padding:0 6px 4px}
+.ev-chips{display:flex;flex-wrap:wrap;gap:4px 10px;padding-left:2px}
+.ev-chip{all:unset;cursor:pointer;font:11px var(--font-mono);color:var(--ink-soft);text-decoration:underline;text-underline-offset:3px}
+.ev-chip:hover{color:var(--ink)}
+.ev-pub,.ev-doc{all:unset;box-sizing:border-box;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:baseline;width:100%;padding:5px 6px;margin:0 -6px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--ink-soft)}
+.ev-pub:hover,.ev-doc:hover{background:var(--paper-2)}
+.ev-pub b{font-weight:650;color:var(--ink)}
+.ev-pub .ct{font:11px var(--font-mono);color:var(--muted)}
+.ev-pubg{display:grid}
+.ev-pubg > summary{list-style:none}
+.ev-doc{grid-template-columns:minmax(0,1fr) auto;padding-left:20px}
+.ev-doc small{font:11px var(--font-mono);color:var(--muted)}
+.ev-fh{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin:4px 0 2px}
+.ev-fbtn{all:unset;cursor:pointer;flex:1 1 180px;font-size:12.5px;line-height:1.4;color:var(--ink)}
+.ev-fbtn:hover{text-decoration:underline;text-underline-offset:3px}
+.ev-fbtn b{font:700 11px var(--font-mono)}
+.ev-call{all:unset;cursor:pointer;padding:1px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font:700 10px var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
+.ev-ex{margin:0;font-size:12.5px;color:var(--ink-soft)}
+.ev-more{justify-self:start;font:600 11px var(--font-mono);margin-top:4px}
+.ev-cov{margin:0;display:flex;gap:14px;font:11px var(--font-mono);color:var(--ink-soft)}
+.ev-cov span{display:inline-flex;gap:6px;align-items:center}
+.ev-built .rbi-uses{margin-bottom:4px}
+.insp-sel .rp-gp{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;font-size:12.5px}
+.insp-sel .rp-gp > .linkbtn,.ev-gb .rp-gp > .linkbtn{grid-column:2;justify-self:start}
+.ev-gb .rp-gp{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;font-size:12.5px;padding:6px 0;border-top:1px dashed var(--line)}
+.ev-gb .rp-ct{font-size:13px}
+/* the report body: the eyebrow and "Behind this section" open the section's trace */
+.rs-h > .rs-eye{all:unset;cursor:pointer;justify-self:start;font:700 10.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.rs-h > .rs-eye:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.rs-h > .rs-eye:focus-visible,.rp-behind:focus-visible,.rp-stat:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.rp-behind{all:unset;cursor:pointer;justify-self:start;font:11.5px var(--font-mono);color:var(--muted);padding:2px 0}
+.rp-behind:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.rp-stat{border:0;border-left:1px solid var(--line);background:none;font:inherit;color:var(--ink2);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.rp-stats > .rp-stat:first-child{border-left:0}
+.rp-stat:hover{color:var(--ink);text-decoration-color:currentcolor}
+.rep .rp-cites .rp-tag{cursor:pointer}
+/* one tag per sentence: an inline figure's own source tag stays quiet inside a report line */
+.rep clan-field.clf-ln clan-field:not(.clf-ln) .clf-src{display:none}
+.rep clan-field.clf-ln.ev-hit:not(.rp-fs){background:color-mix(in srgb,var(--rs-hl) 62%,transparent);box-shadow:0 2px 0 var(--ink)}
+/* the map: considered is a choice; not used is never drawn */
+.map-tog{display:inline-flex;gap:5px;align-items:center;cursor:pointer;color:var(--ink-soft)}
+.map-tog input{margin:0;accent-color:var(--ink)}
+.map-unused{font:inherit;color:var(--ink-soft);text-decoration:underline;text-underline-offset:3px}
+/* the print appendix */
+.ev-appx h4{margin:14px 0 4px;font-size:14px}
+.ev-appx .ev-ax{margin:0 0 6px;padding-left:18px;font-size:12px;display:grid;gap:2px}
+.ev-appx .ev-ax ul{padding-left:16px}
+.ev-appx .ev-axf{margin:8px 0 2px;font-size:12.5px}
+/* /evidence panel */
 </style>
 <!-- @napkin:clan-fields -->
 </head>
@@ -1554,6 +1650,12 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         <button type="button" class="btn sm" id="extractBtn">Read the ask again</button>
       </div>
       <div id="rbox-more"></div>
+    </section>
+    <section class="insp-box ev-box" id="evbox" aria-labelledby="ev-h" hidden>
+      <div class="ev-h"><b id="ev-h">Evidence</b><span class="sp"></span><span class="ev-tot" id="ev-tot"></span></div>
+      <div id="ev-top"></div>
+      <input type="search" class="ev-q" id="ev-q" placeholder="Find a fact or source" aria-label="Find a fact or source" autocomplete="off">
+      <div class="ev-body" id="ev-body"></div>
     </section>
     <section class="insp-ask" id="insp-ask" aria-label="Ask the research"></section>
     <p class="insp-hint" id="insp-hint">Click the headline or any sentence in it, a finding, a pin, a source or a decision. It opens here with everything behind it.</p>
@@ -2735,7 +2837,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         submitDecision('/classify', {target:'campaign.'+k, model:fm.model.checked, export:fm.export.checked, corpus:fm.corpus.checked, rationale:fm.why.value.trim()}, 'Marked.'); }; });
   }
   // A finding is verified or rejected where every app does it: the OS's drawer.
-  function doFinding(id){ if(window.ClanFields) ClanFields.open(id); }
+  function doFinding(id){ inspect(id, false); }
   function doPin(a){
     var id=/facts\[(.+)\]$/.exec(a); id=id&&id[1]; var p=pins()[id]; if(!p) return;
     openDialog('<h2 id="dlg-title">Take the current version</h2><div class="addr">'+esc(a)+'</div>'
@@ -3997,8 +4099,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function lensName(l){ return (LENS[l]||{}).l||String(l||''); }
   function fno(id){ var i=Object.keys(fnds()).indexOf(id); return i<0?'?':String(i+1); }
   function pad2(n){ return (n<10?'0':'')+n; }
-  function rpHead(n, eyebrow, title, hid){
-    return '<div class="rs-h"><span>'+pad2(n)+' — '+esc(eyebrow)+'</span>'+(title?'<h3'+(hid?' id="'+hid+'"':'')+'>'+esc(title)+'</h3>':'')+'</div>';
+  // A body section's eyebrow opens what is behind it (its trace).
+  function rpHead(n, eyebrow, title, hid, sec){
+    var eye=pad2(n)+' — '+esc(eyebrow);
+    return '<div class="rs-h">'+(sec?'<button type="button" class="rs-eye" data-act="ev-sec" data-sec="'+esc(sec)+'" title="What is behind this section">'+eye+'</button>':'<span>'+eye+'</span>')+(title?'<h3'+(hid?' id="'+hid+'"':'')+'>'+esc(title)+'</h3>':'')+'</div>';
   }
   function sourceIds(){
     var o={}; Object.keys(srcRecs()).forEach(function(k){ o[k]=1; });
@@ -4028,16 +4132,19 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var h=esc(t).replace(/\u0000(\d+)\u0000/g, function(_, i){ return '<clan-field ref="'+esc(slots[+i])+'"></clan-field>'; });
     return {html:h, left:left, inlined:slots};
   }
-  function restCites(left, all){
+  // One quiet tag per sentence (the mock's .clf-src): the findings it rests on,
+  // else the publishers of what it cites, then how many pins. More than three
+  // names fold to the first and "+n". The tag is part of the line, so a click
+  // on it is a click on the sentence (its trace).
+  function citeName(id){ var p=pins()[id], s=arr(p&&p.sources).filter(function(x){ return /^src_/.test(x); })[0], r=s?srcRecs()[s]:null; return r?String(r.publisher||r.domain||''):''; }
+  function restCites(all){
     all=arr(all); if(!all.length) return '<span class="pill alert" title="Every claim must cite a pin or a finding">no cite</span>';
-    var n=all.filter(function(c){ return /^f_/.test(c); }).length, h='';
-    left.forEach(function(id){
-      if(/^fi_/.test(id)){ var f=fnds()[id]; h+='<button type="button" class="rp-f" data-rsel="'+esc(id)+'" title="'+esc(f?f.statement:'Not in the projection')+'">F'+esc(fno(id))+'</button>'; }
-      else h+=inlineFig(id)?'<clan-field ref="'+esc(id)+'"></clan-field>':pinChip(id);
-    });
-    return '<span class="rp-cites">'+h+(n?'<span class="rp-n">'+n+' pin'+(n===1?'':'s')+'</span>':'')+'</span>';
+    var n=all.filter(function(c){ return /^f_/.test(c); }).length, names=all.filter(function(c){ return /^fi_/.test(c); }).map(function(id){ return 'F'+fno(id); });
+    if(!names.length) all.forEach(function(id){ var nm=/^f_/.test(id)?citeName(id):''; if(nm&&names.indexOf(nm)<0) names.push(nm); });
+    var t=names.length>3?names[0]+' +'+(names.length-1):names.join(' · ');
+    return '<span class="rp-cites"><span class="clf-src rp-tag" title="'+esc(names.join(', ')+(n?' · '+n+' pin'+(n===1?'':'s'):''))+'">'+esc(t+(n?(t?' · ':'')+n+' pin'+(n===1?'':'s'):''))+'</span></span>';
   }
-  function claimHtml(text, cites){ var x=inlineCited(text, cites); return x.html+' '+restCites(x.left, cites); }
+  function claimHtml(text, cites){ return inlineCited(text, cites).html+' '+restCites(cites); }
   function rpFinding(id){
     var f=fnds()[id];
     if(!f) return '<p class="rp-fp"><span class="tag">'+esc(id)+' · not in the projection</span></p>';
@@ -4075,11 +4182,6 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(!g) return '<div class="rp-gap"><span class="gap-k">Gap</span><span>'+esc(gid)+' · not in selection</span></div>';
     return '<div class="rp-gap" id="rgap-'+esc(slug(g.id))+'"><span class="gap-k">Gap</span><span><clan-field ref="'+esc(g.id)+'" as="gap" keep>'+esc(gapWords(g.searched))+'</clan-field>'+(g.note?' <span class="muted">'+esc(gapWords(g.note))+'</span>':'')+'</span></div>';
   }
-  function rpPins(ids){
-    return '<p class="rp-pins">'+arr(ids).map(function(id){ var p=pins()[id];
-      if(!p||!inlineFig(id)) return pinChip(id);
-      return '<span class="rp-pin"><small>'+esc(String(p.key||'').split('.').slice(-2).join(' ').replace(/_/g,' '))+(p.market?' · '+esc(p.market):'')+'</small><clan-field ref="'+esc(id)+'"></clan-field></span>'; }).join('')+'</p>';
-  }
   // A line of the report as the OS's field (report.headline, report.summary[i],
   // report.sections[<id>].blocks[<i>]): its words as drawn here, and a click
   // traces it to what it rests on.
@@ -4088,7 +4190,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     if(!isObj(b)) return '';
     switch(b.kind){
       case 'claim': return '<p class="rp-p blk-claim">'+(/^[A-Za-z0-9_-]+$/.test(String(sid||''))?lineField('report.sections['+sid+'].blocks['+j+']', 'line', claimHtml(b.text, b.cites)):claimHtml(b.text, b.cites))+'</p>';
-      case 'pins': return rpPins(b.fact_ids);
+      // The section's backing index (report.py) is the Evidence panel's, read through sectionBacking: never drawn in the body.
+      case 'pins': return '';
       case 'finding': return rpFinding(b.finding_id);
       case 'gap': return rpGapNote(b.gap_id);
       case 'contest': return rpContestLine(b.contest_id);
@@ -4124,11 +4227,15 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var hl=isObj(r)&&isObj(r.headline)?String(r.headline.text||'').trim():'';
     return (typeof name==='string'&&name.trim())||askedQuestion()||hl||(brand?'Research · '+brand:'Research');
   }
+  // The band's counts open the Evidence box: sources, every pin (Not used, with
+  // the search field), gaps.
   function rpStats(){
-    var S=sel(), np=Object.keys(pins()).length, nf=Object.keys(fnds()).length, src=sourceIds().length, open=openChecks();
-    var it=[(src||!np)?src+' source'+(src===1?'':'s'):'no source records', np+' pin'+(np===1?'':'s'), nf+' finding'+(nf===1?'':'s'),
-      arr(S.contested).length+' contest'+(arr(S.contested).length===1?'':'s'), arr(S.gaps).length+' gap'+(arr(S.gaps).length===1?'':'s'), arr(S.excluded).length+' excluded'];
-    return '<div class="rp-stats">'+it.map(function(t){ return '<span>'+esc(t)+'</span>'; }).join('')
+    var S=sel(), np=Object.keys(pins()).length, nf=Object.keys(fnds()).length, src=sourceIds().length, open=openChecks(), ng=arr(S.gaps).length, nc=arr(S.contested).length;
+    var st=function(g, t, focus){ return '<button type="button" class="rp-stat" data-act="ev-open" data-g="'+g+'"'+(focus?' data-focus="1"':'')+' title="Open it in Evidence">'+esc(t)+'</button>'; };
+    var it=[src?st('sources', src+' source'+(src===1?'':'s')):'<span>'+(np?'no source records':'0 sources')+'</span>', np?st('unused', np+' pin'+(np===1?'':'s'), true):'<span>0 pins</span>', '<span>'+nf+' finding'+(nf===1?'':'s')+'</span>'];
+    if(nc) it.push(st('contests', nc+' contest'+(nc===1?'':'s')));
+    it.push(ng?st('gaps', ng+' gap'+(ng===1?'':'s')):'<span>0 gaps</span>');
+    return '<div class="rp-stats">'+it.join('')
       +(open&&!reportLocked()?'<button type="button" class="rp-need" data-act="chk-go">'+open+' need'+(open===1?'s':'')+' your call</button>':'<span class="rp-ok">nothing needs your call</span>')+'</div>';
   }
   // 00 — the ask, as a grid of what the client asked; the full 19 fields
@@ -4212,109 +4319,378 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'<button type="button" class="linkbtn no-print" data-act="why" data-path="selection.contested['+esc(c.id)+']" data-address="'+esc(A)+'">Why is this here?</button></div></div>';
     return h;
   }
-  function rpContests(n){
-    var ct=arr(sel().contested);
-    if(!ct.length) return '<section class="rp-sec" id="rp-contests">'+rpHead(n, 'Where sources disagree', 'No contests')+'<p class="rp-p muted">No two sources gave different values for the same figure, so nothing had to be picked.</p></section>';
-    var open=ct.filter(function(c){ return c.status==='open'; }).length, N=ct.length<NUM.length?NUM[ct.length]:String(ct.length);
-    var t=N+' contest'+(ct.length===1?'':'s')+(open?', '+open+' open':ct.length===1?', resolved':', all resolved');
-    return '<section class="rp-sec" id="rp-contests">'+rpHead(n, 'Where sources disagree', t)+ct.map(rpContest).join('')+'</section>';
+  // ════════════════════════════════════════════════════════════════════════
+  // the evidence (features/research-new-ui, design/evidence-panel-final.md):
+  // one model and one set of numbers. The Evidence box, a section's trace,
+  // the map and the print appendix all read evidenceModel, so their counts
+  // never drift.
+  // ════════════════════════════════════════════════════════════════════════
+  // A section's pins block is its backing index (report.py), never a citation.
+  // It is read here and nowhere else.
+  function sectionBacking(s){
+    var o=[]; arr(s&&s.blocks).forEach(function(b){ if(isObj(b)&&b.kind==='pins') arr(b.fact_ids).forEach(function(id){ if(typeof id==='string'&&o.indexOf(id)<0) o.push(id); }); });
+    return o;
   }
-  // 09 — gaps: what was looked for and not found, or not looked up at all.
-  function rpGaps(n){
-    var gaps=arr(sel().gaps); if(!gaps.length) return '';
-    return '<section class="rp-sec" id="rp-gaps">'+rpHead(n, 'Not found / not researched', 'Gaps')+'<div class="rp-gaps">'+gaps.map(function(g){
-      var nr=notRun(g);
-      return '<div class="rp-gp" id="gapr-'+esc(slug(g.id))+'"><i class="sq '+(nr?'none':'empty')+'" aria-hidden="true"></i><div><div class="rp-gp-k"><b>'+(nr?'Not looked up':'Not found')+'</b>'
-        +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div><clan-field ref="'+esc(g.id)+'" as="gap" keep>'+esc(gapWords(g.searched))+'</clan-field>'
-        +'<div class="rp-gp-d">'+(arr(g.sources_tried).length?'Sources tried: '+esc(arr(g.sources_tried).join(', '))+'<br>':'')+(g.note?esc(gapWords(g.note)):'')+'</div></div>'
-        +'<button type="button" class="linkbtn no-print" data-act="gap-ask" data-gap="'+esc(g.id)+'" title="Put this in Ask the research; nothing runs until you press Ask">Research this</button></div>';
-    }).join('')+'</div></section>';
-  }
-  // 10 — every pinned figure with its source, and what became of it.
-  function pinState(id, used){
-    var p=pins()[id], out=[], ex=excludedIds();
-    if(p.stale) out.push(['warn','stale']);
-    arr(sel().contested).forEach(function(c){ arr(c.values).forEach(function(v){ if(v.fact_id!==id) return;
-      out.push(c.status==='open'?['alert','contested']:c.chosen===id?['ok','chosen']:['','not chosen']); }); });
-    if(ex[id]) out.push(['','excluded']);
-    var inF=Object.keys(fnds()).filter(function(f){ return arr(fnds()[f].cites).indexOf(id)!==-1; });
-    if(inF.length) out.push(['ok','in '+inF.map(function(f){ return 'F'+fno(f); }).join(', ')]);
-    else if(used[id]) out.push(['','in the report']);
-    else if(!out.length) out.push(['','context only']);
-    return out.map(function(x){ return '<span class="pill '+x[0]+'">'+esc(x[1])+'</span>'; }).join(' ');
-  }
-  function rpPinned(r, n){
-    var P=pins(), ids=Object.keys(P); if(!ids.length) return '';
-    var used=reportCites(r);
-    return '<section class="rp-sec" id="rp-pins">'+rpHead(n, 'Pinned facts', 'Every figure, with its source')+'<div class="tablewrap"><table class="rp-facts"><thead><tr><th scope="col">Pin</th><th scope="col">Fact · source · as of</th><th scope="col">Value</th><th scope="col">Conf.</th><th scope="col">Status</th></tr></thead><tbody>'
-      +ids.map(function(id){ var p=P[id], src=pinSource(id);
-        return '<tr><td><button type="button" class="rp-pid" data-rsel="'+esc(id)+'">'+esc(id)+'</button></td><td><b>'+esc(String(p.key||'').replace(/[._]/g,' '))+'</b><small>'+esc(p.entity)+(src?' · '+esc(src):'')+' · as of '+esc(p.as_of)+(p.market?' · '+esc(p.market):'')+'</small></td>'
-          +'<td class="v">'+(inlineFig(id)?'<clan-field ref="'+esc(id)+'"></clan-field>':esc(clipT(fmtPinValue(p), 40)))+'</td><td><span class="pill'+(p.confidence==='high'?' ok':p.confidence==='low'?' alert':'')+'">'+esc(p.confidence)+'</span></td><td>'+pinState(id, used)+'</td></tr>';
-      }).join('')+'</tbody></table></div></section>';
-  }
-  // 11 — lens × market: what ran, and what it gave.
-  function rpCoverage(n){
-    var S=sel(), ms=marketsAll(), runs=arr(S.lenses_run), cbm=isObj(S.coverage_by_market)?S.coverage_by_market:{}, cov=isObj(S.coverage)?S.coverage:{};
-    if(!ms.length&&!runs.length) return '';
-    var word={filled:'filled — corroborated', thin:'thin — single source', empty:'searched, nothing found'};
-    var sq=function(v, t){ return '<i class="sq '+esc(v||'n')+'" title="'+esc(t+' · '+(word[v]||'no run recorded'))+'"></i>'; };
-    var h='<section class="rp-sec" id="rp-cov">'+rpHead(n, 'Coverage', 'Lens × market')+'<div class="tablewrap"><table class="rp-cov"><thead><tr><th scope="col">Lens</th>'+ms.map(function(m){ return '<th scope="col">'+esc(m)+'</th>'; }).join('')+'<th scope="col">Merged</th><th scope="col" class="l">What it gave</th></tr></thead><tbody>';
-    LENSES.forEach(function(L){
-      var g=arr(S.gaps).filter(function(x){ return x.lens===L.k; }).length, sk=arr(S.lenses_skipped).filter(function(x){ return x.lens===L.k; });
-      var note=[]; ms.forEach(function(m){ var v=cbm[m]&&cbm[m][L.k]; if(v) note.push(m+' '+v); });
-      if(g) note.push(g+' gap'+(g===1?'':'s')); if(sk.length) note.push('skipped in '+sk.map(function(x){ return x.market||'every market'; }).join(', '));
-      h+='<tr><th scope="row">'+esc(L.l)+'</th>'+ms.map(function(m){ var run=runs.filter(function(x){ return x.lens===L.k&&x.market===m; })[0];
-        return '<td>'+sq(cbm[m]&&cbm[m][L.k], L.l+' · '+m+(run?' · ran '+fmtWhen(run.ran_at)+' · '+run.handler:''))+'</td>'; }).join('')
-        +'<td>'+sq(cov[L.k], L.l+' · merged')+'</td><td class="l muted">'+esc(note.join(' · ')||'not run')+'</td></tr>';
+  // A pin feeds the report when a summary line or the headline reaches it
+  // through a finding it uses, or when a section claim, a summary line or the
+  // headline cites it. Considered, not chosen: the findings the summary did not
+  // take and the pins only they rest on, contest losers and excluded facts.
+  // Not used: everything else that was pinned.
+  function evidenceModel(Dd){
+    Dd=isObj(Dd)?Dd:{};
+    var P=isObj(Dd.projection)?Dd.projection:{}, r=isObj(Dd.report)?Dd.report:null, S=isObj(Dd.selection)?Dd.selection:{};
+    var PN=isObj(P.pins)?P.pins:{}, F=isObj(P.findings)?P.findings:{}, SR=isObj(P.sources)?P.sources:{};
+    var lines=[], citedBy={}, up={}, down={};
+    function link(a, b){ var d=down[a]||(down[a]=[]), u=up[b]||(up[b]=[]); if(d.indexOf(b)<0) d.push(b); if(u.indexOf(a)<0) u.push(a); }
+    function line(ref, kind, text, cites, sec){
+      var l={ref:ref, kind:kind, text:String(text||''), cites:arr(cites).filter(function(c){ return typeof c==='string'; }), sec:sec||''}; lines.push(l);
+      l.cites.forEach(function(c){ var by=citedBy[c]||(citedBy[c]=[]); if(by.indexOf(ref)<0) by.push(ref); if(PN[c]||F[c]) link(c, ref); });
+    }
+    if(r){
+      if(isObj(r.headline)) line('report.headline', 'headline', r.headline.text, r.headline.cites);
+      arr(r.summary).forEach(function(l, i){ if(isObj(l)) line('report.summary['+i+']', 'summary', l.text, l.cites); });
+      arr(r.sections).forEach(function(s){ if(!isObj(s)) return; arr(s.blocks).forEach(function(b, j){ if(isObj(b)&&b.kind==='claim') line('report.sections['+s.id+'].blocks['+j+']', 'claim', b.text, b.cites, String(s.id||'')); }); });
+    }
+    var srcIds=Object.keys(SR), seen={}; srcIds.forEach(function(s){ seen[s]=1; });
+    Object.keys(PN).forEach(function(id){ arr(PN[id]&&PN[id].sources).forEach(function(s){ if(!/^src_/.test(s)) return; if(!seen[s]){ seen[s]=1; srcIds.push(s); } link(s, id); }); });
+    Object.keys(F).forEach(function(fid){ arr(F[fid]&&F[fid].cites).forEach(function(c){ if(PN[c]) link(c, fid); }); });
+    function gone(fid){ var st=F[fid]&&F[fid].status; return st==='rejected'||st==='superseded'; }
+    var usedF=[];
+    lines.forEach(function(l){ if(l.kind==='claim') return; l.cites.forEach(function(c){ if(F[c]&&!gone(c)&&usedF.indexOf(c)<0) usedF.push(c); }); });
+    var consF=Object.keys(F).filter(function(f){ return usedF.indexOf(f)<0; });
+    var losers={}, excluded={};
+    arr(S.contested).forEach(function(c){ if(isObj(c)&&c.status!=='open'&&c.chosen) arr(c.values).forEach(function(v){ if(v&&v.fact_id&&v.fact_id!==c.chosen) losers[v.fact_id]=c.id||'contest'; }); });
+    arr(S.excluded).forEach(function(e){ if(isObj(e)&&e.fact_id) excluded[e.fact_id]=e; });
+    var pin={}, fnd={}, src={};
+    usedF.forEach(function(f){ fnd[f]={group:'feeds'}; }); consF.forEach(function(f){ fnd[f]={group:'considered'}; });
+    var citesOf=function(f){ return arr(F[f]&&F[f].cites); };
+    Object.keys(PN).forEach(function(id){
+      var via=usedF.filter(function(f){ return citesOf(f).indexOf(id)>=0; }), cited=arr(citedBy[id]).length>0;
+      var g=via.length||cited?'feeds':consF.some(function(f){ return citesOf(f).indexOf(id)>=0; })||losers[id]||excluded[id]?'considered':'unused';
+      pin[id]={group:g, via:via, direct:cited&&!via.length, lines:arr(citedBy[id]).slice()};
     });
-    h+='</tbody></table></div><p class="rp-key"><i class="sq filled"></i> filled <i class="sq thin"></i> thin <i class="sq empty"></i> searched, nothing found <i class="sq n"></i> no run recorded'+(runs.length?' · '+runs.length+' of '+(LENSES.length*ms.length)+' lens × market runs':'')+'</p></section>';
+    srcIds.forEach(function(s){
+      var ps=arr(down[s]).filter(function(p){ return !!PN[p]; });
+      var g=ps.some(function(p){ return pin[p].group==='feeds'; })?'feeds':ps.some(function(p){ return pin[p].group==='considered'; })?'considered':'unused';
+      src[s]={group:g, pins:ps, known:!!SR[s]};
+    });
+    var sections=arr(r&&r.sections).filter(isObj).map(function(s, i){
+      var cited=[], fids=[], gaps=[];
+      arr(s.blocks).forEach(function(b){ if(!isObj(b)) return;
+        if(b.kind==='claim') arr(b.cites).forEach(function(c){ if(PN[c]&&cited.indexOf(c)<0) cited.push(c); if(F[c]&&fids.indexOf(c)<0) fids.push(c); });
+        if(b.kind==='finding'&&b.finding_id&&fids.indexOf(b.finding_id)<0) fids.push(b.finding_id);
+        if(b.kind==='gap'&&b.gap_id) gaps.push(b.gap_id); });
+      var backing=sectionBacking(s).filter(function(id){ return !!PN[id]; }), pinned=backing.slice();
+      cited.forEach(function(id){ if(pinned.indexOf(id)<0) pinned.push(id); });
+      return {id:String(s.id||''), n:i+1, lens:String(s.lens||''), market:String(s.market||''), title:String(s.title||''), cited:cited, findings:fids,
+        backing:backing, pinned:pinned, more:pinned.filter(function(id){ return cited.indexOf(id)<0; }), gaps:gaps};
+    });
+    function count(o, g){ return Object.keys(o).filter(function(k){ return o[k].group===g; }).length; }
+    var pubs={}; srcIds.forEach(function(s){ if(src[s].group!=='feeds') return; var x=SR[s]||{}; pubs[x.publisher||x.domain||s]=1; });
+    var feeds=Object.keys(pin).filter(function(k){ return pin[k].group==='feeds'; });
+    return {pin:pin, fnd:fnd, src:src, lines:lines, citedBy:citedBy, up:up, down:down, usedF:usedF, consF:consF, losers:losers,
+      excluded:arr(S.excluded).filter(isObj), gaps:arr(S.gaps).filter(isObj), contests:arr(S.contested).filter(isObj), sections:sections,
+      counts:{pins:Object.keys(PN).length, sources:srcIds.length, findings:Object.keys(F).length,
+        feeds:{pins:feeds.length, viaF:feeds.filter(function(k){ return pin[k].via.length>0; }).length, direct:feeds.filter(function(k){ return pin[k].direct; }).length,
+          sources:count(src, 'feeds'), publishers:Object.keys(pubs).length, findings:usedF.length},
+        considered:{findings:consF.length, pins:count(pin, 'considered'), sources:count(src, 'considered')},
+        unused:{pins:count(pin, 'unused'), sources:count(src, 'unused')},
+        gaps:arr(S.gaps).length, contests:arr(S.contested).length}};
+  }
+  // What a line, a pin, a finding, a source or a section rests on and what
+  // rests on it: the walk traceSel makes on the map, over the model's links.
+  function closure(E, ref){
+    var on={};
+    if(/^sec:/.test(ref)){
+      var id=ref.slice(4), s=arr(E.sections).filter(function(x){ return x.id===id; })[0]; if(!s) return on;
+      on[ref]=1; E.lines.forEach(function(l){ if(l.sec!==id) return; var c=closure(E, l.ref); for(var k in c) on[k]=1; });
+      return on;
+    }
+    if(/^sum:\d+$/.test(ref)) ref='report.summary['+ref.slice(4)+']';
+    on[ref]=1;
+    function walk(k, map, seen){ arr(map[k]).forEach(function(n){ if(!seen[n]){ seen[n]=1; on[n]=1; walk(n, map, seen); } }); }
+    walk(ref, E.up, {}); walk(ref, E.down, {});
+    return on;
+  }
+  // Rows of the same kind of fact: the lens, then the key less its last part,
+  // then the market; rows with the same value merge. A key that is not shaped
+  // lens.family.* falls into Other.
+  function famWords(s){ s=String(s||'').replace(/^x_/,'').replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year').trim(); return s?s.charAt(0).toUpperCase()+s.slice(1):'Other'; }
+  function evFamilies(ids, P, fmt){
+    var by={}, order=[];
+    arr(ids).forEach(function(id){ var p=P[id]; if(!p) return;
+      var seg=String(p.key||'').split('.'), ok=seg.length>=2&&!!seg[0]&&!!seg[1], k=(ok?seg[0]+'.'+seg[1]:'other')+'@'+(p.market||''), f=by[k];
+      if(!f){ f=by[k]={key:k, top:ok?seg[0]:'', label:ok?famWords(seg[1]):'Other', market:String(p.market||''), ids:[], rows:[]}; order.push(f); }
+      f.ids.push(id);
+      var v=String(fmt(p)), row=f.rows.filter(function(x){ return x.v===v; })[0]; if(!row){ row={v:v, ids:[]}; f.rows.push(row); } row.ids.push(id);
+    });
+    return order.sort(function(a, b){ return (a.label==='Other')-(b.label==='Other')||b.ids.length-a.ids.length||(a.label<b.label?-1:a.label>b.label?1:0); });
+  }
+  var TIER_RANK={primary:0, secondary:1, tertiary:2};
+  function tierRank(t){ return t in TIER_RANK?TIER_RANK[t]:9; }
+  // Sources by publisher: by tier, then the facts they gave, then the newest.
+  function sourcesByPublisher(ids, SR, E){
+    var by={}, out=[];
+    arr(ids).forEach(function(s){ var x=SR[s]||{}, name=String(x.publisher||x.domain||'No source record'), g=by[name];
+      if(!g){ g=by[name]={name:name, tier:String(x.tier||''), docs:[], pins:[], newest:''}; out.push(g); }
+      g.docs.push(s); arr(E.src[s]&&E.src[s].pins).forEach(function(p){ if(g.pins.indexOf(p)<0) g.pins.push(p); });
+      if(tierRank(x.tier)<tierRank(g.tier)) g.tier=String(x.tier);
+      if(String(x.published_at||'')>g.newest) g.newest=String(x.published_at||''); });
+    return out.sort(function(a, b){ return tierRank(a.tier)-tierRank(b.tier)||b.pins.length-a.pins.length||(a.newest<b.newest?1:a.newest>b.newest?-1:0); });
+  }
+  // The facts that feed the report: under each finding the summary uses, in
+  // its order, then those a sentence cites straight, by where they are cited.
+  function factsByFinding(E, F){
+    var fs=E.usedF.map(function(f){ return {fid:f, ids:arr(F[f]&&F[f].cites).filter(function(c){ return E.pin[c]&&E.pin[c].group==='feeds'; })}; });
+    var by={}, order=[];
+    Object.keys(E.pin).forEach(function(id){ var p=E.pin[id]; if(p.group!=='feeds'||!p.direct) return;
+      var m=/^report\.sections\[(.+)\]\.blocks\[\d+\]$/.exec(p.lines.filter(function(l){ return /^report\.sections/.test(l); })[0]||''), k=m?m[1]:'';
+      if(!by[k]){ by[k]=[]; order.push(k); } by[k].push(id); });
+    var at=function(k){ if(!k) return -1; for(var i=0;i<E.sections.length;i++) if(E.sections[i].id===k) return i; return 999; };
+    order.sort(function(a, b){ return at(a)-at(b); });
+    return {findings:fs, direct:order.map(function(k){ return {sec:k, ids:by[k]}; })};
+  }
+  function gapsByLens(gaps, lensOrder){
+    var by={}, order=[];
+    arr(gaps).forEach(function(g){ if(!isObj(g)) return; var l=String(g.lens||''), x=by[l]; if(!x){ x=by[l]={lens:l, gaps:[], markets:{}}; order.push(x); }
+      x.gaps.push(g); if(g.market) x.markets[g.market]=(x.markets[g.market]||0)+1; });
+    var at=function(l){ var i=arr(lensOrder).indexOf(l); return i<0?999:i; };
+    return order.sort(function(a, b){ return at(a.lens)-at(b.lens); });
+  }
+
+  // ── the Evidence box, a section's trace, and what lights in the report ──
+  var EV={open:{}, q:'', pages:{}, data:null, model:null, cons:false};
+  try{ EV.open=JSON.parse(localStorage.getItem('clan.research.evopen')||'{}')||{}; }catch(e){ EV.open={}; }
+  try{ EV.cons=localStorage.getItem('clan.research.mapcons')==='1'; }catch(e){}
+  function evSave(){ try{ localStorage.setItem('clan.research.evopen', JSON.stringify(EV.open)); }catch(e){} }
+  function evm(){ var d=D(); if(EV.data!==d||!EV.model){ EV.data=d; EV.model=evidenceModel(d); } return EV.model; }
+  function plural(n, w, ws){ return n+' '+(n===1?w:(ws||w+'s')); }
+  function evSec(id){ return arr(evm().sections).filter(function(s){ return s.id===id; })[0]||null; }
+  function secName(s){ return s.title||lensName(s.lens)||'Section'; }
+  function pinSid(id){ var p=pins()[id]; return arr(p&&p.sources).filter(function(x){ return /^src_/.test(x); })[0]||''; }
+  // A pin's long name, for its tooltip: the sentence that cites it, its quote,
+  // its label, its id. Never its key.
+  function evTitle(id){
+    var E=evm(), l=E.pin[id]&&E.pin[id].lines[0], line=l?E.lines.filter(function(x){ return x.ref===l; })[0]:null;
+    if(line&&line.text) return line.text;
+    var p=pins()[id]||{}, q=isObj(p.quotes)?String(p.quotes[pinSid(id)]||p.quotes[Object.keys(p.quotes)[0]]||''):'';
+    return q||pinLabel(p)||id;
+  }
+  function confDots(c){ c=String(c||''); var w={high:'high', medium:'med', med:'med', low:'low'}[c]||'low';
+    return '<span class="conf" data-c="'+w+'" role="img" aria-label="'+esc('Confidence: '+(c||'not given'))+'"><i></i><i></i><i></i></span>'; }
+  function evRow(id, cls){
+    var p=pins()[id]||{}, s=srcRecs()[pinSid(id)]||{};
+    return '<button type="button" class="ev-row'+(cls?' '+cls:'')+'" data-ev-sel="'+esc(id)+'" data-ev-ids="'+esc(id)+'" title="'+esc(evTitle(id))+'"><span class="v">'+esc(clipT(fmtAny(p), 30))+'</span>'
+      +'<span class="l">'+esc(clipT(pinLabel(p)||'A fact', 90))+'<small>'+(p.market?esc(p.market)+' · ':'')+confDots(p.confidence)+(s.publisher||s.domain?' · '+esc(s.publisher||s.domain):'')+'</small></span></button>';
+  }
+  function evMerged(row){
+    if(row.ids.length===1) return evRow(row.ids[0]);
+    var names=[]; row.ids.forEach(function(id){ var n=citeName(id); if(n&&names.indexOf(n)<0) names.push(n); });
+    return '<div class="ev-merged" data-ev-ids="'+esc(row.ids.join(' '))+'"><div class="ev-mh"><span class="v">'+esc(clipT(row.v, 30))+'</span><span class="l">'+esc(clipT(pinLabel(pins()[row.ids[0]])||'A fact', 90))
+      +'<small>'+plural(row.ids.length, 'pin')+' · '+plural(names.length, 'source')+'</small></span></div>'
+      +'<div class="ev-chips">'+row.ids.map(function(id){ return '<button type="button" class="ev-chip" data-ev-sel="'+esc(id)+'" data-ev-ids="'+esc(id)+'" title="'+esc(evTitle(id))+'">'+esc(citeName(id)||'No source record')+'</button>'; }).join('')+'</div></div>';
+  }
+  function evPaged(k, list, fn, size){
+    size=size||20; var n=EV.pages[k]||size;
+    return list.slice(0, n).map(function(x){ return fn(x); }).join('')
+      +(list.length>n?'<button type="button" class="linkbtn ev-more" data-act="ev-more" data-k="'+esc(k)+'" data-n="'+(size===8?list.length:n+20)+'">'+(size===8?'Show all '+list.length:'Show '+Math.min(20, list.length-n)+' more of '+(list.length-n))+'</button>':'');
+  }
+  function evFamsHtml(key, fams){
+    return fams.map(function(f){ var k=key+'|'+f.key, open=!!EV.q||!!EV.open[k];
+      return '<details class="ev-fam" data-evg="'+esc(k)+'"'+(open?' open':'')+'><summary data-ev-ids="'+esc(f.ids.join(' '))+'"><span>'+esc(f.label+(f.market?' · '+f.market:''))+'</span>'
+        +'<span class="ev-gm">'+plural(f.ids.length, 'pin')+(f.rows.length<f.ids.length?' · '+plural(f.rows.length, 'value'):'')+'</span></summary>'
+        +(open?'<div class="ev-fb">'+evPaged(k, f.rows, evMerged)+'</div>':'')+'</details>'; }).join('');
+  }
+  function evPubRow(g){
+    var ids=g.pins.join(' '), meta=' · '+plural(g.docs.length, 'doc')+(g.newest?' · '+monthOf(g.newest):''), dot='<span class="tier t-'+esc(g.tier)+'" aria-hidden="true"></span>';
+    if(g.docs.length===1) return '<button type="button" class="ev-pub" data-ev-sel="'+esc(g.docs[0])+'" data-ev-ids="'+esc(g.docs[0])+'">'+dot+'<span class="l"><b>'+esc(g.name)+'</b>'+esc(meta)+'</span><span class="ct">'+plural(g.pins.length, 'fact')+'</span></button>';
+    return '<details class="ev-pubg"><summary class="ev-pub" data-ev-ids="'+esc(g.docs.join(' '))+'">'+dot+'<span class="l"><b>'+esc(g.name)+'</b>'+esc(meta)+'</span><span class="ct">'+plural(g.pins.length, 'fact')+'</span></summary>'
+      +g.docs.map(function(s){ var x=srcRecs()[s]||{}; return '<button type="button" class="ev-doc" data-ev-sel="'+esc(s)+'" data-ev-ids="'+esc(s)+'">'+esc(clipT(x.title||x.domain||'A document', 90))+(x.published_at?'<small>'+esc(monthOf(x.published_at))+'</small>':'')+'</button>'; }).join('')+'</details>';
+  }
+  function evTierLine(ids){ var t={primary:0, secondary:0, tertiary:0}; ids.forEach(function(s){ var x=srcRecs()[s]; if(x&&x.tier in t) t[x.tier]++; });
+    return [['primary','pri'],['secondary','sec'],['tertiary','ter']].map(function(x){ return t[x[0]]+' '+x[1]; }).join(' · '); }
+  function lensOfPin(id){ var p=pins()[id]; return p?KEY_LENS[String(p.key||'').split('.')[0]]||'':''; }
+  function lensTitle(l){ var s=arr(evm().sections).filter(function(x){ return x.lens===l; })[0]; return s?secName(s):l?lensName(l):'Other'; }
+  function lensOrder(){ return LENSES.map(function(L){ return L.k; }); }
+  function chkFor(ref){ return checks().filter(function(c){ return c.open&&c.ref===ref; })[0]||null; }
+  function fndHead(fid){
+    var f=fnds()[fid]||{}, st=f.status||'proposed', c=chkFor(fid);
+    return '<div class="ev-fh"><button type="button" class="ev-fbtn" data-ev-sel="'+esc(fid)+'" data-ev-ids="'+esc(fid)+'" title="'+esc(f.statement||'')+'"><b>F'+esc(fno(fid))+'</b> '+esc(clipT(f.statement||'A finding', 110))+'</button>'
+      +'<span class="st-pill '+(st==='verified'?'ok':st==='rejected'||st==='superseded'?'mute':'warn')+'">'+esc(st==='superseded'?'replaced':st)+'</span>'
+      +(c&&!reportLocked()?'<button type="button" class="ev-call" data-act="chk-sel" data-chk="'+esc(chkId(c))+'">Your call</button>':'')+'</div>';
+  }
+  function gapRow(g){
+    var nr=notRun(g);
+    return '<div class="rp-gp" id="gapr-'+esc(slug(g.id))+'"><i class="sq '+(nr?'none':'empty')+'" aria-hidden="true"></i><div><div class="rp-gp-k"><b>'+(nr?'Not looked up':'Not found')+'</b>'
+      +(g.lens?'<span class="pill">'+esc(lensName(g.lens))+'</span>':'')+(g.market?'<span class="pill">'+esc(g.market)+'</span>':'')+'</div><clan-field ref="'+esc(g.id)+'" as="gap" keep>'+esc(gapWords(g.searched))+'</clan-field>'
+      +'<div class="rp-gp-d">'+(arr(g.sources_tried).length?'Sources tried: '+esc(arr(g.sources_tried).join(', '))+'<br>':'')+(g.note?esc(gapWords(g.note)):'')+'</div></div>'
+      +'<button type="button" class="linkbtn no-print" data-act="gap-ask" data-gap="'+esc(g.id)+'" title="Put this in Ask the research; nothing runs until you press Ask">Research this</button></div>';
+  }
+  var COV_WORD={filled:'filled, corroborated', thin:'thin, single source', empty:'searched, nothing found'};
+  function covSq(lens, m){
+    var S=sel(), cbm=isObj(S.coverage_by_market)?S.coverage_by_market:{}, v=cbm[m]&&cbm[m][lens], run=arr(S.lenses_run).filter(function(x){ return x&&x.lens===lens&&x.market===m; })[0];
+    return '<i class="sq '+esc(v||'n')+'" title="'+esc(lensName(lens)+' · '+m+' · '+(COV_WORD[v]||'no run recorded')+(run?' · ran '+fmtWhen(run.ran_at)+(run.handler?' · '+run.handler:''):''))+'"></i>';
+  }
+  // Search: label, value, publisher and title, over every pin and source.
+  function evMatch(q){
+    q=String(q||'').trim().toLowerCase(); if(!q) return null;
+    var o={}, P=pins(), S=srcRecs(), E=evm();
+    var srcText=function(x){ x=x||{}; return [x.publisher, x.domain, x.title].join(' '); };
+    Object.keys(P).forEach(function(id){ var p=P[id]; if([pinLabel(p), fmtAny(p), p.market].concat(arr(p.sources).map(function(s){ return srcText(S[s]); })).join(' ').toLowerCase().indexOf(q)>=0) o[id]=1; });
+    Object.keys(E.src).forEach(function(s){ if(srcText(S[s]).toLowerCase().indexOf(q)>=0) o[s]=1; });
+    return o;
+  }
+  function evGroup(k, title, meta, hits, body){
+    var open=EV.q?hits>0:!!EV.open[k];
+    return '<details class="ev-g" data-evg="'+esc(k)+'"'+(open?' open':'')+'><summary><span class="ev-gt">'+esc(title)+'</span><span class="ev-gm">'+meta+'</span></summary>'+(open?'<div class="ev-gb">'+body()+'</div>':'')+'</details>';
+  }
+  function evGroupsHtml(E){
+    var c=E.counts, F=fnds(), SR=srcRecs(), M=evMatch(EV.q), keep=function(id){ return !M||!!M[id]; };
+    var srcIn=function(g){ return Object.keys(E.src).filter(function(s){ return E.src[s].group===g; }); };
+    var feedSrc=srcIn('feeds').filter(function(s){ return keep(s)||E.src[s].pins.some(keep); });
+    var feedPins=Object.keys(E.pin).filter(function(id){ return E.pin[id].group==='feeds'&&keep(id); });
+    var consPins=Object.keys(E.pin).filter(function(id){ return E.pin[id].group==='considered'&&keep(id); });
+    var unPins=Object.keys(E.pin).filter(function(id){ return E.pin[id].group==='unused'&&keep(id); });
+    var unSrc=srcIn('unused').filter(keep);
+    var fb=factsByFinding(E, F), h='';
+    h+=evGroup('sources', 'Sources', c.feeds.sources+' feed · '+esc(evTierLine(srcIn('feeds'))), feedSrc.length, function(){
+      return evPaged('sources:list', sourcesByPublisher(feedSrc, SR, E), evPubRow, M?999:8); });
+    h+=evGroup('facts', 'Facts', c.feeds.pins+' feed · '+esc(fb.findings.map(function(x){ return 'F'+fno(x.fid)+' '+x.ids.length; }).concat(['cited direct '+c.feeds.direct]).join(' · ')), feedPins.length, function(){
+      var o='';
+      fb.findings.forEach(function(x){ var ids=x.ids.filter(keep); if(M&&!ids.length) return; o+='<div class="ev-sub">'+fndHead(x.fid)+evPaged('facts:'+x.fid, ids, evRow)+'</div>'; });
+      var dn=0; fb.direct.forEach(function(d){ dn+=d.ids.filter(keep).length; });
+      if(dn) o+='<div class="ev-sub"><h6>Cited straight by a sentence · '+dn+'</h6>'+fb.direct.map(function(d){ var ids=d.ids.filter(keep); if(!ids.length) return ''; var s=evSec(d.sec);
+        return '<p class="ev-at">'+esc(s?pad2(s.n)+' '+secName(s):'Headline and summary')+'</p>'+evPaged('facts:direct:'+d.sec, ids, evRow); }).join('')+'</div>';
+      return o||'<p class="ev-empty">No fact matches.</p>'; });
+    h+=evGroup('contests', 'Where sources disagree', String(c.contests), M?0:c.contests, function(){
+      return E.contests.length?E.contests.map(rpContest).join(''):'<p class="ev-empty">No two sources gave different values for the same figure.</p>'; });
+    h+=evGroup('considered', 'Considered, not chosen', plural(c.considered.findings, 'finding')+' · '+plural(c.considered.pins, 'fact'), M?consPins.length:1, function(){
+      var o='', losers=Object.keys(E.losers).filter(function(id){ return pins()[id]&&keep(id); });
+      if(!M&&E.consF.length) o+='<div class="ev-sub"><h6>Findings the summary didn’t take · '+E.consF.length+'</h6>'+E.consF.map(fndHead).join('')+'</div>';
+      var only=consPins.filter(function(id){ return !E.losers[id]; });
+      if(only.length) o+='<div class="ev-sub"><h6>Facts only they rest on · '+only.length+'</h6>'+only.map(function(id){ return evRow(id); }).join('')+'</div>';
+      if(losers.length) o+='<div class="ev-sub"><h6>Not chosen where sources disagree · '+losers.length+'</h6>'+losers.map(function(id){ return evRow(id, 'rej'); }).join('')+'</div>';
+      if(!M&&E.excluded.length) o+='<div class="ev-sub"><h6>Excluded · '+E.excluded.length+'</h6>'+E.excluded.map(function(e){ var p=pins()[e.fact_id];
+        return '<p class="ev-ex"><b>'+esc(p?pinLabel(p):'A fact read, not pinned')+'</b> · '+esc(e.reason||'no reason given')+'</p>'; }).join('')+'</div>';
+      return o||'<p class="ev-empty">Nothing was weighed and set aside.</p>'; });
+    h+=evGroup('unused', 'Not used', plural(c.unused.pins, 'fact')+' · '+plural(c.unused.sources, 'source'), unPins.length+unSrc.length, function(){
+      var o='<p class="ev-note">Pinned while researching, but no sentence or finding rests on them.</p>';
+      var by={}, order=[]; unPins.forEach(function(id){ var l=lensOfPin(id); if(!by[l]){ by[l]=[]; order.push(l); } by[l].push(id); });
+      var lo=lensOrder(); order.sort(function(a, b){ var x=lo.indexOf(a), y=lo.indexOf(b); return (x<0?99:x)-(y<0?99:y); });
+      order.forEach(function(l){ o+='<div class="ev-sub"><h6>'+esc(lensTitle(l))+' · '+by[l].length+'</h6>'+evFamsHtml('unused:'+l, evFamilies(by[l], pins(), fmtAny))+'</div>'; });
+      if(unSrc.length) o+='<div class="ev-sub"><h6>Sources behind these only · '+unSrc.length+'</h6>'+evPaged('unused:src', sourcesByPublisher(unSrc, SR, E), evPubRow)+'</div>';
+      return o; });
+    h+=evGroup('gaps', 'Gaps', String(c.gaps), M?0:c.gaps, function(){
+      if(!E.gaps.length) return '<p class="ev-empty">Nothing was looked for and not found.</p>';
+      return gapsByLens(E.gaps, lensOrder()).map(function(x){ var ms=Object.keys(x.markets);
+        return '<details class="ev-fam" data-evg="gaps|'+esc(x.lens)+'"'+(EV.open['gaps|'+x.lens]?' open':'')+'><summary><span>'+esc(lensTitle(x.lens))+'</span><span class="ev-gm">'+ms.map(function(m){ return esc(m)+' '+x.markets[m]; }).join(' · ')+(ms.length?'':String(x.gaps.length))+'</span></summary>'
+          +(EV.open['gaps|'+x.lens]?'<div class="ev-fb">'+evPaged('gaps:'+x.lens, x.gaps, gapRow)+'</div>':'')+'</details>'; }).join(''); });
+    if(M&&!Object.keys(M).length) h='<p class="ev-empty">No fact or source matches “'+esc(EV.q)+'”.</p>'+h;
     return h;
   }
-  // 12 — read, not pinned: what was left out on purpose, and pins nothing rests on.
-  function rpExcluded(r, n){
-    var ex=arr(sel().excluded), used=reportCites(r), losers={};
-    arr(sel().contested).forEach(function(c){ arr(c.values).forEach(function(v){ losers[v.fact_id]=1; }); });
-    var ctx=Object.keys(pins()).filter(function(id){ return !losers[id]&&!used[id]&&!Object.keys(fnds()).some(function(f){ return arr(fnds()[f].cites).indexOf(id)!==-1; }); });
-    if(!ex.length&&!ctx.length) return '';
-    return '<section class="rp-sec" id="rp-excl">'+rpHead(n, 'Excluded', 'Read, not pinned')+'<div class="rp-excl">'
-      +ex.map(function(e){ var d=e.decision?decById(e.decision):null;
-        return '<div class="rp-ex"><span class="rp-ex-k">excluded · not pinned</span><span><b>'+esc(e.fact_id)+'</b> · '+esc(e.reason)+'</span><small>'+(d?esc(human(d.actor||d.agent))+' · '+esc(fmtWhen(d.timestamp)):'')+(e.decision?' · <span class="mono">'+esc(e.decision)+'</span>':'')+'</small></div>'; }).join('')
-      +ctx.map(function(id){ var p=pins()[id];
-        return '<div class="rp-ex"><span class="rp-ex-k">pinned · context only</span><span><button type="button" class="rp-pid" data-rsel="'+esc(id)+'">'+esc(id)+'</button> · '+esc(String(p.key||'').replace(/[._]/g,' '))+' '+esc(clipT(fmtPinValue(p), 40))+'. Neither a finding nor the report cites it.</span><small></small></div>'; }).join('')
-      +'</div></section>';
+  function evTopHtml(E){
+    var c=E.counts, ms=marketsAll();
+    var h='<p class="ev-feeds"><b>Feeds the report</b><span>'+plural(c.feeds.pins, 'pin')+' · '+plural(c.feeds.sources, 'source')+' · '+c.feeds.findings+' of '+plural(c.findings, 'finding')+'</span></p>';
+    if(E.sections.length) h+='<div class="ev-lens" role="list" aria-label="By lens"><div class="ev-lh" aria-hidden="true"><span>By lens</span><span>used / pinned</span><span>'+ms.map(esc).join(' ')+'</span><span>gaps</span></div>'
+      +E.sections.map(function(s){ var g=E.gaps.filter(function(x){ return x.lens===s.lens; }).length;
+        return '<button type="button" role="listitem" class="ev-lrow" data-act="ev-sec" data-sec="'+esc(s.id)+'" data-ev-ids="'+esc(s.cited.join(' '))+'" title="'+esc('Open what is behind '+pad2(s.n)+' '+secName(s))+'"><span class="l">'+pad2(s.n)+' '+esc(secName(s))+'</span><span class="u">'+s.cited.length+' / '+s.pinned.length+'</span>'
+          +'<span class="c">'+(s.lens?ms.map(function(m){ return covSq(s.lens, m); }).join(''):'')+'</span><span class="g">'+(g||'')+'</span><span class="ar" aria-hidden="true">›</span></button>'; }).join('')+'</div>';
+    return h;
   }
-  // 13 — how it ran: the agents' steps, oldest first, from the chain.
-  var RUN_STAGE={extract:'extract', identify:'identify', answer_question:'', lookup:'research', merge_research:'research', research_run:'research', research_merge:'research', contest:'research', open_contest:'research',
-    select:'select', synthesise:'synthesise', synthesise_finding:'synthesise', propose_audience:'synthesise', report:'report', compose_report:'report'};
-  var RUN_VERB={extract:'read the ask', identify:'worked out the brand and markets', select:'picked the lenses', research:'looked things up and pinned facts', synthesise:'worked out the points', report:'wrote the report'};
-  function runSteps(){
-    var out=[];
-    decs().slice().reverse().forEach(function(d){
-      if(/^human:/.test(actorOf(d))) return;
-      var k=RUN_STAGE[d.action]; if(k===undefined) k=d.action==='mark_stale'?'':'other'; if(!k) return;
-      var last=out[out.length-1];
-      if(last&&last.k===k) last.ds.push(d); else out.push({k:k, ds:[d]});
-    });
+  function renderEvidence(){
+    var box=$('evbox'); if(!box) return;
+    var r=D().report, E=evm(), c=E.counts;
+    box.hidden=false;
+    $('ev-tot').textContent=c.pins||c.sources?plural(c.sources, 'source')+' · '+plural(c.pins, 'pin'):'';
+    var q=$('ev-q'); if(q) q.hidden=!c.pins;
+    if(!isObj(r)&&!c.pins){ $('ev-top').innerHTML='<p class="ev-empty">Evidence appears once research has pinned facts.</p>'; $('ev-body').innerHTML=''; return; }
+    if(!c.pins){ $('ev-top').innerHTML='<p class="ev-empty">Nothing pinned yet. Run research.</p>'; $('ev-body').innerHTML=''; return; }
+    $('ev-top').innerHTML=evTopHtml(E);
+    $('ev-body').innerHTML=evGroupsHtml(E);
+  }
+  function evBody(){ var b=$('ev-body'); if(b) b.innerHTML=evGroupsHtml(evm()); }
+  // Open a group of the Evidence box (the band's stats, the map's legend).
+  function evOpen(g, focus){
+    VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel();
+    if(VIEW.v!=='report') setView('report');
+    EV.open[g]=true; evSave(); renderEvidence();
+    if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
+    var el=document.querySelector('#evbox [data-evg="'+g+'"]')||$('evbox');
+    if(el) el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
+    if(focus){ var q=$('ev-q'); if(q) setTimeout(function(){ try{ q.focus({preventScroll:true}); }catch(e){} }, calm()?0:300); }
+  }
+  // A section's trace: what it is written about, what else was pinned for its
+  // lens (folded by family), its sources by tier, gaps and coverage.
+  function secTraceHtml(id){
+    var s=evSec(id); if(!s) return '<p class="insp-hint">This section is not in the report any more.</p>';
+    var E=evm(), ms=marketsAll(), mk=s.market||ms.join(' · '), fams=evFamilies(s.more, pins(), fmtAny);
+    var sids=[]; s.pinned.forEach(function(p){ var x=pinSid(p); if(x&&sids.indexOf(x)<0) sids.push(x); });
+    var tiers={}; sids.forEach(function(x){ var t=(srcRecs()[x]||{}).tier||'other'; (tiers[t]=tiers[t]||[]).push(x); });
+    var gs=s.gaps.map(gapById).filter(Boolean);
+    var h='<div class="rbi-head"><span class="rbi-kind">Section '+pad2(s.n)+' · '+esc(lensName(s.lens)||'Section')+(mk?' · '+esc(mk):'')+'</span><span class="st-pill">'+s.cited.length+' of '+s.pinned.length+' used</span></div>'
+      +'<p class="rbi-title">'+esc(secName(s))+'</p>';
+    h+='<section class="rbi-sec"><h5>Written about<em>'+s.cited.length+'</em></h5>'+(s.cited.length?s.cited.map(function(p){ return evRow(p); }).join(''):'<p class="ev-empty">No sentence here cites a pin.</p>')+'</section>';
+    if(s.more.length) h+='<section class="rbi-sec"><h5>Also pinned for this lens<em>'+s.more.length+'</em></h5>'+evFamsHtml('sec:'+s.id, fams)+'</section>';
+    if(sids.length) h+='<section class="rbi-sec"><h5>Sources · by tier<em>'+sids.length+'</em></h5>'+Object.keys(tiers).sort(function(a, b){ return tierRank(a)-tierRank(b); }).map(function(t){
+      return '<details class="ev-fam"><summary><span>'+esc(t.charAt(0).toUpperCase()+t.slice(1))+'</span><span class="ev-gm">'+plural(tiers[t].length, 'source')+'</span></summary><div class="ev-fb">'+sourcesByPublisher(tiers[t], srcRecs(), E).map(evPubRow).join('')+'</div></details>'; }).join('')+'</section>';
+    if(gs.length) h+='<section class="rbi-sec"><h5>Gaps<em>'+gs.length+'</em></h5>'+gs.map(gapRow).join('')+'</section>';
+    if(s.lens&&ms.length) h+='<section class="rbi-sec"><h5>Coverage</h5><p class="ev-cov">'+ms.map(function(m){ return '<span>'+esc(m)+' '+covSq(s.lens, m)+'</span>'; }).join('')+'</p></section>';
+    h+='<div class="rbi-acts"><button type="button" class="rb-btn" data-act="ev-ask" data-lens="'+esc(s.lens)+'">Ask about this section</button></div>';
+    return h;
+  }
+  // Under a line's own card: what it is built from, from its closure.
+  var LINE_REF=/^(report\.headline|report\.summary\[\d+\]|report\.sections\[[^\]]+\]\.blocks\[\d+\]|sum:\d+)$/;
+  function builtFromHtml(ref){
+    var E=evm(), C=closure(E, ref), P=pins(), F=fnds(), keys=Object.keys(C);
+    var fs=keys.filter(function(k){ return !!F[k]; }), ps=keys.filter(function(k){ return !!P[k]; }), ss=keys.filter(function(k){ return !!E.src[k]; });
+    if(!fs.length&&!ps.length&&!ss.length) return '';
+    var cons=[]; E.contests.forEach(function(c){ if(c.status!=='open'&&c.chosen&&C[c.chosen]) arr(c.values).forEach(function(v){ if(v&&v.fact_id&&v.fact_id!==c.chosen&&cons.indexOf(v.fact_id)<0) cons.push(v.fact_id); }); });
+    var pubs=sourcesByPublisher(ss, srcRecs(), E);
+    return '<section class="rbi-sec ev-built"><h5>Built from<em>'+plural(ps.length, 'pin')+' · '+plural(ss.length, 'source')+'</em></h5><div class="rbi-uses">'
+      +(fs.length?'<div class="rbi-use"><span>Findings</span>'+fs.map(function(f){ return '<button type="button" class="rb-fchip" data-ev-sel="'+esc(f)+'" data-ev-ids="'+esc(f)+'"><span class="rb-n">'+esc(fno(f))+'</span>Finding '+esc(fno(f))+'</button>'; }).join(' ')+'</div>':'')
+      +(pubs.length?'<div class="rbi-use"><span>Sources</span>'+pubs.map(function(g){ return '<button type="button" class="rb-schip" data-ev-sel="'+esc(g.docs[0])+'" data-ev-ids="'+esc(g.docs.join(' '))+'">'+esc(g.name)+(g.docs.length>1?' · '+g.docs.length:'')+'</button>'; }).join(' ')+'</div>':'')
+      +'</div>'+(ps.length?'<div class="ev-sub"><h6>Pins · '+ps.length+'</h6>'+evPaged('built:'+ref, ps, evRow, 8)+'</div>':'')
+      +(cons.length?'<div class="ev-sub"><h6>Considered, not chosen · '+cons.length+'</h6>'+cons.filter(function(id){ return !!P[id]; }).map(function(id){ return evRow(id, 'rej'); }).join('')+'</div>':'')+'</section>';
+  }
+  // The sentences that cite these pins, sources or findings (themselves, or
+  // through a finding that rests on them), lit in the report.
+  function evLinesFor(ids){
+    var E=evm(), F=fnds(), out={};
+    var add=function(x){ arr(E.citedBy[x]).forEach(function(l){ out[l]=1; }); arr(E.down[x]).forEach(function(f){ if(F[f]) arr(E.citedBy[f]).forEach(function(l){ out[l]=1; }); }); };
+    arr(ids).forEach(function(id){ if(E.src[id]) E.src[id].pins.forEach(add); else add(id); });
     return out;
   }
-  function rpHowRan(n){
-    var steps=runSteps(), runs=arr(sel().lenses_run).length, src=sourceIds().length, who={};
-    steps.forEach(function(s){ who[s.k]=1; });
-    var na=Object.keys(who).length;
-    var t=(na?(na<NUM.length?NUM[na]:String(na))+' step'+(na===1?'':'s'):'The run')+(runs?', '+runs+' lens run'+(runs===1?'':'s'):'')+(src?', '+src+' source'+(src===1?'':'s'):'');
-    var h='<section class="rp-sec" id="rp-ran">'+rpHead(n, 'How it ran', t);
-    if(!steps.length) h+='<p class="muted">'+(CHAIN.state==='ok'?'No steps by the agents are on the record.':'The record is not available here.')+'</p>';
-    else h+='<ol class="rp-run">'+steps.map(function(s){
-      var a=s.ds[0], z=s.ds[s.ds.length-1], hs=[];
-      s.ds.forEach(function(d){ var x=d.handler||d.agent; if(x&&hs.indexOf(x)===-1) hs.push(x); });
-      var nm=s.k==='other'?'The agents':stageWho(s.k);
-      var t1=fmtWhen(a.timestamp), t2=fmtWhen(z.timestamp);
-      return '<li><div><b>'+esc(nm)+'</b> '+esc(RUN_VERB[s.k]||s.ds.map(function(d){ return d.action; }).join(', '))+'<small>'+esc(hs.join(', '))+(hs.length?' · ':'')+s.ds.map(function(d){ return d.id?'<span class="mono">'+esc(d.id)+'</span>':''; }).filter(Boolean).join(' ')+'</small></div><span class="t">'+esc(t1===t2?t1:t1+' – '+t2)+'</span></li>';
-    }).join('')+'</ol>';
-    return h+'<p class="no-print"><button type="button" class="linkbtn" data-act="show-run">'+(document.body.classList.contains('show-run')?'Hide the run':'Show the run: your request, each stage and your answers')+'</button></p></section>';
+  function evHit(ids, scroll){
+    var root=$('report'); if(!root) return;
+    Array.prototype.forEach.call(root.querySelectorAll('.ev-hit'), function(n){ n.classList.remove('ev-hit'); });
+    if(!ids||!ids.length) return;
+    var on=evLinesFor(ids), first=null;
+    Array.prototype.forEach.call(root.querySelectorAll('clan-field.clf-ln[ref]'), function(el){ if(on[el.getAttribute('ref')]){ el.classList.add('ev-hit'); if(!first) first=el; } });
+    if(scroll&&first) first.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'});
   }
-  // 14 — on the record: every decision, newest first, by kind and by who.
-  var REC={kind:'', who:''};
+  function evSelIds(){ var r=VIEW.sel; return r&&(pins()[r]||fnds()[r]||srcRecs()[r])?[r]:[]; }
+  // The print appendix: every source and fact behind the report, from the same model.
+  function evAppendixHtml(E){
+    var c=E.counts, F=fnds(), SR=srcRecs(); if(!c.pins&&!c.sources) return '';
+    var srcIn=function(g){ return Object.keys(E.src).filter(function(s){ return E.src[s].group===g; }); };
+    var fact=function(id){ var p=pins()[id]||{}; return '<li><b>'+esc(clipT(fmtAny(p), 60))+'</b> '+esc(pinLabel(p)||'A fact')+(citeName(id)?' · '+esc(citeName(id)):'')+(p.as_of?' · as of '+esc(p.as_of):'')+'</li>'; };
+    var pub=function(g){ return '<li><b>'+esc(g.name)+'</b>'+(g.tier?' · '+esc(g.tier):'')+' · '+plural(g.pins.length, 'fact')+'<ul>'+g.docs.map(function(s){ var x=SR[s]||{}; return '<li>'+esc(x.title||x.domain||'A document')+(x.published_at?' · '+esc(monthOf(x.published_at)):'')+(x.uri?' · '+esc(x.uri):'')+'</li>'; }).join('')+'</ul></li>'; };
+    var fb=factsByFinding(E, F);
+    var h='<section class="rp-sec ev-appx print-only" id="rp-appx"><div class="rs-h"><span>Appendix — Evidence</span><h3>Every source and fact behind this report</h3></div>'
+      +'<p class="rp-p">'+plural(c.feeds.pins, 'pin')+' and '+plural(c.feeds.sources, 'source')+' feed the report; '+plural(c.considered.findings, 'finding')+' and '+plural(c.considered.pins, 'pin')+' were considered, not chosen; '+plural(c.unused.pins, 'pin')+' and '+plural(c.unused.sources, 'source')+' were pinned but not used; '+plural(c.gaps, 'gap')+'.</p>';
+    h+='<h4>Sources that feed the report, by publisher</h4><ul class="ev-ax">'+sourcesByPublisher(srcIn('feeds'), SR, E).map(pub).join('')+'</ul>';
+    h+='<h4>Facts that feed the report</h4>'+fb.findings.map(function(x){ return '<p class="ev-axf"><b>Finding '+esc(fno(x.fid))+'</b> · '+esc((F[x.fid]||{}).statement||'')+'</p><ul class="ev-ax">'+x.ids.map(fact).join('')+'</ul>'; }).join('')
+      +fb.direct.map(function(d){ var s=evSec(d.sec); return '<p class="ev-axf"><b>Cited straight by a sentence</b> · '+esc(s?pad2(s.n)+' '+secName(s):'Headline and summary')+'</p><ul class="ev-ax">'+d.ids.map(fact).join('')+'</ul>'; }).join('');
+    var consPins=Object.keys(E.pin).filter(function(id){ return E.pin[id].group==='considered'; });
+    h+='<h4>Considered, not chosen</h4>'+(E.consF.length||consPins.length||E.excluded.length?'<ul class="ev-ax">'+E.consF.map(function(f){ return '<li><b>Finding '+esc(fno(f))+'</b> · '+esc((F[f]||{}).statement||'')+'</li>'; }).join('')+consPins.map(fact).join('')
+      +E.excluded.map(function(e){ return '<li>Excluded · '+esc(e.reason||'')+'</li>'; }).join('')+'</ul>':'<p class="rp-p">Nothing was weighed and set aside.</p>');
+    h+='<h4>Gaps, by lens</h4>'+(E.gaps.length?gapsByLens(E.gaps, lensOrder()).map(function(x){ return '<p class="ev-axf"><b>'+esc(lensTitle(x.lens))+'</b> · '+x.gaps.length+'</p><ul class="ev-ax">'+x.gaps.map(function(g){ return '<li>'+esc(gapWords(g.searched))+(g.market?' · '+esc(g.market):'')+'</li>'; }).join('')+'</ul>'; }).join(''):'<p class="rp-p">None.</p>');
+    var un=Object.keys(E.pin).filter(function(id){ return E.pin[id].group==='unused'; });
+    h+='<h4>Pinned, not used: '+plural(un.length, 'pin')+' in families</h4><ul class="ev-ax">'+evFamilies(un, pins(), fmtAny).map(function(f){ return '<li><b>'+esc(f.label+(f.market?' · '+f.market:''))+'</b> · '+plural(f.ids.length, 'pin')+': '+f.rows.map(function(r){ return esc(clipT(r.v, 60))+(r.ids.length>1?' ('+r.ids.length+')':''); }).join('; ')+'</li>'; }).join('')+'</ul>';
+    var us=srcIn('unused');
+    if(us.length) h+='<h4>Sources behind these only</h4><ul class="ev-ax">'+sourcesByPublisher(us, SR, E).map(pub).join('')+'</ul>';
+    return h+'</section>';
+  }
   // One decision, one line; its reasons and what it touched open under it.
   function recRow(d){
     var k=kindOf(d), a=actorOf(d), hu=/^human:/.test(a), body=hasReasoning(d)?reasoningBlock(d.reasoning):d.rationale?'<p class="tlr">'+esc(noIds(d.rationale))+'</p>':'';
@@ -4323,21 +4699,25 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     return '<details class="rp-dec k-'+esc(k)+'"><summary><span class="t">'+esc(fmtWhen(d.timestamp))+'</span><span class="pill'+(k==='verdict'&&d.polarity==='bad'||k==='contest'?' alert':k==='verify'||k==='resolve'||(k==='verdict'&&d.polarity==='good')?' ok':'')+'">'+esc(k)+(d.polarity?' · '+esc(d.polarity):'')+'</span>'
       +'<span><b>'+esc(hu?human(a):a)+'</b> '+esc(d.action||'')+'</span><span class="mono">'+esc(d.id||'')+'</span></summary>'+body+(tg?'<div class="tlt">'+tg+'</div>':'')+'</details>';
   }
-  function rpRecord(n){
-    if(CHAIN.state!=='ok') return '<section class="rp-sec" id="rp-rec">'+rpHead(n, 'On the record', CHAIN.state==='loading'?'Reading the record…':'The record is not available here')+'</section>';
-    var all=decs(), kinds=[];
-    all.forEach(function(d){ if(kinds.indexOf(kindOf(d))===-1) kinds.push(kindOf(d)); });
-    if(REC.kind&&kinds.indexOf(REC.kind)===-1) REC.kind='';
-    var shown=all.filter(function(d){ var hu=/^human:/.test(actorOf(d)); return (!REC.kind||kindOf(d)===REC.kind)&&(!REC.who||(REC.who==='people')===hu); });
-    var b=function(attr, v, on, label){ return '<button type="button" data-act="rec-filter" data-'+attr+'="'+esc(v)+'" aria-pressed="'+on+'">'+esc(label)+'</button>'; };
-    return '<section class="rp-sec" id="rp-rec">'+rpHead(n, 'On the record', all.length+' decision'+(all.length===1?'':'s'))
-      +'<div class="rp-recf no-print">Kind '+b('kind', '', !REC.kind, 'all')+kinds.sort().map(function(k){ return b('kind', k, REC.kind===k, k); }).join('')
-      +'<span class="sp"></span>Who '+b('who', '', !REC.who, 'all')+b('who', 'agents', REC.who==='agents', 'agents')+b('who', 'people', REC.who==='people', 'people')+'<span class="muted">'+shown.length+' shown</span></div>'
-      +'<div class="rp-decs">'+shown.map(recRow).join('')+'</div></section>';
-  }
 
   var MOUNTED=null;
+  // A body section: its claims, findings and contests, the first gap only, and
+  // one line saying what else is behind it.
+  function rpSection(s, n, ms, es){
+    var gap=0, body=arr(s.blocks).map(function(b, j){ if(isObj(b)&&b.kind==='gap'&&gap++) return ''; return rpBlock(b, s.id, j); }).join('');
+    return '<section class="rp-sec rep-sec" id="rs-'+esc(slug(s.id||''))+'"'+(s.lens?' data-lens="'+esc(s.lens)+'"':'')+'>'+rpHead(n, (s.lens?lensName(s.lens):'Section')+' · '+(s.market||ms||'every market'), s.title, '', es?es.id:'')+body+behindLine(es)+'</section>';
+  }
+  function behindLine(es){
+    if(!es) return '';
+    var mg=Math.max(0, es.gaps.length-1), parts=[];
+    if(es.cited.length) parts.push(es.cited.length+' cited');
+    if(es.more.length) parts.push(es.more.length+' more fact'+(es.more.length===1?'':'s'));
+    if(mg) parts.push(mg+' more gap'+(mg===1?'':'s'));
+    if(!parts.length) return '';
+    return '<button type="button" class="rp-behind no-print" data-act="ev-sec" data-sec="'+esc(es.id)+'">Behind this section · '+parts.join(' · ')+' →</button>';
+  }
   function renderReport(){
+    EV.model=null;
     var el=$('report'), r=D().report;
     $('nav-report-a').hidden=!isObj(r);
     if(!isObj(r)){ el.hidden=true; el.innerHTML=''; MOUNTED=null; return; }
@@ -4365,18 +4745,21 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     } else {
       MOUNTED=null;
       var ms=arr(camp().markets&&camp().markets.value).join(' · ');
+      var E=evm();
       $('rp-body').innerHTML=arr(r.sections).map(function(s){
         if(!isObj(s)) return '';
         n++;
-        return '<section class="rp-sec rep-sec" id="rs-'+esc(slug(s.id||''))+'"'+(s.lens?' data-lens="'+esc(s.lens)+'"':'')+'>'+rpHead(n, (s.lens?lensName(s.lens):'Section')+' · '+(s.market||ms||'every market'), s.title)+arr(s.blocks).map(function(b, j){ return rpBlock(b, s.id, j); }).join('')+'</section>';
+        return rpSection(s, n, ms, E.sections.filter(function(x){ return x.id===String(s.id||''); })[0]);
       }).join('');
     }
     var post='';
     var c1=rpConfirm(r, n+1); if(c1){ n++; post+=c1; }
     var c2=rpNotResearched(r, n+1); if(c2){ n++; post+=c2; }
     post+='<div class="rp-asks-at"></div>';
-    [function(k){ return rpContests(k); }, function(k){ return rpGaps(k); }, function(k){ return rpPinned(r, k); }, function(k){ return rpCoverage(k); },
-     function(k){ return rpExcluded(r, k); }, function(k){ return rpHowRan(k); }, function(k){ return rpRecord(k); }].forEach(function(f){ var x=f(n+1); if(x){ n++; post+=x; } });
+    // Contests, gaps, every pin, what was set aside and coverage are the
+    // Evidence box's; on paper they travel as the appendix. How it ran is the
+    // Report box's, and the record is Everything recorded's.
+    post+=evAppendixHtml(evm());
     var bo=isObj(r.based_on)?r.based_on:{};
     post+='<div class="rep-foot"><span>'+esc(r.handler)+'</span><span title="'+esc(bo.version)+'">composed from version '+esc(String(bo.version||'?').slice(7,19))+'</span><span title="'+esc(bo.facts_sha256)+'">facts '+esc(String(bo.facts_sha256||'?').slice(7,19))+'</span><span title="'+esc(bo.findings_sha256)+'">findings '+esc(String(bo.findings_sha256||'?').slice(7,19))+'</span><span>every claim cites a pin or a finding</span></div>';
     $('rp-post').innerHTML=post;
@@ -4410,11 +4793,20 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // nothing runs (and nothing is spent) until the person presses Ask.
   function gapAsk(gid){
     var g=gapById(gid); if(!g) return;
+    if(VIEW.sel){ VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel(); }
     if(!$('rqin-_new')){ toast(reportLocked()?'The report is locked: ask on a new version.':'Asking runs through the host.'); return; }
     ASK.ui['_new']={open:true, draft:'Look again: '+String(g.searched||'')+(g.market?' ('+g.market+')':''), lens:g.lens&&LENS[g.lens]?g.lens:''};
     renderAsks();
     if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
     var i=$('rqin-_new'); if(i){ i.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); try{ i.focus({preventScroll:true}); i.setSelectionRange(i.value.length, i.value.length); }catch(e){} }
+  }
+  // Ask about this section: Ask the research, about its lens; nothing runs until Ask.
+  function evAsk(lens){
+    if(VIEW.sel){ VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel(); }
+    if(!$('rqin-_new')){ toast(reportLocked()?'The report is locked: ask on a new version.':'Asking runs through the host.'); return; }
+    var u=ASK.ui['_new']||{}; ASK.ui['_new']={open:true, draft:u.draft||'', lens:lens&&LENS[lens]?lens:''};
+    renderAsks();
+    var i=$('rqin-_new'); if(i){ i.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); try{ i.focus({preventScroll:true}); }catch(e){} }
   }
   function gotoConfirm(k){
     var rec=$('records'), f=$('field-'+k); if(!f) return;
@@ -4455,7 +4847,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     $('rbox-more').innerHTML=more;
     // Under the ask in the report once there is one (the mock); here until then.
     $('extractBtn').hidden=has;
-    $('insp-peek').textContent=st.label+(open&&!lk?' · '+open+' need'+(open===1?'s':'')+' your call':'');
+    var np=Object.keys(pins()).length;
+    $('insp-peek').textContent=st.label+(open&&!lk?' · '+open+' need'+(open===1?'s':'')+' your call':'')+(np?' · '+np+' pin'+(np===1?'':'s'):'');
+    renderEvidence();
     sendBar(st, has, lk);
     if(VIEW.v==='map') renderMap();
     renderSel();
@@ -4519,6 +4913,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       if(!isObj(l)) return;
       node('sum:'+i, 'summary', {kind:'summary', ref:'sum:'+i, n:i+1, label:String(l.text||''), cites:arr(l.cites)});
     });
+    if(isObj(r)&&isObj(r.headline)) node('report.headline', 'summary', {kind:'summary', ref:'report.headline', n:'H', label:String(r.headline.text||''), cites:arr(r.headline.cites)});
     Object.keys(finds).forEach(function(id){ var f=finds[id];
       node(id, 'finding', {kind:'finding', ref:id, label:String(f.statement||''), status:f.status, confidence:f.confidence, out:f.status==='rejected'||f.status==='superseded'}); });
     Object.keys(pinsM).forEach(function(id){ var p=pinsM[id];
@@ -4547,6 +4942,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     function reaches(id){ if(id in memo) return memo[id]; memo[id]=false; var n=nodes[id];
       var ok=!!n&&n.col==='summary'||(down[id]||[]).some(function(t){ return !nodes[t].out&&reaches(t); }); return (memo[id]=ok); }
     Object.keys(nodes).forEach(function(id){ var n=nodes[id]; n.used=n.kind==='gap'||reaches(id); });
+    // A pin a section's sentence cites is used too, and so is its source.
+    arr(isObj(r)&&r.sections).forEach(function(s){ arr(s&&s.blocks).forEach(function(b){ if(isObj(b)&&b.kind==='claim') arr(b.cites).forEach(function(c){
+      var n=nodes[c]; if(!n||n.kind!=='pin'||n.out) return; n.used=true; edges.forEach(function(e){ if(e.to===c&&nodes[e.from]) nodes[e.from].used=true; }); }); }); });
     edges.forEach(function(e){ if(nodes[e.to].out||nodes[e.from].out) e.kind=e.kind==='gap'?'gap':'out'; });
     // Order each column by what it feeds, so the lines cross as little as they can.
     cols.summary.forEach(function(n, i){ n.order=i; });
@@ -4557,16 +4955,16 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     });
     return {nodes:nodes, edges:edges, cols:cols, gaps:gaps};
   }
-  var MAP_COLS=[['source','Sources'],['pin','Pins'],['finding','Findings'],['summary','Summary']];
+  var MAP_COLS=[['source','Sources'],['pin','Facts'],['finding','Findings'],['summary','Lines']];
   function clipT(t, n){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>n?t.slice(0,n-1)+'…':t; }
   function mapLines(n){
-    if(n.kind==='summary') return [n.n+' · '+n.label, n.cites.length+' cite'+(n.cites.length===1?'':'s')];
+    if(n.kind==='summary') return [(n.n==='H'?'Headline':n.n)+' · '+n.label, n.cites.length+' cite'+(n.cites.length===1?'':'s')];
     if(n.kind==='finding') return [n.label, (n.status||'')+(n.confidence?' · '+n.confidence:'')];
-    if(n.kind==='pin'){ var v=fmtAny(n.pin); return [v+' · '+String(n.pin.key||'').split('.').pop(), (n.pin.confidence||'')+(n.why?' · '+n.why:n.used?'':' · not used')+(n.pin.stale?' · stale':'')]; }
+    if(n.kind==='pin') return [fmtAny(n.pin), [pinLabel(n.pin)||'A fact', n.pin.confidence, n.why, n.pin.stale?'stale':''].filter(Boolean).join(' · ')];
     if(n.kind==='source'){ var s=n.src||{}; return [n.label, [s.tier, s.published_at?String(s.published_at).slice(0,7):''].filter(Boolean).join(' · ')||n.ref]; }
     return [n.label, n.meta||'gap'];
   }
-  function mapSvg(M){
+  function mapSvg(M, T){
     var NW=148, NH=40, GX=30, GY=8, TOP=26, PAD=8, ROW=NH+GY;
     var pos={}, h='', bottom=TOP;
     // Pins are the spine, in the order of what they feed (used first). Each other box sits level with
@@ -4586,8 +4984,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     place(M.cols.summary, function(n){ return mean(up[n.id]); });
     place(M.cols.source, function(n){ return mean(dn[n.id]); });
     MAP_COLS.forEach(function(c, ci){
-      var list=M.cols[c[0]], real=list.filter(function(n){ return n.kind!=='gap'; }), used=real.filter(function(n){ return n.used&&!n.out; }).length;
-      var cnt=c[0]==='summary'?real.length+' line'+(real.length===1?'':'s'):used<real.length&&c[0]!=='pin'?used+' of '+real.length:String(real.length);
+      var list=M.cols[c[0]], real=list.filter(function(n){ return n.kind!=='gap'; }), used=real.filter(function(n){ return !n.out; }).length, all=T&&T[c[0]]!=null?T[c[0]]:real.length;
+      var hd=real.some(function(n){ return n.n==='H'; }), nl=real.length-(hd?1:0);
+      var cnt=c[0]==='summary'?nl+(hd?' + headline':''):used<all?used+' of '+all:String(all);
       h+='<text class="col" x="'+colX(ci)+'" y="14">'+esc(c[1])+' · '+esc(cnt)+'</text>';
       list.forEach(function(n){ pos[n.id].x=colX(ci); });
     });
@@ -4598,18 +4997,35 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       e+='<path class="e'+(ed.kind==='out'?' r':ed.kind==='gap'?' g':'')+'" data-from="'+esc(ed.from)+'" data-to="'+esc(ed.to)+'" d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'"/>'; });
     var nn='';
     Object.keys(pos).forEach(function(id){ var n=M.nodes[id], p=pos[id], L=mapLines(n);
-      var cls='n'+(n.kind==='gap'?' gap':n.out?' out':!n.used?' unused':'')+(VIEW.sel===id?' sel':'');
+      var cls='n'+(n.kind==='gap'?' gap':n.out?' out':'')+(VIEW.sel===id?' sel':'');
       nn+='<g class="'+cls+'" tabindex="0" role="button" data-map="'+esc(id)+'" transform="translate('+p.x+' '+p.y+')" aria-label="'+esc(L[0]+' — '+L[1])+'"><title>'+esc(n.label)+'</title>'
         +'<rect width="'+NW+'" height="'+NH+'" rx="4"/><text class="t" x="8" y="16">'+esc(clipT(L[0], 22))+'</text><text class="m" x="8" y="31">'+esc(clipT(L[1], 28))+'</text></g>'; });
     return '<svg class="map-svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="group" aria-label="Evidence map">'+h+e+nn+'</svg>';
   }
+  // What the map draws (design §6): what feeds the report, by evidenceModel;
+  // with Show considered, what was weighed and set aside too, struck. What was
+  // not used is never drawn; the legend links it to the Evidence box. A gap
+  // is drawn only beside a box that is drawn.
+  function mapShown(M, E, cons){
+    var keep={};
+    Object.keys(M.nodes).forEach(function(id){ var n=M.nodes[id];
+      var g=n.kind==='pin'?E.pin[id]&&E.pin[id].group:n.kind==='finding'?E.fnd[id]&&E.fnd[id].group:n.kind==='source'?E.src[id]&&E.src[id].group:n.kind==='summary'?'feeds':'';
+      if(g==='feeds'||(cons&&g==='considered')) keep[id]=g; });
+    M.edges.forEach(function(e){ var a=M.nodes[e.from], b=M.nodes[e.to]; if(a&&a.kind==='gap'&&keep[e.to]&&keep[e.to]!=='gap') keep[e.from]='gap'; if(b&&b.kind==='gap'&&keep[e.from]&&keep[e.from]!=='gap') keep[e.to]='gap'; });
+    var nodes={}, cols={source:[], pin:[], finding:[], summary:[]};
+    Object.keys(M.cols).forEach(function(c){ M.cols[c].forEach(function(n){ if(!keep[n.id]) return; var x={}; for(var k in n) x[k]=n[k]; if(keep[n.id]==='considered') x.out=true; nodes[n.id]=x; (cols[c]=cols[c]||[]).push(x); }); });
+    var edges=M.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; }).map(function(e){ return {from:e.from, to:e.to, kind:e.kind!=='gap'&&(nodes[e.from].out||nodes[e.to].out)?'out':e.kind}; });
+    return {nodes:nodes, edges:edges, cols:cols, gaps:M.gaps.filter(function(g){ return !!nodes[g.id]; })};
+  }
   function renderMap(){
-    var el=$('mapview'), r=D().report;
+    var el=$('mapview'), r=D().report, E=evm(), c=E.counts, nc=c.considered.findings||(c.considered.pins+c.considered.sources);
     var head='<div class="map-h"><b>Evidence map</b><span>How this report was formed. Click any box to trace it; its details open below.</span></div>'
-      +'<div class="map-leg"><span><i></i>feeds</span><span><i class="r"></i>considered, not chosen</span><span><i class="g"></i>a gap</span><span><i class="d"></i>not used</span></div>';
+      +'<div class="map-leg"><span><i></i>feeds</span>'+(EV.cons?'<span><i class="r"></i>considered, not chosen</span>':'')+'<span><i class="g"></i>a gap</span>'
+      +'<label class="map-tog"><input type="checkbox" id="map-cons"'+(EV.cons?' checked':'')+(nc?'':' disabled')+'> Show considered ('+nc+')</label>'
+      +(c.unused.pins||c.unused.sources?'<button type="button" class="linkbtn map-unused" data-act="ev-open" data-g="unused">'+plural(c.unused.pins, 'fact')+' and '+plural(c.unused.sources, 'source')+' not used → Evidence</button>':'')+'</div>';
     if(!isObj(r)&&!proj()){ el.innerHTML=head+'<p class="map-empty">There is no report yet: the map draws once the research has pinned facts.</p>'; return; }
-    var M=mapModel(r, proj(), sel()); VIEW.model=M;
-    el.innerHTML=head+'<div class="map-scroll">'+mapSvg(M)+'</div>';
+    var M=mapShown(mapModel(r, proj(), sel()), E, EV.cons); VIEW.model=M;
+    el.innerHTML=head+'<div class="map-scroll">'+mapSvg(M, {source:c.sources, pin:c.pins, finding:c.findings})+'</div>';
     traceSel();
   }
   // Light up what the selected box rests on and what rests on it.
@@ -4632,8 +5048,12 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
 
   // ── what is selected, with its trail and a way back ─────────────────────
-  var CARD_KINDS={pin:1, finding:1, source:1, material:1, passage:1, capture:1, answer:1, line:1, gap:1, chart:1, item:1};
+  // Everything in the document opens here, with its trail; never in the OS's
+  // drawer (owner, 2026-11-10). A full record is the OS's own card, drawn here.
+  function inspect(ref, push){ if(!ref) return; VIEW.origin=null; if(VIEW.v==='map'&&!/^rec:/.test(ref)) setView('report'); select(ref, !!push&&!!VIEW.sel); }
   function selLabel(ref){
+    if(/^rec:/.test(ref)) return 'Full record';
+    if(/^sec:/.test(ref)){ var es=evSec(ref.slice(4)); return es?pad2(es.n)+' '+secName(es):'Section'; }
     var M=VIEW.model, n=M&&M.nodes[ref];
     if(n) return clipT(mapLines(n)[0], 40);
     if(pins()[ref]) return clipT(fmtAny(pins()[ref])+' · '+pinLabel(pins()[ref]), 40);
@@ -4656,9 +5076,11 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     // A summary line on the map is the report's line: the same view.
     if(/^sum:/.test(ref)&&n) return '<div id="insp-card" data-line="report.summary['+esc(ref.slice(4))+']"></div>';
     if(n&&n.kind==='gap') return '<p style="margin:0;font-size:13.5px"><b>A gap.</b> '+esc(n.label)+(n.meta?': '+esc(n.meta):'')+'. The map shows only links the document holds.</p>';
+    if(/^sec:/.test(ref)) return secTraceHtml(ref.slice(4));
+    if(/^rec:/.test(ref)) return '<div id="insp-card" data-line="'+esc(ref.slice(4))+'"></div>';
     if(pins()[ref]) return pinCardHtml(ref);
     if(srcRecs()[ref]) return sourceCardHtml(ref);
-    if(window.ClanFields&&CARD_KINDS[window.ClanFields.kindOf(ref)]) return '<div id="insp-card"></div>';
+    if(window.ClanFields&&window.ClanFields.kindOf(ref)) return '<div id="insp-card"></div>';
     return '<p class="insp-hint">'+esc(ref)+'</p>';
   }
   // A pin, in full, in the inspector (the mock's selected pin): what it says,
@@ -4673,6 +5095,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var val=fmtAny(p), text=String(p.unit||'')==='text', label=pinLabel(p)||String(p.key||ref);
     var used=Object.keys(fnds()).filter(function(id){ return arr(fnds()[id].cites).indexOf(ref)!==-1; });
     var sums=arr(isObj(D().report)&&D().report.summary).map(function(l,i){ return isObj(l)&&arr(l.cites).some(function(c){ return c===ref||used.indexOf(c)!==-1; })?i:-1; }).filter(function(i){ return i>=0; });
+    var EM=evm(), sents=arr(EM.pin[ref]&&EM.pin[ref].lines).map(function(l){ var m=/^report\.sections\[(.+)\]\.blocks\[(\d+)\]$/.exec(l); if(!m) return null; var es=evSec(m[1]), ln=EM.lines.filter(function(x){ return x.ref===l; })[0];
+      var k=es?EM.lines.filter(function(x){ return x.sec===es.id; }).map(function(x){ return x.ref; }).indexOf(l)+1:0; return {ref:l, text:ln?ln.text:'', at:(es?pad2(es.n)+' '+clipT(secName(es), 18):'Section')+(k?' · line '+k:'')}; }).filter(Boolean);
     var tierW=s.tier?String(s.tier).charAt(0).toUpperCase()+String(s.tier).slice(1):'';
     var h='<div class="rbi-head"><span class="rbi-kind"><span class="pin" aria-hidden="true"></span>Pin'+(shortId(ref)?' · '+esc(ref):'')+'</span><span class="st-pill '+st[0]+'">'+esc(st[1])+'</span></div>'
       +'<p class="rbi-title">'+esc(text?String(p.key||'').split('.').slice(-1)[0].replace(/_/g,' '):label)+'</p>'
@@ -4692,9 +5116,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         +'<li><span class="k">Frozen pin</span>'+esc((shortId(ref)?ref+'@v':'Version ')+(p.version||1)+'. A pin never follows a newer row; you choose when to take one.')+'</li>'
         +(p.pin_reason?'<li class="hl"><span class="k">Why it was pinned</span>'+esc(p.pin_reason)+'</li>':'')
       +'</ol></section>'
-      +(used.length||sums.length?'<section class="rbi-sec"><h5>Used by</h5><div class="rbi-uses">'
+      +(used.length||sums.length||sents.length?'<section class="rbi-sec"><h5>Used by</h5><div class="rbi-uses">'
         +(used.length?'<div class="rbi-use"><span>Findings</span>'+used.map(function(id){ return '<button type="button" class="rb-fchip" data-sel="'+esc(id)+'"><span class="rb-n">'+(Object.keys(fnds()).indexOf(id)+1)+'</span>Finding '+(Object.keys(fnds()).indexOf(id)+1)+'</button>'; }).join(' ')+'</div>':'')
         +(sums.length?'<div class="rbi-use"><span>Summary</span>'+sums.map(function(i){ return '<span class="rb-cchip">line '+(i+1)+'</span>'; }).join(' ')+'</div>':'')
+        +(sents.length?'<div class="rbi-use"><span>Sentences</span>'+sents.map(function(x){ return '<button type="button" class="rb-cchip" data-sel="'+esc(x.ref)+'" data-sel-push title="'+esc(x.text)+'">'+esc(x.at)+'</button>'; }).join(' ')+'</div>':'')
       +'</div></section>':'')
       +pinDecsHtml(ref)
       +pinActsHtml(ref);
@@ -4738,7 +5163,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var F=fnds(), fids=Object.keys(F), reach=fids.filter(function(id){ return arr(F[id].cites).some(function(c){ return mine.indexOf(c)!==-1; }); });
     var tierW=s.tier?String(s.tier).charAt(0).toUpperCase()+String(s.tier).slice(1):'';
     var g=[['Published', s.published_at?monthOf(s.published_at):'—'],['Read', s.retrieved_at?plainDay(s.retrieved_at):'—'],['Domain', s.domain||'—'],['Licence', s.licence||'—']];
-    return '<div class="rbi-head"><span class="rbi-kind"><span class="tier" aria-hidden="true"></span>Source'+(tierW?' · '+esc(tierW):'')+'</span><span class="st-pill ok">Read'+(mine.length?' · pinned':'')+'</span></div>'
+    var eg=(evm().src[sid]||{}).group;
+    return '<div class="rbi-head"><span class="rbi-kind"><span class="tier" aria-hidden="true"></span>Source'+(tierW?' · '+esc(tierW):'')+'</span><span class="st-pill ok">Read'+(mine.length?' · pinned':'')+'</span>'+(eg==='unused'?'<span class="st-pill mute">Not used</span>':eg==='considered'?'<span class="st-pill mute">Considered</span>':'')+'</div>'
       +'<p class="rbi-title">'+esc(s.publisher||s.domain||sid)+'</p>'+(s.title?'<p class="rbi-unit">'+esc(s.title)+'</p>':'')
       +'<div class="rbi-sec" style="border:0;padding-top:4px"><dl class="rbi-grid">'+g.map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; }).join('')
         +(s.uri?'<div class="w"><dt>Link</dt><dd><a href="'+esc(s.uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clipT(String(s.uri).replace(/^https?:\/\//,''), 56))+' ↗</a></dd></div>':'')+'</dl></div>'
@@ -4750,12 +5176,13 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   // A short key ("f_003") is a name people can say; a generated one ("f_JKWOLL5FAHIY") is not, and stays off the page.
   function shortId(r){ return String(r||'').length<=6; }
   // A crumb names what it is the way the record does: f_003 (else the pin's label), Finding 2, Summary.
-  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return shortId(r) ? r : (clipT(pinLabel(pins()[r]), 28)||'Fact'); if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||'Source', 28); if(/^sum:/.test(r)) return 'Line '+(+r.slice(4)+1); if(r==='report.headline') return 'Summary'; return clipT(c&&c.label||(/^[a-z]{1,4}_[0-9A-Za-z]{7,}$/.test(r)?'This item':r), 34); }
+  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return shortId(r) ? r : (clipT(pinLabel(pins()[r]), 28)||'Fact'); if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||'Source', 28); if(/^sum:/.test(r)) return 'Line '+(+r.slice(4)+1); if(r==='report.headline') return 'Summary'; if(/^rec:/.test(r)) return 'Full record'; if(/^sec:/.test(r)){ var es=evSec(r.slice(4)); return es?clipT(pad2(es.n)+' '+secName(es), 34):'Section'; } return clipT(c&&c.label||(/^[a-z]{1,4}_[0-9A-Za-z]{7,}$/.test(r)?'This item':r), 34); }
   // What is selected shows in the report too (the mock): the line it is in is
   // lit, its section takes a wash, and every other place naming it is marked.
   function markReport(){
     var root=$('report'); if(!root) return;
     Array.prototype.forEach.call(root.querySelectorAll('.rsel-sec,.rsel-line,.rsel-hit'), function(n){ n.classList.remove('rsel-sec','rsel-line','rsel-hit'); });
+    evHit(evSelIds());
     var id=VIEW.sel; if(!id){ VIEW.origin=null; return; }
     var o=VIEW.origin&&root.contains(VIEW.origin)?VIEW.origin:null;
     if(!o&&/^sum:/.test(id)) o=root.querySelector('.rep-sum li[data-sum="'+id.slice(4)+'"]');
@@ -4782,7 +5209,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'<nav class="crumbs rb-crumbs" aria-label="Trail"><button type="button" class="rb-root" data-sel-close>'+(VIEW.v==='map'?'Evidence map':'Report')+'</button>'
       +t.map(function(c, i){ var last=i===t.length-1; return '<span aria-hidden="true">›</span><button type="button" data-crumb="'+i+'"'+(last?' aria-current="true"':'')+' title="'+esc(c.label)+'">'+(last?'<b>':'')+esc(crumbWord(c))+(last?'</b>':'')+'</button>'; }).join('')+'</nav>'
       +'<button type="button" class="rb-ibtn" data-sel-close title="Close (Esc)" aria-label="Close">×</button></div>'
-      +'<div class="rb-part">'+selBody(VIEW.sel)+'</div>';
+      +'<div class="rb-part">'+selBody(VIEW.sel)+(LINE_REF.test(VIEW.sel)?builtFromHtml(VIEW.sel):'')+'</div>';
     var cd=$('insp-card'); if(cd&&window.ClanFields&&ClanFields.card){
       // The card arrives after the read: bring the selection into view once it
       // has its height, so it never opens below the inspector's fold.
@@ -4794,6 +5221,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     }
     var ip0=$('insp'); if(ip0&&VIEW.v!=='map') ip0.scrollTop=0;
   }
+  // Draw the card again where the reader is (a family opened, more rows).
+  function reSel(){ var ip=$('insp'), t=ip?ip.scrollTop:0; renderSel(); if(ip) ip.scrollTop=t; }
   function openSheet(on){ var i=$('insp'); if(!i) return; i.classList.toggle('open', on); $('insp-grab').setAttribute('aria-expanded', String(on)); }
 
   // ── the report's checks: each sits under the sentence it is about ─────────
@@ -5181,8 +5610,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         if(!why){ toast('Pick a reason, or say why.'); focusWhy(); return; }
         chkDecide(ref, '/resolve', {contest:ref, chosen:ui.fid, rationale:why}, 'Settled: the report uses it.', where); break;
       case 'chk-cancel': delete CHK.ui[ref]; renderChecks(); focusIn('[data-act=chk-no],[data-act=chk-pick],[data-act=chk-yes]'); break;
-      case 'chk-why': if(window.ClanFields) ClanFields.open(ref); break;
-      case 'chk-open': if(window.ClanFields) ClanFields.open(ref, false, ref&&ClanFields.kindOf(ref)?'':b.getAttribute('data-note')); break;
+      case 'chk-why': inspect(ref, false); break;
+      case 'chk-open': if(ref) inspect(ref, false); else toast(b.getAttribute('data-note')||'Nothing to show.'); break;
       case 'chk-sel':
         // A mark in the report, or the box's "Finding 1": it is the check in
         // hand, and a finding opens in the inspector with its pins and sources.
@@ -5248,7 +5677,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   }
   function askCite(ids){
     ids=arr(ids); if(!ids.length) return '';
-    return window.ClanFields?' <clan-cite refs="'+esc(ids.join(' '))+'"></clan-cite>':' '+restCites(ids, ids);
+    return window.ClanFields?' <clan-cite refs="'+esc(ids.join(' '))+'"></clan-cite>':' '+restCites(ids);
   }
   function askAnswerHtml(a){
     var n=arr(a.new_facts).length, s=arr(a.answer);
@@ -5488,6 +5917,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       ['data-ref','style','title'].forEach(function(a){ if(b.hasAttribute(a)) s.setAttribute(a,b.getAttribute(a)); });
       b.parentNode.replaceChild(s,b);
     });
+    clone.querySelectorAll('.print-only').forEach(function(n){ n.classList.remove('print-only'); });
     clone.querySelectorAll('.ctl,.no-print,button,dialog,select').forEach(function(n){ n.remove(); });
     // The report, the submitted request and its answers travel; the start
     // screen, the open question and every control do not.
@@ -5520,7 +5950,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       case 'verdict-good': doVerdict(b.getAttribute('data-field'),'good'); break;
       case 'verdict-bad': doVerdict(b.getAttribute('data-field'),'bad'); break;
       case 'classify': doClassify(b.getAttribute('data-field')); break;
-      case 'resolve': if(window.ClanFields) ClanFields.open(b.getAttribute('data-contest')); break;
+      case 'resolve': inspect(b.getAttribute('data-contest'), !!b.closest('#insp-sel')); break;
       case 'verify': doFinding(/findings\[(.+)\]$/.exec(b.getAttribute('data-address'))[1]); break;
       case 'pin': doPin(b.getAttribute('data-address')); break;
       case 'why': doWhy(b.getAttribute('data-path'), b.getAttribute('data-address')); break;
@@ -5558,14 +5988,17 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       case 'pin-bad-x': delete PINACT[b.getAttribute('data-ref')]; renderSel(); break;
       case 'pin-bad-go': var gr=b.getAttribute('data-ref'), gu=PINACT[gr]||(PINACT[gr]={wrong:true}), gt=$('pinwhy-'+slug(gr)), gw=String(gt&&gt.value||gu.why||'').trim();
         if(!gw){ gu.err=true; renderSel(); break; } gu.why=gw; pinDecide(gr, {target:'facts['+gr+']', polarity:'bad', rationale:gw}, 'Thanks. Saved as wrong.'); break;
-      case 'pin-full': if(window.ClanFields) ClanFields.open(b.getAttribute('data-ref')); break;
+      case 'pin-full': inspect('rec:'+b.getAttribute('data-ref'), true); break;
       case 'chk-next': nextCheck(); break;
       case 'lock': doLock(); break;
       case 'goto-field': gotoField(b.getAttribute('data-field')); break;
       case 'goto-records': openRecords(b.getAttribute('data-to')); break;
       case 'extract': doExtract(); break;
       case 'gap-ask': gapAsk(b.getAttribute('data-gap')); break;
-      case 'rec-filter': if(b.hasAttribute('data-kind')) REC.kind=b.getAttribute('data-kind'); if(b.hasAttribute('data-who')) REC.who=b.getAttribute('data-who'); renderReport(); renderChecks(); break;
+      case 'ev-sec': VIEW.origin=null; if(VIEW.v!=='report') setView('report'); select('sec:'+b.getAttribute('data-sec'), false); break;
+      case 'ev-open': evOpen(b.getAttribute('data-g'), b.hasAttribute('data-focus')); break;
+      case 'ev-more': EV.pages[b.getAttribute('data-k')]=+b.getAttribute('data-n')||40; if(b.closest('#insp-sel')) reSel(); else evBody(); break;
+      case 'ev-ask': evAsk(b.getAttribute('data-lens')); break;
       case 'rq-open': case 'rq-cancel': case 'rq-send': case 'rq-retry': case 'rq-drop': onAskAct(act, b); break;
       case 'export-html': doExport('html'); var sm=b.closest('details'); if(sm) sm.open=false; break;
       case 'export-pdf': doExport('pdf'); var sm2=b.closest('details'); if(sm2) sm2.open=false; break;
@@ -5594,6 +6027,31 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     else if(b.hasAttribute('data-crumb')){ var c=VIEW.trail[+b.getAttribute('data-crumb')]; if(c) select(c.ref, true); }
   });
   $('insp-grab').addEventListener('click', function(){ openSheet(!$('insp').classList.contains('open')); });
+  // The Evidence box and the trace: a row opens its card (from the card, with
+  // its trail) and brings the first sentence that cites it into view; hovering
+  // a row lights every sentence that cites it.
+  $('insp').addEventListener('click', function(e){
+    var b=e.target.closest&&e.target.closest('[data-ev-sel]'); if(!b||e.target.closest('[data-act]')) return;
+    e.preventDefault(); var ref=b.getAttribute('data-ev-sel'); VIEW.origin=null;
+    select(ref, !!b.closest('#insp-sel')); evHit([ref], true);
+  });
+  $('insp').addEventListener('mouseover', function(e){ var t=e.target.closest&&e.target.closest('[data-ev-ids]'); evHit(t?String(t.getAttribute('data-ev-ids')||'').split(/\s+/).filter(Boolean):evSelIds()); });
+  $('insp').addEventListener('mouseleave', function(){ evHit(evSelIds()); });
+  $('insp').addEventListener('focusin', function(e){ var t=e.target.closest&&e.target.closest('[data-ev-ids]'); if(t) evHit(String(t.getAttribute('data-ev-ids')||'').split(/\s+/).filter(Boolean)); });
+  // A group's or a family's open state is the viewer's, remembered; its rows draw only once it is open.
+  $('insp').addEventListener('toggle', function(e){
+    var d=e.target; if(!d||!d.matches||!d.matches('details[data-evg]')||EV.q) return;
+    var k=d.getAttribute('data-evg'), was=!!EV.open[k]; if(was===d.open) return;
+    if(d.open) EV.open[k]=true; else delete EV.open[k]; evSave();
+    if(d.closest('#insp-sel')) reSel(); else evBody();
+  }, true);
+  $('ev-q').addEventListener('input', function(){ EV.q=this.value; evBody(); });
+  $('mapview').addEventListener('change', function(e){ if(e.target&&e.target.id==='map-cons'){ EV.cons=!!e.target.checked; try{ localStorage.setItem('clan.research.mapcons', EV.cons?'1':'0'); }catch(x){} renderMap(); } });
+  document.addEventListener('keydown', function(e){
+    if(e.key!=='Escape'||!VIEW.sel||e.defaultPrevented||document.querySelector('dialog[open]')||document.documentElement.classList.contains('clf-editing')) return;
+    if(e.target&&e.target.closest&&e.target.closest('input,textarea,select,[contenteditable]')) return;
+    VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel();
+  });
   // A figure or a finding in the report opens in the inspector, with its
   // trail; its card's "Where this came from" opens the OS's drawer, as a
   // click did before. While editing, a click is the editor's.
@@ -5607,18 +6065,23 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       if(!mk&&e.target.closest('a,button')) return;
       e.preventDefault(); e.stopImmediatePropagation(); VIEW.origin=mk||ch; select(cref, false); return;
     }
-    var t=e.target.closest('#report [data-ref]'); if(!t) return;
-    if(!t.closest('clan-field')||t.classList.contains('editable')) return;
+    // The OS card's own "Where this came from" buttons open here too.
+    var sc=e.target.closest('[data-clf-sc]');
+    if(sc&&sc.getAttribute('data-clf-sc')!=='from'&&!sc.closest('.clf-drawer')){ e.preventDefault(); e.stopImmediatePropagation(); var sr=sc.getAttribute('data-ref'); if(sr){ VIEW.origin=null; select(sr, !!sc.closest('#insp-sel')); } return; }
+    var t=e.target.closest('[data-ref]'); if(!t||t.closest('.clf-drawer')) return;
+    var host=t.closest('clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources'); if(!host) return;
+    if(t.classList.contains('editable')||t.classList.contains('correctable')) return;
+    var inRep=!!t.closest('#report');
     // A control inside a line (a finding's chip, Research this) is its own.
     var inner=e.target.closest('button,a,[data-rsel]'); if(inner&&inner!==t&&t.contains(inner)) return;
-    var ref=t.getAttribute('data-ref'); if(!CARD_KINDS[ClanFields.kindOf(ref)]) return;
+    var ref=t.getAttribute('data-ref'); if(!ClanFields.kindOf(ref)) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    VIEW.origin=t; select(ref, false);
+    VIEW.origin=inRep?t:null; select(ref, !inRep&&!!t.closest('#insp-sel'));
   }, true);
   // A link inside a line's view opens here, with its trail, not in the drawer.
   window.addEventListener('clan:cardgo', function(e){
-    var d=e.detail||{}, ins=$('insp'); if(d.drawer||!d.ref||!ins||!VIEW.sel) return;
-    e.preventDefault(); VIEW.origin=null; select(d.ref, true);
+    var d=e.detail||{}; if(!d.ref||!$('insp')) return;
+    e.preventDefault(); VIEW.origin=null; select(d.ref, !!VIEW.sel);
   });
   window.addEventListener('clan:cardact', function(e){ if((e.detail||{}).act==='map') setView('map'); });
   $('report').addEventListener('click', function(e){
