@@ -98,7 +98,9 @@
               "row": { "type": "integer", "minimum": 1 },
               "w": { "type": "integer", "minimum": 1, "maximum": 12 },
               "h": { "type": "integer", "minimum": 1 },
-              "order": { "type": "integer", "minimum": 0 }
+              "order": { "type": "integer", "minimum": 0 },
+              "as": { "description": "How the part is shown: prose, bullets, callout, statement or cell (a ruled field row). Absent: the part's default.", "type": "string", "enum": ["prose", "bullets", "callout", "statement", "cell"] },
+              "tone": { "description": "What sits behind the part: plain, a soft tint, or inverse (ink with paper words).", "type": "string", "enum": ["plain", "tint", "inverse"] }
             }
           }
         }

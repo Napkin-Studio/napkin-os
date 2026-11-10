@@ -1797,19 +1797,22 @@ test('cards a page asks for in one tick are one POST /cite, kept until the docum
 
 // ── Brief Maker on the new UI (features/brief-new-ui.clan) ──────────────────
 
-type Item = { key: string; sec: string; w: number }
-type Cell = { key?: string; head?: string; col: number; row: number; w: number; h: number; order?: number }
+type Item = { key: string; sec: string; w: number; as?: string; tone?: string }
+type Cell = { key?: string; head?: string; col: number; row: number; w: number; h: number; order?: number; as?: string; tone?: string }
 type Lay = {
   layoutOrder(fields: { key: string; sec: string }[], stored: unknown): Item[]
   layoutPack(items: Item[]): Cell[]
-  layoutParts(items: Item[]): Record<string, { col: number; row: number; w: number; h: number; order: number }>
+  layoutParts(items: Item[]): Record<string, { col: number; row: number; w: number; h: number; order: number; as?: string; tone?: string }>
   layoutMove(items: Item[], key: string, target: string, after: boolean): Item[]
   layoutStep(items: Item[], key: string, d: number): Item[]
   layoutResize(items: Item[], key: string, w: number): Item[]
+  layoutLook(items: Item[], key: string, prop: string, v: string): Item[]
+  boxFill(cells: Cell[]): Record<string, number>
 }
 const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
-const lay = () => lift<Lay>(BM, ['clampW', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize'],
-  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'] })
+const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize', 'layoutLook', 'boxFill'],
+  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'],
+    AS_KINDS: ['prose', 'bullets', 'callout', 'statement', 'cell'], TONES: ['plain', 'tint', 'inverse'] })
 const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
 
 test('a brief with no layout sits in the schema’s order at the default widths, the header’s rows first', () => {
@@ -2706,10 +2709,181 @@ test('a header row shows its whole text, never truncated (owner, 2026-11-10); th
   assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?' title="'\+esc\(String\(v\)\)/)
   assert.match(fn(BM, 'renderSelPart'), /isMeta\(f\.key\)&&hasVal\(get\(f\.key\)\)\?'<p class="sp-full">'/)
   // Print draws the same ruled rows from the same parts (kindOf), with every word and no Version row.
-  assert.match(fn(BM, 'sheetCells'), /'<div class="row k-'\+kindOf\(f\)/)
+  assert.match(fn(BM, 'sheetCells'), /'<div class="row k-'\+kd\+toneClass\(c\.tone\)/)
+  assert.match(fn(BM, 'sheetCells'), /kd=kindOf\(f, c\.as\)/)
   assert.doesNotMatch(fn(BM, 'sheetCells'), /c\.version/)
   // The client copy leaves a confidential header part out like any other.
   assert.match(fn(BM, 'sheetItems'), /copy!=='client'\|\|c\.indexOf\(it\.key\)===-1/)
+})
+
+// ── Show as and Tone: how a part looks (owner, 2026-11-10) ──────────────────
+
+const AS = ['prose', 'bullets', 'callout', 'statement', 'cell'], TN = ['plain', 'tint', 'inverse']
+type Look = { kindOf(f: object, as?: string): string; toneClass(t?: string): string; sentencesOf(v: unknown): string[] }
+const look = () => lift<Look>(BM, ['kindOf', 'toneClass', 'sentencesOf'], { AS_KINDS: AS })
+type FieldDef = { key: string; sec: string; label: string; type?: string; hero?: boolean }
+const BM_DEFS = BM_FIELDS as unknown as FieldDef[]
+const fdef = (k: string) => BM_DEFS.find(f => f.key === k)!
+
+test('kindOf keeps each part’s default, and a stored Show as overrides it', () => {
+  const L = look()
+  assert.equal(L.kindOf(fdef('single_minded_proposition')), 'statement')
+  assert.equal(L.kindOf(fdef('insight')), 'callout')
+  for (const k of ['client', 'project_name', 'budget_and_scope']) assert.equal(L.kindOf(fdef(k)), 'cell')
+  assert.equal(L.kindOf(fdef('background')), 'prose')
+  // A stored `as` wins, for any part, header rows included; an unknown one is ignored.
+  assert.equal(L.kindOf(fdef('background'), 'bullets'), 'bullets')
+  assert.equal(L.kindOf(fdef('single_minded_proposition'), 'prose'), 'prose')
+  assert.equal(L.kindOf(fdef('client'), 'statement'), 'statement')
+  assert.equal(L.kindOf(fdef('background'), 'cell'), 'cell')
+  assert.equal(L.kindOf(fdef('insight'), 'poster'), 'callout')
+  // Tone is a class: tint and inverse only.
+  assert.equal(L.toneClass('tint'), ' tone-tint')
+  assert.equal(L.toneClass('inverse'), ' tone-inverse')
+  assert.equal(L.toneClass('plain'), '')
+  assert.equal(L.toneClass(undefined), '')
+  // Bullets are the part's sentences; a list keeps its own lines.
+  assert.deepEqual(L.sentencesOf('Sales fell 4%. Young people stopped coming! Why? “Nobody asked.” e.g. lunch.'), ['Sales fell 4%.', 'Young people stopped coming!', 'Why?', '“Nobody asked.” e.g. lunch.'])
+  assert.deepEqual(L.sentencesOf('one line\nanother'), ['one line', 'another'])
+  assert.deepEqual(L.sentencesOf(['a. b.', 'c']), ['a. b.', 'c'])
+})
+
+test('Show as and Tone are saved in layout.parts beside the place, and read back', () => {
+  const L = lay()
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  const shown = L.layoutLook(L.layoutLook(items, 'background', 'as', 'bullets'), 'background', 'tone', 'inverse')
+  const parts = L.layoutParts(shown)
+  assert.equal(parts.background.as, 'bullets')
+  assert.equal(parts.background.tone, 'inverse')
+  assert.equal(parts.background.w, 6, 'its width is kept')
+  assert.ok(!('as' in parts.barrier) && !('tone' in parts.barrier), 'a part with no look writes none')
+  const back = L.layoutOrder(BM_FIELDS, parts)
+  const bg = back.find(x => x.key === 'background')!
+  assert.deepEqual([bg.as, bg.tone], ['bullets', 'inverse'])
+  // Moving and resizing keep the look; an unknown value or property changes nothing.
+  const moved = L.layoutResize(L.layoutStep(back, 'background', 1), 'background', 12)
+  const m = moved.find(x => x.key === 'background')!
+  assert.deepEqual([m.as, m.tone, m.w], ['bullets', 'inverse', 12])
+  assert.deepEqual(L.layoutLook(items, 'background', 'as', 'poster'), items)
+  assert.deepEqual(L.layoutLook(items, 'background', 'w', '3'), items)
+  // A stored look that is not one of the schema's values is not read.
+  const odd = L.layoutOrder(BM_FIELDS, { background: { w: 6, order: 3, as: 'poster', tone: 'neon' } }).find(x => x.key === 'background')!
+  assert.ok(!('as' in odd) && !('tone' in odd))
+  // The schema names both, with the same values.
+  const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: { layout: { properties: { parts: { additionalProperties: { properties: Record<string, { enum?: string[] }> } } } } } }
+  const pp = schema.properties.layout.properties.parts.additionalProperties.properties
+  assert.deepEqual(pp.as.enum, AS)
+  assert.deepEqual(pp.tone.enum, TN)
+})
+
+test('the panel’s Show as and Tone save through saveLayout with a decision that says what changed', () => {
+  const calls: unknown[][] = []
+  const L = lay()
+  const S = lift<{ saveLayout(items: Item[], what: string): void; lookWhat(f: object, prop: string, v: string): string }>(BM, ['saveLayout', 'lookWhat', 'partLabel'],
+    { layoutData: () => ({ frame: 'boxed' }), layoutParts: L.layoutParts, patch: (...a: unknown[]) => { calls.push(a) },
+      AS_WORDS: { prose: 'Prose', bullets: 'Bullets', callout: 'Callout', statement: 'Statement', cell: 'Field' } })
+  const items = L.layoutOrder(BM_FIELDS, undefined)
+  S.saveLayout(L.layoutLook(items, 'background', 'as', 'bullets'), S.lookWhat(fdef('background'), 'as', 'bullets'))
+  S.saveLayout(L.layoutLook(items, 'insight', 'tone', 'tint'), S.lookWhat(fdef('insight'), 'tone', 'tint'))
+  S.saveLayout(L.layoutLook(items, 'client', 'as', 'cell'), S.lookWhat(fdef('client'), 'as', 'cell'))
+  const [k, v, o] = calls[0] as [string, { frame: string; parts: Record<string, { as?: string }> }, { action: string; actor: string }]
+  assert.equal(k, 'layout')
+  assert.equal(v.frame, 'boxed', 'the rest of the layout is kept')
+  assert.equal(v.parts.background.as, 'bullets')
+  assert.deepEqual([o.action, o.actor], ['show Background as bullets', 'human'])
+  assert.equal((calls[1] as [string, unknown, { action: string }])[2].action, 'show Insight in the tint tone')
+  assert.equal((calls[2] as [string, unknown, { action: string }])[2].action, 'show Client / brand as field')
+  // The panel: Show as and Tone under Width in Place on page, as segmented buttons, pressed on the current value.
+  const sp = fn(BM, 'renderSelPart')
+  assert.ok(sp.indexOf('aria-label="Width"') < sp.indexOf('aria-label="Show as"') && sp.indexOf('aria-label="Show as"') < sp.indexOf('aria-label="Tone"'))
+  assert.ok(sp.indexOf('aria-label="Tone"') < sp.indexOf('data-sp="up"'), 'above Move up and down')
+  assert.match(sp, /AS_KINDS\.map\(function\(k\)\{ return '<button type="button" data-as="'\+k\+'" aria-pressed="'\+\(kd===k\)\+'">'\+AS_WORDS\[k\]/)
+  assert.match(sp, /TONES\.map\(function\(t\)\{ return '<button type="button" data-tone="'\+t\+'" aria-pressed="'\+\(tone===t\)\+'">'/)
+  assert.match(sp, /saveLayout\(layoutLook\(layoutItems\(\), f\.key, 'as', k\), lookWhat\(f, 'as', k\)\)/)
+  assert.match(sp, /saveLayout\(layoutLook\(layoutItems\(\), f\.key, 'tone', t\), lookWhat\(f, 'tone', t\)\)/)
+  assert.match(obj(BM, 'AS_WORDS'), /cell:'Field'/)
+  // Locked: Place on page, with them, is not offered.
+  assert.match(sp, /\+\(!docLocked\(\)\?'<details class="sp-l"/)
+  // The sheet on screen draws the stored kind and tone.
+  assert.match(fn(BM, 'fieldRow'), /kd=kindOf\(f, lk\.as\)/)
+  assert.match(fn(BM, 'fieldRow'), /row\.className='row k-'\+kd\+toneClass\(lk\.tone\)/)
+})
+
+type SC = { sheetCells(cells: Cell[], ctx: object, rows: number[] | null): string }
+const sheetCellsOf = () => lift<SC>(BM, ['sheetCells', 'kindOf', 'toneClass', 'sentencesOf', 'boxFill', 'exportMarkHtml'],
+  { AS_KINDS: AS, GRID_COLS: 12, arr, esc, hasVal: (v: unknown) => v != null && v !== '' && !(Array.isArray(v) && !v.length), isMeta: (k: string) => ['client', 'project_name', 'budget_and_scope'].includes(k), headOf: (f: FieldDef) => f.label })
+
+test('print draws every kind and tone: prose, bullets, callout, statement, field; tint and inverse; Confidential kept', () => {
+  const vals: Record<string, unknown> = { background: 'Sales fell. Teens left.', insight: 'Summer is shared.', single_minded_proposition: 'Two spoons.', client: 'McDonald’s Ireland', mandatories: ['Logo', 'Legal line'], barrier: 'Price.' }
+  const L = lay()
+  let items = L.layoutOrder(BM_FIELDS, undefined)
+  items = L.layoutLook(items, 'background', 'as', 'bullets')
+  items = L.layoutLook(items, 'insight', 'tone', 'tint')
+  items = L.layoutLook(items, 'single_minded_proposition', 'tone', 'inverse')
+  items = L.layoutLook(items, 'barrier', 'as', 'cell')
+  items = L.layoutLook(items, 'mandatories', 'as', 'callout')
+  const cells = L.layoutPack(items)
+  const ctx = { get: (k: string) => vals[k], fieldOf: fdef, conf: ['single_minded_proposition'], cells, look: {} }
+  const h = sheetCellsOf().sheetCells(cells, ctx, null)
+  const row = (k: string) => { const at = h.indexOf(`<span>${fdef(k).label}</span>`); assert.ok(at > 0, k); return h.slice(h.lastIndexOf('<div class="row', at), h.indexOf('</div></div>', at)) }
+  assert.match(row('background'), /^<div class="row k-bullets[ "]/)
+  assert.match(row('background'), /<ul><li>Sales fell\.<\/li><li>Teens left\.<\/li><\/ul>/)
+  assert.match(row('insight'), /^<div class="row k-callout tone-tint"/)
+  assert.match(row('single_minded_proposition'), /^<div class="row k-statement tone-inverse conf"/, 'a confidential part keeps its tag in the agency copy')
+  assert.match(row('single_minded_proposition'), /class="val spp"/)
+  assert.match(row('client'), /^<div class="row k-cell/)
+  assert.match(row('barrier'), /^<div class="row k-cell/)
+  assert.match(row('mandatories'), /^<div class="row k-callout[ "]/)
+  assert.match(row('mandatories'), /<p>Logo<\/p><p>Legal line<\/p>/, 'a list shown as a callout: a line per item')
+  assert.match(row('audience'), /^<div class="row k-prose[ "]/)
+  // The hero shown as prose loses the statement's look.
+  const plain = L.layoutPack(L.layoutLook(L.layoutOrder(BM_FIELDS, undefined), 'single_minded_proposition', 'as', 'prose'))
+  assert.doesNotMatch(sheetCellsOf().sheetCells(plain, { ...ctx, cells: plain }, null), /spp/)
+  // The page estimate is measured on these same cells (sheetMeasure of sheetDoc), and breakSig sees a look change.
+  assert.match(fn(BM, 'breakSig'), /layoutItems\(\)/)
+  // Each kind and tone has the mock's look on the sheet and in print (the page's own CSS prints).
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.k-callout \.val\{font:italic 400 21px\/1\.32 var\(--font-serif\);border-left:3\.5px solid var\(--brief-accent\)/)
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.k-statement \.val,\.sheet\.a4 \.val\.spp\{font:600 28px\/1\.16 var\(--font-serif\)/)
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.k-bullets \.val ul\{padding-left:18px;margin:0\}/)
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.tone-tint\{background-color:color-mix\(in srgb,var\(--brief-accent\) 9%,var\(--b-bg\)\)!important/)
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.tone-inverse\{background-color:var\(--b-text\)!important/)
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.tone-inverse > \*\{--b-text:var\(--b-bg\)/)
+})
+
+test('Boxed is a ruled form: cells stretch to their row, neighbours share one 1px line, the frame closes on every row', () => {
+  // Stretch, no gaps, and one opaque line per edge (inside top/left, 1px outside right/bottom, so neighbours overlap).
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid\{column-gap:0;row-gap:0;align-items:stretch/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row,\.sheet\.a4\.frame-boxed \.pgrid > \.row\.k-cell\{align-self:stretch;border:0!important/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row::after\{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var\(--frame-line\)/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed\{--frame-line:color-mix\(in srgb,var\(--b-text\) 70%,var\(--b-bg\)\)\}/, 'opaque, so an overlap never darkens')
+  assert.doesNotMatch(BM, /frame-boxed \.pgrid\{[^}]*border:1px/, 'no frame on the grid as well as on the cells')
+  assert.doesNotMatch(BM, /frame-boxed \.pgrid > \.row[^{]*\{[^}]*inset -1px -1px/, 'no half-drawn per-cell edges')
+  // The last cell on each grid row reaches the right edge, on screen and in print; stored widths are unchanged.
+  const L = lay()
+  const items = L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'objection', 6)
+  const cells = L.layoutPack(items)
+  const fill = L.boxFill(cells)
+  const byRow: Record<number, Cell[]> = {}
+  cells.filter(c => c.key).forEach(c => { (byRow[c.row] ||= []).push(c) })
+  for (const r of Object.values(byRow)) {
+    const last = r.reduce((a, b) => (b.col > a.col ? b : a))
+    assert.equal(last.col + fill[last.key!] - 1, 12, `${last.key} closes its row`)
+    for (const c of r) if (c !== last) assert.ok(!(c.key! in fill))
+  }
+  // A row of a third and a half: the half stretches to the edge.
+  const odd = L.layoutPack(L.layoutResize(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'background', 4), 'barrier', 6))
+  assert.equal(L.boxFill(odd).barrier, 8)
+  const boxed = sheetCellsOf().sheetCells(odd, { get: () => 'x', fieldOf: fdef, conf: [], cells: odd, look: { frame: 'boxed' } }, null)
+  assert.match(boxed, /<span>The barrier<\/span>/)
+  const bar = odd.find(c => c.key === 'barrier')!
+  assert.ok(boxed.includes(`grid-column:${bar.col} / span 8;`), 'print fills it too')
+  const open = sheetCellsOf().sheetCells(odd, { get: () => 'x', fieldOf: fdef, conf: [], cells: odd, look: {} }, null)
+  assert.ok(open.includes(`grid-column:${bar.col} / span 6;`), 'the open frame keeps the stored width')
+  assert.match(fn(BM, 'renderStructured'), /fill=layoutData\(\)\.frame==='boxed'\?boxFill\(packed\):\{\}/)
+  // The page estimate: a hidden heading has no box, so it is measured where the last row ended, never at
+  // the viewport's top (with the page scrolled, that pushed every heading a scroll's height down the sheet
+  // and broke the pages early).
+  assert.match(fn(BM, 'sheetMeasure'), /b=el\.getClientRects\(\)\.length\?el\.getBoundingClientRect\(\):\{top:last, bottom:last\}/)
 })
 
 test('a selected line of the report lights as the mock’s claim: the headline, a summary line and a paragraph alike, no grey block, no box', () => {
