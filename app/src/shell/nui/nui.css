@@ -213,7 +213,7 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
 .name-pill.pill-accent:where(.nui, .nui *) {
   height: 40px;
   margin-left: -22px;
-  padding: 0 16px 0 26px; /* owner 11-11: tighter than the mock's 30px; the text now sits ~4px past the 64px medallion */
+  padding: 0 18px 0 30px;
   border-radius: 999px;
   background: var(--ag-pill, var(--ag-acc));
   color: var(--ag-pill-ink, var(--ag-acc-ink));
