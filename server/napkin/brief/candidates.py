@@ -141,7 +141,7 @@ def build_pool(first_value, new: list[dict]) -> list[dict]:
             continue
         seen.add(c["value"])
         pool.append({"value": c["value"], "source": f"seed:{c['seed']}", "angle": c.get("angle", ""),
-                     "rests_on": c.get("rests_on", ""), "cites": c.get("cites", []), "idx": c.get("idx")})
+                     "rests_on": c.get("rests_on", ""), "cites": c.get("cites", []), "idx": c.get("idx"), "seed": c["seed"]})
     if first:
         pool.append({"value": first, "source": FIRST_DRAFT})
     for p in pool:
