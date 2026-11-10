@@ -271,7 +271,7 @@
       var cx = c.x - sr.left, cy = c.y - sr.top;
       var x1 = (cr.left + cr.width / 2 < c.x) ? (cr.right - sr.left) : (cr.left - sr.left), y1 = cr.top - sr.top + cr.height / 2;
       var ang = Math.atan2(y1 - cy, x1 - cx), x2 = cx + Math.cos(ang) * c.rim, y2 = cy + Math.sin(ang) * c.rim;
-      svgOf(stage).innerHTML = '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="var(--ag-base)" stroke-width="1.5" stroke-dasharray="4 3" />';
+      svgOf(stage).innerHTML = '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="var(--ag-act, var(--ag-base))" stroke-width="1.5" stroke-dasharray="4 3" />';
     });
     document.addEventListener('pointerout', function (e) {
       var card = e.target && e.target.closest && e.target.closest('.wcard'), stage = card && card.closest('[data-nk-stage]');

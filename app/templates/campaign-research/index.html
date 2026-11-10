@@ -1390,7 +1390,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .aglbox .rs-lensrow .nm{display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--muted)}
 .rt-work .aglbox .rs-lensrow .nm.off{opacity:.4}
 .rt-work .scap{text-align:center;min-height:64px;z-index:4;display:grid}
-.rt-work .abadge{display:inline-block;font:700 11px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ag-base);margin-bottom:3px}
+.rt-work .abadge{display:inline-block;font:700 11px/1.55 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ag-act);margin-bottom:3px}
 .rt-work .scap .l1{display:block;font:700 20px/1.55 var(--font-ui);letter-spacing:-.015em;color:var(--ink)}
 .rt-work .scap .l2{display:block;font-size:13.5px;line-height:1.55;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
 .rt-work .scap .l2.err{color:var(--alert)}
@@ -1407,10 +1407,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .wcard .wsnip{font:13.5px/1.4 var(--font-serif);color:var(--ink);margin-top:3px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .rt-work .wcard .wsnip.wait{color:var(--faint);font-style:italic}
 .rt-work .wcard .wchk{position:absolute;top:7px;right:8px;font-size:12px;font-weight:800;color:var(--ok)}
-.rt-work .wcard .wchk.now{color:var(--ag-base)}
+.rt-work .wcard .wchk.now{color:var(--ag-act)}
 .rt-work .wcard .wchk.bad{color:var(--alert)}
 .rs-ask.p33-askcard{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:start;border:1px solid color-mix(in srgb,var(--ag-acc) 40%,var(--line));border-radius:12px;background:var(--paper);padding:14px 16px;font-size:13.5px;scroll-margin-bottom:72px}
-.p33-askcard .aq-k{font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ag-base)}
+.p33-askcard .aq-k{font:600 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ag-act)}
 :root[data-color-scheme="dark"] .p33-askcard .aq-k,:root[data-theme="dark"] .p33-askcard .aq-k{color:var(--ag-acc)}
 @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]):not([data-theme="light"]) .p33-askcard .aq-k{color:var(--ag-acc)} }
 .p33-askcard .aq-q{font-weight:600;font-size:15px;color:var(--ink)}
@@ -1437,7 +1437,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .ptiles .tile{font-size:12px;padding:5px 10px;border-radius:6px;border:1px dashed var(--line);color:var(--faint);background:transparent;display:inline-block}
 .rt-work .ptiles .tile.done{border-style:solid;color:var(--ink-soft);background:var(--card)}
 .rt-work .ptiles .tile.done::before{content:"✓ ";color:var(--ok)}
-.rt-work .ptiles .tile.now{border-style:solid;border-color:var(--ag-base);color:var(--ag-base)}
+.rt-work .ptiles .tile.now{border-style:solid;border-color:var(--ag-act);color:var(--ag-act)}
 .rt-work .runbar > .rs-later,.rt-work .runbar > .activity,.rt-work .runbar > .rs-asked{flex-basis:100%;order:10;margin:0;border:0;background:none;box-shadow:none}
 .rt-work .runbar > .rs-later{text-align:left;font-size:12.5px;color:var(--muted);padding:0}
 .rt-work .runbar > .activity > summary,.rt-work .runbar > .rs-asked > summary{font-size:12.5px;color:var(--muted);padding:0;min-height:0}
@@ -4674,7 +4674,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var used=Object.keys(fnds()).filter(function(id){ return arr(fnds()[id].cites).indexOf(ref)!==-1; });
     var sums=arr(isObj(D().report)&&D().report.summary).map(function(l,i){ return isObj(l)&&arr(l.cites).some(function(c){ return c===ref||used.indexOf(c)!==-1; })?i:-1; }).filter(function(i){ return i>=0; });
     var tierW=s.tier?String(s.tier).charAt(0).toUpperCase()+String(s.tier).slice(1):'';
-    var h='<div class="rbi-head"><span class="rbi-kind"><span class="pin" aria-hidden="true"></span>Pin · '+esc(ref)+'</span><span class="st-pill '+st[0]+'">'+esc(st[1])+'</span></div>'
+    var h='<div class="rbi-head"><span class="rbi-kind"><span class="pin" aria-hidden="true"></span>Pin'+(shortId(ref)?' · '+esc(ref):'')+'</span><span class="st-pill '+st[0]+'">'+esc(st[1])+'</span></div>'
       +'<p class="rbi-title">'+esc(text?String(p.key||'').split('.').slice(-1)[0].replace(/_/g,' '):label)+'</p>'
       +(text?'<blockquote class="rbi-q rbi-val">'+esc(val)+'</blockquote>':'<div class="rbi-big"><mark class="rs-hl">'+esc(val)+'</mark></div><div class="rbi-unit">'+esc(label)+'</div>')
       +'<p class="rbi-meta" style="margin-top:8px"><code>'+esc(p.key||'')+'</code>'+(p.market?'<span class="mk-pill">'+esc(p.market)+'</span>':'')+(lens&&LENS[lens]?'<span class="lens-pill"><i></i>'+esc(lensName(lens))+'</span>':'')+(p.method?'<span>method · '+esc(p.method)+'</span>':'')+'</p>'
@@ -4689,7 +4689,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +'<section class="rbi-sec"><h5>Where it came from</h5><ol class="rbi-chain">'
         +'<li><span class="k">Source</span>'+esc(s.publisher||s.domain||'No source record')+(tierW?' · '+esc(tierW):'')+(s.retrieved_at?' · read '+esc(plainDay(s.retrieved_at)):'')+'</li>'
         +'<li><span class="k">Knowledge layer row</span>'+esc((p.layer?p.layer.charAt(0).toUpperCase()+p.layer.slice(1)+' layer':'Layer')+(p.market?' · '+p.market:'')+(p.entity?' → '+p.entity:''))+'</li>'
-        +'<li><span class="k">Frozen pin</span>'+esc(ref+'@v'+(p.version||1)+'. A pin never follows a newer row; you choose when to take one.')+'</li>'
+        +'<li><span class="k">Frozen pin</span>'+esc((shortId(ref)?ref+'@v':'Version ')+(p.version||1)+'. A pin never follows a newer row; you choose when to take one.')+'</li>'
         +(p.pin_reason?'<li class="hl"><span class="k">Why it was pinned</span>'+esc(p.pin_reason)+'</li>':'')
       +'</ol></section>'
       +(used.length||sums.length?'<section class="rbi-sec"><h5>Used by</h5><div class="rbi-uses">'
@@ -4747,8 +4747,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +(reach.length?'<section class="rbi-sec"><h5>Reaches</h5><div class="rbi-uses"><div class="rbi-use"><span>Findings</span>'+reach.map(function(id){ var n=fids.indexOf(id)+1; return '<button type="button" class="rb-fchip" data-sel="'+esc(id)+'" data-sel-push><span class="rb-n">'+n+'</span>Finding '+n+'</button>'; }).join(' ')+'</div></div></section>':'')
       +'<div class="rbi-acts"><button type="button" class="rb-btn" data-act="pin-full" data-ref="'+esc(sid)+'">Full record →</button></div>';
   }
-  // A crumb names what it is the way the record does: f_003, Finding 2, Summary.
-  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return r; if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||r, 28); if(/^sum:/.test(r)) return 'Line '+(+r.slice(4)+1); if(r==='report.headline') return 'Summary'; return clipT(c&&c.label||r, 34); }
+  // A short key ("f_003") is a name people can say; a generated one ("f_JKWOLL5FAHIY") is not, and stays off the page.
+  function shortId(r){ return String(r||'').length<=6; }
+  // A crumb names what it is the way the record does: f_003 (else the pin's label), Finding 2, Summary.
+  function crumbWord(c){ var r=String(c&&c.ref||''); if(pins()[r]) return shortId(r) ? r : (clipT(pinLabel(pins()[r]), 28)||'Fact'); if(fnds()[r]) return 'Finding '+(Object.keys(fnds()).indexOf(r)+1); if(srcRecs()[r]) return clipT(srcRecs()[r].publisher||srcRecs()[r].domain||'Source', 28); if(/^sum:/.test(r)) return 'Line '+(+r.slice(4)+1); if(r==='report.headline') return 'Summary'; return clipT(c&&c.label||(/^[a-z]{1,4}_[0-9A-Za-z]{7,}$/.test(r)?'This item':r), 34); }
   // What is selected shows in the report too (the mock): the line it is in is
   // lit, its section takes a wash, and every other place naming it is marked.
   function markReport(){
