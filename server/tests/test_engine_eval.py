@@ -2091,3 +2091,79 @@ def test_analysis_reports_how_often_a_ranking_was_filled_in(tmp_path):
     assert res["rankings"]["H1"]["not_complete"] == [] and res["rankings"]["H1"]["ranked"] == 5
     md = ee.render_md(res)
     assert "Rankings the harness had to fill in" in md and "- S: 5 ranked, 5 not complete" in md and "35 candidates filled in" in md
+
+
+# =============================================================================================== the review's test gaps
+def asymmetric_handlers():
+    """Jude fails exactly what each arm changes: T1's hypothesis insight (SV1), S's candidate winner (SV2), and the proposition
+    in J1 (the call that carries the two extra tests). Everything else passes. So every number the analysis derives has a
+    distinct, known value that depends on reading the right arm's file."""
+    def jude(s, p, sc):
+        j1 = "must_be_true" in p["tests"].get("single_minded_proposition", {})
+        ins_fail = "Hypothesis" in str(p["brief"].get("insight"))
+        prop_fail = "Option line" in str(p["brief"].get("single_minded_proposition")) or j1
+        return jude_answer(prop_pass=not prop_fail, ins_pass=not ins_fail)
+    return standard_handlers(explain_flags=jude)
+
+
+def test_analyse_derives_every_number_from_arm_files_on_disk_so_a_wrong_arm_name_fails(tmp_path):
+    bids = [f"c{i:02d}" for i in range(1, 21)]
+    out, inputs, _ = run_arms(tmp_path, bids, handlers=asymmetric_handlers())
+    arms_by = ee.load_arms(out, bids)                              # from the files, not from the dicts the arms returned
+    assert sorted(arms_by["c01"]) == sorted(n for n, *_ in ee.arm_specs())
+    _, key = ee.build_packets(inputs, arms_by)
+    r = ee.analyse(out, inputs, arms_by, key, rating_for(key, "R1"))
+    i1, i2, i3 = r["idea1"], r["idea2"], r["idea3"]
+    # idea 1: SV1 is the survival review of T1, J0 of B: Jude fails T1's insight in all 20 briefs and B's in none
+    assert i1["survival"]["paired_T1"]["jude_fails_insight"] == 20 and i1["survival"]["paired_B_via_J0"]["jude_fails_insight"] == 0
+    assert i1["rules"]["go_conditions"]["Jude fails T1's insight in at most 2 more briefs than B's (J0)"] is False
+    assert i1["guard_pairs"] == {"T1_C1_code_checks": 20, "SV1_J0": 20} and i1["step_ran"] == 20 and i1["no_gate"] == 0
+    # idea 2: SV2 reviews S's winner (Jude fails its proposition in all 20), J0 reviews O (in none)
+    assert i2["send_backs"] == {"S_winner_in_B": 20, "O_via_J0": 0, "paired_briefs": 20}
+    assert i2["rules"]["go_conditions"]["Jude or code sends S's winner back in at most 2 more briefs than O"] is False
+    assert sum(i2["winners_by_seed"].values()) == 20 and i2["candidates_citing_nothing"] == {"S": 140, "L": 140, "L2": 140}
+    # idea 3: only J1 (R1) fails the proposition and so rewrites it; J0 and J0' (R0, R0') leave it
+    assert i3["jude_fails_proposition"] == {"J0": 0, "J0p": 0, "J1": 20} and i3["rewrites_per_arm"] == {"J0": 0, "J0p": 0, "J1": 20}
+    assert i3["changed_by_R1_not_R0"] == 20 and i3["changed_by_R0_not_R1"] == 0
+    assert i3["rules"]["wins_by_rewrite_split"] == {"both": 0, "only_R1": 20, "only_R0": 0, "neither": 0}
+    assert r["tallies"]["R1vR0"]["W"] == 20 and r["tallies"]["R0pvR0"]["T"] == 20             # J0' is a copy of J0: identical text, a tie
+    assert r["tallies"]["R1vO"]["W"] == 20 and r["tallies"]["R0vO"]["T"] == 20
+    assert i3["rules"]["go_conditions"]["SR on R1 v R0"] is True
+    assert i3["jude_noise_J0_vs_J0p"] == {"briefs": 20, "disagree_on_failing_proposition": 0, "disagree_on_failing_insight": 0}
+    # an arm file named the way analyse does not expect is not read: remove J0 from disk and the baseline is "not measured"
+    for b in bids:
+        (out / "arms" / b / "J0.json").unlink()
+    gone = ee.load_arms(out, bids)
+    r2 = ee.analyse(out, inputs, gone, key, rating_for(key, "R1"))
+    assert r2["idea1"]["rules"]["guards_not_measured"] and r2["idea1"]["survival"]["B_via_J0"]["briefs"] == 0
+
+
+def test_the_real_path_makes_a_rewrite_when_jude_fails_the_proposition(tmp_path, monkeypatch):
+    """The fake CLI used to pass Jude every time, so a rewrite was never exercised through ModelPort. FAKE_JUDE_FAIL makes it
+    fail the proposition with an instruction: the harness must ask Dara for a rewrite and keep it."""
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_JUDE_FAIL", "1")
+    ee.cmd_pilot(A)
+    arms = ee.load_arms(out, ["c01"])["c01"]
+    for j in ("J0", "J0p", "J1"):
+        a = arms[j]
+        assert a["status"] == "ok" and a["jude_fails_proposition"] is True and a["sent_by"] == "jude" and a["rewritten"] is True
+        assert a["instruction"] == "Say it plainly." and a["rewrites"][0]["by"] == "jude" and a["rewrites"][0]["changed"] is True
+        assert a["proposition"] != arms["B"]["proposition"] and [c["purpose"] for c in a["calls"]][:2] == ["explain_flags", "rewrite_brief_parts"]
+    assert arms["SV1"]["jude_fails_proposition"] is True and arms["SV2"]["jude_fails_proposition"] is True
+    rows = ee.read_log(out / "cost_log.jsonl")
+    rw = [r for r in rows if r["purpose"] == "rewrite_brief_parts"]
+    assert rw and {r["effort"] for r in rw} == {"low"} and {r["arm"] for r in rw} >= {"J0", "J0p", "J1"}
+    assert not any(c["purpose"] == "rewrite_brief_parts" for c in arms["SV1"]["calls"])       # the survival review makes no rewrite
+
+
+def test_the_real_path_records_whether_the_ranker_named_every_candidate(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    ee.cmd_pilot(A)
+    arms = ee.load_arms(out, ["c01"])["c01"]
+    assert arms["H1"]["ranking_complete"] is False and arms["S"]["ranking_calls"][0]["named"] == 1       # the fake ranks [0] only
+    monkeypatch.setenv("FAKE_RANK_FULL", "1")
+    A.only, A.force, A.reason = {"c01", "t01"}, True, "a rerun for the test"
+    ee.cmd_replay(A)
+    arms = ee.load_arms(out, ["c01"])["c01"]
+    assert all(arms[a]["ranking_complete"] is True for a in ("H1", "S", "L", "L2"))

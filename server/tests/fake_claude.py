@@ -71,9 +71,11 @@ elif m:
     obj = gen(json.loads(m.group(1)))
     if os.environ.get("FAKE_RANK_FULL") and "ranking" in obj:
         obj["ranking"] = list(reversed(range(len(json.loads(re.search(r"<input>(.*)</input>", prompt, re.S).group(1))["candidates"]))))
-    if os.environ.get("FAKE_JUDE_FAIL") and prompt.startswith("Task: explain_flags"):
+    if os.environ.get("FAKE_JUDE_FAIL") and "Task: explain_flags" in prompt:       # also on the retry, whose prompt is a conversation
         obj["tests"] = {"single_minded_proposition": {"pass": False, "failed_test": "single_minded", "instruction": "Say it plainly."},
                         "insight": {"pass": True, "failed_test": "", "instruction": ""}}
+        if "must_be_true" in system:                                                # J1's two extra answers
+            obj["tests"]["single_minded_proposition"].update(must_be_true="It must be true.", counter_argument="A counter.")
     text = json.dumps(obj)
 elif "Put together" in prompt:
     text = json.dumps({"groups": [[1, 2]]})
