@@ -1856,7 +1856,7 @@ def test_an_insight_item_ties_when_the_two_insights_are_identical_and_the_propos
 
 
 def test_tidy_equality_is_what_makes_texts_identical_so_a_label_or_full_stop_never_hides_a_tie(tmp_path):
-    h = standard_handlers(draft_brief_whole=lambda s, p, sc: draft_reply(prop="Draft for testing: One plain thought.", insight="I " + p["plan"]["parts"]["insight"]["must_say"]),
+    h = standard_handlers(draft_brief_whole=lambda s, p, sc: draft_reply(prop="Draft for testing: One plain thought.", insight="I " + p["plan"]["parts"]["single_minded_proposition"]["must_say"]),
                           rewrite_brief_parts=lambda s, p, sc: {"single_minded_proposition": entry("one plain thought")})
     _, _, _, _, key = packets_for(tmp_path, ["c01"], h)
     assert {k.split("|")[1]: v for k, v in key["auto_ties"].items()}["C1vB.prop"] == "identical text"
