@@ -984,7 +984,10 @@
   #structured .logo select{position:absolute;inset:auto 4px 4px;opacity:0;height:16px}
   #structured .logo:hover select{opacity:1}
   #structured .logo .x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;border:1px solid var(--nd-line);background:var(--nd-card);font:600 12px/1 var(--font-ui);opacity:0;transition:opacity .12s;padding:0;color:var(--nd-ink)}
-  #structured .logo:hover .x{opacity:1}
+  #structured .logo:hover .x,#structured .logo:focus-within .x{opacity:1}
+  #structured .logo.virt > label{display:grid;place-items:center;align-content:center;gap:4px;cursor:pointer}
+  #structured .logo-back{flex-basis:100%;justify-self:start;align-self:start;width:max-content;max-width:100%;min-height:0;padding:2px 0;border:0;background:none;color:var(--nd-muted);font:500 12px var(--font-ui);text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  #structured .logo-back:hover{color:var(--nd-ink)}
   #structured .logo.add{border:1px dashed var(--nd-line-strong);background:transparent;color:var(--nd-ink)}
   #structured .logo.add .ic{display:none}
   #structured .logo.add b{font:300 26px/1 var(--font-ui);color:var(--nd-ink-soft)}
@@ -1033,7 +1036,10 @@
   .selpart .clf-rv,.selpart .clf-insp{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper);--clf-mono:var(--font-mono)}
   :root[data-color-scheme="dark"] .selpart .clf-rv,:root[data-color-scheme="dark"] .selpart .clf-insp{--clf-paper:var(--nd-card)}
   /* Where something came from, in the Selected part panel (ClanFields.setPanelHost): the inspector's trail and view */
-  .selpart .clf-insp{background:var(--nd-card);--clf-soft:color-mix(in srgb,var(--nd-ink) 5%,var(--nd-card))}
+  /* It sits on the panel's own surface, like the part view: no card of its own. The sticky bar takes
+     the panel's colour so what scrolls under it stays hidden. */
+  .selpart .clf-insp{background:transparent;--clf-soft:color-mix(in srgb,var(--nd-ink) 5%,var(--nd-paper))}
+  .selpart .clf-insp .clf-ibar{background:var(--nd-paper)}
   .selpart .clf-insp .clf-rv{min-width:0;max-width:100%}
   .selpart .clf-insp .clf-rv .rv-title{font-size:17px}
   .sp-prov:empty{display:none}
@@ -3461,7 +3467,7 @@
     var cn=clientName(), an=agencyName();
     var shown=sheetLogos().filter(logoSrc), lg=$('sheetLogos');
     var tiles=shown.length?shown.map(function(l){ return '<img class="b-logo-img" src="'+esc(logoSrc(l))+'" alt="'+esc(l.label||l.slot||'Logo')+'" />'; })
-      :[tileHtml(tileOf('client')), tileHtml(tileOf('agency'))].filter(Boolean);
+      :standInTiles();
     lg.innerHTML=tiles.join('<i class="b-x"></i>');
     $('sheetNames').textContent=[cn, an].filter(Boolean).join(' · ');
     var meta=[cn, docVersion(), fmtDay(lastWhen())].filter(Boolean).join(' · ');
@@ -4530,10 +4536,10 @@
     if(ka.join()!==kb.join()) return false;
     return ka.every(function(k){ return ['col','row','w','h','order','as','tone'].every(function(p){ return String(a[k][p])===String((b[k]||{})[p]); }); });
   }
-  function lookSet(k, v){
+  function lookSet(k, v, action){
     var l=layoutData(), n={}; for(var x in l) n[x]=l[x];
     n[k]=v; if(!n.parts){ n.parts=layoutParts(layoutItems()); n.model='rows'; }
-    patch('layout', n, {actor:'human', pinned:false, action:'set the brief’s '+k});
+    patch('layout', n, {actor:'human', pinned:false, action:action||'set the brief’s '+k});
   }
 
   // The part the side tab is showing (a click selects it; Esc, ← or "← Brief" lets go).
@@ -5168,6 +5174,19 @@
   }
   function slotRank(s){ for(var i=0;i<LOGO_SLOTS.length;i++) if(LOGO_SLOTS[i][0]===s) return i; return LOGO_SLOTS.length; }
   function sheetLogos(){ return logosOf().map(function(l,i){ return {l:l, i:i}; }).sort(function(a,b){ return slotRank(a.l.slot)-slotRank(b.l.slot)||a.i-b.i; }).map(function(x){ return x.l; }); }
+  // While no picture shows, the client's and the agency's initials stand in on the sheet, in the paged
+  // view and in print. A person can take either off (layout.logosHidden) and bring it back.
+  var STAND_INS=['client','agency'];
+  function logosHidden(){ return arr(layoutData().logosHidden).filter(function(k){ return STAND_INS.indexOf(k)>=0; }); }
+  function standInsApply(){ return !sheetLogos().filter(logoSrc).length; }
+  function standIns(){ if(!standInsApply()) return []; var h=logosHidden(); return STAND_INS.filter(function(k){ return h.indexOf(k)<0&&!!tileOf(k); }); }
+  function standInTiles(){ return standIns().map(function(k){ return tileHtml(tileOf(k)); }); }
+  // What the sheet shows, for the fold's summary: its pictures, else its stand-ins.
+  function logosOnSheet(){ var n=sheetLogos().filter(logoSrc).length; return n||standIns().length; }
+  function setStandIn(k, on){
+    var h=logosHidden().filter(function(x){ return x!==k; }); if(!on) h.push(k);
+    lookSet('logosHidden', h, on?'put the '+k+'’s stand-in logo back':'take the '+k+'’s stand-in logo off');
+  }
   function renderLook(){
     var sh=$('sheet'), l=layoutData(), frame=l.frame==='boxed'?'boxed':'open', head=l.headings==='tab'?'tab':'label', cover=l.cover==='band'?'band':'plain', why=l.why==='show'?'show':'hide';
     sh.classList.toggle('frame-boxed', frame==='boxed'); sh.classList.toggle('head-tab', head==='tab');
@@ -5196,15 +5215,16 @@
     var tab=$('sheetTab'), pn=String(get('project_name')||'').trim()||derivedTitle(); tab.textContent=pn;
   }
   function renderLogos(){
-    var ls=logosOf(), box=$('logoList'), sm=$('logoSum');
-    if(sm) sm.textContent=String(ls.length);
+    var ls=logosOf(), box=$('logoList'), sm=$('logoSum'), on=logosOnSheet();
+    if(sm) sm.textContent=on?String(on):'· none on the sheet';
     if($('sheetNames')) renderSheetHead();
-    // With no picture uploaded for the client or the agency, their tiles stand in (initials on
-    // their colours), as on the sheet; Change uploads the real one into that slot.
-    var have={}; ls.forEach(function(l){ have[l.slot]=1; });
-    var virt=ls.length?[]:['client','agency'].filter(function(k){ return !have[k]&&tileOf(k); });
+    // With no picture showing, the client's and the agency's tiles stand in (initials on their
+    // colours), as on the sheet: a click uploads the real one into that slot, × takes the tile off
+    // the sheet, and a tile taken off waits below as a quiet way to bring it back.
+    var virt=standIns(), gone=standInsApply()?logosHidden().filter(function(k){ return !!tileOf(k); }):[];
     box.innerHTML=virt.map(function(k){ var t=tileOf(k);
-      return '<label class="logo virt" title="Click to put '+esc(t.name)+'’s logo here">'+tileHtml(t,'lb-tile')+'<small>'+esc(t.name)+'</small><input type="file" class="sr" data-slot="'+k+'" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'; }).join('')
+      return '<div class="logo virt"><label title="Click to put '+esc(t.name)+'’s logo here">'+tileHtml(t,'lb-tile')+'<small>'+esc(t.name)+'</small><input type="file" class="sr" data-slot="'+k+'" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'
+        +'<button type="button" class="x" data-hide="'+k+'" aria-label="Take '+esc(t.name)+'’s initials off the sheet" title="Take off the sheet">×</button></div>'; }).join('')
       +ls.map(function(l,i){
       var src=logoSrc(l);
       return '<div class="logo'+(l.ref.brand?' kit':'')+'">'+(src?'<img src="'+esc(src)+'" alt="" />':'<span class="muted">Brand Clan</span>')+'<small>'+esc(short(l.label||(LOGO_SLOTS.filter(function(s){ return s[0]===l.slot; })[0]||[,''])[1],14))+'</small>'
@@ -5212,7 +5232,10 @@
         +'<button type="button" class="x" data-n="'+i+'" aria-label="Take off '+esc(l.label||'this logo')+'">×</button></div>';
     }).join('')+kitOffers().map(function(x,i){
       return '<button type="button" class="logo kit offer" data-k="'+i+'" title="Put the '+esc(x.brand)+' Brand Clan’s '+esc(x.name)+' on the brief"><img src="'+esc(assetUrl(x.asset))+'" alt="" /><span>'+esc(short(x.name,14))+'</span><span class="muted">Brand Clan</span></button>';
-    }).join('')+'<label class="logo add" title="Add a logo (PNG, JPG, SVG or WebP)"><b aria-hidden="true">+</b><small>Add logo</small><input type="file" class="sr" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>';
+    }).join('')+'<label class="logo add" title="Add a logo (PNG, JPG, SVG or WebP)"><b aria-hidden="true">+</b><small>Add logo</small><input type="file" class="sr" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'
+      +gone.map(function(k){ return '<button type="button" class="logo-back" data-show="'+k+'">Show '+esc(tileOf(k).name)+'’s initials</button>'; }).join('');
+    box.querySelectorAll('.x[data-hide]').forEach(function(b){ b.addEventListener('click', function(e){ e.preventDefault(); setStandIn(b.getAttribute('data-hide'), false); }); });
+    box.querySelectorAll('.logo-back[data-show]').forEach(function(b){ b.addEventListener('click', function(){ setStandIn(b.getAttribute('data-show'), true); }); });
     box.querySelectorAll('.virt input[data-slot]').forEach(function(inp){ inp.addEventListener('change', function(){ var f=this.files&&this.files[0]; this.value=''; if(f) addLogo(f, inp.getAttribute('data-slot')); }); });
     box.querySelectorAll('.offer[data-k]').forEach(function(b){ b.addEventListener('click', function(){
       var x=kitOffers()[+b.getAttribute('data-k')]; if(!x) return;
@@ -5414,7 +5437,7 @@
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
       look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
       names:[clientName(), agencyName()].filter(Boolean).join(' · '), meta:[clientName(), docVersion(), fmtDay(lastWhen())].filter(Boolean).join(' · '),
-      tiles:[tileHtml(tileOf('client')), tileHtml(tileOf('agency'))].filter(Boolean),
+      tiles:standInTiles(),
       foot:[gridClientName(cli), workingTitle(), 'Creative brief', copy==='client'?'Client copy':'Confidential'].filter(Boolean).join(' / ')};
     for(var k in extra||{}) ctx[k]=extra[k];
     return ctx;

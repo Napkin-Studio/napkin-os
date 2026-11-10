@@ -161,7 +161,7 @@ test('the side tab holds the brief view and the part view apart, the brief view 
   ;(ids.sheetTab as unknown as { style: object }).style = { removeProperty() {} }
   L((id: string) => ids[id] ?? null, () => ({ frame: 'boxed' }), () => '', () => '', [['', 'x']], {}, () => '', esc, () => {}, () => {}, () => {}, { querySelectorAll: () => [] })()
   assert.equal(ids.lookSum.textContent, 'Boxed · Label · Plain', '▸ Look · Boxed · Label · Plain')
-  assert.match(fn(BM, 'renderLogos'), /if\(sm\) sm\.textContent=String\(ls\.length\);/, '▸ Logos · 2')
+  assert.match(fn(BM, 'renderLogos'), /if\(sm\) sm\.textContent=on\?String\(on\):'· none on the sheet';/, '▸ Logos · 2, counting what the sheet shows (briefLogos.test.ts)')
   // A part selected: the brief view goes (in the script, and in CSS for a drill-down with nothing selected).
   assert.match(BM, /#stab:has\(> #selPart:not\(\[hidden\]\)\) > #briefView\{display:none!important\}/)
 })
