@@ -925,27 +925,145 @@ test('an accepted proposal keeps the claims it was proposed with', () => {
   assert.match(fn(BM, 'whyHtml'), /var cd=claimDecision\(d\);\s*h\+=sourcesHtml\(citesOf\(\[d, cd, v&&v\.d\]\), cd\?cd\.claims:\[\]\);/)
 })
 
-test('the drawer quotes the words the planner typed', () => {
-  type W = { writerBlock(ref: string): string }
-  const mats: Record<string, unknown> = {
+// ── one provenance view per part (where-it-came-from, approved 2026-11-10) ──
+// ClanFields.partView draws what wrote a part, and what that cites, once, in the research inspector's
+// .clf-rv grammar: the brief's panel, the drawer's path view and a list line all read the same markup.
+
+/** partParts over a document and a chain, the crew named as the snippet names them, dates left as stamps. */
+function pvEnv(o: {
+  decisions: unknown[]; value?: unknown; materials?: Record<string, unknown>; captures?: Record<string, unknown>
+  pins?: Record<string, unknown>; sources?: Record<string, unknown>; findings?: Record<string, unknown>; excluded?: string[]
+}) {
+  type P = {
+    partParts(path: string, opts?: { name?: string; also?: { key: string; label: string }[] }): { head: string; body: string }
+    partHTML(path: string, opts?: unknown): string
+    provenance(path: string): string
+    history(path: string): string
+    proposalOf(path: string): { decision: { id: string } } | null
+    acceptOf(b: unknown): { decision: { id: string } } | null
+  }
+  const crewKey = (d: { agent?: string }) => (/drafter/.test(String(d.agent)) ? 'drafter' : /judge/.test(String(d.agent)) ? 'judge' : null)
+  const givenOf = (k: string | null) => ({ drafter: 'Brief agent', judge: 'Review agent' } as Record<string, string>)[String(k)] || ''
+  const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
+  const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
+  const KIND_OF_ACTION = new Function(`${obj(CLF, 'KIND_OF_ACTION')} return KIND_OF_ACTION;`)()
+  const P = o.pins ?? {}
+  return lift<P>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'attnOf', 'askOf', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
+    'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history',
+    'writeOf', 'theName', 'byName', 'pvPill', 'pvMeta', 'pvQuote', 'pvCap', 'matCap', 'pvPinRow', 'pvPins', 'pvDecs', 'partParts', 'partHTML',
+    'sec', 'reasonHTML', 'decRow', 'decsSec', 'onTargets', 'blocksOn', 'go', 'fChip', 'sChip', 'dChip', 'pChip', 'citeChip', 'stPill', 'confBars', 'lvOf', 'lvWord', 'pinLv',
+    'excludedPin', 'resolvedFor', 'openContestOf', 'tierWord', 'dparts', 'monthYear', 'words', 'fno', 'srcOf'], {
+    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, gap: () => null, VIEW: { document_id: 'brief', decisions: o.decisions }, DID, DID_ACTION, KIND_OF_ACTION, declaredParts: () => [],
+    docId: () => 'brief', upstreams: () => ({}), valueAt: () => o.value ?? 'One thing, said once.', envAt: () => null, ORIGIN: {}, personName: () => 'ana',
+    crew: () => ({ forWork: (w: string) => (w === 'draft' ? 'drafter' : '') }), crewKey, givenOf,
+    whoDid: (b: { who?: { you?: boolean }; decision: { agent?: string } }) => (b.who?.you ? 'You' : givenOf(crewKey(b.decision)) || 'The agents'),
+    dayMonth: (d: string) => d, captures: () => o.captures ?? {}, passages: () => ({}), pins: () => P, findings: () => o.findings ?? {}, sources: () => o.sources ?? {},
+    contests: () => [], data: () => ({ selection: { excluded: (o.excluded ?? []).map(fact_id => ({ fact_id })) } }),
+    materials: () => o.materials ?? { mat_p: { kind: 'prompt', name: 'prompt', text: 'A brief for Lidl Connect.' } }, andList: listJoin, upTitle: () => 'Irish summer treats',
+    trayNoun: () => 'brief', textOf: (v: unknown) => (v == null ? '' : String(v)), label: (p: { label?: string }) => p?.label ?? '', fmt: (p: { value?: unknown }) => (p ? String(p.value ?? '') : ''),
+    confidential: () => false, LOCK: '<i class="lock"></i>', country: (c: string) => c, pubName: (n: string) => n, STATUS_WORD: {},
+    LV: { high: 3, medium: 2, med: 2, low: 1 }, LV_WORD: { 3: 'High', 2: 'Medium', 1: 'Low' }, MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    PV_OPEN: {},
+  })
+}
+
+test('the part view quotes the words the planner typed, with a mono caption', () => {
+  const dec = { decision: { id: 'd_1', kind: 'edit', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], targets: ['brief#background'], timestamp: '4 Nov',
+    reasoning: { decided: 'x' } }, who: dara, targets: [{ path: 'background' }] }
+  const f = pvEnv({ decisions: [dec], materials: {
     mat_p: { kind: 'prompt', name: 'prompt', text: 'A brief for Lidl Connect: win back switchers.' },
     mat_f: { kind: 'client_brief', name: 'Lidl brief.pdf' },
+  } })
+  const h = f.partHTML('background')
+  assert.match(h, /<h5>From your words<em>1<\/em><\/h5><div class="pv-said"><blockquote class="rv-q">A brief for Lidl Connect: win back switchers\.<\/blockquote><button type="button" class="rv-src pv-cap" data-clf-go="mat_p">your prompt<\/button><\/div>/)
+  // the attachment is a Files chip, not quoted, and the prompt is not listed twice
+  assert.match(h, /<div class="rv-use"><span>Files<\/span><button type="button" class="rv-chip" data-clf-go="mat_f">Lidl brief\.pdf<\/button>/)
+  assert.equal(count(h, 'data-clf-go="mat_p"'), 1)
+  assert.match(h, /Written by <b>the Brief agent<\/b> · from your words · 4 Nov · <span class="rv-dchip"/)
+  // none of the old drawer's pieces for a writer
+  assert.doesNotMatch(h, /clf-say|clf-q said|clf-by|clf-row|What you typed/)
+})
+
+test('the part view: header, quotes, facts with long values on their own row, why, decisions', () => {
+  const pins = {
+    f_1: { label: 'HFSS ad restriction, Ireland', value: 'before 9pm', sources: ['src_1'], confidence: 'medium', market: 'IE' },
+    f_2: { label: 'Restriction · Ireland', value: 'No promotion of HFSS products to under-18s in any medium they mostly see', sources: ['src_1'] },
+    f_3: { label: 'Marked wrong', value: '12', sources: ['src_1'] },
+    f_4: { label: 'Replaced', value: '13', replaced_by: { fact_id: 'f_1' } },
   }
-  const dec = { id: 'd_1', action: 'draft', agent: 'draft_brief@1.0/drafter', cites: ['mat_p', 'mat_f'], reasoning: { decided: 'x' } }
-  const w = lift<W>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'matName', 'kindOf', 'isPath', 'askOf', 'acceptedId', 'acceptOf', 'isAccept', 'writerBlock'], {
-    arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, gap: () => null,
-    writerOf: () => ({ block: { decision: dec } }), captures: () => ({}), passages: () => ({}), pins: () => ({}), findings: () => ({}),
-    materials: () => mats, isPerson: () => false, say: () => '', crewKey: () => 'drafter', andList: listJoin, upTitle: () => '',
-    MAT_KIND: { prompt: 'your prompt', client_brief: 'the client’s brief', other: 'a file' }, textOf: String, SURE: {},
-    STATUS_WORD: {}, label: () => '', srcOf: () => null, srcShort: () => '', confidential: () => false, LOCK: '', fmt: () => '',
-    dayMonth: () => '', whoDid: () => '', blockOf: () => null, givenOf: () => 'Brief agent', proposerOf: () => 'Brief agent',
-    VIEW: { decisions: [] }, declaredParts: () => [],
-  })
-  const h = w.writerBlock('background')
-  assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">A brief for Lidl Connect: win back switchers\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
-  // the attachment is still named, not quoted, and the prompt is not listed twice
-  assert.match(h, /<h3>From your material<\/h3>.*Lidl brief\.pdf/)
-  assert.equal(count(h, 'data-open="mat_p"'), 0)
+  const sources = { src_1: { publisher: 'BAI', tier: 'gov', published_at: '2026-03' } }
+  const captures = {
+    cap_a: { key: 'mandatories', material_id: 'mat_p', quote: 'No "limited time" language', status: 'fact' },
+    cap_b: { key: 'mandatories', material_id: 'mat_n', quote: 'with no price promotion', status: 'assumption' },
+    cap_c: { key: 'mandatories', material_id: 'mat_p', quote: 'No "limited time" language', status: 'fact' },
+  }
+  const materials = { mat_p: { kind: 'prompt', name: 'prompt', text: 'No "limited time" language.' }, mat_n: { kind: 'other', name: 'client-call-notes.pdf' } }
+  const draft = { decision: { id: 'd_031', kind: 'edit', action: 'draft', agent: 'draft_brief@1.0/drafter', targets: ['brief#mandatories'], timestamp: '4 Nov',
+    cites: ['cap_a', 'cap_b', 'cap_c', 'f_1', 'f_2', 'f_3', 'f_4'],
+    reasoning: { decided: 'Keep the client’s three mandatories', because: [{ point: 'Your ask: “Keep it short.”' }, { point: 'The client said no price promotion', cites: ['cap_a'] }],
+      certainty: { level: 'medium', why: 'two are inferred' }, attention: '“limited time” is assumed' } }, who: dara, targets: [{ path: 'mandatories' }] }
+  const verdict = { decision: { id: 'd_v', kind: 'verdict', polarity: 'good', agent: 'napkin/brief/judge', targets: ['brief#mandatories'], timestamp: '4 Nov', rationale: 'Fine.' }, who: jude, targets: [{ path: 'mandatories' }] }
+  const f = pvEnv({ decisions: [verdict, draft], pins, sources, captures, materials, excluded: ['f_3'], value: ['No “limited time” language'] })
+  const p = f.partParts('mandatories', { name: 'Mandatories', also: [{ key: 'audience', label: 'Audience' }] })
+  // head: the name, the decision's own certainty, who wrote it from what
+  assert.match(p.head, /^<div class="rv-head"><span class="rv-pname">Mandatories<\/span><span class="rv-pill warn">Medium · inference<\/span><\/div>/)
+  assert.match(p.head, /<p class="rv-meta">Written by <b>the Brief agent<\/b> · from your words and 2 facts · 4 Nov · <span class="rv-dchip"[^>]*>d_031<\/span><\/p>/)
+  const h = p.body
+  // From your words: deduped by quote, captions in mono, assumed flagged, the ask as your note
+  assert.match(h, /<h5>From your words<em>3<\/em><\/h5>/)
+  assert.equal(count(h, 'No &#34;limited time&#34; language</blockquote>'), 1)
+  assert.match(h, /data-clf-go="cap_b">client-call-notes\.pdf · assumed, not said<\/button>/)
+  assert.match(h, /<blockquote class="rv-q">Keep it short\.<\/blockquote><p class="rv-src">your note for this draft<\/p>/)
+  // Facts under it: a short value in its own cell; a long one spans the row and has no value cell
+  assert.match(h, /<h5>Facts under it<em>2<\/em><\/h5><table class="rv-pins">/)
+  assert.match(h, /<tr data-clf-go="f_1" tabindex="0" role="button" title="[^"]*"><td>HFSS ad restriction, Ireland<small><button type="button" class="rv-schip" data-clf-go="src_1"[^>]*>BAI<\/button> · gov · March 2026 · IE<\/small><\/td><td class="v">before 9pm<\/td><td><span class="rv-conf" data-c="2"/)
+  const wide = /<tr data-clf-go="f_2"[^>]*class="pv-wide"[^>]*>(.*?)<\/tr>/.exec(h)
+  assert.ok(wide, 'the long value takes the whole row')
+  assert.match(wide[1], /^<td colspan="2">Restriction · Ireland<span class="pv-lv">No promotion of HFSS/)
+  assert.doesNotMatch(wide[1], /class="v"/)
+  assert.doesNotMatch(h, /f_3|f_4/, 'a pin marked wrong or replaced is not under it')
+  // Why it says this: the reasons less the ask, signed
+  assert.match(h, /<h5>Why it says this<\/h5><div class="rv-reason"><div class="rv-row dec"><span class="rl">Decided<\/span><div>Keep the client’s three mandatories<\/div>/)
+  assert.doesNotMatch(/<h5>Why it says this<\/h5>.*?<\/section>/.exec(h)![0], /Your ask|Keep it short/)
+  assert.match(h, /<div class="rv-attn"><b>Look at this<\/b>/)
+  assert.match(h, /<div class="rv-by">Brief agent · draft · 4 Nov<\/div>/)
+  // Also used in, folded; Decisions on the record, newest first
+  assert.match(h, /<h5>Also used in<em>1 part<\/em><\/h5><details class="rv-more pv-also">.*data-clf-part="audience">Audience<\/button>/)
+  assert.match(h, /<h5>Decisions on the record<em>2<\/em><\/h5><details class="rv-dec">.*Review agent.*<details class="rv-dec">.*Brief agent/)
+  // the order of the sections is the design's
+  const order = [...h.matchAll(/<h5>([^<]+)/g)].map(m => m[1])
+  assert.deepEqual(order, ['From your words', 'Facts under it', 'Why it says this', 'Also used in', 'Decisions on the record'])
+  assert.doesNotMatch(p.head + h, /clf-say|clf-q said|clf-by|clf-row/)
+})
+
+test('the part view: more than six facts fold under Show all; empty and person-written parts', () => {
+  const pins: Record<string, unknown> = {}
+  const cites: string[] = []
+  for (let i = 1; i <= 9; i++) { pins[`f_${i}`] = { label: `Fact ${i}`, value: String(i) }; cites.push(`f_${i}`) }
+  const draft = { decision: { id: 'd_1', kind: 'edit', action: 'draft', agent: 'draft_brief@1.0/drafter', targets: ['brief#background'], cites, reasoning: { decided: 'x' } }, who: dara, targets: [{ path: 'background' }] }
+  const h = pvEnv({ decisions: [draft], pins }).partHTML('background')
+  assert.equal(count(h, '<tr '), 9)
+  assert.match(h, /<\/table><details class="rv-more" data-pv-facts="background"><summary>Show all 9<\/summary><table class="rv-pins"><tbody><tr data-clf-go="f_7"/)
+  // nothing written, nothing on the record, a person's own words
+  assert.match(pvEnv({ decisions: [draft], value: '' }).partHTML('background'), /<p class="rv-none">Nothing is written here yet\.<\/p>/)
+  assert.match(pvEnv({ decisions: [] }).partHTML('background'), /<p class="rv-none">Nothing on the record wrote this yet\.<\/p>/)
+  const mine = { decision: { id: 'd_m', kind: 'edit', agent: 'human', actor: 'human:sam', action: 'edit background', fields_changed: ['background'], timestamp: '5 Nov',
+    rationale: 'Our client asked for this.' }, who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: [{ path: 'background' }] }
+  const m = pvEnv({ decisions: [mine] }).partParts('background')
+  assert.match(m.head, /Written by <b>You<\/b> · 5 Nov<\/p>$/)
+  assert.match(m.body, /<span class="rl">Decided<\/span><div>Our client asked for this\.<\/div>/)
+  assert.match(m.body, /<div class="rv-by">You · edit · 5 Nov<\/div>/)
+})
+
+test('the part view replaces the old writer block in every drawer path', () => {
+  assert.doesNotMatch(CLF, /function writerBlock\(|writerBlock\(/)
+  assert.match(fn(CLF, 'viewItem'), /partHTML\(it\.path\)/, 'a line opened on its own shows its part’s view')
+  assert.doesNotMatch(fn(CLF, 'viewItem'), /Where it came from/)
+  const draw = fn(CLF, 'draw')
+  assert.match(draw, /if\(!env\) b\+='<div class="clf-rv pv" data-card="'\+esc\(ref\)\+'">'\+partHTML\(ref\)\+'<\/div>';/)
+  // the capture and passage quotes read as the inspector's, not the big beige block
+  assert.doesNotMatch(draw, /<h3>What your material says<\/h3><blockquote class="clf-q said">|<h3>What it says<\/h3><blockquote class="clf-q said">/)
+  assert.match(CLF, /partView:partView/)
 })
 
 // ── a redraft of a held part (redraft-provenance) ──────────────────────────
@@ -978,7 +1096,6 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
   type F = {
     provenance(path: string): string
     history(path: string): string
-    writerBlock(path: string): string
     proposalOf(path: string): { decision: { id: string } } | null
     acceptOf(b: unknown): { decision: { id: string } } | null
   }
@@ -986,8 +1103,8 @@ function drawerEnv(decisions: unknown[], value = 'One thing, said once.') {
   const givenOf = (k: string | null) => ({ brief: 'Brief agent', review: 'Review agent', drafter: 'Brief agent', judge: 'Review agent' } as Record<string, string>)[String(k)] || ''
   const DID = new Function(`${obj(CLF, 'DID')} return DID;`)()
   const DID_ACTION = new Function(`${obj(CLF, 'DID_ACTION')} return DID_ACTION;`)()
-  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'askOf', 'matName', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
-    'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history', 'writerBlock'], {
+  return lift<F>(CLF, ['obj', 'uniq', 'clip', 'plural', 'noIds', 'keyWords', 'partNames', 'lowerWord', 'becauseList', 'attnOf', 'askOf', 'kindOf', 'isPath', 'blockOf', 'isEdit', 'qualify', 'wroteKey',
+    'writerOf', 'proposalOf', 'isPerson', 'acceptedId', 'acceptOf', 'isAccept', 'drafterKey', 'proposerOf', 'saidWords', 'provenance', 'didWords', 'history'], {
     arr, esc, PATH: /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/, gap: () => null, VIEW: { document_id: 'brief', decisions }, DID, DID_ACTION, declaredParts: () => [],
     docId: () => 'brief', upstreams: () => ({}), valueAt: () => value, envAt: () => null, ORIGIN: {}, personName: () => 'ana',
     crew: () => ({ forWork: (w: string) => (w === 'draft' ? 'drafter' : '') }), crewKey, givenOf,
@@ -1060,12 +1177,15 @@ test('the drawer credits an accepted proposal to the Brief agent and quotes the 
   assert.equal(f.provenance(SMP), 'drafted by Brief agent · you accepted')
   assert.equal(f.proposalOf(SMP), null, 'the accept answered it')
 
-  const h = f.writerBlock(SMP)
-  assert.match(h, /^<p class="clf-by"><b>Brief agent<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
-  assert.match(h, /<h3>What you asked for<\/h3><blockquote class="clf-q said">Make it one thing\.<\/blockquote><blockquote class="clf-q said">A brief for Lidl Connect\.<\/blockquote><p class="clf-by">What you typed<\/p>/)
+  const pv = pvEnv({ decisions: [youAccept, secondDraft, judeNo, firstDraft] }).partParts(SMP)
+  assert.match(pv.head, /<p class="rv-meta">Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/p>$/)
+  const h = pv.body
+  assert.match(h, /<h5>From your words<em>2<\/em><\/h5><div class="pv-said"><blockquote class="rv-q">Make it one thing\.<\/blockquote><p class="rv-src">your note for this draft<\/p><\/div><div class="pv-said"><blockquote class="rv-q">A brief for Lidl Connect\.<\/blockquote><button type="button" class="rv-src pv-cap" data-clf-go="mat_p">your prompt<\/button><\/div>/)
   // What the proposal rested on, not the accept; the ask is not listed twice.
-  assert.match(h, /<summary>Why it says this<\/summary><ul class="clf-hist"><li><span>It says one thing\.<\/span><\/li><\/ul>/)
-  assert.doesNotMatch(h, /The Brief agent proposed it|d_P2|d_A/)
+  assert.match(h, /<span class="rl">Because<\/span><ul class="rv-bec"><li>It says one thing\.<\/li><\/ul>/)
+  assert.match(h, /<div class="rv-by">Brief agent · draft · 2026-10-23T09:02:00\+00:00<\/div>/, 'signed by what wrote the reasons')
+  // ids never show outside Decisions on the record, where a decision's chip is inert, as in the research
+  assert.doesNotMatch(h.split('<h5>Decisions on the record')[0], /The Brief agent proposed it|d_P2|d_A\b/)
 
   const lines = [...f.history(SMP).matchAll(/<li><span>(.*?)<\/span><\/li>/g)].map(m => m[1])
   assert.deepEqual(lines, [
@@ -1085,13 +1205,13 @@ test('an older brief’s accept reads the same, without the id it named', () => 
   const f = drawerEnv([oldAccept, secondDraft, judeNo, firstDraft])
   assert.equal(f.acceptOf(oldAccept)?.decision.id, 'd_P2')
   assert.equal(f.provenance(SMP), 'drafted by Brief agent · you accepted')
-  assert.match(f.writerBlock(SMP), /^<p class="clf-by"><b>Brief agent<\/b> wrote this on 2026-10-23T09:02:00\+00:00, on your ask; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.match(pvEnv({ decisions: [oldAccept, secondDraft, judeNo, firstDraft] }).partParts(SMP).head, /Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/p>$/)
   assert.match(f.history(SMP), /<b>You<\/b> accepted the Brief agent’s new version on 2026-10-23T09:05:00\+00:00 — “Accepted the Brief agent’s proposal for single-minded proposition\.”/)
   assert.doesNotMatch(f.history(SMP), /d_P2/)
   // The proposal gone from the chain: still the Brief agent's, by the crew's draft work.
   const gone = drawerEnv([oldAccept])
   assert.equal(gone.provenance(SMP), 'drafted by Brief agent · you accepted')
-  assert.match(gone.writerBlock(SMP), /^<p class="clf-by"><b>Brief agent<\/b> wrote this; <b>You<\/b> accepted it on 2026-10-23T09:05:00\+00:00\.<\/p>/)
+  assert.match(pvEnv({ decisions: [oldAccept] }).partParts(SMP).head, /Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/p>$/)
 })
 
 test('the drawer offers the second draft, never the first the Review agent sent back', () => {
@@ -1867,19 +1987,28 @@ test('nothing the brief did before is gone: every control is still on the page',
   assert.match(sel, /startEdit\(row,f\)/)
   assert.match(sel, /startRegen\(row,f\)/)
   assert.match(sel, /toggleLock\(f\)/)
-  assert.match(sel, /renderBuilt\(\)/, 'Built from is drawn by renderBuilt')
-  assert.match(fn(BM, 'renderBuilt'), /F\.cards\(refs\)/, 'one compact row per ref, from the OS source cards')
-  assert.match(fn(BM, 'renderBuilt'), /F\.open\(x\.getAttribute\('data-ref'\)\)/, 'each row opens its source card')
-  assert.match(sel, /whyHtml\(f\)/)
+  // Where it came from is the OS's one part view (where-it-came-from), not Built from and a Why details.
+  assert.match(sel, /renderProv\(\)/, 'the part view is drawn by renderProv')
+  assert.match(sel, /id="spHead"/, 'its head sits by the part’s name, above the actions')
+  assert.match(sel, /<div class="sp-prov" id="spProv"><\/div>/)
+  assert.doesNotMatch(sel, /whyHtml|sp-w|spBuilt|spLineCard|F\.card\(/)
 })
 
-test('Built from: one source card per ref the part cites, asked for in one tick, each with the parts it is also used in', () => {
-  const src = fn(BM, 'renderBuilt')
-  // All cards are asked for in one call (the mock's compact rows), so ClanFields sends one /cite.
-  assert.match(src, /F\.cards\(refs\)\.then\(function\(m\)\{/)
-  assert.equal((src.match(/F\.cards?\(/g) ?? []).length, 1, 'one lookup for every row')
-  assert.match(src, /cites\.length\?cites:\[docId\(\)\+'#'\+f\.key\]/, 'a part that cites nothing shows its own card, as before')
-  assert.match(src, /data-go=/)
+test('the selected part shows the OS part view; a selected line only its words and where it sits', () => {
+  const src = fn(BM, 'renderProv')
+  assert.match(src, /F\.partView\(f\.key, b, \{panel:true, name:headOf\(f\), head:\$\('spHead'\), also:also\}\)/)
+  assert.match(src, /data-sig/, 'drawn once per part and version, so picking a line does not redraw it')
+  assert.match(src, /goPart\(c\.getAttribute\('data-clf-part'\)\)/, 'an Also used in chip selects that part')
+  assert.doesNotMatch(BM, /function renderBuilt\(|function builtRow\(|class="bf-row|class="sp-w"/)
+  // while someone types in the panel, only the part view follows the chain
+  assert.match(fn(BM, 'loadChain'), /if\(sp&&sp\.contains\(document\.activeElement\)\) renderProv\(\); else renderSelPart\(\);/)
+  // a list line: its text and line n of N, nothing else
+  const L = lift<{ lineHtml(f: { key: string; type: string }): string }>(BM, ['lineHtml'], {
+    SEL_ITEM: 1, get: () => ['No price promotion', 'No “limited time” language', 'Under-15s'], esc,
+  })
+  assert.equal(L.lineHtml({ key: 'mandatories', type: 'list' }),
+    '<div class="sp-line" id="spLine"><div class="clf-rv"><span class="rsp-k">This line<em>line 2 of 3</em></span><p class="rv-title">“No “limited time” language”</p></div></div>')
+  assert.equal(L.lineHtml({ key: 'background', type: 'text' }), '')
   assert.match(fn(BM, 'goPart'), /select\(key\)/, 'a used-in chip selects that part')
   const decisions: Record<string, { cites: string[] }> = { background: { cites: ['f_1', 'f_2'] }, audience: { cites: ['f_2'] }, insight: { cites: ['f_2', 'f_bad'] }, barrier: { cites: ['f_1'] } }
   const vals: Record<string, unknown> = { background: 'B', audience: 'A', insight: 'I', barrier: '' }

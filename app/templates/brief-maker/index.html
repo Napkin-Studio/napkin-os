@@ -652,19 +652,12 @@
   .brandline{font-size:13px}
   .selpart{border:1.5px solid color-mix(in srgb,var(--create) 50%,var(--line));border-radius:10px;padding:14px}
   .selpart .tk{margin:0}
-  .selpart .sp-name{font-weight:700;font-size:15px}
   .sp-acts{display:flex;flex-wrap:wrap;gap:6px}
   .sp-acts button{min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-weight:600;font-size:13px;cursor:pointer}
   .sp-acts button[aria-pressed="true"]{background:var(--amber-soft);color:var(--amber-ink);border-color:transparent}
   .sp-acts button:disabled{opacity:.5;cursor:default}
-  .selpart details{border-top:1px solid var(--rule);padding-top:8px}
-  .selpart summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);min-height:28px;display:flex;align-items:center}
-  .sp-built{display:grid;gap:10px}
-  .bf{display:grid;gap:6px}
-  .bf-used{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .bf-used .tk2{margin:0 2px 0 0}
-  .bf-chip{min-height:28px;padding:3px 10px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--card);font-size:12px;font-weight:600;cursor:pointer}
-  .bf-chip:hover,.bf-chip:focus-visible{border-color:var(--ink)}
+  .selpart > details{border-top:1px solid var(--rule);padding-top:8px}
+  .selpart > details > summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);min-height:28px;display:flex;align-items:center}
   .tk{font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);margin-top:6px}
   .tk2{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
   .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -988,7 +981,6 @@
   #structured .selpart[hidden]{display:none}
   .side-part > h4{margin:0 0 6px!important;font:700 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted);display:flex;justify-content:space-between;align-items:center}
   .side-part > h4 .side-link{font:600 11px var(--font-ui);letter-spacing:0;text-transform:none;color:var(--nd-muted)}
-  .side-part .sp-name{display:block;font:700 14px var(--font-ui);letter-spacing:-.01em;color:var(--nd-ink)}
   #structured .side-part .sp-acts{display:flex;flex-wrap:wrap;gap:6px}
   .sp-btn,#structured .side-part .sp-acts button{display:inline-flex;align-items:center;gap:5px;height:28px;min-height:28px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:600 12px var(--font-ui);cursor:pointer;box-shadow:none}
   .sp-btn:hover,#structured .side-part .sp-acts button:hover:not(:disabled){border-color:var(--nd-ink)}
@@ -1023,34 +1015,25 @@
   .needs-box .note-v .editrow,.needs-box .note-p .editrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
   .needs-box button.act-fix,.needs-box .note-p .save{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;margin-top:4px}
   .needs-box .act-override,.needs-box .note-p .cancel{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--nd-line-strong);background:var(--nd-card);color:var(--nd-ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer;text-decoration:none}
-  /* Built from: compact rows, the source card one click away */
-  .sp-built{display:grid;gap:8px}
-  /* A list part's line, selected: lit on the sheet, its view in the panel (the OS's card) */
-  .sp-line{display:grid;gap:8px;padding:10px 0 12px;border-bottom:1px solid var(--nd-line)}
+  /* A list part's line, selected: lit on the sheet; in the panel only its words and where it sits */
+  .sp-line{display:grid;gap:4px;padding:4px 0 2px}
+  .sp-line .rsp-k{display:flex;align-items:baseline}
+  .sp-line .rsp-k em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:.02em;text-transform:none}
   .side-part .sp-full{margin:6px 0 10px;font:400 13.5px/1.5 var(--font-ui);color:var(--nd-ink2,var(--nd-ink));white-space:pre-line;overflow-wrap:anywhere}
-  .sp-line .clf-rv{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper)}
-  .sp-line .clf-rv .rv-title{font-size:15px}
+  /* Where it came from (ClanFields.partView), in the shell's tokens, light and dark */
+  .selpart .clf-rv{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper);--clf-mono:var(--font-mono)}
+  :root[data-color-scheme="dark"] .selpart .clf-rv{--clf-paper:var(--nd-card)}
+  .sp-line .clf-rv .rv-title{font-size:15px;margin:0}
+  .sp-head .rv-pname{font:700 14px var(--font-ui);letter-spacing:-.01em;color:var(--nd-ink)}
+  .sp-head .rv-meta{margin:0}
+  .sp-prov:empty{display:none}
+  .sp-prov .clf-rv > .rv-sec:first-child,.sp-prov .clf-rv > .rv-none:first-child{margin-top:0}
+  .sp-prov .rv-none{font-size:12.5px;margin:0}
   #fields clan-field.clf-ln[as="item"].sp-on{background:color-mix(in srgb,var(--clf-hl) 55%,transparent);box-shadow:0 2px 0 currentColor}
   .rsp-k{display:block;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
-  .bf-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;width:100%;padding:7px 9px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);text-align:left;font:inherit;cursor:pointer}
-  :root[data-color-scheme="dark"] .bf-row{background:var(--nd-card)}
-  .bf-row:hover{border-color:var(--nd-ink)}
-  .bf-row .pin{width:8px;height:8px;border-radius:50%;background:var(--nd-alert);margin:0 4px}
-  .bf-row .pin.ok{background:var(--nd-ok)}
-  .bf-row .pin.warn{background:var(--nd-warn)}
-  .bf-row .bf-ico{font-size:13px;color:var(--nd-muted);width:16px;text-align:center}
-  .bf-row b{display:block;font:600 12.5px/1.3 var(--font-ui)}
-  .bf-row small{display:block;font:400 10.5px var(--font-mono);color:var(--nd-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .bf-row > span:nth-child(2){min-width:0}
-  .bf-val{font:700 12px var(--font-mono);padding:0 3px;background:#F6E36B;color:#151412;border-radius:2px;white-space:nowrap}
-  .bf-go{font:500 10.5px var(--font-mono);color:var(--nd-muted);white-space:nowrap}
-  .bf-used{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-2px 0 2px}
-  .bf-used .tk2{margin:0;font:600 9.5px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--nd-muted)}
-  .bf-chip{height:22px;min-height:22px;padding:0 8px;border:1px solid var(--nd-line);border-radius:999px;background:var(--nd-card);font:600 11px var(--font-ui);cursor:pointer;color:var(--nd-ink)}
-  .bf-card:empty{display:none}
-  #structured .side-part details{border-top:1px solid var(--nd-line);padding-top:9px}
-  #structured .side-part details > summary{cursor:pointer;margin:0 0 6px;min-height:0;display:list-item;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
-  #structured .side-part details:not([open]) > summary{margin:0}
+  #structured .side-part > details{border-top:1px solid var(--nd-line);padding-top:9px}
+  #structured .side-part > details > summary{cursor:pointer;margin:0 0 6px;min-height:0;display:list-item;font:700 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--nd-muted)}
+  #structured .side-part > details:not([open]) > summary{margin:0}
   #structured .side-part .why{font-size:13px}
   /* upstream notice: the research changed */
   .b-up > summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none;font:600 13px/1.55 var(--font-ui);color:var(--nd-ink)}
@@ -1106,11 +1089,6 @@
   #structured .sheettab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:16px}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok,#structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok{color:#141413}
-  .bf-row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .bf-also > summary{cursor:pointer;font:500 10.5px var(--font-mono);color:var(--nd-muted);list-style:none}
-  .bf-also > summary::before{content:"▸ "}
-  .bf-also[open] > summary::before{content:"▾ "}
-  .bf-also .bf-used{margin:6px 0 0}
   /* the meta row's cells hold short values (the mock): a long one is clamped to two lines on screen,
      its whole text in the cell's tooltip and in the Selected part panel; the PDF keeps every word.
      The clamp sits on the box that holds the words: a written part's words are inside the clan-field's
@@ -1668,7 +1646,7 @@
         .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
         .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy();
           // The selected part's calls follow the chain, unless someone is typing in the panel.
-          var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderBuilt(); else renderSelPart(); });
+          var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderProv(); else renderSelPart(); });
     }, 120);
   }
   // A new version arrived (a job landed, a call settled): the chain has a new
@@ -4198,7 +4176,7 @@
   var VIEW_VER=null;
   window.addEventListener('clan:viewloaded', function(){
     var ver=(osView()||{}).version||null, moved=VIEW_VER!==null&&ver!==VIEW_VER; VIEW_VER=ver;
-    if(phase==='doc'){ if(lockSig()!==LOCK_SIG) renderStructured(); else { renderLock(); renderCrewline(); if(moved) loadChain(); } }
+    if(phase==='doc'){ if(lockSig()!==LOCK_SIG) renderStructured(); else { renderLock(); renderCrewline(); renderProv(); if(moved) loadChain(); } }
     else if(phase==='intake') renderFromUp();
   });
 
@@ -4415,7 +4393,8 @@
     var ov=CHAIN.state==='ok'?ownVerdictOf(f.key):null, nOpen=ql+(CHAIN.state==='ok'?crossVerdictsOf(f.key).filter(function(c){ return c.open; }).length+(ov&&ov.open?1:0)+(proposalOf(f.key)&&!docLocked()?1:0):0);
     el.hidden=false;
     el.innerHTML='<h4>Selected part<button type="button" class="side-link" data-sp="done" title="Let go of this part (Esc)">Done</button></h4>'
-      +'<b class="sp-name">'+esc(headOf(f))+'</b>'
+      // the part's name, its certainty and who wrote it from what (ClanFields.partView's head)
+      +'<div class="sp-head" id="spHead"><div class="clf-rv pv"><div class="rv-head"><span class="rv-pname">'+esc(headOf(f))+'</span></div></div></div>'
       // a meta cell shows two lines on the sheet: the panel carries its whole text
       +(isMeta(f.key)&&metaLong([f.key], get)?'<p class="sp-full">'+esc(String(get(f.key)))+'</p>':'')
       +'<div class="sp-acts">'
@@ -4430,9 +4409,8 @@
             :(A&&!wr?'':'<span class="nb-act"><button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button><button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
           +'</div>'; }).join('')
         +'<div class="notes">'+notes+'</div></div>':'')
-      +(SEL_ITEM!=null&&f.type==='list'?'<div class="sp-line" id="spLine"><span class="rsp-k">This line</span><div id="spLineCard"></div></div>':'')
-      +'<div class="sp-built" id="spBuilt"></div>'
-      +'<details class="sp-w"'+(OPEN_WHY['sp:'+f.key]?' open':'')+'><summary>Why it says this</summary><div class="why">'+whyHtml(f)+'</div></details>'
+      +lineHtml(f)
+      +'<div class="sp-prov" id="spProv"></div>'
       +(!docLocked()&&!isMeta(f.key)?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
         +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
         +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(at<=0?' disabled':'')+'>↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>↓ Move down</button></div></details>':'');
@@ -4449,11 +4427,16 @@
     el.querySelectorAll('.sp-l [data-w]').forEach(function(b){ b.addEventListener('click', function(){ saveLayout(layoutResize(layoutItems(), f.key, +b.getAttribute('data-w')), 'resize '+partName(f)); }); });
     // Place on page stays open while its buttons rewrite the panel.
     var ld=el.querySelector('.sp-l'); if(ld) ld.addEventListener('toggle', function(){ OPEN_WHY['spl:'+f.key]=ld.open; });
-    var wd=el.querySelector('.sp-w'); if(wd) wd.addEventListener('toggle', function(){ OPEN_WHY['sp:'+f.key]=wd.open; if(wd.open&&CHAIN.state!=='ok') loadChain(); });
     var n=el.querySelector('.sp-call .notes'); if(n) bindNotes(n, f);
     bindAnswers(el);
-    renderBuilt();
-    var lc=$('spLineCard'), F=OSF(); if(lc&&F&&F.card) F.card(f.key+'['+SEL_ITEM+']', lc);
+    renderProv();
+  }
+  // A selected list line: its words and where it sits, nothing more (the part's view says where it came from).
+  function lineHtml(f){
+    if(SEL_ITEM==null||f.type!=='list') return '';
+    var v=get(f.key), list=Array.isArray(v)?v:v==null?[]:[v], x=list[SEL_ITEM];
+    if(x==null) return '';
+    return '<div class="sp-line" id="spLine"><div class="clf-rv"><span class="rsp-k">This line<em>line '+(SEL_ITEM+1)+' of '+list.length+'</em></span><p class="rv-title">“'+esc(String(x))+'”</p></div></div>';
   }
   // The line of a list part that is selected is lit on the sheet.
   function markItem(){
@@ -4484,62 +4467,24 @@
   function usedIn(ref, but){
     return layoutItems().map(function(it){ return it.key; }).filter(function(k){ return k!==but&&hasVal(get(k))&&partCites(k).indexOf(ref)!==-1; });
   }
-  // Built from: one OS source card per ref the part cites (ClanFields.card, os-source-card; the cards
-  // asked for in one tick go to the host in one /cite call), each with the other parts it is used in.
-  // A part that cites nothing shows its own field's card, as before.
-  // One Built from row in the mock's words: what it is, a value when it has one, and where it is from.
-  // Never a raw id: the crew by name, the person's own words as such, a fact by its short key.
-  var CREW_OF={judge:'judge', drafter:'drafter', extract:'extract', synthesis:'synthesis', context:'synthesis', review:'judge'};
-  var CREW_DID={judge:'checked the draft', drafter:'wrote it', extract:'read it from your material', synthesis:'planned it'};
-  function shortDay(t){ var d=new Date(t); return isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
-  function builtRow(r, c, f){
-    c=c||{}; var k=c.kind||'unknown', id=String(r).split('#').pop(), det=String(c.detail||'');
-    if(k==='fact'||k==='pin'||k==='finding'){
-      var key=/^f_\d+$/.test(id)?id:'';
-      return {fact:true, title:c.title||c.label||'A fact', small:[key, c.publisher||(c.from&&c.from.title)||''].filter(Boolean).join(' · '), value:c.value||'',
-        tone:c.review&&c.review.verdict==='verified'?'ok':c.review&&c.review.verdict==='rejected'?'':'warn'};
-    }
-    if(k==='capture'){ var bits=det.split(' · '), what=bits[0]||'', inPrompt=/in prompt/.test(det);
-      return {title:c.label||'From your material', small:[what, inPrompt?'from your words':(bits[2]||'from your material')].filter(Boolean).join(' · ')}; }
-    if(k==='material'){ var prompt=/^prompt$/i.test(String(c.label||'')), when=(/received (\S+)/.exec(det)||[])[1];
-      return {title:prompt?'Your words, the ask':String(c.label||'Your material'), small:[prompt?'what you wrote':'', when?'received '+shortDay(when):'', /confidential/.test(det)?'client confidential':''].filter(Boolean).join(' · ')}; }
-    if(k==='decision'){ var lab=String(c.label||''), who=lab.split(/\s+—\s+/)[0].toLowerCase(), ck=CREW_OF[who]||'';
-      return {title:ck?(AGENT_NAME[ck]||lab)+' '+CREW_DID[ck]:(lab||'A decision'), small:short(det,64)}; }
-    if(k==='address'){ var g=fieldOf(id); return {title:g?headOf(g):headOf(f), small:'written in this brief'}; }
-    if(k==='source') return {title:c.title||c.publisher||c.label||'A source', small:[c.publisher, c.published_at?shortDay(c.published_at):''].filter(Boolean).join(' · ')};
-    if(k==='passage') return {title:c.title||c.label||'A library passage', small:c.publisher||'knowledge library'};
-    return {title:c.label||c.title||'Not found', small:k==='unknown'?'not in the document any more':''};
+  // Where the selected part came from: ClanFields' one view per part (where-it-came-from), its head by
+  // the part's name, its sections under Your call, with the other parts that use what it cites.
+  function alsoOf(f){
+    if(CHAIN.state!=='ok') return [];
+    var also={}; partCites(f.key).forEach(function(r){ usedIn(r, f.key).forEach(function(k2){ also[k2]=1; }); });
+    return layoutItems().map(function(it){ return it.key; }).filter(function(k2){ return also[k2]; }).map(function(k2){ var g=fieldOf(k2); return {key:k2, label:g?headOf(g):k2}; });
   }
-  function renderBuilt(){
-    var b=$('spBuilt'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f) return;
-    var head='<span class="rsp-k">Built from</span>';
-    if(!hasVal(get(f.key))){ b.innerHTML=head+'<p class="muted">Nothing is written here yet.</p>'; return; }
-    if(!(F&&F.cards&&docId())){ b.innerHTML=head+'<p class="muted">Where this came from shows in the Napkin host.</p>'; return; }
-    if(CHAIN.state!=='ok'&&CHAIN.state!=='unavailable'){ b.innerHTML=head+'<p class="muted">Finding what it was built from…</p>'; loadChain(); return; }
-    var cites=CHAIN.state==='ok'?partCites(f.key):[], refs=cites.length?cites:[docId()+'#'+f.key];
-    var sig=f.key+'|'+refs.join(',')+'|'+((osView()||{}).version||'');
-    if(b.getAttribute('data-sig')===sig&&b.childNodes.length>1) return;   // drawn already
+  function renderProv(){
+    var b=$('spProv'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f) return;
+    if(!(F&&F.partView)){ b.innerHTML='<p class="muted">Where this came from shows in the Napkin host.</p>'; return; }
+    if(CHAIN.state==='idle') loadChain();
+    var also=alsoOf(f), sig=f.key+'|'+((osView()||{}).version||'')+'|'+(osView()?1:0)+'|'+CHAIN.state+'|'+also.map(function(a){ return a.key; }).join(',')+'|'+JSON.stringify(get(f.key));
+    if(b.getAttribute('data-sig')===sig&&b.childNodes.length) return;   // drawn already
     b.setAttribute('data-sig', sig);
-    b.innerHTML=head+'<p class="muted">Finding what it was built from…</p>';
-    // One compact row per ref (all asked for in one /cite call); a click opens its source card.
-    F.cards(refs).then(function(m){
-      if(b.getAttribute('data-sig')!==sig) return;
-      var also={};
-      refs.forEach(function(r){ (cites.length?usedIn(r, f.key):[]).forEach(function(k2){ also[k2]=1; }); });
-      var al=layoutItems().map(function(it){ return it.key; }).filter(function(k2){ return also[k2]; });
-      b.innerHTML=head+refs.map(function(r){
-        var x=builtRow(r, m[r], f);
-        return '<button type="button" class="bf-row '+(x.fact?'bf-fact':'bf-doc')+'" data-ref="'+esc(r)+'" title="Where this came from">'
-          +(x.fact?'<span class="pin'+(x.tone?' '+x.tone:'')+'"></span>':'<span class="bf-ico" aria-hidden="true">▤</span>')
-          +'<span><b>'+esc(short(x.title,58))+'</b>'+(x.small?'<small>'+esc(x.small)+'</small>':'')+'</span>'
-          +(x.value?'<span class="bf-val">'+esc(short(x.value,14))+'</span>':'<span class="bf-go">Source →</span>')+'</button>';
-      }).join('')
-        +(al.length?'<details class="bf-also"><summary>Also used in '+al.length+' other '+(al.length===1?'part':'parts')+'</summary><div class="bf-used">'+al.map(function(k2){ var g=fieldOf(k2); return '<button type="button" class="bf-chip" data-go="'+esc(k2)+'">'+esc(g?headOf(g):k2)+'</button>'; }).join('')+'</div></details>':'');
-      b.querySelectorAll('.bf-row').forEach(function(x){ x.addEventListener('click', function(){ F.open(x.getAttribute('data-ref')); }); });
-      b.querySelectorAll('[data-go]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-go')); }); });
-    });
+    F.partView(f.key, b, {panel:true, name:headOf(f), head:$('spHead'), also:also});
+    b.querySelectorAll('[data-clf-part]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-clf-part')); }); });
   }
-  // Select a part and bring it into view (Built from's used-in chips).
+  // Select a part and bring it into view (Also used in's chips).
   function goPart(key){
     select(key); var r=rowOf(key); if(!r) return;
     r.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'});
