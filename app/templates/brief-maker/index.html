@@ -4402,6 +4402,10 @@
       +(!A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':'')
       +'<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'
       +'</div>'
+      // Place on page sits under the actions, near the top (owner, 2026-11-10)
+      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
+        +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
+        +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(at<=0?' disabled':'')+'>↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>↓ Move down</button></div></details>':'')
       +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
         +qs.map(function(o){ return '<div class="nb-q'+(o.kind?' done':'')+'" data-q="'+o.i+'"><span class="nb-t">'+esc(o.q)+'</span>'
           +(o.kind?'<span class="nb-a'+(o.kind==='left'?' left':'')+'">'+esc((o.kind==='left'?'Left open: ':'')+o.a)+'</span>'
@@ -4409,10 +4413,7 @@
           +'</div>'; }).join('')
         +'<div class="notes">'+notes+'</div></div>':'')
       +lineHtml(f)
-      +'<div class="sp-prov" id="spProv"></div>'
-      +(!docLocked()?'<details class="sp-l"'+(OPEN_WHY['spl:'+f.key]?' open':'')+'><summary>Place on page</summary><div class="tk2">Width</div><div class="seg" role="group" aria-label="Width">'
-        +WIDTHS.map(function(x){ return '<button type="button" data-w="'+x[0]+'" aria-pressed="'+(w===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>'
-        +'<div class="sp-acts" style="margin-top:8px"><button type="button" class="sp-btn" data-sp="up"'+(at<=0?' disabled':'')+'>↑ Move up</button><button type="button" class="sp-btn" data-sp="down"'+(at>=items.length-1?' disabled':'')+'>↓ Move down</button></div></details>':'');
+      +'<div class="sp-prov" id="spProv"></div>';
     var row=rowOf(f.key);
     el.querySelectorAll('[data-sp]').forEach(function(b){ b.addEventListener('click', function(){
       var a=b.getAttribute('data-sp');
