@@ -1,6 +1,7 @@
 """The client questions, each gap asked once (brief/questions.py)."""
 
-from napkin.brief.questions import dedupe, same_ask, terms
+from napkin.brief import intake
+from napkin.brief.questions import dedupe, same_ask, terms, without_answered
 
 
 def test_the_same_ask_in_other_words_is_one_question():
@@ -73,3 +74,24 @@ def test_a_leftover_ask_that_stands_alone_is_kept_without_the_repeat():
     second = "What is the budget, and when is the tender due?"
     kept, merged = dedupe([first, second])
     assert kept == [first, "When is the tender due?"] and merged
+
+
+def test_without_answered_drops_the_same_ask_in_any_words_and_keeps_a_different_one():
+    said = {"budget": next(q["text"] for q in intake.questions({}, {}, 10) if q["key"] == "budget")}
+    qs = ["What is the launch budget?", "Budget: what has been set?", "What is the media budget split?",
+          "How will the work be judged?"]
+    assert without_answered(qs, said) == ["What is the media budget split?", "How will the work be judged?"]
+    assert without_answered(qs, {}) == qs, "a skipped question changes nothing"
+    assert without_answered(qs, {"timeline": "x"}) == qs
+
+
+def test_dedupe_is_unchanged_by_the_filter():
+    kept, merged = dedupe(["What is the launch budget?", "What budget has been set for this?"])
+    assert kept == ["What is the launch budget?"] and len(merged) == 1
+
+
+def test_a_skipped_questions_wording_leads_and_the_plans_same_ask_merges_into_it():
+    q = intake.questions({}, {'client': {'value': 'Brewline'}}, 10)[2]  # budget
+    assert q["key"] == "budget"
+    kept, merged = dedupe([intake.worded(q), "What is the launch budget?"])
+    assert kept == [intake.worded(q)] and terms(kept[0]) >= {"budget"}

@@ -94,7 +94,7 @@ def run(server, host, task="draft_brief", inp=None, on_reply=None, timeout=30):
     replies = [body]
     jid = body["job"]["id"]
     t0 = time.time()
-    while body["job"]["state"] in ("queued", "running"):
+    while body["job"]["state"] in ("queued", "running", "needs_input"):  # needs_input: intake waits for `on_reply`
         assert time.time() - t0 < timeout, "the job did not finish"
         if on_reply:
             on_reply(body)
