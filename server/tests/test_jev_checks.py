@@ -276,7 +276,9 @@ def test_every_judge_setting_calls_code_s_measures(tmp_path, setting, monkeypatc
     assert calls["tests"] >= 1 and calls["revisions"] >= 1
 
 
-def test_regenerate_field_on_the_jev_path_sends_the_proposition_back(tmp_path):  # T6
+def regen(tmp_path, rewrite=None):
+    """A planned draft under jev, then regenerate_field on the proposition, whose fix comes back as two
+    sentences (a limit code measures); `rewrite` replaces the redraft's answer. -> (host, seen, fixes)"""
     from test_fix_parts import fix_model
     seen = {}
     m = faulty(seen, proposition="Short line.", job="A job.", m=fix_model(seen))
@@ -286,6 +288,8 @@ def test_regenerate_field_on_the_jev_path_sends_the_proposition_back(tmp_path): 
         fixes.append(p)
         return {k: part("One thought. Then another thought.") for k in p["parts"]}
     m.overrides["fix_brief_parts"] = fix
+    if rewrite:
+        m.overrides["rewrite_brief_parts"] = rewrite
     m.overrides["plan_fix"] = lambda p: {
         "strategy": "Sharpen the line.", "parts": {k: {"instruction": "say it once"} for k in p["parts_to_fix"]},
         "brand": "Brewline", "competitors": [], "research": [], "category": p["categories"][0]["code"],
@@ -299,9 +303,27 @@ def test_regenerate_field_on_the_jev_path_sends_the_proposition_back(tmp_path): 
         run(s, host, task="regenerate_field", inp={"field": "single_minded_proposition", "guidance": "sharper"})
     finally:
         s.stop()
+    return host, seen, fixes
+
+
+def test_regenerate_field_on_the_jev_path_sends_the_proposition_back(tmp_path):  # T6
+    host, seen, fixes = regen(tmp_path)
     assert fixes, "the redraft ran"
     assert "2 sentences" in seen["rewrite"]["rewrite"]["single_minded_proposition"]
     assert SHORT in host.data["single_minded_proposition"]
+    # only a check sent it back: the decision says a check, and never Jude's note, for that part
+    prop = [d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#single_minded_proposition")
+            and d["reasoning"]["decided"].startswith("Rewrote")]
+    said = [d["reasoning"]["decided"] for d in prop]
+    assert any("on a check" in x for x in said) and not any("Jude" in x for x in said), said
+
+
+def test_a_fix_part_still_over_its_limit_after_both_rewrites_gets_no_good_verdict(tmp_path):
+    host, seen, fixes = regen(tmp_path, rewrite=lambda p: {k: part("Still one. Still two.") for k in p["parts"]})
+    assert "Still one" in host.data["single_minded_proposition"]
+    good = [d for d in host.chain if d["kind"] == "verdict" and d.get("polarity") == "good"
+            and any(t.endswith("#single_minded_proposition") for t in d["targets"])]
+    assert not [d for d in good if "Checked the" in d["reasoning"]["decided"]], "nobody read the final text"
 
 
 def test_the_clients_own_words_are_not_cut_and_a_held_part_becomes_a_proposal(tmp_path):  # T7
@@ -406,3 +428,42 @@ def test_the_loop_s_jude_prompt_carries_the_same_test_rules_as_the_review():  # 
     # the wording that is not about where a failing part goes is written once
     assert checks.TESTED_WORDS["insight"] in system and "a normal person" in system and "a normal person" in REVIEW_SYSTEM
     assert checkloop.jude_system([]) == checkloop.JUDE_SYSTEM, "no tested part: Jude's prompt is as it was"
+
+
+def test_a_model_outage_on_a_brief_jev_finds_clean_still_places_the_draft(tmp_path):
+    seen = {}
+    m = faulty(seen, proposition="Short line.", job="A job.")
+    m.overrides["explain_flags"] = lambda p: "not json at all"
+    m.overrides["review_brief"] = lambda p: "not json at all"
+    host = go(tmp_path, m, jev=FakeJev(), kw={"brief_judge": "jev"})
+    w = whats(tmp_path)
+    assert "check_loop_failed" in w and "review_failed_after_loop" in w
+    assert host.data["insight"] and host.data["single_minded_proposition"], "the draft is placed"
+    assert "Not reviewed" in json.dumps(host.data.get("review"))
+    check_change_rules(host)
+
+
+def test_the_review_summary_credits_a_check_not_jude_for_a_code_send_back(tmp_path):
+    seen = {}
+    m = faulty(seen, job="A job.")
+    host = go(tmp_path, m, jev=FakeJev(), kw={"brief_judge": "jev"})
+    summary = host.data["review"]["scorecard"]["summary"]
+    assert "Jude sent 0 and a check sent 1 back" in summary, summary
+
+
+def test_an_answered_verdict_says_jev_read_it_again_only_for_text_jev_read(tmp_path):
+    # T3's setup: the proposition is rewritten twice, so jev never read its final text
+    seen = {}
+    m = faulty(seen, job="A job.")
+    n = {"i": 0}
+
+    def rewrite(p):
+        n["i"] += 1
+        return {k: part(W(30) if n["i"] == 1 else "Easy mornings, every day.") for k in p["parts"]}
+    m.overrides["rewrite_brief_parts"] = rewrite
+    host = go(tmp_path, m, jev=FakeJev(), kw={"brief_judge": "jev"})
+    ans = [d for d in host.chain if d["kind"] == "verdict" and d.get("polarity") == "good"
+           and d["targets"][0].endswith("#single_minded_proposition") and "answers the note" in d["reasoning"]["decided"]]
+    assert ans, "code measured the final text and it passes"
+    text = json.dumps(ans[0]["reasoning"])
+    assert "code measured it again" in text and "jev read it again" not in text

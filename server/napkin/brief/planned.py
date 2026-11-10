@@ -704,7 +704,11 @@ class PlannedBriefJob(BriefJob):
                                 whole=self.whole)
         except Exception as e:  # noqa: BLE001 - a judge-stage error must not lose the first draft
             rl.note("check_loop_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
-            return self._judge_by_review(ev)
+            try:
+                return self._judge_by_review(ev)
+            except Exception as e2:  # noqa: BLE001 - the model is out for both calls: place the draft, unreviewed
+                rl.note("review_failed_after_loop", error=f"{type(e2).__name__}: {str(e2)[:200]}")
+                return self._place_unreviewed(ev)
         if res["before"] is None:  # jev did not answer: the whole-brief review, with its checks
             return self._judge_by_review(ev)
         if res["rewritten"]:
@@ -719,7 +723,11 @@ class PlannedBriefJob(BriefJob):
             rl.note("checks_sent_back_again", parts=[x["part"] for x in left])
             self._redraft(left, {}, ev, by="code")
         self.set_state(list(self.whole), "judging", "judge")
-        self._by_jev, self._jev_after_answered = True, res["after"] is not None
+        self._by_jev = True
+        second = {x["part"] for x in left}
+        if res["after"] is not None:  # jev read a part's final text only if no second rewrite changed it after
+            self._jev_saw = {k for k in res["rewritten"] if k not in second}
+            self._jev_still = {k for k in self._jev_saw if res["after"]["p"].get(k, 0) >= checkloop.FLAG_AT}
         read = res["after"] or res["before"]
         chain = (res["jude"] or {}).get("chain") or {}
         notes = [{"parts": [p for p in chain.get("parts") or [] if p in KEYS], "severity": "fix",
@@ -732,9 +740,29 @@ class PlannedBriefJob(BriefJob):
               "questions": res["questions"],
               "single_mindedness": {"verdict": "single", "split_into": []},
               "summary": (f"A quick check read every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
-                          f"; Jude sent {len(res['todo'])} back to Dara, who rewrote {len(res['rewritten'])}.")
+                          f"; {self._sent_by(res, second)}.")
               if res["before"] else "Checked."}
         self.scores = [x["score"] for x in (res["before"], res["after"]) if x]
+        self._place(rv, ev)
+
+    @staticmethod
+    def _sent_by(res, second):
+        """Who sent what back, for the review summary: Jude's notes, code's measures, and the second measure."""
+        by = res.get("by") or {}
+        code = sum(1 for k in res["rewritten"] if by.get(k) == "code")  # no entry: a part Jude named
+        jude = len(res["rewritten"]) - code
+        text = (f"Jude sent {jude} and a check sent {code} back to Dara, who rewrote {len(res['rewritten'])}")
+        return text + (f" ({len(second)} again after a second measure)" if second else "")
+
+    def _place_unreviewed(self, ev):
+        """The model could not read the brief at all: place the draft as written, with what code measures,
+        and say it was not reviewed."""
+        self.set_state(list(self.whole), "judging", "judge")
+        rv = {"dimensions": [{"dimension": d, "verdict": "missing", "evidence": "-", "fix": "-"} for d in DIMS],
+              "chain": {"verdict": "fail", "note": "Not reviewed: the judge was unavailable"},
+              "claims": prov.code_verdicts(self.whole), "notes": [], "revise": [], "questions": [],
+              "single_mindedness": {"verdict": "single", "split_into": []},
+              "summary": "Not reviewed: the judge was unavailable."}
         self._place(rv, ev)
 
     # -- the loop as it happened -----------------------------------------------------------------
@@ -847,17 +875,19 @@ class PlannedBriefJob(BriefJob):
     # what a part's "answered" verdict may say: on the review path Jude read the brief again; on the jev path
     # code measured it again, and jev read it again only when it answered after the rewrite
     _by_jev = False
-    _jev_after_answered = False
+    _jev_saw = frozenset()    # parts whose final text jev read after the rewrite
+    _jev_still = frozenset()  # of those, the ones it still flags
 
     def _unanswered(self, k):
         """A part code still measures over its limit is not answered, whichever judge read the brief."""
-        return self._by_jev and any(x["part"] == k for x in checks.revisions(self.whole))
+        return self._by_jev and (k in self._jev_still or any(x["part"] == k for x in checks.revisions(self.whole)))
 
     def _answer_wording(self, k):
         if not self._by_jev:
             return "Jude reviewed the brief again and left no note on it", "a model judged the brief as a whole"
-        return ("code measured it again" + (" and jev read it again" if self._jev_after_answered else ""),
-                "code measured it" + (" and jev read it" if self._jev_after_answered else ""))
+        read = k in self._jev_saw
+        return ("code measured it again" + (" and jev read it again" if read else ""),
+                "code measured it" + (" and jev read it" if read else ""))
 
     # -- placing ---------------------------------------------------------------------------------
     def _question_seed(self):
