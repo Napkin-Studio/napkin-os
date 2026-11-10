@@ -37,6 +37,8 @@
     },
     "tone_and_world": { "title": "Tone & world", "type": "array", "items": { "type": "string" } },
     "budget_and_scope": { "title": "Budget & scope", "type": "string" },
+    "media_roles": { "title": "Role of each medium", "type": "array", "items": { "type": "string" } },
+    "measurement": { "title": "How we will know it worked", "type": "array", "items": { "type": "string" } },
     "mandatories": { "title": "Mandatories", "type": "array", "items": { "type": "string" } },
     "open_questions": { "title": "Open questions", "type": "array", "items": { "type": "string" } },
     "reference_assets": {

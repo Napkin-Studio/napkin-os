@@ -137,6 +137,17 @@ direct push, no force-push, no deletion, all 9 CI checks green), and
 A fix that must reach staging urgently still goes through develop: merge it
 there, then release at once.
 
+## UAT: our own environment for trying a branch (2026-10-29)
+
+Staging is live and used by testers, so we try work-in-progress on **UAT**, a
+separate AWS stack (`infra/envs/uat`, `napkin-uat-*`). Nothing deploys it
+automatically. Run Actions → Deploy → Run workflow **from develop**, with
+environment `uat` and the branch, tag or commit in `ref`. `ref` is refused for
+staging and production, which still build only main. UAT holds one build at a
+time (the last deploy wins); the run summary and the image tag name the commit.
+Setup and the address: `infra/README.md`. An agent may deploy to UAT only when
+asked; it never applies Terraform.
+
 ## Infrastructure changes reach AWS only by `terraform apply`
 
 The Deploy workflow (`.github/workflows/deploy.yml`) **only swaps images**. It

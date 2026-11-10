@@ -2410,7 +2410,8 @@ def _case_packs() -> tuple:
     never a hardcoded list, so adding or removing a pack needs no code change."""
     try:
         from packs import discover_packs
-        return tuple(p for p in discover_packs() if p.kind == "case")
+        # A gated pack (the award library) is admitted only through awardlib_gate / brief_context.
+        return tuple(p for p in discover_packs() if p.kind == "case" and not p.gated)
     except Exception:
         return ()
 

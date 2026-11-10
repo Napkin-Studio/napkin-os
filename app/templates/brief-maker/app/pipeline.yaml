@@ -76,6 +76,8 @@ fields:                      # app key -> how it is filled; the handler reads th
   audience:                  { class: captured, rubric: audience }
   competitor_context:        { class: captured, rubric: competitor_context }
   budget_and_scope:          { class: captured, rubric: budget_scope }
+  media_roles:               { class: drafted, rubric: media_roles, loop: loop6_substantiation }
+  measurement:               { class: drafted, rubric: measurement, loop: loop6_substantiation }
   mandatories:               { class: captured, rubric: mandatories }
   tone_and_world:            { class: captured, rubric: tone_world_assets }
   insight:                   { class: drafted, rubric: insight, loop: loop4_insight }
@@ -104,5 +106,5 @@ merge_policies:
 # field). Indexing a material alone may omit it.
 reasoning:
   edits: [project_name, client, job, background, barrier, objectives, audience, competitor_context,
-          budget_and_scope, mandatories, tone_and_world, insight, single_minded_proposition, objection,
-          reasons_to_believe, desired_response, open_questions, capture, review]
+          budget_and_scope, media_roles, measurement, mandatories, tone_and_world, insight,
+          single_minded_proposition, objection, reasons_to_believe, desired_response, open_questions, capture, review]

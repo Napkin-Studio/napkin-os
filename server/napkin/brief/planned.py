@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import copy
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
@@ -36,11 +37,12 @@ from ..model import ModelError
 from ..util import iso
 from . import capture as cap_stage
 from . import provenance as prov
+from .clientcat import plan_category
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
-from . import checks
-from .questions import dedupe
+from . import checks, intake
+from .questions import dedupe, without_answered
 
 # The Review agent's whole-brief review: a full brief's dimensions, claims and notes run past 8000 output
 # tokens (thinking counts against the cap), and a cut-off review writes only half the parts.
@@ -80,9 +82,23 @@ WHAT = {
     "desired_response.do": "what they should do",
     "tone_and_world": "how the work should feel (list of short phrases)",
     "budget_and_scope": "deliverables, channels, timing; never a budget figure that was not given; ask whether the budget includes VAT and whether media sits inside it",
+    "media_roles": "one line per medium, at most four and 55 words in all: 'Medium: the job it does for this audience and why', chosen "
+                   "from the job, never from habit; no reach, frequency or cost figure the client or the facts did not give; a medium the "
+                   "client did not name starts 'To confirm:' (list)",
+    "measurement": "how the work is judged and how we will know it worked, one line each, at most five and 70 words in all: Judged by "
+                   "(the client's own criteria, else the objectives it is read against, marked 'To confirm:'); Attribution (a holdout "
+                   "or geo comparison); Before and after (a tracker wave in market before launch, on the attitude the work changes); "
+                   "In flight (the fast reads, one of them the action asked for); The lag (what lands inside the flight, what after). "
+                   "Targets are the objectives' own, never new; a tracker wave or holdout nobody has budgeted starts 'To confirm:' (list)",
     "mandatories": "what must appear or be avoided (list)",
     "open_questions": "what only the client can answer (list)",
 }
+
+
+def _listed(words) -> str:
+    """'a, b and c': names in a sentence."""
+    w = list(words)
+    return w[0] if len(w) == 1 else ", ".join(w[:-1]) + " and " + w[-1]
 
 
 def _obj(props: dict, required=None) -> dict:
@@ -194,7 +210,8 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
    the brief), fix (one sentence)}:
    objectives_quality (a handful at most, benchmarked and time-stamped, the commercial/behavioural/attitudinal
    chain linked), audience_vividness (a vivid picture, not a bare age range; who it is NOT for),
-   single_minded_message (ONE message with relevant proof), evaluation_criteria (how the work will be judged),
+   single_minded_message (ONE message with relevant proof), evaluation_criteria (how the work will be judged and how we will know it worked: the
+   measurement part),
    budget_interlock (budget, objectives and audience feasible together), strategic_clarity (a clear choice,
    including what not to do), language (simple, succinct, no jargon).
 2. chain: does objective -> audience -> insight -> proposition -> reasons to believe hold as one argument?
@@ -213,14 +230,15 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
 7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary. It is "multiple" when the
    brief serves more than one problem, audience or message, or when the client's own input was a wish-list of
    objectives, audiences and messages that was never narrowed to one: say in split_into what the one choice is.
-8. part tests: `tests` holds, for the insight, the proposition, the job, the barrier and the objection, the planning
+8. part tests: `tests` holds, for @TESTED@, the planning
    tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
    `revise` with one instruction that names the test and the fix. `part_checks` is what code measured (words against
-   the limit, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
+   the limit, items against the item cap, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
    fails when it joins two thoughts, and passes when it sits inside one.
 9. anti-patterns, also `revise`: a proposition that is really a tagline, or is the brand's own existing line; two
    thoughts smuggled into one (an objection holding several doubts, a job asking for several changes); a wish-list
-   (more than one problem, audience or message); words a normal person would not say out loud."""
+   (more than one problem, audience or message); a medium whose job is really the creative idea; words a normal person
+   would not say out loud.""".replace("@TESTED@", _listed(checks.TESTED_WORDS.values()))
 
 
 def review_schema(keys):
@@ -267,12 +285,17 @@ def _no_ids(s) -> str:
 class PlannedBriefJob(BriefJob):
     """draft_brief, planned (module docstring)."""
 
-    def __init__(self, *a, research_max: int = 3, judge: str = "review", **kw):
+    def __init__(self, *a, research_max: int = 3, judge: str = "review", intake_wait: float = 0,
+                 intake_max: int = 3, **kw):
         super().__init__(*a, **kw)
+        # intake (brief/intake.py): off unless the request asked and the wait is above 0
+        self.intake_wait, self.intake_max = max(0, float(intake_wait)), max(0, int(intake_max))
+        self.intake_skipped, self.intake_answered = [], {}  # questions left open; {key: the words it was asked in}
         self.research_max = max(0, int(research_max))
         self.judge_mode = judge  # "review": the Review agent reviews the whole brief; "jev": the check loop (checkloop.py)
         self.plan_out, self.plan_dec = None, None
         self.lib = {}           # psg id -> passage record (the library's)
+        self.lib_gated = set()  # the ids in `lib` that came from a gated pack (the award library), added after the plan
         self.new_pins, self.new_sources = [], []
         self.unpinned = []      # facts outside the measure list an older brief cannot keep: suggestions only
         self.whole = {}         # key -> {value, basis, cites, builds_on_client, why}
@@ -328,7 +351,35 @@ class PlannedBriefJob(BriefJob):
         return out
 
     def _library(self, n=12):
-        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in list(self.lib.items())[:n]]
+        """The library's passages for the Brief and Review agents, capped at n. The gated ones (the award library) are
+        few and arrive last, so they keep their places and the rest fill what is left."""
+        items = list(self.lib.items())
+        gated = [x for x in items if x[0] in self.lib_gated][:n]
+        chosen = [x for x in items if x[0] not in self.lib_gated][:max(0, n - len(gated))] + gated
+        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in chosen]
+
+    def _gated_precedent(self):
+        """Once the plan has named the brief's category: the gated precedent for it (the award library),
+        one request in the insight loop. The library lookups at the start of the context stage run before
+        the plan, so they cannot send a category; this is the lookup that can."""
+        rl = self.caps.runlog
+        try:
+            cat = plan_category(self.plan_out)
+            ctx = getattr(self, "ctx", None)
+            if not cat or ctx is None:
+                return
+            ctx.category = cat
+            q, cq = _query("loop4_insight", ctx.gist(), None, "plan")
+            got, notes = ctx.retrieve("loop4_insight", q, cq, only_gated=True)
+            new = {k: v for k, v in got.items() if k not in self.lib}
+            self.lib.update(new)
+            self.lib_gated |= set(new)
+            for n in notes:
+                rl.note("library", detail=n)
+            if new:
+                rl.note("library", detail=f"award library: {len(new)} precedent(s) for {cat}")
+        except Exception as e:  # noqa: BLE001 - the brief is written without it
+            rl.note("library", error=f"{type(e).__name__}: {str(e)[:200]}")
 
     def _already_held(self, asks):
         """The planned research the brief's facts already answer: jev reads the facts held for each
@@ -386,6 +437,9 @@ class PlannedBriefJob(BriefJob):
             leaves = [{"code": x["code"], "name": x.get("name")} for x in self.caps.layers.leaves()]
         except Exception as e:  # noqa: BLE001 - no research to run, the plan still stands
             rl.note("leaves", error=f"{type(e).__name__}: {str(e)[:200]}")
+        self._intake()  # the one pause: the lookups above have finished, so the person is asked after them, not alongside
+        if self.caps.jobs.cancelled:
+            return
         ev = self._evidence()
         payload = {"client_said": self._said(), "captured": self._captured(),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
@@ -397,6 +451,7 @@ class PlannedBriefJob(BriefJob):
         plan = self.caps.model.structured("plan_brief", PLAN_SYSTEM, payload,
                                           plan_schema(keys, LENSES, [x["code"] for x in leaves]), max_tokens=8000)
         self.plan_out = plan
+        self._gated_precedent()
         rests = {}
         for k, p in (plan.get("parts") or {}).items():
             rests.setdefault(p.get("rests_on"), []).append(k)
@@ -419,6 +474,60 @@ class PlannedBriefJob(BriefJob):
         self.plan_dec = self.dec(("plan",), "edit", "plan", [], mat_ids, r, "synthesise")
         decisions = [self.plan_dec] + self._research_asked(plan)
         self.add_chunk("context", {}, decisions, facts=self.new_pins, sources=self.new_sources)
+
+    def _intake(self):
+        """Ask the person what the capture leaves open, once, before the plan (brief/intake.py). Zero model
+        calls; zero seconds when nothing is askable. What is answered becomes client words, what is skipped or
+        not answered in time changes nothing and says so."""
+        rl = self.caps.runlog
+        if self.task != "draft_brief" or self.intake_wait <= 0 or self.capture is None:
+            return
+        items = {**((self.W.get("capture") or {}).get("items") or {}), **self.capture["items"]}
+        asked = intake.questions(items, self.capture.get("named"), self.intake_max,
+                                 intake.answer_materials(self.W.get("materials")))
+        if not asked:
+            return
+        t0 = time.monotonic()
+        answers, timed_out = self.ask(asked, self.intake_wait)
+        if self.caps.jobs.cancelled:
+            return
+        mat, new, done, skipped = intake.answer_items(asked, answers)
+        rl.note("intake_wait", secs=round(time.monotonic() - t0, 1), asked=[q["key"] for q in asked],
+                outcome="unanswered" if timed_out else "answered" if done else "skipped")
+        self.intake_skipped = skipped
+        self.intake_answered = {q["key"]: q["text"] for q in done}
+        patch, decisions = {}, []
+        if mat is not None:
+            self.mats.insert(0, mat)  # first: _said() is cut at its limit, and the answers must not be what goes
+            self.capture["items"].update(new)
+            patch = {"materials": {mat.id: mat.entry(iso())}, "capture": {"items": new}}
+            pts = [rsn.point(f"The answer to “{q['text']}”: “{_short(answers[q['id']].strip(), 160)}”", mat.id)
+                   for q in done]
+            r = rsn.make(f"A person answered {len(done)} question(s) before the draft: "
+                         f"{', '.join(q['key'] for q in done)}.", pts,
+                         rsn.certainty("high", "typed by the person and kept verbatim; the planner, not the client, "
+                                               "gave it"),
+                         "the client says otherwise, or a person edits the capture",
+                         only_option="an answer is the client's word as the planner gave it",
+                         attention="Answered by the planner at intake, as the planner gave it: not read from the "
+                                   "client's own material.")
+            decisions.append(self.dec(("intake", "answered"), "edit", "capture",
+                                      ["capture", f"materials[{mat.id}]"], [mat.id], r, "extract",
+                                      material_read=[mat.id]))
+        if skipped:
+            why = "nobody answered within the wait" if timed_out else "a person chose to skip them"
+            rl.note("intake_unanswered" if timed_out else "intake_skipped", keys=[q["key"] for q in skipped])
+            r = rsn.make(f"Went on without an answer to {len(skipped)} intake question(s): {why}.",
+                         [rsn.point(f"“{q['text']}” was asked and not answered: {why}") for q in skipped],
+                         rsn.certainty("high", "the questions were asked and no answer came"),
+                         "the client answers, or a person edits the part",
+                         only_option="nothing is invented to stand for an answer",
+                         attention="The parts these feed are assumptions marked To confirm, and the questions stay "
+                                   "open.")
+            decisions.append(self.dec(("intake", "unanswered" if timed_out else "skipped"), "edit", "capture", [], [],
+                                      r, "extract"))
+        if decisions:
+            self.add_chunk("context", patch, decisions)
 
     def _research_asked(self, plan):
         """The research `plan` asks for, less what the brief already holds, capped: its decisions."""
@@ -825,8 +934,10 @@ class PlannedBriefJob(BriefJob):
 
     # -- placing ---------------------------------------------------------------------------------
     def _question_seed(self):
-        """The client questions placing starts from: the plan's."""
-        return [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
+        """The client questions placing starts from: intake's that were skipped (their wording stands), then the
+        plan's."""
+        return [intake.worded(q) for q in self.intake_skipped] + \
+            [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
 
     def _unwritten_outcome(self, k):
         """The review's entry for a part this job did not write."""
@@ -901,7 +1012,8 @@ class PlannedBriefJob(BriefJob):
         qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
-        oq, merged = dedupe(qs)
+        qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
+        oq, merged = dedupe(without_answered(qs, self.intake_answered))
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
         oq = clean("open_questions", oq[:12])

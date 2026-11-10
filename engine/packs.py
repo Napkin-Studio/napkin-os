@@ -43,10 +43,16 @@ class Pack:
     path: Path | None = None     # None when discovered from packs.lock
     chunks: int | None = None    # known only from packs.lock / sync
     active: bool = True
+    gated: bool = False          # served only through its gate (awardlib_gate.py): never asked blindly
 
     def eligible(self, loop_key: str) -> bool:
         """True if this pack is active and (has no loop restriction or lists loop_key)."""
         return self.active and (not self.loops or loop_key in self.loops)
+
+
+def _truthy(v) -> bool:
+    """pack.yaml booleans: PyYAML gives True, the dependency-free parser gives 'true'."""
+    return v is True or str(v).strip().lower() in ("true", "yes", "1")
 
 
 def _parse_flat_yaml(text: str) -> dict:
@@ -113,6 +119,7 @@ def _pack_from_dir(d: Path) -> Pack:
         loops=loops,
         path=d,
         active=not d.name.startswith("_"),
+        gated=_truthy(cfg.get("gated")),
     )
 
 
@@ -138,7 +145,7 @@ def discover_packs(root: Path | None = None) -> list[Pack]:
             return [
                 Pack(id=e["id"], tag=e["tag"], kind=e.get("kind", "case"),
                      k=int(e.get("k", 2)), loops=tuple(e.get("loops", [])),
-                     chunks=e.get("chunks"))
+                     chunks=e.get("chunks"), gated=bool(e.get("gated")))
                 for e in data.get("packs", [])
             ]
     return []
@@ -156,7 +163,8 @@ def write_lock(packs: list[Pack], *, embed_model: str, dim: int,
         "dim": dim,
         "packs": [
             {"id": p.id, "tag": p.tag, "kind": p.kind, "k": p.k,
-             "loops": list(p.loops), "chunks": (counts or {}).get(p.tag, p.chunks)}
+             "loops": list(p.loops), "chunks": (counts or {}).get(p.tag, p.chunks),
+             **({"gated": True} if p.gated else {})}      # only gated packs carry the key
             for p in packs
         ],
     }

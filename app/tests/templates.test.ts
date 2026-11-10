@@ -10,7 +10,9 @@
 // offered on a part the Judge failed, empty or not.
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -1320,6 +1322,33 @@ test('the brief’s export cites its sources: one number a publisher, links only
   assert.equal(f.exportMarkHtml([1, 3]), '<sup class="fn">1,3</sup>')
 })
 
+test('a library precedent in the export is named, never quoted and never linked (feature award-in-brief-maker)', () => {
+  type Cit = { marks: Record<string, number[]>; notes: { n: number; name: string; items: { text: string; uri: string | null }[] }[] }
+  type F = { exportCitations(parts: unknown[], env: unknown): Cit; exportSourcesHtml(c: Cit | null): string }
+  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesList', 'exportSourcesHtml'], { arr, esc })
+  const insight = 'RECONSTRUCTED: music preference changes with the time of day, not just stable taste.'
+  const award = 'https://www.oneclub.org/awards/theoneshow/-award/53387/daylist/'
+  const env = {
+    passages: {
+      psg_lib: { pack: 'awardlib', source: 'Award case library', section: 'Spotify — Daylist (2024)', licence: 'licensed-internal', scope: 'house',
+        citation: 'Award case library › Spotify — Daylist (2024)',
+        text: `Spotify — Daylist (2024): ${insight}\n\n## Sources\n- Official award page: ${award}` },
+      psg_ipa: { pack: 'ipa', source: 'ipa_0007.md', section: 'When the chips are down (2024)', citation: 'ipa_0007.md › When the chips are down (2024)', text: 'IPA case text' },
+    },
+  }
+  const c = f.exportCitations([{ key: 'insight', ids: ['psg_lib', 'psg_ipa'] }], env)
+  const lib = c.notes.find(n => n.name === 'Award case library')!
+  assert.ok(lib, 'the library is named as a source')
+  assert.deepEqual(lib.items, [{ text: 'Spotify — Daylist (2024)', uri: null }], 'the case is named by brand and campaign, with no link')
+  assert.deepEqual(c.marks.insight, [1, 2], 'the part carries a footnote for each source')
+  const html = f.exportSourcesHtml(c)
+  assert.match(html, /<b>Award case library<\/b>: Spotify — Daylist \(2024\)<\/li>/)
+  // Nothing of the passage's text, and not the award page's address, reaches the printed brief.
+  assert.ok(!JSON.stringify(c).includes('RECONSTRUCTED') && !html.includes('RECONSTRUCTED') && !html.includes('music preference'))
+  assert.ok(!html.includes('oneclub') && !JSON.stringify(c).includes('oneclub') && !/href=/.test(html))
+  assert.ok(!/lib_[0-9a-f]+\.md/.test(html), 'the printed name is the case, never an internal file name')
+})
+
 test('the brief’s exports wait for the decision chain and say so when it cannot read it', () => {
   const src = fn(BM, 'chainForExport')
   assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
@@ -1356,7 +1385,7 @@ type Grid = {
   gridContentSheets(): number
   gridCss(): string
 }
-const grid = () => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeld', 'gridGrounded', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc })
+const grid = (GRID_MEDIA_ROW = false) => lift<Grid>(BM, ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridGaps', 'gridHeld', 'gridGrounded', 'gridHollow', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss'], { arr, esc, GRID_MEDIA_ROW })
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 const hasVal = (v: unknown) => v != null && (Array.isArray(v) ? v.length > 0 : String(v).trim() !== '')
 const notes = [{ n: 1, name: 'ThinkBusiness', items: [{ text: 'A title · 2024', uri: 'https://example.com/a' }] }]
@@ -1375,17 +1404,171 @@ test('the grid numbers its sections once, in one sequence, and starts with the j
   assert.equal(g.gridSheets().at(-1)?.appendix, true, 'the evidence and the questions sit on an appendix sheet')
 })
 
-test('a box’s word limit is the brief schema’s, and a long part steps its own type down', () => {
+// The media row (feature brief-media-measure): built, and switched off by one constant until Laurence confirms the page rule.
+const AT_LIMIT = (g: Grid) => {
+  const v: Record<string, unknown> = {}
+  const text = (n: number) => Array.from({ length: n }, (_, i) => (['the', 'family', 'brand', 'grows', 'because', 'shoppers', 'rarely', 'reach', 'for', 'relish'])[i % 10]).join(' ')
+  const ITEMS: Record<string, number> = { media_roles: 4, measurement: 5, reasons_to_believe: 3 }
+  for (const s of g.gridSheets()) for (const r of s.rows) for (const c of r) {
+    const lim = g.gridLimit(c.key) || 20, n = c.kind === 'list' ? ITEMS[c.key] || 3 : 0
+    // a list's words are shared out over its items so that they add up to the limit exactly
+    v[c.key] = n ? Array.from({ length: n }, (_, i) => text(Math.floor(lim / n) + (i < lim % n ? 1 : 0))) : text(lim)
+  }
+  return v
+}
+
+test('the media row is one constant, off: today’s print is unchanged, and the parts are still on the form', () => {
+  assert.equal((BM.match(/GRID_MEDIA_ROW\s*=/g) || []).length, 1, 'one place switches the row')
+  assert.match(BM, /var GRID_MEDIA_ROW=false;/)
   const g = grid()
-  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; max_words?: number }[] }
-  const key: Record<string, string> = { background: 'background', audience: 'audience', budget_scope: 'budget_and_scope', competitor_context: 'competitor_context',
-    insight: 'insight', smp: 'single_minded_proposition', tone_world_assets: 'tone_and_world', mandatories: 'mandatories' }
-  for (const f of schema.fields) if (key[f.id]) assert.equal(g.gridLimit(key[f.id]), f.max_words, `${f.id} keeps the schema's limit`)
-  assert.equal(g.gridLimit('job'), 0, 'a part with no limit is never stepped down')
+  const keys = g.gridSheets().flatMap(s => s.rows.flat()).map(c => c.key)
+  assert.ok(!keys.includes('media_roles') && !keys.includes('measurement'), 'neither box is printed')
+  assert.ok(!g.gridKeys().includes('media_roles'))
+  const rows = g.gridSheets()[0].rows
+  assert.equal(rows.length, 5, 'sheet 1 is the five rows it was')
+  assert.deepEqual(g.gridSheets()[1].rows.flat().map(c => c.num).filter(n => /^\d+$/.test(n)).slice(0, 2), ['07', '08'], 'the insight is 07 and the single thought 08')
+  const out = g.gridBody(ctxOf({ ...AT_LIMIT(g), media_roles: ['x'], measurement: ['y'] }))
+  assert.equal(out.contentSheets, 2)
+  assert.doesNotMatch(out.html, /Role of each medium|How we will know it worked/)
+  // a brief without the parts is not held up by them: the export writes no part the sheet does not print
+  assert.ok(!g.gridGaps({ get: () => 'x', hasVal } as never).some(x => x.key === 'media_roles' || x.key === 'measurement'))
+  // both are on the form and found by the words a person uses
+  assert.match(BM, /key:'budget_and_scope',label:'Budget & scope',type:'text'\},\s*\{sec:'Execution',key:'media_roles',label:'Role of each medium',type:'list'\},\s*\{sec:'Execution',key:'measurement',label:'How we will know it worked',type:'list'\}/)
+  assert.match(BM, /media_roles:'media, channels, role of each medium/)
+  assert.match(BM, /measurement:'measurement, how we will know it worked/)
+})
+
+test('switched on, the media row is two boxes on sheet 1 after the budget, and the later boxes run 09 to 15', () => {
+  const g = grid(true)
+  const sheets = g.gridSheets()
+  const rows = sheets[0].rows
+  assert.equal(rows.length, 6)
+  assert.deepEqual(rows[4].map(c => c.key), ['budget_and_scope'])
+  assert.deepEqual(rows[5].map(c => [c.num, c.key, c.kind, c.label]), [['07', 'media_roles', 'list', 'Role of each medium'], ['08', 'measurement', 'list', 'How we will know it worked']])
+  const nums = sheets.flatMap(s => s.rows.flat()).map(c => c.num).filter(n => /^\d+$/.test(n))
+  assert.deepEqual([...new Set(nums)], ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15'])
+  assert.deepEqual(sheets[1].rows.flat().map(c => [c.num, c.key]).slice(0, 3), [['09', 'insight'], ['10', 'single_minded_proposition'], ['11', 'reasons_to_believe']])
+  assert.equal(sheets.filter(s => !s.appendix).length, g.gridContentSheets(), 'still two content sheets')
+  assert.ok(g.gridKeys().indexOf('media_roles') === g.gridKeys().indexOf('budget_and_scope') + 1 && g.gridKeys().includes('measurement'))
+  assert.ok(g.gridKeys().includes('objection'))
+})
+
+test('switched on, every box at its limit is two content sheets, nothing named as over, and the corner tag prints on a list', () => {
+  const g = grid(true)
+  const v = AT_LIMIT(g)
+  for (const [k, lim] of [['media_roles', 55], ['measurement', 70]] as const) assert.equal(g.gridWords(v[k]), lim, `${k} is filled to its limit`)
+  const out = g.gridBody(ctxOf(v, { marks: {}, notes }))
+  assert.equal(out.contentSheets, 2)
+  assert.deepEqual(out.warnings, [], 'at its limit a box does not step down')
+  assert.match(out.html, /<b>07<\/b>Role of each medium<\/div><div class="bd"><ul>/)
+  assert.match(out.html, /<b>08<\/b>How we will know it worked<\/div><div class="bd"><ul>/)
+  assert.match(out.html, /<b>15<\/b>Mandatories/)
+  assert.doesNotMatch(out.html, /SHEET<b>3\//)
+  // over its limit a new box steps down like the others, and a part that rests on an assumption carries the tag
+  const over = g.gridBody(ctxOf({ ...v, media_roles: ['To confirm: ' + words(4 * 20)], measurement: [words(120)] }))
+  assert.deepEqual(over.warnings.map(w => [w.key, w.step]).sort(), [['measurement', 3], ['media_roles', 2]])
+  assert.equal((over.html.match(/class="tc"/g) || []).length, 1, 'the list box carries the to-confirm tag from its first item')
+  assert.doesNotMatch(over.html, /To confirm:/)
+  // a brief that has neither part prints the missing box and the gate names them
+  const bare = g.gridBody(ctxOf({}))
+  assert.equal((bare.html.match(/Missing: ask the Brief agent to write this part\./g) || []).length, 19, 'every box but the open questions reads missing')
+  assert.ok(g.gridGaps({ get: () => '', hasVal } as never).some(x => x.key === 'media_roles'))
+  assert.ok(g.gridGaps({ get: () => '', hasVal } as never).some(x => x.key === 'measurement'))
+})
+
+test('a box’s word limit is the brief schema’s for every part that has one, and a long part steps its own type down', () => {
+  const g = grid()
+  const schema = JSON.parse(readFileSync(join(templates(), '..', '..', 'server', 'napkin', 'brief', 'golden_brief.schema.json'), 'utf8')) as { fields: { id: string; type?: string; max_words?: number; max_items?: number }[] }
+  // the app's key for each schema field, as the template's own pipeline declares it (one key per field: the objectives and the response have none with a limit)
+  const pipeline = readFileSync(join(templates(), 'brief-maker', 'app', 'pipeline.yaml'), 'utf8')
+  const keyOf: Record<string, string[]> = {}
+  for (const m of pipeline.matchAll(/^ {2}([\w.]+):\s+\{ class: \w+, rubric: (\w+)/gm)) (keyOf[m[2]] ||= []).push(m[1])
+  const limited = schema.fields.filter(f => f.max_words)
+  assert.ok(limited.length >= 13, 'every schema field with a word limit is checked')
+  for (const f of limited) {
+    assert.equal(keyOf[f.id]?.length, 1, `${f.id} is one part of the brief`)
+    assert.equal(g.gridLimit(keyOf[f.id][0]), f.max_words, `${f.id} keeps the schema's limit in gridLimit`)
+  }
+  // every list part with an item cap is a list on the form and in the document
+  const doc = JSON.parse(readFileSync(join(templates(), 'brief-maker', 'schema.json'), 'utf8')) as { properties: Record<string, { type: string }> }
+  for (const f of schema.fields.filter(x => x.max_items)) {
+    const k = keyOf[f.id][0]
+    assert.equal(doc.properties[k].type, 'array', `${f.id} is an array in the document`)
+    assert.match(BM, new RegExp(`key:'${k}',label:'[^']+',type:'list'`), `${f.id} is a list row on the form`)
+  }
+  assert.ok(schema.fields.filter(x => x.max_items).length >= 3)
+  assert.equal(g.gridLimit('objectives.commercial'), 0, 'a part with no limit is never stepped down')
   assert.equal(g.gridWords(words(7)), 7)
   assert.equal(g.gridWords(['a b', 'c']), 3)
   assert.equal(g.gridWords(null), 0)
   assert.deepEqual([[70, 70], [71, 70], [88, 70], [112, 70], [120, 70], [9, 0]].map(([w, l]) => g.gridStep(w, l)), [0, 1, 2, 2, 3, 0])
+  assert.equal(g.gridStep(g.gridWords(words(45)), g.gridLimit('job')), 2, 'a job twice its size steps down now it has a limit')
+})
+
+// What size a part's text really prints at: the grid's own CSS read with a small cascade (class chains, specificity, order),
+// so a step-down class that no rule reaches shows as "no smaller", whatever the page claims in its toast.
+type GridCellFns = Grid & { gridCell(c: unknown, ctx: unknown): string }
+function printedSize(css: string, ancestors: string[][], el: string[]): number {
+  const rules: { chain: string[][]; spec: number; order: number; px: number }[] = []
+  let order = 0
+  for (const m of css.matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+    const px = /font-size:([\d.]+)px/.exec(m[2])
+    if (!px || m[1].trim().startsWith('*')) continue
+    for (const sel of m[1].split(',')) {
+      const chain = sel.trim().split(/\s+/).map(part => part.split('.').filter(Boolean))
+      rules.push({ chain, spec: chain.flat().length, order: order++, px: Number(px[1]) })
+    }
+  }
+  // the element chain: sheet > box > .bd > the text element; a rule applies when its chain is a subsequence ending at a node of the chain
+  const nodes = [...ancestors, el]
+  const applies = (rule: (typeof rules)[number], upto: number) => {
+    let i = rule.chain.length - 1
+    if (!rule.chain[i].every(c => nodes[upto].includes(c))) return false
+    for (let n = upto - 1; n >= 0 && i > 0; n--) if (rule.chain[i - 1].every(c => nodes[n].includes(c))) i--
+    return i === 0 || (i === 1 && false)
+  }
+  let size = 0
+  for (let upto = 0; upto < nodes.length; upto++) {
+    const hit = rules.filter(r => applies(r, upto)).sort((a, b) => a.spec - b.spec || a.order - b.order).pop()
+    if (hit) size = hit.px
+  }
+  return size
+}
+
+test('every box with a word limit prints smaller when it steps down, and on a tight sheet, in the type that is really on the page', () => {
+  const g = grid(true) as GridCellFns
+  const css = g.gridCss()
+  const cells = g.gridSheets().flatMap(s => s.rows.flat()).filter(c => c.kind !== 'sources' && g.gridLimit(c.key))
+  assert.deepEqual(cells.map(c => c.key).sort(), Object.keys(AT_LIMIT(g)).filter(k => g.gridLimit(k)).sort().filter(k => k !== 'objection'), 'every limited box is checked')
+  assert.ok(['job', 'barrier', 'media_roles', 'measurement', 'single_minded_proposition', 'insight'].every(k => cells.some(c => c.key === k)))
+  const render = (c: GridCell, n: number, tight: boolean) => {
+    const base = AT_LIMIT(g)
+    const v = { ...base, [c.key]: c.kind === 'list' ? [words(n)] : words(n), objection: words(g.gridLimit('objection')) }
+    const html = g.gridCell(c, ctxOf(v))
+    const box = /<div class="(box[^"]*)">/.exec(html)![1].split(/\s+/)
+    const text = /<p class="([^"]*)">|<(li)>/.exec(html.slice(html.indexOf('class="bd"')))!
+    const el = text[2] ? [] : (text[1] || '').split(/\s+/).filter(Boolean)
+    return printedSize(css, [['sheet', ...(tight ? ['tight'] : [])], box, ['bd']], el)
+  }
+  for (const c of cells) {
+    const lim = g.gridLimit(c.key)
+    const full = render(c, lim, false), over = render(c, Math.ceil(lim * 1.7), false), tight = render(c, lim, true)
+    assert.ok(full > 0 && over > 0, `${c.key} has a printed size`)
+    assert.ok(over < full, `${c.key} over its limit prints smaller (${over}px, was ${full}px)`)
+    assert.ok(tight < full, `${c.key} on a tight sheet prints smaller (${tight}px, was ${full}px)`)
+  }
+  // the objection sits in the single thought's box: it steps down in its own line, is named as over, and tightens with the sheet
+  const hero = cells.find(c => c.key === 'single_minded_proposition')!
+  const obj = (n: number, tight = false) => {
+    const v = { ...AT_LIMIT(g), objection: words(n) }
+    const html = g.gridCell(hero, ctxOf(v)), p = /<p class="(obj[^"]*)">/.exec(html)![1].split(/\s+/)
+    return printedSize(css, [['sheet', ...(tight ? ['tight'] : [])], /<div class="(box[^"]*)">/.exec(html)![1].split(/\s+/), ['bd']], p)
+  }
+  assert.ok(obj(52) < obj(30), 'an over-long objection prints smaller')
+  assert.ok(obj(30, true) < obj(30), 'and on a tight sheet')
+  const body = g.gridBody(ctxOf({ ...AT_LIMIT(g), objection: words(52) }))
+  assert.deepEqual(body.warnings.map(w => [w.key, w.step]), [['objection', 3]], 'the over-long objection is named, so the toast is true')
+  assert.deepEqual(g.gridBody(ctxOf({ ...AT_LIMIT(g), objection: words(30) })).warnings, [])
 })
 
 test('the grid prints a header, an info grid and a footer as the sheets need them, and places each part in its box', () => {
@@ -1567,6 +1750,137 @@ test('an export never prints a clipped sheet: it is measured, the Brief agent ti
   assert.ok(run.indexOf('Not exported: sheet') < run.indexOf('window.clan.exportDoc'))
 })
 
+// The real render: every box at its limit, drawn in headless Chrome, and the room left above each footer. Off unless
+// NAPKIN_RENDER_CHECK=1 (and a Chrome is found), because the room depends on the machine's fonts: the figures in the
+// feature record were measured on the Mac the page is made on, where the first sheet keeps 265 px (row off) and 34 px (row on).
+const CHROME = [process.env.CHROME_BIN, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => p && existsSync(p))
+test('rendered, every box at its limit leaves room above the footer: the row off as before, the row on with two content sheets', { skip: process.env.NAPKIN_RENDER_CHECK !== '1' || !CHROME }, () => {
+  const room = (on: boolean) => {
+    const g = grid(on)
+    const meas = `<script>onload=function(){var r=[];[].forEach.call(document.querySelectorAll('.sheet'),function(sh){var rows=sh.querySelectorAll('.row'),ft=sh.querySelector('.foot').getBoundingClientRect().top;r.push(Math.round(ft-rows[rows.length-1].getBoundingClientRect().bottom))});document.body.setAttribute('data-r',r.join(','))}</script>`
+    const html = `<!DOCTYPE html><html><head><meta charset=utf-8><style>${g.gridCss()}</style></head><body>${g.gridBody(ctxOf(AT_LIMIT(g))).html}${meas}</body></html>`
+    const dir = mkdtempSync(join(tmpdir(), 'brief-render-'))
+    try {
+      writeFileSync(join(dir, 'p.html'), html)
+      const r = spawnSync(CHROME as string, ['--headless=new', '--disable-gpu', '--window-size=900,1200', '--virtual-time-budget=3000', '--dump-dom', `file://${join(dir, 'p.html')}`], { encoding: 'utf8' })
+      return (/data-r="([^"]*)"/.exec(r.stdout)?.[1] ?? '').split(',').map(Number)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  }
+  const off = room(false), on = room(true)
+  assert.ok(off[0] > 200 && off[1] > 100, `row off: no sheet is full (${off})`)
+  assert.ok(on[0] >= 30 && on[1] > 100, `row on: sheet 1 keeps at least 30 px, sheet 2 is untouched (${on})`)
+  assert.equal(on.length, off.length, 'the row adds no sheet')
+})
+
+test('a sheet too full with no part over its limit prints one step smaller, on that sheet only, before anyone is asked to rewrite', () => {
+  const g = grid()
+  const v = AT_LIMIT(g)
+  const plain = g.gridBody(ctxOf(v))
+  assert.doesNotMatch(plain.html, /class="sheet tight"/)
+  const out = g.gridBody({ ...ctxOf(v), tight: [1] })
+  assert.equal((out.html.match(/class="sheet tight"/g) || []).length, 1, 'only the named sheet')
+  assert.match(out.html, /^<div class="sheet tight">/, 'and it is sheet 1')
+  assert.deepEqual(out.warnings, [], 'nothing is named as over its limit: the step is not a rewrite')
+  const css = g.gridCss()
+  assert.match(css, /\.tight \.bd\{font-size:10\.6px;line-height:1\.38\}/)
+  assert.ok(css.indexOf('.tight .bd') < css.indexOf('.fit1 .bd'), 'a box already stepped down by its own limit keeps its own step')
+})
+
+test('the export tries the tight step once, writes with it, and fails only if the sheet still overflows', async () => {
+  const toasts: string[] = []
+  const exported: string[] = []
+  const built: unknown[] = []
+  const filled: string[][] = []
+  const OVER: number[] = [], WARN: unknown[] = []
+  let stillOver = false
+  const env = {
+    toast: (m: string) => toasts.push(m), listWords: listJoin, gridLimit: (k: string) => (k === 'job' ? 30 : 0), gridLongest: () => [{ key: 'insight', label: 'The insight', words: 40 }],
+    LAST_GRID_OVERFLOW: OVER, LAST_GRID_WARNINGS: WARN, docLocked: () => false, noMiddleware: () => false, WRITER_: 'The Brief agent', get: () => 'p',
+    buildExportHTML: (_style: string, tight?: number[]) => {
+      built.push(tight)
+      OVER.length = 0
+      if (!tight || stillOver) OVER.push(1)
+      return Promise.resolve(tight ? '<tight/>' : '<plain/>')
+    },
+    fillParts: (keys: string[]) => { filled.push(keys); return Promise.resolve() },
+    window: { clan: { exportDoc: (_k: string, _b: string, html: string) => { exported.push(html); return Promise.resolve({ ok: true }) } } },
+  }
+  const run = lift<{ runExport(kind: string, style?: string, retried?: boolean, tight?: number[]): Promise<unknown> }>(BM, ['runExport'], env)
+  // too full, nothing over a limit: one tight render, and it goes out. The Brief agent is not asked.
+  await run.runExport('pdf', 'grid')
+  assert.deepEqual(built, [undefined, [1]], 'measured, then drawn tight on sheet 1')
+  assert.deepEqual(exported, ['<tight/>'])
+  assert.deepEqual(filled, [], 'no rewrite for a sheet that only needed a step')
+  assert.ok(!toasts.some(t => /Not exported/.test(t)))
+  // still too full after the step: it goes on to the old retry once, then stops naming the sheet, never looping
+  built.length = 0; exported.length = 0; toasts.length = 0; stillOver = true
+  await run.runExport('pdf', 'grid')
+  assert.deepEqual(exported, [])
+  assert.equal(filled.length, 1, 'the Brief agent tightens the longest parts once')
+  assert.ok(toasts.some(t => /Not exported: sheet 1 is too full\./.test(t)))
+  assert.ok(built.length <= 6, 'a bounded number of renders')
+  // a part over its limit is the old path: the Brief agent first, no tight step
+  built.length = 0; filled.length = 0; toasts.length = 0; WARN.push({ key: 'job', label: 'The job', words: 60, limit: 30, step: 3 })
+  await run.runExport('pdf', 'grid')
+  assert.equal(filled[0]?.[0], 'job')
+  assert.ok(!built.some(t => Array.isArray(t)), 'no tight step when a part is over its limit')
+})
+
+// The overflow decision with the real pieces: the real runExport, buildGridExportHTML, gridBody and gridCss. Only the browser's
+// measure (gridOverflow) is a stand-in, and it reads the HTML that was really built: a sheet overflows unless it was drawn
+// tight, so a step that did nothing to the document leaves it over.
+test('the real overflow decision: a sheet with no part over its limit is redrawn tight, and one that still overflows goes to the Brief agent, then stops naming the sheet', async () => {
+  const g = grid()
+  const NAMES = ['exportMarkHtml', 'exportSourcesList', 'gridContentSheets', 'gridSheets', 'gridKeys', 'gridLimit', 'gridText', 'gridItems', 'gridHas', 'gridFlag', 'gridWords', 'gridStep', 'gridCell', 'gridChunks', 'gridAppendix', 'gridClientName', 'gridHeaderInfo', 'gridInfo', 'gridSheet', 'gridBody', 'gridCss', 'gridLongest', 'measureGrid', 'buildGridExportHTML', 'buildExportHTML', 'runExport']
+  const setup = (vals: Record<string, unknown>, alwaysOver: boolean) => {
+    const toasts: string[] = [], exported: string[] = [], renders: string[] = [], filled: string[][] = []
+    const env = {
+      arr, esc, GRID_MEDIA_ROW: false, hasVal, toast: (m: string) => toasts.push(m), listWords: listJoin, WRITER_: 'The Brief agent',
+      inlineLogos: () => Promise.resolve([]), confList: () => [],
+      LAST_GRID_WARNINGS: [] as unknown[], LAST_GRID_OVERFLOW: [] as number[], docLocked: () => false, noMiddleware: () => false,
+      get: (k: string) => vals[k], CHAIN: { state: 'ok' }, chainForExport: () => Promise.resolve(), exportCitations: () => ({ marks: {}, notes: [] }), exportParts: () => [],
+      workingTitle: () => 'Better With Ballymaloe', window: { __CLAN__: { manifest: { version: '1.2' }, me: { name: 'Sai' } },
+        clan: { exportDoc: (_k: string, _b: string, html: string) => { exported.push(html); return Promise.resolve({ ok: true }) } } },
+      FIELDS: Object.keys(vals).map(key => ({ key, label: key })),
+      gridOverflow: (doc: string) => {
+        renders.push(doc.includes('class="sheet tight"') ? 'tight' : 'plain')
+        const sheets = doc.split('<div class="sheet').slice(1)
+        return Promise.resolve(sheets.flatMap((sh, i) => (alwaysOver ? i === 0 : !sh.startsWith(' tight"') && i === 0) ? [i + 1] : []))
+      },
+      fillParts: (keys: string[]) => { filled.push(keys); return Promise.resolve() },
+      regenField: () => undefined,
+    }
+    const f = lift<{ runExport(kind: string, style?: string): Promise<unknown> }>(BM, NAMES, env)
+    return { f, toasts, exported, renders, filled }
+  }
+  // 1. too full with no part over its limit: drawn again with sheet 1 tight, exported, the Brief agent never asked
+  const a = setup(AT_LIMIT(g), false)
+  await a.f.runExport('pdf', 'grid')
+  assert.deepEqual(a.renders, ['plain', 'tight'], 'measured plain, then redrawn tight')
+  assert.equal(a.exported.length, 1)
+  assert.match(a.exported[0], /^<!DOCTYPE html>.*<div class="sheet tight">/s, 'the document that went out has sheet 1 drawn tight')
+  assert.equal((a.exported[0].match(/class="sheet tight"/g) || []).length, 1, 'and only sheet 1')
+  assert.deepEqual(a.filled, [], 'no rewrite for a step')
+  assert.ok(!a.toasts.some(t => /Not exported|Printed smaller/.test(t)))
+  // 2. still too full when tight: the Brief agent tightens the longest parts once, and then it refuses, naming the sheet
+  const b = setup(AT_LIMIT(g), true)
+  await b.f.runExport('pdf', 'grid')
+  assert.equal(b.exported.length, 0, 'nothing goes out')
+  assert.equal(b.renders[0], 'plain'); assert.equal(b.renders[1], 'tight', 'the step is tried before the Brief agent is asked')
+  assert.equal(b.filled.length, 1, 'then the Brief agent tightens, once')
+  assert.ok(b.filled[0].length > 0 && b.toasts.some(t => /The Brief agent is tightening/.test(t)))
+  assert.ok(b.toasts.some(t => /Not exported: sheet 1 is too full\./.test(t)), 'and it stops naming the sheet')
+  assert.ok(b.toasts.indexOf(b.toasts.find(t => /The Brief agent is tightening/.test(t))!) < b.toasts.findIndex(t => /Not exported/.test(t)))
+  assert.ok(b.renders.length <= 4, `bounded: ${b.renders}`)
+  // 3. a part over its limit is the old path: the Brief agent first, no tight step before it
+  const c = setup({ ...AT_LIMIT(g), job: words(60) }, false)
+  await c.f.runExport('pdf', 'grid')
+  assert.equal(c.renders[0], 'plain')
+  assert.equal(c.filled.length, 1, 'a part over its limit goes to the Brief agent, not to the step')
+  assert.equal(c.filled[0][0], 'job')
+  assert.equal(c.renders[1], 'plain', 'the first redraw after the Brief agent is the plain one, then the step')
+})
+
 test('a sheet that cannot be measured is never exported: one retry with a longer wait, then the plain buttons are offered', async () => {
   assert.match(fn(BM, 'gridOverflow'), /setTimeout\(function\(\)\{ end\(null\); \},wait\)/)
   assert.match(fn(BM, 'measureGrid'), /gridOverflow\(doc,4000\)[\s\S]*gridOverflow\(doc,8000\)/)
@@ -1641,15 +1955,15 @@ test('a part the Review agent rejected is exported as to confirm, and the export
   assert.equal(words([]), '')
   // the export passes them on and says so once the export has started
   let said = ''
-  const run = lift<{ runExport(k: string, s: string, r?: boolean, rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
+  const run = lift<{ runExport(k: string, s: string, r?: boolean, t?: number[], rej?: string[]): Promise<unknown> }>(BM, ['runExport'], {
     LAST_GRID_OVERFLOW: [], LAST_GRID_WARNINGS: [], toast: (m: string) => { said = m }, buildExportHTML: () => Promise.resolve('<html>'),
     get: () => 'x', notApprovedWords: words, window: { clan: { exportDoc: () => Promise.resolve({ ok: true }) } },
   })
-  await run.runExport('pdf', 'grid', false, ['The insight'])
+  await run.runExport('pdf', 'grid', false, undefined, ['The insight'])
   assert.equal(said, 'Written, not approved by the Review agent: the insight.')
-  await run.runExport('pdf', 'grid', false, [])
+  await run.runExport('pdf', 'grid', false, undefined, [])
   assert.equal(said, 'Preparing PDF…', 'nothing rejected: nothing extra is said')
-  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, rejected\)/)
+  assert.match(fn(BM, 'exportOnce'), /\.then\(function\(rejected\)\{[\s\S]*runExport\(kind, style, false, undefined, rejected\)/)
 })
 
 test('the footer names the client, not its descriptor, and the page count never wraps', () => {
@@ -1666,8 +1980,8 @@ test('the grid prints on A4 sheets that break cleanly, and stays among the OS ba
   const css = grid().gridCss()
   assert.match(css, /@page\{size:A4;margin:0\}/)
   assert.match(css, /\.sheet\{width:210mm;height:297mm;[^}]*break-after:page\}/)
-  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):style==='grid'\?buildGridExportHTML\(\):buildSheetExportHTML\(style==='client'\?'client':'agency'\)/)
-  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style\)/)
+  assert.match(fn(BM, 'buildExportHTML'), /style==='plain'\?buildPlainExportHTML\(\):style==='grid'\?buildGridExportHTML\(tight\):buildSheetExportHTML\(style==='client'\?'client':'agency'\)/)
+  assert.match(fn(BM, 'runExport'), /buildExportHTML\(style, tight\)/)
   // Save · PDF and its other ways to save are the OS bar's (the side tab design): one ACTIONS entry each.
   const A = obj(BM, 'ACTIONS')
   assert.match(A, /pdf:function\(\)\{ doExport\('pdf'\); \}/, 'Save · PDF, in the OS bar, is the sheet')
@@ -3778,4 +4092,149 @@ test('research panel: the map draws only what the report uses, grouped, and ligh
   assert.match(fn(RT, 'drawEdgesV'), /el\.classList\.add\(id===PV\.mapSel\?'on':chain\[id\]\?'lit':'dim'\)/)
   assert.match(fn(RT, 'renderMapV'), /data-act="pv-mapopen">Open<\/button>/)
   assert.match(RT, /PV\.keySeen=localStorage\.getItem\('clan\.research\.mapkey'\)==='1'; PV\.keyOpen=!PV\.keySeen;/, 'the Key opens on the first visit, then folds')
+})
+
+// ── Brief Maker: intake (brief-intake-qa) ─────────────────────────────────
+
+// The draft may stop once, in needs_input, for a few questions (middleware-api §10.6). The page keeps
+// polling, shows them with Skip on each and Skip, just draft for all, and answers with answer_question.
+test('a needs_input reply keeps the poll alive, carries the questions, and a running reply resumes', () => {
+  type J = Record<string, unknown> & { state: string; questions?: unknown; questions_id?: unknown }
+  const ended: J[] = [], polled: string[] = [], stored: Record<string, string | null> = {}
+  const f = lift<{ onJobReply(j: J, r: unknown): void }>(BM, ['onJobReply'], {
+    hostErr: () => null, mwBody: (r: unknown) => r, endJob: (j: J) => { ended.push(j) },
+    store: (k: string, v: string | null) => { stored[k] = v }, jobKey: (t: string) => `k.${t}`, loadChain: () => {},
+    pollJob: (j: J) => { polled.push(j.state) }, setTimeout: (fn: () => void) => { fn(); return 1 }, clearTimeout: () => {},
+    LAST_PROPOSALS: null,
+  })
+  const q = [{ id: 'q_budget', key: 'budget', text: 'What is the budget?', why: 'w', priority: 'important', skippable: true }]
+  const j: J = { task: 'draft_brief', state: 'running', delay: 900, onUpdate: () => {}, onEnd: () => {} }
+  f.onJobReply(j, { job: { id: 'job_1', state: 'needs_input', stage: 'context', question: null, questions_id: 'qs_1', questions: q } })
+  assert.equal(j.state, 'needs_input')
+  assert.deepEqual(j.questions, q)
+  assert.equal(j.questions_id, 'qs_1')
+  assert.equal(ended.length, 0, 'the finished state never shows while the job waits')
+  assert.deepEqual(polled, ['needs_input'], 'it keeps polling')
+  assert.equal(stored['k.draft_brief'], 'job_1', 'a reload picks the waiting job up')
+  // answered, skipped or timed out: the job runs again and the questions go
+  f.onJobReply(j, { job: { id: 'job_1', state: 'running', stage: 'context', question: null } })
+  assert.equal(j.questions, null)
+  assert.equal(ended.length, 0)
+  f.onJobReply(j, { job: { id: 'job_1', state: 'done', stage: 'judge' } })
+  assert.equal(ended.length, 1)
+})
+
+test('answers go out as answer_question; a refusal after the wait ran out is not the end of the draft', async () => {
+  type J = Record<string, unknown>
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const replies: unknown[] = []
+  const toasts: string[] = [], polls: J[] = [], updates: J[] = [], handled: unknown[] = []
+  const f = lift<{ answerJob(j: J, a: Record<string, string | null>): void }>(BM, ['answerJob'], {
+    window: { clan: { apiProxy: (_: string, body: { task: string; input: Record<string, unknown> }) => { sent.push(body); return Promise.resolve(replies.shift()) } } },
+    hostErr: (r: { error?: string }) => (r && r.error ? r.error : null), toast: (m: string) => { toasts.push(m) },
+    pollJob: (j: J) => { polls.push(j) }, onJobReply: (_: J, r: unknown) => { handled.push(r) }, clearTimeout: () => {},
+  })
+  const j: J = { task: 'draft_brief', id: 'job_1', questions_id: 'qs_1', state: 'needs_input', onUpdate: (x: J) => { updates.push({ ...x }) } }
+  replies.push({ job: { state: 'running' } })
+  f.answerJob(j, { q_budget: 'EUR 150,000 incl. VAT', q_timeline: null })
+  f.answerJob(j, {})  // a second click while the first is out sends nothing
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(sent.length, 1)
+  assert.deepEqual(sent[0], { task: 'answer_question', input: { job_id: 'job_1', questions_id: 'qs_1', answers: { q_budget: 'EUR 150,000 incl. VAT', q_timeline: null } } })
+  assert.equal(handled.length, 1, 'the reply is the job’s, as a poll’s')
+  assert.equal(j.answering, false)
+  // the wait ran out first (409): say so, keep polling, never end the draft
+  replies.push({ error: 'job_state (409): nobody answered in time, so it went on without' })
+  f.answerJob(j, {})
+  await Promise.resolve(); await Promise.resolve()
+  assert.equal(handled.length, 1)
+  assert.equal(polls.length, 1)
+  assert.match(toasts[0], /went on without/)
+  // nothing is sent when the job holds no open questions
+  f.answerJob({ ...j, questions_id: null }, {})
+  assert.equal(sent.length, 2)
+})
+
+test('the questions card has Skip on each question and Skip, just draft for all', () => {
+  const html = lift<{ askHtml(qs: unknown[], name: string): string }>(BM, ['askHtml'], { esc, WRITER: 'the Brief agent' }).askHtml([
+    { id: 'q_budget', text: 'What is the budget?', why: 'Scope depends on it', skippable: true },
+    { id: 'q_client', text: 'Which client <b>?', skippable: false }], 'The Strategy agent')
+  // the agent-stage card: signed by the agent of the stage asking (role names, never a persona)
+  assert.match(html, /^<span class="aq-k">The Strategy agent asks<\/span><span class="aq-q" id="bq-intake">A few quick questions before the plan<\/span>/)
+  assert.match(html, /What you skip, the Brief agent proposes and marks for you to confirm\./)
+  assert.match(html, /<div class="aq-item" data-q="q_budget"><label class="aq-l" for="ask_q_budget">What is the budget\?<\/label><span class="aq-why">Scope depends on it<\/span><textarea id="ask_q_budget" rows="2"><\/textarea><button type="button" class="aq-skip" data-skip="q_budget">Skip this one<\/button><\/div>/)
+  // a question that is not skippable has no Skip; text is escaped
+  assert.match(html, /<div class="aq-item" data-q="q_client"><label class="aq-l" for="ask_q_client">Which client &#60;b&#62;\?<\/label><textarea id="ask_q_client" rows="2"><\/textarea><\/div>/)
+  assert.equal(html.split('data-skip=').length - 1, 1)
+  assert.match(html, /<button type="button" class="sp-btn" id="askSkipAll">Skip, just draft<\/button><button type="button" class="sp-btn aq-send" id="askSend">Send answers<\/button>/)
+  assert.doesNotMatch(html, /\b(Ellis|Dara|Jude|Sam|Dex)\b/)
+})
+
+test('the card is drawn once per set of questions, so typed text survives a poll; Skip all sends none, Send sends typed', () => {
+  type El = { value?: string; disabled?: boolean; handlers: Record<string, () => void>; classList: { toggle(): void; add(): void; remove(): void }; addEventListener(e: string, f: () => void): void; querySelector(s: string): El; focus(): void; textContent?: string }
+  const mk = (): El => { const el: El = { value: '', handlers: {}, classList: { toggle() {}, add() {}, remove() {} }, addEventListener(e, f) { el.handlers[e] = f }, querySelector: () => el, focus() {} }; return el }
+  const attrs: Record<string, string> = {}
+  let writes = 0
+  const sendEl = mk(), skipAllEl = mk(), row = mk(), ta = mk()
+  const skipBtn = mk()
+  const box = {
+    hidden: true, get innerHTML() { return '' }, set innerHTML(_: string) { writes++ }, classList: { add() {}, remove() {} }, focus() {},
+    getAttribute: (k: string) => attrs[k] ?? null, setAttribute: (k: string, v: string) => { attrs[k] = v }, removeAttribute: (k: string) => { delete attrs[k] },
+    querySelector: (sel: string) => (sel === '#askSkipAll' ? skipAllEl : sel === '#askSend' ? sendEl : sel.startsWith('#ask_') ? ta : { ...row, querySelector: (s: string) => (s === 'textarea' ? ta : s === '.aq-skip' ? skipBtn : row) }),
+    querySelectorAll: () => [],
+  }
+  const sent: Record<string, string | null>[] = []
+  const ids: string[] = []
+  const f = lift<{ renderAsk(j: Record<string, unknown>): boolean }>(BM, ['askHtml', 'renderAsk'], {
+    esc, WRITER: 'the Brief agent', ROLES: { forStage: (_a: string, s: string) => (s === 'context' ? 'strategy' : ''), The: () => 'The Strategy agent' },
+    $: (id: string) => { ids.push(id); return box }, answerJob: (_: unknown, a: Record<string, string | null>) => { sent.push(a) },
+  })
+  const qs = [{ id: 'q_budget', text: 'Budget?', skippable: true }]
+  const j: Record<string, unknown> = { state: 'needs_input', stage: 'context', questions: qs, questions_id: 'qs_1' }
+  assert.equal(f.renderAsk(j), true)
+  assert.equal(writes, 1)
+  assert.deepEqual([...new Set(ids)], ['procAsk'], 'the questions sit in the stage card, under the risen sphere')
+  ta.value = 'EUR 150,000'
+  f.renderAsk(j); f.renderAsk(j)  // the next polls
+  assert.equal(writes, 1, 'the card is not redrawn, so what is typed stays')
+  assert.equal(ta.value, 'EUR 150,000')
+  sendEl.handlers.click()
+  assert.deepEqual(sent[0], { q_budget: 'EUR 150,000' })
+  skipBtn.handlers.click()  // Skip drops the typed answer
+  sendEl.handlers.click()
+  assert.deepEqual(sent[1], { q_budget: null })
+  skipAllEl.handlers.click()
+  assert.deepEqual(sent[2], {})
+  // a new set of questions is drawn afresh
+  f.renderAsk({ ...j, questions_id: 'qs_2' })
+  assert.equal(writes, 2)
+  // the wait over: the card goes
+  assert.equal(f.renderAsk({ state: 'running' }), false)
+  assert.equal(box.hidden, true)
+  assert.equal(attrs['data-qs'], undefined)
+  // the agent-stage pattern: the stage's question card, the sphere rising while intake asks
+  assert.match(BM, /<div class="askq" id="procAsk" role="group" tabindex="-1" hidden><\/div>/)
+  assert.match(fn(BM, 'askInStage'), /if\(renderAsk\(j\)\)\{ ASK\.id=null; if\(ROLES\) ROLES\.ask\(stage, true\); return; \}/)
+  assert.match(fn(BM, 'renderProc'), /askInStage\(j, at\)/)
+  assert.match(fn(BM, 'tellSphere'), /var asking=j\.state==='needs_input'&&!!\(j\.question\|\|arr\(j\.questions\)\.length\)/)
+  // the working page counts needs_input as live: it can be stopped, and it never reads as finished
+  assert.match(fn(BM, 'renderProc'), /var asking=j\.state==='needs_input';\s*var live=[^;]*\|\|asking;/)
+  assert.match(fn(BM, 'renderProc'), /canStop=live&&j\.id/)
+})
+
+test('only the new draft asks for intake', () => {
+  assert.equal(BM.split('intake:true').length - 1, 1, 'one request carries it')
+  type J = { task: string }
+  const runs: { j: J; input: Record<string, unknown> }[] = []
+  const f = lift<{ startDraft(p: string, a: unknown[], id?: string): void }>(BM, ['startDraft'], {
+    DRAFT: null, forceIntake: false, reduce: true, renderProc: () => {}, setPhase: () => {}, render: () => {}, arr,
+    window: { scrollTo: () => {} }, setTimeout: () => 0, pollJob: () => {},
+    runJob: (j: J, input: Record<string, unknown>) => { runs.push({ j, input }) },
+  })
+  f.startDraft('A brief for Brewline', [{ name: 'a.pdf' }])
+  assert.equal(runs[0].j.task, 'draft_brief')
+  assert.equal(runs[0].input.intake, true)
+  assert.deepEqual(runs[0].input.attachments, [{ name: 'a.pdf' }])
+  // the redraft and the part fixes go through other jobs and ask nothing
+  for (const name of ['regenField', 'fixParts']) assert.doesNotMatch(fn(BM, name), /intake/)
 })

@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars. UAT is a second copy of staging; see main.tf.
+
+# Staging's stack owns the account's GitHub OIDC provider; UAT reuses it.
+github_oidc_provider_arn = "arn:aws:iam::741448934623:oidc-provider/token.actions.githubusercontent.com"
+
+# The sandbox test tenant, as on staging.
+agencies = {
+  sandbox = { slot = 20 }
+}
+
+# No certificate yet: UAT answers over HTTP on the load balancer's own name
+# (terraform output studio_url). Put an ACM certificate ARN here when the
+# address is chosen, and the URL turns https.
+# certificate_arn = ""
+
+# No budget_emails: the two budgets are account-wide and staging already has them.

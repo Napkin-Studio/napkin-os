@@ -1344,6 +1344,19 @@
   .askq .aq-own{display:flex;gap:6px}
   .askq .aq-own input{flex:1;min-width:0;height:32px;padding:0 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:14px var(--font-ui)}
   .askq .aq-note{margin:0;font-size:12.5px;color:var(--nd-muted)}
+  /* intake's few questions before the plan, on the same card (renderAsk) */
+  .askq.aq-many{max-height:min(460px,56vh);overflow-y:auto}
+  .askq .aq-item{display:grid;gap:4px;padding-top:8px;border-top:1px solid var(--nd-line)}
+  .askq .aq-l{font:600 14px/1.4 var(--font-ui)}
+  .askq .aq-why{font-size:12.5px;color:var(--nd-muted)}
+  .askq .aq-item textarea{min-height:48px;resize:vertical;padding:8px 10px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:14px/1.4 var(--font-ui)}
+  .askq .aq-item.skipped textarea{opacity:.5}
+  .askq .aq-skip{justify-self:start;min-height:28px;padding:0;border:0;background:none;color:var(--nd-muted);font:12.5px var(--font-ui);text-decoration:underline;cursor:pointer}
+  .askq .aq-skip:hover{color:var(--nd-ink)}
+  .askq .aq-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;padding-top:4px}
+  .askq .aq-acts .sp-btn{height:32px;min-height:32px;padding:0 12px;border:1px solid var(--nd-line);border-radius:6px;background:var(--nd-paper);color:var(--nd-ink);font:600 13px var(--font-ui);cursor:pointer}
+  .askq .aq-acts .aq-send{background:var(--nd-ink);border-color:var(--nd-ink);color:var(--nd-paper)}
+  .askq .aq-acts .sp-btn:disabled{opacity:.55;cursor:default}
   @keyframes askq-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion: reduce){ .aglbox{transition:none} .askq{animation:none} }
   .aglbox .nk-ag{width:101px;height:101px}
@@ -1626,6 +1639,8 @@
     {sec:'Desired response',key:'desired_response.do',label:'Do',type:'text'},
     {sec:'Execution',key:'tone_and_world',label:'Tone & world',type:'list'},
     {sec:'Execution',key:'budget_and_scope',label:'Budget & scope',type:'text'},
+    {sec:'Execution',key:'media_roles',label:'Role of each medium',type:'list'},
+    {sec:'Execution',key:'measurement',label:'How we will know it worked',type:'list'},
     {sec:'Execution',key:'mandatories',label:'Mandatories',type:'list'},
     {sec:'Execution',key:'open_questions',label:'Open questions',type:'list'}
   ];
@@ -1692,6 +1707,8 @@
     'desired_response.do':'what they should do, call to action',
     tone_and_world:'tone, voice, feel',
     budget_and_scope:'budget, cost, spend, scope',
+    media_roles:'media, channels, role of each medium, media plan',
+    measurement:'measurement, how we will know it worked, kpis, tracking, success measures',
     mandatories:'mandatories, mandatory, must include',
     open_questions:'open questions, questions'
   };
@@ -2127,25 +2144,32 @@
     var l=exportSourcesList(cit); return l?'<section class="srcs"><h2>Sources</h2>'+l+'</section>':'';
   }
   // ---- The grid export (feature brief-grid-template). Pure: it reads only what it is given. ----
+  // The role-of-each-medium and measurement row on sheet 1 (feature brief-media-measure). The parts are drafted, judged and
+  // on the form already; the row stays off, so the printed brief is as it was, until Laurence confirms the page rule.
+  var GRID_MEDIA_ROW=false;
   // Which part sits in which box on which sheet is this list, so the page rule (how many sheets) changes the
   // list, not the code. kind: text, list, quote (the insight, large), hero (the single thought, large on black,
   // with the objection it has to beat), new (a part the brief does not draft yet: printed 'to be written'
   // while it is empty), sources (the numbered Sources list).
   function gridSheets(){
     function T(num,label,key,kind,big){ return {num:num, label:label, key:key, kind:kind||'text', big:!!big}; }
+    // Switched on, the media row takes numbers 07 and 08 and the boxes after it run on from 09; off, they are 07 to 13 as they were.
+    var by=GRID_MEDIA_ROW?2:0;
+    function N(n){ return (n+by<10?'0':'')+(n+by); }
+    var media=GRID_MEDIA_ROW?[[T('07','Role of each medium','media_roles','list'), T('08','How we will know it worked','measurement','list')]]:[];
     return [
       {rows:[
         [T('01','The job','job','new',true)],
         [T('02','Where we are','background'), T('03','The barrier','barrier','new')],
         [T('04','Who we are talking to','audience')],
         [T('05','Objective. Commercial','objectives.commercial'), T('05','Objective. Behavioural','objectives.behavioural'), T('05','Objective. Attitudinal','objectives.attitudinal')],
-        [T('06','Budget and scope','budget_and_scope')]]},
+        [T('06','Budget and scope','budget_and_scope')]].concat(media)},
       {rows:[
-        [T('07','The insight','insight','quote')],
-        [T('08','The single thought','single_minded_proposition','hero')],
-        [T('09','Why they should believe it','reasons_to_believe','list'), T('10','Competitor context','competitor_context')],
-        [T('11','Desired response. Think','desired_response.think'), T('11','Desired response. Feel','desired_response.feel'), T('11','Desired response. Do','desired_response.do')],
-        [T('12','Tone and world','tone_and_world','list'), T('13','Mandatories','mandatories','list')]]},
+        [T(N(7),'The insight','insight','quote')],
+        [T(N(8),'The single thought','single_minded_proposition','hero')],
+        [T(N(9),'Why they should believe it','reasons_to_believe','list'), T(N(10),'Competitor context','competitor_context')],
+        [T(N(11),'Desired response. Think','desired_response.think'), T(N(11),'Desired response. Feel','desired_response.feel'), T(N(11),'Desired response. Do','desired_response.do')],
+        [T(N(12),'Tone and world','tone_and_world','list'), T(N(13),'Mandatories','mandatories','list')]]},
       {appendix:true, title:'Appendix. Sources and questions to settle.', rows:[
         [T('A','Evidence and sources','sources','sources'), T('B','Questions to settle','open_questions','list')]]}
     ];
@@ -2157,7 +2181,8 @@
   }
   // A box's size: the word limits the brief's schema sets for each part (server/napkin/brief/golden_brief.schema.json).
   function gridLimit(key){
-    var L={background:70, audience:80, budget_and_scope:50, competitor_context:70, insight:50, single_minded_proposition:20, tone_and_world:60, mandatories:80};
+    var L={job:30, background:70, barrier:60, audience:80, budget_and_scope:50, media_roles:55, measurement:70, competitor_context:70, insight:50,
+      single_minded_proposition:20, objection:30, tone_and_world:60, mandatories:80};
     return L[key]||0;
   }
   // What a part prints as: text and numbers only. An object, a boolean or nothing is not text, so it counts as empty
@@ -2201,7 +2226,8 @@
       body=missing;
     } else if(c.kind==='hero'){
       var ob=ctx.get('objection');
-      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask the Brief agent to write it</i>')+'</p>';
+      var os=gridStep(gridWords(ob), gridLimit('objection'));
+      body='<p class="big">'+esc(gridText(v))+mk+'</p><p class="obj'+(os?' o'+os:'')+'">The objection it has to beat: '+(gridHas(ob)?esc(gridText(ob)):'<i>missing: ask the Brief agent to write it</i>')+'</p>';
     } else {
       body='<p class="'+(c.kind==='quote'||c.big?(c.big?'job':'big'):'')+'">'+esc(gridText(v))+mk+'</p>';
     }
@@ -2254,7 +2280,7 @@
     var sub=sh.title||('Creative brief. '+(ctx.project||'Untitled brief'));
     // The brief's own logos (data.logos, inlined as ctx.logos); none, and the header has no logo cell.
     var logos=arr(ctx.logos).filter(function(l){ return l&&/^data:image\/(png|jpeg|svg\+xml|webp)[;,]/.test(String(l.src||'')); });
-    return '<div class="sheet"><div class="hd">'+(logos.length?'<div class="logo">'+logos.map(function(l){ return '<img src="'+esc(l.src)+'" alt="'+esc(l.alt||'Logo')+'">'; }).join('')+'</div>':'')+'<div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
+    return '<div class="sheet'+(arr(ctx.tight).indexOf(n)!==-1?' tight':'')+'"><div class="hd">'+(logos.length?'<div class="logo">'+logos.map(function(l){ return '<img src="'+esc(l.src)+'" alt="'+esc(l.alt||'Logo')+'">'; }).join('')+'</div>':'')+'<div class="ttl"><b>CREATIVE BRIEF</b><span>'+esc(sub)+'</span></div>'
       +'<div class="shn">'+tag+'</div></div>'
       +(n===1?gridInfo(ctx.info):'')
       +sh.rows.map(function(r){ return '<div class="row c'+r.length+'">'+r.map(function(c){ return gridCell(c, ctx); }).join('')+'</div>'; }).join('')
@@ -2292,6 +2318,9 @@
     gridSheets().forEach(function(s){ s.rows.forEach(function(r){ r.forEach(function(c){
       var w=gridWords(ctx.get(c.key)), lim=gridLimit(c.key), st=gridStep(w,lim);
       if(st) warnings.push({key:c.key, label:c.label, words:w, limit:lim, step:st}); }); }); });
+    // The objection prints inside the single thought's box, so it is no box of its own: it steps down in its own line.
+    var ow=gridWords(ctx.get('objection')), ost=gridStep(ow, gridLimit('objection'));
+    if(ost&&gridHas(ctx.get('single_minded_proposition'))) warnings.push({key:'objection', label:'The objection to beat', words:ow, limit:gridLimit('objection'), step:ost});
     return {html:sheets.map(function(s,i){
         var tag=s.appendix?'APPENDIX<b>'+(i-body.length+1)+'/'+app.length+'</b>':'SHEET<b>'+(i+1)+'/'+body.length+'</b>';
         return gridSheet(i+1, sheets.length, s, ctx, tag); }).join(''),
@@ -2322,9 +2351,12 @@
       +".big{font-size:21px;line-height:1.2;font-weight:800;letter-spacing:-.02em}"
       +".dark{background:#000;color:#fff}.dark .lab{background:#fff;color:#000}.dark .big{font-size:30px;line-height:1.12}"
       +".obj{font-size:10px;color:#bbb}"
+      +".tight .bd{font-size:10.6px;line-height:1.38}.tight .job{font-size:21px}.tight .big{font-size:19px}.tight .dark .big{font-size:27px}.tight .obj{font-size:9.6px}"
       +".fit1 .bd{font-size:10.8px}.fit2 .bd{font-size:10.4px}.fit3 .bd{font-size:10px}"
+      +".fit1 .job{font-size:21px}.fit2 .job{font-size:19px}.fit3 .job{font-size:17px}"
       +".fit1 .big{font-size:19px}.fit2 .big{font-size:17px}.fit3 .big{font-size:15px}"
       +".dark.fit1 .big{font-size:26px}.dark.fit2 .big{font-size:22px}.dark.fit3 .big{font-size:19px}"
+      +".obj.o1{font-size:9.6px}.obj.o2{font-size:9.2px}.obj.o3{font-size:8.8px}"
       +"sup{font-size:7.5px;font-weight:800;margin-left:1px;vertical-align:super}.mk{margin-top:3px}"
       +".conf{background-image:repeating-linear-gradient(135deg,transparent 0 7px,rgba(0,0,0,.07) 7px 8px)}.lab .cf{border:1px solid currentColor;border-radius:9px;padding:0 5px;font-size:6.5px;letter-spacing:.12em;margin-left:4px}"
       +".box{position:relative}.tc{position:absolute;bottom:4px;right:7px;font-size:6.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b}.dark .tc{color:#bdbdbd}"
@@ -2880,6 +2912,9 @@
       // an agent asking the person: the job waits (needs_input) with its question (middleware-api, as the Research Tool's)
       j.question=j.state==='needs_input'&&b.job.question&&typeof b.job.question==='object'?b.job.question:null;
       if(b.job.error) j.error=b.job.error.message||b.job.error.type||String(b.job.error);
+      // intake: the questions the job waits on while it is needs_input (middleware-api §10.6)
+      j.questions=j.state==='needs_input'&&Array.isArray(b.job.questions)?b.job.questions:null;
+      j.questions_id=j.questions?b.job.questions_id:null;
     }
     if(b.result&&typeof b.result==='object'){
       if(b.result.summary) j.summary=b.result.summary;
@@ -2901,6 +2936,19 @@
   }
   function unreachable(j, e){ j.error='The middleware could not be reached: '+(e&&e.message||e); j.state=j.state==='sending'?'unsent':'stalled'; endJob(j); }
   function endJob(j){ store(jobKey(j.task,j.field), null); loadChain(); j.onEnd(j); }
+  // The planner's answers to intake's questions ({question id: text, or null to skip}; {} skips them all).
+  // The reply is the job's, as a poll's. A refusal (the wait ran out, the job went on) is not the job's
+  // end: say so and keep polling.
+  function answerJob(j, answers){
+    if(!j||!j.id||!j.questions_id||j.answering) return;
+    j.answering=true; j.onUpdate(j);
+    window.clan.apiProxy('middleware', {task:'answer_question', input:{job_id:j.id, questions_id:j.questions_id, answers:answers}}).then(function(r){
+      j.answering=false;
+      var err=hostErr(r);
+      if(err){ toast('Not sent: '+err); clearTimeout(j.t); pollJob(j); return; }
+      clearTimeout(j.t); onJobReply(j, r);
+    }, function(e){ j.answering=false; j.onUpdate(j); toast('Not sent: the middleware could not be reached ('+(e&&e.message||e)+').'); });
+  }
   // A person stops a job: the reply is the job's own, as a poll's.
   function cancelJob(j){
     if(!j||!j.id||j.stopping) return;
@@ -2945,7 +2993,7 @@
     var fs=j.fields||{}, busy={extract:[], synthesis:[], drafter:[], judge:[]}, failed=0, passed=0;
     FIELDS.forEach(function(f){ var x=fs[f.key]||{}; if(BUSY[x.state]&&busy[x.by]) busy[x.by].push(f.key); if(x.state==='failed') failed++; if(x.state==='done') passed++; });
     var at=STAGES.indexOf(j.stage), end=j.state==='done';
-    function st(k, i){ return busy[k].length?'working':(end||at>i)?'done':at===i&&(j.state==='queued'||j.state==='running')?'working':'idle'; }
+    function st(k, i){ return busy[k].length?'working':(end||at>i)?'done':at===i&&(j.state==='queued'||j.state==='running'||j.state==='needs_input')?'working':'idle'; }
     // The caption under the sphere is one short line: a live count, never the parts by name (they
     // list in the right rail; owner, 11 Nov).
     var parts=function(a){ return a.length+' '+(a.length===1?'part':'parts'); };
@@ -3025,7 +3073,7 @@
     var v=sphere(), box=$('aglBox');
     // without WebGL: the same sphere as a still frame (never a figure)
     if(!v){ var k=PLAN[at].who; if(box.getAttribute('data-fig')!==k){ box.setAttribute('data-fig',k); box.innerHTML=fig(k,{state:live?'working':'idle',label:sayer(k),size:150}); } return; }
-    var asking=j.state==='needs_input'&&!!j.question;
+    var asking=j.state==='needs_input'&&!!(j.question||arr(j.questions).length);
     var phase=j.state==='done'?'hold':'run', key=at+':'+phase+':'+(j.state==='failed'?'e':'')+':'+(asking?'q':'');
     if(key===SPH.key) return;
     var prev=SPH.key?+SPH.key.split(':')[0]:-1; SPH.key=key;
@@ -3076,7 +3124,8 @@
     var j=DRAFT; if(!j) return;
     track(j);
     var c=crewStates(j), fs=j.fields||{}, at=Math.max(0, STAGES.indexOf(j.stage));
-    var live=j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input';
+    var asking=j.state==='needs_input';
+    var live=j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||asking;
     if(j.state==='done') at=3;
     var stopAt=!live&&j.state!=='done'?at:-1;
     var H={done:'Your brief is ready', failed:'We had to stop', unsent:'We couldn’t start', stalled:'We lost touch with the work', cancelled:'You stopped the draft'};
@@ -3089,7 +3138,7 @@
     var LINE={
       extract:st.extract==='done'?KNOW_+' read everything you sent'+sentWords(j)+(eN?'. Picked out '+eN+ofAll()+'.':'.')
         :(j.state==='sending'||j.state==='checking'||j.state==='queued'?'Getting started… ':'')+KNOW_+' is reading everything you sent'+sentWords(j)+'.',
-      synthesis:st.synthesis==='done'?STRAT_+' planned the whole brief; the plan is with '+WRITER+'.':st.synthesis==='working'?STRAT_+' is planning, then researching what the plan needs…':'Waiting for '+KNOW+'.',
+      synthesis:st.synthesis==='done'?STRAT_+' planned the whole brief; the plan is with '+WRITER+'.':st.synthesis==='working'&&asking?STRAT_+' is looking things up while you answer…':st.synthesis==='working'?STRAT_+' is planning, then researching what the plan needs…':'Waiting for '+KNOW+'.',
       drafter:st.drafter==='done'?(d.w?WRITER_+' wrote '+d.w+ofAll()+'.':WRITER_+': none of my parts went into the brief this time.')+(d.props.length?' A new version of '+(d.props.length===1?'1 part':d.props.length+' parts')+' for you; you hold '+(d.props.length===1?'it':'them')+'.':'')
         :st.drafter==='working'?(d.n?WRITER_+': '+d.k+' of my '+d.n+' written':WRITER_+' is starting…'):'Waiting for '+STRAT+'.',
       judge:st.judge==='needs-you'?REV_+': '+Num(failed)+' '+(failed===1?'part needs':'parts need')+' you.':st.judge==='done'?REV_+': every part I checked holds up.':st.judge==='working'?(c.texts.judge||REV_+' is checking…'):'Waiting for '+WRITER+'.'
@@ -3097,8 +3146,9 @@
     var P=PLAN[at], k=P.who;
     $('capAgent').textContent=P.name.toUpperCase()+' AGENT';
     var l1=$('procH'), l2=$('procS');
-    var asking=j.state==='needs_input'&&j.question&&j.question.id, aw=asking&&ROLES?ROLES.forStage('brief', j.question.stage||j.stage):'';
-    l1.textContent=asking?stageAsks(aw):H[j.state]||P.l1;
+    // the agent asks: one question (j.question) or intake's few before the plan (j.questions)
+    var asks=asking&&!!(arr(j.questions).length||j.question&&j.question.id), aw=asks&&ROLES?ROLES.forStage('brief', (j.question&&j.question.stage)||j.stage):'';
+    l1.textContent=asks?stageAsks(aw):H[j.state]||P.l1;
     l1.title=sayer(k);
     var stopLine=stopAt>=0?(j.state==='cancelled'?'You stopped it at '+P.name.toLowerCase()+'. What the agents had written stays in the brief.':'The agents had to stop at '+P.name.toLowerCase()+'.'):'';
     l2.textContent=j.error?j.error:j.state==='done'?'Opening it now…':stopLine||('Step '+(at+1)+' of '+PLAN.length+' · '+LINE[k]);
@@ -3130,6 +3180,8 @@
   function stageAsks(r){ var n=r&&ROLES?ROLES.name(r):'The agent'; return n.charAt(0).toUpperCase()+n.slice(1)+' asks'; }
   function askInStage(j, at){
     var q=j.state==='needs_input'?j.question:null, box=$('procAsk'), stage=$('meet');
+    // intake's few questions before the plan: the same card under the risen sphere, drawn by renderAsk
+    if(renderAsk(j)){ ASK.id=null; if(ROLES) ROLES.ask(stage, true); return; }
     if(!q||!q.id){ if(box){ box.innerHTML=''; box.hidden=true; } ASK.id=null; if(ROLES) ROLES.ask(stage, false); return; }
     var who=ROLES?ROLES.forStage('brief', q.stage||j.stage):'', name=who?ROLES.The(who):'The agent', opts=arr(q.options), hid='bq-'+String(q.id).replace(/[^a-z0-9_-]/gi,'');
     if(ASK.id!==q.id){ ASK.id=q.id; ASK.busy=false; ASK.draft=''; }
@@ -3159,10 +3211,49 @@
       j.delay=1000; onJobReply(j, r);
     }, function(e){ ASK.busy=false; unreachable(j, e); });
   }
+  // Intake (feature brief-intake-qa, middleware-api §10.1 input.intake, §10.6 job.questions): a few questions before
+  // the plan, in the agent-stage card under the risen sphere, signed by the agent of the stage asking (the Strategy
+  // agent, at context). Skip on each skippable question; "Skip, just draft" sends none.
+  function askHtml(qs, name){
+    var cid=function(q){ return 'ask_'+String(q.id).replace(/[^a-z0-9_-]/gi,''); };
+    return '<span class="aq-k">'+esc(name||'The agent')+' asks</span><span class="aq-q" id="bq-intake">A few quick questions before the plan</span>'
+      +'<p class="aq-note">One line each is plenty. What you skip, '+esc(WRITER)+' proposes and marks for you to confirm.</p>'
+      +qs.map(function(q){ return '<div class="aq-item" data-q="'+esc(q.id)+'"><label class="aq-l" for="'+cid(q)+'">'+esc(q.text)+'</label>'
+        +(q.why?'<span class="aq-why">'+esc(q.why)+'</span>':'')+'<textarea id="'+cid(q)+'" rows="2"></textarea>'
+        +(q.skippable===false?'':'<button type="button" class="aq-skip" data-skip="'+esc(q.id)+'">Skip this one</button>')+'</div>'; }).join('')
+      +'<div class="aq-acts"><button type="button" class="sp-btn" id="askSkipAll">Skip, just draft</button><button type="button" class="sp-btn aq-send" id="askSend">Send answers</button></div>';
+  }
+  // Drawn once per set, so what is typed survives the next poll. -> true while intake's questions are on the card.
+  function renderAsk(j){
+    var box=$('procAsk'), qs=j.state==='needs_input'&&j.questions&&j.questions.length?j.questions:null;
+    if(!qs){ if(box.getAttribute('data-qs')){ box.hidden=true; box.innerHTML=''; box.classList.remove('aq-many'); } box.removeAttribute('data-qs'); return false; }
+    if(box.getAttribute('data-qs')!==j.questions_id){
+      var who=ROLES?ROLES.forStage('brief', j.stage||'context'):'';
+      box.setAttribute('data-qs', j.questions_id); j.skipped={};
+      box.innerHTML=askHtml(qs, who?ROLES.The(who):'');
+      box.classList.add('aq-many'); box.setAttribute('aria-labelledby', 'bq-intake');
+      qs.forEach(function(q){
+        var row=box.querySelector('.aq-item[data-q="'+q.id+'"]'), ta=row.querySelector('textarea'), sk=row.querySelector('.aq-skip');
+        if(sk) sk.addEventListener('click',function(){
+          var off=!j.skipped[q.id]; j.skipped[q.id]=off; row.classList.toggle('skipped',off); ta.disabled=off; if(off) ta.value='';
+          sk.textContent=off?'Skipped. Answer it after all':'Skip this one'; if(!off) ta.focus();
+        });
+      });
+      box.querySelector('#askSkipAll').addEventListener('click',function(){ answerJob(j, {}); });
+      box.querySelector('#askSend').addEventListener('click',function(){
+        var out={}; qs.forEach(function(q){ var v=j.skipped[q.id]?'':String(box.querySelector('#ask_'+String(q.id).replace(/[^a-z0-9_-]/gi,'')).value||'').trim(); out[q.id]=v||null; });
+        answerJob(j, out);
+      });
+      box.hidden=false;
+      try{ box.focus({preventScroll:true}); }catch(e){}
+    }
+    box.querySelectorAll('button').forEach(function(el){ el.disabled=!!j.answering; });
+    return true;
+  }
   // Back to the ask: a stopped run goes back as before; a live one keeps working while you look
   // at the ask (step 2, Agents, brings you back to it).
   $('procBackL').addEventListener('click',function(){
-    var j=DRAFT, live=j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking');
+    var j=DRAFT, live=j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input');
     if(!live) DRAFT=null;
     forceIntake=true; setPhase('intake'); render();
   });
@@ -3177,7 +3268,7 @@
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
     setPhase('proc'); window.scrollTo(0,0);
     if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; renderProc(); pollJob(j); return; }
-    runJob(j, {prompt:prompt, attachments:atts});
+    runJob(j, {prompt:prompt, attachments:atts, intake:true});  // the planner is here to answer: ask first (§10.1)
     renderProc();
   }
 
@@ -4036,7 +4127,8 @@
   }
   // The grid export: the default. The parts that ran over their box are named in LAST_GRID_WARNINGS.
   var LAST_GRID_WARNINGS=[], LAST_GRID_OVERFLOW=[];
-  function buildGridExportHTML(){
+  // tight: the sheets (numbered from 1) to print one step smaller, when they are too full with no part over its limit.
+  function buildGridExportHTML(tight){
     var logos=[];
     return inlineLogos().then(function(l){ logos=l; return chainForExport(); }).then(function(){
       var pr=get('projection')||{}, m=(window.__CLAN__||{}).manifest||{};
@@ -4046,7 +4138,7 @@
       var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
       var me=((window.__CLAN__||{}).me||{}).name;
       var info=gridHeaderInfo({client:client, project:project, version:m.version, date:date, me:me});
-      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version, logos:logos, conf:confList()});
+      var g=gridBody({get:get, hasVal:hasVal, cit:cit, info:info, project:project, client:client, version:m.version, logos:logos, conf:confList(), tight:tight});
       LAST_GRID_WARNINGS=g.warnings;
       // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's injectors never mistake these literals for the real ones.
       var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+esc(project)+'</title><style>'+gridCss()+'</style><\/head><body>'
@@ -4055,7 +4147,8 @@
     });
   }
   // style: none for the sheet (Save · PDF), 'client' for the sheet's client copy, 'grid' for the grid template, 'plain'.
-  function buildExportHTML(style){ return style==='plain'?buildPlainExportHTML():style==='grid'?buildGridExportHTML():buildSheetExportHTML(style==='client'?'client':'agency'); }
+  // tight: the grid's sheets to print one step smaller (runExport).
+  function buildExportHTML(style, tight){ return style==='plain'?buildPlainExportHTML():style==='grid'?buildGridExportHTML(tight):buildSheetExportHTML(style==='client'?'client':'agency'); }
   // A part the Review agent rejected is written, not approved. Its stored value says so, the way the draft marks an assumption:
   // "To confirm:" in front (a list marks its first line), which the sheet draws as the box's corner tag.
   function confirmMarked(v){
@@ -4112,15 +4205,15 @@
     return fillParts(gaps.map(function(g){ return g.key; })).then(function(rejected){
       var left=gridGaps(ctx);
       if(left.length){ toast('Not exported: '+listWords(left.map(function(g){ return g.label.toLowerCase(); }))+' still needs writing. Ask '+WRITER+' again from its row.'); return; }
-      return runExport(kind, style, false, rejected);
+      return runExport(kind, style, false, undefined, rejected);
     });
   }
-  // A brief never leaves with a sheet clipped: one that runs past its footer has the Brief agent tighten the longest parts, once;
-  // if it still does not fit, the export stops and says which sheet.
-  function runExport(kind, style, retried, rejected){
+  // A brief never leaves with a sheet clipped: one that runs past its footer has the Brief agent tighten the longest parts, once
+  // (a grid sheet with no part over its limit first prints one step smaller); if it still does not fit, the export stops and says which sheet.
+  function runExport(kind, style, retried, tight, rejected){
     rejected=rejected||[];
     toast('Preparing '+kind.toUpperCase()+'…');
-    return buildExportHTML(style).then(function(html){
+    return buildExportHTML(style, tight).then(function(html){
       // The sheet: a page that could not be measured is not printed.
       if(style!=='plain'&&style!=='grid'&&html==null){
         toast('Not exported: this browser could not lay the sheet out on its pages. Try again, or use Plain PDF or Plain HTML.');
@@ -4132,13 +4225,15 @@
         return null;
       }
       if(style==='grid'&&LAST_GRID_OVERFLOW.length){
+        // Too full with no part over its limit: the sheet steps its type down once, before anyone is asked to rewrite.
+        if(!tight&&!LAST_GRID_WARNINGS.length) return runExport(kind, style, retried, LAST_GRID_OVERFLOW.slice(), rejected);
         var long=LAST_GRID_WARNINGS.slice().sort(function(a,b){ return b.words/b.limit-a.words/a.limit; });
         if(!long.length) long=gridLongest(2);  // nothing over its limit: the longest parts have no limit, so they go first
         var names=listWords(long.map(function(w){ return w.label.toLowerCase(); }));
         if(!retried&&long.length&&!docLocked()&&!noMiddleware()){
           toast(WRITER_+' is tightening '+names+' to fit the sheet…');
           return fillParts(long.map(function(w){ return w.key; }), function(k){ return gridLimit(k)?'Rewrite this part in at most '+gridLimit(k)+' words, keeping what matters most.':'Rewrite this part about a third shorter, keeping what matters most.'; })
-            .then(function(more){ return runExport(kind, style, true, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
+            .then(function(more){ return runExport(kind, style, true, tight, rejected.concat((more||[]).filter(function(l){ return rejected.indexOf(l)===-1; }))); });
         }
         toast('Not exported: sheet '+LAST_GRID_OVERFLOW[0]+' is too full. Shorten '+(names||'its parts')+' and export again.');
         return null;
