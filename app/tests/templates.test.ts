@@ -2698,13 +2698,10 @@ test('the header’s rows move and resize like every other part; the version is 
   assert.match(fn(BM, 'sheetCtx'), /meta:\[clientName\(\), docVersion\(\), fmtDay\(lastWhen\(\)\)\]/)
 })
 
-test('a long header row shows two lines on screen, clamped on the clan-field’s button; the panel and print keep every word', () => {
-  // The screen clamp reaches the words: the clan-field's button (its own formatting context) and a plain
-  // value; it is screen-only and never on the printed page (.page), which keeps every word.
-  const clamp = /@media screen\{\s*\.sheet\.a4:not\(\.page\) \.pgrid > \.row\.k-cell \.val:not\(:has\(\.clf\)\),\s*\.sheet\.a4:not\(\.page\) \.pgrid > \.row\.k-cell \.val \.clf\.txt-f\{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;/
-  assert.match(BM, clamp)
-  assert.equal((BM.match(/k-cell[^{}]*\{[^}]*line-clamp/g) || []).length, 1, 'the one clamp on a header row, the screen’s')
-  assert.doesNotMatch(BM, /\.a4\.page[^{}]*k-cell[^{}]*\{[^}]*line-clamp/, 'no clamp on the printed sheet')
+test('a header row shows its whole text, never truncated (owner, 2026-11-10); the panel and print keep every word', () => {
+  // A ruled header row spans the page, so a long value simply wraps: no line clamp, no ellipsis, on screen or in print.
+  assert.equal((BM.match(/k-cell[^{}]*\{[^}]*line-clamp/g) || []).length, 0, 'no clamp on a header row')
+  assert.doesNotMatch(BM, /k-cell[^{}]*\{[^}]*text-overflow:ellipsis/, 'no ellipsis on a header row')
   // The whole text: the row's tooltip, and the Selected part panel when the row is clicked.
   assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?' title="'\+esc\(String\(v\)\)/)
   assert.match(fn(BM, 'renderSelPart'), /isMeta\(f\.key\)&&hasVal\(get\(f\.key\)\)\?'<p class="sp-full">'/)

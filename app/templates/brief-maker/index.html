@@ -1113,8 +1113,7 @@
      written part's words are inside the clan-field's button (its own formatting context, which a clamp
      on .val never reaches), a plain one's in .val. */
   @media screen{
-    .sheet.a4:not(.page) .pgrid > .row.k-cell .val:not(:has(.clf)),
-    .sheet.a4:not(.page) .pgrid > .row.k-cell .val .clf.txt-f{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}
+    .sheet.a4:not(.page) .pgrid > .row.k-cell .val .clf.txt-f{overflow-wrap:anywhere}
     .sheet.a4:not(.page) .pgrid > .row.k-cell .val .clf.txt-f{text-align:left;width:calc(100% + 8px)}
   }
   .sheet.a4 .pgrid > .row.k-cell .val.empty{font-style:italic;font-weight:400;color:var(--b-muted)}
