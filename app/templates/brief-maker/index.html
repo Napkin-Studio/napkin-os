@@ -729,6 +729,10 @@
     --nd-line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --nd-line-strong:#CFC6B6;
     --nd-warn:#E09A4B; --nd-warn-soft:#3A2A18; --nd-ok:#5DBB83; --nd-ok-soft:#1C2E23;
   }
+  /* An agency whose accent is a line, never a fill (accentUse 'line', Catapult): the primary stays the
+     base in dark too, its ink on it, outlined in the accent (--ag-act-line), as the shell's own buttons. */
+  @media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
+  :root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
   body{background:var(--nd-desk)!important;background-image:none!important;font-family:var(--font-ui);font-size:15px;line-height:1.55;color:var(--nd-ink)}
 
   /* the desk: an A4-ish sheet (860) and the 440 side tab, 32 apart, 28 under the bar */
@@ -760,6 +764,8 @@
   .b-logos{display:inline-flex;align-items:center;gap:10px}
   .b-logos:empty{display:none}
   .b-logo{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;background:var(--ib);color:var(--if);font:800 13px var(--font-ui);letter-spacing:-.03em;flex:none}
+  .b-logo.has-icon,.lb-tile.has-icon{background:none;overflow:hidden}
+  .has-icon > img{width:100%;height:100%;object-fit:contain;display:block}
   .b-logo-img{height:32px;width:auto;max-width:140px;object-fit:contain;display:block}
   .b-x{display:block;width:1px;height:26px;background:color-mix(in srgb,var(--b-text) 30%,transparent);flex:none}
   .b-iname{font:700 16px var(--font-ui);letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--b-text)}
@@ -1018,7 +1024,7 @@
   .nb-act button:hover{background:var(--nd-ink);color:var(--nd-card)}
   .nb-act button.nb-why{border:0;background:none;color:var(--nd-muted);padding:0 4px;text-decoration:underline;text-underline-offset:3px}
   .nb-act button.nb-why:hover{background:none;color:var(--nd-ink)}
-  .nb-act button.nb-primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+  .nb-act button.nb-primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act-line,var(--ag-act))}
   .nb-in{flex:1;min-width:160px;height:28px;border:1px solid var(--nd-line-strong);border-radius:6px;padding:0 8px;font:13px var(--font-ui);background:var(--nd-card);color:var(--nd-ink)}
   .nb-q.done .nb-t{color:var(--nd-muted)}
   .nb-a{font-size:12.5px;font-weight:600;color:var(--nd-ok)}
@@ -1121,11 +1127,11 @@
   .b-head .status{font-size:12px;line-height:1.45;color:var(--nd-muted)}
   .b-head .status:empty{display:none}
   .b-lockslot{display:grid;gap:8px}
-  .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;min-height:28px;padding:0 14px;border:1px solid var(--ag-act);border-radius:6px;background:var(--ag-act);color:var(--ag-act-ink);font:600 12.5px var(--font-ui);cursor:pointer;box-shadow:none;text-shadow:none}
+  .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;min-height:28px;padding:0 14px;border:1px solid var(--ag-act-line,var(--ag-act));border-radius:6px;background:var(--ag-act);color:var(--ag-act-ink);font:600 12.5px var(--font-ui);cursor:pointer;box-shadow:none;text-shadow:none}
   .btn-primary:hover:not(:disabled){filter:brightness(1.08)}
   .btn-primary:disabled{opacity:.5;cursor:not-allowed}
   .btn-primary:focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
-  #structured .stab .lock.btn-primary{height:38px;min-height:38px;border:1px solid var(--ag-act);border-radius:6px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui)}
+  #structured .stab .lock.btn-primary{height:38px;min-height:38px;border:1px solid var(--ag-act-line,var(--ag-act));border-radius:6px;background:var(--ag-act);color:var(--ag-act-ink);font:600 13.5px var(--font-ui)}
   #structured .stab .lock.btn-primary:disabled{opacity:.5;cursor:not-allowed}
   #structured .stab .lock.btn-primary.locked{background:var(--nd-paper);color:var(--nd-ink);border-color:var(--nd-line)}
   .b-lockwhy{font-size:12px;color:var(--nd-muted);text-align:center}
@@ -1160,8 +1166,8 @@
   .sp-chip-c.ok{color:var(--nd-ok);border-color:color-mix(in srgb,var(--nd-ok) 45%,transparent)}
   .sp-chip-c.warn{color:var(--nd-warn);border-color:color-mix(in srgb,var(--nd-warn) 45%,transparent)}
   .sp-chip-c.on{background:var(--nd-ink);color:var(--nd-card);border-color:var(--nd-ink)}
-  #structured .side-part .sp-acts button.btn-primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
-  #structured .side-part .sp-acts button.btn-primary:hover:not(:disabled){border-color:var(--ag-act);filter:brightness(1.08)}
+  #structured .side-part .sp-acts button.btn-primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act-line,var(--ag-act))}
+  #structured .side-part .sp-acts button.btn-primary:hover:not(:disabled){border-color:var(--ag-act-line,var(--ag-act));filter:brightness(1.08)}
   .sp-keys{align-self:center;font:11px var(--font-mono);color:var(--nd-muted)}
   .sp-reason{display:grid;gap:4px;font:600 12px var(--font-ui);color:var(--nd-muted)}
   .sp-reason textarea,.sp-regen textarea{width:100%;box-sizing:border-box;min-height:48px;padding:6px 8px;border:1px solid var(--nd-line-strong,var(--nd-line));border-radius:6px;background:var(--nd-card);color:var(--nd-ink);font:400 13px/1.45 var(--font-ui);resize:vertical}
@@ -3457,11 +3463,14 @@
   function initialsOf(n){ n=String(n||'').replace(/[^A-Za-z0-9+ ]/g,' ').trim(); var w=n.split(/[\s+]+/).filter(Boolean); if(!w.length) return ''; if(/^mc/i.test(w[0])) return 'Mc'; if(w[0].length>2&&w[0]===w[0].toUpperCase()&&/[A-Z]/.test(w[0])) return w[0].slice(0,2); return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0].slice(0,2).toUpperCase(); }
   // A logo tile for a name with no picture: the client's in the brief's colour, the agency's in its own.
   function tileOf(kind){
-    if(kind==='agency'){ var a=window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now(); var nm=agencyName(); if(!nm) return null; return {name:nm, txt:initialsOf(nm), bg:a?a.base:'#141413', fg:a?a.accent:'#FFFFFF'}; }
+    // The agency's square mark when the shell gives one (NapkinAgency.now().icon: Boys+Girls, Catapult, Pluto); else its initials.
+    if(kind==='agency'){ var a=window.NapkinAgency&&NapkinAgency.now&&NapkinAgency.now(); var nm=agencyName(); if(!nm) return null; return {name:nm, txt:initialsOf(nm), bg:a?a.base:'#141413', fg:a?a.accent:'#FFFFFF', icon:a&&typeof a.icon==='string'&&a.icon.indexOf('data:image/')===0?a.icon:''}; }
     var cn=clientName(); if(!cn) return null; var acc=String(get('theme.accent')||''); acc=/^#[0-9a-f]{6}$/i.test(acc)?acc:'#C9462A';
     return {name:cn, txt:initialsOf(cn), bg:acc, fg:readable(acc)};
   }
-  function tileHtml(t, cls){ return t?'<span class="'+(cls||'b-logo')+'" style="--ib:'+esc(t.bg)+';--if:'+esc(t.fg)+'">'+esc(t.txt)+'</span>':''; }
+  // (logoTileHtml: a stand-in logo tile; tileHtml is the drafting progress tile's.)
+  function logoTileHtml(t, cls){ return !t?'':t.icon?'<span class="'+(cls||'b-logo')+' has-icon"><img src="'+esc(t.icon)+'" alt="'+esc(t.name)+'" /></span>'
+    :'<span class="'+(cls||'b-logo')+'" style="--ib:'+esc(t.bg)+';--if:'+esc(t.fg)+'">'+esc(t.txt)+'</span>'; }
   // The version and the date the sheet carries: the host's version, the latest change.
   // The version a person would say: one more than the times it was locked (the host's version is a hash).
   function docVersion(){ var n=arr((osView()||{}).decisions).filter(function(b){ return b&&b.decision&&b.decision.kind==='approve'&&arr(b.targets).some(function(t){ return t&&t.here!==false; }); }).length; return 'v'+Math.max(1,n); }
@@ -5185,7 +5194,7 @@
   function logosHidden(){ return arr(layoutData().logosHidden).filter(function(k){ return STAND_INS.indexOf(k)>=0; }); }
   function standInsApply(){ return !sheetLogos().filter(logoSrc).length; }
   function standIns(){ if(!standInsApply()) return []; var h=logosHidden(); return STAND_INS.filter(function(k){ return h.indexOf(k)<0&&!!tileOf(k); }); }
-  function standInTiles(){ return standIns().map(function(k){ return tileHtml(tileOf(k)); }); }
+  function standInTiles(){ return standIns().map(function(k){ return logoTileHtml(tileOf(k)); }); }
   // What the sheet shows, for the fold's summary: its pictures, else its stand-ins.
   function logosOnSheet(){ var n=sheetLogos().filter(logoSrc).length; return n||standIns().length; }
   function setStandIn(k, on){
@@ -5228,8 +5237,8 @@
     // the sheet, and a tile taken off waits below as a quiet way to bring it back.
     var virt=standIns(), gone=standInsApply()?logosHidden().filter(function(k){ return !!tileOf(k); }):[];
     box.innerHTML=virt.map(function(k){ var t=tileOf(k);
-      return '<div class="logo virt"><label title="Click to put '+esc(t.name)+'’s logo here">'+tileHtml(t,'lb-tile')+'<small>'+esc(t.name)+'</small><input type="file" class="sr" data-slot="'+k+'" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'
-        +'<button type="button" class="x" data-hide="'+k+'" aria-label="Take '+esc(t.name)+'’s initials off the sheet" title="Take off the sheet">×</button></div>'; }).join('')
+      return '<div class="logo virt"><label title="Click to put '+esc(t.name)+'’s logo here">'+logoTileHtml(t,'lb-tile')+'<small>'+esc(t.name)+'</small><input type="file" class="sr" data-slot="'+k+'" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'
+        +'<button type="button" class="x" data-hide="'+k+'" aria-label="Take '+esc(t.name)+'’s '+(t.icon?'logo':'initials')+' off the sheet" title="Take off the sheet">×</button></div>'; }).join('')
       +ls.map(function(l,i){
       var src=logoSrc(l);
       return '<div class="logo'+(l.ref.brand?' kit':'')+'">'+(src?'<img src="'+esc(src)+'" alt="" />':'<span class="muted">Brand Clan</span>')+'<small>'+esc(short(l.label||(LOGO_SLOTS.filter(function(s){ return s[0]===l.slot; })[0]||[,''])[1],14))+'</small>'
@@ -5238,7 +5247,7 @@
     }).join('')+kitOffers().map(function(x,i){
       return '<button type="button" class="logo kit offer" data-k="'+i+'" title="Put the '+esc(x.brand)+' Brand Clan’s '+esc(x.name)+' on the brief"><img src="'+esc(assetUrl(x.asset))+'" alt="" /><span>'+esc(short(x.name,14))+'</span><span class="muted">Brand Clan</span></button>';
     }).join('')+'<label class="logo add" title="Add a logo (PNG, JPG, SVG or WebP)"><b aria-hidden="true">+</b><small>Add logo</small><input type="file" class="sr" accept="image/png,image/jpeg,image/svg+xml,image/webp" /></label>'
-      +gone.map(function(k){ return '<button type="button" class="logo-back" data-show="'+k+'">Show '+esc(tileOf(k).name)+'’s initials</button>'; }).join('');
+      +gone.map(function(k){ return '<button type="button" class="logo-back" data-show="'+k+'">Show '+esc(tileOf(k).name)+'’s '+(tileOf(k).icon?'logo':'initials')+'</button>'; }).join('');
     box.querySelectorAll('.x[data-hide]').forEach(function(b){ b.addEventListener('click', function(e){ e.preventDefault(); setStandIn(b.getAttribute('data-hide'), false); }); });
     box.querySelectorAll('.logo-back[data-show]').forEach(function(b){ b.addEventListener('click', function(){ setStandIn(b.getAttribute('data-show'), true); }); });
     box.querySelectorAll('.virt input[data-slot]').forEach(function(inp){ inp.addEventListener('change', function(){ var f=this.files&&this.files[0]; this.value=''; if(f) addLogo(f, inp.getAttribute('data-slot')); }); });

@@ -116,7 +116,7 @@ function logos(o: { layout?: Record<string, unknown>; logos?: unknown[]; client?
     layoutParts: () => ({}), layoutItems: () => [],
     patch: (k: string, v: unknown, d: { action: string }) => { patches.push([k, v, d]); data[k] = v; return Promise.resolve({ ok: true }) },
   }
-  const fns = ['layoutData', 'logosOf', 'logoSrc', 'slotRank', 'sheetLogos', 'logosHidden', 'standInsApply', 'standIns', 'standInTiles', 'logosOnSheet', 'setStandIn', 'lookSet', 'tileHtml', 'renderSheetHead', 'renderLogos']
+  const fns = ['layoutData', 'logosOf', 'logoSrc', 'slotRank', 'sheetLogos', 'logosHidden', 'standInsApply', 'standIns', 'standInTiles', 'logosOnSheet', 'setStandIn', 'lookSet', 'logoTileHtml', 'renderSheetHead', 'renderLogos']
   const body = `${fns.map(n => fn(BM, n)).join('\n')}\nreturn { ${fns.join(',')} };`
   const T = new Function(...Object.keys(env), body)(...Object.values(env)) as Record<string, (...a: unknown[]) => any>
   return { T, ids, patches, data }
@@ -162,7 +162,7 @@ test('with both stand-ins hidden, nothing shows on the sheet or in print, and th
   assert.match(fn(BM, 'sheetCtx'), /tiles:standInTiles\(\)/)
   assert.match(fn(BM, 'sheetDoc'), /:arr\(ctx\.tiles\)/)
   assert.match(fn(BM, 'renderSheetHead'), /:standInTiles\(\)/)
-  assert.doesNotMatch(BM, /\[tileHtml\(tileOf\('client'\)\), tileHtml\(tileOf\('agency'\)\)\]/, 'nothing draws the tiles past the hidden list')
+  assert.doesNotMatch(BM, /\[(?:logoT|t)ileHtml\(tileOf\('client'\)\), (?:logoT|t)ileHtml\(tileOf\('agency'\)\)\]/, 'nothing draws the tiles past the hidden list')
 })
 
 test('a hidden stand-in waits on the fold as a quiet way back, which puts it on the sheet again', () => {

@@ -552,11 +552,15 @@ var NapkinAgency=(function(){
   function apply(c){
     if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
     now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null,
-      logo:img(c.logo), logoOnDark:img(c.logoOnDark), icon:img(c.icon)};
+      logo:img(c.logo), logoOnDark:img(c.logoOnDark), icon:img(c.icon), accentUse:c.accentUse==='line'?'line':'fill'};
     var r=document.documentElement;
     r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
     r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', HEX.test(c.accentInk||'')?c.accentInk:inkOn(c.accent));
     r.setAttribute('data-agency', '');
+    // accentUse 'line' (palette.ts: Catapult's crimson): actions stay the base in both themes, with
+    // the accent as their outline (--ag-act-line), never a fill; an app's CSS reads data-agency-accent.
+    if(now.accentUse==='line'){ r.setAttribute('data-agency-accent','line'); r.style.setProperty('--ag-act-line', c.accent); }
+    else { r.removeAttribute('data-agency-accent'); r.style.removeProperty('--ag-act-line'); }
     try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
   }
   function start(){ if(window.clan&&typeof window.clan.me==='function') window.clan.me().then(function(m){ if(m&&m.agency) apply(m.agency); }, function(){}); }
