@@ -23,11 +23,11 @@ import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import { statusOf, type BarItem } from './appBar'
+import { modeOf, statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
-import { isProductApp, markTarget } from '../components/medallionMotion'
+import { isProductApp, markTarget, pageRunOf } from '../components/medallionMotion'
 import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
@@ -113,7 +113,6 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const engaged = useEngaged()
   // Only a product's document (Brief, Research, Deck, Production) moves the mark; any other app keeps it at rest.
   const product = isProductApp(open.manifest.app?.app_id)
-  const mark_ = markTarget({ inDoc: product, needs, run, finished: runSeen.finished, engaged })
   // The Decisions drawer, opened from the bar. Kept with the document it was opened on.
   const [drawer, setDrawer] = useState<{ docPath: string; open: boolean }>({ docPath, open: false })
   const decisionsOpen = drawer.docPath === docPath && drawer.open
@@ -303,6 +302,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const barItems = barState.doc === docPath && !clientOn ? barState.items : []
   // The app's own word for its state wins over the shell's, where it sends one.
   const appStatus = statusOf(barItems)
+  // The page says its agents are at work (the bar's working chip) before the host's run catches up:
+  // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
+  const pageRun = pageRunOf(modeOf(barItems))
+  const mark_ = markTarget({ inDoc: product, needs, run: run?.state === 'working' || !pageRun ? run : pageRun, finished: runSeen.finished, engaged })
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null

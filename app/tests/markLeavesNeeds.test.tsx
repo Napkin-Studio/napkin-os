@@ -88,3 +88,12 @@ test('a document of an app that is not a product never warms the mark', () => {
   const t = markTarget({ inDoc: isProductApp('ie.napkin.home'), needs: 5, run: { state: 'waiting' }, engaged: true })
   assert.deepEqual(t, { state: 'awake', progress: 0 })
 })
+
+test('a page that says its agents are working moves the mark to working, with its step', async () => {
+  const { markTarget, pageRunOf } = await import('../src/components/medallionMotion')
+  const run = pageRunOf({ mode: 'working', label: 'Working · step 1/4' })
+  assert.deepEqual(run, { state: 'working', progress: [0, 4] })
+  assert.equal(markTarget({ inDoc: true, needs: 0, run, engaged: false }).state, 'working')
+  assert.equal(pageRunOf({ mode: 'ask', label: 'New brief' }), null)
+  assert.equal(pageRunOf(null), null)
+})

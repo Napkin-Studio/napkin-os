@@ -178,3 +178,10 @@ export function stepLook(l: Look, tx: number, ty: number, dt: number): Look {
   const vy = l.vy + (-w * w * (l.ly - ty) - 2 * w * l.vy) * dt
   return { vx, vy, lx: l.lx + vx * dt, ly: l.ly + vy * dt }
 }
+
+/** A page-reported run (the bar's `mode: working`, label e.g. "Working · step 1/4") as the mark's run. */
+export function pageRunOf(mode: { mode: 'ask' | 'working'; label: string } | null): MarkInputs['run'] {
+  if (!mode || mode.mode !== 'working') return null
+  const m = /(\d+)\s*\/\s*(\d+)/.exec(mode.label || '')
+  return { state: 'working', progress: m ? [Math.max(0, Number(m[1]) - 1), Number(m[2])] : undefined }
+}
