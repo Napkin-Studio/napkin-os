@@ -168,15 +168,15 @@ def build_packets(rows: list[dict]):
             for order, bucket in ((1, pairs1), (2, pairs2)):
                 win_is_x = (swap == 0) == (order == 1)
                 x, y = (win, first) if win_is_x else (first, win)
-                item = f"o{order}-{opaque('pair', r['name'], order)}"
+                item = f"o{order}-{opaque('pair', r['name'], order, first, win)}"
                 bucket.append({"item": item, "kind": "pair", "prompt": render_pair(r["brief_text"], tidy(r["insight"]), x, y)})
                 key["pairs"][item] = {"job": r["name"], "order": order, "X": "winner" if win_is_x else "first_draft",
                                       "Y": "first_draft" if win_is_x else "winner"}
         if len(r["pool"]) >= 2:
             order = sorted(range(len(r["pool"])), key=lambda i: hashlib.sha256(f"{SALT}|idea|{r['name']}|{i}".encode()).hexdigest())
-            item = f"s-{opaque('idea', r['name'])}"
+            item = f"s-{opaque('idea', r['name'], *[tidy(p['value']) for p in r['pool']])}"
             listing = "\n".join(f"{k + 1}. {tidy(r['pool'][i]['value'])}" for k, i in enumerate(order))
-            ideas.append({"item": item, "kind": "sameidea", "prompt": SAME_IDEA_PROMPT.format(n=len(order), listing=listing)})
+            ideas.append({"item": item, "kind": "sameidea", "n": len(order), "prompt": SAME_IDEA_PROMPT.format(n=len(order), listing=listing)})
             key["sameidea"][item] = {"job": r["name"], "n": len(order),
                                      "numbers": {str(k + 1): r["pool"][i]["source"] for k, i in enumerate(order)}}
     def shuf(items, tag):
@@ -194,12 +194,24 @@ def pair_sum(scores: list) -> int | None:
 
 def distinct_ideas(groups, n: int) -> int | None:
     """The number of distinct ideas a rater's grouping leaves among numbers 1..n; a number left out is its own
-    idea, a number named twice counts in its first group. None when the answer is not a list of lists."""
+    idea, a number named twice counts in its first group. Digit strings and whole floats are read as numbers. None when
+    the answer is not a list of lists of numbers 1..n."""
     if not isinstance(groups, list) or not all(isinstance(g, list) for g in groups):
         return None
     seen, count = set(), 0
     for g in groups:
-        fresh = {x for x in g if isinstance(x, int) and 1 <= x <= n} - seen
+        nums = set()
+        for x in g:
+            if isinstance(x, bool):
+                return None
+            if isinstance(x, float) and x == int(x):
+                x = int(x)
+            elif isinstance(x, str) and x.strip().isdigit():
+                x = int(x.strip())
+            if not isinstance(x, int) or not 1 <= x <= n:
+                return None   # an answer that cannot be read is missing, never the most favourable count
+            nums.add(x)
+        fresh = nums - seen
         if fresh:
             count += 1
             seen |= fresh
@@ -261,11 +273,14 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+HARD_CAP_USD = 20.0   # no invocation may spend past this whatever --max-usd says
+
+
 class CostLog:
     """The per-call cost log (cost_log.jsonl) and a spending cap checked before every call."""
 
     def __init__(self, path: Path, max_usd: float):
-        self.path, self.max_usd, self.spent, self.lock = path, max_usd, 0.0, threading.Lock()
+        self.path, self.max_usd, self.spent, self.lock = path, min(max_usd, HARD_CAP_USD), 0.0, threading.Lock()
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             self.spent = sum(json.loads(l).get("cost_usd") or 0 for l in path.read_text().splitlines() if l.strip())
@@ -526,19 +541,47 @@ def _rows(out: Path) -> list[dict]:
     return rows
 
 
+def results_hash(out: Path) -> str:
+    h = hashlib.sha256()
+    for p in sorted((out / "results").glob("*.json")):
+        h.update(p.name.encode() + p.read_bytes())
+    return h.hexdigest()
+
+
 def cmd_packets(a):
     out = Path(a.out)
+    bad = [r["name"] for r in _rows(out) if r["outcome"] in FAILED]
+    if bad:
+        sys.exit(f"packets refused: results still FAILED for {', '.join(bad)}; run replay again first, then packets, then rate")
     o1, o2, ideas, key = build_packets(_rows(out))
     (out / "packets").mkdir(exist_ok=True)
     for name, doc in (("order1", o1), ("order2", o2), ("sameidea", ideas)):
         (out / "packets" / f"{name}.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False))
+    key["results_sha256"] = results_hash(out)
     (out / "key.json").write_text(json.dumps(key, indent=1))
     (out / "rating_prompts.md").write_text("# Frozen prompts (phase 0)\n\n## Pair\n\n" + PAIR_PROMPT + "\n\n## Same idea\n\n" + SAME_IDEA_PROMPT + "\n")
     print(f"{len(o1['items'])} pairs x 2 orders, {len(ideas['items'])} same-idea items; judgements: "
           f"{(len(o1['items']) * 2 + len(ideas['items'])) * 2}")
 
 
-def rater_call(rater: str, prompt: str, cost: CostLog, job: str):
+def normalise_pick(v):
+    """'X', 'Y' or 'no real difference' from a reply that may differ in case, spaces or a trailing full stop."""
+    if not isinstance(v, str):
+        return None
+    t = v.strip().rstrip(".!").strip().lower()
+    return {"x": "X", "y": "Y", "no real difference": "no real difference"}.get(t)
+
+
+def usable(obj, kind: str, n: int | None = None) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    if kind == "pair":
+        return normalise_pick(obj.get("better")) is not None
+    g = obj.get("groups")
+    return distinct_ideas(g, n if n else 99) is not None
+
+
+def rater_call(rater: str, prompt: str, cost: CostLog, job: str, kind: str = "pair", n: int | None = None):
     cost.check()
     argv = [CLAUDE, "-p", "--model", RATERS[rater], "--output-format", "json", "--no-session-persistence",
             "--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands"]
@@ -547,19 +590,20 @@ def rater_call(rater: str, prompt: str, cost: CostLog, job: str):
     try:
         env = run_claude(argv, prompt, None, 600, RATER_CWD)
     except Exception as e:
-        cost.add({**rec, "secs": round(time.monotonic() - t0, 2), "ok": False, "error": str(e)[:200], "cost_usd": 0})
+        cost.add({**rec, "secs": round(time.monotonic() - t0, 2), "ok": False, "error": str(e)[:200], "cost_usd": 0,
+                  "unknown_cost": True})
         raise
     i, o = _usage(env)
     m = re.search(r"\{.*\}", env.get("result") or "", re.S)
     obj = None
-    if m:
+    if m and not env.get("is_error"):
         try:
             obj = json.loads(m.group(0))
         except json.JSONDecodeError:
             pass
     cost.add({**rec, "secs": round(time.monotonic() - t0, 2), "in_tokens": i, "out_tokens": o,
-              "cost_usd": env.get("total_cost_usd") or 0, "ok": obj is not None})
-    return obj
+              "cost_usd": env.get("total_cost_usd") or 0, "ok": usable(obj, kind, n)})
+    return obj if usable(obj, kind, n) else None
 
 
 def cmd_rate(a):
@@ -576,13 +620,13 @@ def cmd_rate(a):
     def one(j):
         r, it = j
         try:
-            obj = rater_call(r, it["prompt"], cost, it["item"])
+            obj = rater_call(r, it["prompt"], cost, it["item"], it["kind"], it.get("n"))
         except BudgetExceeded:
             return
         except Exception as e:
             obj = None
             print(f"{r} {it['item']}: {e}", file=sys.stderr)
-        if obj is not None:   # a failed call leaves no file: it is retried by the next run, never scored
+        if obj is not None:   # a failed or unusable answer leaves no file: it is retried by the next run, never scored
             (out / "ratings" / f"{r}-{it['item']}.json").write_text(json.dumps({"rater": r, "item": it["item"], **obj}))
 
     with ThreadPoolExecutor(a.workers) as ex:
@@ -592,7 +636,8 @@ def cmd_rate(a):
 
 def cmd_analyse(a):
     out = Path(a.out)
-    key = json.loads((out / "key.json").read_text())
+    kp = out / "key.json"
+    key = json.loads(kp.read_text()) if kp.exists() else {"pairs": {}, "sameidea": {}}
     rows = _rows(out)
 
     def rating(r, item):
@@ -603,7 +648,7 @@ def cmd_analyse(a):
     for item, k in key["pairs"].items():
         for r in RATERS:
             x = rating(r, item)
-            pick_ = (x or {}).get("better")
+            pick_ = normalise_pick((x or {}).get("better"))
             side = {"X": k["X"], "Y": k["Y"]}.get(pick_)
             s = None if pick_ is None else (0 if pick_ == "no real difference" else (1 if side == "winner" else -1 if side == "first_draft" else None))
             jobs.setdefault(k["job"], {r2: [None, None] for r2 in RATERS})[r][k["order"] - 1] = s
@@ -616,8 +661,16 @@ def cmd_analyse(a):
     res["jobs"] = {r["name"]: {"outcome": r["outcome"], "winner_source": r["winner_source"], "first_flag": r["first_flag"],
                               "winner_flag": r["winner_flag"], "scores": jobs.get(r["name"]), "ideas": ideas.get(r["name"])} for r in rows}
     failed = [r["name"] for r in rows if r["outcome"] in FAILED]
+    stale = []
+    if key.get("results_sha256") != results_hash(out):
+        stale.append("key.json was built from different results: run packets, then rate, again")
+    keyed = {k["job"] for k in key["pairs"].values()}
+    stale += [f"{r['name']}:no pair in key" for r in rows
+              if r["winner"] is not None and r["winner_source"] != "first_draft" and r["name"] not in keyed]
+    if stale:
+        res["verdict"], res["missing"] = "INCOMPLETE", res["missing"] + stale
     if failed:   # a run that failed is infrastructure, not a tie: run `replay` again for it before the rule is read
-        res["verdict"], res["missing"] = "INCOMPLETE", res["missing"] + [f"{n}:run failed" for n in failed]
+        res["verdict"], res["missing"] = "INCOMPLETE", res["missing"] + [f"{n}:run failed (replay again, then packets, then rate)" for n in failed]
     res["not_part_of_the_rule"] = {"outcomes": {o: sum(1 for r in rows if r["outcome"] == o) for o in sorted({r["outcome"] for r in rows})}}
     (out / "analysis.json").write_text(json.dumps(res, indent=1))
     print(json.dumps({k: res[k] for k in ("verdict", "missing", "conditions", "pairs_rated", "ties_or_unrated")}, indent=1))

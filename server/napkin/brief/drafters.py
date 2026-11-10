@@ -41,7 +41,7 @@ N_CANDIDATES = 4
 # (a product point, a practical benefit, an emotional benefit), ADR 0007. The earlier seeds here (what the
 # audience settles for, how they are judged by others, the competitive edge, the brand's craft) were unsourced
 # and pushed drafts toward social-judgement lines. server/ cannot import engine/ (the image never holds it), so
-# tests/test_brief_candidates.py checks the words.
+# tests/test_drafters_port.py checks the words.
 SMP_ANGLE_SEEDS = (
     "build it on a killer fact: one true, specific thing about this brand or product that changes the audience's view",
     "build it on a promise: the practical benefit this audience gets that rivals do not deliver as well",
