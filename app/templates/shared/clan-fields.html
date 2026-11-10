@@ -344,8 +344,7 @@ clan-field.clf-ln{display:inline;cursor:pointer;border-radius:3px;box-decoration
 clan-field.clf-ln:hover{background:color-mix(in srgb,var(--clf-hl) 34%,transparent);box-shadow:0 2px 0 var(--clf-ink)}
 clan-field.clf-ln:has(.clf:hover,button:hover){background:none;box-shadow:none}
 clan-field.clf-ln:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
-clan-field.clf-ln[as="answer"]{display:block;margin:0 -6px;padding:4px 6px;border-radius:6px;box-shadow:none}
-clan-field.clf-ln[as="answer"]:hover{background:color-mix(in srgb,var(--clf-ink) 4%,transparent);box-shadow:none}
+/* the answer (a report's headline) lights as any line does: its words, line by line, not a block */
 clan-field.clf-ln.s-rejected,clan-field.clf-ln.s-superseded{text-decoration:line-through;text-decoration-color:var(--clf-create)}
 clan-chart .clf-chart{cursor:pointer}
 /* The views of those lines (ClanFields.card): the mock's inspector views,

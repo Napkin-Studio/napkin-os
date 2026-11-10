@@ -2342,6 +2342,21 @@ test('a long client or budget turns the meta row two by two; on screen a cell sh
   assert.match(fn(BM, 'sheetCells'), /k-cell'\+\(c\.row===1\?' r1':''\)/)
 })
 
+test('a selected line of the report lights as the mock’s claim: the headline, a summary line and a paragraph alike, no grey block, no box', () => {
+  // Hover and selection are a wash on the words themselves, line by line, with the 2px ink underline.
+  assert.match(RT, /\.rep clan-field\.clf-ln:not\(\.rp-fs\)\{padding:1px 0;border-radius:3px\}/)
+  assert.match(RT, /\.rep clan-field\.clf-ln:not\(\.rp-fs\):hover:not\(:has\(\.clf:hover,button:hover,a:hover\)\)\{background:color-mix\(in srgb,var\(--rs-hl\) 34%,transparent\);box-shadow:0 2px 0 #141413\}/)
+  assert.match(RT, /\.rep clan-field\.clf-ln\.rsel-hit:not\(\.rp-fs\)\{background:color-mix\(in srgb,var\(--rs-hl\) 62%,transparent\)!important;box-shadow:0 2px 0 #141413;outline:0\}/)
+  // The headline is a line like the others: no block of its own, no grey wash on it or its heading.
+  assert.doesNotMatch(CLF, /clan-field\.clf-ln\[as="answer"\]\{display:block/)
+  assert.doesNotMatch(RT, /\.headline:has\(> clan-field\.clf-ln|\.headline\.rsel-line\{/)
+  const mark = fn(RT, 'markReport')
+  // a pin's own chip is marked, never the cite chips inside a selected line
+  assert.match(mark, /clan-field\[ref="'\+id\+'"\] > \.clf/)
+  // a selected line takes no wash on its block or section
+  assert.match(mark, /lf\.getAttribute\('data-ref'\)===id&&!lf\.classList\.contains\('rp-fs'\)\) return;[\s\S]*rsel-line/)
+})
+
 // ── every line is a field (owner, 2026-11-09) ──────────────────────────────
 
 test('every line of a report or a list is a field: the answer, a line, a list item, a chart, a gap by its id', () => {

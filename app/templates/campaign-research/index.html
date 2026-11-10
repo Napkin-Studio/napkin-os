@@ -1246,14 +1246,14 @@ section.report{margin-top:0}
 .rp-sec.rsel-sec{background:color-mix(in srgb,#141413 3.5%,transparent);border-radius:8px;margin-left:30px!important;margin-right:30px!important;padding:14px 14px 14px}
 .rsel-line{background:color-mix(in srgb,#141413 5%,transparent);border-radius:6px;box-shadow:0 0 0 4px color-mix(in srgb,#141413 5%,transparent)}
 .rsel-hit{background:linear-gradient(transparent 38%,var(--rs-hl) 38%,var(--rs-hl) 88%,transparent 88%)!important;border-radius:2px}
-/* Every line is a field (the OS's clan-field, keep): the headline takes the mock's soft wash
-   as a whole, a summary line or a paragraph its highlighter wash, and a selected line stays lit. */
-.rep #rp-pre .headline > clan-field.clf-ln[as="answer"]{margin:0;padding:0;border-radius:0}
-.rep #rp-pre .headline > clan-field.clf-ln[as="answer"]:hover{background:none}
-.rep #rp-pre .headline:has(> clan-field.clf-ln){cursor:pointer;transition:background .12s}
-.rep #rp-pre .headline:has(> clan-field.clf-ln:hover){background:color-mix(in srgb,#141413 4%,transparent)}
-.rep #rp-pre .headline.rsel-line{background:color-mix(in srgb,#141413 5%,transparent)}
-.rep-sum clan-field.clf-ln.rsel-hit,.rp-p clan-field.clf-ln.rsel-hit{background:color-mix(in srgb,var(--rs-hl) 62%,transparent)!important;box-shadow:0 2px 0 #141413}
+/* Every line is a field (the OS's clan-field, keep). The headline, a summary line and a paragraph
+   light the same way, as the mock's claim (.rb-claim): a highlighter wash on the words themselves,
+   line by line (box-decoration-break), with a 2px ink underline; hover is the lighter wash, selection
+   the stronger one. No grey block, no box. The cite chips keep their own paper face on top. */
+.rep clan-field.clf-ln:not(.rp-fs){padding:1px 0;border-radius:3px}
+.rep clan-field.clf-ln:not(.rp-fs):hover:not(:has(.clf:hover,button:hover,a:hover)){background:color-mix(in srgb,var(--rs-hl) 34%,transparent);box-shadow:0 2px 0 #141413}
+.rep clan-field.clf-ln.rsel-hit:not(.rp-fs){background:color-mix(in srgb,var(--rs-hl) 62%,transparent)!important;box-shadow:0 2px 0 #141413;outline:0}
+.rep clan-field.clf-ln.rsel-hit :is(.clf.in,.rp-f,.pinc){background:#FFFDF8;border-color:#141413}
 .rp-fs.clf-ln:hover{outline:0}
 /* the evidence map is paper too, in both themes (the mock) */
 .insp-map:not([hidden]){--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--card:#FFFDF8;--paper:#FFFDF8;--line:#E2D9C8;--create:#C9462A;--amber:#B45309;--amber-soft:#FEF3DC;--soft:#F3ECDC;color:#141413;margin:-16px -18px 0;padding:14px 14px 14px;background:#FFFDF8;border-bottom:1px solid var(--line);gap:10px}
@@ -4760,8 +4760,13 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var o=VIEW.origin&&root.contains(VIEW.origin)?VIEW.origin:null;
     if(!o&&/^sum:/.test(id)) o=root.querySelector('.rep-sum li[data-sum="'+id.slice(4)+'"]');
     if(!o) o=root.querySelector('[data-rsel="'+id+'"],[data-ref="'+id+'"]');
-    Array.prototype.forEach.call(root.querySelectorAll('[data-rsel="'+id+'"],clan-field[ref="'+id+'"] .clf,[data-ref="'+id+'"]'), function(n){ n.classList.add('rsel-hit'); });
+    // a pin's own chip (the field's button), never the cite chips inside a line that is selected
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rsel="'+id+'"],clan-field[ref="'+id+'"] > .clf,[data-ref="'+id+'"]'), function(n){ n.classList.add('rsel-hit'); });
     if(!o) return;
+    // A line of the report (the headline, a summary line, a paragraph) is lit itself, as the mock's
+    // claim: no wash on the block or the section around it.
+    var lf=o.closest&&o.closest('clan-field.clf-ln');
+    if(lf&&lf.getAttribute('data-ref')===id&&!lf.classList.contains('rp-fs')) return;
     var line=o.closest('.rep-sum li,.rp-fp,.headline,.rp-p,tr,.rp-gp,.rp-ct'), sec=o.closest('.rp-sec');
     if(line) line.classList.add('rsel-line'); if(sec) sec.classList.add('rsel-sec');
   }
