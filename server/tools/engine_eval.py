@@ -285,6 +285,11 @@ def leftover_label(text: str) -> bool:
     return bool(re.match(r"^\s*(?:\S+\s+){0,3}\S+:", str(text or "")))
 
 
+PRIMARY_COMPARISONS = ("T1vC1.ins", "SvO", "R1vR0")
+LEFTOVER_ARMS = ("B", "C1", "T1", "S", "L", "L2", "J0", "J0p", "J1")
+_SIDE_OF_ARM = {"J0": "R0", "J0p": "R0p", "J1": "R1"}
+
+
 def words(text) -> int:
     return len(str(text or "").split())
 
@@ -1673,6 +1678,7 @@ def build_packets(inputs: list[dict], arms_by: dict, size: int | None = None):
     """Blinded batches (R1: files for the harness only), the key and the automatic ties. -> (packets, key)."""
     size = size or CFG["PACKET_SIZE"]
     items, key = [], {"pairs": {}, "sameidea": {}, "auto_ties": {}}
+    primary_left = []
     for inp in inputs:
         b, arms = inp["id"], arms_by.get(inp["id"], {})
         for cname, idea, question, first, second in comparisons():
@@ -1689,6 +1695,11 @@ def build_packets(inputs: list[dict], arms_by: dict, size: int | None = None):
             if same:
                 key["auto_ties"][tk] = "identical text"
                 continue
+            if cname in PRIMARY_COMPARISONS:      # R3: a text a rater sees must carry no label that could mark its arm
+                for side, texts in ((first, a), (second, c)):
+                    for part, t in (("insight", texts[0]), ("proposition", texts[1])):
+                        if (question == QPROP or part == "insight") and leftover_label(t):
+                            primary_left.append({"brief": b, "comparison": cname, "side": side, "part": part, "text": t[:80]})
             for it in pair_items(b, inp["brief_text"], cname, question, a, c):
                 m = it["meta"]
                 key["pairs"][it["item"]] = {"brief": b, "idea": idea, "comparison": cname, "question": question,
@@ -1709,9 +1720,24 @@ def build_packets(inputs: list[dict], arms_by: dict, size: int | None = None):
                           "prompt": SAME_IDEA_PROMPT.format(n=len(order), kind=kind, listing=listing)})
     pairs = [i for i in items if i["kind"] == "pair"]
     ideas = [i for i in items if i["kind"] == "sameidea"]
+    key["leftover_labels"] = {"by_arm": leftover_by_arm(inputs, arms_by), "primary": primary_left}
     packets = assign_packets(pairs, size, lambda i: i["twin"]) + assign_packets(ideas, size, lambda i: i["item"])
     return [{"packet": f"p{n + 1:02d}", "items": [{k: v for k, v in it.items() if k != "twin"} for it in p]}
             for n, p in enumerate(packets)], key
+
+
+def leftover_by_arm(inputs: list[dict], arms_by: dict) -> dict:
+    """R3's report: per arm, the shown texts (insight and proposition, through tidy) that still begin with four or fewer
+    words followed by a colon."""
+    left = {}
+    for a in LEFTOVER_ARMS:
+        cnt = 0
+        for inp in inputs:
+            t, _ = arm_text(arms_by.get(inp["id"], {}), inp, _SIDE_OF_ARM.get(a, a))
+            if t:
+                cnt += sum(leftover_label(tidy(x)) for x in t)
+        left[a] = cnt
+    return left
 
 
 def rating_prompts_text() -> str:
@@ -1734,6 +1760,13 @@ def cmd_packets(a):
     if short:
         sys.exit(f"packets refused: arms not settled (missing or budget_stopped): {', '.join(short)}; run replay first")
     packets, key = build_packets(inputs, arms_by)
+    lo = key["leftover_labels"]
+    print(f"leftover labels in shown texts (R3), by arm: {lo['by_arm']}; in the primary comparisons {', '.join(PRIMARY_COMPARISONS)}: "
+          f"{len(lo['primary'])}")
+    if lo["primary"]:
+        sys.exit("packets refused: a shown text in a primary comparison still carries a leading label, which could mark its arm "
+                 "(R3). Extend `tidy`'s label list (a fault fix, R7) or rerun the arm; nothing was written.\n  "
+                 + "\n  ".join(f"{x['brief']} {x['comparison']} {x['side']} {x['part']}: {x['text']!r}" for x in lo["primary"][:20]))
     (out / "packets").mkdir(exist_ok=True)
     for p in (out / "packets").glob("p*.json"):
         p.unlink()
@@ -2387,14 +2420,7 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                         "changed_by_R0_not_R1": sum(1 for b in ids if all((arms_by[b].get(j) or {}).get("status") == "ok" for j in ("J0", "J1")) and tidy(arms_by[b]["J0"]["proposition"]) != tidy(arms_by[b]["B"]["proposition"]) and tidy(arms_by[b]["J1"]["proposition"]) == tidy(arms_by[b]["B"]["proposition"])),
                         "step_ran": steps3}
     # ---------------- all: shown-text labels (R3), arm failures, retries
-    left = {}
-    for a in ("B", "C1", "T1", "S", "L", "L2", "J0", "J0p", "J1"):
-        cnt = 0
-        for b in ids:
-            t, _ = arm_text(arms_by[b], inp_by[b], {"J0": "R0", "J0p": "R0p", "J1": "R1"}.get(a, a))
-            if t:
-                cnt += sum(leftover_label(tidy(x)) for x in t)
-        left[a] = cnt
+    left = leftover_by_arm(inputs, arms_by)
     res["leftover_labels_in_shown_texts"] = left
     fails, retries = {}, []
     for b in ids:

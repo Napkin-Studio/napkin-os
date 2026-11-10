@@ -1859,3 +1859,49 @@ def test_tidy_equality_is_what_makes_texts_identical_so_a_label_or_full_stop_nev
                           rewrite_brief_parts=lambda s, p, sc: {"single_minded_proposition": entry("one plain thought")})
     _, _, _, _, key = packets_for(tmp_path, ["c01"], h)
     assert {k.split("|")[1]: v for k, v in key["auto_ties"].items()}["C1vB.prop"] == "identical text"
+
+
+# =============================================================================================== F7: leftover labels block the packets
+def test_leftover_labels_are_counted_per_arm_and_only_those_in_a_primary_comparison_block(tmp_path):
+    _, inputs, arms_by, packets, key = packets_for(tmp_path, ["c01"])
+    assert key["leftover_labels"] == {"by_arm": {a: 0 for a in ee.LEFTOVER_ARMS}, "primary": []}
+    arms_by["c01"]["L2"]["winner_value"] = "Note: a plain line"                  # L2 v O is a control, not a primary comparison
+    _, key2 = ee.build_packets(inputs, arms_by)
+    assert key2["leftover_labels"]["by_arm"]["L2"] == 1 and key2["leftover_labels"]["primary"] == []
+    arms_by["c01"]["S"]["winner_value"] = "Insight: a plain line"                 # S v O is primary
+    _, key3 = ee.build_packets(inputs, arms_by)
+    assert key3["leftover_labels"]["by_arm"]["S"] == 1
+    assert [(x["comparison"], x["side"], x["part"]) for x in key3["leftover_labels"]["primary"]] == [("SvO", "S", "proposition")]
+    arms_by["c01"]["T1"]["insight"] = "Nobody said: a plain insight"
+    _, key4 = ee.build_packets(inputs, arms_by)
+    assert ("T1vC1.ins", "T1", "insight") in [(x["comparison"], x["side"], x["part"]) for x in key4["leftover_labels"]["primary"]]
+
+
+def test_a_label_in_a_part_the_question_does_not_show_blocks_nothing(tmp_path):
+    _, inputs, arms_by, _, _ = packets_for(tmp_path, ["c01"])
+    arms_by["c01"]["T1"]["proposition"] = "Label: line"                           # T1 v C1 insight shows no proposition
+    arms_by["c01"]["T1"]["insight"] = "Hypothesis 0 about people drafted"
+    _, key = ee.build_packets(inputs, arms_by)
+    assert not [x for x in key["leftover_labels"]["primary"] if x["comparison"] == "T1vC1.ins"]
+    assert key["leftover_labels"]["by_arm"]["T1"] == 1                           # still reported per arm
+
+
+def test_cmd_packets_prints_the_counts_and_refuses_to_write_while_a_primary_text_carries_a_label(tmp_path, monkeypatch, capsys):
+    from types import SimpleNamespace
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    ee.cmd_pilot(A)
+    ee.cmd_replay(A)
+    ee.cmd_packets(A)
+    said = capsys.readouterr().out
+    assert "leftover labels in shown texts (R3), by arm" in said and "in the primary comparisons T1vC1.ins, SvO, R1vR0: 0" in said
+    p = out / "arms/c01/S.json"
+    d = json.loads(p.read_text())
+    d["winner_value"] = "Draft: a plain line"
+    p.write_text(json.dumps(d))
+    before = sorted(x.name for x in (out / "packets").glob("p*.json"))
+    (out / "packets" / before[0]).write_text("untouched")
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_packets(A)
+    assert "packets refused" in str(e.value) and "c01 SvO S proposition" in str(e.value) and "Draft: a plain line" in str(e.value)
+    assert (out / "packets" / before[0]).read_text() == "untouched"             # nothing was written or deleted
+    assert "primary comparisons T1vC1.ins, SvO, R1vR0: 1" in capsys.readouterr().out
