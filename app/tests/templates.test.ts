@@ -1805,12 +1805,13 @@ type Lay = {
   layoutParts(items: Item[]): Record<string, { col: number; row: number; w: number; h: number; order: number; as?: string; tone?: string }>
   layoutMove(items: Item[], key: string, target: string, after: boolean): Item[]
   layoutStep(items: Item[], key: string, d: number): Item[]
+  layoutDrop(items: Item[], key: string, target: string, after: boolean): Item[]
   layoutResize(items: Item[], key: string, w: number): Item[]
   layoutLook(items: Item[], key: string, prop: string, v: string): Item[]
   boxGaps(cells: Cell[]): { row: number; col: number; w: number }[]
 }
 const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
-const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize', 'layoutLook', 'boxGaps'],
+const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutDrop', 'layoutResize', 'layoutLook', 'boxGaps'],
   { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'],
     AS_KINDS: ['prose', 'bullets', 'callout', 'statement', 'cell'], TONES: ['plain', 'tint', 'inverse'] })
 const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
@@ -2918,6 +2919,49 @@ test('a resize holds: saved, read back and packed again at the new width, the he
     for (const n of ['col', 'row', 'w', 'h', 'order'] as const) assert.ok(Number.isInteger(p[n]), n)
     assert.ok(p.col >= 1 && p.col <= 12 && p.w >= 1 && p.w <= 12 && p.row >= 1 && p.h >= 1 && p.order >= 0)
   }
+})
+
+test('a part moves in both frames: onto a part, into the empty end of a row, by the panel and the keyboard; it holds on reload', () => {
+  const L = lay()
+  // The owner's First Round: Client at six columns, the rest of its row empty (Boxed draws an empty box there).
+  const stored = L.layoutParts(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'client', 6))
+  const items = L.layoutOrder(BM_FIELDS, stored)
+  const cellOf = (xs: Item[], k: string) => L.layoutPack(xs).find(c => c.key === k)!
+  // Dropped into the room beside Client, the project row takes that room and sits beside it.
+  const beside = L.layoutDrop(items, 'project_name', 'client', true)
+  const c = cellOf(beside, 'client'), p = cellOf(beside, 'project_name')
+  assert.deepEqual([p.row, p.col, p.w], [c.row, 7, 6], 'beside Client, six columns')
+  // It holds: written, read back, packed again.
+  const back = L.layoutOrder(BM_FIELDS, JSON.parse(JSON.stringify(L.layoutParts(beside))))
+  assert.deepEqual([cellOf(back, 'project_name').row, cellOf(back, 'project_name').w], [cellOf(back, 'client').row, 6])
+  // A part that already fits keeps its width; a row with less than three columns left is no room: a plain move.
+  const narrow = L.layoutResize(items, 'budget_and_scope', 4)
+  assert.equal(cellOf(L.layoutDrop(narrow, 'budget_and_scope', 'client', true), 'budget_and_scope').w, 4)
+  const full = L.layoutOrder(BM_FIELDS, L.layoutParts(L.layoutResize(items, 'client', 10)))
+  assert.deepEqual(L.layoutDrop(full, 'project_name', 'client', true), L.layoutMove(full, 'project_name', 'client', true))
+  // Before a part, or onto a part of another section, it moves without changing its width.
+  assert.deepEqual(L.layoutDrop(items, 'barrier', 'background', false), L.layoutMove(items, 'barrier', 'background', false))
+  assert.equal(L.layoutDrop(items, 'job', 'client', true).find(x => x.key === 'job')!.w, 12)
+  const other = L.layoutDrop(items, 'background', 'client', true)
+  assert.deepEqual(other, L.layoutMove(items, 'background', 'client', true), 'another section: order only')
+  // Move up / Move down and the arrow keys: one place, read back the same.
+  const up = L.layoutStep(items, 'project_name', -1)
+  assert.deepEqual(keysOf(L.layoutOrder(BM_FIELDS, L.layoutParts(up))).slice(0, 2), ['project_name', 'client'])
+  // The drag: the part under the pointer, else the nearest part on that line of the grid (the empty box in
+  // Boxed is not a part, and once swallowed the drop); the drop goes through layoutDrop.
+  const da = fn(BM, 'dropAt')
+  assert.match(da, /el\.closest\('#fields \.row'\)/)
+  assert.match(da, /if\(y<b\.top\|\|y>b\.bottom\) return;/)
+  assert.match(da, /after:x>b\.left\+b\.width\/2/)
+  const sd = fn(BM, 'startDrag')
+  assert.match(sd, /var d=dropAt\(ev\.clientX, ev\.clientY, row\);/)
+  assert.match(sd, /saveLayout\(layoutDrop\(layoutItems\(\), f\.key, t\.key, after\), 'move '\+partName\(f\)\)/)
+  // The panel's and the keyboard's moves are unchanged.
+  assert.match(fn(BM, 'placeRow'), /saveLayout\(layoutStep\(layoutItems\(\), f\.key, d\), 'move '\+partName\(f\)\)/)
+  assert.match(BM, /else if\(a==='up'\|\|a==='down'\) saveLayout\(layoutStep\(layoutItems\(\), f\.key, a==='up'\?-1:1\), 'move '\+partName\(f\)\);/)
+  // The grip is reached in both frames: above its neighbours in Boxed, in the margin in Open.
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.grip\{left:3px;z-index:3\}/)
+  assert.match(BM, /\.sheet\.a4 \.grip\{left:-16px;/)
 })
 
 test('every part gets its move grip and width handle, whatever it is shown as, and they can be reached in Boxed', () => {

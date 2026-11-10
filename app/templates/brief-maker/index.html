@@ -4305,6 +4305,17 @@
     list.splice(after?to+1:to, 0, it);
     return list;
   }
+  // A drag's drop: before or after `target`. Dropped after the last part on a grid row that has room
+  // left (the empty box in Boxed, the blank in Open), the part takes that room when it is wider, so it
+  // lands beside the target instead of flowing onto the next row as if nothing had moved.
+  function layoutDrop(items, key, target, after){
+    var moved=layoutMove(items, key, target, after), i=layoutIndex(items, key), j=layoutIndex(items, target);
+    if(!after||i<0||j<0||key===target||items[i].sec!==items[j].sec) return moved;
+    var cells=layoutPack(items.filter(function(x){ return x.key!==key; })), t=null;
+    cells.forEach(function(c){ if(c.key===target) t=c; });
+    var last=!cells.some(function(c){ return c.key&&c.row===t.row&&c.col>t.col; }), room=GRID_COLS-(t.col+t.w-1);
+    return last&&room>=MIN_W&&items[i].w>room?layoutResize(moved, key, room):moved;
+  }
   // One step earlier or later in reading order (the keyboard's move, and the panel's).
   function layoutStep(items, key, d){
     var i=layoutIndex(items,key), j=i+d;
@@ -4411,6 +4422,20 @@
     });
   }
   function clearDrop(){ document.querySelectorAll('#fields .drop-before,#fields .drop-after').forEach(function(r){ r.classList.remove('drop-before','drop-after'); }); }
+  // Where a drag would drop: the part under the pointer, or, over the empty end of a grid row (Boxed's
+  // empty box, Open's blank), the nearest part on that line, after it when the pointer is past its middle.
+  // -> {row, after} | null
+  function dropAt(x, y, self){
+    var el=document.elementFromPoint(x, y), r=el&&el.closest?el.closest('#fields .row'):null, best=null, bd=Infinity;
+    if(r===self) return null;
+    if(!r) document.querySelectorAll('#fields .row').forEach(function(c){
+      if(c===self) return; var b=c.getBoundingClientRect();
+      if(y<b.top||y>b.bottom) return;
+      var dist=x<b.left?b.left-x:x>b.right?x-b.right:0; if(dist<bd){ bd=dist; best=c; }
+    });
+    r=r||best; if(!r) return null;
+    var b=r.getBoundingClientRect(); return {row:r, after:x>b.left+b.width/2};
+  }
   function startDrag(e, row, f, g){
     if(e.button>0) return; e.preventDefault(); e.stopPropagation();
     try{ g.setPointerCapture(e.pointerId); }catch(x){}
@@ -4418,16 +4443,15 @@
     function mv(ev){
       if(!moved&&Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)<4) return;
       moved=true; row.classList.add('dragging'); clearDrop();
-      var el=document.elementFromPoint(ev.clientX, ev.clientY), r=el&&el.closest?el.closest('#fields .row'):null;
-      if(!r||r===row){ over=null; return; }
-      var b=r.getBoundingClientRect(); after=ev.clientX>b.left+b.width/2; over=r;
-      r.classList.add(after?'drop-after':'drop-before');
+      var d=dropAt(ev.clientX, ev.clientY, row);
+      over=d&&d.row; after=!!d&&d.after;
+      if(over) over.classList.add(after?'drop-after':'drop-before');
     }
     function up(){
       g.removeEventListener('pointermove', mv); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
       row.classList.remove('dragging'); clearDrop();
       var t=over&&FIELDS[+over.getAttribute('data-i')];
-      if(moved&&t) saveLayout(layoutMove(layoutItems(), f.key, t.key, after), 'move '+partName(f));
+      if(moved&&t) saveLayout(layoutDrop(layoutItems(), f.key, t.key, after), 'move '+partName(f));
     }
     g.addEventListener('pointermove', mv); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
   }
