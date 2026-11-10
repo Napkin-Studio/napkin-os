@@ -3542,3 +3542,18 @@ test('the side panel’s job line: research and brief use the one shared helper 
   // Your call names the finding and counts what it rests on; the sources are a tap away, never listed.
   assert.match(fn(RT, 'chkRests'), /pubs\.length===1\?'one source':pubs\.length\+' sources'/)
 })
+
+// The run stage's sphere on a dark stage (owner, 2026-11-11): it is lit for the stage's own ground, a pale
+// material keeps a shaded side and a rim there, and the role mark is subtler at stage size.
+test('the stage sphere: lit for the stage’s ground, pale materials shaded on dark, the mark scaled to size', () => {
+  for (const src of [RT, page('brief-maker/index.html')]) {
+    assert.match(src, /bg:(isDark\(\)|dark)\?'#16181D':'#F6F1E7'/, 'the sphere is lit for a dark stage when the stage is dark')
+    assert.match(src, /SPH\.view\.setBg\(/, 'and follows a change of scheme')
+  }
+  const av = page('shared/agent-sphere/agent-view.js')
+  assert.match(av, /float pale = uDarkBg \* smoothstep\(\.55, \.9, dot\(base/)
+  assert.match(av, /float big = smoothstep\(40\., 110\., uR\), mk = mix\(1\., \.8, big\);/)
+  const roles = page('shared/agent-sphere/roles.js')
+  assert.match(roles, /<g transform="scale\(' \+ mk \+ '\)">/, 'the static frame scales its mark too')
+  assert.match(roles, /stroke="#000" stroke-opacity="\.16"/, 'and has a rim')
+})

@@ -110,11 +110,11 @@
     size = +size || 28;
     var A = mats(), M = A ? A.MATS[matOf(r)] : { base: '#EEECE7', ink: '#16191D' }, ag = A && A.AG[r];
     var base = M.base, ink = M.ink, id = 'nkg' + (++uid);
-    var lite = mix(base, '#FFFFFF', 0.28), dark = mix(base, '#000000', 0.22);
+    var lite = mix(base, '#FFFFFF', 0.28), dark = mix(base, '#000000', 0.34), mk = size > 80 && !fill ? 0.8 : 1;
     var out = ['<svg class="nk-still" viewBox="-1.25 -1.25 2.5 2.5" width="' + (fill ? '100%' : size) + '" height="' + (fill ? '100%' : size) + '" aria-hidden="true" focusable="false">',
       '<defs><radialGradient id="' + id + '" cx="-.35" cy="-.42" r="1.6" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="' + lite + '"/><stop offset=".55" stop-color="' + base + '"/><stop offset="1" stop-color="' + dark + '"/></radialGradient></defs>',
       '<ellipse cx=".1" cy="1.08" rx=".7" ry=".12" fill="#000" opacity=".12"/>',
-      '<circle r="1" fill="url(#' + id + ')"/>'];
+      '<circle r="1" fill="url(#' + id + ')"/>', '<g transform="scale(' + mk + ')">'];
     if (ag) {
       var sw = function (w) { return Math.max(w, 2.2 / size); };
       for (var a = 0; a < ag.arcs.length; a++) {
@@ -129,9 +129,11 @@
           : '<circle cx="' + o[0] + '" cy="' + o[1] + '" r="' + o[2] + '" fill="none" stroke="' + ink + '" stroke-opacity="' + (op2 * 0.95).toFixed(2) + '" stroke-width="' + sw(o[3]).toFixed(4) + '"/>');
       }
     }
-    // the horizon: one thin line below centre, in Napkin's line colour
+    out.push('</g>');
+    // the horizon: one thin line below centre, in Napkin's line colour; a soft dark rim and a light edge give the
+    // static frame a silhouette on any ground
     out.push('<path d="M-.86 .31H.86" stroke="#BCBFF5" stroke-opacity=".35" stroke-width="' + (1.5 / size * 2.5).toFixed(4) + '"/>');
-    out.push('<circle r="1" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width=".03"/></svg>');
+    out.push('<circle r=".985" fill="none" stroke="#000" stroke-opacity=".16" stroke-width=".03"/><circle r=".95" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width=".03"/></svg>');
     return out.join('');
   }
 

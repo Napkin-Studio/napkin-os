@@ -197,6 +197,10 @@ void main(){
       // metal keeps a soft studio reflection, glass keeps its see-through body, gloss sets how wide the sheen is.
       vec3 V = vec3(0., 0., 1.);
       lit = nkBody(base, n, V, L, vec3(NK_FILLDIR.x, -NK_FILLDIR.y, NK_FILLDIR.z), 1., 1., uDarkBg);   // y down here
+      // A pale material on a dark stage (pearl, paper, ceramic, glass) reads as a flat glaring disc under the
+      // matte satin: there it keeps a shaded side and a darker rim, so it stays a sphere (owner, 2026-11-11).
+      float pale = uDarkBg * smoothstep(.55, .9, dot(base, vec3(.299, .587, .114)));
+      lit *= 1. - pale * (.20 * (1. - nkWrap(n, L)) + .16 * pow(1. - n.z, 1.6) + .05);
       lit = mix(lit, env * mix(base, vec3(1.), .35) * .95, metal * .45);
       vec3 glc = mix(uBg, base, .35) + .14 * nkWrap(n, L);
       lit = mix(lit, glc, glass * (.30 + .35 * n.z));
@@ -225,12 +229,14 @@ void main(){
       inkL = .88 + .2 * diff;
     }
     float tw = uTw * (1. - smoothstep(0., 1.1, length(uv))), cs = cos(tw), sn = sin(tw);
-    vec2 ug = vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y) + rgrad * .22;
-    float aa = 1.5 / uR; vec2 cov = vec2(0.);
+    // the role mark scales with the sphere: full at avatar size, a subtler mark at stage size
+    float big = smoothstep(40., 110., uR), mk = mix(1., .8, big);
+    vec2 ug = (vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y) + rgrad * .22) / mk;
+    float aa = 1.5 / uR / mk; vec2 cov = vec2(0.);
     for (int i = 0; i < 4; i++) cov += arcCov(ug, uArc0[i], uArc1[i], aa);
     for (int i = 0; i < 2; i++) cov += cirCov(ug, uCir0[i], uCir1[i], aa);
     cov = clamp(cov, 0., 1.);
-    lit = mix(lit, inkc * inkL, cov.x * .95);
+    lit = mix(lit, inkc * inkL, cov.x * mix(.95, .78, big));
     lit = mix(lit, uAccent, cov.y * .95);
     lit += (uSatin > .5 ? nkSheenCol(base) : vec3(1.)) * spec * (1. - .7 * max(cov.x, cov.y));
     float aB = 1. - smoothstep(-.7, .7, d);

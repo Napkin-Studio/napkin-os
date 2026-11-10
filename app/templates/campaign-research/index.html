@@ -3458,7 +3458,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       // the ring is the agency's base; a near-black base rings in its accent, deepened (the mock's TBWA ring)
       var ring=lumOf(base)<0.15?hexMix(acc,'#000000',0.23):base;
       $('aglBox').appendChild(SPH.el);
-      SPH.view=A.create(S, SPH.el, {level:4, accent:ring, inkAccent:base, bg:'#F6F1E7', dark:isDark(), rFrac:[0.27,0.24], cyFrac:0.45});
+      // the stage's own ground, light or dark: a light ground under a dark stage blows the pale spheres out
+      SPH.view=A.create(S, SPH.el, {level:4, accent:ring, inkAccent:base, bg:isDark()?'#16181D':'#F6F1E7', dark:isDark(), rFrac:[0.27,0.24], cyFrac:0.45});
+      window.addEventListener('clan:colorscheme', function(){ setTimeout(function(){ if(SPH.view&&SPH.view.setBg) SPH.view.setBg(isDark()?'#16181D':'#F6F1E7', isDark()); }, 0); });
     }catch(e){ SPH.view=null; }
     return SPH.view;
   }
