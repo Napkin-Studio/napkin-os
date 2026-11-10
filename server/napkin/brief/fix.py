@@ -100,7 +100,7 @@ class FixPartsJob(PlannedBriefJob):
     def _wrote(self, k, v, answers=None):
         """A fix rewrites, and the line says on what: Jude's note it answers, the person's ask
         (a redraft on a planned brief comes as one), else the standing note the problem quotes."""
-        on = ["Jude's note"] if answers else []
+        on = [self._asker(v)] if answers else []
         if self.guidance or any(p.get("by") == "a person" for p in self.problem):
             on.append("your ask")
         elif not answers:
@@ -208,13 +208,17 @@ class FixPartsJob(PlannedBriefJob):
         back = {d["id"] for d in decisions if d.get("superseded_by")}
         noted = {t.split("#", 1)[1] for d in decisions if d["kind"] == "verdict" and d.get("polarity") == "bad"
                  and not set(d.get("cites") or []) & back for t in d["targets"]}
-        ok = [k for k in self.whole if k not in noted and not self.held.get(k) and k in self.writer]
+        ok = [k for k in self.whole if k not in noted and not self.held.get(k) and k in self.writer
+              and not self._unanswered(k)]  # a part code still measures over its limit was not checked as fine
         if not ok:
             return []
         cites = [self.writer[k] for k in ok] + self._problem_cites()
+        by = "Jude checked the rewritten parts and left no note on them"
+        if self._by_jev and any(self.whole[k].get("sent_back") for k in ok):  # jev read the draft, not the rewrite
+            by = "Jude left no note on the draft, and code measured the rewritten parts again"
         r = rsn.make(f"Checked the fix: the problem no longer holds for {', '.join(LABELS.get(k, k) for k in ok)}.",
                      [rsn.point(f"The problem was: {_short(self.problem[0]['text'], 300)}", self._problem_cites()),
-                      rsn.point("Jude checked the rewritten parts and left no note on them",
+                      rsn.point(by,
                                 [self.writer[k] for k in ok])],
                      rsn.certainty("medium", "a model checked the rewritten parts against the brief"),
                      "the parts change again, or a person says otherwise", only_option="the fix passed the check")

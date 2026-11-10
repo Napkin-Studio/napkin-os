@@ -119,6 +119,37 @@ def revisions(whole: dict) -> list[dict]:
     return out
 
 
+def listed(words) -> str:
+    """'a, b and c': names in a sentence."""
+    w = list(words)
+    return w[0] if len(w) == 1 else ", ".join(w[:-1]) + " and " + w[-1]
+
+
+# How Jude uses the planning tests, in one place for every prompt that carries them (the whole-brief review
+# and the check loop's Jude): the rules and their wording are written here and nowhere else.
+TESTS_GUIDE = """part tests: `tests` holds, for @TESTED@, the planning
+   tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
+   @WHERE@. `part_checks` is what code measured (words against
+   the limit, items against the item cap, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
+   fails when it joins two thoughts, and passes when it sits inside one."""
+ANTI_PATTERNS = """anti-patterns, also @ALSO@: a proposition that is really a tagline, or is the brand's own existing line; two
+   thoughts smuggled into one (an objection holding several doubts, a job asking for several changes); a wish-list
+   (more than one problem, audience or message); a medium whose job is really the creative idea; words a normal person
+   would not say out loud."""
+REVISE = "`revise` with one instruction that names the test and the fix"
+
+
+def guide_parts(where: str = REVISE, also: str = "`revise`") -> tuple[str, str]:
+    """The guide's two pieces (how to use the tests; the anti-patterns), `where` being where a failing part is
+    reported and `also` where an anti-pattern is."""
+    return (TESTS_GUIDE.replace("@TESTED@", listed(TESTED_WORDS.values())).replace("@WHERE@", where),
+            ANTI_PATTERNS.replace("@ALSO@", also))
+
+
+def tests_guide(where: str = REVISE, also: str = "`revise`") -> str:
+    return "\n".join(guide_parts(where, also))
+
+
 def tests(keys) -> dict:
     """The planning skill's judged tests for the parts in TESTED, as the schema words them."""
     out = {}
