@@ -19,8 +19,8 @@
 
 /** What an admin sets for an agency: its colour (`accent`) and its darker base. */
 export interface AgencyColours {
-  /** The agency's display name, on the pill and the desk (admin-set; the session carries the id only). */
-  name?: string
+  /** The agency's display name, on the pill, the desk and the sign-in card (admin-set; the session carries the id only). */
+  name: string
   /** The agency's colour on the chrome (the mock's `acc`). */
   accent: string
   /** Its base colour (the mock's `base`): kept for the dial and future use. */
@@ -31,14 +31,23 @@ export interface AgencyColours {
  * The agency registry's colours, by the agency id people sign in under
  * (`name@<agency>`, lower case). Admin-maintained: a change here is a reviewed
  * change, like the roster. Seeded from the approved mock's agency kits.
+ *
+ * This is the one place an agency's look ("template") lives: the sign-in card
+ * (shell/SignIn.tsx) takes it as soon as someone types `@<id>` (or an email at
+ * `<id>.<tld>`), and the studio wears it after they sign in. To add an agency,
+ * an admin adds one line: its id (lower case, the part after the @), its
+ * display `name`, its darker `base` and its `accent` (#rrggbb). Every other
+ * token, light and dark, is derived (paletteOf, surfaceCss, markOf), and
+ * tests/agencyPalette.test.ts checks that the new look reads. Branding only:
+ * nothing here says who has an account.
  */
 export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
   wk: { name: 'Wieden+Kennedy', base: '#1E22AA', accent: '#FFB800' },
   tbwa: { name: 'TBWA\\Dublin', base: '#16181D', accent: '#FFD400' },
-  ogilvy: { base: '#E4002B', accent: '#FFD6DD' },
-  harbour: { base: '#0F6B5C', accent: '#9FE6D8' },
-  droga: { base: '#16181D', accent: '#C6F432' },
-  napkin: { base: '#515BFF', accent: '#C8CBFF' },
+  ogilvy: { name: 'Ogilvy', base: '#E4002B', accent: '#FFD6DD' },
+  harbour: { name: 'Harbour & Co', base: '#0F6B5C', accent: '#9FE6D8' },
+  droga: { name: 'Droga5', base: '#16181D', accent: '#C6F432' },
+  napkin: { name: 'Napkin', base: '#515BFF', accent: '#C8CBFF' },
 }
 
 /** The agency's name for a signed-in person: the registry's, else `fallback` (the id, title-cased). */
@@ -118,7 +127,23 @@ export function agencyIdOf(personId: string | null | undefined): string | null {
 
 /** The admin-set colours for an agency id, if it has any. */
 export function coloursOf(agencyId: string | null | undefined): AgencyColours | null {
-  return agencyId ? AGENCY_COLOURS[agencyId] ?? null : null
+  return agencyId && Object.hasOwn(AGENCY_COLOURS, agencyId) ? AGENCY_COLOURS[agencyId] : null
+}
+
+/**
+ * The registry agency a half-typed sign-in name points at, for the sign-in
+ * card's look: `tia@tbwa` is tbwa, and an email's domain before its TLD is too
+ * (`siobhan.ryan@tbwa.com`, `x@tbwa.co.uk`). Null with no @ yet, or for an
+ * agency the registry does not have. Only the registry is read, never the
+ * roster or the server, so the look says nothing about who has an account.
+ */
+export function agencyOfSignInName(typed: string): string | null {
+  const id = agencyIdOf(typed)
+  if (!id) return null
+  if (coloursOf(id)) return id
+  const labels = id.split('.')
+  for (let i = labels.length - 2; i >= 0; i--) if (coloursOf(labels[i])) return labels[i]
+  return null
 }
 
 /** The CSS the layer is: both themes, on :root, apart from every other token. */

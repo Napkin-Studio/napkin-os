@@ -6,7 +6,7 @@ import { markSignedOut } from './agency/lastAgency'
 
 /** Sign out of the studio (napkin-web clears the session cookie), then start over at sign-in. */
 export async function signOut() {
-  // The sign-in screen then says "Signed out." in the agency's name (agency/lastAgency.ts).
+  // The sign-in screen then says "Signed out.", in Napkin's look until they type (agency/lastAgency.ts).
   markSignedOut(true)
   await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' }).catch(() => {})
   // The open document and the place in the studio were this person's: the

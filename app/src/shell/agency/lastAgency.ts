@@ -2,11 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The agency this browser last signed in to, and whether the person just
-// signed out, so the sign-in screen (shell/SignIn.tsx) can say "Signed out."
-// in that agency's name and colours. Before anyone has signed in here the
-// agency is unknown, and the screen is Napkin's, in neutral colours.
-// Per browser only: a convenience, never a source of truth.
+// The agency this browser last signed in to, so a reload opens in its look
+// (brand/bootLook.ts, brand/useAgencyMark.ts), and whether the person just
+// signed out, so the sign-in screen (shell/SignIn.tsx) can say "Signed out.".
+// The sign-in screen itself always opens in Napkin's look and takes an
+// agency's only from what is typed. Per browser only: a convenience, never a
+// source of truth.
 
 import { agencyIdOf } from './palette'
 

@@ -14,17 +14,22 @@
 // device and on the desktop.
 //
 // The screen is the approved mock's (design/new-ui/napkin-app-v1.html,
-// .p33-signin): one paper card on the desk, the agency's medallion, the
-// heading, then the fields. After a sign-out the agency this browser last
-// signed in to is known (agency/lastAgency.ts): its name, colours and
-// medallion. Before that it is Napkin's medallion in neutral colours.
+// .p33-signin): one paper card on the desk, the medallion, the heading, then
+// the fields. It always opens in Napkin's own look, after a sign-out too
+// (owner, 2026-11-11), and takes an agency's look ("template") as the person
+// types: the part after the @ (or an email's domain before its TLD) picks the
+// agency from the admin registry (agency/palette.ts AGENCY_COLOURS), and the
+// medallion, the line under the heading, the desk and the Sign in button take
+// its name and colours. Only the registry is read, never the roster or the
+// server, so the look says nothing about who has an account.
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { LogoSpinnerFill } from '../brand/LogoSpinner'
 import { DeepOMark } from '../brand/DeepOMark'
 import { accountName, isAccountName } from './accountName'
-import { agencyNameOf, applyAgency, coloursOf, markOf } from './agency/palette'
-import { justSignedOut, lastAgency, markSignedOut, rememberAgency } from './agency/lastAgency'
+import { agencyOfSignInName, applyAgency } from './agency/palette'
+import { LOOK_DELAY_MS, signInLookOf, type SignInLook } from './agency/signInLook'
+import { justSignedOut, markSignedOut, rememberAgency } from './agency/lastAgency'
 import './SignIn.css'
 
 type Gate = 'checking' | 'open' | 'signin'
@@ -64,14 +69,18 @@ async function post(path: string, body: unknown): Promise<{ status: number; data
   return { status: r.status, data: await r.json().catch(() => ({})) }
 }
 
-/** Who the screen is for: the last agency signed in to here, or nobody yet (Napkin, neutral). */
-function useAgency(): { id: string | null; name: string | null; mark: { base: string; accent: string } } {
-  const [id] = useState(lastAgency)
-  const person = id ? `@${id}` : null
-  // The agency's colours on the desk, paper and action colour; none before anyone has signed in here.
-  useEffect(() => { if (id) applyAgency(person) }, [id, person])
-  const name = id ? agencyNameOf(person, coloursOf(id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1)) : null
-  return { id, name, mark: markOf(person) }
+/** The look for the typed name, a moment after typing rests, and on the page (desk, paper, action colour). */
+function useSignInLook(typed: string): SignInLook {
+  const want = agencyOfSignInName(typed)
+  const [id, setId] = useState<string | null>(null)
+  useEffect(() => {
+    if (want === id) return
+    const t = setTimeout(() => setId(want), LOOK_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [want, id])
+  // Napkin's layer when nobody is named (it replaces the last agency's the boot screen painted).
+  useEffect(() => { applyAgency(id ? `_@${id}` : null) }, [id])
+  return signInLookOf(id ? `_@${id}` : '')
 }
 
 export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone: () => void }) {
@@ -84,7 +93,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
   const [busy, setBusy] = useState(false)
   const [forgot, setForgot] = useState(false)
   const [signedOut] = useState(justSignedOut)
-  const agency = useAgency()
+  const agency = useSignInLook(name)
   const done = () => { markSignedOut(false); rememberAgency(accountName(name)); onDone() }
 
   const signIn = async (e: FormEvent) => {
@@ -119,15 +128,14 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
     } finally { setBusy(false) }
   }
 
-  const heading = signedOut ? 'Signed out.' : agency.id ? 'Welcome back.' : 'Sign in.'
-  const lede = agency.name ? `Sign in to ${agency.name} on Napkin Studio.` : 'Sign in to Napkin Studio.'
+  const heading = signedOut ? 'Signed out.' : 'Sign in.'
   return (
     <main className="nui p33-signin" data-agency={agency.id ?? 'none'}>
       {challenge === null ? (
         <form className="si-card" onSubmit={signIn} noValidate>
-          <span className="si-mark"><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
+          <span className="si-mark" key={agency.id ?? 'none'}><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
           <h2>{heading}</h2>
-          <p>{lede}</p>
+          <p data-testid="signin-lede">{agency.lede}</p>
           <label>
             Sign-in name
             <input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
@@ -150,7 +158,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
         </form>
       ) : (
         <form className="si-card" onSubmit={choose} noValidate>
-          <span className="si-mark"><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
+          <span className="si-mark" key={agency.id ?? 'none'}><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
           <h2>Choose your password.</h2>
           <p>This is your first sign-in as <b>{accountName(name)}</b>. Pick a password only you know: at least 10 characters, with a letter and a number.</p>
           <label>
