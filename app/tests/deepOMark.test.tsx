@@ -16,9 +16,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { DeepOMark } from '../src/brand/DeepOMark.tsx'
 import { LogoSpinner, LogoSpinnerFill, LogoSpinnerVeil } from '../src/brand/LogoSpinner.tsx'
 import {
-  bootMarkSvg, DEEP_O_CSS, faviconSvg, homeAppRegions, INDETERMINATE_LEN, NAPKIN_MARK, rimFor, staticMarkSvg,
+  DEEP_O_CSS, faviconSvg, homeAppRegions, INDETERMINATE_LEN, NAPKIN_MARK, rimFor, staticMarkSvg,
 } from '../src/brand/deepOSvg.ts'
-import { AGENCY_COLOURS } from '../src/shell/agency/palette.ts'
+import { bootMarkHtml } from '../src/brand/bootLook.ts'
+import { AGENCY_COLOURS, NEUTRAL_MARK } from '../src/shell/agency/palette.ts'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
@@ -50,9 +51,10 @@ test('loading is working: an indeterminate arc when the length is unknown, the r
   assert.match(tiny, new RegExp(`stroke="${wk.accent}"`), 'the small cut\'s ring is the agency accent')
 })
 
-test('a mark that is not told its colours is Napkin\'s before any agency is known', () => {
+test('a mark that is not told its colours is neutral before any agency is known, never Napkin\'s blue', () => {
   const html = renderToStaticMarkup(createElement(DeepOMark, { size: 16 }))
-  assert.match(html, new RegExp(`fill="${NAPKIN_MARK.base.toLowerCase()}"`, 'i'))
+  assert.match(html, new RegExp(`fill="${NEUTRAL_MARK.base}"`, 'i'))
+  assert.doesNotMatch(html, new RegExp(NAPKIN_MARK.base, 'i'))
 })
 
 test('the loading signs keep their API and draw Deep O working', () => {
@@ -70,14 +72,12 @@ test('the small cut gets a contrast rim on a surface too close to it', () => {
   assert.equal(rimFor(NAPKIN_MARK.base, '#FFFFFF'), null)
 })
 
-test('the boot splash is put in at build from the same source, in Napkin\'s colours', () => {
+test('the boot splash is put in at build from the same source, in the person\'s own look (bootLook.test.tsx)', () => {
   const html = read('index.html')
   assert.match(html, /<!-- deep-o:boot -->/)
-  assert.match(html, /\/\* deep-o:css \*\//)
-  assert.match(read('vite.config.ts'), /bootMarkSvg\(\)/)
-  const boot = bootMarkSvg()
+  assert.match(read('vite.config.ts'), /bootMarkHtml\(\)/)
+  const boot = bootMarkHtml()
   assert.match(boot, /class="deep-o-spin"/, 'the ring turns by CSS, with no script')
-  assert.ok(boot.includes(NAPKIN_MARK.accent.toLowerCase()) || boot.includes(NAPKIN_MARK.accent), 'Napkin\'s accent')
   assert.match(DEEP_O_CSS, /prefers-reduced-motion:reduce/)
 })
 

@@ -32,8 +32,14 @@
   justify-content: center;
   min-height: 0;
   padding: 40px 24px;
-  background: var(--paper);
+  /* The desk, as the boot screen (brand/bootLook.ts) and the page it opens to. */
+  background: var(--desk);
 }
+
+/* Shown only on a slow wait: the delay is set inline (lateShow.ts), on the
+   boot screen's clock, and goes negative once the wait has passed it. */
+.logo-spinner-late { animation: logo-spinner-fade 300ms ease 400ms both; }
+@media (prefers-reduced-motion: reduce) { .logo-spinner-late { animation-duration: 1ms; } }
 
 /* Floating over the current screen while something opens. */
 .logo-spinner-veil {
@@ -43,11 +49,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--paper) 62%, transparent);
+  background: color-mix(in srgb, var(--desk) 62%, transparent);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
-  /* A short wait before showing, so a quick open does not flash. */
-  animation: logo-spinner-fade var(--dur) var(--ease) 0.15s both;
 }
 .logo-spinner-veil > .logo-spinner {
   padding: 18px 22px;

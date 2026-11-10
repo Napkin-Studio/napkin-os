@@ -4,7 +4,7 @@
 
 // Deep O as markup: the one source of the mark's geometry, for every place that
 // draws it. <DeepOMark> (brand/DeepOMark.tsx) renders these strings and repaints
-// them per frame; the pre-JS boot splash (vite.config.ts deepOBoot), the favicon,
+// them per frame; the pre-JS boot splash (brand/bootLook.ts), the favicon,
 // the app icons (scripts/deep-o-icons.mjs) and the home CLAN app take the static,
 // CSS-animated cut of the same strings. Nothing else draws the mark.
 //
@@ -239,11 +239,6 @@ export function faviconSvg(): string {
 /** The app icon source (the manifest's PNGs): the satin mark, awake, in Napkin's colours. */
 export function appIconSvg(size: number): string {
   return staticMarkSvg({ size, uid: 'icon', label: 'Napkin Studio' })
-}
-
-/** The pre-JS boot splash's mark: working, the length unknown, in Napkin's colours (never an agency's). */
-export function bootMarkSvg(size = 64): string {
-  return staticMarkSvg({ size, state: 'working', uid: 'boot' })
 }
 
 /** A static cut as a template for a page's own script: `__ID__` for the id prefix, `__SIZE__` for the size. */

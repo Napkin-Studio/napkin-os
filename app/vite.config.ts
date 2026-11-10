@@ -6,7 +6,8 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
-import { bootMarkSvg, DEEP_O_CSS } from './src/brand/deepOSvg'
+import { DEEP_O_CSS } from './src/brand/deepOSvg'
+import { BOOT_CSS, bootHeadScript, bootMarkHtml } from './src/brand/bootLook'
 
 // One bundle, every host. The web build talks to napkin-web and loads the
 // WebAssembly host only when a file is opened on the device; the serverless
@@ -73,16 +74,23 @@ function serviceWorker(): Plugin {
 }
 
 /**
- * The boot splash's mark (index.html), before any script runs: the static,
- * CSS-animated Deep O from src/brand/deepOSvg.ts, the same geometry every
- * other mark draws, so there is no hand-kept copy of it to drift.
+ * The boot screen (index.html), before any module runs, in the person's own
+ * look (src/brand/bootLook.ts): the head script reads the theme and the agency
+ * this browser last signed in to and puts that agency's desk on the page; the
+ * mark is the static, CSS-animated Deep O from src/brand/deepOSvg.ts, recoloured
+ * to the agency's. The colours are generated here from shell/agency/palette.ts,
+ * so there is no hand-kept copy to drift.
  */
 function deepOBoot(): Plugin {
   return {
     name: 'napkin-deep-o-boot',
     transformIndexHtml(html) {
-      if (!html.includes('<!-- deep-o:boot -->')) throw new Error('index.html lost its <!-- deep-o:boot --> mark')
-      return html.replace('/* deep-o:css */', DEEP_O_CSS).replace('<!-- deep-o:boot -->', bootMarkSvg())
+      for (const mark of ['<!-- boot:look -->', '<!-- deep-o:boot -->']) {
+        if (!html.includes(mark)) throw new Error(`index.html lost its ${mark} mark`)
+      }
+      return html
+        .replace('<!-- boot:look -->', () => `<style>${BOOT_CSS}${DEEP_O_CSS}</style>\n    <script>${bootHeadScript()}</script>`)
+        .replace('<!-- deep-o:boot -->', () => bootMarkHtml())
     },
   }
 }

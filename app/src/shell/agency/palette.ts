@@ -128,6 +128,18 @@ export function agencyCss(p: AgencyPalette): string {
 }
 
 const STYLE_ID = 'napkin-agency'
+/** The boot screen's copy of the surface layer (index.html, brand/bootLook.ts), until the shell's own lands. */
+export const BOOT_SURFACE_ID = 'napkin-boot-surface'
+
+/** The desk before any agency tint: tokens.css's --desk, and the boot screen's when no agency is known. */
+export const DESK_BASE = { light: '#F6F1E7', dark: '#121110' } as const
+
+/**
+ * The mark when no agency is known (a browser nobody has signed in on yet):
+ * warm graphite on a pale accent, never Napkin's blue, so a first visit does
+ * not open in one look and turn into another.
+ */
+export const NEUTRAL_MARK: { base: string; accent: string } = { base: '#4A453E', accent: '#D9D1C3' }
 const SURFACE_ID = 'napkin-agency-surface'
 
 /**
@@ -144,8 +156,8 @@ export function surfaceCss(colours: AgencyColours | null | undefined): string {
   const ink = (bg: string) => (inkOn(bg) === INK ? '#141413' : WHITE)
   const mixIn = (pct: string, onto: string) => `color-mix(in srgb, ${b} ${pct}, ${onto})`
   const shared = `--ag-base: ${b}; --ag-acc: ${a}; --ag-acc-ink: ${inkOn(a)}; --accent-line: #C8CBFF;`
-  const light = `${shared} --ag-act: ${b}; --ag-act-ink: ${ink(b)}; --desk: ${mixIn('6%', '#F6F1E7')}; --paper: ${mixIn('2.5%', '#FFFDF8')}; --card: #FFFFFF; --line: ${mixIn('10%', '#E2D9C8')};`
-  const dark = `${shared} --ag-act: ${a}; --ag-act-ink: ${ink(a)}; --desk: ${mixIn('12%', '#121110')}; --paper: ${mixIn('9%', '#1B1A18')}; --card: ${mixIn('7%', '#201E1B')}; --line: ${mixIn('16%', '#34302A')};`
+  const light = `${shared} --ag-act: ${b}; --ag-act-ink: ${ink(b)}; --desk: ${mixIn('6%', DESK_BASE.light)}; --paper: ${mixIn('2.5%', '#FFFDF8')}; --card: #FFFFFF; --line: ${mixIn('10%', '#E2D9C8')};`
+  const dark = `${shared} --ag-act: ${a}; --ag-act-ink: ${ink(a)}; --desk: ${mixIn('12%', DESK_BASE.dark)}; --paper: ${mixIn('9%', '#1B1A18')}; --card: ${mixIn('7%', '#201E1B')}; --line: ${mixIn('16%', '#34302A')};`
   return `:root, :root[data-theme='light'] { ${light} }\n:root[data-theme='dark'] { ${dark} }`
 }
 
@@ -167,6 +179,8 @@ export function applyAgency(personId: string | null | undefined, doc: Document =
     doc.head.appendChild(sl)
   }
   if (sl.textContent !== surface) sl.textContent = surface
+  // The boot screen painted the last agency's surface before any script ran; the shell's own layer replaces it.
+  doc.getElementById(BOOT_SURFACE_ID)?.remove()
   setAppliedMark(markOf(personId))
 }
 

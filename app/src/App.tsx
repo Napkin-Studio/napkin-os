@@ -122,7 +122,10 @@ export default function App() {
   const personId = landing.data?.person?.id ?? null
   // Whose client registry applies (agency/clients.ts): set before anything below reads a client's look.
   setClientAgency(personId)
-  useEffect(() => { applyAgency(personId); rememberAgency(personId) }, [personId])
+  // Not before the first read settles: until then the boot screen's layer (brand/bootLook.ts, the agency
+  // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
+  const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
+  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // Decisions on the desk: every call across the documents it has read.
@@ -465,6 +468,8 @@ export default function App() {
     return refused
   }, [landing])
 
+  // The studio is opening: the loading sign alone, on the desk, with no bar half filled in round it.
+  const opening = !(device && !serverless) && (!booted || landing.state === 'loading')
   const apps = device && !serverless ? (
     <DeviceHome
       onChooseFile={chooseDeviceFile}
@@ -619,7 +624,7 @@ export default function App() {
         />
       ) : (
         <StudioShell
-          bar={(
+          bar={opening ? null : (
             <Toolbar
               agency={agency}
               mark={mark}

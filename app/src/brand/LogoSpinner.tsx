@@ -2,8 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { DeepOMark } from './DeepOMark'
+import { lateBegin, lateDelay, lateEnd, waitStart } from './lateShow'
 import './LogoSpinner.css'
 
 export type LogoSpinnerSize = 'xs' | 'sm' | 'md' | 'lg'
@@ -46,19 +47,37 @@ export function LogoSpinner({ size = 'md', label, stack = false, className, styl
   )
 }
 
-/** A spinner centred in the space it is given — a panel, a pane, a screen. */
+/**
+ * The animation-delay that shows a full-surface sign only on a slow wait
+ * (lateShow.ts): the same clock as the boot screen, so the hand-off from it, and
+ * from one sign to the next, never fades the mark out and in again.
+ */
+function useLateDelay(): number {
+  // Still in the page while the first render runs, before React's commit replaces it.
+  const [start] = useState(() => waitStart(performance.now(), typeof document !== 'undefined' && typeof document.querySelector === 'function' && !!document.querySelector('.napkin-boot')))
+  const [delay] = useState(() => lateDelay(start, performance.now()))
+  useEffect(() => { lateBegin(start); return () => lateEnd() }, [start])
+  return delay
+}
+
+/**
+ * A spinner centred in the space it is given — a panel, a pane, a screen — on
+ * the desk, as the boot screen is (brand/bootLook.ts); it appears only on a slow wait.
+ */
 export function LogoSpinnerFill({ label, size = 'lg' }: Pick<LogoSpinnerProps, 'label' | 'size'>) {
+  const delay = useLateDelay()
   return (
     <div className="logo-spinner-fill">
-      <LogoSpinner size={size} label={label} stack />
+      <LogoSpinner size={size} label={label} stack className="logo-spinner-late" style={{ animationDelay: `${delay}ms` }} />
     </div>
   )
 }
 
-/** Over everything, while the shell opens or prepares something. */
+/** Over everything, while the shell opens or prepares something; it appears only on a slow wait. */
 export function LogoSpinnerVeil({ label }: { label?: string }) {
+  const delay = useLateDelay()
   return (
-    <div className="logo-spinner-veil">
+    <div className="logo-spinner-veil logo-spinner-late" style={{ animationDelay: `${delay}ms` }}>
       <LogoSpinner size="md" label={label} />
     </div>
   )
