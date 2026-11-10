@@ -136,7 +136,11 @@ def service(monkeypatch):
     def fake_retrieve(q, k=5, where=None, **kw):
         calls.append(dict(where or {}))
         src = (where or {}).get("source", "x")
-        return [{"text": f"passage from {src}", "source": src, "section": "s", "citation": f"{src} › s", "score": 0.9}]
+        # what the real search returns: the chunk's file name as `source`, the case title as `section`
+        fname = "lib_00e4bcae27.md" if src == "awardlib" else f"{src}_0001.md"
+        title = "Spotify — Daylist (2024)" if src == "awardlib" else "s"
+        return [{"text": f"passage from {src}\n\n## Sources\n- Official award page: https://example.org/case",
+                 "source": fname, "section": title, "citation": f"{fname} › {title}", "score": 0.9}]
 
     monkeypatch.setattr(mod.retrieve, "retrieve", fake_retrieve)
     store = {"s": corpus(tech_cases=17, food_cases=127)}
@@ -219,3 +223,28 @@ def test_a_store_that_cannot_count_withholds_the_library(service, monkeypatch):
 
 def test_an_empty_query_is_still_a_400(service):
     assert ask(service, query="  ")[0] == 400
+
+
+def test_library_passages_name_themselves_not_their_file(service, monkeypatch):
+    """The export prints a source's name, so the library says what it is, and every other pack is untouched."""
+    monkeypatch.setenv("RAG_AWARDLIB", "thin")
+    _, out = ask(service, packs=["awardlib"], where={"category": "technology"})
+    p = out["passages"][0]
+    assert p["source"] == "Award case library" and p["section"] == "Spotify — Daylist (2024)"
+    assert p["citation"] == "Award case library › Spotify — Daylist (2024)" and ".md" not in p["citation"]
+    assert "## Sources" in p["text"] and "https://example.org/case" in p["text"]      # the source link rides in the text
+    assert p["licence"] == "licensed-internal" and p["scope"] == "house"
+    _, other = ask(service, packs=["ipa"])
+    assert other["passages"][0]["source"] == "ipa_0001.md"                            # unchanged
+    assert other["passages"][0]["citation"] == "ipa_0001.md › s"
+
+
+def test_the_passage_still_passes_the_clients_own_checks(service, monkeypatch):
+    """server/napkin/retrieval.py drops any passage whose id, uri or hash it cannot recompute."""
+    import hashlib
+    monkeypatch.setenv("RAG_AWARDLIB", "thin")
+    _, out = ask(service, packs=["awardlib"], where={"category": "technology"})
+    p = out["passages"][0]
+    assert p["text_sha256"] == hashlib.sha256(p["text"].encode()).hexdigest()
+    assert p["id"] == "psg_" + hashlib.sha256(f"{p['pack']}\n{p['source']}\n{p['section']}\n{p['text']}".encode()).hexdigest()[:20]
+    assert p["uri"] == f"passage://{p['pack']}/{p['source']}#spotify-daylist-2024@{p['text_sha256'][:16]}"

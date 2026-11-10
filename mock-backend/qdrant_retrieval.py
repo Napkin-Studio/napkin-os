@@ -71,9 +71,18 @@ def section_slug(s):
     return re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")
 
 
+# A gated pack's passages say what they are, not which file they came from: the export prints the
+# source's name, and "lib_00e4bcae27.md" means nothing to a reader (the chunk text carries the case's
+# own provenance label and its source links under "## Sources").
+GATED_LABEL = {"awardlib": "Award case library"}
+
+
 def passage(pack, hit):
     text = str(hit.get("text") or "")[:MAX_TEXT].strip()
     source, section = str(hit.get("source") or "index"), str(hit.get("section") or "-")
+    if pack in GATED_LABEL:
+        source = GATED_LABEL[pack]
+        hit = {**hit, "citation": f"{source} › {section}"}
     sha = hashlib.sha256(text.encode()).hexdigest()
     pid = "psg_" + hashlib.sha256(f"{pack}\n{source}\n{section}\n{text}".encode()).hexdigest()[:20]
     return {"id": pid, "uri": f"passage://{pack}/{source}#{section_slug(section)}@{sha[:16]}", "pack": pack,
