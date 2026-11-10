@@ -170,6 +170,14 @@
     if (st === 'handoff' && of(o.next) && of(o.next) !== r) { env.phase = 'handoff'; env.nextAgentKey = of(o.next); }
     return env;
   }
+  /** A sphere that fills its box (o.fit, the side block's): the sphere is .8 of the box, as the static frame
+   *  draws it, and the ring hugs it a few pixels out. The view reads the element's real box every frame, so a
+   *  box of `size` px draws a sphere of .8 x size, never a stage-sized sphere lost in the middle of it. */
+  function fit(size) {
+    size = +size || 28;
+    return { rFrac: FIT_R, cyFrac: 0.5, ringGap: Math.max(2.5, size * 0.035), ringScale: Math.max(0.6, Math.min(1, size / 120)), sphere: Math.round(size * FIT_R * 2) };
+  }
+  var FIT_R = 0.4;
   /** A live sphere in `el`, sized to the element: {agent, state, progress, next, kind, size}. Without WebGL the
    *  element gets the static frame. Returns {set(o), destroy(), live}. */
   function mount(el, o) {
@@ -179,8 +187,11 @@
     function fallback() { el.innerHTML = still(o.agent, size); }
     if (S && S.gl && A) {
       try {
-        var L = look(), small = size < 72;
-        h.view = A.create(S, el, {
+        var L = look(), small = size < 72, F = o.fit ? fit(size) : null;
+        h.view = A.create(S, el, F ? {
+          level: 4, accent: L.accent, inkAccent: L.inkAccent, bg: L.bg, dark: L.dark, interactive: false,
+          rFrac: [F.rFrac, F.rFrac], cyFrac: F.cyFrac, ringGap: F.ringGap, ringScale: F.ringScale, fps: 30
+        } : {
           level: 4, accent: L.accent, inkAccent: L.inkAccent, bg: L.bg, dark: L.dark, interactive: !small && o.interactive !== false,
           rFrac: small ? [0.33, 0.33] : (o.rFrac || [0.27, 0.24]), cyFrac: small ? 0.47 : (o.cyFrac || 0.45),
           ringGap: small ? Math.max(2, size * 0.07) : o.ringGap, ringScale: small ? Math.max(0.55, size / 80) : o.ringScale, fps: small ? 30 : undefined
@@ -215,7 +226,7 @@
     var k = of(r) || 'orchestrator', size = o.size || 0, st = o.state === 'needs-you' ? 'needs' : o.state || 'idle';
     var label = o.label || name(k) + (st === 'working' ? ', working' : st === 'needs' ? ', needs you' : '');
     return '<span class="nk-ag' + (o.cls ? ' ' + esc(o.cls) : '') + '" data-nk-agent="' + k + '" data-nk-state="' + esc(st) + '"' + (size ? ' data-nk-size="' + size + '"' : '') +
-      (o.progress != null ? ' data-nk-progress="' + esc(o.progress) + '"' : '') + (o.next && of(o.next) ? ' data-nk-next="' + of(o.next) + '"' : '') +
+      (o.progress != null ? ' data-nk-progress="' + esc(o.progress) + '"' : '') + (o.next && of(o.next) ? ' data-nk-next="' + of(o.next) + '"' : '') + (o.fit ? ' data-nk-fit="1"' : '') +
       ' style="display:inline-block;position:relative;flex:none;vertical-align:middle;line-height:0' + (size ? ';width:' + size + 'px;height:' + size + 'px' : '') + '"' +
       (o.decorative ? ' aria-hidden="true"' : ' role="img" aria-label="' + esc(label) + '"') + '>' + still(k, size) + '</span>';
   }
@@ -229,6 +240,8 @@
       if (el._nk && el._nk.view && el._nk.view.detached) { el._nk.destroy(); el._nk = null; }
       if (el._nk && el._nkWant === want) continue;
       var pr = el.getAttribute('data-nk-progress'), o = { agent: el.getAttribute('data-nk-agent'), state: el.getAttribute('data-nk-state'), progress: pr == null ? undefined : +pr, next: el.getAttribute('data-nk-next') || undefined, size: +el.getAttribute('data-nk-size') || Math.min(el.clientWidth, el.clientHeight) || 28 };
+      // a sphere that fills its box is sized from the box the page actually gave it
+      if (el.hasAttribute('data-nk-fit')) { o.fit = true; o.size = Math.min(el.clientWidth, el.clientHeight) || o.size; }
       el._nkWant = want;
       if (el._nk) { el._nk.set(o); continue; }
       var svg = el.querySelector('.nk-still');
@@ -253,7 +266,10 @@
   // narrow panel) the role in mono caps, what it is doing in body type, and a small mono status. A hairline in
   // the agency colour runs along its foot while it works. Clicking it goes to what the job is about. When the
   // job ends the block folds away (a height transition; none under reduced motion).
-  var SIDE = 92, SIDE_NARROW = 64, NARROW = 320;
+  // (owner, 2026-11-11: "the agent is small, space is big") SIDE is the sphere's own diameter: its box is SIDE / .8
+  // (fit(): the sphere fills it, the ring hugging it) and the well is that box plus a few pixels of air.
+  var SIDE = 88, SIDE_NARROW = 64, NARROW = 320, WELL_AIR = 6;
+  function sideBox(d) { return Math.round(d / (FIT_R * 2)); }
   function sideCss() {
     if (!root.document || document.getElementById('nk-side-css')) return;
     var st = document.createElement('style'); st.id = 'nk-side-css';
@@ -264,18 +280,18 @@
       + '.side-agent[hidden]{display:none}'
       + '.side-agent.nk-job-off{grid-template-rows:0fr;opacity:0;border-bottom-color:transparent}'
       + '.side-agent>.nk-job{min-height:0;overflow:hidden}'
-      + '.side-agent .nk-job-go{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:16px;width:100%;padding:16px var(--sb);cursor:default;border-radius:0}'
+      + '.side-agent .nk-job-go{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:14px;width:100%;padding:10px var(--sb);cursor:default;border-radius:0}'
       + '.side-agent .nk-job-go[data-go]{cursor:pointer}.side-agent .nk-job-go[data-go]:hover .nk-job-do{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}'
       + '.side-agent .nk-job-go:focus-visible{outline:2px solid var(--ag-act,currentColor);outline-offset:-4px}'
-      + '.side-agent .nk-job-well{flex:none;display:grid;place-items:center;width:' + (SIDE + 14) + 'px;height:' + (SIDE + 14) + 'px;border-radius:50%;'
+      + '.side-agent .nk-job-well{flex:none;display:grid;place-items:center;width:' + (sideBox(SIDE) + WELL_AIR) + 'px;height:' + (sideBox(SIDE) + WELL_AIR) + 'px;border-radius:50%;'
       + 'background:color-mix(in srgb,currentColor 6%,transparent);box-shadow:inset 0 3px 8px rgba(0,0,0,.16),inset 0 -1px 0 rgba(255,255,255,.35),inset 0 0 0 1px color-mix(in srgb,currentColor 5%,transparent)}'
       + ':root[data-color-scheme="dark"] .side-agent .nk-job-well{box-shadow:inset 0 3px 10px rgba(0,0,0,.55),inset 0 -1px 0 rgba(255,255,255,.06)}'
-      + '.side-agent .nk-job-t{display:grid;gap:4px;min-width:0;flex:1}'
+      + '.side-agent .nk-job-t{display:grid;gap:3px;align-content:center;min-width:0;flex:1}'
       + '.side-agent .nk-job-role{font:600 11px/1.3 var(--font-mono,ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--nd-muted,var(--muted,inherit))}'
       + '.side-agent .nk-job-do{font:500 15.5px/1.35 var(--font-ui,var(--f,inherit));overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
       + '.side-agent .nk-job-st{font:11.5px/1.3 var(--font-mono,ui-monospace,monospace);color:var(--nd-muted,var(--muted,inherit))}'
-      + '.side-agent.nk-job-narrow .nk-job-go{flex-direction:column;align-items:flex-start;gap:10px}'
-      + '.side-agent.nk-job-narrow .nk-job-well{width:' + (SIDE_NARROW + 10) + 'px;height:' + (SIDE_NARROW + 10) + 'px}'
+      + '.side-agent.nk-job-narrow .nk-job-go{flex-direction:column;align-items:flex-start;gap:8px}'
+      + '.side-agent.nk-job-narrow .nk-job-well{width:' + (sideBox(SIDE_NARROW) + WELL_AIR) + 'px;height:' + (sideBox(SIDE_NARROW) + WELL_AIR) + 'px}'
       + '.side-agent::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;pointer-events:none;'
       + 'background:linear-gradient(90deg,transparent,var(--ag-act,var(--accent,#C9462A)) 50%,transparent) no-repeat;background-size:38% 100%;'
       + 'animation:nk-job-run 1.8s linear infinite;transition:opacity .4s}'
@@ -285,14 +301,15 @@
     document.head.appendChild(st);
   }
   function cap1(s) { s = String(s == null ? '' : s); return s.charAt(0).toUpperCase() + s.slice(1); }
-  /** The job block's markup, into a .side-agent: {role, doing, status, title, progress (0-1), size, go (a flag)}. */
+  /** The job block's markup, into a .side-agent: {role, doing, status, title, progress (0-1), size (the sphere's
+   *  diameter), go (a flag)}. */
   function side(r, o) {
     sideCss();
     o = typeof o === 'string' ? { doing: o } : o || {};
     var size = o.size || SIDE;
     return '<div class="nk-job"><div class="nk-job-go" role="' + (o.go ? 'button' : 'group') + '"' + (o.go ? ' tabindex="0" data-go="1"' : '') +
       (o.title ? ' title="' + esc(o.title) + '"' : '') + '><span class="nk-job-well">' +
-      tag(r, { state: 'working', decorative: true, size: size, cls: 'nk-side', progress: o.progress != null ? o.progress : undefined }) +
+      tag(r, { state: 'working', decorative: true, size: sideBox(size), fit: true, cls: 'nk-side', progress: o.progress != null ? o.progress : undefined }) +
       '</span><span class="nk-job-t"><span class="nk-job-role">' + esc(caption(r)) + '</span><span class="nk-job-do">' + esc(cap1(o.doing)) + '</span>' +
       '<span class="nk-job-st">' + esc(o.status || 'working') + '</span></span></div></div>';
   }
@@ -387,7 +404,7 @@
   }
 
   root.NapkinRoles = {
-    thread: thread, ask: ask, side: side, sideSet: sideSet, SIDE: SIDE, SIDE_NARROW: SIDE_NARROW,
+    thread: thread, ask: ask, side: side, sideSet: sideSet, SIDE: SIDE, SIDE_NARROW: SIDE_NARROW, fit: fit, sideBox: sideBox,
     ROLES: ROLES, KIND: KIND, of: of, forStage: forStage, ofDecision: ofDecision, name: name, the: the, The: The,
     job: function (r) { var m = meta(r); return m ? m.job : ''; }, mat: matOf, caption: caption,
     still: still, mount: mount, tag: tag, hydrate: hydrate, auto: auto, configure: configure, envelope: envelope

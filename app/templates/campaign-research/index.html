@@ -919,8 +919,6 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
 .save-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:5;display:grid;min-width:150px;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:4px}
 .save-menu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
 .save-menu button:hover{background:var(--soft)}
-.rq-about{display:flex;gap:8px;align-items:center;font-size:12.5px!important;font-weight:500!important;color:var(--ink2)!important}
-.rq-about select{font:inherit;border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:var(--paper);color:var(--ink);min-width:0;max-width:100%}
 .jb-hint{font-size:13px;color:var(--ink2)}
 @media (max-width:640px){
   .rp-gp{grid-template-columns:auto minmax(0,1fr)}
@@ -1146,16 +1144,29 @@ section.report{margin-top:0}
 .rbox-acts #lockBtn.btn{height:32px;padding:0 12px;border-color:var(--ag-act);background:var(--ag-act);color:var(--ag-act-ink)}
 .insp-box summary{font:700 10.5px var(--font-mono);letter-spacing:.84px;color:var(--muted)}
 .insp-box details{font-size:12.5px;color:var(--ink)}
-/* Ask the research */
+/* Ask the research (owner, 2026-11-11: "follows old UI"): one composed field on the panel's surface, a hairline,
+   the agency colour's ring on focus at the shell's 2px; About is a chip opening the shell's menu of section names;
+   Ask is the shell's standard button in the field's corner. The selected view's "Ask about this…" is the same field. */
 #insp-ask .rq-box{border:0;background:none;padding:0;border-radius:0;gap:8px;max-width:none}
-#insp-ask .rq-box > label:first-child{font:700 11px var(--font-mono);letter-spacing:.88px;text-transform:uppercase;color:var(--muted)}
-#insp-ask .rq-box .r{flex-wrap:nowrap;align-items:center;gap:8px}
-#insp-ask textarea{flex:1;min-width:0;height:58px;min-height:0;border:1.5px solid var(--ink);border-radius:14px;padding:9px 12px;font:13.5px/1.4 var(--font-ui);background:#FFFFFF;color:#141413;resize:vertical}
-:root[data-color-scheme="dark"] #insp-ask textarea{background:var(--card);color:var(--ink)}
-#insp-ask .ans.primary{display:inline-flex;align-items:center;justify-content:center;height:34px;min-height:34px;padding:0 16px;border-radius:999px;border:0;background:var(--ag-act);color:var(--ag-act-ink);font:600 12.5px var(--font-ui)}
-#insp-ask .rq-about{font-size:12px!important;color:var(--muted)!important}
-#insp-ask .rq-about select{background:var(--card);border-color:var(--line);color:var(--ink)}
 #insp-ask .rq-hint{font-size:12px;color:var(--muted)}
+.rq-field{display:grid;gap:6px;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:9px 8px 8px 12px;transition:border-color .15s var(--ease),box-shadow .15s var(--ease)}
+.rq-field:focus-within{border-color:var(--ag-act);box-shadow:0 0 0 2px color-mix(in srgb,var(--ag-act) 22%,transparent)}
+.rq-field textarea{all:unset;box-sizing:border-box;display:block;width:100%;min-height:38px;max-height:160px;overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:13.5px/1.4 var(--font-ui);color:var(--ink);cursor:text}
+.rq-field textarea::placeholder{color:var(--muted);opacity:1}
+.rq-field textarea:focus-visible{outline:none}
+.rq-field :focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
+.rq-foot{display:flex;align-items:center;gap:8px;min-width:0}
+.rq-foot .rq-send{margin-left:auto;flex:none}
+.rq-aboutm{position:relative;min-width:0}
+.rq-aboutm>summary{list-style:none;display:flex;align-items:center;gap:4px;max-width:100%;height:24px;box-sizing:border-box;padding:0 8px;border:1px solid var(--line);border-radius:999px;font:500 11.5px var(--font-ui);color:var(--muted);cursor:pointer;white-space:nowrap}
+.rq-aboutm>summary::-webkit-details-marker{display:none}
+.rq-aboutm>summary b{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rq-aboutm>summary .chev{flex:none;font-size:9px;color:var(--muted)}
+.rq-aboutm>summary:hover,.rq-aboutm[open]>summary{border-color:var(--ink)}
+.rq-aboutm .pv-menu{position:absolute;left:0;top:30px;z-index:20;max-height:300px;overflow-y:auto}
+.rq-aboutm .pv-menu button[aria-checked="true"]{font-weight:600}
+.rq-field .sp-btn{display:inline-flex;align-items:center;justify-content:center;height:28px;min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer}
+.rq-field .sp-btn:hover{border-color:var(--ink)}
 /* foot: hint, the section nav (kept, §11), who signs */
 .insp-hint{margin:0;font-size:12px;line-height:1.45;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
 .insp-nav{font-size:12px;border-top:1px solid var(--line);padding-top:10px}
@@ -1734,8 +1745,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
 .pv-rec{font:11.5px/1.7 var(--mono);color:var(--ink3);padding:4px 10px 6px 26px;word-break:break-all}
 .pv-note{font-size:13px;color:var(--ink2);line-height:1.5;margin:8px 2px}
 .pv-empty{font-size:13px;color:var(--ink3);padding:8px}
-.pv-ask{border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 12px;background:var(--soft);display:flex;gap:8px;align-items:flex-end;margin-top:10px}
-.pv-ask textarea{all:unset;flex:1;font-size:13px;line-height:1.4;min-height:38px;white-space:pre-wrap;color:var(--ink)}
+.pv-ask{margin-top:10px}
 .pv-wrong{display:grid;gap:6px;margin:0 0 12px}
 .pv-wrong .pre{display:flex;gap:6px;flex-wrap:wrap}
 .pv-wrong textarea{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--paper);color:var(--ink)}
@@ -5848,14 +5858,24 @@ details.pv-fold>summary:hover{background:var(--soft)}
         :'<p class="rq-how">Looking into it… the Research agent searches only if what’s here doesn’t answer it.</p>'
           +(j.jobId?'<div class="answers sm"><button type="button" class="ans" data-act="rq-stop" data-i="'+i+'"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Stop')+'</button></div>':''))+'</div>';
   }
-  // Always open: the place to ask is a box you can type in, not a link to find.
+  // Always open: the place to ask is a box you can type in, not a link to find. One composed field (owner,
+  // 2026-11-11): the question, then About as a chip (the shell's menu, the report's plain section names, never a
+  // native select; its value rides in a hidden input) and Ask, the shell's button, in the corner.
+  function aboutName(k){ var s=secByLens(k); return s?secName(s):lensName(k); }
+  function aboutHtml(key, lens){
+    var cur=lens&&LENS[lens]?lens:'', opt=function(k, t){ return '<button type="button" role="menuitemradio" aria-checked="'+(cur===k)+'" data-act="rq-lens" data-k="'+esc(key)+'" data-lens="'+esc(k)+'">'+esc(t)+'</button>'; };
+    return '<details class="rq-aboutm"><summary aria-label="About: '+esc(cur?aboutName(cur):'anything')+'">About · <b>'+esc(cur?aboutName(cur):'anything')+'</b><span class="chev" aria-hidden="true">▾</span></summary>'
+      +'<div class="pv-menu" role="menu">'+opt('', 'Anything')+LENSES.map(function(L){ return opt(L.k, aboutName(L.k)); }).join('')+'</div></details>'
+      +'<input type="hidden" id="rqlens-'+esc(slug(key))+'" value="'+esc(cur)+'">';
+  }
+  function askField(o){
+    return '<div class="rq-field'+(o.cls?' '+o.cls:'')+'"><textarea id="'+o.id+'"'+(o.k?' data-k="'+esc(o.k)+'"':'')+' rows="2" maxlength="1000" placeholder="'+esc(o.ph)+'"'+(o.label?' aria-label="'+esc(o.label)+'"':'')+'>'+esc(o.draft||'')+'</textarea>'
+      +'<div class="rq-foot">'+(o.about||'')+'<button type="button" class="sp-btn rq-send" data-act="'+o.act+'"'+(o.k?' data-k="'+esc(o.k)+'"':'')+'>Ask</button></div></div>';
+  }
   function askBoxHtml(key, label){
     var ui=ASK.ui[key]||{}, id='rqin-'+slug(key);
-    return '<div class="rq-box no-print'+(key==='_new'?' rq-new':'')+'" id="rqbox-'+esc(slug(key))+'"><label for="'+id+'">'+esc(label)+'</label><div class="r">'
-      +(key==='_new'?'<textarea id="'+id+'" data-k="'+esc(key)+'" rows="2" maxlength="1000" placeholder="What should it look into next? It reads the facts and sources behind this report.">'+esc(ui.draft||'')+'</textarea>'
-        :'<input type="text" id="'+id+'" data-k="'+esc(key)+'" value="'+esc(ui.draft||'')+'" maxlength="1000" autocomplete="off" placeholder="What do you want to know?">')
-      +'<button type="button" class="ans primary" data-act="rq-send" data-k="'+esc(key)+'">Ask</button></div>'
-      +(key==='_new'?'<label class="rq-about">About <select id="rqlens-_new" data-k="_new"><option value="">anything</option>'+LENSES.map(function(L){ var s=secByLens(L.k); return '<option value="'+esc(L.k)+'"'+(ui.lens===L.k?' selected':'')+'>'+esc(s?secWords(s):L.l)+'</option>'; }).join('')+'</select></label>':'')+'</div>';
+    return '<div class="rq-box no-print'+(key==='_new'?' rq-new':'')+'" id="rqbox-'+esc(slug(key))+'"><label class="sr" for="'+id+'">'+esc(label)+'</label>'
+      +askField({id:id, k:key, act:'rq-send', draft:ui.draft, ph:key==='_new'?'Ask the research…':'What do you want to know?', about:key==='_new'?aboutHtml(key, ui.lens):''})+'</div>';
   }
   function renderAsks(){
     try{ sideAgent(); }catch(e){}
@@ -5940,6 +5960,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'rq-open': ASK.ui[k]={open:true, draft:''}; renderAsks(); var i=$('rqin-'+slug(k)); if(i) i.focus(); break;
       case 'rq-cancel': delete ASK.ui[k]; renderAsks(); break;
       case 'rq-send': doAsk(k); break;
+      case 'rq-lens':
+        var lu=ASK.ui[k]||(ASK.ui[k]={}), lin=$('rqin-'+slug(k)); if(lin) lu.draft=lin.value;
+        lu.lens=b.getAttribute('data-lens')||''; renderAsks();
+        var lf=$('rqin-'+slug(k)); if(lf){ try{ lf.focus({preventScroll:true}); }catch(e){} } break;
       case 'rq-retry': if(j){ sendAsk(j); renderAsks(); } break;
       case 'rq-drop': if(j){ ASK.jobs.splice(ASK.jobs.indexOf(j), 1); saveAskJobs(); renderAsks(); } break;
       case 'rq-stop':
@@ -6010,7 +6034,6 @@ details.pv-fold>summary:hover{background:var(--soft)}
     else if(id&&/^chkwhyc?-/.test(id)){ var ui=CHK.ui[t.getAttribute('data-ref')]; if(ui){ ui.why=t.value; if(t.value.trim()) ui.err=false; } }
     else if(id&&id.indexOf('rqin-')===0){ var ak=t.getAttribute('data-k'); (ASK.ui[ak]||(ASK.ui[ak]={})).draft=t.value; }
     else if(id&&id.indexOf('pinwhy-')===0){ var pk=t.getAttribute('data-ref'); (PINACT[pk]||(PINACT[pk]={wrong:true})).why=t.value; }
-    else if(id&&id.indexOf('rqlens-')===0){ var lk2=t.getAttribute('data-k'); (ASK.ui[lk2]||(ASK.ui[lk2]={})).lens=t.value; }
   });
   document.addEventListener('keydown', function(e){
     var t=e.target; if(e.key!=='Enter'||e.isComposing||!t||!t.id) return;
@@ -6018,12 +6041,19 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if((t.id==='cmp-prompt'&&!e.shiftKey)||t.id==='cmp-who'){ e.preventDefault(); doSend(); }
     else if(t.id.indexOf('qtext-')===0){ e.preventDefault(); doAnswer(t.getAttribute('data-q'), null, t.value); }
     else if(t.id.indexOf('rqin-')===0&&!(e.shiftKey&&t.tagName==='TEXTAREA')){ e.preventDefault(); doAsk(t.getAttribute('data-k')); }
+    else if(t.id==='pv-askq'&&!e.shiftKey){ e.preventDefault(); var pb=t.closest('.rq-field').querySelector('[data-act="pv-ask"]'); if(pb) pb.click(); }
     else if(/^chkwhyc?-/.test(t.id)){ e.preventDefault(); var cb=t.closest('.rc-why'), go=cb&&cb.querySelector('[data-act=chk-reject],[data-act=chk-use]'); if(go) go.click(); }
   });
+  // The About menu closes on a click outside it or on Escape, as the shell's menus do.
+  function closeAbout(keep){ Array.prototype.forEach.call(document.querySelectorAll('details.rq-aboutm[open]'), function(d){ if(d!==keep) d.open=false; }); }
+  document.addEventListener('click', function(e){ closeAbout(e.target&&e.target.closest?e.target.closest('details.rq-aboutm'):null); }, true);
+  document.addEventListener('keydown', function(e){ if(e.key!=='Escape') return; var d=document.querySelector('details.rq-aboutm[open]'); if(!d) return; e.preventDefault(); d.open=false; var sm=d.querySelector('summary'); if(sm) sm.focus(); });
   document.addEventListener('change', function(e){ if(e.target&&e.target.id==='cmp-file'){ addFiles(e.target.files); e.target.value=''; } });
   document.addEventListener('toggle', function(e){
     if(e.target&&e.target.id==='activity') CHAT.open=e.target.open;
-    else if(e.target&&e.target.id==='asked') CHAT.sheetOpen=e.target.open; }, true);
+    else if(e.target&&e.target.id==='asked') CHAT.sheetOpen=e.target.open;
+    // the About menu, opened low in the panel, scrolls into view rather than hiding under the panel's edge
+    else if(e.target&&e.target.classList&&e.target.classList.contains('rq-aboutm')&&e.target.open){ var mn=e.target.querySelector('.pv-menu'); if(mn&&mn.scrollIntoView) mn.scrollIntoView({block:'nearest'}); } }, true);
   // Files dropped anywhere on the start page are attached, as the page says.
   function dragOff(){ document.body.classList.remove('dragging'); var c=$('composer'); if(c) c.classList.remove('drag'); }
   function hasFiles(e){ var t=e.dataTransfer&&e.dataTransfer.types; return !!t&&Array.prototype.indexOf.call(t,'Files')!==-1; }
@@ -6146,7 +6176,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function histFor(ref){ var p=/^f_/.test(ref)?'facts['+ref+']':/^fi_/.test(ref)?'findings['+ref+']':/^src_/.test(ref)?'sources['+ref+']':ref;
     return decs().filter(function(d){ return touches(d, p)||arr(d.cites).indexOf(ref)!==-1; }); }
   function histRow(ref){ var n=histFor(ref).length; return '<button type="button" class="pv-row" data-pv="hist:'+esc(ref)+'"><span class="g">⟲</span><span class="nm">History'+(n?' · '+n:'')+'</span>'+chev()+'</button>'; }
-  function askHtml(ph){ return '<div class="pv-ask"><textarea id="pv-askq" rows="2" placeholder="'+esc(ph)+'" aria-label="'+esc(ph)+'"></textarea><button type="button" class="pv-btn primary" data-act="pv-ask">Ask</button></div>'; }
+  function askHtml(ph){ return askField({cls:'pv-ask', id:'pv-askq', act:'pv-ask', ph:ph, label:ph}); }
   function warnHtml(t){ return t?'<div class="pv-warn" role="note"><b>!</b><span>'+esc(t)+'</span></div>':''; }
   function chipsUsedIn(refs){ return refs.map(function(r){ return /^fi_/.test(r)?findChip(r):lineChip(r); }).join(''); }
   // What a finding, a fact or a source is used in: findings, then the lines (summary, headline, sentences).
@@ -6716,7 +6746,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'ev-open': evOpen(b.getAttribute('data-g'), b.hasAttribute('data-focus')); break;
       case 'ev-more': EV.pages[b.getAttribute('data-k')]=+b.getAttribute('data-n')||40; if(b.closest('#insp-sel')) reSel(); else evBody(); break;
       case 'ev-ask': evAsk(b.getAttribute('data-lens')); break;
-      case 'rq-open': case 'rq-cancel': case 'rq-send': case 'rq-retry': case 'rq-drop': onAskAct(act, b); break;
+      case 'rq-open': case 'rq-cancel': case 'rq-send': case 'rq-retry': case 'rq-drop': case 'rq-lens': onAskAct(act, b); break;
       case 'export-html': doExport('html'); var sm=b.closest('details'); if(sm) sm.open=false; break;
       case 'export-pdf': doExport('pdf'); var sm2=b.closest('details'); if(sm2) sm2.open=false; break;
       case 'pv-keep': pvKeep(b.getAttribute('data-ref')); break;

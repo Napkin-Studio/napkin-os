@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import vm from 'node:vm'
 
 /** app/templates, found from wherever the runner put this bundle. */
 function templates(): string {
@@ -493,7 +494,7 @@ test('a review leaves the page where it is, and the Strategy agent works in the 
   assert.equal(runs[0].quiet, true, 'the reconsider job does not scroll the page')
   assert.ok(!side.hidden, 'the Strategy agent shows in the side panel while the job runs')
   assert.ok(!on(), 'not on the bottom edge: the agent has moved to the side panel')
-  assert.match(side.innerHTML, /<span class="nk-ag nk-side" data-nk-agent="strategy" data-nk-state="working" data-nk-size="92"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working, at the shared size (the static frame until it is hydrated)')
+  assert.match(side.innerHTML, /<span class="nk-ag nk-side" data-nk-agent="strategy" data-nk-state="working" data-nk-size="110" data-nk-fit="1"[^>]*aria-hidden="true"><svg class="nk-still"/, 'its sphere, working, at the shared size, filling its box (the static frame until it is hydrated)')
   assert.match(side.innerHTML, /<span class="nk-job-role">STRATEGY AGENT<\/span><span class="nk-job-do">Bringing the report in step with your review<\/span>/)
   assert.doesNotMatch(side.innerHTML, /agent-figure|walking/)
   finish(runs[0])
@@ -2388,8 +2389,46 @@ test('research: the report body is the mock’s, and every section of the record
   assert.doesNotMatch(fn(RT, 'gapAsk'), /doAsk|sendAsk|apiProxy/)
   // One Ask the research box; a lens-scoped question is asked from it with About.
   assert.doesNotMatch(fn(RT, 'renderAsks'), /askBoxHtml\(L\.k/)
-  assert.match(fn(RT, 'askBoxHtml'), /id="rqlens-_new"/)
+  assert.match(fn(RT, 'aboutHtml'), /id="rqlens-'\+esc\(slug\(key\)\)\+'"/)
   assert.match(fn(RT, 'doAsk'), /rqlens-/)
+})
+
+// Owner, 2026-11-11 ("follows old UI"): the Ask box is one composed field in the new UI's language, with About as a
+// chip that opens the shell's menu of plain section names, never a native select, and Ask as the shell's button.
+test('research: the Ask box is one field with an About chip, no native select', () => {
+  const LENSES = [{ k: 'market', l: 'Market' }, { k: 'audience', l: 'Audience' }], LENS = { market: LENSES[0], audience: LENSES[1] }
+  const secs: Record<string, { n: number; title: string; lens: string }> = { market: { n: 1, title: 'The market', lens: 'market' } }
+  const env = { esc, slug: (x: string) => x.replace(/[^a-z0-9_-]/gi, '-'), LENSES, LENS, ASK: { ui: { _new: { draft: 'Why?', lens: 'market' } } },
+    secByLens: (k: string) => secs[k] || null, secName: (x: { title: string }) => x.title, lensName: (k: string) => (LENS as Record<string, { l: string }>)[k]?.l || k }
+  const f = lift<{ askBoxHtml(k: string, l: string): string; askHtml(ph: string): string }>(RT, ['askBoxHtml', 'askField', 'aboutHtml', 'aboutName', 'askHtml'], env)
+  const box = f.askBoxHtml('_new', 'Ask the research')
+  assert.doesNotMatch(box, /<select/, 'no native select in the Ask box')
+  assert.equal((box.match(/class="rq-field/g) || []).length, 1, 'one composed field')
+  assert.match(box, /<textarea id="rqin-_new"[^>]*placeholder="Ask the research…"[^>]*>Why\?<\/textarea>/, 'a short placeholder; the draft kept')
+  assert.match(box, /<label class="sr" for="rqin-_new">Ask the research<\/label>/, 'no mono caps label, named for screen readers')
+  assert.match(box, /<details class="rq-aboutm"><summary aria-label="About: The market">About · <b>The market<\/b>/, 'About is a chip naming the section')
+  assert.match(box, /<div class="pv-menu" role="menu">/, 'it opens the shell’s menu')
+  assert.match(box, /data-lens="">Anything<\/button>/)
+  assert.match(box, /aria-checked="true" data-act="rq-lens" data-k="_new" data-lens="market">The market<\/button>/, 'plain section names, the chosen one checked')
+  assert.match(box, /data-lens="audience">Audience<\/button>/)
+  assert.doesNotMatch(box, /§/, 'no section numbers in About')
+  assert.match(box, /<input type="hidden" id="rqlens-_new" value="market">/, 'the lens rides in a hidden input for doAsk')
+  assert.match(box, /<div class="rq-foot">[\s\S]*<button type="button" class="sp-btn rq-send" data-act="rq-send" data-k="_new">Ask<\/button><\/div><\/div>/, 'Ask is the shell’s button, inside the field')
+  // The selected view's Ask about this… is the same field.
+  const sel = f.askHtml('Ask about this finding…')
+  assert.match(sel, /^<div class="rq-field pv-ask"><textarea id="pv-askq"[^>]*placeholder="Ask about this finding…"/)
+  assert.match(sel, /class="sp-btn rq-send" data-act="pv-ask">Ask</)
+  assert.doesNotMatch(sel, /pv-btn primary|<select/)
+  // The look: a hairline on the panel surface, the agency colour's 2px ring, no thick red ring, no new colours.
+  const css = RT.slice(RT.indexOf('.rq-field{'), RT.indexOf('.rq-field .sp-btn:hover'))
+  assert.match(css, /\.rq-field\{[^}]*border:1px solid var\(--line\)[^}]*background:var\(--paper\)/)
+  assert.match(css, /\.rq-field:focus-within\{border-color:var\(--ag-act\);box-shadow:0 0 0 2px color-mix\(in srgb,var\(--ag-act\)/)
+  assert.match(css, /\.rq-field textarea:focus-visible\{outline:none\}/, 'the global 3px red focus outline is off inside the field')
+  assert.doesNotMatch(css, /#[0-9a-f]{3,6}\b|--create/i, 'tokens only')
+  assert.doesNotMatch(RT, /#insp-ask textarea\{|\.rq-about select/, 'the old textarea and select styles are gone')
+  // Choosing in the menu keeps the draft and sets the lens; the menu closes outside or on Escape.
+  assert.match(fn(RT, 'onAskAct'), /case 'rq-lens':[\s\S]*lu\.draft=lin\.value;[\s\S]*lu\.lens=b\.getAttribute\('data-lens'\)\|\|''/)
+  assert.match(fn(RT, 'closeAbout'), /details\.rq-aboutm\[open\]/)
 })
 
 test('research: a figure the sentence states becomes its field where it stands', () => {
@@ -3558,6 +3597,49 @@ test('the side panel’s job block: research and brief use the one shared helper
   assert.match(RT, /<div class="insp-sw" id="viewsw"[\s\S]{0,300}<\/div>\s*<div class="side-agent" id="sideAgent"/)
   // Your call names the finding and counts what it rests on; the sources are a tap away, never listed.
   assert.match(fn(RT, 'chkRests'), /pubs\.length===1\?'one source':pubs\.length\+' sources'/)
+})
+
+// Owner, 2026-11-11 ("the agent is small, space is big"): the sphere fills its well. The engine's view reads the
+// element's real box; a stage-sized geometry inside a bigger box drew a 44px sphere in a 106px well.
+test('the job block: the sphere fills its well, the ring hugging it', () => {
+  const ctx: Record<string, unknown> = {}
+  vm.runInNewContext(page('shared/agent-sphere/roles.js'), ctx)
+  const R = ctx.NapkinRoles as { SIDE: number; SIDE_NARROW: number; sideBox(d: number): number; fit(n: number): { rFrac: number; cyFrac: number; ringGap: number; ringScale: number; sphere: number }; side(r: string, o: object): string }
+  const roles = page('shared/agent-sphere/roles.js'), air = Number(/WELL_AIR = (\d+)/.exec(roles)?.[1])
+  for (const [d, want] of [[R.SIDE, 88], [R.SIDE_NARROW, 64]]) {
+    const box = R.sideBox(d), g = R.fit(box)
+    assert.equal(g.sphere, want, `the sphere draws at ${want}px`)
+    assert.equal(g.cyFrac, 0.5, 'centred in its box')
+    const ringR = box * g.rFrac + g.ringGap + 3.5 * g.ringScale / 2
+    assert.ok(g.ringGap <= 5, 'the ring hugs the sphere')
+    assert.ok(ringR <= box / 2 - 2 && ringR >= box / 2 - 8, `the ring sits just inside the box (${ringR.toFixed(1)} of ${box / 2})`)
+    assert.ok(air >= 4 && air <= 10, 'the well is the box and a little air')
+    assert.ok(box + air <= want * 1.4, `the well (${box + air}px) holds the sphere (${want}px), no big empty space`)
+  }
+  // the markup asks the engine for a filling sphere at the box's size, and hydrate sizes it from the real box
+  const html = R.side('research', { doing: 'x' })
+  assert.match(html, new RegExp(`data-nk-size="${R.sideBox(R.SIDE)}"[^>]* data-nk-fit="1"`))
+  assert.match(fn(roles, 'hydrate'), /hasAttribute\('data-nk-fit'\)\) \{ o\.fit = true; o\.size = Math\.min\(el\.clientWidth, el\.clientHeight\)/)
+  assert.match(fn(roles, 'mount'), /rFrac: \[F\.rFrac, F\.rFrac\], cyFrac: F\.cyFrac, ringGap: F\.ringGap, ringScale: F\.ringScale/)
+  // the still frame draws its sphere at the same .8 of the box, so the swap to the live view does not jump
+  assert.match(fn(roles, 'still'), /viewBox="-1\.25 -1\.25 2\.5 2\.5"/)
+  assert.match(roles, /var FIT_R = 0\.4;/)
+  // tight: small padding, the text beside the sphere, vertically centred
+  const css = fn(roles, 'sideCss')
+  assert.match(css, /\.nk-job-go\{[^']*align-items:center;gap:14px;[^']*padding:10px var\(--sb\)/)
+  assert.match(css, /\.nk-job-t\{[^']*align-content:center/)
+})
+
+test('the job block: brief and research draw it identically', () => {
+  const brief = page('brief-maker/index.html')
+  for (const [name, src] of [['research', RT], ['brief', brief]] as const) {
+    assert.match(src, /<div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden><\/div>/, `${name} has the one block`)
+    assert.match(src, /\.side-agent\{--side-bleed:18px;margin-top:-1\dpx\}/, `${name}: edge to edge at the same 18px bleed`)
+    assert.doesNotMatch(src, /\.nk-job-(well|go|t|role|do|st)\b[^{]*\{/, `${name} styles none of the block's own parts`)
+    assert.doesNotMatch(src, /\.side-agent \.nk-ag\{[^}]*(width|height)/, `${name} never sizes the sphere`)
+  }
+  assert.match(fn(RT, 'sideAgent'), /R2\.sideSet\(el, job\)/)
+  assert.match(fn(brief, 'sideAgent'), /ROLES\.sideSet\(el, job\)/)
 })
 
 test('the job block says a question’s gist, the whole question in its tooltip', () => {
