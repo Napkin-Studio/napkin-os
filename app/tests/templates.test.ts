@@ -1807,10 +1807,10 @@ type Lay = {
   layoutStep(items: Item[], key: string, d: number): Item[]
   layoutResize(items: Item[], key: string, w: number): Item[]
   layoutLook(items: Item[], key: string, prop: string, v: string): Item[]
-  boxFill(cells: Cell[]): Record<string, number>
+  boxGaps(cells: Cell[]): { row: number; col: number; w: number }[]
 }
 const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
-const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize', 'layoutLook', 'boxFill'],
+const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize', 'layoutLook', 'boxGaps'],
   { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'],
     AS_KINDS: ['prose', 'bullets', 'callout', 'statement', 'cell'], TONES: ['plain', 'tint', 'inverse'] })
 const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
@@ -2810,7 +2810,7 @@ test('the panel’s Show as and Tone save through saveLayout with a decision tha
 })
 
 type SC = { sheetCells(cells: Cell[], ctx: object, rows: number[] | null): string }
-const sheetCellsOf = () => lift<SC>(BM, ['sheetCells', 'kindOf', 'toneClass', 'sentencesOf', 'boxFill', 'exportMarkHtml'],
+const sheetCellsOf = () => lift<SC>(BM, ['sheetCells', 'kindOf', 'toneClass', 'sentencesOf', 'boxGaps', 'exportMarkHtml'],
   { AS_KINDS: AS, GRID_COLS: 12, arr, esc, hasVal: (v: unknown) => v != null && v !== '' && !(Array.isArray(v) && !v.length), isMeta: (k: string) => ['client', 'project_name', 'budget_and_scope'].includes(k), headOf: (f: FieldDef) => f.label })
 
 test('print draws every kind and tone: prose, bullets, callout, statement, field; tint and inverse; Confidential kept', () => {
@@ -2854,36 +2854,94 @@ test('Boxed is a ruled form: cells stretch to their row, neighbours share one 1p
   // Stretch, no gaps, and one opaque line per edge (inside top/left, 1px outside right/bottom, so neighbours overlap).
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid\{column-gap:0;row-gap:0;align-items:stretch/)
   assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row,\.sheet\.a4\.frame-boxed \.pgrid > \.row\.k-cell\{align-self:stretch;border:0!important/)
-  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row::after\{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var\(--frame-line\)/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.pgrid > \.row::after,\.sheet\.a4\.frame-boxed \.pgrid > \.boxgap::after\{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var\(--frame-line\)/)
   assert.match(BM, /\.sheet\.a4\.frame-boxed\{--frame-line:color-mix\(in srgb,var\(--b-text\) 70%,var\(--b-bg\)\)\}/, 'opaque, so an overlap never darkens')
   assert.doesNotMatch(BM, /frame-boxed \.pgrid\{[^}]*border:1px/, 'no frame on the grid as well as on the cells')
   assert.doesNotMatch(BM, /frame-boxed \.pgrid > \.row[^{]*\{[^}]*inset -1px -1px/, 'no half-drawn per-cell edges')
-  // The last cell on each grid row reaches the right edge, on screen and in print; stored widths are unchanged.
+  // Every part is drawn at its stored width; a grid row that ends short of the edge closes with an empty
+  // box over the rest, on screen and in print (stretching the last part hid a resize: "it snaps back").
   const L = lay()
   const items = L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'objection', 6)
   const cells = L.layoutPack(items)
-  const fill = L.boxFill(cells)
+  const gaps = L.boxGaps(cells)
   const byRow: Record<number, Cell[]> = {}
   cells.filter(c => c.key).forEach(c => { (byRow[c.row] ||= []).push(c) })
-  for (const r of Object.values(byRow)) {
-    const last = r.reduce((a, b) => (b.col > a.col ? b : a))
-    assert.equal(last.col + fill[last.key!] - 1, 12, `${last.key} closes its row`)
-    for (const c of r) if (c !== last) assert.ok(!(c.key! in fill))
+  for (const [r, cs] of Object.entries(byRow)) {
+    const end = Math.max(...cs.map(c => c.col + c.w - 1)), g = gaps.filter(x => x.row === +r)
+    if (end === 12) assert.equal(g.length, 0, `row ${r} is full`)
+    else assert.deepEqual(g, [{ row: +r, col: end + 1, w: 12 - end }], `row ${r} closes with an empty box`)
   }
-  // A row of a third and a half: the half stretches to the edge.
+  // A row of a third and a half: the half keeps its six columns; a box of two closes the row.
   const odd = L.layoutPack(L.layoutResize(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'background', 4), 'barrier', 6))
-  assert.equal(L.boxFill(odd).barrier, 8)
+  const bar = odd.find(c => c.key === 'barrier')!
+  assert.deepEqual(L.boxGaps(odd).filter(g => g.row === bar.row), [{ row: bar.row, col: 11, w: 2 }])
   const boxed = sheetCellsOf().sheetCells(odd, { get: () => 'x', fieldOf: fdef, conf: [], cells: odd, look: { frame: 'boxed' } }, null)
   assert.match(boxed, /<span>The barrier<\/span>/)
-  const bar = odd.find(c => c.key === 'barrier')!
-  assert.ok(boxed.includes(`grid-column:${bar.col} / span 8;`), 'print fills it too')
+  assert.ok(boxed.includes(`grid-column:${bar.col} / span 6;`), 'print draws the stored width')
+  assert.ok(boxed.includes(`<div class="boxgap" aria-hidden="true" data-r="${bar.row}" style="grid-column:11 / span 2;`), 'print closes the row with an empty box')
   const open = sheetCellsOf().sheetCells(odd, { get: () => 'x', fieldOf: fdef, conf: [], cells: odd, look: {} }, null)
   assert.ok(open.includes(`grid-column:${bar.col} / span 6;`), 'the open frame keeps the stored width')
-  assert.match(fn(BM, 'renderStructured'), /fill=layoutData\(\)\.frame==='boxed'\?boxFill\(packed\):\{\}/)
+  assert.doesNotMatch(open, /boxgap/, 'the open frame has no boxes to close')
+  // On screen: the same boxes, and no width but the stored one (placeRow's).
+  const rs = fn(BM, 'renderStructured')
+  assert.match(rs, /gaps=layoutData\(\)\.frame==='boxed'\?boxGaps\(packed\):\[\]/)
+  assert.match(rs, /b\.className='boxgap'/)
+  assert.doesNotMatch(rs, /row\.style\.gridColumn=/, 'nothing overrides a part’s width after placeRow')
   // The page estimate: a hidden heading has no box, so it is measured where the last row ended, never at
   // the viewport's top (with the page scrolled, that pushed every heading a scroll's height down the sheet
   // and broke the pages early).
   assert.match(fn(BM, 'sheetMeasure'), /b=el\.getClientRects\(\)\.length\?el\.getBoundingClientRect\(\):\{top:last, bottom:last\}/)
+})
+
+test('a resize holds: saved, read back and packed again at the new width, the header’s rows and every Show as kind alike', () => {
+  const L = lay()
+  // The owner's First Round: Client at nine columns, alone on its row (it used to draw at twelve in Boxed).
+  let stored = L.layoutParts(L.layoutResize(L.layoutOrder(BM_FIELDS, undefined), 'client', 9))
+  const kinds = ['prose', 'bullets', 'callout', 'statement', 'cell']
+  const keys = ['client', 'project_name', 'budget_and_scope', 'job', 'background', 'barrier', 'insight', 'single_minded_proposition', 'objectives.behavioural']
+  keys.forEach((k, i) => {
+    // Show as first (any kind), then a resize: the write carries both, and a re-render reads both back.
+    let items = L.layoutLook(L.layoutOrder(BM_FIELDS, stored), k, 'as', kinds[i % kinds.length])
+    items = L.layoutResize(items, k, 5)
+    stored = JSON.parse(JSON.stringify(L.layoutParts(items)))   // what patch-data writes, as the document returns it
+    const back = L.layoutOrder(BM_FIELDS, stored).find(x => x.key === k)!
+    assert.deepEqual([back.w, back.as], [5, kinds[i % kinds.length]], k)
+    const cell = L.layoutPack(L.layoutOrder(BM_FIELDS, stored)).find(c => c.key === k)!
+    assert.equal(cell.w, 5, `${k} is drawn at five columns`)
+    // In Boxed, the part's own cell is never widened: the rest of its row is an empty box, not the part.
+    const cells = L.layoutPack(L.layoutOrder(BM_FIELDS, stored))
+    for (const g of L.boxGaps(cells)) assert.ok(!(g.row === cell.row && g.col <= cell.col + cell.w - 1 && g.col + g.w - 1 >= cell.col), `${k}: no box over the part`)
+  })
+  // The write stays inside the schema every brief carries (documents made before Show as included):
+  // layout.parts entries allow extra keys, and col/row/w/h/order are integers in range.
+  for (const p of Object.values(stored)) {
+    for (const n of ['col', 'row', 'w', 'h', 'order'] as const) assert.ok(Number.isInteger(p[n]), n)
+    assert.ok(p.col >= 1 && p.col <= 12 && p.w >= 1 && p.w <= 12 && p.row >= 1 && p.h >= 1 && p.order >= 0)
+  }
+})
+
+test('every part gets its move grip and width handle, whatever it is shown as, and they can be reached in Boxed', () => {
+  const pr = fn(BM, 'placeRow')
+  // placeRow draws both handles for every part (header rows and every kind), only a locked brief has none.
+  assert.match(pr, /if\(!docLocked\(\)\)\{\s*var g=document\.createElement\('button'\); g\.type='button'; g\.className='grip';/)
+  assert.match(pr, /r\.className='redge';/)
+  assert.match(pr, /row\.appendChild\(g\); row\.appendChild\(r\);/)
+  assert.doesNotMatch(pr, /kindOf|isMeta|k-cell/, 'no kind is left without handles')
+  // renderStructured places every packed part with placeRow, header rows included.
+  assert.match(fn(BM, 'renderStructured'), /placeRow\(row,f,\{key:p\.key, col:p\.col, row:guideRow\(p\.row\), w:p\.w\}\)/)
+  // A ruled cell's grid leaves the handles where they are.
+  assert.match(BM, /\.row\.k-cell > :not\(\.lab\):not\(\.val\):not\(\.edit\):not\(\.grip\):not\(\.redge\)/)
+  // Boxed has no gap between cells: the handles sit on the part's own edges, above the neighbour and the lines
+  // (outside the box, the next cell covered the width handle, so only a row's last part could be sized).
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.grip\{left:3px;z-index:3\}/)
+  assert.match(BM, /\.sheet\.a4\.frame-boxed \.redge\{right:-6px;width:12px;z-index:3\}/)
+  // The Width buttons are offered for every part (Place on page, unless the brief is locked).
+  const sp = fn(BM, 'renderSelPart')
+  assert.match(sp, /WIDTHS\.map\(function\(x\)\{ return '<button type="button" data-w="'\+x\[0\]\+'"/)
+  // While a part is sized, its row's empty box steps aside, and comes back after.
+  const rz = fn(BM, 'startResize')
+  assert.match(rz, /querySelectorAll\('\.boxgap'\)\.forEach\(function\(b\)\{ if\(b\.style\.gridRowStart===row\.style\.gridRowStart\) b\.hidden=true; \}\)/)
+  assert.match(rz, /querySelectorAll\('\.boxgap\[hidden\]'\)\.forEach\(function\(b\)\{ b\.hidden=false; \}\)/)
 })
 
 test('a selected line of the report lights as the mock’s claim: the headline, a summary line and a paragraph alike, no grey block, no box', () => {

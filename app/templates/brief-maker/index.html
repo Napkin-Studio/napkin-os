@@ -879,16 +879,23 @@
   /* boxed frame: the mock's outlined grid */
   /* A ruled form (owner, 10 Nov): every cell stretches to its grid row's height, and draws its own
      1px box, inside on its top and left and 1px outside on its right and bottom, so two neighbours'
-     lines fall on the same pixel (one line, opaque, never doubled). The last cell on a row reaches the
-     right edge (boxFill), so the frame closes; each printed page's grid is closed on its own. */
+     lines fall on the same pixel (one line, opaque, never doubled). A row that ends short of the right
+     edge closes with an empty box (boxGaps), so the frame closes and every part keeps its real width;
+     each printed page's grid is closed on its own. */
   .sheet.a4.frame-boxed{--frame-line:color-mix(in srgb,var(--b-text) 70%,var(--b-bg))}
   #sheet.frame-boxed .pgrid{column-gap:0;padding:0;margin:8px 60px 36px}
   .sheet.a4.frame-boxed .pgrid{column-gap:0;row-gap:0;align-items:stretch;padding-right:1px;padding-bottom:1px}
   .sheet.a4.frame-boxed .pgrid > .row,.sheet.a4.frame-boxed .pgrid > .row.k-cell{align-self:stretch;border:0!important;border-radius:0;padding:18px 20px}
   .sheet.a4.frame-boxed .pgrid > .row.k-cell{padding:12px 20px}
-  .sheet.a4.frame-boxed .pgrid > .row::after{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var(--frame-line);pointer-events:none;z-index:1}
+  .sheet.a4.frame-boxed .pgrid > .boxgap{position:relative;align-self:stretch;min-height:1px}
+  .sheet.a4.frame-boxed .pgrid > .boxgap[hidden]{display:none}
+  .sheet.a4.frame-boxed .pgrid > .row::after,.sheet.a4.frame-boxed .pgrid > .boxgap::after{content:"";position:absolute;top:0;left:0;right:-1px;bottom:-1px;border:1px solid var(--frame-line);pointer-events:none;z-index:1}
   .sheet.a4.frame-boxed .pgrid > .row.sel{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--brief-accent) 50%,transparent)}
   .sheet.a4.frame-boxed .pbreak{margin:6px -60px}
+  /* No gap between boxed cells: a part's handles sit on its own edges, above its neighbours and the frame's
+     lines, so every part can be moved and sized (outside the box the next cell covered them). */
+  .sheet.a4.frame-boxed .grip{left:3px;z-index:3}
+  .sheet.a4.frame-boxed .redge{right:-6px;width:12px;z-index:3}
   .sheet.a4.head-tab .pgrid > .row .lab > span:first-child{background:var(--b-text);color:var(--b-bg);padding:6px 12px;font:800 10.5px/1.2 var(--font-ui);letter-spacing:.14em;border-radius:0;position:absolute;top:0;left:0}
   .sheet.a4.head-tab .pgrid > .row{padding-top:40px}
 
@@ -3431,7 +3438,7 @@
       // Each part in its cell on the sheet's grid (layout.parts, else the defaults).
       // Where the printed sheet starts a new page, a guide takes a row of its own (SHEET_BREAKS, measured
       // on the sheet as it prints, so the screen breaks where the PDF does).
-      var headRow=0, guided={}, packed=layoutPack(layoutItems()), firstRow=null, fill=layoutData().frame==='boxed'?boxFill(packed):{};
+      var headRow=0, guided={}, packed=layoutPack(layoutItems()), firstRow=null, gaps=layoutData().frame==='boxed'?boxGaps(packed):[];
       packed.forEach(function(p){ if(!p.head&&(firstRow===null||p.row<firstRow)) firstRow=p.row; });
       packed.forEach(function(p){
         var pg=SHEET_BREAKS.starts[p.row];
@@ -3439,9 +3446,11 @@
           g.style.gridRow=String(guideRow(p.row)-1); g.innerHTML='<span>Page '+pg+' of '+SHEET_BREAKS.total+'</span>'; host.appendChild(g); }
         if(p.head){ var h=document.createElement('div'); h.className='sechead'; h.textContent=p.head; h.style.gridRow=String(guideRow(p.row)); host.appendChild(h); headRow=p.row; return; }
         var i=fieldIndex(p.key), f=FIELDS[i];
-        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); if(p.row===firstRow) row.classList.add('r1'); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w}); if(fill[p.key]) row.style.gridColumn=p.col+' / span '+fill[p.key]; host.appendChild(row);   // Studio tints the parts in turn
+        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); if(p.row===firstRow) row.classList.add('r1'); placeRow(row,f,{key:p.key, col:p.col, row:guideRow(p.row), w:p.w}); host.appendChild(row);   // Studio tints the parts in turn
         if(p.row===headRow+1) row.classList.add('afterhead');   // the heading's rule is the first row's
       });
+      gaps.forEach(function(g){ var b=document.createElement('div'); b.className='boxgap'; b.setAttribute('aria-hidden','true');
+        b.style.gridColumn=g.col+' / span '+g.w; b.style.gridRow=String(guideRow(g.row)); host.appendChild(b); });
     }
     // The pictures, sound and video the person sent, when there are any.
     var showBoards=arr(data().reference_assets).length>0;
@@ -4311,13 +4320,15 @@
     if(ok.indexOf(v)===-1) return items.slice();
     return items.map(function(it){ if(it.key!==key) return it; var n=withLook({key:it.key, sec:it.sec, w:it.w}, it); n[prop]=v; return n; });
   }
-  // In the boxed frame the sheet is a ruled form: the last part on a grid row reaches the right edge,
-  // so every row closes the frame (its stored width is unchanged). -> {key: columns it spans}
-  function boxFill(cells){
-    var last={}, out={};
-    cells.forEach(function(c){ if(c.key&&(!last[c.row]||c.col>last[c.row].col)) last[c.row]=c; });
-    for(var r in last) out[last[r].key]=GRID_COLS-last[r].col+1;
-    return out;
+  // In the boxed frame the sheet is a ruled form whose frame closes on every row. A row of parts that
+  // ends short of the right edge closes with an empty box over what is left; every part is drawn at its
+  // stored width, so a resize shows (stretching the last part hid its width: a resize "snapped back").
+  // -> [{row, col, w}] one empty box per grid row of parts that ends before the edge
+  function boxGaps(cells){
+    var end={}, out=[];
+    cells.forEach(function(c){ if(c.key) end[c.row]=Math.max(end[c.row]||0, c.col+c.w-1); });
+    for(var r in end) if(end[r]<GRID_COLS) out.push({row:+r, col:end[r]+1, w:GRID_COLS-end[r]});
+    return out.sort(function(a,b){ return a.row-b.row; });
   }
   function layoutData(){ var l=get('layout'); return l&&typeof l==='object'&&!Array.isArray(l)?l:{}; }
   function layoutItems(){ return layoutOrder(FIELDS, layoutData().parts); }
@@ -4426,6 +4437,8 @@
     var grid=$('fields'), gb=grid.getBoundingClientRect(), gap=parseFloat(getComputedStyle(grid).columnGap)||0;
     var step=(gb.width+gap)/GRID_COLS, left=gb.left+(p.col-1)*step, w=p.w;
     var tag=document.createElement('span'); tag.className='wtag'; row.appendChild(tag); row.classList.add('resizing');
+    // in the boxed frame the row's empty box steps aside while the part is sized
+    grid.querySelectorAll('.boxgap').forEach(function(b){ if(b.style.gridRowStart===row.style.gridRowStart) b.hidden=true; });
     function mv(ev){
       w=Math.max(MIN_W, Math.min(GRID_COLS-p.col+1, Math.round((ev.clientX-left+gap)/step)));
       row.style.gridColumn=p.col+' / span '+w; tag.textContent=w+'/'+GRID_COLS;
@@ -4433,6 +4446,7 @@
     function up(){
       h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
       row.classList.remove('resizing'); tag.remove();
+      grid.querySelectorAll('.boxgap[hidden]').forEach(function(b){ b.hidden=false; });
       if(w!==p.w) saveLayout(layoutResize(layoutItems(), f.key, w), 'resize '+partName(f));
     }
     h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
@@ -4919,10 +4933,10 @@
   // The grid's cells for the rows `rows` (all when null), renumbered from 1 in that order.
   // ctx: {get, fieldOf, conf:[key], styleOf(key), marks:{key:[n]}} — pure.
   function sheetCells(cells, ctx, rows){
-    var map={}, n=0, headRow=0, fill=(ctx.look||{}).frame==='boxed'?boxFill(cells):{};
+    var map={}, n=0, headRow=0, gaps=(ctx.look||{}).frame==='boxed'?boxGaps(cells):[];
     (rows||cells.map(function(c){ return c.row; })).forEach(function(r){ if(!map[r]) map[r]=++n; });
     return cells.filter(function(c){ return map[c.row]; }).map(function(c){
-      var at='grid-column:'+c.col+' / span '+(fill[c.key]||c.w)+';grid-row:'+map[c.row], r=' data-r="'+c.row+'"';
+      var at='grid-column:'+c.col+' / span '+c.w+';grid-row:'+map[c.row], r=' data-r="'+c.row+'"';
       if(c.head){ headRow=c.row; return '<div class="sechead"'+r+' style="'+at+'">'+esc(c.head)+'</div>'; }
       var f=ctx.fieldOf(c.key); if(!f) return '';
       var v=ctx.get(f.key), has=hasVal(v), conf=arr(ctx.conf).indexOf(f.key)!==-1, mk=exportMarkHtml((ctx.marks||{})[f.key]);
@@ -4934,6 +4948,8 @@
         :'<div class="val'+(kd==='statement'?' spp':'')+'"'+sa+'>'+esc(String(v))+mk+'</div>';
       return '<div class="row k-'+kd+toneClass(c.tone)+(conf?' conf':'')+(c.row===headRow+1?' afterhead':'')+(c.row===ctx.cells.filter(function(x){ return !x.head; }).reduce(function(m,x){ return Math.min(m,x.row); },1e9)?' r1':'')+'"'+r+' style="'+at+';--w:'+c.w+'">'
         +'<div class="lab"><span>'+esc(headOf(f))+'</span>'+(conf?' <span class="conftag">Confidential</span>':'')+'</div>'+val+'</div>';
+    }).join('')+gaps.filter(function(g){ return map[g.row]; }).map(function(g){
+      return '<div class="boxgap" aria-hidden="true" data-r="'+g.row+'" style="grid-column:'+g.col+' / span '+g.w+';grid-row:'+map[g.row]+'"></div>';
     }).join('');
   }
   // The whole document. pages null: one long sheet, to be measured; else [[block id]] per page, where a
