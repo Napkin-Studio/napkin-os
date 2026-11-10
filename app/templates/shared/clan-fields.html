@@ -664,7 +664,18 @@ var ClanFields=(function(){
       return short(v)+(u?' '+u:'');
     }
     if(typeof v==='boolean') return v?'yes':'no';
+    if(u==='code'||typeof v==='string'&&CODE.test(v)) return codeWords(v);
     return String(v);
+  }
+  // A code in words (design, data fixes 4): the intake's own option label for it ("Fast food"),
+  // else its last segment in words; never the raw code.
+  var CODE=/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+  function codeWords(v){
+    v=String(v==null?'':v); var lab='', M=obj(obj(data().intake).messages);
+    Object.keys(M).some(function(k){ var q=obj(M[k]).question; return arr(q&&q.options).some(function(o){
+      var vs=o&&Array.isArray(o.value)?o.value:[o&&o.value]; if(o&&o.label&&vs.indexOf(v)!==-1){ lab=String(o.label); return true; } return false; }); });
+    if(lab) return lab;
+    var w=slugWords(v.split('.').pop()); return w.charAt(0).toUpperCase()+w.slice(1);
   }
   function short(n){
     var a=Math.abs(n);
@@ -673,12 +684,20 @@ var ClanFields=(function(){
     if(a>=1e4) return (Math.round(n/100)/10)+'k';
     return String(Math.round(n*100)/100);
   }
+  // A key in words (design, data fixes 5): a family the roster names has its own word; the rest is the
+  // key less its trailing hash, with acronyms and names spelt as people write them. Never the raw key.
+  var KEY_FAM={'roster.categories.primary':'Category','roster.categories.secondary':'Second category','roster.client_org':'Client','roster.brand':'Brand','roster.markets':'Markets'};
+  var ACRO={hfss:'HFSS',asai:'ASAI',asa:'ASA',cap:'CAP',bai:'BAI',ipa:'IPA',qsr:'QSR',fmcg:'FMCG',ooh:'OOH',tv:'TV',bvod:'BVOD',uk:'UK',eu:'EU',gb:'GB',ie:'IE',nl:'NL',be:'BE',yoy:'year on year',cnam:'Coimisiún na Meán',mcdonalds:'McDonald’s'};
+  function slugWords(k){
+    var ws=String(k||'').replace(/_[0-9a-f]{6}$/,'').replace(/_(eur|gbp|usd)$/,'').split(/[_.\s]+/).filter(Boolean);
+    return ws.map(function(w){ return ACRO[w]||w; }).join(' ').replace(/\bcoimisi[uú]n na me[aá]n\b/i,'Coimisiún na Meán');
+  }
   function label(p){
     if(!p) return '';
     // A text pin's key ends in a slug of its own value ("key_moment.christmas_the_busiest…"):
     // its label is the kind of thing it is, and the value says the rest.
-    var seg=String(p.key||'').split('.'), k=(seg.length>1?(p.unit==='text'?seg[1]:seg.slice(1).join(' ')):seg[0])||'';
-    k=k.replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year');
+    var key=String(p.key||''), fam=KEY_FAM[key], seg=key.split('.');
+    var k=fam||slugWords((seg.length>1?(p.unit==='text'?seg[1]:seg.slice(1).join(' ')):seg[0])||'')||'Fact';
     return k.charAt(0).toUpperCase()+k.slice(1)+(p.market?' · '+country(p.market):'');
   }
   // "IE" → "Ireland", as the report names a market; the code where the browser has no name.
@@ -704,9 +723,15 @@ var ClanFields=(function(){
   // What a person wrote, without the "<their id>: " an older note began with.
   function saidBy(q,rec){ var id=String(rec&&rec.publisher||''); q=String(q); return id&&q.indexOf(id+': ')===0?q.slice(id.length+2):q; }
   function srcShort(p){ var s=srcOf(p); if(!s||!s.rec) return s?'source details missing':'';
-    if(s.rec.tier==='reviewer-verified') return (/correct/.test(s.rec.title||'')?'corrected by ':'checked by ')+personName(whoOfSrc(s.rec));
+    if(s.rec.tier==='reviewer-verified') return reviewerWords(s.rec);
     if(/^material:/.test(s.rec.uri||'')) return 'your file'+(s.rec.title?' '+s.rec.title:'');
     return (pubName(s.rec.publisher)||s.rec.domain||'source')+(s.rec.published_at?' · '+yr(s.rec.published_at):''); }
+  // A person's check, one rule everywhere (design, data fixes 8): "Confirmed by Tia in chat" when the
+  // record says it was confirmed in the chat, "corrected by" only when it says correction, else
+  // "checked by"; a record from the knowledge layer adds where it came from.
+  function reviewerWords(rec){ var t=String(rec&&rec.title||''), who=personName(whoOfSrc(rec));
+    var w=/correct/i.test(t)?'corrected by '+who:/confirm/i.test(t)?'confirmed by '+who+' in chat':'checked by '+who;
+    return w+(rec&&rec.origin==='layer'?' · from what Napkin already knew':''); }
   // Where a source came from, in plain words: 'ShelfLife Magazine · March 2025
   // · we read it on 28 Sept'.
   function srcLine(rec,p){
@@ -1270,19 +1295,36 @@ var ClanFields=(function(){
   function pinLv(p){ return lvOf(p&&p.confidence)||2; }
   // What a line is, from what it cites: a finding restated, a figure quoted
   // as written (or contested, then resolved), or an inference no source says.
+  // What kind of line it is (design: line kinds), from what it cites. A figure is a numeric fact
+  // only; a worded fact is a source's point; a code or roster fact is the client's record. One
+  // finding is restated; two or more are drawn on; nothing cited is our reading, never more than
+  // fairly sure. Mixed facts name the kinds there ("A figure and a source's point").
+  function numPin(p){ return !!p&&typeof p.value==='number'; }
+  function codePin(p){ return !!p&&(p.unit==='code'||/^roster\./.test(String(p.key||''))); }
+  // Strict: the fact's own words, or a long enough quote of its source, stand in the line.
+  function quotesText(p,text){ var t=normText(text), v=normText(typeof p.value==='string'?p.value:'');
+    if(v.length>=12&&t.indexOf(v)!==-1) return true;
+    var q=obj(p.quotes); return Object.keys(q).some(function(k){ var x=normText(q[k]); return x.length>=24&&t.indexOf(x)!==-1; }); }
   function lineKind(l){
     var cs=arr(l&&l.cites), F=findings(), P=pins(), text=String(l&&l.text||'');
     var fis=uniq(cs.filter(function(c){ return F[c]; })), ps=uniq(cs.filter(function(c){ return P[c]; }));
     var flag=fis.some(function(i){ return /rejected|superseded/.test(F[i].status||''); })||ps.some(function(p){ return P[p].replaced_by||excludedPin(p); });
-    var quoted=ps.filter(function(p){ var v=fmt(P[p]); return v&&v.length>1&&text.indexOf(v)!==-1; });
     var minF=fis.length?Math.min.apply(0,fis.map(function(i){ return findingLv(F[i]); })):3;
     var minP=function(xs){ return xs.length?Math.min.apply(0,xs.map(function(p){ return pinLv(P[p]); })):3; };
+    var num=ps.filter(function(p){ return numPin(P[p]); }), code=ps.filter(function(p){ return !numPin(P[p])&&codePin(P[p]); }), txt=ps.filter(function(p){ return num.indexOf(p)<0&&code.indexOf(p)<0; });
     var o={fis:fis, pins:ps, flag:flag};
-    if(!fis.length&&!ps.length){ o.kind='Inference · no source says this'; o.lv=2; o.inf=true; }
-    else if(quoted.length){ var res=quoted.filter(resolvedFor); o.kind=res.length?'Figure, contested then resolved':'Figure, quoted as written'; o.lv=Math.min(minP(quoted),minF); o.fig=true; }
-    else if(fis.length>1){ o.kind='Inference · no source says this'; o.lv=Math.min(2,minF); o.inf=true; }
-    else if(fis.length===1){ var f=F[fis[0]]; o.kind=(f.status==='proposed'?'From Finding '+fno(fis[0])+' · proposed':'Restates Finding '+fno(fis[0])); o.lv=Math.min(findingLv(f),minP(ps)); }
-    else { o.kind=ps.length===1?'Figure, put in words':'Figures, put in words'; o.lv=minP(ps); o.fig=true; }
+    if(fis.length>1){ o.kind='Draws on Findings '+andList(fis.map(function(i){ return String(fno(i)); })); o.glyph='◗◗'; o.lv=Math.min(2,minF,minP(ps)); o.inf=true; }
+    else if(fis.length===1){ var f=F[fis[0]]; o.kind=(f.status==='proposed'?'From Finding '+fno(fis[0])+' · proposed':'Restates Finding '+fno(fis[0])); o.glyph='◗'; o.lv=Math.min(findingLv(f),minP(ps)); }
+    else if(!ps.length){ o.kind='Our reading, nothing cited'; o.glyph='?'; o.lv=2; o.inf=true; }
+    else {
+      var quoted=num.filter(function(p){ var v=fmt(P[p]); return v&&v.length>1&&text.indexOf(v)!==-1; }), qt=txt.filter(function(p){ return quotesText(P[p],text); });
+      var kinds=[num.length?'figure':'', txt.length?'point':'', code.length?'record':''].filter(Boolean);
+      if(kinds.length>1){ var W={figure:'a figure', point:'a source’s point', record:'the client’s record'}, ws=kinds.map(function(k){ return W[k]; }); o.kind=andList(ws); o.kind=o.kind.charAt(0).toUpperCase()+o.kind.slice(1); o.fig=num.length>0; }
+      else if(num.length){ o.fig=true; o.kind=quoted.length?(quoted.filter(resolvedFor).length?'A figure sources disagreed on':'Quotes a figure'):'A figure, in our words'; if(quoted.filter(resolvedFor).length) o.agree=true; }
+      else if(txt.length) o.kind=qt.length?'Quotes a source':'A source’s point, in our words';
+      else o.kind='From the client’s record';
+      o.glyph=o.agree?'◆⇄':'◆'; o.lv=minP(ps);
+    }
     if(flag) o.lv=1;
     return o;
   }
@@ -1392,10 +1434,10 @@ var ClanFields=(function(){
     var h='<div class="rv-head"><span class="rv-kind">'+esc(where)+'</span>'+lvPill(o)+'</div>'
       +'<p class="rv-title">“'+esc(l.text.replace(/[,:]\s*$/,''))+'”</p><p class="rv-meta"><b>'+esc(o.kind)+'</b></p>'+lineFlag(o);
     h+=sec('Comes from',o.fis.length?'<div class="rv-uses">'+o.fis.map(function(i){ return '<div class="rv-use"><span>'+fChip(i)+'</span>'+esc(F[i].statement)+' '+stPill(F[i])+'</div>'; }).join('')+'</div>'
-      :o.inf?'<p class="rv-none">No source says this in so many words: the agent drew it from the lines around it.</p>':'<p>The figures below, as their sources give them.</p>');
+      :o.inf?'<p class="rv-none">No source says this in so many words: the agent drew it from the lines around it.</p>':o.fig&&!o.pins.some(function(p){ return !numPin(pins()[p]); })?'<p>The figures below, as their sources give them.</p>':'<p>What the source says, below.</p>');
     if(ps.length||lost.length) h+=sec('Pins and sources under it','<ol class="rv-chain">'+ps.map(function(p){ return pinChainLi(p); }).join('')+lost.map(function(p){ return pinChainLi(p,true); }).join('')+'</ol>');
     var bec=o.fis.map(function(i){ return {point:'Finding '+fno(i)+': '+F[i].statement, cites:[i].concat(arr(F[i].cites).filter(function(c){ return pins()[c]; }).slice(0,3))}; })
-      .concat(arr(l.cites).filter(function(c){ return pins()[c]; }).map(function(p){ var P=pins()[p], s=srcOf(P); return {point:label(P)+' is '+fmt(P)+(s&&s.rec?', as '+(pubName(s.rec.publisher)||s.rec.domain||'its source')+' gives it':''), cites:[p]}; }));
+      .concat(arr(l.cites).filter(function(c){ return pins()[c]; }).map(function(p){ var P=pins()[p], s=srcOf(P); return {point:(numPin(P)?label(P)+' is '+fmt(P):'“'+fmt(P)+'”')+(s&&s.rec?', as '+(pubName(s.rec.publisher)||s.rec.domain||'its source')+' gives it':''), cites:[p]}; }));
     var chg=o.fis.length?'Finding '+o.fis.map(fno).join(' or ')+' is rejected, or a pin under it is marked wrong.':ps.length?'A pin under it is corrected or marked wrong.':'A source is found that says it, or one that says otherwise.';
     h+=sec('Why it says this',reasonHTML({decided:'Write “'+l.text+'”', because:bec, certainty:{level:lvWord(o.lv).toLowerCase(), why:o.kind}, would_change_if:chg}));
     h+='<div class="rv-acts">'+o.fis.map(function(i){ return '<button type="button" class="rv-btn" data-clf-go="'+esc(i)+'">Open Finding '+fno(i)+'</button>'; }).join('')+(l.where!=='answer'?'<button type="button" class="rv-btn" data-clf-go="report.headline">The whole summary</button>':'')+'</div>';
@@ -2929,7 +2971,7 @@ var ClanFields=(function(){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
 
   return {refresh:refresh, reload:function(){ return loadView().then(refresh); }, open:open, layout:layout, mount:mount,
-          format:fmt, label:label, kindOf:kindOf, stateOf:stateOf,
+          format:fmt, label:label, kindOf:kindOf, stateOf:stateOf, codeWords:codeWords, slugWords:slugWords, reviewerWords:reviewerWords,
           // The host's decision view as last read (null until it is), and the lock.
           view:function(){ return VIEW; }, locked:lockDecision, needs:needs,
           // The source card (OS-layer contract §8.3): card(ref, el) renders it

@@ -3279,21 +3279,30 @@ test('a line’s kind and certainty come from what it cites, never from a model'
     fi_b: { statement: 'B', status: 'proposed', confidence: 'medium', cites: ['f_2'] },
     fi_c: { statement: 'C', status: 'rejected', cites: [] },
   }
-  const pins = { f_1: { value: 0.68, confidence: 'high' }, f_2: { value: 0.234, confidence: 'medium' }, f_3: { value: 12, confidence: 'low' } }
+  const pins = { f_1: { value: 0.68, confidence: 'high' }, f_2: { value: 0.234, confidence: 'medium' }, f_3: { value: 12, confidence: 'low' },
+    f_t: { value: 'No ads where most viewers are under fifteen', unit: 'text', quotes: { src_a: 'no ads where most viewers are under fifteen years old' } }, f_c: { value: 'qsr.fast_food', unit: 'code', key: 'roster.categories.primary' } }
   const contests = [{ id: 'ct', status: 'resolved', chosen: 'f_2', values: [{ fact_id: 'f_2' }, { fact_id: 'f_9' }] }]
   const LV = new Function(`${obj(CLF, 'LV')} return LV;`)()
-  const f = lift<{ lineKind(l: unknown): K }>(CLF, ['lineKind', 'findingLv', 'pinLv', 'lvOf', 'resolvedFor', 'excludedPin', 'fno', 'uniq'], {
+  const f = lift<{ lineKind(l: unknown): K }>(CLF, ['lineKind', 'numPin', 'codePin', 'quotesText', 'andList', 'findingLv', 'pinLv', 'lvOf', 'resolvedFor', 'excludedPin', 'fno', 'uniq'], {
     arr, obj: (v: unknown) => (isObj(v) ? v : {}), LV, findings: () => findings, pins: () => pins, contests: () => contests,
+    normText: (t: unknown) => String(t ?? '').toLowerCase().replace(/[^a-z0-9%.]+/g, ' ').replace(/\.(?!\d)/g, ' ').replace(/\s+/g, ' ').trim(),
     data: () => ({ selection: { excluded: [{ fact_id: 'f_3' }] } }),
-    fmt: (p: { value: number }) => (p.value < 1 ? `${Math.round(p.value * 1000) / 10}%` : String(p.value)),
+    fmt: (p: { value: unknown }) => (typeof p.value !== 'number' ? String(p.value) : p.value < 1 ? `${Math.round(p.value * 1000) / 10}%` : String(p.value)),
   })
   const k = (text: string, cites: string[]) => f.lineKind({ text, cites })
   assert.deepEqual([k('Most stops are social.', ['fi_a', 'f_1']).kind, k('x', ['fi_a']).lv], ['Restates Finding 1', 3])
-  assert.equal(k('68% of stops are unplanned.', ['f_1']).kind, 'Figure, quoted as written')
-  assert.equal(k('Delivery grew 23.4%.', ['f_2']).kind, 'Figure, contested then resolved')
+  // A figure is a numeric fact only (design: line kinds).
+  assert.equal(k('68% of stops are unplanned.', ['f_1']).kind, 'Quotes a figure')
+  assert.equal(k('Most stops are unplanned.', ['f_1']).kind, 'A figure, in our words')
+  assert.equal(k('Delivery grew 23.4%.', ['f_2']).kind, 'A figure sources disagreed on')
+  assert.equal(k('Teens take the bus after school.', ['f_t']).kind, 'A source’s point, in our words')
+  assert.equal(k('The rule: no ads where most viewers are under fifteen years old, says the code.', ['f_t']).kind, 'Quotes a source')
+  assert.equal(k('It is fast food.', ['f_c']).kind, 'From the client’s record')
+  assert.equal(k('Big, and teens take the bus.', ['f_1', 'f_t']).kind, 'A figure and a source’s point')
   const inf = k('So it moves home.', ['fi_a', 'fi_b'])
-  assert.deepEqual([inf.kind, inf.lv], ['Inference · no source says this', 1])
-  assert.equal(k('Nobody says so.', []).kind, 'Inference · no source says this')
+  assert.deepEqual([inf.kind, inf.lv], ['Draws on Findings 1 and 2', 1])
+  const none = k('Nobody says so.', [])
+  assert.deepEqual([none.kind, none.lv], ['Our reading, nothing cited', 2])
   const thin = k('A ritual, maybe.', ['fi_b'])
   assert.deepEqual([thin.kind, thin.lv], ['From Finding 2 · proposed', 1])
   // A rejected finding or a figure marked wrong flags the line, and it is low.
