@@ -98,6 +98,17 @@ REPLAY_MODEL_ID = "claude-sonnet-5-5"
 # R5: reserve per purpose, held before every replay call and released when it is logged.
 RESERVE_USD = {"draft_brief_whole": 0.50, "explain_flags": 0.25, "rewrite_brief_parts": 0.25, "insight_hypotheses": 0.25}
 RESERVE_DEFAULT_USD = 0.10
+# Protocol section 8's planned calls per arm and purpose (the table's "calls per brief"; its rewrites row is "about 4" for
+# the three review arms, so 4/3 each), and its per-call cost estimates, used only for a purpose the pilot never called.
+ARM_PLAN = {"B": {"draft_brief_whole": 1}, "C1": {"draft_brief_whole": 1}, "T1": {"draft_brief_whole": 1},
+            "H1": {"insight_hypotheses": 1, "rank_insight": 1},
+            "L": {"candidates_smp": 1, "rank_smp": 1}, "L2": {"candidates_smp": 1, "rank_smp": 1}, "S": {"candidates_smp": 1, "rank_smp": 1},
+            "J0": {"explain_flags": 1, "rewrite_brief_parts": 4 / 3}, "J0p": {"explain_flags": 1, "rewrite_brief_parts": 4 / 3},
+            "J1": {"explain_flags": 1, "rewrite_brief_parts": 4 / 3},
+            "SV1": {"explain_flags": 1}, "SV2": {"explain_flags": 1},
+            "H1p": {"insight_hypotheses": 1, "rank_insight": 1}, "T1p": {"draft_brief_whole": 1}}
+PROTOCOL_COST_ESTIMATE_USD = {"draft_brief_whole": 0.13, "insight_hypotheses": 0.07, "rank_insight": 0.011, "candidates_smp": 0.032,
+                              "rank_smp": 0.011, "explain_flags": 0.035, "rewrite_brief_parts": 0.045}
 # max_tokens per purpose (planned.py:568, checkloop.py:176, :221, and the saved make_call default for the rest)
 MAX_TOKENS = {"draft_brief_whole": 16000, "explain_flags": 6000, "rewrite_brief_parts": 8000}
 MAX_TOKENS_DEFAULT = 12000
@@ -787,21 +798,40 @@ def cost_summary(rows: list[dict]) -> dict:
     return by
 
 
+def planned_per_brief(include_survival: bool = True) -> dict:
+    """Section 8's planned calls per brief, by purpose, for the arms this run will make."""
+    skip = effective_skip(() if include_survival else SURVIVAL_ARMS)
+    out: dict = {}
+    for name, _, _ in arm_specs():
+        if name not in skip:
+            for p, n in ARM_PLAN.get(name, {}).items():
+                out[p] = out.get(p, 0) + n
+    return out
+
+
 def project_replay(rows: list[dict], n_pilot: int, n_total: int, include_survival: bool = True) -> dict:
     """R5: the projection after the pilot. For each purpose, the median cost of the pilot's calls of that purpose times
-    its planned calls for all briefs (the pilot's calls of that purpose per brief, times n_total), plus 10%. The smoke
-    call is excluded; survival rows (arm SV*) leave out when `include_survival` is false."""
+    its planned calls for all briefs, plus 10%. Planned calls per brief = the larger of the pilot's own frequency (its
+    calls of that purpose per pilot brief, retries included) and section 8's planned count, so a purpose the pilot
+    happened to call less often (a rewrite no brief needed) is never projected below the protocol's plan. A purpose the
+    pilot never called takes section 8's per-call estimate. The smoke call is excluded; survival rows (arm SV*) leave out
+    when `include_survival` is false."""
     use = [r for r in rows if r.get("purpose") not in (None, "smoke") and r.get("job") != "smoke"
            and (include_survival or not str(r.get("arm") or "").startswith(SURVIVAL_ARMS))]
     by: dict = {}
     for r in use:
         by.setdefault(r["purpose"], []).append(r.get("cost_usd") or 0)
+    plan = planned_per_brief(include_survival)
     per = {}
     total = 0.0
-    for p, costs in by.items():
-        planned = len(costs) / n_pilot * n_total
-        per[p] = {"median_usd": statistics.median(costs), "pilot_calls": len(costs), "planned_calls": planned,
-                  "usd": statistics.median(costs) * planned}
+    for p in sorted(set(by) | set(plan)):
+        costs = by.get(p, [])
+        freq = len(costs) / n_pilot
+        per_brief = max(freq, plan.get(p, 0))
+        med = statistics.median(costs) if costs else PROTOCOL_COST_ESTIMATE_USD.get(p, RESERVE_USD.get(p, RESERVE_DEFAULT_USD))
+        per[p] = {"median_usd": med, "median_from": "pilot" if costs else "protocol estimate", "pilot_calls": len(costs),
+                  "pilot_per_brief": freq, "protocol_per_brief": plan.get(p, 0), "planned_calls": per_brief * n_total,
+                  "usd": med * per_brief * n_total}
         total += per[p]["usd"]
     return {"per_purpose": per, "total_usd": round(total * PROJECTION_MARGIN, 4), "survival_included": include_survival}
 
@@ -1438,11 +1468,24 @@ def _discard(out: Path, ids: list[str], reason: str):
         f.write(f"- {stamp}: rerun --force of {', '.join(ids)}. Reason: {reason}\n")
 
 
+def pilot_unsettled(out: Path, ids) -> list[str]:
+    """Pilot arms that are not `ok` or `no_gate` (FAILED-final, budget_stopped, missing): the pilot cannot decide."""
+    arms = load_arms(out, list(ids))
+    return [f"{i}:{n}={(arms.get(i, {}).get(n) or {}).get('status', 'missing')}" for i in ids for n, _, _ in arm_specs()
+            if (arms.get(i, {}).get(n) or {}).get("status") not in OK_STATUS]
+
+
 def cmd_pilot(a):
     out = Path(a.out)
     if (out / "pilot.json").exists():
         sys.exit("pilot.json exists: the pilot has run; change nothing but R5's cuts and R7's fault fixes (use replay --force --reason)")
-    _run_briefs(a, set(PILOT_BRIEFS))
+    cost = _run_briefs(a, set(PILOT_BRIEFS))
+    bad = pilot_unsettled(out, PILOT_BRIEFS)
+    if bad:
+        sys.exit("NO PILOT DECISION WRITTEN: every pilot arm must be ok or no_gate, and these are not: " + ", ".join(bad)
+                 + (f". The run stopped: {cost.stopped}" if getattr(cost, "stopped", None) else "")
+                 + ". A FAILED-final or budget-stopped arm is a fault to find (R7): fix it, move the pilot aside with "
+                   "`replay --only c01 t01 --force --reason '<why>'`, then run `pilot` again.")
     rows = read_log(out / "cost_log.jsonl")
     n_total = len(load_inputs(out))
     d = cut_decision(rows, len(PILOT_BRIEFS), n_total)

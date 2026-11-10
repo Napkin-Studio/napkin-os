@@ -616,25 +616,60 @@ def test_rater_cap_is_its_own_log_and_the_reserve_depends_on_the_model(tmp_path)
         log.reserve("rate:opus")
 
 
+def pilot_rows(d=0.13, sv=0.05, f=0.05, jobs=1, nsv=2):
+    """One pilot brief's calls exactly as protocol section 8 plans them (a rewrite row of 4)."""
+    rows = []
+    for j in range(jobs):
+        job = f"c0{j + 1}"
+        add = lambda purpose, arm, cost, n=1: rows.extend({"purpose": purpose, "cost_usd": cost, "arm": arm, "job": job} for _ in range(n))
+        add("draft_brief_whole", "B", d, 3)
+        add("insight_hypotheses", "H1", 0.07)
+        add("rank_insight", "H1", 0.011)
+        add("candidates_smp", "S", 0.032, 3)
+        add("rank_smp", "S", 0.011, 3)
+        add("explain_flags", "J0", f, 3)
+        add("explain_flags", "SV1", sv, nsv)
+        add("rewrite_brief_parts", "J0", 0.045, 4)
+    return rows
+
+
 def test_projection_uses_the_median_per_purpose_excludes_smoke_and_adds_ten_percent():
     rows = [{"purpose": "draft_brief_whole", "cost_usd": c, "arm": "B", "job": "c01"} for c in (0.1, 0.3, 0.2)] \
         + [{"purpose": "draft_brief_whole", "cost_usd": 9.0, "arm": "B", "job": "smoke"}, {"purpose": "smoke", "cost_usd": 1.0, "job": "smoke"}] \
         + [{"purpose": "explain_flags", "cost_usd": 0.04, "arm": "SV1", "job": "c01"}, {"purpose": "explain_flags", "cost_usd": 0.06, "arm": "J0", "job": "c01"}]
     p = ee.project_replay(rows, n_pilot=1, n_total=20)
     assert p["per_purpose"]["draft_brief_whole"]["median_usd"] == 0.2 and p["per_purpose"]["draft_brief_whole"]["planned_calls"] == 60
-    assert abs(p["total_usd"] - (0.2 * 60 + 0.05 * 40) * 1.1) < 1e-6       # a median is not the pilot's total x 10
+    # F4: the pilot made 2 explain_flags calls in its one brief; section 8 plans 5 a brief (J0, J0', J1, SV1, SV2): 5 wins
+    ex = p["per_purpose"]["explain_flags"]
+    assert ex["pilot_per_brief"] == 2 and ex["protocol_per_brief"] == 5 and ex["planned_calls"] == 100 and ex["median_usd"] == 0.05
+    # a purpose the pilot never called takes the protocol's own estimate, flagged as such
+    assert p["per_purpose"]["rank_smp"]["median_from"] == "protocol estimate" and p["per_purpose"]["rank_smp"]["planned_calls"] == 60
+    per_brief = 0.2 * 3 + 0.07 + 0.011 + 0.032 * 3 + 0.011 * 3 + 0.05 * 5 + 0.045 * 4
+    assert abs(p["total_usd"] - per_brief * 20 * 1.1) < 1e-6          # a median is not the pilot's total x 10
     lean = ee.project_replay(rows, 1, 20, include_survival=False)
-    assert lean["per_purpose"]["explain_flags"]["median_usd"] == 0.06
+    assert lean["per_purpose"]["explain_flags"]["median_usd"] == 0.06 and lean["per_purpose"]["explain_flags"]["protocol_per_brief"] == 3
+
+
+def test_a_pilot_that_called_a_purpose_more_often_than_the_plan_projects_its_own_frequency():
+    rows = [{"purpose": "draft_brief_whole", "cost_usd": 0.1, "arm": "B", "job": c} for c in ("c01", "c02") for _ in range(4)]     # 4 a brief (retries), plan 3
+    d = ee.project_replay(rows, n_pilot=2, n_total=20)["per_purpose"]["draft_brief_whole"]
+    assert d["pilot_per_brief"] == 4 and d["protocol_per_brief"] == 3 and d["planned_calls"] == 80
+    one = [{"purpose": "draft_brief_whole", "cost_usd": 0.1, "arm": "B", "job": "c01"}]                                               # 1 a brief, plan 3
+    assert ee.project_replay(one, 1, 20)["per_purpose"]["draft_brief_whole"]["planned_calls"] == 60
+
+
+def test_the_plan_follows_the_arms_this_run_makes(monkeypatch):
+    assert ee.planned_per_brief()["explain_flags"] == 5 and ee.planned_per_brief(False)["explain_flags"] == 3
+    monkeypatch.setitem(ee.CFG, "INCLUDE_IDEA3", False)
+    assert ee.planned_per_brief()["explain_flags"] == 4 and abs(ee.planned_per_brief()["rewrite_brief_parts"] - 8 / 3) < 1e-9
+    assert "explain_flags" not in ee.planned_per_brief(False)         # idea 3 off and the reviews cut: J0 and J0' go too
 
 
 def test_cut_order_is_survival_first_then_stop_and_never_l2():
-    mk = lambda c: [{"purpose": "draft_brief_whole", "cost_usd": c, "arm": "B", "job": "c01"}] + [{"purpose": "explain_flags", "cost_usd": 0.5, "arm": "SV1", "job": "c01"}]
-    assert ee.cut_decision(mk(0.2), 1, 20)["decision"] == "run_all"
-    rows = [{"purpose": "draft_brief_whole", "cost_usd": 0.28, "arm": "B", "job": "c01"}] * 3 + [{"purpose": "explain_flags", "cost_usd": 0.05, "arm": "J0", "job": "c01"}] * 3 \
-        + [{"purpose": "explain_flags", "cost_usd": 0.5, "arm": "SV1", "job": "c01"}] * 2
-    d = ee.cut_decision(rows, 1, 20)
+    assert ee.cut_decision(pilot_rows(d=0.13, sv=0.05), 1, 20)["decision"] == "run_all"
+    d = ee.cut_decision(pilot_rows(d=0.13, sv=0.5, nsv=4), 1, 20)       # the reviews retried and dear: they pull the median up
     assert d["decision"] == "drop_survival" and d["projection"]["total_usd"] > 23 >= d["projection_without_survival"]["total_usd"]
-    assert ee.cut_decision([{"purpose": "draft_brief_whole", "cost_usd": 0.8, "arm": "B", "job": "c01"}] * 2, 1, 20)["decision"] == "stop"
+    assert ee.cut_decision(pilot_rows(d=0.3, sv=0.2), 1, 20)["decision"] == "stop"
     assert "L2" not in json.dumps(d) and ee.SURVIVAL_ARMS == ("SV1", "SV2")
 
 
@@ -1659,3 +1694,57 @@ def test_with_idea_3_off_the_baseline_is_measured_from_j0_and_with_j0_absent_it_
         assert r[k]["rules"]["guards_not_measured"] and r[k]["rules"]["go_conditions"][gate] is False
         assert r[k]["rules"]["verdict"] in ("INCONCLUSIVE", "DROP") and "not measured" in " ".join(r[k]["rules"]["why"] + ["not measured"])
     assert ee.idea1_rules(idea1_base(jude_fail_ins_t1=None, jude_fail_ins_b=None, survival_measured=False))["go_conditions"][GATE_T1_INSIGHT] is False
+
+
+# =============================================================================================== F4: the pilot decides only on a clean pilot
+def pilot_setup(tmp_path, monkeypatch, max_usd=24.0):
+    from types import SimpleNamespace
+    use_fake_cli(monkeypatch, tmp_path)
+    src, out = fake_source(tmp_path, ids=("c01", "t01", "c02")), tmp_path / "out"
+    A = SimpleNamespace(out=str(out), src=str(src), max_usd=max_usd, only=None, force=False, reason=None, raters=["sonnet", "opus"],
+                        retry_missing=False, rater="opus")
+    ee.cmd_select(A)
+    return A, out
+
+
+def test_a_pilot_with_a_failed_final_arm_writes_no_decision(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_MODE", "truncate")                 # every call is a model failure: every arm FAILED_final
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_pilot(A)
+    assert "NO PILOT DECISION WRITTEN" in str(e.value) and "c01:B=FAILED_final" in str(e.value)
+    assert not (out / "pilot.json").exists()
+    monkeypatch.delenv("FAKE_MODE")                             # fix the fault, move the pilot aside (R7), run it again
+    A.only, A.force, A.reason = {"c01", "t01"}, True, "the fault"
+    ee.cmd_replay(A)
+    A.only, A.force = None, False
+    ee.cmd_pilot(A)
+    assert json.loads((out / "pilot.json").read_text())["decision"] == "run_all"
+
+
+def test_a_pilot_stopped_by_the_budget_writes_no_decision(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch, max_usd=0.52)
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_pilot(A)
+    assert "NO PILOT DECISION WRITTEN" in str(e.value) and "budget_stopped" in str(e.value) and not (out / "pilot.json").exists()
+
+
+def test_an_outage_during_the_pilot_writes_no_decision_and_says_why(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_MODE", "is_error")
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_pilot(A)
+    assert "infrastructure errors in a row" in str(e.value) and not (out / "pilot.json").exists()
+
+
+def test_no_gate_pilot_arms_count_as_settled_and_a_failed_or_missing_one_does_not(tmp_path):
+    out = tmp_path / "out"
+    for b in ee.PILOT_BRIEFS:
+        (out / "arms" / b).mkdir(parents=True)
+        for n, *_ in ee.arm_specs():
+            (out / "arms" / b / f"{n}.json").write_text(json.dumps({"status": "no_gate" if n in ("T1", "SV1") else "ok"}))
+    assert ee.pilot_unsettled(out, ee.PILOT_BRIEFS) == []
+    (out / "arms/t01/L.json").write_text(json.dumps({"status": "FAILED_final"}))
+    (out / "arms/c01/S.json").unlink()
+    (out / "arms/c01/J1.json").write_text(json.dumps({"status": "budget_stopped"}))
+    assert ee.pilot_unsettled(out, ee.PILOT_BRIEFS) == ["c01:S=missing", "c01:J1=budget_stopped", "t01:L=FAILED_final"]
