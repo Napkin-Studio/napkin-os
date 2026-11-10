@@ -36,7 +36,6 @@ export interface DocBar {
   onOpenFile: () => void
   onToggleSidebar: () => void
   sidebarOpen: boolean
-  onWorkspace: () => void
   onSave: () => void
   /** Keep a copy on this device for presenting offline. Absent where it makes no sense. */
   onKeepOffline?: () => void
@@ -86,8 +85,8 @@ export interface DocBar {
   toolKey?: string | null
   /** Rename it (the name's double-click, and Rename in its menu): `/set-title`. Absent where it cannot be renamed. */
   onRename?: (title: string) => void
-  /** "Where it came from" in the Decisions drawer's Lineage view; absent, WorkspaceView. */
-  onLineage?: () => void
+  /** "Where it came from": the Decisions drawer, open on its Lineage tab. */
+  onLineage: () => void
   /** Its tool's own page for its client (the old trail's last crumb): its other documents, and New. */
   onToolPage?: { label: string; run: () => void } | null
 }
@@ -285,7 +284,7 @@ export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => v
       ? [{ label: 'Present offline', hint: 'Keep it on this device, to show with no internet', run: doc.onKeepOffline }]
       : []),
     { label: 'Export', hint: 'Make a PDF of it', run: () => doc.onExport('pdf') },
-    { label: 'Where it came from', hint: 'What it was made from, step by step', run: doc.onWorkspace },
+    { label: 'Where it came from', hint: 'Its app, what it was made from, what it fed', run: doc.onLineage },
     {
       label: doc.sidebarOpen ? 'Hide the file’s details' : 'Show the file’s details',
       run: doc.onToggleSidebar,
@@ -319,7 +318,7 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
       ? [{ label: 'Present offline', hint: 'Keeps a copy that works without a connection', run: doc.onKeepOffline }]
       : []),
     { label: 'Export', hint: 'Make a PDF of it', run: () => doc.onExport('pdf') },
-    { label: 'Where it came from', hint: 'Its parent, what it was made from, what it fed', run: doc.onLineage ?? doc.onWorkspace, apart: true },
+    { label: 'Where it came from', hint: 'Its parent, what it was made from, what it fed', run: doc.onLineage, apart: true },
   ]
 }
 

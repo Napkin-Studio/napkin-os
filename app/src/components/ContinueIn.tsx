@@ -82,7 +82,7 @@ export function useMadeFrom(docPath: string, onTaken: () => void, onError: (mess
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
   }, [onTaken, onError])
 
-  return { madeFrom, update }
+  return { madeFrom, update, upstream: got?.docPath === docPath ? got.view : null }
 }
 
 /**

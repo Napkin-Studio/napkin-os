@@ -9,7 +9,6 @@ import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../compon
 import { linksOf } from '../components/barMenus'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
-import WorkspaceView from './WorkspaceView'
 import { DecisionsDrawer, type DrawerView } from './nui/DecisionsDrawer'
 import { openInApp } from './appExport'
 import { refOfAddress } from './decisions/words'
@@ -82,7 +81,6 @@ interface Props {
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
 export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
-  const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -228,7 +226,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const [upError, setUpError] = useState<{ docPath: string; message: string } | null>(null)
   const onUpError = useCallback((message: string) => setUpError({ docPath, message }), [docPath])
   const onUpTaken = useCallback(() => { setUpError(null); changed() }, [changed])
-  const { madeFrom, update: updateFromUpstream } = useMadeFrom(docPath, onUpTaken, onUpError, stamp)
+  const { madeFrom, update: updateFromUpstream, upstream } = useMadeFrom(docPath, onUpTaken, onUpError, stamp)
 
   // Links (os-layer §5.7): link an existing document, take a linked one's
   // newer version, let go of one. A refusal (a locked document) is said where
@@ -377,7 +375,6 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onOpenFile,
           onToggleSidebar: () => setSidebarOpen(o => !o),
           sidebarOpen,
-          onWorkspace: () => setWorkspaceOpen(true),
           onLineage: () => { setDrawerView('lineage'); setDecisionsOpen(true) },
           toolKey,
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
@@ -499,7 +496,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
               onShow: (ref, path) => { setDecisionsOpen(false); openInApp(ref, path) },
               onOpenPath: onOpenDocument,
               acknowledge: id => host.acknowledge(id),
-              onWorkspace: () => setWorkspaceOpen(true),
+              manifest: open.manifest,
+              upstream: upstream?.upstream ?? null,
             }}
             view={drawerView}
             onView={setDrawerView}
@@ -511,7 +509,6 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <footer className="ch-footer" ref={footRef}>
         <PoweredByClan />
       </footer>
-      {workspaceOpen && <WorkspaceView manifest={open.manifest} onClose={() => setWorkspaceOpen(false)} />}
     </div>
   )
 }

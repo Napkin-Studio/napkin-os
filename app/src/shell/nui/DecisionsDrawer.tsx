@@ -8,17 +8,18 @@
 // Open; Approve all and lock, per document, through the document's own
 // /verify and /approve), then the views: Graph (how it was decided), By part,
 // By time (each row with Show in document and its details folded) and
-// Lineage (where it came from, You are here, what it fed). In a document it
+// Lineage (the app, where it came from, You are here, what was made from
+// it, what is linked, then the ids folded under Technical details). In a document it
 // is that document's; on the desk the call card lists every call across the
 // documents the desk has read, and the views are the first one's.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { AttentionItem, DecisionsView, RelatedView } from '../../host'
+import type { AttentionItem, DecisionsView, RelatedView, UpstreamEntry } from '../../host'
 import { LogoSpinner } from '../../brand/LogoSpinner'
 import { looksRightOf, needKey, splitAside } from '../decisions/needs'
 import { refOfAddress, sectionsOf } from '../decisions/words'
 import { HistoryBody, QuietItem } from '../decisions/DecisionBlock'
-import { approveWords, callCount, callWords, graphOf, lineageOf, rowOf } from './drawerData'
+import { approveWords, callCount, callWords, graphOf, lineageOf, rowOf, type LineManifest, type LineTech } from './drawerData'
 import '../decisions/DecisionPanel.css'
 
 export type DrawerView = 'graph' | 'part' | 'time' | 'lineage'
@@ -58,8 +59,10 @@ export interface Focus {
   onOpenPath?: (path: string) => void
   /** "Looks right" on something an agent noticed (Worth a look). */
   acknowledge?: (decision: string) => Promise<void>
-  /** "Where it came from", step by step (WorkspaceView). */
-  onWorkspace?: () => void
+  /** The open document's manifest: the app it was made in, its ids and last change (the Lineage tab). */
+  manifest?: LineManifest | null
+  /** `GET /upstream`: every ancestor, the ones further back than its parent too. */
+  upstream?: UpstreamEntry[] | null
 }
 
 interface Props {
@@ -232,25 +235,7 @@ function Views({ focus, view, onView, busy, act }: {
       </div>
     )
   } else if (view === 'lineage') {
-    const rows = lineageOf(focus.related ?? null, { title: focus.title, noun: focus.noun })
-    body = (
-      <div className="p33-dlist" id="p33-dlist">
-        <div>
-          <h5>Where it came from</h5>
-          <div className="p33-lineage" data-testid="lineage">
-            {rows.map((r, i) => (
-              <div className={`ln${r.here ? ' here' : ''}`} key={i}>
-                <i aria-hidden />
-                <span><b>{r.title}</b><small>{r.sub}</small></span>
-                {r.here ? <span className="pp-k">You are here</span>
-                  : r.path && focus.onOpenPath ? <button type="button" className="side-link" onClick={() => focus.onOpenPath!(r.path!)}>Open</button> : <span />}
-              </div>
-            ))}
-          </div>
-          {focus.onWorkspace && <p style={{ marginTop: 10 }}><button type="button" className="side-link" onClick={focus.onWorkspace}>Step by step</button></p>}
-        </div>
-      </div>
-    )
+    body = <LineageView focus={focus} />
   } else {
     // By time is one list, newest first (the mock's "What happened, newest first"); By part groups by the part each decision touched.
     const groups = view === 'time' ? [{ key: 'time', title: 'What happened, newest first', blocks: v.decisions }] : sectionsOf(v)
@@ -295,6 +280,54 @@ function Views({ focus, view, onView, busy, act }: {
       </div>
       {body}
     </>
+  )
+}
+
+/** The Lineage tab: the whole chain in one vertical line, then the ids, folded. */
+function LineageView({ focus }: { focus: Focus }) {
+  const { sections, tech } = lineageOf(focus.related ?? null, { title: focus.title, noun: focus.noun, manifest: focus.manifest }, focus.upstream)
+  return (
+    <div className="p33-dlist" id="p33-dlist">
+      <div className="p33-lineage p33-chain" data-testid="lineage">
+        {sections.map(sec => (
+          <div className="ln-sec" key={sec.key} data-ln={sec.key}>
+            <h5>{sec.title}</h5>
+            {sec.rows.length === 0 && <div className="ln quiet"><i aria-hidden /><span><small>{sec.empty}</small></span><span /></div>}
+            {sec.rows.map((r, i) => (
+              <div className={`ln${r.here ? ' here' : ''}${sec.key === 'app' ? ' app' : ''}`} key={i} data-testid="lineage-row" title={r.tip}>
+                <i aria-hidden />
+                <span><b>{r.title}</b><small>{r.sub}</small></span>
+                {r.here ? <span className="pp-k">You are here</span>
+                  : r.path && focus.onOpenPath ? <button type="button" className="side-link" data-testid="lineage-open" onClick={() => focus.onOpenPath!(r.path!)}>Open</button> : <span />}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {tech.length > 0 && <TechIds tech={tech} />}
+    </div>
+  )
+}
+
+function TechIds({ tech }: { tech: LineTech[] }) {
+  const [copied, setCopied] = useState<number | null>(null)
+  const copy = (i: number, value: string) => {
+    void navigator.clipboard?.writeText(value).then(() => setCopied(i), () => {})
+  }
+  return (
+    <details className="ln-tech" data-testid="lineage-tech">
+      <summary>Technical details</summary>
+      <dl>
+        {tech.map((t, i) => (
+          <div key={i} className="ln-id">
+            <dt>{t.label}</dt>
+            <dd><code>{t.value}</code>
+              <button type="button" className="side-link" onClick={() => copy(i, t.value)} aria-label={`Copy ${t.label}`}>{copied === i ? 'Copied' : 'Copy'}</button>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   )
 }
 

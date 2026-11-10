@@ -643,6 +643,22 @@ button.side-link:hover:where(.nui, .nui *) { text-decoration-color: var(--ag-act
 .p33-lineage:where(.nui, .nui *) .ln i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ink); justify-self: center; }
 .p33-lineage:where(.nui, .nui *) .ln.here i { background: var(--ink); }
 .p33-lineage:where(.nui, .nui *) .ln small { display: block; color: var(--muted); font-size: 12px; }
+.p33-chain:where(.nui, .nui *) h5 { margin: 10px 0 0 32px; }
+.p33-chain:where(.nui, .nui *) .ln-sec:first-child h5 { margin-top: 0; }
+.p33-chain:where(.nui, .nui *) .ln { position: relative; border-bottom: 0; padding: 8px 0; }
+.p33-chain:where(.nui, .nui *) .ln::before { content: ""; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+.p33-chain:where(.nui, .nui *) .ln-sec:first-child .ln:first-of-type::before { top: 50%; }
+.p33-chain:where(.nui, .nui *) .ln-sec:last-child .ln:last-of-type::before { bottom: 50%; }
+.p33-chain:where(.nui, .nui *) .ln i { position: relative; z-index: 1; background: var(--paper); }
+.p33-chain:where(.nui, .nui *) .ln.here i { background: var(--ink); }
+.p33-chain:where(.nui, .nui *) .ln.app i { border-radius: 3px; }
+.p33-chain:where(.nui, .nui *) .ln.quiet i { border-color: var(--line); border-style: dashed; }
+.ln-tech:where(.nui, .nui *) { margin-top: 4px; }
+.ln-tech:where(.nui, .nui *) summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.ln-tech:where(.nui, .nui *) dl { display: grid; gap: 6px; margin: 8px 0 0; }
+.ln-tech:where(.nui, .nui *) dt { font: 600 10.5px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.ln-tech:where(.nui, .nui *) dd { margin: 0; display: flex; gap: 10px; align-items: baseline; }
+.ln-tech:where(.nui, .nui *) code { font: 500 11.5px var(--font-mono); color: var(--ink-soft); overflow-wrap: anywhere; min-width: 0; flex: 1; }
 .p33-desk-tools:where(.nui, .nui *) { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; }
 .p33-desk-tools:where(.nui, .nui *) .sp { flex: 1; }
 .p33-search:where(.nui, .nui *) { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; background: var(--paper); min-width: 240px; }

@@ -5,9 +5,9 @@
 // What the Decisions drawer says, from the host's decision view (gaps.md §4):
 // a call's question and where it is, the Graph's steps (sources, then each
 // decision that shaped the document, oldest first), and the Lineage chain
-// from /related. All derived in the shell; no route of its own.
+// from /related, /upstream and the manifest. All derived in the shell; no route of its own.
 
-import type { AttentionItem, DecisionBlock, DecisionsView, RelatedView } from '../../host'
+import type { AttentionItem, DecisionBlock, DecisionsView, RelatedView, UpstreamEntry } from '../../host'
 import { didWhat, mainTarget, refOfAddress, sureWord, upper, whoOf, withCountry } from '../decisions/words'
 
 const TITLE: Record<string, string> = {
@@ -98,21 +98,105 @@ export function rowOf(b: DecisionBlock, view: DecisionsView): { what: string; wh
   }
 }
 
-export interface LineRow { title: string; sub: string; path?: string; here?: boolean }
+export interface LineRow {
+  title: string
+  sub: string
+  /** Opens that document, as the bar's lineage chips do. */
+  path?: string
+  here?: boolean
+  /** A quiet tooltip (the app's id): never in the visible text. */
+  tip?: string
+}
 
-/** Where it came from: what it was made from and links, this one ("You are here"), then what was made from it. */
-export function lineageOf(related: RelatedView | null, here: { title: string; noun: string }): LineRow[] {
-  const how: Record<string, string> = { made_from: 'what it was made from', linked: 'linked into this', made_into: 'made from this', linked_in: 'this is linked into it' }
-  const row = (d: RelatedView['upstream'][number]): LineRow => ({
+export interface LineSection {
+  key: 'app' | 'from' | 'here' | 'into' | 'linked'
+  title: string
+  rows: LineRow[]
+  /** What it says when there is nothing in it. */
+  empty?: string
+}
+
+/** One technical id, folded under "Technical details" with a copy button. */
+export interface LineTech { label: string; value: string }
+
+/** The bits of the manifest the chain reads: the app it was made in, and its last change. */
+export interface LineManifest {
+  id?: string
+  document_type?: string
+  app?: { name: string; app_id: string; version: string } | null
+  lineage?: { parent_id: string; parent_sha256?: string; delta: string } | null
+}
+
+const IDS = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b(?:sha256:)?[0-9a-f]{24,}\b/gi
+
+/**
+ * A document's last change (its manifest's lineage delta), in words. A
+ * middleware run reads as the run that wrote it: "middleware change from
+ * start_campaign@1.0" in the Research Tool is "Written by the research run
+ * (start campaign)". No ids, no hashes.
+ */
+export function changeWords(delta: string, appName?: string | null): string {
+  const d = delta.trim()
+  const mw = /^middleware change from ([\w.-]+?)(?:@[\w.-]+)?$/i.exec(d)
+  if (mw) {
+    const run = (appName ?? '').replace(/\s+(tool|maker|app)$/i, '').trim().toLowerCase()
+    return `Written by the ${run ? `${run} ` : 'agent '}run (${mw[1].replace(/[_-]+/g, ' ').trim()})`
+  }
+  const asset = /^added asset (.+)$/i.exec(d)
+  if (asset) return `A file was added (${asset[1]})`
+  const fields = /^updated fields?: (.+)$/i.exec(d)
+  if (fields) {
+    const parts = fields[1].split(/,\s*/).map(f => f.replace(/[_-]+/g, ' ').trim()).filter(Boolean)
+    const named = parts.slice(0, 3).join(', ')
+    return `${parts.length} part${parts.length === 1 ? '' : 's'} edited (${named}${parts.length > 3 ? ` and ${parts.length - 3} more` : ''})`
+  }
+  const mark = /^mark_(\w+)$/i.exec(d)
+  if (mark) return `Marked ${mark[1].replace(/_/g, ' ')}`
+  const words = d.replace(IDS, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return words ? upper(words) : 'Changed'
+}
+
+/**
+ * The Lineage tab's whole chain, top to bottom: the app it was made in, where
+ * it came from (what it was made from, and the run that last wrote it), this
+ * document ("You are here"), what was made from it, and the documents linked
+ * with it. Human words only; the ids go in `tech`.
+ */
+export function lineageOf(related: RelatedView | null, here: { title: string; noun: string; manifest?: LineManifest | null }, upstream?: UpstreamEntry[] | null): { sections: LineSection[]; tech: LineTech[] } {
+  const m = here.manifest ?? null
+  const how: Record<string, string> = { carried: 'further back', made_from: 'made from it', linked: 'linked into this', made_into: 'made from this', linked_in: 'this is linked into it' }
+  const row = (d: Pick<RelatedView['upstream'][number], 'title' | 'noun' | 'how' | 'path' | 'taken' | 'status'> | Pick<UpstreamEntry, 'title' | 'noun' | 'how' | 'path' | 'taken' | 'status'>): LineRow => ({
     title: d.title || 'Untitled',
-    sub: `${upper(d.noun ?? 'document')} · ${how[d.how] ?? d.how}${d.taken ? ` · v${d.taken} kept` : ''}${d.status === 'changed' ? ' · changed since' : ''}`,
+    sub: `${upper(d.noun ?? 'document')} · ${how[d.how ?? ''] ?? (d.how ?? '').replace(/_/g, ' ')}${d.taken ? ` · v${d.taken} kept` : ''}${d.status === 'changed' ? ' · changed since' : ''}`,
     ...(d.path ? { path: d.path } : {}),
   })
-  return [
-    ...(related?.upstream ?? []).map(row),
-    { title: here.title, sub: `${upper(here.noun)} · this document`, here: true },
-    ...(related?.downstream ?? []).map(row),
-  ]
+  const up = related?.upstream ?? []
+  const down = related?.downstream ?? []
+  const sections: LineSection[] = []
+  if (m?.app) {
+    sections.push({ key: 'app', title: 'The app', rows: [{ title: `${m.app.name} · v${m.app.version}`, sub: 'What it was made in', tip: m.app.app_id }] })
+  }
+  // Further back first (what its parent was made from), then its parent.
+  const further = (upstream ?? []).filter(d => d.how === 'carried' && !up.some(u => u.document_id === d.document_id))
+  const from = [...further.map(row), ...up.filter(d => d.how === 'made_from').map(row)]
+  // A spin-off's last change only repeats the parent above it.
+  if (m?.lineage?.delta && !(from.length && /^spun off from /i.test(m.lineage.delta))) from.push({ title: changeWords(m.lineage.delta, m.app?.name), sub: 'Its last change' })
+  sections.push({ key: 'from', title: 'Where it came from', rows: from, empty: 'Started here, from nothing before it.' })
+  sections.push({ key: 'here', title: 'This document', rows: [{ title: here.title, sub: upper(here.noun), here: true }] })
+  sections.push({ key: 'into', title: 'What was made from it', rows: down.filter(d => d.how === 'made_into').map(row), empty: 'Nothing yet.' })
+  sections.push({ key: 'linked', title: 'Linked documents', rows: [...up.filter(d => d.how === 'linked'), ...down.filter(d => d.how === 'linked_in')].map(row), empty: 'None.' })
+
+  const tech: LineTech[] = []
+  if (m?.app) tech.push({ label: 'App id', value: m.app.app_id })
+  if (m?.id) tech.push({ label: 'Document id', value: m.id })
+  if (m?.document_type) tech.push({ label: 'Document type', value: m.document_type })
+  if (m?.lineage) {
+    tech.push({ label: 'Last change', value: m.lineage.delta })
+    tech.push({ label: 'Previous version id', value: m.lineage.parent_id })
+    if (m.lineage.parent_sha256) tech.push({ label: 'Previous version sha256', value: m.lineage.parent_sha256 })
+  }
+  for (const d of [...further, ...up, ...down]) tech.push({ label: `${d.title || 'Untitled'} · id`, value: d.document_id })
+  return { sections, tech }
 }
 
 /** What still stands between the document and its lock, in words (under the call card). */

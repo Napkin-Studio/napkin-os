@@ -23,7 +23,7 @@ import { barFrom } from '../src/shell/appBar.ts'
 const noop = () => {}
 const doc = (over: Partial<DocBar> = {}): DocBar => ({
   title: 'Spring brief', tool: { name: 'Brief' }, toolKey: 'brief',
-  onOpenFile: noop, onToggleSidebar: noop, sidebarOpen: false, onWorkspace: noop, onSave: noop,
+  onOpenFile: noop, onToggleSidebar: noop, sidebarOpen: false, onLineage: noop, onSave: noop,
   onKeepOffline: noop, onExport: noop, targets: [{ app_id: 'ie.napkin.deck-maker', name: 'Deck Maker', version: '1' }],
   onSpinoff: noop, onToggleEdit: noop, saved: createElement('span', { className: 'ch-saved' }, 'Saved'), ...over,
 })
@@ -87,6 +87,12 @@ test('a document: its tool icon and name with saved · valid under it, Continue 
   const menu = labels(docMenuItems(doc({ bar: items, onRename: noop }), noop))
   assert.deepEqual(menu, ['Rerun', 'Rename', 'Open…', 'Save as…', 'File details', 'Edit', 'Present offline', 'Export', 'Where it came from'])
   assert.ok(!menu.some(l => l.startsWith('Continue in')), 'Continue in is not in the document menu')
+  // "Where it came from" opens the Decisions drawer on its Lineage tab, in both menus; never the old floating panel.
+  let opened = 0
+  const lineageDoc = doc({ bar: items, onLineage: () => { opened++ } })
+  docMenuItems(lineageDoc, noop).find(i => i.label === 'Where it came from')!.run()
+  moreItems(lineageDoc).find(i => i.label === 'Where it came from')!.run()
+  assert.equal(opened, 2, 'both menus open the Lineage tab')
   assert.deepEqual(labels(continueItems(doc({ onStartFresh: noop })).fresh), ['New brief for this client'], 'Start fresh, in Continue in')
   const cont = continueItems(doc())
   assert.deepEqual(labels(cont.spin), ['Deck'])
