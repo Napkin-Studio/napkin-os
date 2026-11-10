@@ -2356,8 +2356,8 @@ test('research: no label in the box, a trace, the map or a crumb is a raw key', 
     }
   }
   assert.equal(f.crumbWord({ ref: 'sec:s_regulation_clearance' }), '07 Clearance')
-  assert.match(fn(RT, 'mapLines'), /pinLabel\(n\.pin\)/)
-  assert.doesNotMatch(fn(RT, 'mapLines'), /\.key/)
+  assert.match(fn(RT, 'mapLines'), /pinLabel\(\{key:n\.pin\.key, unit:n\.pin\.unit\}\)/)
+  assert.doesNotMatch(fn(RT, 'mapLines'), /\.key\.split|\.key\)\.split/)
 })
 
 test('research: the map draws what feeds the report; Show considered adds exactly the considered set', () => {

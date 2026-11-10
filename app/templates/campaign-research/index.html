@@ -1504,7 +1504,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .ev-lrow .ar{color:var(--muted)}
 .ev-body{display:grid}
 .ev-g{border-top:1px solid var(--line)}
-.ev-g > summary,.ev-fam > summary{list-style:none;display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:8px 0}
+.ev-g > summary,.ev-fam > summary{list-style:none;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;cursor:pointer;padding:8px 0}
 .ev-g > summary::-webkit-details-marker,.ev-fam > summary::-webkit-details-marker,.ev-pubg > summary::-webkit-details-marker{display:none}
 .ev-g > summary::before,.ev-fam > summary::before{content:"\25B8";font-size:10px;color:var(--muted);transition:transform .15s var(--ease)}
 .ev-g[open] > summary::before,.ev-fam[open] > summary::before{transform:rotate(90deg)}
@@ -1517,7 +1517,10 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .ev-note{margin:0;font-size:12.5px;color:var(--muted)}
 .ev-empty{margin:0;font-size:12.5px;color:var(--muted)}
 .ev-fam{border-top:1px dashed var(--line)}
-.ev-fam > summary{padding:6px 0;font-size:12.5px;color:var(--ink)}
+.insp-box .ev-fam > summary,.insp-sel .ev-fam > summary,.ev-fam > summary{padding:6px 0;font:500 12.5px var(--font-ui);letter-spacing:0;text-transform:none;color:var(--ink)}
+.ev-row.txt,.ev-mh.txt{grid-template-columns:minmax(0,1fr);gap:2px}
+.ev-row.txt .v,.ev-mh.txt .v{font:600 12.5px/1.4 var(--font-ui)}
+.ev-cpub{font:11px var(--font-mono);color:var(--muted)}
 .ev-fb{display:grid;gap:2px;padding:0 0 8px 14px}
 .ev-row,.ev-mh{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(64px,auto) minmax(0,1fr);gap:10px;align-items:baseline;padding:5px 6px;margin:0 -6px;border-radius:6px;cursor:pointer;color:var(--ink)}
 .ev-mh{cursor:default}
@@ -4479,16 +4482,19 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function confDots(c){ c=String(c||''); var w={high:'high', medium:'med', med:'med', low:'low'}[c]||'low';
     return '<span class="conf" data-c="'+w+'" role="img" aria-label="'+esc('Confidence: '+(c||'not given'))+'"><i></i><i></i><i></i></span>'; }
   function evRow(id, cls){
-    var p=pins()[id]||{}, s=srcRecs()[pinSid(id)]||{};
-    return '<button type="button" class="ev-row'+(cls?' '+cls:'')+'" data-ev-sel="'+esc(id)+'" data-ev-ids="'+esc(id)+'" title="'+esc(evTitle(id))+'"><span class="v">'+esc(clipT(fmtAny(p), 30))+'</span>'
+    var p=pins()[id]||{}, s=srcRecs()[pinSid(id)]||{}, v=fmtAny(p), txt=v.length>16;
+    return '<button type="button" class="ev-row'+(txt?' txt':'')+(cls?' '+cls:'')+'" data-ev-sel="'+esc(id)+'" data-ev-ids="'+esc(id)+'" title="'+esc(evTitle(id))+'"><span class="v">'+esc(clipT(v, txt?140:30))+'</span>'
       +'<span class="l">'+esc(clipT(pinLabel(p)||'A fact', 90))+'<small>'+(p.market?esc(p.market)+' · ':'')+confDots(p.confidence)+(s.publisher||s.domain?' · '+esc(s.publisher||s.domain):'')+'</small></span></button>';
   }
   function evMerged(row){
     if(row.ids.length===1) return evRow(row.ids[0]);
-    var names=[]; row.ids.forEach(function(id){ var n=citeName(id); if(n&&names.indexOf(n)<0) names.push(n); });
-    return '<div class="ev-merged" data-ev-ids="'+esc(row.ids.join(' '))+'"><div class="ev-mh"><span class="v">'+esc(clipT(row.v, 30))+'</span><span class="l">'+esc(clipT(pinLabel(pins()[row.ids[0]])||'A fact', 90))
+    var names=[], by={}; row.ids.forEach(function(id){ var n=citeName(id)||'No source record'; if(!by[n]){ by[n]=[]; names.push(n); } by[n].push(id); });
+    var txt=row.v.length>16;
+    return '<div class="ev-merged" data-ev-ids="'+esc(row.ids.join(' '))+'"><div class="ev-mh'+(txt?' txt':'')+'"><span class="v">'+esc(clipT(row.v, txt?140:30))+'</span><span class="l">'+esc(clipT(pinLabel(pins()[row.ids[0]])||'A fact', 90))
       +'<small>'+plural(row.ids.length, 'pin')+' · '+plural(names.length, 'source')+'</small></span></div>'
-      +'<div class="ev-chips">'+row.ids.map(function(id){ return '<button type="button" class="ev-chip" data-ev-sel="'+esc(id)+'" data-ev-ids="'+esc(id)+'" title="'+esc(evTitle(id))+'">'+esc(citeName(id)||'No source record')+'</button>'; }).join('')+'</div></div>';
+      +'<div class="ev-chips">'+names.map(function(n){ var ids=by[n];
+        return '<span class="ev-cpub">'+(ids.length===1?'<button type="button" class="ev-chip" data-ev-sel="'+esc(ids[0])+'" data-ev-ids="'+esc(ids[0])+'" title="'+esc(evTitle(ids[0]))+'">'+esc(n)+'</button>'
+          :esc(n)+ids.map(function(id, i){ return ' <button type="button" class="ev-chip" data-ev-sel="'+esc(id)+'" data-ev-ids="'+esc(id)+'" title="'+esc(evTitle(id))+'" aria-label="'+esc(n+', pin '+(i+1))+'">'+(i+1)+'</button>'; }).join(''))+'</span>'; }).join('')+'</div></div>';
   }
   function evPaged(k, list, fn, size){
     size=size||20; var n=EV.pages[k]||size;
@@ -4960,7 +4966,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
   function mapLines(n){
     if(n.kind==='summary') return [(n.n==='H'?'Headline':n.n)+' · '+n.label, n.cites.length+' cite'+(n.cites.length===1?'':'s')];
     if(n.kind==='finding') return [n.label, (n.status||'')+(n.confidence?' · '+n.confidence:'')];
-    if(n.kind==='pin') return [fmtAny(n.pin), [pinLabel(n.pin)||'A fact', n.pin.confidence, n.why, n.pin.stale?'stale':''].filter(Boolean).join(' · ')];
+    if(n.kind==='pin') return [fmtAny(n.pin), [pinLabel({key:n.pin.key, unit:n.pin.unit})||'A fact', n.pin.market, n.pin.confidence, n.why, n.pin.stale?'stale':''].filter(Boolean).join(' · ')];
     if(n.kind==='source'){ var s=n.src||{}; return [n.label, [s.tier, s.published_at?String(s.published_at).slice(0,7):''].filter(Boolean).join(' · ')||n.ref]; }
     return [n.label, n.meta||'gap'];
   }
@@ -4999,7 +5005,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     Object.keys(pos).forEach(function(id){ var n=M.nodes[id], p=pos[id], L=mapLines(n);
       var cls='n'+(n.kind==='gap'?' gap':n.out?' out':'')+(VIEW.sel===id?' sel':'');
       nn+='<g class="'+cls+'" tabindex="0" role="button" data-map="'+esc(id)+'" transform="translate('+p.x+' '+p.y+')" aria-label="'+esc(L[0]+' — '+L[1])+'"><title>'+esc(n.label)+'</title>'
-        +'<rect width="'+NW+'" height="'+NH+'" rx="4"/><text class="t" x="8" y="16">'+esc(clipT(L[0], 22))+'</text><text class="m" x="8" y="31">'+esc(clipT(L[1], 28))+'</text></g>'; });
+        +'<rect width="'+NW+'" height="'+NH+'" rx="4"/><text class="t" x="8" y="16">'+esc(clipT(L[0], 22))+'</text><text class="m" x="8" y="31">'+esc(clipT(L[1], 24))+'</text></g>'; });
     return '<svg class="map-svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="group" aria-label="Evidence map">'+h+e+nn+'</svg>';
   }
   // What the map draws (design §6): what feeds the report, by evidenceModel;
