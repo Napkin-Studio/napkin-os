@@ -4,19 +4,16 @@
 
 // A client's dial on the desk, as the mock draws it (gaps.md D12, D13): four
 // quadrants (Brief, Research, Deck, Production) with what is in each, a hub in
-// the client's colour that opens the client, number keys 1 to 4. Idea, Ads
-// and every coming tool keep their place in the account menu's All tools.
+// the client's colour that opens the client, number keys 1 to 4.
 
 import './domFakes.ts'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { LibraryItem } from '../src/host/types.ts'
 import { Dial } from '../src/shell/nui/Dial.tsx'
-import { TOOLS } from '../src/shell/landing/tools.ts'
 
 const c = { id: 'cli_00000001', name: 'Client Alpha', sector: null, look: { cl: '#DA291C', ink: '#FFC72C' } }
 const item = (app: string, over: Partial<LibraryItem> = {}): LibraryItem => ({
@@ -60,10 +57,3 @@ test('a quadrant counts its work in its own noun', () => {
   assert.match(html, /class="dz-sub">1 brief</)
 })
 
-test('no tool loses its place: All tools lists every tool in the table, Idea and Ads too', () => {
-  const src = readFileSync('src/shell/nui/AccountModals.tsx', 'utf8')
-  assert.match(src, /TOOLS\.map\(t =>/)
-  assert.ok(TOOLS.some(t => t.id === 'idea') && TOOLS.some(t => t.id === 'ads'))
-  assert.match(src, /Tell me when/)
-  assert.match(src, /Open the app library/, 'the Launcher stays reachable')
-})

@@ -2,9 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The mock's popover (`.p33-pop`, phase 33) and its modal (`.p33-modal`): one
-// at a time, placed under what opened it (8px below; left-aligned, or
-// right-aligned to it), kept on screen. Arrows move through its buttons, Home
+// The mock's popover (`.p33-pop`, phase 33): one at a time, placed under what
+// opened it (8px below; left-aligned, or right-aligned to it), kept on screen. Arrows move through its buttons, Home
 // and End jump, Escape closes it and gives focus back; a click outside, a
 // scroll, or leaving the window (a click into the app frame) closes it too.
 
@@ -75,27 +74,3 @@ export function Pop({ anchor, align = 'left', onClose, label, className = 'p33-p
     document.body,
   )
 }
-
-/** The mock's modal: a card over a dimmed page; Escape, the ×, or a click on the dim closes it. */
-export function Modal({ onClose, label, children }: { onClose: () => void; label: string; children: ReactNode }) {
-  const card = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const was = document.activeElement as HTMLElement | null
-    card.current?.querySelector<HTMLElement>('button, input')?.focus()
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }
-    document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('keydown', esc); was?.focus?.() }
-  }, [onClose])
-  return createPortal(
-    <div className="nui">
-      <div className="p33-modal" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="p33-mcard" role="dialog" aria-modal="true" aria-label={label} ref={card}>
-          <button type="button" className="p33-mx" title="Close" aria-label="Close" onClick={onClose}>×</button>
-          {children}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}
-

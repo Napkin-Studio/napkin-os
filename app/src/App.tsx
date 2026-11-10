@@ -17,7 +17,7 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
-import { TOOLS, isLive, toolById, toolOfApp } from './shell/landing/tools'
+import { toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
 import { signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
@@ -26,14 +26,10 @@ import { spinoffTitle } from './shell/docTitle'
 import { agencyNameOf, applyAgency, markOf } from './shell/agency/palette'
 import { rememberAgency } from './shell/agency/lastAgency'
 import { DeskDrawer } from './shell/nui/DeskDrawer'
-import { AllToolsModal, CrewModal } from './shell/nui/AccountModals'
 import { useDeskFacts } from './shell/nui/useDeskFacts'
-import { useCanGL } from './shell/nui/use3D'
 import { callsIn, clientLook, clientName, monogramOf, sectorOf, setSector } from './shell/nui/deskData'
 import { setClientAgency } from './shell/agency/clients'
 import type { Account, ClientChip } from './components/barMenus'
-import { applyFlatPref, flatPref, setFlatPref } from './orbs/prefs'
-import { useInstall } from './pwa/pwa'
 import { useOfflineCopies } from './offline/useOfflineCopies'
 import { useRoute } from './shell/useRoute'
 import { formatRoute, type Route } from './shell/route'
@@ -90,10 +86,8 @@ const retireDocEntry = () => { if (isDocEntry()) window.history.replaceState(nul
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
-  // Where the landing is (the URL hash), and whether the person asked for the
-  // plain list of tools instead of it.
+  // Where the landing is (the URL hash).
   const [route, go] = useRoute()
-  const [allTools, setAllTools] = useState(false)
   const [running, setRunning] = useState<RunningApp | null>(null)
   const [installed, setInstalled] = useState<InstalledApp[]>([])
   const [pendingLaunch, setPendingLaunch] = useState<OpenResult | null>(null)
@@ -115,7 +109,7 @@ export default function App() {
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
-  const landing = useLanding(host, (screen === 'home' && !allTools) || screen === 'app', !(device && !serverless),
+  const landing = useLanding(host, screen === 'home' || screen === 'app', !(device && !serverless),
     screen === 'app' ? running?.artifactPath ?? null : null)
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
@@ -135,14 +129,6 @@ export default function App() {
   const [deskDecisions, setDeskDecisions] = useState(false)
   // What the desk reads of recent documents' own chains: last editor, calls, thin findings, upstream changes.
   const { facts, refresh: refreshFacts } = useDeskFacts(landing.data?.items ?? null, landing.state === 'ready' && !(device && !serverless))
-  // The account menu's modals.
-  const [modal, setModal] = useState<'tools' | 'crew' | null>(null)
-  const [flat, setFlat] = useState(flatPref)
-  const install = useInstall()
-  // Flat circles is offered only where there is a 3D to switch to.
-  const canGL = useCanGL()
-  // The person's Flat circles choice holds on every screen, not only once the desk has drawn.
-  useEffect(() => { applyFlatPref() }, [])
   const offlineCopies = useOfflineCopies()
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
@@ -425,13 +411,11 @@ export default function App() {
     return () => { subs.forEach(s => s.then(f => f()).catch(() => {})) }
   }, [device, openPath, handleOpenFile, saveCurrent])
 
-  const goHome = useCallback(() => { retireDocEntry(); setAllTools(false); openHome() }, [openHome])
 
   // A level of the trail, chosen from inside a document: leave the document for it.
   const leaveTo = useCallback((r: Route) => {
     retireDocEntry()
     go(r, true)
-    setAllTools(false)
     openHome()
   }, [go, openHome])
 
@@ -439,7 +423,7 @@ export default function App() {
   const screenRef = useRef(screen)
   useEffect(() => { screenRef.current = screen }, [screen])
   useEffect(() => {
-    const leave = () => { if (screenRef.current === 'app' && !isDocEntry()) { setAllTools(false); openHome() } }
+    const leave = () => { if (screenRef.current === 'app' && !isDocEntry()) openHome() }
     window.addEventListener('popstate', leave)
     window.addEventListener('hashchange', leave)
     return () => { window.removeEventListener('popstate', leave); window.removeEventListener('hashchange', leave) }
@@ -490,7 +474,7 @@ export default function App() {
     />
   ) : !booted ? (
     <LogoSpinnerFill label="Opening the studio…" />
-  ) : landing.state === 'ready' && landing.data && !allTools ? (
+  ) : landing.state === 'ready' && landing.data ? (
     <LandingHome
       route={route}
       data={landing.data}
@@ -505,7 +489,7 @@ export default function App() {
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
     />
-  ) : landing.state === 'loading' && !allTools ? (
+  ) : landing.state === 'loading' ? (
     <LogoSpinnerFill label="Opening the studio…" />
   ) : (
     // Where the host cannot list the library, the Launcher is the home as it was.
@@ -515,15 +499,13 @@ export default function App() {
       onLaunchApp={launchApp}
       onOpenFile={handleOpenFile}
       onOpenDocument={openPath}
-      onLanding={landing.state === 'ready' ? () => setAllTools(false) : undefined}
     />
   )
 
   // Where you are, after the agency's pill: the client chip on a client's page (a switcher) and in its documents (the way back).
-  const onLanding = landing.state === 'ready' && landing.data && !allTools && !(device && !serverless)
+  const onLanding = landing.state === 'ready' && landing.data && !(device && !serverless)
   const who = whoIs(landing.data?.person ?? null)
   const agency = agencyNameOf(landing.data?.person?.id, who.agency)
-  const live = new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string))
   const chipOf = (c: { id?: string; name: string; initials?: string }): Omit<ClientChip, 'onOpen'> => ({
     name: c.id ? clientName({ id: c.id, name: c.name }) : c.name, mono: monogramOf({ name: c.name, initials: c.initials ?? '' }), look: clientLook(c.id ?? c.name, c.name),
   })
@@ -551,20 +533,16 @@ export default function App() {
   // The desk's needs-your-call count: across all the agency's clients (owner,
   // 9 Nov 2026). It never lights the medallion; only an open document does.
   const deskNeeds = landing.data ? landing.data.items.reduce((n, i) => n + callsIn(i), 0) : 0
-  const toAgency = () => { setAllTools(false); go({ level: 'agency' }) }
+  const toAgency = () => go({ level: 'agency' })
   const onSignOut = user ? () => { void signOut() } : undefined
-  // The account menu on the pill: who you are, All tools, the crew, Offline copies, Install, Flat circles, Sign out.
+  // The account menu on the avatar (owner, 2026-11-11): who you are, Offline copies, Sign out.
   const personName = landing.data?.person?.name ?? who.first ?? user ?? 'You'
   const account: Account = {
     name: personName,
     initials: initialsOf(personName),
     // No role is served yet (gaps.md §12): the agency's name alone.
     line: agency,
-    onAllTools: () => setModal('tools'),
-    onCrew: () => setModal('crew'),
     ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
-    onInstall: install,
-    ...(canGL ? { flat: { on: flat, toggle: () => { setFlatPref(!flat); setFlat(!flat) } } } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -605,7 +583,8 @@ export default function App() {
           running={running}
           tool={installed.find(a => a.app_id === running.open.manifest.app?.app_id) ?? null}
           onOpenDocument={openPath}
-          onHome={goHome}
+          // The medallion and the agency pill both go to the desk (owner, 2026-11-11).
+          onHome={() => leaveTo({ level: 'agency' })}
           client={docChip}
           account={account}
           toolKey={toolOfApp(running.open.manifest.app?.app_id)?.id ?? null}
@@ -655,7 +634,6 @@ export default function App() {
               user={user}
               onSignOut={onSignOut}
               account={account}
-              onOpenFile={onLanding ? undefined : handleOpenFile}
             />
           )}
         >
@@ -674,12 +652,6 @@ export default function App() {
       )}
 
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
-      {modal === 'tools' && (
-        <AllToolsModal live={live} onClose={() => setModal(null)}
-          onSoon={t => notify(`${t.full} is coming soon`, 'It keeps its place in All tools.')}
-          onLibrary={() => { retireDocEntry(); setAllTools(true); openHome() }} />
-      )}
-      {modal === 'crew' && <CrewModal agency={agency} onClose={() => setModal(null)} />}
 
       {dragging && (
         <div className="dv-drop" aria-hidden>

@@ -1,6 +1,6 @@
 // The final screenshot matrix of the desk, on the real shell and the real server:
-// every screen at 1440 and 390 wide, in light and dark, with WebGL on (SwiftShader,
-// so it runs with no GPU) and the flat fallback. It writes nothing unless a folder is
+// every screen at 1440 and 390 wide, in light and dark; the circles are always
+// the flat discs (owner, 2026-11-11). It writes nothing unless a folder is
 // given, and it asserts only that each screen shows up, so it stays a cheap smoke.
 //
 //   NAPKIN_E2E_SHOTS=<dir> npm run e2e -- final
@@ -11,7 +11,6 @@ import { expect, test, type Browser, type Page } from '@playwright/test'
 import { seedClients } from './seedClients'
 
 const shots = process.env.NAPKIN_E2E_SHOTS
-const SOFT_GL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
 const BRIEF = 'ie.napkin.brief-maker'
 const DECK = 'ie.napkin.deck-maker'
 const CONTEST = {
@@ -20,18 +19,13 @@ const CONTEST = {
 const SIZES = [{ tag: '1440', width: 1440, height: 900 }, { tag: '390', width: 390, height: 844 }]
 const THEMES = ['light', 'dark'] as const
 
-test.use({ launchOptions: { args: SOFT_GL } })
 test.skip(!shots, 'set NAPKIN_E2E_SHOTS=<dir> to write the final screenshots')
 
-async function open(browser: Browser, size: { width: number; height: number }, theme: string, flat = false) {
+async function open(browser: Browser, size: { width: number; height: number }, theme: string) {
   const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1 })
-  await ctx.addInitScript(([t, f]) => {
-    try {
-      localStorage.setItem('napkin.theme', t as string)
-      // 3D is the person's choice (Flat circles off); the flat fallback is the mock's colour discs.
-      localStorage.setItem('napkin.circles.flat', f ? '1' : '0')
-    } catch { /* not kept */ }
-  }, [theme, flat])
+  await ctx.addInitScript(t => {
+    try { localStorage.setItem('napkin.theme', t) } catch { /* not kept */ }
+  }, theme)
   const page = await ctx.newPage()
   await page.goto('/')
   return { ctx, page }
@@ -51,7 +45,7 @@ async function snap(page: Page, name: string, hash: string, ready: string) {
   await page.goto(`/${hash}`)
   await page.reload()
   await expect(page.getByTestId(ready).first()).toBeVisible({ timeout: 20_000 })
-  await page.waitForTimeout(1200) // the cross-fade from flat to 3D
+  await page.waitForTimeout(400) // the page settles
   await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true })
 }
 
@@ -92,18 +86,6 @@ for (const size of SIZES) {
       await page.getByRole('button', { name: 'Show all 20' }).click()
       await page.waitForTimeout(800)
       await page.screenshot({ path: `${shots}/08-twenty-clients-all-${tag}.png`, fullPage: true })
-      await ctx.close()
-    })
-
-    test(`screens in the flat fallback, ${tag}`, async ({ browser }) => {
-      const { ctx, page } = await open(browser, size, theme, true)
-      const { api, ids } = await seedClients(page, 4)
-      await work(page, api, BRIEF, 'Spring brief', ids[0], CONTEST)
-      await work(page, api, DECK, 'Pitch deck', ids[1], { run: { state: 'building', stage: 'Layout' } })
-      await snap(page, `09-flat-desk-${tag}`, '#agency', 'client-circle')
-      await snap(page, `10-flat-clients-${tag}`, '#clients', 'client-circle')
-      await snap(page, `11-flat-client-tools-${tag}`, `#client-${ids[0]}`, 'tool-brief')
-      await expect(page.locator('html')).not.toHaveAttribute('data-orbs', 'gl')
       await ctx.close()
     })
   }

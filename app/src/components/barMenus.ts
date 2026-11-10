@@ -91,22 +91,16 @@ export interface DocBar {
   onToolPage?: { label: string; run: () => void } | null
 }
 
-/** The account menu on the agency pill (mock phase 33). */
+/** The account menu on the person's avatar, at the bar's right (owner, 2026-11-11). */
 export interface Account {
   /** The person's name, and their initials on the avatar. */
   name: string
   initials: string
   /** "Strategy lead · TBWA\Dublin": role (when known) and the agency's name. */
   line: string
-  onAllTools?: () => void
-  onCrew?: () => void
   onOffline?: () => void
   /** How many offline copies are on this device, when known. */
   offlineCount?: number | null
-  /** Install the app (the browser's own prompt); null where it cannot be installed now. */
-  onInstall?: (() => void) | null
-  /** "Flat circles": the person's own switch for the drawn circles (orbs/prefs.ts). */
-  flat?: { on: boolean; toggle: () => void }
 }
 
 /** Where the bar is when no document is open but a tool's home is: its icon and its plural ("Briefs"). */
@@ -324,28 +318,14 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
 
 
 /**
- * The account menu on the agency pill (mock phase 33): All tools, the crew,
- * Offline copies, Install the app, then Change password and Sign out. What the
- * studio cannot do yet is shown and says so, never faked.
+ * The account menu on the avatar (owner, 2026-11-11): Offline copies, then
+ * Sign out, last. The agency pill only goes to the desk.
  */
-export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void, onOpenFile?: () => void): MenuItem[] {
+export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void): MenuItem[] {
   const n = account?.offlineCount
   return [
-    ...(account?.onAllTools ? [{ label: 'All tools', hint: 'Every tool and template, and what is coming', run: account.onAllTools }] : []),
-    ...(account?.onCrew ? [{ label: 'Your agents', hint: 'The agents, by role, and what each one does', run: account.onCrew }] : []),
     ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
-    ...(onOpenFile ? [{ label: 'Open…', hint: 'Open a .clan file from this computer', run: onOpenFile }] : []),
-    ...(account && account.onInstall !== undefined
-      ? [account.onInstall
-        ? { label: 'Install the app', hint: 'Napkin Studio on this computer', run: account.onInstall }
-        : { label: 'Install the app', hint: 'Installed already, or this browser cannot install it', run: () => {}, disabled: true }]
-      : []),
-    ...(user && onSignOut
-      ? [
-          { label: 'Change password', hint: 'Not built yet: ask your studio admin', run: () => {}, disabled: true, apart: true },
-          { label: 'Sign out', run: onSignOut },
-        ]
-      : []),
+    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!account?.onOffline }] : []),
   ]
 }
 

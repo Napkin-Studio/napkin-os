@@ -6,16 +6,19 @@
 // its More ▾ menu held keeps a visible home in the new bar or its slot menus,
 // in each state of the shell: the desk, a document, a document in edit mode,
 // a locked one (client review offered), client review itself, and the device.
-// Owner rule: no feature that exists today may be removed or hidden.
+// Owner rule: no feature that exists today may be removed or hidden, except
+// what the owner removes by name (2026-11-11: All tools, Your agents, Install
+// the app, Change password and Flat circles are gone; the agency pill goes to
+// the desk; the account menu is on the avatar).
 
 import './domFakes.ts'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import Toolbar from '../src/components/Toolbar.tsx'
+import Toolbar, { AgencyPill } from '../src/components/Toolbar.tsx'
 import { accountItems, continueItems, deskItems, docMenuItems, linksOf, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
@@ -32,17 +35,24 @@ const bar = (props: Partial<Parameters<typeof Toolbar>[0]> = {}) => renderToStat
 }))
 const labels = (items: { label: string }[]) => items.map(i => i.label)
 
-test('the desk: medallion, the agency pill with its account menu, the client chip, the theme, Decisions with the count', () => {
+const sam = { name: 'Sam Agent', initials: 'SA', line: 'Studio A', onOffline: noop, offlineCount: 2 }
+
+test('the desk: medallion, the agency pill back to the desk, the client chip, the theme, your avatar, Decisions with the count', () => {
   dogfood({ on: true, consented: false })
   const html = bar({
-    needs: 3, user: 'sam@studio-a', onSignOut: noop,
+    needs: 3, user: 'sam@studio-a', onSignOut: noop, account: sam,
     client: { name: 'Client A', mono: 'CA', look: { cl: '#DA291C', ink: '#FFC72C' }, switcher: [{ id: 'cli_1', name: 'Client A' }], onSwitch: noop },
     tools: createElement('button', { className: 'ch-btn' }, 'Offline'),
   })
   dogfood({ on: false, consented: false })
   assert.match(html, /data-where="desk"/)
   assert.match(html, /data-testid="medallion"/)
-  assert.match(html, /id="header-name-pill"[^>]*aria-haspopup="menu"[^>]*>.*Studio A.*Napkin Studio/, 'the pill opens the account menu')
+  assert.match(html, /<button type="button" class="name-pill pill-accent" id="header-name-pill" title="Studio A: back to the desk" aria-label="Back to the desk" data-testid="agency-pill">.*Studio A.*Napkin Studio/, 'the pill is a button back to the desk')
+  assert.doesNotMatch(html, /id="header-name-pill"[^>]*aria-haspopup/, 'no menu opens from the agency pill')
+  // Your avatar, beside the theme and Decisions: a menu button with your initials.
+  assert.match(html, /<button type="button" class="tb-me" id="tb-me" aria-haspopup="menu" aria-expanded="false" aria-label="Sam Agent: your account"[^>]*data-testid="account-button"><i class="cw" aria-hidden="true">SA<\/i><\/button>/)
+  assert.ok(html.indexOf('Switch to') < html.indexOf('id="tb-me"') && html.indexOf('id="tb-me"') < html.indexOf('id="tb-decisions-btn"'), 'after the theme, before Decisions')
+  assert.doesNotMatch(html, /Flat circles|flat-circles/, 'no Flat circles toggle')
   assert.match(html, /data-testid="client-chip"[^>]*>.*Client A/, 'on a client page: the chip, a switcher')
   assert.match(html, /id="p33-cswitch"[^>]*title="Switch client"/)
   assert.match(html, />Offline</, 'a caller\'s own tools still have a place')
@@ -51,9 +61,15 @@ test('the desk: medallion, the agency pill with its account menu, the client chi
   assert.match(html, /aria-label="Decisions: 3 need your call"/)
   assert.match(html, /data-testid="needs-count">3</)
   assert.doesNotMatch(html, />More </, 'no More ▾ on the desk: its actions are in the account and desk menus')
-  // The account menu: who you are, All tools, the crew, Offline copies, Open…, Install, Change password, Sign out.
-  const acct = labels(accountItems({ name: 'Sam', initials: 'SA', line: 'Studio A', onAllTools: noop, onCrew: noop, onOffline: noop, offlineCount: 2, onInstall: null }, 'sam@studio-a', noop, noop))
-  assert.deepEqual(acct, ['All tools', 'Your agents', 'Offline copies', 'Open…', 'Install the app', 'Change password', 'Sign out'])
+  // The avatar's menu (owner, 2026-11-11): who you are (its header), Offline copies with its count, Sign out last.
+  const items = accountItems(sam, 'sam@studio-a', noop)
+  assert.deepEqual(labels(items), ['Offline copies', 'Sign out'])
+  assert.match(items[0].hint ?? '', /^2 on this device · /, 'Offline copies keeps its count line')
+  assert.ok(items[1].apart, 'Sign out sits apart, last')
+  for (const gone of ['All tools', 'Your agents', 'Install the app', 'Change password', 'Flat circles']) {
+    assert.ok(!labels(items).includes(gone), `no ${gone}`)
+  }
+  assert.deepEqual(labels(accountItems({ ...sam, onOffline: undefined }, 'sam@studio-a', noop)), ['Sign out'])
   assert.deepEqual(labels(accountItems(undefined, null, noop)), [], 'no accounts, no Sign out')
   assert.deepEqual(labels(deskItems('sam@studio-a', noop)), ['Sign out'])
   assert.deepEqual(deskItems(null, noop), [], 'no accounts, no Sign out')
@@ -61,6 +77,47 @@ test('the desk: medallion, the agency pill with its account menu, the client chi
   assert.deepEqual(labels(deskItems('sam@studio-a', noop, noop)), ['Open…', 'Sign out'])
   assert.deepEqual(labels(deskItems(null, noop, noop)), ['Open…'])
   assert.doesNotMatch(html, /data-attention/, 'the desk never lights the medallion')
+})
+
+test('the agency pill takes you to the desk; the avatar menu is a proper menu button', () => {
+  let went = 0
+  const pill = AgencyPill({ agency: 'Studio A', onDesk: () => { went++ } })
+  ;(pill.props as { onClick: () => void }).onClick()
+  assert.equal(went, 1, 'a click on the pill goes to the desk')
+  // The bar hands the pill the desk route (onAgency), and the medallion too; App.tsx gives both the agency level.
+  const src = readFileSync('src/components/Toolbar.tsx', 'utf8')
+  assert.match(src, /<AgencyPill agency=\{agency\} onDesk=\{onAgency \?\? onHome\} \/>/)
+  const app = readFileSync('src/App.tsx', 'utf8')
+  assert.match(app, /onHome=\{\(\) => leaveTo\(\{ level: 'agency' \}\)\}/, 'in a document the medallion goes to the desk')
+  assert.match(app, /onAgency=\{\(\) => leaveTo\(\{ level: 'agency' \}\)\}/, 'in a document the pill goes to the desk')
+  assert.match(app, /onAgency=\{toAgency\}\s+onHome=\{toAgency\}/, 'on the desk and client page both go to the desk')
+  // The menu opens under the avatar, right-aligned; Escape closes it and gives focus back (Pop + popKit).
+  assert.match(src, /<Pop anchor=\{pop\.open\.anchor\} align="right" onClose=\{pop\.close\} label="Your account" testid="account-menu">/)
+  assert.match(readFileSync('src/shell/nui/popKit.ts', 'utf8'), /case 'Escape': e\.preventDefault\(\); e\.stopPropagation\(\); close\(\)/)
+  assert.match(readFileSync('src/shell/nui/Pop.tsx', 'utf8'), /onListKey\(e, ref\.current, \(\) => onClose\(true\)\)/, 'Escape refocuses the button')
+  // No account (no accounts on this server): no avatar.
+  assert.doesNotMatch(bar({}), /tb-me/)
+})
+
+test('in a document the avatar is you; the crew beside it is everyone else', () => {
+  const crew = { people: [{ name: 'Sam', initials: 'SA', you: true }, { name: 'Ana', initials: 'AN' }] }
+  const html = bar({ account: sam, user: 'sam', onSignOut: noop, doc: doc({ crew }) })
+  assert.match(html, /data-testid="account-button"/)
+  assert.match(html, /data-testid="crew"[^>]*>(<i[^>]*>AN<\/i>)<\/span>/, 'the crew shows the others only')
+  assert.doesNotMatch(bar({ account: sam, doc: doc({ crew: { people: [crew.people[0]] } }) }), /data-testid="crew"/, 'alone: just the avatar')
+  assert.match(bar({ doc: doc({ crew }) }), /data-testid="crew"[^>]*>(<i[^>]*>SA<\/i>)(<i[^>]*>AN<\/i>)/, 'no account: the crew as before')
+})
+
+test('the removed pieces are gone from the shell: All tools, Your agents, Install, Change password, Flat circles, 3D circles', () => {
+  for (const f of ['src/shell/nui/AccountModals.tsx', 'src/shell/agents/AgentGallery.tsx', 'src/orbs', 'src/shell/landing/useOrb.ts', 'src/shell/nui/use3D.ts']) {
+    assert.ok(!existsSync(f), `${f} is gone`)
+  }
+  const app = readFileSync('src/App.tsx', 'utf8')
+  for (const gone of ['AllToolsModal', 'CrewModal', 'onAllTools', 'onCrew', 'setFlatPref', 'napkin.circles.flat', 'useCanGL', 'allTools']) {
+    assert.ok(!app.includes(gone), `App.tsx has no ${gone}`)
+  }
+  const desk = readFileSync('src/shell/nui/Desk.tsx', 'utf8')
+  assert.doesNotMatch(desk, /orbs|use3D|installPressGate|<Circle /, 'the desk draws flat discs only')
 })
 
 test('a document: its tool icon and name with saved · valid under it, Continue in and Share; the chips are on the bar; no state pill', () => {
@@ -120,7 +177,7 @@ test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made fr
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {
-  // The old More ▾: each action's home is now the document menu on the name, or the account menu (Sign out).
+  // The old More ▾: each action's home is now the document menu on the name, or the avatar's menu (Sign out).
   const OLD: [string, string][] = [['Edit', 'Edit'], ['Open…', 'Open…'], ['Save as…', 'Save as…'], ['Present offline', 'Present offline'],
     ['Export', 'Export'], ['Where it came from', 'Where it came from'], ['Show the file’s details', 'File details'], ['Sign out', 'Sign out']]
   const now = [...labels(docMenuItems(doc())), ...labels(accountItems(undefined, 'sam', noop))]
@@ -163,7 +220,7 @@ test('the bar never draws tabs: they are an owner removal, and a tab an older ap
 
 test('what lives outside the bar keeps its home in App.tsx: device banner, update toast, install prompt, drop veil, Offline dialog', () => {
   const app = readFileSync('src/App.tsx', 'utf8') // npm test runs in app/
-  for (const want of ['<DeviceBanner', 'dv-update', '<InstallPrompt', 'dv-drop', '<OfflineDialog', 'setOfflineOpen(true)', '<Launcher', '<DeviceHome', 'onAllTools']) {
+  for (const want of ['<DeviceBanner', 'dv-update', '<InstallPrompt', 'dv-drop', '<OfflineDialog', 'setOfflineOpen(true)', '<Launcher', '<DeviceHome']) {
     assert.ok(app.includes(want), `App.tsx still has ${want}`)
   }
 })

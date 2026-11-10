@@ -77,14 +77,6 @@ test('the desk, add a client, reload, open a client, start work', async ({ page 
   await expect(page).toHaveURL(/#clients$/)
   for (const t of ['brief', 'research', 'deck', 'prod']) await expect(page.getByTestId(`quadrant-${t}`)).toBeVisible()
   await expect(page.getByTestId('quadrant-prod')).toHaveAttribute('aria-disabled', 'true')
-  // More tools: Idea, Ads and Production keep their place in the account menu's All tools.
-  await page.getByTestId('agency-pill').click()
-  await page.getByRole('menuitem', { name: /^All tools/ }).click()
-  const tools = page.getByTestId('all-tools')
-  for (const t of ['Idea', 'Advertising Studio', 'Production Tool']) await expect(tools.getByText(t, { exact: true })).toBeVisible()
-  await expect(tools.locator('.m-card.soon')).toHaveCount(3)
-  await page.getByRole('button', { name: 'Close' }).click()
-  await page.getByRole('button', { name: /^Client A:/ }).click()
   // Open a client: its tools are its groups' headings, Idea and Prod Soon, its work listed.
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
@@ -215,9 +207,8 @@ test('the keyboard reaches the circles and Enter opens one', async ({ page }) =>
   await expect(page.getByTestId('tool-page')).toBeVisible()
 })
 
-// Phase 4 (3D circles): reduced motion alone no longer means flat (the approved mock shows still
-// 3D spheres; circles.spec.ts covers that). This test is about its other half, no WebGL at all, so
-// it starts its own browser without WebGL, as its name says. The assertions are unchanged.
+// The circles are always flat (owner, 2026-11-11). This test starts its own browser with reduced
+// motion and no WebGL, as its name says, so nothing could draw a sphere or animate if it tried.
 test('reduced motion and no WebGL: the circles are flat SVG, nothing animates', async () => {
   const browser = await chromium.launch({ args: ['--disable-webgl', '--disable-webgl2', '--disable-3d-apis', '--disable-gpu'] })
   const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL: test.info().project.use.baseURL })

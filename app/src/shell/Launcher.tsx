@@ -26,8 +26,6 @@ interface Props {
   onOpenFile: () => void
   /** Open a document already in the store: one of the recent ones. */
   onOpenDocument: (path: string) => void
-  /** Back to the landing, when the host can list the library and the person came here from it. */
-  onLanding?: () => void
 }
 
 // Every word and colour on a card comes from the app's own manifest
@@ -164,7 +162,7 @@ function Chip({ state }: { state?: RecentState | null }) {
 }
 
 /** The OS home: a greeting, a card per tool, and the work left open. */
-export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, onOpenDocument, onLanding }: Props) {
+export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, onOpenDocument }: Props) {
   // null while the list is on its way, so the section waits instead of flashing empty.
   const [recent, setRecent] = useState<RecentDoc[] | null>(null)
   const [recentFailed, setRecentFailed] = useState(false)
@@ -214,9 +212,6 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
 
   return (
     <div className="ln">
-      {onLanding && (
-        <button className="ln-more ln-back" onClick={onLanding}>← Back to the studio</button>
-      )}
       <div className="ln-hello">
         <h1 className="ln-banner">{greeting()} What shall we work on?</h1>
       </div>

@@ -19,11 +19,6 @@ import { ACTIVITY_WORD, adoptLabel, agencySummary, countsLine, matches, pageOf }
 import type { Tool } from '../landing/tools'
 import type { Manage } from '../landing/useLanding'
 import { AdoptPanel } from '../landing/Registry'
-import { Circle } from '../landing/Circle'
-import { shared } from '../../orbs/engine'
-import { installPressGate } from '../../orbs/gate'
-import { applyFlatPref } from '../../orbs/prefs'
-import { use3D } from './use3D'
 import type { LandingData } from '../landing/store'
 import { greeting } from '../when'
 import { clientName, deskClients, pickRows, sectorOf, worthItems, type DeskClient, type Facts } from './deskData'
@@ -93,13 +88,6 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
   // The heading takes focus on arrival, so a keyboard or a screen reader lands on it.
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [])
-  // 3D circles, where the person turned them on (Flat circles off) and WebGL is up: a press is seen
-  // (squish and ripple) before the dial opens. Flat, the gate lets every click straight through.
-  const three = use3D()
-  useEffect(() => {
-    applyFlatPref()
-    return top.current ? installPressGate(top.current, shared(), () => 'desk') : undefined
-  }, [])
 
   const all = useMemo(() => deskClients(data.clients, data.items), [data])
   const page = useMemo(() => {
@@ -218,7 +206,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
 
             <div className="cl-row" id="cl-row" ref={row} role="group" aria-label="Your clients" onKeyDown={onRowKey}>
               {page.shown.map((c, i) => (
-                <ClientCircle key={c.id} c={c} three={three} material={data.clients.find(x => x.id === c.id)?.material ?? 'pearl'} tab={i === atNow} open={dial === c.id}
+                <ClientCircle key={c.id} c={c} tab={i === atNow} open={dial === c.id}
                   onFocus={() => setAt(i)} onClick={(el, key) => openDial(c.id, el, key)} />
               ))}
               <button type="button" className="cl-circle cl-add" id="cl-add-btn" data-testid="add-client" aria-expanded={adding}
@@ -333,9 +321,9 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
   )
 }
 
-/** One client circle: its colour, monogram and needs badge (or its 3D sphere); the name and a line naming the work. */
-function ClientCircle({ c, three, material, tab, open, onFocus, onClick }: {
-  c: DeskClient; three: boolean; material: string; tab: boolean; open: boolean; onFocus: () => void; onClick: (el: HTMLElement, byKey: boolean) => void
+/** One client circle: its flat colour disc, monogram and needs badge; the name and a line naming the work. */
+function ClientCircle({ c, tab, open, onFocus, onClick }: {
+  c: DeskClient; tab: boolean; open: boolean; onFocus: () => void; onClick: (el: HTMLElement, byKey: boolean) => void
 }) {
   // What its ring would say, in words: a quiet verb (reading, thinking, checking, working) or idle.
   const verb = c.summary.activity === 'human' || c.summary.activity === 'error' ? '' : `, ${ACTIVITY_WORD[c.summary.activity]}`
@@ -345,9 +333,7 @@ function ClientCircle({ c, three, material, tab, open, onFocus, onClick }: {
       aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget, e.detail === 0)}>
       <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: c.look.ink }}>
         <svg viewBox="0 0 116 116" aria-hidden><circle cx="58" cy="58" r="52" className="cl-track" /></svg>
-        {three
-          ? <span className="cl-orb"><Circle size={116} material={material} initials={c.mono} activity={c.summary.activity} slot={`client:${c.id}`} orb /></span>
-          : <b>{c.mono}</b>}
+        <b>{c.mono}</b>
         {c.badge > 0 && <span className="cl-badge" data-testid="needs-badge">{c.badge}</span>}
       </span>
       <span className="cl-name">{c.name}</span>

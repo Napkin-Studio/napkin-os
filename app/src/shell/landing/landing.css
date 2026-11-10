@@ -201,18 +201,6 @@
 
 /* In the one OS bar the trail sits after the agency's pill (chrome.css .ch-crumbs places it). */
 
-/* 3D circles: the flat svg is the fallback, a canvas goes over it once the engine has drawn into it.
-   The initials stay as text on top of the blank sphere. Reduced motion gets this cross-fade and nothing else. */
-.lc-c3 { position: relative; display: block; width: fit-content; line-height: 0; flex: none; }
-.lc-c3.lc-dim { opacity: 0.55; }
-.lc-c3 canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; transition: opacity 250ms var(--lc-ease); }
-.lc-c3 .lc-cir > * { transition: opacity 250ms var(--lc-ease); }
-.lc-c3[data-orb='on'] canvas { opacity: 1; }
-.lc-c3[data-orb='on'] .lc-cir > :not(.lc-ini) { opacity: 0; }
-html[data-orbs-gl='0'] .lc-flat-toggle { display: none; }
-/* the flat svg is above the canvas, so its initials read over the sphere (its disc and ring are hidden once the canvas shows) */
-.lc-c3 .lc-cir { position: relative; z-index: 1; }
-
 /* Phase 5: adopt, rename, archive, restore, and the registry's error banner. */
 .lc-adopt .lc-fields { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
 .lc-adopt legend { font: 600 12px/1.3 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink2); padding: 0; }

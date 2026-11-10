@@ -5,14 +5,14 @@
 // The one OS bar, as the approved mock draws it (design/new-ui
 // napkin-app-v1.html, phases 26 to 36; gaps.md §3 and §13.1, §13.4). Left,
 // who and where: the medallion (the way home, and the one mark that changes
-// when the document you are IN needs you), the agency's pill (its account
-// menu: who you are, All tools, the crew, Offline copies, Install, Flat
-// circles, Sign out), and the client chip (back to the client, or on the
+// when the document you are IN needs you), the agency's pill (back to the
+// desk, as the medallion), and the client chip (back to the client, or on the
 // client page a switcher). Then the document, left-aligned (phase 36): its
 // tool's icon and its name in serif with "saved · valid ✓" under it and the
 // document menu on it, what it was made from, Continue in ▾ and Share. Right:
 // the app's own chips and buttons, Client review, the beta badge, the theme,
-// the crew in the document, and Decisions, the bar's one needs-your-call
+// the crew in the document, your avatar (its menu: who you are, Offline
+// copies, Sign out; owner, 2026-11-11), and Decisions, the bar's one needs-your-call
 // signal (amber with the count). No state pill (phase 26: state lives in the
 // app's own side tab).
 //
@@ -42,14 +42,12 @@ export type { Account, ClientChip, Crew, DocBar, DocState, MenuItem, ToolBrand }
 interface Props {
   /** The signed-in agency's name, on the pill. */
   agency: string
-  /** Kept for callers; the pill opens the account menu now (mock phase 33). */
+  /** The agency pill: back to the desk (owner, 2026-11-11); else the medallion's way home. */
   onAgency?: () => void
   /** The medallion: back to the studio. */
   onHome: () => void
   /** The medallion's colours: the agency's base and accent (shell/agency/palette.ts), else Napkin's. */
   mark?: { base: string; accent: string }
-  /** "Open…" (a .clan from this computer), in the account menu where a caller has no desk menu of its own. */
-  onOpenFile?: () => void
   /**
    * The medallion's state: the app the person is IN needs them (the open
    * document has something blocking its lock). Never shown on the desk, and
@@ -70,7 +68,7 @@ interface Props {
   /** Who is signed in, and the way out; absent where there are no accounts. */
   user?: string | null
   onSignOut?: () => void
-  /** The account menu on the pill. */
+  /** Who is signed in: the avatar at the right, and its menu. */
   account?: Account
   /** The open document; absent on the desk. */
   doc?: DocBar
@@ -184,14 +182,57 @@ const crewColour = (name: string) => CREW_COLOURS[[...name].reduce((h, c) => (h 
 /** Who is in the document: the people only. An agent shows in one place, on
  * the run stage or in the document's side panel, never here (owner, 2026-11-09);
  * that one works is the bar's working chip ({@link JobChip}). */
-function CrewHere({ crew }: { crew: Crew }) {
+function CrewHere({ crew, mine }: { crew: Crew; mine?: boolean }) {
+  // Your own circle is the avatar beside it (its menu is yours); the crew here is everyone else.
+  const shown = mine ? crew.people.filter(p => !p.you) : crew.people
+  if (mine && !shown.length) return null
   const names = crew.people.map(p => (p.you ? `${p.name} (you)` : p.name))
   const who = crew.agent ? roles.the(crew.agent) : 'an agent'
   const said = `In this document: ${names.join(', ') || 'nobody yet'}${crew.working ? `; ${who} is ${crew.working}` : ''}`
   return (
     <span className="tb-crew" id="tb-crew" role="group" aria-label={said} title={said} data-testid="crew">
-      {crew.people.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
+      {shown.map(p => <i key={p.name} className="cw" style={{ ['--c' as string]: p.you ? '#C9462A' : crewColour(p.name) }} aria-hidden>{p.initials}</i>)}
     </span>
+  )
+}
+
+/** The agency's pill: back to the desk, no menu (owner, 2026-11-11). */
+export function AgencyPill({ agency, onDesk }: { agency: string; onDesk: () => void }) {
+  return (
+    <button
+      type="button"
+      className="name-pill pill-accent"
+      id="header-name-pill"
+      title={`${agency}: back to the desk`}
+      aria-label="Back to the desk"
+      data-testid="agency-pill"
+      onClick={onDesk}
+    >
+      <span className="stacked-lockup" id="header-lockup">
+        <span className="sl-big">{agency}</span>
+        <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>
+      </span>
+    </button>
+  )
+}
+
+/** You, at the bar's right: your initials; the menu has who you are, Offline copies and Sign out. */
+function AccountButton({ account, open, onMenu }: { account: Account; open: boolean; onMenu: (el: HTMLElement) => void }) {
+  return (
+    <button
+      type="button"
+      className="tb-me"
+      id="tb-me"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label={`${account.name}: your account`}
+      title={`${account.name} · ${account.line}`}
+      data-testid="account-button"
+      onClick={e => onMenu(e.currentTarget)}
+      onKeyDown={e => { if (e.key === 'ArrowDown') { e.preventDefault(); onMenu(e.currentTarget) } }}
+    >
+      <i className="cw" aria-hidden>{account.initials}</i>
+    </button>
   )
 }
 
@@ -279,7 +320,7 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
 }
 
 export default function Toolbar({
-  agency, onHome, mark = markOf(null), onOpenFile, attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
+  agency, onAgency, onHome, mark = markOf(null), attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
 }: Props) {
   const pop = usePop<PopKey>()
   const appRef = useRef<HTMLDivElement>(null)
@@ -291,27 +332,13 @@ export default function Toolbar({
     return { top: (slot?.top ?? r.top) + 40, left: r.left }
   }, [])
 
-  const acct = accountItems(account, user, onSignOut, onOpenFile)
+  const acct = accountItems(account, user, onSignOut)
+  const me = account ? <AccountButton account={account} open={pop.open?.key === 'account'} onMenu={el => pop.toggle('account', el)} /> : null
   const lead = (
     <>
       <div className="dock-connected">
         <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} target={doc ? markTarget : undefined} />
-        <button
-          type="button"
-          className="name-pill pill-accent"
-          id="header-name-pill"
-          title="Your account and studio"
-          aria-label={`${agency}, Napkin Studio: your account and studio`}
-          aria-haspopup="menu"
-          aria-expanded={pop.open?.key === 'account'}
-          data-testid="agency-pill"
-          onClick={e => pop.toggle('account', e.currentTarget)}
-        >
-          <span className="stacked-lockup" id="header-lockup">
-            <span className="sl-big">{agency}</span>
-            <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>
-          </span>
-        </button>
+        <AgencyPill agency={agency} onDesk={onAgency ?? onHome} />
       </div>
       <span className="tb-vsep" aria-hidden />
       <nav className="tb-trail" id="tb-trail" aria-label="Where you are">
@@ -339,21 +366,14 @@ export default function Toolbar({
 
   const popovers = (
     <>
-      {pop.open?.key === 'account' && (
-        <Pop anchor={pop.open.anchor} onClose={pop.close} label="Your account" testid="account-menu">
-          {account && (
-            <div className="pp-me">
-              <span className="pp-av" aria-hidden>{account.initials}</span>
-              <span><b>{account.name}</b><small>{account.line}</small></span>
-            </div>
-          )}
-          {account && <hr />}
+      {pop.open?.key === 'account' && account && (
+        <Pop anchor={pop.open.anchor} align="right" onClose={pop.close} label="Your account" testid="account-menu">
+          <div className="pp-me">
+            <span className="pp-av" aria-hidden>{account.initials}</span>
+            <span><b>{account.name}</b><small>{account.line}</small></span>
+          </div>
+          {acct.length > 0 && <hr />}
           <Rows items={acct} close={pop.close} />
-          {account?.flat && (
-            <button type="button" className="pp-opt" aria-pressed={account.flat.on} data-testid="flat-circles" onClick={account.flat.toggle}>
-              <span className="pp-box" aria-hidden>{account.flat.on ? '✓' : ''}</span>Flat circles
-            </button>
-          )}
         </Pop>
       )}
       {pop.open?.key === 'client' && client?.switcher && (
@@ -393,6 +413,7 @@ export default function Toolbar({
             <span className="tb-spacer" />
             {tools}
             {right}
+            {me}
             <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} />
           </header>
         </div>
@@ -490,7 +511,8 @@ export default function Toolbar({
             )}
           </span>
           {right}
-          {doc.crew && <CrewHere crew={doc.crew} />}
+          {doc.crew && <CrewHere crew={doc.crew} mine={!!account} />}
+          {me}
           <DecisionsButton needs={needs} onDecisions={onDecisions} open={decisionsOpen} waiting={!!doc.crew?.waiting} />
         </header>
       </div>

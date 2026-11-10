@@ -1906,46 +1906,12 @@ The shell serves all four levels:
   move, `1` to `6` pick a tool, Enter opens it; a live region says each level on
   arrival and "coming soon" for a Soon tool (`app/src/shell/landing/keys.ts`).
 
-### 12.6 The circles in 3D: the Orbs module (read by the shell; later by the templates)
+### 12.6 The circles are flat
 
-Feature `landing-circles`, phase 4. **Not final until Shrey signs off** (open questions
-in the feature record). The sphere + ring shader is Shrey's and is not changed here.
-
-`app/src/orbs/` is the shell's source of truth for the engine that the Deck Maker
-template also carries inline (its `Orbs` block). The template keeps its own copy,
-because a sandboxed single file cannot import a shell module; `app/tests/orbsDrift.test.ts`
-reads the template's block and fails on any difference in the shader, the tables or the
-pose maths that is not marked `PORT` on the shell's side.
-
-- `engine.ts`: `createOrbs()` (and `shared()`, the shell's one). `attach({wrap, canvas}, spec)`
-  returns a handle (`update`, `kick`, `press`, `detach`) or `null` when the circle must stay
-  flat; `scan(root, stateFor)` does the same for every `[data-orb-host]` under a root;
-  `kick(el)` is the keyboard press. One WebGL context for the page: circles are drawn into
-  one atlas and each cell copied to the circle's own 2D canvas. The circle's markup is the
-  caller's (React): the flat `<svg>` is the fallback and stays; the engine never moves a node.
-- A circle's state is kept by **slot** (where it lives, never its size), so a re-render or a
-  new size does not reset its ring or turn. Two live circles never share a slot.
-- **Flat SVG stays** whenever: no WebGL, a shader that will not compile, reduced data
-  (`prefers-reduced-data`, `saveData`), the context is lost (3D returns on restore), an
-  unknown material, more than `MAX_LIVE` (40) circles, or the person's "Flat circles"
-  (`prefs.ts`, kept in this browser only). `<html data-orbs="gl|flat" data-orbs-gl="1|0"
-  data-orbs-why="...">` says which, for people and the smoke test.
-- **Client, tool and studio circles are pseudo-agents** (`agents.ts`): a blank sphere in one
-  of the materials in `tables.ts` (the client's `material`, stored on its record), no arcs and
-  no emblem circles, the initials as DOM text over it. The clan's agents are not changed.
-- **The ring** is the shader's travelling arc, in the landing's `--lc-ring-*` tokens read from
-  the circle's own element (light and dark follow the page). Length says activity, not
-  progress the shell does not have: needs you a quarter, failed 0.62 with a broken end,
-  working/thinking/reading/checking a fixed 0.34 arc (several jobs or none reporting steps),
-  idle a whole thin still ring. Priority across a client's work is the shell's `strongest`
-  (needs you, failed, working, thinking, reading, checking, idle).
-- **Budget:** only visible circles draw (IntersectionObserver); idle, untouched ones redraw about
-  15 times a second; a software renderer (SwiftShader, llvmpipe) draws at 1 pixel per CSS pixel,
-  any other at the device ratio capped at 2 and eased down when frames run long.
-- **Pointer:** every 3D circle leans toward the pointer across the whole window, with no click
-  and no distance limit. A press squishes and ripples; the click that goes on follows about
-  250 ms after the press (at least 100 ms after a release, so press, drag and release is play)
-  (`gate.ts`). Enter and Space go straight on with the ripple. Flat circles, no WebGL and
-  reduced motion get the plain click.
-- **Reduced motion:** the sphere and ring are still pictures (no turn, wobble or breath), redrawn
-  only when something changes; the flat-to-3D cross-fade is the only motion.
+Owner, 2026-11-11: "We only need flat circles." The desk and the client page draw
+each client as a flat colour disc (`app/src/shell/nui/Desk.tsx`,
+`app/src/shell/landing/Circle.tsx`): plain SVG and CSS, no WebGL, no canvas and
+no switch. The 3D client-circle engine (`app/src/orbs/`), its "Flat circles"
+setting (`napkin.circles.flat`) and the `<html data-orbs…>` attributes are gone.
+The agents keep their spheres from the one agent engine
+(`app/templates/shared/agent-sphere`, `app/src/shell/agents/AgentSphere.tsx`).

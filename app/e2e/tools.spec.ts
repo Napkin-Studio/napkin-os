@@ -165,13 +165,6 @@ test('the keyboard: Tab to the tools, arrows move, 1 to 4 pick, Enter opens, Soo
   await page.keyboard.press('4')
   await expect(live).toContainText('Production Tool is coming soon')
   await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
-  // Idea is in All tools, saying it is coming; asking does not move the page.
-  await page.getByTestId('agency-pill').click()
-  await page.getByRole('menuitem', { name: /^All tools/ }).click()
-  await page.getByTestId('all-tools').locator('.m-card', { hasText: 'Idea' }).getByRole('button', { name: 'Tell me when' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Idea is coming soon' })).toBeVisible()
-  await page.getByRole('button', { name: 'Close' }).click()
-  await expect(page).toHaveURL(new RegExp(`#client-${a}$`))
 
   // 1 is Brief: its page, with its arrival said.
   await page.keyboard.press('1')
