@@ -29,10 +29,10 @@ async function openBrief(page: Page) {
   await page.reload()
   await page.getByTestId('work-item').first().click()
   const app = page.frameLocator('iframe').first()
-  // 21 parts. The meta row's Version cell (the mock's fourth meta cell) is a row on the
-  // grid too, but it is read-only and no part: count the rows that carry a part.
+  // 21 parts, every row a part: the version is the side tab's, not a row on the sheet (owner, 10 Nov).
   await expect(app.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
-  await expect(app.locator('#fields .row.meta-version')).toHaveCount(1)
+  await expect(app.locator('#fields .row')).toHaveCount(21)
+  await expect(app.locator('#fields .row.k-cell').first()).toHaveAttribute('data-clan-part', 'client')
   return app
 }
 
@@ -62,7 +62,6 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(panel.locator('#spHead .rv-pname')).toBeVisible()
 
   // Place on page: full width, then one place earlier; the keyboard on the grip moves it too.
-  // The meta row's cells (client, project, budget) hold their places, so a movable part is moved.
   const mand = app.locator('#fields .row[data-clan-part="mandatories"]')
   await mand.locator('.lab > span').first().click()
   await expect(mand).toHaveClass(/\bsel\b/)

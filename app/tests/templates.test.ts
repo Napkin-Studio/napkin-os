@@ -1809,15 +1809,19 @@ type Lay = {
 }
 const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
 const lay = () => lift<Lay>(BM, ['clampW', 'layoutOrder', 'layoutPack', 'layoutParts', 'layoutIndex', 'layoutMove', 'layoutStep', 'layoutResize'],
-  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)() })
+  { GRID_COLS: 12, MIN_W: 3, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'] })
 const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
 
-test('a brief with no layout sits in the schema’s order at the default widths', () => {
+test('a brief with no layout sits in the schema’s order at the default widths, the header’s rows first', () => {
   const L = lay()
   const items = L.layoutOrder(BM_FIELDS, undefined)
-  assert.deepEqual(keysOf(items), BM_FIELDS.map(f => f.key), 'every part, in the schema’s order')
+  const head = ['client', 'project_name', 'budget_and_scope']
+  assert.deepEqual(keysOf(items), [...head, ...BM_FIELDS.map(f => f.key).filter(k => !head.includes(k))], 'every part, the header’s first (Client, Project, Budget & scope), the rest in the schema’s order')
   const cells = L.layoutPack(items)
   const at = (k: string) => cells.find(c => c.key === k)!
+  // The header's rows are full-width ruled rows under the title, one per row.
+  assert.deepEqual(head.map(k => [at(k).col, at(k).w]), [[1, 12], [1, 12], [1, 12]])
+  assert.ok(at('client').row < at('project_name').row && at('project_name').row < at('budget_and_scope').row && at('budget_and_scope').row < at('job').row)
   // The job is a full row; background and barrier share one; the three objectives share one.
   assert.deepEqual([at('job').col, at('job').w], [1, 12])
   assert.equal(at('background').row, at('barrier').row)
@@ -1825,7 +1829,7 @@ test('a brief with no layout sits in the schema’s order at the default widths'
   assert.deepEqual(['objectives.commercial', 'objectives.behavioural', 'objectives.attitudinal'].map(k => at(k).col), [1, 5, 9])
   // A section heading takes a row of its own where the section changes, and nothing shares a cell.
   const heads = cells.filter(c => c.head).map(c => c.head)
-  assert.deepEqual(heads, ['Identity', 'The brief', 'Objectives', 'Strategy', 'Desired response', 'Execution'])
+  assert.deepEqual(heads, ['Identity', 'Execution', 'The brief', 'Objectives', 'Strategy', 'Desired response', 'Execution'])
   const taken = new Set<string>()
   for (const c of cells) for (let x = c.col; x < c.col + c.w; x++) {
     const k = `${c.row}:${x}`; assert.ok(!taken.has(k), `cell ${k} is used once`); taken.add(k)
@@ -1856,9 +1860,12 @@ test('a part moved or resized keeps its place in data, and the rest keep theirs'
   const wide = L.layoutPack(L.layoutResize(items, 'barrier', 8))
   const bg = wide.find(c => c.key === 'background')!, br = wide.find(c => c.key === 'barrier')!
   assert.deepEqual([br.row, br.col], [bg.row + 1, 1])
-  // The keyboard's step: one place earlier or later; nothing moves past either end.
-  assert.deepEqual(keysOf(L.layoutStep(items, 'client', -1)).slice(0, 2), ['client', 'project_name'])
-  assert.deepEqual(keysOf(L.layoutStep(items, 'project_name', -1)), keysOf(items))
+  // The keyboard's step: one place earlier or later; nothing moves past either end. The header's
+  // parts step like any other (owner, 10 Nov): no part is skipped.
+  assert.deepEqual(keysOf(L.layoutStep(items, 'client', -1)), keysOf(items))
+  assert.deepEqual(keysOf(L.layoutStep(items, 'project_name', -1)).slice(0, 3), ['project_name', 'client', 'budget_and_scope'])
+  assert.deepEqual(keysOf(L.layoutStep(items, 'job', -1)).slice(0, 4), ['client', 'project_name', 'job', 'budget_and_scope'])
+  assert.deepEqual(keysOf(L.layoutStep(items, 'budget_and_scope', 1)).slice(2, 4), ['job', 'budget_and_scope'])
   assert.deepEqual(keysOf(L.layoutStep(items, 'open_questions', 1)), keysOf(items))
   // An older brief's layout naming a part only by width keeps its schema place; a stray entry is ignored.
   const partial = L.layoutOrder(BM_FIELDS, { audience: { w: 12 }, nonsense: { order: 0 } })
@@ -2074,8 +2081,8 @@ test('the screen and the PDF are one sheet: one builder, one measure, guides whe
   assert.match(build, /LAST_SHEET_PAGES=sheetPaginate\(blocks\)/)
   assert.match(build, /return sheetDoc\(ctx, LAST_SHEET_PAGES\)/)
   assert.match(fn(BM, 'sheetCtx'), /css:pageCss\(\)/)
-  assert.match(fn(BM, 'sheetCtx'), /cells:packSheet\(items, get\)/, 'the same grid the screen packs')
-  assert.match(fn(BM, 'renderStructured'), /packed=packSheet\(layoutItems\(\), get\)/, 'the screen packs it the same way, meta row first')
+  assert.match(fn(BM, 'sheetCtx'), /cells:layoutPack\(items\)/, 'the same grid the screen packs')
+  assert.match(fn(BM, 'renderStructured'), /packed=layoutPack\(layoutItems\(\)\)/, 'the screen packs it the same way, the layout’s order and widths')
   assert.match(fn(BM, 'sheetMeasure'), /width:794px;visibility:hidden/, 'measured A4 wide, in this page (a frame in a sandboxed app cannot be read)')
   assert.doesNotMatch(fn(BM, 'sheetMeasure'), /iframe/)
   // A phone's rules shape the screen's sheet only, never the printed one or its probe.
@@ -2644,48 +2651,68 @@ test('a sign-in id reads as the person’s name on a source card', () => {
   assert.equal(f.nameOfId('ana-maria'), 'ana maria')
 })
 
-test('the brief sheet opens with the mock’s meta row: Client, Project, Budget & scope, Version, four cells across', () => {
-  const S = lift<{ packSheet(items: { key: string; sec: string; w: number }[]): { key?: string; version?: boolean; col: number; row: number; w: number }[] }>(
-    BM, ['packSheet', 'isMeta', 'metaLong', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], META_SHORT: 40, GRID_COLS: 12 })
-  const out = S.packSheet([
-    { key: 'project_name', sec: 'Identity', w: 6 }, { key: 'client', sec: 'Identity', w: 6 }, { key: 'job', sec: 'The brief', w: 12 },
-    { key: 'budget_and_scope', sec: 'Execution', w: 12 },
-  ])
-  const top = out.filter(c => c.row === 1)
-  assert.deepEqual(top.map(c => c.key ?? (c.version ? 'version' : '?')), ['client', 'project_name', 'budget_and_scope', 'version'])
-  assert.deepEqual(top.map(c => [c.col, c.w]), [[1, 3], [4, 3], [7, 3], [10, 3]])
-  assert.ok(out.filter(c => c.key === 'job').every(c => c.row > 1), 'every other part packs below it')
-  assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?'not given'/, 'an empty meta cell says “not given”')
+test('the brief opens with ruled form rows: Client, Project, Budget & scope, parts like any other, no Version, no card', () => {
+  const css = (sel: string) => { const m = BM.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{([^}]*)\\}')); assert.ok(m, `a rule for ${sel}`); return m![1] }
+  // A ruled row: the label in a ~92px margin, the value across the page; a hairline of ink between rows,
+  // and no card (no radius, fill or shadow).
+  const row = css('.sheet.a4 .pgrid > .row.k-cell')
+  assert.match(row, /display:grid;grid-template-columns:minmax\(60px,92px\) minmax\(0,1fr\)/)
+  assert.match(row, /border-top:1px solid var\(--line\)/)
+  assert.match(row, /border-radius:0;background-color:transparent;box-shadow:none/)
+  assert.match(css('.sheet.a4 .pgrid > .row.k-cell > .lab'), /grid-column:1/)
+  assert.match(BM, /\.sheet\.a4 \.pgrid > \.row\.k-cell > \.val,\.sheet\.a4 \.pgrid > \.row\.k-cell > \.edit\{grid-column:2\}/)
+  // The label in the sheet's mono label style, free to wrap; the value in the body type (no bold cell type).
+  assert.match(css('.sheet.a4 .pgrid > .row.k-cell .lab > span:first-child'), /var\(--font-mono\).*white-space:normal/)
+  assert.doesNotMatch(BM, /\.row\.k-cell \.val\{font-weight:600/)
+  // Selected: a highlighter's wash on the value and the ink tick, not the accent's rounded card.
+  assert.match(css('.sheet.a4 .pgrid > .row.k-cell.sel,.sheet.a4.frame-boxed .pgrid > .row.k-cell.sel'), /background-color:transparent;box-shadow:inset 2px 0 0 var\(--b-text\)/)
+  assert.match(css('.sheet.a4 .pgrid > .row.k-cell.sel > .val'), /background:color-mix\(in srgb,var\(--clf-hl,var\(--rs-hl,#F6E36B\)\) 45%,transparent\)/)
+  // Empty: "not given", muted italic.
+  assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?'not given'/, 'an empty header row says “not given”')
+  assert.match(fn(BM, 'sheetCells'), /isMeta\(f\.key\)\?'not given'/, 'in print too')
+  assert.match(css('.sheet.a4 .pgrid > .row.k-cell .val.empty'), /font-style:italic;font-weight:400;color:var\(--b-muted\)/)
+  // The header's parts are drawn as cells wherever the layout puts them.
+  assert.match(fn(BM, 'kindOf'), /\(f\.key==='project_name'\|\|f\.key==='client'\|\|f\.key==='budget_and_scope'\)\?'cell'/)
 })
 
-test('a long client or budget turns the meta row two by two; on screen a cell shows two lines, its whole text on hover and in the panel', () => {
-  type Cell = { key?: string; version?: boolean; col: number; row: number; w: number }
-  const S = lift<{ packSheet(items: { key: string; sec: string; w: number }[], valOf?: (k: string) => unknown): Cell[] }>(
-    BM, ['packSheet', 'isMeta', 'metaLong', 'layoutPack'], { META_KEYS: ['client', 'project_name', 'budget_and_scope'], META_SHORT: 40, GRID_COLS: 12 })
-  const items = [{ key: 'client', sec: 'Identity', w: 6 }, { key: 'project_name', sec: 'Identity', w: 6 }, { key: 'budget_and_scope', sec: 'Execution', w: 12 }, { key: 'job', sec: 'The brief', w: 12 }]
-  const name = (c: Cell) => c.key ?? (c.version ? 'version' : '?')
-  const isTop = (c: Cell) => c.version || ['client', 'project_name', 'budget_and_scope'].includes(c.key ?? '')
-  const meta = (out: Cell[]) => out.filter(isTop).map(c => [name(c), c.col, c.row, c.w])
-  // Short values (the mock's): four cells across row 1.
-  const short = S.packSheet(items, k => ({ client: "McDonald's Ireland", project_name: 'Summer McFlurry', budget_and_scope: '€140k prod · OOH, Social, Film' } as Record<string, string>)[k])
-  assert.deepEqual(meta(short), [['client', 1, 1, 3], ['project_name', 4, 1, 3], ['budget_and_scope', 7, 1, 3], ['version', 10, 1, 3]])
-  assert.ok(short.filter(c => !isTop(c)).every(c => c.row >= 2), 'the parts pack below row 1')
-  // One long value (the owner's "Going For One"): two by two, each half the sheet; the parts start below.
-  const long = S.packSheet(items, k => (k === 'budget_and_scope' ? '€140k production budget. Activity runs June to August. Proposed deliverables, to confirm: a social-first video series' : 'Going For One'))
-  assert.deepEqual(meta(long), [['client', 1, 1, 6], ['project_name', 7, 1, 6], ['budget_and_scope', 1, 2, 6], ['version', 7, 2, 6]])
-  assert.ok(long.filter(c => !isTop(c)).every(c => c.row >= 3), 'the parts pack below both meta rows')
-  // A part the client copy leaves out does not count, and no value reader keeps the mock's row.
-  assert.deepEqual(meta(S.packSheet(items)).map(c => c[3]), [3, 3, 3, 3])
-  assert.deepEqual(meta(S.packSheet(items.filter(i => i.key !== 'budget_and_scope'), k => (k === 'budget_and_scope' ? 'x'.repeat(200) : 'ok'))), [['client', 1, 1, 3], ['project_name', 4, 1, 3], ['version', 7, 1, 3]])
+test('the header’s rows move and resize like every other part; the version is the side tab’s, not the sheet’s', () => {
+  // No 2×2 packing and no fixed meta row: the sheet is the layout's grid, on screen and in print.
+  for (const gone of ['function packSheet', 'function metaLong', 'META_SHORT', 'meta-version', 'versionLine', 'p.meta', "<span>Version</span>"]) assert.ok(!BM.includes(gone), `${gone} is gone`)
+  // The grip, the right edge, and Place on page (width, up and down) are on every part.
+  assert.match(fn(BM, 'placeRow'), /if\(!docLocked\(\)\)\{\s*var g=document\.createElement\('button'\); g\.type='button'; g\.className='grip'/)
+  assert.match(fn(BM, 'renderSelPart'), /\+\(!docLocked\(\)\?'<details class="sp-l"/)
+  assert.doesNotMatch(fn(BM, 'layoutStep'), /isMeta|meta\(/)
+  // A moved or resized header part is saved in layout.parts like the others and read back in place.
+  const L = lay()
+  const moved = L.layoutResize(L.layoutMove(L.layoutOrder(BM_FIELDS, undefined), 'budget_and_scope', 'tone_and_world', true), 'client', 6)
+  const back = L.layoutOrder(BM_FIELDS, L.layoutParts(moved))
+  assert.deepEqual(keysOf(back), keysOf(moved))
+  assert.equal(back.find(x => x.key === 'client')!.w, 6)
+  const k = keysOf(back)
+  assert.equal(k.indexOf('budget_and_scope'), k.indexOf('tone_and_world') + 1)
+  // The version reads in the side tab's state line: "v1 · edited …", or "v2 · locked by …".
+  assert.match(fn(BM, 'renderStateLine'), /var v=docVersion\(\)/)
+  assert.match(fn(BM, 'renderStateLine'), /\[v, 'locked by '\+who/)
+  assert.match(fn(BM, 'renderStateLine'), /\[v, w\?'edited '\+agoWords\(w\):''\]/)
+  // The title line (the document's header, not a part) keeps the version.
+  assert.match(fn(BM, 'sheetCtx'), /meta:\[clientName\(\), docVersion\(\), fmtDay\(lastWhen\(\)\)\]/)
+})
+
+test('a long header row shows two lines on screen, clamped on the clan-field’s button; the panel and print keep every word', () => {
   // The screen clamp reaches the words: the clan-field's button (its own formatting context) and a plain
-  // value; it is screen-only and never on the printed page, which keeps every word.
+  // value; it is screen-only and never on the printed page (.page), which keeps every word.
   const clamp = /@media screen\{\s*\.sheet\.a4:not\(\.page\) \.pgrid > \.row\.k-cell \.val:not\(:has\(\.clf\)\),\s*\.sheet\.a4:not\(\.page\) \.pgrid > \.row\.k-cell \.val \.clf\.txt-f\{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;/
   assert.match(BM, clamp)
-  // The whole text: the cell's tooltip, and the Selected part panel when the cell is long.
+  assert.equal((BM.match(/k-cell[^{}]*\{[^}]*line-clamp/g) || []).length, 1, 'the one clamp on a header row, the screen’s')
+  assert.doesNotMatch(BM, /\.a4\.page[^{}]*k-cell[^{}]*\{[^}]*line-clamp/, 'no clamp on the printed sheet')
+  // The whole text: the row's tooltip, and the Selected part panel when the row is clicked.
   assert.match(fn(BM, 'fieldRow'), /isMeta\(f\.key\)\?' title="'\+esc\(String\(v\)\)/)
-  assert.match(fn(BM, 'renderSelPart'), /isMeta\(f\.key\)&&metaLong\(\[f\.key\], get\)\?'<p class="sp-full">'/)
-  // Version's cell keeps its top rule on the second row of the 2×2.
-  assert.match(fn(BM, 'sheetCells'), /k-cell'\+\(c\.row===1\?' r1':''\)/)
+  assert.match(fn(BM, 'renderSelPart'), /isMeta\(f\.key\)&&hasVal\(get\(f\.key\)\)\?'<p class="sp-full">'/)
+  // Print draws the same ruled rows from the same parts (kindOf), with every word and no Version row.
+  assert.match(fn(BM, 'sheetCells'), /'<div class="row k-'\+kindOf\(f\)/)
+  assert.doesNotMatch(fn(BM, 'sheetCells'), /c\.version/)
+  // The client copy leaves a confidential header part out like any other.
+  assert.match(fn(BM, 'sheetItems'), /copy!=='client'\|\|c\.indexOf\(it\.key\)===-1/)
 })
 
 test('a selected line of the report lights as the mock’s claim: the headline, a summary line and a paragraph alike, no grey block, no box', () => {
