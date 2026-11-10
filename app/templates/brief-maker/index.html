@@ -1032,8 +1032,12 @@
   .sp-line .rsp-k em{margin-left:auto;font-style:normal;font-weight:500;letter-spacing:.02em;text-transform:none}
   .side-part .sp-full{margin:6px 0 10px;font:400 13.5px/1.5 var(--font-ui);color:var(--nd-ink2,var(--nd-ink));white-space:pre-line;overflow-wrap:anywhere}
   /* Where it came from (ClanFields.partView), in the shell's tokens, light and dark */
-  .selpart .clf-rv{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper);--clf-mono:var(--font-mono)}
-  :root[data-color-scheme="dark"] .selpart .clf-rv{--clf-paper:var(--nd-card)}
+  .selpart .clf-rv,.selpart .clf-insp{--clf-ink:var(--nd-ink);--clf-ink2:var(--nd-ink-soft,var(--nd-ink));--clf-ink3:var(--nd-muted);--clf-line:var(--nd-line);--clf-line2:var(--nd-line);--clf-paper:var(--nd-paper);--clf-mono:var(--font-mono)}
+  :root[data-color-scheme="dark"] .selpart .clf-rv,:root[data-color-scheme="dark"] .selpart .clf-insp{--clf-paper:var(--nd-card)}
+  /* Where something came from, in the Selected part panel (ClanFields.setPanelHost): the inspector's trail and view */
+  .selpart .clf-insp{background:var(--nd-card);--clf-soft:color-mix(in srgb,var(--nd-ink) 5%,var(--nd-card))}
+  .selpart .clf-insp .clf-rv{min-width:0;max-width:100%}
+  .selpart .clf-insp .clf-rv .rv-title{font-size:17px}
   .sp-line .clf-rv .rv-title{font-size:15px;margin:0}
   .sp-head .rv-pname{font:700 14px var(--font-ui);letter-spacing:-.01em;color:var(--nd-ink)}
   .sp-head .rv-meta{margin:0}
@@ -1096,12 +1100,12 @@
   #structured .b-reopen{font-size:12.5px}
   #structured .side-part .sp-acts button.sp-conf[aria-pressed="true"]::before{content:"● ";white-space:pre}
   .sheet.a4 .pgrid > .row.conf{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,#C9462A 9%,transparent) 7px 8px);box-shadow:inset 0 0 0 1px color-mix(in srgb,#C9462A 45%,transparent)}
+  .sheet.a4 .pgrid > .row.k-cell.conf{box-shadow:inset 2px 0 0 color-mix(in srgb,#C9462A 60%,transparent)}
+  .sheet.a4 .pgrid > .row.k-cell.conf.sel{box-shadow:inset 2px 0 0 var(--b-text)}
   .sheet.a4 .conftag{color:#C9462A;border-color:color-mix(in srgb,#C9462A 60%,transparent);opacity:1}
   .toast{background:#141413;color:#fff;border-radius:6px;font:500 13px var(--font-ui);padding:12px 18px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4)}
   .b-gate-l .lkitem .x{display:inline}
   #structured .sheettab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:16px}
-  .sheet.a4 .pgrid > .row.k-cell.conf{box-shadow:inset 2px 0 0 color-mix(in srgb,#C9462A 60%,transparent)}
-  .sheet.a4 .pgrid > .row.k-cell.conf.sel{box-shadow:inset 2px 0 0 var(--b-text)}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok,#structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   :root[data-color-scheme="dark"] #structured .b-state .pill.ok{color:#141413}
   /* a cell's value shows two lines at most on screen, its whole text in the row's tooltip and in the
@@ -1116,11 +1120,11 @@
   .sheet.a4 .pgrid > .row.k-cell .val.empty{font-style:italic;font-weight:400;color:var(--b-muted)}
   .side-link:disabled{opacity:.45;cursor:not-allowed;text-decoration-color:var(--nd-line)}
   .sheet.a4 .pgrid > .row.k-cell.needs::before{position:static;display:table;margin:0 0 8px}
+  .sheet.a4 .pgrid > .row.k-cell.needs,.sheet.a4 .pgrid > .row.k-cell.needs:hover{background-color:transparent;box-shadow:inset 2px 0 0 #B45309}
   .sheet.a4 .pgrid > .row.k-cell.needs .lab{padding-right:0}
   .sheet.a4 .pgrid > .row.k-cell.needs .ctrls{right:6px;top:40px}
   /* New brief lives in Continue in › Start fresh (gaps.md §7 L2) */
   #structured #newDraft{display:none}
-  .sheet.a4 .pgrid > .row.k-cell.needs,.sheet.a4 .pgrid > .row.k-cell.needs:hover{background-color:transparent;box-shadow:inset 2px 0 0 #B45309}
 
   /* ── The start, to the mock's prompt (design/new-ui/napkin-app-v1.html #brief-screen-prompt, its
      .app-head and phase 2 "Brief prompt: one sheet, one action"; gaps.md H2, §13): the tool's header
@@ -4277,6 +4281,8 @@
   // The part the side tab is showing (a click selects it; Escape or Done lets go).
   var SEL=null, SEL_ITEM=null;
   function select(key, item){
+    // Another part (or none) ends a look at where something came from.
+    if(PROV_INSPECT){ PROV_INSPECT=false; var F=OSF(); if(F&&F.closePanel) F.closePanel(true); }
     SEL=key||null; SEL_ITEM=SEL&&item!=null?item:null; markItem();
     document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
     var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
@@ -4373,13 +4379,14 @@
     }
     h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
   }
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&SEL&&!document.querySelector('#fields .edit')) select(null); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&!e.defaultPrevented&&SEL&&!document.querySelector('#fields .edit')) select(null); });
 
   // The selected part: what can be done to it, what it was built from, why it says it, and its place.
   var WIDTHS=[[4,'Third'],[6,'Half'],[8,'Two-thirds'],[12,'Full']];
   function renderSelPart(){
     var el=$('selPart'), f=SEL?fieldOf(SEL):null;
-    if(!el) return;
+    if(!el||PROV_INSPECT) return;   // the panel is showing where something came from
+
     if(!f||phase!=='doc'){ el.hidden=true; el.innerHTML=''; return; }
     var A=approveLocked(), kept=isLocked(f.key), conf=isConf(f.key), wr=canWrite(f.key), items=layoutItems(), at=layoutIndex(items,f.key), w=at>=0?items[at].w:GRID_COLS;
     var notes=notesHtml(f), qs=f.key==='open_questions'?openQs():[], ql=qs.filter(function(o){ return !o.kind; }).length;
@@ -4468,7 +4475,7 @@
     return layoutItems().map(function(it){ return it.key; }).filter(function(k2){ return also[k2]; }).map(function(k2){ var g=fieldOf(k2); return {key:k2, label:g?headOf(g):k2}; });
   }
   function renderProv(){
-    var b=$('spProv'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f) return;
+    var b=$('spProv'), f=SEL?fieldOf(SEL):null, F=OSF(); if(!b||!f||PROV_INSPECT) return;
     if(!(F&&F.partView)){ b.innerHTML='<p class="muted">Where this came from shows in the Napkin host.</p>'; return; }
     if(CHAIN.state==='idle') loadChain();
     var also=alsoOf(f), sig=f.key+'|'+((osView()||{}).version||'')+'|'+(osView()?1:0)+'|'+CHAIN.state+'|'+also.map(function(a){ return a.key; }).join(',')+'|'+JSON.stringify(get(f.key));
@@ -4477,6 +4484,31 @@
     F.partView(f.key, b, {panel:true, name:headOf(f), head:$('spHead'), also:also});
     b.querySelectorAll('[data-clf-part]').forEach(function(c){ c.addEventListener('click', function(){ goPart(c.getAttribute('data-clf-part')); }); });
   }
+  // Where something came from opens here, in the side tab, never in a drawer
+  // over the page (owner, 2026-11-10). ClanFields asks this panel first: a part
+  // of the brief (or a line of one) is selected, so its part view shows; a fact,
+  // source, your words or a passage takes the Selected part panel's body, with
+  // the trail "Budget & scope › Fact › Source", ← back and ×. Done or × (ref null)
+  // brings the part back. Outside the sheet there is no panel: null, the drawer.
+  var PROV_INSPECT=false;
+  function provPartOf(ref){
+    var p=String(ref||''), m=/^(.+)\[(\d+)\]$/.exec(p), f=m?fieldOf(m[1]):null;
+    if(f&&f.type==='list') return {key:f.key, item:+m[2]};
+    f=FIELDS.filter(function(x){ return x.key===p||p.indexOf(x.key+'.')===0; })[0];
+    return f?{key:f.key, item:null}:null;
+  }
+  function provHost(ref, kind){
+    if(ref==null){ if(PROV_INSPECT){ PROV_INSPECT=false; renderSelPart(); } return null; }
+    var el=$('selPart'); if(phase!=='doc'||!el) return null;
+    if(kind==='path'||kind==='item'){
+      var at=provPartOf(ref);
+      if(at){ PROV_INSPECT=false; if(SEL!==at.key||SEL_ITEM!==at.item) select(at.key, at.item); else renderSelPart(); return true; }
+    }
+    var f=SEL?fieldOf(SEL):null;
+    PROV_INSPECT=true; el.hidden=false; el.removeAttribute('data-sig');
+    return {el:el, root:f?headOf(f):'Brief'};
+  }
+  (function(){ var F=OSF(); if(F&&F.setPanelHost) F.setPanelHost(provHost); })();
   // Select a part and bring it into view (Also used in's chips).
   function goPart(key){
     select(key); var r=rowOf(key); if(!r) return;

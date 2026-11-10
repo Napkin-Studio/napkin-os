@@ -489,6 +489,37 @@ clan-chart .clf-chart{cursor:pointer}
 .clf-rv .rv-more[open] > summary{display:none}
 @media (max-width:620px){.clf-rv .rv-pins td.v{white-space:normal}}
 .clf-drawer .clf-rv{padding-top:4px}
+/* The side panel's inspector (setPanelHost): the research inspector's bar, ← back, the trail, ×. */
+.clf-insp{display:grid;gap:0;min-width:0;color:var(--clf-ink);font-size:13.5px;line-height:1.5}
+.clf-ibar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;padding:0 0 10px;margin:0 0 12px;border-bottom:1px solid var(--clf-line2);background:inherit}
+.clf-ibtn{width:28px;height:28px;flex:0 0 auto;border-radius:6px;border:1px solid var(--clf-line);background:var(--clf-paper);color:var(--clf-ink);cursor:pointer;font:600 14px/1 inherit;display:grid;place-items:center;padding:0}
+.clf-ibtn:hover{border-color:var(--clf-ink)}
+.clf-ibtn:focus-visible,.clf-crumbs button:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-crumbs{flex:1 1 0%;min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden;white-space:nowrap;font:11.5px var(--clf-mono);color:var(--clf-ink3)}
+.clf-crumbs button{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.clf-crumbs button:hover{color:var(--clf-ink);text-decoration:underline}
+.clf-crumbs b{color:var(--clf-ink);font-weight:650}
+.clf-crumbs > span{flex:none}
+.clf-insp-b{display:grid;gap:16px;align-content:start;min-width:0}
+.clf-insp-b .clf-dv .stmt{font-size:16px}
+/* The answers under a view, in the inspector's size: its section heads, compact buttons in a row. */
+.clf-insp-b .clf-sec{border-top:1px solid var(--clf-line2);padding-top:12px}
+.clf-insp-b .clf-sec > h3,.clf-insp-b .clf-sec > h3.ask{font:700 10.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-insp-b .clf-answers{display:flex;flex-wrap:wrap;gap:6px}
+.clf-insp-b .clf-btn.big{min-height:30px;padding:5px 11px;font-size:12.5px;font-weight:600;border-width:1px;border-radius:6px;white-space:nowrap}
+.clf-insp-b .clf-btn.big:hover:not([disabled]){box-shadow:none;border-color:var(--clf-ink)}
+.clf-insp-b .clf-btn.big.quiet{border-color:var(--clf-line)}
+.clf-insp-b .clf-ex,.clf-insp-b .clf-muted{font-size:12px;line-height:1.45;color:var(--clf-ink3)}
+.clf-insp-b .clf-answers + .clf-answers{margin-top:2px}
+.clf-rv .rv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin:0}
+.clf-rv .rv-grid > div{min-width:0}
+.clf-rv .rv-grid > div.w{grid-column:1 / -1}
+.clf-rv .rv-grid dt{font:700 9.5px var(--clf-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--clf-ink3)}
+.clf-rv .rv-grid dd{margin:2px 0 0;font-size:12.5px;color:var(--clf-ink);overflow-wrap:anywhere}
+.clf-rv .rv-grid a{color:var(--clf-ink)}
+.clf-rv .rv-dot{width:8px;height:8px;border-radius:50%;background:var(--clf-create);flex:none}
+.clf-rv .rv-sq{width:8px;height:8px;background:var(--clf-ink);flex:none}
+.clf-rv .rv-q mark{background:color-mix(in srgb,var(--clf-hl,#FFE45C) 70%,transparent);color:inherit;padding:0 1px}
 /* On a phone a long publisher breaks rather than push the column past the card. */
 @media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
   .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
@@ -526,6 +557,9 @@ var NapkinAgency=(function(){
 var ClanFields=(function(){
   var SCHEME=(navigator.userAgent.indexOf('Windows')!==-1)?'http://clan.localhost':'clan://localhost';
   var VIEW=null, STACK=[], DRAWER=null, EDIT=false;
+  // The app's side panel, when it has one (ClanFields.setPanelHost), and the
+  // inspector open in it: provenance opens there, never in the drawer.
+  var PANEL=null, SURF=null;
   var TICK='<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>';
   var LOCK='<svg class="clf-lock" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>';
 
@@ -1562,8 +1596,55 @@ var ClanFields=(function(){
     return DRAWER;
   }
   function toast(msg){ var t=ensureDrawer().toast; t.textContent=msg; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(function(){ t.classList.remove('on'); },2600); }
-  function open(ref,push,note){ ensureDrawer(); if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); DRAWER.el.classList.add('on'); DRAWER.el.setAttribute('aria-hidden','false'); DRAWER.scrim.classList.add('on'); setTimeout(function(){ DRAWER.el.querySelector('[data-clf="close"]').focus(); },50); }
-  function close(){ if(!DRAWER) return; DRAWER.el.classList.remove('on'); DRAWER.el.setAttribute('aria-hidden','true'); DRAWER.scrim.classList.remove('on'); STACK=[]; }
+  // open(ref, push, note): where `ref` came from. A page with its own side panel
+  // (setPanelHost) shows it there, with the inspector's trail; any other page,
+  // in the drawer. A push opens it from the view already showing, one step on.
+  function open(ref,push,note){
+    if(PANEL&&!(push&&SURF&&kindOf(ref)!=='path')){
+      var r=PANEL(ref,kindOf(ref));
+      // The app showed it itself (a part of its own: its panel's part view).
+      if(r===true){ SURF=null; STACK=[]; return; }
+      if(r&&r.el){ if(DRAWER&&DRAWER.el.classList.contains('on')){ SURF=null; close(); } mountSurf(r.el,r.root); push=false; }
+      else SURF=null;
+    }
+    if(SURF){ if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); return; }
+    ensureDrawer(); if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); DRAWER.el.classList.add('on'); DRAWER.el.setAttribute('aria-hidden','false'); DRAWER.scrim.classList.add('on'); setTimeout(function(){ DRAWER.el.querySelector('[data-clf="close"]').focus(); },50); }
+  // Done, or ×: the panel goes back to the app's own view (quiet: the app is
+  // already drawing something else there).
+  function close(quiet){
+    if(SURF){ SURF=null; STACK=[]; if(PANEL&&!quiet) PANEL(null); return; }
+    if(!DRAWER) return; DRAWER.el.classList.remove('on'); DRAWER.el.setAttribute('aria-hidden','true'); DRAWER.scrim.classList.remove('on'); STACK=[]; }
+  // Whichever is showing a view: the panel's inspector, else the drawer.
+  function surf(){ return SURF||DRAWER; }
+  function inSurf(n){ var x=surf(); return !!(x&&x.el&&n&&x.el.contains(n)); }
+  function showing(){ return !!SURF||!!(DRAWER&&DRAWER.el.classList.contains('on')); }
+  // ── the side panel's inspector ─────────────────────────────────────
+  // The research inspector's bar (rb-ibar), shared: ← back, the trail
+  // root › … › where you are, and ×. trail is [{label, title}], oldest first.
+  function crumbsHTML(root,trail){
+    trail=arr(trail); var n=trail.length;
+    return '<div class="clf-ibar"><button type="button" class="clf-ibtn back" data-clf="back" title="'+(n>1?'Back':esc('Back to '+(root||'the page')))+'" aria-label="Back">←</button>'
+      +'<nav class="clf-crumbs" aria-label="Trail">'+(root?'<button type="button" class="clf-root" data-clf-crumb="-1" title="'+esc(root)+'">'+esc(clip(root,34))+'</button>':'')
+      +trail.map(function(c,i){ var last=i===n-1; return (root||i?'<span aria-hidden="true">›</span>':'')+'<button type="button" data-clf-crumb="'+i+'"'+(last?' aria-current="true"':'')+' title="'+esc(c.title||c.label)+'">'+(last?'<b>':'')+esc(clip(c.label,28))+(last?'</b>':'')+'</button>'; }).join('')
+      +'</nav><button type="button" class="clf-ibtn" data-clf="close" title="Close (Esc)" aria-label="Close">×</button></div>';
+  }
+  // A crumb names what a ref is, as the trail reads: Budget & scope › Fact › Source.
+  var CRUMB_WORD={pin:'Fact', finding:'Point', source:'Source', capture:'Your words', passage:'Library passage', material:'File', contest:'Disagreement', gap:'Gap', cite:'Sources', answer:'Summary', line:'Line', item:'Line', chart:'Chart'};
+  function crumbWord(ref){ var k=kindOf(ref); return k==='path'?words(ref):CRUMB_WORD[k]||'Needs a person'; }
+  function trailOf(){ return STACK.map(function(s){ return {label:crumbWord(s.ref), title:named(s.ref)||crumbWord(s.ref)}; }); }
+  function mountSurf(el,root){
+    el.innerHTML='<div class="clf-insp" role="region" aria-label="Where this came from"><div class="clf-insp-bar"></div><div class="clf-insp-b"></div></div>';
+    var box=el.querySelector('.clf-insp');
+    box.addEventListener('click',onSurfClick); box.addEventListener('submit',onDrawerSubmit);
+    SURF={el:box, host:el, root:root||'', bar:box.querySelector('.clf-insp-bar'), body:box.querySelector('.clf-insp-b')};
+  }
+  function onSurfClick(e){
+    var c=e.target.closest&&e.target.closest('[data-clf-crumb]');
+    if(c){ e.preventDefault(); var i=+c.getAttribute('data-clf-crumb');
+      if(i<0) close(); else if(i<STACK.length-1){ STACK.length=i+1; draw(); }
+      return; }
+    onDrawerClick(e);
+  }
   function top(){ return STACK[STACK.length-1]||{}; }
   function locked(){ return !!lockDecision(); }
 
@@ -1938,21 +2019,101 @@ var ClanFields=(function(){
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it as it is</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
       +'<p class="clf-muted">Your reason is kept with it, and the doubt is marked answered.</p></form>';
   }
+  // ── the inspector's views of a fact, a source, your words, a passage and a
+  // file (the research inspector's pin and source cards, in .clf-rv): what it
+  // is, where it says so, and what rests on it. Each link opens one step on.
+  function rvGrid(rows){ rows=rows.filter(function(x){ return x&&x[1]; }); return rows.length?'<dl class="rv-grid">'+rows.map(function(x){ return '<div'+(x[2]?' class="w"':'')+'><dt>'+esc(x[0])+'</dt><dd>'+(x[2]?x[1]:esc(x[1]))+'</dd></div>'; }).join('')+'</dl>':''; }
+  function rvLink(uri){ return /^https?:\/\//.test(uri||'')?'<a href="'+esc(uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clip(String(uri).replace(/^https?:\/\//,''),48))+' ↗</a>':''; }
+  function rvQuote(q,p){ return quoteBlock(q,p).replace('class="clf-q said"','class="rv-q"'); }
+  function restsOn(id){ var F=findings(); return Object.keys(F).filter(function(f){ return arr(F[f].cites).indexOf(id)!==-1; }); }
+  function viewPin(id){
+    var p=pins()[id]; if(!p) return '<p class="rv-none">This fact is no longer in the document.</p>';
+    var st=stateOf(id), s=srcOf(p), byPerson=s&&s.rec&&s.rec.tier==='reviewer-verified', lv=pinLv(p);
+    var pill=st==='contest'?'<span class="rv-pill warn">Sources disagree</span>':st==='rejected'?'<span class="rv-pill bad">Marked wrong</span>':st==='replaced'||st==='superseded'?'<span class="rv-pill mute">Replaced</span>'
+      :byPerson||st==='verified'?'<span class="rv-pill ok">Checked</span>':p.stale?'<span class="rv-pill warn">Out of date</span>':lvPill({lv:lv});
+    var h='<div class="rv-head"><span class="rv-kind"><span class="rv-dot" aria-hidden="true"></span>Fact'+(p.market?' · '+esc(country(p.market)):'')+'</span>'+pill+'</div>'
+      +'<p class="rv-title">'+(confidential(id)?LOCK:'')+esc(fmt(p))+'</p>'
+      +'<p class="rv-meta"><span>'+esc(label(p))+'</span>'+(p.as_of?'<span>as of '+esc(plainDate(p.as_of))+'</span>':'')+'</p>';
+    var qs=obj(p.quotes), srcs=arr(p.sources).filter(function(x){ return /^src_|^human:/.test(x); });
+    if(!srcs.length) h+=sec('Where it says so','<p class="rv-none">No source was saved for this.</p>');
+    srcs.forEach(function(sid){ var q=qs[sid], rec=sources()[sid], person=rec&&rec.tier==='reviewer-verified', you=person&&isYou(whoOfSrc(rec));
+      var cap=/^human:/.test(sid)?'<p class="rv-src">checked by '+esc(personName(sid))+'</p>':'<p class="rv-src">'+srcBits({id:sid, rec:rec})+'</p>';
+      h+=sec(q?(person?(you?'What you said':'What they said'):'What the source says'):'The source','<div class="pv-said">'+(q?(person?pvQuote(saidBy(q,rec),600):rvQuote(q,p)):'')+cap+'</div>'); });
+    h+=sec('Confidence','<p>'+confBars(lv)+' <b>'+esc(lvWord(lv))+'</b>'+(p.confidence==='low'?': the agents are not very sure of it.':'.')+'</p>');
+    var fis=restsOn(id);
+    if(fis.length) h+=sec('Points that rest on it','<div class="rv-uses">'+fis.map(function(i){ var f=findings()[i]; return '<div class="rv-use"><span>'+fChip(i)+'</span>'+esc(f.statement)+' '+stPill(f)+'</div>'; }).join('')+'</div>',String(fis.length));
+    return h;
+  }
+  function viewSource(sid){
+    var s=sources()[sid]; if(!s) return '<p class="rv-none">We no longer have the details of this source: it was saved before sources were kept with the document.</p>';
+    var P=pins(), used=Object.keys(P).filter(function(x){ return arr(P[x].sources).indexOf(sid)!==-1; }), reach=uniq([].concat.apply([],used.map(restsOn)));
+    var person=s.tier==='reviewer-verified', who=person?personName(whoOfSrc(s)):'';
+    var h='<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>Source'+(s.tier?' · '+esc(tierWord(s.tier)):'')+'</span>'+(person?'<span class="rv-pill ok">A person</span>':'<span class="rv-pill ok">Read'+(used.length?' · pinned':'')+'</span>')+'</div>'
+      +'<p class="rv-title">'+esc(person?(/correct/.test(s.title||'')?'Corrected':'Checked')+' by '+who:pubName(s.publisher)||s.domain||'A source')+'</p>'
+      +(s.title&&!person?'<p class="rv-meta"><span>'+esc(s.title)+'</span></p>':'');
+    h+=sec('About it',rvGrid([['Published',s.published_at?monthYear(s.published_at):''],['Read',s.retrieved_at?dayMonth(s.retrieved_at,true):''],['Domain',s.domain||''],['Licence',s.licence||''],['Link',rvLink(s.uri),1]])||'<p class="rv-none">Nothing more was kept about it.</p>');
+    if(used.length) h+=sec('What we took from it','<table class="rv-pins"><tbody>'+used.map(pvPinRow).join('')+'</tbody></table>',plural(used.length,'fact'));
+    if(reach.length) h+=sec('Reaches','<div class="rv-uses"><div class="rv-use"><span>Points</span>'+reach.map(fChip).join(' ')+'</div></div>');
+    return h;
+  }
+  function viewCapture(id){
+    var ci=captures()[id], m=ci&&materials()[ci.material_id]; if(!ci) return '<p class="rv-none">This is no longer in the document.</p>';
+    var as=ci.status==='assumption';
+    return '<div class="rv-head"><span class="rv-kind"><span class="rv-dot" aria-hidden="true"></span>Your words</span>'+(as?'<span class="rv-pill warn">Assumed</span>':'<span class="rv-pill ok">The words match</span>')+'</div>'
+      +'<p class="rv-title">'+esc(textOf(ci.value))+'</p>'+(ci.key?'<p class="rv-meta"><span>'+esc(words(ci.key))+'</span></p>':'')
+      +sec(as?'Assumed, not said':'What your material says','<div class="pv-said">'+(ci.quote?pvQuote(ci.quote,600):'')+(ci.material_id?pvCap(ci.material_id,m?matCap(m):'no longer in the document'):'')+'</div>'
+        +(as?'<p class="rv-none">Your material does not say this in so many words: the agents assumed it.</p>':''));
+  }
+  function viewPassage(id){
+    var pg=passages()[id]; if(!pg) return '<p class="rv-none">This passage is no longer in the document.</p>';
+    return '<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>Library passage</span><span class="rv-pill mute">An example</span></div>'
+      +'<p class="rv-title">'+esc(pg.citation||pg.section||'A passage')+'</p>'
+      +(pg.text?sec('What it says','<div class="pv-said">'+pvQuote(pg.text,600)+'</div>'):'')
+      +sec('About it',rvGrid([['From',pg.source||''],['Section',pg.section||''],['Pack',pg.pack?pg.pack+(pg.pack_version?' · '+pg.pack_version:''):''],['Whose library',scopeWord(pg.scope)],['Licence',pg.licence||''],['Read',pg.retrieved_at?dayMonth(pg.retrieved_at,true):''],['Link',rvLink(pg.uri),1]]))
+      +'<p class="rv-none" style="margin-top:10px">A passage is an example the agents learned from, not evidence about this client.</p>';
+  }
+  function viewMaterial(id){
+    var mt=materials()[id]; if(!mt) return '<p class="rv-none">This file is no longer in the document.</p>';
+    var tr=obj(mt.transcribed), said=mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text;
+    return '<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>'+(mt.kind==='prompt'?'Your prompt':'File')+'</span>'+(confidential(id)?'<span class="rv-pill mute">Private</span>':'')+'</div>'
+      +'<p class="rv-title">'+(confidential(id)?LOCK:'')+esc(mt.kind==='prompt'?'What you asked for':mt.name||'A file')+'</p>'
+      +'<p class="rv-meta"><span>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</span></p>'
+      +(said?sec('What it says','<div class="pv-said">'+pvQuote(mt.text,600)+'</div>'):'')
+      +sec('About it',rvGrid([['Arrived',mt.received_at?dayMonth(mt.received_at,true):''],['Read',mt.unread?'Nothing in it could be read':tr.model?'Read from the image by an agent':'Yes'],['Licence',mt.licence||'']]));
+  }
+  var PANEL_VIEW={pin:viewPin, source:viewSource, capture:viewCapture, passage:viewPassage, material:viewMaterial};
+  // The view's name: the drawer's title, or the panel's trail.
+  function setCrumb(t){ if(SURF) SURF.bar.innerHTML=crumbsHTML(SURF.root,trailOf()); else DRAWER.crumb.textContent=t; }
   function draw(){
     var t=top(), ref=t.ref, k=kindOf(ref), b='', crumb='Where this came from', L=locked();
-    DRAWER.back.hidden=STACK.length<2;
+    var S=surf(), P=!!SURF;
+    if(!P) S.back.hidden=STACK.length<2;
     // Something carried over that nothing here can settle, and has no page
     // of its own here: what it is, and "Set aside, with a reason".
     var ca=carriedAt(ref), sa=!ca.length&&setAsideOf(ref);
     if((ca.length||sa)&&(!k||(k==='path'&&valueAt(ref)==null))){
-      DRAWER.crumb.textContent='Carried over'; DRAWER.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
+      setCrumb('Carried over'); S.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
     if(t.note) b+='<p class="clf-err" style="background:var(--clf-soft);color:var(--clf-ink2)">'+esc(t.note)+'</p>';
-    var cref=cardRef(ref,k); if(cref) b+='<div class="clf-sc-slot"></div>';
+    var cref=cardRef(ref,k); if(cref&&!(P&&PANEL_VIEW[k])) b+='<div class="clf-sc-slot"></div>';
     if(LINE_KINDS[k]){
       crumb=k==='answer'?'How the summary was formed':k==='line'?'Where this line came from':k==='chart'?'What this chart shows':'Where this line came from';
-      DRAWER.crumb.textContent=crumb; DRAWER.body.innerHTML=b+'<div class="clf-rich"></div>'; richCard(ref,DRAWER.body.querySelector('.clf-rich')); return;
+      setCrumb(crumb); S.body.innerHTML=b+'<div class="clf-rich"></div>'; richCard(ref,S.body.querySelector('.clf-rich')); return;
     }
-    if(k==='pin'){
+    // In the panel a fact, source, capture, passage or file is the inspector's
+    // own view (the research inspector's grammar); its answers follow it.
+    if(P&&PANEL_VIEW[k]){
+      b+='<div class="clf-rv" data-card="'+esc(ref)+'">'+PANEL_VIEW[k](ref)+'</div>';
+      var pp=k==='pin'&&pins()[ref];
+      if(pp){
+        if(pp.replaced_by) b+='<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(pp.replaced_by.fact_id)+'"><span>Now replaced by<small>a person picked another value</small></span><b>'+esc(fmt(pins()[pp.replaced_by.fact_id]))+'</b></button></div>';
+        var poc=openContestOf(ref); if(poc) b+='<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(poc.id)+'"><span>Another source says something else<small>pick one before you lock it</small></span><b>'+arr(poc.values).map(fmt).map(esc).join(' or ')+'</b></button></div>';
+        var pwb=wrongBlock(ref);
+        if(pwb) b+=pwb;
+        else if(!L&&!pp.replaced_by) b+=(t.fix?correctForm(ref,pp):'')+'<div class="clf-sec" data-clf-anchor><h3 class="ask">Is this right?</h3><div class="clf-answers"><button type="button" class="clf-btn big primary" data-clf="good">Yes, this is right</button><button type="button" class="clf-btn big" data-clf="bad">No, this is wrong</button><button type="button" class="clf-btn big quiet" data-clf="fix">Change it to the right value</button></div>'+privBlock()+'</div>';
+        b+=history('facts['+ref+']');
+      }
+      if(k==='material'&&materials()[ref]){ if(!L) b+='<div class="clf-sec" data-clf-anchor>'+privBlock()+'</div>'; b+=history('materials['+ref+']'); }
+    } else if(k==='pin'){
       var p=pins()[ref];
       if(!p){ b+=gone(); }
       else {
@@ -2047,7 +2208,7 @@ var ClanFields=(function(){
       if(!env) b+='<div class="clf-rv pv" data-card="'+esc(ref)+'">'+partHTML(ref)+'</div>';
       b+=proposalBlock(ref)+verdictBlock(ref);
       if(ca.length) b+='<div class="clf-sec">'+carriedBlock(ca)+'</div>';
-      if(canEdit(ref)&&editableValue(v)) b+=L?'<p class="clf-muted">It is open for the client’s change: tap it to change it.</p>':'<p class="clf-muted">To change it, choose <b>Edit</b> under More at the top, then tap it.</p>';
+      if(!P&&canEdit(ref)&&editableValue(v)) b+=L?'<p class="clf-muted">It is open for the client’s change: tap it to change it.</p>':'<p class="clf-muted">To change it, choose <b>Edit</b> under More at the top, then tap it.</p>';
       b+=history(ref);
     } else if(k==='cite'){
       b+='<div class="clf-rows">'+ref.slice(5).split(',').map(function(r){ var kk=kindOf(r), t='', v='';
@@ -2064,10 +2225,10 @@ var ClanFields=(function(){
     } else {
       crumb='Needs a person'; if(!t.note) b+='<p class="clf-muted">This needs a person to look at it.</p>';
     }
-    if(k&&k!=='source'&&k!=='cite') b+=wrote(ref);
-    DRAWER.crumb.textContent=crumb; DRAWER.body.innerHTML=b;
+    if(!P&&k&&k!=='source'&&k!=='cite') b+=wrote(ref);
+    setCrumb(crumb); S.body.innerHTML=b;
     // The source card's provenance at the top: the same renderer as inline.
-    var slot=cref&&DRAWER.body.querySelector('.clf-sc-slot');
+    var slot=cref&&S.body.querySelector('.clf-sc-slot');
     if(slot) card(cref,slot,true).then(function(c){ if(!c||c.kind==='unknown') slot.innerHTML=''; });
   }
   function showError(form,msg){ var e=form&&form.querySelector('.clf-err'); if(e){ e.textContent=msg; e.hidden=false; } else toast(msg); }
@@ -2095,22 +2256,23 @@ var ClanFields=(function(){
     if(w==='override'||w==='pathbad'){
       var host=a.closest('.clf-answers')||a, fb=document.createElement('div');
       fb.innerHTML=w==='override'?overrideForm(target):badForm(target); host.replaceWith(fb.firstChild);
-      var ta=DRAWER.body.querySelector('form[data-clf-form="'+(w==='override'?'override':'bad')+'"] textarea'); if(ta) ta.focus(); return; }
+      var ta=surf().body.querySelector('form[data-clf-form="'+(w==='override'?'override':'bad')+'"] textarea'); if(ta) ta.focus(); return; }
     if(w==='aside'){ var ah=a.closest('.clf-answers')||a, af=document.createElement('div'); af.innerHTML=asideForm(a.getAttribute('data-target')); ah.replaceWith(af.firstChild);
-      var at=DRAWER.body.querySelector('form[data-clf-form="aside"] textarea'); if(at) at.focus(); return; }
+      var at=surf().body.querySelector('form[data-clf-form="aside"] textarea'); if(at) at.focus(); return; }
     if(w==='useprop'){ var pb=blockOf(a.getAttribute('data-d')), ro=reopenedOf(ref); if(!pb) return;
       var ub={path:ref,value:pb.decision.proposed_value,rationale:'Used proposal '+pb.decision.id}; if(ro) ub.answers=ro.answers;
       act('/edit',ub,null,'Saved. The proposal is used.'); return; }
     if(w==='close') close();
-    else if(w==='back'){ STACK.pop(); draw(); }
+    // Back from the first step in the panel is back to the part.
+    else if(w==='back'){ if(SURF&&STACK.length<2) close(); else { STACK.pop(); draw(); } }
     else if(w==='redraw') draw();
-    else if(w==='fix'){ top().fix=true; draw(); var inp=DRAWER.body.querySelector('form[data-clf-form="correct"] input[name="value"]'); if(inp) inp.focus(); }
+    else if(w==='fix'){ top().fix=true; draw(); var inp=surf().body.querySelector('form[data-clf-form="correct"] input[name="value"]'); if(inp) inp.focus(); }
     else if(w==='good') act('/verdict',{target:target,polarity:'good',rationale:''},null,'Thanks. Saved as right.');
     else if(w==='bad'||w==='conf'){
       var box=document.createElement('div');
       box.innerHTML=w==='conf'?confForm(ref,target):badForm(target);
-      var anchor=DRAWER.body.querySelector('[data-clf-anchor]'); if(anchor) anchor.replaceWith(box.firstChild); else DRAWER.body.appendChild(box.firstChild);
-      var first=DRAWER.body.querySelector('form[data-clf-form="'+(w==='conf'?'classify':'bad')+'"] textarea'); if(first&&w==='bad') first.focus();
+      var anchor=surf().body.querySelector('[data-clf-anchor]'); if(anchor) anchor.replaceWith(box.firstChild); else surf().body.appendChild(box.firstChild);
+      var first=surf().body.querySelector('form[data-clf-form="'+(w==='conf'?'classify':'bad')+'"] textarea'); if(first&&w==='bad') first.focus();
     }
   }
   function onDrawerSubmit(e){
@@ -2517,12 +2679,12 @@ var ClanFields=(function(){
     if(w==='mark'){ if(!wantsParts()) return true; var m=MARKS[path]||{marked:false,words:''}; m.marked=!m.marked; if(!m.marked) m.words=''; MARKS[path]=m;
       postMark(path,m.marked,m.words); syncParts(); refocus(path,'mark'); return true; }
     if(w==='chip'){ OPEN_PART=OPEN_PART===path?null:path; syncParts(); refocus(path,'chip'); return true; }
-    if(w==='make'){ if(DRAWER&&DRAWER.el.contains(t)) close(); makeChange(path||(top().ref||''),t.getAttribute('data-answer'),t); return true; }
+    if(w==='make'){ if(inSurf(t)) close(); makeChange(path||(top().ref||''),t.getAttribute('data-answer'),t); return true; }
     if(w==='yes'||w==='no'){
       Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=true; });
       post('/client-review/confirm',{suggestion:t.getAttribute('data-s'),confirm:w==='yes'}).then(function(res){
         if(!res||!res.ok){ Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=false; }); toast(errorOf(res)||'That did not go through. Please try again.'); return; }
-        return loadView().then(function(){ refresh(); if(DRAWER&&DRAWER.el.classList.contains('on')) draw(); toast(w==='yes'?'Saved. That part has the client’s answer.':'Saved. Not that part.'); });
+        return loadView().then(function(){ refresh(); if(showing()&&STACK.length) draw(); toast(w==='yes'?'Saved. That part has the client’s answer.':'Saved. Not that part.'); });
       },function(){ Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=false; }); toast(OFFLINE); });
       return true; }
     return false;
@@ -2548,7 +2710,7 @@ var ClanFields=(function(){
     // A link inside a line's view: the app may show it itself (the research
     // inspector does, cancelling clan:cardgo); else it opens in the drawer.
     var cg=e.target.closest&&e.target.closest('[data-clf-go]');
-    if(cg){ e.preventDefault(); var gr=cg.getAttribute('data-clf-go'), inD=!!(DRAWER&&DRAWER.el.contains(cg));
+    if(cg){ e.preventDefault(); var gr=cg.getAttribute('data-clf-go'), inD=inSurf(cg);
       if(window.dispatchEvent(new CustomEvent('clan:cardgo',{cancelable:true, detail:{ref:gr, drawer:inD}}))) open(gr,inD&&STACK.length>0);
       return; }
     var ca=e.target.closest&&e.target.closest('[data-clf-act]');
@@ -2556,9 +2718,9 @@ var ClanFields=(function(){
     var cb=e.target.closest&&e.target.closest('[data-clf-sc]');
     if(cb){ e.preventDefault();
       if(cb.getAttribute('data-clf-sc')==='from') post('/open',{path:cb.getAttribute('data-path')});
-      else open(cb.getAttribute('data-ref'),!!(DRAWER&&DRAWER.el.contains(cb)&&STACK.length));
+      else open(cb.getAttribute('data-ref'),inSurf(cb)&&STACK.length>0);
       return; }
-    if(DRAWER&&DRAWER.el.contains(e.target)) return;
+    if(inSurf(e.target)) return;
     if(e.target.closest('.clf-part')) return; // a part's own controls
     if(EDIT&&!locked()){
       var tx=e.target.closest('[data-clan-text]');
@@ -2583,6 +2745,8 @@ var ClanFields=(function(){
     if(t.classList.contains('clf-titem')){ var el=document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'}); open(ref,false,kindOf(ref)&&kindOf(ref)!=='path'?'':t.getAttribute('data-note')); return; }
     open(ref);
   });
+  // Escape in the panel's inspector goes back to the part (the app sees it was handled).
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&SURF&&!e.defaultPrevented){ e.preventDefault(); close(); } });
   document.addEventListener('keydown',function(e){ var m=e.target.closest&&e.target.closest('.clf-chart .mark'); if(m&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); open(m.getAttribute('data-ref')); return; }
     // A line as a field takes Enter and Space as a click, as a button would.
     if(e.target.matches&&e.target.matches('clan-field.clf-ln')&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); e.target.click(); return; }
@@ -2654,6 +2818,14 @@ var ClanFields=(function(){
           // what kind of line it is: derived from its cites, never asked of a model.
           // A part's one provenance view (where-it-came-from): partView(ref, el, {panel, name, head, also}).
           partView:partView,
+          // A page with its own side panel shows provenance there, never in the drawer:
+          // setPanelHost(fn), fn(ref, kind) -> true (the app showed it itself), {el, root}
+          // (the inspector goes into el, its trail starting at root) or null (the drawer);
+          // fn(null) when the inspector closes. closePanel(quiet) closes it; inspecting() asks.
+          setPanelHost:function(fn){ PANEL=typeof fn==='function'?fn:null; if(!PANEL&&SURF) close(true); },
+          closePanel:function(quiet){ if(SURF) close(!!quiet); }, inspecting:function(){ return !!SURF; },
+          // The inspector's bar (← back, root › … › here, ×), for any app's own inspector.
+          crumbs:crumbsHTML,
           lineView:function(ref){ return viewOf(ref); }, lineKind:function(ref){ var l=lineOf(ref); return l?lineKind(l):null; }, named:named,
           // The parts this page declares for client review, as sent to the shell.
           parts:function(){ return declaredParts().map(partRef); }};
