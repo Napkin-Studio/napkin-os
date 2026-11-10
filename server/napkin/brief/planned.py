@@ -34,6 +34,7 @@ from ..rules import merge as merge_rules
 from ..util import iso
 from . import capture as cap_stage
 from . import provenance as prov
+from .clientcat import plan_category
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, last_writer, put
 from .job import BriefJob, log
@@ -274,6 +275,7 @@ class PlannedBriefJob(BriefJob):
         self.judge_mode = judge  # "review": Jude reviews the whole brief; "jev": the check loop (checkloop.py)
         self.plan_out, self.plan_dec = None, None
         self.lib = {}           # psg id -> passage record (the library's)
+        self.lib_gated = set()  # the ids in `lib` that came from a gated pack (the award library), added after the plan
         self.new_pins, self.new_sources = [], []
         self.unpinned = []      # facts outside the measure list an older brief cannot keep: suggestions only
         self.whole = {}         # key -> {value, basis, cites, builds_on_client, why}
@@ -329,7 +331,35 @@ class PlannedBriefJob(BriefJob):
         return out
 
     def _library(self, n=12):
-        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in list(self.lib.items())[:n]]
+        """The library's passages for Dara and Jude, capped at n. The gated ones (the award library) are
+        few and arrive last, so they keep their places and the rest fill what is left."""
+        items = list(self.lib.items())
+        gated = [x for x in items if x[0] in self.lib_gated][:n]
+        chosen = [x for x in items if x[0] not in self.lib_gated][:max(0, n - len(gated))] + gated
+        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in chosen]
+
+    def _gated_precedent(self):
+        """Once the plan has named the brief's category: the gated precedent for it (the award library),
+        one request in the insight loop. The library lookups at the start of the context stage run before
+        the plan, so they cannot send a category; this is the lookup that can."""
+        rl = self.caps.runlog
+        try:
+            cat = plan_category(self.plan_out)
+            ctx = getattr(self, "ctx", None)
+            if not cat or ctx is None:
+                return
+            ctx.category = cat
+            q, cq = _query("loop4_insight", ctx.gist(), None, "plan")
+            got, notes = ctx.retrieve("loop4_insight", q, cq, only_gated=True)
+            new = {k: v for k, v in got.items() if k not in self.lib}
+            self.lib.update(new)
+            self.lib_gated |= set(new)
+            for n in notes:
+                rl.note("library", detail=n)
+            if new:
+                rl.note("library", detail=f"award library: {len(new)} precedent(s) for {cat}")
+        except Exception as e:  # noqa: BLE001 - the brief is written without it
+            rl.note("library", error=f"{type(e).__name__}: {str(e)[:200]}")
 
     def _already_held(self, asks):
         """The planned research the brief's facts already answer: jev reads the facts held for each
@@ -398,6 +428,7 @@ class PlannedBriefJob(BriefJob):
         plan = self.caps.model.structured("plan_brief", PLAN_SYSTEM, payload,
                                           plan_schema(keys, LENSES, [x["code"] for x in leaves]), max_tokens=8000)
         self.plan_out = plan
+        self._gated_precedent()
         rests = {}
         for k, p in (plan.get("parts") or {}).items():
             rests.setdefault(p.get("rests_on"), []).append(k)

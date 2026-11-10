@@ -123,6 +123,9 @@ def main(argv=None):
         if missing:
             sys.exit(f"unknown packs: {sorted(missing)}")
     for p in packs:
+        if p.gated:
+            print(f"{p.id}: skipped (gated pack: its text is never distilled into an ungated digest)")
+            continue
         if p.path is None:
             print(f"{p.id}: skipped (no corpus on disk — digests are built where the corpus lives)")
             continue

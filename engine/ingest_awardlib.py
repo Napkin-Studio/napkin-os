@@ -48,6 +48,9 @@ SLICES = ("effectiveness_results", "all")
 DEDUPE_SOURCES = ("ipa", "cannes", "effie")          # corpora a library case may duplicate
 CONTRACT_TIERS = ("grand_prix", "gold", "silver", "bronze", "shortlist")
 
+PACK_YAML = ("tag: awardlib\nkind: case\nk: 2\nloops: [loop4_insight]   # insight precedent only: the results are unaudited\n"
+             "gated: true\n")
+
 PROVENANCE = ("**Provenance:** the strategy fields below are Napkin reconstructions from public "
               "sources, not the entrant's own words. Results are entrant-reported and not "
               "independently audited. Public facts only; no asset reuse rights.")
@@ -319,6 +322,9 @@ def run(input_path: Path, mapping_path: Path, corpus: Path, out_dir: Path, slice
             for p in sorted(out_dir.glob("lib_*.md")):
                 if p.name not in out:
                     p.unlink()
+        # The library is a gated pack: napkin-packs sync lists it as such and nothing may ask it
+        # blindly (rag/awardlib_gate.py). Written here because reference/rag/ is not in git.
+        (out_dir / "pack.yaml").write_text(PACK_YAML, encoding="utf-8")
         (out_dir / "_manifest.json").write_text(json.dumps(manifest, indent=1, ensure_ascii=False, sort_keys=True) + "\n",
                                                 encoding="utf-8")
     return manifest

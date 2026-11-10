@@ -52,6 +52,17 @@
       "k": 2,
       "loops": [],
       "chunks": 1224
+    },
+    {
+      "id": "awardlib",
+      "tag": "awardlib",
+      "kind": "case",
+      "k": 2,
+      "loops": [
+        "loop4_insight"
+      ],
+      "chunks": 1190,
+      "gated": true
     }
   ]
 }

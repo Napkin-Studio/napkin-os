@@ -1016,6 +1016,33 @@ test('the brief’s export cites its sources: one number a publisher, links only
   assert.equal(f.exportMarkHtml([1, 3]), '<sup class="fn">1,3</sup>')
 })
 
+test('a library precedent in the export is named, never quoted and never linked (feature award-in-brief-maker)', () => {
+  type Cit = { marks: Record<string, number[]>; notes: { n: number; name: string; items: { text: string; uri: string | null }[] }[] }
+  type F = { exportCitations(parts: unknown[], env: unknown): Cit; exportSourcesHtml(c: Cit | null): string }
+  const f = lift<F>(BM, ['exportClient', 'exportSource', 'exportNotes', 'exportCitations', 'exportMarkHtml', 'exportSourcesList', 'exportSourcesHtml'], { arr, esc })
+  const insight = 'RECONSTRUCTED: music preference changes with the time of day, not just stable taste.'
+  const award = 'https://www.oneclub.org/awards/theoneshow/-award/53387/daylist/'
+  const env = {
+    passages: {
+      psg_lib: { pack: 'awardlib', source: 'Award case library', section: 'Spotify — Daylist (2024)', licence: 'licensed-internal', scope: 'house',
+        citation: 'Award case library › Spotify — Daylist (2024)',
+        text: `Spotify — Daylist (2024): ${insight}\n\n## Sources\n- Official award page: ${award}` },
+      psg_ipa: { pack: 'ipa', source: 'ipa_0007.md', section: 'When the chips are down (2024)', citation: 'ipa_0007.md › When the chips are down (2024)', text: 'IPA case text' },
+    },
+  }
+  const c = f.exportCitations([{ key: 'insight', ids: ['psg_lib', 'psg_ipa'] }], env)
+  const lib = c.notes.find(n => n.name === 'Award case library')!
+  assert.ok(lib, 'the library is named as a source')
+  assert.deepEqual(lib.items, [{ text: 'Spotify — Daylist (2024)', uri: null }], 'the case is named by brand and campaign, with no link')
+  assert.deepEqual(c.marks.insight, [1, 2], 'the part carries a footnote for each source')
+  const html = f.exportSourcesHtml(c)
+  assert.match(html, /<b>Award case library<\/b>: Spotify — Daylist \(2024\)<\/li>/)
+  // Nothing of the passage's text, and not the award page's address, reaches the printed brief.
+  assert.ok(!JSON.stringify(c).includes('RECONSTRUCTED') && !html.includes('RECONSTRUCTED') && !html.includes('music preference'))
+  assert.ok(!html.includes('oneclub') && !JSON.stringify(c).includes('oneclub') && !/href=/.test(html))
+  assert.ok(!/lib_[0-9a-f]+\.md/.test(html), 'the printed name is the case, never an internal file name')
+})
+
 test('the brief’s exports wait for the decision chain and say so when it cannot read it', () => {
   const src = fn(BM, 'chainForExport')
   assert.match(src, /CHAIN\.state==='ok'\|\|CHAIN\.state==='unavailable'\)\s*return Promise\.resolve\(\)/)
