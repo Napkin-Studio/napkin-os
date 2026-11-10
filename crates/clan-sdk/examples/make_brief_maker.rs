@@ -188,9 +188,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // each, every app).
     let index_html = app_ui::inline_sphere(
         &dir.join(".."),
-        &app_ui::inline_fields(
+        &app_ui::inline_source_card(
             &dir.join(".."),
-            &fs::read_to_string(dir.join("index.html"))?,
+            &app_ui::inline_fields(
+                &dir.join(".."),
+                &fs::read_to_string(dir.join("index.html"))?,
+            )?,
         )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;

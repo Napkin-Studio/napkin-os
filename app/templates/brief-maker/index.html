@@ -1268,12 +1268,12 @@
   .plabel label{cursor:text}
   #wordCount{white-space:nowrap;margin-left:12px}
   .ifiles .plabel{margin-bottom:8px}
-  .pta{display:inline-block;vertical-align:baseline;width:100%;min-height:190px;height:190px;margin:0;border:1px solid var(--nd-line);border-radius:4px;padding:16px 16px 16px 44px;font:400 17px/27px var(--font-serif);color:var(--nd-ink);resize:vertical;outline:none;
-    background:#FFFDF8 repeating-linear-gradient(transparent 0 26px,color-mix(in srgb,#7A9CC6 22%,transparent) 26px 27px);background-position:0 14px;background-attachment:local;box-shadow:inset 30px 0 0 -29px #C9462A}
+  /* the writing area: clean, on the sheet's own paper (owner, 11 Nov: no ruled lines, no margin line), a
+     faint inset, and the agency's colour as its focus ring */
+  .pta{display:inline-block;vertical-align:baseline;width:100%;min-height:190px;height:190px;margin:0;border:1px solid var(--nd-line);border-radius:4px;padding:16px 18px;font:400 17px/27px var(--font-serif);color:var(--nd-ink);resize:vertical;outline:none;
+    background:transparent;background-image:none;box-shadow:inset 0 1px 3px color-mix(in srgb,var(--nd-ink) 7%,transparent);transition:border-color .15s,box-shadow .15s}
   .pta::placeholder{color:var(--nd-faint);font-style:italic}
-  .pta:focus{border-color:color-mix(in srgb,var(--ag-act) 55%,var(--nd-line))}
-  :root[data-color-scheme="dark"] .pta{background-color:var(--nd-card);background-image:repeating-linear-gradient(transparent 0 26px,rgba(122,156,198,.18) 26px 27px)}
-  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .pta{background-color:var(--nd-card);background-image:repeating-linear-gradient(transparent 0 26px,rgba(122,156,198,.18) 26px 27px)} }
+  .pta:focus{border-color:color-mix(in srgb,var(--ag-act-line,var(--ag-act)) 85%,var(--nd-ink));box-shadow:0 0 0 3px color-mix(in srgb,var(--ag-act-line,var(--ag-act)) 28%,transparent)}
   .iex{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;line-height:1.55;color:var(--nd-muted)}
   .iex #examples{display:contents}
   .iex button{border:1px solid var(--nd-line);border-radius:99px;padding:4px 11px;background:var(--nd-card);color:var(--nd-ink-soft);font:400 12.5px/1.55 var(--font-ui);cursor:pointer;box-shadow:none;min-height:0}
@@ -1295,11 +1295,9 @@
   .paperc .go:active{transform:translateY(1px);box-shadow:none}
   .paperc #intakeStatus{margin:0;text-align:left}
   .paperc .nomw{margin:0}
-  /* the research it starts from: one line, and what came with it on a click */
+  /* what it starts from: a card per source in its tool's identity (shared/source-card.html), and what
+     came with it on a click */
   .paperc .fromup{margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none;display:block;color:var(--nd-muted);font-size:13px;line-height:1.55}
-  .fromup > details > summary{list-style:none;cursor:pointer;width:max-content;max-width:100%}
-  .fromup > details > summary::-webkit-details-marker{display:none}
-  .fromup > details > summary:hover{color:var(--nd-ink)}
   .fromup .fu-body{display:grid;gap:12px;margin-top:12px;padding:14px 16px;border:1px solid var(--nd-line);border-radius:4px;background:var(--nd-card);color:var(--nd-ink);font-size:14px}
   .fromup .fu-t{font-size:16px}
   /* while the crew work: the same header, compact (the mock's loading step) */
@@ -1400,6 +1398,7 @@
   @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} }
 </style>
 <!-- @napkin:clan-fields -->
+<!-- @napkin:source-card -->
 </head>
 <body>
 <div class="app">
@@ -2945,14 +2944,16 @@
     FIELDS.forEach(function(f){ var x=fs[f.key]||{}; if(BUSY[x.state]&&busy[x.by]) busy[x.by].push(f.key); if(x.state==='failed') failed++; if(x.state==='done') passed++; });
     var at=STAGES.indexOf(j.stage), end=j.state==='done';
     function st(k, i){ return busy[k].length?'working':(end||at>i)?'done':at===i&&(j.state==='queued'||j.state==='running')?'working':'idle'; }
-    var label=function(k){ var f=FIELDS.filter(function(x){ return x.key===k; })[0]; return f?(f.sec==='Desired response'?'“'+f.label.toLowerCase()+'”':f.label.toLowerCase()):k; };
+    // The caption under the sphere is one short line: a live count, never the parts by name (they
+    // list in the right rail; owner, 11 Nov).
+    var parts=function(a){ return a.length+' '+(a.length===1?'part':'parts'); };
     return {
       states:{extract:st('extract',0), synthesis:st('synthesis',1), drafter:st('drafter',2), judge:end&&failed?'needs-you':st('judge',3)},
       texts:{
         extract:busy.extract.length?'Reading the material: '+busy.extract.length+' fields to capture.':at>0||end?'Read the material.':null,
-        synthesis:busy.synthesis.length?'Writing '+busy.synthesis.map(label).join(', ')+' from the research.':at>1||end?'Done.':null,
-        drafter:busy.drafter.length?busy.drafter.length+' drafting at once: '+busy.drafter.map(label).join(', ')+'.':at>2||end?'Drafts are in.':null,
-        judge:busy.judge.length?'Checking '+busy.judge.map(label).join(', ')+'.':end?('Passed '+passed+(failed?', failed '+failed:'')+'.'):null
+        synthesis:busy.synthesis.length?'Writing '+parts(busy.synthesis)+' from the research.':at>1||end?'Done.':null,
+        drafter:busy.drafter.length?parts(busy.drafter)+' drafting at once.':at>2||end?'Drafts are in.':null,
+        judge:busy.judge.length?'checking '+parts(busy.judge):end?('Passed '+passed+(failed?', failed '+failed:'')+'.'):null
       }
     };
   }
@@ -3087,9 +3088,9 @@
       extract:st.extract==='done'?KNOW_+' read everything you sent'+sentWords(j)+(eN?'. Picked out '+eN+ofAll()+'.':'.')
         :(j.state==='sending'||j.state==='checking'||j.state==='queued'?'Getting started… ':'')+KNOW_+' is reading everything you sent'+sentWords(j)+'.',
       synthesis:st.synthesis==='done'?STRAT_+' planned the whole brief; the plan is with '+WRITER+'.':st.synthesis==='working'?STRAT_+' is planning, then researching what the plan needs…':'Waiting for '+KNOW+'.',
-      drafter:st.drafter==='done'?(d.w?WRITER_+' wrote '+d.w+ofAll()+'.':WRITER_+': none of my parts went into the brief this time.')+(d.props.length?' A new version of '+listWords(d.props.map(partName))+' for you; you hold '+(d.props.length===1?'it':'them')+'.':'')
+      drafter:st.drafter==='done'?(d.w?WRITER_+' wrote '+d.w+ofAll()+'.':WRITER_+': none of my parts went into the brief this time.')+(d.props.length?' A new version of '+(d.props.length===1?'1 part':d.props.length+' parts')+' for you; you hold '+(d.props.length===1?'it':'them')+'.':'')
         :st.drafter==='working'?(d.n?WRITER_+': '+d.k+' of my '+d.n+' written':WRITER_+' is starting…'):'Waiting for '+STRAT+'.',
-      judge:st.judge==='needs-you'?REV_+': '+Num(failed)+' '+(failed===1?'part needs':'parts need')+' you.':st.judge==='done'?REV_+': every part I checked holds up.':st.judge==='working'?(c.texts.judge?REV_+': '+c.texts.judge:REV_+' is checking…'):'Waiting for '+WRITER+'.'
+      judge:st.judge==='needs-you'?REV_+': '+Num(failed)+' '+(failed===1?'part needs':'parts need')+' you.':st.judge==='done'?REV_+': every part I checked holds up.':st.judge==='working'?(c.texts.judge||REV_+' is checking…'):'Waiting for '+WRITER+'.'
     };
     var P=PLAN[at], k=P.who;
     $('capAgent').textContent=P.name.toUpperCase()+' AGENT';
@@ -3353,9 +3354,24 @@
       +(n?'I’ll read the client’s own words that came with it':'I’ll read the ask that started it')
       +'. Add anything else they said, then draft it.';
   }
-  // Closed, as the mock's one line, unless something there needs the person (open items to
-  // settle, or the research changed); then open until they close it.
+  // Each source as a card in its tool's identity (NapkinSource, shared/source-card.html); what came
+  // with it shows under the cards on a click, open by itself when something there needs the person
+  // (open items to settle, or the research changed) until they close it.
   var FU_OPEN=null;
+  // The documents this brief starts from, as source cards: the direct one first, with this brief's
+  // own merged counts (its facts, findings and sources came from there); any other as it was frozen.
+  function upSources(){
+    var u=get('upstream')||{}, ents=UP.res?arr(UP.res.upstream):[], d=directUpId(), c=upCounts();
+    var NS=window.NapkinSource; if(!NS) return [];
+    var ks=upKeys().slice().sort(function(a,b){ return (a===d?0:1)-(b===d?0:1); });
+    return ks.map(function(id){
+      var e=ents.filter(function(x){ return x&&x.document_id===id; })[0]||(id===d?upEntry():null)||{};
+      var over=id===d?{title:upTitle()||undefined, facts:c.pins||undefined, findings:c.findings||undefined, sources:c.sources||undefined, verified:c.checked||undefined}:{};
+      var src=NS.fromUpstream(u[id], Object.assign({document_id:id}, e), over);
+      if(!src.kind) src.kind='research';   // a brief here only ever starts from research
+      return src;
+    });
+  }
   function renderFromUp(){
     var el=$('fromUp'), on=isResearchFed()&&phase==='intake';
     // The mock asks the same question either way; the line under it says it starts from research.
@@ -3363,17 +3379,12 @@
     $('ledeText').textContent=on?'The client’s words came with it. Add anything else they said, or draft it now.':'Paste the client’s words, or drop in their notes, deck or voice memo.';
     $('prompt').placeholder=on?'Anything else the client said? (optional)':'Paste what the client said, drop in the call notes, or write what you need…';
     el.hidden=!on; if(!on){ el.innerHTML=''; return; }
-    var t=upTitle(), hl=upHeadline(), c=upCounts(), mats=upMaterials(), items=lockItems(), n=[];
+    var hl=upHeadline(), c=upCounts(), mats=upMaterials(), items=lockItems(), n=[];
     if(c.findings) n.push('<b>'+c.findings+'</b> '+(c.findings===1?'finding':'findings')+(c.checked?' ('+c.checked+' checked)':''));
     if(c.pins) n.push('<b>'+c.pins+'</b> '+(c.pins===1?'fact':'facts'));
     if(c.sources) n.push('<b>'+c.sources+'</b> '+(c.sources===1?'source':'sources'));
-    var ue=upEntry(), up_=ue&&ue.path;
-    // The mock's one line ("From research: Irish summer treats · 12 facts"); what came with it opens under it.
-    var upPins=Object.keys(((upData().projection||{}).pins)||upData().pins||{}).length;
-    var nf=c.pins||upPins||c.findings, line='From research: '+(t||'the research this brief started from')+(nf?' · '+nf+' '+(c.pins||upPins?(nf===1?'fact':'facts'):(nf===1?'finding':'findings')):'');
-    var h='<div><div class="fu-k">From research</div><div class="fu-t">'+esc(t||'The research this brief started from')+'</div>'
-      +(up_?'<button type="button" class="linkbtn" id="openUpIn">Open the research ↗</button>':'')+'</div>'
-      +(hl?'<blockquote>'+esc(hl)+'</blockquote>':'')
+    var ue=upEntry(), up_=ue&&ue.path, srcs=upSources();
+    var h=(hl?'<blockquote>'+esc(hl)+'</blockquote>':'')
       +(n.length||c.open?'<p class="fu-n">'+(n.length?'It carries '+listWords(n)+'.':'')+(c.open?' Its sources disagree in '+esc(num(c.open))+' '+(c.open===1?'place':'places')+'.':'')+'</p>':'')
       +'<p class="note">'+esc(mats.length
         ?KNOW_+' reads the client’s own words that came with it ('+listWords(mats.map(function(m){ return m.label; }))+') and the ask that started the research. The research’s findings can back the insight and the proposition; they never stand in for what the client said.'
@@ -3381,12 +3392,16 @@
     if(items.length) h+='<div class="locklist">'+lockListHtml(items, lockWhy(items.length)+'. Settle '+(items.length===1?'it':'them')+' now, or once the brief is drafted.')+'</div>';
     var up=upNoteInner(); if(up) h+='<div class="upnote" role="status">'+up+'</div>';
     var open_=FU_OPEN===null?!!(items.length||up):FU_OPEN;
-    h='<details id="fuMore"'+(open_?' open':'')+'><summary title="What came with the research">'+esc(line)+'</summary><div class="fu-body">'
-      +'<p class="fu-n">'+esc($('ledeText').textContent)+'</p>'+h+'</div></details>';
-    el.innerHTML=h; bindLkItems(el);
-    $('fuMore').addEventListener('toggle',function(){ FU_OPEN=this.open; });
-    var oi=$('openUpIn'); if(oi) oi.addEventListener('click',function(){
-      fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:up_})}); });
+    el.innerHTML='<div id="fuCards"></div><div class="fu-body" id="fuBody"'+(open_?'':' hidden')+'>'
+      +'<p class="fu-n">'+esc($('ledeText').textContent)+'</p>'+h+'</div>';
+    var cards=$('fuCards'), body=$('fuBody');
+    window.NapkinSource&&NapkinSource.mount(cards, srcs, {
+      // No side panel on the prompt: a card opens what came with it, under the cards.
+      details:function(){ FU_OPEN=body.hidden; body.hidden=!FU_OPEN; NapkinSource.setOpen(cards, FU_OPEN?0:null); },
+      open:function(s){ var p=s&&s.path||up_; if(p) fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:p})}); }
+    });
+    if(window.NapkinSource) NapkinSource.setOpen(cards, open_?0:null);
+    bindLkItems(el);
   }
   // "The research has changed since this brief started", and what changed:
   // findings marked wrong there first, with where this brief uses them.

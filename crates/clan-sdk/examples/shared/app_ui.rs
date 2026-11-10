@@ -1,5 +1,5 @@
-//! What the template-app packers share: the OS's fields, the agent sphere every
-//! Napkin app draws, and the app's mark.
+//! What the template-app packers share: the OS's fields, the source cards, the
+//! agent sphere every Napkin app draws, and the app's mark.
 //!
 //! Included by `make_brief_maker.rs` and `make_campaign_research.rs` with
 //! `#[path = "shared/app_ui.rs"] mod app_ui;` (cargo does not build this
@@ -31,6 +31,32 @@ pub fn inline_fields(templates: &Path, html: &str) -> Result<String, Box<dyn std
         return Err("the fields snippet contains its own marker".into());
     }
     Ok(html.replacen(FIELDS_MARKER, snippet.trim_end(), 1))
+}
+
+/// Where a template asks for the source cards: where a document came from, on
+/// its prompt, in the source tool's own identity (`NapkinSource`).
+pub const SOURCE_MARKER: &str = "<!-- @napkin:source-card -->";
+
+/// Splice `app/templates/shared/source-card.html` into the template at its
+/// marker, when it has one. Checked like the fields: no `</body>` inside it.
+pub fn inline_source_card(
+    templates: &Path,
+    html: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    match html.matches(SOURCE_MARKER).count() {
+        0 => return Ok(html.to_string()),
+        1 => {}
+        _ => return Err(format!("the template has more than one {SOURCE_MARKER}").into()),
+    }
+    let snippet = fs::read_to_string(templates.join("shared/source-card.html"))
+        .map_err(|e| format!("app/templates/shared/source-card.html: {e}"))?;
+    if snippet.to_ascii_lowercase().contains("</body") {
+        return Err("the source-card snippet contains </body>".into());
+    }
+    if snippet.contains(SOURCE_MARKER) {
+        return Err("the source-card snippet contains its own marker".into());
+    }
+    Ok(html.replacen(SOURCE_MARKER, snippet.trim_end(), 1))
 }
 
 /// Where a template's `<body>` asks for the agent sphere (the mock's loading stage).
