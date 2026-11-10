@@ -2989,7 +2989,7 @@
       judge:st.judge==='needs-you'?REV_+': '+Num(failed)+' '+(failed===1?'part needs':'parts need')+' you.':st.judge==='done'?REV_+': every part I checked holds up.':st.judge==='working'?(c.texts.judge?REV_+': '+c.texts.judge:REV_+' is checking…'):'Waiting for '+WRITER+'.'
     };
     var P=PLAN[at], k=P.who;
-    $('capAgent').textContent=P.name.toUpperCase()+' AGENT · '+P.mat+' SPHERE';
+    $('capAgent').textContent=P.name.toUpperCase()+' AGENT';
     var l1=$('procH'), l2=$('procS');
     l1.textContent=H[j.state]||P.l1;
     l1.title=sayer(k);

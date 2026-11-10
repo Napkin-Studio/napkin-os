@@ -16,7 +16,6 @@ export default function AgentGallery() {
         <li key={r} style={{ display: 'grid', justifyItems: 'center', gap: 6, textAlign: 'center' }}>
           <AgentSphere agent={r} size={88} label="" />
           <b style={{ fontSize: 14 }}>{roles.name(r)}</b>
-          <span className="mono" style={{ fontSize: 10.5, letterSpacing: '.06em', color: 'var(--ink3, #6F757F)' }}>{roles.mat(r).toUpperCase()} SPHERE</span>
           <span style={{ fontSize: 12.5, color: 'var(--ink2, #3C4048)' }}>{roles.job(r).replace(/^./, c => c.toUpperCase())}.</span>
         </li>
       ))}

@@ -3514,7 +3514,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       // the stage as it stood at the last render (ASKING): renderChat moves it only on a change
       +'<div class="sstage'+(ASKING?' nk-asking':'')+'" id="rt-stage" data-nk-stage><div class="rail">'+R[0]+'</div>'
         +'<div class="score"><div class="aglbox" id="aglBox" title="'+esc(agentLine(sp.k))+'"></div>'
-          +'<div class="scap" role="status" aria-live="polite"><span class="abadge">'+esc(P.name.toUpperCase()+' AGENT · '+P.mat+' SPHERE')+'</span><span class="l1" title="'+esc(agentLine(sp.k))+'">'+esc(l1)+'</span><span class="l2'+(sp.err?' err':'')+'">'+esc(l2)+'</span>'
+          +'<div class="scap" role="status" aria-live="polite"><span class="abadge">'+esc(P.name.toUpperCase()+' AGENT')+'</span><span class="l1" title="'+esc(agentLine(sp.k))+'">'+esc(l1)+'</span><span class="l2'+(sp.err?' err':'')+'">'+esc(l2)+'</span>'
           +(sp.err?'<span class="l2 err">'+esc(sp.err)+'</span>':'')
           +(j&&live&&j.applied===false&&j.reason&&j.reason!=='already applied'?'<span class="l2 err">The host did not apply the last change: '+esc(j.reason)+'</span>':'')
           +(sp.acts?'<span class="rs-acts no-print">'+sp.acts+'</span>':'')+'</div>'

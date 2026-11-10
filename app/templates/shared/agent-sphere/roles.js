@@ -5,7 +5,7 @@
 //   - THE one lookup from anything a run, a step or a stored decision calls an agent (a stage id, a handler,
 //     an old crew key or crew name kept in older documents) to its role: NapkinRoles.of / forStage / ofDecision;
 //   - the words people read: name('review') "Review agent", the('review') "the Review agent",
-//     caption('knowledge') "KNOWLEDGE AGENT · ONYX SPHERE";
+//     caption('knowledge') "KNOWLEDGE AGENT" (the material is not the person's business, owner 2026-11-10);
 //   - the sphere at any size: mount(el, {agent, state, progress}) puts a live view on the page's one scene
 //     (scene.js), and still(agent, size) is the same sphere as a static frame (material, marks, horizon) for a
 //     page without WebGL. tag() writes a placeholder an app can put in any innerHTML; hydrate() (or auto())
@@ -97,7 +97,7 @@
   function The(r) { var s = the(r); return s.charAt(0).toUpperCase() + s.slice(1); }
   function mats() { var A = root.NapkinAgents; return A ? A : null; }
   function matOf(r) { var A = mats(), m = meta(r); return A && m ? A.MAT_OF[m.name] || 'pearl' : 'pearl'; }
-  function caption(r) { return (name(r) + ' · ' + matOf(r) + ' sphere').toUpperCase(); }
+  function caption(r) { return name(r).toUpperCase(); }
   function hex(h) { var n = parseInt(String(h).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function mix(a, b, t) { var x = hex(a), y = hex(b); return '#' + x.map(function (v, i) { return ('0' + Math.round(v + (y[i] - v) * t).toString(16)).slice(-2); }).join(''); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
