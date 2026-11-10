@@ -1440,7 +1440,21 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .rt-work .runbar > .rs-later{text-align:left;font-size:12.5px;color:var(--muted);padding:0}
 .rt-work .runbar > .activity > summary,.rt-work .runbar > .rs-asked > summary{font-size:12.5px;color:var(--muted);padding:0;min-height:0}
 .rt-work .runbar > .activity,.rt-work .runbar > .rs-asked{padding:0}
-@media (max-width:980px){ .rt-work .sstage{grid-template-columns:1fr;height:auto} }
+/* The stage holds at any window (owner, 2026-11-11): the rails shrink, then stack under the score below
+   1100px; nothing in the score shrinks, so the caption always sits above the question card; asking, the
+   stage grows with the card instead of clipping it, and the card has one frame. */
+.rt-work .sstage{grid-template-columns:minmax(0,310px) minmax(min(320px,100%),440px) minmax(0,310px);grid-template-areas:"l s r";padding:12px clamp(8px,2vw,16px);gap:clamp(8px,1.5vw,16px);min-width:0}
+.rt-work .sstage>.rail:first-child{grid-area:l}.rt-work .sstage>.rail:last-child{grid-area:r}.rt-work .sstage>.score{grid-area:s}
+.rt-work .rail,.rt-work .score{min-width:0}
+.rt-work .score>*{flex:none}
+.rt-work .sstage.nk-asking{height:auto;min-height:clamp(420px,calc(100vh - 338px),640px);align-items:start}
+.rt-work .sstage.nk-asking .score{overflow:visible;max-height:none}
+.rt-work .rt-askin .aq-k{display:none}
+.rt-work .rt-askwrap{max-width:min(560px,100%);margin:0 auto}
+.rt-work .rt-askin .rs-ask:focus-visible{outline:none;border-color:var(--ag-acc)}
+.rt-work .ptop{min-width:0}.rt-work .apills{min-width:0;row-gap:6px}
+@media (max-width:1100px){ .rt-work .sstage{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"s s" "l r";height:auto;min-height:0;align-items:start} .rt-work .rail{max-height:clamp(140px,32vh,280px)} }
+@media (max-width:640px){ .rt-work .sstage{grid-template-columns:minmax(0,1fr);grid-template-areas:"s" "l" "r"} }
 @media (prefers-reduced-motion:reduce){ .rs-load-lens .cov{transition:none} .rt-work .aglbox,.rt-work .rt-askwrap,.rt-work .rt-askin > .p33-askcard,.rt-work .wcard{transition:none} }
 /* The ask, to the mock (?tool=research&step=prompt): one column, the box, examples, lens chips (filled when
    picked, outlined when not), three market circles, the window, then the attach line and Start research. */
@@ -3602,6 +3616,8 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     t.push({l:'Gaps and contests', c:rep?'done':''});
     return t;
   }
+  // While an agent asks, the caption over the card says who asks; the card carries only the question.
+  function stageAsks(r){ var n=agentName(r); return n.charAt(0).toUpperCase()+n.slice(1)+' asks'; }
   function workHtml(T, Q){
     var at=runStep(), P=PLAN[at], j=CHAT.job, live=jobActive(), sp=speech(T), plan=lensPlan();
     var pills=PLAN.map(function(p, i){ var done=i<at||(j&&j.state==='done'), cur=i===at&&!(j&&j.state==='done');
@@ -3610,7 +3626,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
     var dots='<span class="rs-load-lens" role="img" aria-label="Lenses: '+nDone+' of '+nOn+' researched"><small>Lenses</small>'+plan.map(function(x){
       return '<i class="cov'+(x.done?' filled':x.off?' none':live&&j&&j.stage==='research'?' thin':'')+'" title="'+esc(lensName(x.lens)+(x.off?' · not needed':x.done?' · done':''))+'"></i>'; }).join('')+'</span>';
     var H={done:isObj(D().report)?'Your report is ready':'The run is done', failed:'We had to stop', cancelled:'You stopped the research', stalled:'We lost touch with the work'};
-    var l1=liveQuestion()?'Quick question before we go on':j&&H[j.state]||P.l1;
+    var l1=liveQuestion()?stageAsks(Q?runRole(Q.stage):sp.k):j&&H[j.state]||P.l1;
     var said=sp.text||(sp.k==='research'?researchersLine(plan):'');
     var l2=(j&&j.state==='done'?'':'Step '+(at+1)+' of '+PLAN.length+' · ')+said;
     var R=railsFor(at), tiles=sectionTiles(), wN=tiles.filter(function(t){ return t.c==='done'; }).length;

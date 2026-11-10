@@ -3458,3 +3458,24 @@ test('the research report is composed by the Synthesis agent; the brief stays th
   assert.match(X, /MAT_OF\.Synthesis = 'ceramic'/)
   assert.match(X, /"name": "Synthesis"/)
 })
+
+// The run stage holds at any window (owner bug, 2026-11-11): asking, the caption over the card says who
+// asks and the card has no second header; nothing in the score shrinks under the card; the rails stack
+// under the score below 1100px, in the research and the brief alike.
+test('the agent stage: the caption says who asks above the card, and the rails stack below 1100px', () => {
+  const r = lift<{ stageAsks(k: string): string }>(RT, ['stageAsks'], { agentName: (k: string) => `${k[0].toUpperCase()}${k.slice(1)} agent` })
+  assert.equal(r.stageAsks('strategy'), 'Strategy agent asks')
+  assert.match(fn(RT, 'workHtml'), /var l1=liveQuestion\(\)\?stageAsks\(/)
+  assert.doesNotMatch(RT, /Quick question before we go on/)
+  const BM = page('brief-maker/index.html')
+  const b = lift<{ stageAsks(k: string): string }>(BM, ['stageAsks'], { ROLES: { name: () => 'Brief agent' } })
+  assert.equal(b.stageAsks('brief'), 'Brief agent asks')
+  for (const [name, src, pre] of [['research', RT, '.rt-work '], ['brief', BM, '']] as const) {
+    const p = pre.replace(/[.]/g, '\\.')
+    assert.match(src, new RegExp(`${p}\\.sstage\\{grid-template-columns:minmax\\(0,310px\\) minmax\\(min\\(320px,100%\\),440px\\) minmax\\(0,310px\\)`), `${name}: the rails shrink to nothing before the stage overflows`)
+    assert.match(src, new RegExp(`@media \\(max-width:1100px\\)\\{ ${p}\\.sstage\\{grid-template-columns:minmax\\(0,1fr\\) minmax\\(0,1fr\\);grid-template-areas:"s s" "l r"`), `${name}: below 1100px the rails stack under the score`)
+    assert.match(src, new RegExp(`${p}(\\.sstage )?\\.score>\\*\\{flex:none\\}`), `${name}: nothing in the score shrinks, so the caption never runs under the card`)
+    assert.match(src, new RegExp(`${p}\\.sstage\\.nk-asking\\{height:auto;min-height:clamp\\(`), `${name}: asking, the stage grows with the card`)
+    assert.doesNotMatch(src, /@media \(max-width:980px\)\{ (\.rt-work )?\.sstage/, `${name}: the old one-column switch is gone`)
+  }
+})

@@ -1388,7 +1388,18 @@
   .ptiles .tile.now{border-style:solid;border-color:var(--ag-act);color:var(--ag-act)}
   .ptiles .tile.fail{border-style:solid;border-color:var(--nd-alert);color:var(--nd-alert)}
   .app.p-start:has(> .proc.on) > .foot{display:none}
-  @media (max-width:980px){ .sstage{grid-template-columns:1fr;height:auto} }
+  /* The stage holds at any window (owner, 2026-11-11): rails shrink, then stack under the score below 1100px;
+     nothing in the score shrinks, so the caption sits above the question; asking, the stage grows with the card. */
+  .sstage{grid-template-columns:minmax(0,310px) minmax(min(320px,100%),440px) minmax(0,310px);grid-template-areas:"l s r";padding:12px clamp(8px,2vw,16px);gap:clamp(8px,1.5vw,16px);min-width:0}
+  .sstage>.rail:first-child{grid-area:l} .sstage>.rail:last-child{grid-area:r} .sstage>.score{grid-area:s}
+  .sstage .rail,.sstage .score{min-width:0}
+  .sstage .score>*{flex:none}
+  .sstage.nk-asking{height:auto;min-height:clamp(420px,calc(100vh - 338px),640px);align-items:start}
+  .askq .aq-k{display:none}
+  .askq:focus-visible{outline:none;border-color:var(--ag-acc)}
+  .ptop{min-width:0} .apills{min-width:0;row-gap:6px}
+  @media (max-width:1100px){ .sstage{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"s s" "l r";height:auto;min-height:0;align-items:start} .sstage .rail{max-height:clamp(140px,32vh,280px)} }
+  @media (max-width:640px){ .sstage{grid-template-columns:minmax(0,1fr);grid-template-areas:"s" "l" "r"} }
   @media (max-width:880px){ .paperc{max-width:none} }
   @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} }
   @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} }
@@ -3086,7 +3097,8 @@
     var P=PLAN[at], k=P.who;
     $('capAgent').textContent=P.name.toUpperCase()+' AGENT';
     var l1=$('procH'), l2=$('procS');
-    l1.textContent=H[j.state]||P.l1;
+    var asking=j.state==='needs_input'&&j.question&&j.question.id, aw=asking&&ROLES?ROLES.forStage('brief', j.question.stage||j.stage):'';
+    l1.textContent=asking?stageAsks(aw):H[j.state]||P.l1;
     l1.title=sayer(k);
     var stopLine=stopAt>=0?(j.state==='cancelled'?'You stopped it at '+P.name.toLowerCase()+'. What the agents had written stays in the brief.':'The agents had to stop at '+P.name.toLowerCase()+'.'):'';
     l2.textContent=j.error?j.error:j.state==='done'?'Opening it now…':stopLine||('Step '+(at+1)+' of '+PLAN.length+' · '+LINE[k]);
@@ -3114,6 +3126,8 @@
   // question under it, in view without scrolling; answered, the card goes and the sphere comes back down.
   // NapkinRoles.ask eases it (none under reduced motion); the card is signed by the agent of the stage asking.
   var ASK={id:null, busy:false, draft:''};
+  // While an agent asks, the caption over the card says who asks; the card carries only the question.
+  function stageAsks(r){ var n=r&&ROLES?ROLES.name(r):'The agent'; return n.charAt(0).toUpperCase()+n.slice(1)+' asks'; }
   function askInStage(j, at){
     var q=j.state==='needs_input'?j.question:null, box=$('procAsk'), stage=$('meet');
     if(!q||!q.id){ if(box){ box.innerHTML=''; box.hidden=true; } ASK.id=null; if(ROLES) ROLES.ask(stage, false); return; }
