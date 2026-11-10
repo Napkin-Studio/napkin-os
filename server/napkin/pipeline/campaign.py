@@ -39,7 +39,7 @@ from ..doc import (CAMPAIGN_FIELDS, GATES, LENS_NAMESPACE, LENS_TITLES, LENSES, 
                    build_materials, ctx_data, ctx_decisions, ctx_facts, ctx_findings, decision, deep_merge, field_paths,
                    get_dotted, human_owned, known_ids, market_list, read_of)
 from ..jobs import Abandoned, Cancelled, abandon, abandoned, bounded
-from ..layers import origin_uri
+from ..layers import origin_uri, row_source_records
 from ..metrics import emit
 from ..model import ModelError
 from ..rules import identify as id_rules
@@ -257,6 +257,7 @@ class CampaignJob:
         self._report_from = "landed"   # landed | working: which document the report composes from
         self._last_sent = set()        # the chunks the previous reply carried
         self._identify_call: Future | None = None  # identify started beside extract
+        self._layer_sources: dict = {}  # source records of the layer rows identify pinned (the roster's), by id
         self.latest_clan = clan
         self.W, self.W_facts, self.W_version, self.clan = {}, [], None, clan
         self.sync(clan)
@@ -839,6 +840,11 @@ class CampaignJob:
         self.add_chunk("extract", change["data_patch"], [dec], text=text)
         return True
 
+    def layer_sources(self, facts) -> list[dict]:
+        """The source records of the layer rows identify pinned that these facts cite."""
+        cited = dict.fromkeys(s for f in facts for s in f.get("sources") or [])
+        return [self._layer_sources[s] for s in cited if s in self._layer_sources]
+
     def ask(self, field, text, options, allow_text, intro, decisions=None, patch=None, facts=()):
         qid = uid("q_", self.doc, self.id, field, self.seq + 1, n=12)
         q = {"id": qid, "text": text, "options": options, "allow_text": allow_text,
@@ -870,7 +876,7 @@ class CampaignJob:
                          attention="Waiting for your answer: research does not start until it is given."))
         decs = list(decisions or []) + [d]
         self.add_chunk("identify", patch or {}, decs, facts=facts, text=f"{intro} {text}".strip(), question=q,
-                       msg_decision=d)
+                       msg_decision=d, sources=self.layer_sources(facts))
         with self.lock:
             self.question = q
         self.caps.runlog.question("identify", text, [o.get("label") for o in options])
@@ -942,7 +948,8 @@ class CampaignJob:
         text = (f"Nobody answered in {waited}, so I went on with {pick['label']} for the {label}, as the material "
                 f"reads: confirm it." if pick else
                 f"Nobody answered in {waited}, so I went on without the {label}: {UNANSWERED[fld]}.")
-        self.add_chunk("identify", patch, list(decisions or []) + [d], facts=facts, text=text, msg_decision=d)
+        self.add_chunk("identify", patch, list(decisions or []) + [d], facts=facts, text=text, msg_decision=d,
+                       sources=self.layer_sources(facts))
 
     def stage_identify(self):
         camp = self.W.get("campaign") or {}
@@ -1073,6 +1080,9 @@ class CampaignJob:
                                                            "the brand layer already holds a roster row for "
                                                            "this brand")])))
                 self.hits += [{"id": f["id"], "scope": "brand", "source": f["origin"]} for f in facts]
+                # what each roster row cites goes into the document with it, so a citation leads somewhere
+                for rec in row_source_records(row["facts"]):
+                    self._layer_sources.setdefault(rec["id"], rec)
                 pinned = pinned + facts
         cat_pins = sorted([f for f in pinned if f["key"] in ("roster.categories.primary", "roster.categories.secondary")
                            and re.fullmatch(r"[a-z0-9_]+\.[a-z0-9_]+", str(f.get("value")))],
@@ -1239,7 +1249,7 @@ class CampaignJob:
                                only_option="there was nothing left to identify"))]
         text = " ".join(notes) or (f"{bname}: brand, categories and markets are settled." if brand and
                                    not self.skipped_fields else "Went on with what is settled.")
-        self.add_chunk("identify", p, ds, facts=facts, text=text)
+        self.add_chunk("identify", p, ds, facts=facts, text=text, sources=self.layer_sources(facts))
         with self.lock:
             self.question = None
         return True
