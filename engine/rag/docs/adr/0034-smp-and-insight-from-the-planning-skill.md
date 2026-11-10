@@ -33,6 +33,16 @@ judge's fix, and is capped by the existing rewrite limit. Two clauses joined by 
 semicolon or dash count as two thoughts to the judge, which closes the gap the word rule leaves.
 Commas do not flag.
 
+**Amended 2026-11-10 (Sai, brief-jev-checks): code sends a standalone "and" back.** Code does not wait for
+the judge on a standalone "and" or "&" in the proposition: `checks.revisions` (from #140, "tighten
+twice") sends the proposition back to Dara with the instruction to keep the one thought that matters and
+say it without "and", whatever Jude says, on both judge paths (the whole-brief review and jev's check
+loop). Jude still gets the flag in `part_checks` and still judges the thought against the skill's
+tests, so a sourced proposition he passes is also sent back for its "and". Names with an ampersand
+("Crust & Co") are not an "and". The owner chose this over the flag-only rule above on 10 Nov 2026,
+and the heading "a flag, not a ban" now describes the first half of the paragraph only: code
+flags it to Jude, and sends it back as well.
+
 **Wording.** The insight and proposition definitions in the schema and the ranking prompt use the
 skill's words ("a truth about the audience, usually a tension"; "one thought, not a thought with
 an 'and'").

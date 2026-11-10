@@ -21,12 +21,13 @@ proposition built on it not: Laurence's own review item).
 **Jude judges the five parts against the skill's tests, with code beside him.** The whole-brief review
 carries, for the insight, proposition, job, barrier and objection, the schema's judged tests, and
 `part_checks`: what code measured (words against the limit, sentences, a standalone "and" in the
-proposition). A failing part goes in `revise`, as it already can. The "and" stays a flag, not a ban (ADR
-0034): Jude decides whether it joins two thoughts.
+proposition). A failing part goes in `revise`, as it already can. The "and" is flagged to Jude, who
+decides whether it joins two thoughts, and code also sends it back (ADR 0034, amended 2026-11-10).
 
 **Code sends back only what it can measure,** once, in the review's own rewrite: a part more than 15
 percent over its word limit, or a job, proposition or objection of more than one sentence. A word or a
-phrase is fine.
+phrase is fine. A list over its item cap and a standalone "and" in the proposition go back too
+(ADR 0034, amended 2026-11-10).
 
 **An assumption says it is one.** Dara's own proposals are prefixed "To confirm:" in code, on her raw
 output before provenance reads the sentences (so a claim and its sentence stay the same text), and the
