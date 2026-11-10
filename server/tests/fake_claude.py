@@ -39,8 +39,11 @@ def gen(sch, name=""):
     return f"Fake text {seed}-{next(n)} for {name}"
 
 
+bad_first = os.environ.get("FAKE_BAD_FIRST") and "That output does not validate" not in prompt
 m = re.search(r"validates against this JSON Schema:\n(\{.*\})\s*$", system, re.S)
-if m:
+if m and bad_first:
+    text = json.dumps({"unexpected": 1})
+elif m:
     text = json.dumps(gen(json.loads(m.group(1))))
 elif "Put together" in prompt:
     text = json.dumps({"groups": [[1, 2]]})

@@ -1853,6 +1853,35 @@ def variety(key: dict, ratings, pool: str, keep_first4: bool = False) -> dict:
             "min": min(per.values()) if per else None, "max": max(per.values()) if per else None}
 
 
+def same_group(groups, a: int, b: int) -> bool | None:
+    """Whether a rater put numbers a and b together; None when the grouping cannot be read."""
+    if distinct_ideas(groups, max(a, b)) is None and not (isinstance(groups, list) and all(isinstance(g, list) for g in groups)):
+        return None
+    return any({_num(x) for x in g} >= {a, b} for g in groups)
+
+
+def chosen_in_plan_group(key: dict, ratings, arms_by: dict) -> dict:
+    """Idea 1, section 6: is the chosen hypothesis in the same group as the plan's own insight? Per rater, and by both."""
+    per = {r: 0 for r in RATERS}
+    both, n = 0, 0
+    for item, k in key["sameidea"].items():
+        h = (arms_by.get(k["brief"], {}).get("H1") or {})
+        if k["pool"] != "H1" or h.get("status") != "ok" or h.get("chosen") is None:
+            continue
+        num = {v["source"]: int(i) for i, v in k["numbers"].items()}
+        a, b = num.get("plan"), num.get(f"hyp:{h['chosen']}")
+        if a is None or b is None:
+            continue
+        ans = {r: same_group((ratings(r, item) or {}).get("groups"), a, b) for r in RATERS}
+        if any(v is None for v in ans.values()):
+            continue
+        n += 1
+        for r, v in ans.items():
+            per[r] += bool(v)
+        both += all(ans.values())
+    return {"briefs": n, "per_rater": per, "both_raters": both}
+
+
 def _med(vals):
     return median_of([v for v in vals if v is not None])
 
@@ -1948,6 +1977,8 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                     "order_agreement": order_ag("T1vC1.ins"), "x_share": x_shares({"T1vC1.ins", "C1vB.ins", "T1vB.ins", "T1vC1.prop", "C1vB.prop"}),
                     "no_gate": sum(1 for b in ids if (arms_by[b].get("H1") or {}).get("status") == "no_gate"),
                     "ranker_preferred": sum(1 for b in ids if (arms_by[b].get("H1") or {}).get("ranker_preferred")),
+                    "ranker_preferred_subset_T1vC1": tally({b: u for b, u in units.get("T1vC1.ins", {}).items() if (arms_by[b].get("H1") or {}).get("ranker_preferred") is True}),
+                    "chosen_in_plans_group": chosen_in_plan_group(key, ratings, arms_by),
                     "plan_rank": {b: (arms_by[b].get("H1") or {}).get("plan_rank") for b in ids},
                     "insight_over_50": {a: sum(per_arm_text(a, INS, lambda t: words(tidy(t)) > INSIGHT_MAX_WORDS).values()) for a in ("B", "C1", "T1")},
                     "insight_over_57": {a: over57(a) for a in ("B", "C1", "T1")},
@@ -2106,7 +2137,8 @@ def render_md(r: dict) -> str:
         ("Control: C1 v B, insight", _fmt_tally(T["C1vB.ins"])),
         ("Other: T1 v C1 proposition", _fmt_tally(T["T1vC1.prop"])), ("Other: T1 v B insight", _fmt_tally(T["T1vB.ins"])),
         ("Other: C1 v B proposition", _fmt_tally(T["C1vB.prop"])),
-        ("Ranker-preferred subset (count)", i1["ranker_preferred"]),
+        ("Ranker-preferred subset: briefs / T1 v C1 insight W/L/T", f"{i1['ranker_preferred']} / {_fmt_tally(i1['ranker_preferred_subset_T1vC1'])}"),
+        ("Is the chosen hypothesis in the plan's group (rater grouping)", i1["chosen_in_plans_group"]),
         ("Order agreement per rater (T1 v C1)", i1["order_agreement"]), ("Share of non-tie answers picking X", i1["x_share"]),
         ("Distinct ideas among the 9: median / min / max (lower rater)", f"{i1['variety_9']['median']} / {i1['variety_9']['min']} / {i1['variety_9']['max']}"),
         ("Code checks: insight over 50 / over 57 (B, C1, T1)", f"{i1['insight_over_50']} / {i1['insight_over_57']}"),

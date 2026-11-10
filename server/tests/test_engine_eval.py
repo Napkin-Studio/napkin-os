@@ -1337,3 +1337,30 @@ def test_the_replay_cap_stops_the_run_before_any_spend_it_could_not_cover(tmp_pa
     assert sum(r["cost_usd"] for r in rows) <= 0.52
     arms = ee.load_arms(out, ["c01"])["c01"]
     assert arms["T1"]["status"] == "budget_stopped" and "L" not in arms and arms["B"]["status"] == "ok"   # the third 0.50 draft would not fit
+
+
+def test_a_call_that_needs_a_second_attempt_logs_both_attempts_and_the_first_validation_error(tmp_path, monkeypatch):
+    from pathlib import Path
+    monkeypatch.setattr(ee, "CLAUDE", str(Path(__file__).parent / "fake_claude.py"))
+    monkeypatch.setattr(ee, "RATER_CWD", tmp_path / "cwd")
+    monkeypatch.setenv("FAKE_BAD_FIRST", "1")
+    cost = ee.replay_cost_log(tmp_path, 24.0)
+    port, client = ee.make_port(cost)
+    call = ee.Caller(port, client, "c01", "B")
+    got = call("rank_smp", "System.", {"x": 1}, {"type": "object", "additionalProperties": False, "required": ["word"], "properties": {"word": {"type": "string"}}})
+    rec = call.records[0]
+    assert got["word"] and rec["attempts"] == 2 and rec["ok"] and abs(rec["cost_usd"] - 0.02) < 1e-9
+    assert rec["first_validation_error"] and "word" in rec["first_validation_error"]
+    rows = ee.read_log(tmp_path / "cost_log.jsonl")
+    assert len(rows) == 2 and {r["arm"] for r in rows} == {"B"} and {r["job"] for r in rows} == {"c01"}
+
+
+def test_chosen_in_plans_group_reads_each_raters_grouping():
+    key = {"sameidea": {"i1": {"brief": "c01", "pool": "H1", "n": 4, "numbers": {"1": {"source": "plan", "idx": None}, "2": {"source": "hyp:0", "idx": 0},
+                                                                                "3": {"source": "hyp:1", "idx": 1}, "4": {"source": "hyp:2", "idx": 2}}}}}
+    arms = {"c01": {"H1": {"status": "ok", "chosen": 1}}}
+    r = {"sonnet": {"groups": [[1, 3], [2, 4]]}, "opus": {"groups": [[1, 2], [3]]}}
+    got = ee.chosen_in_plan_group(key, lambda who, item: r[who], arms)
+    assert got == {"briefs": 1, "per_rater": {"sonnet": 1, "opus": 0}, "both_raters": 0}
+    r["opus"] = {"groups": "bad"}
+    assert ee.chosen_in_plan_group(key, lambda who, item: r[who], arms)["briefs"] == 0
