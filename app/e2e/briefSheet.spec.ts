@@ -57,8 +57,9 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(budget.locator('.conftag')).toHaveText('Confidential')
   await expect(panel.locator('[data-sp="conf"]')).toHaveAttribute('aria-pressed', 'true')
 
-  // Built from: compact rows (the mock), each opening the OS source card.
-  await expect(panel.locator('#spBuilt .bf-row').first()).toBeVisible({ timeout: 15_000 })
+  // Where it came from: the OS's one part view (ClanFields.partView), its head by the part's name.
+  await expect(panel.locator('#spProv .clf-rv')).toBeVisible({ timeout: 15_000 })
+  await expect(panel.locator('#spHead .rv-pname')).toBeVisible()
 
   // Place on page: full width, then one place earlier; the keyboard on the grip moves it too.
   // The meta row's cells (client, project, budget) hold their places, so a movable part is moved.

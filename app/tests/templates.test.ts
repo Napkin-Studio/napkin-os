@@ -1007,7 +1007,7 @@ test('the part view: header, quotes, facts with long values on their own row, wh
   const p = f.partParts('mandatories', { name: 'Mandatories', also: [{ key: 'audience', label: 'Audience' }] })
   // head: the name, the decision's own certainty, who wrote it from what
   assert.match(p.head, /^<div class="rv-head"><span class="rv-pname">Mandatories<\/span><span class="rv-pill warn">Medium · inference<\/span><\/div>/)
-  assert.match(p.head, /<p class="rv-meta">Written by <b>the Brief agent<\/b> · from your words and 2 facts · 4 Nov · <span class="rv-dchip"[^>]*>d_031<\/span><\/p>/)
+  assert.match(p.head, /<p class="rv-meta"><span>Written by <b>the Brief agent<\/b> · from your words and 2 facts · 4 Nov · <span class="rv-dchip"[^>]*>d_031<\/span><\/span><\/p>/)
   const h = p.body
   // From your words: deduped by quote, captions in mono, assumed flagged, the ask as your note
   assert.match(h, /<h5>From your words<em>3<\/em><\/h5>/)
@@ -1050,7 +1050,7 @@ test('the part view: more than six facts fold under Show all; empty and person-w
   const mine = { decision: { id: 'd_m', kind: 'edit', agent: 'human', actor: 'human:sam', action: 'edit background', fields_changed: ['background'], timestamp: '5 Nov',
     rationale: 'Our client asked for this.' }, who: { kind: 'person', id: 'me', name: 'You', you: true }, targets: [{ path: 'background' }] }
   const m = pvEnv({ decisions: [mine] }).partParts('background')
-  assert.match(m.head, /Written by <b>You<\/b> · 5 Nov<\/p>$/)
+  assert.match(m.head, /Written by <b>You<\/b> · 5 Nov<\/span><\/p>$/)
   assert.match(m.body, /<span class="rl">Decided<\/span><div>Our client asked for this\.<\/div>/)
   assert.match(m.body, /<div class="rv-by">You · edit · 5 Nov<\/div>/)
 })
@@ -1178,7 +1178,7 @@ test('the drawer credits an accepted proposal to the Brief agent and quotes the 
   assert.equal(f.proposalOf(SMP), null, 'the accept answered it')
 
   const pv = pvEnv({ decisions: [youAccept, secondDraft, judeNo, firstDraft] }).partParts(SMP)
-  assert.match(pv.head, /<p class="rv-meta">Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/p>$/)
+  assert.match(pv.head, /<p class="rv-meta"><span>Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/span><\/p>$/)
   const h = pv.body
   assert.match(h, /<h5>From your words<em>2<\/em><\/h5><div class="pv-said"><blockquote class="rv-q">Make it one thing\.<\/blockquote><p class="rv-src">your note for this draft<\/p><\/div><div class="pv-said"><blockquote class="rv-q">A brief for Lidl Connect\.<\/blockquote><button type="button" class="rv-src pv-cap" data-clf-go="mat_p">your prompt<\/button><\/div>/)
   // What the proposal rested on, not the accept; the ask is not listed twice.
@@ -1205,13 +1205,13 @@ test('an older brief’s accept reads the same, without the id it named', () => 
   const f = drawerEnv([oldAccept, secondDraft, judeNo, firstDraft])
   assert.equal(f.acceptOf(oldAccept)?.decision.id, 'd_P2')
   assert.equal(f.provenance(SMP), 'drafted by Brief agent · you accepted')
-  assert.match(pvEnv({ decisions: [oldAccept, secondDraft, judeNo, firstDraft] }).partParts(SMP).head, /Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/p>$/)
+  assert.match(pvEnv({ decisions: [oldAccept, secondDraft, judeNo, firstDraft] }).partParts(SMP).head, /Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/span><\/p>$/)
   assert.match(f.history(SMP), /<b>You<\/b> accepted the Brief agent’s new version on 2026-10-23T09:05:00\+00:00 — “Accepted the Brief agent’s proposal for single-minded proposition\.”/)
   assert.doesNotMatch(f.history(SMP), /d_P2/)
   // The proposal gone from the chain: still the Brief agent's, by the crew's draft work.
   const gone = drawerEnv([oldAccept])
   assert.equal(gone.provenance(SMP), 'drafted by Brief agent · you accepted')
-  assert.match(pvEnv({ decisions: [oldAccept] }).partParts(SMP).head, /Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/p>$/)
+  assert.match(pvEnv({ decisions: [oldAccept] }).partParts(SMP).head, /Written by <b>the Brief agent<\/b> · accepted by <b>You<\/b> · 2026-10-23T09:05:00\+00:00<\/span><\/p>$/)
 })
 
 test('the drawer offers the second draft, never the first the Review agent sent back', () => {

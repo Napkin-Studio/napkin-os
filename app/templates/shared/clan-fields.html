@@ -464,6 +464,10 @@ clan-chart .clf-chart{cursor:pointer}
 .clf-rv .rv-btn:focus-visible,.clf-rv .rv-chip:focus-visible,.clf-rv .rv-fchip:focus-visible,.clf-rv .rv-schip:focus-visible,.clf-rv .rv-cchip:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
 .clf-rv .rv-host:empty{display:none}
 /* One view per part (ClanFields.partView): the inspector's sections, a part's name at its head. */
+.clf-rv .rv-bec,.clf-rv .rv-rej{grid-template-columns:minmax(0,1fr)}
+.clf-rv .rv-reason .rv-cites{display:flex;max-width:100%;min-width:0;margin:4px 0 0}
+.clf-rv .rv-reason .rv-cites > *{flex:0 1 auto;min-width:0}
+.clf-rv .pv .rv-meta > span,.clf-rv.pv .rv-meta > span{display:inline}
 .clf-rv .rv-pname{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.3;color:var(--clf-ink);min-width:0;overflow-wrap:anywhere}
 .clf-rv.pv > .rv-head:first-child,.clf-rv .pv-in > .rv-head:first-child{align-items:flex-start;margin-bottom:4px}
 .clf-rv .pv-said{display:grid;gap:3px}
@@ -1823,7 +1827,7 @@ var ClanFields=(function(){
   // opts.also lists the other parts that use what it cites ([{key,label}]).
   function partParts(path,opts){
     opts=opts||{}; var nm=opts.name||words(path), x=writeOf(path);
-    var head=function(pill,meta){ return '<div class="rv-head"><span class="rv-pname">'+esc(nm)+'</span>'+(pill||'')+'</div>'+(meta?'<p class="rv-meta">'+meta+'</p>':''); };
+    var head=function(pill,meta){ return '<div class="rv-head"><span class="rv-pname">'+esc(nm)+'</span>'+(pill||'')+'</div>'+(meta?'<p class="rv-meta"><span>'+meta+'</span></p>':''); };
     if(!docId()) return {head:head(), body:'<p class="rv-none">Where this came from shows in the Napkin host.</p>'};
     if(!VIEW) return {head:head(), body:'<p class="rv-none">Reading the record…</p>'};
     if(!textOf(valueAt(path))) return {head:head(), body:'<p class="rv-none">Nothing is written here yet.</p>'};
