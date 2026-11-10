@@ -242,7 +242,9 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
 /* The agency's wordmark in place of its name (Toolbar.tsx AgencyPill, palette.ts pillLogoOf); its icon on a narrow bar. */
 .stacked-lockup:where(.nui, .nui *) .sl-logo { display: flex; align-items: center; height: 15px; }
 .stacked-lockup:where(.nui, .nui *) .sl-logo img { display: block; width: auto; height: auto; max-width: 100%; }
-.stacked-lockup:where(.nui, .nui *) .sl-logo .sl-wordmark { max-width: min(120px, 100%); max-height: 15px; }
+/* A fixed height and a capped width, so a wide wordmark's box is the size it draws at (it kept its
+   intrinsic width before, leaving empty pill after B+G's mark: owner 11-11). */
+.stacked-lockup:where(.nui, .nui *) .sl-logo .sl-wordmark { width: auto; height: 15px; max-width: 120px; object-fit: contain; object-position: left center; }
 .stacked-lockup:where(.nui, .nui *) .sl-logo .sl-icon { display: none; width: 24px; height: 24px; border-radius: 5px; }
 .stacked-lockup:where(.nui, .nui *) .sl-mono {
   font-family: var(--font-mono);
