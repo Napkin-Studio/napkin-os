@@ -1830,3 +1830,32 @@ def test_analysis_carries_the_snapshot_in_json_and_markdown(tmp_path, monkeypatc
     assert res["run_config"]["cfg"] == snap["cfg"] and res["run_config"]["git_head"] == snap["git_head"]
     md = (out / "analysis.md").read_text()
     assert "Run configuration" in md and snap["git_head"] in md and '"INCLUDE_IDEA3": true' in md
+
+
+# =============================================================================================== F6: the tie rule is R2's literal
+def test_a_proposition_item_ties_when_the_two_propositions_alone_are_identical_whatever_the_insights(tmp_path):
+    # T1 and C1 are both drafted from a reset plan, so their propositions are the same text; their insights differ
+    _, inputs, arms_by, packets, key = packets_for(tmp_path, ["c01"])
+    assert arms_by["c01"]["T1"]["proposition"] == arms_by["c01"]["C1"]["proposition"]
+    assert ee.tidy(arms_by["c01"]["T1"]["insight"]) != ee.tidy(arms_by["c01"]["C1"]["insight"])
+    ties = {k.split("|")[1]: v for k, v in key["auto_ties"].items()}
+    assert ties["T1vC1.prop"] == "identical text"
+    assert not any(k["comparison"] == "T1vC1.prop" for k in key["pairs"].values())
+    assert any(k["comparison"] == "T1vC1.ins" for k in key["pairs"].values())          # the insights differ: rated
+
+
+def test_an_insight_item_ties_when_the_two_insights_are_identical_and_the_propositions_may_differ(tmp_path):
+    # B and C1 are drafted from the same plan insight; make their insights identical and their propositions differ
+    h = standard_handlers(draft_brief_whole=lambda s, p, sc: draft_reply(insight="Same insight", prop="Line from " + p["plan"]["parts"]["single_minded_proposition"]["must_say"][:10]))
+    _, _, arms_by, _, key = packets_for(tmp_path, ["c01"], h)
+    ties = {k.split("|")[1]: v for k, v in key["auto_ties"].items()}
+    assert ties["C1vB.ins"] == "identical text"
+    assert any(k["comparison"] == "C1vB.prop" for k in key["pairs"].values())            # propositions differ: rated
+    assert not any(k["comparison"] == "C1vB.ins" for k in key["pairs"].values())
+
+
+def test_tidy_equality_is_what_makes_texts_identical_so_a_label_or_full_stop_never_hides_a_tie(tmp_path):
+    h = standard_handlers(draft_brief_whole=lambda s, p, sc: draft_reply(prop="Draft for testing: One plain thought.", insight="I " + p["plan"]["parts"]["insight"]["must_say"]),
+                          rewrite_brief_parts=lambda s, p, sc: {"single_minded_proposition": entry("one plain thought")})
+    _, _, _, _, key = packets_for(tmp_path, ["c01"], h)
+    assert {k.split("|")[1]: v for k, v in key["auto_ties"].items()}["C1vB.prop"] == "identical text"

@@ -1683,7 +1683,9 @@ def build_packets(inputs: list[dict], arms_by: dict, size: int | None = None):
                 key["auto_ties"][tk] = ra or rb or "no_gate"
                 continue
             a, c = (tidy(ta[0]), tidy(ta[1])), (tidy(tb[0]), tidy(tb[1]))
-            same = a[0] == c[0] if question == INS else a == c
+            # R2: "two texts identical after tidy are a tie without a rating": the texts being compared, so a proposition item
+            # ties when the two propositions alone are identical, whatever their insights (F6)
+            same = (a[0] == c[0]) if question == INS else (a[1] == c[1])
             if same:
                 key["auto_ties"][tk] = "identical text"
                 continue
