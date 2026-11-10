@@ -87,10 +87,7 @@ WHAT = {
 }
 
 
-def _listed(words) -> str:
-    """'a, b and c': names in a sentence."""
-    w = list(words)
-    return w[0] if len(w) == 1 else ", ".join(w[:-1]) + " and " + w[-1]
+_listed = checks.listed
 
 
 def _obj(props: dict, required=None) -> dict:
@@ -195,6 +192,7 @@ def draft_schema(keys):
 
 
 # -- review ----------------------------------------------------------------------------------
+_TESTS, _ANTI = checks.guide_parts()
 REVIEW_SYSTEM = """You are the agency's brief judge. Review the WHOLE creative brief once, as a creative team would
 receive it, against the BetterBriefs rubric (the global study on briefing) and against its own evidence.
 
@@ -222,15 +220,7 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
 7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary. It is "multiple" when the
    brief serves more than one problem, audience or message, or when the client's own input was a wish-list of
    objectives, audiences and messages that was never narrowed to one: say in split_into what the one choice is.
-8. part tests: `tests` holds, for @TESTED@, the planning
-   tests for that part (the agency's planning skill). Judge each part against its tests. A part that fails goes in
-   `revise` with one instruction that names the test and the fix. `part_checks` is what code measured (words against
-   the limit, items against the item cap, sentences, and whether the proposition has a standalone 'and'). A flagged 'and' is yours to decide: it
-   fails when it joins two thoughts, and passes when it sits inside one.
-9. anti-patterns, also `revise`: a proposition that is really a tagline, or is the brand's own existing line; two
-   thoughts smuggled into one (an objection holding several doubts, a job asking for several changes); a wish-list
-   (more than one problem, audience or message); a medium whose job is really the creative idea; words a normal person
-   would not say out loud.""".replace("@TESTED@", _listed(checks.TESTED_WORDS.values()))
+8. """ + _TESTS + "\n9. " + _ANTI
 
 
 def review_schema(keys):
