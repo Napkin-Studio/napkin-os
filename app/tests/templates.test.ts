@@ -2371,8 +2371,9 @@ test('research: the report body is the mock’s, and every section of the record
   const r = fn(RT, 'renderReport')
   // band, stats, 00 the ask, headline and summary, lens × market sections, then the record
   for (const part of ['rpBand(r, lk)', 'rpStats()', 'rpAsk(0)', 'h2 class="headline"', 'rep-sum', 'rpSection(s, n, ms', 'rpConfirm(r', 'rpNotResearched(r',
-    'rp-asks-at', 'evAppendixHtml(evm())', 'rep-foot'])
+    'rp-asks-at', 'evAppendixHtml(evm())'])
     assert.ok(r.includes(part), part)
+  assert.ok(!r.includes('rep-foot'), 'the record’s versions and hashes are not on the page')
   // Read the ask again sits under the ask; All 19 fields and Your request open what they name.
   const ask = fn(RT, 'rpAsk')
   assert.match(ask, /data-act="extract"[^>]*>Read the ask again</)
@@ -3478,4 +3479,45 @@ test('the agent stage: the caption says who asks above the card, and the rails s
     assert.match(src, new RegExp(`${p}\\.sstage\\.nk-asking\\{height:auto;min-height:clamp\\(`), `${name}: asking, the stage grows with the card`)
     assert.doesNotMatch(src, /@media \(max-width:980px\)\{ (\.rt-work )?\.sstage/, `${name}: the old one-column switch is gone`)
   }
+})
+
+// Confirming a part of the ask (owner, 2026-11-11): in the side panel, never a modal, in plain words,
+// and the yes is written with the person's note.
+test('research: Confirm opens in the side panel in plain words, and writes the value with the note', () => {
+  assert.match(fn(RT, 'doConfirm'), /inspect\('ask:'\+k, false\)/)
+  assert.doesNotMatch(fn(RT, 'doConfirm'), /openDialog/, 'no modal for confirm')
+  const camp: Record<string, unknown> = { client_org: { origin: 'proposed', value: { name: 'Guinness', ref: 'org/guinness' }, fact_ids: ['f_1', 'f_2', 'f_3'], decision: 'd_X' } }
+  const pins = { f_1: { key: 'roster.client_org', value: 'Guinness' }, f_2: { key: 'brand.owner', value: 'Diageo' }, f_3: { key: 'brand.name', value: 'Guinness' } }
+  const writes: unknown[][] = []
+  const els: Record<string, { value: string }> = { 'cf-note-client_org': { value: '  It is their brand  ' } }
+  const env = {
+    FIELD: { client_org: { k: 'client_org', label: 'Client', type: 'ref' } }, BANDS: {}, MARKET: {}, camp: () => camp, pins: () => pins, arr, isObj, esc, listJoin,
+    clipT: (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t), plural: (n: number, w: string) => `${n} ${n === 1 ? w : w + 's'}`,
+    pinLabel: (p: { key: string }) => p.key.split('.').pop(), fmtAny: (p: { value: string }) => p.value, verdictState: () => ({ unanswered: [] }),
+    reportLocked: () => false, WHO: { shell: { id: 'tia@tbwa', name: 'Tia' } }, reviewer: () => '', human: (x: string) => x, renderValue: () => '',
+    $: (id: string) => els[id] || null, byOf: () => 'tia@tbwa', setReviewer: () => {}, hasHost: () => true, mintDecisionId: () => 'd_NEW',
+    renderSel: () => {}, toast: () => {}, loadChain: () => {}, VIEW: { sel: 'ask:client_org', trail: [] }, CONF: { ui: {} as Record<string, unknown> },
+    window: { ClanFields: null, clan: { patchData: (...a: unknown[]) => { writes.push(a); return Promise.resolve({ ok: true }) } } },
+  }
+  const f = lift<{ confirmViewHtml(k: string): string; confirmWrite(k: string): void }>(RT, ['confirmViewHtml', 'confirmWrite', 'plainValue', 'askQuestion', 'codeText'], env)
+  const h = f.confirmViewHtml('client_org')
+  assert.match(h, /<h3 class="cf-q">Is the client Guinness\?<\/h3>/)
+  assert.match(h, /We worked this out from 3 facts/)
+  assert.equal((h.match(/class="cf-fact" data-sel="f_/g) || []).length, 3, 'the facts are tappable rows')
+  assert.match(h, /Yes, that’s right/); assert.match(h, /Change it…/); assert.match(h, /Not now/)
+  assert.match(h, /<details class="cf-note"><summary>Add a note<\/summary>/, 'the note stays folded')
+  for (const bad of [/org\//, /#campaign/, /patch-data/i, /pinned/i, /\bpins?\b/, /inference/i, /[0-9a-f]{8}-[0-9a-f]{4}-/, /What will be written/])
+    assert.doesNotMatch(h, bad, `no developer text: ${bad}`)
+  f.confirmWrite('client_org')
+  assert.equal(writes.length, 1)
+  const [path, value, dec] = writes[0] as [string, Record<string, unknown>, Record<string, unknown>]
+  assert.equal(path, 'campaign.client_org')
+  assert.deepEqual([value.origin, value.confirmed_from, value.by, (value.value as { name: string }).name], ['confirmed', 'proposed', 'human:tia@tbwa', 'Guinness'])
+  assert.deepEqual([dec.action, dec.pinned, dec.rationale], ['confirm', true, 'Confirmed the client: Guinness — It is their brand'])
+})
+
+test('research: nothing the person sees names an address, a code, patch-data or a contract id', () => {
+  for (const bad of ['W1P-I5', 'W2-O2', 'W5-Z1', 'W2-A3', 'via patch-data', 'Heads up.', 'What will be written', 'class="addr"', "class=\"path\"", 'contract campaign-clan/1', 'this view writes nothing', "preview('Request'"])
+    assert.ok(!RT.includes(bad), bad)
+  assert.doesNotMatch(fn(RT, 'renderValue'), /esc\(v&&v\.ref\)|esc\(x\.ref\)|sha256/, 'no entity code or hash beside a value')
 })
