@@ -13,11 +13,17 @@ need rewriting, Jude says why, Dara rewrites those parts.
      The loop holds no cleaning of its own, and no claim's kind or verdict puts a part in `todo`.
   4. jev again on what changed, for the log: did the rewrite help?
 
-jev not configured or not answering: the loop says so in the log and the brief stands as written.
+jev not configured or not answering: the loop says so in the log and the brief stands as written. Called with
+`whole` (the planned job's draft) it makes no model call then and leaves the brief to the whole-brief review.
+
+With `whole`, Laurence's checks (feature brief-jev-checks, ADR 0035) ride on the same calls: Jude's call carries
+the planning tests and what code measured for the parts the job wrote, whether or not jev flagged anything, and
+what code can measure goes into the same rewrite. The wording of the test rules is checks.tests_guide's.
 """
 from __future__ import annotations
 
 from ..jev import JevError, choice, noul
+from . import checks
 from .fields import KEYS, LABELS, filled
 from .planned import DIMS, DRAFT_SYSTEM, REWRITE_NOTE, WHAT, _short, draft_schema
 
@@ -62,15 +68,32 @@ def _obj(props):
     return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
 
 
-def jude_schema(keys):
+def jude_system(tested=()) -> str:
+    """Jude's prompt; with parts to test, the planning tests' rules as the review prompt words them."""
+    if not tested:
+        return JUDE_SYSTEM
+    return (JUDE_SYSTEM + "\n\nThe payload also carries `tested` (parts the writer drafted), `tests` (the planning "
+            "tests for each) and `part_checks`. For each tested part answer in `tests`: {pass, failed_test, "
+            "instruction}, whether or not the checker flagged it.\n"
+            + checks.tests_guide("`tests` (pass false, one instruction that names the test and the fix)",
+                                 "`tests` with pass false"))
+
+
+def jude_schema(keys, tests=()):
+    """`tests`: the parts Jude judges against the planning tests. Their answers come under one optional key, so
+    an answer without it (what every earlier caller and fake gives) still validates."""
     s = {"type": "string"}
-    return _obj({"parts": _obj({k: _obj({"rework": {"type": "boolean"}, "why": s, "instruction": s}) for k in keys}),
+    sch = _obj({"parts": _obj({k: _obj({"rework": {"type": "boolean"}, "why": s, "instruction": s}) for k in keys}),
                  "dimensions": {"type": "array", "items": _obj({
                      "dimension": {"type": "string", "enum": DIMS}, "instruction": s,
                      "parts": {"type": "array", "items": {"type": "string", "enum": list(KEYS)}}})},
                  "chain": _obj({"issue": {"anyOf": [s, {"type": "null"}]},
                                 "parts": {"type": "array", "items": {"type": "string", "enum": list(KEYS)}}}),
                  "questions": {"type": "array", "items": s}})
+    if tests:
+        sch["properties"]["tests"] = {"type": "object", "additionalProperties": False, "properties": {
+            k: _obj({"pass": {"type": "boolean"}, "failed_test": s, "instruction": s}) for k in tests}}
+    return sch
 
 
 def text_of(v) -> str:
@@ -108,53 +131,91 @@ def jev_read(job, values: dict, said: str, parts: list, what: str) -> dict | Non
 
 
 def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: list, plan=None, *, clean,
-        claims=None) -> dict:
-    """The loop over the brief as it stands. Returns {"before", "after", "jude", "rewritten", "todo"}:
+        claims=None, whole=None) -> dict:
+    """The loop over the brief as it stands. Returns {"before", "after", "jude", "rewritten", "todo", "by"}:
     rewritten = `clean(Dara's answer, the parts)` (provenance.clean_parts), `why` being Jude's. `claims`:
-    each part's claims as they stand, for Jude and the rewrite."""
+    each part's claims as they stand, for Jude and the rewrite. `whole`: the planned job's draft; when it is
+    given the planning tests and code's measures join Jude's call and code's send-backs the rewrite, and `by`
+    says who named each rewritten part (jude, code or both)."""
     claims = claims or {}
     rl = job.caps.runlog
     written = [k for k in open_keys if filled(values.get(k)) and k != "open_questions"]
     empty = [k for k in open_keys if not filled(values.get(k)) and k != "open_questions"]
     before = jev_read(job, values, said, written, "jev_before")
-    out = {"before": before, "after": None, "jude": {}, "rewritten": {}, "todo": {}, "questions": []}
-    if before is None and not empty:
-        return out
+    out = {"before": before, "after": None, "jude": {}, "rewritten": {}, "todo": {}, "questions": [], "by": {}}
+    if before is None and (whole is not None or not empty):
+        return out  # with `whole` the caller falls back to the whole-brief review, so no call is spent here
+    tested = [k for k in checks.TESTED if whole and k in whole]
     flagged = [k for k in written if before and before["p"][k] >= FLAG_AT]
     chain_doubt = bool(before and before["chain"] < FLAG_AT)
     missing = [d for d in DIMS if before and before["dims"].get(d) == "missing"]
     ask = flagged + empty
-    if not ask and not chain_doubt and not missing:
+    sent = checks.revisions(whole) if whole else []
+    if not ask and not chain_doubt and not missing and not tested and not sent:
         rl.note("check_clean", detail="jev flagged nothing and every part is written")
         return out
-    payload = {"brief": {k: values.get(k) for k in KEYS if filled(values.get(k))}, "client_said": said[:8000],
-               "flagged": {k: round(before["p"][k], 3) for k in flagged} if before else {},
-               "empty": empty, "chain_holds": round(before["chain"], 3) if before else None,
-               "missing_dimensions": {d: DIM_Q[d] for d in missing},
-               "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
-               "claims": {k: [{x: c[x] for x in ("text", "kind", "cites", "working") if x in c} for c in cs]
-                          for k, cs in claims.items() if cs}}
-    jude = job.caps.model.structured("explain_flags", JUDE_SYSTEM, payload, jude_schema(ask),
-                                     max_tokens=6000)
+    jude, todo, why_of = {}, {}, {}
+    if ask or chain_doubt or missing or tested:
+        payload = {"brief": {k: values.get(k) for k in KEYS if filled(values.get(k))}, "client_said": said[:8000],
+                   "flagged": {k: round(before["p"][k], 3) for k in flagged} if before else {},
+                   "empty": empty, "chain_holds": round(before["chain"], 3) if before else None,
+                   "missing_dimensions": {d: DIM_Q[d] for d in missing},
+                   "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
+                   "claims": {k: [{x: c[x] for x in ("text", "kind", "cites", "working") if x in c} for c in cs]
+                              for k, cs in claims.items() if cs}}
+        if tested:
+            payload.update({"tested": tested, "tests": checks.tests(tested), "part_checks": checks.facts(whole)})
+        jude = job.caps.model.structured("explain_flags", jude_system(tested), payload, jude_schema(ask, tests=tested),
+                                         max_tokens=6000)
     out["jude"] = jude
     todo = {k: v["instruction"] for k, v in (jude.get("parts") or {}).items()
             if k in ask and v.get("rework") and str(v.get("instruction") or "").strip()}
+    by = {k: "jude" for k in todo}
     chain = jude.get("chain") or {}
     if chain.get("issue"):
         for k in chain.get("parts") or []:
             if k in open_keys and k != "open_questions":
                 todo.setdefault(k, f"Make it follow the brief's one argument: {chain['issue']}")
+                by.setdefault(k, "jude")
     for dfix in jude.get("dimensions") or []:
         ins = str(dfix.get("instruction") or "").strip()
         for k in dfix.get("parts") or []:
             if ins and k in open_keys and k != "open_questions":
                 todo[k] = (todo[k] + " Also: " + ins) if k in todo else ins
+                by.setdefault(k, "jude")
+    # Laurence's tests, as Jude answered them: a part he fails goes back on his instruction
+    unanswered, failed = [], []
+    for k in tested:
+        t = (jude.get("tests") or {}).get(k)
+        if not isinstance(t, dict) or "pass" not in t:
+            unanswered.append(k)
+            continue
+        ins = str(t.get("instruction") or "").strip() or (
+            f"Fix what fails the {t['failed_test']} test." if str(t.get("failed_test") or "").strip() else "")
+        if t["pass"] is False and ins:
+            failed.append(k)
+            why_of[k] = f"it fails the {t['failed_test']} test" if str(t.get("failed_test") or "").strip() else ins
+            todo[k] = (todo[k] + " Also: " + ins) if k in todo else ins
+            by.setdefault(k, "jude")
+    if unanswered:
+        rl.note("tests_unanswered", parts=unanswered)
+    # what code can measure goes back with Jude's own list, once: his word stands for a part he already named
+    extra = [x for x in sent if x["part"] not in todo]
+    if extra:
+        for x in extra:
+            todo[x["part"]] = x["instruction"]
+            by[x["part"]] = "code"
+        rl.note("checks_sent_back", parts=[x["part"] for x in extra])
+    for x in sent:
+        if by.get(x["part"]) == "jude" and x["part"] not in [e["part"] for e in extra]:
+            by[x["part"]] = "both"
     out["questions"] = list(jude.get("questions") or [])
     disagreed = [k for k in flagged if not (jude.get("parts") or {}).get(k, {}).get("rework")]
     rl.note("jude_on_flags", flagged=flagged, empty=empty, rework=sorted(todo), disagreed_with_jev=disagreed,
             chain_issue=bool(chain.get("issue")), missing_dimensions=missing,
-            dimension_fixes=[{"dimension": x.get("dimension"), "parts": x.get("parts")} for x in jude.get("dimensions") or []])
-    out["todo"] = todo
+            dimension_fixes=[{"dimension": x.get("dimension"), "parts": x.get("parts")} for x in jude.get("dimensions") or []],
+            **({"tested": tested, "tests_failed": failed} if tested else {}))
+    out["todo"], out["by"] = todo, by
     if not todo:
         return out
     pay = {"client_said": said[:8000], "plan": plan, "brief": {k: values.get(k) for k in KEYS if filled(values.get(k))},
@@ -165,10 +226,16 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
     got = job.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, pay,
                                     draft_schema(list(todo)), max_tokens=8000)
     for k, v in clean(got, list(todo)).items():
-        why = ((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue") or ""
-        out["rewritten"][k] = {**v, "why": _short(f"Rewritten on Jude's note: {why}", 300), "revised": True,
-                               # placing records the loop: Jude's note, in his words, on the draft he sent back
-                               "sent_back": {"instruction": _short(todo[k], 400), "why": _short(why, 400)}}
+        if by.get(k) == "code":  # nobody read it: a check measured it, and says so
+            why = todo[k]
+            note, back = f"Rewritten on a check: {why}", {"instruction": _short(todo[k], 400), "why": _short(why, 400),
+                                                          "by": "code"}
+        else:
+            why = why_of.get(k) or ((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue") or ""
+            note = f"Rewritten on Jude's note: {why}"
+            # placing records the loop: Jude's note, in his words, on the draft he sent back
+            back = {"instruction": _short(todo[k], 400), "why": _short(why, 400)}
+        out["rewritten"][k] = {**v, "why": _short(note, 300), "revised": True, "sent_back": back}
     after_vals = {**values, **{k: v["value"] for k, v in out["rewritten"].items()}}
     out["after"] = jev_read(job, after_vals, said, [k for k in open_keys if filled(after_vals.get(k))
                                                      and k != "open_questions"], "jev_after")
