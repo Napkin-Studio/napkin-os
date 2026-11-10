@@ -4,6 +4,7 @@ sub-pools, and the arms driven by a scripted fake model. Fixtures only: no model
 
 import copy
 import json
+import os
 import re
 import threading
 
@@ -160,7 +161,7 @@ def test_select_writes_the_list_with_hashes_and_a_timestamp_and_refuses_to_selec
     ee.cmd_select(a)
     sel = json.loads((out / "inputs/selection.json").read_text())
     assert [r["id"] for r in sel["runs"]] == ["c01", "c02", "t01"]
-    assert all(len(r["source_runlog_sha256"]) == 64 for r in sel["runs"]) and sel["selected_at"].endswith("Z")
+    assert all(len(r["source_runlog_file_sha256"]) == 64 for r in sel["runs"]) and sel["selected_at"].endswith("Z")
     assert (out / "inputs/c01.json").exists()
     with pytest.raises(SystemExit):
         ee.cmd_select(a)
@@ -1975,3 +1976,118 @@ def test_same_draft_picked_is_reported_beside_order_agreement(tmp_path):
     res, md, _ = md_for(tmp_path)
     assert res["idea2"]["same_draft_picked"] == {"sonnet": 1.0, "opus": 1.0} and res["idea2"]["order_agreement"] == {"sonnet": 1.0, "opus": 1.0}
     assert "Same draft picked in both orders (S v O)" in md and "Same draft picked in both orders (T1 v C1)" in md and "(R1 v R0)" in md
+
+
+# =============================================================================================== F9: the rest
+def test_the_selection_hash_is_the_files_own_sha256_and_a_legacy_selection_gains_it_unchanged(tmp_path):
+    import hashlib
+    import subprocess
+    src, out = fake_source(tmp_path), tmp_path / "out"
+    for f in (src / "runs").glob("*/runlog.jsonl"):
+        f.write_text(f.read_text() + "\n")                      # a real run log ends with a newline
+    ee.cmd_select(type("A", (), {"out": str(out), "src": str(src)})())
+    sel = json.loads((out / "inputs/selection.json").read_text())
+    for r in sel["runs"]:
+        f = src / "runs" / r["name"] / "runlog.jsonl"
+        shasum = subprocess.run(["shasum", "-a", "256", str(f)], capture_output=True, text=True).stdout.split()[0]
+        assert r["source_runlog_file_sha256"] == shasum == hashlib.sha256(f.read_bytes()).hexdigest()
+        assert r["source_runlog_lines_sha256"] != shasum                 # the old computation: lines joined, no final newline
+    # a selection written the old way: only `source_runlog_sha256`, the lines hash
+    legacy = copy.deepcopy(sel)
+    for r in legacy["runs"]:
+        r["source_runlog_sha256"] = r.pop("source_runlog_lines_sha256")
+        del r["source_runlog_file_sha256"]
+    (out / "inputs/selection.json").write_text(json.dumps(legacy))
+    ee.cmd_fix_selection_hash(type("A", (), {"out": str(out)})())
+    fixed = json.loads((out / "inputs/selection.json").read_text())
+    assert [r["id"] for r in fixed["runs"]] == [r["id"] for r in legacy["runs"]] and fixed["selected_at"] == legacy["selected_at"]
+    for r, was in zip(fixed["runs"], legacy["runs"]):
+        assert {k: v for k, v in r.items() if k != "source_runlog_file_sha256"} == was       # nothing else changed
+        assert r["source_runlog_file_sha256"] == hashlib.sha256((src / "runs" / r["name"] / "runlog.jsonl").read_bytes()).hexdigest()
+    assert "sha256sum" in fixed["hash_note"]
+    (src / "runs" / "c01-off" / "runlog.jsonl").write_text("changed")          # the source moved since it was selected
+    (out / "inputs/selection.json").write_text(json.dumps(legacy))
+    with pytest.raises(SystemExit):
+        ee.cmd_fix_selection_hash(type("A", (), {"out": str(out)})())
+    assert json.loads((out / "inputs/selection.json").read_text()) == legacy
+
+
+def test_two_replay_or_rate_processes_cannot_run_at_once(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    ee.cmd_pilot(A)
+    with ee.run_lock(out, "replay"):
+        for cmd in (ee.cmd_replay, ee.cmd_rate, ee.cmd_pilot, ee.cmd_measure_raters):
+            with pytest.raises(SystemExit) as e:
+                cmd(A)
+            assert "already holds" in str(e.value) and "`replay`" in str(e.value) and str(os.getpid()) in str(e.value)
+    ee.cmd_replay(A)                                                        # released: runs
+    assert not (out / ".run.lock").read_text()                              # and leaves no claim behind
+
+
+def test_the_lock_is_dropped_when_a_command_fails(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit):
+        ee.cmd_replay(A)                                                    # no pilot yet: refused inside the lock
+    with ee.run_lock(out, "again"):                                         # so the lock is free
+        pass
+
+
+def test_main_drops_the_production_recorders_from_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("NAPKIN_RECORD_DIR", str(tmp_path / "rec"))
+    monkeypatch.setenv("NAPKIN_METRICS_FILE", str(tmp_path / "metrics.jsonl"))
+    (tmp_path / "out").mkdir()
+    ee.main(["--out", str(tmp_path / "out"), "cost"])
+    assert "NAPKIN_RECORD_DIR" not in os.environ and "NAPKIN_METRICS_FILE" not in os.environ
+    from napkin import metrics
+    metrics.record("model_calls", x=1)
+    metrics.emit("model", x=1)
+    assert not (tmp_path / "rec").exists() and not (tmp_path / "metrics.jsonl").exists()
+    monkeypatch.setenv("NAPKIN_RECORD_DIR", "x")
+    assert "NAPKIN_RECORD_DIR" not in ee._child_env()                        # and the child process never sees them either
+
+
+def test_replay_only_the_pilot_briefs_respects_the_pilots_cut_decision(tmp_path, monkeypatch):
+    A, out = pilot_setup(tmp_path, monkeypatch)
+    ee.cmd_pilot(A)
+    pj = json.loads((out / "pilot.json").read_text())
+    A.only = ["c01", "t01"]
+    (out / "pilot.json").write_text(json.dumps({**pj, "decision": "stop"}))
+    with pytest.raises(SystemExit) as e:
+        ee.cmd_replay(A)
+    assert "stop and report" in str(e.value)
+    (out / "pilot.json").write_text(json.dumps({**pj, "decision": "drop_survival"}))
+    for b in ("c01", "t01"):                      # as if the pilot had been run before the cut: its survival arms are not there
+        for n in ("SV1", "SV2"):
+            (out / "arms" / b / f"{n}.json").unlink()
+    ee.cmd_replay(A)
+    assert not list((out / "arms").glob("*/SV*.json"))                         # --only the pilot's own briefs did not run them
+    (out / "pilot.json").write_text(json.dumps({**pj, "decision": "run_all"}))
+    ee.cmd_replay(A)
+    assert len(list((out / "arms").glob("*/SV*.json"))) == 4
+
+
+def test_a_ranking_that_does_not_name_every_candidate_is_recorded_as_filled_in(tmp_path):
+    inp = make_inp()
+    deps = routes_deps(inp)
+    short = standard_handlers(rank_smp=lambda s, p, sc: {"ranking": [0], "why_winner": "w", "losers": []},
+                              rank_insight=lambda s, p, sc: {"ranking": [0], "why_winner": "w", "losers": []})
+    s = ee.arm_S(Fake(short), inp, deps)
+    assert s["ranking_complete"] is False and s["ranking_calls"] == [{"purpose": "rank_smp", "candidates": 8, "named": 1, "filled_in": 7, "complete": False}]
+    h = ee.arm_H1(Fake(short), inp, {})
+    assert h["ranking_complete"] is False and h["ranking_calls"][0]["filled_in"] == 8
+    full = ee.arm_S(Fake(standard_handlers()), inp, deps)
+    assert full["ranking_complete"] is True and full["ranking_calls"][0]["filled_in"] == 0
+    odd = standard_handlers(rank_smp=lambda s, p, sc: {"ranking": [0, 0, 99, True, 1, 2, 3, 4], "why_winner": "w", "losers": []})
+    r = ee.arm_S(Fake(odd), inp, deps)["ranking_calls"][0]
+    assert r["complete"] is False and r["named"] == 5            # a repeat, an out-of-range index and a boolean name nobody new
+
+
+def test_analysis_reports_how_often_a_ranking_was_filled_in(tmp_path):
+    short = standard_handlers(rank_smp=lambda s, p, sc: {"ranking": [0], "why_winner": "w", "losers": []})
+    out, inputs, arms_by, packets, key = packets_for(tmp_path, [f"c{i:02d}" for i in range(1, 6)], short)
+    res = ee.analyse(out, inputs, arms_by, key, rating_for(key, "S"))
+    assert res["rankings"]["S"] == {"ranked": 5, "not_complete": [f"c{i:02d}" for i in range(1, 6)], "candidates_filled_in": 35}
+    assert res["rankings"]["H1"]["not_complete"] == [] and res["rankings"]["H1"]["ranked"] == 5
+    md = ee.render_md(res)
+    assert "Rankings the harness had to fill in" in md and "- S: 5 ranked, 5 not complete" in md and "35 candidates filled in" in md

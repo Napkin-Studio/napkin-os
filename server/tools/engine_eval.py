@@ -9,6 +9,7 @@ PROTOCOL.md, with its "Review amendments" R1-R12, which win where they differ). 
                     timestamp) BEFORE any model call; refuses to select twice          writes inputs/
     smoke           ONE tiny model call through the replay call path, its cost logged   writes cost_log.jsonl
     smoke-rate      ONE rater call on a made-up item, its cost logged                    writes rater_cost_log.jsonl
+    fix-selection-hash  add each run log's sha256sum-compatible hash beside the one select wrote (the selection is unchanged)
     pilot           briefs c01 and t01, every arm; then the projection (R5) and the cut decision
                                                                         writes arms/, cost_log.jsonl, pilot.json
     replay          every brief, every arm, per brief in the protocol's order; a settled arm is kept
@@ -30,7 +31,10 @@ plain `claude -p`. Nothing here reads or writes client material. Outputs are und
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
+import fcntl
+import functools
 import hashlib
 import json
 import math
@@ -856,7 +860,7 @@ def cut_decision(rows: list[dict], n_pilot: int, n_total: int) -> dict:
 # ============================================================================ the call path
 def _child_env() -> dict:
     env = dict(os.environ)
-    for k in ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL"):
+    for k in ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "NAPKIN_RECORD_DIR", "NAPKIN_METRICS_FILE"):
         env.pop(k, None)
     return env
 
@@ -1077,6 +1081,31 @@ class Caller:
                                  "ok": err is None, "error": err})
 
 
+class RankCapture:
+    """Wraps a model call so the ranker's raw reply is kept (F9): `drafters.rank` quietly drops duplicates and invalid
+    indices and appends any candidate the ranker left out, so the order it returns looks complete when it was not.
+    `seen` has one entry per ranking call: how many candidates, how many the ranker named validly, and whether the
+    ranking was complete (every candidate named exactly once)."""
+
+    def __init__(self, call):
+        self.call, self.seen = call, []
+
+    def __call__(self, purpose, system, payload, schema):
+        raw = self.call(purpose, system, payload, schema)
+        if purpose.startswith("rank_"):
+            n = len(payload.get("candidates") or [])
+            r = (raw or {}).get("ranking") if isinstance(raw, dict) else None
+            ints = [i for i in r if isinstance(i, int) and not isinstance(i, bool)] if isinstance(r, list) else []
+            named = len(set(i for i in ints if 0 <= i < n))
+            self.seen.append({"purpose": purpose, "candidates": n, "named": named, "filled_in": n - named,
+                              "complete": len(ints) == n and sorted(ints) == list(range(n))})
+        return raw
+
+    @property
+    def complete(self) -> bool | None:
+        return all(x["complete"] for x in self.seen) if self.seen else None
+
+
 # ============================================================================ the arms (5.1-5.4)
 def draft_step(call, payload: dict) -> dict:
     """One `draft_brief_whole` call exactly as production sends it, then `checks.mark_assumptions` (code only)."""
@@ -1115,12 +1144,13 @@ def arm_H1(call, inp, deps, plain: bool = False):
     shown = candidates.shuffled(len(pool), job_id)
     cands = [{"value": pool[i]["text"], "words": pool[i]["words"], **({} if plain else {"counter_evidence": pool[i]["counter_evidence"]})}
              for i in shown]
-    order, why, losers = rank(call, "insight", cands, context=rank_context_insight(payload), note=INSIGHT_RANK_NOTE)
+    rc = RankCapture(call)
+    order, why, losers = rank(rc, "insight", cands, context=rank_context_insight(payload), note=INSIGHT_RANK_NOTE)
     order = [shown[i] for i in order]
     ci = choose_insight(pool, order)
     plan_i = next(i for i, p in enumerate(pool) if p["source"] == "plan")
     res = {"hypotheses": hyps, "pool": pool, "shown": shown, "order": order, "why_winner": why,
-           "plan_rank": order.index(plan_i), "plan_insight": plan_insight,
+           "plan_rank": order.index(plan_i), "plan_insight": plan_insight, "ranking_complete": rc.complete, "ranking_calls": rc.seen,
            "plan_rank_note": "the plan's insight carries no counter-evidence of its own"}
     if ci is None:
         return {**res, "status": "no_gate", "chosen": None}
@@ -1162,10 +1192,12 @@ def arm_routes(call, inp, deps, arm: str, seeds) -> dict:
     pool = candidates.build_pool(B[PROP]["value"], new)
     if len(pool) < 2:
         return {"status": "no_gate", "pool": pool, "order": [], "winner": None}
-    order, why, losers, shown = candidates.rank_pool(call, pool, candidates.rank_context(parts, B[INS]["value"]), f"{inp['id']}:{arm}")
+    rc = RankCapture(call)
+    order, why, losers, shown = candidates.rank_pool(rc, pool, candidates.rank_context(parts, B[INS]["value"]), f"{inp['id']}:{arm}")
     w = candidates.choose_new(pool, order)
     first_i = next(i for i, p in enumerate(pool) if p["source"] == candidates.FIRST_DRAFT)
-    res = {"pool": pool, "order": order, "shown": shown, "why_winner": why, "winner": w}
+    res = {"pool": pool, "order": order, "shown": shown, "why_winner": why, "winner": w, "ranking_complete": rc.complete,
+           "ranking_calls": rc.seen}
     if w is None:
         return {**res, "status": "no_gate"}
     return {**res, "winner_value": pool[w]["value"], "winner_seed": pool[w]["seed"], "winner_source": pool[w]["source"],
@@ -1376,6 +1408,34 @@ def load_inputs(out: Path, only=None) -> list[dict]:
     return [json.loads((out / "inputs" / f"{r['id']}.json").read_text()) for r in sel if not only or r["id"] in only]
 
 
+def _lines_hash(lines: list[str]) -> str:
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+def cmd_fix_selection_hash(a):
+    """Add the runlog's real file hash (what `sha256sum` prints) beside the hash an earlier select wrote, which was taken over
+    the lines joined by newlines and so never matched the file. The selection itself is not touched: every run's existing
+    hash must still match its source, or nothing is written (the source changed since it was selected)."""
+    out = Path(a.out)
+    path = out / "inputs/selection.json"
+    sel = json.loads(path.read_text())
+    src = Path(sel["source"])
+    rows = []
+    for r in sel["runs"]:
+        raw = (src / "runs" / r["name"] / "runlog.jsonl").read_bytes()
+        old = r.get("source_runlog_lines_sha256") or r.get("source_runlog_sha256")
+        if old != _lines_hash(raw.decode("utf-8", errors="replace").splitlines()):
+            sys.exit(f"{r['name']}: the source run log no longer matches the hash written at selection; nothing was changed")
+        rows.append((r, hashlib.sha256(raw).hexdigest()))
+    for r, h in rows:
+        r["source_runlog_file_sha256"] = h
+    sel["hash_note"] = ("source_runlog_sha256 is the sha256 of the run log's lines joined by newlines (no final newline), as the first "
+                        "selection wrote it; it never matched `sha256sum`. source_runlog_file_sha256 is the sha256 of the file's "
+                        "bytes and does. Added later; the selection is unchanged.")
+    path.write_text(json.dumps(sel, indent=1))
+    print(f"added source_runlog_file_sha256 to {len(rows)} runs; the selection is unchanged")
+
+
 def cmd_select(a):
     out, src = Path(a.out), Path(a.src)
     if (out / "inputs/selection.json").exists():
@@ -1387,15 +1447,18 @@ def cmd_select(a):
     (out / "inputs").mkdir(parents=True, exist_ok=True)
     rows, excluded = [], []
     for name in chosen:
-        lines = (src / "runs" / name / "runlog.jsonl").read_text().splitlines()
+        raw = (src / "runs" / name / "runlog.jsonl").read_bytes()
+        lines = raw.decode("utf-8", errors="replace").splitlines()
         try:
             inp = extract_input(name, lines)
         except ValueError as e:
             excluded.append({"name": name, "why": str(e)})
             continue
         (out / "inputs" / f"{inp['id']}.json").write_text(json.dumps(inp, indent=1, ensure_ascii=False))
-        rows.append({"id": inp["id"], "name": name, "source_runlog_sha256": hashlib.sha256("\n".join(lines).encode()).hexdigest(),
-                     "system_is_draft_system": inp["system_is_draft_system"]})
+        # F9: `source_runlog_file_sha256` is the file's own bytes, so it matches `sha256sum runlog.jsonl`; the lines hash is what
+        # the first selection wrote under `source_runlog_sha256` (the lines joined by newlines: no final newline)
+        rows.append({"id": inp["id"], "name": name, "source_runlog_file_sha256": hashlib.sha256(raw).hexdigest(),
+                     "source_runlog_lines_sha256": _lines_hash(lines), "system_is_draft_system": inp["system_is_draft_system"]})
     excluded += [{"name": f"{i}-off", "why": "not done in summary.json and job_end"} for i in ids if f"{i}-off" not in chosen]
     (out / "inputs" / "selection.json").write_text(json.dumps({
         "rule": "every id of AWARD/briefs.json in id order; the run <id>-off when summary.json and the run log's job_end say done "
@@ -1513,6 +1576,45 @@ def check_run_config(out: Path, what: str) -> dict:
     return saved
 
 
+@contextlib.contextmanager
+def run_lock(out: Path, what: str):
+    """F9: one pilot, replay or rate process at a time per output folder (two would share the cost log's reserve, write the
+    same arm files and rate the same items twice). An advisory flock on <out>/.run.lock held for the process's life; the
+    kernel drops it when the process dies, so a crash leaves no stale lock."""
+    out.mkdir(parents=True, exist_ok=True)
+    f = open(out / ".run.lock", "a+")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.seek(0)
+        held = f.read().strip() or "another process"
+        f.close()
+        sys.exit(f"{what} refused: {held} already holds {out / '.run.lock'}. Two pilot, replay or rate processes cannot run at "
+                 f"once; wait for it to finish (or stop it) and run this again.")
+    try:
+        f.seek(0)
+        f.truncate()
+        f.write(f"`{what}` (pid {os.getpid()}, since {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})")
+        f.flush()
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            f.seek(0)
+            f.truncate()
+        f.close()
+
+
+def locked(what: str):
+    """Decorator: the command runs holding the output folder's run lock (F9)."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def inner(a):
+            with run_lock(Path(a.out), what):
+                return fn(a)
+        return inner
+    return deco
+
+
 def write_infra_stop(out: Path, where: str, message: str, at: str | None = None):
     """The resumable state of an outage stop: what stopped, where, when. Settled arms and ratings are untouched; the
     unsettled one has no file, so the same command run again picks up exactly there."""
@@ -1545,6 +1647,7 @@ def pilot_unsettled(out: Path, ids) -> list[str]:
             if (arms.get(i, {}).get(n) or {}).get("status") not in OK_STATUS]
 
 
+@locked("pilot")
 def cmd_pilot(a):
     out = Path(a.out)
     if (out / "pilot.json").exists():
@@ -1569,29 +1672,29 @@ def cmd_pilot(a):
                       "without_survival": (d.get("projection_without_survival") or {}).get("total_usd")}, indent=1))
 
 
+@locked("replay")
 def cmd_replay(a):
     out = Path(a.out)
     only = set(a.only) if a.only else None
     force = a.force
-    if force:
-        if not a.reason or not only:
-            sys.exit("--force needs --only <ids> and --reason '<why>' (R7: a fault fix, written to changes.md)")
-        if not (out / "run_config.json").exists():
-            check_run_config(out, "replay")
-        _discard(out, sorted(only), a.reason)
-        write_run_config(out, note=f"R7 rerun --force: {a.reason}")      # the fix may have moved HEAD: a new snapshot, the old kept
-    else:
+    if force and (not a.reason or not only):
+        sys.exit("--force needs --only <ids> and --reason '<why>' (R7: a fault fix, written to changes.md)")
+    if not (out / "run_config.json").exists() or not force:
         check_run_config(out, "replay")
     skip = ()
-    if only is None or not only <= set(PILOT_BRIEFS):
-        pj = out / "pilot.json"
-        if not pj.exists():
-            sys.exit("run `pilot` first: the projection and the cut decision (R5) come from it")
+    pj = out / "pilot.json"
+    if pj.exists():
+        # F9: the pilot's cut decision binds every replay after it, `--only` the pilot's own briefs included
         dec = json.loads(pj.read_text())["decision"]
         if dec == "stop":
             sys.exit("the pilot projection is above 23 USD even without the survival reviews: stop and report (R5)")
         if dec == "drop_survival":
             skip = SURVIVAL_ARMS
+    elif only is None or not only <= set(PILOT_BRIEFS):
+        sys.exit("run `pilot` first: the projection and the cut decision (R5) come from it")
+    if force:
+        _discard(out, sorted(only), a.reason)
+        write_run_config(out, note=f"R7 rerun --force: {a.reason}")      # the fix may have moved HEAD: a new snapshot, the old kept
     _run_briefs(a, only, force, skip)
 
 
@@ -1928,6 +2031,7 @@ def project_rater(rows: list[dict], planned: dict) -> dict:
             "over_cap": total is not None and total > CFG["RATER_HARD_CAP_USD"]}
 
 
+@locked("measure-raters")
 def cmd_measure_raters(a):
     out = Path(a.out)
     cost = rater_cost_log(out)
@@ -1945,6 +2049,7 @@ def cmd_measure_raters(a):
         print("projected rater spend is above the rater cap: STOP and report to the owner (R5); nothing is cut by the harness")
 
 
+@locked("rate")
 def cmd_rate(a):
     out = Path(a.out)
     check_run_config(out, "rate")
@@ -2461,6 +2566,14 @@ def analyse(out: Path, inputs: list[dict], arms_by: dict, key: dict, ratings) ->
                                     "first_validation_error": c["first_validation_error"], "error": c["error"]})
     res["failed_final"] = fails
     res["retries"] = retries
+    # F9: how often the ranker's reply left candidates out (or named one twice or out of range) and the harness's order had
+    # them appended: a ranking that is not complete is not the ranker's order for the candidates it never placed
+    rk = {}
+    for arm_name in ("H1", "S", "L", "L2"):
+        got = [(b, arms_by[b][arm_name]) for b in ids if (arms_by[b].get(arm_name) or {}).get("ranking_complete") is not None]
+        rk[arm_name] = {"ranked": len(got), "not_complete": [b for b, a in got if a["ranking_complete"] is False],
+                        "candidates_filled_in": sum(c["filled_in"] for _, a in got for c in a.get("ranking_calls", []))}
+    res["rankings"] = rk
     res["costs_by_arm_median_usd_secs"] = {name: {"usd": _med([step_cost(arms_by[b][name])[0] for b in ids if name in arms_by[b]]),
                                                   "secs": _med([step_cost(arms_by[b][name])[1] for b in ids if name in arms_by[b]])}
                                            for name in sorted({k for b in ids for k in arms_by[b]})}
@@ -2605,6 +2718,11 @@ def render_md(r: dict) -> str:
         L.append("\n```json\n" + json.dumps({"cfg": rc["cfg"], "models": rc["models"]}, indent=1) + "\n```")
     L.append("\n## Shown texts that still begin with four or fewer words and a colon (R3), per arm\n")
     L.append(str(r["leftover_labels_in_shown_texts"]))
+    L.append("\n## Rankings the harness had to fill in (F9)\n")
+    L.append("Per ranking arm: rankings made, those whose reply did not name every candidate exactly once (the harness appended the "
+             "missing ones at the bottom), and how many candidates that was.\n")
+    L.extend(f"- {k}: {v['ranked']} ranked, {len(v['not_complete'])} not complete {v['not_complete'] or ''}, "
+             f"{v['candidates_filled_in']} candidates filled in" for k, v in r.get("rankings", {}).items())
     L.append("\n## Arms FAILED-final (R6): every comparison needing one is a tie\n")
     L.append(str(r["failed_final"] or "none"))
     L.append("\n## Calls needing a second attempt or failing, with the first validation error\n")
@@ -2639,6 +2757,7 @@ def main(argv=None):
                     help="replay cap; never above REPLAY_HARD_CAP_USD, whatever you pass")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("select"); s.add_argument("--src", default=str(SRC_DEFAULT)); s.set_defaults(f=cmd_select)
+    sub.add_parser("fix-selection-hash").set_defaults(f=cmd_fix_selection_hash)
     sub.add_parser("smoke").set_defaults(f=cmd_smoke)
     s = sub.add_parser("smoke-rate"); s.add_argument("--rater", default="opus", choices=list(RATERS)); s.set_defaults(f=cmd_smoke_rate)
     sub.add_parser("pilot").set_defaults(f=cmd_pilot)
@@ -2651,6 +2770,9 @@ def main(argv=None):
     sub.add_parser("analyse").set_defaults(f=cmd_analyse)
     sub.add_parser("cost").set_defaults(f=cmd_cost)
     a = ap.parse_args(argv)
+    # F9: the production recorders must not write a run's model calls (client material) anywhere: the harness has its own logs
+    for k in ("NAPKIN_RECORD_DIR", "NAPKIN_METRICS_FILE"):
+        os.environ.pop(k, None)
     a.f(a)
 
 
