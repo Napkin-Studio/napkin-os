@@ -5115,7 +5115,7 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
         +'<div><dt>Licence</dt><dd>'+esc(p.licence||s.licence||'—')+'</dd></div>'
         +'<div class="w"><dt>Source</dt><dd><span class="tier t-'+esc(String(s.tier||''))+'"></span>'+esc(s.publisher||s.domain||'No source record')+(tierW?' · '+esc(tierW):'')+(s.title?'<small>'+esc(s.title)+'</small>':'')+'</dd></div>'
       +'</dl></div>'
-      +(q?'<section class="rbi-sec"><h5>Source line</h5><blockquote class="rbi-q">'+esc(q)+'</blockquote><p class="rbi-srcline">'+(sid&&S[sid]?'<button type="button" class="rb-schip" data-sel="'+esc(sid)+'" data-sel-push>'+esc(s.publisher||s.domain||'Source')+'</button>':esc(s.publisher||''))+(s.published_at?' · '+esc(monthOf(s.published_at)):'')+(p.licence?' · '+esc(p.licence):'')+' · <button type="button" data-act="pin-full" data-ref="'+esc(ref)+'">Full source →</button></p></section>':'')
+      +(q?'<section class="rbi-sec"><h5>Source line</h5><blockquote class="rbi-q">'+esc(q)+'</blockquote><p class="rbi-srcline">'+(sid&&S[sid]?'<button type="button" class="rb-schip" data-sel="'+esc(sid)+'" data-sel-push>'+esc(s.publisher||s.domain||'Source')+'</button>':esc(s.publisher||''))+(s.published_at?' · '+esc(monthOf(s.published_at)):'')+(p.licence?' · '+esc(p.licence):'')+srcOpenHtml(sid)+'</p></section>':'')
       +'<section class="rbi-sec"><h5>Where it came from</h5><ol class="rbi-chain">'
         +'<li><span class="k">Source</span>'+esc(s.publisher||s.domain||'No source record')+(tierW?' · '+esc(tierW):'')+(s.retrieved_at?' · read '+esc(plainDay(s.retrieved_at)):'')+'</li>'
         +'<li><span class="k">Knowledge layer row</span>'+esc((p.layer?p.layer.charAt(0).toUpperCase()+p.layer.slice(1)+' layer':'Layer')+(p.market?' · '+p.market:'')+(p.entity?' → '+p.entity:''))+'</li>'
@@ -5131,6 +5131,11 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
       +pinActsHtml(ref);
     return h;
   }
+  // The source line's way on: "Open the source ↗", the publisher's page itself in a new tab; a source
+  // kept with no web address opens its own card here. (The old link here opened the pin's Full record.)
+  function srcOpenHtml(sid){ var s=sid&&srcRecs()[sid]; if(!s) return '';
+    return /^https?:\/\//.test(s.uri||'')?' · <a href="'+esc(s.uri)+'" target="_blank" rel="noopener noreferrer" data-src-open>Open the source ↗</a>'
+      :' · <button type="button" data-sel="'+esc(sid)+'" data-sel-push>About the source →</button>'; }
   // The decisions that name a pin, as the record shows them (the mock's
   // "Decisions on the record" under the card).
   function pinDecsHtml(ref){

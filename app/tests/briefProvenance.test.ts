@@ -169,7 +169,7 @@ test('a fact tapped in the brief opens in the Selected part panel, with its trai
   assert.match(view.innerHTML, /class="clf-rv" data-card="f_1"/)
   assert.match(view.innerHTML, /rv-kind[^>]*><span class="rv-dot"[^>]*><\/span>Fact/)
   assert.match(view.innerHTML, /class="rv-title">250k EUR/)
-  assert.match(view.innerHTML, /What the source says/)
+  assert.match(view.innerHTML, /What Acme Annual Report says/)
   assert.match(view.innerHTML, /data-clf-go="src_a"/)
   // and none of the drawer: no aside made, nothing asked of the shell
   assert.ok(!made.includes('aside'), 'no drawer is built')
@@ -242,9 +242,11 @@ test('your words open in the panel, with the material they came from; the Edit h
   const box = b.selPart.querySelector('.clf-insp')!
   assert.match(box.querySelector('.clf-insp-bar')!.innerHTML, /<b>Your words<\/b>/)
   const v = box.querySelector('.clf-insp-b')!.innerHTML
-  assert.match(v, /What your material says/)
-  assert.match(v, /We want more people signing up\./)
-  assert.match(v, /data-clf-go="mat_1"[^>]*>your prompt/)
+  // the client's prompt itself, the passage marked in it, then what was taken from it
+  assert.match(v, /class="rv-title">Your prompt</)
+  assert.match(v, /The passage, marked in it/)
+  assert.match(v, /<mark>We want more people signing up\.<\/mark>/)
+  assert.match(v, /Taken from it[\s\S]*Grow sign-ups/)
   assert.doesNotMatch(v, /To change it, press/)
   assert.ok(!made.includes('aside'))
 })

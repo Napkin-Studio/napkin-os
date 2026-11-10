@@ -461,6 +461,12 @@ clan-chart .clf-chart{cursor:pointer}
 .clf-rv .rv-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
 .clf-rv .rv-btn{all:unset;box-sizing:border-box;cursor:pointer;height:28px;padding:0 10px;display:inline-flex;align-items:center;border-radius:6px;border:1px solid var(--clf-line);background:var(--clf-paper);color:var(--clf-ink);font-size:12px;font-weight:600}
 .clf-rv .rv-btn:hover{border-color:var(--clf-ink)}
+/* Open the source / Open the file: the way out to the original, the view's one strong action */
+.clf-rv .rv-acts.pv-open{margin-top:8px}
+.clf-rv a.rv-btn{text-decoration:none}
+.clf-rv .rv-open{background:var(--clf-ink);border-color:var(--clf-ink);color:var(--clf-paper)}
+.clf-rv .rv-open:hover{background:color-mix(in srgb,var(--clf-ink) 85%,var(--clf-paper));color:var(--clf-paper)}
+.clf-rv .rv-q.pv-doc{position:relative;max-height:260px;overflow:auto;white-space:pre-wrap}
 .clf-rv .rv-btn:focus-visible,.clf-rv .rv-chip:focus-visible,.clf-rv .rv-fchip:focus-visible,.clf-rv .rv-schip:focus-visible,.clf-rv .rv-cchip:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
 .clf-rv .rv-host:empty{display:none}
 /* One view per part (ClanFields.partView): the inspector's sections, a part's name at its head. */
@@ -541,6 +547,8 @@ var NapkinAgency=(function(){
   var HEX=/^#[0-9a-f]{6}$/i, now=null;
   function lum(h){ var n=parseInt(h.slice(1),16); return [n>>16,(n>>8)&255,n&255].map(function(v){ v/=255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); }).reduce(function(a,v,i){ return a+v*[.2126,.7152,.0722][i]; },0); }
   function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
+  // The agency's logos (palette.ts: logo and logoOnDark per ground, icon square) arrive inline; only an inline picture is kept.
+  function img(u){ return typeof u==='string'&&/^data:image\/(svg\+xml|png)[;,]/.test(u)?u:null; }
   function apply(c){
     if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
     now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null,
@@ -548,8 +556,6 @@ var NapkinAgency=(function(){
     var r=document.documentElement;
     r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
     r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', HEX.test(c.accentInk||'')?c.accentInk:inkOn(c.accent));
-  // The agency's logos (palette.ts: logo and logoOnDark per ground, icon square) arrive inline; only an inline picture is kept.
-  function img(u){ return typeof u==='string'&&/^data:image\/(svg\+xml|png)[;,]/.test(u)?u:null; }
     r.setAttribute('data-agency', '');
     try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
   }
@@ -1952,17 +1958,28 @@ var ClanFields=(function(){
   // certainty (the state chips carry it) and without a Because line the panel already shows (opts.seen).
   function normText(t){ return String(t==null?'':t).toLowerCase().replace(/[\u2018\u2019\u201C\u201D"'`.,;:!?()\[\]\-–—…]/g,' ').replace(/\s+/g,' ').trim(); }
   function echoes(quote,sheet){ var q=normText(quote), sh=normText(sheet); return !!q&&!!sh&&(q===sh||sh.indexOf(q)!==-1); }
-  function pvRow(ref,title,meta,val){ return go(ref,'pv-bf','<span class="pv-bf-t">'+esc(clip(title,90))+'</span>'+(meta?'<small>'+esc(meta)+'</small>':'')+(val?'<b class="pv-bf-v">'+esc(clip(val,18))+'</b>':'')); }
+  // A row opens what it names in the panel; a fact's row also carries ↗, its source's own page in a new
+  // tab (the old Sources list's "Open it ↗": one click from the part to the publisher).
+  function pvRow(ref,title,meta,val,uri,pub){ var b=go(ref,'pv-bf','<span class="pv-bf-t">'+esc(clip(title,90))+'</span>'+(meta?'<small>'+esc(meta)+'</small>':'')+(val?'<b class="pv-bf-v">'+esc(clip(val,18))+'</b>':''));
+    return uri?'<div class="pv-bfr">'+b+'<a class="pv-bf-go" href="'+esc(uri)+'" target="_blank" rel="noopener noreferrer" title="'+esc('Open the source: '+pub+', in a new tab')+'" aria-label="'+esc('Open the source, '+pub+', in a new tab')+'">↗</a></div>':b; }
   function pvRows(path,x,sheet){
-    var rows=[]; rows.echoed=0;
-    x.caps.forEach(function(c){ var ci=captures()[c], m=materials()[ci.material_id], q=ci.quote||textOf(ci.value); if(echoes(q,sheet)){ rows.echoed++; return; }
-      rows.push(pvRow(c,'“'+q+'”',matCap(m)+(ci.status==='assumption'?' · assumed, not said':''),'')); });
+    var rows=[], quoted={}, echoed=[]; rows.echoed=0;
+    x.caps.forEach(function(c){ var ci=captures()[c], m=materials()[ci.material_id], q=ci.quote||textOf(ci.value);
+      if(echoes(q,sheet)){ rows.echoed++; echoed.push(c); return; }
+      quoted[ci.material_id]=1; rows.push(pvRow(c,'“'+q+'”',matCap(m)+(ci.status==='assumption'?' · assumed, not said':''),'')); });
+    // Words the sheet already says are not quoted back, but the way to them stays: a row for the file
+    // they are in (opening on them, marked), unless another row here opens that file already.
+    echoed.forEach(function(c){ var ci=captures()[c], mc=matCap(materials()[ci.material_id]); if(quoted[ci.material_id]) return; quoted[ci.material_id]=1;
+      rows.push(pvRow(c,mc.charAt(0).toUpperCase()+mc.slice(1),'the words the sheet uses, marked in it','')); });
     x.mats.forEach(function(m){ var mt=materials()[m]; if(!mt) return; var typed=mt.kind==='prompt'&&typeof mt.text==='string'&&mt.text;
-      if(typed&&echoes(mt.text,sheet)){ rows.echoed++; return; }
+      if(typed&&echoes(mt.text,sheet)){ rows.echoed++; if(!quoted[m]){ quoted[m]=1; rows.push(pvRow(m,'Your prompt','the words the sheet uses','')); } return; }
+      quoted[m]=1;
       rows.push(pvRow(m,typed?'“'+mt.text+'”':(mt.name||'A file'),typed?'your prompt':'your file','')); });
     x.psgs.forEach(function(p){ var pg=passages()[p]; rows.push(pvRow(p,pg.text?'“'+pg.text+'”':(pg.citation||'A passage'),(pg.citation||'A passage')+' · knowledge library','')); });
-    x.fs.forEach(function(id){ var P=pins()[id]; if(!P) return; var sr=srcOf(P), r=sr&&sr.rec;
-      rows.push(pvRow(id,(confidential(id)?'🔒 ':'')+label(P),[id, r?pubName(r.publisher)||r.domain||'':''].filter(Boolean).join(' · '),fmt(P))); });
+    // A fact by what it says (a worded one) or by its label and figure, with its publisher, never its id.
+    x.fs.forEach(function(id){ var P=pins()[id]; if(!P) return; var sr=srcOf(P), r=sr&&sr.rec, v=fmt(P), long=v.length>18, pub=r&&r.tier!=='reviewer-verified'?pubName(r.publisher)||r.domain||'':'';
+      var who=r&&r.tier==='reviewer-verified'?'checked by a person':pub;
+      rows.push(pvRow(id,(confidential(id)?'🔒 ':'')+(long?v:label(P)),[long?label(P):'', who].filter(Boolean).join(' · '),long?'':v,pub&&/^https?:\/\//.test(r.uri||'')?r.uri:'',pub)); });
     x.fis.forEach(function(i){ var f=findings()[i]; rows.push(pvRow(i,f.statement,'Finding '+fno(i)+' · a point the agents worked out','')); });
     return rows;
   }
@@ -2086,6 +2103,26 @@ var ClanFields=(function(){
   function rvGrid(rows){ rows=rows.filter(function(x){ return x&&x[1]; }); return rows.length?'<dl class="rv-grid">'+rows.map(function(x){ return '<div'+(x[2]?' class="w"':'')+'><dt>'+esc(x[0])+'</dt><dd>'+(x[2]?x[1]:esc(x[1]))+'</dd></div>'; }).join('')+'</dl>':''; }
   function rvLink(uri){ return /^https?:\/\//.test(uri||'')?'<a href="'+esc(uri)+'" target="_blank" rel="noopener noreferrer">'+esc(clip(String(uri).replace(/^https?:\/\//,''),48))+' ↗</a>':''; }
   function rvQuote(q,p){ return quoteBlock(q,p).replace('class="clf-q said"','class="rv-q"'); }
+  // "Open the source ↗": the original itself (the publisher's page or document) in a new tab. A source
+  // kept with no web address has nothing further to open, so its button opens the source's own view.
+  function srcName(s){ return s?pubName(s.publisher)||s.domain||'the source':'the source'; }
+  function openSrc(sid,cls){ var s=sources()[sid]; if(!s) return ''; cls='rv-btn rv-open'+(cls?' '+cls:'');
+    return /^https?:\/\//.test(s.uri||'')?'<a class="'+cls+'" href="'+esc(s.uri)+'" target="_blank" rel="noopener noreferrer" title="'+esc('Opens '+srcName(s)+' in a new tab: '+String(s.uri).replace(/^https?:\/\//,''))+'">Open the source ↗</a>'
+      :go(sid,cls,'Open the source','We have no web address for it: this shows what we kept about '+srcName(s)); }
+  // A client's file kept in the document (materials[].asset): "Open the file ↗" reads it through
+  // clan:// (the host serves the document's own files there) and opens it in a new tab as what it is.
+  // A plain link cannot: this frame is sandboxed without downloads, so the browser drops it, and a
+  // file the browser would download (a PDF, a deck, a .clan) is dropped the same way. Only what a tab
+  // can show (text, an image) gets the button; for the rest the view says how to get it.
+  function assetName(mt){ var a=String(mt&&mt.asset||''); return a?a.split('/').pop():''; }
+  function viewable(mt){ return /^(?:text\/|image\/)/.test(String(mt&&mt.media_type||'')); }
+  function openFile(mt){ var n=assetName(mt); if(!n) return '';
+    if(!viewable(mt)) return '<p class="rv-none">The file itself is kept in this document. To get it, save a copy of the document.</p>';
+    return '<button type="button" class="rv-btn rv-open" data-clf-file="'+esc(n)+'"'+(mt.media_type?' data-type="'+esc(mt.media_type)+'"':'')+' title="'+esc('Opens '+(mt.name||n)+' in a new tab')+'">Open the file ↗</button>'; }
+  // The passage in the whole of what the client sent, marked; null when the words are not in it as such.
+  function markIn(text,q){ text=String(text||''); q=String(q||'').trim(); if(!text||!q) return null;
+    var at=text.toLowerCase().indexOf(q.toLowerCase()); if(at===-1) return null;
+    return esc(text.slice(0,at))+'<mark>'+esc(text.slice(at,at+q.length))+'</mark>'+esc(text.slice(at+q.length)); }
   function restsOn(id){ var F=findings(); return Object.keys(F).filter(function(f){ return arr(F[f].cites).indexOf(id)!==-1; }); }
   function viewPin(id){
     var p=pins()[id]; if(!p) return '<p class="rv-none">This fact is no longer in the document.</p>';
@@ -2099,7 +2136,8 @@ var ClanFields=(function(){
     if(!srcs.length) h+=sec('Where it says so','<p class="rv-none">No source was saved for this.</p>');
     srcs.forEach(function(sid){ var q=qs[sid], rec=sources()[sid], person=rec&&rec.tier==='reviewer-verified', you=person&&isYou(whoOfSrc(rec));
       var cap=/^human:/.test(sid)?'<p class="rv-src">checked by '+esc(personName(sid))+'</p>':'<p class="rv-src">'+srcBits({id:sid, rec:rec})+'</p>';
-      h+=sec(q?(person?(you?'What you said':'What they said'):'What the source says'):'The source','<div class="pv-said">'+(q?(person?pvQuote(saidBy(q,rec),600):rvQuote(q,p)):'')+cap+'</div>'); });
+      h+=sec(q?(person?(you?'What you said':'What they said'):'What '+srcName(rec)+' says'):'The source','<div class="pv-said">'+cap+(q?(person?pvQuote(saidBy(q,rec),600):rvQuote(q,p)):'')+'</div>'
+        +(!rec||person&&!/^https?:\/\//.test(rec.uri||'')?'':'<div class="rv-acts pv-open">'+openSrc(sid)+'</div>')); });
     h+=sec('Confidence','<p>'+confBars(lv)+' <b>'+esc(lvWord(lv))+'</b>'+(p.confidence==='low'?': the agents are not very sure of it.':'.')+'</p>');
     var fis=restsOn(id);
     if(fis.length) h+=sec('Points that rest on it','<div class="rv-uses">'+fis.map(function(i){ var f=findings()[i]; return '<div class="rv-use"><span>'+fChip(i)+'</span>'+esc(f.statement)+' '+stPill(f)+'</div>'; }).join('')+'</div>',String(fis.length));
@@ -2111,19 +2149,27 @@ var ClanFields=(function(){
     var person=s.tier==='reviewer-verified', who=person?personName(whoOfSrc(s)):'';
     var h='<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>Source'+(s.tier?' · '+esc(tierWord(s.tier)):'')+'</span>'+(person?'<span class="rv-pill ok">A person</span>':'<span class="rv-pill ok">Read'+(used.length?' · pinned':'')+'</span>')+'</div>'
       +'<p class="rv-title">'+esc(person?(/correct/.test(s.title||'')?'Corrected':'Checked')+' by '+who:pubName(s.publisher)||s.domain||'A source')+'</p>'
-      +(s.title&&!person?'<p class="rv-meta"><span>'+esc(s.title)+'</span></p>':'');
-    h+=sec('About it',rvGrid([['Published',s.published_at?monthYear(s.published_at):''],['Read',s.retrieved_at?dayMonth(s.retrieved_at,true):''],['Domain',s.domain||''],['Licence',s.licence||''],['Link',rvLink(s.uri),1]])||'<p class="rv-none">Nothing more was kept about it.</p>');
+      +(s.title&&!person?'<p class="rv-meta"><span>'+esc(s.title)+'</span></p>':'')
+      +(/^https?:\/\//.test(s.uri||'')?'<div class="rv-acts pv-open">'+openSrc(sid)+'</div>':'');
+    h+=sec('About it',rvGrid([['Published',s.published_at?monthYear(s.published_at):''],['Read',s.retrieved_at?dayMonth(s.retrieved_at,true):''],['Domain',s.domain||''],['Licence',s.licence||''],['Address',rvLink(s.uri),1]])||'<p class="rv-none">Nothing more was kept about it.</p>');
     if(used.length) h+=sec('What we took from it','<table class="rv-pins"><tbody>'+used.map(pvPinRow).join('')+'</tbody></table>',plural(used.length,'fact'));
     if(reach.length) h+=sec('Reaches','<div class="rv-uses"><div class="rv-use"><span>Points</span>'+reach.map(fChip).join(' ')+'</div></div>');
     return h;
   }
+  // Your words: the client's own material, with the passage it was taken from marked in it (the whole
+  // prompt when the document keeps its words; else the passage itself), Open the file when the file
+  // is kept, and then what was taken from it.
   function viewCapture(id){
     var ci=captures()[id], m=ci&&materials()[ci.material_id]; if(!ci) return '<p class="rv-none">This is no longer in the document.</p>';
-    var as=ci.status==='assumption';
+    var as=ci.status==='assumption', full=m&&m.kind==='prompt'&&typeof m.text==='string'&&m.text, marked=full&&markIn(full,ci.quote);
+    var name=m?(m.kind==='prompt'?'Your prompt':m.name||'Your file'):'Your material';
+    var said=marked?'<blockquote class="rv-q pv-doc">'+marked+'</blockquote>':ci.quote?pvQuote(ci.quote,600):'';
     return '<div class="rv-head"><span class="rv-kind"><span class="rv-dot" aria-hidden="true"></span>Your words</span>'+(as?'<span class="rv-pill warn">Assumed</span>':'<span class="rv-pill ok">The words match</span>')+'</div>'
-      +'<p class="rv-title">'+esc(textOf(ci.value))+'</p>'+(ci.key?'<p class="rv-meta"><span>'+esc(words(ci.key))+'</span></p>':'')
-      +sec(as?'Assumed, not said':'What your material says','<div class="pv-said">'+(ci.quote?pvQuote(ci.quote,600):'')+(ci.material_id?pvCap(ci.material_id,m?matCap(m):'no longer in the document'):'')+'</div>'
-        +(as?'<p class="rv-none">Your material does not say this in so many words: the agents assumed it.</p>':''));
+      +'<p class="rv-title">'+(m&&confidential(ci.material_id)?LOCK:'')+esc(name)+'</p>'+(m?'<p class="rv-meta"><span>'+esc(MAT_KIND[m.kind]||MAT_KIND.other)+'</span>'+(m.received_at?'<span>arrived '+esc(dayMonth(m.received_at,true))+'</span>':'')+'</p>':'')
+      +sec(as?'Assumed, not said':marked?'The passage, marked in it':'The passage','<div class="pv-said">'+said+(ci.material_id&&!marked?pvCap(ci.material_id,m?matCap(m):'no longer in the document'):'')+'</div>'
+        +(as?'<p class="rv-none">Your material does not say this in so many words: the agents assumed it.</p>':'')
+        +(m&&assetName(m)?'<div class="rv-acts pv-open">'+openFile(m)+'</div>':''))
+      +sec('Taken from it','<div class="pv-said"><blockquote class="rv-q">'+esc(textOf(ci.value))+'</blockquote>'+(ci.key?'<p class="rv-src">'+esc(words(ci.key))+'</p>':'')+'</div>');
   }
   function viewPassage(id){
     var pg=passages()[id]; if(!pg) return '<p class="rv-none">This passage is no longer in the document.</p>';
@@ -2139,6 +2185,7 @@ var ClanFields=(function(){
     return '<div class="rv-head"><span class="rv-kind"><span class="rv-sq" aria-hidden="true"></span>'+(mt.kind==='prompt'?'Your prompt':'File')+'</span>'+(confidential(id)?'<span class="rv-pill mute">Private</span>':'')+'</div>'
       +'<p class="rv-title">'+(confidential(id)?LOCK:'')+esc(mt.kind==='prompt'?'What you asked for':mt.name||'A file')+'</p>'
       +'<p class="rv-meta"><span>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</span></p>'
+      +(assetName(mt)?'<div class="rv-acts pv-open">'+openFile(mt)+'</div>':'')
       +(said?sec('What it says','<div class="pv-said">'+pvQuote(mt.text,600)+'</div>'):'')
       +sec('About it',rvGrid([['Arrived',mt.received_at?dayMonth(mt.received_at,true):''],['Read',mt.unread?'Nothing in it could be read':tr.model?'Read from the image by an agent':'Yes'],['Licence',mt.licence||'']]));
   }
@@ -2288,6 +2335,9 @@ var ClanFields=(function(){
     }
     if(!P&&k&&k!=='source'&&k!=='cite') b+=wrote(ref);
     setCrumb(crumb); S.body.innerHTML=b;
+    // The passage marked in the client's whole prompt: its box scrolls to it.
+    var mk=S.body.querySelector('.pv-doc mark'), box=mk&&mk.parentNode;
+    if(box&&typeof box.scrollTop==='number'&&mk.offsetTop>box.clientHeight/2) box.scrollTop=mk.offsetTop-24;
     // The source card's provenance at the top: the same renderer as inline.
     var slot=cref&&S.body.querySelector('.clf-sc-slot');
     if(slot) card(cref,slot,true).then(function(c){ if(!c||c.kind==='unknown') slot.innerHTML=''; });
@@ -2773,6 +2823,13 @@ var ClanFields=(function(){
     var cg=e.target.closest&&e.target.closest('[data-clf-go]');
     if(cg){ e.preventDefault(); var gr=cg.getAttribute('data-clf-go'), inD=inSurf(cg);
       if(window.dispatchEvent(new CustomEvent('clan:cardgo',{cancelable:true, detail:{ref:gr, drawer:inD}}))) open(gr,inD&&STACK.length>0);
+      return; }
+    var cf=e.target.closest&&e.target.closest('[data-clf-file]');
+    if(cf){ e.preventDefault(); var ft=cf.getAttribute('data-type')||'';
+      fetch('clan://localhost/assets/'+encodeURIComponent(cf.getAttribute('data-clf-file'))).then(function(r){ return r.ok?r.blob():null; }).then(function(bl){
+        var w=bl&&window.open(URL.createObjectURL(ft?new Blob([bl],{type:ft}):bl),'_blank');
+        if(!w) toast(bl?'Your browser would not open it from here. Save a copy of the document to get the file.':'That file is not in this document any more.'); },
+        function(){ toast(OFFLINE); });
       return; }
     var ca=e.target.closest&&e.target.closest('[data-clf-act]');
     if(ca){ e.preventDefault(); window.dispatchEvent(new CustomEvent('clan:cardact',{detail:{act:ca.getAttribute('data-clf-act'), ref:(ca.closest('[data-card]')||ca).getAttribute('data-card')||''}})); return; }
