@@ -23,16 +23,28 @@ let engaged = false
 const engagedSubs = new Set<() => void>()
 /** The person engaged (the mock's wakeMark): from now on the mark is awake when nothing else holds it. */
 export function engage(): void {
-  if (engaged) return
-  engaged = true
-  engagedSubs.forEach(f => f())
+  ever = true
+  setEngaged(true)
+  armIdle()
 }
 /** Whether the person has engaged since the studio opened. */
 export function useEngaged(): boolean {
   return useSyncExternalStore(f => { engagedSubs.add(f); return () => { engagedSubs.delete(f) } }, () => engaged, () => false)
 }
+// Sleep after 30 s with nothing happening (owner, 2026-11-11): the mark rests asleep until the next
+// movement, click or key. Before the first engagement it is asleep anyway; a run or a call that needs
+// the person always wins over this (markTarget puts working and needs before rest).
+export const IDLE_MS = 30_000
+/** Whether the mark rests awake right now (what useEngaged reads). */
+export const isEngaged = (): boolean => engaged
+let ever = false
+let idleTimer: ReturnType<typeof setTimeout> | null = null
+function setEngaged(v: boolean) { if (engaged === v) return; engaged = v; engagedSubs.forEach(f => f()) }
+function armIdle() { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(() => setEngaged(false), IDLE_MS) }
+/** Something happened (here or in the app's page): wake if the person had engaged before, and restart the 30 s. */
+export function activity(): void { if (!ever) return; setEngaged(true); armIdle() }
 /** For tests: forget the model and engagement. */
-export function resetMark(): void { shared = null; look_ = { lx: 0, ly: 0, vx: 0, vy: 0 }; engaged = false }
+export function resetMark(): void { shared = null; look_ = { lx: 0, ly: 0, vx: 0, vy: 0 }; engaged = false; ever = false; if (idleTimer) clearTimeout(idleTimer); idleTimer = null }
 
 let listening = false
 let ptr_: { x: number; y: number } | null = null
@@ -47,6 +59,9 @@ export function listen() {
   for (const ev of ['input', 'click', 'keydown']) document.addEventListener(ev, onAct, true)
   // The app's own page (a prompt) is a frame: focus going into it is engaging too.
   window.addEventListener('blur', () => { setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME') engage() }, 0) })
+  // Any movement, scroll or key keeps it awake (and wakes it after a doze); a hidden tab sleeps at once.
+  for (const ev of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll']) window.addEventListener(ev, e => { if (e.isTrusted) activity() }, { capture: true, passive: true })
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (idleTimer) clearTimeout(idleTimer); setEngaged(false) } })
 }
 
 

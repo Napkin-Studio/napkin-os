@@ -2640,6 +2640,10 @@ var ClanFields=(function(){
   // Reduced motion: scrolls jump instead of gliding (the CSS rule only stops transitions).
   function calm(){ try{ return !!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } }
   function toShell(m){ if(window.parent&&window.parent!==window) window.parent.postMessage(m,'*'); }
+  // The person is active in this page: tell the shell, at most every 5 s, so the medallion stays
+  // awake while they work here and sleeps after 30 s of nothing (owner, 2026-11-11).
+  (function(){ var last=0; function act(e){ if(e&&e.isTrusted===false) return; var t=Date.now(); if(t-last<5000) return; last=t; toShell({type:'clan:activity'}); }
+    ['pointermove','pointerdown','keydown','wheel','input','scroll'].forEach(function(ev){ window.addEventListener(ev, act, {capture:true, passive:true}); }); })();
   function postParts(force){
     var ps=declaredParts().map(partRef), sig=JSON.stringify(ps);
     if(!force&&sig===SENT_PARTS) return;

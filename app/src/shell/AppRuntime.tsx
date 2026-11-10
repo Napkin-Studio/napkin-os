@@ -13,6 +13,7 @@ import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
 import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
+import { activity as markActivity } from '../components/markStore'
 
 interface Props {
   htmlContent: string
@@ -174,6 +175,7 @@ export default function AppRuntime({
       else if (m?.type === 'clan:part-mark' && typeof m.address === 'string') {
         handlers.current.onPartMark?.({ address: m.address, marked: m.marked === true, words: typeof m.words === 'string' ? m.words : '' })
       } else if (m?.type === 'clan:edit-request') handlers.current.onEditRequest?.()
+      else if (m?.type === 'clan:activity') markActivity()
       // the dogfood build's listener inside the frame (recorder.ts FRAME_CAPTURE)
       else if (m?.type === 'clan:interaction') {
         const { kind, name } = m as { kind?: unknown; name?: unknown }

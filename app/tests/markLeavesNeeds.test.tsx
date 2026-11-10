@@ -14,6 +14,7 @@
 import './domFakes.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { existsSync, readFileSync } from 'node:fs'
 
 import { h1Attrs, nodePainter, paintH1, type PaintNode } from '../src/brand/deepOSvg.ts'
 import { isProductApp, markTarget } from '../src/components/medallionMotion.ts'
@@ -96,4 +97,35 @@ test('a page that says its agents are working moves the mark to working, with it
   assert.equal(markTarget({ inDoc: true, needs: 0, run, engaged: false }).state, 'working')
   assert.equal(pageRunOf({ mode: 'ask', label: 'New brief' }), null)
   assert.equal(pageRunOf(null), null)
+})
+
+test('after 30 s with nothing happening the mark goes to sleep, and the next movement wakes it', async () => {
+  const store = await import('../src/components/markStore.ts')
+  const { mock } = await import('node:test')
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    store.resetMark()
+    store.activity()
+    assert.equal(store.isEngaged(), false, 'movement before the first engagement does not wake it')
+    store.engage()
+    assert.equal(store.isEngaged(), true)
+    mock.timers.tick(29_000); store.activity()
+    mock.timers.tick(29_000)
+    assert.equal(store.isEngaged(), true, 'activity inside the 30 s restarts the wait')
+    mock.timers.tick(1_001)
+    assert.equal(store.isEngaged(), false, '30 s with nothing happening: asleep')
+    store.activity()
+    assert.equal(store.isEngaged(), true, 'the next movement wakes it')
+    assert.equal(store.IDLE_MS, 30_000)
+  } finally { mock.timers.reset(); store.resetMark() }
+})
+
+test('the app page tells the shell it is active, at most every 5 s, and the shell passes it to the mark', () => {
+  let root = new URL('.', import.meta.url)
+  while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
+  const clf = readFileSync(new URL('templates/shared/clan-fields.html', root), 'utf8')
+  assert.match(clf, /toShell\(\{type:'clan:activity'\}\)/)
+  assert.match(clf, /t-last<5000/)
+  const rt = readFileSync(new URL('src/shell/AppRuntime.tsx', root), 'utf8')
+  assert.match(rt, /m\?\.type === 'clan:activity'\) markActivity\(\)/)
 })
