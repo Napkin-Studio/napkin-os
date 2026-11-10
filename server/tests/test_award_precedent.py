@@ -183,3 +183,112 @@ def test_an_old_pack_list_without_the_gated_flag_is_asked_as_before():
     ask(c, "loop4_insight")
     lib = [x for x in r.calls if "awardlib" in x["packs"]]
     assert len(lib) == 1 and lib[0]["where"] is None
+
+
+# ---- the planned flow: the default draft_brief -----------------------------------------------------
+# The planned flow fetches the library's passages once at the start of the context stage, before the
+# planner has named a category, so the category cannot reach that lookup. These tests drive the real job
+# and check the lookup that runs after the plan.
+import json as _json  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+import httpx  # noqa: E402
+
+from conftest import Server  # noqa: E402
+from fakes import FakeRetrievalService, _passage as fake_passage  # noqa: E402
+from napkin.brief.planned import PlannedBriefJob  # noqa: E402
+from test_brief import Host, retrieval as retrieval_port, run as run_job  # noqa: E402
+from test_planned_brief import THIN, planned_model  # noqa: E402
+
+
+class GatedService(FakeRetrievalService):
+    """The fake retrieval service plus a gated `awardlib` pack that answers only a request that names a
+    category. `listed=False` is the service with the flag off: the pack is not in /v1/packs."""
+
+    def __init__(self, listed=True, **kw):
+        super().__init__(**kw)
+        self.listed, self.gated_asks = listed, []
+
+    def packs_list(self):
+        packs = super().packs_list()
+        if self.listed:
+            packs.append({"tag": "awardlib", "id": "awardlib", "kind": "case", "scope": "house",
+                          "licence": "licensed-internal", "k": 2, "loops": ["loop4_insight"], "passages": 1,
+                          "filterable": ["category"], "gated": True,
+                          "version": "sha256:" + hashlib.sha256(b"awardlib").hexdigest()[:16]})
+        return packs
+
+    def __call__(self, request):
+        if request.url.path == "/v1/retrieve":
+            body = _json.loads(request.content)
+            if body.get("packs") == ["awardlib"]:
+                self.gated_asks.append(body)
+                cat = (body.get("where") or {}).get("category")
+                ps = [fake_passage("awardlib", "Award case library", "Spotify — Daylist (2024)",
+                                   "Daylist: music changes with the time of day.", 1, body["k"])] if cat else []
+                return httpx.Response(200, json={"passages": ps, "trace": {"backend": "fake", "embed_model": None,
+                                                                          "packs": {"awardlib": self.packs_list()[-1]["version"]}}})
+        return super().__call__(request)
+
+
+def planned_run(tmp_path, svc, plan_leaf=None):
+    seen = {}
+    m = planned_model(seen)
+    if plan_leaf:
+        original = m.overrides["plan_brief"]
+        m.overrides["plan_brief"] = lambda p: {**original(p), "category": plan_leaf}
+    s = Server(tmp_path, model=m, retrieval=retrieval_port(svc),
+               settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        replies = run_job(s, Host(), inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    assert replies[-1]["job"]["state"] == "done"
+    return seen
+
+
+def lib_ids(payload):
+    return [x["id"] for x in payload["library"]]
+
+
+def test_the_planned_flow_asks_the_library_once_after_the_plan_names_a_category(tmp_path):
+    svc = GatedService()
+    seen = planned_run(tmp_path, svc)
+    leaf = seen["plan"]["categories"][0]["code"]
+    assert clientcat.client_category(leaf), f"the fake tree's first leaf, {leaf}, should map for this test"
+    assert len(svc.gated_asks) == 1                                         # one request, not one per loop
+    ask = svc.gated_asks[0]
+    assert ask["where"] == {"category": clientcat.client_category(leaf)} and ask["k"] == 2
+    assert ask["purpose"] == "loop4_insight"
+    lib = [x for x in seen["draft"]["library"] if x["citation"].startswith("Award case library")]
+    assert len(lib) == 1, "Dara is given the library's precedent"
+    assert not [x for x in seen["plan"]["library"] if x["citation"].startswith("Award case library")], \
+        "the plan was made before the category was known, so it did not see it"
+    assert lib[0]["id"] not in lib_ids(seen["plan"])
+
+
+def test_the_planned_flow_without_the_gated_pack_is_unchanged(tmp_path):
+    svc = GatedService(listed=False)
+    seen = planned_run(tmp_path, svc)
+    assert svc.gated_asks == []
+    assert not [x for x in seen["draft"]["library"] if "Award case library" in x["citation"]]
+
+
+def test_a_leaf_held_for_review_asks_for_nothing(tmp_path):
+    svc = GatedService()
+    leaf = "software.b2b_saas"
+    seen = planned_run(tmp_path, svc, plan_leaf=leaf)
+    if leaf not in [c["code"] for c in seen["plan"]["categories"]]:
+        pytest.skip("the fake tree does not offer the leaf")
+    assert clientcat.client_category(leaf) is None and svc.gated_asks == []
+
+
+def test_the_library_keeps_its_places_when_dara_is_given_a_capped_list():
+    ns = SimpleNamespace(lib={f"psg_{i:02d}": {"citation": f"c{i}", "text": "t"} for i in range(20)})
+    ns.lib["psg_g1"], ns.lib["psg_g2"] = {"citation": "g1", "text": "t"}, {"citation": "g2", "text": "t"}
+    ns.lib_gated = {"psg_g1", "psg_g2"}
+    got = [x["id"] for x in PlannedBriefJob._library(ns, 12)]
+    assert len(got) == 12 and got[-2:] == ["psg_g1", "psg_g2"]             # kept, though they arrived last
+    assert got[:10] == [f"psg_{i:02d}" for i in range(10)]                  # the rest fill what is left, in order
+    ns.lib_gated = set()
+    assert [x["id"] for x in PlannedBriefJob._library(ns, 12)] == [f"psg_{i:02d}" for i in range(12)]   # no gated: as before

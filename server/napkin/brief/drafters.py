@@ -156,8 +156,10 @@ class DraftContext:
         return {"problem": w.get("background") or "", "objective": objs, "audience": w.get("audience") or "",
                 "competitors": w.get("competitor_context") or ""}
 
-    def retrieve(self, loop: str, query: str, case_query: str | None) -> tuple[dict, list[str]]:
-        """Passages for a loop: {psg id: record} and notes on what failed."""
+    def retrieve(self, loop: str, query: str, case_query: str | None,
+                 only_gated: bool = False) -> tuple[dict, list[str]]:
+        """Passages for a loop: {psg id: record} and notes on what failed. `only_gated` asks the gated
+        packs alone (the planned flow does, once the plan has named the category)."""
         ret = self.caps.retrieval
         if not ret.configured:
             return {}, ["no retrieval service is configured: drafted without precedent passages"]
@@ -165,6 +167,8 @@ class DraftContext:
         try:
             packs = ret.packs()
             general = [p["tag"] for p in packs if p.get("kind") != "case" and (not p.get("loops") or loop in p["loops"])]
+            if only_gated:
+                general = []
             asks = []
             if general:
                 asks.append((query, 5, general, None))
@@ -178,7 +182,10 @@ class DraftContext:
                                 asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]],
                                              {"category": self.category}))
                             continue
-                        asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]], None))
+                        if not only_gated:
+                            asks.append((case_query or query, int(p.get("k") or 2), [p["tag"]], None))
+            if only_gated and not asks:
+                return {}, []       # nothing gated to ask (flag off, no category, loop not eligible): say nothing
             for q, k, tags, where in asks:
                 r = ret.retrieve(q, k, packs=tags, where=where, purpose=loop)
                 t = iso()
