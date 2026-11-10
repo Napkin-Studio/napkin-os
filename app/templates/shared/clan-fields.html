@@ -543,10 +543,13 @@ var NapkinAgency=(function(){
   function inkOn(h){ return lum(h)>.3?'#141413':'#FFFFFF'; }
   function apply(c){
     if(!c||!HEX.test(c.base||'')||!HEX.test(c.accent||'')) return;
-    now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null};
+    now={base:c.base, accent:c.accent, name:typeof c.name==='string'&&c.name.trim()?c.name.trim():null,
+      logo:img(c.logo), logoOnDark:img(c.logoOnDark), icon:img(c.icon)};
     var r=document.documentElement;
     r.style.setProperty('--ag-base', c.base); r.style.setProperty('--ag-acc', c.accent);
-    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', inkOn(c.accent));
+    r.style.setProperty('--ag-base-ink', inkOn(c.base)); r.style.setProperty('--ag-acc-ink', HEX.test(c.accentInk||'')?c.accentInk:inkOn(c.accent));
+  // The agency's logos (palette.ts: logo and logoOnDark per ground, icon square) arrive inline; only an inline picture is kept.
+  function img(u){ return typeof u==='string'&&/^data:image\/(svg\+xml|png)[;,]/.test(u)?u:null; }
     r.setAttribute('data-agency', '');
     try{ window.dispatchEvent(new CustomEvent('napkin:agency', {detail:now})); }catch(e){}
   }

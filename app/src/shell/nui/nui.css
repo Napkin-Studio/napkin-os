@@ -215,9 +215,9 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
   margin-left: -22px;
   padding: 0 18px 0 30px;
   border-radius: 999px;
-  background: var(--ag-acc);
-  color: var(--ag-acc-ink);
-  border: 1px solid rgba(16,17,20,0.12);
+  background: var(--ag-pill, var(--ag-acc));
+  color: var(--ag-pill-ink, var(--ag-acc-ink));
+  border: 1px solid var(--ag-pill-line, rgba(16,17,20,0.12));
   box-shadow: 0 4px 12px -4px rgba(16,17,20,0.14);
   display: inline-flex;
   align-items: center;
@@ -236,16 +236,21 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
   font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.025em;
-  color: var(--ag-acc-ink);
+  color: var(--ag-pill-ink, var(--ag-acc-ink));
   white-space: nowrap;
 }
+/* The agency's wordmark in place of its name (Toolbar.tsx AgencyPill, palette.ts pillLogoOf); its icon on a narrow bar. */
+.stacked-lockup:where(.nui, .nui *) .sl-logo { display: flex; align-items: center; height: 15px; }
+.stacked-lockup:where(.nui, .nui *) .sl-logo img { display: block; width: auto; height: auto; max-width: 100%; }
+.stacked-lockup:where(.nui, .nui *) .sl-logo .sl-wordmark { max-width: min(120px, 100%); max-height: 15px; }
+.stacked-lockup:where(.nui, .nui *) .sl-logo .sl-icon { display: none; width: 24px; height: 24px; border-radius: 5px; }
 .stacked-lockup:where(.nui, .nui *) .sl-mono {
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: var(--ag-acc-ink);
+  color: var(--ag-pill-ink, var(--ag-acc-ink));
   opacity: 0.84;
   display: inline-flex;
   align-items: center;
@@ -257,7 +262,7 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--ag-base);
+  background: var(--ag-pill-line, var(--ag-base));
   box-shadow: 0 0 0 1px rgba(255,255,255,0.35);
   display: inline-block;
 }
@@ -560,7 +565,7 @@ html[data-theme="dark"] .topbar-outer:where(.nui, .nui *) { background: color-mi
 html:not([data-theme="dark"]) .topbar-outer:where(.nui, .nui *) { background: color-mix(in srgb, var(--desk) 94%, transparent) !important; }
 .btn-rect.primary:where(.nui, .nui *),
 html[data-theme="dark"] .btn-rect.primary:where(.nui, .nui *) {
-  background: var(--ag-act) !important; color: var(--ag-act-ink) !important; border-color: var(--ag-act) !important; }
+  background: var(--ag-act) !important; color: var(--ag-act-ink) !important; border-color: var(--ag-act-line, var(--ag-act)) !important; }
 .seg-row:where(.nui, .nui *) button[aria-pressed="true"],
 html[data-theme="dark"] .seg-row:where(.nui, .nui *) button[aria-pressed="true"] { background: var(--ag-act) !important; color: var(--ag-act-ink) !important; }
 .cl-circle[aria-pressed="true"]:where(.nui, .nui *) .cl-disc { box-shadow: 0 0 0 3px var(--ag-act), 0 12px 26px -12px rgba(20,20,19,.5); }
@@ -684,8 +689,8 @@ html[data-theme="dark"] .p33-mcard:where(.nui, .nui *),
 html[data-theme="dark"] .p33-pop:where(.nui, .nui *) { box-shadow: 0 24px 60px -18px rgba(0,0,0,.8); }
 html[data-theme="dark"] .tba-gate:where(.nui, .nui *),
 html[data-theme="dark"] .p33-stale:where(.nui, .nui *) { color: #F2B86A; }
-.tb-decisions-btn.has-needs:where(.nui, .nui *) { border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 12%, var(--paper)); }
-.tb-decisions-btn.has-needs:where(.nui, .nui *) .cnt { background: var(--warn) !important; color: #fff !important; }
+.tb-decisions-btn.has-needs:where(.nui, .nui *) { border-color: color-mix(in srgb, var(--needs, var(--warn)) 55%, transparent); background: color-mix(in srgb, var(--needs, var(--warn)) 12%, var(--paper)); }
+.tb-decisions-btn.has-needs:where(.nui, .nui *) .cnt { background: var(--needs, var(--warn)) !important; color: var(--needs-ink, #fff) !important; }
 .dc-rows:where(.nui, .nui *) .pp-row { padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--warn) 18%, transparent); }
 .dc-rows:where(.nui, .nui *) .pp-row:first-child { border-top: 0; }
 .dc-rows:where(.nui, .nui *) [data-np-open] { all: unset; cursor: pointer; display: block; }

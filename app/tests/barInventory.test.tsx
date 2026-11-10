@@ -86,7 +86,7 @@ test('the agency pill takes you to the desk; the avatar menu is a proper menu bu
   assert.equal(went, 1, 'a click on the pill goes to the desk')
   // The bar hands the pill the desk route (onAgency), and the medallion too; App.tsx gives both the agency level.
   const src = readFileSync('src/components/Toolbar.tsx', 'utf8')
-  assert.match(src, /<AgencyPill agency=\{agency\} onDesk=\{onAgency \?\? onHome\} \/>/)
+  assert.match(src, /<AgencyPill agency=\{agency\} logo=\{agencyLogo\} onDesk=\{onAgency \?\? onHome\} \/>/)
   const app = readFileSync('src/App.tsx', 'utf8')
   assert.match(app, /onHome=\{\(\) => leaveTo\(\{ level: 'agency' \}\)\}/, 'in a document the medallion goes to the desk')
   assert.match(app, /onAgency=\{\(\) => leaveTo\(\{ level: 'agency' \}\)\}/, 'in a document the pill goes to the desk')

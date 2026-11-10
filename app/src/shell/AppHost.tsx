@@ -26,6 +26,7 @@ import { modeOf, statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
+import type { AgencyLogo } from './agency/palette'
 import { isProductApp, markTarget, pageRunOf } from '../components/medallionMotion'
 import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
@@ -59,6 +60,8 @@ interface Props {
   onToolPage?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
   agency: string
+  /** The agency's marks for the pill (palette.ts pillLogoOf). */
+  agencyLogo?: AgencyLogo
   onAgency: () => void
   /** Who is signed in, and the way out (the slot's More menu). */
   user?: string | null
@@ -80,7 +83,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -350,6 +353,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <div className="ch-strip" />
       <Toolbar
         agency={agency}
+        agencyLogo={agencyLogo}
         mark={mark}
         onAgency={onAgency}
         onHome={onHome}

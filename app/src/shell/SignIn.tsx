@@ -83,6 +83,18 @@ function useSignInLook(typed: string): SignInLook {
   return signInLookOf(id ? `_@${id}` : '')
 }
 
+/** The agency's wordmark on the card, the copy for each theme's paper (CSS shows the one that reads); nothing without one. */
+function AgencyWordmark({ look }: { look: SignInLook }) {
+  const { light, dark } = look.wordmark
+  if (!look.name || (!light && !dark)) return null
+  return (
+    <span className="si-agency" key={look.id ?? 'none'} data-testid="signin-wordmark">
+      {light && <img className="on-light" src={light} alt={look.name} />}
+      {dark && <img className="on-dark" src={dark} alt={look.name} />}
+    </span>
+  )
+}
+
 export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone: () => void }) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
@@ -134,6 +146,7 @@ export function SignIn({ asksPassword, onDone }: { asksPassword: boolean; onDone
       {challenge === null ? (
         <form className="si-card" onSubmit={signIn} noValidate>
           <span className="si-mark" key={agency.id ?? 'none'}><DeepOMark size={54} palette={agency.mark} shared state="awake" progress={0} testId="medallion-mark" /></span>
+          <AgencyWordmark look={agency} />
           <h2>{heading}</h2>
           <p data-testid="signin-lede">{agency.lede}</p>
           <label>

@@ -23,7 +23,7 @@ import { signedInUser } from './host/http'
 import { signOut } from './shell/signOut'
 import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
 import { spinoffTitle } from './shell/docTitle'
-import { agencyNameOf, applyAgency, markOf } from './shell/agency/palette'
+import { agencyIdOf, agencyNameOf, applyAgency, coloursOf, markOf, pillLogoOf } from './shell/agency/palette'
 import { rememberAgency } from './shell/agency/lastAgency'
 import { DeskDrawer } from './shell/nui/DeskDrawer'
 import { useDeskFacts } from './shell/nui/useDeskFacts'
@@ -128,6 +128,8 @@ export default function App() {
   useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
+  // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
+  const agencyLogo = pillLogoOf(coloursOf(agencyIdOf(personId)))
   // Decisions on the desk: every call across the documents it has read.
   const [deskDecisions, setDeskDecisions] = useState(false)
   // What the desk reads of recent documents' own chains: last editor, calls, thin findings, upstream changes.
@@ -598,6 +600,7 @@ export default function App() {
             run: () => leaveTo(docRoute),
           } : null}
           agency={agency}
+          agencyLogo={agencyLogo}
           mark={mark}
           onAgency={() => leaveTo({ level: 'agency' })}
           onCopyLink={hasServer && !device ? copyLink : undefined}
@@ -627,6 +630,7 @@ export default function App() {
           bar={opening ? null : (
             <Toolbar
               agency={agency}
+              agencyLogo={agencyLogo}
               mark={mark}
               onAgency={toAgency}
               onHome={toAgency}

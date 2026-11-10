@@ -4,6 +4,11 @@
 .p33-signin { position: fixed; inset: 0; z-index: 140; background: var(--desk); display: grid; place-items: center; overflow: auto; font: 15px/1.55 var(--font-ui); color: var(--ink); }
 .p33-signin .si-card { width: min(380px, calc(100vw - 32px)); background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 30px 28px; box-shadow: var(--shadow-paper); display: grid; gap: 12px; }
 .p33-signin .si-mark { display: block; width: 54px; height: 54px; border-radius: 50%; }
+.p33-signin .si-agency { display: block; animation: si-look .35s ease; }
+.p33-signin .si-agency img { display: block; width: auto; height: auto; max-width: 160px; max-height: 28px; }
+.p33-signin .si-agency .on-dark { display: none; }
+:root[data-theme='dark'] .p33-signin .si-agency .on-light { display: none; }
+:root[data-theme='dark'] .p33-signin .si-agency .on-dark { display: block; }
 .p33-signin h2 { margin: 0; font: 700 24px/1.15 var(--font-ui); letter-spacing: normal; color: var(--ink); }
 .p33-signin p { margin: 0; color: var(--muted); font-size: 13.5px; }
 .p33-signin p b { color: var(--ink); font-weight: 600; }
@@ -24,5 +29,5 @@
 @keyframes si-look { from { opacity: .55; transform: scale(.94); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .p33-signin, .p33-signin .si-card, .p33-signin input, .p33-signin .btn-rect.primary { transition: none; }
-  .p33-signin .si-mark { animation: none; }
+  .p33-signin .si-mark, .p33-signin .si-agency { animation: none; }
 }

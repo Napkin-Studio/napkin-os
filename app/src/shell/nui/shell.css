@@ -30,7 +30,7 @@
 .nui .tba-name > svg, .nui .tba-name > .tba-caret { flex: none; }
 .nui .tb-tools { display: inline-flex; align-items: center; gap: 8px; }
 .nui .tb-tools:empty { display: none; }
-.nui .tba-primary { background: var(--ag-act) !important; color: var(--ag-act-ink) !important; border-color: var(--ag-act) !important; }
+.nui .tba-primary { background: var(--ag-act) !important; color: var(--ag-act-ink) !important; border-color: var(--ag-act-line, var(--ag-act)) !important; }
 .nui .tba-static { cursor: default; }
 .nui .tba-line[disabled] { cursor: default; }
 @media (max-width: 1180px) { .nui .tb-tools .ch-chip { display: none; } }
@@ -112,6 +112,9 @@
   .nui .m1-medallion { width: 52px !important; height: 52px !important; top: 2px !important; }
   .nui .tb-client { max-width: 110px; }
   .nui .stacked-lockup .sl-big { max-width: 64px; }
+  .nui .stacked-lockup .sl-logo.has-icon { height: 24px; }
+  .nui .stacked-lockup .sl-logo.has-icon .sl-wordmark { display: none; }
+  .nui .stacked-lockup .sl-logo.has-icon .sl-icon { display: block; }
 }
 @media (max-width: 360px) {
   .nui .tb-locked { padding: 0 6px; gap: 5px !important; }

@@ -9,7 +9,7 @@
 // agency's only from what is typed. Per browser only: a convenience, never a
 // source of truth.
 
-import { agencyIdOf } from './palette'
+import { agencyIdOf, canonicalAgencyId } from './palette'
 
 const AGENCY_KEY = 'napkin.lastAgency'
 const SIGNED_OUT_KEY = 'napkin.signedOut'
@@ -20,7 +20,9 @@ function store(kind: 'local' | 'session'): Storage | null {
 
 /** Remember the agency of the person signed in (`name@agency`); nothing for an anonymous tenant. */
 export function rememberAgency(personId: string | null | undefined): void {
-  const id = agencyIdOf(personId)
+  // An alias is kept as the registry id it means (`b+g` is boysandgirls), so the boot screen finds its look.
+  const raw = agencyIdOf(personId)
+  const id = canonicalAgencyId(raw) ?? raw
   if (!id) return
   try { store('local')?.setItem(AGENCY_KEY, id) } catch { /* not kept */ }
 }

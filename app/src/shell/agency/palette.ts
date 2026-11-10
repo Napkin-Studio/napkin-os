@@ -17,6 +17,9 @@
 // (the Create department, and the one accent). Documents inside the frame keep
 // their own paper palette: nothing here reaches the iframe.
 
+import { ICON_PNG, ICON_SVG, WORDMARK_SVG } from './logos'
+import { recolourSvg } from './svgSanitise'
+
 /** What an admin sets for an agency: its colour (`accent`) and its darker base. */
 export interface AgencyColours {
   /** The agency's display name, on the pill, the desk and the sign-in card (admin-set; the session carries the id only). */
@@ -25,7 +28,29 @@ export interface AgencyColours {
   accent: string
   /** Its base colour (the mock's `base`): kept for the dial and future use. */
   base: string
+  /** Its wordmark for a light ground (a data: URI from logos.ts), where a wide mark fits: the agency pill, the sign-in card. */
+  logo?: string
+  /** Its wordmark for a dark ground. */
+  logoOnDark?: string
+  /** Its square mark (a data: URI), where a square fits: the brief's agency tile, avatar-sized spots. Without one, initials. */
+  icon?: string
+  /** Ink on the accent, where the brand sets it (Pluto: navy on lime); else near-black or white, whichever reads. */
+  accentInk?: string
+  /** The pill's ground: the accent (the default), or the base with an accent hairline (a brand whose mark is white on black). */
+  pill?: 'accent' | 'base'
+  /**
+   * 'line': the accent is never a big fill. Actions are the base in both
+   * themes, outlined in the accent, and the accent is the needs and highlight
+   * colour (Catapult's crimson). Default 'fill': actions are the base in
+   * light and the accent in dark.
+   */
+  accentUse?: 'fill' | 'line'
+  /** 'mono': neutral surfaces (an off-white desk in light, black in dark) instead of the studio's warm paper tinted with the base. */
+  surface?: 'warm' | 'mono'
 }
+
+const svgUri = (svg: string) => 'data:image/svg+xml,' + encodeURIComponent(svg)
+const pngUri = (b64: string) => 'data:image/png;base64,' + b64
 
 /**
  * The agency registry's colours, by the agency id people sign in under
@@ -38,8 +63,12 @@ export interface AgencyColours {
  * an admin adds one line: its id (lower case, the part after the @), its
  * display `name`, its darker `base` and its `accent` (#rrggbb). Every other
  * token, light and dark, is derived (paletteOf, surfaceCss, markOf), and
- * tests/agencyPalette.test.ts checks that the new look reads. Branding only:
- * nothing here says who has an account.
+ * tests/agencyPalette.test.ts checks that the new look reads. Logos are
+ * optional: put the files through scripts/agency-logos.mjs (it sanitises them
+ * into logos.ts) and set `logo` / `logoOnDark` (wordmark per ground) and
+ * `icon` (square); without them the agency's name and initials stand in.
+ * Other spellings go in AGENCY_ALIASES. Branding only: nothing here says who
+ * has an account.
  */
 export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
   wk: { name: 'Wieden+Kennedy', base: '#1E22AA', accent: '#FFB800' },
@@ -48,6 +77,43 @@ export const AGENCY_COLOURS: Readonly<Record<string, AgencyColours>> = {
   harbour: { name: 'Harbour & Co', base: '#0F6B5C', accent: '#9FE6D8' },
   droga: { name: 'Droga5', base: '#16181D', accent: '#C6F432' },
   napkin: { name: 'Napkin', base: '#515BFF', accent: '#C8CBFF' },
+  // The next three: colours from the owner's brand references, logos from the
+  // owner's assets (2026-11-11). tests/agencySkins.test.tsx checks each reads.
+  // Boys+Girls: black and white only. The white wordmark on a black pill;
+  // black buttons in light, white buttons with black text in dark.
+  boysandgirls: {
+    name: 'Boys+Girls', base: '#000000', accent: '#FFFFFF', pill: 'base', surface: 'mono',
+    logo: svgUri(recolourSvg(WORDMARK_SVG.boysandgirls, '#000000')), logoOnDark: svgUri(WORDMARK_SVG.boysandgirls), icon: pngUri(ICON_PNG.boysandgirls),
+  },
+  // Catapult: black, with a hint of crimson (their "Get in touch" outline):
+  // a hairline on actions and the pill, and the needs colour; never a big fill.
+  catapult: {
+    name: 'Catapult', base: '#000000', accent: '#C61566', pill: 'base', accentUse: 'line', surface: 'mono',
+    logo: svgUri(WORDMARK_SVG.catapult), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.catapult, '#FFFFFF')), icon: svgUri(ICON_SVG.catapult),
+  },
+  // Pluto: navy, white and lime (their play button); text on lime is navy, never white.
+  pluto: {
+    name: 'Pluto', base: '#000047', accent: '#B2F257', accentInk: '#000047',
+    logo: svgUri(WORDMARK_SVG.pluto), logoOnDark: svgUri(recolourSvg(WORDMARK_SVG.pluto, '#FFFFFF')),
+  },
+}
+
+/**
+ * Other spellings people sign in under, to the registry id they mean
+ * (`x@bg` is Boys+Girls). Only for the look: the roster decides who signs in.
+ */
+export const AGENCY_ALIASES: Readonly<Record<string, string>> = {
+  bg: 'boysandgirls',
+  boysgirls: 'boysandgirls',
+  'b+g': 'boysandgirls',
+}
+
+/** The registry id an agency id means (itself, or an alias's target); null when the registry has neither. */
+export function canonicalAgencyId(agencyId: string | null | undefined): string | null {
+  if (!agencyId) return null
+  const id = agencyId.trim().toLowerCase()
+  if (Object.hasOwn(AGENCY_COLOURS, id)) return id
+  return Object.hasOwn(AGENCY_ALIASES, id) ? AGENCY_ALIASES[id] : null
 }
 
 /** The agency's name for a signed-in person: the registry's, else `fallback` (the id, title-cased). */
@@ -110,11 +176,22 @@ function mix(a: string, b: string, t: number): string {
 export function paletteOf(colours: AgencyColours | null | undefined): AgencyPalette {
   if (!colours || !rgb(colours.accent)) return NEUTRAL
   const a = colours.accent.toUpperCase()
-  const fg = inkOn(a)
+  const fg = accentInkOf(colours)
   return {
     light: { agency: a, fg, soft: mix(a, PAPER.light, 0.16) },
     dark: { agency: a, fg, soft: mix(a, PAPER.dark, 0.2) },
   }
+}
+
+/** Ink on an agency's accent: the brand's own where it sets one, else whichever of near-black and white reads. */
+export function accentInkOf(colours: AgencyColours): string {
+  return colours.accentInk && rgb(colours.accentInk) ? colours.accentInk.toUpperCase() : inkOn(colours.accent)
+}
+
+/** The pill's ground, its ink and its rim (Toolbar.tsx AgencyPill): the accent, or the base with an accent hairline. */
+export function pillOf(colours: AgencyColours): { bg: string; ink: string; line: string | null } {
+  if (colours.pill === 'base') return { bg: colours.base.toUpperCase(), ink: inkOn(colours.base), line: colours.accent.toUpperCase() }
+  return { bg: colours.accent.toUpperCase(), ink: accentInkOf(colours), line: null }
 }
 
 /** The agency id from a signed-in person's id (`name@agency`); null for the desktop or an anonymous tenant. */
@@ -127,7 +204,36 @@ export function agencyIdOf(personId: string | null | undefined): string | null {
 
 /** The admin-set colours for an agency id, if it has any. */
 export function coloursOf(agencyId: string | null | undefined): AgencyColours | null {
-  return agencyId && Object.hasOwn(AGENCY_COLOURS, agencyId) ? AGENCY_COLOURS[agencyId] : null
+  const id = canonicalAgencyId(agencyId)
+  return id ? AGENCY_COLOURS[id] : null
+}
+
+/** Which ground a colour is: light when near-black ink reads best on it. */
+export function groundOf(bg: string): 'light' | 'dark' {
+  return inkOn(bg) === INK ? 'light' : 'dark'
+}
+
+/** The agency's wordmark for a ground; null when it has none that reads there (then its name, as text). */
+export function wordmarkOf(colours: AgencyColours | null | undefined, ground: 'light' | 'dark'): string | null {
+  return (ground === 'light' ? colours?.logo : colours?.logoOnDark) || null
+}
+
+/**
+ * The agency pill's mark (Toolbar.tsx AgencyPill): the wordmark for the pill's
+ * ground (the accent), and the icon for a bar too narrow for it. Nulls for an
+ * agency with no logos: the pill keeps its name.
+ */
+export function pillLogoOf(colours: AgencyColours | null | undefined): AgencyLogo {
+  if (!colours || !rgb(colours.accent) || !rgb(colours.base)) return { wordmark: null, icon: null }
+  return { wordmark: wordmarkOf(colours, groundOf(pillOf(colours).bg)), icon: iconOf(colours) }
+}
+
+/** An agency's marks for one place: the wordmark that reads on its ground, and its square icon. */
+export interface AgencyLogo { wordmark: string | null; icon: string | null }
+
+/** The agency's square mark; null when it has none (then its initials). */
+export function iconOf(colours: AgencyColours | null | undefined): string | null {
+  return colours?.icon || null
 }
 
 /**
@@ -140,9 +246,9 @@ export function coloursOf(agencyId: string | null | undefined): AgencyColours | 
 export function agencyOfSignInName(typed: string): string | null {
   const id = agencyIdOf(typed)
   if (!id) return null
-  if (coloursOf(id)) return id
+  if (canonicalAgencyId(id)) return canonicalAgencyId(id)
   const labels = id.split('.')
-  for (let i = labels.length - 2; i >= 0; i--) if (coloursOf(labels[i])) return labels[i]
+  for (let i = labels.length - 2; i >= 0; i--) if (canonicalAgencyId(labels[i])) return canonicalAgencyId(labels[i])
   return null
 }
 
@@ -173,16 +279,32 @@ const SURFACE_ID = 'napkin-agency-surface'
  * the agency's base (6%, 2.5% and 10% in light; 12%, 9%, 7% and 16% in dark),
  * and the action colour (--ag-act: selected toggles, primary buttons) is the
  * base in light and the accent in dark. An agency an admin has not coloured
- * takes Napkin's kit, as the medallion does (markOf).
+ * takes Napkin's kit, as the medallion does (markOf). An agency's options
+ * change this: `surface: 'mono'` swaps the tinted warm paper for neutral
+ * surfaces, `accentUse: 'line'` keeps actions in the base with an accent
+ * hairline (--ag-act-line) and makes the accent the needs colour (--needs),
+ * and `pill: 'base'` puts the pill on the base with an accent rim (--ag-pill*).
  */
 export function surfaceCss(colours: AgencyColours | null | undefined): string {
   const c = colours && rgb(colours.base) && rgb(colours.accent) ? colours : NAPKIN_COLOURS
   const b = c.base.toUpperCase(), a = c.accent.toUpperCase()
   const ink = (bg: string) => (inkOn(bg) === INK ? '#141413' : WHITE)
+  const accInk = accentInkOf(c), actInk = (bg: string) => (bg === a ? (c.accentInk ? accInk : ink(a)) : ink(bg))
   const mixIn = (pct: string, onto: string) => `color-mix(in srgb, ${b} ${pct}, ${onto})`
-  const shared = `--ag-base: ${b}; --ag-acc: ${a}; --ag-acc-ink: ${inkOn(a)}; --accent-line: #C8CBFF;`
-  const light = `${shared} --ag-act: ${b}; --ag-act-ink: ${ink(b)}; --desk: ${mixIn('6%', DESK_BASE.light)}; --paper: ${mixIn('2.5%', '#FFFDF8')}; --card: #FFFFFF; --line: ${mixIn('10%', '#E2D9C8')};`
-  const dark = `${shared} --ag-act: ${a}; --ag-act-ink: ${ink(a)}; --desk: ${mixIn('12%', DESK_BASE.dark)}; --paper: ${mixIn('9%', '#1B1A18')}; --card: ${mixIn('7%', '#201E1B')}; --line: ${mixIn('16%', '#34302A')};`
+  const pill = pillOf(c)
+  // Only an agency that sets them writes the pill, hairline and needs tokens; the rest keep the CSS defaults.
+  const extra = (pill.line ? ` --ag-pill: ${pill.bg}; --ag-pill-ink: ${pill.ink}; --ag-pill-line: ${pill.line};` : '')
+    + (c.accentUse === 'line' ? ` --ag-act-line: ${a}; --needs: ${a}; --needs-ink: ${ink(a)};` : '')
+  const shared = `--ag-base: ${b}; --ag-acc: ${a}; --ag-acc-ink: ${accInk}; --accent-line: #C8CBFF;${extra}`
+  const act = { light: b, dark: c.accentUse === 'line' ? b : a }
+  const surfaces = c.surface === 'mono'
+    ? { light: '--desk: #F5F5F4; --paper: #FFFFFF; --card: #FFFFFF; --line: #E2E2E0;', dark: '--desk: #000000; --paper: #111111; --card: #161616; --line: #2A2A2A;' }
+    : {
+        light: `--desk: ${mixIn('6%', DESK_BASE.light)}; --paper: ${mixIn('2.5%', '#FFFDF8')}; --card: #FFFFFF; --line: ${mixIn('10%', '#E2D9C8')};`,
+        dark: `--desk: ${mixIn('12%', DESK_BASE.dark)}; --paper: ${mixIn('9%', '#1B1A18')}; --card: ${mixIn('7%', '#201E1B')}; --line: ${mixIn('16%', '#34302A')};`,
+      }
+  const light = `${shared} --ag-act: ${act.light}; --ag-act-ink: ${actInk(act.light)}; ${surfaces.light}`
+  const dark = `${shared} --ag-act: ${act.dark}; --ag-act-ink: ${actInk(act.dark)}; ${surfaces.dark}`
   return `:root, :root[data-theme='light'] { ${light} }\n:root[data-theme='dark'] { ${dark} }`
 }
 

@@ -26,7 +26,7 @@ import { DeepOMark } from '../brand/DeepOMark'
 import type { MarkTarget } from './medallionMotion'
 import { modeOf } from '../shell/appBar'
 import { useEngaged } from './markStore'
-import { markOf } from '../shell/agency/palette'
+import { markOf, type AgencyLogo } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
 import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
@@ -42,6 +42,8 @@ export type { Account, ClientChip, Crew, DocBar, DocState, MenuItem, ToolBrand }
 interface Props {
   /** The signed-in agency's name, on the pill. */
   agency: string
+  /** The agency's marks for the pill (palette.ts pillLogoOf): its wordmark instead of the name, its icon on a narrow bar. */
+  agencyLogo?: AgencyLogo
   /** The agency pill: back to the desk (owner, 2026-11-11); else the medallion's way home. */
   onAgency?: () => void
   /** The medallion: back to the studio. */
@@ -197,7 +199,7 @@ function CrewHere({ crew, mine }: { crew: Crew; mine?: boolean }) {
 }
 
 /** The agency's pill: back to the desk, no menu (owner, 2026-11-11). */
-export function AgencyPill({ agency, onDesk }: { agency: string; onDesk: () => void }) {
+export function AgencyPill({ agency, logo, onDesk }: { agency: string; logo?: AgencyLogo; onDesk: () => void }) {
   return (
     <button
       type="button"
@@ -209,7 +211,9 @@ export function AgencyPill({ agency, onDesk }: { agency: string; onDesk: () => v
       onClick={onDesk}
     >
       <span className="stacked-lockup" id="header-lockup">
-        <span className="sl-big">{agency}</span>
+        {logo?.wordmark
+          ? <span className={`sl-big sl-logo${logo.icon ? ' has-icon' : ''}`} data-testid="agency-wordmark"><img className="sl-wordmark" src={logo.wordmark} alt={agency} />{logo.icon && <img className="sl-icon" src={logo.icon} alt="" aria-hidden />}</span>
+          : <span className="sl-big">{agency}</span>}
         <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>
       </span>
     </button>
@@ -320,7 +324,7 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
 }
 
 export default function Toolbar({
-  agency, onAgency, onHome, mark = markOf(null), attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
+  agency, agencyLogo, onAgency, onHome, mark = markOf(null), attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
 }: Props) {
   const pop = usePop<PopKey>()
   const appRef = useRef<HTMLDivElement>(null)
@@ -338,7 +342,7 @@ export default function Toolbar({
     <>
       <div className="dock-connected">
         <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} target={doc ? markTarget : undefined} />
-        <AgencyPill agency={agency} onDesk={onAgency ?? onHome} />
+        <AgencyPill agency={agency} logo={agencyLogo} onDesk={onAgency ?? onHome} />
       </div>
       <span className="tb-vsep" aria-hidden />
       <nav className="tb-trail" id="tb-trail" aria-label="Where you are">
