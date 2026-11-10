@@ -731,7 +731,7 @@ var ClanFields=(function(){
   // "checked by"; a record from the knowledge layer adds where it came from.
   function reviewerWords(rec){ var t=String(rec&&rec.title||''), who=personName(whoOfSrc(rec));
     var w=/correct/i.test(t)?'corrected by '+who:/confirm/i.test(t)?'confirmed by '+who+' in chat':'checked by '+who;
-    return w+(rec&&rec.origin==='layer'?' · from what Napkin already knew':''); }
+    return w+(rec&&(rec.origin==='layer'||rec.origin_kind==='layer')?' · from what Napkin already knew':''); }
   // Where a source came from, in plain words: 'ShelfLife Magazine · March 2025
   // · we read it on 28 Sept'.
   function srcLine(rec,p){

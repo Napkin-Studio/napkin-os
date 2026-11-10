@@ -2618,16 +2618,18 @@ test('research: the map draws what feeds the report; Show considered adds exactl
   // No "unused" box, no dashed legend; the legend links what is not used to Evidence.
   assert.doesNotMatch(fn(RT, 'mapSvg'), /unused/)
   assert.doesNotMatch(RT, /\.n\.unused|<i class="d"><\/i>not used|· not used'/)
-  assert.match(fn(RT, 'renderMap'), /data-act="ev-open" data-g="unused">'\+plural\(c\.unused\.pins, 'fact'\)\+' and '\+plural\(c\.unused\.sources, 'source'\)\+' not used → Evidence/)
-  assert.match(fn(RT, 'renderMap'), /Show considered \('\+nc\+'\)/)
-  assert.match(RT, /try\{ EV\.cons=localStorage\.getItem\('clan\.research\.mapcons'\)==='1'; \}catch\(e\)\{\}/)
+  // The design's map (2026-11-11): stubs end each column, and "left out" draws exactly the left-out findings.
+  const mv = fn(RT, 'renderMapV')
+  assert.match(mv, /\+'\+c\.unused\.sources\+'▤ not used/)
+  assert.match(mv, /\+'\+c\.unused\.pins\+'◆ not used/)
+  assert.match(mv, /data-act="pv-leftout">'\+\(PV\.leftOut\?'Hide the '\+nleft/)
 })
 
 test('research: the Evidence box holds what left the body, and the export keeps it as an appendix', () => {
+  // The panel (2026-11-11): the report view or one item, then the map; Ask under the report view.
   const insp = RT.slice(RT.indexOf('<aside class="insp'), RT.indexOf('</aside>'))
-  assert.ok(insp.indexOf('id="evbox"') > insp.indexOf('id="rbox"') && insp.indexOf('id="evbox"') < insp.indexOf('id="insp-ask"'), 'after the Report box, before Ask')
-  assert.match(insp, /id="ev-q" placeholder="Find a fact or source"/)
-  assert.match(RT, /\.insp\.has-sel #evbox,/)
+  assert.ok(insp.indexOf('id="pv"') < insp.indexOf('id="mapview"') && insp.indexOf('id="mapview"') < insp.indexOf('id="insp-ask"'), 'report or item, the map, then Ask')
+  assert.match(fn(RT, 'reportViewHtml'), /id="pv-q" type="search" placeholder="Find a fact or source"/)
   const g = fn(RT, 'evGroupsHtml')
   for (const k of ["'sources', 'Sources'", "'facts', 'Facts'", "'contests', 'Where sources disagree'", "'considered', 'Considered, not chosen'", "'unused', 'Not used'", "'gaps', 'Gaps'"]) assert.ok(g.includes(k), k)
   assert.match(g, /Nothing was weighed and set aside\./)
@@ -2685,7 +2687,7 @@ test('research: the report box and the OS bar say the report’s state in the sa
   // the run's state, for the bar's mode (the name alone at the ask; the run's step while it works)
   const run = { fresh: false, job: null as null | { state: string }, active: false, step: 0, report: true }
   const f = lift<F>(RT, ['reportStatus', 'barItems', 'barMode'], {
-    isObj, CHAT: { reportBusy: false, get job() { return run.job } }, gateWords: () => gate.t,
+    isObj, theAgent: (k: string) => `the ${k} agent`, CHAT: { reportBusy: false, get job() { return run.job } }, gateWords: () => gate.t,
     thread: () => (run.fresh ? [] : [{}]), camp: () => (run.fresh ? {} : { name: {} }), jobActive: () => run.active,
     liveQuestion: () => null, runStep: () => run.step, PLAN: [{}, {}, {}, {}], D: () => (run.report ? { report: {} } : {}) })
   assert.equal(f.reportStatus(null, false, false, 0).label, 'No report yet')
@@ -2693,15 +2695,17 @@ test('research: the report box and the OS bar say the report’s state in the sa
   assert.equal(f.reportStatus({}, false, true, 3).label, 'Out of date')
   assert.equal(f.reportStatus({}, false, false, 2).label, 'Draft')
   assert.equal(f.reportStatus({}, false, false, 0).label, 'Ready to lock')
-  // The OS bar takes the state only (decision 9 Nov): Continue in, Share and Export are
-  // the bar's own; Refresh, Lock and accept and Run research are the Report box's.
+  // The OS bar (the design's Brief-tab parity): Redo ▾ and Save · PDF ▾, no state pill; locked, Save only.
   const st = f.reportStatus({}, false, false, 1)
-  assert.deepEqual(f.barItems(st, true, false), [{ kind: 'status', label: 'Draft', tone: 'warn', locked: false }])
-  assert.deepEqual(f.barItems(f.reportStatus({}, true, false, 0), true, true), [{ kind: 'status', label: 'Locked', tone: 'ok', locked: true }])
+  const bar = f.barItems(st, true, false) as { kind: string; id?: string; menu?: { id: string }[] }[]
+  assert.deepEqual(bar.map(i => i.id), ['redo', 'save'])
+  assert.deepEqual(bar[0].menu?.map(m => m.id), ['refresh', 'synth', 'research', 'extract'])
+  assert.deepEqual(bar[1].menu?.map(m => m.id), ['export', 'export-html', 'save-clan'])
+  assert.deepEqual((f.barItems(f.reportStatus({}, true, false, 0), true, true) as { id?: string }[]).map(i => i.id), ['save'])
   // Not brief-ready: Continue in begins with the gate line (gaps.md §7 L3); never once it is locked.
   gate.t = 'Not brief-ready yet: 1 call open (Finding 3). You can still start; the brief flags what is open.'
   assert.deepEqual(f.barItems(st, true, false)[0], { kind: 'gate', label: gate.t, tone: 'warn' })
-  assert.equal(f.barItems(f.reportStatus({}, true, false, 0), true, true).length, 1)
+  assert.equal(f.barItems(f.reportStatus({}, true, false, 0), true, true).filter(i => i.kind === 'gate').length, 0)
   gate.t = ''
   // The mock's bar per step: the ask shows the name alone, a run its step, a run that left no report how it ended.
   run.fresh = true
@@ -2711,8 +2715,6 @@ test('research: the report box and the OS bar say the report’s state in the sa
   run.active = false; run.job = { state: 'cancelled' }; run.report = false
   assert.deepEqual(f.barItems(f.reportStatus(null, false, false, 0), false, false)[0], { kind: 'mode', mode: 'working', label: 'Stopped' })
   run.job = null; run.report = true
-  const box = RT.slice(RT.indexOf('<section class="insp-box" id="rbox"'), RT.indexOf('</section>', RT.indexOf('id="rbox"')))
-  for (const id of ['rbox-status', 'rbox-refresh', 'lockBtn', 'researchBtn', 'synthBtn']) assert.match(box, new RegExp(`id="${id}"`), `${id} is in the Report box`)
   // A bar action from an older shell still does what the page's button does.
   const onBar = fn(RT, 'onBarAction')
   assert.match(onBar, /'refresh'\) doRefreshReport\(\)/)
@@ -3504,7 +3506,7 @@ test('research: Confirm opens in the side panel in plain words, and writes the v
   const h = f.confirmViewHtml('client_org')
   assert.match(h, /<h3 class="cf-q">Is the client Guinness\?<\/h3>/)
   assert.match(h, /We worked this out from 3 facts/)
-  assert.equal((h.match(/class="cf-fact" data-sel="f_/g) || []).length, 3, 'the facts are tappable rows')
+  assert.equal((h.match(/class="cf-fact" data-pv="f_/g) || []).length, 3, 'the facts are tappable rows')
   assert.match(h, /Yes, that’s right/); assert.match(h, /Change it…/); assert.match(h, /Not now/)
   assert.match(h, /<details class="cf-note"><summary>Add a note<\/summary>/, 'the note stays folded')
   assert.doesNotMatch(h, /cf-who|Your name/, 'signed in, no name is asked: the check is the signed-in person’s')
@@ -3556,4 +3558,54 @@ test('the stage sphere: lit for the stage’s ground, pale materials shaded on d
   const roles = page('shared/agent-sphere/roles.js')
   assert.match(roles, /<g transform="scale\(' \+ mk \+ '\)">/, 'the static frame scales its mark too')
   assert.match(roles, /stroke="#000" stroke-opacity="\.16"/, 'and has a rim')
+})
+
+// ── the research panel, one thing at a time (features/research-new-ui.clan; the approved design, 2026-11-11) ──
+test('research panel: the footing says itself, no key needed (owner override)', () => {
+  const foot = fn(RT, 'footHtml')
+  assert.match(foot, /Uses <b>'\+c\.feeds\.sources\+'<\/b> of '\+c\.sources\+' sources · <b>'\+c\.feeds\.pins\+'<\/b> of '\+c\.pins\+' facts · <b>'\+c\.feeds\.findings\+'<\/b> of '\+c\.findings\+' findings/)
+  assert.match(foot, /class="lead" aria-hidden="true">▤ ◆ /, 'the glyphs are a quiet lead-in, never alone')
+  assert.match(foot, /plural\(need, 'finding'\)\)\+' wait'\+\(need===1\?'s':''\)\+' for your call'/)
+  assert.match(foot, /'All '\+plural\(k, 'finding'\)\+' kept'/)
+  assert.match(foot, />facts used</)
+  assert.match(foot, /g\+' couldn’t find'/)
+  const chip = fn(RT, 'mktChip')
+  assert.match(chip, /'Nothing found for ':'Facts found for '/)
+})
+
+test('research panel: one primary per view, Lock waits with "Settle n first", and the report view never quotes the page', () => {
+  const rv = fn(RT, 'reportViewHtml')
+  assert.match(rv, />Lock the report<\/button>/)
+  assert.match(rv, /'Settle '\+open\.length\+' first'/)
+  assert.equal((rv.match(/pv-btn primary/g) || []).length, 1)
+  for (const k of ['Left out · ', 'Found, not used · ', 'Couldn’t find · ']) assert.ok(rv.includes(k), k)
+  // Your call rows name a finding by number and section, never its text.
+  assert.doesNotMatch(fn(RT, 'callRow'), /statement/)
+  assert.doesNotMatch(fn(RT, 'rowFind'), /statement/)
+})
+
+test('research panel: the missing source is named by its origin, never by its id', () => {
+  const f = lift<{ missLabel(k: string): string; entityName(e: string): string }>(RT, ['missLabel', 'entityName'], { brandName: () => '', slug: (s: string) => s })
+  assert.equal(f.missLabel('lib:brand/mcdonald-s-ireland'), 'From what Napkin knew about McDonald’s Ireland')
+  assert.equal(f.missLabel('none'), 'No source saved')
+  const v = fn(RT, 'viewMissHtml')
+  assert.match(v, /Confirmed by a person in an earlier chat\. The note of who confirmed it wasn’t copied into this document\./)
+  assert.match(v, /Record not copied/)
+  assert.doesNotMatch(v, /src_|esc\(k\)\+'<\/span>/, 'no raw id on the surface')
+  // A fact whose source record is not held carries the chain mark; the map draws one dashed tile per origin.
+  assert.match(fn(RT, 'rowFact'), /noSource\(id\)\?'<span class="mk prop" title="Source record not copied">'\+ICO_CHAIN/)
+  assert.match(fn(RT, 'mapGraphV'), /var mk='M:'\+missKey\(id\)/)
+})
+
+test('research panel: the map draws only what the report uses, grouped, and lights the chain both ways', () => {
+  const g = fn(RT, 'mapGraphV')
+  assert.match(g, /E\.pin\[id\]\.group==='feeds'/)
+  assert.match(g, /'Quoted straight in the summary'/)
+  assert.match(g, /'⋮ '\+tail\.length\+' more'/)
+  const ch = fn(RT, 'chainV')
+  assert.match(ch, /if\(up\[e\.b\]&&!up\[e\.a\]\)/)
+  assert.match(ch, /if\(down\[e\.a\]&&!down\[e\.b\]\)/)
+  assert.match(fn(RT, 'drawEdgesV'), /el\.classList\.add\(id===PV\.mapSel\?'on':chain\[id\]\?'lit':'dim'\)/)
+  assert.match(fn(RT, 'renderMapV'), /data-act="pv-mapopen">Open<\/button>/)
+  assert.match(RT, /PV\.keySeen=localStorage\.getItem\('clan\.research\.mapkey'\)==='1'; PV\.keyOpen=!PV\.keySeen;/, 'the Key opens on the first visit, then folds')
 })
