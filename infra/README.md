@@ -221,6 +221,36 @@ Set `budget_emails` to get two budgets, each emailing when the forecast passes
 cost the credits are paying for) and **card** (`monthly_card_budget_usd`, $5,
 what is left after credits, i.e. real money).
 
+## UAT: our own copy, for trying a branch before it merges
+
+`envs/uat` is a second copy of the staging stack (`napkin-uat-*`, VPC
+`10.41.0.0/16`). It shares no data or network with staging, which testers use,
+and nothing deploys it automatically (`features/uat-environment.clan`).
+
+Set it up once, as for staging, with these differences:
+
+```sh
+cd infra/envs/uat
+sed 's/<account-id>/<account id>/' backend.hcl.example > backend.hcl
+cp terraform.tfvars.example terraform.tfvars   # the account's OIDC provider ARN is in it
+terraform init -backend-config=backend.hcl
+terraform plan -out=uat.tfplan                 # read it: ~141 adds, no changes, no OIDC provider
+terraform apply uat.tfplan                     # a person applies, never an agent
+$(terraform output -raw provision_databases)
+```
+
+Then put the Tavily and jev secret values (`napkin-uat/research/*`) and any
+provider keys by hand (UAT-only, low cap), make the roster for UAT, and set the
+repository variable `AWS_DEPLOY_ROLE_ARN_UAT` from `terraform output
+deploy_role_arn`. `terraform output studio_url` is the address: plain HTTP on
+the load balancer's own name until a certificate ARN is set in `tfvars`.
+
+To put a branch on UAT: Actions → Deploy → Run workflow, **run from develop**,
+environment `uat`, and the branch, tag or commit in `ref`. The run summary
+names the commit; `aws ecs describe-services --cluster napkin-uat --services
+web`, then `describe-task-definition`, shows the image tag, which is the commit.
+The last deploy wins: UAT holds one build at a time.
+
 ## What comes next
 
 1. **Layers schema** (migrations, run as `<db>_owner`):
