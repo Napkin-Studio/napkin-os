@@ -118,7 +118,7 @@ function logos(o: { layout?: Record<string, unknown>; logos?: unknown[]; client?
   }
   const fns = ['layoutData', 'logosOf', 'logoSrc', 'slotRank', 'sheetLogos', 'logosHidden', 'standInsApply', 'standIns', 'standInTiles', 'logosOnSheet', 'setStandIn', 'lookSet', 'logoTileHtml', 'renderSheetHead', 'renderLogos']
   const body = `${fns.map(n => fn(BM, n)).join('\n')}\nreturn { ${fns.join(',')} };`
-  const T = new Function(...Object.keys(env), body)(...Object.values(env)) as Record<string, (...a: unknown[]) => any>
+  const T = new Function(...Object.keys(env), body)(...Object.values(env)) as Record<string, (...a: unknown[]) => unknown>
   return { T, ids, patches, data }
 }
 
