@@ -23,10 +23,10 @@
 .ns-rects i:first-child { height: 28px; }
 
 /* The gallery (states.html). The shell has a light and a dark theme; v2 asks for three modes, so the
-   gallery states the shell's own light and dark token values and one grey between them. */
+   gallery states the shell's own token values for each, Grey as in shell/nui/modes.css. */
 .ns-mode, .ns-gallery { background: var(--paper); color: var(--ink); }
 .ns-mode[data-mode='white'], .ns-gallery[data-mode='white'] { --paper: #FFFDF8; --card: #FFFFFF; --soft: #F3ECDC; --paper-2: #F3ECDC; --ink: #141413; --ink2: #2A2620; --muted: #6D655A; --line: #E2D9C8; }
-.ns-mode[data-mode='grey'], .ns-gallery[data-mode='grey']  { --paper: #DEDAD0; --card: #E9E5DB; --soft: #D0CBBF; --paper-2: #D0CBBF; --ink: #141413; --ink2: #2A2620; --muted: #4F483E; --line: #B9B2A3; }
+.ns-mode[data-mode='grey'], .ns-gallery[data-mode='grey']  { --paper: #D8D3C7; --card: #E4DFD4; --soft: #CDC7BA; --paper-2: #CDC7BA; --ink: #141413; --ink2: #26231E; --muted: #3E382F; --line: #A8A194; }
 .ns-mode[data-mode='black'], .ns-gallery[data-mode='black'] { --paper: #1B1A18; --card: #201E1B; --soft: #262320; --paper-2: #262320; --ink: #EFE9DE; --ink2: #D6CEC0; --muted: #A49B8D; --line: #34302A; }
 
 .ns-gallery { max-width: none; margin: 0; padding: 55px 34px 89px; font-family: var(--font-ui); color: var(--ink); }

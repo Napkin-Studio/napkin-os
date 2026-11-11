@@ -1,0 +1,14 @@
+/* The agency look panel (AgencyLookPanel.tsx): the shell's own dialog, a logo
+   and three rows. The accent itself is shown as a chip; no text is set in it. */
+.al-dialog { max-width: 520px; }
+.al-logo { display: grid; place-items: center; min-height: 89px; padding: 13px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); color: var(--muted); }
+.al-logo img { max-width: 100%; max-height: 89px; }
+.al-file { position: relative; justify-self: start; cursor: pointer; }
+.al-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.al-file:focus-within { outline: 3px solid var(--agency-accent, var(--accent)); outline-offset: 2px; }
+.al-modes { list-style: none; display: grid; gap: 8px; }
+.al-modes li { display: grid; grid-template-columns: 21px 55px 1fr auto; align-items: center; gap: 8px; }
+.al-modes small { color: var(--muted); }
+.al-chip { width: 21px; height: 21px; border-radius: var(--r-sm); border: 1px solid var(--line); }
+.al-note { min-height: 21px; color: var(--muted); }
+.al-bad { color: var(--danger); }

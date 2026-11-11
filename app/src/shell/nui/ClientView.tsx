@@ -175,7 +175,7 @@ export function ClientView({ client: c, items, facts, live, onOpenItem, onNew, o
                 <div className="cp-hrow">
                   <h2 className="cp-h">
                     <button type="button" className="cp-tool" data-testid={`tool-${g.tool}`} data-activity={strongest(g.docs.map(activityOfItem))} ref={el => { heads.current[gi] = el }}
-                      tabIndex={gi === Math.min(at, groups.length - 1) ? 0 : -1} aria-keyshortcuts={String(g.n + 1)} aria-label={toolSaid(g)}
+                      tabIndex={gi === Math.min(at, groups.length - 1) ? 0 : -1} aria-keyshortcuts={String(g.n + 1)} aria-description={toolSaid(g)}
                       aria-disabled={on ? undefined : true} onFocus={() => setAt(gi)} onKeyDown={e => onHeadKey(e, gi)}
                       onClick={() => { if (on) onOpenTool(t); else onSoon(t) }}>
                       <span className={`cp-ico k-${g.icon}`}><ToolIcon tool={g.icon} /></span>{g.label}<small>{g.docs.length}</small>

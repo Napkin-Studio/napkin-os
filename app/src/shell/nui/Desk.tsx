@@ -330,7 +330,7 @@ function ClientCircle({ c, tab, open, onFocus, onClick }: {
   const said = `${c.name}: ${c.line}${verb}${c.badge ? `. ${c.badge} need${c.badge === 1 ? 's' : ''} you` : ''}. Opens its tools`
   return (
     <button type="button" className={`cl-circle${open ? ' is-open' : ''}`} data-client={c.id} aria-pressed={open} tabIndex={tab ? 0 : -1}
-      aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget, e.detail === 0)}>
+      aria-description={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget, e.detail === 0)}>
       <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: c.look.ink }}>
         <svg viewBox="0 0 116 116" aria-hidden><circle cx="58" cy="58" r="52" className="cl-track" /></svg>
         <b>{c.mono}</b>
