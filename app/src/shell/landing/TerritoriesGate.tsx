@@ -4,12 +4,14 @@
 
 // Territories, for one client, behind the Brief gate (features/brief-gate.clan; build prompt v2
 // section 6: no creative work starts on a brief the client has not confirmed). Closed, it says
-// what stands in the way, step by step, and takes the person to the brief. Open, it says so:
-// the Territory tool itself is its own record (features/territory-tool.clan).
+// what stands in the way, step by step, and takes the person to the brief. Open, it takes a territory
+// (typed by hand until the Territory tool lands, features/territory-tool.clan) and spins the brief off into
+// a visual brief (features/visual-brief.clan); the visual briefs already made for the client are listed.
 
+import { useState, type FormEvent } from 'react'
 import type { ClientRecord, LibraryItem } from '../../host'
 import { clientName } from '../nui/deskData'
-import { territoriesOf } from '../gate/words'
+import { territoriesOf, VISUAL_BRIEF } from '../gate/words'
 import '../gate/gate.css'
 
 interface Props {
@@ -19,11 +21,44 @@ interface Props {
   onOpenBrief: (path: string) => void
   onNewBrief: () => void
   onBack: () => void
+  /** Spin the brief off into a visual brief for this territory and open it. Rejects with the host's words. */
+  onChooseTerritory?: (brief: LibraryItem, territory: string, line: string) => Promise<void>
 }
 
-export function TerritoriesGate({ client, items, onOpenBrief, onNewBrief, onBack }: Props) {
+/** The form that takes a territory by hand and makes the visual brief from the brief. */
+function ChooseTerritory({ brief, onChoose }: { brief: LibraryItem; onChoose: (brief: LibraryItem, territory: string, line: string) => Promise<void> }) {
+  const [territory, setTerritory] = useState('')
+  const [line, setLine] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!territory.trim() || busy) return
+    setBusy(true); setError(null)
+    onChoose(brief, territory.trim(), line.trim())
+      .catch(err => setError(String(err instanceof Error ? err.message : err)))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <form className="tg-form" onSubmit={submit} data-testid="choose-territory">
+      <h2 className="sec-title">Choose a territory</h2>
+      <p>Write the territory the team is taking forward. The visual brief starts from the brief, with its proposition and tone.</p>
+      <label className="bg-field"><span>Territory</span>
+        <input value={territory} onChange={e => setTerritory(e.target.value)} placeholder="Permission to stop" autoComplete="off" /></label>
+      <label className="bg-field"><span>In one line</span>
+        <input value={line} onChange={e => setLine(e.target.value)} placeholder="The evening does not start until something says the day is over." autoComplete="off" /></label>
+      <button type="submit" className="ch-btn ch-btn-primary" disabled={busy || !territory.trim()} aria-disabled={busy || !territory.trim()}>
+        {busy ? 'Making the visual brief' : 'Make the visual brief'}
+      </button>
+      {error && <p className="bg-err" role="alert">{error}</p>}
+    </form>
+  )
+}
+
+export function TerritoriesGate({ client, items, onOpenBrief, onNewBrief, onBack, onChooseTerritory }: Props) {
   const name = clientName(client)
   const t = territoriesOf(items, name)
+  const visual = items.filter(i => i.app_id === VISUAL_BRIEF)
   return (
     <div className="nui nui-page" data-testid="tool-page" data-client={client.id} data-tool="territories">
       <div className="studio-shell">
@@ -42,7 +77,8 @@ export function TerritoriesGate({ client, items, onOpenBrief, onNewBrief, onBack
           {t.open ? (
             <div className="tg-card tg-open" data-testid="territories-open">
               <h2 className="sec-title">Territories are open</h2>
-              <p>The brief is ready for creative work. The territory tool starts from it.</p>
+              <p>The brief is ready for creative work.</p>
+              {t.brief && onChooseTerritory && <ChooseTerritory brief={t.brief} onChoose={onChooseTerritory} />}
               {t.brief && <button type="button" className="ch-btn" onClick={() => onOpenBrief(t.brief!.path)}>Open the brief</button>}
             </div>
           ) : (
@@ -60,6 +96,18 @@ export function TerritoriesGate({ client, items, onOpenBrief, onNewBrief, onBack
               {t.brief
                 ? <button type="button" className="ch-btn ch-btn-primary" onClick={() => onOpenBrief(t.brief!.path)}>Open the brief</button>
                 : <button type="button" className="ch-btn ch-btn-primary" onClick={onNewBrief}>Start a brief</button>}
+            </div>
+          )}
+          {visual.length > 0 && (
+            <div className="tg-card tg-visual-list" data-testid="visual-briefs-card">
+              <h2 className="sec-title">Visual briefs</h2>
+              <ul className="tg-visuals" aria-label="Visual briefs" data-testid="visual-briefs">
+                {visual.map(v => (
+                  <li key={v.path}>
+                    <button type="button" className="ch-link" onClick={() => onOpenBrief(v.path)}>{v.title}</button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           <p className="nui-more"><button type="button" className="side-link" onClick={onBack}>Back to {name}</button></p>

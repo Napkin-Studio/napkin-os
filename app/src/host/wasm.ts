@@ -260,7 +260,7 @@ export const wasmHost: Host = {
   },
   getGate: () => route<GateView>('/gate', '', new Uint8Array()),
   gateSign: async rationale => { await post<unknown>('/sign', { rationale: rationale ?? '' }) },
-  gatePatch: async (patch, action) => { await post<unknown>('/patch-data', { patch, agent: 'human', action }) },
+  gatePatch: async (patch, action, rationale) => { await post<unknown>('/patch-data', { patch, agent: 'human', action, ...(rationale ? { rationale } : {}) }) },
   gateNewVersion: async reason => { await post<unknown>('/unapprove', { rationale: reason }) },
   getVersions: () => route<VersionsView>('/versions', '', new Uint8Array()),
   getVersion: n => route<VersionParts>('/version', `n=${n}`, new Uint8Array()),

@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Visual brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet" />
+<style>
+  /* The Visual brief, in the Napkin Studio OS design language: the tokens, the warm paper and the pill
+     buttons are Brief Maker's, so the two read as one family. One A4 sheet; the approval beside it. */
+  :root{
+    --ag-base:#515BFF; --ag-acc:#C8CBFF; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+    --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+    --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7);
+    --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+    --paper-2:#F3ECDC; --card:#FFFFFF;
+    --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+    --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --line-strong:#2A2620;
+    --warn:#B45309; --warn-soft:#FEF3DC; --ok:#14633A; --ok-soft:#E6F6EC; --alert:#B53A20;
+    --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+    --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+      --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+      --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+      --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+      --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+      --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6;
+      --warn:#E09A4B; --warn-soft:#3A2A18; --ok:#5DBB83; --ok-soft:#1C2E23;
+    }
+  }
+  :root[data-color-scheme="dark"]{
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+    --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+    --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6;
+    --warn:#E09A4B; --warn-soft:#3A2A18; --ok:#5DBB83; --ok-soft:#1C2E23;
+  }
+  @media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
+  :root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--desk);color:var(--ink);font:15px/1.55 var(--font-ui);-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p,ul,dl,dd,figure{margin:0;padding:0}
+  ul{list-style:none}
+  button,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
+  /* Every picture sits in a rectangle: a corner no rounder than 2 px, on every image and film. */
+  img,video{display:block;max-width:100%;border-radius:0}
+
+  .desk{display:grid;grid-template-columns:minmax(0,760px) minmax(300px,380px);gap:32px;justify-content:center;align-items:start;padding:28px 16px 56px}
+  @media (max-width:1100px){ .desk{grid-template-columns:minmax(0,760px)} }
+
+  /* the sheet */
+  .sheet{background:var(--paper);border:1px solid var(--line);border-radius:2px;box-shadow:var(--shadow-paper);padding:56px 64px 48px;display:grid;gap:40px}
+  :root[data-color-scheme="dark"] .sheet{border-color:transparent}
+  @media (prefers-color-scheme:dark){ :root:not([data-color-scheme="light"]) .sheet{border-color:transparent} }
+  .eyebrow{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .eyebrow b{font-weight:500;color:var(--ink)}
+  .head{display:grid;gap:14px}
+  .tname{font:400 clamp(34px,5.4vw,52px)/1.04 var(--font-serif);letter-spacing:-.012em;color:var(--ink);overflow-wrap:anywhere}
+  .tline{font:400 19px/1.45 var(--font-ui);color:var(--ink-soft);max-width:58ch}
+  .blank{color:var(--muted)}
+  .headacts{display:flex;gap:0;margin-left:-10px}
+
+  /* the reference frames: rectangles, never a circle */
+  .frames{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .frame{display:grid;gap:8px;align-content:start;min-width:0}
+  .frame .box{position:relative;aspect-ratio:16/9;border:1px solid var(--line);border-radius:2px;background:var(--paper-2);overflow:hidden}
+  .frame .box img{width:100%;height:100%;object-fit:cover}
+  .frame.empty .box{border-style:dashed;display:grid;place-items:center;text-align:center;padding:10px;color:var(--muted);font-size:13px}
+  .frame .cap{font-size:13px;color:var(--muted);min-height:1.5em;overflow-wrap:anywhere}
+  .frame .acts{display:flex;gap:0;flex-wrap:wrap;margin-left:-10px}
+  .frame .acts .btn.quiet{padding:0 8px}
+  @media (max-width:640px){ .frames{grid-template-columns:minmax(0,1fr)} }
+
+  /* the four rows */
+  .rows{display:grid;border-top:1px solid var(--line-strong)}
+  .row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 24px;padding:18px 0;border-bottom:1px solid var(--line);align-items:start}
+  .row dt{font:500 11px/1.9 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .row dd{min-width:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .row dd > .val,.row dd > .editor{flex:1;min-width:0}
+  .row .val{font-size:16px;color:var(--ink);overflow-wrap:anywhere}
+  .row ul.val li+li{margin-top:2px}
+  .row .val.blank{color:var(--muted)}
+  .row[data-editable="true"] .val{cursor:text}
+  @media (max-width:640px){
+    .sheet{padding:28px 20px 28px;gap:28px}
+    .row{grid-template-columns:minmax(0,1fr)}
+    .row dt{line-height:1.4}
+  }
+
+  /* the editor that opens in a row */
+  .editor{display:grid;gap:8px}
+  .editor textarea{width:100%;min-height:76px;resize:vertical;padding:10px 12px;background:var(--card);border:1px solid var(--line-strong);border-radius:6px;line-height:1.5}
+  .editor .hint{font-size:12px;color:var(--muted)}
+  .editor .btns{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* buttons: the shell's pills. A primary on a phone is at least 44 px tall. */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 16px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--ink);font:500 13px/1 var(--font-ui);cursor:pointer;white-space:nowrap}
+  .btn:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+  .btn.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+  .btn.primary:hover{background:color-mix(in srgb,var(--ag-act) 88%,#000)}
+  .btn.primary[aria-disabled="true"]{background:transparent;color:var(--muted);border:1px dashed var(--muted);cursor:not-allowed}
+  .btn.quiet{border-color:transparent;color:var(--muted);min-height:28px;padding:0 10px}
+  .btn.quiet:hover{color:var(--ink)}
+  .btn.big{min-height:44px;padding:0 22px;font-size:14px}
+  @media (max-width:640px){ .btn.primary{min-height:44px;width:100%} .btn{min-height:44px} .btn.quiet{min-height:44px} }
+
+  /* the approval, beside the sheet */
+  .side{display:grid;gap:14px;position:sticky;top:12px}
+  @media (max-width:1100px){ .side{position:static} }
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;display:grid;gap:10px}
+  .card h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .vnum{font:400 44px/1 var(--font-serif);color:var(--ink)}
+  .card p{color:var(--ink-soft)}
+  .card .small{font-size:13px;color:var(--muted)}
+  .card a,.linkbtn{color:var(--ink);text-decoration:underline;text-underline-offset:3px;background:none;border:0;padding:0;cursor:pointer;font:inherit;text-align:left}
+  .stamp{display:inline-flex;align-items:center;gap:8px;width:max-content;max-width:100%;padding:6px 12px;border-radius:999px;background:var(--ok-soft);color:var(--ok);font:600 12px/1 var(--font-ui)}
+  .stamp i{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .stamp.off{background:var(--paper-2);color:var(--muted)}
+  .err{color:var(--alert);font-size:13px}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,12px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:5}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  @media (prefers-reduced-motion:reduce){ .toast{transition:none} }
+</style>
+</head>
+<body>
+<div class="desk" data-where="visual-brief">
+  <main>
+    <article class="sheet" id="sheet" aria-label="Visual brief">
+      <header class="head">
+        <p class="eyebrow" id="eyebrow"></p>
+        <h1 class="tname" id="tname"></h1>
+        <p class="tline" id="tline"></p>
+        <div class="headacts" id="headActs"></div>
+      </header>
+      <section class="frames" id="frames" aria-label="Reference frames"></section>
+      <dl class="rows" id="rows"></dl>
+    </article>
+  </main>
+  <aside class="side" id="side" aria-label="Approval"></aside>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="pick" accept="image/*" hidden />
+
+<!-- @napkin:clan-fields -->
+<script>
+(function(){
+  'use strict';
+  var clanScheme = navigator.userAgent.indexOf('Windows') >= 0 ? 'http://clan.localhost' : 'clan://localhost';
+
+  // ── pure helpers (the unit tests lift these out of the page and run them) ─────────────────────────
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function getPath(o, p){ return String(p).split('.').reduce(function(x, k){ return x == null ? undefined : x[k]; }, o); }
+  // A list is written one line to a row of the editor; a string a person typed before is one line.
+  function linesOf(v){
+    if(Array.isArray(v)) return v.map(function(x){ return String(x).trim(); }).filter(Boolean);
+    if(typeof v === 'string' && v.trim()) return [v.trim()];
+    return [];
+  }
+  function toLines(text){ return String(text == null ? '' : text).split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean); }
+  function sourceWords(t){
+    t = t || {};
+    if(t.source === 'territories') return 'Territory' + (t.chosen_by ? ' · chosen by ' + t.chosen_by : '');
+    return 'Territory · written by hand' + (t.chosen_by ? ' · ' + t.chosen_by : '');
+  }
+  // The decisions the host read for this document: approvals made on THIS page (a carried approve belongs
+  // to the brief). One approve is one version, so the first approve is version 1 and a page that has been
+  // reopened is working on the next number.
+  function onThisDoc(b){ return arr(b && b.targets).some(function(t){ return t && t.here && !t.path; }); }
+  function approvesOf(view){
+    return arr(view && view.decisions).filter(function(b){ return b && b.decision && b.decision.kind === 'approve' && onThisDoc(b); });
+  }
+  function versionOf(view){
+    var done = approvesOf(view).length, locked = !!(view && view.lock && view.lock.locked);
+    return { n: locked ? done : done + 1, locked: locked, approved: done, lock: locked ? approvesOf(view)[0] || null : null };
+  }
+  // The brief this page answers: the direct parent in the host's upstream view.
+  function parentOf(up){
+    var list = arr(up && up.upstream);
+    return list.filter(function(e){ return e && e.how === 'made_from'; })[0] || list.filter(function(e){ return e && e.direct; })[0] || null;
+  }
+  // Who may approve: the creative director the brief names (its frozen copy is under data.upstream). A brief
+  // that names none leaves it to whoever is signed in.
+  function approverOf(data){
+    var ups = (data && data.upstream) || {}, found = null;
+    Object.keys(ups).forEach(function(k){
+      arr(ups[k] && ups[k].signers).forEach(function(s){ if(s && s.role === 'creative_director' && s.person) found = String(s.person); });
+    });
+    return found;
+  }
+  function mayApprove(approver, me){ return !approver || (!!me && String(me).replace(/^human:/, '') === approver); }
+  function approveReason(state, approver, may, hasTerritory){
+    if(state.locked) return 'Locked. A change makes version ' + (state.n + 1) + '.';
+    if(!hasTerritory) return 'Name the territory first. Approval locks this exact version.';
+    if(!may) return 'Only ' + approver + ', the creative director on the brief, approves it.';
+    return 'Approval locks this exact version. A later change makes version ' + (state.n + 1) + '.';
+  }
+  var FIELDS = {
+    'territory.name': { label: 'Territory name', kind: 'text' },
+    'territory.line': { label: 'The line', kind: 'text' },
+    'proposition':    { label: 'Proposition', kind: 'text' },
+    'tone':           { label: 'Tone', kind: 'list' },
+    'must_show':      { label: 'Must show', kind: 'list' },
+    'never_show':     { label: 'Never show', kind: 'list' }
+  };
+  var SLOTS = ['a', 'b', 'c'];
+
+  // ── the page ────────────────────────────────────────────────────────────────────────────────────
+  var S = { view: null, up: null, me: null, editing: null, cap: null, capText: '', busy: false, error: '' };
+  function data(){ return (window.__CLAN__ && window.__CLAN__.data) || {}; }
+  function get(p){ return getPath(data(), p); }
+  function $(id){ return document.getElementById(id); }
+  function toast(m, ms){ var t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('on'); }, ms || 2400); }
+  function untoast(){ var t = $('toast'); clearTimeout(t._t); t.classList.remove('on'); }
+  function assetUrl(n){ return clanScheme + '/assets/' + encodeURIComponent(n); }
+  function state(){ return versionOf(S.view); }
+  function locked(){ return state().locked; }
+  function put(path, value, action){
+    if(!window.clan || !window.clan.patchData){ toast('No host bridge. Changes are not being saved.'); return Promise.resolve(); }
+    return window.clan.patchData(path, value, { actor: 'human', action: action, pinned: false });
+  }
+
+  function editBtn(key){
+    return locked() ? '' : '<button type="button" class="btn quiet" data-edit="' + key + '" aria-label="Edit ' + esc(FIELDS[key].label) + '">Edit</button>';
+  }
+  function drawHead(){
+    var t = get('territory') || {};
+    $('eyebrow').innerHTML = esc(sourceWords(t));
+    var name = $('tname'), line = $('tline');
+    if(S.editing === 'territory.name' || S.editing === 'territory.line'){ /* the editor draws below */ }
+    name.className = 'tname' + (t.name ? '' : ' blank');
+    name.textContent = t.name || 'Name the territory';
+    line.className = 'tline' + (t.line ? '' : ' blank');
+    line.textContent = t.line || 'One sentence that says it.';
+    $('tname').setAttribute('data-edit', 'territory.name'); $('tline').setAttribute('data-edit', 'territory.line');
+    $('headActs').innerHTML = locked() ? '' : editBtn('territory.name') + editBtn('territory.line');
+    var host = $('headEditor');
+    if(host) host.remove();
+    if(S.editing === 'territory.name' || S.editing === 'territory.line'){
+      var h = document.createElement('div'); h.id = 'headEditor'; h.innerHTML = editorHtml(S.editing);
+      $('tline').insertAdjacentElement('afterend', h);
+      name.hidden = S.editing === 'territory.name'; line.hidden = S.editing === 'territory.line';
+    } else { name.hidden = false; line.hidden = false; }
+  }
+  function editorHtml(key){
+    var f = FIELDS[key], v = get(key), text = f.kind === 'list' ? linesOf(v).join('\n') : (v == null ? '' : String(v));
+    return '<div class="editor"><textarea id="ed" aria-label="Write ' + esc(f.label) + '" rows="' + (f.kind === 'list' ? 4 : 2) + '">' + esc(text) + '</textarea>'
+      + '<p class="hint">' + (f.kind === 'list' ? 'One line each. ' : '') + 'Ctrl or Cmd Enter is Done. Escape cancels.</p>'
+      + '<div class="btns"><button type="button" class="btn primary" data-done="1">Done</button><button type="button" class="btn" data-cancel="1">Cancel</button></div></div>';
+  }
+  function capEditorHtml(slot){
+    return '<div class="editor"><textarea id="capEd" rows="2" aria-label="Write caption for frame ' + (SLOTS.indexOf(slot) + 1) + '">' + esc(S.capText) + '</textarea>'
+      + '<div class="btns"><button type="button" class="btn primary" data-capdone="' + slot + '">Done</button><button type="button" class="btn" data-capcancel="1">Cancel</button></div></div>';
+  }
+  function frameHtml(slot){
+    var fr = get('reference_frames.' + slot) || {}, can = !locked(), n = SLOTS.indexOf(slot) + 1;
+    if(fr.asset){
+      return '<figure class="frame" data-slot="' + slot + '"><div class="box"><img src="' + assetUrl(fr.asset) + '" alt="' + esc(fr.caption || 'Reference frame ' + n) + '"></div>'
+        + '<figcaption class="cap">' + (S.cap === slot ? capEditorHtml(slot) : fr.caption ? esc(fr.caption) : '<span class="blank">No caption</span>') + '</figcaption>'
+        + (can ? '<div class="acts"><button type="button" class="btn quiet" data-cap="' + slot + '">Caption</button><button type="button" class="btn quiet" data-swap="' + slot + '">Replace</button><button type="button" class="btn quiet" data-drop="' + slot + '">Remove</button></div>' : '')
+        + '</figure>';
+    }
+    return '<figure class="frame empty" data-slot="' + slot + '"><div class="box">' + (can ? '<button type="button" class="btn" data-add="' + slot + '">Add reference frame ' + n + '</button>' : '<span>No frame</span>') + '</div></figure>';
+  }
+  function drawFrames(){
+    var any = SLOTS.some(function(s){ return (get('reference_frames.' + s) || {}).asset; });
+    if(!any && locked()){ $('frames').hidden = true; $('frames').innerHTML = ''; return; }
+    $('frames').hidden = false;
+    $('frames').innerHTML = SLOTS.map(frameHtml).join('');
+  }
+  function rowHtml(key){
+    var f = FIELDS[key], v = get(key), editing = S.editing === key;
+    var shown;
+    if(editing) shown = editorHtml(key);
+    else if(f.kind === 'list'){
+      var L = linesOf(v);
+      shown = L.length ? '<ul class="val">' + L.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="val blank">Not written yet.</p>';
+    } else shown = v ? '<p class="val">' + esc(v) + '</p>' : '<p class="val blank">Not written yet.</p>';
+    return '<div class="row" data-key="' + key + '" data-editable="' + (!locked()) + '"><dt>' + esc(f.label) + '</dt><dd>' + shown + (editing ? '' : editBtn(key)) + '</dd></div>';
+  }
+  function drawRows(){ $('rows').innerHTML = ['proposition', 'tone', 'must_show', 'never_show'].map(rowHtml).join(''); }
+
+  function drawSide(){
+    var st = state(), t = get('territory') || {}, approver = approverOf(data()), may = mayApprove(approver, S.me), par = parentOf(S.up);
+    var has = !!(t.name && String(t.name).trim());
+    var h = '<section class="card" aria-label="Version"><h2>Version</h2><p class="vnum" id="vnum">' + st.n + '</p>';
+    h += par ? '<p>Answers the brief ' + esc(par.title || '') + (par.locked ? ', signed' : '') + '.</p>' : '<p>Written by hand, with no brief behind it.</p>';
+    if(par && par.status === 'changed') h += '<p class="small">The brief has changed since this page was made.</p>';
+    if(par && par.path) h += '<p class="small"><button type="button" class="linkbtn" data-open="' + esc(par.path) + '">Open the brief</button></p>';
+    h += '</section>';
+    h += '<section class="card" aria-label="Approval">';
+    if(st.locked){
+      var who = st.lock && st.lock.who && st.lock.who.name ? st.lock.who.name : 'the creative director';
+      h += '<h2>Approved</h2><p><span class="stamp" id="stamp" data-testid="locked-stamp"><i aria-hidden="true"></i>Locked · version ' + st.n + '</span></p>'
+        + '<p class="small">Approved by ' + esc(who) + '. Stills, film and radio open from this exact version.</p>'
+        + '<button type="button" class="btn" id="newv" data-newv="1">Start version ' + (st.n + 1) + '</button>'
+        + '<p class="small">The approved version stays in the history as it is.</p>';
+    } else {
+      var ok = has && may && !S.busy;
+      h += '<h2>Approve</h2><button type="button" class="btn primary big" id="approve" aria-disabled="' + (ok ? 'false' : 'true') + '" data-approve="1">Approve version ' + st.n + '</button>'
+        + '<p class="small" id="approveReason">' + esc(approveReason(st, approver, may, has)) + '</p>';
+      h += '<h2>After you approve</h2><p><span class="stamp off"><i aria-hidden="true"></i>Locked</span></p><p class="small">The stamp names the version and who approved it.</p>';
+    }
+    if(S.error) h += '<p class="err" role="alert" id="sideError">' + esc(S.error) + '</p>';
+    h += '</section>';
+    $('side').innerHTML = h;
+  }
+  function draw(){
+    if(S.editing) { var keep = $('ed') && $('ed').value; }
+    drawHead(); drawFrames(); drawRows(); drawSide();
+    if(S.editing){ var ed = $('ed'); if(ed){ if(keep != null && S._keep) ed.value = keep; ed.focus(); } }
+    S._keep = false;
+  }
+
+  // ── reading the host ────────────────────────────────────────────────────────────────────────────
+  function load(){
+    askMe();
+    return Promise.all([
+      fetch(clanScheme + '/decisions').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
+      fetch(clanScheme + '/upstream').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
+    ]).then(function(a){ S.view = a[0]; S.up = a[1]; if(!S.editing) draw(); else { drawFrames(); drawSide(); } });
+  }
+
+  // ── writing ─────────────────────────────────────────────────────────────────────────────────────
+  function openEditor(key){ if(locked()) return; S.editing = key; draw(); }
+  function closeEditor(){ S.editing = null; draw(); }
+  function saveEditor(){
+    var key = S.editing, ta = $('ed'); if(!key || !ta) return;
+    var f = FIELDS[key], v = f.kind === 'list' ? toLines(ta.value) : ta.value.trim();
+    S.editing = null; draw();
+    put(key, v, 'edit ' + f.label.toLowerCase()).then(function(){ draw(); return load(); });
+  }
+  function sha256Hex(buf){
+    if(!(window.crypto && window.crypto.subtle)) return Promise.resolve('');
+    return window.crypto.subtle.digest('SHA-256', buf).then(function(d){ return Array.prototype.map.call(new Uint8Array(d), function(b){ return ('0' + b.toString(16)).slice(-2); }).join(''); });
+  }
+  function addFrame(slot, file){
+    if(!file || locked()) return;
+    var ext = (file.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'png';
+    var name = 'frame-' + slot + '-' + Date.now() + '.' + ext;
+    toast('Adding the frame', 20000);
+    file.arrayBuffer().then(function(buf){
+      return fetch(clanScheme + '/upload-asset?name=' + encodeURIComponent(name) + '&agent=human', { method: 'POST', body: buf })
+        .then(function(r){ return r.json().then(function(j){ if(!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'The frame did not save.'); return j; }); });
+    }).then(function(res){
+      return put('reference_frames.' + slot, { asset: name, path: res.internal_path, caption: '' }, 'add reference frame ' + (SLOTS.indexOf(slot) + 1));
+    }).then(function(){ untoast(); return load(); }).catch(function(e){ toast(String(e && e.message || e)); });
+  }
+  function pickFor(slot){
+    var inp = $('pick'); inp.value = '';
+    inp.onchange = function(){ addFrame(slot, inp.files && inp.files[0]); };
+    inp.click();
+  }
+  function editCaption(slot){
+    var fr = get('reference_frames.' + slot) || {};
+    S.cap = slot; S.capText = fr.caption || '';
+    drawFrames();
+    var ta = $('capEd'); if(ta) ta.focus();
+  }
+  function closeCaption(){ S.cap = null; S.capText = ''; drawFrames(); }
+  function saveCaption(slot){
+    var text = ($('capEd') ? $('capEd').value : S.capText).trim();
+    closeCaption();
+    return put('reference_frames.' + slot + '.caption', text, 'caption reference frame ' + (SLOTS.indexOf(slot) + 1)).then(load);
+  }
+  function approve(){
+    if(S.busy) return;
+    var st = state(), t = get('territory') || {};
+    if(!(t.name && String(t.name).trim()) || !mayApprove(approverOf(data()), S.me)) return;
+    S.busy = true; S.error = ''; drawSide();
+    fetch(clanScheme + '/approve', { method: 'POST', body: JSON.stringify({ rationale: 'Approved visual brief version ' + st.n + ': ' + t.name }) })
+      .then(function(r){ return r.json().catch(function(){ return { ok: false, error: 'status ' + r.status }; }).then(function(j){ if(!r.ok && j && j.ok !== false) j.ok = false; return j; }); })
+      .then(function(j){ if(!j || j.ok === false) S.error = (j && j.error) || 'The host did not approve it.'; })
+      .catch(function(){ S.error = 'The page could not reach the host. Nothing was approved.'; })
+      .then(function(){ S.busy = false; return load(); });
+  }
+  function newVersion(){
+    var st = state();
+    fetch(clanScheme + '/unapprove', { method: 'POST', body: JSON.stringify({ rationale: 'Starting version ' + (st.n + 1) + ' of the visual brief. Version ' + st.n + ' stays as approved.' }) })
+      .then(function(r){ return r.json().catch(function(){ return { ok: false }; }).then(function(j){ if(!r.ok && j && j.ok !== false) j.ok = false; return j; }); })
+      .then(function(j){ S.error = (j && j.ok === false) ? (j.error || 'The host did not reopen it.') : ''; })
+      .catch(function(){ S.error = 'The page could not reach the host.'; })
+      .then(function(){ return load(); });
+  }
+
+  // ── events ──────────────────────────────────────────────────────────────────────────────────────
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-edit],[data-done],[data-cancel],[data-add],[data-swap],[data-drop],[data-cap],[data-capdone],[data-capcancel],[data-approve],[data-newv],[data-open]');
+    if(!el) return;
+    if(el.hasAttribute('data-edit')) return openEditor(el.getAttribute('data-edit'));
+    if(el.hasAttribute('data-done')) return saveEditor();
+    if(el.hasAttribute('data-cancel')) return closeEditor();
+    if(el.hasAttribute('data-add')) return pickFor(el.getAttribute('data-add'));
+    if(el.hasAttribute('data-swap')) return pickFor(el.getAttribute('data-swap'));
+    if(el.hasAttribute('data-drop')){ var s = el.getAttribute('data-drop'); return put('reference_frames.' + s, null, 'remove reference frame ' + (SLOTS.indexOf(s) + 1)).then(load); }
+    if(el.hasAttribute('data-cap')) return editCaption(el.getAttribute('data-cap'));
+    if(el.hasAttribute('data-capdone')) return saveCaption(el.getAttribute('data-capdone'));
+    if(el.hasAttribute('data-capcancel')) return closeCaption();
+    if(el.hasAttribute('data-approve')){ if(el.getAttribute('aria-disabled') === 'true'){ S.error = ''; return; } return approve(); }
+    if(el.hasAttribute('data-newv')) return newVersion();
+    if(el.hasAttribute('data-open')) return void fetch(clanScheme + '/open', { method: 'POST', body: JSON.stringify({ path: el.getAttribute('data-open') }) });
+  });
+  document.addEventListener('dblclick', function(e){
+    var row = e.target.closest('.row[data-key]'); if(row && !e.target.closest('button,textarea')) return openEditor(row.getAttribute('data-key'));
+  });
+  document.addEventListener('input', function(e){ if(e.target && e.target.id === 'capEd') S.capText = e.target.value; });
+  document.addEventListener('keydown', function(e){
+    if(e.target && e.target.id === 'capEd'){
+      if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); saveCaption(S.cap); }
+      else if(e.key === 'Escape'){ e.preventDefault(); closeCaption(); }
+      return;
+    }
+    if(e.target && e.target.id === 'ed'){
+      if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); saveEditor(); }
+      else if(e.key === 'Escape'){ e.preventDefault(); closeEditor(); }
+      return;
+    }
+    var h = e.target && e.target.getAttribute && e.target.getAttribute('data-edit');
+    if(h && (e.key === 'Enter' || e.key === ' ') && !/^(BUTTON|TEXTAREA)$/.test(e.target.tagName)){ e.preventDefault(); openEditor(h); }
+  });
+  window.addEventListener('clan:dataupdated', function(){ if(!S.editing) draw(); load(); });
+  window.addEventListener('clan:viewloaded', function(){ load(); });
+
+  // who is signed in, for the approve control (the shell answers "clan:me?"). The bridge may arrive after this
+  // script, so it is asked for whenever the page reads the host, until it answers.
+  function askMe(){
+    if(S.meAsked || !(window.clan && typeof window.clan.me === 'function')) return;
+    S.meAsked = true;
+    window.clan.me().then(function(m){ S.me = m && (m.id || m.actor) || null; if(!S.editing) drawSide(); }, function(){ S.meAsked = false; });
+  }
+  window.addEventListener('load', askMe);
+
+  draw();
+  load();
+  // Seen by the page tests: nothing else reads it.
+  window.__visualBrief = { state: function(){ return state(); }, approver: function(){ return approverOf(data()); } };
+})();
+</script>
+</body>
+</html>
