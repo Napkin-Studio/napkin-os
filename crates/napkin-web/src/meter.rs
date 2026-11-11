@@ -10,7 +10,7 @@
 //! deliberately the simplest thing that makes the seam exist; a hosted
 //! deployment swaps the body for a durable counter without moving the call site.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use crate::tenant::TenantId;
@@ -18,9 +18,17 @@ use crate::tenant::TenantId;
 pub struct Meter {
     cap: u32,
     used: Mutex<HashMap<TenantId, u32>>,
+    /// The jobs each tenant has paid for and that have not failed or been
+    /// refunded: a failed job gives its charge back once, and only to the
+    /// tenant that paid for it.
+    paid: Mutex<HashMap<TenantId, HashSet<String>>>,
 }
 
-#[derive(Clone, Copy, serde::Serialize)]
+/// More paid-for jobs than this per tenant and the oldest bookkeeping is
+/// dropped (a refund is then lost, never invented).
+const PAID_JOBS_KEPT: usize = 256;
+
+#[derive(Debug, Clone, Copy, serde::Serialize)]
 pub struct Usage {
     pub used: u32,
     pub cap: u32,
@@ -31,6 +39,57 @@ impl Meter {
         Self {
             cap,
             used: Mutex::new(HashMap::new()),
+            paid: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Give one charge back. Never below zero.
+    pub fn refund(&self, tenant: &TenantId) {
+        if let Some(n) = self.used.lock().unwrap().get_mut(tenant) {
+            *n = n.saturating_sub(1);
+        }
+    }
+
+    /// Settle the charge against what an `/api-proxy` reply says happened.
+    ///
+    /// `charged` is whether this call was charged (a `job_status` poll is not).
+    /// The charge comes back, once, when
+    /// - the provider could not be reached or answered 5xx (`ok: false`,
+    ///   status 0 or 500 and up) on a charged call: nothing ran; or
+    /// - a job this tenant paid for reports `failed` (a provider error, in
+    ///   the reply to the submission or to a later poll).
+    ///
+    /// A person cancelling a job (`cancel_job`) is not a failure and a
+    /// cancelled run keeps its charge: only `failed` and a dead provider give
+    /// it back. A 4xx the caller caused stays charged.
+    pub fn settle(&self, tenant: &TenantId, charged: bool, reply: &[u8]) {
+        let Ok(reply) = serde_json::from_slice::<serde_json::Value>(reply) else {
+            return;
+        };
+        if reply.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+            let status = reply.get("status").and_then(|v| v.as_u64()).unwrap_or(0);
+            if charged && (status == 0 || status >= 500) {
+                self.refund(tenant);
+            }
+            return;
+        }
+        let Some(job) = reply.get("data").and_then(|d| d.get("job")) else {
+            return;
+        };
+        let Some(id) = job.get("id").and_then(|v| v.as_str()) else {
+            return;
+        };
+        let mut paid = self.paid.lock().unwrap();
+        let set = paid.entry(tenant.clone()).or_default();
+        if charged {
+            if set.len() >= PAID_JOBS_KEPT {
+                set.clear();
+            }
+            set.insert(id.to_string());
+        }
+        if job.get("state").and_then(|v| v.as_str()) == Some("failed") && set.remove(id) {
+            drop(paid);
+            self.refund(tenant);
         }
     }
 
@@ -102,6 +161,93 @@ mod tests {
         assert!(meter.try_spend(&a).is_err(), "the cap must bite");
         assert!(meter.try_spend(&b).is_ok(), "another tenant is unaffected");
         assert_eq!(meter.usage(&a).used, 2);
+    }
+
+    fn reply(state: &str) -> Vec<u8> {
+        format!(r#"{{"ok":true,"status":200,"data":{{"job":{{"id":"job_1","state":"{state}"}}}}}}"#)
+            .into_bytes()
+    }
+
+    #[test]
+    fn a_failed_job_gives_its_charge_back_once() {
+        let meter = Meter::new(3);
+        let a = TenantId::mint();
+        meter.try_spend(&a).unwrap();
+        meter.settle(&a, true, &reply("running"));
+        assert_eq!(meter.usage(&a).used, 1, "a running job keeps its charge");
+        meter.settle(&a, false, &reply("failed"));
+        assert_eq!(meter.usage(&a).used, 0, "the failed poll refunds");
+        meter.settle(&a, false, &reply("failed"));
+        meter.settle(&a, false, &reply("failed"));
+        assert_eq!(meter.usage(&a).used, 0, "polling again never refunds twice");
+    }
+
+    #[test]
+    fn a_failure_in_the_submission_reply_refunds_and_a_retry_is_charged_again() {
+        let meter = Meter::new(3);
+        let a = TenantId::mint();
+        meter.try_spend(&a).unwrap();
+        meter.settle(&a, true, &reply("failed"));
+        assert_eq!(meter.usage(&a).used, 0);
+        meter.try_spend(&a).unwrap();
+        meter.settle(&a, true, &reply("done"));
+        assert_eq!(meter.usage(&a).used, 1, "the retry that works is paid for");
+    }
+
+    #[test]
+    fn a_cancelled_or_finished_run_keeps_its_charge() {
+        let meter = Meter::new(3);
+        let a = TenantId::mint();
+        meter.try_spend(&a).unwrap();
+        meter.settle(&a, true, &reply("running"));
+        // the person cancels: the job is reported as it ended, never `failed`
+        meter.settle(&a, false, &reply("done"));
+        meter.settle(&a, false, &reply("cancelled"));
+        assert_eq!(meter.usage(&a).used, 1);
+    }
+
+    #[test]
+    fn a_tenant_is_never_refunded_for_a_job_it_did_not_pay_for() {
+        let meter = Meter::new(3);
+        let (a, b) = (TenantId::mint(), TenantId::mint());
+        meter.try_spend(&a).unwrap();
+        meter.try_spend(&b).unwrap();
+        meter.settle(&a, true, &reply("running"));
+        meter.settle(&b, false, &reply("failed"));
+        assert_eq!(meter.usage(&b).used, 1, "b polled a job a paid for");
+        meter.settle(&a, false, &reply("failed"));
+        assert_eq!(meter.usage(&a).used, 0);
+    }
+
+    #[test]
+    fn a_dead_provider_refunds_but_never_below_zero() {
+        let meter = Meter::new(3);
+        let a = TenantId::mint();
+        meter.try_spend(&a).unwrap();
+        let down = br#"{"ok":false,"status":0,"error":"could not reach http://m"}"#;
+        meter.settle(&a, true, down);
+        assert_eq!(meter.usage(&a).used, 0);
+        meter.settle(&a, true, down);
+        meter.settle(
+            &a,
+            true,
+            br#"{"ok":false,"status":503,"error":"upstream returned 503"}"#,
+        );
+        assert_eq!(meter.usage(&a).used, 0, "never below zero");
+        meter.try_spend(&a).unwrap();
+        meter.settle(
+            &a,
+            true,
+            br#"{"ok":false,"status":409,"error":{"type":"job_state"}}"#,
+        );
+        meter.settle(&a, false, down);
+        assert_eq!(
+            meter.usage(&a).used,
+            1,
+            "a 409 and an uncharged poll refund nothing"
+        );
+        meter.settle(&a, true, b"not json");
+        assert_eq!(meter.usage(&a).used, 1);
     }
 
     #[test]
