@@ -61,6 +61,10 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/clients/{id}/archive", post(archive_client))
         .route("/t/{tenant}/clients/{id}/restore", post(restore_client))
         .route("/t/{tenant}/home", get(home))
+        .route(
+            "/t/{tenant}/agency/look",
+            get(crate::look::get_look).put(crate::look::put_look),
+        )
         .route("/t/{tenant}/documents", post(new_document))
         .route("/t/{tenant}/documents/upload", post(upload_document))
         .route("/t/{tenant}/d/{doc}", get(open_document))

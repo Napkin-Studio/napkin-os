@@ -134,6 +134,11 @@ impl AppCtx {
         self
     }
 
+    /// The tenant's own directory: where its settings files live.
+    pub fn tenant_dir(&self, tenant: &TenantId) -> PathBuf {
+        self.root.join(tenant.as_str())
+    }
+
     pub fn workspace(&self, tenant: &TenantId) -> Arc<Workspace> {
         let mut workspaces = self.workspaces.lock().unwrap();
         if let Some(existing) = workspaces.get(tenant) {
