@@ -750,6 +750,21 @@ only. `engine/packs.py` reads `gated: true` from `pack.yaml`, `napkin-packs
 sync` writes it to `packs.lock`, and `parse_brief` and `distil_pack` skip gated
 packs.
 
+### 3.8 The default source filter (Cannes stays out)
+
+Cannes Lions material is never served (Laurence, 10 Nov 2026; `features/harness.clan`).
+Until the stored copy is removed (`cannes-removal`, run by a person), every search the
+engine makes carries `source nin [cannes]`, and the egress check drops any hit whose
+`source` is `cannes` even if a store ignored the filter.
+
+| Rule | Behaviour |
+|---|---|
+| Where | `engine/rag/retrieve.py` (`EXCLUDED_SOURCES`, `exclude_sources()`, applied inside `retrieve()`) and `engine/rag/brief_context.py` (`bucket_filters()`, so `build()` and `build_multi()` both carry it). The filter language is `engine/rag/filters.py`. |
+| A caller's own `source` clause | It can narrow the default and never bring `cannes` back: `eq` and `in` lose the excluded names, `nin` and `ne` gain them. A request for `cannes` alone returns no passages and runs no search. Never an error, as in §3.7. |
+| Egress | A `cannes` hit that reaches the end of retrieval is removed and recorded in the trace's `egress` list with `"on": "source"`. That is the filter failing and the check catching it, so it is a bug to chase. |
+| Trace | `BriefContext.trace()` records `source_of` (cite to source) per block; `MultiContext.trace` records `source_of` (field, then cite, to source). Per hit, at retrieval time: the index is mutable, so a source not written down then is gone. |
+| Tests | `engine/rag/test_default_source_filter.py` counts the Cannes rows kept out and shows none served on the mix path. Pilot test 12 reads `source_of` on the J001 brief. |
+
 ## 4. Layers port — `napkin.layers/1`
 
 The knowledge layers (D1): category facts shared by everyone, brand facts
@@ -1146,6 +1161,14 @@ Environment only (`server/napkin/config.py`); handlers never see any of it.
 | `NAPKIN_TOKEN` | unset | unset | the host's middleware secret |
 | `NAPKIN_PIPELINES` | every `app/templates/*/app/pipeline.yaml` | same | same |
 | `NAPKIN_HOST` / `NAPKIN_PORT` | `127.0.0.1` / `8795` | same | deployment |
+| `NAPKIN_ENV` | `local` | `local` | the environment's name (`napkin-staging`); anything but unset, `local`, `dev`, `test` is deployed |
+| `NAPKIN_PAID_CALLS` | `on` locally, `off` when deployed | unset | `off` until a person raises the cap, then `on` (one switch for every paid call) |
+| `NAPKIN_SPEND_CAP_EUR` | no cap locally, `0` when deployed | unset | euro per environment per UTC day; `0` refuses every paid call |
+| `NAPKIN_SPEND_RUN_CAP_EUR` | no run cap | unset | euro per run (job), optional |
+
+The spend guard is `server/napkin/spend.py` (`allow(amount, env, run)`), called before every paid
+request: the model wires, Tavily, Nova grounding and jev. A refused model call raises `ModelError`
+kind `server` with "not sent" and nothing leaves the server. Totals are in memory per process.
 
 Removed: `NAPKIN_LAYERS=local:…` (the middleware no longer opens a database).
 `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` still work through the SDK when the
