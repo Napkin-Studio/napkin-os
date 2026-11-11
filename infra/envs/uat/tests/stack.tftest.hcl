@@ -16,6 +16,19 @@ mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
     defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
+  # staging's layer secrets, found by name (staging-layers.tf)
+  mock_data "aws_secretsmanager_secrets" {
+    defaults = {
+      names = ["napkin-staging/db/napkin_agency_acme", "napkin-staging/db/napkin_category"]
+      arns  = ["arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-staging/db/napkin_agency_acme-a", "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-staging/db/napkin_category-c"]
+    }
+  }
+  mock_data "aws_secretsmanager_secret" {
+    defaults = { kms_key_id = "arn:aws:kms:eu-west-1:111111111111:key/staging" }
+  }
+  mock_data "aws_vpc" {
+    defaults = { id = "vpc-staging", cidr_block = "10.40.0.0/16" }
+  }
   mock_resource "aws_rds_cluster" {
     defaults = {
       master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:master", kms_key_id = "k", secret_status = "active" }]
@@ -86,5 +99,44 @@ run "uat_is_its_own_stack_and_takes_any_branch" {
   assert {
     condition     = var.vpc_cidr == "10.41.0.0/16"
     error_message = "UAT's network does not overlap staging's 10.40.0.0/16"
+  }
+}
+
+# Owner, 2026-11-11: "allow it to hit the same thing as staging". UAT's middleware uses staging's layer
+# databases where staging has them, over a peering, and keeps its own for the rest.
+run "uat_uses_staging_layers" {
+  command = plan
+
+  assert {
+    condition     = module.services.middleware_secret_arns["NAPKIN_LAYERS_DSN"] == "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-staging/db/napkin_category-c"
+    error_message = "the category layer is staging's"
+  }
+  assert {
+    condition     = module.services.middleware_secret_arns["NAPKIN_LAYERS_AGENCY_DSN_ACME"] == "arn:aws:secretsmanager:eu-west-1:111111111111:secret:napkin-staging/db/napkin_agency_acme-a"
+    error_message = "an agency staging has is staging's"
+  }
+  assert {
+    condition     = !contains(keys(local.staging_db_arns), "napkin_agency_globex") && contains(keys(module.services.middleware_secret_arns), "NAPKIN_LAYERS_AGENCY_DSN_GLOBEX")
+    error_message = "an agency staging lacks keeps UAT's own database"
+  }
+  assert {
+    condition     = length(aws_vpc_peering_connection.staging) == 1 && aws_route.staging_to_uat[0].destination_cidr_block == "10.41.0.0/16" && aws_vpc_security_group_ingress_rule.staging_db_from_uat[0].from_port == 5432
+    error_message = "peered, routed both ways, and staging's Aurora takes Postgres from UAT"
+  }
+  assert {
+    condition     = can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{0,255}$", aws_vpc_security_group_ingress_rule.staging_db_from_uat[0].description))
+    error_message = "a security group rule's description takes only the characters EC2 allows (no apostrophe)"
+  }
+}
+
+run "uat_can_go_back_to_its_own_layers" {
+  command = plan
+  variables {
+    layers_from_staging = false
+  }
+
+  assert {
+    condition     = length(local.staging_db_arns) == 0 && length(aws_vpc_peering_connection.staging) == 0 && length(aws_vpc_security_group_ingress_rule.staging_db_from_uat) == 0
+    error_message = "off: UAT's own databases, no peering"
   }
 }

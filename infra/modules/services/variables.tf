@@ -31,6 +31,12 @@ variable "kms_key_arn" {
   type        = string
 }
 
+variable "extra_kms_key_arns" {
+  description = "Other keys the tasks' secrets are encrypted with (UAT reading staging's layer secrets)"
+  type        = list(string)
+  default     = []
+}
+
 variable "session_secret_arn" {
   description = "NAPKIN_SESSION_SECRET (Secrets Manager), from the identity module"
   type        = string

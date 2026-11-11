@@ -91,7 +91,9 @@ COPY --from=device /out/apps/ /srv/napkin/seed/
 RUN rm -f /srv/napkin/seed/*.example.clan
 COPY --from=shell /src/app/dist/ /srv/napkin/dist/
 # Who may sign in when NAPKIN_AUTH=roster (staging): user@agency<TAB>Display name.
-COPY infra/scripts/accounts.napkin.tsv /srv/napkin/accounts.tsv
+# UAT's deploy passes ROSTER=accounts.uat.tsv: the studio's accounts and a mock sign-in per agency.
+ARG ROSTER=accounts.napkin.tsv
+COPY infra/scripts/${ROSTER} /srv/napkin/accounts.tsv
 
 ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_STATIC=/srv/napkin/dist \
