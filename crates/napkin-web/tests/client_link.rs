@@ -416,8 +416,6 @@ async fn a_wrong_link_is_404_and_says_nothing() {
         targets: vec![a.doc.clone()],
         version: "v".into(),
         hash: "h".into(),
-        name: "Pat".into(),
-        email: "pat@client-a.example".into(),
         agency: None,
         exp,
     };
@@ -467,8 +465,6 @@ async fn an_expired_link_is_410() {
             targets: vec![a.doc.clone()],
             version: "v".into(),
             hash: "h".into(),
-            name: "Pat".into(),
-            email: "pat@client-a.example".into(),
             agency: None,
             exp: chrono::Utc::now().timestamp() as u64 - 1,
         },
@@ -825,4 +821,69 @@ async fn the_clients_brief_holds_the_allow_listed_fields_and_nothing_the_brief_a
     // and nothing from the brief's own drawing of itself
     let html = page["html"].as_str().unwrap();
     assert!(!html.contains("internal_extra") && !html.contains("planner"));
+}
+
+#[tokio::test]
+async fn the_token_in_the_url_does_not_carry_the_clients_name_or_email() {
+    let s = server();
+    let a = agency(&s).await;
+    let (_id, token) = make_link(&s, &a).await;
+    use base64::Engine as _;
+    let body = token.split_once('.').unwrap().0;
+    let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(body)
+        .unwrap();
+    let claims: Value = serde_json::from_slice(&raw).unwrap();
+    let keys: Vec<&str> = claims
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    for k in keys {
+        assert!(
+            ["v", "id", "tenant", "doc", "scope", "targets", "version", "hash", "agency", "exp"]
+                .contains(&k),
+            "the token carries `{k}`: the chain holds that, the URL need not"
+        );
+    }
+    let text = String::from_utf8_lossy(&raw).to_lowercase();
+    assert!(!text.contains("pat@client-a.example") && !text.contains("\"pat\""));
+    // the page and the record still know who the link is for
+    let v = send(&s, "GET", &format!("/c/{token}/view"), None, None).await;
+    assert_eq!(v.json()["client"]["name"], "Pat");
+    let r = send(
+        &s,
+        "POST",
+        &format!("/c/{token}/answer"),
+        None,
+        Some(json!({ "answer": "confirm" })),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.text());
+    let c = chain(&s, &a).await;
+    assert!(c
+        .iter()
+        .any(|d| d["actor"] == "client:pat@client-a.example"));
+}
+
+#[test]
+fn a_short_link_secret_is_not_used_to_sign() {
+    let ctx = |secret: Option<&[u8]>| {
+        AppCtx::new(
+            tempfile::tempdir().unwrap().keep(),
+            Arc::new(NoConfig),
+            None,
+            40,
+        )
+        .with_link_secret(secret)
+    };
+    let short = ctx(Some(b"short"));
+    assert_ne!(
+        short.link_key,
+        napkin_web::links::key_from(b"short"),
+        "a guessable secret must not sign links"
+    );
+    let long = b"a session secret of thirty-two bytes!";
+    assert_eq!(ctx(Some(long)).link_key, napkin_web::links::key_from(long));
 }

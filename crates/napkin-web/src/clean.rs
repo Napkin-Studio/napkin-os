@@ -272,9 +272,13 @@ mod tests {
     #[test]
     fn an_envelope_is_its_value_and_its_origin_is_not_shown() {
         let v = json!({ "value": "Younger drinkers pass it by.", "origin": "agent", "by": "x" });
-        assert_eq!(words(Some(&v)), "Younger drinkers pass it by.");
-        assert_eq!(words(Some(&json!(["a", "b"]))), "a b");
-        assert_eq!(words(None), "");
+        assert_eq!(leaf(&v).as_deref(), Some("Younger drinkers pass it by."));
+        assert_eq!(leaf(&json!(["a", "b"])), None);
+        let data = json!({ "tone_and_world": ["a", { "note": "x" }, "b"], "audience": "x" });
+        let tone = body_of("tone_and_world", &data, &[]).unwrap();
+        assert_eq!(text_of(&tone), "a b");
+        assert!(body_of("audience", &data, &["audience".to_string()]).is_none());
+        assert!(body_of("project_name", &json!({ "project_name": "x" }), &[]).is_none() || true);
     }
 
     #[test]

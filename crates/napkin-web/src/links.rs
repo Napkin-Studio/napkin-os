@@ -42,6 +42,7 @@ use axum::Router;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use base64::Engine as _;
 use hmac::{Hmac, Mac};
+use napkin_host::ops::client_link;
 use napkin_host::{Actor, Ctx, DocId, HostEvent, HostRequest, Scope};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -52,10 +53,13 @@ use crate::tenant::{agency_of, TenantId};
 
 /// The one thing a Phase 1 link lets a client do.
 pub const SCOPE: &str = "confirm";
+/// The shortest secret a link is signed with, as the session secret's.
+pub const MIN_SECRET: usize = 32;
 /// A link's life, at most.
 pub const LIFE_DAYS: i64 = 30;
 
-/// What the token says, signed. The host holds the facts the token must agree with.
+/// What the token says, signed. The host holds the facts the token must agree with, and who the
+/// link is for (the issue record on the chain): the client's name and email are not in a URL.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Claims {
     /// Token shape: 1.
@@ -70,8 +74,6 @@ pub struct Claims {
     /// The version the link is for: the lock's version and the hash of its data.
     pub version: String,
     pub hash: String,
-    pub name: String,
-    pub email: String,
     /// The agency that sent it (what the client sees as the sender).
     pub agency: Option<String>,
     /// Unix seconds.
@@ -244,9 +246,10 @@ fn open(ctx: &AppCtx, token: &str) -> Result<Claims, Response> {
     }
 }
 
-/// The client, as the host sees them: their email, in the agency's workspace.
-fn client_ctx(c: &Claims) -> Option<Ctx> {
-    let actor = Actor::client(&c.email).ok()?;
+/// The client, as the host sees them: their email (from the link's issue record), in the
+/// agency's workspace.
+fn client_ctx(c: &Claims, email: &str) -> Option<Ctx> {
+    let actor = Actor::client(email).ok()?;
     Some(Ctx::new(actor).with_scope(Scope {
         org: Some(c.tenant.clone()),
         brand: None,
@@ -267,31 +270,28 @@ async fn view(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>) -> Resp
     let Some(tenant) = TenantId::parse(&claims.tenant) else {
         return not_found();
     };
-    let Some(who) = client_ctx(&claims) else {
-        return not_found();
-    };
     let ws = ctx.workspace(&tenant);
     let Ok(session) = ws.session(&DocId::new(claims.doc.clone())) else {
         return gone("superseded");
     };
-    // The host says whether the link is open: unknown, withdrawn, answered,
-    // for an older version, or out of time.
-    let state = napkin_host::dispatch(
-        &who,
-        &session,
-        &*ctx.config,
-        HostRequest::new(
-            "/client-link/state",
-            "",
-            json!({ "id": claims.id }).to_string().into_bytes(),
-        ),
-    );
-    let state_v: Value = serde_json::from_slice(&state.body).unwrap_or(Value::Null);
-    match state.status {
-        200 => {}
-        404 => return not_found(),
-        _ => return gone(state_v["state"].as_str().unwrap_or("gone")),
-    }
+    // The link's state and the words the client is shown come from one read of the document, so
+    // an edit cannot land between "this version is open" and what is drawn: the host says whether
+    // the link is open (unknown, withdrawn, answered, for an older version, out of time), and in
+    // that same read the brief is drawn from its allow list (clean::sheet).
+    let seen = session.read(|d| {
+        let st = client_link::state_reply(d, &claims.id)?;
+        let drawn = (st["ok"] == true).then(|| (crate::clean::sheet(d), crate::clean::page_of(d)));
+        Ok((st, drawn))
+    });
+    let Ok((state_v, drawn)) = seen else {
+        return gone("superseded");
+    };
+    let Some((html, page)) = drawn else {
+        return match state_v["state"].as_str() {
+            Some("unknown") | None => not_found(),
+            Some(word) => gone(word),
+        };
+    };
     // A link answers for the version it names, and the version the host found
     // open must be the one the token was made for.
     if state_v["version"].as_str() != Some(claims.version.as_str())
@@ -299,19 +299,10 @@ async fn view(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>) -> Resp
     {
         return gone("superseded");
     }
-
-    // The full brief: drawn from the brief's own data (clean::sheet); any other document is
-    // its export with provenance off and no brand.
-    let html = match session.read(|d| Ok(crate::clean::sheet(d))) {
-        Ok(Some(html)) => html,
-        _ => match session.compose_export(false, true) {
-            Ok((html, _)) => html,
-            Err(_) => return gone("superseded"),
-        },
+    // Only a Brief Maker brief is drawn for a client; a link to anything else shows nothing.
+    let Some(html) = html else {
+        return not_found();
     };
-    let page = session
-        .read(|d| Ok(crate::clean::page_of(d)))
-        .unwrap_or_default();
     let look = crate::look::read(&ctx, &tenant);
     plain(
         StatusCode::OK,
@@ -319,7 +310,7 @@ async fn view(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>) -> Resp
             "ok": true,
             "state": "open",
             "title": page.title,
-            "client": { "name": claims.name },
+            "client": { "name": state_v["client"]["name"] },
             "agency": { "name": claims.agency, "logo": look.logo, "accent": look.accent },
             "version": claims.version,
             "expires": state_v["expires"],
@@ -355,8 +346,24 @@ async fn answer(
     let Some(tenant) = TenantId::parse(&claims.tenant) else {
         return not_found();
     };
-    let Some(who) = client_ctx(&claims) else {
-        return not_found();
+    let ws = ctx.workspace(&tenant);
+    let Ok(session) = ws.session(&DocId::new(claims.doc.clone())) else {
+        return gone("superseded");
+    };
+    // Who the link is for is in its issue record, not in the token. A link the host does not
+    // find, or that is over, ends here with its word.
+    let Ok(state_v) = session.read(|d| client_link::state_reply(d, &claims.id)) else {
+        return gone("superseded");
+    };
+    let email = state_v["client"]["email"].as_str().unwrap_or_default();
+    let who = match client_ctx(&claims, email) {
+        Some(w) if state_v["ok"] == true => w,
+        _ => {
+            return match state_v["state"].as_str() {
+                Some("unknown") | None => not_found(),
+                Some(word) => gone(word),
+            }
+        }
     };
     // The client says which answer and in what words, and nothing else: the
     // link supplies who, which version and how.
@@ -364,10 +371,6 @@ async fn answer(
     if let Some(said) = sent.get("said") {
         asked["said"] = said.clone();
     }
-    let ws = ctx.workspace(&tenant);
-    let Ok(session) = ws.session(&DocId::new(claims.doc.clone())) else {
-        return gone("superseded");
-    };
     let resp = napkin_host::dispatch(
         &who,
         &session,
@@ -420,8 +423,6 @@ mod tests {
             targets: vec!["doc-x".into()],
             version: "v1".into(),
             hash: "sha256:00".into(),
-            name: "Pat".into(),
-            email: "pat@client-a.example".into(),
             agency: Some("wk".into()),
             exp,
         }
@@ -441,7 +442,7 @@ mod tests {
         );
         let (body, sig) = t.split_once('.').unwrap();
         let mut other = claims(unix_now() + 60);
-        other.email = "mallory@x.example".into();
+        other.doc = "doc-y".into();
         let swapped = format!("{}.{sig}", B64.encode(serde_json::to_vec(&other).unwrap()));
         assert_eq!(verify(&key, &swapped), Err(Bad::Forged));
         assert_eq!(verify(&key, &format!("{body}x.{sig}")), Err(Bad::Forged));

@@ -138,9 +138,11 @@ impl AppCtx {
     }
 
     /// Sign client links with the session secret's child key, so every server behind one
-    /// load balancer reads the same links; without one, links last as long as this process.
+    /// load balancer reads the same links; without one, or with one under 32 bytes (the
+    /// session secret's own floor, a guessable one signs nothing), links last as long as this
+    /// process.
     pub fn with_link_secret(mut self, secret: Option<&[u8]>) -> Self {
-        if let Some(s) = secret {
+        if let Some(s) = secret.filter(|s| s.len() >= crate::links::MIN_SECRET) {
             self.link_key = crate::links::key_from(s);
         }
         self
