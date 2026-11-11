@@ -49,6 +49,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import normalise  # noqa: E402
+from retrieve import EXCLUDED_SOURCES  # noqa: E402
 
 # ---- budgets -------------------------------------------------------------------
 # ~8k tokens total. Sized against the measured corpus: an IPA case parent is ~550
@@ -318,6 +319,8 @@ class BriefContext:
                                         for h in b.hits},
                            "tenant_of": {h.cite: str(h.metadata.get("tenant") or "house")
                                          for h in b.hits},
+                           # cite -> source (corpus). Cannes is never served, so none reads cannes.
+                           "source_of": {h.cite: h.source for h in b.hits},
                            "relevance_of": {h.cite: h.relevance for h in b.hits if h.relevance}}
                 for b in self.blocks.values()
             },
@@ -469,6 +472,9 @@ def bucket_filters(bucket: str, filters: dict, scopes: list[str],
     base: dict = {"bucket": bucket,
                   "status": {"ne": "superseded"},
                   "stage": {"ne": "production"},
+                  # Cannes material is never served (retrieve.EXCLUDED_SOURCES). One operator per
+                  # field: _bucket_hits widens this to also exclude the award library.
+                  "source": {"nin": list(EXCLUDED_SOURCES)},
                   "scope": {"in": scopes},
                   "tenant": {"in": tenants or ["house"]}}
     if bucket == "exemplars":
@@ -710,6 +716,10 @@ def _egress_refusal(h: Hit, allowed_scopes: set, allowed_tenants: set) -> dict |
     this agency's BMW)."""
     sc = str(h.metadata.get("scope") or "global")
     tn = str(h.metadata.get("tenant") or "house")
+    src = str(h.source or h.metadata.get("source") or "")
+    if src in EXCLUDED_SOURCES:        # the default source filter failed, or a store did not honour it
+        return {"cite": h.cite, "on": "source", "source": src, "scope": sc, "tenant": tn, "doc_id": h.doc_id,
+                "allowed": [f"not {x}" for x in EXCLUDED_SOURCES]}
     if tn not in allowed_tenants:
         on, allow = "tenant", sorted(allowed_tenants)
     elif sc not in allowed_scopes:
@@ -795,7 +805,7 @@ def _bucket_hits(store, qvec, search_text: str, bucket: str, filters: dict, scop
     if bucket == "exemplars" and mode != "on":
         # The library never reaches the main search. The ladder below only drops `category`
         # and `effectiveness_type`, so this clause stays through every widening step.
-        where = {**where, "source": {"nin": [AWARDLIB_SOURCE]}}
+        where = {**where, "source": {"nin": [AWARDLIB_SOURCE, *EXCLUDED_SOURCES]}}
     rows = rag.search_vec(store, qvec, search_text, k=candidates, where=where)
     if mode == "thin":
         rows = _awardlib_fill(store, qvec, search_text, where, filters, rows, candidates, notes)
@@ -965,7 +975,9 @@ def build_multi(pairs: dict, queries: dict[str, str], *, index_dir=None, per_fie
                                                  "validator": (validation or {}).get("calls", 0),
                                                  "searches": len(jobs)},
              "seconds": round(__import__("time").time() - t0, 2),
-             "fields": {f: [h.cite for h in hs] for f, hs in out.items()}}
+             "fields": {f: [h.cite for h in hs] for f, hs in out.items()},
+             # field -> cite -> source (corpus): what each hit is, recorded at retrieval time
+             "source_of": {f: {h.cite: h.source for h in hs} for f, hs in out.items()}}
     return MultiContext(fields=out, trace=trace)
 
 

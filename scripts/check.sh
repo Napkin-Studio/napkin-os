@@ -9,7 +9,11 @@
 #   scripts/check.sh --only rust,wasm  just these suites
 #   scripts/check.sh --list            say which suites would run, run nothing
 #
-# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool
+# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool secrets copy
+# `secrets` (gitleaks over the commits in range, with .gitleaks.toml) runs for any change. It needs the
+# gitleaks binary on PATH or in $GITLEAKS_BIN (CI pins v8.30.1; the suite says how to get it).
+# `copy` fails on an em dash in an interface string: string literals and templates in .ts/.tsx/.js/.jsx
+# under app/src and app/templates (tests, .d.ts and comments are skipped; .clan, .yaml, .md, .html are not read).
 # `e2e` (the Playwright smoke in app/e2e against a seeded local stack) runs only when named
 # (`--only e2e`): it needs a browser (`cd app && npx playwright install chromium`) and a cold run
 # builds the shell and napkin-web first.
@@ -25,7 +29,7 @@ unset CLAN_NO_HINTS
 for b in chromium chromium-browser google-chrome-stable google-chrome; do
   command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
 done
-ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool)
+ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool secrets copy)
 # Suites that only run when named; never part of --all or of what a change reaches.
 OPTIONAL=(e2e)
 
@@ -67,6 +71,9 @@ else
   notes=()
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
+    # The pre-push hook runs the secret scan itself, so it sets NAPKIN_SECRETS_DONE for the run it hands us.
+    [[ -z "${NAPKIN_SECRETS_DONE:-}" ]] && want[secrets]=1
+    case "$f" in app/src/*|app/templates/*) want[copy]=1 ;; esac
     case "$f" in
       Cargo.toml|Cargo.lock|.cargo/*)
         want[rust]=1; want[wasm]=1; want[conformance]=1 ;;
@@ -188,6 +195,67 @@ suite_production-tool() {
       { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
       npm run -s lint && npm test && npm run -s build:web )
   fi
+}
+
+suite_secrets() {
+  local gl="${GITLEAKS_BIN:-gitleaks}" r="$range" b mb
+  if ! command -v "$gl" >/dev/null 2>&1; then
+    echo "secrets: gitleaks is not installed, so no push can be checked for keys."
+    echo "  Get the pinned release (v8.30.1) from https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1,"
+    echo "  check it against the release's checksums file, and put it on PATH or set GITLEAKS_BIN=<path>."
+    echo "  (macOS: brew install gitleaks.) The hook never skips this scan."
+    return 1
+  fi
+  if [[ -z "$r" ]]; then
+    b="${base:-$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null ||
+      { git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop; } || echo origin/main)}"
+    mb="$(git merge-base "$b" HEAD 2>/dev/null)" && r="$mb..HEAD"
+  fi
+  if [[ -n "$r" && -z "$(git rev-list "$r")" ]]; then echo "secrets: no commits in $r"; return 0; fi
+  # --redact: a finding is reported by rule, file and line, never by value.
+  "$gl" git --config "$root/.gitleaks.toml" --redact --no-banner ${r:+--log-opts "$r"} "$root"
+}
+suite_copy() {
+  # Interface strings carry no em dash (house style). Roots can be overridden for the fixture test.
+  python3 -I - ${NAPKIN_COPY_ROOTS:-app/src app/templates} <<'PY'
+import pathlib, sys
+EM = "\u2014"
+def code_lines(src):
+    inblock = False
+    for ln, line in enumerate(src.split("\n"), 1):
+        out, i, n = "", 0, len(line)
+        while i < n:
+            if inblock:
+                j = line.find("*/", i)
+                if j < 0:
+                    i = n
+                else:
+                    inblock, i = False, j + 2
+                continue
+            if line.startswith("/*", i):
+                inblock, i = True, i + 2
+                continue
+            if line.startswith("//", i) and (i == 0 or line[i - 1] != ":") and sum(out.count(q) for q in "'\"`") % 2 == 0:
+                break   # a line comment (quotes before it are balanced, and it is not a URL)
+            out += line[i]
+            i += 1
+        yield ln, out
+bad = 0
+for root in sys.argv[1:]:
+    for p in sorted(pathlib.Path(root).rglob("*")):
+        if (p.is_file() and p.suffix in (".ts", ".tsx", ".js", ".jsx", ".mjs") and ".test." not in p.name
+                and not p.name.endswith(".d.ts") and "node_modules" not in p.parts):
+            src = p.read_text(encoding="utf8", errors="replace")
+            if EM not in src:
+                continue
+            for ln, code in code_lines(src):
+                if EM in code:
+                    bad += 1
+                    print(f"{p}:{ln}: em dash in an interface string: {code.strip()[:100]}")
+if bad:
+    print(f"copy: {bad} em dash(es). Rewrite the sentence with a comma, colon or full stop.")
+    sys.exit(1)
+PY
 }
 
 suite_e2e() {

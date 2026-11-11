@@ -493,7 +493,7 @@ export default function Toolbar({
               : doc.crew?.working ? <JobChip crew={doc.crew} /> : null}
             {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
             {doc.trusted && (
-              <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">Trusted</span>
+              <span className="ch-chip ch-chip-ok" title="Signed by Napkin: scoped host capabilities enabled">Trusted</span>
             )}
             {invalid && (
               <span className="ch-chip ch-chip-warn" title={doc.validation}>

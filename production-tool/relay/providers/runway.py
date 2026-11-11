@@ -16,6 +16,7 @@ from typing import Optional
 
 import httpx
 
+from director import spend
 from .types import (
     VIDEO_OPS, AssetResolver, CapabilityMissing, ProviderError, ProviderJob,
     ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
@@ -26,6 +27,7 @@ BASE_URL = "https://api.dev.runwayml.com"
 VERSION = "2024-11-06"
 MIN_POLL_S = 5  # sheet results.minPollS
 USD_PER_CREDIT = 0.01
+UNPRICED_EUR = 1.0  # the spend guard's ceiling for an op whose sheet has no estimateUsd (service.UNKNOWN_PRICE_USD)
 
 MAX_PROMPT = {"image": 5500, "clip": 1000, "clip_edit": 1000}
 MAX_HUMAN, MAX_OBJECT = 5, 9
@@ -272,6 +274,13 @@ class RunwayProvider:
     # The Provider interface
 
     def submit(self, job: ProviderJob) -> str:
+        # The spend guard (spend.py), before anything is built or sent: the sheet's estimate for the op is
+        # the ceiling, a dollar price standing in for euro (only errs high).
+        price = (effective_sheet(self._sheet, job.op, job.model)["ops"].get(job.op) or {}).get("estimateUsd")
+        try:
+            spend.check(float(price) if price is not None else UNPRICED_EUR)
+        except spend.SpendRefused as exc:
+            raise ProviderError("spend_stop", f"Not sent: {exc}", False, source="napkin") from None
         build = {"clip": self._clip, "clip_edit": self._clip_edit}.get(job.op, self._image)
         path, body = build(job)
         resp = self._call("POST", path, json=body)

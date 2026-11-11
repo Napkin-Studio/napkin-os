@@ -68,6 +68,8 @@ suites, and `--list` to see what would run.
 | middleware | `uv run pytest` in `server/` | `server/` |
 | mock-backend | unittest in `mock-backend/` | `mock-backend/`, `mock-middleware/` |
 | terraform | fmt, validate, mocked-provider test on staging | `infra/` |
+| secrets | gitleaks over the commits in range, with `.gitleaks.toml` (needs the binary: `GITLEAKS_BIN` or PATH; CI pins v8.30.1) | any change |
+| copy | no em dash in interface strings: string literals and templates in `.ts/.tsx/.js/.jsx` under `app/src` and `app/templates` | `app/src/`, `app/templates/` |
 
 The hooks are `.githooks/pre-push` and `.githooks/commit-msg`. Turn them on
 once per clone with `git config core.hooksPath .githooks`. The pre-push hook
