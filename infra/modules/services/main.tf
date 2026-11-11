@@ -101,7 +101,7 @@ data "aws_iam_policy_document" "execution_secrets" {
   }
   statement {
     actions   = ["kms:Decrypt"]
-    resources = [var.kms_key_arn]
+    resources = concat([var.kms_key_arn], var.extra_kms_key_arns)
   }
 }
 

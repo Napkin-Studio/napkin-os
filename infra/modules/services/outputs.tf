@@ -30,3 +30,8 @@ output "middleware_mounts" {
   description = "The middleware container's mount points"
   value       = local.middleware_mounts
 }
+
+# Which secret each middleware variable reads, by name (the tests read it).
+output "middleware_secret_arns" {
+  value = var.middleware_secrets
+}
