@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import threading
 
+from . import spend
+
 BATCH = 40
 STATE_CHARS = 60_000
+REQUEST_EUR = 0.01   # the spend guard's ceiling for one jev request (spend.py)
 
 
 class JevError(Exception):
@@ -51,6 +54,10 @@ class JevPort:
         names, out = list(questions), {}
         for i in range(0, len(names), BATCH):
             chunk = {n: questions[n] for n in names[i:i + BATCH]}
+            try:
+                spend.check(REQUEST_EUR)
+            except spend.SpendRefused as e:
+                raise JevError(f"jev not asked: {e}") from None
             try:
                 with self._lock:
                     r = self._client.system_one(state=state, questions=chunk, model=self.model, timeout=self.timeout)

@@ -52,7 +52,7 @@ def run(name, director, **kw):
 
 # --- the copied model port ---------------------------------------------------
 
-@pytest.mark.parametrize("name", ["model.py", "model_routes.py", "metrics.py"])
+@pytest.mark.parametrize("name", ["model.py", "model_routes.py", "metrics.py", "spend.py"])
 def test_copy_has_not_drifted_from_the_original(name):
     header, _, body = (HERE.parent / "director" / name).read_text().partition("\n")
     assert header == f"# Copied from server/napkin/{name}; keep in step until the shared package (D8)"

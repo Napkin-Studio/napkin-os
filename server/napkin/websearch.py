@@ -43,6 +43,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from . import spend
 from .model import ModelError, Usage
 from .research import ResearchError
 
@@ -50,6 +51,8 @@ log = logging.getLogger("napkin.websearch")
 
 TAVILY_URL = "https://api.tavily.com/search"
 TAVILY_CREDIT_USD = 0.008          # pay as you go; an advanced search is 2 credits
+TAVILY_CALL_EUR = 0.02             # the spend guard's ceiling for one advanced search
+NOVA_CALL_EUR = 0.05               # and for one Nova grounding call (spend.py)
 NOVA_MODEL = "us.amazon.nova-2-lite-v1:0"
 NOVA_REGION = "us-east-1"          # web grounding runs in US regions only
 
@@ -334,9 +337,10 @@ class WebResearch:
             raise ResearchError("research needs a question")
         market = (market or "").strip().upper()
         backend, credits, failed = None, 0, None
+        run = str((attribution or {}).get("job") or "-")
         if self.tavily_key:
             try:
-                cands, credits = self._tavily(q, market, max_sources)
+                cands, credits = self._tavily(q, market, max_sources, run=run)
                 backend = "tavily"
             except ResearchError as e:
                 if not self.nova:
@@ -345,7 +349,7 @@ class WebResearch:
                 log.warning("tavily failed (%s): Nova grounding instead", e)
         if backend is None:
             try:
-                cands = self._nova_candidates(q, lens, market)
+                cands = self._nova_candidates(q, lens, market, run=run)
             except ResearchError as e:
                 raise ResearchError(f"{failed}; then {e}" if failed else str(e)) from None
             backend = "nova-grounding"
@@ -361,9 +365,18 @@ class WebResearch:
             trace["failover"] = failed
         return {"sources": sources, "trace": trace}
 
+    @staticmethod
+    def _spend(amount: float, run: str) -> None:
+        """The spend guard (spend.py), before a paid search leaves the server."""
+        try:
+            spend.check(amount, run)
+        except spend.SpendRefused as e:
+            raise ResearchError(f"search not sent: {e}") from None
+
     # ------------------------------------------------------------ Tavily
 
-    def _tavily(self, q: str, market: str, max_sources: int) -> tuple[list[dict], int]:
+    def _tavily(self, q: str, market: str, max_sources: int, run: str = "-") -> tuple[list[dict], int]:
+        self._spend(TAVILY_CALL_EUR, run)
         body = {"query": q, "search_depth": "advanced", "topic": "general", "chunks_per_source": 3,
                 "max_results": max(8, min(20, max_sources * 2)), "include_raw_content": "markdown",
                 "include_answer": False, "include_images": False, "exclude_domains": SOCIAL}
@@ -418,9 +431,10 @@ class WebResearch:
                 config=botocore.config.Config(read_timeout=self.timeout, retries={"max_attempts": 2}))
         return self._nova_client
 
-    def _nova_candidates(self, q: str, lens: str, market: str) -> list[dict]:
+    def _nova_candidates(self, q: str, lens: str, market: str, run: str = "-") -> list[dict]:
         if not self.nova:
             raise ResearchError("no web search is configured")
+        self._spend(NOVA_CALL_EUR, run)
         ask = (f"{q}\n\nMarket: {COUNTRIES.get(market, market)}. Looking for: {LENSES.get(lens, lens)}. "
                "Search the web and answer briefly, citing primary sources (statistics offices, regulators, "
                "company reports) where they exist, with the most recent figures and the period they describe.")

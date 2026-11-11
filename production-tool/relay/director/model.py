@@ -41,6 +41,7 @@ import time
 import httpx
 import jsonschema
 
+from . import spend
 from .metrics import emit, record
 
 log = logging.getLogger("napkin.model")
@@ -148,6 +149,19 @@ def check_images(images) -> list[dict]:
     return out
 
 
+def guard_spend(*, model, system, turns, max_tokens, purpose, headers=None) -> None:
+    """The spend guard (spend.py), before a paid request leaves this process: a refused call is a
+    ModelError of kind `server` and nothing is sent. The estimate is a ceiling: the input as sized
+    from the text, and all of max_tokens as output, at the model's rate (the dearest tier's if unknown)."""
+    images = [im for t in turns for im in t.get("images") or []]
+    docs = sum(1 for im in images if im["media_type"] in DOC_TYPES)
+    chars = len(system or "") + sum(len(t["text"]) for t in turns)
+    amount = spend.model_ceiling(chars, len(images) - docs, docs, max_tokens or 0, spend.model_rates(model))
+    verdict = spend.allow(amount, spend.environment(), (headers or {}).get("X-Napkin-Job") or spend.current_run())
+    if not verdict:
+        raise ModelError(f"{purpose}: not sent: {verdict.reason}", "server")
+
+
 # ---------------------------------------------------------------------------
 # Wire A — Anthropic Messages (the official SDK), direct or on Bedrock
 # ---------------------------------------------------------------------------
@@ -183,6 +197,7 @@ class AnthropicWire:
              schema_mode="enforced") -> Reply:
         """`schema_mode`: enforced (output_config.format) or prompt (the schema in the system prompt)."""
         prompt = schema_mode == "prompt"
+        guard_spend(model=model, system=system, turns=turns, max_tokens=max_tokens, purpose=purpose, headers=headers)
         config = {} if prompt else {"format": {"type": "json_schema", "schema": schema}}
         if effort:
             config["effort"] = effort
@@ -311,6 +326,7 @@ class OpenAIWire:
     def send(self, *, model, system, turns, schema, purpose, max_tokens, effort, timeout, headers=None,
              schema_mode="enforced") -> Reply:
         prompt = schema_mode == "prompt"
+        guard_spend(model=model, system=system, turns=turns, max_tokens=max_tokens, purpose=purpose, headers=headers)
         body = dict(self.extra)
         body.update(model=model, max_tokens=max_tokens,
                     messages=[{"role": "system", "content": schema_in_prompt(system, schema) if prompt else system}]
