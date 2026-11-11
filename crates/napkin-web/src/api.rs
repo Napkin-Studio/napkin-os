@@ -425,7 +425,9 @@ async fn needs(
         user.as_ref().map(|a| a.username.as_str()),
         user.as_ref().map(|a| a.roles.as_slice()).unwrap_or(&[]),
     );
-    Ok(Json(serde_json::json!({ "total": items.len(), "items": items })))
+    Ok(Json(
+        serde_json::json!({ "total": items.len(), "items": items }),
+    ))
 }
 
 /// The six tiles. Management's: the route is behind the role check.

@@ -304,11 +304,17 @@ impl Session {
     /// the installed app's view when the library has one of the same major
     /// ([`crate::view`]).
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
+        // The lock is held from the read to the assignment, as `perform` holds it from its
+        // snapshot to the store's write. Without it, an open that read the file just before a
+        // write landed could put its older snapshot in place after the write had advanced it, and
+        // the next read would not show the write (found by pilot test 4, which a page reopening
+        // documents in the background raced).
+        let mut view = self.view.lock().unwrap();
         // One read: the snapshot holds the bytes it was built from (#10).
         let doc = Document::load(self.store.parts(), id)?;
         let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
         let result = read::describe(&doc);
-        self.view.lock().unwrap().open = Some(doc);
+        view.open = Some(doc);
         Ok(result)
     }
 

@@ -222,7 +222,12 @@ impl JobIndex {
         }
         needs.sort_by(|a, b| {
             // by deadline, a job with none last, then by job and text for a stable list
-            (a.due.is_none(), &a.due, &a.job, &a.text).cmp(&(b.due.is_none(), &b.due, &b.job, &b.text))
+            (a.due.is_none(), &a.due, &a.job, &a.text).cmp(&(
+                b.due.is_none(),
+                &b.due,
+                &b.job,
+                &b.text,
+            ))
         });
         Ok(JobIndex {
             jobs: entries,
@@ -292,12 +297,7 @@ fn entry_of(
     }
 
     let (stage_id, status, waiting_on, days) = match &best {
-        None => (
-            "client-brief",
-            "No brief yet.".to_string(),
-            "agency",
-            None,
-        ),
+        None => ("client-brief", "No brief yet.".to_string(), "agency", None),
         Some((p, f, path, title)) => {
             let mut push = |audience: Audience, text: String, action: &str| {
                 needs.push(Need {
@@ -328,7 +328,10 @@ fn entry_of(
                     );
                     (
                         "client-brief",
-                        format!("{n} gate {} missing.", if n == 1 { "item" } else { "items" }),
+                        format!(
+                            "{n} gate {} missing.",
+                            if n == 1 { "item" } else { "items" }
+                        ),
                         "agency",
                         None,
                     )
@@ -336,7 +339,11 @@ fn entry_of(
                 Progress::Passed => {
                     if f.changed {
                         let text = format!("{title}: changed after it was signed.");
-                        push(person(&f.planner, "planning"), text.clone(), "Sign the changed brief");
+                        push(
+                            person(&f.planner, "planning"),
+                            text.clone(),
+                            "Sign the changed brief",
+                        );
                         push(
                             person(&f.creative_director, "creative-director"),
                             text,
@@ -512,10 +519,7 @@ impl JobIndex {
             waiting_on_client: self
                 .jobs
                 .iter()
-                .filter_map(|j| {
-                    j.days_waiting_on_client
-                        .map(|d| line(j, format!("{d}")))
-                })
+                .filter_map(|j| j.days_waiting_on_client.map(|d| line(j, format!("{d}"))))
                 .collect(),
             scores: None,
             results: None,

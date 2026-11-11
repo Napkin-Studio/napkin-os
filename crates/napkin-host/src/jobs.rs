@@ -125,11 +125,7 @@ fn rebuilt(clan: &ClanFile, data: Vec<u8>) -> HostResult<Vec<u8>> {
     Ok(b.build()?)
 }
 
-fn write_registry(
-    store: &dyn DocStore,
-    reg: &Registry,
-    base: Option<Version>,
-) -> HostResult<()> {
+fn write_registry(store: &dyn DocStore, reg: &Registry, base: Option<Version>) -> HostResult<()> {
     let id = registry_id(store)?;
     let data = data_yaml(reg)?;
     let change = match base {
@@ -197,7 +193,10 @@ pub fn create_job(store: &dyn DocStore, ctx: &Ctx, new: NewJob) -> HostResult<Jo
         .as_deref()
         .map(|t| t.split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|t| !t.is_empty());
-    if title.as_deref().is_some_and(|t| t.chars().count() > MAX_TITLE) {
+    if title
+        .as_deref()
+        .is_some_and(|t| t.chars().count() > MAX_TITLE)
+    {
         return Err(HostError::bad_request(format!(
             "a job's title is at most {MAX_TITLE} characters"
         )));

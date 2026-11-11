@@ -877,7 +877,13 @@ mod tests {
     fn only_management_opens_the_dashboard_and_everyone_opens_their_own_needs() {
         assert_eq!(group_of("/t/x/dashboard"), Group::Management);
         assert_eq!(group_of("/dashboard"), Group::Management);
-        for role in ["planning", "creative-director", "account-service", "producer", "traffic"] {
+        for role in [
+            "planning",
+            "creative-director",
+            "account-service",
+            "producer",
+            "traffic",
+        ] {
             assert!(!allowed(&r(&[role]), "/t/x/dashboard", None), "{role}");
             assert!(allowed(&r(&[role]), "/t/x/needs", None), "{role} needs");
             assert!(allowed(&r(&[role]), "/t/x/jobs", None), "{role} jobs");
