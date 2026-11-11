@@ -317,7 +317,7 @@ export const httpHost: Host = {
   },
   getGate: () => clanCall<GateView>('/gate'),
   gateSign: async rationale => { await clanPost<unknown>('/sign', { rationale: rationale ?? '' }) },
-  gatePatch: async (patch, action) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action }) },
+  gatePatch: async (patch, action, rationale) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action, ...(rationale ? { rationale } : {}) }) },
   gateNewVersion: async reason => { await clanPost<unknown>('/unapprove', { rationale: reason }) },
   acknowledge: async decision => {
     const resp = await fetch(`${httpHost.clanOrigin()}/acknowledge`, { method: 'POST', body: JSON.stringify({ decision }) })

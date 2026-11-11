@@ -12,6 +12,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import { TerritoriesGate } from './TerritoriesGate'
+import { host } from '../../host'
+import type { LibraryItem } from '../../host'
+import { VISUAL_BRIEF } from '../gate/words'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
 import { TOOLS, isLive, toolById } from './tools'
@@ -140,6 +143,21 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   // The desk is the Clients door then (`#clients`). A person with no role keeps the desk, as before.
   const homed = home?.restricted ? home : null
 
+  // A territory chosen (typed by hand until the Territory tool lands) spins the signed, confirmed brief off into a
+  // visual brief and opens it. The territory is written as one attributed decision that names the brief version.
+  const chooseTerritory = async (brief: LibraryItem, territory: string, line: string) => {
+    await host.openClan(brief.path)
+    const made = await host.spinoffDocument(VISUAL_BRIEF, `Visual brief, ${territory}`, null)
+    let from = ''
+    try { from = (await host.upstream()).carried?.last_decision ?? '' } catch { /* the page still opens */ }
+    await host.gatePatch(
+      { territory: { name: territory, line, source: 'typed', ...(who.first ? { chosen_by: who.first } : {}) } },
+      'choose the territory',
+      `Territory "${territory}" chosen from the brief${from ? ` at ${from}` : ''}.`,
+    )
+    onOpenDocument(made.path)
+  }
+
   let body
   if (clientId && client && route.level === 'tool' && route.tool === 'territories') {
     body = (
@@ -149,6 +167,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenBrief={onOpenDocument}
         onNewBrief={() => onStart('ie.napkin.brief-maker', client.id)}
         onBack={() => go({ level: 'client', client: client.id })}
+        onChooseTerritory={chooseTerritory}
       />
     )
   } else if (homed && route.level === 'map') {

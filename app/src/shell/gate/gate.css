@@ -96,6 +96,12 @@
 .tg-steps b { font-size: 13px; font-weight: 600; }
 .tg-card .ch-btn { height: 44px; padding: 0 20px; font-size: 14px; font-weight: 600; }
 
+.tg-form { display: flex; flex-direction: column; gap: 12px; align-items: stretch; width: 100%; padding-top: 4px; }
+.tg-form .bg-field input { min-height: 44px; }
+.tg-visuals { list-style: none; margin: 0; padding: 0; width: 100%; border-top: 1px solid var(--line); }
+.tg-visuals li { padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.tg-visuals .ch-link { min-height: 44px; display: inline-flex; align-items: center; text-align: left; }
+
 /* The desk's Changed brief alert (nui/Desk.tsx). */
 .gate-alert {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;

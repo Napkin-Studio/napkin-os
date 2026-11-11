@@ -21,7 +21,8 @@ import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
 import { useGate } from './gate/useGate'
-import { BRIEF_MAKER } from './gate/words'
+import { BRIEF_MAKER, VISUAL_BRIEF, briefMoved } from './gate/words'
+import { ChangedBrief } from '../components/states/ScreenStates'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
@@ -445,6 +446,21 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         </div>
       )}
       <StateStrip queue={writes} app={appState} onAction={barAction} onRefresh={refreshApp} />
+      {/* A visual brief answers one brief version: when the brief moves on, say so, and take the new one only into a version that is open. */}
+      {!clientOn && appId === VISUAL_BRIEF && !open.is_template && (() => {
+        const moved = briefMoved(upstream)
+        if (!moved) return null
+        const sealed = !!decisions.view?.lock.locked
+        return (
+          <ChangedBrief
+            from={moved.from || undefined}
+            to={moved.to || undefined}
+            changes={sealed ? 'This version is approved and stays as it is. Start a new version to take the new brief into it.' : 'Updating takes the new brief into this page. What you wrote here stays.'}
+            primary={!sealed}
+            onUpdate={sealed ? () => onUpError('This version is approved. Start a new version before taking the new brief.') : updateFromUpstream}
+          />
+        )
+      })()}
       {!decisions.view?.lock.locked && !open.is_template && changedLinks.map(l => (
         <div key={l.documentId} className="ch-banner ch-banner-note" role="status" data-testid="link-changed">
           <span className="ch-banner-dot" aria-hidden />

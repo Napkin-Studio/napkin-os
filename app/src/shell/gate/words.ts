@@ -5,9 +5,11 @@
 // What the Brief gate says, from what the host answered (`GET /gate`). Pure: no host and no React,
 // so the sentences and the buttons' rules are table-tested (features/brief-gate.clan).
 
-import type { GateItem, GateSigner, GateSummary, GateView, LibraryItem } from '../../host'
+import type { GateItem, GateSigner, GateSummary, GateView, LibraryItem, UpstreamView } from '../../host'
 
 export const BRIEF_MAKER = 'ie.napkin.brief-maker'
+/** The page the creative director approves, spun off from a brief (features/visual-brief.clan). */
+export const VISUAL_BRIEF = 'ie.napkin.visual-brief'
 
 /** The roles a brief names to sign it. */
 export const PLANNER = 'planner'
@@ -132,3 +134,14 @@ export function territoriesOf(items: readonly LibraryItem[], client: string): Te
 /** The briefs that changed after they were signed: the desk's Changed brief alerts. */
 export const changedBriefs = (items: readonly LibraryItem[]): LibraryItem[] =>
   items.filter(i => i.app_id === BRIEF_MAKER && i.state?.gate?.changed_since_lock)
+
+/**
+ * The brief a visual brief was made from has moved on (the host's `GET /upstream` says `changed`): the two versions,
+ * for the Changed brief state, or null while the brief is as it was when the page was made.
+ */
+export function briefMoved(view: UpstreamView | null): { title: string; to: string; from: string } | null {
+  const parent = view?.upstream.find(u => u.direct && u.in_store && u.status === 'changed')
+  if (!parent) return null
+  const short = (v?: string) => (v ?? '').slice(0, 7)
+  return { title: parent.title || 'the brief', to: short(parent.version), from: short(view?.carried?.last_decision) }
+}

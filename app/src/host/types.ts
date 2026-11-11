@@ -745,7 +745,7 @@ export interface Host {
   /** The signer named on the brief signs this version (`POST /sign`): the planner's sign, or the creative director's lock. */
   gateSign(rationale?: string): Promise<void>
   /** A person's edit of the open brief from the gate (`POST /patch-data`), attributed to them. */
-  gatePatch(patch: Record<string, unknown>, action: string): Promise<void>
+  gatePatch(patch: Record<string, unknown>, action: string, rationale?: string): Promise<void>
   /** Start a new version of a signed brief that changed (`POST /unapprove`, with the reason). */
   gateNewVersion(reason: string): Promise<void>
   /** A person accepts an agent's call ("Looks right"): `/acknowledge`. */
