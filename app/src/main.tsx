@@ -10,7 +10,8 @@ import { isDesktop, isViewerRoute, serverless } from './host'
 import { SignInGate } from './shell/SignIn'
 import { DogfoodGate } from './dogfood/Dogfood'
 import { registerServiceWorker } from './pwa/pwa'
-import ClientLink, { linkToken } from './clientLink/ClientLink'
+import ClientLink from './clientLink/ClientLink'
+import { linkToken } from './clientLink/linkToken'
 
 // A client's own link (`/c/<token>`) is a page of its own: no sign-in, no shell, no service worker,
 // no host. The token in the address is the whole of the visitor's authority.

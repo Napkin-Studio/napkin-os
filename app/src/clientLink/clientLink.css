@@ -10,7 +10,7 @@
 .cl-wrap { width: 100%; max-width: 610px; margin: 0 auto; padding: 24px 20px 32px; display: flex; flex-direction: column; gap: 28px; }
 .cl-head { display: flex; flex-direction: column; gap: 12px; }
 .cl-mark { display: inline-flex; align-items: center; gap: 10px; min-height: 28px; font-weight: 800; letter-spacing: 0.04em; font-size: 14px; }
-.cl-mark i { display: block; width: 10px; height: 20px; border-radius: 3px; background: var(--agency-accent, var(--accent)); }
+.cl-mark i { display: block; width: 10px; height: 20px; border-radius: 3px; background: var(--agency, var(--ink)); }
 .cl-mark img { display: block; max-height: 32px; max-width: 160px; object-fit: contain; }
 .cl-title { font-size: 30px; line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; }
 .cl-sub { font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 46ch; }

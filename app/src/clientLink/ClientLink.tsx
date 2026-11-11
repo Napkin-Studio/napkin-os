@@ -32,12 +32,6 @@ type Seen =
 
 type Done = null | { answer: 'confirm' | 'changes' }
 
-/** `/c/<token>`: the token, or null when this is not a client link. */
-export function linkToken(pathname: string = window.location.pathname): string | null {
-  const m = /^\/c\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\/?$/.exec(pathname)
-  return m ? m[1] : null
-}
-
 const date = (iso: string) => new Date(iso).toLocaleDateString('en-IE', { day: 'numeric', month: 'long' })
 
 const GONE_WORDS: Record<string, (who: string) => string> = {
