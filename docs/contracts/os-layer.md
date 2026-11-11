@@ -1236,7 +1236,10 @@ freely, never redefine.
   `/spinoff-targets`, `/set-title`, `/set-context`, `/export`, `/notify`,
   `/set-theme`, and the library routes.
 - A body `agent` field on `/patch-data` is kept as `claimed_agent` on the
-  decision. The actor always comes from `Ctx`.
+  decision. The actor always comes from `Ctx`. A `/patch-data` with no `agent`
+  or no `action` is `400` (ADR-004; the rationale stays optional). The
+  environment `NAPKIN_UNATTRIBUTED_WRITES=dry-run` logs the refusal and writes
+  as before, for the week before it is enforced.
 - New in v1: `/verdict`, `/classify`, `/contest`, `/resolve`, `/finding`,
   `/verify`, `/approve`, `/unapprove` (§7.6), `/history`, `/timeline`, `/open`, `/stale`,
   `/upstream` (§8.1), `/client-review`, `/client-review/confirm` and

@@ -149,8 +149,15 @@ name the stand-in, its port, or branch on which implementation answered.
   from auth. A request that carries `scope`, `tenant`, `org`, `org_id` or
   `tenant_id` at the top level of the body, `payload`, `payload.input` or `clan`
   is refused with `400 invalid_input` — a caller must not be able to widen what
-  it reads. In development the tenant is a fixed dev tenant from middleware
-  configuration, reported back in `trace.scope`.
+  it reads. The agency comes from the signed-in person: the host sends it in
+  the `x-napkin-agency` header (lower-case letters, digits and hyphens) on every
+  request, and the middleware's scope is `org/<agency>`, reported back in
+  `trace.scope`. A bad header is `400`; outside local development a request with
+  none is `401 unauthenticated`. In local development (`NAPKIN_ENV` unset or
+  `local`) a request with none is the fixed dev tenant from middleware
+  configuration. `NAPKIN_DEV_ORG` is refused when `NAPKIN_ENV` is `staging` or
+  `production`, except on staging by the recorded exception
+  `NAPKIN_DEV_ORG_EXCEPTION=1` (docs/adr/0004-client-wall.md).
 
 ### Task inputs
 

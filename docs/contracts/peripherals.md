@@ -232,7 +232,11 @@ gets a model in a region.
   (Service Quotas). A missing agreement or a zero quota is a `403 … is not
   available for this account` → `ModelError(auth)`.
 - **Routing:** `global.` profiles route anywhere at list price; `eu.` keeps
-  inference in the EU at a 10% premium. The owner accepted global (2026-09-30).
+  inference in the EU at a 10% premium. The owner accepted global (2026-09-30);
+  ADR-004 reopens that for client text (docs/adr/0004-client-wall.md). With
+  `NAPKIN_MODEL_PIN=eu` an alias resolves to its `eu.` profile, and a route that
+  still resolves to `global.` stops startup unless it is a recorded exception
+  (`server/napkin/model_route_exceptions.json`).
 - **Not on Bedrock**, and not used by the port anyway: server tools (web
   search, web fetch), the Models API, top-level automatic `cache_control` (the
   legacy integration for Opus 4.6 and earlier refuses it), server-side
@@ -1142,7 +1146,9 @@ Environment only (`server/napkin/config.py`); handlers never see any of it.
 | `NAPKIN_LAYERS_TOKEN` | unset | unset | service token |
 | `NAPKIN_LAYERS_TIMEOUT` | `30` | `30` | `30` |
 | `NAPKIN_REUSE_DAYS` | `30` | `30` | `30` |
-| `NAPKIN_DEV_ORG` / `NAPKIN_DEV_BRAND` | `org/dev-agency` / `brand/dev-brand` | same | unused (scope from auth) |
+| `NAPKIN_DEV_ORG` / `NAPKIN_DEV_BRAND` | `org/dev-agency` / `brand/dev-brand` | same | refused when `NAPKIN_ENV` is not `local` (scope from the signed-in agency; docs/adr/0004-client-wall.md) |
+| `NAPKIN_ENV` | `local` | `local` | `staging` or `production` |
+| `NAPKIN_MODEL_PIN` | unset | unset | `eu`: client text only to EU-processed routes (§1.9) |
 | `NAPKIN_TOKEN` | unset | unset | the host's middleware secret |
 | `NAPKIN_PIPELINES` | every `app/templates/*/app/pipeline.yaml` | same | same |
 | `NAPKIN_HOST` / `NAPKIN_PORT` | `127.0.0.1` / `8795` | same | deployment |
