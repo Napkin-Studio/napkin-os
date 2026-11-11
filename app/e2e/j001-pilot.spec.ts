@@ -285,7 +285,7 @@ for (const size of SIZES) {
   test(t(7), async ({ browser }) => {
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     // The Phase 1 pages that exist on this branch: the desk, the clients page, a client, its Brief
-    // page, and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
+    // page, Territories (the visual brief's choose-a-territory form), and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
     // visual brief) join this list when they land. The app frame is a document with its own paper
     // (the apps are restyled in their own records), so it is left out of the scan.
     const problems: string[] = []
@@ -298,6 +298,8 @@ for (const size of SIZES) {
         ['clients', async () => { await page.goto('/#clients'); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['client', async () => { await page.goto(`/#client-${job.client}`); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['brief page', async () => { await page.goto(`/#tool-${job.client}-brief`); await page.reload(); await expect(page.getByTestId('work-item').first()).toBeVisible() }],
+        // Territories with the Brief gate off (this stack): open, with the choose-a-territory form of the visual brief.
+        ['territories', async () => { await page.goto(`/#tool-${job.client}-territories`); await page.reload(); await expect(page.getByTestId('choose-territory')).toBeVisible() }],
         ['agency look', async () => {
           await page.goto('/#agency'); await page.reload()
           await page.getByTestId('account-button').click()

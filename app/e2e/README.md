@@ -82,3 +82,12 @@ mode on `NAPKIN_E2E_ROSTER_PORT` (default 18082) beside the anonymous one: the p
 are in `seed/j001/people.mjs`, and a spec opens its context with `open(browser, size, 'white', { roster: true })`
 (features/roles-and-homes.clan, decision "the e2e stack serves both auth modes"). `roles-homes.spec.ts` covers the
 homes, the O and the switcher; `NAPKIN_E2E_SHOTS=<dir>` also writes a screenshot of each.
+
+## The visual brief (feature `visual-brief`)
+
+`visual-brief.spec.ts` runs on the roster stack at 390 and 1440 px: a brief signed by both people and confirmed by the
+client, a territory typed on the Territories page, the visual brief that is spun off, and the creative director's approval
+(one `approve` decision, then a 409 on a write, then a new version with the first left as it was). The frames are plain
+gradient PNGs made in the test; nothing generates an image. The Territories retrieval check runs the engine's mix path over
+stand-in rows (`seed/visual-brief/territoryTrace.py`) with `cannes`, `effie` and `warc` rows. `VISUAL_BRIEF_SHOTS=<dir>`
+also writes a screenshot of each new screen. No pilot test carries the slug `visual-brief`, so `phase1-fixme.mjs` is unchanged.
