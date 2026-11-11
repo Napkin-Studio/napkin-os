@@ -138,3 +138,19 @@ variable "middleware_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "spend_cap_eur" {
+  description = "NAPKIN_SPEND_CAP_EUR on the web and middleware tasks: the most one environment spends on paid calls in a UTC day, in euro (server/napkin/spend.py). 0 refuses every paid call. A person raises it at a gate."
+  type        = string
+  default     = "0"
+}
+
+variable "paid_calls" {
+  description = "NAPKIN_PAID_CALLS on the web and middleware tasks: on or off, one switch for every paid call (server/napkin/spend.py)."
+  type        = string
+  default     = "off"
+  validation {
+    condition     = contains(["on", "off"], var.paid_calls)
+    error_message = "paid_calls is on or off"
+  }
+}

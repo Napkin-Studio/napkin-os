@@ -399,6 +399,14 @@ locals {
     { name = "NAPKIN_COGNITO_REGION", value = var.region },
     { name = "NAPKIN_COGNITO_CLIENT_ID", value = var.cognito_client_id },
   ]
+  # The spend guard (server/napkin/spend.py; features/harness.clan). NAPKIN_ENV names the environment, so
+  # a deployed task never runs with the local defaults. Cap 0 and paid calls off until a person raises them.
+  spend_env_map = {
+    NAPKIN_ENV           = var.name
+    NAPKIN_SPEND_CAP_EUR = var.spend_cap_eur
+    NAPKIN_PAID_CALLS    = var.paid_calls
+  }
+  spend_env = [for k, v in local.spend_env_map : { name = k, value = v }]
   web_environment = concat(
     [{ name = "PORT", value = "8080" }],
     local.web_auth_env,
@@ -406,6 +414,7 @@ locals {
       { name = "NAPKIN_PROXY_MIDDLEWARE_URL", value = local.mw_url },
       { name = "NAPKIN_AGENT_CAP", value = "400" }, # task submissions per agency per server start (meter.rs)
     ],
+    local.spend_env,
     local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [],
     # the dogfood record, on the task's EFS under /data/_dogfood
     var.web_dogfood ? [{ name = "NAPKIN_DOGFOOD", value = "1" }] : [],
@@ -452,7 +461,7 @@ resource "aws_ecs_task_definition" "web" {
 
 locals {
   runlog_dir = "/runlog"
-  middleware_environment = merge({
+  middleware_environment = merge(local.spend_env_map, {
     NAPKIN_HOST         = "0.0.0.0"
     NAPKIN_PORT         = tostring(local.mw_port)
     NAPKIN_MODEL_API    = "bedrock"
