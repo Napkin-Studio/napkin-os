@@ -30,7 +30,7 @@ async function make(page: Page, api: string, app: string, title: string, client:
   expect(r.status(), `create ${title}`).toBe(200)
   const body = await r.json() as { token: string; manifest: { id: string } }
   if (patch) {
-    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch } })
+    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch, agent: 'j001-seed', action: `seed: ${title}` } })
     expect(p.status(), `patch ${title}`).toBe(200)
   }
   return { token: body.token, id: body.manifest.id }
