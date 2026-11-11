@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+STOPPED 11 Nov 2026 (feature cannes-removal): main() exits with a message and writes nothing. The
+code stays so a signed licence that allows AI use could restore it (docs/adr/0005-cannes-removed.md).
+
 ingest_cannes.py — Convert a Cannes Lions ("Love The Work" / IAPI) export into
 RAG-ready markdown, following the same pattern as ingest_ipa.py.
 
@@ -33,6 +36,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 DEFAULT_INPUT = HERE / "reference" / "_raw" / "cannes.json"
 OUT_DIR = HERE / "reference" / "rag" / "cannes"
+
+
+STOPPED = (
+    "ingest_cannes is stopped. Cannes Lions material stays out of every model and every retrieval "
+    "(Laurence, 10 Nov 2026; docs/napkin-os-build-prompt-v3.1.md section 8). See feature record "
+    "cannes-removal, docs/adr/0005-cannes-removed.md and docs/runbooks/cannes-removal.md. "
+    "It may return only under a signed licence that allows AI use."
+)
 
 
 def _slug(text: str) -> str:
@@ -169,6 +180,7 @@ tags: {tags_yaml}
 def main():
     """Load the Cannes export (path arg or DEFAULT_INPUT), write one markdown file per non-empty
     case to OUT_DIR, and print a wrote/skipped summary. Exits with an error if the input is missing."""
+    sys.exit(STOPPED)
     src = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_INPUT
     if not src.exists():
         sys.exit(
