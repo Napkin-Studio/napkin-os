@@ -45,6 +45,57 @@ export const STRUCTURED_EDIT_BRIDGE = `
     return root;
   }
 
+  // ── The shell is told how each write went (features/screen-states.clan) ──
+  // Every patchData is reported as a "clan:write" {v, id, state, field, text}:
+  // saving, then saved, failed or changed (the host said the document moved
+  // on, HTTP 409). The window also hears it as a CustomEvent of the same name.
+  // A write that did not land is kept here under its id, and sent again when
+  // the shell asks ("clan:retry {id}"), once: a retry of a write already saved
+  // does nothing, so Try again pressed twice records one decision. The text on
+  // the page is never touched, so what the person typed stays where it is.
+  var pendingWrites = {};
+  var writeSeq = 0;
+  function reportWrite(w) {
+    try {
+      window.dispatchEvent(new CustomEvent('clan:write', { detail: w }));
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'clan:write', v: 1, id: w.id, state: w.state, field: w.field, text: w.text }, '*');
+      }
+    } catch (e) {}
+  }
+  function sendWrite(entry) {
+    if (entry.inflight) return entry.inflight;
+    var w = entry.w;
+    reportWrite({ id: w.id, state: 'saving', field: w.field, text: w.text });
+    entry.inflight = fetch(clanScheme + '/patch-data', { method: 'POST', body: JSON.stringify(entry.body) })
+      .then(function(r) {
+        entry.status = r.status;
+        return r.json().catch(function() { return { ok: false, error: 'The server sent something unreadable.' }; });
+      })
+      .then(function(res) {
+        entry.inflight = null;
+        if (res && res.ok) {
+          delete pendingWrites[w.id];
+          entry.apply();
+          window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: {} }));
+          reportWrite({ id: w.id, state: 'saved', field: w.field, text: w.text });
+        } else {
+          reportWrite({ id: w.id, state: entry.status === 409 ? 'changed' : 'failed', field: w.field, text: w.text });
+        }
+        return res;
+      }, function(err) {
+        entry.inflight = null;
+        reportWrite({ id: w.id, state: 'failed', field: w.field, text: w.text });
+        throw err;
+      });
+    return entry.inflight;
+  }
+  function retryWrite(id) {
+    var entry = pendingWrites[id];
+    if (!entry) return Promise.resolve(null);
+    return sendWrite(entry).catch(function() { return null; });
+  }
+
   // patchData('dot.path', value, opts)  OR  patchData({k:v, ...}, opts) for a
   // multi-field write recorded as ONE attributed decision.
   function patchData(path, value, opts) {
@@ -59,16 +110,17 @@ export const STRUCTURED_EDIT_BRIDGE = `
     };
     // A person's structured reasoning, in the spec's shape; the host checks it.
     if (opts.reasoning) body.reasoning = opts.reasoning;
-    return fetch(clanScheme + '/patch-data', { method: 'POST', body: JSON.stringify(body) })
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
-        if (res && res.ok) {
-          if (isObj) { Object.keys(patchObj).forEach(function(k){ window.__CLAN__.data[k] = patchObj[k]; }); }
-          else { setByPath(window.__CLAN__.data, path, value); }
-          window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: {} }));
-        }
-        return res;
-      });
+    var entry = {
+      body: body,
+      w: { id: 'w' + Date.now().toString(36) + (++writeSeq), field: isObj ? Object.keys(patchObj).join(', ') : String(path), text: (!isObj && typeof value === 'string') ? value : '' },
+      apply: function() {
+        if (isObj) { Object.keys(patchObj).forEach(function(k){ window.__CLAN__.data[k] = patchObj[k]; }); }
+        else { setByPath(window.__CLAN__.data, path, value); }
+      },
+      inflight: null, status: 0
+    };
+    pendingWrites[entry.w.id] = entry;
+    return sendWrite(entry);
   }
 
   function apiProxy(kind, payload) {
@@ -151,6 +203,7 @@ export const STRUCTURED_EDIT_BRIDGE = `
     me: me,
     data: function() { return window.__CLAN__.data; },
     patchData: patchData,
+    retryWrite: retryWrite,
     apiProxy: apiProxy,
     uploadAsset: uploadAsset,
     fork: fork,
@@ -200,6 +253,8 @@ export const STRUCTURED_EDIT_BRIDGE = `
     if (e.source !== window.parent) return;
     var m = e.data;
     if (m && m.type === 'clan:colorscheme') applyColorScheme(m.scheme);
+    // The shell's Try again for a write that did not land.
+    if (m && m.type === 'clan:retry' && typeof m.id === 'string') retryWrite(m.id);
     // The shell changed the document outside the app (a client's answer, a
     // suggestion settled): the app reads it again as after its own write.
     if (m && m.type === 'clan:dataupdated') {

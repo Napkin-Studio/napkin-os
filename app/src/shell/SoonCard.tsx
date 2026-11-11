@@ -6,6 +6,7 @@
 
 import type { CSSProperties } from 'react'
 import type { Teaser } from './comingSoon'
+import { Empty } from '../components/states/ScreenStates'
 
 /** A tool's card that opens nothing yet: the same card as an app's, with Coming soon for Start. */
 export function SoonCard({ teaser }: { teaser: Teaser }) {
@@ -24,9 +25,8 @@ export function SoonCard({ teaser }: { teaser: Teaser }) {
       </span>
       <span className="ln-body">
         <span className="ln-app-name eyebrow">{teaser.name}</span>
-        <span className="ln-app-job">{teaser.job}</span>
-        <span className="ln-sr">{teaser.line}</span>
-        <span className="ln-app-go">Coming soon</span>
+        {/* The Empty state: what goes here, a finished example, and the one starting verb, not yet available. */}
+        <Empty compact inert line={teaser.line} example={teaser.example} verb={teaser.job} reason="Coming soon" />
       </span>
     </div>
   )

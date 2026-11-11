@@ -5009,6 +5009,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function barItems(st, has, lk){
     var items=[], g=has&&!lk?gateWords():'', md=barMode();
     if(md) items.push(md);
+    // A run that did not finish is the shell's Run failed state (features/screen-states.clan): one plain line and
+    // Try again, which comes back as the bar action "state-retry". None means Normal. Kept inline: a bar item is a pure read.
+    var cj=typeof CHAT!=='undefined'?CHAT.job:null;
+    if(cj&&(cj.state==='failed'||(cj.error&&!cj.id))){ var why=String(cj.error||''); items.push({kind:'state', state:'run-failed', why:/refus|declin|policy/i.test(why)?'refused':/time ?out|timed out|too long/i.test(why)?'timeout':'provider'}); }
     if(g) items.push({kind:'gate', label:g, tone:'warn'});
     if(md&&md.mode) return items;
     if(has&&!lk) items.push({kind:'button', id:'redo', label:'Redo', title:'Write the report, the findings or the research again', menu:[
@@ -5048,7 +5052,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
     try{ window.parent.postMessage({type:'clan:bar', v:1, items:items}, '*'); }catch(e){}
   }
   function onBarAction(id){
-    if(id==='refresh') doRefreshReport();
+    if(id==='state-retry') doRetry();
+    else if(id==='refresh') doRefreshReport();
     else if(id==='lock') doLock();
     else if(id==='export') doExport('pdf');
     else if(id==='export-html') doExport('html');

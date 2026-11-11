@@ -22,7 +22,10 @@ import ClientReviewBand from './clientReview/ClientReviewBand'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import { modeOf, statusOf, type BarItem } from './appBar'
+import { modeOf, statusOf, stateOf, type BarItem } from './appBar'
+import { createSaveQueue } from '../components/states/saveQueue'
+import { StateStrip } from '../components/states/StateStrip'
+import { useSaveState } from '../components/states/useSaveState'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
@@ -306,6 +309,11 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const barItems = barState.doc === docPath && !clientOn ? barState.items : []
   // The app's own word for its state wins over the shell's, where it sends one.
   const appStatus = statusOf(barItems)
+  // How each write went (the bridge reports it) and the state the app is in, shown between the bar and the work.
+  // One queue per document: a write that failed in another document is not this one's to retry.
+  const writes = useMemo(() => createSaveQueue(), [docPath]) // eslint-disable-line react-hooks/exhaustive-deps
+  const saveState = useSaveState(writes)
+  const appState = stateOf(barItems)
   // The page says its agents are at work (the bar's working chip) before the host's run catches up:
   // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
   const pageRun = pageRunOf(modeOf(barItems))
@@ -406,7 +414,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
-          saved: saved ? <SaveStatus docPath={docPath} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          saved: saved ? <SaveStatus docPath={docPath} state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.
@@ -431,6 +439,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           <button type="button" className="ch-link" onClick={() => setLinkError(null)}>Dismiss</button>
         </div>
       )}
+      <StateStrip queue={writes} app={appState} onAction={barAction} onRefresh={refreshApp} />
       {!decisions.view?.lock.locked && !open.is_template && changedLinks.map(l => (
         <div key={l.documentId} className="ch-banner ch-banner-note" role="status" data-testid="link-changed">
           <span className="ch-banner-dot" aria-hidden />
@@ -463,6 +472,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onEditRequest={onEditRequest}
             onChrome={onChrome}
             onBar={onBar}
+            writes={writes}
             insets={shown}
           />
         </main>
