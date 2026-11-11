@@ -1231,6 +1231,16 @@ What a link is worth is derived from the chain, never stored: `open`, or `404`
 once), `superseded` (the document is not the version the link names), `expired`.
 The token the web shell signs carries the same facts and cannot widen them.
 
+What the link shows the client is the brief's own fields by an allow list, not
+what the brief holds (`crates/napkin-web/src/clean.rs`, `FIELDS`): the planner's
+working notes, the capture, the review, the passages, the materials and any key
+not on the list are never drawn. Unlike the staff-recorded review above (item 6
+of §7.5), the link takes the strict reading of `confidential_fields`: a part a
+person marked confidential, and the whole field if the key names it, is not
+shown to the client, in the sheet or the summary. A default taken on
+2026-11-11 until the owner confirms it
+(`features/client-confirm-link.clan`, decisions).
+
 ### 7.6 Unlocking the whole document: `/unapprove`
 
 Owner, 2026-11-09: a person can unlock a locked document (settles W5-Z1's

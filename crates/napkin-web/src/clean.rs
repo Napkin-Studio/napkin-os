@@ -4,8 +4,8 @@
 
 //! What the client's link shows around the clean copy
 //! (features/client-confirm-link.clan, done_when 3): the brief's own words in
-//! four short sections, and who signed it. Chosen by name from the brief's data,
-//! never by walking it: nothing from `agent/` (the context, the state, the
+//! four short sections, and who signed it. Chosen by name from the allow list
+//! [`FIELDS`], never by walking the brief's data: nothing from `agent/` (the context, the state, the
 //! decision chain, a field's origin) and no decision is read into the answer.
 //! The clean copy itself is the export with provenance off
 //! (`Session::compose_export(false, true)`); a test holds both to it.
@@ -29,46 +29,23 @@ pub struct Page {
 }
 
 /// The sections, in the order the client reads them: the key in the brief's
-/// data (the first that has words), and the label on it.
+/// data (the first that has words), and the label on it. Only keys in [`FIELDS`].
 const SECTIONS: &[(&str, &[&str])] = &[
-    ("What we are solving", &["insight", "problem", "background"]),
-    (
-        "The one thing to say",
-        &["single_minded_proposition", "proposition"],
-    ),
+    ("What we are solving", &["insight", "background"]),
+    ("The one thing to say", &["single_minded_proposition"]),
     ("How we will know it worked", &["measurement", "objectives"]),
-    ("Budget and scope", &["budget_and_scope", "budget"]),
+    ("Budget and scope", &["budget_and_scope"]),
 ];
-
-/// A field's words as the client reads them: an envelope is its value, a
-/// list is its lines, an object its parts, in order.
-pub fn words(v: Option<&Value>) -> String {
-    match v {
-        Some(Value::String(s)) => s.trim().to_string(),
-        Some(Value::Array(a)) => a
-            .iter()
-            .map(|x| words(Some(x)))
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" "),
-        Some(Value::Object(o)) => match (o.get("value"), o.get("origin")) {
-            (Some(inner), Some(_)) => words(Some(inner)),
-            _ => o
-                .values()
-                .map(|x| words(Some(x)))
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" "),
-        },
-        _ => String::new(),
-    }
-}
 
 // ── the full brief ──────────────────────────────────────────────────────────
 
-/// What the full brief says for each field, in the order a client reads them. Anything the brief
-/// has that is not here is shown under its own name, except the keys in [`HIDDEN`].
-const FIELDS: &[(&str, &str)] = &[
+/// The allow list: the only fields of a brief the client's link ever shows, in the order a client
+/// reads them, with their labels. Nothing else in `shared/data.yaml` is drawn: not the planner's
+/// working notes, the capture, the review, the passages, the materials, the projection, the
+/// layout, nor a key a later schema adds. A new key is shown only by being put here, on purpose
+/// (`tests/client_link.rs` holds every key of the Brief Maker schema to this list or to a list of
+/// those never shown). Each field is read in the shape its schema gives it, see [`shape`].
+pub const FIELDS: &[(&str, &str)] = &[
     ("client", "Client"),
     ("background", "Background"),
     ("audience", "Audience"),
@@ -84,16 +61,104 @@ const FIELDS: &[(&str, &str)] = &[
     ("mandatories", "Mandatories"),
 ];
 
-/// The planner's working notes, the host's own members and the people who sign: not the client's to read.
-const HIDDEN: &[&str] = &[
-    "brief_input",
-    "open_questions",
-    "signers",
-    "facts",
-    "findings",
-    "sources",
-    "title",
-];
+/// What a field holds, from the Brief Maker schema.
+enum Shape {
+    /// A string.
+    Text,
+    /// A list of strings.
+    Lines,
+    /// An object with these string parts and no others.
+    Parts(&'static [(&'static str, &'static str)]),
+}
+
+fn shape(key: &str) -> Shape {
+    match key {
+        "tone_and_world" | "reasons_to_believe" | "measurement" | "mandatories" => Shape::Lines,
+        "objectives" => Shape::Parts(&[
+            ("commercial", "Commercial"),
+            ("behavioural", "Behavioural"),
+            ("attitudinal", "Attitudinal"),
+        ]),
+        "desired_response" => Shape::Parts(&[("think", "Think"), ("feel", "Feel"), ("do", "Do")]),
+        _ => Shape::Text,
+    }
+}
+
+/// What the client reads of one field.
+enum Body {
+    Text(String),
+    Lines(Vec<String>),
+    Parts(Vec<(&'static str, String)>),
+}
+
+/// A string, or an envelope holding one; anything else is not words.
+fn leaf(v: &Value) -> Option<String> {
+    let v = match v {
+        Value::Object(o) if o.contains_key("value") && o.contains_key("origin") => &o["value"],
+        other => other,
+    };
+    v.as_str()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Parts a person marked Confidential: the whole field (`audience`) or one part of it
+/// (`objectives.commercial`). The strict reading of the contract for the link (§7.5.9): the
+/// client's own link does not show them.
+fn confidential(data: &Value) -> Vec<String> {
+    data.get("confidential_fields")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|k| k.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// One allow-listed field as the client reads it: its schema's shape and no more, and none of
+/// it if confidential. `None` when there are no words.
+fn body_of(key: &str, data: &Value, conf: &[String]) -> Option<Body> {
+    if conf.iter().any(|c| c == key) {
+        return None;
+    }
+    let v = data.get(key)?;
+    let v = match v {
+        Value::Object(o) if o.contains_key("value") && o.contains_key("origin") => &o["value"],
+        other => other,
+    };
+    match shape(key) {
+        Shape::Text => leaf(v).map(Body::Text),
+        Shape::Lines => {
+            let lines: Vec<String> = match v {
+                Value::Array(a) => a.iter().filter_map(leaf).collect(),
+                other => leaf(other).into_iter().collect(),
+            };
+            (!lines.is_empty()).then_some(Body::Lines(lines))
+        }
+        Shape::Parts(parts) => {
+            let o = v.as_object()?;
+            let got: Vec<(&'static str, String)> = parts
+                .iter()
+                .filter(|(sub, _)| !conf.iter().any(|c| *c == format!("{key}.{sub}")))
+                .filter_map(|(sub, label)| Some((*label, leaf(o.get(*sub)?)?)))
+                .collect();
+            (!got.is_empty()).then_some(Body::Parts(got))
+        }
+    }
+}
+
+fn text_of(b: &Body) -> String {
+    match b {
+        Body::Text(t) => t.clone(),
+        Body::Lines(l) => l.join(" "),
+        Body::Parts(p) => p
+            .iter()
+            .map(|(_, t)| t.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+    }
+}
 
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -102,82 +167,44 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-fn label_of(key: &str) -> String {
-    let words = key.replace('_', " ");
-    let mut c = words.chars();
-    match c.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        None => String::new(),
-    }
-}
-
-/// One field's value as HTML: words, a list, or labelled parts.
-fn value_html(v: &Value) -> String {
-    match v {
-        Value::Object(o) if o.contains_key("value") && o.contains_key("origin") => {
-            value_html(&o["value"])
-        }
-        Value::Object(o) => o
+fn body_html(b: &Body) -> String {
+    match b {
+        Body::Text(t) => format!("<p>{}</p>", escape(t)),
+        Body::Lines(l) => format!(
+            "<ul>{}</ul>",
+            l.iter()
+                .map(|t| format!("<li>{}</li>", escape(t)))
+                .collect::<String>()
+        ),
+        Body::Parts(p) => p
             .iter()
-            .filter(|(_, x)| !words(Some(x)).is_empty())
-            .map(|(k, x)| {
-                format!(
-                    "<p><b>{}</b> {}</p>",
-                    escape(&label_of(k)),
-                    escape(&words(Some(x)))
-                )
-            })
+            .map(|(label, t)| format!("<p><b>{}</b> {}</p>", escape(label), escape(t)))
             .collect(),
-        Value::Array(a) => {
-            let items: String = a
-                .iter()
-                .map(|x| words(Some(x)))
-                .filter(|t| !t.is_empty())
-                .map(|t| format!("<li>{}</li>", escape(&t)))
-                .collect();
-            format!("<ul>{items}</ul>")
-        }
-        other => format!("<p>{}</p>", escape(&words(Some(other)))),
     }
 }
 
-/// The whole brief as one readable page, built from its data and nothing else: the fields in
-/// [`FIELDS`] first, any others after, a field with no words left out. Scripts there are none.
-/// (The export of an app's own view is the app's page with its script stripped, which for the
-/// Brief Maker is an empty form, so a brief is drawn from its data here.)
+/// The whole brief as one readable page, drawn from the brief's data by the allow list
+/// [`FIELDS`] and nothing else, in that order; a field with no words, or a confidential one, is
+/// left out. Scripts there are none. (The export of an app's own view is the app's page with its
+/// script stripped, which for the Brief Maker is an empty form, so a brief is drawn from its data
+/// here.) The heading is the document's own title, not a field of the data.
 pub fn sheet(doc: &Document) -> Option<String> {
     if !gate::applies(doc) {
         return None;
     }
     let data = read::data_json(doc);
-    let obj = data.as_object()?;
-    let mut keys: Vec<&str> = FIELDS.iter().map(|(k, _)| *k).collect();
-    let more: Vec<&str> = obj
-        .keys()
-        .map(String::as_str)
-        .filter(|k| {
-            !k.starts_with('_')
-                && !HIDDEN.contains(k)
-                && *k != "project_name"
-                && !FIELDS.iter().any(|(f, _)| f == k)
-        })
-        .collect();
-    keys.extend(more);
-    let title = words(obj.get("project_name"));
+    data.as_object()?;
+    let conf = confidential(&data);
+    let title = doc.title().trim().to_string();
     let mut body = String::new();
-    for k in keys {
-        let Some(v) = obj.get(k) else { continue };
-        if words(Some(v)).is_empty() {
+    for (k, label) in FIELDS {
+        let Some(b) = body_of(k, &data, &conf) else {
             continue;
-        }
-        let label = FIELDS
-            .iter()
-            .find(|(f, _)| *f == k)
-            .map_or_else(|| label_of(k), |(_, l)| (*l).to_string());
+        };
         body.push_str(&format!(
             "<section><h2>{}</h2>{}</section>",
-            escape(&label),
-            value_html(v)
+            escape(label),
+            body_html(&b)
         ));
     }
     Some(format!(
@@ -189,17 +216,19 @@ section{{padding:14px 0 4px;border-top:1px solid #e7e9ee}}\
 h2{{margin:0 0 6px;font:500 11px/1.4 'Geist Mono',ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#737987}}\
 p{{margin:0 0 10px;overflow-wrap:anywhere}}b{{font-weight:600}}ul{{margin:0 0 10px;padding-left:20px}}li{{margin:0 0 4px;overflow-wrap:anywhere}}\
 </style></head><body><h1>{t}</h1>{body}</body></html>",
-        t = escape(if title.is_empty() { doc.title().trim() } else { &title }),
+        t = escape(&title),
     ))
 }
 
 pub fn page_of(doc: &Document) -> Page {
     let data = read::data_json(doc);
+    let conf = confidential(&data);
     let summary = SECTIONS
         .iter()
         .filter_map(|(label, keys)| {
             keys.iter()
-                .map(|k| words(data.get(*k)))
+                .filter_map(|k| body_of(k, &data, &conf))
+                .map(|b| text_of(&b))
                 .find(|t| !t.is_empty())
                 .map(|text| Section { label, text })
         })
@@ -243,9 +272,12 @@ mod tests {
     #[test]
     fn an_envelope_is_its_value_and_its_origin_is_not_shown() {
         let v = json!({ "value": "Younger drinkers pass it by.", "origin": "agent", "by": "x" });
-        assert_eq!(words(Some(&v)), "Younger drinkers pass it by.");
-        assert_eq!(words(Some(&json!(["a", "b"]))), "a b");
-        assert_eq!(words(None), "");
+        assert_eq!(leaf(&v).as_deref(), Some("Younger drinkers pass it by."));
+        assert_eq!(leaf(&json!(["a", "b"])), None);
+        let data = json!({ "tone_and_world": ["a", { "note": "x" }, "b"], "audience": "x" });
+        let tone = body_of("tone_and_world", &data, &[]).unwrap();
+        assert_eq!(text_of(&tone), "a b");
+        assert!(body_of("audience", &data, &["audience".to_string()]).is_none());
     }
 
     #[test]

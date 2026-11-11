@@ -772,15 +772,13 @@ async fn make_client_link(
         targets: vec![doc.clone()],
         version: text("version"),
         hash: text("doc_hash"),
-        name: body.name.trim().to_string(),
-        email: body.email.trim().to_lowercase(),
         agency: crate::tenant::agency_of(&person),
         exp,
     };
     let token = crate::links::sign(&ctx.link_key, &claims);
     Ok(Json(serde_json::json!({
         "ok": true, "id": id, "path": format!("/c/{token}"), "expires": expires,
-        "version": claims.version, "client": { "name": claims.name, "email": claims.email },
+        "version": claims.version, "client": { "name": body.name.trim(), "email": body.email.trim().to_lowercase() },
     })))
 }
 

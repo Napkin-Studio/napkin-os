@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
-import { asMe, gateOf, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
+import { asMe, gateOf, INTERNAL_WORDS, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -667,6 +667,9 @@ for (const size of SIZES) {
     const everything = JSON.stringify(seen)
     expect(everything).toContain(READY_BRIEF.single_minded_proposition)
     expect(everything, 'the planner\'s raw notes are not the client\'s to read').not.toContain(READY_BRIEF.brief_input)
+    // the allow list: what the brief also keeps for the agency (capture, review, passages) is not shown
+    expect(everything).toContain(READY_BRIEF.insight)
+    for (const w of INTERNAL_WORDS) expect(everything, `the agency's ${w} is not the client's to read`).not.toContain(w)
     for (const d of await chainOf(page, brief.token)) expect(everything).not.toContain(d.id ?? 'no id')
     await cp.getByRole('button', { name: 'Confirm' }).click()
     await expect(cp.getByText('Thank you')).toBeVisible()

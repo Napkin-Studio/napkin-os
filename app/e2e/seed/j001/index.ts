@@ -8,7 +8,7 @@ import { assertDeIdentified } from './denyList.mjs'
 import { DECK_TITLE, JOB, MESSY_BRIEF, READY_BRIEF, RESEARCH_TITLE } from './brief'
 
 export { PEOPLE, ROSTER_LINES } from './people'
-export { JOB, MESSY_BRIEF, READY_BRIEF } from './brief'
+export { INTERNAL_WORDS, JOB, MESSY_BRIEF, READY_BRIEF } from './brief'
 
 const BRIEF_APP = 'ie.napkin.brief-maker'
 const RESEARCH_APP = 'ie.napkin.campaign-research'

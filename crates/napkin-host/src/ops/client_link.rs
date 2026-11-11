@@ -290,6 +290,13 @@ fn write(doc: &Document, d: Decision, delta: &str, now: &str, reply: Value) -> H
 /// reopened: a link names exactly the version a person signed.
 pub fn issue(ctx: &Ctx, doc: &Document, input: Issue) -> HostResult<Outcome> {
     let who = person(ctx, "make a client's link")?;
+    // A client's link is to a signed brief (features/client-confirm-link.clan): the web layer
+    // shows the client the brief's own fields, so a document it cannot read that way gets none.
+    if !super::gate::applies(doc) {
+        return Err(bad(
+            "a client's link is for a Brief Maker brief: this document is not one",
+        ));
+    }
     let chain = chain_of(doc)?;
     let here = doc.clan().document_id().to_string();
     let at = lock_index(&chain, &here).ok_or_else(|| {
