@@ -138,3 +138,9 @@ variable "middleware_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "web_env" {
+  description = "Extra environment for napkin-web (e.g. NAPKIN_UNATTRIBUTED_WRITES, docs/adr/0004-client-wall.md)"
+  type        = map(string)
+  default     = {}
+}

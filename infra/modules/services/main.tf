@@ -409,6 +409,7 @@ locals {
     local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [],
     # the dogfood record, on the task's EFS under /data/_dogfood
     var.web_dogfood ? [{ name = "NAPKIN_DOGFOOD", value = "1" }] : [],
+    [for k, v in var.web_env : { name = k, value = v }],
   )
 }
 
