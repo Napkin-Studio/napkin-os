@@ -136,6 +136,9 @@ function session(): Promise<SessionInfo> {
   return sessionOnce
 }
 
+/** `/api/t/<tenant>`: where the shell's own API calls start (the timesheet reads it too). */
+export async function apiBase(): Promise<string> { return base() }
+
 async function base(): Promise<string> {
   return `/api/t/${(await session()).tenant}`
 }

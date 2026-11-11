@@ -17,6 +17,8 @@ import type { DoorEntry, HomeView } from '../../host/http'
 import type { JobNeed, LibraryItem } from '../../host/types'
 import { doorIsLive, doorLabel, firstNeeds, hello, homeEyebrow, needsLine, needsRows } from './model'
 import { changedBriefs } from '../gate/words'
+import { Ask } from '../../timesheet/Ask'
+import { useConsent } from '../../timesheet/consent'
 import '../gate/gate.css'
 import './home.css'
 
@@ -32,11 +34,15 @@ interface Props {
   onDoor: (door: DoorEntry) => void
   onOpenDocument: (path: string) => void
   onMap: () => void
+  /** Opens the person's own timesheet day. */
+  onTimesheet?: () => void
   /** The role switcher (admins and demos): another role's home, or null for your own. */
   onSwitch: (role: string | null) => void
 }
 
-export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onSwitch }: Props) {
+export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSwitch }: Props) {
+  // Asked once, here, at the person's first sign-in: only a signed-in person has a timesheet to ask about.
+  const consent = useConsent()
   const top = useRef<HTMLDivElement>(null)
   const [all, setAll] = useState(false)
   // The heading takes focus on arrival, so a keyboard or a screen reader lands on it.
@@ -68,10 +74,12 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
               </label>
             )}
             <button type="button" className="side-link" data-testid="open-map" onClick={onMap}>The map of the agency</button>
+            {onTimesheet && consent !== null && <button type="button" className="side-link" data-testid="open-timesheet" onClick={onTimesheet}>Your timesheet</button>}
           </div>
         </section>
 
         <main className="hm-main">
+          {consent === 'not_asked' && <Ask variant="card" onTimesheet={onTimesheet} />}
           {changedBriefs(items).map(i => (
             <div key={i.path} className="gate-alert" role="status" data-testid="alert">
               <i aria-hidden />

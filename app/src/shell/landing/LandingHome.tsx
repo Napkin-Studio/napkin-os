@@ -31,6 +31,7 @@ import type { AgencyLogo } from '../agency/palette'
 import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
+import { Timesheet } from '../../timesheet/Timesheet'
 import './landing.css'
 
 const NONE: never[] = []
@@ -174,6 +175,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onChooseTerritory={chooseTerritory}
       />
     )
+  } else if (route.level === 'timesheet') {
+    body = <Timesheet go={go} />
   } else if (homed && route.level === 'map') {
     body = (
       <TheO
@@ -198,6 +201,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onDoor={d => go(d.id === 'clients' ? { level: 'clients' } : { level: 'door', door: d.id })}
         onOpenDocument={onOpenDocument}
         onMap={() => go({ level: 'map' })}
+        onTimesheet={() => go({ level: 'timesheet' })}
         onSwitch={role => go(role ? { level: 'home', as: role } : { level: 'agency' })}
       />
     )

@@ -47,6 +47,8 @@ export function arrival(route: Route, names: { agency: string; client?: string; 
       return `${names.agency}: the map. Tab moves between departments, Enter opens one, Escape goes back to your home.`
     case 'door':
       return `${names.tool ?? 'A door'}. Escape goes back to your home.`
+    case 'timesheet':
+      return `${names.agency}: your timesheet. Escape goes back to your home.`
     case 'home':
       return `${names.agency}: a home. Tab moves between doors, Enter opens one.`
     case 'tool': {
