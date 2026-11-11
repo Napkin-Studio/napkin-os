@@ -286,7 +286,7 @@ export default function AppRuntime({
         <h2 style={{ color: 'var(--ink)', margin: '10px 0 12px', fontSize: 32, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1.05 }}>
           {manifest.title}
         </h2>
-        <p style={{ fontSize: 16, lineHeight: 1.55 }}>This .clan file has no view yet — awaiting first agent pass.</p>
+        <p style={{ fontSize: 16, lineHeight: 1.55 }}>This .clan file has no view yet, awaiting first agent pass.</p>
       </div>
     )
   }

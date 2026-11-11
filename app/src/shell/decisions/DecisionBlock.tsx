@@ -193,7 +193,7 @@ export function HistoryBody({ block, view }: { block: DecisionBlock; view: Decis
             </div>
           )}
           {r?.rejected?.length ? (
-            <div><h4>Considered and set aside</h4><ul>{r.rejected.map((x, i) => <li key={i}>{plain(x.option, parts)}{x.why && <span className="dp-muted"> — {plain(x.why, parts)}</span>}</li>)}</ul></div>
+            <div><h4>Considered and set aside</h4><ul>{r.rejected.map((x, i) => <li key={i}>{plain(x.option, parts)}{x.why && <span className="dp-muted"> ({plain(x.why, parts)})</span>}</li>)}</ul></div>
           ) : null}
           {sure && <p><b>{sure}</b>{r?.certainty?.why ? ` · ${plain(r.certainty.why, parts)}` : ''}</p>}
           <Again block={block} />

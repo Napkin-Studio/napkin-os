@@ -155,7 +155,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   const appId = open.manifest.app?.app_id ?? null
   useEffect(() => { setScreen({ screen: 'app', doc: docPath, app: appId }) }, [docPath, appId])
   useEffect(() => {
-    document.title = brandName ? `Napkin Studio ${brandName} — ${barTitle}` : `${barTitle} — Napkin Studio`
+    document.title = brandName ? `Napkin Studio ${brandName} | ${barTitle}` : `${barTitle} | Napkin Studio`
     return () => { document.title = 'Napkin Studio' }
   }, [brandName, barTitle])
   const fontUrl = tool?.home?.brand_font_url
