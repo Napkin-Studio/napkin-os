@@ -22,6 +22,7 @@ import { Desk } from '../nui/Desk'
 import { Home } from '../home/Home'
 import { TheO } from '../home/TheO'
 import { DoorPage } from '../home/DoorPage'
+import { useJobNeeds } from '../home/useJobNeeds'
 import type { HomeView } from '../../host/http'
 import type { AgencyLogo } from '../agency/palette'
 import { ClientView } from '../nui/ClientView'
@@ -81,6 +82,9 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   // Each level's heading takes focus on arrival, so a keyboard or a screen reader lands on it.
   const key = formatRoute(route)
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [key])
+
+  // What the job index asks of this person: read only where there is a home to show it.
+  const jobNeeds = useJobNeeds(!!home?.restricted)
 
   const who = whoIs(data.person)
   const summary = useMemo(() => agencySummary(data.clients, data.items, data.unassigned), [data])
@@ -169,6 +173,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
       <Home
         view={homed}
         items={data.items}
+        jobNeeds={jobNeeds}
         first={who.first}
         apps={data.apps}
         onDoor={d => go(d.id === 'clients' ? { level: 'clients' } : { level: 'door', door: d.id })}

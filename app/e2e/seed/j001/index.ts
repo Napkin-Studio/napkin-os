@@ -19,6 +19,8 @@ export type SeededJob = {
   client: string
   /** The client's name: Client A, or Client A2 ... where a tenant is shared (see seedJ001). */
   clientName: string
+  /** The job the three documents are filed under: J001, or J002 ... with a fresh client (job numbers are unique in a tenant). */
+  job: string
   /** The sandbox token of each document, for its /s/<token>/... routes. */
   brief: { token: string; id: string; path: string }
   research: { token: string; id: string; path: string }
@@ -26,8 +28,8 @@ export type SeededJob = {
   deIdentified: { checked: boolean; note: string }
 }
 
-async function make(page: Page, api: string, app: string, title: string, client: string, patch?: object) {
-  const r = await page.request.post(`${api}/documents`, { data: { app_id: app, title, client_id: client } })
+async function make(page: Page, api: string, app: string, title: string, client: string, job: string, patch?: object) {
+  const r = await page.request.post(`${api}/documents`, { data: { app_id: app, title, client_id: client, job } })
   expect(r.status(), `create ${title}`).toBe(200)
   const body = await r.json() as { token: string; path: string; manifest: { id: string } }
   if (patch) {
@@ -53,6 +55,7 @@ export async function seedJ001(page: Page, opts: { ready?: boolean; fresh?: bool
   let client = ''
   let clientName = ''
   const all = async () => await (await page.request.get(`${api}/clients`)).json() as { id: string; name: string }[]
+  let ordinal = 1
   for (let n = 1; !client; n++) {
     const name = n === 1 ? JOB.client : `${JOB.client}${n}`
     const made = await page.request.post(`${api}/clients`, { data: { name } })
@@ -64,11 +67,17 @@ export async function seedJ001(page: Page, opts: { ready?: boolean; fresh?: bool
       client = (await made.json() as { id: string }).id
     }
     clientName = name
+    ordinal = n
   }
-  const brief = await make(page, api, BRIEF_APP, JOB.title, client, opts.ready ? READY_BRIEF : MESSY_BRIEF)
-  const research = await make(page, api, RESEARCH_APP, RESEARCH_TITLE, client)
-  const deck = await make(page, api, DECK_APP, DECK_TITLE, client)
-  return { api, client, clientName, brief, research, deck, deIdentified }
+  // The job: J001 for Client A, J002 for Client A2 ... It holds a deadline and a budget in hours, and the
+  // three documents are filed under it. A tenant that already has the job (a later test, the same Client A) reuses it.
+  const job = `J${String(ordinal).padStart(3, '0')}`
+  const opened = await page.request.post(`${api}/jobs`, { data: { number: job, client_id: client, title: JOB.title, due: '2026-12-18', budget_hours: 120 } })
+  expect([201, 409], `open ${job}`).toContain(opened.status())
+  const brief = await make(page, api, BRIEF_APP, JOB.title, client, job, opts.ready ? READY_BRIEF : MESSY_BRIEF)
+  const research = await make(page, api, RESEARCH_APP, RESEARCH_TITLE, client, job)
+  const deck = await make(page, api, DECK_APP, DECK_TITLE, client, job)
+  return { api, client, clientName, job, brief, research, deck, deIdentified }
 }
 
 /**

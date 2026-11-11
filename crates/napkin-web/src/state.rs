@@ -43,6 +43,9 @@ pub struct Workspace {
     /// What the library listing worked out per document, so a poll does not
     /// re-read every decision chain (napkin-host `listing`).
     pub library: LibraryCache,
+    /// The job index, read-only and disposable (napkin-host `jobindex`): rebuilt
+    /// from the documents whenever one has moved.
+    pub jobs: napkin_host::jobindex::IndexCache,
 }
 
 impl Workspace {
@@ -52,6 +55,7 @@ impl Workspace {
             ctx,
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
+            jobs: napkin_host::jobindex::IndexCache::new(),
         }
     }
 

@@ -538,6 +538,7 @@ fn filters_come_from_the_query_string() {
         LibraryFilter::from_query("client=&app=ie%2Enapkin"),
         LibraryFilter {
             client: None,
+            job: None,
             app: Some("ie.napkin".into())
         }
     );

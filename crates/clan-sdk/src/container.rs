@@ -256,6 +256,7 @@ mod tests {
             merge_policies: None,
             app: None,
             client: None,
+            job: None,
             signature: None,
             external: vec![],
             files: vec![FileEntry {
