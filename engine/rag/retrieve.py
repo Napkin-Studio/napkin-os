@@ -66,6 +66,41 @@ def index_label(index_dir: Path | str | None = None) -> str:
 # (the golden eval and any production-clan caller).
 BRIEF_SAFE = {"stage": {"ne": "production"}, "status": {"ne": "superseded"}}
 
+# Sources no caller is served by default, whatever it asks for. Cannes Lions material stays out of
+# every retrieval (Laurence, 10 Nov 2026; features/harness.clan). `source nin [cannes]` rides on every
+# search, and a source filter a caller writes can narrow it but never bring cannes back. Removing the
+# stored material is a separate record (cannes-removal); until then this keeps it from being served.
+EXCLUDED_SOURCES = ("cannes",)
+
+
+def exclude_sources(where: dict | None, excluded=EXCLUDED_SOURCES) -> dict | None:
+    """`where` with `source nin excluded` merged in, or None when the filter can match nothing
+    but excluded sources (the caller then returns no rows). A field holds one operator, so a
+    caller's own `source` clause is rewritten: eq stays eq (unless excluded), `in` loses the
+    excluded names, `nin` and `ne` gain them."""
+    where = dict(where or {})
+    spec = where.get("source")
+    if spec is None:
+        where["source"] = {"nin": list(excluded)}
+        return where
+    if not isinstance(spec, dict):
+        return None if str(spec) in excluded else where
+    (op, value), = spec.items()
+    if op == "eq":
+        return None if str(value) in excluded else where
+    if op == "in":
+        keep = [v for v in value if str(v) not in excluded]
+        if not keep:
+            return None
+        where["source"] = {"in": keep}
+    elif op in ("nin", "ne"):
+        vals = list(value) if op == "nin" else [value]
+        where["source"] = {"nin": list(dict.fromkeys([*map(str, vals), *excluded]))}
+    else:
+        where["source"] = {"nin": list(excluded)}      # exists, a range: no meaning for a source name
+    return where
+
+
 # Sentinel for "search every scope". Deliberately not `None` and not a bare bool: an
 # unscoped read has to be written down at the call site, because grepping for the
 # callers that opted out of the confidentiality boundary is the only way to audit it.
@@ -123,11 +158,16 @@ def retrieve(query: str, k: int = 5, where: dict | None = None,
         allowed_tenants = tuple(dict.fromkeys(tenants or DEFAULT_TENANTS))
         where = {**(where or {}), "tenant": {"in": list(allowed_tenants)}}
 
+    where = exclude_sources(where)
+    if where is None:                  # the caller asked for an excluded source and nothing else
+        return []
     if not rag.store_available(d):
         return []
     out: list[dict] = []
     for score, r in rag.search(d, query, k=k, where=where):
         md = r.get("metadata", {}) or {}
+        if str(md.get("source") or r.get("source") or "") in EXCLUDED_SOURCES:
+            continue                   # egress: the store did not honour the filter
         # Egress check. Everything above constrains what we ASK for; this is the only
         # thing that checks what came BACK. filters.py warns that a store may render
         # only part of the filter language, and a leaked chunk cannot be caught

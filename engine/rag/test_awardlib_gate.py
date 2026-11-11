@@ -79,7 +79,7 @@ def test_default_is_off_and_the_library_never_reaches_the_main_search(monkeypatc
     calls = install(monkeypatch, corpus())
     got = ids(hits(corpus(), "technology"))
     assert not [d for d in got if d.startswith("lib_")] and got                        # baseline rows only
-    assert all(c.get("source") == {"nin": ["awardlib"]} for c in calls)
+    assert all(c.get("source") == {"nin": ["awardlib", "cannes"]} for c in calls)
 
 
 def test_off_hides_library_rows_even_when_they_are_the_only_rows(monkeypatch):
@@ -127,7 +127,7 @@ def test_thin_library_pass_is_pinned_to_the_category_and_drops_effectiveness_typ
     assert lib_calls[0]["category"] == "technology" and "effectiveness_type" not in lib_calls[0]
     assert lib_calls[0]["scope"] == {"in": ["global"]} and lib_calls[0]["tenant"] == {"in": ["house"]}   # confidentiality kept
     main = [c for c in calls if c.get("source") != "awardlib"]
-    assert main and all(c["source"] == {"nin": ["awardlib"]} for c in main)
+    assert main and all(c["source"] == {"nin": ["awardlib", "cannes"]} for c in main)
 
 
 def test_thin_merges_by_score_so_the_validator_sees_one_list(monkeypatch):
@@ -195,7 +195,7 @@ def test_widening_never_lets_the_library_in_through_the_ladder(monkeypatch):
     notes = []
     got = ids(hits(store, "luxury", notes))
     assert len(calls) >= 2 and any("dropped category" in n for n in notes)                 # it did widen
-    assert all(c["source"] == {"nin": ["awardlib"]} for c in calls)
+    assert all(c["source"] == {"nin": ["awardlib", "cannes"]} for c in calls)
     assert not [d for d in got if d.startswith("lib_")]
 
 
@@ -206,7 +206,7 @@ def test_on_adds_no_clause_and_the_library_competes_everywhere(monkeypatch):
     calls = install(monkeypatch, store)
     got = ids(hits(store, "food_drink"))
     assert any(d.startswith("lib_f") for d in got)
-    assert all("source" not in c for c in calls)
+    assert all(c.get("source") == {"nin": ["cannes"]} for c in calls)    # only the default source filter
 
 
 def test_only_the_exemplars_bucket_is_touched(monkeypatch):
@@ -214,7 +214,7 @@ def test_only_the_exemplars_bucket_is_touched(monkeypatch):
     store = FakeStore([row("pb_1", "playbook", None, .5, bucket="craft")])
     calls = install(monkeypatch, store)
     hits(store, "technology", bucket="craft")
-    assert calls and all("source" not in c for c in calls)                                 # craft/rules/instructions untouched
+    assert calls and all(c.get("source") == {"nin": ["cannes"]} for c in calls)            # craft/rules/instructions: the default filter only
 
 
 def test_a_rendered_library_hit_always_carries_its_provenance_header(tmp_path):
