@@ -46,6 +46,9 @@ use super::{read, review, Outcome};
 /// The one app whose documents the gate reads.
 pub const BRIEF_MAKER: &str = "ie.napkin.brief-maker";
 
+/// The app whose page the creative director approves (features/visual-brief.clan).
+pub const VISUAL_BRIEF: &str = "ie.napkin.visual-brief";
+
 /// The decision a planner's signature writes.
 pub const SIGN: &str = "sign";
 
@@ -386,9 +389,61 @@ pub fn blockers(clan: &clan_sdk::ClanFile, data: &Value, chain: &DecisionChain) 
     out
 }
 
+/// The document is a visual brief.
+pub fn is_visual_brief(doc: &Document) -> bool {
+    doc.clan()
+        .manifest()
+        .app
+        .as_ref()
+        .is_some_and(|a| a.app_id == VISUAL_BRIEF)
+}
+
+/// A write to an approved visual brief is refused `409` (features/visual-brief.clan): approval binds one exact
+/// version, so a change is made by reopening it (`/unapprove`) and approving the new version. Any other document
+/// keeps its own rule (a brief takes an edit after its lock and says it changed).
+pub fn refuse_write_when_approved(doc: &Document) -> HostResult<()> {
+    if !is_visual_brief(doc) {
+        return Ok(());
+    }
+    match review::lock_of(&review::chain_of(doc)?, doc.clan().document_id()) {
+        Some(lock) => Err(HostError::conflict(format!(
+            "this visual brief was approved by {}; start a new version to change it",
+            lock.actor.as_deref().unwrap_or(&lock.agent)
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// The creative director a visual brief answers to: the one named on the brief it was spun off from,
+/// whose frozen copy is under `upstream.<brief id>`. `None` when no brief names one.
+fn visual_brief_approver(data: &Value) -> Option<String> {
+    data.get("upstream")?
+        .as_object()?
+        .values()
+        .flat_map(|b| signer_list(b))
+        .find(|(r, _)| r == CREATIVE_DIRECTOR)
+        .map(|(_, p)| p)
+}
+
 /// Before `/approve` locks a gated brief: only the creative director named on it signs by locking.
+/// A visual brief is held the same way: only the creative director named on its brief approves it.
 pub fn may_lock(ctx: &Ctx, doc: &Document) -> HostResult<()> {
-    if !enforced() || !applies(doc) {
+    if !enforced() {
+        return Ok(());
+    }
+    if is_visual_brief(doc) {
+        let me = person_of(ctx.actor.as_str());
+        if let Some(cd) = visual_brief_approver(&read::data_json(doc)) {
+            if cd != me {
+                return Err(HostError::new(
+                    403,
+                    format!("only {cd}, the creative director named on the brief, can approve this visual brief"),
+                ));
+            }
+        }
+        return Ok(());
+    }
+    if !applies(doc) {
         return Ok(());
     }
     let data = read::data_json(doc);
@@ -572,6 +627,24 @@ mod tests {
 
     fn states(v: &Value) -> Vec<(&'static str, &'static str)> {
         items(v).into_iter().map(|i| (i.id, i.state)).collect()
+    }
+
+    #[test]
+    fn the_creative_director_of_a_visual_brief_is_the_one_its_brief_names() {
+        let data = json!({
+            "territory": { "name": "Permission to stop" },
+            "upstream": { "doc_a": { "signers": [
+                { "role": "planner", "person": "aoife@wk" },
+                { "role": "creative_director", "person": "dara@wk" },
+            ] } },
+        });
+        assert_eq!(visual_brief_approver(&data).as_deref(), Some("dara@wk"));
+        // A brief that names none, and a page with no brief behind it, leave approval open.
+        assert_eq!(
+            visual_brief_approver(&json!({ "upstream": { "doc_a": { "signers": [] } } })),
+            None
+        );
+        assert_eq!(visual_brief_approver(&json!({ "territory": {} })), None);
     }
 
     #[test]

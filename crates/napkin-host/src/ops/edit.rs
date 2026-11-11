@@ -277,6 +277,8 @@ impl PatchData {
 /// decision chain when the body names an agent (the provenance-native human/AI
 /// co-author write path).
 pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Outcome> {
+    // An approved visual brief is one exact version: it takes no write until a new version is started.
+    super::gate::refuse_write_when_approved(doc)?;
     // A document with facts or findings members has a host-owned projection
     // of them in its data (Contract 3 §5). No agent or human patch writes it —
     // it is rebuilt from the members, never edited.
@@ -627,6 +629,7 @@ pub fn upload_asset(
     claimed: Option<&str>,
     body: Vec<u8>,
 ) -> HostResult<Outcome> {
+    super::gate::refuse_write_when_approved(doc)?;
     let decision = claimed.map(|agent| {
         attribute(
             ctx,
