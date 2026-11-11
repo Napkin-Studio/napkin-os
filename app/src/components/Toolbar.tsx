@@ -219,6 +219,7 @@ export function AgencyPill({ agency, logo, onDesk }: { agency: string; logo?: Ag
           : logo?.wordmark
           ? <span className={`sl-big sl-logo${logo.icon ? ' has-icon' : ''}`} data-testid="agency-wordmark"><img className="sl-wordmark" src={logo.wordmark} alt={agency} />{logo.icon && <img className="sl-icon" src={logo.icon} alt="" aria-hidden />}</span>
           : <span className="sl-big">{agency}</span>}
+        {!own && ' '}
         {!own && <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>}
       </span>
     </button>

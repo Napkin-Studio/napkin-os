@@ -120,6 +120,13 @@ test('open: Approve version 1, and the page is editable', async () => {
   assert.ok(p.all('[data-edit]').length >= 6)
 })
 
+test('the two edit buttons under the headline say which they edit, and every edit button has its own name', async () => {
+  const p = await page()
+  assert.deepEqual(p.all('#headActs button').map(b => b.textContent), ['Edit name', 'Edit line'])
+  const names = p.all('button[data-edit]').map(b => b.getAttribute('aria-label') ?? b.textContent)
+  assert.equal(new Set(names).size, names.length, `each edit button is named apart: ${names.join(' | ')}`)
+})
+
 test('approving posts one /approve that names the version, and nothing else', async () => {
   const p = await page()
   p.d.querySelector<HTMLButtonElement>('#approve')!.click()

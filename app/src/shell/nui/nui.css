@@ -406,7 +406,7 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
 .cl-track:where(.nui, .nui *) { fill: none; stroke: var(--line); stroke-width: 3; }
 .cl-arc:where(.nui, .nui *) { fill: none; stroke-width: 3; stroke-linecap: round; }
 .cl-disc:where(.nui, .nui *) b { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; background: var(--cl, var(--ink)); color: var(--cl-ink, var(--paper)); font: 800 26px var(--font-ui); letter-spacing: -.03em; }
-.cl-badge:where(.nui, .nui *) { position: absolute; top: 4px; right: 4px; min-width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; background: var(--warn); color: #fff; font: 700 12px var(--font-mono); box-shadow: 0 0 0 3px var(--bg, #F6F1E7); }
+.cl-badge:where(.nui, .nui *) { position: absolute; top: 4px; right: 4px; min-width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; background: var(--warn); color: var(--on-warn, #fff); font: 700 12px var(--font-mono); box-shadow: 0 0 0 3px var(--bg, #F6F1E7); }
 .cl-circle[aria-pressed="true"]:where(.nui, .nui *) .cl-disc { box-shadow: 0 0 0 3px var(--ag-acc), 0 12px 26px -12px rgba(20,20,19,.5); }
 .cl-name:where(.nui, .nui *) { margin-top: 8px; font: 700 14px var(--font-ui); color: var(--ink); letter-spacing: -.01em; }
 .cl-line:where(.nui, .nui *) { font-size: 12px; color: var(--muted); line-height: 1.3; }
@@ -452,7 +452,7 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
 .cp-h:where(.nui, .nui *) { font: 700 18px var(--font-ui); letter-spacing: -.01em; margin-bottom: 12px; }
 .cp-box:where(.nui, .nui *) { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .cp-h:where(.nui, .nui *) { display: flex; align-items: center; gap: 10px; }
-.cp-h:where(.nui, .nui *) small { font: 600 11.5px var(--font-mono); color: var(--faint); }
+.cp-h:where(.nui, .nui *) small { font: 600 11.5px var(--font-mono); color: var(--muted); }
 .cp-group:where(.nui, .nui *) .cp-row { padding-left: 18px; }
 .cp-group:where(.nui, .nui *) .cp-row .cp-ico { display: none; }
 .cp-group:where(.nui, .nui *) .cp-row { grid-template-columns: 1fr auto 56px; }
@@ -491,7 +491,7 @@ html[data-theme="dark"] .rs-band:where(.nui, .nui *) { background: #0E0D0C; }
 .home-card:where(.nui, .nui *) small { font: 700 10.5px var(--font-mono); letter-spacing: .1em; color: var(--muted); }
 .home-card:where(.nui, .nui *) b { font: 700 17px var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
 .home-card:where(.nui, .nui *) > span { margin-top: auto; font-size: 12.5px; color: var(--muted); }
-.home-st.needs:where(.nui, .nui *) { color: var(--warn); font-weight: 600; }
+.home-st.needs:where(.nui, .nui *) { color: var(--warn-text, var(--warn)); font-weight: 600; }
 .home-st.working:where(.nui, .nui *) { color: var(--ink-soft); }
 .home-new:where(.nui, .nui *) { background: transparent; border-style: dashed; border-color: var(--line-strong); }
 .dial:where(.nui, .nui *) { position: absolute; z-index: 6; width: 360px; aspect-ratio: 1; filter: drop-shadow(0 18px 30px rgba(20,20,19,.12)); }
@@ -692,7 +692,7 @@ html[data-theme="dark"] .p33-pop:where(.nui, .nui *) { box-shadow: 0 24px 60px -
 html[data-theme="dark"] .tba-gate:where(.nui, .nui *),
 html[data-theme="dark"] .p33-stale:where(.nui, .nui *) { color: #F2B86A; }
 .tb-decisions-btn.has-needs:where(.nui, .nui *) { border-color: color-mix(in srgb, var(--needs, var(--warn)) 55%, transparent); background: color-mix(in srgb, var(--needs, var(--warn)) 12%, var(--paper)); }
-.tb-decisions-btn.has-needs:where(.nui, .nui *) .cnt { background: var(--needs, var(--warn)) !important; color: var(--needs-ink, #fff) !important; }
+.tb-decisions-btn.has-needs:where(.nui, .nui *) .cnt { background: var(--needs, var(--warn)) !important; color: var(--needs-ink, var(--on-warn, #fff)) !important; }
 .dc-rows:where(.nui, .nui *) .pp-row { padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--warn) 18%, transparent); }
 .dc-rows:where(.nui, .nui *) .pp-row:first-child { border-top: 0; }
 .dc-rows:where(.nui, .nui *) [data-np-open] { all: unset; cursor: pointer; display: block; }

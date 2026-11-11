@@ -179,7 +179,7 @@ for (const size of SIZES) {
 
   // The Brief gate (features/brief-gate.clan). The planner signs first, then the creative director: the
   // creative director's signature is the one approve decision that locks the version. People sign in
-  // on the roster stack (NAPKIN_E2E_ROSTER=1); the stack turns the gate on (NAPKIN_BRIEF_GATE=on).
+  // on the roster server (every run starts it); the stack turns the gate on (NAPKIN_BRIEF_GATE=on).
   const openBrief = async (page: Page, job: Awaited<ReturnType<typeof seedJ001>>) => {
     await page.goto(`/#tool-${job.client}-brief`)
     await page.reload()
@@ -292,7 +292,7 @@ for (const size of SIZES) {
     // menu), saved for the agency, and set per mode. Each mode is checked on the papers the page
     // really draws (--desk, --paper, --card), not on a table kept in this file.
     for (const logo of LOGOS) {
-      const up = await open(browser, size, 'white')
+      const up = await open(browser, size, 'white', { roster: true })
       await signIn(up.page, { username: 'ann@napkin' }) // an admin
       await up.page.goto('/')
       await up.page.getByTestId('account-button').click()
@@ -303,7 +303,7 @@ for (const size of SIZES) {
       await up.ctx.close()
 
       for (const mode of MODES) {
-        const { ctx, page } = await open(browser, size, mode)
+        const { ctx, page } = await open(browser, size, mode, { roster: true })
         await signIn(page, { username: 'ann@napkin' })
         await page.goto('/')
         await expect(page.getByTestId('os-bar')).toBeVisible()
@@ -333,16 +333,23 @@ for (const size of SIZES) {
     // (the apps are restyled in their own records), so it is left out of the scan.
     const problems: string[] = []
     for (const mode of MODES) {
-      const { ctx, page } = await open(browser, size, mode)
+      const { ctx, page } = await open(browser, size, mode, { roster: true })
       await signIn(page, { username: 'ann@napkin' })
       const job = await somethingToRead(page)
+      // Territories open only for a brief that has passed the gate, been signed and been confirmed by the client (the
+      // roster stack has the Brief gate on), so the page scanned is the open one with its choose-a-territory form. The
+      // admin cannot sign a brief, so the agency "wk" does it (planner, creative director, client) and the page is read as
+      // its planner, who has the Territories door; every other page is read as the admin, whose Agency look it is.
+      await signIn(page, PEOPLE.planning)
+      const signed = await seedJ001(page, { ready: true, fresh: true })
+      await signOff(page, signed)
+      expect((await recordClientConfirmation(page, await asMe(page, signed.api, signed.brief))).status()).toBe(200)
       const pages: [string, () => Promise<void>][] = [
         ['desk', async () => { await page.goto('/#agency'); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['clients', async () => { await page.goto('/#clients'); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['client', async () => { await page.goto(`/#client-${job.client}`); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['brief page', async () => { await page.goto(`/#tool-${job.client}-brief`); await page.reload(); await expect(page.getByTestId('work-item').first()).toBeVisible() }],
-        // Territories with the Brief gate off (this stack): open, with the choose-a-territory form of the visual brief.
-        ['territories', async () => { await page.goto(`/#tool-${job.client}-territories`); await page.reload(); await expect(page.getByTestId('choose-territory')).toBeVisible() }],
+        ['territories', async () => { await page.goto(`/#tool-${signed.client}-territories`); await page.reload(); await expect(page.getByTestId('choose-territory')).toBeVisible() }],
         ['agency look', async () => {
           await page.goto('/#agency'); await page.reload()
           await page.getByTestId('account-button').click()
@@ -351,6 +358,8 @@ for (const size of SIZES) {
         }],
       ]
       for (const [name, show] of pages) {
+        await signIn(page, name === 'territories' ? PEOPLE.planning : { username: 'ann@napkin' })
+        await page.goto('/'); await page.reload() // the page is loaded again as this person: its tenant is read at load
         await show()
         await page.waitForTimeout(700) // the page's own entrance finishes before it is read
         const found = (await new AxeBuilder({ page }).exclude('iframe').analyze()).violations

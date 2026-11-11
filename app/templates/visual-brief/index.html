@@ -233,8 +233,13 @@
     return window.clan.patchData(path, value, { actor: 'human', action: action, pinned: false });
   }
 
-  function editBtn(key){
-    return locked() ? '' : '<button type="button" class="btn quiet" data-edit="' + key + '" aria-label="Edit ' + esc(FIELDS[key].label) + '">Edit</button>';
+  // `said` is the visible label where two buttons sit together with no row label to tell them apart (the
+  // headline's name and line): then the visible words are the accessible name. Elsewhere the row's label does it.
+  function editBtn(key, said){
+    if(locked()) return '';
+    return said
+      ? '<button type="button" class="btn quiet" data-edit="' + key + '">' + esc(said) + '</button>'
+      : '<button type="button" class="btn quiet" data-edit="' + key + '" aria-label="Edit ' + esc(FIELDS[key].label) + '">Edit</button>';
   }
   function drawHead(){
     var t = get('territory') || {};
@@ -246,7 +251,7 @@
     line.className = 'tline' + (t.line ? '' : ' blank');
     line.textContent = t.line || 'One sentence that says it.';
     $('tname').setAttribute('data-edit', 'territory.name'); $('tline').setAttribute('data-edit', 'territory.line');
-    $('headActs').innerHTML = locked() ? '' : editBtn('territory.name') + editBtn('territory.line');
+    $('headActs').innerHTML = locked() ? '' : editBtn('territory.name', 'Edit name') + editBtn('territory.line', 'Edit line');
     var host = $('headEditor');
     if(host) host.remove();
     if(S.editing === 'territory.name' || S.editing === 'territory.line'){

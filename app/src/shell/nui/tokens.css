@@ -22,6 +22,8 @@
   --line-strong: #2A2620;
   --accent-line: #C8CBFF;
   --warn: #B45309;
+  --warn-text: #9A4208;   /* warn as small text on a tinted card: 5.4 to 1 or better (the plain --warn is 4.1 there) */
+  --on-warn: #FFFFFF;     /* the ink on a --warn fill (a count badge) */
   --warn-soft: #FEF3DC;
   --ok: #1D8A4E;
   --ok-soft: #E6F6EC;
@@ -64,6 +66,8 @@
   --line: #34302A;
   --line-strong: #CFC6B6;
   --warn: #E09A4B;
+  --warn-text: #E09A4B;
+  --on-warn: #141413;     /* white on the amber is 2.4 to 1; dark ink is 7.8 */
   --warn-soft: #3A2A18;
   --ok: #5DBB83;
   --ok-soft: #1C2E23;

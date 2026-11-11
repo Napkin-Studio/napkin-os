@@ -64,6 +64,12 @@ node e2e/phase1-fixme.mjs           # the slug for each fixme test and the count
 node e2e/phase1-fixme.mjs --gate    # the same; exits 1 while the count is above 0
 ```
 
+Every pilot test runs in one plain `scripts/check.sh --only e2e` (or `npm run e2e`): the tests that sign people in
+(1 to 7, 9, 10, 14, 17, 18) use the roster server on `NAPKIN_E2E_ROSTER_PORT`, so `NAPKIN_E2E_ROSTER=1` is not needed.
+Tests 6 and 7 once used the primary server and needed that switch; they now open the roster server like the rest. Test 7
+reads the Territories page open (a brief signed by the planner and the creative director and confirmed by the client, in the
+agency `wk`) and every other page as the admin.
+
 Tests 11, 12 and 13 run. Test 11 reads the chains of the seeded documents and sends an unattributed write, which the host
 refuses with a 400. Test 12 runs the engine's own retrieval over stand-in rows (`seed/j001/retrievalTrace.py`, through
 `uv`, with four rows tagged `cannes` and no corpus text) and reads the trace: no `cannes` hit, each hit's source named. Test 13
