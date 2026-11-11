@@ -98,8 +98,9 @@ const server = spawn(join(root, 'target/debug/napkin-web'), [], {
   env: {
     ...env,
     NAPKIN_CANARY_KEY: CANARY,
-    // The Brief gate holds the lock list (features/brief-gate.clan); it is off by default elsewhere.
-    NAPKIN_BRIEF_GATE: 'on',
+    // The Brief gate holds the lock list (features/brief-gate.clan). On with the roster, where the J001 people
+    // sign in; off otherwise, as it is by default, so the specs that count what needs a person are unchanged.
+    NAPKIN_BRIEF_GATE: roster ? 'on' : 'off',
     NAPKIN_AUTH: roster ? 'roster' : 'none',
     // Signed sessions need a key: a throwaway one, made for this run and gone with it.
     ...(roster ? { NAPKIN_AUTH_ROSTER: roster, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),

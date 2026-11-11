@@ -67,6 +67,17 @@ async function signIn(page: Page, who: { username: string }) {
   expect(r.status(), `sign in as ${who.username}`).toBe(200)
 }
 
+/**
+ * The agency signs the brief with the Brief gate on: the planner first, then the creative director's lock
+ * (features/brief-gate.clan). Leaves the creative director signed in.
+ */
+async function signOff(page: Page, job: Awaited<ReturnType<typeof seedJ001>>) {
+  await signIn(page, PEOPLE.planning)
+  expect((await signBrief(page, job.brief)).status()).toBe(200)
+  await signIn(page, PEOPLE.creativeDirector)
+  expect((await lockBrief(page, await asMe(page, job.api, job.brief))).status()).toBe(200)
+}
+
 const chainOf = async (page: Page, token: string): Promise<Decision[]> =>
   ((await (await page.request.get(`/s/${token}/chain`)).json()) as { decisions: Decision[] }).decisions
 
@@ -365,7 +376,7 @@ for (const size of SIZES) {
     const rows = page.getByTestId('version-row')
     await expect(rows.filter({ hasText: 'v3' })).toHaveCount(1) // v3 is still in the history
     await expect(rows.first()).toContainText('Restored from v2') // restore made a new version
-    await lockBrief(page, job.brief)
+    await lockBrief(page, job.brief) // with the Brief gate on the planner signs first: signOff(page, job)
     await expect(rows.filter({ hasText: 'locked' })).not.toHaveCount(0) // an approved version stays locked
     expect((await edit('Edit after the lock.')).status()).toBe(409)
     await ctx.close()
@@ -414,8 +425,7 @@ for (const size of SIZES) {
     const { ctx, page } = await open(browser, size)
     await signIn(page, PEOPLE.accountService)
     const job = await seedJ001(page, { ready: true })
-    await signIn(page, PEOPLE.creativeDirector)
-    await lockBrief(page, job.brief)
+    await signOff(page, job)
     await signIn(page, PEOPLE.accountService)
     const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 } }) // no cookies, no account

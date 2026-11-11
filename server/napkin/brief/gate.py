@@ -29,16 +29,17 @@ GATE_GROUPS = {
     "baseline": ["measurement", "baseline"],
 }
 
-# What the client is asked when a scorecard dimension is not a pass: one question per dimension, said so the
-# same ask in the brief's other gaps merges with it (questions.dedupe).
+# What the client is asked when a scorecard dimension is not a pass: one plain question per dimension, worded
+# as the capture's own gap questions are (capture.core_gap_questions), so the same ask in the brief's other
+# gaps is one question (questions.dedupe). No em dash: the interface does not use them.
 ASK = {
-    "objectives_quality": "What is the objective? — Give the number it should reach and the date it should reach it by.",
-    "audience_vividness": "Who is the audience? — Describe them as a person: what they want, and who this is not for.",
-    "single_minded_message": "What is the key message? — The one thing the client wants people to take away.",
-    "evaluation_criteria": "What are the evaluation criteria? — How the client will judge the work, and who makes the call.",
-    "budget_interlock": "What is the budget? — Whether it matches what the client wants to achieve.",
-    "strategic_clarity": "What is the strategic angle? — The choice the client has made, and what the work should not do.",
-    "language": "Which words in the brief need defining? — Terms the agency should not have to guess at.",
+    "objectives_quality": "What is the objective?",
+    "audience_vividness": "Who is the audience?",
+    "single_minded_message": "What is the key message?",
+    "evaluation_criteria": "What are the evaluation criteria?",
+    "budget_interlock": "What is the budget?",
+    "strategic_clarity": "What is the strategic angle?",
+    "language": "Which words in the brief need defining?",
 }
 SIGNERS = "Who signs this brief off at the client, and who signs it at the agency?"
 
@@ -51,18 +52,10 @@ def enabled() -> bool:
 
 
 def scorecard_questions(scorecard: dict | None, *, signers_named: bool = False) -> list[str]:
-    """One question for the client per scorecard dimension that is vague or missing, in the scorecard's order,
-    each with the evidence the judge quoted; and, unless someone is named, who signs off."""
-    out = []
-    for d in (scorecard or {}).get("dimensions") or []:
-        dim = d.get("dimension")
-        if dim not in SCORECARD_DIMENSIONS or d.get("verdict") == "pass":
-            continue
-        q = ASK[dim]
-        ev = str(d.get("evidence") or "").strip().rstrip(".")
-        if ev:
-            q = f"{q} The brief says \"{ev}\"."
-        out.append(q)
+    """One question for the client per scorecard dimension that is vague or missing, in the scorecard's order;
+    and, unless someone is named, who signs off. The evidence the judge quoted stays on the scorecard."""
+    out = [ASK[d["dimension"]] for d in (scorecard or {}).get("dimensions") or []
+           if d.get("dimension") in SCORECARD_DIMENSIONS and d.get("verdict") != "pass"]
     if scorecard and not signers_named:
         out.append(SIGNERS)
     return out

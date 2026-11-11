@@ -23,18 +23,16 @@ def card(**verdicts):
 def test_a_j001_brief_with_no_objective_gives_exactly_one_question_about_the_objective():
     sc = card(objectives_quality="missing")
     # the capture's own gap question for the same thing, as the job gathers them
-    asked = ["[blocker] What is the objective? — Without it the work has nothing to be judged against."]
+    asked = ["[blocker] What is the objective? \u2014 Without it the work has nothing to be judged against."]
     questions, _ = dedupe(asked + gate.scorecard_questions(sc, signers_named=True))
     assert len([q for q in questions if "objective" in q.lower()]) == 1
 
 
-def test_each_dimension_short_of_a_pass_is_one_question_and_the_evidence_is_quoted():
-    sc = card(objectives_quality="vague", language="missing")
-    sc["dimensions"][0]["evidence"] = "grow consideration among younger drinkers"
-    qs = gate.scorecard_questions(sc, signers_named=True)
-    assert len(qs) == 2
-    assert 'The brief says "grow consideration among younger drinkers".' in qs[0]
+def test_each_dimension_short_of_a_pass_is_one_question_and_a_pass_is_none():
+    qs = gate.scorecard_questions(card(objectives_quality="vague", language="missing"), signers_named=True)
+    assert qs == [gate.ASK["objectives_quality"], gate.ASK["language"]]
     assert gate.scorecard_questions(card(), signers_named=True) == []
+    assert not any("\u2014" in q for q in gate.ASK.values()), "no em dash in what a person reads"
 
 
 def test_brief_check_asks_who_signs_off_unless_it_is_known():
