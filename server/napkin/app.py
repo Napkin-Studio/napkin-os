@@ -2,8 +2,10 @@
 
     cd server && uv run python -m napkin.app          # http://127.0.0.1:8795/v1/tasks
 
-Scope comes from auth (in development: the fixed tenant in configuration) and
-is reported in `trace.scope`; a request that names a scope is refused (M3).
+Scope comes from auth: the signed-in person's agency, which the host sends in the
+`x-napkin-agency` header on every request (docs/adr/0004-client-wall.md). In local
+development a request with none is the fixed tenant in configuration. It is
+reported in `trace.scope`; a request that names a scope in its body is refused (M3).
 Every error is `{"error": {"type", "message"}}` with the contract's status,
 and a message never carries request content. Never a 200 with a fallback.
 """
@@ -34,6 +36,7 @@ from .util import TaskError, bad, iso
 
 log = logging.getLogger("napkin.app")
 MAX_BODY = 64 * 1024 * 1024
+AGENCY_HEADER = "x-napkin-agency"      # the signed-in person's agency, set by the host (ops/middleware.rs)
 
 
 class Req:
@@ -94,8 +97,8 @@ class Middleware:
         self.research_sem = threading.Semaphore(max(1, settings.research_concurrency))
         self.model_sem = threading.Semaphore(max(1, settings.model_concurrency))
 
-    def caps(self, handler: str) -> Capabilities:
-        return Capabilities(handler=handler, scope=self.settings.scope, model_port=self.model_port,
+    def caps(self, handler: str, scope: dict | None = None) -> Capabilities:
+        return Capabilities(handler=handler, scope=scope or self.settings.scope, model_port=self.model_port,
                             research_port=self.research_port, layer_store=self.layer_store,
                             research_semaphore=self.research_sem, retrieval_port=self.retrieval_port,
                             model_semaphore=self.model_sem, jev_port=self.jev_port)
@@ -103,7 +106,7 @@ class Middleware:
     # -- envelope -----------------------------------------------------------
     def trace(self, caps: Capabilities | None, hits=()) -> dict:
         ran = caps is not None and caps.model_ran()
-        return {"scope": self.settings.scope, "backend": backend(),
+        return {"scope": caps.scope if caps is not None else self.settings.scope, "backend": backend(),
                 "model": caps.model.model_id if ran else None,
                 "models": dict(caps.usage.by_model) if caps is not None else {},
                 "hits": list({(h["id"], h["source"]): h for h in hits}.values()),
@@ -135,7 +138,7 @@ class Middleware:
                              job.hits if job.state == "done" else [])
 
     # -- dispatch -----------------------------------------------------------
-    def handle(self, body) -> dict:
+    def handle(self, body, agency: str | None = None) -> dict:
         if not isinstance(body, dict):
             raise bad("the body must be a JSON object")
         if body.get("request_kind") != "middleware":
@@ -157,7 +160,7 @@ class Middleware:
         if not isinstance(clan, dict) or not isinstance(clan.get("id"), str) or not clan["id"]:
             raise bad("clan.id is required: a change is computed for one document")
         doc = clan["id"]
-        scope = self.settings.scope
+        scope = self.settings.scope_for(agency)
         if task in ("job_status", "cancel_job"):
             job = self.jobs.get(inp.get("job_id"), scope, doc)
             if task == "cancel_job":
@@ -193,7 +196,7 @@ class Middleware:
             if self.jobs.unfinished_campaign(scope, doc):
                 raise TaskError(409, "job_state", "a start_campaign job on this document is still running or "
                                                   "waiting for an answer; one composition of a document at a time")
-            caps = self.caps(handler)
+            caps = self.caps(handler, scope)
             jid = self.jobs.new_id()
             caps.bind_job(jid)
             job = mod.start(req, caps, self.settings, jid)
@@ -201,7 +204,7 @@ class Middleware:
             job.start()
             return self.campaign_envelope(job, None)
         if mod.KIND == "brief":
-            caps = self.caps(handler)
+            caps = self.caps(handler, scope)
             jid = self.jobs.new_id()
             caps.bind_job(jid)
             job = mod.start(req, caps, self.settings, jid)  # validates: a 400 before a 409
@@ -217,7 +220,7 @@ class Middleware:
             if task == "compose_report" and self.jobs.unfinished_campaign(scope, doc):
                 raise TaskError(409, "job_state", "a start_campaign job on this document is unfinished; one "
                                                   "composition of a document at a time")
-            caps = self.caps(handler)
+            caps = self.caps(handler, scope)
             jid = self.jobs.new_id()
             caps.bind_job(jid)
             t0 = iso()
@@ -231,7 +234,7 @@ class Middleware:
                 job.update(stage="report", question=None)
             return self.envelope(task, handler, job, result, change, caps, hits)
         # long
-        caps = self.caps(handler)
+        caps = self.caps(handler, scope)
         jid = self.jobs.new_id()
         caps.bind_job(jid)
         total, work = mod.prepare(req, caps, self.settings)  # validates: a 400 before a 409
@@ -262,6 +265,9 @@ def _has_scope(obj) -> bool:
 def create_app(settings: Settings | None = None, **components) -> FastAPI:
     settings = settings or Settings.from_env()
     mw = Middleware(settings, **components)
+    if settings.env != "local" and not settings.model_pin:
+        log.warning("NAPKIN_ENV=%s with no NAPKIN_MODEL_PIN: client text may use model routes outside the EU "
+                    "(docs/adr/0004-client-wall.md)", settings.env)
     app = FastAPI(title="napkin-middleware", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.mw = mw
 
@@ -291,7 +297,7 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
         task = (body.get("payload") or {}).get("task", "?") if isinstance(body, dict) else "?"
         try:
             import anyio
-            out = await anyio.to_thread.run_sync(mw.handle, body)
+            out = await anyio.to_thread.run_sync(mw.handle, body, request.headers.get(AGENCY_HEADER))
         except TaskError as e:
             log.info("%s %s %s", e.status, task, e.etype)
             return err(e.status, e.etype, e.message)
@@ -316,8 +322,9 @@ def main():
     if settings.port in (8080, 8090, 8790, 8791, 8792, 8796):
         raise SystemExit(f"refusing to bind port {settings.port}")
     app = create_app(settings)
-    log.info("%s on http://%s:%d/v1/tasks scope=%s model=%s/%s research=%s retrieval=%s layers=%s", API,
-             settings.host, settings.port, settings.scope, settings.model_api, settings.model,
+    log.info("%s on http://%s:%d/v1/tasks env=%s scope=%s model=%s/%s research=%s retrieval=%s layers=%s", API,
+             settings.host, settings.port, settings.env,
+             settings.scope if settings.fixed_tenant else "from the signed-in agency", settings.model_api, settings.model,
              settings.research_url or "none", settings.retrieval_url or "none",
              settings.layers_url or ("postgres (in process)" if settings.layers_dsn else "none"))
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="warning")

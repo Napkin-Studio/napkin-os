@@ -1,0 +1,4 @@
+{
+  "comment": "Recorded exceptions to the EU pin (docs/adr/0004-client-wall.md). A name is a purpose, `wire:<api>` or `web:nova_grounding`; each needs a reason, who decided and when. Empty: no route may leave the EU. The 30 Sep 2026 decision to accept global profiles is reopened in the ADR and is not carried here.",
+  "exceptions": {}
+}

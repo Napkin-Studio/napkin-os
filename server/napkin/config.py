@@ -53,7 +53,14 @@ see any of it.
   NAPKIN_LAYERS_AGENCY_DSN_<SLUG>  one agency's database, DSN or secret JSON (wins over the template);
                                <SLUG> upper case, '-' as '_': NAPKIN_LAYERS_AGENCY_DSN_DEV_AGENCY for org/dev-agency
   NAPKIN_REUSE_DAYS            a layer fact younger than this is reused, not re-researched (30)
-  NAPKIN_DEV_ORG / NAPKIN_DEV_BRAND  the fixed development tenant (org/dev-agency, brand/dev-brand)
+  NAPKIN_ENV                   local (default) | staging | production. Outside local the scope comes from the
+                               signed-in person's agency on every request (the `x-napkin-agency` header the host
+                               sends); NAPKIN_DEV_ORG is refused (docs/adr/0004-client-wall.md)
+  NAPKIN_DEV_ORG / NAPKIN_DEV_BRAND  the fixed development tenant (org/dev-agency, brand/dev-brand). Local only,
+                               unless NAPKIN_ENV=staging and NAPKIN_DEV_ORG_EXCEPTION=1 (staging's test tenant,
+                               until the roster carries agencies; a person removes both then)
+  NAPKIN_MODEL_PIN             eu: client text goes only to EU-processed model routes (model_routes.py);
+                               unset = the routes as written
   NAPKIN_TOKEN                 when set, requests must carry it (Bearer or x-api-key)
   NAPKIN_PIPELINES             ':'-separated pipeline.yaml files resolved at startup
                                (default: every app/templates/*/app/pipeline.yaml in the repo)
@@ -65,10 +72,13 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
+ENVS = ("local", "staging", "production")
+AGENCY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
 def _default_pipelines() -> list[str]:
@@ -120,6 +130,9 @@ class Settings:
     reuse_days: int = 30
     org: str = "org/dev-agency"
     brand: str = "brand/dev-brand"
+    env: str = "local"
+    dev_org_exception: bool = False   # staging only: the fixed test tenant serves every request
+    model_pin: str | None = None
     token: str | None = None
     pipelines: list[str] = field(default_factory=list)
     host: str = "127.0.0.1"
@@ -137,14 +150,25 @@ class Settings:
         if not isinstance(extra_body, dict):
             raise SystemExit("NAPKIN_MODEL_EXTRA_BODY must be a JSON object")
         api = (e("NAPKIN_MODEL_API") or "anthropic").strip().lower()
-        return cls(model_api=api,
+        env = (e("NAPKIN_ENV") or "local").strip().lower()
+        if env not in ENVS:
+            raise SystemExit(f"NAPKIN_ENV must be one of {', '.join(ENVS)}, not {env!r}")
+        exception = (e("NAPKIN_DEV_ORG_EXCEPTION") or "").strip().lower() in ("1", "true", "yes", "on")
+        if env != "local" and e("NAPKIN_DEV_ORG") and not (exception and env == "staging"):
+            raise SystemExit(f"NAPKIN_DEV_ORG is a development tenant and is refused when NAPKIN_ENV={env}: "
+                             "the scope comes from the signed-in person's agency (docs/adr/0004-client-wall.md)")
+        pin = (e("NAPKIN_MODEL_PIN") or "").strip().lower() or None
+        if pin not in (None, "eu"):
+            raise SystemExit(f"NAPKIN_MODEL_PIN must be eu or unset, not {pin!r}")
+        return cls(env=env, dev_org_exception=exception and env == "staging", model_pin=pin,
+                   model_api=api,
                    model_base_url=e("NAPKIN_MODEL_BASE_URL") or None,
                    model_api_key=e("NAPKIN_MODEL_API_KEY") or None,
                    model_region=e("NAPKIN_MODEL_REGION") or None,
                    model_bedrock_endpoint=(e("NAPKIN_MODEL_BEDROCK_ENDPOINT") or "runtime").strip().lower(),
                    # Bedrock ids carry the provider prefix; a bare claude-* id is a 400 there.
-                   model=e("NAPKIN_MODEL") or ("global.anthropic.claude-opus-5-5" if api == "bedrock"
-                                               else "claude-opus-5"),
+                   model=e("NAPKIN_MODEL") or (("eu." if pin == "eu" else "global.") + "anthropic.claude-opus-5-5"
+                                               if api == "bedrock" else "claude-opus-5"),
                    vision_model=e("NAPKIN_VISION_MODEL") or None,
                    model_routes=e("NAPKIN_MODEL_ROUTES") or None,
                    model_extra_body=extra_body,
@@ -189,5 +213,28 @@ class Settings:
                    host=e("NAPKIN_HOST") or "127.0.0.1", port=int(e("NAPKIN_PORT") or 8795))
 
     @property
+    def fixed_tenant(self) -> bool:
+        """The fixed development tenant may serve a request: local development, or staging's recorded exception."""
+        return self.env == "local" or self.dev_org_exception
+
+    @property
     def scope(self) -> dict:
+        """The fixed development tenant. Not a request's scope: see `scope_for`."""
         return {"org": self.org, "brand": self.brand}
+
+    def scope_for(self, agency: str | None) -> dict:
+        """One request's scope, from the signed-in person's agency (the host's `x-napkin-agency` header).
+        Staging's recorded exception serves every request as the fixed test tenant; local development
+        serves a request with no agency as the fixed tenant; anywhere else a request with no agency is
+        refused. The brand is the configured one until the client wall names it per request."""
+        from .util import bad, TaskError
+        if self.dev_org_exception:
+            return self.scope
+        if agency is None:
+            if self.fixed_tenant:
+                return self.scope
+            raise TaskError(401, "unauthenticated", "no agency on this request: the scope comes from the "
+                                                    "signed-in person's agency")
+        if not AGENCY_RE.match(agency):
+            raise bad("the agency must be lower-case letters, digits and hyphens")
+        return {"org": f"org/{agency}", "brand": self.brand}

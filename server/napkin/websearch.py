@@ -562,6 +562,17 @@ def web_research(settings, model_port) -> WebResearch:
         raise SystemExit(f"NAPKIN_RESEARCH_WEB must be tavily, tavily-only or nova, not {mode!r}")
     if mode != "nova" and not settings.tavily_api_key:
         raise SystemExit(f"NAPKIN_RESEARCH_WEB={mode} needs NAPKIN_TAVILY_API_KEY")
+    nova = mode != "tavily-only"
+    if nova and getattr(settings, "model_pin", None) == "eu":
+        # Nova web grounding runs in US regions only (NOVA_REGION): under the EU pin it is off
+        # unless the exception is recorded (napkin/model_route_exceptions.json).
+        from .model_routes import load_exceptions
+        if "web:nova_grounding" not in load_exceptions():
+            if mode == "nova":
+                raise SystemExit("NAPKIN_RESEARCH_WEB=nova runs in a US region: refused under NAPKIN_MODEL_PIN=eu "
+                                 "(record web:nova_grounding in model_route_exceptions.json to allow it)")
+            log.warning("web research: Nova grounding is off under NAPKIN_MODEL_PIN=eu (US regions only)")
+            nova = False
     return WebResearch(model_port, settings.tavily_api_key if mode != "nova" else None,
-                       nova=mode != "tavily-only", nova_region=settings.nova_region, nova_model=settings.nova_model,
+                       nova=nova, nova_region=settings.nova_region, nova_model=settings.nova_model,
                        timeout=min(settings.research_timeout, 180.0))
