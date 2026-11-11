@@ -123,6 +123,10 @@ run "uat_uses_staging_layers" {
     condition     = length(aws_vpc_peering_connection.staging) == 1 && aws_route.staging_to_uat[0].destination_cidr_block == "10.41.0.0/16" && aws_vpc_security_group_ingress_rule.staging_db_from_uat[0].from_port == 5432
     error_message = "peered, routed both ways, and staging's Aurora takes Postgres from UAT"
   }
+  assert {
+    condition     = can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{0,255}$", aws_vpc_security_group_ingress_rule.staging_db_from_uat[0].description))
+    error_message = "a security group rule's description takes only the characters EC2 allows (no apostrophe)"
+  }
 }
 
 run "uat_can_go_back_to_its_own_layers" {
