@@ -1,0 +1,9 @@
+# The secret scan: gitleaks, run by .githooks/pre-push and by the `secrets` job in CI
+# (both through scripts/check.sh --only secrets). Pinned release: v8.30.1.
+#
+# Default rules plus a reviewed allow list. A change to the allow list goes in a commit of
+# its own, so a reviewer sees what is being waved through and why.
+title = "napkin-os"
+
+[extend]
+useDefault = true

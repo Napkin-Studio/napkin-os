@@ -9,6 +9,9 @@
 #      Each feature record in the push must pass `scripts/feature verify`: past
 #      `exploring`, its design is complete and approved.
 #
+# Before either, a secret scan (gitleaks, .gitleaks.toml) over the pushed commits. No variable
+# skips it, and it fails if gitleaks is not installed: scripts/check.sh --only secrets says how to get it.
+#
 # Only a person may bypass it: NAPKIN_ALLOW_MAIN=1 permits a push to main,
 # NAPKIN_SKIP_CHECKS=1 skips step 1, and NAPKIN_NO_FEATURE=1 skips step 2.
 # Agents never bypass it, and never use --no-verify.
@@ -38,10 +41,17 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -z "$(git rev-list "$range")" ]] && continue
   echo "pre-push: ${remote_ref#refs/heads/} ← $(git rev-list --count "$range") commit(s)"
 
+  # 0. secret scan: not skippable, and the checks below then leave it out
+  if ! scripts/check.sh --only secrets --range "$range"; then
+    echo "pre-push: a key, or something shaped like one, is in these commits (or gitleaks is missing)."
+    echo "  Remove it from the history, never just from the tip, and rotate the key."
+    status=1
+  fi
+
   # 1. checks
   if [[ "${NAPKIN_SKIP_CHECKS:-}" == 1 ]]; then
     echo "pre-push: checks skipped (NAPKIN_SKIP_CHECKS=1)"
-  elif ! scripts/check.sh --range "$range"; then
+  elif ! NAPKIN_SECRETS_DONE=1 scripts/check.sh --range "$range"; then
     status=1
   fi
 
