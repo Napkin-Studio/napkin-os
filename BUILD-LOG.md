@@ -123,7 +123,7 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 - Shrey: contract changes in docs/contracts/os-layer.md 7.5, 7.5.9, 7.7, 7.8 and 13.
 - UAT: `terraform apply` in infra/envs/uat (cap 10 euro a day, paid calls on, set by Sai), then deploy this branch. `NAPKIN_BRIEF_GATE` is not set there.
 
-**Cost.** Subagents reported about 6.3 million tokens across 27 runs. The main session's cost is not visible from inside it: read `/cost` or the Console.
+**Cost.** Subagents reported about 5.1 million tokens across 23 runs (the sum of the harness figures). The main session's cost is not visible from inside it: read `/cost` or the Console.
 
 **Phase 2, started.** Four read-only audits are done (Judge and the Brain; the bar, search, Ask Nap, voice, Needs you and the homes; sign-on, agency setup, approvals, the client link and timesheet signals; the Idea room and Script editor). No Phase 2 record is opened yet. Findings worth keeping: nothing scores creative work today and the calibrated judge backend is still planned; no bar, search, Ask Nap or voice code exists; larryob78/the-canon holds one Cannes data file and nothing usable; sign-on and the calendar, Slack and email signals each need an outside account a person registers.
 
