@@ -53,25 +53,20 @@ impl Meter {
     /// Settle the charge against what an `/api-proxy` reply says happened.
     ///
     /// `charged` is whether this call was charged (a `job_status` poll is not).
-    /// The charge comes back, once, when
-    /// - the provider could not be reached or answered 5xx (`ok: false`,
-    ///   status 0 or 500 and up) on a charged call: nothing ran; or
-    /// - a job this tenant paid for reports `failed` (a provider error, in
-    ///   the reply to the submission or to a later poll).
+    /// The charge comes back, once, when a job this tenant paid for reports
+    /// `failed` (the middleware's word for a provider error), in the reply to
+    /// the submission or to a later poll.
     ///
     /// A person cancelling a job (`cancel_job`) is not a failure and a
-    /// cancelled run keeps its charge: only `failed` and a dead provider give
-    /// it back. A 4xx the caller caused stays charged.
+    /// cancelled run keeps its charge, as does a finished one. A reply that
+    /// is not a successful middleware answer (no endpoint, a refusal, a body
+    /// that is not JSON) changes nothing.
     pub fn settle(&self, tenant: &TenantId, charged: bool, reply: &[u8]) {
         let Ok(reply) = serde_json::from_slice::<serde_json::Value>(reply) else {
             return;
         };
-        if reply.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-            let status = reply.get("status").and_then(|v| v.as_u64()).unwrap_or(0);
-            if charged && (status == 0 || status >= 500) {
-                self.refund(tenant);
-            }
-            return;
+        if reply.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            return; // nothing ran that this meter can say failed: the charge stands
         }
         let Some(job) = reply.get("data").and_then(|d| d.get("job")) else {
             return;
@@ -220,34 +215,29 @@ mod tests {
     }
 
     #[test]
-    fn a_dead_provider_refunds_but_never_below_zero() {
+    fn a_refund_never_goes_below_zero_and_other_replies_change_nothing() {
         let meter = Meter::new(3);
         let a = TenantId::mint();
-        meter.try_spend(&a).unwrap();
-        let down = br#"{"ok":false,"status":0,"error":"could not reach http://m"}"#;
-        meter.settle(&a, true, down);
-        assert_eq!(meter.usage(&a).used, 0);
-        meter.settle(&a, true, down);
-        meter.settle(
-            &a,
-            true,
-            br#"{"ok":false,"status":503,"error":"upstream returned 503"}"#,
-        );
+        meter.refund(&a);
         assert_eq!(meter.usage(&a).used, 0, "never below zero");
         meter.try_spend(&a).unwrap();
-        meter.settle(
-            &a,
-            true,
+        for body in [
+            &br#"{"ok":false,"status":0,"endpoint":"http://m","error":"could not reach http://m"}"#
+                [..],
+            br#"{"ok":false,"status":0,"endpoint":null,"error":{"type":"no_middleware"}}"#,
             br#"{"ok":false,"status":409,"error":{"type":"job_state"}}"#,
-        );
-        meter.settle(&a, false, down);
+            b"not json",
+        ] {
+            meter.settle(&a, true, body);
+        }
+        assert_eq!(meter.usage(&a).used, 1);
+        meter.settle(&a, true, &reply("failed"));
+        meter.settle(&a, true, &reply("failed"));
         assert_eq!(
             meter.usage(&a).used,
-            1,
-            "a 409 and an uncharged poll refund nothing"
+            0,
+            "a repeated failure refunds one charge, not two"
         );
-        meter.settle(&a, true, b"not json");
-        assert_eq!(meter.usage(&a).used, 1);
     }
 
     #[test]
