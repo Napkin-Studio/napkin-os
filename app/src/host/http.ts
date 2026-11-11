@@ -29,6 +29,8 @@ import type {
   ClientLinkMade,
   ClientLinkRow,
   GateView,
+  VersionParts,
+  VersionsView,
   Host,
   HostEvents,
   InstalledApp,
@@ -324,6 +326,10 @@ export const httpHost: Host = {
   gateSign: async rationale => { await clanPost<unknown>('/sign', { rationale: rationale ?? '' }) },
   gatePatch: async (patch, action) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action }) },
   gateNewVersion: async reason => { await clanPost<unknown>('/unapprove', { rationale: reason }) },
+  getVersions: () => clanCall<VersionsView>('/versions'),
+  getVersion: n => clanCall<VersionParts>(`/version?n=${n}`),
+  getCurrent: () => clanCall<{ data: Record<string, unknown>; version: string }>('/current'),
+  restoreVersion: async n => { await clanPost<unknown>('/restore', { version: n }) },
   acknowledge: async decision => {
     const resp = await fetch(`${httpHost.clanOrigin()}/acknowledge`, { method: 'POST', body: JSON.stringify({ decision }) })
     if (!resp.ok) throw new Error(((await resp.json().catch(() => null)) as { error?: string } | null)?.error ?? `acknowledge: ${resp.status}`)

@@ -42,9 +42,9 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   11: { title: 'every write in the J001 documents is attributed', slug: null },
   12: { title: 'the J001 brief retrieval trace has no source cannes hit', slug: null },
   13: { title: 'a failed save keeps the text, Try again saves it, and reopening shows it', slug: null },
-  14: { title: 'restoring v2 keeps v3 and the approved version locked', slug: 'brief-versions-undo' },
+  14: { title: 'restoring v2 keeps v3 and the approved version locked', slug: null },
   15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: 'screen-states' },
-  16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: 'brief-versions-undo' },
+  16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: null },
   17: { title: 'the client confirms the brief link on a phone with no account', slug: null },
   18: { title: 'no consent means no captured sessions', slug: 'timesheet-sessions' },
 }
@@ -473,23 +473,59 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(14), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
-    await signIn(page, PEOPLE.creativeDirector)
-    const job = await seedJ001(page, { ready: true })
-    const edit = (v: string) => page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { audience: v } } })
-    await edit('Version two audience.')
-    await edit('Version three audience.')
+  // Three signed versions, each signed the way the gate asks: the planner signs, then the creative director's
+  // approve locks it; a new version starts with an unlock (features/brief-versions-undo.clan).
+  test(t(14), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    // The shell's own page stays off the document while the signatures are written: a read that opens it
+    // while a write lands can leave the host's open copy one write behind (a note in the report, not this record's).
+    await page.goto('about:blank')
+    const as = async (who: { username: string }) => { await signIn(page, who); return (await asMe(page, job.api, job.brief)).token }
+    const edit = (token: string, audience: string) => page.request.post(`/s/${token}/patch-data`, {
+      data: { patch: { audience }, agent: 'human', action: 'edit audience' },
+    })
+    const sign = async (words: string) => {
+      const planner = await as(PEOPLE.planning)
+      expect((await edit(planner, words)).status()).toBe(200)
+      expect((await signBrief(page, { token: planner })).status()).toBe(200)
+      const director = await as(PEOPLE.creativeDirector)
+      expect((await lockBrief(page, { token: director })).status()).toBe(200)
+      return director
+    }
+    let director = await sign('Version one audience.')
+    for (const words of ['Version two audience.', 'Version three audience.']) {
+      const unlock = await page.request.post(`/s/${director}/unapprove`, { data: { rationale: 'A new version.' } })
+      expect(unlock.status(), await unlock.text()).toBe(200)
+      director = await sign(words)
+    }
+    const lockOf = async () => (await chainOf(page, director)).filter(d => d.kind === 'approve')
+    const signed = await lockOf()
+    expect(signed).toHaveLength(3)
+
     await page.goto(`/#tool-${job.client}-brief`)
+    await page.reload()
     await page.getByTestId('work-item').first().click()
     await page.getByRole('button', { name: 'Version history' }).click()
-    await page.getByTestId('version-row').filter({ hasText: 'v2' }).getByRole('button', { name: 'Restore' }).click()
     const rows = page.getByTestId('version-row')
+    await expect(rows.filter({ hasText: 'v1' })).toHaveCount(1)
+    await expect(rows.filter({ hasText: 'v3' })).toContainText('Signed by')
+    await rows.filter({ hasText: 'v2' }).getByRole('button', { name: 'Restore' }).click()
+    await expect(rows.first()).toContainText('Restored from v2') // restore made a new version of the draft
     await expect(rows.filter({ hasText: 'v3' })).toHaveCount(1) // v3 is still in the history
-    await expect(rows.first()).toContainText('Restored from v2') // restore made a new version
-    await lockBrief(page, job.brief) // with the Brief gate on the planner signs first: signOff(page, job)
     await expect(rows.filter({ hasText: 'locked' })).not.toHaveCount(0) // an approved version stays locked
-    expect((await edit('Edit after the lock.')).status()).toBe(409)
+    await expect(rows.filter({ hasText: 'v3' })).toContainText('Locked')
+    expect(await lockOf()).toEqual(signed) // not one signature was touched
+    const read = async (n: number | string) => ((await (await page.request.get(`/s/${director}/version?n=${n}`)).json()) as { parts: { audience: string } }).parts.audience
+    expect(await read(3)).toBe('Version three audience.') // the signed words are as they were
+    expect(await read('draft')).toBe('Version two audience.') // the draft has v2's
+    const gate = await gateOf(page, { token: director })
+    expect(gate.signed).toBe(true)
+    expect(gate.changed_since_lock).toBe(true) // the restored draft is a new version to sign
+    const restored = (await chainOf(page, director))[0]
+    expect(restored.action).toBe('restore v2')
+    expect(restored.actor ?? '').toContain(PEOPLE.creativeDirector.username) // restoring is attributed
     await ctx.close()
   })
 
@@ -522,20 +558,29 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(16), async ({ browser }) => {
+  test(t(16), async ({ browser }) => {
     test.skip(size.width < 1000, 'Cmd Z is the desktop width (v3.1, test 16)')
     const { ctx, page } = await open(browser, size)
     const job = await seedJ001(page)
     await page.goto(`/#tool-${job.client}-brief`)
     await page.getByTestId('work-item').first().click()
     const app = page.frameLocator('iframe').first()
-    const field = app.locator('#fields .row[data-clan-part="audience"] [contenteditable]').first()
+    // A double click opens a part for writing in the brief's own editor; Ctrl+Enter is Done.
+    await app.locator('#fields .row[data-clan-part="audience"]').dblclick()
+    const field = app.getByRole('textbox', { name: /^Write / })
     await field.fill('An edit to undo.')
-    await field.blur()
+    await field.press('Control+Enter')
+    await expect(app.locator('#fields')).toContainText('An edit to undo.')
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled() // the shell took the edit
     await page.keyboard.press('Meta+z')
     await expect(app.locator('#fields')).not.toContainText('An edit to undo.')
     await page.getByRole('button', { name: 'Redo' }).click() // the undone text can be brought back
     await expect(app.locator('#fields')).toContainText('An edit to undo.')
+    // Undo is itself attributed: the chain holds an edit by this person, not a missing entry.
+    const chain = await chainOf(page, job.brief.token)
+    const undone = chain.find(d => d.action?.startsWith('undo edit'))
+    expect(undone?.kind).toBe('edit')
+    expect(undone?.actor ?? '').not.toBe('')
     await ctx.close()
   })
 
