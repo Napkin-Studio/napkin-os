@@ -61,11 +61,11 @@ test('a running job, a failure and a waiting question show on the landing and th
   await shot(page, 'p3-01-running')
 
   // The circles: each wears its own verb, and says it.
-  await expect(page.getByRole('button', { name: /^Client A: Spring brief · agents working, reading\./ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client B: Pitch deck · agents working, working\./ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client A:/ })).toHaveAttribute('data-activity', 'read')
+  await expect(page.getByRole('button', { description: /^Client A: Spring brief · agents working, reading\./ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client B: Pitch deck · agents working, working\./ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client A:/ })).toHaveAttribute('data-activity', 'read')
   await shot(page, 'p3-02-clients')
-  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByRole('button', { description: /^Client A:/ }).click()
   await expect(page.getByTestId('quadrant-brief')).toHaveAttribute('data-activity', 'read') // the dial says it too
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page.getByTestId('tool-brief')).toHaveAttribute('data-activity', 'read')
@@ -77,7 +77,7 @@ test('a running job, a failure and a waiting question show on the landing and th
   await ask()
   await expect(row('Spring brief')).toContainText('Your answer', { timeout: 15_000 })
   await expect(page.getByTestId('news')).toHaveText('1 more needs you')
-  await expect(page.getByRole('button', { name: /^Client A:/ })).toHaveAttribute('data-activity', 'human')
+  await expect(page.getByRole('button', { description: /^Client A:/ })).toHaveAttribute('data-activity', 'human')
   await expect(page.getByTestId('decisions')).toHaveClass(/has-needs/)
   await shot(page, 'p3-04-needs-you')
 
@@ -86,7 +86,7 @@ test('a running job, a failure and a waiting question show on the landing and th
   await ask()
   await expect(row('Spring brief')).toContainText('Failed: research', { timeout: 15_000 })
   await expect(row('Spring brief')).not.toContainText('Your answer')
-  await expect(page.getByRole('button', { name: /^Client A:/ })).toHaveAttribute('data-activity', 'error')
+  await expect(page.getByRole('button', { description: /^Client A:/ })).toHaveAttribute('data-activity', 'error')
   await shot(page, 'p3-05-failed')
 
   // A new run finishes: it stops running, and the failure does not come back.
@@ -111,7 +111,7 @@ test('a document that needs the person shows on the landing and its client circl
   await page.reload()
   await expect(page.getByTestId('pick-row').filter({ hasText: 'Contested brief' })).toContainText('1 call')
   await expect(page.getByTestId('needs-count')).toHaveText('1')
-  await expect(page.getByRole('button', { name: /^Client A:/ })).toHaveAttribute('data-activity', 'human')
-  await expect(page.getByRole('button', { name: /^Client A: Contested brief · 1 needs you\./ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client A:/ })).toHaveAttribute('data-activity', 'human')
+  await expect(page.getByRole('button', { description: /^Client A: Contested brief · 1 needs you\./ })).toBeVisible()
   await expect(page.getByTestId('needs-badge')).toHaveText('1')
 })

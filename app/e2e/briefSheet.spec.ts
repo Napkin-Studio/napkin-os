@@ -29,9 +29,9 @@ async function openBrief(page: Page) {
   await page.reload()
   await page.getByTestId('work-item').first().click()
   const app = page.frameLocator('iframe').first()
-  // 21 parts, every row a part: the version is the side tab's, not a row on the sheet (owner, 10 Nov).
-  await expect(app.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
-  await expect(app.locator('#fields .row')).toHaveCount(21)
+  // 23 parts (the brief template has 23 fields), every row a part: the version is the side tab's, not a row on the sheet (owner, 10 Nov).
+  await expect(app.locator('#fields .row[data-clan-part]')).toHaveCount(23, { timeout: 30_000 })
+  await expect(app.locator('#fields .row')).toHaveCount(23)
   await expect(app.locator('#fields .row.k-cell').first()).toHaveAttribute('data-clan-part', 'client')
   return app
 }
@@ -84,7 +84,7 @@ test('the brief sits on an A4 sheet: guides where the PDF breaks, select, Confid
   await expect(item.or(page.locator('[data-where="document"]'))).toBeVisible({ timeout: 30_000 })
   if (await item.isVisible()) await item.click()
   const again = page.frameLocator('iframe').first()
-  await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(21, { timeout: 30_000 })
+  await expect(again.locator('#fields .row[data-clan-part]')).toHaveCount(23, { timeout: 30_000 })
   const b2 = again.locator('#fields .row[data-clan-part="budget_and_scope"]')
   await expect(b2).toHaveClass(/\bconf\b/)
   const m2 = again.locator('#fields .row[data-clan-part="mandatories"]')
