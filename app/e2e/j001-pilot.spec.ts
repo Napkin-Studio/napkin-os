@@ -33,7 +33,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   2: { title: 'Planning gets 403 on Scope and estimates', slug: null },
   3: { title: 'the creative director signs the brief with one approve decision', slug: null },
   4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: null },
-  5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: 'job-index-dashboard' },
+  5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: null },
   6: { title: 'five logos repaint the accent and it passes contrast in all three modes', slug: null },
   7: { title: 'axe finds nothing serious on every Phase 1 page in all three modes', slug: null },
   8: { title: 'a canary key set on the server never reaches the browser', slug: null },
@@ -232,16 +232,56 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(5), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
-    await signIn(page, PEOPLE.management)
-    const job = await seedJ001(page, { ready: true })
-    await page.goto('/#dashboard')
-    await expect(page.getByTestId('tile-stage')).toContainText('Brief')
-    const moved = await page.request.post(`${job.api}/jobs/J001/stage`, { data: { stage: 'Ideas' } })
-    expect(moved.status()).toBe(200)
-    await expect(page.getByTestId('tile-stage')).toContainText('Ideas', { timeout: 10_000 })
-    await ctx.close()
+  // The dashboard is a door on Management's home (features/job-index-dashboard.clan). A job's stage is read from
+  // its documents' decisions, never typed in: the stage changes here are the Brief gate's own (the gate passed,
+  // the planner and the creative director signed, the client confirmed), written by the planner's browser while
+  // Management's page, open on the dashboard, is left alone. Each change must show on it within 10 seconds.
+  test(t(5), async ({ browser }) => {
+    const mgr = await open(browser, size, 'white', { roster: true })
+    const planner = await open(browser, size, 'white', { roster: true })
+    await signIn(planner.page, PEOPLE.planning)
+    const job = await seedJ001(planner.page, { fresh: true }) // the messy brief: it has not passed the gate
+    await signIn(mgr.page, PEOPLE.management)
+    await mgr.page.goto('/')
+    await mgr.page.goto('/#door-agency-dashboard')
+    await mgr.page.reload()
+    await expect(mgr.page.getByTestId('dashboard')).toBeVisible()
+    await expect(mgr.page.getByTestId(/^tile-(stage|risk|hours|waiting|scores|results)$/)).toHaveCount(6)
+    const row = mgr.page.getByTestId('tile-stage').locator(`[data-job="${job.job}"]`)
+    await expect(row).toHaveAttribute('data-stage', 'client-brief')
+    // the number on the tile is a link, and it opens the client the job is for
+    await expect(mgr.page.getByTestId('tile-stage').getByTestId('tile-number').first()).toHaveAttribute('href', /^#(client-cli_[0-9a-f]{8}|door-live-jobs)$/)
+
+    // the gate passes: Brief check
+    const patched = await planner.page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: READY_BRIEF, agent: 'human', action: 'answer the gate items' } })
+    expect(patched.status()).toBe(200)
+    await expect(row).toHaveAttribute('data-stage', 'brief-check', { timeout: 10_000 })
+    // the planner signs, then the creative director locks: the brief is signed and waits for the client
+    expect((await signBrief(planner.page, job.brief)).status()).toBe(200)
+    await expect(row).toContainText('The planner has signed', { timeout: 10_000 })
+    await signIn(planner.page, PEOPLE.creativeDirector)
+    expect((await lockBrief(planner.page, await asMe(planner.page, job.api, job.brief))).status()).toBe(200)
+    await expect(row).toContainText('Waiting for the client to confirm', { timeout: 10_000 })
+    await expect(mgr.page.getByTestId('tile-waiting')).toContainText('The longest wait')
+    // the client confirms: the job moves on
+    expect((await recordClientConfirmation(planner.page, await asMe(planner.page, job.api, job.brief))).status()).toBe(200)
+    await expect(row).toHaveAttribute('data-stage', 'scope-estimate', { timeout: 10_000 })
+
+    // the stage is read, never written: a write to the index answers 405
+    const stage = await mgr.page.request.get(`${job.api}/jobs/${job.job}/stage`)
+    expect((await stage.json()).stage.label).toBe('Scope and estimate')
+    for (const method of ['post', 'put', 'patch', 'delete'] as const) {
+      expect((await mgr.page.request[method](`${job.api}/jobs/${job.job}/stage`, { data: { stage: 'Ideas' } })).status(), method).toBe(405)
+    }
+    // Management and an admin open the dashboard; Planning gets 403 from the server
+    expect((await mgr.page.request.get(`${job.api}/dashboard`)).status()).toBe(200)
+    await signIn(planner.page, PEOPLE.planning)
+    expect((await planner.page.request.get(`${job.api}/dashboard`)).status()).toBe(403)
+    await planner.page.goto('/#door-agency-dashboard')
+    await planner.page.reload()
+    await expect(planner.page.locator('[data-state="missing-access"]')).toBeVisible()
+    await mgr.ctx.close()
+    await planner.ctx.close()
   })
 
   test(t(6), async ({ browser }) => {

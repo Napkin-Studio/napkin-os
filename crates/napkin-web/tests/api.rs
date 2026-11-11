@@ -3088,3 +3088,107 @@ async fn the_doors_are_served_from_the_roles_in_the_session_and_the_switcher_is_
         false
     );
 }
+
+// ── jobs and the job index (features/job-index-dashboard.clan) ──────────────
+
+#[tokio::test]
+async fn a_job_files_its_documents_and_the_index_answers_read_only() {
+    let s = server(10);
+    let b = browser(&s).await;
+    let t = &b.tenant;
+    let client = add_client(&s, &b, "Client A").await;
+    let cid = client["id"].as_str().unwrap();
+
+    // the registry opens a job; a number twice is a conflict; a job needs a real client
+    let j = post_json(&s, &format!("/api/t/{t}/jobs"), &b.cookie,
+        serde_json::json!({ "number": "J001", "client_id": cid, "due": "2026-11-20", "budget_hours": 120 })).await;
+    assert_eq!(
+        j.status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&j.body)
+    );
+    let again = post_json(
+        &s,
+        &format!("/api/t/{t}/jobs"),
+        &b.cookie,
+        serde_json::json!({ "number": "J001", "client_id": cid }),
+    )
+    .await;
+    assert_eq!(again.status, StatusCode::CONFLICT);
+    let nobody = post_json(
+        &s,
+        &format!("/api/t/{t}/jobs"),
+        &b.cookie,
+        serde_json::json!({ "client_id": "cli_00000000" }),
+    )
+    .await;
+    assert_eq!(nobody.status, StatusCode::NOT_FOUND);
+
+    // a document names its job at birth; a job of another client, or of no client, is refused
+    let other = add_client(&s, &b, "Client B").await;
+    let mut body = serde_json::json!({ "app_id": "ie.napkin.nothing", "title": "x", "client_id": other["id"], "job": "J001" });
+    let wrong = post_json(
+        &s,
+        &format!("/api/t/{t}/documents"),
+        &b.cookie,
+        body.clone(),
+    )
+    .await;
+    assert_eq!(
+        wrong.status,
+        StatusCode::BAD_REQUEST,
+        "{}",
+        String::from_utf8_lossy(&wrong.body)
+    );
+    body["job"] = "J404".into();
+    assert_eq!(
+        post_json(&s, &format!("/api/t/{t}/documents"), &b.cookie, body)
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+
+    // the index lists the job, and its stage is read, never written
+    let list = get(&s, &format!("/api/t/{t}/jobs"), Some(&b.cookie)).await;
+    assert_eq!(list.status, StatusCode::OK);
+    assert_eq!(list.json()[0]["number"], "J001");
+    assert_eq!(list.json()[0]["stage"]["id"], "client-brief");
+    let stage = get(&s, &format!("/api/t/{t}/jobs/J001/stage"), Some(&b.cookie)).await;
+    assert_eq!(stage.json()["stage"]["label"], "Client brief");
+    assert_eq!(
+        get(&s, &format!("/api/t/{t}/jobs/J404"), Some(&b.cookie))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get(&s, &format!("/api/t/{t}/dashboard"), Some(&b.cookie))
+            .await
+            .json()["live_jobs"],
+        1
+    );
+    assert_eq!(
+        get(&s, &format!("/api/t/{t}/needs"), Some(&b.cookie))
+            .await
+            .json()["total"],
+        0
+    );
+
+    // the index is never written to: every write method on it is 405
+    for route in ["dashboard", "needs", "jobs/J001", "jobs/J001/stage"] {
+        for method in ["POST", "PUT", "PATCH", "DELETE"] {
+            let r = send(
+                &s,
+                request(
+                    method,
+                    &format!("/api/t/{t}/{route}"),
+                    Some(&b.cookie),
+                    Body::empty(),
+                ),
+            )
+            .await;
+            assert_eq!(r.status, StatusCode::METHOD_NOT_ALLOWED, "{method} {route}");
+        }
+    }
+}

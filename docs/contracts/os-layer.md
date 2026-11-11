@@ -2030,3 +2030,27 @@ no switch. The 3D client-circle engine (`app/src/orbs/`), its "Flat circles"
 setting (`napkin.circles.flat`) and the `<html data-orbs…>` attributes are gone.
 The agents keep their spheres from the one agent engine
 (`app/templates/shared/agent-sphere`, `app/src/shell/agents/AgentSphere.tsx`).
+
+## 13. Jobs and the job index
+
+(features/job-index-dashboard.clan; v2 sections 3, 4 and 6.)
+
+- **The job registry.** The jobs of a tenant are one CLAN document, `document_type: job-registry`,
+  kept beside the client registry (`Library::home("jobs-v1")`, `crates/napkin-host/src/jobs.rs`). A job
+  holds its number (`J001`), client, title, owner, `opened_on`, `due` and `budget_hours`. It holds no stage.
+  Every write names its actor, goes through `Change` and `PartStore::apply`, and the host stays wasm32-clean.
+- **`manifest.job`.** A document names its job by number. `POST /documents` takes `job` beside `client_id`
+  (404 for an unknown number, 400 for another client's job), a spin-off carries it, and `clan_sdk::with_job`
+  sets it. The registry never lists documents: the job's documents are the ones that name it.
+- **The index.** `napkin_host::jobindex::JobIndex` is built from the registry and from the decision chains
+  of the job's documents. A job's **stage is derived**, never stored: the Brief gate gives Client brief
+  (gate not passed), Brief check (passed, signed, waiting on the client), then Scope and estimate (client
+  confirmed). Phase 1 reads only the Brief; the later steps of the eleven are named and wait for their
+  tools' decisions. The index is read-only, disposable and rebuilt from the documents when any document's
+  version moves (`IndexCache`); a rebuilt index equals the live one (tested).
+- **Routes**, all under `/api/t/{tenant}`: `GET /jobs`, `GET /jobs/{number}`, `GET /jobs/{number}/stage`,
+  `GET /needs` (the signed-in person's lines, by deadline) and `GET /dashboard` (the six tiles;
+  Management, an admin or a demo, else 403 from `roles.rs`). `POST /jobs` opens a job in the registry.
+  A write of any kind to the index routes is 405.
+- **Never scores people.** The index and the dashboard hold jobs, stages and what each person is asked
+  to do next. They hold no ranking or score of a person.

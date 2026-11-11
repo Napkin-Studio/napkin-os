@@ -552,6 +552,13 @@ pub fn view(doc: &Document, decisions: &DecisionsView) -> HostResult<GateView> {
     })
 }
 
+/// When the lock that holds was written (RFC 3339), if one holds: the moment
+/// the brief was signed, which "days waiting on the client" counts from.
+pub fn signed_at(doc: &Document) -> Option<String> {
+    let chain = review::chain_of(doc).ok()?;
+    review::lock_of(&chain, doc.clan().document_id()).map(|d| d.timestamp.clone())
+}
+
 /// `POST /sign`: the signer named on the brief signs this version. The planner
 /// writes a `sign` decision; the creative director's signature is the lock, so
 /// that is `/approve` itself (one `approve` decision on this version).

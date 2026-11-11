@@ -543,6 +543,8 @@ pub enum Group {
     /// Making and withdrawing the client's own link: account service sends it, the planner may
     /// (features/client-confirm-link.clan).
     ClientLink,
+    /// The agency dashboard: management (an admin or a demo opens everything).
+    Management,
     Open,
 }
 
@@ -553,6 +555,7 @@ impl Group {
             Group::Brains => &["planning", "account-service", "agency-brain"],
             Group::Proprietary => &["agency-brain"],
             Group::ClientLink => &["account-service", "planning"],
+            Group::Management => &["management"],
             Group::Open => &[],
         }
     }
@@ -583,6 +586,7 @@ pub fn group_of(route: &str) -> Group {
         }
         Some("client-brains" | "pitches") => Group::Brains,
         Some("proprietary") => Group::Proprietary,
+        Some("dashboard") => Group::Management,
         _ => Group::Open,
     }
 }
@@ -874,6 +878,27 @@ mod tests {
             "/t/x/jobs/J001/scope",
             None
         ));
+    }
+
+    #[test]
+    fn only_management_opens_the_dashboard_and_everyone_opens_their_own_needs() {
+        assert_eq!(group_of("/t/x/dashboard"), Group::Management);
+        assert_eq!(group_of("/dashboard"), Group::Management);
+        for role in [
+            "planning",
+            "creative-director",
+            "account-service",
+            "producer",
+            "traffic",
+        ] {
+            assert!(!allowed(&r(&[role]), "/t/x/dashboard", None), "{role}");
+            assert!(allowed(&r(&[role]), "/t/x/needs", None), "{role} needs");
+            assert!(allowed(&r(&[role]), "/t/x/jobs", None), "{role} jobs");
+        }
+        assert!(allowed(&r(&["management"]), "/t/x/dashboard", None));
+        assert!(allowed(&r(&["admin"]), "/t/x/dashboard", None));
+        assert!(allowed(&r(&["demo"]), "/t/x/dashboard", None));
+        assert!(allowed(&[], "/t/x/dashboard", None));
     }
 
     #[test]

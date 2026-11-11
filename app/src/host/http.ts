@@ -21,6 +21,8 @@ import type {
   Adopted,
   LegacyName,
   ClientRecord,
+  DashboardView,
+  JobNeed,
   LibraryFilter,
   LibraryListing,
   ClientReopenReply,
@@ -83,6 +85,20 @@ export async function homeView(as?: string | null): Promise<HomeView | null> {
   try {
     const q = as ? `?as=${encodeURIComponent(as)}` : ''
     return await json<HomeView>(`/doors${q}`)
+  } catch { return null }
+}
+
+/** What the signed-in person is asked to do next, by deadline (`GET /needs`); empty where there is no server answer. */
+export async function jobNeeds(): Promise<JobNeed[]> {
+  try { return (await json<{ items: JobNeed[] }>('/needs')).items } catch { return [] }
+}
+
+/** The agency dashboard's tiles; `forbidden` when this role may not open it (403), null when the server does not answer. */
+export async function dashboardView(): Promise<DashboardView | 'forbidden' | null> {
+  try {
+    const r = await fetch(`${await base()}/dashboard`, { credentials: 'same-origin' })
+    if (r.status === 403) return 'forbidden'
+    return r.ok ? ((await r.json()) as DashboardView) : null
   } catch { return null }
 }
 

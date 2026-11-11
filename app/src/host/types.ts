@@ -280,12 +280,44 @@ export interface LibraryItem {
   title: string
   updated_at: string
   client: ClientRef | null
+  /** The job it is filed under (`J001`), when it is. Absent on a document with no job. */
+  job?: string
   state?: RecentState | null
   run: RunInfo | null
   /** Who last wrote it: the signed-in account's username (`name@agency`). Absent from an older host. */
   last_editor?: string
   /** Middleware jobs on it the host has not seen finish: the shell polls each (`settleJob`). */
   jobs?: string[]
+}
+
+/** One thing a person is asked to do next on a job (napkin-host `jobindex::Need`). */
+export interface JobNeed {
+  job: string
+  client: string
+  client_id: string
+  /** One line on what is waiting. */
+  text: string
+  /** The next action, on its button. */
+  action: string
+  /** The document the action opens. */
+  path: string
+  /** The job's deadline (`YYYY-MM-DD`): what the list is ordered by. */
+  due: string | null
+}
+
+/** A job named on a dashboard tile. */
+export interface JobLine { number: string; client: string; client_id: string; line: string }
+
+/** The six tiles of the agency dashboard (`GET /dashboard`). Judge scores and results hold no numbers in Phase 1. */
+export interface DashboardView {
+  live_jobs: number
+  by_stage: { id: string; label: string; count: number; jobs: JobLine[] }[]
+  at_risk: JobLine[]
+  hours: { budget: number; confirmed: number | null; jobs: JobLine[] }
+  /** `line` is the whole days the client has waited. */
+  waiting_on_client: JobLine[]
+  scores: null
+  results: null
 }
 
 export interface LibraryListing {

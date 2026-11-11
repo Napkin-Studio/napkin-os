@@ -73,6 +73,13 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<ClientRef>,
 
+    /// The job this document belongs to, by job number (`J001`): the link the
+    /// job index reads (features/job-index-dashboard.clan). The job itself
+    /// lives in the tenant's job registry; this is only the address. Absent on
+    /// every earlier file. Carried verbatim by every write and by a spin-off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<String>,
+
     /// Publisher signature over the app's code (the trust gate for granting an
     /// app direct host access). Asymmetric (ed25519): signed with the
     /// publisher's private key, verified against the viewer's embedded public
@@ -760,6 +767,7 @@ mod tests {
             merge_policies: None,
             app: None,
             client: None,
+            job: None,
             signature: None,
             external: vec![],
             files: vec![FileEntry {

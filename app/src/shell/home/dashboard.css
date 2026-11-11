@@ -1,0 +1,18 @@
+/* The agency dashboard (features/job-index-dashboard.clan): six plain tiles, no charts. It borrows the
+   home's section label (.hm-h), the shell's text link (.side-link) and its tokens, and defines only the
+   grid and the number's size. Every number is a link, at least 44 px tall to press on a phone. */
+
+.db:where(.nui, .nui *) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 40px; align-items: start; }
+.db-tile:where(.nui, .nui *) { display: grid; gap: 8px; align-content: start; padding-top: 14px; border-top: 1.5px solid var(--line-strong); }
+.db-numbers:where(.nui, .nui *) { display: grid; gap: 0; }
+.db-n:where(.nui, .nui *) { display: flex; align-items: center; min-height: 44px; font: 600 28px/1.15 var(--f-display); letter-spacing: -.02em; color: var(--ink); text-decoration: none; text-wrap: balance; }
+.db-n:hover:where(.nui, .nui *) { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.db-n:focus-visible:where(.nui, .nui *) { outline: 2px solid var(--ink); outline-offset: 3px; }
+.db-none:where(.nui, .nui *) { display: flex; align-items: center; min-height: 44px; margin: 0; font: 600 28px/1.15 var(--f-display); letter-spacing: -.02em; color: var(--muted); }
+.db-line:where(.nui, .nui *) { margin: 0; font-size: 13.5px; color: var(--muted); }
+.db-jobs:where(.nui, .nui *) { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.db-jobs:where(.nui, .nui *) li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.db-jobs:where(.nui, .nui *) .side-link { font: 600 12px var(--font-mono); color: var(--ink); }
+
+@media (max-width: 900px) { .db:where(.nui, .nui *) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .db:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr); gap: 26px; } .db-n:where(.nui, .nui *), .db-none:where(.nui, .nui *) { font-size: 26px; } }

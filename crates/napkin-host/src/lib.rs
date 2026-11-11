@@ -29,6 +29,8 @@ pub mod event;
 #[cfg(feature = "native")]
 pub mod export;
 pub mod html;
+pub mod jobindex;
+pub mod jobs;
 pub mod library;
 pub mod listing;
 pub mod log;
