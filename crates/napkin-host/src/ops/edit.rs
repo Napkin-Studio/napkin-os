@@ -328,6 +328,18 @@ pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Out
         );
         if let Some(typed) = entry.typed.as_mut() {
             typed.reasoning = reasoning;
+            // The inverse of this write, kept with it: what each patched key held
+            // before. Undo and the version list read it (features/brief-versions-undo.clan);
+            // an append write has no simple inverse, so it keeps none.
+            if input.append_keys.is_empty() {
+                if let Ok(before) =
+                    serde_yaml::to_value(super::versions::before_of(doc, &input.keys))
+                {
+                    typed
+                        .extra
+                        .insert(super::versions::BEFORE.to_string(), before);
+                }
+            }
         }
         entry
     });

@@ -621,6 +621,28 @@ pub fn dispatch(
             Err(e) => e.into(),
         },
 
+        // The version list, one version's words, and restoring one into the draft
+        // (features/brief-versions-undo.clan). Reads, and one attributed write.
+        "/versions" => match session.read(crate::ops::versions::list) {
+            Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+            Err(e) => e.into(),
+        },
+        "/version" => {
+            let which = query_param(&req.query, "n").unwrap_or_default();
+            match session.read(|d| crate::ops::versions::read_at(d, &which)) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
+        }
+        "/restore" => review(session, ctx, |c, d| {
+            let n = req
+                .body_json()
+                .get("version")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| HostError::bad_request("name the version to restore"))?;
+            crate::ops::versions::restore(c, d, n as usize)
+        }),
+
         // The signer named on the brief signs this version: the planner's
         // `sign`, or the creative director's `approve` (which locks it).
         "/sign" => review_then(
