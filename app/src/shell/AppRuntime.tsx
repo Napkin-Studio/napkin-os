@@ -48,6 +48,10 @@ interface Props {
   onBar?: (items: BarItem[]) => void
   /** Where the app's writes are reported (`clan:write`) and retried (`clan:retry`). */
   writes?: SaveQueue
+  /** A write of the app's reached the host (`clan:write`, saved). */
+  onSaved?: () => void
+  /** Cmd or Ctrl Z, pressed inside the app where no field owns it (`clan:undo-key`). */
+  onUndoKey?: (dir: 'undo' | 'redo') => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
 }
@@ -60,7 +64,7 @@ interface Props {
  */
 export default function AppRuntime({
   htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, writes, insets,
+  onChrome, onBar, writes, insets, onSaved, onUndoKey,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -167,8 +171,8 @@ export default function AppRuntime({
   // What the app says about its parts. Its contentWindow is the frame's for
   // the frame's whole life, loads included, so nothing it posts before its
   // load event is missed. Only our own frame is heard.
-  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, writes })
-  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, writes } })
+  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, writes, onSaved, onUndoKey })
+  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, writes, onSaved, onUndoKey } })
   // Try again for a write that did not land: the frame holds the write, the shell asks it to send it again.
   useEffect(() => {
     if (!writes) return
@@ -191,7 +195,13 @@ export default function AppRuntime({
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
       else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
-      else if (m?.type === 'clan:write') { const w = writeFrom(m); if (w) handlers.current.writes?.report(w) }
+      else if (m?.type === 'clan:write') {
+        const w = writeFrom(m)
+        if (w) { handlers.current.writes?.report(w); if (w.state === 'saved') handlers.current.onSaved?.() }
+      } else if (m?.type === 'clan:undo-key') {
+        const dir = (m as { dir?: unknown }).dir
+        if (dir === 'undo' || dir === 'redo') handlers.current.onUndoKey?.(dir)
+      }
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',

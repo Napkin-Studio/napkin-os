@@ -1264,6 +1264,41 @@ record, and the host's lock list (§7.2, item 7) is its one enforcement point.
 5. The library listing carries a short form of it as `state.gate`, which is what
    Territories and the desk's Changed brief alert read.
 
+### 7.8 Versions and restore (features/brief-versions-undo.clan)
+
+*Added 2026-11-11.* A document's versions are read from its own chain; there is
+no second store of its past.
+
+1. **A version is each live `approve`** that targets the document; the first is
+   v1. The working draft is what stands now.
+2. **Every attributed `/patch-data` keeps its inverse**, `before`, on its `edit`
+   decision: what each patched key held until then (`null` when it held
+   nothing). An appending write (`append_keys`) has no simple inverse and keeps
+   none.
+3. **`GET /versions`** lists the versions newest first (`n`, `decision`,
+   `signer`, `at`, `locked`, `readable`) and the draft (`changed`,
+   `restored_from`, `edited_by`, `at`, `last_edit`: the newest write that kept
+   its inverse). **`GET /version?n=2`** (or `n=draft`) answers the brief's parts
+   as they stood at that approve: the data now with every later write undone,
+   newest first, by its `before`. The host's own keys and the signing list
+   (`projection`, `upstream`, `signers`, `locked_fields`) are not part of it.
+4. **A version is `readable` only while every data write since it kept a
+   `before`.** A write that did not (an older edit, an agent's applied draft, an
+   append) leaves a gap: the versions before it answer `409` and are listed as
+   unreadable rather than guessed.
+5. **`POST /restore {version: n}`** by a person writes the old words into the
+   draft as one new `edit` (`action: restore v<n>`). It never writes, removes or
+   supersedes an `approve`, an `unlock` or a `sign`: a signed version stays
+   locked and in the list, and the restored draft is a new version to sign
+   (`changed_since_lock`, §7.7). Restoring what the draft already says writes
+   nothing.
+6. **`GET /current`** answers the document as it stands (`data`, `version`), as a
+   host-side write's reply carries it, so a shell can hand it to the open app.
+
+The shell's undo is not a host route: it keeps the person's own edits this
+session, and Cmd or Ctrl Z writes the inverse through `/patch-data` as a new
+attributed edit, only while the part still holds what that person last wrote.
+
 ## 8. Routes — contract v1
 
 `/capabilities` reports `contract: 1`. A document is shown with the installed

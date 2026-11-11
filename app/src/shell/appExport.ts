@@ -80,6 +80,15 @@ export function refreshApp() {
   frame?.postMessage({ type: 'clan:dataupdated', source: 'shell' }, '*')
 }
 
+/**
+ * The shell changed the words (an undo, a restore): give the app the document as it stands, so it
+ * draws what is there. The bridge in the frame swaps it into `window.__CLAN__.data` and the app
+ * redraws as after its own write.
+ */
+export function pushData(data: Record<string, unknown>) {
+  frame?.postMessage({ type: 'clan:data', data }, '*')
+}
+
 /** A tab or button the app put in the OS bar was pressed: tell the app which. */
 export function barAction(id: string) {
   frame?.postMessage({ type: 'clan:bar-action', id }, '*')
