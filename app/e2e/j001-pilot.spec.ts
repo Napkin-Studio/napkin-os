@@ -37,7 +37,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   6: { title: 'five logos repaint the accent and it passes contrast in all three modes', slug: null },
   7: { title: 'axe finds nothing serious on every Phase 1 page in all three modes', slug: null },
   8: { title: 'a canary key set on the server never reaches the browser', slug: null },
-  9: { title: 'each confirmed timesheet line links to its sessions', slug: 'timesheet-sessions' },
+  9: { title: 'each confirmed timesheet line links to its sessions', slug: null },
   10: { title: 'the brief passes the gate and the client confirms it before Territories open', slug: null },
   11: { title: 'every write in the J001 documents is attributed', slug: null },
   12: { title: 'the J001 brief retrieval trace has no source cannes hit', slug: null },
@@ -46,7 +46,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: null },
   16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: null },
   17: { title: 'the client confirms the brief link on a phone with no account', slug: null },
-  18: { title: 'no consent means no captured sessions', slug: 'timesheet-sessions' },
+  18: { title: 'no consent means no captured sessions', slug: null },
 }
 
 const DOORS = {
@@ -390,19 +390,27 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(9), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
-    await signIn(page, PEOPLE.planning)
-    const job = await seedJ001(page, { ready: true })
+  // A person who says yes keeps that answer on the roster stack, so this one is not the planner test 18 needs unanswered.
+  test(t(9), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planningAndCreative)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await page.request.delete(`${job.api}/timesheet/mine`) // the other width's day, if it ran first
     await page.request.post(`${job.api}/timesheet/consent`, { data: { consent: true } })
     await page.goto(`/#tool-${job.client}-brief`)
+    await page.reload() // the shell reads the person's answer when it loads
     await page.getByTestId('work-item').first().click()
+    await expect(page.locator('[data-where="document"]')).toBeVisible({ timeout: 30_000 }) // the document is open
     await page.waitForTimeout(3000) // a work session while the brief is open and in focus
     await page.goto('/#timesheet')
-    await page.getByRole('button', { name: 'Confirm my day' }).click()
+    await page.getByRole('button', { name: /^Confirm today/ }).click()
+    await expect(page.getByTestId('timesheet-confirmed')).toBeVisible()
     const lines = page.getByTestId('timesheet-line')
     await expect(lines.first()).toBeVisible()
-    for (const line of await lines.all()) await expect(line.getByTestId('line-sessions')).not.toHaveCount(0)
+    for (const line of await lines.all()) await expect(line.getByTestId('line-sessions')).toHaveCount(1) // each confirmed line links to its sessions
+    const day = await (await page.request.get(`${job.api}/timesheet/day?date=${await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })}`)).json()
+    expect(day.status).toBe('confirmed')
+    for (const l of day.lines) expect(l.session_ids.length).toBeGreaterThan(0)
     await ctx.close()
   })
 
@@ -677,10 +685,10 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(18), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+  test(t(18), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning) // has not answered the consent question
-    const job = await seedJ001(page, { ready: true })
+    const job = await seedJ001(page, { ready: true, fresh: true })
     await page.goto(`/#tool-${job.client}-brief`)
     await page.getByTestId('work-item').first().click()
     await page.waitForTimeout(3000) // long enough for a session, if one were being kept

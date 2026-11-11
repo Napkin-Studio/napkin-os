@@ -28,6 +28,7 @@ pub mod sandbox;
 pub mod state;
 pub mod store;
 pub mod tenant;
+pub mod timesheet;
 pub mod tokens;
 
 use std::path::Path;

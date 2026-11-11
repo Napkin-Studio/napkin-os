@@ -37,6 +37,7 @@ export function Trail({ route, agency, client, inDocument, noAgency, onGo }: Pro
       case 'map': return { route: r, label: 'The map', disc: mini('pearl', 'O') }
       case 'door': return { route: r, label: 'A door', disc: mini('pearl', 'D') }
       case 'home': return { route: r, label: 'A home', disc: mini('pearl', 'H') }
+      case 'timesheet': return { route: r, label: 'Timesheet', disc: mini('pearl', 'T') }
       case 'tool': {
         const t = toolById(r.tool)
         return { route: r, label: t?.full ?? 'Tool', disc: mini('pearl', t?.name.slice(0, 1) ?? '') }

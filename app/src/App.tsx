@@ -17,6 +17,7 @@ import { applyUpdate, onLaunchFiles, useUpdateReady } from './pwa/pwa'
 import { askAppToExport } from './shell/appExport'
 import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
+import { useWorkSessions } from './timesheet/useWorkSessions'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
 import { toolById, toolOfApp } from './shell/landing/tools'
@@ -124,6 +125,8 @@ const [lookOpen, setLookOpen] = useState(false)
   const person = useRef<string | null>(null)
   // A read from the server: the state is set when it answers.
   useEffect(() => { void signedInUser().then(u => { person.current = u ? u.username : null; setUser(person.current) }) }, [])
+  // The work session of a job's document, noted only when this person has said yes (features/timesheet-sessions.clan).
+  useWorkSessions(!!user && hasServer && !(device && !serverless), screen === 'app' && running && !running.open.is_template ? running.open.path : null)
   // The agency's admin-set colours on the chrome (shell/agency/palette.ts), or
   // the neutral pair; a layer of its own that resetTheme never clears.
   const personId = landing.data?.person?.id ?? null
