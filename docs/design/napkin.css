@@ -1,0 +1,138 @@
+/* Napkin OS design proposal. Tokens follow v2 section 8, the locked rules.
+   Colours: white, black, mid-grey, and one accent sampled from the agency logo.
+   Type: Helvetica Neue for the interface, Newsreader for display. No web fonts are loaded here.
+   Spacing: 5 8 13 21 34 55 89. Type: 13 21 34 55, and 12 for uppercase labels. */
+
+:root {
+  --s1: 5px; --s2: 8px; --s3: 13px; --s4: 21px; --s5: 34px; --s6: 55px; --s7: 89px;
+  --ui: "Helvetica Neue", Arial, sans-serif;
+  --display: Newsreader, Georgia, "Times New Roman", serif;
+  /* White mode */
+  --paper: #ffffff; --ink: #000000; --mid: #6b6b6b; --line: #d4d4d4; --wash: #f2f2f2;
+  /* The accent is sampled from the agency logo, then its lightness is adjusted per mode
+     until it passes 4.5 to 1 on that mode's paper. Placeholder agency: a burnt orange. */
+  --accent: #a83a08;
+}
+[data-mode="grey"]  { --paper: #d9d9d9; --ink: #000000; --mid: #4a4a4a; --line: #a8a8a8; --wash: #cccccc; --accent: #8a2f06; }
+[data-mode="black"] { --paper: #000000; --ink: #ffffff; --mid: #a3a3a3; --line: #3d3d3d; --wash: #1a1a1a; --accent: #ff9a5c; }
+
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 13px/1.5 var(--ui); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+
+/* Type: four sizes and the label */
+.t55 { font: 400 55px/1.05 var(--display); letter-spacing: -0.01em; }
+.t34 { font: 400 34px/1.15 var(--display); }
+.t21 { font: 400 21px/1.35 var(--ui); }
+.t13 { font: 400 13px/1.5 var(--ui); }
+.label { font: 500 12px/1.4 var(--ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); }
+.mid { color: var(--mid); }
+.read { max-width: 68ch; }
+.count { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* The top bar: the agency mark, the one bar, the timesheet chip, Ask Nap */
+.top { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) var(--s5); border-bottom: 1px solid var(--line); }
+.mark { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; text-decoration: none; font-weight: 700; letter-spacing: 0.04em; }
+.mark i { display: block; width: 13px; height: 21px; background: var(--accent); }
+.bar { flex: 1; max-width: 610px; margin: 0 auto; display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line); border-radius: 2px; color: var(--mid); }
+.bar kbd { margin-left: auto; font: inherit; }
+.chip { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--s3); border: 1px solid var(--line); border-radius: 2px; text-decoration: none; white-space: nowrap; }
+.textbtn { min-height: 44px; display: inline-flex; align-items: center; background: none; border: 0; padding: 0 var(--s2); font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
+
+/* Page frame */
+.page { max-width: 1220px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+.where { display: flex; gap: var(--s2); color: var(--mid); margin-bottom: var(--s4); }
+.where b { color: var(--accent); font-weight: 400; }
+.gap5 > * + * { margin-top: var(--s5); }
+.gap6 > * + * { margin-top: var(--s6); }
+.gap4 > * + * { margin-top: var(--s4); }
+.gap3 > * + * { margin-top: var(--s3); }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 377px; gap: var(--s7); align-items: start; }
+
+/* Buttons: one primary per screen, solid ink. A primary that cannot run yet is dashed, with the reason under it. */
+.btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--s4); border-radius: 2px; border: 1px solid var(--ink); background: none; color: var(--ink); font: 500 13px/1 var(--ui); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.dashed { border-style: dashed; color: var(--mid); border-color: var(--mid); }
+.reason { margin-top: var(--s2); color: var(--mid); }
+.btnrow { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+
+/* Doors: circles are portals only. The only element with a shadow. */
+.doors { display: flex; flex-wrap: wrap; gap: var(--s5); }
+.door { width: 144px; height: 144px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; padding: var(--s3); text-decoration: none; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,0.13); font: 400 13px/1.3 var(--ui); }
+[data-mode="black"] .door { box-shadow: 0 2px 8px rgba(255,255,255,0.13); }
+.door.here { border-color: var(--accent); border-width: 2px; }
+.more { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); }
+.more a { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* Needs you: one line each, the next action as a button */
+.needs li { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
+.needs li:first-child { border-top: 1px solid var(--line); }
+.needs .what { flex: 1; min-width: 0; }
+.needs .when { color: var(--mid); white-space: nowrap; }
+
+/* The O: the map. The logo at the centre, at most five department circles around it. */
+.o { position: relative; width: 610px; height: 610px; margin: var(--s6) auto 0; }
+.o .logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: var(--s3); font: 700 34px/1 var(--ui); letter-spacing: 0.04em; }
+.o .logo i { display: block; width: 21px; height: 55px; background: var(--accent); }
+.o .door { position: absolute; left: 50%; top: 50%; margin: -72px 0 0 -72px; transform: rotate(var(--a)) translateY(-233px) rotate(calc(var(--a) * -1)); }
+.others { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); justify-content: center; }
+.others a { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* Rectangles hold all other content. 2 px corners. Cards stay flat. */
+.sheet { border: 1px solid var(--line); border-radius: 2px; padding: var(--s5); }
+.rows > * { display: grid; grid-template-columns: 233px minmax(0, 1fr) auto; gap: var(--s4); padding: var(--s3) 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.rows > *:first-child { border-top: 1px solid var(--line); }
+.state { white-space: nowrap; }
+.state.pass::before { content: "Passed"; }
+.state.open::before { content: "Missing"; font-weight: 700; }
+.note { border-left: 2px solid var(--ink); padding-left: var(--s3); }
+.locked { display: inline-flex; align-items: center; gap: var(--s2); min-height: 21px; padding: 0 var(--s2); border: 1px solid var(--ink); border-radius: 2px; font: 500 12px/1.4 var(--ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.ph { background: var(--wash); border-radius: 2px; display: flex; align-items: flex-end; padding: var(--s3); color: var(--mid); }
+
+/* Dashboard: six plain rows. No big number tiles, no decorative charts. Every number is a link. */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6) var(--s7); }
+.tile .n { display: block; font: 400 34px/1.15 var(--display); text-decoration: none; }
+.tile .n:hover { text-decoration: underline; }
+
+/* Timesheet day */
+.day li { display: grid; grid-template-columns: 89px minmax(0, 1fr) auto; gap: var(--s4); padding: var(--s3) 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.day li:first-child { border-top: 1px solid var(--line); }
+.day .gapline > :first-child { font-weight: 700; }
+
+/* Client link: one piece at a time, full width */
+.client { max-width: 610px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); }
+.client .stick { position: sticky; bottom: 0; background: var(--paper); padding: var(--s3) 0; border-top: 1px solid var(--line); display: flex; gap: var(--s3); }
+.client .stick .btn { flex: 1; }
+
+/* Index */
+.index li { padding: var(--s3) 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 233px minmax(0,1fr); gap: var(--s4); }
+
+/* Phone: 390 px */
+@media (max-width: 720px) {
+  .top { padding: var(--s2) var(--s3); gap: var(--s2); flex-wrap: wrap; }
+  .bar { order: 3; flex-basis: 100%; max-width: none; }
+  .top .mark { margin-right: auto; }
+  .page { padding: var(--s5) var(--s3) var(--s6); }
+  .t55 { font-size: 34px; }
+  .t34 { font-size: 21px; font-family: var(--ui); }
+  .cols { grid-template-columns: minmax(0, 1fr); gap: var(--s6); }
+  .doors { gap: var(--s3); }
+  .door { width: 110px; height: 110px; }
+  .needs li { flex-wrap: wrap; gap: var(--s2) var(--s3); }
+  .needs .what { flex-basis: 100%; }
+  .o { width: auto; height: auto; display: grid; grid-template-columns: repeat(2, 110px); gap: var(--s3); justify-content: center; }
+  .o .logo { position: static; transform: none; grid-column: 1 / -1; justify-content: center; margin-bottom: var(--s4); font-size: 21px; }
+  .o .logo i { width: 13px; height: 34px; }
+  .o .door { position: static; margin: 0; transform: none; }
+  .rows > * { grid-template-columns: minmax(0, 1fr) auto; }
+  .rows > * > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .tiles { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+  .day li { grid-template-columns: 55px minmax(0, 1fr); }
+  .day li > :nth-child(3) { grid-column: 2; }
+  .sheet { padding: var(--s4); }
+  .index li { grid-template-columns: minmax(0,1fr); gap: var(--s1); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
