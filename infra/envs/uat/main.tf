@@ -307,16 +307,13 @@ module "services" {
     NAPKIN_BRIEF_JUDGE        = "jev"
     NAPKIN_BRIEF_RESEARCH_MAX = "6"
   }
-  # The knowledge layers, in process (pg.py): the shared category database and
-  # each agency's own. Each secret is the JSON the database module wrote.
+  # The knowledge layers, in process (pg.py): the shared category database and each agency's own,
+  # staging's while layers_from_staging is on (staging-layers.tf). Each secret is the JSON the database module wrote.
   middleware_secrets = merge({
     NAPKIN_TAVILY_API_KEY = aws_secretsmanager_secret.tavily.arn
     NAPKIN_JEV_API_KEY    = aws_secretsmanager_secret.jev.arn
-    NAPKIN_LAYERS_DSN     = module.databases.secret_arns["napkin_category"]
-    }, {
-    for slug in keys(var.agencies) :
-    "NAPKIN_LAYERS_AGENCY_DSN_${upper(replace(slug, "-", "_"))}" => module.databases.secret_arns["napkin_agency_${replace(slug, "-", "_")}"]
-  })
+  }, local.layer_secrets)
+  extra_kms_key_arns = distinct([for s in data.aws_secretsmanager_secret.staging_db : s.kms_key_id])
 }
 
 # jev (TypeSafe), the checker research, asks and briefs rely on. Value put by hand:
