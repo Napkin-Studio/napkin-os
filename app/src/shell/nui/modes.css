@@ -30,6 +30,8 @@
   /* Status colours dark enough for text on the grey papers. */
   --success: #11592b;
   --warn: #7f3a05;
+  --warn-text: #7f3a05;
+  --on-warn: #FFFFFF;
   --danger: #8f1515;
   --warn-soft: #E3CFA6;
   --ok: #14633a;
