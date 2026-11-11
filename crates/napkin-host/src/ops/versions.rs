@@ -149,6 +149,17 @@ pub struct Draft {
     pub restored_from: Option<usize>,
     pub edited_by: Option<String>,
     pub at: Option<String>,
+    /// The newest write to the draft that kept its inverse: what the shell's undo
+    /// stack takes for the person's own edit (their name, the keys, what they held).
+    pub last_edit: Option<LastEdit>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct LastEdit {
+    pub decision: String,
+    pub person: String,
+    pub keys: Vec<String>,
+    pub before: Value,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -200,6 +211,14 @@ pub fn list(doc: &Document) -> HostResult<VersionsView> {
             restored_from,
             edited_by: last_write.map(person_of),
             at: last_write.map(|d| d.timestamp.clone()),
+            last_edit: last_write.and_then(|d| {
+                Some(LastEdit {
+                    decision: d.id.clone().unwrap_or_default(),
+                    person: person_of(d),
+                    keys: d.fields_changed.clone(),
+                    before: before_in(d)?,
+                })
+            }),
         },
     })
 }

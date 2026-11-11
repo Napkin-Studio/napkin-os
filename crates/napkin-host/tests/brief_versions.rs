@@ -117,6 +117,9 @@ fn restoring_an_old_version_keeps_the_newer_one_and_its_lock() {
     // Restore v2: a new edit in the draft; v3 and its lock stand.
     let (status, v) = call(&dara(), "/restore", "", json!({ "version": 2 }));
     assert_eq!(status, 200, "{v}");
+    // The kept inverses do not make the file invalid.
+    let report = clan_sdk::validate(&ClanFile::open(rig.id.as_str()).unwrap());
+    assert_eq!(report.display(), "OK");
     assert_eq!(data_of(&rig)["audience"], "Second words.");
     let (_, list) = call(&dara(), "/versions", "", Value::Null);
     let rows = list["versions"].as_array().unwrap();

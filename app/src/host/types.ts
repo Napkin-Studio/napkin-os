@@ -155,6 +155,47 @@ export interface GateView {
   waiting_on: string[]
 }
 
+/** One approved version of a brief, as `GET /versions` lists it (newest first). */
+export interface VersionRow {
+  /** v1 is the first approve. */
+  n: number
+  decision: string
+  /** Who signed it. */
+  signer: string
+  at: string
+  reason: string
+  /** The lock that holds now. */
+  locked: boolean
+  /** Its words can be shown and restored. */
+  readable: boolean
+}
+
+/** The newest write to the draft that kept its inverse. */
+export interface LastEdit {
+  decision: string
+  person: string
+  keys: string[]
+  /** What each key held before, null when it held nothing. */
+  before: Record<string, unknown>
+}
+
+export interface VersionsView {
+  versions: VersionRow[]
+  draft: {
+    changed: boolean
+    restored_from: number | null
+    edited_by: string | null
+    at: string | null
+    last_edit: LastEdit | null
+  }
+}
+
+/** `GET /version?n=`: the brief's parts as they stood at that version, or now (`draft`). */
+export interface VersionParts {
+  n: number | 'draft'
+  parts: Record<string, unknown>
+}
+
 // ── Clients and the library listing (`napkin_host::{clients, listing}`) ──────
 
 /** Who a document is for: the registry's id, and the name it has now. */
@@ -748,6 +789,14 @@ export interface Host {
   gatePatch(patch: Record<string, unknown>, action: string): Promise<void>
   /** Start a new version of a signed brief that changed (`POST /unapprove`, with the reason). */
   gateNewVersion(reason: string): Promise<void>
+  /** The brief's versions, each approve with its signer and date, and the draft (`GET /versions`). */
+  getVersions(): Promise<VersionsView>
+  /** One version's words, or the draft's (`GET /version?n=`). */
+  getVersion(n: number | 'draft'): Promise<VersionParts>
+  /** The open document as it stands now (`GET /current`): what an app draws after the shell changed it. */
+  getCurrent(): Promise<{ data: Record<string, unknown>; version: string }>
+  /** The draft takes an old version's words as one new attributed edit; no lock changes (`POST /restore`). */
+  restoreVersion(n: number): Promise<void>
   /** A person accepts an agent's call ("Looks right"): `/acknowledge`. */
   acknowledge(decision: string): Promise<void>
   /**

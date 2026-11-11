@@ -634,6 +634,12 @@ pub fn dispatch(
                 Err(e) => e.into(),
             }
         }
+        // The document as it stands now, as a host-side write's reply carries it: the shell hands
+        // it to the open app after an undo or a restore, so the app draws the words that are there.
+        "/current" => match session.document_now() {
+            Some(v) => HostResponse::json(200, &v),
+            None => HostError::no_file_open().into(),
+        },
         "/restore" => review(session, ctx, |c, d| {
             let n = req
                 .body_json()

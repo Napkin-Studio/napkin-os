@@ -27,6 +27,8 @@ import type {
   ClientReviewReply,
   DecisionsView,
   GateView,
+  VersionParts,
+  VersionsView,
   Host,
   HostEvents,
   InstalledApp,
@@ -260,6 +262,10 @@ export const wasmHost: Host = {
   gateSign: async rationale => { await post<unknown>('/sign', { rationale: rationale ?? '' }) },
   gatePatch: async (patch, action) => { await post<unknown>('/patch-data', { patch, agent: 'human', action }) },
   gateNewVersion: async reason => { await post<unknown>('/unapprove', { rationale: reason }) },
+  getVersions: () => route<VersionsView>('/versions', '', new Uint8Array()),
+  getVersion: n => route<VersionParts>('/version', `n=${n}`, new Uint8Array()),
+  getCurrent: () => route<{ data: Record<string, unknown>; version: string }>('/current', '', new Uint8Array()),
+  restoreVersion: async n => { await post<unknown>('/restore', { version: n }) },
   acknowledge: async decision => {
     const resp = (await boot()).handle('/acknowledge', '', new TextEncoder().encode(JSON.stringify({ decision }))) as RawResponse
     if (resp.status !== 200) throw new Error(new TextDecoder().decode(asBytes(resp.body)))
