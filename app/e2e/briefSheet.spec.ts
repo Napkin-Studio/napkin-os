@@ -24,7 +24,7 @@ async function openBrief(page: Page) {
   const r = await page.request.post(`${api}/documents`, { data: { app_id: 'ie.napkin.brief-maker', title: 'Summer Spoons', client_id: ids[0] } })
   expect(r.status()).toBe(200)
   const { token } = await r.json() as { token: string }
-  expect((await page.request.post(`/s/${token}/patch-data`, { data: { patch: BRIEF } })).status()).toBe(200)
+  expect((await page.request.post(`/s/${token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch: BRIEF } })).status()).toBe(200)
   await page.goto(`/#tool-${ids[0]}-brief`)
   await page.reload()
   await page.getByTestId('work-item').first().click()

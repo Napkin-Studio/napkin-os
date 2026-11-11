@@ -277,6 +277,12 @@ module "services" {
   # included, until the dogfood ends and it is purged (owner, 2026-10-05;
   # features/dogfood-telemetry.clan). Staging only.
   web_dogfood = true
+  # ADR-004 (features/client-wall.clan): a write with no agent or no action is
+  # logged and let through for one week, then refused. A person removes this
+  # line to enforce it; never before a week of the log has been read.
+  web_env = {
+    NAPKIN_UNATTRIBUTED_WRITES = "dry-run"
+  }
   # The middleware's run log beside the record (features/dogfood-log-quality.clan),
   # with what every model call and search saw, so a brief can be traced claim
   # by claim (owner, 2026-10-19; features/brief-fact-provenance.clan). Napkin
@@ -289,9 +295,19 @@ module "services" {
   middleware_count         = var.middleware_count
   middleware_env = {
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
-    # Until the middleware takes its scope from the signed-in person's agency,
-    # it works as our own test tenant, whose database exists (agencies.sandbox).
-    NAPKIN_DEV_ORG      = "org/sandbox"
+    # The middleware takes its scope from the signed-in person's agency
+    # (ADR-004, features/client-wall.clan). Until the roster carries agencies
+    # that have a database of their own, the exception below keeps the test
+    # tenant, whose database exists (agencies.sandbox). A person then removes
+    # NAPKIN_DEV_ORG and NAPKIN_DEV_ORG_EXCEPTION; staging refuses them without
+    # the exception, and production refuses them always.
+    NAPKIN_ENV               = "staging"
+    NAPKIN_DEV_ORG           = "org/sandbox"
+    NAPKIN_DEV_ORG_EXCEPTION = "1"
+    # Client text goes only to EU-processed models (docs/adr/0004-client-wall.md).
+    # Check the eu. profiles exist for each model in server/model-routes.example.json
+    # (aws bedrock list-inference-profiles --region eu-west-1) before applying.
+    NAPKIN_MODEL_PIN    = "eu"
     NAPKIN_MODEL_ROUTES = "/srv/napkin/server/model-routes.json"
     # As the local stack runs it (napkin-os-wt/stack/start-integrate.sh)
     NAPKIN_BRIEF_JUDGE        = "jev"

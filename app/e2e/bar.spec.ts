@@ -24,7 +24,7 @@ async function seed(page: Page) {
   const work = async (title: string, client: string, patch?: unknown) => {
     const r = await page.request.post(`${api}/documents`, { data: { app_id: BRIEF, title, client_id: client } })
     const v = await r.json() as { token: string }
-    if (patch) expect((await page.request.post(`/s/${v.token}/patch-data`, { data: { patch } })).status()).toBe(200)
+    if (patch) expect((await page.request.post(`/s/${v.token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch } })).status()).toBe(200)
   }
   await work('Spring brief', ids[0], CONTEST)
   await work('Autumn brief', ids[1], CONTEST)

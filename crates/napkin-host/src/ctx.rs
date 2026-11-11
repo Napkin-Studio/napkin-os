@@ -85,6 +85,11 @@ impl fmt::Display for Actor {
 pub struct Scope {
     pub org: Option<String>,
     pub brand: Option<String>,
+    /// The signed-in person's agency, as the shell resolved it. The host
+    /// sends it to the middleware with every request, which takes its scope
+    /// from it (ADR-004). Not recorded in decisions, so it is not part of
+    /// [`Scope::is_empty`].
+    pub agency: Option<String>,
 }
 
 impl Scope {

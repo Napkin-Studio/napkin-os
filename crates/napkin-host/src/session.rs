@@ -807,7 +807,7 @@ mod tests {
     fn attribution_comes_from_ctx_and_the_body_agent_is_only_a_claim() {
         let (_dir, session, id) = open_temp_clan();
         let ctx = Ctx::new(crate::ctx::Actor::human("u-42").unwrap());
-        let body = r#"{"patch":{"tone":"warm"},"agent":"analysis-model","rationale":"drafted"}"#;
+        let body = r#"{"patch":{"tone":"warm"},"agent":"analysis-model","action":"edit","rationale":"drafted"}"#;
         session.patch_data_as(&ctx, body).unwrap();
 
         let chain = ClanFile::open(id.as_str())
@@ -830,8 +830,9 @@ mod tests {
         let ctx = ctx.with_scope(crate::ctx::Scope {
             org: Some("o1".into()),
             brand: Some("b1".into()),
+            ..Default::default()
         });
-        let body = r#"{"patch":{"tone":"cool"},"agent":"human:u-42"}"#;
+        let body = r#"{"patch":{"tone":"cool"},"agent":"human:u-42","action":"edit"}"#;
         session.patch_data_as(&ctx, body).unwrap();
         let chain = ClanFile::open(id.as_str())
             .unwrap()

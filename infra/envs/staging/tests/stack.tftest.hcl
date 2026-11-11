@@ -62,6 +62,18 @@ run "plans_with_two_agencies" {
     error_message = "staging is the dogfood build (features/dogfood-telemetry.clan)"
   }
   assert {
+    condition     = lookup(module.services.middleware_environment, "NAPKIN_MODEL_PIN", "") == "eu"
+    error_message = "staging pins client text to EU model routes (docs/adr/0004-client-wall.md)"
+  }
+  assert {
+    condition     = lookup(module.services.middleware_environment, "NAPKIN_ENV", "") == "staging" && lookup(module.services.middleware_environment, "NAPKIN_DEV_ORG_EXCEPTION", "") == "1"
+    error_message = "staging's test tenant is a recorded exception, not the default (docs/adr/0004-client-wall.md)"
+  }
+  assert {
+    condition     = lookup(module.services.web_environment, "NAPKIN_UNATTRIBUTED_WRITES", "") == "dry-run"
+    error_message = "staging logs unattributed writes for a week before refusing them (features/client-wall.clan)"
+  }
+  assert {
     condition     = lookup(module.services.middleware_environment, "NAPKIN_RUNLOG_DIR", "") == "/runlog"
     error_message = "staging keeps the middleware's run log (features/dogfood-log-quality.clan)"
   }

@@ -44,6 +44,9 @@ pub const API: &str = "napkin.middleware/1";
 /// The `request_kind` whose replies are settled here. Every other kind is
 /// passed back to the app exactly as it came.
 pub const REQUEST_KIND: &str = "middleware";
+/// The header that tells the middleware which agency the signed-in person
+/// belongs to. The middleware's scope comes from it, never from the body.
+pub const AGENCY_HEADER: &str = "x-napkin-agency";
 
 /// The job id the middleware acts under: every decision it records is
 /// `process:middleware`, whichever handler computed it.

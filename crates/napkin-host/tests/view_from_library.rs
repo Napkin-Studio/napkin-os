@@ -454,7 +454,7 @@ fn a_write_keeps_the_library_view() {
     let f = Fixture::new(v1(), Some(template("1.2.0", &[])));
     f.session.open(f.doc.clone()).unwrap();
     f.session
-        .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human"}"#)
+        .patch_data(r#"{"patch":{"tone":"warm"},"agent":"human","action":"edit"}"#)
         .unwrap();
     assert!(f.session.human_html().unwrap().contains("VIEW 1.2.0"));
     // The write landed on the document, whose own view is still 1.0.0.
@@ -510,7 +510,7 @@ fn spun_off_brief(version: &str) -> (Arc<MemStore>, DocId, DocId) {
     let source = create_instance(&*store, RESEARCH, Some("Lúnasa".into())).unwrap();
     let s = Session::new(store.clone() as Arc<dyn DocStore>);
     s.open(source.clone()).unwrap();
-    s.patch_data(r#"{"patch":{"campaign":{"name":"Lúnasa 0.0"}},"agent":"human"}"#)
+    s.patch_data(r#"{"patch":{"campaign":{"name":"Lúnasa 0.0"}},"agent":"human","action":"edit"}"#)
         .unwrap();
 
     let carries = clan_sdk::SpinoffSpec {

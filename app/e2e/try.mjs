@@ -28,7 +28,7 @@ if (!empty) {
   }
   const work = async (app, title, c, patch) => {
     const r = await page.request.post(`${api}/documents`, { data: { app_id: app, title, ...(c ? { client_id: c } : {}) } })
-    if (patch) await page.request.post(`${base}/s/${(await r.json()).token}/patch-data`, { data: { patch } })
+    if (patch) await page.request.post(`${base}/s/${(await r.json()).token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch } })
   }
   if (ids[0]) { await work(BRIEF, 'Spring brief', ids[0], CONTEST); await work(BRIEF, 'Autumn brief', ids[0]); await work(DECK, 'Pitch deck', ids[0], { run: { state: 'building', stage: 'Layout' } }) }
   if (ids[1]) await work(BRIEF, 'Launch brief', ids[1])

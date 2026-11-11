@@ -902,7 +902,7 @@ fn an_ordinary_patch_data_afterwards_keeps_the_members() {
     // And no patch writes the projection on a document that has members.
     let err = f
         .session
-        .patch_data(r#"{"patch":{"projection":{"pins":{}}},"agent":"human"}"#)
+        .patch_data(r#"{"patch":{"projection":{"pins":{}}},"agent":"human","action":"edit"}"#)
         .unwrap_err();
     assert_eq!(err.status, 400);
 }
@@ -1190,7 +1190,7 @@ fn repeat_after_a_person_touched(
         "doc": doc_id, "base_version": clan["version"],
         "read": { read_key: null },
         "data_patch": patch,
-        "decisions": [{ "id": "d_01JB0STAGE1", "kind": "edit", "agent": "start_campaign@1.0",
+        "decisions": [{ "id": "d_01JB0STAGE1", "kind": "edit", "agent": "start_campaign@1.0","action":"edit",
                         "action": "staged", "rationale": "the stage's entry",
                         "reasoning": reasoning("Staged the entry.", &["mat_email01"]),
                         "targets": [target.replace("<doc>", &doc_id)] }],
@@ -1443,7 +1443,7 @@ fn verdict_reply(clan: &Value) -> Value {
             "read": { "open_questions": Value::Null },
             "data_patch": { "open_questions": ["[high] Agree the insight — it failed twice"] },
             "decisions": [
-                { "id": "d_01JB0V01VER", "kind": "verdict", "agent": "draft_brief@1.0/judge",
+                { "id": "d_01JB0V01VER", "kind": "verdict", "agent": "draft_brief@1.0/judge","action":"edit",
                   "action": "judge", "polarity": "bad", "reason_code": "cliche",
                   "taxonomy_version": "reason-codes/1", "reviewer_role": "judge",
                   "licence": { "model": true, "export": false },

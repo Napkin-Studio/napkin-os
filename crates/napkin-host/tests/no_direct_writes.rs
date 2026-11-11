@@ -161,7 +161,10 @@ fn document_operations_return_changes_and_write_nothing() {
         edit::patch_data(
             &ctx,
             &doc,
-            edit::PatchData::parse(r#"{"patch":{"verdict":"yes"},"agent":"human"}"#).unwrap(),
+            edit::PatchData::parse(
+                r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
+            )
+            .unwrap(),
         )
         .unwrap(),
         edit::upload_asset(&ctx, &doc, "note.txt", Some("human"), b"hello".to_vec()).unwrap(),
@@ -241,7 +244,7 @@ fn a_session_writes_only_through_apply() {
 
     store.unsealed.store(true, Ordering::SeqCst);
     session
-        .patch_data(r#"{"patch":{"verdict":"yes"},"agent":"human"}"#)
+        .patch_data(r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#)
         .unwrap();
     assert_eq!(store.applied.load(Ordering::SeqCst), 1);
     let now = session.current_version().unwrap();
@@ -250,7 +253,7 @@ fn a_session_writes_only_through_apply() {
 
     // An unchanged edit is no write at all.
     let reply = session
-        .patch_data(r#"{"patch":{"verdict":"yes"},"agent":"human"}"#)
+        .patch_data(r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#)
         .unwrap();
     assert_eq!(reply["noop"], true);
     assert_eq!(store.applied.load(Ordering::SeqCst), 1);

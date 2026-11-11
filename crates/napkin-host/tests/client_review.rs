@@ -67,7 +67,7 @@ fn open_with(schema: Option<String>) -> Fixture {
     };
     f.post_ok(
         "/patch-data",
-        json!({ "agent": "human", "patch": {
+        json!({ "agent": "human","action":"edit", "patch": {
             SMP: "Summer tastes better without the hangover.",
             "audience": { "primary": "Adults 25-40", "commercial": "Grocery shoppers" },
             "tone": "Warm, dry, a little wry",
