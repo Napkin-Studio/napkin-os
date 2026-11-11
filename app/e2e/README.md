@@ -64,6 +64,12 @@ node e2e/phase1-fixme.mjs           # the slug for each fixme test and the count
 node e2e/phase1-fixme.mjs --gate    # the same; exits 1 while the count is above 0
 ```
 
+Tests 11, 12 and 13 run. Test 11 reads the chains of the seeded documents and sends an unattributed write, which the host
+refuses with a 400. Test 12 runs the engine's own retrieval over stand-in rows (`seed/j001/retrievalTrace.py`, through
+`uv`, with four rows tagged `cannes` and no corpus text) and reads the trace: no `cannes` hit, each hit's source named. Test 13
+cuts the network while a part of the J001 brief is written, and Try again saves it. Test 15 stays `test.fixme`: the shell says
+the reserved estimate is returned, but the web meter never returns it. Its other parts run in `runFailed.spec.ts`.
+
 `seed/j001/` is the de-identified job ("Client A, an Irish whiskey"): `seedJ001(page)` writes its documents
 through the tenant's own API, as `seedClients.ts` writes clients. No real brand, client or person appears in
 it. To prove that, keep a list of the real names in a file **outside the repo** (one per line) and run
