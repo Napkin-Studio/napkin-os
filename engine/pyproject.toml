@@ -32,5 +32,5 @@ napkin-packs = "napkin_packs:main"
 [tool.setuptools]
 py-modules = [
     "parse_brief", "golden_critic", "check_invariants", "packs", "napkin_packs",
-    "ingest_ipa", "ingest_cannes", "ingest_effie", "ingest_dandad",
+    "ingest_ipa", "ingest_effie", "ingest_dandad",
 ]

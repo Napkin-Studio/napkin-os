@@ -22,7 +22,7 @@ import packs as P  # noqa: E402
 from test_awardlib_gate import corpus  # noqa: E402
 
 LOCK = json.loads((HERE / "packs.lock").read_text())
-ORIGINAL_FIVE = ["briefing-template", "cannes", "dandad", "ipa", "playbooks"]
+ORIGINAL_FIVE = ["briefing-template", "dandad", "ipa", "playbooks"]  # the cannes pack left the port (cannes-removal)
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +39,8 @@ def test_the_lock_lists_the_library_as_a_gated_insight_pack_and_leaves_the_rest_
     assert lib["gated"] is True and lib["kind"] == "case" and lib["loops"] == ["loop4_insight"] and lib["k"] == 2
     for pid in ORIGINAL_FIVE:
         assert "gated" not in by_id[pid]                                  # only gated packs carry the key
-    assert [e["id"] for e in LOCK["packs"]] == ORIGINAL_FIVE + ["awardlib"]
+    # the cannes pack is dropped whether or not packs.lock has been regenerated yet (cannes-removal)
+    assert [e["id"] for e in LOCK["packs"] if e["id"] != "cannes"] == ORIGINAL_FIVE + ["awardlib"]
 
 
 def test_pack_yaml_booleans_read_the_same_with_and_without_pyyaml():
@@ -157,7 +158,7 @@ def test_flag_off_the_pack_is_not_listed_and_nothing_changes(service):
     assert [p["id"] for p in service.visible_packs()] == ORIGINAL_FIVE
     status, out = ask(service)                                            # no packs named: every visible pack
     assert status == 200
-    assert sorted(c["source"] for c in service.calls) == sorted(["template", "cannes", "dandad", "ipa", "playbook"])
+    assert sorted(c["source"] for c in service.calls) == sorted(["template", "dandad", "ipa", "playbook"])
     assert all(p["pack"] != "awardlib" for p in out["passages"])
 
 
@@ -210,8 +211,8 @@ def test_the_other_packs_are_searched_exactly_as_before_whatever_the_flag(servic
         if mode:
             monkeypatch.setenv("RAG_AWARDLIB", mode)
         service.calls.clear()
-        ask(service, packs=["ipa", "cannes"], where={"category": "technology"})
-        assert service.calls == [{"source": "ipa"}, {"source": "cannes"}]
+        ask(service, packs=["ipa", "dandad"], where={"category": "technology"})
+        assert service.calls == [{"source": "ipa"}, {"source": "dandad"}]
 
 
 def test_a_store_that_cannot_count_withholds_the_library(service, monkeypatch):

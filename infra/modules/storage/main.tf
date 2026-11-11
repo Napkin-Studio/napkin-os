@@ -1,5 +1,5 @@
 # The three buckets the data plane needs:
-#   corpus  — the licensed craft corpora (Cannes, D&AD, IPA, Effie…) as source
+#   corpus  — the licensed craft corpora (D&AD, IPA, Effie…; Cannes removed, docs/adr/0005-cannes-removed.md) as source
 #             files, the input to RAG ingestion. licensed-internal: never public,
 #             never served to a browser.
 #   blobs   — document assets by sha256 (the Postgres + S3 decision). Empty

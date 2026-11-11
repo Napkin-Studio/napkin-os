@@ -541,8 +541,8 @@ real service may ignore it.
 
 ## 3. Retrieval port — `napkin.retrieval/1`
 
-Search over the knowledge packs — the licensed craft corpora (Cannes, D&AD,
-Effie, IPA), the planner playbooks and the briefing templates — returning
+Search over the knowledge packs — the licensed craft corpora (D&AD,
+Effie, IPA; Cannes Lions material is removed and never served, docs/adr/0005-cannes-removed.md), the planner playbooks and the briefing templates — returning
 **verbatim passages** with where they came from. Today this is
 `engine/rag/rag.py` `search()` / `retrieve.py` over Qdrant or a local index
 with NIM embeddings; it becomes a service.

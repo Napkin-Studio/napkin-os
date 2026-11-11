@@ -4,7 +4,7 @@
   POST /v1/retrieve   {query, k, packs?, where?, purpose?} -> verbatim passages, per pack
 
 The mock's retrieval port quotes from 3-passage digests of each pack; this one searches the
-whole corpora the engine indexed (IPA, Cannes, D&AD, playbooks, the briefing template) with
+whole corpora the engine indexed (IPA, D&AD, playbooks, the briefing template) with
 the engine's hybrid search, its brief-safe filter and its scopes. Keys come from engine/.env
 (the engine's loader): QDRANT_*, NVIDIA_API_KEY, RAG_STORE=qdrant.
 
@@ -41,10 +41,10 @@ PACKS = [{"tag": p["tag"], "id": p["id"], "kind": p["kind"], "scope": "house", "
           "k": int(p.get("k") or 2), "loops": list(p.get("loops") or []), "passages": int(p.get("chunks") or 0),
           "gated": bool(p.get("gated")), "filterable": ["category"] if p.get("gated") else [], "version": "sha256:" + hashlib.sha256(f"{LABEL}|{LOCK.get('embed_model')}|{p['id']}"
                                                                   .encode()).hexdigest()}
-         for p in LOCK["packs"]]
+         for p in LOCK["packs"] if p["tag"] not in retrieve.EXCLUDED_SOURCES]  # a pack the engine never serves is not listed
 BY_TAG = {p["tag"]: p for p in PACKS}
 # the index's metadata `source` for each pack tag
-SOURCE = {"template": "template", "cannes": "cannes", "dandad": "dandad", "ipa": "ipa", "playbook": "playbook"}
+SOURCE = {"template": "template", "dandad": "dandad", "ipa": "ipa", "playbook": "playbook"}
 
 
 def visible_packs():
