@@ -278,7 +278,6 @@ mod tests {
         let tone = body_of("tone_and_world", &data, &[]).unwrap();
         assert_eq!(text_of(&tone), "a b");
         assert!(body_of("audience", &data, &["audience".to_string()]).is_none());
-        assert!(body_of("project_name", &json!({ "project_name": "x" }), &[]).is_none() || true);
     }
 
     #[test]
