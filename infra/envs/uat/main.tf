@@ -297,6 +297,12 @@ module "services" {
   github_repository_ids    = var.github_repository_ids
   certificate_arn          = var.certificate_arn
   middleware_count         = var.middleware_count
+  # The spend guard (features/harness.clan). UAT is where a branch is tried with
+  # real calls: Claude on Bedrock, Tavily and jev. Set by the owner on 2026-11-11
+  # (Sai; Laurence's approval relayed by Sai). Staging and production keep the
+  # module's defaults: 0 euro, paid calls off.
+  spend_cap_eur = "10"
+  paid_calls    = "on"
   middleware_env = {
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
     # UAT keeps our own test tenant, whose database exists (agencies.sandbox), by
