@@ -36,9 +36,9 @@ test('a tool for a client: its page lists that client’s documents only, and Ne
   await page.reload()
 
   // The count on the tool's door is this client's, from the library.
-  await expect(page.getByTestId('tool-brief')).toHaveAccessibleName(/2 open/)
+  await expect(page.getByTestId('tool-brief')).toHaveAccessibleDescription(/2 open/)
   await expect(page.getByTestId('tool-brief')).toContainText('2')
-  await expect(page.getByTestId('tool-research')).toHaveAccessibleName(/none open, start one/)
+  await expect(page.getByTestId('tool-research')).toHaveAccessibleDescription(/none open, start one/)
   await page.getByTestId('tool-brief').click()
   await expect(page).toHaveURL(new RegExp(`#tool-${a}-brief$`))
   const tool = page.getByTestId('tool-page')
@@ -103,7 +103,7 @@ test('Escape goes up one level, and Back and Forward walk the same levels', asyn
   const { a } = await seed(page)
   await page.goto('/#agency')
   await page.reload()
-  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByRole('button', { description: /^Client A:/ }).click()
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await page.getByTestId('tool-brief').click()
   await expect(page.getByTestId('tool-page')).toBeVisible()
@@ -182,12 +182,12 @@ test('every tool says its name, its count and its state to a screen reader', asy
   const { a } = await seed(page)
   await page.goto(`/#client-${a}`)
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Brief Maker for Client A, 2 open (1 of 4)' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Research Tool for Client A, none open, start one \(2 of 4\)/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: 'Brief Maker for Client A, 2 open (1 of 4)' })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Research Tool for Client A, none open, start one \(2 of 4\)/ })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Tools for Client A' })).toBeVisible()
   // On the desk's dial, each quadrant says the same, Production Soon and disabled.
   await page.goto('/#agency')
-  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByRole('button', { description: /^Client A:/ }).click()
   await expect(page.getByRole('button', { name: 'Brief Maker for Client A, 2 briefs (1 of 4)' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Production Tool for Client A, coming soon (4 of 4)' })).toHaveAttribute('aria-disabled', 'true')
   await expect(page.getByRole('group', { name: 'Client A: its tools' })).toBeVisible()

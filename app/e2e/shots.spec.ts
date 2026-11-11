@@ -64,25 +64,25 @@ test('what needs you and what is running come from the documents', async ({ page
   await expect(drawer).toContainText('Client D · Review brief')
   await page.getByRole('button', { name: 'Close decisions' }).click()
   // What is running: its client's circle says what and how.
-  await expect(page.getByRole('button', { name: /^Client C: Pitch deck · agents working, working/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client C: Pitch deck · agents working, working/ })).toBeVisible()
   await shot(page, 'p1-01-landing')
 
   await expect(page.getByTestId('client-circle')).toHaveCount(6)
   // urgency first: needs you (A, D), then failed (E), then running (C), then the rest
   const order = await page.getByTestId('client-circle').evaluateAll(els => els.map(e => e.getAttribute('data-client')))
   expect(order.slice(0, 5)).toEqual([ids['Client A'], ids['Client D'], ids['Client E'], ids['Client C'], ids['Client B']])
-  await expect(page.getByRole('button', { name: /^Client A: Spring brief · 1 needs you/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client E: Board deck · failed/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client C: Pitch deck · agents working/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client A: Spring brief · 1 needs you/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client E: Board deck · failed/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client C: Pitch deck · agents working/ })).toBeVisible()
   await shot(page, 'p1-02-clients')
 
-  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByRole('button', { description: /^Client A:/ }).click()
   await shot(page, 'p1-02b-dial')
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await expect(page.getByTestId('work-item')).toHaveCount(3) // the one that needs you on top, then each in its group
   await expect(page.getByTestId('client-needs').getByTestId('work-item')).toHaveCount(1)
   await expect(page.getByTestId('work-item').first()).toContainText(/brief/i)
-  await expect(page.getByTestId('tool-brief')).toHaveAccessibleName(/Brief Maker for Client A, 2 open, needs you/)
+  await expect(page.getByTestId('tool-brief')).toHaveAccessibleDescription(/Brief Maker for Client A, 2 open, needs you/)
   await shot(page, 'p1-03-client')
 })
 
@@ -118,7 +118,7 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await shot(page, 'p1-09-phone-landing')
   await page.goto('/#clients'); await page.reload()
   await shot(page, 'p1-10-phone-clients')
-  await page.getByRole('button', { name: /^Client B:/ }).click()
+  await page.getByRole('button', { description: /^Client B:/ }).click()
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await shot(page, 'p1-11-phone-client')
 
@@ -128,7 +128,7 @@ test('screens: empty, many clients, phone, dark', async ({ page }) => {
   await shot(page, 'p1-12-dark-landing')
   await page.goto('/#clients'); await page.reload()
   await shot(page, 'p1-13-dark-clients')
-  await page.getByRole('button', { name: /^Client B:/ }).click()
+  await page.getByRole('button', { description: /^Client B:/ }).click()
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
   await shot(page, 'p1-14-dark-client')
 })

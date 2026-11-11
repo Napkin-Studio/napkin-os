@@ -33,7 +33,7 @@ test('every screen is the flat circle and nothing waits', async ({ page }) => {
   await shot(page, 'p4-12-no-webgl-desk')
 
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
-  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByRole('button', { description: /^Client A:/ }).click()
   await expect(page.getByTestId('dial')).toBeVisible({ timeout: 150 }) // no gate when flat
   await shot(page, 'p4-13-no-webgl-dial')
   await page.getByTestId('dial-hub').click() // the dial's hub: the client's page
