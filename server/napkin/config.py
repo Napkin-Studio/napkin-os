@@ -53,11 +53,11 @@ see any of it.
   NAPKIN_LAYERS_AGENCY_DSN_<SLUG>  one agency's database, DSN or secret JSON (wins over the template);
                                <SLUG> upper case, '-' as '_': NAPKIN_LAYERS_AGENCY_DSN_DEV_AGENCY for org/dev-agency
   NAPKIN_REUSE_DAYS            a layer fact younger than this is reused, not re-researched (30)
-  NAPKIN_ENV                   local (default) | staging | production. Outside local the scope comes from the
+  NAPKIN_ENV                   local (default) | staging | uat | production (a leading napkin- is dropped). Outside local the scope comes from the
                                signed-in person's agency on every request (the `x-napkin-agency` header the host
                                sends); NAPKIN_DEV_ORG is refused (docs/adr/0004-client-wall.md)
   NAPKIN_DEV_ORG / NAPKIN_DEV_BRAND  the fixed development tenant (org/dev-agency, brand/dev-brand). Local only,
-                               unless NAPKIN_ENV=staging and NAPKIN_DEV_ORG_EXCEPTION=1 (staging's test tenant,
+                               unless NAPKIN_ENV is staging or uat and NAPKIN_DEV_ORG_EXCEPTION=1 (the test tenant,
                                until the roster carries agencies; a person removes both then)
   NAPKIN_MODEL_PIN             eu: client text goes only to EU-processed model routes (model_routes.py);
                                unset = the routes as written
@@ -77,7 +77,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
-ENVS = ("local", "staging", "production")
+ENVS = ("local", "staging", "uat", "production")
+TEST_ENVS = ("staging", "uat")   # our own stacks: the fixed test tenant may be kept by a recorded exception
 AGENCY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
@@ -151,16 +152,19 @@ class Settings:
             raise SystemExit("NAPKIN_MODEL_EXTRA_BODY must be a JSON object")
         api = (e("NAPKIN_MODEL_API") or "anthropic").strip().lower()
         env = (e("NAPKIN_ENV") or "local").strip().lower()
+        # Terraform names the environment by its stack ("napkin-staging", infra/modules/services); the
+        # spend guard reads the same variable (spend.py), so both spellings mean one environment.
+        env = env.removeprefix("napkin-")
         if env not in ENVS:
             raise SystemExit(f"NAPKIN_ENV must be one of {', '.join(ENVS)}, not {env!r}")
         exception = (e("NAPKIN_DEV_ORG_EXCEPTION") or "").strip().lower() in ("1", "true", "yes", "on")
-        if env != "local" and e("NAPKIN_DEV_ORG") and not (exception and env == "staging"):
+        if env != "local" and e("NAPKIN_DEV_ORG") and not (exception and env in TEST_ENVS):
             raise SystemExit(f"NAPKIN_DEV_ORG is a development tenant and is refused when NAPKIN_ENV={env}: "
                              "the scope comes from the signed-in person's agency (docs/adr/0004-client-wall.md)")
         pin = (e("NAPKIN_MODEL_PIN") or "").strip().lower() or None
         if pin not in (None, "eu"):
             raise SystemExit(f"NAPKIN_MODEL_PIN must be eu or unset, not {pin!r}")
-        return cls(env=env, dev_org_exception=exception and env == "staging", model_pin=pin,
+        return cls(env=env, dev_org_exception=exception and env in TEST_ENVS, model_pin=pin,
                    model_api=api,
                    model_base_url=e("NAPKIN_MODEL_BASE_URL") or None,
                    model_api_key=e("NAPKIN_MODEL_API_KEY") or None,

@@ -549,6 +549,7 @@ pub fn capture_sandbox(ctx: &AppCtx, call: SandboxCall<'_>) {
         username: user,
         agency,
         name: None,
+        roles: Vec::new(),
     };
     let Some((dog, account)) = recording(ctx, Some(&account)) else {
         return;
@@ -795,6 +796,7 @@ mod tests {
             username: "engineer@napkin".into(),
             agency: "napkin".into(),
             name: None,
+            roles: Vec::new(),
         }
     }
 
@@ -865,6 +867,7 @@ mod tests {
             username: "lead@napkin".into(),
             agency: "napkin".into(),
             name: None,
+            roles: Vec::new(),
         }
     }
 

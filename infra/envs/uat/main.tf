@@ -299,10 +299,12 @@ module "services" {
   middleware_count         = var.middleware_count
   middleware_env = {
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
-    # Until the middleware takes its scope from the signed-in person's agency,
-    # it works as our own test tenant, whose database exists (agencies.sandbox).
-    NAPKIN_DEV_ORG      = "org/sandbox"
-    NAPKIN_MODEL_ROUTES = "/srv/napkin/server/model-routes.json"
+    # UAT keeps our own test tenant, whose database exists (agencies.sandbox), by
+    # the recorded exception (docs/adr/0004-client-wall.md): the middleware refuses
+    # NAPKIN_DEV_ORG outside local development without it.
+    NAPKIN_DEV_ORG           = "org/sandbox"
+    NAPKIN_DEV_ORG_EXCEPTION = "1"
+    NAPKIN_MODEL_ROUTES      = "/srv/napkin/server/model-routes.json"
     # As the local stack runs it (napkin-os-wt/stack/start-integrate.sh)
     NAPKIN_BRIEF_JUDGE        = "jev"
     NAPKIN_BRIEF_RESEARCH_MAX = "6"

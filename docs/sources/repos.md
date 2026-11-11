@@ -19,7 +19,7 @@ The home repo is Napkin-Studio/napkin-os. It is this checkout, so it is not clon
 | larryob78/Admagined- | Formats (said to be empty) | no access | | |
 | larryob78/shopper-display-builder | Shopper stands, branch concept-vahid | no access | | |
 | larryob78/napkin-os-experimental | Experiential, the fallback | no access | | |
-| vahid-vakson/napkin-experimental | Experiential, the main repo | no access | | |
+| vahid-vakson/napkin-experimental | Experiential, the main repo | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | master | 2026-11-10 |
 | larryob78/napkin-studio-editing | Film | no access | | |
 | larryob78/napkin-timesheet | AI timesheets | no access | | |
 | larryob78/napkin-timesheet-traffic | AI timesheets, Traffic board | no access | | |

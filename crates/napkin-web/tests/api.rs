@@ -2965,3 +2965,126 @@ async fn a_job_the_middleware_lost_is_no_longer_offered_to_settle() {
         StatusCode::BAD_REQUEST
     );
 }
+
+// ── Roles (features/roles-and-homes.clan): the session carries them, the server enforces them ──
+
+async fn signed_in_as(s: &Server, who: &str) -> (String, String) {
+    let r = send(
+        s,
+        json_req(
+            "/api/auth/sign-in",
+            None,
+            serde_json::json!({ "username": who }),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK, "sign in as {who}");
+    let cookie = session_cookie(&r);
+    let me = send(
+        s,
+        request("GET", "/api/session", Some(&cookie), Body::empty()),
+    )
+    .await
+    .json();
+    (cookie, me["tenant"].as_str().unwrap().to_string())
+}
+
+#[tokio::test]
+async fn the_session_carries_roles_and_a_role_that_may_not_open_a_route_gets_403() {
+    let s = roster_server(
+        "aoife@wk\tAoife\tplanning\ndara@wk\tDara\tcreative-director\nniamh@wk\tNiamh\tmanagement\n\
+         cian@wk\tCian\taccount-service\nann@wk\tAnn\tadmin\nlegacy@wk\tLegacy\nboth@wk\tBoth\tplanning,management\n",
+    );
+    let scope = |t: &str| format!("/api/t/{t}/jobs/J001/scope");
+
+    let (planner, tenant) = signed_in_as(&s, "aoife@wk").await;
+    let me = get(&s, "/api/session", Some(&planner)).await.json();
+    assert_eq!(me["roles"], serde_json::json!(["planning"]));
+    // Scope and estimates is money: not for Planning, and the server says so
+    let r = get(&s, &scope(&tenant), Some(&planner)).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    assert_eq!(r.json()["ok"], false);
+    // proprietary data is for the Agency Brain only
+    assert_eq!(
+        get(
+            &s,
+            &format!("/api/t/{tenant}/proprietary/rates"),
+            Some(&planner)
+        )
+        .await
+        .status,
+        StatusCode::FORBIDDEN
+    );
+    // a route no group names stays open: the desk and the documents keep working
+    assert_eq!(
+        get(&s, &format!("/api/t/{tenant}/clients"), Some(&planner))
+            .await
+            .status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        get(&s, &format!("/api/t/{tenant}/home"), Some(&planner))
+            .await
+            .status,
+        StatusCode::OK
+    );
+
+    // the creative director is refused it too; management, account service, an admin and a two-role person pass the check
+    // (the route is not built yet, so what answers is the router's 404, not the check's 403)
+    let (cd, t) = signed_in_as(&s, "dara@wk").await;
+    assert_eq!(
+        get(&s, &scope(&t), Some(&cd)).await.status,
+        StatusCode::FORBIDDEN
+    );
+    for who in ["niamh@wk", "cian@wk", "ann@wk", "both@wk", "legacy@wk"] {
+        let (c, t) = signed_in_as(&s, who).await;
+        assert_eq!(
+            get(&s, &scope(&t), Some(&c)).await.status,
+            StatusCode::NOT_FOUND,
+            "{who}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_doors_are_served_from_the_roles_in_the_session_and_the_switcher_is_for_admins() {
+    let s = roster_server(
+        "aoife@wk\tAoife\tplanning,creative-director\nann@wk\tAnn\tadmin\nlegacy@wk\tLegacy\n",
+    );
+
+    let (c, t) = signed_in_as(&s, "aoife@wk").await;
+    let home = get(&s, &format!("/api/t/{t}/doors"), Some(&c)).await.json();
+    assert_eq!(home["restricted"], true);
+    assert_eq!(
+        home["doors"].as_array().unwrap().len(),
+        5,
+        "two roles, one merged home of five"
+    );
+    assert!(home["switcher"].is_null(), "a planner has no switcher");
+    // asking to see another role's home changes nothing for a planner
+    let tried = get(&s, &format!("/api/t/{t}/doors?as=management"), Some(&c))
+        .await
+        .json();
+    assert_eq!(tried["doors"], home["doors"]);
+
+    let (a, t) = signed_in_as(&s, "ann@wk").await;
+    let admin = get(&s, &format!("/api/t/{t}/doors"), Some(&a)).await.json();
+    assert_eq!(admin["map"]["circles"].as_array().unwrap().len(), 5);
+    assert_eq!(admin["map"]["other"].as_array().unwrap().len(), 2);
+    assert!(admin["switcher"].is_array());
+    let as_cd = get(
+        &s,
+        &format!("/api/t/{t}/doors?as=creative-director"),
+        Some(&a),
+    )
+    .await
+    .json();
+    assert_eq!(as_cd["doors"][0]["name"], "Ideas");
+
+    // no role: not restricted, so the shell keeps the desk as it was
+    let (l, t) = signed_in_as(&s, "legacy@wk").await;
+    assert_eq!(
+        get(&s, &format!("/api/t/{t}/doors"), Some(&l)).await.json()["restricted"],
+        false
+    );
+}

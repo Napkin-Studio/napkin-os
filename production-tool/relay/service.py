@@ -40,6 +40,7 @@ import identity
 import library
 import names
 import projects
+from director import spend
 from contracts import Contracts, api
 from director.base import Director
 from providers import Registry
@@ -911,6 +912,7 @@ class Relay:
         if delta:
             self.store.incr("spend", "usd", delta)
         job = saved
+        spend.set_run(job["jobId"])   # the spend guard's per-run total, for the model call and the submit below
 
         try:
             directed, block = self._direct(job, sheet)

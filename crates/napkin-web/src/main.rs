@@ -221,7 +221,8 @@ async fn main() {
             settings.agent_cap,
         )
         .with_seed(settings.seed_dir.clone())
-        .with_dogfood(dogfood.clone()),
+        .with_dogfood(dogfood.clone())
+        .with_roles_dir(Some(settings.config_dir.clone())),
     );
 
     let app = napkin_web::router_with(ctx, settings.static_dir.as_deref(), identity);

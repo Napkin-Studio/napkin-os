@@ -17,7 +17,7 @@
   --ink: #141413;
   --ink-soft: #2A2620;
   --muted: #6D655A;
-  --faint: #9A9082;
+  --faint: #736859;   /* 4.8 to 1 or better on every white-mode paper (agency-look: axe, color-contrast) */
   --line: #E2D9C8;
   --line-strong: #2A2620;
   --accent-line: #C8CBFF;
@@ -60,7 +60,7 @@
   --ink: #EFE9DE;
   --ink-soft: #D6CEC0;
   --muted: #A49B8D;
-  --faint: #7B7367;
+  --faint: #9A9183;   /* 5.0 to 1 or better on every black-mode paper */
   --line: #34302A;
   --line-strong: #CFC6B6;
   --warn: #E09A4B;

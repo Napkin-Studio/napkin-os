@@ -8,7 +8,7 @@ from __future__ import annotations
 import base64
 import json
 
-from director.model import ModelError, Reply
+from director.model import ModelError, Reply, guard_spend
 
 
 def cli_schema(schema):
@@ -48,6 +48,7 @@ class ClaudeCliWire:
              schema_mode="enforced") -> Reply:
         import subprocess
         import tempfile
+        guard_spend(model=model, system=system, turns=turns, max_tokens=max_tokens, purpose=purpose, headers=headers)
         with tempfile.TemporaryDirectory(prefix="napkin-cli-") as tmp:
             parts, paths = [], []
             for t in turns:

@@ -15,7 +15,7 @@ import { MODES, type Mode } from '../components/states/words'
 
 const asked = new URLSearchParams(location.search).get('mode')
 const one = MODES.find(m => m === asked) as Mode | undefined
-const paper = { white: '#FFFDF8', grey: '#DEDAD0', black: '#1B1A18' }
+const paper = { white: '#FFFDF8', grey: '#D8D3C7', black: '#1B1A18' }
 document.body.style.margin = '0'
 document.body.style.background = paper[one ?? 'white']
 

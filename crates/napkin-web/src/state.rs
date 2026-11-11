@@ -98,6 +98,8 @@ pub struct AppCtx {
     pub sandbox_origin: Option<String>,
     /// The dogfood build's record (`NAPKIN_DOGFOOD=1`); `None` everywhere else.
     pub dogfood: Option<Arc<crate::dogfood::Dogfood>>,
+    /// Where an agency's own door table may be served from (`roles/<agency>.json`).
+    pub roles_dir: Option<PathBuf>,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
 
@@ -118,6 +120,7 @@ impl AppCtx {
             meter: Meter::new(agent_cap),
             sandbox_origin,
             dogfood: None,
+            roles_dir: None,
             workspaces: Mutex::new(HashMap::new()),
         }
     }
@@ -131,6 +134,17 @@ impl AppCtx {
     /// Record everything consenting accounts do (the dogfood build).
     pub fn with_dogfood(mut self, dogfood: Option<Arc<crate::dogfood::Dogfood>>) -> Self {
         self.dogfood = dogfood;
+        self
+    }
+
+    /// The tenant's own directory: where its settings files live.
+    pub fn tenant_dir(&self, tenant: &TenantId) -> PathBuf {
+        self.root.join(tenant.as_str())
+    }
+
+    /// The directory an agency's own door table is read from.
+    pub fn with_roles_dir(mut self, dir: Option<PathBuf>) -> Self {
+        self.roles_dir = dir;
         self
     }
 

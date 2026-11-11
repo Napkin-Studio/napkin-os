@@ -84,10 +84,12 @@ export const BOOT_CSS = `:root,:root[data-theme='light']{--desk:${DESK_BASE.ligh
 
 /** The head script: theme and agency from the last session, before the first paint. Storage may throw: then neutral. */
 export function bootHeadScript(looks: BootLooks = bootLooks()): string {
-  return '(function(){var L=' + JSON.stringify(looks) + ',d=document.documentElement,t,a,k;'
+  return '(function(){var L=' + JSON.stringify(looks) + ',d=document.documentElement,t,m,a,k;'
     + `try{t=localStorage.getItem('${THEME_KEY}');a=localStorage.getItem('${AGENCY_KEY}')}catch(e){}`
-    + "if(t!=='light'&&t!=='dark')t=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';"
-    + "d.setAttribute('data-theme',t);d.style.colorScheme=t;"
+    + "m=t==='light'?'white':t==='dark'?'black':t;"
+    + "if(m!=='white'&&m!=='grey'&&m!=='black')m=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'white':'black';"
+    + "t=m==='black'?'dark':'light';"
+    + "d.setAttribute('data-theme',t);d.setAttribute('data-mode',m);d.style.colorScheme=t;"
     + "a=a?String(a).trim().toLowerCase():'';"
     + 'k=/^[a-z0-9._-]+$/.test(a)?(Object.prototype.hasOwnProperty.call(L.a,a)?L.a[a]:L.d):null;'
     + `if(k){var s=document.createElement('style');s.id='${BOOT_SURFACE_ID}';s.textContent=k.s;document.head.appendChild(s)}`

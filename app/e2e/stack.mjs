@@ -11,6 +11,11 @@
 //      every new workspace. With NAPKIN_E2E_ROSTER=1 it signs people in from a
 //      placeholder roster instead (NAPKIN_AUTH=roster): sam@wk, tia@tbwa and
 //      ann@napkin, so the agency's colours and the medallion can be seen.
+//   5. a second napkin-web, always, on 127.0.0.1:$NAPKIN_E2E_ROSTER_PORT (default 18082): the roster
+//      stack the role tests sign in to (seed/j001/people.mjs, with roles). The server has one auth
+//      mode per process, and the existing specs need anonymous sessions, so the two modes run side by
+//      side, each with its own data directory and signed-session key. A spec chooses by baseURL
+//      (`rosterURL` in j001-pilot.spec.ts). Same shell build, same seed, same stand-in middleware.
 // Nothing here calls a model or any network service. Ctrl-C (or SIGTERM from
 // Playwright) stops the server and removes the temp directories.
 
@@ -22,6 +27,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CANARY } from './seed/j001/canary.mjs'
+import { ROSTER_LINES } from './seed/j001/people.mjs'
 
 const app = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const root = resolve(app, '..')
@@ -33,6 +39,7 @@ const scratch = join(work, 'scratch')
 const config = join(work, 'config')
 for (const d of [seed, data, scratch, config]) mkdirSync(d)
 const mwPort = process.env.NAPKIN_E2E_MW_PORT || '18081'
+const rosterPort = process.env.NAPKIN_E2E_ROSTER_PORT || '18082'
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { stdio: 'inherit', cwd: root, ...opts })
@@ -79,9 +86,7 @@ const middleware = createServer((req, res) => {
 middleware.listen(Number(mwPort), '127.0.0.1')
 // Placeholder people only, one per agency kit the screenshots compare (wk, tbwa) and Napkin's own.
 const roster = process.env.NAPKIN_E2E_ROSTER === '1' ? join(config, 'roster.tsv') : null
-if (roster) writeFileSync(roster, 'sam@wk\tSam Test\ntia@tbwa\tTia Test\nann@napkin\tAnn Test\n'
-  // The J001 people (e2e/seed/j001/people.ts), so the brief's two signers can sign in.
-  + 'aoife@wk\tAoife Test\ndara@wk\tDara Test\ncian@wk\tCian Test\nniamh@wk\tNiamh Test\n')
+if (roster) writeFileSync(roster, 'sam@wk\tSam Test\ntia@tbwa\tTia Test\nann@napkin\tAnn Test\n')
 writeFileSync(join(config, 'workspace.yaml'), `proxies:\n  middleware:\n    endpoint: http://127.0.0.1:${mwPort}/v1/tasks\n`)
 
 // Every provider key is unset for the server, whatever this shell holds (features/j001-pilot-suite.clan:
@@ -92,30 +97,48 @@ const unset = Object.keys(env).filter(k => PROVIDER.test(k) && !k.startsWith('NA
 for (const k of unset) delete env[k]
 console.log(`e2e stack: provider keys unset (${unset.length} removed from the server's environment), no model route`)
 
-const server = spawn(join(root, 'target/debug/napkin-web'), [], {
-  stdio: 'inherit',
-  cwd: root,
-  env: {
-    ...env,
-    NAPKIN_CANARY_KEY: CANARY,
-    // The Brief gate holds the lock list (features/brief-gate.clan). On with the roster, where the J001 people
-    // sign in; off otherwise, as it is by default, so the specs that count what needs a person are unchanged.
-    NAPKIN_BRIEF_GATE: roster ? 'on' : 'off',
-    NAPKIN_AUTH: roster ? 'roster' : 'none',
-    // Signed sessions need a key: a throwaway one, made for this run and gone with it.
-    ...(roster ? { NAPKIN_AUTH_ROSTER: roster, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
-    NAPKIN_WEB_ADDR: `127.0.0.1:${port}`,
-    NAPKIN_WEB_DATA: data,
-    NAPKIN_WEB_STATIC: join(app, 'dist'),
-    NAPKIN_WEB_SEED: seed,
-    NAPKIN_CONFIG_DIR: config,
-    // No model and no secrets: the only middleware is the local stand-in above.
-    RUST_LOG: 'napkin_web=warn',
-  },
-})
+function start(addr, data, auth) {
+  return spawn(join(root, 'target/debug/napkin-web'), [], {
+    stdio: 'inherit',
+    cwd: root,
+    env: {
+      ...env,
+      NAPKIN_CANARY_KEY: CANARY,
+      // The Brief gate holds the lock list (features/brief-gate.clan). On for the roster stack, where the J001
+      // people sign in; off on the primary, as it is by default, so the specs that count what needs a person are unchanged.
+      NAPKIN_BRIEF_GATE: auth ? 'on' : 'off',
+      NAPKIN_AUTH: auth ? 'roster' : 'none',
+      // Signed sessions need a key: a throwaway one, made for this run and gone with it.
+      ...(auth ? { NAPKIN_AUTH_ROSTER: auth, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
+      NAPKIN_WEB_ADDR: addr,
+      NAPKIN_WEB_DATA: data,
+      NAPKIN_WEB_STATIC: join(app, 'dist'),
+      NAPKIN_WEB_SEED: seed,
+      NAPKIN_CONFIG_DIR: config,
+      // No model and no secrets: the only middleware is the local stand-in above.
+      RUST_LOG: 'napkin_web=warn',
+    },
+  })
+}
 
-const stop = () => { middleware.close(); server.kill('SIGTERM') }
+// The roster stack for the role tests: its own data directory, and a roster with the placeholder people
+// and their roles. Started first and waited for, so the primary's health check (which Playwright waits on)
+// means both are up.
+const rosterData = join(work, 'data-roster')
+mkdirSync(rosterData)
+const rosterFile = join(work, 'roster-people.tsv')
+writeFileSync(rosterFile, ROSTER_LINES.join('\n') + '\n')
+const people = start(`127.0.0.1:${rosterPort}`, rosterData, rosterFile)
+for (let i = 0; ; i++) {
+  try { if ((await fetch(`http://127.0.0.1:${rosterPort}/api/healthz`)).ok) break } catch { /* not up yet */ }
+  if (i > 200) { console.error('e2e stack: the roster server did not start'); people.kill('SIGTERM'); cleanup(); process.exit(1) }
+  await new Promise(r => setTimeout(r, 100))
+}
+
+const server = start(`127.0.0.1:${port}`, data, roster)
+
+const stop = () => { middleware.close(); server.kill('SIGTERM'); people.kill('SIGTERM') }
 process.on('SIGTERM', stop)
 process.on('SIGINT', stop)
-server.on('exit', code => { middleware.close(); cleanup(); process.exit(code ?? 0) })
-console.log(`e2e stack: http://127.0.0.1:${port}  (data ${data})`)
+server.on('exit', code => { middleware.close(); people.kill('SIGTERM'); cleanup(); process.exit(code ?? 0) })
+console.log(`e2e stack: http://127.0.0.1:${port}  (data ${data}); roster stack http://127.0.0.1:${rosterPort}`)

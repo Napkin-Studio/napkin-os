@@ -31,7 +31,7 @@ async function make(page: Page, api: string, app: string, title: string, client:
   expect(r.status(), `create ${title}`).toBe(200)
   const body = await r.json() as { token: string; path: string; manifest: { id: string } }
   if (patch) {
-    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch, agent: 'human', action: 'seed the J001 job' } })
+    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch, agent: 'j001-seed', action: `seed: ${title}` } })
     expect(p.status(), `patch ${title}`).toBe(200)
   }
   return { token: body.token, id: body.manifest.id, path: body.path }
@@ -41,21 +41,28 @@ async function make(page: Page, api: string, app: string, title: string, client:
  * Seed J001 into the tenant the page is signed in as. `ready: true` writes the brief that
  * answers the gate's six items; the default is the messy one a planner pastes in.
  */
-export async function seedJ001(page: Page, opts: { ready?: boolean } = {}): Promise<SeededJob> {
+export async function seedJ001(page: Page, opts: { ready?: boolean; fresh?: boolean } = {}): Promise<SeededJob> {
   const deIdentified = assertDeIdentified()
   await page.goto('/')
-  // On the roster stack a tenant is the agency's, shared by every test, so "Client A" may already exist
-  // (the host answers 409): the job then goes to Client A2, A3 ..., one client for each test.
+  // An anonymous context is its own tenant; a signed-in person works in their agency's, which the next
+  // test finds again, so Client A may already be there (409): then it is the one to use. `fresh` is for a
+  // test whose answer is about one client alone (Territories reads every brief of a client): it gets
+  // Client A2, A3 ... instead.
   const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
   const api = `/api/t/${tenant}`
   let client = ''
   let clientName = ''
+  const all = async () => await (await page.request.get(`${api}/clients`)).json() as { id: string; name: string }[]
   for (let n = 1; !client; n++) {
     const name = n === 1 ? JOB.client : `${JOB.client}${n}`
-    const r = await page.request.post(`${api}/clients`, { data: { name } })
-    if (r.status() === 409) continue
-    expect(r.status(), `create ${name}`).toBe(201)
-    client = (await r.json() as { id: string }).id
+    const made = await page.request.post(`${api}/clients`, { data: { name } })
+    if (made.status() === 409) {
+      if (opts.fresh) continue
+      client = (await all()).find(c => c.name === name)!.id
+    } else {
+      expect(made.status(), `create ${name}`).toBe(201)
+      client = (await made.json() as { id: string }).id
+    }
     clientName = name
   }
   const brief = await make(page, api, BRIEF_APP, JOB.title, client, opts.ready ? READY_BRIEF : MESSY_BRIEF)

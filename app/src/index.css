@@ -134,7 +134,7 @@ body {
 
 button { font-family: inherit; }
 button:focus-visible,
-[tabindex]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+[tabindex]:focus-visible { outline: 3px solid var(--agency-accent, var(--accent)); outline-offset: 2px; }
 
 /* Mono eyebrow / label: the design's small uppercase caption. */
 .eyebrow {

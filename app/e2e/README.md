@@ -64,6 +64,12 @@ node e2e/phase1-fixme.mjs           # the slug for each fixme test and the count
 node e2e/phase1-fixme.mjs --gate    # the same; exits 1 while the count is above 0
 ```
 
+Tests 11, 12 and 13 run. Test 11 reads the chains of the seeded documents and sends an unattributed write, which the host
+refuses with a 400. Test 12 runs the engine's own retrieval over stand-in rows (`seed/j001/retrievalTrace.py`, through
+`uv`, with four rows tagged `cannes` and no corpus text) and reads the trace: no `cannes` hit, each hit's source named. Test 13
+cuts the network while a part of the J001 brief is written, and Try again saves it. Test 15 stays `test.fixme`: the shell says
+the reserved estimate is returned, but the web meter never returns it. Its other parts run in `runFailed.spec.ts`.
+
 `seed/j001/` is the de-identified job ("Client A, an Irish whiskey"): `seedJ001(page)` writes its documents
 through the tenant's own API, as `seedClients.ts` writes clients. No real brand, client or person appears in
 it. To prove that, keep a list of the real names in a file **outside the repo** (one per line) and run
@@ -71,5 +77,8 @@ it. To prove that, keep a list of the real names in a file **outside the repo** 
 hit. With no list supplied the check passes and says so. `j001-seed.spec.ts` tests the seed and the check.
 
 The stack unsets every provider key for the server and sets a fake canary key (test 8). The role tests sign
-people in, so they need the roster stack (`NAPKIN_E2E_ROSTER=1`) and the Phase 1 roles on it; the harness runs
-one auth mode per run, which `roles-and-homes` has to settle.
+people in, and a server has one auth mode per process, so the stack also starts a second `napkin-web` in roster
+mode on `NAPKIN_E2E_ROSTER_PORT` (default 18082) beside the anonymous one: the placeholder people and their roles
+are in `seed/j001/people.mjs`, and a spec opens its context with `open(browser, size, 'white', { roster: true })`
+(features/roles-and-homes.clan, decision "the e2e stack serves both auth modes"). `roles-homes.spec.ts` covers the
+homes, the O and the switcher; `NAPKIN_E2E_SHOTS=<dir>` also writes a screenshot of each.

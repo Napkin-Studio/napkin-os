@@ -89,7 +89,7 @@ export default function Sidebar({ manifest, path, onOpenDocument }: Props) {
       ) : (
         <div className="ch-section">
           <div className="eyebrow">Lineage</div>
-          <span className="ch-val">Root document — no parent.</span>
+          <span className="ch-val">Root document, no parent.</span>
         </div>
       )}
 

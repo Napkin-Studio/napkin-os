@@ -208,7 +208,8 @@ export function AgencyPill({ agency, logo, onDesk }: { agency: string; logo?: Ag
       className="name-pill pill-accent"
       id="header-name-pill"
       title={`${agency}: back to the desk`}
-      aria-label="Back to the desk"
+      // The name carries the words the button shows (WCAG 2.5.3, Label in Name), then where it goes.
+      aria-label={`${own ? 'Napkin Studio' : `${agency} Napkin Studio`}: back to the desk`}
       data-testid="agency-pill"
       onClick={onDesk}
     >
@@ -233,7 +234,7 @@ function AccountButton({ account, open, onMenu }: { account: Account; open: bool
       id="tb-me"
       aria-haspopup="menu"
       aria-expanded={open}
-      aria-label={`${account.name}: your account`}
+      aria-label={`${account.initials}, ${account.name}: your account`}
       title={`${account.name} · ${account.line}`}
       data-testid="account-button"
       onClick={e => onMenu(e.currentTarget)}
@@ -268,7 +269,8 @@ function DecisionsButton({ needs, onDecisions, open, waiting }: { needs: number;
       onClick={onDecisions}
       disabled={!onDecisions}
       aria-expanded={open}
-      aria-label={`Decisions: ${said}`}
+      // Its name is what it shows, "Decisions" and the count (WCAG 2.5.3); what the count means is its description.
+      aria-description={said}
       title={said}
       data-testid="decisions"
     >
@@ -356,7 +358,7 @@ export default function Toolbar({
             className="tb-client"
             id={client.switcher ? 'p33-cswitch' : undefined}
             title={client.switcher ? 'Switch client' : `Back to ${client.name}`}
-            aria-label={client.switcher ? `Switch client: ${client.name}` : client.name}
+            aria-description={client.switcher ? `Switch client: ${client.name}` : `Back to ${client.name}`}
             aria-current={client.current ? 'page' : undefined}
             aria-haspopup={client.switcher ? 'menu' : undefined}
             aria-expanded={client.switcher ? pop.open?.key === 'client' : undefined}
@@ -493,7 +495,7 @@ export default function Toolbar({
               : doc.crew?.working ? <JobChip crew={doc.crew} /> : null}
             {doc.isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}
             {doc.trusted && (
-              <span className="ch-chip ch-chip-ok" title="Signed by Napkin — scoped host capabilities enabled">Trusted</span>
+              <span className="ch-chip ch-chip-ok" title="Signed by Napkin: scoped host capabilities enabled">Trusted</span>
             )}
             {invalid && (
               <span className="ch-chip ch-chip-warn" title={doc.validation}>

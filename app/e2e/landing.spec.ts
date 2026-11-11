@@ -47,8 +47,8 @@ test('the desk, add a client, reload, open a client, start work', async ({ page 
   await page.goto('/#clients')
   await expect(page.getByTestId('desk')).toBeVisible()
   await expect(page.getByTestId('client-circle')).toHaveCount(2)
-  await expect(page.getByRole('button', { name: /^Client A: Spring brief for Client A · draft/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Client B: Launch brief for Client B · draft/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client A: Spring brief for Client A · draft/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client B: Launch brief for Client B · draft/ })).toBeVisible()
 
   // Add a client: a real record, through the host.
   await page.getByTestId('add-client').click()
@@ -56,7 +56,7 @@ test('the desk, add a client, reload, open a client, start work', async ({ page 
   await page.getByLabel('Client name').fill('Client C')
   await page.getByRole('button', { name: 'Add client', exact: true }).click()
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
-  await expect(page.getByRole('button', { name: /^Client C: No work yet, idle/ })).toBeVisible()
+  await expect(page.getByRole('button', { description: /^Client C: No work yet, idle/ })).toBeVisible()
 
   // The same name again is refused in the host's words and makes nothing.
   await page.getByTestId('add-client').click()
@@ -72,7 +72,7 @@ test('the desk, add a client, reload, open a client, start work', async ({ page 
   await expect(page.getByTestId('client-circle')).toHaveCount(3)
 
   // A client's circle opens the dial in place: four apps round the client's hub; the URL stays.
-  await page.getByRole('button', { name: /^Client A:/ }).click()
+  await page.getByRole('button', { description: /^Client A:/ }).click()
   await expect(page.getByTestId('dial-hub')).toBeVisible()
   await expect(page).toHaveURL(/#clients$/)
   for (const t of ['brief', 'research', 'deck', 'prod']) await expect(page.getByTestId(`quadrant-${t}`)).toBeVisible()
@@ -113,7 +113,7 @@ test('the desk, add a client, reload, open a client, start work', async ({ page 
   await expect(page.getByTestId('desk')).toBeVisible()
 
   // Start work for a client: the tool's page, then a document that is already theirs.
-  await page.getByRole('button', { name: /^Client C:/ }).click()
+  await page.getByRole('button', { description: /^Client C:/ }).click()
   await page.getByTestId('quadrant-brief').click() // straight from the dial to the tool
   await expect(page.getByTestId('tool-page')).toBeVisible()
   await page.getByTestId('new-doc').click()
@@ -247,7 +247,7 @@ test('on a phone the client chip has a name and a 44px target', async ({ page })
     const box = (await b.boundingBox())!
     expect(box.width, 'target width').toBeGreaterThanOrEqual(43.5)
     expect(box.height, 'target height').toBeGreaterThanOrEqual(43.5)
-    expect(((await b.getAttribute('aria-label')) ?? '').length, 'it has a name').toBeGreaterThan(0)
+    await expect(b, 'it has a name').toHaveAccessibleName(/\S/)
     // None is clipped by the bar: it lies inside the window.
     expect(box.x, 'left edge').toBeGreaterThanOrEqual(0)
     expect(box.x + box.width, 'right edge').toBeLessThanOrEqual(390 + 0.5)

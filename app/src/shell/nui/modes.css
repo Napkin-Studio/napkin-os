@@ -1,0 +1,44 @@
+/* Grey, the shell's third mode (features/agency-look.clan). White and Black
+   are the light and dark sets in index.css and tokens.css; Grey is the same
+   warm paper pulled down to a mid grey, with the ink kept dark so every word
+   still reads. `data-mode='grey'` is set on <html> by theme.ts, together with
+   data-theme='light', so everything written for light keeps working and only
+   the surfaces, the quiet inks and the status colours below change.
+
+   The three surfaces here (--desk, --paper, --card) are held equal to
+   MODE_SURFACES in shell/agency/accent.ts by tests/agencyAccent.test.ts: the
+   accent's lightness is worked out against them. The selector is more
+   specific than the agency's tint layer on purpose: in Grey the paper is
+   Grey for every agency. */
+:root[data-theme='light'][data-mode='grey'] {
+  --desk: #C9C3B6;
+  --paper: #D8D3C7;
+  --card: #E4DFD4;
+  --paper-2: #CDC7BA;
+  --soft-2: #CDC7BA;
+  --frost: rgba(216, 211, 199, 0.82);
+  --line: #A8A194;
+  --ink: #141413;
+  --ink-soft: #26231E;
+  --muted: #3E382F;
+  --faint: #4D463B;
+  --line-strong: #26231E;
+  --shadow-soft: 0 10px 30px rgba(40, 32, 18, 0.16);
+  --shadow-card: 0 1px 2px rgba(20,20,19,.10), 0 4px 12px -4px rgba(20,20,19,.14);
+  --shadow-paper: 0 1px 0 rgba(255,255,255,.4) inset, 0 8px 24px -8px rgba(50,38,18,.18), 0 1px 3px rgba(50,38,18,.14);
+
+  /* Status colours dark enough for text on the grey papers. */
+  --success: #11592b;
+  --warn: #7f3a05;
+  --danger: #8f1515;
+  --warn-soft: #E3CFA6;
+  --ok: #14633a;
+  --ok-soft: #BDD3C2;
+  --alert: #9d321b;
+  --alert-soft: #E0BEB4;
+  --ok-bg: #BDD3C2;
+  --ok-fg: #11592b;
+  --ok-border: #6f9b80;
+  --warn-bg: #E3CFA6;
+  --warn-border: #9a7a3c;
+}

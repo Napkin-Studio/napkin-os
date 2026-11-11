@@ -48,6 +48,22 @@ resource "aws_cognito_user_pool" "studio" {
     }
   }
 
+  # the person's roles (`planning,creative-director`), read into the session
+  # (features/roles-and-homes.clan). An admin sets them; the person cannot, so
+  # the web client may read this attribute and never write it. Empty means no
+  # role, which is every door, as before roles existed.
+  schema {
+    name                     = "roles"
+    attribute_data_type      = "String"
+    developer_only_attribute = false
+    mutable                  = true
+    required                 = false
+    string_attribute_constraints {
+      min_length = 0
+      max_length = 256
+    }
+  }
+
   account_recovery_setting {
     # no email or phone on these accounts: an admin resets a forgotten password
     recovery_mechanism {
@@ -66,7 +82,7 @@ resource "aws_cognito_user_pool_client" "web" {
   generate_secret               = false
   explicit_auth_flows           = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
   prevent_user_existence_errors = "ENABLED"
-  read_attributes               = ["name"]
+  read_attributes               = ["name", "custom:roles"]
   write_attributes              = ["name"]
   id_token_validity             = 1
   access_token_validity         = 1
