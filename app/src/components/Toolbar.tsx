@@ -200,6 +200,8 @@ function CrewHere({ crew, mine }: { crew: Crew; mine?: boolean }) {
 
 /** The agency's pill: back to the desk, no menu (owner, 2026-11-11). */
 export function AgencyPill({ agency, logo, onDesk }: { agency: string; logo?: AgencyLogo; onDesk: () => void }) {
+  // Napkin's own people see "Napkin Studio" once, not "Napkin" over "Napkin Studio" (owner, 2026-11-11).
+  const own = /^napkin(\s+studio)?$/i.test(agency.trim())
   return (
     <button
       type="button"
@@ -211,10 +213,12 @@ export function AgencyPill({ agency, logo, onDesk }: { agency: string; logo?: Ag
       onClick={onDesk}
     >
       <span className="stacked-lockup" id="header-lockup">
-        {logo?.wordmark
+        {own
+          ? <span className="sl-big">Napkin Studio</span>
+          : logo?.wordmark
           ? <span className={`sl-big sl-logo${logo.icon ? ' has-icon' : ''}`} data-testid="agency-wordmark"><img className="sl-wordmark" src={logo.wordmark} alt={agency} />{logo.icon && <img className="sl-icon" src={logo.icon} alt="" aria-hidden />}</span>
           : <span className="sl-big">{agency}</span>}
-        <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>
+        {!own && <span className="sl-mono"><i className="ag-dot" aria-hidden />Napkin Studio</span>}
       </span>
     </button>
   )

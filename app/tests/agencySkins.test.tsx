@@ -158,6 +158,17 @@ test('the pill shows the wordmark in place of the name, and the name where there
   assert.match(wk, /<span class="sl-big">Wieden\+Kennedy<\/span>/)
 })
 
+// Owner, 2026-11-11: "I told you to put just Napkin Studio there, not Napkin twice".
+test('Napkin’s own pill says Napkin Studio once; every other agency keeps its name over Napkin Studio', () => {
+  const pill = (agency: string, id: string) => renderToStaticMarkup(createElement(AgencyPill, { agency, logo: pillLogoOf(coloursOf(id)), onDesk: () => {} }))
+  const own = pill('Napkin', 'napkin')
+  assert.match(own, /<span class="sl-big">Napkin Studio<\/span>/)
+  assert.doesNotMatch(own, /sl-mono/)
+  const lockup = own.slice(own.indexOf('id="header-lockup"'))
+  assert.equal((lockup.match(/Napkin/g) || []).length, 1, 'Napkin appears once on the pill')
+  assert.match(pill('Wieden+Kennedy', 'wk'), /<span class="sl-mono">.*Napkin Studio<\/span>/)
+})
+
 test('no script, style, link or handler survives the sanitiser', () => {
   const hostile = `<?xml version="1.0"?><!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10" onload="alert(1)">
     <script>alert(1)</script><script xlink:href="https://evil.example/x.js"/>
