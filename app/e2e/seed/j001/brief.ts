@@ -37,9 +37,27 @@ export const READY_BRIEF = {
   mandatories: ['Drink responsibly line', 'Age 18 plus only'],
   open_questions: [],
   // What the brief also keeps for the agency: the client's link never shows these (test 17).
-  capture: { items: [{ text: 'Capture note: Client A will not go below the agreed price floor.' }], gaps: ['Capture gap: the stand sizes are not known.'] },
-  review: { scorecard: 'Review note: the proposition scores low on distinctiveness.' },
-  passages: [{ text: 'Passage kept for the planner: a licensed line from an earlier whiskey campaign.' }],
+  capture: {
+    built_at: '2026-11-10T09:00:00Z', handler: 'extract@1', gaps: ['timeline'],
+    items: { cap_0123456789abcdef: { key: 'constraints', value: 'Capture note: Client A will not go below the agreed price floor.', status: 'assumption', material_id: 'mat_0123456789abcdef' } },
+    how_to_win: [{ kind: 'likely_landmines', point: 'Capture landmine: the stand sizes are not known.', evidence: 'Client A notes', material_id: 'mat_0123456789abcdef' }],
+    ledger: { total_segments: 2, mapped_segments: 1, coverage_pct: 50, unmapped: [{ segment: 'Capture segment: a line about the old logo.', material_id: 'mat_0123456789abcdef' }] },
+  },
+  review: {
+    built_at: '2026-11-10T09:05:00Z', handler: 'review@1', based_on: { version: '1' },
+    scorecard: {
+      dimensions: ['objectives_quality', 'audience_vividness', 'single_minded_message', 'evaluation_criteria', 'budget_interlock', 'strategic_clarity', 'language']
+        .map(dimension => ({ dimension, verdict: 'pass' })),
+      single_mindedness: { verdict: 'single', split_into: [] },
+      summary: 'Review note: the proposition scores low on distinctiveness.',
+    },
+  },
+  passages: {
+    psg_0123456789abcdef0123: {
+      uri: 'passage://house/x', pack: 'house', scope: 'house', licence: 'licensed-internal', source: 'an earlier whiskey campaign', section: 's1', citation: 'c1',
+      text: 'Passage kept for the planner: a licensed line from an earlier whiskey campaign.', text_sha256: '0'.repeat(64), pack_version: 'sha256:00', retrieved_at: '2026-11-10T09:00:00Z',
+    },
+  },
   // Who signs this brief: the planner first, then the creative director (the people in people.ts).
   signers: [{ role: 'planner', person: 'aoife@wk' }, { role: 'creative_director', person: 'dara@wk' }],
 }
@@ -48,6 +66,7 @@ export const READY_BRIEF = {
 export const INTERNAL_WORDS = [
   'will not go below the agreed price floor',
   'the stand sizes are not known',
+  'a line about the old logo',
   'scores low on distinctiveness',
   'a licensed line from an earlier whiskey campaign',
 ]
