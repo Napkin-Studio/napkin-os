@@ -1,0 +1,6 @@
+# Capability requirements (CLAN spec §22) for the Visual Brief.
+# The visual brief does no inference of its own: it is one page a person writes and the
+# creative director approves. Phase 1 takes reference frames by upload only; a generated
+# frame is a later phase and a paid call, held by the server's spend guard.
+requires:
+  tools: []
