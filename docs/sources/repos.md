@@ -16,17 +16,17 @@ The home repo is Napkin-Studio/napkin-os. It is this checkout, so it is not clon
 | larryob78/idea-to-ooh-studio | Outdoor in situ | yes, public | main | 2026-03-26 |
 | larryob78/awards-board-maker | Awards studio | yes, public | main | 2026-10-24 |
 | larryob78/Socials-ads-maker- | Formats (said to be empty) | yes, private | main | 2025-12-31 |
-| larryob78/Admagined- | Formats (said to be empty) | no access | | |
-| larryob78/shopper-display-builder | Shopper stands, branch concept-vahid | no access | | |
-| larryob78/napkin-os-experimental | Experiential, the fallback | no access | | |
+| larryob78/Admagined- | Formats (said to be empty) | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-04-11 |
+| larryob78/shopper-display-builder | Shopper stands, branch concept-vahid | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-11-07 |
+| larryob78/napkin-os-experimental | Experiential, the fallback | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-11-06 |
 | vahid-vakson/napkin-experimental | Experiential, the main repo | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | master | 2026-11-10 |
-| larryob78/napkin-studio-editing | Film | no access | | |
-| larryob78/napkin-timesheet | AI timesheets | no access | | |
-| larryob78/napkin-timesheet-traffic | AI timesheets, Traffic board | no access | | |
-| larryob78/the-canon | Idea room | no access | | |
-| larryob78/HTML-slides-tool | Presentations | no access | | |
-| larryob78/napkin-deck-director- | Presentations (owner assumed) | no access | | |
-| larryob78/pitcher | Pitch maker (owner assumed) | no access | | |
+| larryob78/napkin-studio-editing | Film | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-10-11 |
+| larryob78/napkin-timesheet | AI timesheets | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-11-09 |
+| larryob78/napkin-timesheet-traffic | AI timesheets, Traffic board | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | master | 2026-10-24 |
+| larryob78/the-canon | Idea room | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-02-20 |
+| larryob78/HTML-slides-tool | Presentations | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | claude/new-session-CTl8C | 2026-06-05 |
+| larryob78/napkin-deck-director- | Presentations (owner assumed) | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-07-28 |
+| larryob78/pitcher | Pitch maker (owner assumed) | yes, private (granted 11 Nov 2026, after Discovery; not yet audited) | main | 2026-08-18 |
 
 ## Never cloned
 
