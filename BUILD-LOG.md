@@ -87,3 +87,44 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 - **So v2's 19 to 31 weeks is a floor, not a ceiling.** The honest range for all four phases is 36 to 50 weeks of agent-led build at three lanes, before human hours. A money figure follows once the main session's cost is read.
 
 **Next action.** Laurence writes nothing yet: Shrey approves the `client-wall` design, so ADR-004 can be written for Laurence to sign. It blocks everything else in Phase 1.
+
+## 2026-11-11 · Phase 1 · session 2
+
+**Run settings.** Claude Code, Fable 5.2 directing and reviewing, billed to the Claude API (napkin Console org, prepaid). Builders and auditors on Sonnet 5.5; one security review on Opus 5.5. Branch `spike/fabletest`, cut from feat/discovery at 37a0c8e6, in the worktree ../napkin-fabletest. Each record was built on `feat/<slug>` in ../napkin-b-<slug> and merged here. About 11:50 to 17:30 GMT for the build.
+
+**Approvals, as given.** Sai approved all build phases and relayed Laurence's approval to build them all and to take Laurence's approvals as given (chat, 2026-11-11). Laurence has signed nothing himself: ADR-004's signature line is blank. Sai's rules for this run: everything lands on this one branch, no pull request to any branch, design follows the shell on develop where it differs from the Discovery proposal, and the branch is pushed once built and tested.
+
+**Done.** All 13 Phase 1 records are built and merged: harness, client-wall, screen-states, j001-pilot-suite, agency-look, roles-and-homes, brief-gate, brief-versions-undo, visual-brief, client-confirm-link, job-index-dashboard, timesheet-sessions, cannes-removal.
+
+**Checks at the end.** `scripts/check.sh --all`: twelve suites pass (rust, wasm, conformance, frontend, desktop, engine, middleware, mock-backend, terraform, production-tool, secrets, copy), run with uv 0.13 and a pinned gitleaks. The pilot suite, `app/e2e/j001-pilot.spec.ts` in installed Chrome: 47 passed, 1 skipped (test 16 at 390 px, desktop only by design), all 18 tests at 390 and 1440 px. Gate screenshots: docs/design/phase1-gate/.
+
+**What went wrong, and what was done.**
+
+- Records built side by side collided when merged: one `NAPKIN_ENV` with two meanings (harness and client-wall), the relay's byte copy of model_routes.py left behind, a seed writing with no agent, a lost test helper. Each was fixed on this branch. From the third wave on, each builder merged this branch into its own before reporting.
+- An independent review of the client's link found the "full brief" showed the client every field but seven, including the Judge's review, the capture notes and the source passages. It now draws from an allow list of 13 fields, with a test seeded from every schema key.
+- The Production Tool's quiet writes named no agent, which ADR-004 now refuses. Default taken: they name the participant and an action, folded by a 1.5 second wait. To be confirmed by Sai and Laurence.
+- Three builders found the same race in `Session::open` (a read outside the lock). One fix is kept.
+- The accessibility scan, once it ran on the right server, found three real contrast and naming faults. Fixed.
+
+**Could not verify, or weaker than it reads.**
+
+- Pilot test 12 runs the engine's retrieval path over stand-in rows; the test stack has no engine, so it is not the J001 brief's own trace.
+- Nine older e2e tests fail here as they do on develop (bar Share, briefSheet x2, landing 320, registry x2, research x2, one in tools that passed in the last run).
+- No model call was made by any test. The brief check questions, Run failed in the two apps and the gate on the Ballymaloe brief are unproven with a real model.
+- The `eu.` Bedrock profile ids for the 5.5 models are unconfirmed.
+- Nothing is applied to AWS. A read-only UAT plan showed only the roles attribute in Cognito and the two task definitions.
+
+**For a person.**
+
+- Laurence: sign docs/adr/0004-client-wall.md; judge the look (Geist and the warm palette were kept, by Sai's rule); the timesheet Friday rule; whether consent is a clan document.
+- Run the Cannes removal (docs/runbooks/cannes-removal.md) and check the award workbook.
+- Decide: Effie in the default exclusion list; the client link defaults (single use, 30 days, dead after any change, confidential parts hidden); who has which role.
+- Confirm the Runway token in the deleted production-tool/relay/results/delayer-tests.json (still in history) has expired.
+- Shrey: contract changes in docs/contracts/os-layer.md 7.5, 7.5.9, 7.7, 7.8 and 13.
+- UAT: `terraform apply` in infra/envs/uat (cap 10 euro a day, paid calls on, set by Sai), then deploy this branch. `NAPKIN_BRIEF_GATE` is not set there.
+
+**Cost.** Subagents reported about 6.3 million tokens across 27 runs. The main session's cost is not visible from inside it: read `/cost` or the Console.
+
+**Phase 2, started.** Four read-only audits are done (Judge and the Brain; the bar, search, Ask Nap, voice, Needs you and the homes; sign-on, agency setup, approvals, the client link and timesheet signals; the Idea room and Script editor). No Phase 2 record is opened yet. Findings worth keeping: nothing scores creative work today and the calibrated judge backend is still planned; no bar, search, Ask Nap or voice code exists; larryob78/the-canon holds one Cannes data file and nothing usable; sign-on and the calendar, Slack and email signals each need an outside account a person registers.
+
+**Next action.** Open and design the Phase 2 records, in this order: approval-route, a job page with the full Needs you, remaining-homes, one-bar-search, idea-room (cards and the five-card gate first), script-editor, judge (routing and overrule first, on fixture scores), agency-setup, client-review-full, napkin-brain (page store first), first-day, ask-nap, sso, timesheet-signals, voice. Show Sai the designs, then build as in this session.
