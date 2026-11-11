@@ -81,6 +81,12 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.this.id
   }
   tags = { Name = "${var.name}-private" }
+  # Routes added beside the table (aws_route: UAT's peering with staging, both ways; staging-layers.tf)
+  # would otherwise be stripped by the next apply, as inline routes own the whole list. The NAT route
+  # above is set when the table is made; change it in the console or with a replace.
+  lifecycle {
+    ignore_changes = [route]
+  }
 }
 
 resource "aws_route_table_association" "private" {
