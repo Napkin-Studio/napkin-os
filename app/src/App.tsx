@@ -32,6 +32,7 @@ import { setClientAgency } from './shell/agency/clients'
 import type { Account, ClientChip } from './components/barMenus'
 import { useOfflineCopies } from './offline/useOfflineCopies'
 import { useRoute } from './shell/useRoute'
+import { useHomeView } from './shell/home/useHomeView'
 import { formatRoute, type Route } from './shell/route'
 import AppHost from './shell/AppHost'
 import InstallPrompt from './shell/InstallPrompt'
@@ -111,6 +112,8 @@ export default function App() {
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
   const landing = useLanding(host, screen === 'home' || screen === 'app', !(device && !serverless),
     screen === 'app' ? running?.artifactPath ?? null : null)
+  // The person's home, from the roles in their session; none for a person with no role, who keeps the desk.
+  const home = useHomeView(hasServer && !(device && !serverless), route.level === 'home' ? route.as : null)
   // On a server with accounts: who is signed in, for the bar's way out.
   const [user, setUser] = useState<string | null>(null)
   // Who the history entries the shell writes are for (lastOpen.ts).
@@ -471,7 +474,7 @@ export default function App() {
   }, [landing])
 
   // The studio is opening: the loading sign alone, on the desk, with no bar half filled in round it.
-  const opening = !(device && !serverless) && (!booted || landing.state === 'loading')
+  const opening = !(device && !serverless) && (!booted || landing.state === 'loading' || home.state === 'loading')
   const apps = device && !serverless ? (
     <DeviceHome
       onChooseFile={chooseDeviceFile}
@@ -481,7 +484,7 @@ export default function App() {
     />
   ) : !booted ? (
     <LogoSpinnerFill label="Opening the studio…" />
-  ) : landing.state === 'ready' && landing.data ? (
+  ) : landing.state === 'ready' && landing.data && home.state === 'ready' ? (
     <LandingHome
       route={route}
       data={landing.data}
@@ -495,8 +498,11 @@ export default function App() {
       onOpenFile={handleOpenFile}
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
+      home={home.view}
+      agencyName={agencyNameOf(landing.data.person?.id, whoIs(landing.data.person ?? null).agency)}
+      agencyLogo={agencyLogo}
     />
-  ) : landing.state === 'loading' ? (
+  ) : landing.state === 'loading' || (landing.state === 'ready' && home.state === 'loading') ? (
     <LogoSpinnerFill label="Opening the studio…" />
   ) : (
     // Where the host cannot list the library, the Launcher is the home as it was.
@@ -547,8 +553,8 @@ export default function App() {
   const account: Account = {
     name: personName,
     initials: initialsOf(personName),
-    // No role is served yet (gaps.md §12): the agency's name alone.
-    line: agency,
+    // The agency's name, and the person's role where the session carries one (the role an admin is viewing as is not theirs).
+    line: home.view?.restricted && !home.view.viewing && home.view.title ? `${agency} · ${home.view.title}` : agency,
     ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
   }
 

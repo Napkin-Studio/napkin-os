@@ -47,7 +47,38 @@ interface SessionInfo {
   sandbox_origin: string | null
   quota: { used: number; cap: number }
   /** The signed-in person, on a server with accounts (`name@agency`). */
-  user?: { username: string; agency: string; name?: string }
+  user?: { username: string; agency: string; name?: string; roles?: string[] }
+  /** The roles the session carries; empty for an anonymous visitor or a person with none. */
+  roles?: string[]
+}
+
+/** A door, or a line under More tools (napkin-web/src/roles.rs `Entry`). */
+export interface DoorEntry { id: string; name: string }
+/** A circle on the O: a department, and the role whose home it opens (none: the client desk). */
+export interface MapCircle { id: string; name: string; mine: boolean; opens: string | null }
+/**
+ * The person's home, as the server serves it (`GET /api/t/{tenant}/doors`): the doors,
+ * More tools and the O's circles, from the roles in the session. `restricted` is false
+ * for a person with no roles, who keeps the desk.
+ */
+export interface HomeView {
+  roles: string[]
+  restricted: boolean
+  title: string
+  viewing: string | null
+  doors: DoorEntry[]
+  more: DoorEntry[]
+  map: { circles: MapCircle[]; other: MapCircle[] }
+  /** Every role's home, for admins and demos; null for everyone else. */
+  switcher: { id: string; title: string }[] | null
+}
+
+/** The person's home. `as` asks for another role's (an admin or a demo only; the server ignores it otherwise). */
+export async function homeView(as?: string | null): Promise<HomeView | null> {
+  try {
+    const q = as ? `?as=${encodeURIComponent(as)}` : ''
+    return await json<HomeView>(`/doors${q}`)
+  } catch { return null }
 }
 
 /** The signed-in person, when the server has accounts; null when it is anonymous. */

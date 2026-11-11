@@ -43,6 +43,12 @@ export function arrival(route: Route, names: { agency: string; client?: string; 
       return `${names.agency}: your desk. Arrow keys move between clients, Enter opens one's dial, 1 to ${names.tools} pick a tool on it, Escape closes it.`
     case 'client':
       return `${names.client ?? 'Client'} opened with ${names.tools} tools. 1 to ${names.tools} open a tool, Escape goes back to the desk.`
+    case 'map':
+      return `${names.agency}: the map. Tab moves between departments, Enter opens one, Escape goes back to your home.`
+    case 'door':
+      return `${names.tool ?? 'A door'}. Escape goes back to your home.`
+    case 'home':
+      return `${names.agency}: a home. Tab moves between doors, Enter opens one.`
     case 'tool': {
       const n = names.open ?? 0
       return `${names.tool ?? 'Tool'} for ${names.client ?? 'the client'}. ${n === 0 ? 'Nothing open yet.' : `${n} open.`} Escape goes back to ${names.client ?? 'the client'}.`

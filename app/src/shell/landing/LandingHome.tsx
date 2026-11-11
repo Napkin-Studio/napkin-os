@@ -18,6 +18,11 @@ import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
+import { Home } from '../home/Home'
+import { TheO } from '../home/TheO'
+import { DoorPage } from '../home/DoorPage'
+import type { HomeView } from '../../host/http'
+import type { AgencyLogo } from '../agency/palette'
 import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
@@ -44,9 +49,14 @@ interface Props {
   onOffline?: () => void
   /** The Decisions drawer (the client page's record line opens it). */
   onDecisions?: () => void
+  /** The person's home, from the roles in the session; absent or unrestricted keeps the desk (features/roles-and-homes.clan). */
+  home?: HomeView | null
+  /** The agency's name and marks, for the centre of the O. */
+  agencyName?: string
+  agencyLogo?: AgencyLogo
 }
 
-export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions }: Props) {
+export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, home = null, agencyName, agencyLogo }: Props) {
   const top = useRef<HTMLDivElement>(null)
   const [registryNote, setRegistryNote] = useState<string | null>(null)
 
@@ -124,8 +134,38 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     agency: who.agency, client: client?.name, tool: tool?.full, tools: 4, open: inTool.length,
   })
 
+  // A person with a role lands on their home; the O, a door and another role's home are its pages.
+  // The desk is the Clients door then (`#clients`). A person with no role keeps the desk, as before.
+  const homed = home?.restricted ? home : null
+
   let body
-  if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
+  if (homed && route.level === 'map') {
+    body = (
+      <TheO
+        view={homed}
+        agency={agencyName ?? who.agency}
+        logo={agencyLogo}
+        onHome={() => go({ level: 'agency' })}
+        onOpen={c => go(c.mine ? { level: 'agency' } : c.opens ? { level: 'home', as: c.opens } : { level: 'clients' })}
+      />
+    )
+  } else if (homed && route.level === 'door') {
+    const entry = [...homed.doors, ...homed.more].find(d => d.id === route.door)
+    body = <DoorPage door={route.door} name={entry?.name ?? null} clients={data.clients} items={data.items} apps={data.apps} go={go} />
+  } else if (homed && (route.level === 'agency' || route.level === 'home')) {
+    body = (
+      <Home
+        view={homed}
+        items={data.items}
+        first={who.first}
+        apps={data.apps}
+        onDoor={d => go(d.id === 'clients' ? { level: 'clients' } : { level: 'door', door: d.id })}
+        onOpenDocument={onOpenDocument}
+        onMap={() => go({ level: 'map' })}
+        onSwitch={role => go(role ? { level: 'home', as: role } : { level: 'agency' })}
+      />
+    )
+  } else if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
     body = (
       <ToolPage
         client={client}
