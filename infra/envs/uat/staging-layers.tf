@@ -99,5 +99,5 @@ resource "aws_vpc_security_group_ingress_rule" "staging_db_from_uat" {
   ip_protocol                  = "tcp"
   from_port                    = 5432
   to_port                      = 5432
-  description                  = "Postgres from napkin-uat data clients (UAT uses staging's layers)"
+  description                  = "Postgres from napkin-uat data clients (UAT uses the staging layers)"
 }
