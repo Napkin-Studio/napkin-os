@@ -1749,6 +1749,13 @@ details.pv-fold>summary:hover{background:var(--soft)}
 .pv-wrong{display:grid;gap:6px;margin:0 0 12px}
 .pv-wrong .pre{display:flex;gap:6px;flex-wrap:wrap}
 .pv-wrong textarea{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--paper);color:var(--ink)}
+/* what a line is, in a sentence */
+.pv-what{display:grid;gap:6px;margin:2px 0 4px}
+.pv-whath{display:flex;align-items:center;gap:8px}
+.pv-kindtag{font:600 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:4px 9px}
+.pv-lead{margin:0;font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.2px;color:var(--ink)}
+.pv-based{margin:0;font-size:13px;color:var(--ink3);display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.pv-sure{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 /* the evidence map */
 .pv-map{min-width:0}
 .pv-mhead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 12px}
@@ -6310,6 +6317,27 @@ details.pv-fold>summary:hover{background:var(--soft)}
     return bits.length?bits.join('. ')+'.':'Nothing is cited under it: it is the report’s own reading.'; }
   function changeIf(o){ return arr(o.fis).length?'Finding '+o.fis.map(fnum).join(' or ')+' is cut, or a fact under it is marked wrong.':arr(o.pins).length?'A fact under it is corrected or marked wrong.':'A source is found that says it, or one that says otherwise.'; }
   function lineWarn(o, srcN){ if(o.flag) return 'A finding under it was cut, or a fact under it was marked wrong.'; if(o.lv===1) return srcN===1?'Thin: every fact under it comes from one source.':'Thin: the evidence under it is weak.'; return ''; }
+  // What a line is, in a sentence (owner, 2026-11-11: "This line was a fact / derived, based on the sources
+  // below", as the old card said it): a tag for the kind, the sentence, and what it rests on with how sure.
+  function lineWhatHtml(ref, o, nFacts, nSrcs, need){
+    var it=ref==='report.headline'?'headline':/^report\.summary/.test(ref)?'summary line':'sentence', k=String(o.kind||''), fl=arr(o.fis).map(function(i){ return String(fnum(i)); });
+    var fw=function(){ return 'Finding'+(fl.length===1?' ':'s ')+andListW(fl); }, tag, lead;
+    if(fl.length>1){ tag='Worked out'; lead='This '+it+' was worked out by '+theAgent('synthesis')+' from '+fw()+'.'; }
+    else if(fl.length===1){ tag='From a finding'; lead=/proposed/.test(k)?'This '+it+' comes from '+fw()+', which nobody has checked yet.':'This '+it+' restates '+fw()+'.'; }
+    else if(!arr(o.pins).length){ tag='Our reading'; lead='This '+it+' is the agents’ own reading. Nothing is cited under it.'; }
+    else if(/disagreed/.test(k)){ tag='A fact'; lead='This '+it+' uses a figure the sources disagreed on; a pick settled it.'; }
+    else if(/^Quotes a figure/.test(k)){ tag='A fact'; lead='This '+it+' quotes a figure from a source.'; }
+    else if(/^A figure, in our words/.test(k)){ tag='A fact'; lead='This '+it+' states a figure from a source, in our words.'; }
+    else if(/^Quotes a source/.test(k)){ tag='Quoted'; lead='This '+it+' quotes a source.'; }
+    else if(/in our words/.test(k)){ tag='From a source'; lead='This '+it+' puts a source’s point in our words.'; }
+    else if(/client/.test(k)&&!/ and /.test(k)){ tag='The client’s record'; lead='This '+it+' comes from the client’s own record.'; }
+    else { tag='Combined'; lead='This '+it+' combines '+k.charAt(0).toLowerCase()+k.slice(1)+'.'; }
+    var parts=[]; if(fl.length) parts.push(plural(fl.length, 'finding')); if(nFacts) parts.push(plural(nFacts, 'fact')); if(nSrcs) parts.push(plural(nSrcs, 'source'));
+    var sure=['', 'thin', 'fairly sure', 'sure'][o.lv]||'fairly sure';
+    return '<div class="pv-what"><div class="pv-whath"><span class="pv-kindtag">'+esc(tag)+'</span>'+(need?'<span class="mk need">● Needs you</span>':'')+'</div>'
+      +'<p class="pv-lead">'+esc(lead)+'</p>'
+      +'<p class="pv-based">'+(parts.length?'Based on '+esc(andListW(parts))+', listed below.':'Nothing below it to check against.')+' <span class="pv-sure">How sure: '+bars(o.lv)+' '+esc(sure)+'</span></p></div>';
+  }
   function viewLineHtml(ref){
     var E=evm(), l=E.lines.filter(function(x){ return x.ref===ref; })[0]; if(!l) return crumbHtml()+'<p class="pv-empty">This line is no longer in the report.</p>';
     var o=lineKindOf(ref), F=fnds(), P=pins(), need=arr(o.fis).some(function(i){ return fState(F[i])==='need'; });
@@ -6317,7 +6345,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var srcs={}, miss={}; Object.keys(under).forEach(function(p){ pinSrcIds(p).forEach(function(s){ if(srcRecs()[s]) srcs[s]=(srcs[s]||0)+1; }); if(noSource(p)){ var k=missKey(p); miss[k]=(miss[k]||0)+1; } });
     var pubs={}; Object.keys(srcs).forEach(function(s){ var k=pubKeyOf(s); if(!pubs[k]) pubs[k]={sid:s, n:0}; pubs[k].n+=srcs[s]; });
     var sec=/^report\.sections/.test(ref), es=sec?evSec(l.sec):null;
-    var h=crumbHtml()+'<div class="pv-state"><span class="k">'+esc(o.glyph||'◆').replace(/◗/g, FG())+' '+esc(o.kind)+'</span>'+bars(o.lv)+(need?'<span class="mk need">● Needs you</span>':'')+'</div>';
+    var h=crumbHtml()+lineWhatHtml(ref, o, Object.keys(under).length, Object.keys(pubs).length+Object.keys(miss).length, need);
     h+='<div class="pv-acts">'+(o.fis.length?'<button type="button" class="pv-btn primary" data-pv="'+esc(o.fis[0])+'">Open Finding '+fnum(o.fis[0])+'</button>':'<button type="button" class="pv-btn primary" data-act="pv-askfocus">Ask about this '+(sec?'sentence':'line')+'</button>')
       +(sec&&es?'<button type="button" class="pv-link muted" data-pv="sec:'+esc(es.id)+'">'+esc(secWords(es))+'</button>':'<button type="button" class="pv-link muted" data-pv="list:summary">The whole summary</button>')+'</div>';
     h+=warnHtml(lineWarn(o, Object.keys(pubs).length));

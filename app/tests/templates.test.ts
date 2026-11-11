@@ -4073,6 +4073,25 @@ test('research map: on the Map tab a click in the report lights the map; the OS 
   assert.match(RT, /\.insp-sw\{[^}]*position:sticky;top:0/, 'the tabs stay at the top of the panel as it scrolls')
 })
 
+// A line says what it is (owner, 2026-11-11: "This line was a fact/derived. Based on the sources from below").
+test('research panel: a line says in a sentence what it is and what it is based on', () => {
+  const f = lift<{ lineWhatHtml(r: string, o: unknown, nf: number, ns: number, need: boolean): string }>(RT, ['lineWhatHtml'], {
+    arr, esc, fnum: (i: string) => i.slice(1), theAgent: () => 'the Synthesis agent', bars: (n: number) => `[${n}]`,
+    plural: (n: number, w: string) => `${n} ${n === 1 ? w : w + 's'}`, andListW: listJoin,
+  })
+  const h = f.lineWhatHtml('report.headline', { kind: 'Draws on Findings 4, 2 and 1', fis: ['f4', 'f2', 'f1'], pins: [], lv: 1 }, 24, 9, false)
+  assert.match(h, /<span class="pv-kindtag">Worked out<\/span>/)
+  assert.match(h, /This headline was worked out by the Synthesis agent from Findings 4, 2 and 1\./)
+  assert.match(h, /Based on 3 findings, 24 facts and 9 sources, listed below\./)
+  assert.match(h, /How sure: \[1\] thin/)
+  const fact = f.lineWhatHtml('report.sections[s1].blocks[1]', { kind: 'A figure, in our words', fis: [], pins: ['p1'], lv: 2 }, 2, 2, false)
+  assert.match(fact, />A fact</); assert.match(fact, /This sentence states a figure from a source, in our words\./)
+  const q = f.lineWhatHtml('report.summary[0]', { kind: 'Quotes a source', fis: [], pins: ['p1'], lv: 3 }, 1, 1, true)
+  assert.match(q, /This summary line quotes a source\./); assert.match(q, /Needs you/)
+  assert.match(f.lineWhatHtml('report.summary[1]', { kind: 'Our reading, nothing cited', fis: [], pins: [], lv: 2 }, 0, 0, false), /Nothing is cited under it\./)
+  assert.match(fn(RT, 'viewLineHtml'), /crumbHtml\(\)\+lineWhatHtml\(ref, o,/)
+})
+
 test('research map: the four columns fit the width given, edges inside it', () => {
   const f = lift<{ mapFit(a: number): { cx: number[]; cw: number[]; w: number; tight: boolean } }>(RT, ['mapFit'], { COLX: [0, 236, 486, 722], COLW: [208, 224, 206, 108] })
   // the panel's map width at 1280, 1440 and 1600 (744px panel), the 440px panel, and wide
