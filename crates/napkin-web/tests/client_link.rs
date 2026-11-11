@@ -92,7 +92,55 @@ struct Agency {
     token: String,
 }
 
+/// A Brief Maker brief: the Brief gate and the client's sheet read only these.
+fn brief_bytes(data: &Value) -> Vec<u8> {
+    let plain = clan_sdk::create(clan_sdk::CreateOptions {
+        title: "Brief for Client A".into(),
+        brief: "an Irish whiskey, for under 35s".into(),
+        document_type: None,
+        no_render: false,
+        schema: None,
+    })
+    .unwrap();
+    let base = clan_sdk::ClanFile::from_bytes(plain).unwrap();
+    let mut m = base.manifest().clone();
+    m.app = Some(clan_sdk::AppInfo {
+        home: None,
+        name: "Brief Maker".into(),
+        app_id: "ie.napkin.brief-maker".into(),
+        version: "1.0.0".into(),
+        icon: None,
+        entry: "human/index.html".into(),
+        schema: None,
+        prompt_templates: vec![],
+        data_seed: None,
+        spinoff: None,
+        attach: None,
+    });
+    let mut b = clan_sdk::ClanBuilder::new(m);
+    for (path, bytes) in base.read_all_entries().unwrap() {
+        if path != clan_sdk::MANIFEST_PATH && path != "shared/data.yaml" {
+            b.add_entry(path, bytes);
+        }
+    }
+    // the brief's data as it stands when it is first opened (JSON is YAML)
+    let mut seed = json!({ "$schema": "spec/schemas/document.schema.json" });
+    for (k, v) in data.as_object().unwrap() {
+        seed[k] = v.clone();
+    }
+    b.add_entry("shared/data.yaml", seed.to_string().into_bytes());
+    b.build().unwrap()
+}
+
 async fn agency(s: &Server) -> Agency {
+    agency_with(
+        s,
+        json!({ "single_minded_proposition": "The easy way into Irish whiskey.", "insight": "Younger drinkers think it is for someone else." }),
+    )
+    .await
+}
+
+async fn agency_with(s: &Server, patch: Value) -> Agency {
     let r = send(s, "GET", "/api/session", None, None).await;
     let cookie = r.headers[header::SET_COOKIE]
         .to_str()
@@ -102,14 +150,7 @@ async fn agency(s: &Server) -> Agency {
         .unwrap()
         .to_string();
     let tenant = r.json()["tenant"].as_str().unwrap().to_string();
-    let clan = clan_sdk::create(clan_sdk::CreateOptions {
-        title: "Brief for Client A".into(),
-        brief: "an Irish whiskey, for under 35s".into(),
-        document_type: None,
-        no_render: false,
-        schema: None,
-    })
-    .unwrap();
+    let clan = brief_bytes(&patch);
     let req = Request::builder()
         .method("POST")
         .uri(format!("/api/t/{tenant}/documents/upload"))
@@ -125,11 +166,6 @@ async fn agency(s: &Server) -> Agency {
         doc: up["path"].as_str().unwrap().into(),
         token: up["token"].as_str().unwrap().into(),
     };
-    let edit = send(s, "POST", &format!("/s/{}/patch-data", a.token), None, Some(json!({
-        "agent": "human", "action": "edit",
-        "patch": { "single_minded_proposition": "The easy way into Irish whiskey.", "insight": "Younger drinkers think it is for someone else." },
-    }))).await;
-    assert_eq!(edit.status, StatusCode::OK, "{}", edit.text());
     let lock = send(
         s,
         "POST",
@@ -534,14 +570,7 @@ async fn a_link_to_an_unlocked_brief_is_not_made_and_a_link_needs_a_session() {
     let s = server();
     let a = agency(&s).await;
     // a second document, never locked
-    let clan = clan_sdk::create(clan_sdk::CreateOptions {
-        title: "Draft".into(),
-        brief: "x".into(),
-        document_type: None,
-        no_render: false,
-        schema: None,
-    })
-    .unwrap();
+    let clan = brief_bytes(&json!({}));
     let req = Request::builder()
         .method("POST")
         .uri(format!("/api/t/{}/documents/upload", a.tenant))
@@ -622,4 +651,178 @@ async fn a_visitor_cannot_reach_anything_else_with_a_link() {
     )
     .await;
     assert_ne!(r.status, StatusCode::OK);
+}
+
+// ── what the client's full brief may hold ───────────────────────────────────
+
+/// Keys of the Brief Maker schema that the client is never shown. A new key in the schema
+/// must be put here, or in `clean::FIELDS`, on purpose: the test below fails until it is.
+const NEVER: &[&str] = &[
+    "project_name",
+    "competitor_context",
+    "job",
+    "barrier",
+    "objection",
+    "media_roles",
+    "open_questions",
+    "reference_assets",
+    "brief_input",
+    "brief_style",
+    "theme",
+    "field_styles",
+    "layout",
+    "logos",
+    "locked_fields",
+    "confidential_fields",
+    "locked",
+    "materials",
+    "capture",
+    "review",
+    "passages",
+    "projection",
+    "upstream",
+];
+
+fn brief_schema() -> Value {
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../app/templates/brief-maker/schema.json"
+    );
+    serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+}
+
+#[test]
+fn every_key_of_the_brief_schema_is_shown_or_named_as_never_shown() {
+    let schema = brief_schema();
+    let props = schema["properties"].as_object().unwrap();
+    let shown: Vec<&str> = napkin_web::clean::FIELDS.iter().map(|(k, _)| *k).collect();
+    for k in props.keys() {
+        assert!(
+            shown.contains(&k.as_str()) ^ NEVER.contains(&k.as_str()),
+            "`{k}` is a key of the Brief Maker schema: put it in clean::FIELDS (the client reads it) or in NEVER (the client does not), and in one only"
+        );
+    }
+    // `famous` is the Brief gate's own item (a string), not yet a schema key
+    for k in shown.iter().chain(NEVER).filter(|k| **k != "famous") {
+        assert!(
+            props.contains_key(*k),
+            "`{k}` is not in the schema any more"
+        );
+    }
+}
+
+/// Every key of the schema filled with a marker of its own, and some keys the schema does not name.
+fn marked_brief() -> Value {
+    let schema = brief_schema();
+    let mut out = serde_json::Map::new();
+    for (k, v) in schema["properties"].as_object().unwrap() {
+        let m = format!("MK_{k}");
+        let value = match v["type"].as_str() {
+            Some("string") => json!(m),
+            Some("array") if v["items"]["type"] == "string" => json!([format!("{m}_0")]),
+            Some("array") => {
+                json!([{ "name": format!("{m}_name"), "path": format!("{m}_path"), "slot": "client", "ref": { "asset": format!("{m}_asset") } }])
+            }
+            Some("object") => {
+                let mut o = serde_json::Map::new();
+                for sub in v["properties"].as_object().into_iter().flatten() {
+                    if sub.1["type"] == "string" {
+                        o.insert(sub.0.clone(), json!(format!("{m}_{}", sub.0)));
+                    }
+                }
+                o.insert("internal_extra".into(), json!(format!("{m}_extra")));
+                Value::Object(o)
+            }
+            Some("boolean") => continue,
+            _ => {
+                json!({ "note": m, "deep": { "text": format!("{m}_deep") }, "list": [format!("{m}_item")] })
+            }
+        };
+        out.insert(k.clone(), value);
+    }
+    // a list of strings can hold an object, and the brief can hold keys no schema names
+    out.insert(
+        "tone_and_world".into(),
+        json!(["MK_tone_and_world_0", { "note": "MK_tone_object" }]),
+    );
+    out.insert("famous".into(), json!("MK_famous"));
+    out.insert("unlisted_key".into(), json!("MK_unlisted"));
+    out.insert("planner_notes".into(), json!({ "text": "MK_planner" }));
+    out.insert(
+        "confidential_fields".into(),
+        json!(["audience", "insight", "objectives.behavioural"]),
+    );
+    Value::Object(out)
+}
+
+/// Every `MK_…` marker in some text.
+fn markers(text: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut rest = text;
+    while let Some(i) = rest.find("MK_") {
+        let tail = &rest[i..];
+        let end = tail
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(tail.len());
+        out.insert(tail[..end].to_string());
+        rest = &tail[end..];
+    }
+    out
+}
+
+#[tokio::test]
+async fn the_clients_brief_holds_the_allow_listed_fields_and_nothing_the_brief_also_keeps() {
+    let s = server();
+    let a = agency_with(&s, marked_brief()).await;
+    let (_id, token) = make_link(&s, &a).await;
+    let v = send(&s, "GET", &format!("/c/{token}/view"), None, None).await;
+    assert_eq!(v.status, StatusCode::OK, "{}", v.text());
+    let page = v.json();
+    let want: std::collections::BTreeSet<String> = [
+        "client",
+        "background",
+        "single_minded_proposition",
+        "budget_and_scope",
+        "famous",
+    ]
+    .iter()
+    .map(|k| format!("MK_{k}"))
+    .chain(
+        [
+            "tone_and_world",
+            "reasons_to_believe",
+            "measurement",
+            "mandatories",
+        ]
+        .iter()
+        .map(|k| format!("MK_{k}_0")),
+    )
+    .chain(
+        [
+            "objectives_commercial",
+            "objectives_attitudinal",
+            "desired_response_think",
+            "desired_response_feel",
+            "desired_response_do",
+        ]
+        .iter()
+        .map(|k| format!("MK_{k}")),
+    )
+    .collect();
+    // the confidential parts (audience, insight, objectives.behavioural) are not here
+    let got = markers(&v.text());
+    assert_eq!(
+        got,
+        want,
+        "shown but not allowed: {:?}; allowed but missing: {:?}",
+        got.difference(&want).collect::<Vec<_>>(),
+        want.difference(&got).collect::<Vec<_>>()
+    );
+    // the summary the client reads first draws on the same fields
+    assert!(markers(&page["summary"].to_string()).is_subset(&want));
+    assert!(page["summary"].to_string().contains("MK_background"));
+    assert!(!page["summary"].to_string().contains("MK_insight"));
+    // and nothing from the brief's own drawing of itself
+    let html = page["html"].as_str().unwrap();
+    assert!(!html.contains("internal_extra") && !html.contains("planner"));
 }
