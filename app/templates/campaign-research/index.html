@@ -1089,7 +1089,7 @@ section.report{margin-top:0}
 @media (min-width:901px){ .insp{top:calc(var(--clan-top,0px) + 14px);margin-top:34px;max-height:calc(100vh - var(--clan-top,0px) - var(--clan-bottom,0px) - 30px);border-radius:8px;box-shadow:none} }
 .insp{background:var(--paper);border:1px solid var(--line);color:var(--ink)}
 .insp-body{padding:0 18px 18px;gap:16px}
-.insp-sw{margin:0 -18px 16px;display:flex;border:1px solid color-mix(in srgb,var(--ag-act) 45%,var(--line));border-radius:4px;background:var(--card);overflow:hidden}
+.insp-sw{margin:0 -18px 16px;position:sticky;top:0;z-index:8;display:flex;border:1px solid color-mix(in srgb,var(--ag-act) 45%,var(--line));border-radius:4px;background:var(--card);overflow:hidden}
 .insp-sw button{flex:1;height:32px;padding:0;border:0;background:transparent;font:600 12px/18.6px var(--font-ui);color:var(--muted)}
 :root[data-color-scheme="dark"] .insp-sw button{color:var(--ink-soft)}
 .insp-sw button[aria-pressed="true"],:root[data-color-scheme="dark"] .insp-sw button[aria-pressed="true"]{background:var(--ag-act);color:var(--ag-act-ink)}
@@ -1759,7 +1759,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
 .pv-key{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 12px;display:grid;grid-template-columns:repeat(4,auto);gap:6px 22px;font-size:12px;color:var(--ink2);justify-content:start}
 .pv-key div{display:flex;align-items:center;gap:7px;white-space:nowrap}
 .pv-key .kh{grid-column:1/-1;font-weight:600;color:var(--ink3);font-size:11.5px;margin-top:2px}
-.pv-sticky{position:sticky;top:-16px;z-index:5;display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--ink2);border-radius:10px;padding:8px 8px 8px 12px;margin:0 0 12px;box-shadow:var(--shadow);flex-wrap:wrap}
+.pv-sticky{position:sticky;top:42px;z-index:5;display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--ink2);border-radius:10px;padding:8px 8px 8px 12px;margin:0 0 12px;box-shadow:var(--shadow);flex-wrap:wrap}
 .pv-sticky .k{font-weight:700;font-size:14px}
 .pv-sticky .sp{flex:1}
 .pv-mscroll{overflow-x:auto;overflow-y:visible;padding-bottom:4px}
@@ -5214,11 +5214,12 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(window.ClanFields&&ClanFields.named){ var nm=ClanFields.named(ref); if(nm) return clipT(nm, 40); }
     return ref;
   }
-  function select(ref, push){
+  function select(ref, push, open){
     if(!ref) return;
     endSurf();
-    // On the map with nothing open, a click on the page lights that item's chain (the design's map).
-    if(VIEW.v==='map'&&!VIEW.sel&&!push&&MAPV){ var mid=mapNodeOf(ref); if(mid){ mapSelect(mid); return; } }
+    // On the map tab a click in the report lights that item's chain on the map and the map stays
+    // (owner, 2026-11-11: the toggles swapped the map for a detail on every click). Open shows the detail.
+    if(VIEW.v==='map'&&!push&&!open){ mapLight(ref); return; }
     if(!VIEW.sel) PV.root=VIEW.v==='map'?'map':'report';
     PV.touched=true;
     var t=VIEW.trail, at=-1; for(var i=0;i<t.length;i++) if(t[i].ref===ref) at=i;
@@ -6111,7 +6112,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // three bars say how sure; the panel names a thing by glyph and number and
   // lights it on the page, never quoting it.
   // ════════════════════════════════════════════════════════════════════════
-  var PV={touched:false, root:'report', cut:{}, q:'', mapSel:null, open:{}, auto:[], leftOut:false, moreSrc:false, keyOpen:true, keySeen:false, mapScroll:null};
+  var PV={touched:false, root:'report', cut:{}, q:'', mapSel:null, mapRef:null, mapSet:null, open:{}, auto:[], leftOut:false, moreSrc:false, keyOpen:true, keySeen:false, mapScroll:null};
   try{ PV.keySeen=localStorage.getItem('clan.research.mapkey')==='1'; PV.keyOpen=!PV.keySeen; }catch(e){}
   var CONFW=['','Thin','Fairly sure','Sure'], LVN={high:3, medium:2, med:2, low:1};
   var TIERW={first:'First-hand', firm:'Research firm', press:'Press and web', checked:'Checked by a person'};
@@ -6518,10 +6519,11 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function renderPanel(){
     var pv=$('pv'), foot=$('pv-foot'), ask=$('insp-ask'), map=$('mapview'); if(!pv) return;
     // The OS's inspector is in the panel (provHost): it keeps it until it closes or something else opens.
-    if(PV.surf){ pv.hidden=false; if(map) map.hidden=true; if(ask) ask.hidden=true; if(foot){ foot.hidden=true; } $('ws').classList.remove('ws-map'); return; }
+    if(PV.surf){ pv.hidden=false; if(map) map.hidden=true; if(ask) ask.hidden=true; if(foot){ foot.hidden=true; } $('ws').classList.toggle('ws-map', VIEW.v==='map'); return; }
     var sel=VIEW.sel, showMap=VIEW.v==='map'&&!sel, sw=$('viewsw');
     if(sw) Array.prototype.forEach.call(sw.querySelectorAll('[data-view]'), function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-view')===VIEW.v)); });
-    pv.hidden=showMap; if(map) map.hidden=!showMap; $('ws').classList.toggle('ws-map', showMap);
+    pv.hidden=showMap; if(map) map.hidden=!showMap; $('ws').classList.toggle('ws-map', VIEW.v==='map');
+    if(!showMap){ var rr=$('report'); if(rr) Array.prototype.forEach.call(rr.querySelectorAll('.map-hit'), function(n){ n.classList.remove('rsel-hit','map-hit'); }); }
     if(ask) ask.hidden=!!sel||showMap||!isObj(D().report); if(foot) foot.hidden=!!sel||showMap;
     if(showMap){ renderMapV();
       // the panel widens for the map: draw it again at its new width, and whenever the window resizes
@@ -6620,8 +6622,9 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(n.k==='fact'){ var p=pins()[n.ref]||{}; return '<span class="k">◆ '+esc(clipT((factVal(p)?factVal(p)+' ':'')+factTitle(p), 60))+'</span>'+bars(pinLvOf(p))+(noSource(n.ref)?'<span class="mk prop">'+ICO_CHAIN+'</span>':''); }
     return '';
   }
-  function autoOpenV(G){ PV.auto.forEach(function(g){ delete PV.open[g]; }); PV.auto=[]; if(!PV.mapSel||!G.nodes[PV.mapSel]) return;
-    var ch=chainV(PV.mapSel, edgesV(G)); Object.keys(G.nodes).forEach(function(id){ var n=G.nodes[id]; if(n.k==='grp'&&id!==PV.mapSel&&ch[id]&&!PV.open[id]){ PV.open[id]=true; PV.auto.push(id); } }); }
+  function autoOpenV(G){ PV.auto.forEach(function(g){ delete PV.open[g]; }); PV.auto=[];
+    var ch=mapChain(G, edgesV(G)); if(!ch) return;
+    Object.keys(G.nodes).forEach(function(id){ var n=G.nodes[id]; if(n.k==='grp'&&id!==PV.mapSel&&ch[id]&&!PV.open[id]){ PV.open[id]=true; PV.auto.push(id); } }); }
   function renderMapV(){
     var el=$('mapview'); if(!el) return;
     var r=D().report;
@@ -6635,6 +6638,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(PV.keyOpen) h+='<div class="pv-key" role="note" aria-label="Key"><span class="kh">Shape is the kind</span><div><span class="g">▤</span> Source</div><div><span class="g">◆</span> Fact</div><div>'+FG()+' Finding</div><div><span class="pv-disc" style="width:16px;height:16px;font-size:9px">1</span> Summary line, Ⓗ headline</div>'
       +'<span class="kh">Mark is the state</span><div><span class="mk need">●</span> Needs you</div><div><span class="mk prop">○</span> Proposed</div><div><span class="mk kept">✓</span> Kept</div><div><span class="mk prop">'+ICO_CHAIN+'</span> Record not copied</div>'
       +'<span class="kh">How sure, and source kind</span><div>'+bars(3)+' Sure</div><div>'+bars(2)+' Fairly sure</div><div>'+bars(1)+' Thin</div><div>'+tierF('primary')+' First-hand '+tierF('secondary')+' Research firm '+tierF('tertiary')+' Press '+tierF('reviewer-verified')+' Checked</div></div>';
+    if(!PV.mapSel&&PV.mapRef) h+='<div class="pv-sticky"><span class="k">'+esc(clipT(crumbOf(PV.mapRef).replace(/◗/g, ''), 60))+'</span><span class="mk prop">'+(arr(PV.mapSet).length?'Rests on '+plural(PV.mapSet.length, 'box', 'boxes')+' here':'Nothing it rests on is drawn here')+'</span><span class="sp"></span><button type="button" class="pv-btn primary" data-act="pv-mapopen">Open</button><button type="button" class="pv-btn" data-act="pv-mapclear" aria-label="Clear" style="width:30px;padding:0;justify-content:center">×</button></div>';
     if(PV.mapSel&&G.nodes[PV.mapSel]) h+='<div class="pv-sticky">'+stickyV(G, PV.mapSel)+'<span class="sp"></span><button type="button" class="pv-btn primary" data-act="pv-mapopen">Open</button><button type="button" class="pv-btn" data-act="pv-mapclear" aria-label="Clear" style="width:30px;padding:0;justify-content:center">×</button></div>';
     var cols=[[],[],[],[]]; vis.forEach(function(id){ cols[G.nodes[id].col].push(id); });
     var rank=function(id){ var n=G.nodes[id]; if(n.k==='more') return 1e6; if(n.k==='miss') return 1e6+1; var i=G.srcOrder.indexOf(n.in||id); return i<0?0:i; };
@@ -6663,26 +6667,58 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function drawEdgesV(){
     var svg=$('pv-msvg'); if(!svg||!MAPV) return; var G=MAPV.G, Y=MAPV.Y, edges=MAPV.edges, CX=MAPV.cx, CW=MAPV.cw;
-    var chain=PV.mapSel&&G.nodes[PV.mapSel]?chainV(PV.mapSel, edges):null;
+    var chain=mapChain(G, edges), foc=mapFocus(G);
     svg.innerHTML=edges.map(function(e){ var a=G.nodes[e.a], b=G.nodes[e.b]; if(Y[e.a]==null||Y[e.b]==null) return '';
       var x1=CX[a.col]+CW[a.col], y1=Y[e.a]+NH/2, x2=CX[b.col], y2=Y[e.b]+NH/2, mx=(x1+x2)/2, on=chain&&chain[e.a]&&chain[e.b];
       var cls='pv-edge'+(e.left||a.k==='miss'?' dash':'')+(chain?(on?' on':' dim'):'');
       return '<path class="'+cls+'" data-from="'+esc(e.a)+'" data-to="'+esc(e.b)+'" stroke-width="'+Math.min(7, 1+e.w*.45).toFixed(2)+'" d="M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2+'"/>'; }).join('');
-    Array.prototype.forEach.call(document.querySelectorAll('#pv-canvas .nd'), function(el){ var id=el.getAttribute('data-node'); el.classList.remove('on','lit','dim'); if(!chain) return; el.classList.add(id===PV.mapSel?'on':chain[id]?'lit':'dim'); });
+    Array.prototype.forEach.call(document.querySelectorAll('#pv-canvas .nd'), function(el){ var id=el.getAttribute('data-node'); el.classList.remove('on','lit','dim'); if(!chain) return; el.classList.add(foc.indexOf(id)!==-1?'on':chain[id]?'lit':'dim'); });
     // the page lights the chain too
     var root=$('report'); if(!root) return;
     Array.prototype.forEach.call(root.querySelectorAll('.rsel-lit'), function(n){ n.classList.remove('rsel-lit'); });
     if(chain) Object.keys(chain).forEach(function(id){ var n=G.nodes[id], ref=n&&(n.k==='fact'||n.k==='find'||n.k==='ln')?n.ref:null; if(!ref) return;
       Array.prototype.forEach.call(root.querySelectorAll('[data-ref="'+ref+'"],[data-rsel="'+ref+'"]'), function(x){ if(!x.closest('.rc-tags')) x.classList.add('rsel-lit'); }); });
+    // what is in focus is marked on the page as a selection is: the line clicked, or the box's own item
+    Array.prototype.forEach.call(root.querySelectorAll('.map-hit'), function(n){ n.classList.remove('rsel-hit','map-hit'); });
+    var hn=PV.mapSel&&G.nodes[PV.mapSel], href=PV.mapRef||(hn&&hn.ref)||'';
+    if(href&&!/^chart:/.test(href)){ href=href.split('"').join(''); Array.prototype.forEach.call(root.querySelectorAll('[data-ref="'+href+'"],[data-rsel="'+href+'"]'), function(x){ if(!x.closest('.rc-tags')) x.classList.add('rsel-hit','map-hit'); }); }
   }
   function mapNodeOf(ref){ if(!MAPV) return null; var G=MAPV.G; if(/^sum:\d+$/.test(ref)) ref='report.summary['+ref.slice(4)+']';
     var id=null; Object.keys(G.nodes).some(function(k){ var n=G.nodes[k]; if(n.ref===ref&&(n.k==='fact'||n.k==='find'||n.k==='ln')){ id=k; return true; } return false; });
     if(!id&&srcRecs()[ref]) id='S:'+pubKeyOf(ref);
     return id&&G.nodes[id]?id:null; }
-  function mapSelect(id){ var G=MAPV&&MAPV.G; if(!G) return; var n=G.nodes[id]; if(!n) return;
+  function mapReveal(G, id){ var n=G.nodes[id]; if(!n) return;
     if(n.in){ var g=G.nodes[n.in]; if(g.k==='more') PV.moreSrc=true; else PV.open[n.in]=true; }
-    if(n.left) PV.leftOut=true;
-    PV.mapSel=id; PV.touched=true; autoOpenV(G); keepScroll(renderMapV); }
+    if(n.left) PV.leftOut=true; }
+  function mapSelect(id){ var G=MAPV&&MAPV.G; if(!G) return; if(!G.nodes[id]) return;
+    mapReveal(G, id); PV.mapSel=id; PV.mapRef=null; PV.mapSet=null; PV.touched=true; autoOpenV(G); keepScroll(renderMapV); mapIntoView(); }
+  // What a line of the report rests on, as boxes on the map: its own box (a summary line, a finding,
+  // a fact, a source); else the facts and findings a sentence, a section or a chart cites. Only those:
+  // never everything their facts feed elsewhere.
+  function mapNodesOf(ref){ if(!MAPV) return []; var one=mapNodeOf(ref); if(one) return [one];
+    var E=evm(), cites=[];
+    if(/^sec:/.test(ref)){ var es=evSec(ref.slice(4)); if(es) cites=arr(es.cited).concat(arr(es.findings)); }
+    else if(/^chart:/.test(ref)) cites=ref.slice(6).split(',');
+    else cites=arr(E.up[ref]);
+    var out=[]; cites.forEach(function(c){ var id=mapNodeOf(c); if(id&&out.indexOf(id)<0) out.push(id); }); return out; }
+  function mapLight(ref){
+    if(VIEW.sel||!MAPV||$('mapview').hidden){ VIEW.sel=null; VIEW.trail=[]; renderSel(); }
+    if(!MAPV) return;
+    var ids=mapNodesOf(ref); PV.touched=true;
+    if(ids.length===1&&mapNodeOf(ref)){ mapSelect(ids[0]); return; }
+    var G=MAPV.G; ids.forEach(function(id){ mapReveal(G, id); });
+    PV.mapSel=null; PV.mapRef=ref; PV.mapSet=ids; autoOpenV(G); keepScroll(renderMapV); mapIntoView();
+  }
+  // The boxes in focus (visible ones) and what they light: one box lights what it rests on and what
+  // rests on it; a sentence's boxes light only what they rest on.
+  function mapFocus(G){ var f=PV.mapSel&&G.nodes[PV.mapSel]?[PV.mapSel]:arr(PV.mapSet).filter(function(id){ return G.nodes[id]; });
+    var o=[]; f.forEach(function(id){ var v=visV(G, id); if(v&&o.indexOf(v)<0) o.push(v); }); return o; }
+  function mapChain(G, edges){ var f=mapFocus(G); if(!f.length) return null; if(PV.mapSel) return chainV(f[0], edges);
+    var up={}; f.forEach(function(id){ up[id]=1; }); var ch=true;
+    while(ch){ ch=false; edges.forEach(function(e){ if(up[e.b]&&!up[e.a]){ up[e.a]=1; ch=true; } }); }
+    return up; }
+  function mapIntoView(){ var f=MAPV?mapFocus(MAPV.G)[0]:null; if(!f) return; var el=document.querySelector('#pv-canvas .nd[data-node="'+f.split('"').join('')+'"]');
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:calm()?'auto':'smooth'}); }
   function keepScroll(fn){ var ip=$('insp'), t=ip?ip.scrollTop:0; fn(); if(ip) ip.scrollTop=t; }
   function showOnMap(ref){ VIEW.sel=null; VIEW.trail=[]; setView('map'); renderSel(); renderMapV(); var id=mapNodeOf(ref); if(id) mapSelect(id); }
 
@@ -6762,8 +6798,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'pv-showmap': showOnMap(b.getAttribute('data-ref')); break;
       case 'pv-key': PV.keyOpen=!PV.keyOpen; keepScroll(renderMapV); break;
       case 'pv-leftout': PV.leftOut=!PV.leftOut; keepScroll(renderMapV); break;
-      case 'pv-mapclear': PV.mapSel=null; if(MAPV) autoOpenV(MAPV.G); keepScroll(renderMapV); break;
-      case 'pv-mapopen': var mn=MAPV&&MAPV.G.nodes[PV.mapSel]; if(!mn||!mn.ref) break; var ipm=$('insp'); PV.mapScroll=ipm?ipm.scrollTop:0; PV.root='map'; VIEW.trail=[{ref:mn.ref, label:''}]; VIEW.sel=mn.ref; renderSel(); break;
+      case 'pv-mapclear': PV.mapSel=null; PV.mapRef=null; PV.mapSet=null; if(MAPV) autoOpenV(MAPV.G); keepScroll(renderMapV); break;
+      case 'pv-mapopen': var mn=MAPV&&MAPV.G.nodes[PV.mapSel], mref=mn&&mn.ref||(!PV.mapSel&&PV.mapRef); if(!mref) break; var ipm=$('insp'); PV.mapScroll=ipm?ipm.scrollTop:0; PV.root='map'; VIEW.trail=[{ref:mref, label:selLabel(mref)}]; VIEW.sel=mref; renderSel(); break;
       case 'pv-listall': PV.open[b.getAttribute('data-k')]=true; reSel(); break;
       case 'pin-conf': var cd2=b.closest('details'); if(cd2) cd2.open=false; inspect('rec:'+b.getAttribute('data-ref'), true); break;
       case 'rq-jump': var bx=$('rqbox-_new'), bi=$('rqin-_new'); if(bx){ bx.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'}); if(bi) setTimeout(function(){ try{ bi.focus({preventScroll:true}); }catch(x){} }, calm()?0:350); } else toast('Asking needs a report first.'); break;
@@ -6796,7 +6832,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var x=e.target.closest&&e.target.closest('[data-exp]'); if(x&&MAPV){ e.preventDefault(); e.stopPropagation(); var g=x.getAttribute('data-exp'); PV.open[g]=!PV.open[g]; PV.auto=PV.auto.filter(function(a){ return a!==g; }); keepScroll(renderMapV); return; }
     var nd=e.target.closest&&e.target.closest('[data-node]'); if(nd&&MAPV){ var id=nd.getAttribute('data-node'), n=MAPV.G.nodes[id];
       if(n&&n.k==='more'){ PV.moreSrc=true; keepScroll(renderMapV); return; }
-      PV.mapSel=PV.mapSel===id?null:id; PV.touched=true; autoOpenV(MAPV.G); keepScroll(renderMapV); return; }
+      PV.mapSel=PV.mapSel===id?null:id; PV.mapRef=null; PV.mapSet=null; PV.touched=true; autoOpenV(MAPV.G); keepScroll(renderMapV); return; }
     if(e.target.closest&&e.target.closest('[data-act]')) return;
     var p=e.target.closest&&e.target.closest('[data-pv]'); if(p){ e.preventDefault(); var dd=p.closest('details.pv-more,details.pv-jump'); if(dd) dd.open=false; VIEW.origin=null; pvOpen(p.getAttribute('data-pv'), !!VIEW.sel); return; }
     var pp=e.target.closest&&e.target.closest('[data-pv-pop]'); if(pp){ e.preventDefault(); pvPop(+pp.getAttribute('data-pv-pop')); }
@@ -6845,9 +6881,9 @@ details.pv-fold>summary:hover{background:var(--soft)}
     pvPop(VIEW.trail.length-1);
   });
   document.addEventListener('keydown', function(e){
-    if(e.key!=='Escape'||VIEW.sel||VIEW.v!=='map'||!PV.mapSel||document.querySelector('dialog[open]')) return;
+    if(e.key!=='Escape'||VIEW.sel||VIEW.v!=='map'||!(PV.mapSel||PV.mapRef)||document.querySelector('dialog[open]')) return;
     if(e.target&&e.target.closest&&e.target.closest('input,textarea,select')) return;
-    PV.mapSel=null; if(MAPV) autoOpenV(MAPV.G); keepScroll(renderMapV);
+    PV.mapSel=null; PV.mapRef=null; PV.mapSet=null; if(MAPV) autoOpenV(MAPV.G); keepScroll(renderMapV);
   });
   // A figure or a finding in the report opens in the inspector, with its
   // trail; its card's "Where this came from" opens the OS's drawer, as a
@@ -6893,12 +6929,17 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(!$('insp')||!pv) return null;
     if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches) openSheet(true);
     ref=String(ref);
-    if(ownView(ref)){ VIEW.origin=null; select(ref, !!VIEW.sel); return true; }
+    // A click in the report (a field the OS opens itself) lights the map on the Map tab; the OS asking from
+    // elsewhere (the Decisions drawer's Open) opens the item.
+    var fromPage=!!(PAGEDOWN.t&&Date.now()-PAGEDOWN.t<1500);
+    if(ownView(ref)){ VIEW.origin=null; select(ref, !!VIEW.sel, !fromPage); return true; }
     var root=VIEW.sel?crumbOf(VIEW.sel).replace(/◗/g, ''):VIEW.v==='map'?'Map':'Report';
     PV.surf=true; renderPanel();
     var ip=$('insp'); if(ip) ip.scrollTop=0;
     return {el:pv, root:root};
   }
+  var PAGEDOWN={t:0};
+  document.addEventListener('pointerdown', function(e){ PAGEDOWN.t=e.target&&e.target.closest&&e.target.closest('#report')?Date.now():0; }, true);
   function endSurf(){ if(!PV.surf) return; PV.surf=false; if(window.ClanFields&&ClanFields.closePanel) ClanFields.closePanel(true); }
   if(window.ClanFields&&ClanFields.setPanelHost) ClanFields.setPanelHost(provHost);
   $('report').addEventListener('click', function(e){

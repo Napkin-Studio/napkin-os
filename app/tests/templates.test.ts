@@ -4007,11 +4007,70 @@ test('research panel: the pressed tab and the content are one state, both ways a
   // an item opened from the map keeps the Map tab, shows the item, and Back returns to the map
   f.setView('map'); env.VIEW.sel = 'f_1'; f.renderSel()
   assert.deepEqual(pressed(), ['map']); assert.equal(els.pv.innerHTML, 'ITEM f_1'); assert.equal(els.mapview.hidden, true)
+  assert.ok(els.ws.cls.has('ws-map'), 'the panel keeps its map width on the Map tab: the report beside it does not jump')
   // the restore on load goes through setView too, so its highlight matches
   assert.match(RT, /if\(sessionStorage\.getItem\('clan\.research\.view\.'\+docId\(\)\)==='map'\) setView\('map'\);/)
   assert.doesNotMatch(fn(RT, 'setView'), /aria-pressed|ws-map/, 'setView only changes the state; renderPanel draws it')
   // only one set of view tabs on the page: the hidden legacy inspector holds none
   assert.equal((RT.match(/data-view="map"/g) || []).length, 1)
+})
+
+// The map tab stays the map (owner, 2026-11-11 video: "the evidence map and Report toggles are not working
+// right, evidence map is not highlighting the right nodes"): a click in the report lights the map; a sentence
+// lights what it cites and what those rest on, never everything their facts feed elsewhere.
+function mapEnv() {
+  // S:a ─ p1 ─ f1 ─┐
+  //   └── p2 ─ f2 ─┴ L1          a sentence of §1 cites p1 alone
+  const nodes: Record<string, { k: string; ref?: string; col: number }> = {
+    'S:a': { k: 'src', ref: 'src_a', col: 0 }, p1: { k: 'fact', ref: 'p1', col: 1 }, p2: { k: 'fact', ref: 'p2', col: 1 },
+    f1: { k: 'find', ref: 'f1', col: 2 }, f2: { k: 'find', ref: 'f2', col: 2 }, L1: { k: 'ln', ref: 'report.summary[0]', col: 3 },
+  }
+  const edges = [['S:a', 'p1'], ['S:a', 'p2'], ['p1', 'f1'], ['p2', 'f2'], ['f1', 'L1'], ['f2', 'L1']].map(([a, b]) => ({ a, b }))
+  const G = { nodes }
+  const PV: { mapSel: string | null; mapSet: string[] | null } = { mapSel: null, mapSet: null }
+  const sent = 'report.sections[s1].blocks[2]'
+  const E = { up: { [sent]: ['p1'] }, sections: [{ id: 's1', cited: ['p1'], findings: ['f1'] }] }
+  const f = lift<{ mapNodesOf(r: string): string[]; mapChain(g: unknown, e: unknown): Record<string, number> | null }>(RT, ['mapNodeOf', 'mapNodesOf', 'mapFocus', 'mapChain', 'chainV'], {
+    MAPV: { G }, PV, arr, evm: () => E, evSec: (id: string) => E.sections.find(x => x.id === id) ?? null,
+    srcRecs: () => ({ src_a: {} }), pubKeyOf: () => 'a', visV: (_g: unknown, id: string) => id,
+  })
+  const lit = () => Object.keys(f.mapChain(G, edges) ?? {}).sort()
+  return { f, PV, lit, sent }
+}
+
+test('research map: a sentence lights what it cites and what that rests on, not its neighbours', () => {
+  const { f, PV, lit, sent } = mapEnv()
+  assert.deepEqual(f.mapNodesOf(sent), ['p1'], 'a sentence is no box of its own: its cited fact is')
+  assert.deepEqual(f.mapNodesOf('sec:s1'), ['p1', 'f1'], 'a section: what it cites and its findings')
+  assert.deepEqual(f.mapNodesOf('chart:p1,p2'), ['p1', 'p2'])
+  assert.deepEqual(f.mapNodesOf('f1'), ['f1'], 'a finding is its own box')
+  assert.deepEqual(f.mapNodesOf('report.summary[0]'), ['L1'])
+  assert.deepEqual(f.mapNodesOf('gap_1'), [])
+  PV.mapSet = ['p1']
+  assert.deepEqual(lit(), ['S:a', 'p1'], 'the sentence lights its fact and the source under it, not f1, f2 or the line')
+  PV.mapSet = null; PV.mapSel = 'f1'
+  assert.deepEqual(lit(), ['L1', 'S:a', 'f1', 'p1'], 'one box lights what it rests on and what rests on it')
+  PV.mapSel = null
+  assert.equal(f.mapChain({ nodes: {} }, []), null, 'nothing in focus lights nothing')
+})
+
+test('research map: on the Map tab a click in the report lights the map; the OS asking to show an item opens it', () => {
+  const calls: string[] = []
+  const VIEW = { v: 'map', sel: null as string | null, trail: [] as { ref: string }[] }
+  const f = lift<{ select(r: string, push?: boolean, open?: boolean): void }>(RT, ['select'], {
+    VIEW, PV: {}, endSurf: () => {}, mapLight: (r: string) => calls.push('light ' + r), selLabel: (r: string) => r,
+    traceSel: () => {}, renderSel: () => calls.push('render'), checks: () => [], CHK: {}, chkId: () => '', renderChecks: () => {},
+    $: () => null, window: {},
+  })
+  f.select('report.sections[s1].blocks[2]', false)
+  assert.deepEqual(calls, ['light report.sections[s1].blocks[2]']); assert.equal(VIEW.sel, null, 'the map is not swapped for a detail')
+  f.select('f1', false, true)
+  assert.equal(VIEW.sel, 'f1', 'open: the detail, under the Map tab')
+  VIEW.sel = null; VIEW.v = 'report'; calls.length = 0
+  f.select('f1', false)
+  assert.equal(VIEW.sel, 'f1', 'on the Report tab a click opens the detail as before')
+  assert.match(fn(RT, 'provHost'), /select\(ref, !!VIEW\.sel, !fromPage\)/, 'a field clicked in the report lights the map; the Decisions drawer opens the item')
+  assert.match(RT, /\.insp-sw\{[^}]*position:sticky;top:0/, 'the tabs stay at the top of the panel as it scrolls')
 })
 
 test('research map: the four columns fit the width given, edges inside it', () => {
@@ -4089,7 +4148,8 @@ test('research panel: the map draws only what the report uses, grouped, and ligh
   const ch = fn(RT, 'chainV')
   assert.match(ch, /if\(up\[e\.b\]&&!up\[e\.a\]\)/)
   assert.match(ch, /if\(down\[e\.a\]&&!down\[e\.b\]\)/)
-  assert.match(fn(RT, 'drawEdgesV'), /el\.classList\.add\(id===PV\.mapSel\?'on':chain\[id\]\?'lit':'dim'\)/)
+  assert.match(fn(RT, 'drawEdgesV'), /el\.classList\.add\(foc\.indexOf\(id\)!==-1\?'on':chain\[id\]\?'lit':'dim'\)/)
+  assert.match(fn(RT, 'mapChain'), /if\(PV\.mapSel\) return chainV\(f\[0\], edges\)/, 'one box: both ways')
   assert.match(fn(RT, 'renderMapV'), /data-act="pv-mapopen">Open<\/button>/)
   assert.match(RT, /PV\.keySeen=localStorage\.getItem\('clan\.research\.mapkey'\)==='1'; PV\.keyOpen=!PV\.keySeen;/, 'the Key opens on the first visit, then folds')
 })
