@@ -14,6 +14,18 @@ import pytest
 from napkin.brief import candidates, checks
 from tools import engine_eval as ee
 
+OWNER_CFG = copy.deepcopy(ee.CFG)
+# The tests were written against the protocol's original switches; the owner's later calls (idea 3 dropped, the plain
+# best-of-8 arm added, the replay cap raised) are pinned by one test below and the rest run on this baseline.
+TEST_BASELINE = {"INCLUDE_IDEA3": True, "INCLUDE_PLAIN_BEST_OF_8": False, "REPLAY_HARD_CAP_USD": 25.0,
+                 "REPLAY_WORKING_LIMIT_USD": 24.0}
+
+
+@pytest.fixture(autouse=True)
+def _protocol_baseline_switches(monkeypatch):
+    for k, v in TEST_BASELINE.items():
+        monkeypatch.setitem(ee.CFG, k, v)
+
 
 # =============================================================================================== fixtures
 PARTS = ["insight", "single_minded_proposition", "objection", "audience", "background", "competitor_context", "job",
@@ -1303,9 +1315,9 @@ def test_cmd_rate_refuses_before_the_rater_cost_is_measured(tmp_path):
 
 
 def test_the_config_block_holds_the_owners_defaults():
-    c = ee.CFG
-    assert c["RATER_HARD_CAP_USD"] == 40.0 and c["REPLAY_HARD_CAP_USD"] == 25.0 and c["REPLAY_WORKING_LIMIT_USD"] == 24.0
-    assert c["INCLUDE_IDEA3"] is True and c["IDEA3_COUNTER_ARGUMENT_RULE"] == "reviewer" and c["INCLUDE_PLAIN_BEST_OF_8"] is False
+    c = OWNER_CFG                                                # the block as shipped, before the fixture below
+    assert c["RATER_HARD_CAP_USD"] == 40.0 and c["REPLAY_HARD_CAP_USD"] == 30.0 and c["REPLAY_WORKING_LIMIT_USD"] == 29.0
+    assert c["INCLUDE_IDEA3"] is False and c["IDEA3_COUNTER_ARGUMENT_RULE"] == "reviewer" and c["INCLUDE_PLAIN_BEST_OF_8"] is True
     assert c["INCLUDE_D0_V_B"] is False and c["INVESTIGATOR_SEES_STRATEGY"] is False and c["RATER_EFFORT"] == "medium"
 
 
@@ -2044,6 +2056,7 @@ def test_main_drops_the_production_recorders_from_the_environment(tmp_path, monk
     metrics.emit("model", x=1)
     assert not (tmp_path / "rec").exists() and not (tmp_path / "metrics.jsonl").exists()
     monkeypatch.setenv("NAPKIN_RECORD_DIR", "x")
+    assert ee._child_env()["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1" and ee._child_env()["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1"
     assert "NAPKIN_RECORD_DIR" not in ee._child_env()                        # and the child process never sees them either
 
 

@@ -65,22 +65,22 @@ SALT = "brief-engine-eval-2026-11-10"
 # ============================================================================ the config block (owner's calls)
 CFG = {
     # R5: replay spend. HARD is the ceiling no flag raises; the working limit is --max-usd's default.
-    "REPLAY_HARD_CAP_USD": 25.0,
-    "REPLAY_WORKING_LIMIT_USD": 24.0,
+    "REPLAY_HARD_CAP_USD": 30.0,
+    "REPLAY_WORKING_LIMIT_USD": 29.0,
     # R5: rater spend, enforced the same way, in rater_cost_log.jsonl.
     "RATER_HARD_CAP_USD": 40.0,
     # reserve held per rater call before it is made; a failed call is logged at it. Set from the measured cost
     # (rater_measure.json) if the defaults are wrong; the cap is never exceeded whatever they are.
     "RATER_RESERVE_USD": {"sonnet": 0.25, "opus": 0.50},
-    # Idea 3 is included (owner). False skips J1 and idea 3's comparisons; J0 and J0' still run, because they are the
+    # Idea 3 is dropped (owner, 11 Nov 2026). False skips J1 and idea 3's comparisons; J0 and J0' still run, because they are the
     # survival reviews' baseline (F2).
-    "INCLUDE_IDEA3": True,
+    "INCLUDE_IDEA3": False,
     # Idea 3's counter_argument pass rule: "reviewer" (default: the reviewer's alternative wording) or "protocol"
     # (the protocol's original wording).
     "IDEA3_COUNTER_ARGUMENT_RULE": "reviewer",
-    # No plain best-of-8 insight arm (T1p) unless True. It costs about 4 USD more replay: the hard cap would have
-    # to cover it (REPLAY_HARD_CAP_USD is the hard ceiling; there is no override here that exceeds the owner's 25).
-    "INCLUDE_PLAIN_BEST_OF_8": False,
+    # The plain best-of-8 insight arm (T1p) is included (owner, 11 Nov 2026). It costs about 4 USD more replay, which
+    # is why the owner raised the replay hard cap from 25 to 30.
+    "INCLUDE_PLAIN_BEST_OF_8": True,
     # D0 v B (the stored default-effort draft against the medium baseline) is not rated unless True (80 judgements).
     "INCLUDE_D0_V_B": False,
     # The investigator does not see plan.strategy (as the protocol specifies) unless True.
@@ -862,6 +862,9 @@ def _child_env() -> dict:
     env = dict(os.environ)
     for k in ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "NAPKIN_RECORD_DIR", "NAPKIN_METRICS_FILE"):
         env.pop(k, None)
+    # no auto-memory section and no CLAUDE.md in a replay or rater call's context
+    env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+    env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
     return env
 
 
