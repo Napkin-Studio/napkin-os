@@ -128,3 +128,11 @@ export async function makeClientLink(
   expect(r.status(), await r.text()).toBe(200)
   return (await r.json()) as { id: string; path: string; expires: string; version: string }
 }
+
+/** The client's answer, recorded by an agency person (the host's `/client-review`): for tests that need a
+ *  confirmed brief and are not about the client's own link (`makeClientLink`). */
+export async function recordClientConfirmation(page: Page, brief: { token: string }) {
+  return page.request.post(`/s/${brief.token}/client-review`, {
+    data: { answer: 'accepted', client: { name: 'Client A contact' }, channel: 'none', parts: [] },
+  })
+}

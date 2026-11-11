@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
-import { asMe, gateOf, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, seedJ001, signBrief } from './seed/j001'
+import { asMe, gateOf, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
