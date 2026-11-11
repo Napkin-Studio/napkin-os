@@ -30,7 +30,7 @@ async function setup(page: Page, names: string[]) {
     expect(r.status(), title).toBe(200)
     const v = await r.json() as { token: string }
     if (patch) {
-      const p = await page.request.post(`/s/${v.token}/patch-data`, { data: { patch } })
+      const p = await page.request.post(`/s/${v.token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch } })
       expect(p.status(), `patch ${title}: ${await p.text()}`).toBe(200)
     }
   }

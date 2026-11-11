@@ -36,7 +36,7 @@ async function work(page: Page, api: string, app: string, title: string, clientI
   expect(r.status(), title).toBe(200)
   if (patch) {
     const { token } = await r.json() as { token: string }
-    const p = await page.request.post(`/s/${token}/patch-data`, { data: { patch } })
+    const p = await page.request.post(`/s/${token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch } })
     expect(p.status(), `patch ${title}`).toBe(200)
   }
 }

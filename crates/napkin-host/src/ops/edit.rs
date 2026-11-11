@@ -171,8 +171,35 @@ pub struct PatchData {
     reasoning: Option<Reasoning>,
 }
 
+/// What the host does with a write that names no agent or no action
+/// (features/client-wall.clan, ADR-004: no write without a decision).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unattributed {
+    /// A 400. The rule.
+    Refuse,
+    /// Log what would be refused and write as before: one week on staging
+    /// before the refusal is enforced. `NAPKIN_UNATTRIBUTED_WRITES=dry-run`.
+    DryRun,
+}
+
+impl Unattributed {
+    pub fn from_env() -> Self {
+        match std::env::var("NAPKIN_UNATTRIBUTED_WRITES").as_deref() {
+            Ok("dry-run") => Self::DryRun,
+            _ => Self::Refuse,
+        }
+    }
+}
+
 impl PatchData {
+    /// Parse under the mode the environment names (the rule, unless dry-run).
     pub fn parse(body: &str) -> HostResult<Self> {
+        Self::parse_with(body, Unattributed::from_env())
+    }
+
+    /// A write names an agent and an action, both non-empty strings. The
+    /// rationale is not required: a look edit needs no reason today.
+    pub fn parse_with(body: &str, mode: Unattributed) -> HostResult<Self> {
         let json: Value = serde_json::from_str(body)
             .map_err(|e| HostError::bad_request(format!("invalid JSON: {e}")))?;
         let patch = json
@@ -201,6 +228,19 @@ impl PatchData {
                 .unwrap_or(default)
                 .to_string()
         };
+        let named = |k: &str| {
+            json.get(k)
+                .and_then(Value::as_str)
+                .is_some_and(|v| !v.trim().is_empty())
+        };
+        if !(named("agent") && named("action")) {
+            let what =
+                "a write needs an agent and an action (ADR-004: no write without a decision)";
+            match mode {
+                Unattributed::Refuse => return Err(HostError::bad_request(what)),
+                Unattributed::DryRun => log(&format!("patch_data: dry-run, would refuse: {what}")),
+            }
+        }
         let claim = json.get("agent").and_then(|v| v.as_str()).map(|agent| {
             (
                 agent.to_string(),

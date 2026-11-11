@@ -17,7 +17,16 @@ use crate::session::Session;
 /// POST `payload` verbatim to the endpoint resolved for `request_kind`, add
 /// host-side auth, return a structured envelope. RAG, model choice, prompt
 /// assembly — all backend concerns behind the endpoint.
-pub async fn proxy_call(cfg: &dyn HostConfig, request_kind: &str, payload: Value) -> Value {
+///
+/// `agency` is the signed-in person's agency; a middleware request carries it
+/// in the `x-napkin-agency` header, and the middleware takes its scope from
+/// it, never from the body (ADR-004, M3).
+pub async fn proxy_call(
+    cfg: &dyn HostConfig,
+    request_kind: &str,
+    payload: Value,
+    agency: Option<&str>,
+) -> Value {
     // The middleware never falls back to the agent URL: that endpoint does not
     // speak napkin.middleware/1, and sending it the request (and the document)
     // to refuse its answer afterwards is the fall-through M4 forbids. The app
@@ -31,6 +40,9 @@ pub async fn proxy_call(cfg: &dyn HostConfig, request_kind: &str, payload: Value
     }
     let client = reqwest::Client::new();
     let mut rb = client.post(&url).json(&payload);
+    if let Some(a) = agency.filter(|_| request_kind == middleware::REQUEST_KIND) {
+        rb = rb.header(middleware::AGENCY_HEADER, a);
+    }
     if let Some(k) = &key {
         rb = match auth_kind.as_deref() {
             Some("bearer") => rb.bearer_auth(k),
@@ -123,7 +135,7 @@ pub async fn api_proxy(
     let clan_ctx = session.clan_context_for_agent();
     let outgoing =
         serde_json::json!({ "request_kind": kind, "payload": payload, "clan": clan_ctx });
-    let reply = proxy_call(cfg, &kind, outgoing).await;
+    let reply = proxy_call(cfg, &kind, outgoing, ctx.scope.agency.as_deref()).await;
     if kind == middleware::REQUEST_KIND {
         return Ok(session.settle_middleware(ctx, reply));
     }
@@ -132,7 +144,7 @@ pub async fn api_proxy(
 
 /// Home-screen prompt → the unified proxy with `request_kind = "agent"`.
 pub async fn agent_prompt(cfg: &dyn HostConfig, text: &str) -> Value {
-    proxy_call(cfg, "agent", serde_json::json!({ "input": text })).await
+    proxy_call(cfg, "agent", serde_json::json!({ "input": text }), None).await
 }
 
 #[cfg(test)]

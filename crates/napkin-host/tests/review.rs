@@ -1264,7 +1264,7 @@ fn the_frozen_copy_is_read_only() {
     ] {
         let e = brief
             .session
-            .patch_data(&json!({ "patch": patch, "agent": "human" }).to_string())
+            .patch_data(&json!({ "patch": patch, "agent": "human","action":"edit" }).to_string())
             .unwrap_err();
         assert_eq!(e.status, 400);
         assert!(
@@ -1943,7 +1943,7 @@ fn a_field_citing_a_superseded_finding_is_flagged_until_it_moves() {
             "value": "win midweek", "origin": "stated", "gate": "brief", "by": "human:local",
             "decision": "d_01JA0D09HUM", "finding_ids": ids } } });
         f.session
-            .patch_data(&json!({ "patch": patch, "agent": "human" }).to_string())
+            .patch_data(&json!({ "patch": patch, "agent": "human","action":"edit" }).to_string())
             .unwrap();
     };
     cite(&["fi_01JA0F2B"]);

@@ -376,8 +376,8 @@ async fn the_server_and_the_browser_host_answer_alike_for_one_document() {
     let (doc, token) = upload(&s, &b, "Parity").await;
     // Give it a history: a person's write, then an agent's.
     for body in [
-        r#"{"patch":{"verdict":"yes"},"agent":"human","rationale":"the brief says so"}"#,
-        r#"{"patch":{"notes":"checked"},"agent":"agent","rationale":"a second look"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit","rationale":"the brief says so"}"#,
+        r#"{"patch":{"notes":"checked"},"agent":"agent","action":"edit","rationale":"a second look"}"#,
     ] {
         let r = post(&s, &format!("/s/{token}/patch-data"), &b.cookie, body).await;
         assert_eq!(
@@ -476,7 +476,7 @@ async fn a_token_reaches_exactly_one_document() {
         &s,
         &format!("/s/{token_a}/patch-data"),
         &b.cookie,
-        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
     )
     .await;
     assert_eq!(patched.status, StatusCode::OK);
@@ -496,7 +496,7 @@ async fn sandbox_writes_reach_the_shell_as_events() {
         &s,
         &format!("/s/{token}/patch-data"),
         &b.cookie,
-        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
     )
     .await;
 
@@ -957,7 +957,7 @@ async fn a_locked_brief(s: &Server, b: &Browser) -> (String, String) {
         s,
         &token,
         "/patch-data",
-        serde_json::json!({ "agent": "human", "rationale": "the brief", "patch": {
+        serde_json::json!({ "agent": "human","action":"edit", "rationale": "the brief", "patch": {
             SMP: "Summer tastes better without the hangover.",
             "audience": { "primary": "Adults 25-40" },
             "tone": "Warm, dry, a little wry",
@@ -1192,7 +1192,7 @@ async fn upstream_names_the_tenants_parent_and_what_changed_in_it() {
         &s,
         &parent_token,
         "/patch-data",
-        serde_json::json!({ "agent": "human", "rationale": "first", "patch": { "tone": "Warm" } }),
+        serde_json::json!({ "agent": "human","action":"edit", "rationale": "first", "patch": { "tone": "Warm" } }),
     )
     .await;
     let child = post_json(
@@ -1222,7 +1222,7 @@ async fn upstream_names_the_tenants_parent_and_what_changed_in_it() {
     assert_eq!(v["upstream"][0]["status"], "current");
 
     clan_ok(&s, &parent_token, "/patch-data",
-            serde_json::json!({ "agent": "human", "rationale": "later", "patch": { "tone": "Bright" } })).await;
+            serde_json::json!({ "agent": "human","action":"edit", "rationale": "later", "patch": { "tone": "Bright" } })).await;
     let v = get(&s, &format!("/s/{child_token}/upstream"), None)
         .await
         .json();
@@ -1682,7 +1682,7 @@ async fn a_dogfood_build_records_everything_an_account_does_after_it_agrees() {
         &s,
         &format!("/s/{token}/patch-data"),
         "",
-        r#"{"patch":{"verdict":"a long answer to keep"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"a long answer to keep"},"agent":"human","action":"edit"}"#,
     )
     .await;
 
@@ -2683,7 +2683,7 @@ async fn a_spinoff_of_a_clients_document_is_that_clients_in_the_library() {
         &s,
         &child_token,
         "/patch-data",
-        serde_json::json!({ "agent": "human", "rationale": "work", "patch": { "tone": "Warm" } }),
+        serde_json::json!({ "agent": "human","action":"edit", "rationale": "work", "patch": { "tone": "Warm" } }),
     )
     .await;
     let child_list = library(&s, &b, &format!("?client={ida}&app=ie.napkin.child")).await;
@@ -2855,7 +2855,7 @@ async fn settling_middleware() -> (String, Arc<std::sync::Mutex<&'static str>>) 
                 let change = (state == "done").then(|| serde_json::json!({
                     "doc": doc, "base_version": req["clan"]["version"],
                     "data_patch": {"answer": "Gen Z own the late pint"},
-                    "decisions": [{"id": "d_01JB0SETTLE01", "kind": "edit", "agent": "ask_research@1.0",
+                    "decisions": [{"id": "d_01JB0SETTLE01", "kind": "edit", "agent": "ask_research@1.0","action":"edit",
                                    "action": "ask_answer", "rationale": "answered",
                                    "targets": [format!("{doc}#answer")]}],
                 }));

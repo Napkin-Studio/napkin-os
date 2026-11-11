@@ -34,7 +34,7 @@ test('a running job, a failure and a waiting question show on the landing and th
     const r = await page.request.post(`${api}/documents`, { data: { app_id: app, title, client_id: clientId } })
     expect(r.status(), title).toBe(200)
     const { token } = await r.json() as { token: string }
-    if (patch) expect((await page.request.post(`/s/${token}/patch-data`, { data: { patch } })).status(), title).toBe(200)
+    if (patch) expect((await page.request.post(`/s/${token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch } })).status(), title).toBe(200)
     return token
   }
   const briefToken = await make(BRIEF, 'Spring brief', a)
@@ -107,7 +107,7 @@ test('a document that needs the person shows on the landing and its client circl
   const id = (await (await page.request.post(`${api}/clients`, { data: { name: 'Client A' } })).json() as { id: string }).id
   const r = await page.request.post(`${api}/documents`, { data: { app_id: BRIEF, title: 'Contested brief', client_id: id } })
   const { token } = await r.json() as { token: string }
-  expect((await page.request.post(`/s/${token}/patch-data`, { data: { patch: CONTEST } })).status()).toBe(200)
+  expect((await page.request.post(`/s/${token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch: CONTEST } })).status()).toBe(200)
   await page.reload()
   await expect(page.getByTestId('pick-row').filter({ hasText: 'Contested brief' })).toContainText('1 call')
   await expect(page.getByTestId('needs-count')).toHaveText('1')

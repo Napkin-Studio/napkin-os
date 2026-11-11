@@ -82,7 +82,7 @@ fn patch_and_patch_data_are_distinct_routes() {
     let resp = post(
         &f,
         "/patch-data",
-        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
     );
     assert_eq!(resp.status, 200);
     assert_eq!(json(&resp)["keys"][0], "verdict");
@@ -168,7 +168,7 @@ fn decisions_lists_the_chain_newest_first() {
     post(
         &f,
         "/patch-data",
-        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
     );
     let v = json(&get(&f, "/decisions"));
     let decisions = v["decisions"].as_array().unwrap();
@@ -1010,7 +1010,7 @@ mod upstream {
         // The brief cites one finding in a field; then the research moves on.
         brief.post(
             "/patch-data",
-            r#"{"patch":{"insight":{"value":"Growing from small","finding_ids":["fi_01JA0F2B"]}},"agent":"human"}"#,
+            r#"{"patch":{"insight":{"value":"Growing from small","finding_ids":["fi_01JA0F2B"]}},"agent":"human","action":"edit"}"#,
         );
         research.post(
             "/verdict",
@@ -1157,13 +1157,14 @@ mod upstream {
             Ctx::new(Actor::human("u-1").unwrap()).with_scope(Scope {
                 org: Some(org.into()),
                 brand: None,
+                agency: None,
             })
         };
         // A person of tenant A writes to the research: it is A's now.
         let resp = research.call(
             &tenant("org-a"),
             "/patch-data",
-            r#"{"patch":{"tone":"warm"},"agent":"human"}"#,
+            r#"{"patch":{"tone":"warm"},"agent":"human","action":"edit"}"#,
         );
         assert_eq!(resp.status, 200);
 
@@ -1204,7 +1205,7 @@ mod upstream {
         let (store, research, brief) = setup();
         brief.post(
             "/patch-data",
-            r#"{"patch":{"project_name":"Lúnasa"},"agent":"human"}"#,
+            r#"{"patch":{"project_name":"Lúnasa"},"agent":"human","action":"edit"}"#,
         );
         // Nothing moved yet: refused, plainly.
         let (status, body) = refused(&brief, "/upstream/update");
@@ -1424,7 +1425,10 @@ mod upstream {
         let id2 =
             library::create_instance(&*store, RESEARCH, Some("Audience study".into())).unwrap();
         let second = Doc::open(&store, id2);
-        second.post("/patch-data", r#"{"patch":{"note":"x"},"agent":"human"}"#);
+        second.post(
+            "/patch-data",
+            r#"{"patch":{"note":"x"},"agent":"human","action":"edit"}"#,
+        );
         brief.post("/attach", &json!({ "document_id": second.doc }).to_string());
         assert_eq!(
             brief.get("/upstream")["upstream"].as_array().unwrap().len(),
@@ -1597,4 +1601,59 @@ fn a_document_whose_look_alone_changed_is_still_blank() {
     let edit = r#"{"patch":{"insight":"people forget"},"agent":"human","action":"edit field","rationale":""}"#;
     assert_eq!(post(&f, "/patch-data", edit).status, 200);
     assert!(!blank(), "a field is work");
+}
+
+// ADR-004 (features/client-wall.clan): no write without a decision. A
+// patch-data that names no agent, or no action, is a 400 and writes nothing;
+// the rationale stays optional, so a look edit still goes through.
+#[test]
+fn a_write_without_an_agent_and_an_action_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = DocId::from(dir.path().join("wall.clan"));
+    let schema = r#"{"type":"object","properties":{
+        "brief_style":{"type":"string","x-clan-appearance":true},
+        "insight":{"type":"string"}}}"#;
+    let bytes = clan_sdk::create(clan_sdk::CreateOptions {
+        title: "Wall".into(),
+        brief: "test brief".into(),
+        document_type: None,
+        no_render: false,
+        schema: Some(schema.into()),
+    })
+    .unwrap();
+    std::fs::write(id.as_str(), bytes).unwrap();
+    let session = Session::new(Arc::new(FsStore::new(dir.path().to_path_buf())));
+    session.open(id).unwrap();
+    let path = dir.path().join("wall.clan");
+    let f = Fixture { _dir: dir, session };
+    let version = || std::fs::read(&path).unwrap();
+    let before = version();
+
+    for body in [
+        r#"{"patch":{"insight":"x"}}"#,
+        r#"{"patch":{"insight":"x"},"action":"edit field"}"#,
+        r#"{"patch":{"insight":"x"},"agent":"human"}"#,
+        r#"{"patch":{"insight":"x"},"agent":"","action":"edit field"}"#,
+        r#"{"patch":{"insight":"x"},"agent":"human","action":"  "}"#,
+    ] {
+        let r = post(&f, "/patch-data", body);
+        assert_eq!(r.status, 400, "refused: {body}");
+        assert!(json(&r)["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("agent and an action"));
+    }
+    assert_eq!(version(), before, "a refused write changes nothing");
+
+    // Agent and action, no rationale: a work edit and a look edit both pass.
+    let edit = r#"{"patch":{"insight":"x"},"agent":"human","action":"edit field"}"#;
+    assert_eq!(post(&f, "/patch-data", edit).status, 200);
+    let look = r#"{"patch":{"brief_style":"creative"},"agent":"human","action":"look"}"#;
+    assert_eq!(post(&f, "/patch-data", look).status, 200);
+
+    // The dry-run mode logs and lets the write through.
+    use napkin_host::ops::edit::{PatchData, Unattributed};
+    let bare = r#"{"patch":{"insight":"y"}}"#;
+    assert!(PatchData::parse_with(bare, Unattributed::Refuse).is_err());
+    assert!(PatchData::parse_with(bare, Unattributed::DryRun).is_ok());
 }

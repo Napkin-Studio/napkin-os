@@ -86,8 +86,22 @@ impl TenantId {
         napkin_host::Ctx::new(actor).with_scope(napkin_host::Scope {
             org: Some(self.0.clone()),
             brand: None,
+            agency: agency_of(person),
         })
     }
+}
+
+/// The agency a signed-in person belongs to: the part after `@` in their
+/// `user@agency` name ([`crate::auth::Account::parse_username`] keeps it to
+/// letters, digits and hyphens). The middleware takes its scope from this on
+/// every request (ADR-004). An anonymous tenant has none.
+pub fn agency_of(person: &str) -> Option<String> {
+    let (_, agency) = person.rsplit_once('@')?;
+    let ok = !agency.is_empty()
+        && agency
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    ok.then(|| agency.to_string())
 }
 
 /// How this server knows who someone is.
@@ -306,5 +320,25 @@ mod tests {
         ] {
             assert!(TenantId::parse(bad).is_none(), "{bad} must be refused");
         }
+    }
+
+    #[test]
+    fn a_persons_agency_is_the_name_after_the_at_sign() {
+        assert_eq!(agency_of("engineer@napkin").as_deref(), Some("napkin"));
+        assert_eq!(agency_of("a@b@wk-ie").as_deref(), Some("wk-ie"));
+        for none in ["", "engineer", "x@", "x@Bad Agency", "x@a.b", "x@a/../b"] {
+            assert_eq!(agency_of(none), None, "{none:?}");
+        }
+        // The tenant's own id (an anonymous person) names no agency.
+        let t = TenantId::mint();
+        assert_eq!(t.ctx().scope.agency, None);
+        assert_eq!(
+            TenantId::of_agency("napkin")
+                .ctx_for("engineer@napkin")
+                .scope
+                .agency
+                .as_deref(),
+            Some("napkin")
+        );
     }
 }

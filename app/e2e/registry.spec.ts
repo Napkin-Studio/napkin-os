@@ -10,7 +10,7 @@ async function legacyDoc(page: Page, api: string, title: string, name: string) {
   const r = await page.request.post(`${api}/documents`, { data: { app_id: BRIEF, title } })
   expect(r.status(), title).toBe(200)
   const { token } = await r.json() as { token: string }
-  expect((await page.request.post(`/s/${token}/patch-data`, { data: { patch: { client: name } } })).status()).toBe(200)
+  expect((await page.request.post(`/s/${token}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch: { client: name } } })).status()).toBe(200)
 }
 
 test('adopt clients from free-text names, then rename, archive and restore one', async ({ page }) => {

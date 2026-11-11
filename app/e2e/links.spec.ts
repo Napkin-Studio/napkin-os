@@ -17,7 +17,7 @@ async function seed(page: Page) {
     return (await r.json() as { token: string }).token
   }
   const brief = await make('ie.napkin.brief-maker', 'Summer Spoons')
-  expect((await page.request.post(`/s/${brief}/patch-data`, { data: { patch: { client: 'Client A', single_minded_proposition: 'Spoons.' } } })).status()).toBe(200)
+  expect((await page.request.post(`/s/${brief}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch: { client: 'Client A', single_minded_proposition: 'Spoons.' } } })).status()).toBe(200)
   await make('ie.napkin.deck-maker', 'Pitch deck')
   return { client: ids[0], brief }
 }
@@ -47,7 +47,7 @@ test('a brief links into a deck, shows on both sides, updates when it changes, a
   if (shots) await page.screenshot({ path: `${shots}/links-linked.png` })
 
   // The brief changes: the deck says so, and takes the newer version.
-  expect((await page.request.post(`/s/${brief}/patch-data`, { data: { patch: { single_minded_proposition: 'Two spoons.' } } })).status()).toBe(200)
+  expect((await page.request.post(`/s/${brief}/patch-data`, { data: { agent: 'human', action: 'seed the test document', patch: { single_minded_proposition: 'Two spoons.' } } })).status()).toBe(200)
   await openWork(page, client, 'deck', 'Pitch deck')
   const notice = page.getByTestId('link-changed')
   await expect(notice).toContainText('Summer Spoons', { timeout: 15_000 })
