@@ -833,12 +833,17 @@ email, attached as a file, or noted from a call.
    (§7.2, item 5), so a client's "accepted" would silently clear the Judge's
    objection. A `client_review` never carries `polarity` or `reason_code` —
    `Decision::is_verdict` counts any decision with a `polarity` as a verdict.
-5. **Recorded by staff, about a client.** The recorder is the person in `Ctx`
-   (`403` for a process), as for every review route. There is no client
-   actor: `Actor::parse` gains nothing, and a body naming `actor` or
-   `recorded_by` is refused `400`. The client is data — a name and an email
-   the recorder typed — and nothing checks that the client is that person;
-   the record states its evidence (§7.5.2), never more.
+5. **Recorded by staff, about a client, or by the client through their link.**
+   The recorder of `POST /client-review` is the person in `Ctx` (`403` for a
+   process), and a body naming `actor` or `recorded_by` is refused `400`. There
+   the client is data — a name and an email the recorder typed — and nothing
+   checks that the client is that person; the record states its evidence
+   (§7.5.2), never more. *Amended 2026-11-11 (features/client-confirm-link.clan;
+   needs the OS layer owner's approval):* `Actor::parse` gains a fourth shape,
+   `client:<email>`, the client who opened their own link (§7.5.9). The host
+   accepts it on `client_review` only: a context with a client actor reaches
+   exactly `POST /client-link/state` and `POST /client-link/answer`, and every
+   other route answers `403` before it is read.
 6. **Confidential is not a filter here** (owner, 2026-09-29: confidential
    means only "kept out of RAG and the corpus"). Clients see everything, so
    nothing in client review — the records, `/decisions`, the extract's
@@ -1200,6 +1205,31 @@ words reach the match (§7.5.2a) only when the recorder pastes them as `said`.
 
 ---
 
+
+#### 7.5.9 The client's own link
+
+*Added 2026-11-11.* A link to one locked version, opened on a phone with no
+account (`features/client-confirm-link.clan`). Three records on the document's
+chain, all `kind: client_review`, told apart by `action` and tied by the link's
+id (32 lower-case hex digits):
+
+- `issue_link`, by the person who made it (`POST /client-link/issue`
+  `{id, name, email, expires}`): `extra.link` holds the `id`, `scope: confirm`,
+  `targets: [<document id>]` (one), the `lock` it is for, that lock's `version`,
+  the `doc_hash` of `shared/data.yaml` as the client is shown it, the client
+  `{name, email}` and `expires`. Refused `409` on a document that is not locked,
+  was edited after its lock, or has a part reopened; `400` for an `expires` past
+  or more than 30 days away.
+- `withdraw_link`, by a person (`POST /client-link/withdraw` `{id}`).
+- `client_answer`, by `client:<email>`, the same document answer §7.5.2 records
+  (`confirm` is `accepted`; `changes`, which needs words, is
+  `accepted_with_changes`), with `channel: link` and `extra.link`. Its `version`
+  is the lock's. It never unlocks or edits.
+
+What a link is worth is derived from the chain, never stored: `open`, or `404`
+(no such link) or `410` with its state: `withdrawn`, `answered` (a link answers
+once), `superseded` (the document is not the version the link names), `expired`.
+The token the web shell signs carries the same facts and cannot widen them.
 
 ### 7.6 Unlocking the whole document: `/unapprove`
 
@@ -2000,3 +2030,27 @@ no switch. The 3D client-circle engine (`app/src/orbs/`), its "Flat circles"
 setting (`napkin.circles.flat`) and the `<html data-orbs…>` attributes are gone.
 The agents keep their spheres from the one agent engine
 (`app/templates/shared/agent-sphere`, `app/src/shell/agents/AgentSphere.tsx`).
+
+## 13. Jobs and the job index
+
+(features/job-index-dashboard.clan; v2 sections 3, 4 and 6.)
+
+- **The job registry.** The jobs of a tenant are one CLAN document, `document_type: job-registry`,
+  kept beside the client registry (`Library::home("jobs-v1")`, `crates/napkin-host/src/jobs.rs`). A job
+  holds its number (`J001`), client, title, owner, `opened_on`, `due` and `budget_hours`. It holds no stage.
+  Every write names its actor, goes through `Change` and `PartStore::apply`, and the host stays wasm32-clean.
+- **`manifest.job`.** A document names its job by number. `POST /documents` takes `job` beside `client_id`
+  (404 for an unknown number, 400 for another client's job), a spin-off carries it, and `clan_sdk::with_job`
+  sets it. The registry never lists documents: the job's documents are the ones that name it.
+- **The index.** `napkin_host::jobindex::JobIndex` is built from the registry and from the decision chains
+  of the job's documents. A job's **stage is derived**, never stored: the Brief gate gives Client brief
+  (gate not passed), Brief check (passed, signed, waiting on the client), then Scope and estimate (client
+  confirmed). Phase 1 reads only the Brief; the later steps of the eleven are named and wait for their
+  tools' decisions. The index is read-only, disposable and rebuilt from the documents when any document's
+  version moves (`IndexCache`); a rebuilt index equals the live one (tested).
+- **Routes**, all under `/api/t/{tenant}`: `GET /jobs`, `GET /jobs/{number}`, `GET /jobs/{number}/stage`,
+  `GET /needs` (the signed-in person's lines, by deadline) and `GET /dashboard` (the six tiles;
+  Management, an admin or a demo, else 403 from `roles.rs`). `POST /jobs` opens a job in the registry.
+  A write of any kind to the index routes is 405.
+- **Never scores people.** The index and the dashboard hold jobs, stages and what each person is asked
+  to do next. They hold no ranking or score of a person.

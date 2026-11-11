@@ -14,10 +14,13 @@ use std::fmt;
 
 use crate::error::{HostError, HostResult};
 
-/// The principal an operation runs as. One of three shapes, so a reader of
-/// the decision chain can tell a person from a job from a piece of software:
+/// The principal an operation runs as. One of four shapes, so a reader of
+/// the decision chain can tell a person from a job from a piece of software
+/// from a client:
 ///
 /// - `human:<user-id>` — a person, as the shell authenticated them.
+/// - `client:<email>` — a client, through a signed link and nothing else. The
+///   host accepts it on `client_review` alone (`ops::client_link`).
 /// - `process:<job-id>` — a background job acting on someone's behalf.
 /// - `<producer>/<version>` — a tool writing under its own name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -30,6 +33,13 @@ impl Actor {
 
     pub fn process(job: &str) -> HostResult<Self> {
         Self::parse(&format!("process:{job}"))
+    }
+
+    /// A client who opened their own link. Only the web shell makes one, from
+    /// a token it verified; the host reaches nothing with it but the two
+    /// routes in `ops::client_link::CLIENT_ROUTES`.
+    pub fn client(email: &str) -> HostResult<Self> {
+        Self::parse(&format!("client:{email}"))
     }
 
     pub fn producer(name: &str, version: &str) -> HostResult<Self> {
@@ -46,6 +56,9 @@ impl Actor {
             well_formed(id)
         } else if let Some(job) = s.strip_prefix("process:") {
             well_formed(job)
+        } else if let Some(email) = s.strip_prefix("client:") {
+            well_formed(email)
+                && matches!(email.split_once('@'), Some((l, r)) if !l.is_empty() && !r.is_empty() && !r.contains('@'))
         } else if let Some((name, version)) = s.split_once('/') {
             well_formed(name) && well_formed(version) && !name.contains(':')
         } else {
@@ -55,7 +68,7 @@ impl Actor {
             Ok(Self(s.to_string()))
         } else {
             Err(HostError::bad_request(format!(
-                "malformed actor {s:?}: expected human:<id>, process:<id> or <producer>/<version>"
+                "malformed actor {s:?}: expected human:<id>, client:<email>, process:<id> or <producer>/<version>"
             )))
         }
     }
@@ -66,6 +79,10 @@ impl Actor {
 
     pub fn is_human(&self) -> bool {
         self.0.starts_with("human:")
+    }
+
+    pub fn is_client(&self) -> bool {
+        self.0.starts_with("client:")
     }
 }
 
@@ -167,6 +184,24 @@ mod tests {
             "tool/",
             "human:has space",
             "a:b/c",
+        ] {
+            assert!(Actor::parse(bad).is_err(), "{bad:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn a_client_actor_is_an_email_and_is_not_a_person() {
+        let c = Actor::client("pat@client-a.example").unwrap();
+        assert_eq!(c.as_str(), "client:pat@client-a.example");
+        assert!(c.is_client());
+        assert!(!c.is_human());
+        for bad in [
+            "client:",
+            "client:pat",
+            "client:@x.y",
+            "client:a@",
+            "client:a@b@c",
+            "client:a b@c.d",
         ] {
             assert!(Actor::parse(bad).is_err(), "{bad:?} must be refused");
         }

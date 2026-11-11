@@ -66,6 +66,7 @@ pub fn create(opts: CreateOptions) -> Result<Vec<u8>> {
         merge_policies: None,
         app: None,
         client: None,
+        job: None,
         signature: None,
         external: vec![],
         files,

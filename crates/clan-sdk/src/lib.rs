@@ -42,7 +42,7 @@ pub use error::{Error, Result};
 pub use export::{export_html, ExportOptions};
 pub use inject::{assemble, AgentContext, InjectOptions};
 pub use instantiate::{
-    instantiate, make_template, spinoff, take_upstream, with_client, InstantiateOptions,
+    instantiate, make_template, spinoff, take_upstream, with_client, with_job, InstantiateOptions,
     MakeTemplateOptions, SpinoffOptions, TakenUpstream,
 };
 pub use manifest::{

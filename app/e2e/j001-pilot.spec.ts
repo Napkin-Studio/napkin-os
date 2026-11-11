@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
-import { asMe, gateOf, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
+import { asMe, gateOf, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -33,7 +33,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   2: { title: 'Planning gets 403 on Scope and estimates', slug: null },
   3: { title: 'the creative director signs the brief with one approve decision', slug: null },
   4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: null },
-  5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: 'job-index-dashboard' },
+  5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: null },
   6: { title: 'five logos repaint the accent and it passes contrast in all three modes', slug: null },
   7: { title: 'axe finds nothing serious on every Phase 1 page in all three modes', slug: null },
   8: { title: 'a canary key set on the server never reaches the browser', slug: null },
@@ -45,7 +45,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   14: { title: 'restoring v2 keeps v3 and the approved version locked', slug: null },
   15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: null },
   16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: null },
-  17: { title: 'the client confirms the brief link on a phone with no account', slug: 'client-confirm-link' },
+  17: { title: 'the client confirms the brief link on a phone with no account', slug: null },
   18: { title: 'no consent means no captured sessions', slug: 'timesheet-sessions' },
 }
 
@@ -57,7 +57,7 @@ const DOORS = {
 } as const
 const MODES = ['white', 'grey', 'black'] as const
 
-type Decision = { kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
+type Decision = { id?: string; kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
 
 /**
  * The role tests sign people in, and a server has one auth mode per process: the existing specs run on
@@ -235,16 +235,56 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(5), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
-    await signIn(page, PEOPLE.management)
-    const job = await seedJ001(page, { ready: true })
-    await page.goto('/#dashboard')
-    await expect(page.getByTestId('tile-stage')).toContainText('Brief')
-    const moved = await page.request.post(`${job.api}/jobs/J001/stage`, { data: { stage: 'Ideas' } })
-    expect(moved.status()).toBe(200)
-    await expect(page.getByTestId('tile-stage')).toContainText('Ideas', { timeout: 10_000 })
-    await ctx.close()
+  // The dashboard is a door on Management's home (features/job-index-dashboard.clan). A job's stage is read from
+  // its documents' decisions, never typed in: the stage changes here are the Brief gate's own (the gate passed,
+  // the planner and the creative director signed, the client confirmed), written by the planner's browser while
+  // Management's page, open on the dashboard, is left alone. Each change must show on it within 10 seconds.
+  test(t(5), async ({ browser }) => {
+    const mgr = await open(browser, size, 'white', { roster: true })
+    const planner = await open(browser, size, 'white', { roster: true })
+    await signIn(planner.page, PEOPLE.planning)
+    const job = await seedJ001(planner.page, { fresh: true }) // the messy brief: it has not passed the gate
+    await signIn(mgr.page, PEOPLE.management)
+    await mgr.page.goto('/')
+    await mgr.page.goto('/#door-agency-dashboard')
+    await mgr.page.reload()
+    await expect(mgr.page.getByTestId('dashboard')).toBeVisible()
+    await expect(mgr.page.getByTestId(/^tile-(stage|risk|hours|waiting|scores|results)$/)).toHaveCount(6)
+    const row = mgr.page.getByTestId('tile-stage').locator(`[data-job="${job.job}"]`)
+    await expect(row).toHaveAttribute('data-stage', 'client-brief')
+    // the number on the tile is a link, and it opens the client the job is for
+    await expect(mgr.page.getByTestId('tile-stage').getByTestId('tile-number').first()).toHaveAttribute('href', /^#(client-cli_[0-9a-f]{8}|door-live-jobs)$/)
+
+    // the gate passes: Brief check
+    const patched = await planner.page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: READY_BRIEF, agent: 'human', action: 'answer the gate items' } })
+    expect(patched.status()).toBe(200)
+    await expect(row).toHaveAttribute('data-stage', 'brief-check', { timeout: 10_000 })
+    // the planner signs, then the creative director locks: the brief is signed and waits for the client
+    expect((await signBrief(planner.page, job.brief)).status()).toBe(200)
+    await expect(row).toContainText('The planner has signed', { timeout: 10_000 })
+    await signIn(planner.page, PEOPLE.creativeDirector)
+    expect((await lockBrief(planner.page, await asMe(planner.page, job.api, job.brief))).status()).toBe(200)
+    await expect(row).toContainText('Waiting for the client to confirm', { timeout: 10_000 })
+    await expect(mgr.page.getByTestId('tile-waiting')).toContainText('The longest wait')
+    // the client confirms: the job moves on
+    expect((await recordClientConfirmation(planner.page, await asMe(planner.page, job.api, job.brief))).status()).toBe(200)
+    await expect(row).toHaveAttribute('data-stage', 'scope-estimate', { timeout: 10_000 })
+
+    // the stage is read, never written: a write to the index answers 405
+    const stage = await mgr.page.request.get(`${job.api}/jobs/${job.job}/stage`)
+    expect((await stage.json()).stage.label).toBe('Scope and estimate')
+    for (const method of ['post', 'put', 'patch', 'delete'] as const) {
+      expect((await mgr.page.request[method](`${job.api}/jobs/${job.job}/stage`, { data: { stage: 'Ideas' } })).status(), method).toBe(405)
+    }
+    // Management and an admin open the dashboard; Planning gets 403 from the server
+    expect((await mgr.page.request.get(`${job.api}/dashboard`)).status()).toBe(200)
+    await signIn(planner.page, PEOPLE.planning)
+    expect((await planner.page.request.get(`${job.api}/dashboard`)).status()).toBe(403)
+    await planner.page.goto('/#door-agency-dashboard')
+    await planner.page.reload()
+    await expect(planner.page.locator('[data-state="missing-access"]')).toBeVisible()
+    await mgr.ctx.close()
+    await planner.ctx.close()
   })
 
   test(t(6), async ({ browser }) => {
@@ -288,7 +328,7 @@ for (const size of SIZES) {
   test(t(7), async ({ browser }) => {
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     // The Phase 1 pages that exist on this branch: the desk, the clients page, a client, its Brief
-    // page, and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
+    // page, Territories (the visual brief's choose-a-territory form), and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
     // visual brief) join this list when they land. The app frame is a document with its own paper
     // (the apps are restyled in their own records), so it is left out of the scan.
     const problems: string[] = []
@@ -301,6 +341,8 @@ for (const size of SIZES) {
         ['clients', async () => { await page.goto('/#clients'); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['client', async () => { await page.goto(`/#client-${job.client}`); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
         ['brief page', async () => { await page.goto(`/#tool-${job.client}-brief`); await page.reload(); await expect(page.getByTestId('work-item').first()).toBeVisible() }],
+        // Territories with the Brief gate off (this stack): open, with the choose-a-territory form of the visual brief.
+        ['territories', async () => { await page.goto(`/#tool-${job.client}-territories`); await page.reload(); await expect(page.getByTestId('choose-territory')).toBeVisible() }],
         ['agency look', async () => {
           await page.goto('/#agency'); await page.reload()
           await page.getByTestId('account-button').click()
@@ -383,10 +425,17 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toBeVisible() // passed and signed, the client has not confirmed
-    // The client's confirmation. The record here is the host's own client_review, written by an agency
-    // person; the client's own link (test 17, client-confirm-link) writes the same decision with the
-    // client as the actor.
-    expect((await recordClientConfirmation(page, job.brief)).status()).toBe(200)
+    // The client's confirmation, through their own link on a phone with no account (test 17): account
+    // service makes it from the signed brief, and the client confirms it.
+    await signIn(page, PEOPLE.accountService)
+    const link = await makeClientLink(page, job.api, job.brief)
+    const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } })
+    const cp = await phone.newPage()
+    await cp.goto(link.path)
+    await cp.getByRole('button', { name: 'Confirm' }).click()
+    await expect(cp.getByTestId('client-link-done')).toBeVisible()
+    await phone.close()
+    await signIn(page, PEOPLE.planning)
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toHaveCount(0)
@@ -587,21 +636,43 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(17), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
-    await signIn(page, PEOPLE.accountService)
-    const job = await seedJ001(page, { ready: true })
+  test(t(17), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
     await signOff(page, job)
     await signIn(page, PEOPLE.accountService)
-    const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
-    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } }) // no cookies, no account
+    const { path } = await makeClientLink(page, job.api, job.brief)
+    const brief = await asMe(page, job.api, job.brief)
+    const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } }) // no cookies, no account
     const cp = await phone.newPage()
-    await cp.goto(link)
+    await cp.goto(path)
+    await expect(cp.getByRole('heading', { name: 'Please confirm this brief' })).toBeVisible()
+    // phone-sized, and the primary buttons are at least 44 px tall (the screen's one exception to the shell's heights)
+    expect(await cp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    for (const name of ['Confirm this brief', 'Ask for changes']) {
+      expect((await cp.getByRole('button', { name }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    }
+    // a clean copy: the brief's own words, no agent context, no decision but the one it answers
+    const seen = await (await phone.request.get(`/c/${path.replace('/c/', '')}/view`)).json() as Record<string, unknown>
+    expect(Object.keys(seen).sort()).toEqual(['agency', 'client', 'expires', 'html', 'ok', 'signed_by', 'state', 'summary', 'title', 'version'])
+    const everything = JSON.stringify(seen)
+    expect(everything).toContain(READY_BRIEF.single_minded_proposition)
+    expect(everything, 'the planner\'s raw notes are not the client\'s to read').not.toContain(READY_BRIEF.brief_input)
+    for (const d of await chainOf(page, brief.token)) expect(everything).not.toContain(d.id ?? 'no id')
     await cp.getByRole('button', { name: 'Confirm' }).click()
     await expect(cp.getByText('Thank you')).toBeVisible()
-    const reviews = (await chainOf(page, job.brief.token)).filter(d => d.kind === 'client_review')
+    expect(await phone.cookies(), 'the client was given no session').toHaveLength(0)
+    const chain = await chainOf(page, brief.token)
+    const reviews = chain.filter(d => d.kind === 'client_review' && d.action === 'client_answer')
     expect(reviews).toHaveLength(1)
-    expect(reviews[0].version).toBe((await chainOf(page, job.brief.token)).find(d => d.kind === 'approve')!.version) // that exact version
+    expect(reviews[0].version).toBe(chain.find(d => d.kind === 'approve')!.version) // that exact version
+    expect(reviews[0].actor).toBe('client:contact@client-a.example') // the client, not staff
+    expect((await gateOf(page, brief)).confirmed).toBe(true)
+    // the link is used up: opening it again shows no brief, and no second decision lands
+    await cp.reload()
+    await expect(cp.getByTestId('client-link-gone')).toBeVisible()
+    expect((await chainOf(page, brief.token)).filter(d => d.action === 'client_answer')).toHaveLength(1)
     await phone.close()
     await ctx.close()
   })

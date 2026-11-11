@@ -299,6 +299,22 @@ pub fn with_client(clan: &ClanFile, client: Option<ClientRef>) -> Result<Vec<u8>
     b.build()
 }
 
+/// `clan`'s bytes with `manifest.job` set to `job` (or cleared with `None`),
+/// every other entry untouched. Like [`with_client`], it changes the revision
+/// id and not `updated_at`: filing a document under a job is not work done in it.
+pub fn with_job(clan: &ClanFile, job: Option<String>) -> Result<Vec<u8>> {
+    let mut manifest = clan.manifest().clone();
+    manifest.next_revision();
+    manifest.job = job;
+    let mut b = ClanBuilder::new(manifest);
+    for (path, bytes) in clan.read_all_entries()? {
+        if path != MANIFEST_PATH {
+            b.add_entry(path, bytes);
+        }
+    }
+    b.build()
+}
+
 /// Branch a finished document into a new document of a different app, carrying
 /// its data and its decisions across.
 ///
@@ -534,6 +550,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
     manifest.fork = None;
     // Who the source was for, this is for: a spin-off stays with its client.
     manifest.client = src_manifest.client.clone();
+    manifest.job = src_manifest.job.clone();
     manifest.lineage = Some(Lineage {
         // The source document is the substantive parent — it is where the
         // content came from. The template is recorded alongside it.

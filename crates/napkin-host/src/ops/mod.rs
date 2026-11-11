@@ -15,6 +15,7 @@
 //! operation knowing which.
 
 pub mod assemble;
+pub mod client_link;
 pub mod client_match;
 pub mod client_review;
 pub mod decisions;

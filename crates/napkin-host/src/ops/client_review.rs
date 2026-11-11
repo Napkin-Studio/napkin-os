@@ -486,6 +486,15 @@ pub(crate) fn part_hash(data: &Value, path: &str) -> String {
     sha256_prefixed(out.as_bytes())
 }
 
+/// The hash of a document's whole data as canonical JSON (the part hash of §7.5.1, over everything):
+/// the same content gives the same hash however the YAML happens to be written. The archive's own
+/// bytes are no identity for it, since every decision written re-serialises the data.
+pub(crate) fn content_hash(data: &Value) -> String {
+    let mut out = String::new();
+    canonical(data, &mut out);
+    sha256_prefixed(out.as_bytes())
+}
+
 fn canonical(v: &Value, out: &mut String) {
     match v {
         Value::Object(m) => {

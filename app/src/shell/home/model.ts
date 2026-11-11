@@ -9,7 +9,7 @@
 // words said about it. Nothing here fetches.
 
 import type { DoorEntry, HomeView, MapCircle } from '../../host/http'
-import type { LibraryItem } from '../../host/types'
+import type { JobNeed, LibraryItem } from '../../host/types'
 import { toolById } from '../landing/tools'
 import { callsIn, clientName, stateWords } from '../nui/deskData'
 import type { ToolId } from '../route'
@@ -20,9 +20,9 @@ const DOOR_TOOL: Readonly<Record<string, ToolId>> = { brief: 'brief', research: 
 
 export const doorTool = (id: string): ToolId | null => DOOR_TOOL[id] ?? null
 
-/** Clients opens the client desk, which already exists; the others need their tool's app installed. */
+/** Clients opens the client desk and the Agency dashboard reads the job index, both already here; the others need their tool's app installed. */
 export function doorIsLive(id: string, apps: readonly string[]): boolean {
-  if (id === 'clients') return true
+  if (id === 'clients' || id === 'agency-dashboard') return true
   const tool = doorTool(id)
   const appId = tool ? toolById(tool)?.appId : null
   return !!appId && apps.includes(appId)
@@ -40,11 +40,52 @@ export interface NeedRow {
   state: string
   /** The next action, on its button. */
   action: string
+  /** The job's deadline, when the row is a job's: what the list is ordered by. */
+  due?: string | null
 }
 
-/** What is waiting on this person: the documents with a call to make, a run that wants an answer, a failed run. */
-export function needsRows(items: readonly LibraryItem[]): NeedRow[] {
-  return items
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** `2026-11-20` as `20 Nov`; anything else as it came. */
+export function dueWords(due: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(due)
+  return m && MONTHS[Number(m[2]) - 1] ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}` : due
+}
+
+/** A job's need as a row: the line, the job and its client, the deadline, and the one next action. */
+export function jobNeedRow(n: JobNeed): NeedRow {
+  return { path: n.path, title: n.text, sub: `${n.job}, ${n.client}`, state: n.due ? `Due ${dueWords(n.due)}` : 'No deadline', action: n.action, due: n.due }
+}
+
+/** By deadline, soonest first, a row with none last; rows with the same deadline keep the order they came in. */
+export function orderNeeds<T extends { due?: string | null }>(rows: readonly T[]): T[] {
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => {
+      const x = a.r.due ?? null
+      const y = b.r.due ?? null
+      if (x === y) return a.i - b.i
+      if (x === null) return 1
+      if (y === null) return -1
+      return x < y ? -1 : 1
+    })
+    .map(({ r }) => r)
+}
+
+/** The first five lines, and how many are left behind Show all. */
+export function firstNeeds<T>(rows: readonly T[], all: boolean): { shown: T[]; more: number } {
+  const shown = all ? [...rows] : rows.slice(0, NEEDS_FIRST)
+  return { shown, more: rows.length - shown.length }
+}
+
+/**
+ * What is waiting on this person. A job's documents are the job's: its needs come from the server per
+ * person (a planner and a creative director on one job see different lines). A document with no job
+ * stays as it was: a call to make, a run that wants an answer, a failed run.
+ */
+export function needsRows(items: readonly LibraryItem[], jobNeeds: readonly JobNeed[] = []): NeedRow[] {
+  const loose = items
+    .filter(i => !i.job)
     .filter(i => callsIn(i) > 0 || i.run?.state === 'failed')
     .map(i => {
       const st = stateWords(i)
@@ -58,6 +99,7 @@ export function needsRows(items: readonly LibraryItem[]): NeedRow[] {
         action: failed ? 'See what failed' : waiting ? 'Answer' : 'Make the calls',
       }
     })
+  return orderNeeds<NeedRow>([...jobNeeds.map(jobNeedRow), ...loose])
 }
 
 /** The line under the greeting. */

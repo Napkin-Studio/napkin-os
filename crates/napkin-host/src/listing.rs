@@ -80,6 +80,10 @@ pub struct LibraryItem {
     /// Who it is for: the registry's id and name; the manifest's own name for
     /// an id the registry does not know. `null` when it has no client.
     pub client: Option<ClientRef>,
+    /// The job it is filed under, by number (`manifest.job`): the home reads this to
+    /// leave a job's documents to Needs you per person, and to keep the jobless as they were.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<RecentState>,
     pub run: Option<RunInfo>,
@@ -117,6 +121,7 @@ struct Core {
     app_id: Option<String>,
     updated_at: String,
     client: Option<ClientRef>,
+    job: Option<String>,
     state: Option<RecentState>,
     run: Option<RunInfo>,
     last_editor: Option<String>,
@@ -234,6 +239,7 @@ pub fn scan_library(
             title: core.title,
             updated_at: core.updated_at,
             client,
+            job: core.job,
             state: core.state,
             // What the host heard of a job first, else what the document records.
             run: cache.runs.run_for(&id).or(core.run),
@@ -272,6 +278,7 @@ fn work_out(store: &dyn DocStore, id: &DocId, clan: &ClanFile) -> Option<Core> {
         app_id: m.app.as_ref().map(|a| a.app_id.clone()),
         updated_at: m.updated_at.clone(),
         client: m.client.clone(),
+        job: m.job.clone(),
         state: recent_state(id.clone(), clan.raw_bytes().to_vec()),
         run: run_of(clan),
         last_editor: last_editor(clan),

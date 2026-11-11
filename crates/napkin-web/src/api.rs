@@ -62,6 +62,13 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/clients/{id}/archive", post(archive_client))
         .route("/t/{tenant}/clients/{id}/restore", post(restore_client))
         .route("/t/{tenant}/home", get(home))
+        // The job index: read-only. A write to any of these is 405; jobs are opened
+        // with POST /jobs (the registry), and a job's stage is read from its documents.
+        .route("/t/{tenant}/jobs", get(list_jobs).post(create_job))
+        .route("/t/{tenant}/jobs/{number}", get(get_job))
+        .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
+        .route("/t/{tenant}/needs", get(needs))
+        .route("/t/{tenant}/dashboard", get(dashboard))
         .route(
             "/t/{tenant}/agency/look",
             get(crate::look::get_look).put(crate::look::put_look),
@@ -77,6 +84,12 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
         .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
+        .route("/t/{tenant}/d/{doc}/client-link", post(make_client_link))
+        .route("/t/{tenant}/d/{doc}/client-links", get(client_links))
+        .route(
+            "/t/{tenant}/d/{doc}/client-link/{link}/withdraw",
+            post(withdraw_client_link),
+        )
         .route("/t/{tenant}/d/{doc}/download", get(download))
         .route("/t/{tenant}/d/{doc}/export", post(export_document))
         .route("/t/{tenant}/export/{handle}", get(export_download))
@@ -340,6 +353,97 @@ async fn library_listing(
     Json(napkin_host::scan_library(&*ws.store, &ws.library, &filter))
 }
 
+// ── Jobs: the registry and the index ─────────────────────────────────────────
+
+/// The current index, rebuilt when any document has moved. A rebuild is timed
+/// and logged, so the cost of keeping it in memory is a number, not a guess.
+fn job_index(ws: &Workspace) -> ApiResult<napkin_host::jobindex::JobIndex> {
+    let before = ws.jobs.builds();
+    let t = std::time::Instant::now();
+    let index = ws.jobs.get(&*ws.store, chrono::Utc::now())?;
+    if ws.jobs.builds() != before {
+        tracing::info!(
+            target: "napkin_web::jobs",
+            jobs = index.jobs.len(),
+            documents = index.jobs.iter().map(|j| j.documents.len()).sum::<usize>(),
+            ms = t.elapsed().as_millis() as u64,
+            "job index rebuilt"
+        );
+    }
+    Ok(index)
+}
+
+async fn list_jobs(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+) -> ApiResult<Json<Vec<napkin_host::jobindex::JobEntry>>> {
+    Ok(Json(job_index(&ctx.workspace(&tenant))?.jobs))
+}
+
+async fn create_job(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Json(body): Json<napkin_host::jobs::NewJob>,
+) -> ApiResult<(StatusCode, Json<napkin_host::jobs::JobRecord>)> {
+    let ws = ctx.workspace(&tenant);
+    let job = napkin_host::jobs::create_job(&*ws.store, &acting, body)?;
+    Ok((StatusCode::CREATED, Json(job)))
+}
+
+async fn get_job(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Path((_t, number)): Path<(String, String)>,
+) -> ApiResult<Json<napkin_host::jobindex::JobEntry>> {
+    job_index(&ctx.workspace(&tenant))?
+        .job(&number)
+        .cloned()
+        .map(Json)
+        .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")).into())
+}
+
+/// A job's stage, as its documents' decisions have it. Read-only: it is never typed in.
+async fn job_stage(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Path((_t, number)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let index = job_index(&ctx.workspace(&tenant))?;
+    let job = index
+        .job(&number)
+        .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")))?;
+    Ok(Json(serde_json::json!({
+        "job": job.number, "stage": job.stage, "status": job.status, "waiting_on": job.waiting_on,
+    })))
+}
+
+/// What the signed-in person is asked to do next, by deadline. Everyone's own list:
+/// two people on one job see different lines. An anonymous visitor sees them all.
+async fn needs(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
+) -> ApiResult<Json<Value>> {
+    let index = job_index(&ctx.workspace(&tenant))?;
+    let user = user.map(|Extension(a)| a);
+    let items = index.needs_for(
+        user.as_ref().map(|a| a.username.as_str()),
+        user.as_ref().map(|a| a.roles.as_slice()).unwrap_or(&[]),
+    );
+    Ok(Json(
+        serde_json::json!({ "total": items.len(), "items": items }),
+    ))
+}
+
+/// The six tiles. Management's: the route is behind the role check.
+async fn dashboard(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+) -> ApiResult<Json<napkin_host::jobindex::Dashboard>> {
+    Ok(Json(job_index(&ctx.workspace(&tenant))?.dashboard()))
+}
+
 // ── Clients ──────────────────────────────────────────────────────────────────
 
 async fn list_clients(
@@ -456,6 +560,10 @@ struct NewDocument {
     /// are `404`.
     #[serde(default)]
     client_id: Option<String>,
+    /// The job the document is filed under, by number (`J001`): it must be a job of
+    /// the same client. Unknown numbers are `404`.
+    #[serde(default)]
+    job: Option<String>,
 }
 
 async fn new_document(
@@ -466,7 +574,21 @@ async fn new_document(
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
     let client = clients::get_named(&*ws.store, body.client_id.as_deref())?;
+    let job = napkin_host::jobs::get_named(&*ws.store, body.job.as_deref())?;
+    if let Some(j) = &job {
+        // refused before anything is made, so a bad request leaves no stray document
+        if client.as_ref().map(|c| c.id.as_str()) != Some(j.client_id.as_str()) {
+            return Err(napkin_host::HostError::bad_request(format!(
+                "job {} is for another client than this document",
+                j.number
+            ))
+            .into());
+        }
+    }
     let doc = library::create_instance_for(&*ws.store, &body.app_id, body.title, client.as_ref())?;
+    if let Some(j) = &job {
+        napkin_host::jobs::link_document(&*ws.store, &doc, &j.number)?;
+    }
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
@@ -581,6 +703,115 @@ async fn open_document(
         &person,
         &ws,
         DocId::new(doc),
+    )?))
+}
+
+#[derive(Deserialize)]
+struct ClientLinkBody {
+    name: String,
+    email: String,
+}
+
+/// Run one of the host's client-link routes as the signed-in person, and carry
+/// its events to the agency's other tabs.
+fn client_link_call(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    person: &str,
+    doc: &str,
+    path: &str,
+    body: Value,
+) -> ApiResult<Value> {
+    let (_ws, session, _) = doc_session(ctx, tenant, doc)?;
+    let resp = napkin_host::dispatch(
+        &tenant.ctx_for(person),
+        &session,
+        &*ctx.config,
+        napkin_host::HostRequest::new(path, "", body.to_string().into_bytes()),
+    );
+    ctx.events.publish_all(tenant, &resp.events);
+    let v: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
+    if resp.status == 200 {
+        Ok(v)
+    } else {
+        Err(ApiError::new(
+            resp.status,
+            v["error"].as_str().unwrap_or("the link could not be made"),
+        ))
+    }
+}
+
+/// `POST /d/{doc}/client-link` `{name, email}`: a link the client opens on a phone with no
+/// account, to this locked version (features/client-confirm-link.clan). The token is in the
+/// answer once; the chain keeps the rest.
+async fn make_client_link(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc)): Path<(String, String)>,
+    Json(body): Json<ClientLinkBody>,
+) -> ApiResult<Json<Value>> {
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let (expires, exp) = crate::links::ends();
+    let made = client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/issue",
+        serde_json::json!({ "id": id, "name": body.name, "email": body.email, "expires": expires }),
+    )?;
+    let text = |k: &str| made[k].as_str().unwrap_or_default().to_string();
+    let claims = crate::links::Claims {
+        v: 1,
+        id: id.clone(),
+        tenant: tenant.to_string(),
+        doc: doc.clone(),
+        scope: crate::links::SCOPE.into(),
+        targets: vec![doc.clone()],
+        version: text("version"),
+        hash: text("doc_hash"),
+        name: body.name.trim().to_string(),
+        email: body.email.trim().to_lowercase(),
+        agency: crate::tenant::agency_of(&person),
+        exp,
+    };
+    let token = crate::links::sign(&ctx.link_key, &claims);
+    Ok(Json(serde_json::json!({
+        "ok": true, "id": id, "path": format!("/c/{token}"), "expires": expires,
+        "version": claims.version, "client": { "name": claims.name, "email": claims.email },
+    })))
+}
+
+async fn client_links(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/list",
+        serde_json::json!({}),
+    )?))
+}
+
+async fn withdraw_client_link(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc, link)): Path<(String, String, String)>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/withdraw",
+        serde_json::json!({ "id": link }),
     )?))
 }
 

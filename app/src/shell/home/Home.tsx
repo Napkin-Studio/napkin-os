@@ -14,8 +14,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DoorEntry, HomeView } from '../../host/http'
-import type { LibraryItem } from '../../host/types'
-import { doorIsLive, doorLabel, hello, homeEyebrow, needsLine, needsRows, NEEDS_FIRST } from './model'
+import type { JobNeed, LibraryItem } from '../../host/types'
+import { doorIsLive, doorLabel, firstNeeds, hello, homeEyebrow, needsLine, needsRows } from './model'
 import { changedBriefs } from '../gate/words'
 import '../gate/gate.css'
 import './home.css'
@@ -23,6 +23,8 @@ import './home.css'
 interface Props {
   view: HomeView
   items: readonly LibraryItem[]
+  /** What the job index asks of this person, by deadline. */
+  jobNeeds?: readonly JobNeed[]
   /** The person's first name, for the greeting. */
   first: string | null
   /** App ids installed here: which doors have a tool. */
@@ -34,7 +36,7 @@ interface Props {
   onSwitch: (role: string | null) => void
 }
 
-export function Home({ view, items, first, apps, onDoor, onOpenDocument, onMap, onSwitch }: Props) {
+export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onSwitch }: Props) {
   const top = useRef<HTMLDivElement>(null)
   const [all, setAll] = useState(false)
   // The heading takes focus on arrival, so a keyboard or a screen reader lands on it.
@@ -43,8 +45,8 @@ export function Home({ view, items, first, apps, onDoor, onOpenDocument, onMap, 
   // The last word keeps the period dot with it, so the dot never wraps alone onto a line.
   const greet = hello(first)
   const cut = greet.lastIndexOf(' ')
-  const needs = useMemo(() => needsRows(items), [items])
-  const shown = all ? needs : needs.slice(0, NEEDS_FIRST)
+  const needs = useMemo(() => needsRows(items, jobNeeds), [items, jobNeeds])
+  const { shown } = firstNeeds(needs, all)
 
   return (
     <div className="nui nui-page" ref={top} data-testid="home" data-role={view.viewing ?? view.roles.join(' ')}>
@@ -92,7 +94,7 @@ export function Home({ view, items, first, apps, onDoor, onOpenDocument, onMap, 
                 ))}
               </ul>
             )}
-            {!all && needs.length > NEEDS_FIRST && (
+            {!all && needs.length > shown.length && (
               <p className="nui-more"><button type="button" className="side-link" data-testid="needs-show-all" onClick={() => setAll(true)}>Show all {needs.length}</button></p>
             )}
           </section>

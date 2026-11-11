@@ -1,0 +1,19 @@
+# A recorded sample: Client A, an Irish whiskey. Every line is invented.
+territory:
+  name: Permission to stop
+  line: The evening does not start until something tells you the day is over. This whiskey is that signal.
+  source: typed
+  chosen_by: Creative director
+proposition: The whiskey that waits for you.
+tone:
+  - Unhurried
+  - Dry
+  - Never nostalgic
+must_show:
+  - The 70 cl bottle, label forward
+  - The age statement, readable
+never_show:
+  - Anyone who looks under 25
+  - Driving
+  - Sport
+reference_frames: {}

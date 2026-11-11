@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Visual brief",
+  "description": "One page from a chosen territory: the territory, its line, up to three reference frames, the proposition, the tone, what must show and what must never show. Approved once by the creative director, and then locked.",
+  "type": "object",
+  "properties": {
+    "territory": {
+      "type": "object",
+      "description": "The territory this page takes forward.",
+      "properties": {
+        "name": { "type": "string" },
+        "line": { "type": "string", "description": "One sentence that says the territory." },
+        "source": { "enum": ["typed", "territories"], "description": "typed: written by hand. territories: made by the Territories tool." },
+        "chosen_by": { "type": "string" }
+      }
+    },
+    "proposition": { "type": "string", "description": "The brief's single-minded proposition, lifted at spin-off." },
+    "tone": { "type": "array", "items": { "type": "string" }, "description": "The brief's tone and world, lifted at spin-off." },
+    "must_show": { "type": "array", "items": { "type": "string" }, "description": "What every image must show (the Production Recipes name for product and brand rules)." },
+    "never_show": { "type": "array", "items": { "type": "string" }, "description": "What no image may show." },
+    "reference_frames": {
+      "type": "object",
+      "description": "Up to three uploaded images, in slots a, b and c. Phase 1 has no generated frames.",
+      "properties": {
+        "a": { "$ref": "#/definitions/frame" },
+        "b": { "$ref": "#/definitions/frame" },
+        "c": { "$ref": "#/definitions/frame" }
+      }
+    }
+  },
+  "definitions": {
+    "frame": {
+      "type": "object",
+      "properties": {
+        "asset": { "type": "string", "description": "The asset's name in the document." },
+        "path": { "type": "string" },
+        "caption": { "type": "string" }
+      }
+    }
+  }
+}

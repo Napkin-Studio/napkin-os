@@ -43,6 +43,9 @@ pub struct Workspace {
     /// What the library listing worked out per document, so a poll does not
     /// re-read every decision chain (napkin-host `listing`).
     pub library: LibraryCache,
+    /// The job index, read-only and disposable (napkin-host `jobindex`): rebuilt
+    /// from the documents whenever one has moved.
+    pub jobs: napkin_host::jobindex::IndexCache,
 }
 
 impl Workspace {
@@ -52,6 +55,7 @@ impl Workspace {
             ctx,
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
+            jobs: napkin_host::jobindex::IndexCache::new(),
         }
     }
 
@@ -90,6 +94,9 @@ pub struct AppCtx {
     seed: Option<PathBuf>,
     pub config: Arc<dyn HostConfig>,
     pub tokens: TokenStore,
+    /// Signs the client's links (`links`); the session secret's child, or a key for this run.
+    pub link_key: Vec<u8>,
+    pub limiter: crate::links::Limiter,
     pub events: EventBus,
     pub exports: ExportStore,
     pub meter: Meter,
@@ -115,6 +122,8 @@ impl AppCtx {
             seed: None,
             config,
             tokens: TokenStore::default(),
+            link_key: crate::links::fresh_key(),
+            limiter: crate::links::Limiter::default(),
             events: EventBus::default(),
             exports: ExportStore::default(),
             meter: Meter::new(agent_cap),
@@ -123,6 +132,15 @@ impl AppCtx {
             roles_dir: None,
             workspaces: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Sign client links with the session secret's child key, so every server behind one
+    /// load balancer reads the same links; without one, links last as long as this process.
+    pub fn with_link_secret(mut self, secret: Option<&[u8]>) -> Self {
+        if let Some(s) = secret {
+            self.link_key = crate::links::key_from(s);
+        }
+        self
     }
 
     /// Templates installed into every new workspace.

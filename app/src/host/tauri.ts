@@ -70,6 +70,9 @@ export const tauriHost: Host = {
   // The desktop viewer is parked; the web shell is where the panel lives.
   getDecisions: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   getGate: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),
+  makeClientLink: () => Promise.reject(new Error('the client link is not available on the desktop yet')),
+  listClientLinks: () => Promise.resolve([]),
+  withdrawClientLink: () => Promise.reject(new Error('the client link is not available on the desktop yet')),
   gateSign: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),
   gatePatch: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),
   gateNewVersion: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),

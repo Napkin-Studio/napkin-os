@@ -21,11 +21,15 @@ import type {
   Adopted,
   LegacyName,
   ClientRecord,
+  DashboardView,
+  JobNeed,
   LibraryFilter,
   LibraryListing,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
+  ClientLinkMade,
+  ClientLinkRow,
   GateView,
   VersionParts,
   VersionsView,
@@ -81,6 +85,20 @@ export async function homeView(as?: string | null): Promise<HomeView | null> {
   try {
     const q = as ? `?as=${encodeURIComponent(as)}` : ''
     return await json<HomeView>(`/doors${q}`)
+  } catch { return null }
+}
+
+/** What the signed-in person is asked to do next, by deadline (`GET /needs`); empty where there is no server answer. */
+export async function jobNeeds(): Promise<JobNeed[]> {
+  try { return (await json<{ items: JobNeed[] }>('/needs')).items } catch { return [] }
+}
+
+/** The agency dashboard's tiles; `forbidden` when this role may not open it (403), null when the server does not answer. */
+export async function dashboardView(): Promise<DashboardView | 'forbidden' | null> {
+  try {
+    const r = await fetch(`${await base()}/dashboard`, { credentials: 'same-origin' })
+    if (r.status === 403) return 'forbidden'
+    return r.ok ? ((await r.json()) as DashboardView) : null
   } catch { return null }
 }
 
@@ -318,8 +336,11 @@ export const httpHost: Host = {
     return resp.json() as Promise<DecisionsView>
   },
   getGate: () => clanCall<GateView>('/gate'),
+  makeClientLink: (name, email) => json<ClientLinkMade>(`/d/${requireDoc()}/client-link`, postJson({ name, email })),
+  listClientLinks: async () => (await json<{ links: ClientLinkRow[] }>(`/d/${requireDoc()}/client-links`)).links,
+  withdrawClientLink: async id => { await json<unknown>(`/d/${requireDoc()}/client-link/${id}/withdraw`, postJson({})) },
   gateSign: async rationale => { await clanPost<unknown>('/sign', { rationale: rationale ?? '' }) },
-  gatePatch: async (patch, action) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action }) },
+  gatePatch: async (patch, action, rationale) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action, ...(rationale ? { rationale } : {}) }) },
   gateNewVersion: async reason => { await clanPost<unknown>('/unapprove', { rationale: reason }) },
   getVersions: () => clanCall<VersionsView>('/versions'),
   getVersion: n => clanCall<VersionParts>(`/version?n=${n}`),
