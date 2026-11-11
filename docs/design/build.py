@@ -66,7 +66,7 @@ def page(name, title, body, mode="white", person="Aoife", with_top=True):
 </body>
 </html>
 """
-    assert "—" not in html, name
+    assert chr(0x2014) not in html, name
     (OUT / name).write_text(html)
 
 

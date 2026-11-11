@@ -37,13 +37,13 @@ in the worktree ../napkin-discovery. Started 00:57 UTC.
 
 **What changed.** Three commits on feat/discovery after the prompt files:
 
-- `846dd472` docs: the audit (docs/discovery, eight files) and the design proposal (docs/design, 13 pages, 26 screenshots, CHECKS.md).
+- `846dd472` docs: the audit (docs/discovery, eight files: the index and seven detail files) and the design proposal (docs/design, 13 pages, 26 screenshots, CHECKS.md).
 - `3ebed317` features: 13 records at status exploring, decisions for each default taken, open decisions in napkin-studio.clan, audit.md and open-questions.md.
 - This log.
 
 **The five hand-back items.**
 
-1. Audit: docs/discovery/audit.md, with six detail files.
+1. Audit: docs/discovery/audit.md, with seven detail files.
 2. Design proposal: docs/design/index.html. Squint and Count results in docs/design/CHECKS.md.
 3. Phase 1 records: j001-pilot-suite, roles-and-homes, agency-look, job-index-dashboard, brief-gate, client-confirm-link, visual-brief, timesheet-sessions, screen-states, brief-versions-undo, client-wall.
 4. Harness record: harness. Cannes record: cannes-removal.
@@ -80,7 +80,7 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 
 **Re-estimate of each phase.** Discovery changes the estimate more by what it found than by what it cost.
 
-- **Phase 1.** v2 treated it as wrapping what exists. The audit shows it is new work on every line but the brief. The 13 records carry their own build estimates, which add up to about 120 working days for one builder. Run as three parallel lanes (shell, brief path, platform) that is 8 to 10 weeks, plus the owners' time to approve 13 designs and Laurence's time at the gate. It cannot start until ADR-004 is written and signed.
+- **Phase 1.** v2 treated it as wrapping what exists. The audit shows it is new work on every line but the brief. The 13 records carry their own build estimates, which add up to 123 working days for one builder (2, 10, 8, 10, 10, 10, 8, 15, 10, 10, 15, 10 and 5, in the order the records are listed above, then harness and cannes-removal). Run as three parallel lanes (shell, brief path, platform) that is 8 to 10 weeks, plus the owners' time to approve 13 designs and Laurence's time at the gate. It cannot start until ADR-004 is written and signed.
 - **Phase 2.** Not smaller than Phase 1: Idea room, Script editor, Judge out of 30, the Brain, voice, search, single sign-on and five more homes are all new, and the idea sources could not be opened. Estimate 8 to 12 weeks.
 - **Phase 3.** The largest. No outside repo is ready to wrap: Art Director Tool is a prototype, Resize covers four ratios, the outdoor repo is a different product, and the recipe runner, cost engine, tiers and ledger do not exist. Estimate 12 to 16 weeks, and it needs paid calls on.
 - **Phase 4.** Cannot be estimated: Shopper and Experiential are unaudited. Deck Maker needs its server side. Hold v2's figure.

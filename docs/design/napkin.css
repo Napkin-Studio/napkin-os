@@ -94,7 +94,7 @@ ul, ol { list-style: none; }
 
 /* Dashboard: six plain rows. No big number tiles, no decorative charts. Every number is a link. */
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6) var(--s7); }
-.tile .n { display: block; font: 400 34px/1.15 var(--display); text-decoration: none; }
+.tile .n { display: flex; align-items: center; min-height: 44px; font: 400 34px/1.15 var(--display); text-decoration: none; }
 .tile .n:hover { text-decoration: underline; }
 
 /* Timesheet day */
@@ -136,3 +136,5 @@ ul, ol { list-style: none; }
   .index li { grid-template-columns: minmax(0,1fr); gap: var(--s1); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.day a, .index a { min-height: 44px; display: inline-flex; align-items: center; }

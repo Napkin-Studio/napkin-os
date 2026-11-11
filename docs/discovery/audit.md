@@ -94,6 +94,32 @@ The suite itself is the first record: j001-pilot-suite.
 | Meeting notes to actions | No | Skip for v1 |
 | New business tracker | No. J001 is a live job, not a pitch | Skip for v1 |
 
+## What was run, and the command that proved it
+
+The prompt asks for the command behind each claim. Most of this audit is from reading code,
+and says so. These are the commands that were actually run.
+
+| Area | Command | Result |
+| --- | --- | --- |
+| The whole repo | `scripts/check.sh --all` (uv 0.13.7) | Ten suites pass: rust, wasm, conformance, frontend, desktop, engine, middleware, mock-backend, terraform, production-tool |
+| Feature records | `scripts/feature verify` | Passes for every record |
+| Brief Maker, Research, the shell | Covered by the frontend, middleware and engine suites above. No test was run on its own | The brief-path subagent's one attempt failed on the old uv |
+| Production Tool relay | `cd production-tool/relay && uv run pytest tests/test_mock.py` | 19 passed |
+| Deck Maker engine | `cd engine && PYTHONPATH=. python3 -m pytest -q deck/tests/test_validate.py` | 32 passed |
+| mock-agent | `python3 -m pytest mock-agent/test_mock_agent.py` | 4 passed |
+| napkin-art-director | `node --test *.test.mjs *.test.cjs` | 77 pass, 3 skipped |
+| Resize | `node --test` | 86 pass |
+| napkin-radio | `npm run test:access`, `npx tsc --noEmit`, `npm run build` | 4 of 4, clean, built |
+| napkin-audio | `npm test`, `npm run build` | 34 of 34, built |
+| awards-board-maker | `python -m unittest discover -s tests`, `node tests/image_craft_test.js` | 75 run with 1 error, 18 of 18 |
+| idea-to-ooh-studio | `npm run build` | Fails on two type errors |
+| e2e | Not run. It needs a browser download and is not part of `--all` | The existing specs' widths were read from the code |
+
+**Phase 1 repos in depth.** The prompt asks for the Phase 1 outside repos to be checked in
+depth. Phase 1 names two: napkin-timesheet and napkin-timesheet-traffic. Neither can be
+opened with this login, so no outside repo got an in-depth check. All seven that could be
+opened belong to Phase 3 or 4 and got the 15-minute triage.
+
 ## Could not verify, and why
 
 - **Eleven outside repos.** GitHub answers Not Found for this login (docs/sources/repos.md). Shopper, experiential, timesheets, the canon and three deck repos are unaudited.

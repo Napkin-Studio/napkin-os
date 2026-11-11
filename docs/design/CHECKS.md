@@ -26,9 +26,9 @@ Measured in Chrome at both widths by a script (`docs/design/shots.mjs`).
 | Rule | Result |
 | --- | --- |
 | One primary button per screen | 10 pages have exactly one. The O, the dashboard and the index have none: their links are the actions |
-| Four type sizes or fewer, plus 12 for labels | Every page uses 13, 21, 34 or 55 px, and 12 px for uppercase labels. No page uses more than three of the four |
-| No card inside a card | None. One rectangle exists, around the visual brief |
-| Tap targets 44 px or more | No button, door, chip or text link is under 44 px, at either width |
+| Four type sizes or fewer, plus 12 for labels | Every page uses 13, 21, 34 or 55 px, and 12 px for uppercase labels. No page uses more than three of the four. The script prints the sizes and fails on any other |
+| No card inside a card | None. One content card exists, around the visual brief. Buttons, the bar and the chip have borders; nothing sits inside another bordered box |
+| Tap targets 44 px or more | No button, door, chip, top-bar link, tile link, list link or More tools link is under 44 px, at either width. Links inside a sentence are not counted: WCAG exempts them |
 | No sideways scroll | 0 px overflow on all 26 screenshots |
 | Nothing moves | The pages have no animation or transition |
 | No em dashes | The build script refuses to write a page that contains one |
@@ -65,6 +65,6 @@ lightness is set per mode. That is what v2 section 5 asks for ("adjust its light
 
 1. **Needs you sits above the doors.** v2 lists doors first. I put the work first, because a home's job is to say what is waiting. Swap it back if the doors should lead.
 2. **The dashboard has no chart and no large coloured tile.** v2's Never list rules out big number tiles with decorative charts. The six tiles are a label, one number in display type, and one line naming the job.
-3. **The brief is signed before the client confirms it.** The repo's contract only allows a client's answer on a locked document. v2 has the client confirm first. See open question 4 in docs/discovery/open-questions.md.
+3. **The brief is signed before the client confirms it.** The repo's contract only allows a client's answer on a locked document. v2 has the client confirm first. See question 2 in docs/discovery/open-questions.md.
 4. **The O has no primary button.** The circles are the actions.
 5. **J001 is shown as Client A**, and the agency is a placeholder. The repo never commits client material.
