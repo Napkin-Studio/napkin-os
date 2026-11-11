@@ -540,6 +540,9 @@ pub enum Group {
     Brains,
     /// Proprietary data: the Agency Brain only.
     Proprietary,
+    /// Making and withdrawing the client's own link: account service sends it, the planner may
+    /// (features/client-confirm-link.clan).
+    ClientLink,
     Open,
 }
 
@@ -549,6 +552,7 @@ impl Group {
             Group::Money => &["producer", "account-service", "management", "traffic"],
             Group::Brains => &["planning", "account-service", "agency-brain"],
             Group::Proprietary => &["agency-brain"],
+            Group::ClientLink => &["account-service", "planning"],
             Group::Open => &[],
         }
     }
@@ -574,6 +578,9 @@ pub fn group_of(route: &str) -> Group {
             Group::Money
         }
         Some("scope" | "estimates" | "invoices" | "change-orders" | "time-money") => Group::Money,
+        Some("d") if matches!(rest.get(1).copied(), Some("client-link" | "client-links")) => {
+            Group::ClientLink
+        }
         Some("client-brains" | "pitches") => Group::Brains,
         Some("proprietary") => Group::Proprietary,
         _ => Group::Open,

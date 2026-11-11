@@ -141,6 +141,27 @@ export interface GateItem {
 export interface GateSigner { role: string; person: string; signed: boolean }
 
 /** `GET /gate`: the Brief gate of the open brief. */
+/** The client's own link to the locked brief (`POST /d/{doc}/client-link`). */
+export interface ClientLinkMade {
+  id: string
+  /** `/c/<token>`: the page the client opens, on this server. Shown once. */
+  path: string
+  expires: string
+  version: string
+  client: { name: string; email: string }
+}
+
+export interface ClientLinkRow {
+  id: string
+  /** `open`, `answered`, `withdrawn`, `expired` or `superseded`: what the host reads off the chain. */
+  state: string
+  answer: string | null
+  version: string
+  client: { name: string; email: string }
+  expires: string
+  made: string
+}
+
 export interface GateView {
   enforced: boolean
   items: GateItem[]
@@ -744,6 +765,12 @@ export interface Host {
   getGate(): Promise<GateView>
   /** The signer named on the brief signs this version (`POST /sign`): the planner's sign, or the creative director's lock. */
   gateSign(rationale?: string): Promise<void>
+  /** Make the link a client opens on a phone, with no account, to confirm this locked version. */
+  makeClientLink(name: string, email: string): Promise<ClientLinkMade>
+  /** The links this document has had, and what each is worth now. */
+  listClientLinks(): Promise<ClientLinkRow[]>
+  /** Kill a link: it answers 410 from then on. */
+  withdrawClientLink(id: string): Promise<void>
   /** A person's edit of the open brief from the gate (`POST /patch-data`), attributed to them. */
   gatePatch(patch: Record<string, unknown>, action: string): Promise<void>
   /** Start a new version of a signed brief that changed (`POST /unapprove`, with the reason). */

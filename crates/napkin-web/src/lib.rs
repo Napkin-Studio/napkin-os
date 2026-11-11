@@ -15,10 +15,12 @@
 
 pub mod api;
 pub mod auth;
+pub mod clean;
 pub mod dogfood;
 pub mod error;
 pub mod events;
 pub mod exports;
+pub mod links;
 pub mod look;
 pub mod meter;
 pub mod roles;
@@ -115,6 +117,13 @@ pub fn router_with(
         .nest(
             "/s",
             sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
+        )
+        // The client's own link: a token in the URL, no session, one document
+        // version and one answer (features/client-confirm-link.clan). `/c/<token>`
+        // itself is the shell's page; these are the two calls it makes.
+        .nest(
+            "/c",
+            links::router().layer(DefaultBodyLimit::max(32 * 1024)),
         )
         .merge(shell_service(static_dir))
         .layer(TraceLayer::new_for_http())

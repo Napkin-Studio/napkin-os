@@ -304,11 +304,16 @@ impl Session {
     /// the installed app's view when the library has one of the same major
     /// ([`crate::view`]).
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
-        // One read: the snapshot holds the bytes it was built from (#10).
+        // One read: the snapshot holds the bytes it was built from (#10). It is read with the
+        // view held, so an open that began before a write cannot finish after it and put the
+        // older bytes back (features/client-confirm-link.clan: a link written while the shell
+        // opened the same document vanished from the snapshot, and the next write built on the
+        // older one would have dropped it from the file).
+        let mut view = self.view.lock().unwrap();
         let doc = Document::load(self.store.parts(), id)?;
         let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
         let result = read::describe(&doc);
-        self.view.lock().unwrap().open = Some(doc);
+        view.open = Some(doc);
         Ok(result)
     }
 

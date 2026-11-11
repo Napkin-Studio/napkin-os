@@ -77,6 +77,12 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
         .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
+        .route("/t/{tenant}/d/{doc}/client-link", post(make_client_link))
+        .route("/t/{tenant}/d/{doc}/client-links", get(client_links))
+        .route(
+            "/t/{tenant}/d/{doc}/client-link/{link}/withdraw",
+            post(withdraw_client_link),
+        )
         .route("/t/{tenant}/d/{doc}/download", get(download))
         .route("/t/{tenant}/d/{doc}/export", post(export_document))
         .route("/t/{tenant}/export/{handle}", get(export_download))
@@ -581,6 +587,115 @@ async fn open_document(
         &person,
         &ws,
         DocId::new(doc),
+    )?))
+}
+
+#[derive(Deserialize)]
+struct ClientLinkBody {
+    name: String,
+    email: String,
+}
+
+/// Run one of the host's client-link routes as the signed-in person, and carry
+/// its events to the agency's other tabs.
+fn client_link_call(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    person: &str,
+    doc: &str,
+    path: &str,
+    body: Value,
+) -> ApiResult<Value> {
+    let (_ws, session, _) = doc_session(ctx, tenant, doc)?;
+    let resp = napkin_host::dispatch(
+        &tenant.ctx_for(person),
+        &session,
+        &*ctx.config,
+        napkin_host::HostRequest::new(path, "", body.to_string().into_bytes()),
+    );
+    ctx.events.publish_all(tenant, &resp.events);
+    let v: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
+    if resp.status == 200 {
+        Ok(v)
+    } else {
+        Err(ApiError::new(
+            resp.status,
+            v["error"].as_str().unwrap_or("the link could not be made"),
+        ))
+    }
+}
+
+/// `POST /d/{doc}/client-link` `{name, email}`: a link the client opens on a phone with no
+/// account, to this locked version (features/client-confirm-link.clan). The token is in the
+/// answer once; the chain keeps the rest.
+async fn make_client_link(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc)): Path<(String, String)>,
+    Json(body): Json<ClientLinkBody>,
+) -> ApiResult<Json<Value>> {
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let (expires, exp) = crate::links::ends();
+    let made = client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/issue",
+        serde_json::json!({ "id": id, "name": body.name, "email": body.email, "expires": expires }),
+    )?;
+    let text = |k: &str| made[k].as_str().unwrap_or_default().to_string();
+    let claims = crate::links::Claims {
+        v: 1,
+        id: id.clone(),
+        tenant: tenant.to_string(),
+        doc: doc.clone(),
+        scope: crate::links::SCOPE.into(),
+        targets: vec![doc.clone()],
+        version: text("version"),
+        hash: text("doc_hash"),
+        name: body.name.trim().to_string(),
+        email: body.email.trim().to_lowercase(),
+        agency: crate::tenant::agency_of(&person),
+        exp,
+    };
+    let token = crate::links::sign(&ctx.link_key, &claims);
+    Ok(Json(serde_json::json!({
+        "ok": true, "id": id, "path": format!("/c/{token}"), "expires": expires,
+        "version": claims.version, "client": { "name": claims.name, "email": claims.email },
+    })))
+}
+
+async fn client_links(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/list",
+        serde_json::json!({}),
+    )?))
+}
+
+async fn withdraw_client_link(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc, link)): Path<(String, String, String)>,
+) -> ApiResult<Json<Value>> {
+    Ok(Json(client_link_call(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        "/client-link/withdraw",
+        serde_json::json!({ "id": link }),
     )?))
 }
 

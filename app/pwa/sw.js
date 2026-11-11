@@ -8,7 +8,7 @@
 // The build fills in the two placeholders (vite.config.ts). Four rules:
 //
 //  * The server's routes are never touched. `/api/*` is client work, and the
-//    server is authoritative for it (N3); `/s/*` is an app frame's capability
+//    server is authoritative for it (N3); `/c/*` is a client's own link, a token in its URL; `/s/*` is an app frame's capability
 //    URL. Neither is answered from, or written to, a cache.
 //  * The shell is precached whole and served from the cache. A new build is a
 //    new cache, installed beside the old one and swapped in when the page says
@@ -32,7 +32,7 @@ const INDEX = new URL('index.html', SCOPE).href
 function serverOwned(url) {
   if (url.origin !== SCOPE.origin) return false
   const p = url.pathname
-  return ['api/', 's/'].some(r => p.startsWith(`/${r}`) || p.startsWith(SCOPE.pathname + r))
+  return ['api/', 's/', 'c/'].some(r => p.startsWith(`/${r}`) || p.startsWith(SCOPE.pathname + r))
 }
 
 /** Published separately from the shell: apps.json and apps/*.clan. */

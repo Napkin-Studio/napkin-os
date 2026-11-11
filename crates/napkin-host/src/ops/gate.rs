@@ -331,7 +331,7 @@ fn live(d: &Decision) -> bool {
 
 /// Whether the document was edited after the decision at `at` (the chain is
 /// newest first, so newer is a smaller index).
-fn edited_since(chain: &DecisionChain, at: usize) -> bool {
+pub(crate) fn edited_since(chain: &DecisionChain, at: usize) -> bool {
     chain.decisions[..at]
         .iter()
         .any(|d| live(d) && d.kind.as_deref() == Some("edit"))

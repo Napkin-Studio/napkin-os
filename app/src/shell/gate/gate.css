@@ -106,3 +106,13 @@
 .gate-alert i { width: 8px; height: 8px; border-radius: 50%; background: var(--create); flex: none; }
 .gate-alert span { flex: 1; min-width: 12rem; }
 .gate-alert .ch-btn { height: 36px; padding: 0 16px; font-weight: 600; }
+
+/* The client's link, made from the signed brief (ClientLinkPanel.tsx). */
+.cl-made { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; width: 100%; }
+.cl-made input {
+  width: 100%; min-height: 44px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card);
+  color: var(--ink); font: 13px var(--f-mono); padding: 0 12px;
+}
+.cl-made .ch-btn { height: 44px; padding: 0 20px; font-size: 14px; font-weight: 600; }
+.cl-rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; justify-content: space-between; }
+.cl-rows .ch-btn { height: 34px; padding: 0 14px; }

@@ -231,6 +231,13 @@ pub async fn dispatch_async(
 ) -> HostResponse {
     #[cfg(feature = "native")]
     if req.path == "/api-proxy" {
+        // the one route that spends money is never a client's
+        if ctx.actor.is_client() {
+            return HostResponse::error(
+                403,
+                "a client's link reaches its own answer and nothing else",
+            );
+        }
         return match api_proxy(ctx, session, cfg, &req.body_str()).await {
             Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
             Err(e) => e.into(),
@@ -299,6 +306,16 @@ pub fn dispatch(
     req: HostRequest,
 ) -> HostResponse {
     let path = req.path.as_str();
+    // A client's context is the one thing here that is not a person, a job or a
+    // tool, and it reaches two routes: the state of its own link and its answer
+    // (`ops::client_link`). Every other route, read or write, is refused before
+    // it is looked at.
+    if ctx.actor.is_client() && !crate::ops::client_link::CLIENT_ROUTES.contains(&path) {
+        return HostResponse::error(
+            403,
+            "a client's link reaches its own answer and nothing else",
+        );
+    }
     match path {
         #[cfg(feature = "native")]
         "/api-proxy" => HostResponse::error(500, "/api-proxy must be dispatched asynchronously"),
@@ -479,6 +496,51 @@ pub fn dispatch(
                 c,
                 d,
                 crate::ops::client_review::ClientReview::parse(&req.body_str())?,
+            )
+        }),
+        // The client's own link: made, withdrawn and listed by an agency person;
+        // read and answered by the client, as `client:<email>` (ops::client_link).
+        "/client-link/issue" => review(session, ctx, |c, d| {
+            crate::ops::client_link::issue(
+                c,
+                d,
+                crate::ops::client_link::Issue::parse(&req.body_str())?,
+            )
+        }),
+        "/client-link/withdraw" => review(session, ctx, |c, d| {
+            crate::ops::client_link::withdraw(
+                c,
+                d,
+                &crate::ops::client_link::parse_withdraw(&req.body_str())?,
+            )
+        }),
+        "/client-link/list" => match session.read(crate::ops::client_link::list) {
+            Ok(v) => HostResponse::json(200, &v),
+            Err(e) => e.into(),
+        },
+        "/client-link/state" => match session.read(|d| {
+            crate::ops::client_link::state_reply(
+                d,
+                &crate::ops::client_link::id_of(&req.body_str())?,
+            )
+        }) {
+            Ok(v) => HostResponse::json(
+                if v["ok"] == true {
+                    200
+                } else if v["state"] == "unknown" {
+                    404
+                } else {
+                    410
+                },
+                &v,
+            ),
+            Err(e) => e.into(),
+        },
+        "/client-link/answer" => review(session, ctx, |c, d| {
+            crate::ops::client_link::answer(
+                c,
+                d,
+                crate::ops::client_link::Answer::parse(&req.body_str())?,
             )
         }),
         "/client-review/confirm" => review(session, ctx, |c, d| {
