@@ -7,3 +7,30 @@ title = "napkin-os"
 
 [extend]
 useDefault = true
+
+# Reviewed 2026-11-11 against the whole history (26 findings, all false positives or test fixtures).
+# Each entry names a file and why. Do not widen a path to a folder.
+[allowlist]
+description = "Reviewed findings in test fixtures and an env var name"
+paths = [
+  # Evidence fixture: projection keys such as "regulation.age_rule.<id>", not credentials.
+  '''app/tests/fixtures/research-evidence\.json''',
+  # Test passwords for the in-memory sign-in tests (crates/napkin-web/tests/api.rs).
+  '''crates/napkin-web/tests/api\.rs''',
+  # Test-only signing secret and own-keys header values; no provider accepts them.
+  '''production-tool/relay/tests/conftest\.py''',
+  '''production-tool/relay/tests/test_dogfood\.py''',
+  # Layers test fixture key (server/tests/test_layers_pg.py).
+  '''server/tests/test_layers_pg\.py''',
+  # Session contract example and a UI test constant; both fake. Files no longer in the tree, still in history.
+  '''production-tool/contracts/examples/session\.response\.json''',
+  '''production-tool/web/src/jobs/shotRefs\.test\.ts''',
+  # An old test result that quotes a Runway upload URI (an expired, signed asset reference). Deleted from
+  # the tree; it stays in history, so the scan skips it. A person should confirm it is dead (see the harness record).
+  '''production-tool/relay/results/delayer-tests\.json''',
+]
+regexTarget = "line"
+regexes = [
+  # The NAME of an environment variable, not a value (engine/brief_llm.py).
+  '''"groq":\s+\("https://api\.groq\.com/openai/v1", "GROQ_API_KEY"''',
+]
