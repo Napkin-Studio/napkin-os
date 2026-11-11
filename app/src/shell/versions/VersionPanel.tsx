@@ -7,7 +7,7 @@
 // Restore. Restore writes the old words into the draft as a new edit; a signed version stays
 // locked and nothing newer is removed. The host reads every version from the brief's own chain.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { host } from '../../host'
 import type { VersionsView } from '../../host'
 import { pushData } from '../appExport'
@@ -24,27 +24,24 @@ type Pick = number | 'draft'
 const nameOf = (p: Pick) => (p === 'draft' ? 'Working draft' : `v${p}`)
 
 interface Props {
-  docPath: string
   undo: BriefUndo
   /** After a write: the app reads the document again. */
   onChanged: () => void
 }
 
-export default function VersionPanel({ docPath, undo, onChanged }: Props) {
+export default function VersionPanel({ undo, onChanged }: Props) {
   const [view, setView] = useState<VersionsView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<Pick[]>([])
   const [diffs, setDiffs] = useState<{ left: Pick; right: Pick; parts: PartDiff[] } | null>(null)
   const [busy, setBusy] = useState(false)
-  const live = useRef(docPath)
-  live.current = docPath
 
   const load = useCallback(() => {
     host.getVersions().then(
-      v => { if (live.current === docPath) { setView(v); setError(null) } },
+      v => { setView(v); setError(null) },
       e => setError(String(e instanceof Error ? e.message : e)),
     )
-  }, [docPath])
+  }, [])
   useEffect(() => {
     load()
     const offs = [host.on('clan-data-changed', load), host.on('clan-patch-saved', load)]
@@ -53,7 +50,7 @@ export default function VersionPanel({ docPath, undo, onChanged }: Props) {
 
   // Two picked: read both and show what differs. The older goes on the left.
   useEffect(() => {
-    if (picked.length !== 2) { setDiffs(null); return }
+    if (picked.length !== 2) return
     const [a, b] = [...picked].sort((x, y) => (x === 'draft' ? 1 : y === 'draft' ? -1 : x - y))
     let stale = false
     Promise.all([host.getVersion(a), host.getVersion(b)]).then(
@@ -125,7 +122,7 @@ export default function VersionPanel({ docPath, undo, onChanged }: Props) {
       </ul>
       {view && view.versions.length === 0 && <p className="vh-mid">Nothing is signed yet. Each time the brief is signed and locked it becomes a version here.</p>}
       {picked.length === 1 && <p className="vh-mid">Pick one more to compare it with {nameOf(picked[0])}.</p>}
-      {diffs && (
+      {picked.length === 2 && diffs && (
         <section className="vh-compare" data-testid="version-compare" aria-label={`${nameOf(diffs.left)} and ${nameOf(diffs.right)}, side by side`}>
           <div className="vh-cols vh-colhead"><span>{nameOf(diffs.left)}</span><span>{nameOf(diffs.right)}</span></div>
           {diffs.parts.length === 0 && <p className="vh-mid">These two read the same.</p>}

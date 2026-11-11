@@ -41,9 +41,9 @@ for (const size of SIZES) {
       expect((await lockBrief(page, { token: director })).status()).toBe(200)
       return director
     }
-    let director = await sign({ audience: 'Drinkers aged 25 to 34 who think Irish whiskey is for someone else.', insight: 'The first pour is the hard one.' })
+    const director = await sign({ audience: 'Drinkers aged 25 to 34 who think Irish whiskey is for someone else.', insight: 'The first pour is the hard one.' })
     expect((await page.request.post(`/s/${director}/unapprove`, { data: { rationale: 'A new version.' } })).status()).toBe(200)
-    director = await sign({ audience: 'Drinkers aged 25 to 34 who go out midweek.', insight: 'The first pour is the hard one.' })
+    await sign({ audience: 'Drinkers aged 25 to 34 who go out midweek.', insight: 'The first pour is the hard one.' })
 
     await page.goto(`/#tool-${job.client}-brief`)
     await page.reload()

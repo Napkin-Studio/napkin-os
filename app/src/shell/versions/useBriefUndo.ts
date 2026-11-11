@@ -34,18 +34,17 @@ export interface BriefUndo {
 }
 
 export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void): BriefUndo {
-  const stack = useRef<UndoStack>(createUndoStack())
+  // Kept with the document it was made for: another brief opens on an empty stack.
+  const [held, setHeld] = useState<{ docPath: string; stack: UndoStack; note: string | null }>(() => ({ docPath, stack: createUndoStack(), note: null }))
+  if (held.docPath !== docPath) setHeld({ docPath, stack: createUndoStack(), note: null })
+  const stack = useRef<UndoStack>(held.stack)
+  useEffect(() => { stack.current = held.stack }, [held.stack])
   const [, bump] = useState(0)
-  const [note, setNote] = useState<string | null>(null)
+  const setNote = useCallback((note: string | null) => setHeld(h => ({ ...h, note })), [])
   const me = useRef<string | null>(null)
   const line = useRef<Promise<void>>(Promise.resolve())
   const busy = useRef(false)
 
-  useEffect(() => {
-    stack.current.clear()
-    setNote(null)
-    bump(n => n + 1)
-  }, [docPath])
   useEffect(() => {
     if (!on) return
     host.whoAmI().then(p => { me.current = p.id.replace(/^human:/, '') }, () => { me.current = null })
@@ -89,7 +88,7 @@ export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void
       busy.current = false
       bump(n => n + 1)
     }
-  }, [on, onChanged])
+  }, [on, onChanged, setNote])
 
   // Cmd or Ctrl Z on the page, unless a field owns it (its own undo is the browser's).
   useEffect(() => {
@@ -111,9 +110,9 @@ export function useBriefUndo(docPath: string, on: boolean, onChanged: () => void
   }, [])
 
   return {
-    canUndo: stack.current.canUndo(),
-    canRedo: stack.current.canRedo(),
-    note,
+    canUndo: held.stack.canUndo(),
+    canRedo: held.stack.canRedo(),
+    note: held.note,
     undo: () => void run('undo'),
     redo: () => void run('redo'),
     onSaved,

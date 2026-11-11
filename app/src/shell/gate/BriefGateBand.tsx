@@ -109,7 +109,7 @@ export default function BriefGateBand({ gate, client, onChanged, undo, docPath }
         </button>
         {undo.note && <p className="bg-note-line" role="status" data-testid="undo-note">{undo.note}</p>}
       </div>
-      {versions && <VersionPanel docPath={docPath} undo={undo} onChanged={() => { gate.reload(); onChanged() }} />}
+      {versions && <VersionPanel key={docPath} undo={undo} onChanged={() => { gate.reload(); onChanged() }} />}
 
       {open && (
         <div className="bg-body">
