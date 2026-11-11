@@ -26,6 +26,8 @@ import type {
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
+  ClientLinkMade,
+  ClientLinkRow,
   GateView,
   VersionParts,
   VersionsView,
@@ -318,6 +320,9 @@ export const httpHost: Host = {
     return resp.json() as Promise<DecisionsView>
   },
   getGate: () => clanCall<GateView>('/gate'),
+  makeClientLink: (name, email) => json<ClientLinkMade>(`/d/${requireDoc()}/client-link`, postJson({ name, email })),
+  listClientLinks: async () => (await json<{ links: ClientLinkRow[] }>(`/d/${requireDoc()}/client-links`)).links,
+  withdrawClientLink: async id => { await json<unknown>(`/d/${requireDoc()}/client-link/${id}/withdraw`, postJson({})) },
   gateSign: async rationale => { await clanPost<unknown>('/sign', { rationale: rationale ?? '' }) },
   gatePatch: async (patch, action, rationale) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action, ...(rationale ? { rationale } : {}) }) },
   gateNewVersion: async reason => { await clanPost<unknown>('/unapprove', { rationale: reason }) },

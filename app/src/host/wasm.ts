@@ -259,6 +259,9 @@ export const wasmHost: Host = {
     return JSON.parse(body) as DecisionsView
   },
   getGate: () => route<GateView>('/gate', '', new Uint8Array()),
+  makeClientLink: () => Promise.reject(new Error('the client link needs a server')),
+  listClientLinks: () => Promise.resolve([]),
+  withdrawClientLink: () => Promise.reject(new Error('the client link needs a server')),
   gateSign: async rationale => { await post<unknown>('/sign', { rationale: rationale ?? '' }) },
   gatePatch: async (patch, action, rationale) => { await post<unknown>('/patch-data', { patch, agent: 'human', action, ...(rationale ? { rationale } : {}) }) },
   gateNewVersion: async reason => { await post<unknown>('/unapprove', { rationale: reason }) },

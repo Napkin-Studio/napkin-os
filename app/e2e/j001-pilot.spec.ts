@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
-import { asMe, gateOf, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
+import { asMe, gateOf, lockBrief, makeClientLink, PEOPLE, READY_BRIEF, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -45,7 +45,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   14: { title: 'restoring v2 keeps v3 and the approved version locked', slug: null },
   15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: 'screen-states' },
   16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: null },
-  17: { title: 'the client confirms the brief link on a phone with no account', slug: 'client-confirm-link' },
+  17: { title: 'the client confirms the brief link on a phone with no account', slug: null },
   18: { title: 'no consent means no captured sessions', slug: 'timesheet-sessions' },
 }
 
@@ -57,7 +57,7 @@ const DOORS = {
 } as const
 const MODES = ['white', 'grey', 'black'] as const
 
-type Decision = { kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
+type Decision = { id?: string; kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
 
 /**
  * The role tests sign people in, and a server has one auth mode per process: the existing specs run on
@@ -382,10 +382,17 @@ for (const size of SIZES) {
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toBeVisible() // passed and signed, the client has not confirmed
-    // The client's confirmation. The record here is the host's own client_review, written by an agency
-    // person; the client's own link (test 17, client-confirm-link) writes the same decision with the
-    // client as the actor.
-    expect((await recordClientConfirmation(page, job.brief)).status()).toBe(200)
+    // The client's confirmation, through their own link on a phone with no account (test 17): account
+    // service makes it from the signed brief, and the client confirms it.
+    await signIn(page, PEOPLE.accountService)
+    const link = await makeClientLink(page, job.api, job.brief)
+    const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } })
+    const cp = await phone.newPage()
+    await cp.goto(link.path)
+    await cp.getByRole('button', { name: 'Confirm' }).click()
+    await expect(cp.getByTestId('client-link-done')).toBeVisible()
+    await phone.close()
+    await signIn(page, PEOPLE.planning)
     await page.goto(`/#tool-${job.client}-territories`)
     await page.reload()
     await expect(page.getByTestId('territories-closed')).toHaveCount(0)
@@ -579,21 +586,43 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(17), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
-    await signIn(page, PEOPLE.accountService)
-    const job = await seedJ001(page, { ready: true })
+  test(t(17), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
     await signOff(page, job)
     await signIn(page, PEOPLE.accountService)
-    const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
-    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } }) // no cookies, no account
+    const { path } = await makeClientLink(page, job.api, job.brief)
+    const brief = await asMe(page, job.api, job.brief)
+    const phone = await browser.newContext({ baseURL: rosterURL, viewport: { width: size.width, height: size.height } }) // no cookies, no account
     const cp = await phone.newPage()
-    await cp.goto(link)
+    await cp.goto(path)
+    await expect(cp.getByRole('heading', { name: 'Please confirm this brief' })).toBeVisible()
+    // phone-sized, and the primary buttons are at least 44 px tall (the screen's one exception to the shell's heights)
+    expect(await cp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    for (const name of ['Confirm this brief', 'Ask for changes']) {
+      expect((await cp.getByRole('button', { name }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    }
+    // a clean copy: the brief's own words, no agent context, no decision but the one it answers
+    const seen = await (await phone.request.get(`/c/${path.replace('/c/', '')}/view`)).json() as Record<string, unknown>
+    expect(Object.keys(seen).sort()).toEqual(['agency', 'client', 'expires', 'html', 'ok', 'signed_by', 'state', 'summary', 'title', 'version'])
+    const everything = JSON.stringify(seen)
+    expect(everything).toContain(READY_BRIEF.single_minded_proposition)
+    expect(everything, 'the planner\'s raw notes are not the client\'s to read').not.toContain(READY_BRIEF.brief_input)
+    for (const d of await chainOf(page, brief.token)) expect(everything).not.toContain(d.id ?? 'no id')
     await cp.getByRole('button', { name: 'Confirm' }).click()
     await expect(cp.getByText('Thank you')).toBeVisible()
-    const reviews = (await chainOf(page, job.brief.token)).filter(d => d.kind === 'client_review')
+    expect(await phone.cookies(), 'the client was given no session').toHaveLength(0)
+    const chain = await chainOf(page, brief.token)
+    const reviews = chain.filter(d => d.kind === 'client_review' && d.action === 'client_answer')
     expect(reviews).toHaveLength(1)
-    expect(reviews[0].version).toBe((await chainOf(page, job.brief.token)).find(d => d.kind === 'approve')!.version) // that exact version
+    expect(reviews[0].version).toBe(chain.find(d => d.kind === 'approve')!.version) // that exact version
+    expect(reviews[0].actor).toBe('client:contact@client-a.example') // the client, not staff
+    expect((await gateOf(page, brief)).confirmed).toBe(true)
+    // the link is used up: opening it again shows no brief, and no second decision lands
+    await cp.reload()
+    await expect(cp.getByTestId('client-link-gone')).toBeVisible()
+    expect((await chainOf(page, brief.token)).filter(d => d.action === 'client_answer')).toHaveLength(1)
     await phone.close()
     await ctx.close()
   })

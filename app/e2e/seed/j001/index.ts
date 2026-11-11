@@ -104,9 +104,18 @@ export async function gateOf(page: Page, brief: { token: string }) {
   }
 }
 
-/** The client's answer, recorded by an agency person (the host's `/client-review`): what the client's link replaces. */
-export async function recordClientConfirmation(page: Page, brief: { token: string }) {
-  return page.request.post(`/s/${brief.token}/client-review`, {
-    data: { answer: 'accepted', client: { name: 'Client A contact' }, channel: 'none', parts: [] },
-  })
+/**
+ * The client's own link to the locked brief (features/client-confirm-link.clan), made as the signed-in
+ * person (account service or planning, on the roster stack). `path` is `/c/<token>`: open it with no
+ * cookies at all, as the client does.
+ */
+export async function makeClientLink(
+  page: Page,
+  api: string,
+  brief: { path: string },
+  client = { name: 'Client A contact', email: 'contact@client-a.example' },
+) {
+  const r = await page.request.post(`${api}/d/${encodeURIComponent(brief.path)}/client-link`, { data: client })
+  expect(r.status(), await r.text()).toBe(200)
+  return (await r.json()) as { id: string; path: string; expires: string; version: string }
 }

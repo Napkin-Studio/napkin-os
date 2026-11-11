@@ -833,12 +833,17 @@ email, attached as a file, or noted from a call.
    (§7.2, item 5), so a client's "accepted" would silently clear the Judge's
    objection. A `client_review` never carries `polarity` or `reason_code` —
    `Decision::is_verdict` counts any decision with a `polarity` as a verdict.
-5. **Recorded by staff, about a client.** The recorder is the person in `Ctx`
-   (`403` for a process), as for every review route. There is no client
-   actor: `Actor::parse` gains nothing, and a body naming `actor` or
-   `recorded_by` is refused `400`. The client is data — a name and an email
-   the recorder typed — and nothing checks that the client is that person;
-   the record states its evidence (§7.5.2), never more.
+5. **Recorded by staff, about a client, or by the client through their link.**
+   The recorder of `POST /client-review` is the person in `Ctx` (`403` for a
+   process), and a body naming `actor` or `recorded_by` is refused `400`. There
+   the client is data — a name and an email the recorder typed — and nothing
+   checks that the client is that person; the record states its evidence
+   (§7.5.2), never more. *Amended 2026-11-11 (features/client-confirm-link.clan;
+   needs the OS layer owner's approval):* `Actor::parse` gains a fourth shape,
+   `client:<email>`, the client who opened their own link (§7.5.9). The host
+   accepts it on `client_review` only: a context with a client actor reaches
+   exactly `POST /client-link/state` and `POST /client-link/answer`, and every
+   other route answers `403` before it is read.
 6. **Confidential is not a filter here** (owner, 2026-09-29: confidential
    means only "kept out of RAG and the corpus"). Clients see everything, so
    nothing in client review — the records, `/decisions`, the extract's
@@ -1200,6 +1205,31 @@ words reach the match (§7.5.2a) only when the recorder pastes them as `said`.
 
 ---
 
+
+#### 7.5.9 The client's own link
+
+*Added 2026-11-11.* A link to one locked version, opened on a phone with no
+account (`features/client-confirm-link.clan`). Three records on the document's
+chain, all `kind: client_review`, told apart by `action` and tied by the link's
+id (32 lower-case hex digits):
+
+- `issue_link`, by the person who made it (`POST /client-link/issue`
+  `{id, name, email, expires}`): `extra.link` holds the `id`, `scope: confirm`,
+  `targets: [<document id>]` (one), the `lock` it is for, that lock's `version`,
+  the `doc_hash` of `shared/data.yaml` as the client is shown it, the client
+  `{name, email}` and `expires`. Refused `409` on a document that is not locked,
+  was edited after its lock, or has a part reopened; `400` for an `expires` past
+  or more than 30 days away.
+- `withdraw_link`, by a person (`POST /client-link/withdraw` `{id}`).
+- `client_answer`, by `client:<email>`, the same document answer §7.5.2 records
+  (`confirm` is `accepted`; `changes`, which needs words, is
+  `accepted_with_changes`), with `channel: link` and `extra.link`. Its `version`
+  is the lock's. It never unlocks or edits.
+
+What a link is worth is derived from the chain, never stored: `open`, or `404`
+(no such link) or `410` with its state: `withdrawn`, `answered` (a link answers
+once), `superseded` (the document is not the version the link names), `expired`.
+The token the web shell signs carries the same facts and cannot widen them.
 
 ### 7.6 Unlocking the whole document: `/unapprove`
 

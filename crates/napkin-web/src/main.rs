@@ -222,7 +222,13 @@ async fn main() {
         )
         .with_seed(settings.seed_dir.clone())
         .with_dogfood(dogfood.clone())
-        .with_roles_dir(Some(settings.config_dir.clone())),
+        .with_roles_dir(Some(settings.config_dir.clone()))
+        // client links are signed with a child of the session secret (none in the anonymous demo)
+        .with_link_secret(
+            env_string("NAPKIN_SESSION_SECRET")
+                .as_deref()
+                .map(str::as_bytes),
+        ),
     );
 
     let app = napkin_web::router_with(ctx, settings.static_dir.as_deref(), identity);

@@ -12,6 +12,7 @@ import { useState, type FormEvent } from 'react'
 import { host } from '../../host'
 import type { GateItem, GateView } from '../../host'
 import type { Gate } from './useGate'
+import ClientLinkPanel from './ClientLinkPanel'
 import VersionPanel from '../versions/VersionPanel'
 import type { BriefUndo } from '../versions/useBriefUndo'
 import {
@@ -179,6 +180,7 @@ export default function BriefGateBand({ gate, client, onChanged, undo, docPath }
               )}
               {error && <p className="bg-err" role="alert">{error}</p>}
             </section>
+            {v.signed && !v.changed_since_lock && <ClientLinkPanel client={client} onChanged={onChanged} />}
           </aside>
         </div>
       )}

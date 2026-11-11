@@ -87,6 +87,16 @@ fn path(ctx: &AppCtx, tenant: &crate::tenant::TenantId) -> std::path::PathBuf {
     ctx.tenant_dir(tenant).join(FILE)
 }
 
+/// The tenant's saved look, for a page that has no session (the client's link).
+pub fn read(ctx: &AppCtx, tenant: &crate::tenant::TenantId) -> Look {
+    match std::fs::read(path(ctx, tenant)) {
+        Ok(bytes) => serde_json::from_slice::<Saved>(&bytes)
+            .map(|s| s.look)
+            .unwrap_or_default(),
+        Err(_) => Look::default(),
+    }
+}
+
 /// The tenant's saved look; an empty one when nothing is saved yet.
 pub async fn get_look(
     State(ctx): State<Arc<AppCtx>>,
