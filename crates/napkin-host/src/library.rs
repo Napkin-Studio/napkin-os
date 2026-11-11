@@ -82,6 +82,21 @@ pub struct RecentState {
     pub needs_you: usize,
     /// Locked (Contract 4 §7.1).
     pub locked: bool,
+    /// A Brief Maker brief's gate, in short (features/brief-gate.clan): what
+    /// the desk's "Changed brief" alert and the Territories door read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate: Option<GateSummary>,
+}
+
+/// [`crate::ops::gate::GateView`], without its items.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct GateSummary {
+    pub enforced: bool,
+    pub passed: bool,
+    pub signed: bool,
+    pub confirmed: bool,
+    pub changed_since_lock: bool,
+    pub open: bool,
 }
 
 /// A document's [`RecentState`], or `None` when its decisions can't be read.
@@ -99,9 +114,21 @@ pub(crate) fn recent_state(id: DocId, bytes: Vec<u8>) -> Option<RecentState> {
         .filter(|a| a.blocks_lock)
         .map(|a| (a.code, a.address.as_deref().unwrap_or(&a.text)))
         .collect();
+    let gate = crate::ops::gate::applies(&doc)
+        .then(|| crate::ops::gate::view(&doc, &view).ok())
+        .flatten()
+        .map(|g| GateSummary {
+            enforced: g.enforced,
+            passed: g.passed,
+            signed: g.signed,
+            confirmed: g.confirmed,
+            changed_since_lock: g.changed_since_lock,
+            open: g.open,
+        });
     Some(RecentState {
         needs_you: places.len(),
         locked: view.lock.locked,
+        gate,
     })
 }
 

@@ -1055,6 +1055,12 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
     };
     let is_kind = |d: &Decision, k: &str| d.kind.as_deref() == Some(k);
 
+    // The Brief gate (features/brief-gate.clan): a gated brief's missing items
+    // and its unsigned versions hold the lock like any other open item.
+    for text in super::gate::blockers(clan, ctx.data, ctx.chain) {
+        out.push(blocker("gate_item", text, None, None));
+    }
+
     // 1. Open contests: in the selection, in the chain, and left by a merge.
     let mut contests_seen = BTreeSet::new();
     for c in data_contests(ctx.data) {

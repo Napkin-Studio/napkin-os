@@ -19,6 +19,7 @@ pub mod client_match;
 pub mod client_review;
 pub mod decisions;
 pub mod edit;
+pub mod gate;
 pub mod members;
 pub mod middleware;
 pub mod office;

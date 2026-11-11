@@ -611,6 +611,31 @@ pub fn dispatch(
             Err(e) => e.into(),
         },
 
+        // The Brief gate: six items, the signers, the client's answer, and
+        // whether Territories may open (features/brief-gate.clan). A read.
+        "/gate" => match session.read(|d| {
+            let v = crate::ops::decisions::decisions(d)?;
+            crate::ops::gate::view(d, &v)
+        }) {
+            Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+            Err(e) => e.into(),
+        },
+
+        // The signer named on the brief signs this version: the planner's
+        // `sign`, or the creative director's `approve` (which locks it).
+        "/sign" => review_then(
+            session,
+            ctx,
+            |c, d| {
+                crate::ops::gate::sign(c, d, &crate::ops::review::parse_approve(&req.body_str())?)
+            },
+            |reply| {
+                if reply.get("kind").and_then(Value::as_str) == Some("approve") {
+                    with_backrefs(session, ctx, reply, &Backref::Used)
+                }
+            },
+        ),
+
         // The source card for one ref (`GET /cite?ref=`) or many at once
         // (`POST /cite {refs}`), so a page renders a section's cards in one
         // call (OS-layer contract §8.3). Any app, any actor: a read.
