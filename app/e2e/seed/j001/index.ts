@@ -5,7 +5,6 @@
 
 import { expect, type Page } from '@playwright/test'
 import { assertDeIdentified } from './denyList.mjs'
-import { seedClients } from '../../seedClients'
 import { DECK_TITLE, JOB, MESSY_BRIEF, READY_BRIEF, RESEARCH_TITLE } from './brief'
 
 export { PEOPLE, ROSTER_LINES } from './people'
@@ -30,7 +29,7 @@ async function make(page: Page, api: string, app: string, title: string, client:
   expect(r.status(), `create ${title}`).toBe(200)
   const body = await r.json() as { token: string; manifest: { id: string } }
   if (patch) {
-    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch } })
+    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch, agent: 'human', action: 'seed the J001 documents' } })
     expect(p.status(), `patch ${title}`).toBe(200)
   }
   return { token: body.token, id: body.manifest.id }
@@ -43,8 +42,19 @@ async function make(page: Page, api: string, app: string, title: string, client:
 export async function seedJ001(page: Page, opts: { ready?: boolean } = {}): Promise<SeededJob> {
   const deIdentified = assertDeIdentified()
   await page.goto('/')
-  const { api, ids } = await seedClients(page, 1)
-  const client = ids[0]
+  // An anonymous context is its own tenant; a signed-in person works in their agency's, which the next
+  // test finds again, so Client A may already be there (409): then it is the one to use.
+  const { tenant } = await (await page.request.get('/api/session')).json() as { tenant: string }
+  const api = `/api/t/${tenant}`
+  const made = await page.request.post(`${api}/clients`, { data: { name: 'Client A' } })
+  let client: string
+  if (made.status() === 409) {
+    const all = await (await page.request.get(`${api}/clients`)).json() as { id: string; name: string }[]
+    client = all.find(c => c.name === 'Client A')!.id
+  } else {
+    expect(made.status(), 'create Client A').toBe(201)
+    client = (await made.json() as { id: string }).id
+  }
   const brief = await make(page, api, BRIEF_APP, JOB.title, client, opts.ready ? READY_BRIEF : MESSY_BRIEF)
   const research = await make(page, api, RESEARCH_APP, RESEARCH_TITLE, client)
   const deck = await make(page, api, DECK_APP, DECK_TITLE, client)
