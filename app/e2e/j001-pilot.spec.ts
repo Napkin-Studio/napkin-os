@@ -195,6 +195,9 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.creativeDirector)
     await openBrief(page, job)
     await expect(page.getByTestId('gate-item')).toHaveCount(6)
+    // The planner's `sign` decision is a kind the format knows: the bar shows no file error.
+    await expect(page.getByTestId('os-bar')).toBeVisible()
+    await expect(page.getByText('Something’s wrong with this file')).toHaveCount(0)
     await page.getByRole('button', { name: 'Sign and lock this version' }).click() // the creative director's signature
     await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
     const chain = await chainOf(page, job.brief.token)

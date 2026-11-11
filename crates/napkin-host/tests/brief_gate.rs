@@ -154,6 +154,13 @@ fn the_gate_holds_a_brief_until_it_passes_is_signed_twice_and_confirmed() {
     // The planner signs; then the creative director's signature is one approve decision.
     let (status, v) = post(&pl(), "/sign", json!({}));
     assert_eq!(status, 200, "{v}");
+    // A signed brief validates clean: `sign` is a decision kind the SDK knows.
+    let report = clan_sdk::validate(&ClanFile::open(rig.id.as_str()).unwrap());
+    assert!(
+        report.is_content_valid(),
+        "a signed brief validates clean:\n{}",
+        report.display()
+    );
     let g = get(&pl(), "/gate");
     assert_eq!(g["planner_signed"], true);
     assert_eq!(g["signed"], false);

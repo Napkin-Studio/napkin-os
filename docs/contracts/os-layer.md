@@ -130,7 +130,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | Field | Meaning |
 |---|---|
 | `id` | Stable, generated at creation, never content-derived |
-| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) |
+| `kind` | `edit` · `contest` · `resolve` · `verdict` · `classify` · `pin` · `finding` · `verify` · `approve` · `lease` · `backref` (§7) · `client_review` · `unlock` (§7.5) · `sign` (§7.7, the planner's signature on a brief; *added 2026-11-11*) |
 | `targets[]` | Addresses this decision is about |
 | `cites[]` | Fact pins, sources, findings and decisions it rests on |
 | `superseded_by` | The decision that replaced this one |
