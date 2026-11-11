@@ -38,6 +38,7 @@ pub const DECISION_KINDS: &[&str] = &[
     "backref",
     "client_review",
     "unlock",
+    "sign",
 ];
 
 /// Prefix every generated decision id carries.
@@ -480,6 +481,23 @@ pub(crate) mod tests {
   rationale: Opened.
   timestamp: 2026-05-31T09:00:00Z
 ";
+
+    #[test]
+    fn every_kind_the_host_writes_is_known() {
+        // The Brief gate's planner signature is a `sign` decision (os-layer §7.7).
+        for k in ["approve", "client_review", "unlock", "backref", "sign"] {
+            let d = Decision {
+                kind: Some(k.into()),
+                ..Default::default()
+            };
+            assert!(d.kind_is_known(), "{k}");
+        }
+        let d = Decision {
+            kind: Some("attest".into()),
+            ..Default::default()
+        };
+        assert!(!d.kind_is_known());
+    }
 
     #[test]
     fn untouched_legacy_chain_round_trips_byte_for_byte() {

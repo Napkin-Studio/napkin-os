@@ -1,8 +1,7 @@
 // A run that fails (features/screen-states.clan, pilot test 15 without its credit line): the shell shows
 // the Run failed state as one plain line with Try again, the inputs stay, and Try again runs it again.
 // The stand-in middleware (stack.mjs) is told to fail the run; no model and no provider is called.
-// The credit line ("the credits come back") is pilot 15 in j001-pilot.spec.ts, still fixme: nothing returns
-// the charge of a failed run yet.
+// The credit line ("the credits come back") is pilot 15 in j001-pilot.spec.ts: the meter returns the charge.
 
 import { expect, test } from '@playwright/test'
 import { seedJ001 } from './seed/j001'

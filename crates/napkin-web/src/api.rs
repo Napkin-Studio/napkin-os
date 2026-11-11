@@ -929,6 +929,8 @@ async fn settle_job(
     for e in &resp.events {
         ctx.events.publish(&tenant, e);
     }
+    // The poll that finds a paid-for job failed gives its charge back.
+    ctx.meter.settle(&tenant, false, &resp.body);
     let reply: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
     let lost = reply["data"]["error"]["type"] == "unknown_job"
         || (reply["ok"] == false && reply["status"] == 404);

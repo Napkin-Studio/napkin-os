@@ -67,7 +67,8 @@ async fn dispatch(
     // The one route that spends money is metered before it is dispatched —
     // every call through it but a middleware `job_status` poll, which waits on
     // work already charged (`meter::charged`; an unreadable body is charged).
-    if path == "/api-proxy" && crate::meter::charged(&body) {
+    let charged = path == "/api-proxy" && crate::meter::charged(&body);
+    if charged {
         if let Err(usage) = ctx.meter.try_spend(&grant.tenant) {
             return refuse(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -124,6 +125,10 @@ async fn dispatch(
             ),
             other => ctx.events.publish(&grant.tenant, other),
         }
+    }
+    // A run that failed gives its charge back (meter::Meter::settle).
+    if path == "/api-proxy" {
+        ctx.meter.settle(&grant.tenant, charged, &resp.body);
     }
     let job = (ctx.dogfood.is_some() && path == "/api-proxy")
         .then(|| crate::dogfood::job_of(&resp.body))

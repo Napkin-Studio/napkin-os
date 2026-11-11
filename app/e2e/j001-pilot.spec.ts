@@ -43,7 +43,7 @@ const TESTS: Record<number, { title: string; slug: string | null }> = {
   12: { title: 'the J001 brief retrieval trace has no source cannes hit', slug: null },
   13: { title: 'a failed save keeps the text, Try again saves it, and reopening shows it', slug: null },
   14: { title: 'restoring v2 keeps v3 and the approved version locked', slug: null },
-  15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: 'screen-states' },
+  15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: null },
   16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: null },
   17: { title: 'the client confirms the brief link on a phone with no account', slug: null },
   18: { title: 'no consent means no captured sessions', slug: 'timesheet-sessions' },
@@ -195,6 +195,9 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.creativeDirector)
     await openBrief(page, job)
     await expect(page.getByTestId('gate-item')).toHaveCount(6)
+    // The planner's `sign` decision is a kind the format knows: the bar shows no file error.
+    await expect(page.getByTestId('os-bar')).toBeVisible()
+    await expect(page.getByText('Something’s wrong with this file')).toHaveCount(0)
     await page.getByRole('button', { name: 'Sign and lock this version' }).click() // the creative director's signature
     await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
     const chain = await chainOf(page, job.brief.token)
@@ -571,11 +574,8 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  // Waits on screen-states and the server: the shell says "the reserved estimate is returned", but nothing
-  // returns it. The web meter (crates/napkin-web/src/meter.rs) charges a run when it is sent and never gives the
-  // charge back, so quota.used stays up after a failed run. Everything else in this test passes today and runs in
-  // runFailed.spec.ts; this one keeps the credit line and comes on when the meter returns a failed run's charge.
-  test.fixme(t(15), async ({ browser }) => {
+  // A provider error: one plain line, the charge returned (crates/napkin-web/src/meter.rs), inputs kept, Try again works.
+  test(t(15), async ({ browser }) => {
     const { ctx, page } = await open(browser, size)
     const job = await seedJ001(page)
     // A brief with nothing in it opens on the ask, so a run can be started from it.
@@ -589,11 +589,21 @@ for (const size of SIZES) {
       await page.goto(`/#tool-${job.client}-brief`)
       await page.getByTestId('work-item').filter({ hasText: 'J001 blank brief' }).click()
       const app = page.frameLocator('iframe').first()
-      await app.locator('#prompt').fill('Client A, an Irish whiskey, wants to reach drinkers aged 25 to 34.')
+      const ask = 'Client A, an Irish whiskey, wants to reach drinkers aged 25 to 34.'
+      await app.locator('#prompt').fill(ask)
       await app.getByRole('button', { name: 'Write the brief' }).click()
       const failed = page.locator('[data-state="run-failed"]')
       await expect(failed).toBeVisible()
-      expect((await sessionOf(page)).quota.used).toBe(before) // the credits come back
+      expect((await failed.locator('.ns-line').allInnerTexts()).filter(Boolean)).toHaveLength(1) // one plain line
+      await expect(failed).not.toContainText(/exception|stack|[{}]/i)
+      await expect(failed).toContainText('The reserved estimate is returned')
+      await expect.poll(async () => (await sessionOf(page)).quota.used).toBe(before) // the credits come back
+      await expect(app.locator('body')).toContainText(ask) // the inputs stay
+      // The provider is back: Try again runs it again, and that run is charged.
+      await page.request.post(mw, { data: { state: 'running', stage: 'research' } })
+      await failed.getByRole('button', { name: 'Try again' }).click()
+      await expect(failed).toHaveCount(0)
+      await expect.poll(async () => (await sessionOf(page)).quota.used).toBe(before + 1)
     } finally {
       await page.request.post(mw, { data: { state: 'running', stage: 'research' } })
     }
