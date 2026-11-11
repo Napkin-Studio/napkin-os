@@ -111,6 +111,25 @@ export function accentFor(hex: string, mode: Mode): string {
   return dir === 1 ? '#FFFFFF' : '#000000'
 }
 
+/**
+ * A client's monogram ink on its own fill, at 4.5 to 1 or better. The fill is the client's colour and
+ * does not change with the mode, so neither does this pair: it holds in White, Grey and Black alike.
+ * An ink that already reads is returned as it is; otherwise only its lightness moves, away from the
+ * fill (lighter on a dark fill, darker on a light one), so it keeps its hue and saturation, the same
+ * way `accentFor` moves an accent.
+ */
+export function readableInk(fill: string, ink: string): string {
+  const reads = (c: string) => contrast(c, fill) >= TARGET
+  if (reads(ink)) return ink
+  const [h, s, l] = toHsl(fromHex(ink))
+  const lighter = contrast('#FFFFFF', fill) >= contrast('#000000', fill)
+  for (let step = 1; step <= 100; step++) {
+    const c = toHex(fromHsl([h, s, Math.max(0, Math.min(1, l + (lighter ? 1 : -1) * step * 0.01))]))
+    if (reads(c)) return c
+  }
+  return lighter ? '#FFFFFF' : '#000000'
+}
+
 /** The accent in every mode, from the logo's sampled colour. */
 export function accentsOf(hex: string): Accents {
   return { white: accentFor(hex, 'white'), grey: accentFor(hex, 'grey'), black: accentFor(hex, 'black') }

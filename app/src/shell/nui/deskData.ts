@@ -24,6 +24,7 @@ import { initialsOf, needsYou, ordered, summarise, type ClientSummary } from '..
 import { toolOfApp } from '../landing/tools'
 import type { ToolId } from '../route'
 import { clientBrand } from '../agency/clients'
+import { readableInk } from '../agency/accent'
 
 /** A client's colour on the desk: the disc's fill and the ink of its monogram. */
 export interface ClientLook { cl: string; ink: string }
@@ -45,10 +46,15 @@ export const CLIENT_LOOKS: readonly ClientLook[] = [
   { cl: '#9A3412', ink: '#FED7AA' },
 ]
 
-/** A client's colours: the admin's registry entry, else the hashed palette colour (hashLook). */
+/**
+ * A client's colours: the admin's registry entry, else the hashed palette colour (hashLook). The ink is
+ * moved only as far as the contrast rule needs (readableInk), so no client's monogram fails the
+ * accessibility scan whatever colour it takes.
+ */
 export function clientLook(id: string, name = ''): ClientLook {
   const b = clientBrand({ id, name })
-  return b ? { cl: b.base, ink: b.accent } : hashLook(id)
+  const { cl, ink } = b ? { cl: b.base, ink: b.accent } : hashLook(id)
+  return { cl, ink: readableInk(cl, ink) }
 }
 
 /** The name a client shows under: the registry's display name, else its stored name. */
