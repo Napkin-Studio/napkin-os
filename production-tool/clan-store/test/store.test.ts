@@ -307,6 +307,37 @@ describe('timing and size, 8 shots + 30 jobs', () => {
   })
 })
 
+describe('chain growth from quiet writes', () => {
+  // A typical session: a script, 8 shots, 16 assets, then 30 jobs each written as the engine's
+  // bookkeeping (queued, running, done: three quiet writes per job would be 90; the app's sync
+  // folds them, so 30 here) beside 12 things the person did.
+  it('counts chain entries and bytes for 30 quiet job writes', async () => {
+    const s = store(null)
+    await s.create(maya)
+    await s.patch({ shots: Array.from({ length: 8 }, (_, i) => shot(i)), assets: Array.from({ length: 16 }, (_, i) => asset(i + 1)) }, { action: 'shot list' })
+    for (let i = 0; i < 12; i++) await s.patch({ stage: { current: 'video', next_action: `Step ${i}.` } }, { action: `moved to step ${i}` })
+    const before = { entries: (await s.chain()).length, bytes: (await s.exportClan()).byteLength }
+    let jobs: unknown[] = []
+    for (let i = 0; i < 30; i++) {
+      jobs = [...jobs, job(i)]
+      await s.patch({ jobs }, { action: 'sync', quiet: true })
+    }
+    const chain = await s.chain()
+    const after = { entries: chain.length, bytes: (await s.exportClan()).byteLength }
+    console.log(`\n[quiet write growth] before the 30 quiet writes: ${before.entries} entries, ${before.bytes} bytes; after: ${after.entries} entries, ${after.bytes} bytes (+${after.entries - before.entries} entries, +${after.bytes - before.bytes} bytes)\n`)
+    // The floor: the same data in one write (what the old no-entry rule cost, give or take one entry).
+    const one = store(null)
+    await one.create(maya)
+    await one.patch({ shots: Array.from({ length: 8 }, (_, i) => shot(i)), assets: Array.from({ length: 16 }, (_, i) => asset(i + 1)) }, { action: 'shot list' })
+    for (let i = 0; i < 12; i++) await one.patch({ stage: { current: 'video', next_action: `Step ${i}.` } }, { action: `moved to step ${i}` })
+    await one.patch({ jobs }, { action: 'sync', quiet: true })
+    console.log(`[quiet write growth] same data in one write: ${(await one.chain()).length} entries, ${(await one.exportClan()).byteLength} bytes`)
+    one.dispose()
+    expect(chain.filter((e) => e.action === 'sync').every((e) => e.agent === 'maya')).toBe(true)
+    s.dispose()
+  })
+})
+
 describe('postClanMirror', () => {
   const capture = () => {
     const sent: { url: string; headers: Record<string, string> }[] = []
