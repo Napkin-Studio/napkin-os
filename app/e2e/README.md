@@ -71,5 +71,8 @@ it. To prove that, keep a list of the real names in a file **outside the repo** 
 hit. With no list supplied the check passes and says so. `j001-seed.spec.ts` tests the seed and the check.
 
 The stack unsets every provider key for the server and sets a fake canary key (test 8). The role tests sign
-people in, so they need the roster stack (`NAPKIN_E2E_ROSTER=1`) and the Phase 1 roles on it; the harness runs
-one auth mode per run, which `roles-and-homes` has to settle.
+people in, and a server has one auth mode per process, so the stack also starts a second `napkin-web` in roster
+mode on `NAPKIN_E2E_ROSTER_PORT` (default 18082) beside the anonymous one: the placeholder people and their roles
+are in `seed/j001/people.mjs`, and a spec opens its context with `open(browser, size, 'white', { roster: true })`
+(features/roles-and-homes.clan, decision "the e2e stack serves both auth modes"). `roles-homes.spec.ts` covers the
+homes, the O and the switcher; `NAPKIN_E2E_SHOTS=<dir>` also writes a screenshot of each.
