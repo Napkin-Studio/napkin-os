@@ -1,0 +1,44 @@
+/* The version list under the Brief gate bar (features/brief-versions-undo.clan). Tokens from index.css
+   and the pill buttons of chrome.css only: paper and ink, the accent for the lock. */
+
+.vh { padding: 4px 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.vh-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.vh-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding: 11px 0; border-bottom: 1px solid var(--line-soft);
+}
+.vh-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; flex: 1 1 18rem; }
+.vh-name { font-weight: 800; letter-spacing: -0.01em; min-width: 6.5rem; }
+.vh-sub { color: var(--ink2); font-size: 13.5px; overflow-wrap: anywhere; }
+.vh-gone { flex-basis: 100%; color: var(--ink3); }
+.vh-lock {
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 9px;
+}
+.vh-draft .vh-name { color: var(--ink); }
+.vh-actions { display: flex; gap: 8px; }
+.vh-btn { height: 34px; padding: 0 16px; font-weight: 600; font-size: 13px; }
+.vh-mid { margin: 0; color: var(--ink2); font-size: 13.5px; }
+.vh-err { margin: 0; color: var(--create); font-size: 13.5px; }
+
+.vh-compare {
+  background: var(--card); border: 1.5px solid var(--ink); border-radius: 16px; padding: 14px 16px;
+  box-shadow: 3px 3px 0 var(--ink); display: flex; flex-direction: column; gap: 12px;
+}
+.vh-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.vh-colhead { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink3); }
+.vh-part { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.vh-label { margin: 0; font-size: 13px; font-weight: 700; }
+.vh-cell { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.vh-cell em { color: var(--ink3); font-style: normal; }
+
+/* The bar's own tools: undo and redo, and the entry to the list. */
+.bg-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bg-tools .ch-btn { height: 34px; padding: 0 14px; font-weight: 600; font-size: 13px; }
+.bg-tools .ch-btn:disabled { opacity: 0.45; cursor: default; }
+.bg-note-line { flex-basis: 100%; margin: 0; color: var(--ink2); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .vh-cols { gap: 10px; }
+  .vh-btn { height: 44px; }
+}

@@ -73,6 +73,10 @@ export const tauriHost: Host = {
   gateSign: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),
   gatePatch: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),
   gateNewVersion: () => Promise.reject(new Error('the Brief gate is not available on the desktop yet')),
+  getVersions: () => Promise.reject(new Error('version history is not available on the desktop yet')),
+  getVersion: () => Promise.reject(new Error('version history is not available on the desktop yet')),
+  getCurrent: () => Promise.reject(new Error('version history is not available on the desktop yet')),
+  restoreVersion: () => Promise.reject(new Error('version history is not available on the desktop yet')),
   acknowledge: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   verify: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   // Nor client review, which is read and answered from that view.

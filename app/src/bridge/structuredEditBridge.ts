@@ -123,6 +123,19 @@ export const STRUCTURED_EDIT_BRIDGE = `
     return sendWrite(entry);
   }
 
+  // Cmd or Ctrl Z inside the app, where no text field owns it, is the shell's undo of the person's
+  // own last edit (features/brief-versions-undo.clan). A field being typed in keeps the browser's own.
+  window.addEventListener('keydown', function(e) {
+    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.altKey || window.parent === window) return;
+    var k = String(e.key).toLowerCase();
+    var dir = k === 'z' ? (e.shiftKey ? 'redo' : 'undo') : (k === 'y' && !e.shiftKey ? 'redo' : null);
+    if (!dir) return;
+    var t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
+    e.preventDefault();
+    window.parent.postMessage({ type: 'clan:undo-key', dir: dir }, '*');
+  });
+
   function apiProxy(kind, payload) {
     return fetch(clanScheme + '/api-proxy', {
       method: 'POST',
@@ -255,6 +268,11 @@ export const STRUCTURED_EDIT_BRIDGE = `
     if (m && m.type === 'clan:colorscheme') applyColorScheme(m.scheme);
     // The shell's Try again for a write that did not land.
     if (m && m.type === 'clan:retry' && typeof m.id === 'string') retryWrite(m.id);
+    // The shell changed the words (undo, restore) and hands over the document as it stands.
+    if (m && m.type === 'clan:data' && m.data && typeof m.data === 'object') {
+      window.__CLAN__.data = m.data;
+      window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: { source: 'shell' } }));
+    }
     // The shell changed the document outside the app (a client's answer, a
     // suggestion settled): the app reads it again as after its own write.
     if (m && m.type === 'clan:dataupdated') {

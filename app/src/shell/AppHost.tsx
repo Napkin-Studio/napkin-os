@@ -21,6 +21,7 @@ import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
 import { useGate } from './gate/useGate'
+import { useBriefUndo } from './versions/useBriefUndo'
 import { BRIEF_MAKER, VISUAL_BRIEF, briefMoved } from './gate/words'
 import { ChangedBrief } from '../components/states/ScreenStates'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
@@ -235,6 +236,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     reload()
     refreshApp()
   }, [reload])
+  // Undo and redo of this person's own edits to the open brief (features/brief-versions-undo.clan).
+  const briefUndo = useBriefUndo(docPath, open.manifest.app?.app_id === BRIEF_MAKER && !open.is_template && !clientOn, changed)
 
   // What it was made from, and taking that document's newer version (a
   // spin-off may, owner 2026-11-09). A refusal is said where the bar is.
@@ -474,7 +477,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
         <main className="ch-work-main">
           {!clientOn && gate.view && (
-            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} />
+            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} undo={briefUndo} docPath={docPath} />
           )}
           {!clientOn && decisions.view && (
             <ClientReviewBand
@@ -497,6 +500,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onChrome={onChrome}
             onBar={onBar}
             writes={writes}
+            onSaved={briefUndo.onSaved}
+            onUndoKey={briefUndo.onFrameKey}
             insets={shown}
           />
         </main>
