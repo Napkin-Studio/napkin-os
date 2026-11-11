@@ -36,9 +36,21 @@ export const READY_BRIEF = {
   budget_and_scope: 'Production budget agreed in hours on the job record. Social, bars, shopper stand.',
   mandatories: ['Drink responsibly line', 'Age 18 plus only'],
   open_questions: [],
+  // What the brief also keeps for the agency: the client's link never shows these (test 17).
+  capture: { items: [{ text: 'Capture note: Client A will not go below the agreed price floor.' }], gaps: ['Capture gap: the stand sizes are not known.'] },
+  review: { scorecard: 'Review note: the proposition scores low on distinctiveness.' },
+  passages: [{ text: 'Passage kept for the planner: a licensed line from an earlier whiskey campaign.' }],
   // Who signs this brief: the planner first, then the creative director (the people in people.ts).
   signers: [{ role: 'planner', person: 'aoife@wk' }, { role: 'creative_director', person: 'dara@wk' }],
 }
+
+/** The agency-only words in READY_BRIEF: the client's link must hold none of them. */
+export const INTERNAL_WORDS = [
+  'will not go below the agreed price floor',
+  'the stand sizes are not known',
+  'scores low on distinctiveness',
+  'a licensed line from an earlier whiskey campaign',
+]
 
 export const RESEARCH_TITLE = 'J001 research'
 export const DECK_TITLE = 'J001 pitch deck'
