@@ -9,7 +9,7 @@ deployment boundary, not a filter).
 |---|---|---|
 | **Aurora PostgreSQL** (Serverless v2), database `napkin_category` | The **category** layer: facts shared by every agency, their sources and decisions, the category tree | `napkin.layers/1`: `docs/contracts/peripherals.md` §4 |
 | Same cluster, database `napkin_agency_<slug>` per agency | That agency's **brand** layer (RLS on `brand_id` inside it), roster, decisions, and its RAG overrides | same |
-| **RAG host**: Qdrant store `house` | The licensed corpus (Cannes, D&AD, IPA, Effie, playbooks, templates). **Shared, read-only**: retrieval holds only a read-only key | `napkin.retrieval/1`: §3 |
+| **RAG host**: Qdrant store `house` | The licensed corpus (D&AD, IPA, Effie, playbooks, templates). Cannes Lions material is removed (docs/adr/0005-cannes-removed.md). **Shared, read-only**: retrieval holds only a read-only key | `napkin.retrieval/1`: §3 |
 | RAG host: Qdrant store `<agency>` per agency | That agency's **learnings** only: its own material and its locked briefs | same |
 | **S3** | `corpus` (ingestion input), `blobs` (document assets by hash), `backups` | — |
 

@@ -1,8 +1,8 @@
 """Research agent — grounds a Brief Maker draft before the engine runs.
 
 Two tracks, one dossier:
-  corpus  — precedent retrieval across the award corpora (ipa · cannes · effie ·
-            dandad) + planner playbooks, via the engine's own rag/retrieve.py —
+  corpus  — precedent retrieval across the award corpora (ipa · effie ·
+            dandad; never cannes, see rag/retrieve.EXCLUDED_SOURCES) + planner playbooks, via the engine's own rag/retrieve.py —
             the same retrieval every Brief Maker instance shares.
   web     — live context on the client/market/competitors, behind RESEARCH_WEB:
             "off" (default) or "claude" (reference impl: headless `claude -p`
