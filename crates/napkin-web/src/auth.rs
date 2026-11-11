@@ -46,6 +46,12 @@ pub struct Account {
     pub agency: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// The roles the person holds (features/roles-and-homes.clan): `planning`,
+    /// `creative-director`, `admin`... None until the roster or the pool names
+    /// some, and a person with none is unrestricted. The signed session carries
+    /// them, so the shell and the permission check read them from nowhere else.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<String>,
 }
 
 impl Account {
@@ -284,6 +290,7 @@ impl Local {
             username: u,
             agency,
             name: user.name.clone(),
+            roles: Vec::new(),
         }
     }
 
@@ -330,8 +337,10 @@ impl Local {
 
 // ── the roster: names, no passwords ─────────────────────────────────────────
 
-/// The people who may sign in, one per line: `user@agency<TAB>Display name`
+/// The people who may sign in, one per line: `user@agency<TAB>Display name<TAB>roles`
 /// (the format of infra/scripts/accounts.napkin.tsv; `#` lines are comments).
+/// The roles column is optional and holds roles separated by commas
+/// (`planning,creative-director`); a line without it names a person with no role.
 /// The file is read at each sign-in, so a person added to it can sign in
 /// without a restart.
 pub struct Roster {
@@ -350,17 +359,19 @@ impl Roster {
         Ok(r)
     }
 
-    fn load(&self) -> Result<BTreeMap<String, Option<String>>, String> {
+    fn load(&self) -> Result<BTreeMap<String, (Option<String>, Vec<String>)>, String> {
         let text = std::fs::read_to_string(&self.path)
             .map_err(|e| format!("cannot read the roster {}: {e}", self.path.display()))?;
         Ok(text
             .lines()
             .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
             .filter_map(|l| {
-                let (user, name) = l.split_once('\t').unwrap_or((l, ""));
+                let mut cols = l.splitn(3, '\t');
+                let user = cols.next().unwrap_or("");
+                let name = cols.next().unwrap_or("").trim();
+                let roles = crate::roles::parse_roles(cols.next().unwrap_or(""));
                 let (u, _) = Account::parse_username(user)?;
-                let name = name.trim();
-                Some((u, (!name.is_empty()).then(|| name.to_string())))
+                Some((u, ((!name.is_empty()).then(|| name.to_string()), roles)))
             })
             .collect())
     }
@@ -368,12 +379,13 @@ impl Roster {
     fn sign_in(&self, username: &str) -> SignIn {
         match self.load() {
             Ok(people) => match people.get(username) {
-                Some(name) => {
+                Some((name, roles)) => {
                     let (u, agency) = Account::parse_username(username).unwrap_or_default();
                     SignIn::Done(Account {
                         username: u,
                         agency,
                         name: name.clone(),
+                        roles: roles.clone(),
                     })
                 }
                 None => SignIn::Refused(
@@ -471,17 +483,25 @@ impl Cognito {
 
     fn done(username: &str, v: &serde_json::Value) -> SignIn {
         // the name the admin gave the account, from the ID token's claims
-        let name = v["AuthenticationResult"]["IdToken"]
+        let claims = v["AuthenticationResult"]["IdToken"]
             .as_str()
             .and_then(|t| t.split('.').nth(1))
             .and_then(|p| B64.decode(p.trim_end_matches('=')).ok())
-            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+        let name = claims
+            .as_ref()
             .and_then(|c| c["name"].as_str().map(String::from));
+        // the roles an admin gave the account (the pool's custom:roles attribute)
+        let roles = claims
+            .as_ref()
+            .and_then(|c| c["custom:roles"].as_str().map(crate::roles::parse_roles))
+            .unwrap_or_default();
         let (u, agency) = Account::parse_username(username).unwrap_or_default();
         SignIn::Done(Account {
             username: u,
             agency,
             name,
+            roles,
         })
     }
 
@@ -557,6 +577,7 @@ mod tests {
             username: "engineer@napkin".into(),
             agency: "napkin".into(),
             name: Some("Shrey".into()),
+            roles: vec!["planning".into(), "creative-director".into()],
         };
         let c = s.issue(&a);
         assert_eq!(s.read(&c), Some(a.clone()));
@@ -644,6 +665,34 @@ mod tests {
         std::fs::write(&path, "# nobody yet\n").unwrap();
         assert!(Roster::new(path).is_err());
         assert!(Roster::new(dir.path().join("missing.tsv")).is_err());
+    }
+
+    #[test]
+    fn a_roster_line_may_carry_roles_and_one_without_still_parses() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("accounts.tsv");
+        std::fs::write(
+            &path,
+            "aoife@wk\tAoife\tplanning,Creative-Director\nold@wk\tOld Line\nbare@wk\t\tmanagement\nname-only@wk\n",
+        )
+        .unwrap();
+        let r = Roster::new(path).unwrap();
+        let done = |u: &str| match r.sign_in(u) {
+            SignIn::Done(a) => a,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(done("aoife@wk").roles, ["planning", "creative-director"]);
+        assert_eq!(done("aoife@wk").name.as_deref(), Some("Aoife"));
+        assert!(
+            done("old@wk").roles.is_empty(),
+            "a roster with no roles column still parses"
+        );
+        assert_eq!(done("bare@wk").name, None);
+        assert_eq!(done("bare@wk").roles, ["management"]);
+        assert!(done("name-only@wk").roles.is_empty());
+        // the roles ride the signed session and come back out of it
+        let s = Sessions::new(&[7u8; 32]).unwrap();
+        assert_eq!(s.read(&s.issue(&done("aoife@wk"))), Some(done("aoife@wk")));
     }
 
     #[tokio::test]
