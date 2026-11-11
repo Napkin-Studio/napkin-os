@@ -51,3 +51,25 @@ the documents themselves, urgency order, accessible names.
 (band, stats, the ask, numbered sections, the record as report sections), the evidence map widening the
 inspector beside the report, a summary line traced and a crumb back, a finding's card, a gap put into Ask the
 research (never sent), the record filtered, and the phone bottom sheet.
+
+## The J001 pilot suite (feature `j001-pilot-suite`)
+
+`j001-pilot.spec.ts` is the Phase 1 acceptance suite: tests 1 to 18 of `docs/napkin-os-build-prompt-v3.1.md`
+section 9, each named by its number and run at 390 and 1440 px. A test whose feature is not built is written
+in full and marked `test.fixme`; the `TESTS` table at the top of the file names the feature record that turns
+it on, and that feature removes the fixme when it lands. Count what is left:
+
+```bash
+node e2e/phase1-fixme.mjs           # the slug for each fixme test and the count (Phase 1 is done at 0)
+node e2e/phase1-fixme.mjs --gate    # the same; exits 1 while the count is above 0
+```
+
+`seed/j001/` is the de-identified job ("Client A, an Irish whiskey"): `seedJ001(page)` writes its documents
+through the tenant's own API, as `seedClients.ts` writes clients. No real brand, client or person appears in
+it. To prove that, keep a list of the real names in a file **outside the repo** (one per line) and run
+`NAPKIN_DENY_LIST=<that file> node e2e/seed/j001/denyList.mjs`; `seedJ001` makes the same check and throws on a
+hit. With no list supplied the check passes and says so. `j001-seed.spec.ts` tests the seed and the check.
+
+The stack unsets every provider key for the server and sets a fake canary key (test 8). The role tests sign
+people in, so they need the roster stack (`NAPKIN_E2E_ROSTER=1`) and the Phase 1 roles on it; the harness runs
+one auth mode per run, which `roles-and-homes` has to settle.

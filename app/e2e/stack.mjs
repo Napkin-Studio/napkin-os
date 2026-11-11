@@ -21,6 +21,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CANARY } from './seed/j001/canary.mjs'
 
 const app = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const root = resolve(app, '..')
@@ -81,11 +82,20 @@ const roster = process.env.NAPKIN_E2E_ROSTER === '1' ? join(config, 'roster.tsv'
 if (roster) writeFileSync(roster, 'sam@wk\tSam Test\ntia@tbwa\tTia Test\nann@napkin\tAnn Test\n')
 writeFileSync(join(config, 'workspace.yaml'), `proxies:\n  middleware:\n    endpoint: http://127.0.0.1:${mwPort}/v1/tasks\n`)
 
+// Every provider key is unset for the server, whatever this shell holds (features/j001-pilot-suite.clan:
+// the suite calls no model and no paid provider). A fake canary key is set in its place for pilot test 8.
+const PROVIDER = /(^|_)(API_KEY|APIKEY|SECRET_KEY|ACCESS_KEY|MODEL_API)$|^(ANTHROPIC|OPENAI|ELEVENLABS|RUNWAY|GOOGLE_AI|GEMINI|REPLICATE|FAL|BEDROCK)_/i
+const env = { ...process.env }
+const unset = Object.keys(env).filter(k => PROVIDER.test(k) && !k.startsWith('NAPKIN_E2E_'))
+for (const k of unset) delete env[k]
+console.log(`e2e stack: provider keys unset (${unset.length} removed from the server's environment), no model route`)
+
 const server = spawn(join(root, 'target/debug/napkin-web'), [], {
   stdio: 'inherit',
   cwd: root,
   env: {
-    ...process.env,
+    ...env,
+    NAPKIN_CANARY_KEY: CANARY,
     NAPKIN_AUTH: roster ? 'roster' : 'none',
     // Signed sessions need a key: a throwaway one, made for this run and gone with it.
     ...(roster ? { NAPKIN_AUTH_ROSTER: roster, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
