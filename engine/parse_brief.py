@@ -2103,9 +2103,29 @@ def review_loop2(loop2):
 # 5b. BETTERBRIEFS SCORECARD — quality of the client brief, not just presence
 # ---------------------------------------------------------------------------
 
-SCORECARD_DIMENSIONS = ("objectives_quality", "audience_vividness",
-                        "single_minded_message", "evaluation_criteria",
-                        "budget_interlock", "strategic_clarity", "language")
+def _scorecard_dims() -> tuple:
+    """The seven BetterBriefs dimensions, read from the brief object schema's enum: the middleware's
+    SCORECARD_DIMENSIONS (server/napkin/brief/capture.py) is the one definition, and a test keeps the two equal
+    (features/brief-gate.clan: one scorecard, not three)."""
+    def find(node):
+        if isinstance(node, dict):
+            d = node.get("dimension")
+            if isinstance(d, dict) and isinstance(d.get("enum"), list):
+                return tuple(d["enum"])
+            for v in node.values():
+                got = find(v)
+                if got:
+                    return got
+        elif isinstance(node, list):
+            for v in node:
+                got = find(v)
+                if got:
+                    return got
+        return None
+    return find(json.loads((Path(__file__).resolve().parent / "brief_object.schema.json").read_text())) or ()
+
+
+_SCORECARD_DIMS = _scorecard_dims()
 
 # Demographic clichés = "as sure a sign as any that you have not got a strategy".
 AUDIENCE_CLICHES = re.compile(
@@ -2223,7 +2243,7 @@ def score_betterbriefs(text, fields=None):
         if not isinstance(d, dict):
             continue
         name = str(d.get("dimension") or "").strip().lower()
-        if name not in SCORECARD_DIMENSIONS or name in scored:
+        if name not in _SCORECARD_DIMS or name in scored:
             continue
         scored.add(name)
         verdict = str(d.get("verdict") or "").strip().lower()
@@ -2234,7 +2254,7 @@ def score_betterbriefs(text, fields=None):
             if verdict == "pass":
                 verdict = "vague"
         dims.append(_dim(name, verdict, evidence, str(d.get("fix") or "")))
-    for missing in SCORECARD_DIMENSIONS:          # judge skipped one — make it visible
+    for missing in _SCORECARD_DIMS:          # judge skipped one — make it visible
         if missing not in scored:
             dims.append(_dim(missing, "vague", "not scored by judge"))
     sm = obj.get("single_mindedness") or {}

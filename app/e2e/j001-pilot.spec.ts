@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
-import { lockBrief, PEOPLE, READY_BRIEF, seedJ001 } from './seed/j001'
+import { asMe, gateOf, lockBrief, PEOPLE, READY_BRIEF, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -31,14 +31,14 @@ const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', w
 const TESTS: Record<number, { title: string; slug: string | null }> = {
   1: { title: 'each live role sees its own doors', slug: null },
   2: { title: 'Planning gets 403 on Scope and estimates', slug: null },
-  3: { title: 'the creative director signs the brief with one approve decision', slug: 'brief-gate' },
-  4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: 'brief-gate' },
+  3: { title: 'the creative director signs the brief with one approve decision', slug: null },
+  4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: null },
   5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: 'job-index-dashboard' },
   6: { title: 'five logos repaint the accent and it passes contrast in all three modes', slug: null },
   7: { title: 'axe finds nothing serious on every Phase 1 page in all three modes', slug: null },
   8: { title: 'a canary key set on the server never reaches the browser', slug: null },
   9: { title: 'each confirmed timesheet line links to its sessions', slug: 'timesheet-sessions' },
-  10: { title: 'the brief passes the gate and the client confirms it before Territories open', slug: 'brief-gate' },
+  10: { title: 'the brief passes the gate and the client confirms it before Territories open', slug: null },
   11: { title: 'every write in the J001 documents is attributed', slug: null },
   12: { title: 'the J001 brief retrieval trace has no source cannes hit', slug: null },
   13: { title: 'a failed save keeps the text, Try again saves it, and reopening shows it', slug: null },
@@ -76,6 +76,17 @@ async function open(browser: Browser, size: Size, mode: string = 'white', opts: 
 async function signIn(page: Page, who: { username: string }) {
   const r = await page.request.post('/api/auth/sign-in', { data: { username: who.username } })
   expect(r.status(), `sign in as ${who.username}`).toBe(200)
+}
+
+/**
+ * The agency signs the brief with the Brief gate on: the planner first, then the creative director's lock
+ * (features/brief-gate.clan). Leaves the creative director signed in.
+ */
+async function signOff(page: Page, job: Awaited<ReturnType<typeof seedJ001>>) {
+  await signIn(page, PEOPLE.planning)
+  expect((await signBrief(page, job.brief)).status()).toBe(200)
+  await signIn(page, PEOPLE.creativeDirector)
+  expect((await lockBrief(page, await asMe(page, job.api, job.brief))).status()).toBe(200)
 }
 
 const chainOf = async (page: Page, token: string): Promise<Decision[]> =>
@@ -166,30 +177,58 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(3), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+  // The Brief gate (features/brief-gate.clan). The planner signs first, then the creative director: the
+  // creative director's signature is the one approve decision that locks the version. People sign in
+  // on the roster stack (NAPKIN_E2E_ROSTER=1); the stack turns the gate on (NAPKIN_BRIEF_GATE=on).
+  const openBrief = async (page: Page, job: Awaited<ReturnType<typeof seedJ001>>) => {
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.reload()
+    await page.getByTestId('work-item').first().click()
+    await page.getByRole('button', { name: 'Check the brief' }).click()
+  }
+
+  test(t(3), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    expect((await signBrief(page, job.brief, 'Gate passed.')).status()).toBe(200) // the planner signs first
     await signIn(page, PEOPLE.creativeDirector)
-    const job = await seedJ001(page, { ready: true })
-    expect((await lockBrief(page, job.brief, 'Signed.')).status()).toBe(200)
-    const approvals = (await chainOf(page, job.brief.token)).filter(d => d.kind === 'approve')
+    await openBrief(page, job)
+    await expect(page.getByTestId('gate-item')).toHaveCount(6)
+    await page.getByRole('button', { name: 'Sign and lock this version' }).click() // the creative director's signature
+    await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
+    const chain = await chainOf(page, job.brief.token)
+    const approvals = chain.filter(d => d.kind === 'approve')
     expect(approvals).toHaveLength(1)
     expect(approvals[0].actor ?? '').toContain(PEOPLE.creativeDirector.username)
+    expect(chain.filter(d => d.kind === 'sign')).toHaveLength(1) // the planner's, not a second lock
     await ctx.close()
   })
 
-  test.fixme(t(4), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+  test(t(4), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true, fresh: true })
+    await signBrief(page, job.brief)
     await signIn(page, PEOPLE.creativeDirector)
-    const job = await seedJ001(page, { ready: true })
-    await lockBrief(page, job.brief)
+    const locked = await lockBrief(page, await asMe(page, job.api, job.brief))
+    expect(locked.status(), await locked.text()).toBe(200)
     const signed = (await chainOf(page, job.brief.token)).find(d => d.kind === 'approve')!.version
-    const edit = await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { single_minded_proposition: 'A new line.' } } })
+    expect((await gateOf(page, job.brief)).changed_since_lock).toBe(false)
+    const edit = await page.request.post(`/s/${job.brief.token}/patch-data`, {
+      data: { patch: { single_minded_proposition: 'A new line.' }, agent: 'human', action: 'edit the proposition' },
+    })
     expect(edit.status()).toBe(200)
-    const after = await chainOf(page, job.brief.token)
-    expect(after.find(d => d.kind === 'approve')!.version).toBe(signed) // the signed version stays as it was
-    expect(after.some(d => d.kind === 'edit' && d.version !== signed)).toBe(true) // a new version, in the chain
+    const after = await chainOf(page, job.brief.token) // newest first
+    const lock = after.findIndex(d => d.kind === 'approve')
+    expect(after[lock].version).toBe(signed) // the signed version stays as it was
+    const edited = after.findIndex(d => d.kind === 'edit' && d.action === 'edit the proposition')
+    expect(edited, 'the edit is a newer decision than the lock').toBeGreaterThanOrEqual(0)
+    expect(edited).toBeLessThan(lock)
+    expect((await gateOf(page, job.brief)).changed_since_lock).toBe(true)
     await page.goto('/')
-    await expect(page.getByTestId('alert').filter({ hasText: 'Changed brief' })).toBeVisible()
+    await page.reload()
+    await expect(page.getByTestId('alert').filter({ hasText: `Changed brief J001 brief, ${job.clientName}.` })).toBeVisible()
     await ctx.close()
   })
 
@@ -322,29 +361,33 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(10), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+  test(t(10), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning)
-    const job = await seedJ001(page, { ready: true })
+    const job = await seedJ001(page, { ready: true, fresh: true })
     await page.goto(`/#tool-${job.client}-territories`)
-    await expect(page.getByTestId('territories-closed')).toBeVisible() // not passed, not confirmed
-    await page.goto(`/#tool-${job.client}-brief`)
-    await page.getByTestId('work-item').first().click()
-    await page.getByRole('button', { name: 'Check the brief' }).click()
+    await page.reload()
+    await expect(page.getByTestId('territories-closed')).toBeVisible() // not signed, not confirmed
+    await openBrief(page, job)
     await expect(page.getByTestId('gate-item')).toHaveCount(6)
     await expect(page.getByTestId('gate-item').filter({ hasText: 'missing' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Sign this version' }).click() // the planner signs
+    await expect.poll(async () => (await gateOf(page, job.brief)).passed).toBe(true)
     await signIn(page, PEOPLE.creativeDirector)
-    expect((await lockBrief(page, job.brief)).status()).toBe(200)
+    await openBrief(page, job)
+    await page.getByRole('button', { name: 'Sign and lock this version' }).click()
+    await expect.poll(async () => (await gateOf(page, job.brief)).signed).toBe(true)
     await page.goto(`/#tool-${job.client}-territories`)
-    await expect(page.getByTestId('territories-closed')).toBeVisible() // passed, signed, not yet confirmed by the client
-    const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
-    const client = await browser.newContext()
-    const cp = await client.newPage()
-    await cp.goto(link)
-    await cp.getByRole('button', { name: 'Confirm' }).click()
-    await client.close()
+    await page.reload()
+    await expect(page.getByTestId('territories-closed')).toBeVisible() // passed and signed, the client has not confirmed
+    // The client's confirmation. The record here is the host's own client_review, written by an agency
+    // person; the client's own link (test 17, client-confirm-link) writes the same decision with the
+    // client as the actor.
+    expect((await recordClientConfirmation(page, job.brief)).status()).toBe(200)
     await page.goto(`/#tool-${job.client}-territories`)
+    await page.reload()
     await expect(page.getByTestId('territories-closed')).toHaveCount(0)
+    await expect(page.getByTestId('territories-open')).toBeVisible()
     await ctx.close()
   })
 
@@ -437,7 +480,7 @@ for (const size of SIZES) {
     const rows = page.getByTestId('version-row')
     await expect(rows.filter({ hasText: 'v3' })).toHaveCount(1) // v3 is still in the history
     await expect(rows.first()).toContainText('Restored from v2') // restore made a new version
-    await lockBrief(page, job.brief)
+    await lockBrief(page, job.brief) // with the Brief gate on the planner signs first: signOff(page, job)
     await expect(rows.filter({ hasText: 'locked' })).not.toHaveCount(0) // an approved version stays locked
     expect((await edit('Edit after the lock.')).status()).toBe(409)
     await ctx.close()
@@ -493,8 +536,7 @@ for (const size of SIZES) {
     const { ctx, page } = await open(browser, size)
     await signIn(page, PEOPLE.accountService)
     const job = await seedJ001(page, { ready: true })
-    await signIn(page, PEOPLE.creativeDirector)
-    await lockBrief(page, job.brief)
+    await signOff(page, job)
     await signIn(page, PEOPLE.accountService)
     const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 } }) // no cookies, no account

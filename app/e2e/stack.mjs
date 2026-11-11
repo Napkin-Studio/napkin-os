@@ -97,13 +97,16 @@ const unset = Object.keys(env).filter(k => PROVIDER.test(k) && !k.startsWith('NA
 for (const k of unset) delete env[k]
 console.log(`e2e stack: provider keys unset (${unset.length} removed from the server's environment), no model route`)
 
-function start(addr, data, auth) {
+function start(addr, data, auth, gate = false) {
   return spawn(join(root, 'target/debug/napkin-web'), [], {
     stdio: 'inherit',
     cwd: root,
     env: {
       ...env,
       NAPKIN_CANARY_KEY: CANARY,
+      // The Brief gate holds the lock list (features/brief-gate.clan). On for the J001 roster stack only, where the
+      // pilot tests sign in; off on the primary, as it is by default, so the specs that count what needs a person are unchanged.
+      NAPKIN_BRIEF_GATE: gate ? 'on' : 'off',
       NAPKIN_AUTH: auth ? 'roster' : 'none',
       // Signed sessions need a key: a throwaway one, made for this run and gone with it.
       ...(auth ? { NAPKIN_AUTH_ROSTER: auth, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
@@ -125,7 +128,7 @@ const rosterData = join(work, 'data-roster')
 mkdirSync(rosterData)
 const rosterFile = join(work, 'roster-people.tsv')
 writeFileSync(rosterFile, ROSTER_LINES.join('\n') + '\n')
-const people = start(`127.0.0.1:${rosterPort}`, rosterData, rosterFile)
+const people = start(`127.0.0.1:${rosterPort}`, rosterData, rosterFile, true)
 for (let i = 0; ; i++) {
   try { if ((await fetch(`http://127.0.0.1:${rosterPort}/api/healthz`)).ok) break } catch { /* not up yet */ }
   if (i > 200) { console.error('e2e stack: the roster server did not start'); people.kill('SIGTERM'); cleanup(); process.exit(1) }

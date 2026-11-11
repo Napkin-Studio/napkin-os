@@ -26,6 +26,8 @@ import { Dial } from './Dial'
 import { ToolIcon, SearchIcon } from './icons'
 import { Pop } from './Pop'
 import { usePop } from './popKit'
+import { changedBriefs } from '../gate/words'
+import '../gate/gate.css'
 
 interface Props {
   data: LandingData
@@ -177,6 +179,13 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
               The client list could not be read, so names shown are the documents’ own. {data.registryError}
             </p>
           )}
+          {changedBriefs(data.items).map(i => (
+            <div key={i.path} className="gate-alert" role="status" data-testid="alert">
+              <i aria-hidden />
+              <span><b>Changed brief</b> {i.title}{i.client ? `, ${clientName(i.client)}` : ''}. The signed version stays as it was; the new one needs signing.</span>
+              <button type="button" className="ch-btn" onClick={() => onOpenDocument(i.path)}>Open the brief</button>
+            </div>
+          ))}
           <section className="cl-row-wrap" aria-label="Clients">
             <div className="p33-desk-tools">
               <label className="p33-search">

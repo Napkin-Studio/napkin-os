@@ -26,6 +26,7 @@ import type {
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
+  GateView,
   Host,
   HostEvents,
   InstalledApp,
@@ -314,6 +315,10 @@ export const httpHost: Host = {
     if (!resp.ok) throw new Error(`decisions: ${resp.status}`)
     return resp.json() as Promise<DecisionsView>
   },
+  getGate: () => clanCall<GateView>('/gate'),
+  gateSign: async rationale => { await clanPost<unknown>('/sign', { rationale: rationale ?? '' }) },
+  gatePatch: async (patch, action) => { await clanPost<unknown>('/patch-data', { patch, agent: 'human', action }) },
+  gateNewVersion: async reason => { await clanPost<unknown>('/unapprove', { rationale: reason }) },
   acknowledge: async decision => {
     const resp = await fetch(`${httpHost.clanOrigin()}/acknowledge`, { method: 'POST', body: JSON.stringify({ decision }) })
     if (!resp.ok) throw new Error(((await resp.json().catch(() => null)) as { error?: string } | null)?.error ?? `acknowledge: ${resp.status}`)

@@ -42,6 +42,7 @@ from ..model import ModelError
 from ..util import TaskError, bad, iso, uid
 from . import capture as cap_stage
 from . import fill as fill_stage
+from . import gate
 from .clientcat import plan_category
 from .drafters import DraftContext, Drafter, _query, run_drafters
 from .fields import (KEYS, LABELS, RUBRIC_FIELDS, bare, address, clean, drafter_of, field_map, field_paths, filled, get,
@@ -1089,9 +1090,17 @@ class BriefJob:
         items = (self.capture or {}).get("items") or ((self.W.get("capture") or {}).get("items") or {})
         capq += [q for q in cap_stage.core_gap_questions(items)
                  if not any(same_ask(q["question"], c["question"]) for c in capq)]
+        # Brief check: each dimension of the client's scorecard short of a pass is one question (brief/gate.py)
+        review = self.W.get("review") if isinstance(self.W.get("review"), dict) else {}
+        asked = gate.scorecard_questions(review.get("scorecard"), signers_named=bool(self.W.get("signers")))
         if capq:
             qs += [cap_stage.format_question(q) for q in capq]
+        fresh = [q for q in asked if not any(same_ask(q, e) for e in qs)]
+        qs += fresh
+        if capq:
             pts.append(rsn.point(f"{len(capq)} question(s) the client's material leaves open", f"{self.doc}#capture"))
+        if fresh:
+            pts.append(rsn.point(f"{len(fresh)} question(s) the client's brief scorecard raises", f"{self.doc}#review"))
         vby = {tuple(sorted(t.split("#", 1)[1] for t in v["targets"])): v for v in verdicts}
         for fk in dict.fromkeys(failed_keys):
             v = next((x for key, x in vby.items() if fk in key and x.get("polarity") == "bad"), None)

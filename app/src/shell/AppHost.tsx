@@ -19,6 +19,9 @@ import { splitAside } from './decisions/needs'
 import { useSetAside } from './decisions/useSetAside'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
+import BriefGateBand from './gate/BriefGateBand'
+import { useGate } from './gate/useGate'
+import { BRIEF_MAKER } from './gate/words'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
@@ -101,6 +104,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // The host's view of the document, read once: the panel renders it, and
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
+  // The Brief gate of a Brief Maker brief (features/brief-gate.clan): read for a brief only.
+  const gate = useGate(docPath, open.manifest.app?.app_id === BRIEF_MAKER && !open.is_template)
   // The needs-your-call count, from the one selector the drawer lists from,
   // less what this person set aside (it still blocks the lock).
   const aside = useSetAside(docPath)
@@ -452,6 +457,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
         <main className="ch-work-main">
+          {!clientOn && gate.view && (
+            <BriefGateBand gate={gate} client={client?.name ?? 'the client'} onChanged={changed} />
+          )}
           {!clientOn && decisions.view && (
             <ClientReviewBand
               view={decisions.view}

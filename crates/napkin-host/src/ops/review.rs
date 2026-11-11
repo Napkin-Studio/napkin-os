@@ -454,7 +454,7 @@ fn contest_index(data: &Value, id: &str) -> Option<usize> {
 
 /// A decision by `who`, of `kind`, about `targets`.
 #[allow(clippy::too_many_arguments)]
-fn decided(
+pub(super) fn decided(
     ctx: &Ctx,
     who: &str,
     kind: &str,
@@ -514,7 +514,7 @@ fn commit(
 
 /// [`commit`], with `then` written after `decision` in the same generation
 /// (the last ends up newest). The reply names `decision`.
-fn commit_with(
+pub(super) fn commit_with(
     doc: &Document,
     data: Value,
     m: Members,
@@ -1693,6 +1693,7 @@ fn number_in(s: &str) -> Option<(f64, bool)> {
 /// (§7.5.3): they were about a version the new lock replaces.
 pub fn approve(ctx: &Ctx, doc: &Document, rationale: &str) -> HostResult<Outcome> {
     let who = person(ctx, "lock the document")?;
+    super::gate::may_lock(ctx, doc)?;
     let chain = chain_of(doc)?;
     let here = doc.clan().document_id();
     let again = lock_of(&chain, here).is_some();

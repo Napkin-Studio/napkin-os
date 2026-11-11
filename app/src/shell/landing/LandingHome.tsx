@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
+import { TerritoriesGate } from './TerritoriesGate'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
 import { TOOLS, isLive, toolById } from './tools'
@@ -94,7 +95,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     if (said) setNews(said)
   }, [summary])
   const installed = useMemo(() => data.apps.map(app_id => ({ app_id })), [data.apps])
-  const live = useMemo(() => new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string)), [installed])
+  // Territories is a page behind the gate, not a circle: it is here whenever the client is.
+  const live = useMemo(() => new Set([...TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string), 'territories']), [installed])
 
   const clientId = route.level === 'client' || route.level === 'tool' ? route.client : null
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
@@ -139,7 +141,17 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const homed = home?.restricted ? home : null
 
   let body
-  if (homed && route.level === 'map') {
+  if (clientId && client && route.level === 'tool' && route.tool === 'territories') {
+    body = (
+      <TerritoriesGate
+        client={client}
+        items={mine}
+        onOpenBrief={onOpenDocument}
+        onNewBrief={() => onStart('ie.napkin.brief-maker', client.id)}
+        onBack={() => go({ level: 'client', client: client.id })}
+      />
+    )
+  } else if (homed && route.level === 'map') {
     body = (
       <TheO
         view={homed}
@@ -175,6 +187,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
+        onTerritories={tool.id === 'brief' ? () => go({ level: 'tool', client: client.id, tool: 'territories' }) : undefined}
       />
     )
   } else if (clientId && client) {

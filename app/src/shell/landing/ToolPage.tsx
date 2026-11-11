@@ -27,6 +27,8 @@ interface Props {
   onBack: () => void
   /** Each research's lens dots, read from its own selection (useLensDots). */
   lenses?: Readonly<Record<string, Cov[]>>
+  /** The brief's page links on to Territories, which sit behind the Brief gate. */
+  onTerritories?: () => void
 }
 
 /** What each tool says under its name (the mock's tool headers). */
@@ -38,7 +40,7 @@ const LINE: Record<string, string> = {
 
 const STATE_CLASS = (s: ReturnType<typeof stateWords>) => (s.needs ? 'needs' : s.working ? 'working' : s.text === 'Done' ? 'done' : 'draft')
 
-export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lenses = {} }: Props) {
+export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lenses = {}, onTerritories }: Props) {
   const [one, many] = tool.noun
   const name = clientName(client)
   const kind = tool.id === 'brief' ? 'brief' : tool.id === 'research' ? 'research' : 'other'
@@ -96,6 +98,9 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lense
             </button>
           </div>
           {items.length === 0 && <p className="nui-empty">Nothing yet. Start the first {one} for {name}; it is theirs from the start.</p>}
+          {onTerritories && (
+            <p className="nui-more"><button type="button" className="side-link" data-testid="to-territories" onClick={onTerritories}>Territories for {name}</button></p>
+          )}
           <p className="nui-more"><button type="button" className="side-link" onClick={onBack}>Back to {name}</button></p>
         </section>
       </div>

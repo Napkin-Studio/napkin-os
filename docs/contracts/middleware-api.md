@@ -1366,7 +1366,21 @@ decision-rule passages (UC-6).
 7. **Open questions** (`open_questions`, written whole): the capture's open
    questions formatted `[<priority>] <question> — <why>` (the engine's
    `_format_question`), then one per failed field, then one per bad verdict on
-   a captured field. Never a question the material already answers.
+   a captured field. Never a question the material already answers. *Added
+   2026-11-11 (Brief check):* one more question for each dimension of the
+   client's BetterBriefs scorecard (`review.scorecard`) that is `vague` or
+   `missing`, quoting the evidence the judge found, and one asking who signs the
+   brief off when `signers` is not set. A question that asks what another
+   already asks is one question (`questions.dedupe`).
+8. **The Brief gate's two new checks** (*added 2026-11-11*, `brief/gate.py`):
+   `famous` (what would make this famous is said; whether it is a real idea is
+   the Judge's call, a model check) and `baseline` (the effectiveness plan names
+   what it is measured against, with a number). They start as `review`, never
+   `fail`, and fail only while `NAPKIN_BRIEF_GATE` is `on`. They are written to
+   `review.gate.checks`. The gate's six items are named groups over the existing
+   checks and these two (`GATE_GROUPS`); whether an item is met is the host's
+   (os-layer §7.7). The draft's scorecard is kept as `review.draft_scorecard`,
+   so `review.scorecard` stays the client's own.
 
 ### 10.9 Staged changes
 

@@ -43,6 +43,7 @@ from .fields import ARRAY_KEYS, KEYS, LABELS, bare, clean, filled, get, last_wri
 from .job import BriefJob, log
 from . import checks, intake
 from .questions import dedupe, without_answered
+from . import gate
 
 # The Review agent's whole-brief review: a full brief's dimensions, claims and notes run past 8000 output
 # tokens (thinking counts against the cap), and a cut-off review writes only half the parts.
@@ -1013,6 +1014,9 @@ class PlannedBriefJob(BriefJob):
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
         qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
+        # Brief check: each dimension of the client's own scorecard that is not a pass is a question for the client
+        client_sc = (self.W.get("review") or {}).get("scorecard") if isinstance(self.W.get("review"), dict) else None
+        qs += gate.scorecard_questions(client_sc, signers_named=bool(self.W.get("signers")))
         oq, merged = dedupe(without_answered(qs, self.intake_answered))
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])
@@ -1069,8 +1073,13 @@ class PlannedBriefJob(BriefJob):
                {"id": "evaluation_present", "status": st(dim["evaluation_criteria"])},
                {"id": "all_required_filled", "status": "pass" if all(
                    k in self.whole or filled(get(self.W, k)) for k in KEYS if k != "open_questions") else "fail"}]
+        # The client's own scorecard stays under `scorecard`; the draft's goes beside it (features/brief-gate.clan).
+        client_sc = (self.W.get("review") or {}).get("scorecard") if isinstance(self.W.get("review"), dict) else None
+        gate_values = {"famous": self.W.get("famous"),
+                       "measurement": (self.whole.get("measurement") or {}).get("value") or get(self.W, "measurement")}
         patch["review"] = {"built_at": t, "handler": self.handler, "based_on": {"version": self.base},
-                           "scorecard": sc,
+                           "scorecard": client_sc or sc, "draft_scorecard": sc,
+                           "gate": {"checks": gate.gate_checks(gate_values)},
                            "judge": {"reason_codes_version": "1", "fields": fields,
                                      "dependencies": [{"id": "chain", "status": "pass" if rv["chain"]["verdict"] == "pass"
                                                        else "fail", "note": _short(rv["chain"]["note"], 300) or "-"}],
