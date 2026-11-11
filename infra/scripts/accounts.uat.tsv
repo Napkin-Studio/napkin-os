@@ -1,0 +1,31 @@
+# UAT's sign-in roster (features/uat-environment.clan). The deploy builds UAT's image with this file
+# as /srv/napkin/accounts.tsv instead of accounts.napkin.tsv, so the mock accounts below reach UAT and
+# never staging or production. Keep the studio's accounts in step with accounts.napkin.tsv (a test checks).
+# user@agency<TAB>Display name
+visionary@napkin	Laurance
+engineer@napkin	Shrey
+developer@napkin	Sai
+mock@napkin	Mock tester
+hello@napkin	Hello tester
+# Outside testers (owner, 2026-10-20). The agency is the email domain without
+# its ending (chloe@chloehanratty.com -> chloe@chloehanratty). People on a generic
+# mail provider (gmail, outlook) get <surname>-studio (shane@kelly-studio); if
+# two share a surname, use <first>-<surname>-studio.
+chloe@chloehanratty	Chloe Hanratty
+shane@kelly-studio	Shane Kelly
+dael@wood-studio	Dael Wood
+marcus@six	Marcus Culloty
+kris@boysandgirls	Kris Clarkin
+marktuthill@core	Mark Tuthill
+rory@boysandgirls	Rory Hamilton
+# Mock sign-ins, one per agency look in the shell's registry (app/src/shell/agency/palette.ts), as the
+# local stack has them (owner, 2026-11-11): each opens the studio in that agency's look.
+tia@tbwa	Tia Test
+sam@wk	Sam Test
+oli@ogilvy	Oli Test
+hal@harbour	Hal Test
+dee@droga	Dee Test
+ann@napkin	Ann Test
+bo@boysandgirls	Bo Test
+cat@catapult	Cat Test
+plu@pluto	Plu Test
