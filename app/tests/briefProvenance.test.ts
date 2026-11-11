@@ -309,7 +309,7 @@ function researchHost(data: typeof DATA) {
     crumbOf: (r: string) => (r === 'f_1' ? '◆ 250k EUR' : r),
     openSheet: () => {}, window: {},
   }
-  const body = `var VIEW={v:'report', sel:null, trail:[], origin:null}, PV={surf:false};
+  const body = `var VIEW={v:'report', sel:null, trail:[], origin:null}, PV={surf:false}, PAGEDOWN={t:0};
     function select(r){ calls.push('select:'+r); VIEW.sel=r; }
     function renderPanel(){ calls.push('renderPanel'); }
     function renderSel(){ calls.push('renderSel'); }
@@ -323,7 +323,7 @@ function researchHost(data: typeof DATA) {
 test('research registers its inspector as the panel host', () => {
   assert.match(RP, /if\(window\.ClanFields&&ClanFields\.setPanelHost\) ClanFields\.setPanelHost\(provHost\);/)
   // and every new selection lets go of the OS's inspector first
-  assert.match(fn(RP, 'select'), /^function select\(ref, push\)\{\s*if\(!ref\) return;\s*endSurf\(\);/)
+  assert.match(fn(RP, 'select'), /^function select\(ref, push, open\)\{\s*if\(!ref\) return;\s*endSurf\(\);/)
 })
 
 test('research: a provenance request opens in the panel, never the drawer', () => {
