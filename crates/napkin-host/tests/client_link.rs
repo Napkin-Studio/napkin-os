@@ -38,10 +38,15 @@ fn in_days(n: i64) -> String {
         .to_string()
 }
 
+/// A new document the Brief gate reads: a Brief Maker brief.
 fn open() -> Fixture {
+    open_as(true)
+}
+
+fn open_as(brief: bool) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let id = DocId::from(dir.path().join("brief.clan"));
-    let bytes = clan_sdk::create(clan_sdk::CreateOptions {
+    let plain = clan_sdk::create(clan_sdk::CreateOptions {
         title: "Brief".into(),
         brief: "a brief".into(),
         document_type: None,
@@ -49,6 +54,32 @@ fn open() -> Fixture {
         schema: None,
     })
     .unwrap();
+    let bytes = if brief {
+        let base = ClanFile::from_bytes(plain).unwrap();
+        let mut m = base.manifest().clone();
+        m.app = Some(clan_sdk::AppInfo {
+            home: None,
+            name: "Brief Maker".into(),
+            app_id: "ie.napkin.brief-maker".into(),
+            version: "1.0.0".into(),
+            icon: None,
+            entry: "human/index.html".into(),
+            schema: None,
+            prompt_templates: vec![],
+            data_seed: None,
+            spinoff: None,
+            attach: None,
+        });
+        let mut b = clan_sdk::ClanBuilder::new(m);
+        for (path, bytes) in base.read_all_entries().unwrap() {
+            if path != clan_sdk::MANIFEST_PATH {
+                b.add_entry(path, bytes);
+            }
+        }
+        b.build().unwrap()
+    } else {
+        plain
+    };
     std::fs::write(id.as_str(), bytes).unwrap();
     let session = Session::with_ctx(Arc::new(FsStore::new(dir.path().to_path_buf())), staff());
     session.open(id.clone()).unwrap();
@@ -127,6 +158,18 @@ impl Fixture {
             .filter(|d| d.kind.as_deref() == Some("client_review") && d.action == "client_answer")
             .collect()
     }
+}
+
+#[test]
+fn a_link_is_only_for_a_brief_the_gate_reads() {
+    // a locked document that is not a Brief Maker brief is refused, and nothing is written
+    let f = open_as(false);
+    assert_eq!(f.call(&staff(), "/approve", json!({})).0, 200);
+    let before = std::fs::read(f.id.as_str()).unwrap();
+    let (s, v) = f.issue(ID, &in_days(30));
+    assert_eq!(s, 400, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("brief"), "{v}");
+    assert_eq!(std::fs::read(f.id.as_str()).unwrap(), before);
 }
 
 #[test]
