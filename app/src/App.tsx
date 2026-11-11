@@ -8,6 +8,8 @@ import type { InstalledApp, OpenResult } from './host'
 import DeviceBanner from './offline/DeviceBanner'
 import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
+import AgencyLookPanel from './shell/agency/AgencyLookPanel'
+import { applyAgencyLook, getAgencyLook } from './shell/agency/look'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
 import { copyBytes, type OfflineCopy } from './offline/store'
 import { useFileDrop } from './offline/useFileDrop'
@@ -41,6 +43,7 @@ import { LogoSpinnerFill, LogoSpinnerVeil } from './brand/LogoSpinner'
 import './index.css'
 import './components/chrome.css'
 import './shell/nui/tokens.css'
+import './shell/nui/modes.css'
 import './shell/nui/nui.css'
 import './shell/nui/shell.css'
 import { roles } from './shell/agents/engine'
@@ -106,6 +109,7 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
+const [lookOpen, setLookOpen] = useState(false)
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
@@ -126,6 +130,8 @@ export default function App() {
   // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
   const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
   useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown])
+  // The accent sampled from the agency's logo (shell/agency/look.ts), once the server says whose it is.
+  useEffect(() => { if (personKnown && hasServer && !device) void getAgencyLook().then(applyAgencyLook) }, [personId, personKnown, device])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
@@ -549,7 +555,7 @@ export default function App() {
     initials: initialsOf(personName),
     // No role is served yet (gaps.md §12): the agency's name alone.
     line: agency,
-    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
+    ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null, onLook: () => setLookOpen(true) } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -660,6 +666,7 @@ export default function App() {
         </StudioShell>
       )}
 
+      {lookOpen && <AgencyLookPanel onClose={() => setLookOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
 
       {dragging && (

@@ -2,79 +2,134 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Light / dark for the shell.
+// White, Grey and Black: the shell's three modes (features/agency-look.clan).
+//
+// A mode is a set of the same tokens, not a second design. White and Black are
+// the shell's light and dark; Grey is the warm paper pulled down to a mid
+// grey, with ink that still reads on it. `data-mode` on <html> names the mode;
+// `data-theme` stays `light` or `dark` (Grey is light), because everything
+// written before the modes keys off that pair, and so does the colour scheme
+// native widgets and app frames follow.
 //
 // The palette is CSS custom properties on `:root`, so switching is one
 // attribute flip and nothing re-renders to change colour. Until someone picks
-// a side we follow the OS and keep following it; the moment they do pick, that
+// a mode we follow the OS and keep following it; the moment they do pick, that
 // choice is theirs and the OS stops overriding it.
 
 import { useEffect, useState } from 'react'
 
+export type Mode = 'white' | 'grey' | 'black'
+/** The colour scheme a mode sits in: what native widgets and app frames follow. */
 export type Theme = 'light' | 'dark'
+
+export const MODES: readonly Mode[] = ['white', 'grey', 'black']
 
 const STORAGE_KEY = 'napkin.theme'
 const QUERY = '(prefers-color-scheme: light)'
 
 const listeners = new Set<(theme: Theme) => void>()
+const modeListeners = new Set<(mode: Mode) => void>()
 
-function systemTheme(): Theme {
-  return window.matchMedia?.(QUERY).matches ? 'light' : 'dark'
+export const schemeOf = (mode: Mode): Theme => (mode === 'black' ? 'dark' : 'light')
+
+function systemMode(): Mode {
+  return window.matchMedia?.(QUERY).matches ? 'white' : 'black'
+}
+
+/** What storage holds as a mode: the three names, or the two the shell stored before there were three. */
+function parseMode(v: string | null): Mode | null {
+  if (v === 'white' || v === 'grey' || v === 'black') return v
+  if (v === 'light') return 'white'
+  if (v === 'dark') return 'black'
+  return null
 }
 
 /** The user's own choice, if they have made one. */
-function storedTheme(): Theme | null {
+function storedMode(): Mode | null {
   try {
-    const v = localStorage.getItem(STORAGE_KEY)
-    return v === 'light' || v === 'dark' ? v : null
+    return parseMode(localStorage.getItem(STORAGE_KEY))
   } catch {
     // Private windows and locked-down browsers throw on access, not on read.
     return null
   }
 }
 
-let current: Theme = storedTheme() ?? systemTheme()
+let current: Mode = storedMode() ?? systemMode()
 
-function apply(theme: Theme) {
+function apply(mode: Mode) {
   const root = document.documentElement
+  const theme = schemeOf(mode)
   root.dataset.theme = theme
+  root.dataset.mode = mode
   // Native widgets — scrollbars, form controls, the canvas behind the page —
   // follow this rather than our variables.
   root.style.colorScheme = theme
 }
 
-function set(theme: Theme, remember: boolean) {
+function set(mode: Mode, remember: boolean) {
   if (remember) {
     try {
-      localStorage.setItem(STORAGE_KEY, theme)
+      localStorage.setItem(STORAGE_KEY, mode)
     } catch { /* the preference just won't survive the tab */ }
   }
-  if (theme === current) return
-  current = theme
-  apply(theme)
-  for (const fn of listeners) fn(theme)
+  if (mode === current) return
+  const before = schemeOf(current)
+  current = mode
+  apply(mode)
+  for (const fn of modeListeners) fn(mode)
+  if (schemeOf(mode) !== before) for (const fn of listeners) fn(schemeOf(mode))
 }
 
 apply(current)
 
 // Keep following the OS, but only for as long as there is nothing to override.
 window.matchMedia?.(QUERY).addEventListener?.('change', e => {
-  if (storedTheme()) return
-  set(e.matches ? 'light' : 'dark', false)
+  if (storedMode()) return
+  set(e.matches ? 'white' : 'black', false)
 })
 
-export function getTheme(): Theme {
+export function getMode(): Mode {
   return current
 }
 
+export function setMode(mode: Mode) {
+  set(mode, true)
+}
+
+/** White, then Grey, then Black, then round again. */
+export function nextMode(mode: Mode = current): Mode {
+  return MODES[(MODES.indexOf(mode) + 1) % MODES.length]
+}
+
+export function cycleMode() {
+  setMode(nextMode())
+}
+
+export function onModeChange(fn: (mode: Mode) => void): () => void {
+  modeListeners.add(fn)
+  return () => modeListeners.delete(fn)
+}
+
+export function useMode(): Mode {
+  const [mode, setLocal] = useState(getMode)
+  useEffect(() => onModeChange(setLocal), [])
+  return mode
+}
+
+/** The colour scheme of the current mode. */
+export function getTheme(): Theme {
+  return schemeOf(current)
+}
+
 export function setTheme(theme: Theme) {
-  set(theme, true)
+  set(theme === 'dark' ? 'black' : 'white', true)
 }
 
 export function toggleTheme() {
-  setTheme(current === 'dark' ? 'light' : 'dark')
+  setTheme(getTheme() === 'dark' ? 'light' : 'dark')
 }
 
+/** Told when the colour scheme changes (not for White to Grey, which share one). */
 export function onThemeChange(fn: (theme: Theme) => void): () => void {
   listeners.add(fn)
   return () => listeners.delete(fn)

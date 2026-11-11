@@ -66,11 +66,11 @@ test('the desk: eyebrow, Clients., the greeting, Find a client and ⋯ always, o
   assert.match(html, /class="cl-line">Spring brief · 3 need you</)
   assert.match(html, /class="cl-line">Pitch · agents working</)
   assert.match(html, /class="cl-line">No work yet</)
-  assert.match(html, /aria-label="Client A: Spring brief · 3 need you\. 3 need you\. Opens its tools"/)
+  assert.match(html, /aria-description="Client A: Spring brief · 3 need you\. 3 need you\. Opens its tools"/)
   // urgent first (needs you, running, then the rest), one tab stop, each saying its ring's verb in words
   assert.ok(html.indexOf('Client A') < html.indexOf('Client B') && html.indexOf('Client B') < html.indexOf('Client C'))
-  assert.match(html, /aria-label="Client B: Pitch · agents working, working\. Opens its tools" data-testid="client-circle" data-activity="work"/)
-  assert.match(html, /aria-label="Client C: No work yet, idle\. Opens its tools"/)
+  assert.match(html, /aria-description="Client B: Pitch · agents working, working\. Opens its tools" data-testid="client-circle" data-activity="work"/)
+  assert.match(html, /aria-description="Client C: No work yet, idle\. Opens its tools"/)
   assert.equal(count(html, /class="cl-circle[^"]*"[^>]*tabindex="0"/g), 1)
   assert.equal(count(html, /class="cl-circle[^"]*"[^>]*tabindex="-1"/g), 2)
   // no legend: every state is in words on its circle
@@ -219,11 +219,11 @@ test('the client page: since, the name, a line naming the work, Needs you, work 
   assert.match(html, /aria-label="New deck for Client A"/)
   assert.equal(count(html, /data-testid="work-item"/g), 5, 'each document in its group, the one that needs you also on top')
   // no wheel: each group's heading is its tool's door, one tab stop for them, named with its count
-  assert.match(html, /aria-label="Brief Maker for Client A, 2 open, needs you \(1 of 4\)"/)
+  assert.match(html, /aria-description="Brief Maker for Client A, 2 open, needs you \(1 of 4\)"/)
   assert.match(html, /data-testid="tool-brief"[^>]*tabindex="0"|tabindex="0"[^>]*data-testid="tool-brief"/)
   assert.match(html, /data-testid="tool-deck"[^>]*tabindex="-1"|tabindex="-1"[^>]*data-testid="tool-deck"/)
   assert.match(html, /role="group" aria-label="Tools for Client A"/)
-  assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 4\)"/)
+  assert.match(html, /aria-description="Research Tool for Client A, none open, start one \(2 of 4\)"/)
   assert.match(html, /class="cp-st ">Draft</)
 })
 

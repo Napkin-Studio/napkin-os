@@ -87,6 +87,41 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05)
 }
 
+/**
+ * A client with a brief in it, in the signed-in agency's workspace, so the pages have something to show.
+ * The J001 seed is not used here: its brief patch is refused on this branch (j001-seed.spec.ts fails the
+ * same way), and an agency's workspace outlives a test, so a client that is already there is reused.
+ */
+async function somethingToRead(page: Page): Promise<{ client: string }> {
+  await page.goto('/')
+  const { tenant } = await sessionOf(page)
+  const api = `/api/t/${tenant}`
+  let list = (await (await page.request.get(`${api}/clients`)).json()) as { id: string }[]
+  if (!list.length) {
+    expect((await page.request.post(`${api}/clients`, { data: { name: 'Client A' } })).status()).toBe(201)
+    list = (await (await page.request.get(`${api}/clients`)).json()) as { id: string }[]
+  }
+  const client = list[0].id
+  const made = await page.request.post(`${api}/documents`, { data: { app_id: 'ie.napkin.brief-maker', title: 'J001 brief, Client A', client_id: client } })
+  expect(made.status(), 'a brief to open').toBe(200)
+  return { client }
+}
+
+/** The three papers the page really draws, as #rrggbb: what --desk, --paper and --card resolve to. */
+async function papers(page: Page): Promise<string[]> {
+  const rgb = await page.evaluate(() => ['--desk', '--paper', '--card'].map(v => {
+    const probe = document.createElement('div')
+    probe.style.background = `var(${v})`
+    document.body.appendChild(probe)
+    const c = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    // Chrome writes a mixed colour as color(srgb r g b) with 0 to 1 channels, a plain one as rgb(r, g, b).
+    const n = (c.match(/-?[\d.]+/g) ?? []).slice(0, 3).map(Number)
+    return c.startsWith('color(') ? n.map(x => Math.round(x * 255)) : n
+  }))
+  return rgb.map(c => '#' + c.map(x => x.toString(16).padStart(2, '0')).join(''))
+}
+
 /** Five flat logos in five hues, and one black and white (the fixtures of test 6). */
 const LOGOS = [
   ...['#d6402f', '#2f6fd6', '#2fa36b', '#8a3fd1', '#d19a1f'].map(c => ({ name: c, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="${c}"/></svg>`, accent: true })),
@@ -158,43 +193,77 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test.fixme(t(6), async ({ browser }) => {
-    const bg: Record<string, string> = { white: '#ffffff', grey: '#e6e6e6', black: '#000000' }
+  test(t(6), async ({ browser }) => {
+    // The accent is sampled in the browser from the uploaded logo (Agency look, in the account
+    // menu), saved for the agency, and set per mode. Each mode is checked on the papers the page
+    // really draws (--desk, --paper, --card), not on a table kept in this file.
     for (const logo of LOGOS) {
+      const up = await open(browser, size, 'white')
+      await signIn(up.page, { username: 'ann@napkin' }) // an admin
+      await up.page.goto('/')
+      await up.page.getByTestId('account-button').click()
+      await up.page.getByRole('menuitem', { name: /Agency look/ }).click()
+      await up.page.getByTestId('look-file').setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(logo.svg) })
+      await expect(up.page.getByTestId('look-note'), logo.name).toContainText('Saved')
+      await expect(up.page.getByTestId(logo.accent ? 'look-accents' : 'look-no-accent'), logo.name).toBeVisible()
+      await up.ctx.close()
+
       for (const mode of MODES) {
         const { ctx, page } = await open(browser, size, mode)
-        await signIn(page, { username: 'ann@napkin' }) // an admin
-        const { tenant } = await sessionOf(page)
-        const up = await page.request.post(`/api/t/${tenant}/agency/logo`, { data: logo.svg, headers: { 'content-type': 'image/svg+xml' } })
-        expect(up.status(), logo.name).toBe(200)
+        await signIn(page, { username: 'ann@napkin' })
         await page.goto('/')
-        const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())
+        await expect(page.getByTestId('os-bar')).toBeVisible()
+        await expect(page.locator('html')).toHaveAttribute('data-mode', mode)
+        const token = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--agency-accent').trim())
         if (logo.accent) {
-          expect(accent, `accent for ${logo.name} in ${mode}`).toMatch(/^#[0-9a-f]{6}$/i)
-          expect(contrast(accent, bg[mode])).toBeGreaterThanOrEqual(4.5)
+          await expect.poll(token, { message: `accent for ${logo.name} in ${mode}` }).toMatch(/^#[0-9a-f]{6}$/i)
+          const accent = await token()
+          for (const paper of await papers(page)) {
+            expect(contrast(accent, paper), `${accent} on ${paper} in ${mode}`).toBeGreaterThanOrEqual(4.5)
+          }
         } else {
-          expect(accent, 'the black and white logo gives no accent').toBe('')
+          // The saved look has been read once the signed-in desk has settled; give it a moment, then check it stayed empty.
+          await page.waitForLoadState('networkidle')
+          expect(await token(), `the black and white logo gives no accent in ${mode}`).toBe('')
         }
         await ctx.close()
       }
     }
   })
 
-  test.fixme(t(7), async ({ browser }) => {
+  test(t(7), async ({ browser }) => {
     const { default: AxeBuilder } = await import('@axe-core/playwright')
-    const pages = ['#home', '#agency', '#brief', '#gate', '#visual-brief', '#dashboard', '#timesheet']
+    // The Phase 1 pages that exist on this branch: the desk, the clients page, a client, its Brief
+    // page, and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
+    // visual brief) join this list when they land. The app frame is a document with its own paper
+    // (the apps are restyled in their own records), so it is left out of the scan.
+    const problems: string[] = []
     for (const mode of MODES) {
       const { ctx, page } = await open(browser, size, mode)
-      await signIn(page, PEOPLE.planning)
-      await seedJ001(page, { ready: true })
-      for (const hash of pages) {
-        await page.goto(`/${hash}`)
-        await page.reload()
-        const found = (await new AxeBuilder({ page }).analyze()).violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
-        expect(found.map(v => `${hash} ${mode}: ${v.id}`)).toEqual([])
+      await signIn(page, { username: 'ann@napkin' })
+      const job = await somethingToRead(page)
+      const pages: [string, () => Promise<void>][] = [
+        ['desk', async () => { await page.goto('/#agency'); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
+        ['clients', async () => { await page.goto('/#clients'); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
+        ['client', async () => { await page.goto(`/#client-${job.client}`); await page.reload(); await expect(page.getByTestId('os-bar')).toBeVisible() }],
+        ['brief page', async () => { await page.goto(`/#tool-${job.client}-brief`); await page.reload(); await expect(page.getByTestId('work-item').first()).toBeVisible() }],
+        ['agency look', async () => {
+          await page.goto('/#agency'); await page.reload()
+          await page.getByTestId('account-button').click()
+          await page.getByRole('menuitem', { name: /Agency look/ }).click()
+          await expect(page.getByTestId('agency-look')).toBeVisible()
+        }],
+      ]
+      for (const [name, show] of pages) {
+        await show()
+        await page.waitForTimeout(700) // the page's own entrance finishes before it is read
+        const found = (await new AxeBuilder({ page }).exclude('iframe').analyze()).violations
+          .filter(v => v.impact === 'serious' || v.impact === 'critical')
+        problems.push(...found.map(v => `${name} ${mode}: ${v.id} ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`))
       }
       await ctx.close()
     }
+    expect(problems).toEqual([])
   })
 
   test(t(8), async ({ browser }) => {

@@ -491,7 +491,7 @@
   transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .ch-seg button:hover { opacity: 0.8; }
-.ch-seg button[aria-selected='true'] { opacity: 1; background: var(--card); box-shadow: var(--shadow-pill); }
+.ch-seg button[aria-selected='true'] { opacity: 1; background: var(--card); box-shadow: var(--shadow-pill), inset 0 -2px 0 var(--agency-accent, transparent); }
 
 .ch-pre {
   font-family: var(--f-mono);
