@@ -1,0 +1,414 @@
+// The Phase 1 acceptance suite for the J001 pilot job (features/j001-pilot-suite.clan):
+// tests 1 to 18 of docs/napkin-os-build-prompt-v3.1.md section 9 (1 to 12 as written in
+// docs/napkin-os-build-prompt-v2.md section 10, 13 to 18 added in v3.1), each run at 390 and
+// 1440 px on the real shell and the real server, against the de-identified seed in seed/j001/.
+//
+// Phase 1 is done when `node e2e/phase1-fixme.mjs` prints a count of 0 and this file passes.
+//
+// A test whose feature is not built yet is written in full and marked `test.fixme(t(N), ...)`:
+// TESTS below names the feature record that turns it on, and each feature removes its own
+// fixme when it lands (the selectors and routes in a fixme body are that design's proposal;
+// the owning feature adjusts them to what it builds). A test that can pass today really runs.
+//
+// No model, no paid provider: the stack unsets every provider key (stack.mjs), and the
+// stand-in middleware answers every task. Clients and people are placeholders.
+
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { CANARY } from './seed/j001/canary.mjs'
+import { lockBrief, PEOPLE, seedJ001 } from './seed/j001'
+
+type Size = { tag: string; width: number; height: number }
+const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', width: 1440, height: 900 }]
+
+/** Each test: its title, and the feature record that turns it on (null: it runs now). */
+const TESTS: Record<number, { title: string; slug: string | null }> = {
+  1: { title: 'each live role sees its own doors', slug: 'roles-and-homes' },
+  2: { title: 'Planning gets 403 on Scope and estimates', slug: 'roles-and-homes' },
+  3: { title: 'the creative director signs the brief with one approve decision', slug: 'brief-gate' },
+  4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: 'brief-gate' },
+  5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: 'job-index-dashboard' },
+  6: { title: 'five logos repaint the accent and it passes contrast in all three modes', slug: 'agency-look' },
+  7: { title: 'axe finds nothing serious on every Phase 1 page in all three modes', slug: 'agency-look' },
+  8: { title: 'a canary key set on the server never reaches the browser', slug: null },
+  9: { title: 'each confirmed timesheet line links to its sessions', slug: 'timesheet-sessions' },
+  10: { title: 'the brief passes the gate and the client confirms it before Territories open', slug: 'brief-gate' },
+  11: { title: 'every write in the J001 documents is attributed', slug: 'client-wall' },
+  12: { title: 'the J001 brief retrieval trace has no source cannes hit', slug: 'harness' },
+  13: { title: 'a failed save keeps the text, Try again saves it, and reopening shows it', slug: 'screen-states' },
+  14: { title: 'restoring v2 keeps v3 and the approved version locked', slug: 'brief-versions-undo' },
+  15: { title: 'a provider error shows one line, returns credits, keeps inputs, and Try again works', slug: 'screen-states' },
+  16: { title: 'Cmd Z undoes the last brief edit and the text comes back', slug: 'brief-versions-undo' },
+  17: { title: 'the client confirms the brief link on a phone with no account', slug: 'client-confirm-link' },
+  18: { title: 'no consent means no captured sessions', slug: 'timesheet-sessions' },
+}
+
+const DOORS = {
+  planning: ['Brief', 'Research', 'Territories', 'Client brains', 'Presentations'],
+  creativeDirector: ['Ideas', 'Ready for review', 'Judge scores', 'Approved work', 'Direction notes'],
+  accountService: ['Clients', 'Live jobs', 'Approvals', 'Scope and estimates', 'Presentations'],
+  management: ['Agency dashboard', 'Live jobs', 'Time and money', 'Clients', 'Traffic board'],
+} as const
+const MODES = ['white', 'grey', 'black'] as const
+
+type Decision = { kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
+
+async function open(browser: Browser, size: Size, mode: string = 'white'): Promise<{ ctx: BrowserContext; page: Page }> {
+  const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1 })
+  await ctx.addInitScript(m => { try { localStorage.setItem('napkin.theme', m) } catch { /* not kept */ } }, mode)
+  return { ctx, page: await ctx.newPage() }
+}
+
+/** Sign in as a placeholder person (needs the roster stack, NAPKIN_E2E_ROSTER=1). */
+async function signIn(page: Page, who: { username: string }) {
+  const r = await page.request.post('/api/auth/sign-in', { data: { username: who.username } })
+  expect(r.status(), `sign in as ${who.username}`).toBe(200)
+}
+
+const chainOf = async (page: Page, token: string): Promise<Decision[]> =>
+  ((await (await page.request.get(`/s/${token}/chain`)).json()) as { decisions: Decision[] }).decisions
+
+const sessionOf = async (page: Page) =>
+  (await (await page.request.get('/api/session')).json()) as { tenant: string; quota: { used: number; cap: number } }
+
+const walk = (dir: string): string[] =>
+  readdirSync(dir).flatMap(f => (statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : [join(dir, f)]))
+
+/** WCAG contrast of two #rrggbb colours. */
+function contrast(a: string, b: string): number {
+  const lum = (hex: string) => {
+    const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+  }
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/** Five flat logos in five hues, and one black and white (the fixtures of test 6). */
+const LOGOS = [
+  ...['#d6402f', '#2f6fd6', '#2fa36b', '#8a3fd1', '#d19a1f'].map(c => ({ name: c, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="${c}"/></svg>`, accent: true })),
+  { name: 'black and white', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#fff"/><circle cx="32" cy="32" r="28" fill="#000"/></svg>', accent: false },
+]
+
+for (const size of SIZES) {
+  const t = (n: number) => `${n} ${TESTS[n].title}, ${size.tag} px`
+
+  // 1 to 12: as written in v2 section 10.
+
+  test.fixme(t(1), async ({ browser }) => {
+    for (const [role, doors] of Object.entries(DOORS)) {
+      const { ctx, page } = await open(browser, size)
+      await signIn(page, PEOPLE[role as keyof typeof PEOPLE])
+      await page.goto('/')
+      const shown = page.getByTestId('door')
+      await expect(shown).toHaveCount(doors.length)
+      expect(await shown.allInnerTexts()).toEqual([...doors])
+      await ctx.close()
+    }
+  })
+
+  test.fixme(t(2), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true })
+    const r = await page.request.get(`${job.api}/jobs/J001/scope`)
+    expect(r.status()).toBe(403)
+    await ctx.close()
+  })
+
+  test.fixme(t(3), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.creativeDirector)
+    const job = await seedJ001(page, { ready: true })
+    expect((await lockBrief(page, job.brief, 'Signed.')).status()).toBe(200)
+    const approvals = (await chainOf(page, job.brief.token)).filter(d => d.kind === 'approve')
+    expect(approvals).toHaveLength(1)
+    expect(approvals[0].actor ?? '').toContain(PEOPLE.creativeDirector.username)
+    await ctx.close()
+  })
+
+  test.fixme(t(4), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.creativeDirector)
+    const job = await seedJ001(page, { ready: true })
+    await lockBrief(page, job.brief)
+    const signed = (await chainOf(page, job.brief.token)).find(d => d.kind === 'approve')!.version
+    const edit = await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { single_minded_proposition: 'A new line.' } } })
+    expect(edit.status()).toBe(200)
+    const after = await chainOf(page, job.brief.token)
+    expect(after.find(d => d.kind === 'approve')!.version).toBe(signed) // the signed version stays as it was
+    expect(after.some(d => d.kind === 'edit' && d.version !== signed)).toBe(true) // a new version, in the chain
+    await page.goto('/')
+    await expect(page.getByTestId('alert').filter({ hasText: 'Changed brief' })).toBeVisible()
+    await ctx.close()
+  })
+
+  test.fixme(t(5), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.management)
+    const job = await seedJ001(page, { ready: true })
+    await page.goto('/#dashboard')
+    await expect(page.getByTestId('tile-stage')).toContainText('Brief')
+    const moved = await page.request.post(`${job.api}/jobs/J001/stage`, { data: { stage: 'Ideas' } })
+    expect(moved.status()).toBe(200)
+    await expect(page.getByTestId('tile-stage')).toContainText('Ideas', { timeout: 10_000 })
+    await ctx.close()
+  })
+
+  test.fixme(t(6), async ({ browser }) => {
+    const bg: Record<string, string> = { white: '#ffffff', grey: '#e6e6e6', black: '#000000' }
+    for (const logo of LOGOS) {
+      for (const mode of MODES) {
+        const { ctx, page } = await open(browser, size, mode)
+        await signIn(page, { username: 'ann@napkin' }) // an admin
+        const { tenant } = await sessionOf(page)
+        const up = await page.request.post(`/api/t/${tenant}/agency/logo`, { data: logo.svg, headers: { 'content-type': 'image/svg+xml' } })
+        expect(up.status(), logo.name).toBe(200)
+        await page.goto('/')
+        const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())
+        if (logo.accent) {
+          expect(accent, `accent for ${logo.name} in ${mode}`).toMatch(/^#[0-9a-f]{6}$/i)
+          expect(contrast(accent, bg[mode])).toBeGreaterThanOrEqual(4.5)
+        } else {
+          expect(accent, 'the black and white logo gives no accent').toBe('')
+        }
+        await ctx.close()
+      }
+    }
+  })
+
+  test.fixme(t(7), async ({ browser }) => {
+    const { default: AxeBuilder } = await import('@axe-core/playwright')
+    const pages = ['#home', '#agency', '#brief', '#gate', '#visual-brief', '#dashboard', '#timesheet']
+    for (const mode of MODES) {
+      const { ctx, page } = await open(browser, size, mode)
+      await signIn(page, PEOPLE.planning)
+      await seedJ001(page, { ready: true })
+      for (const hash of pages) {
+        await page.goto(`/${hash}`)
+        await page.reload()
+        const found = (await new AxeBuilder({ page }).analyze()).violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
+        expect(found.map(v => `${hash} ${mode}: ${v.id}`)).toEqual([])
+      }
+      await ctx.close()
+    }
+  })
+
+  test(t(8), async ({ browser }) => {
+    // The stack sets NAPKIN_CANARY_KEY on the server. It must be in no response the browser
+    // gets (the shell, the app frame, the API) and in no file of the built bundle.
+    const { ctx, page } = await open(browser, size)
+    const bodies: string[] = []
+    page.on('response', async r => {
+      try {
+        if (/text|json|javascript|css|xml|html/.test(r.headers()['content-type'] ?? '')) bodies.push(await r.text())
+      } catch { /* a body that is gone is not a leak */ }
+    })
+    const job = await seedJ001(page)
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.reload()
+    await page.getByTestId('work-item').first().click()
+    await expect(page.locator('[data-where="document"]')).toBeVisible({ timeout: 30_000 })
+    await expect(page.frameLocator('iframe').first().locator('#fields')).toBeVisible({ timeout: 30_000 }) // the app frame has loaded
+    for (const url of ['/api/session', '/api/healthz', `${job.api}/home`, `${job.api}/apps`, `${job.api}/clients`, `/s/${job.brief.token}/chain`]) {
+      bodies.push(await (await page.request.get(url)).text())
+    }
+    expect(bodies.length, 'the page loaded its bundle and data').toBeGreaterThan(10)
+    expect(bodies.filter(b => b.includes(CANARY))).toHaveLength(0)
+    const dist = fileURLToPath(new URL('../dist', import.meta.url))
+    const built = walk(dist).filter(f => /\.(js|css|html|json|map)$/.test(f))
+    expect(built.length).toBeGreaterThan(0)
+    expect(built.filter(f => readFileSync(f, 'utf8').includes(CANARY))).toEqual([])
+    await ctx.close()
+  })
+
+  test.fixme(t(9), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true })
+    await page.request.post(`${job.api}/timesheet/consent`, { data: { consent: true } })
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    await page.waitForTimeout(3000) // a work session while the brief is open and in focus
+    await page.goto('/#timesheet')
+    await page.getByRole('button', { name: 'Confirm my day' }).click()
+    const lines = page.getByTestId('timesheet-line')
+    await expect(lines.first()).toBeVisible()
+    for (const line of await lines.all()) await expect(line.getByTestId('line-sessions')).not.toHaveCount(0)
+    await ctx.close()
+  })
+
+  test.fixme(t(10), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.planning)
+    const job = await seedJ001(page, { ready: true })
+    await page.goto(`/#tool-${job.client}-territories`)
+    await expect(page.getByTestId('territories-closed')).toBeVisible() // not passed, not confirmed
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    await page.getByRole('button', { name: 'Check the brief' }).click()
+    await expect(page.getByTestId('gate-item')).toHaveCount(6)
+    await expect(page.getByTestId('gate-item').filter({ hasText: 'missing' })).toHaveCount(0)
+    await signIn(page, PEOPLE.creativeDirector)
+    expect((await lockBrief(page, job.brief)).status()).toBe(200)
+    await page.goto(`/#tool-${job.client}-territories`)
+    await expect(page.getByTestId('territories-closed')).toBeVisible() // passed, signed, not yet confirmed by the client
+    const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
+    const client = await browser.newContext()
+    const cp = await client.newPage()
+    await cp.goto(link)
+    await cp.getByRole('button', { name: 'Confirm' }).click()
+    await client.close()
+    await page.goto(`/#tool-${job.client}-territories`)
+    await expect(page.getByTestId('territories-closed')).toHaveCount(0)
+    await ctx.close()
+  })
+
+  test.fixme(t(11), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    const job = await seedJ001(page, { ready: true })
+    for (const doc of [job.brief, job.research, job.deck]) {
+      const chain = await chainOf(page, doc.token)
+      expect(chain.length, 'the seed left a chain').toBeGreaterThan(0)
+      for (const d of chain) {
+        expect(d.agent, 'a write with no agent').toBeTruthy()
+        expect(d.action, 'a write with no action').toBeTruthy()
+        if (d.agent === 'human') expect(d.edited_by).toBe('human')
+      }
+    }
+    // The host refuses an unattributed write.
+    const bare = await page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { audience: 'x' }, agent: '' } })
+    expect(bare.status()).toBe(400)
+    await ctx.close()
+  })
+
+  test.fixme(t(12), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    const job = await seedJ001(page, { ready: true })
+    const r = await page.request.get(`${job.api}/d/${job.brief.id}/retrieval-trace`)
+    expect(r.status()).toBe(200)
+    const trace = (await r.json() as { hits: { source: string }[] }).hits
+    expect(trace.length, 'the trace records each hit with its source').toBeGreaterThan(0)
+    expect(trace.filter(h => /^(cannes)$/i.test(h.source))).toEqual([])
+    await ctx.close()
+  })
+
+  // 13 to 18: added in v3.1, so the gate proves recovery and reopening, not only the happy path.
+
+  test.fixme(t(13), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    const job = await seedJ001(page)
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    const app = page.frameLocator('iframe').first()
+    const field = app.locator('#fields .row[data-clan-part="audience"] [contenteditable]').first()
+    await ctx.setOffline(true)
+    await field.fill('Typed while the network is cut.')
+    await expect(page.getByTestId('state-failed-save')).toBeVisible()
+    await expect(field).toHaveText('Typed while the network is cut.') // the typed text stays on screen
+    await ctx.setOffline(false)
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(page.getByTestId('state-failed-save')).toHaveCount(0)
+    await page.goto('/')
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    await expect(page.frameLocator('iframe').first().locator('#fields')).toContainText('Typed while the network is cut.')
+    await ctx.close()
+  })
+
+  test.fixme(t(14), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.creativeDirector)
+    const job = await seedJ001(page, { ready: true })
+    const edit = (v: string) => page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: { audience: v } } })
+    await edit('Version two audience.')
+    await edit('Version three audience.')
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    await page.getByRole('button', { name: 'Version history' }).click()
+    await page.getByTestId('version-row').filter({ hasText: 'v2' }).getByRole('button', { name: 'Restore' }).click()
+    const rows = page.getByTestId('version-row')
+    await expect(rows.filter({ hasText: 'v3' })).toHaveCount(1) // v3 is still in the history
+    await expect(rows.first()).toContainText('Restored from v2') // restore made a new version
+    await lockBrief(page, job.brief)
+    await expect(rows.filter({ hasText: 'locked' })).not.toHaveCount(0) // an approved version stays locked
+    expect((await edit('Edit after the lock.')).status()).toBe(409)
+    await ctx.close()
+  })
+
+  test.fixme(t(15), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    const job = await seedJ001(page)
+    const before = (await sessionOf(page)).quota.used
+    // The stand-in middleware (stack.mjs, port NAPKIN_E2E_MW_PORT) is told to fail the run.
+    const mw = `http://127.0.0.1:${process.env.NAPKIN_E2E_MW_PORT || '18081'}/control`
+    await page.request.post(mw, { data: { state: 'failed', stage: 'provider error' } })
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    const app = page.frameLocator('iframe').first()
+    await app.getByRole('button', { name: 'Draft from the brief' }).click()
+    const failed = page.getByTestId('state-run-failed')
+    await expect(failed).toBeVisible()
+    expect((await failed.innerText()).trim().split('\n').filter(Boolean)).toHaveLength(1) // one plain line
+    expect((await sessionOf(page)).quota.used).toBe(before) // the credits come back
+    await expect(app.locator('#fields')).toContainText('Drinkers aged 25 to 34') // the inputs stay
+    await page.request.post(mw, { data: { state: 'running', stage: 'research' } })
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(failed).toHaveCount(0)
+    await ctx.close()
+  })
+
+  test.fixme(t(16), async ({ browser }) => {
+    test.skip(size.width < 1000, 'Cmd Z is the desktop width (v3.1, test 16)')
+    const { ctx, page } = await open(browser, size)
+    const job = await seedJ001(page)
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    const app = page.frameLocator('iframe').first()
+    const field = app.locator('#fields .row[data-clan-part="audience"] [contenteditable]').first()
+    await field.fill('An edit to undo.')
+    await field.blur()
+    await page.keyboard.press('Meta+z')
+    await expect(app.locator('#fields')).not.toContainText('An edit to undo.')
+    await page.getByRole('button', { name: 'Redo' }).click() // the undone text can be brought back
+    await expect(app.locator('#fields')).toContainText('An edit to undo.')
+    await ctx.close()
+  })
+
+  test.fixme(t(17), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.accountService)
+    const job = await seedJ001(page, { ready: true })
+    await signIn(page, PEOPLE.creativeDirector)
+    await lockBrief(page, job.brief)
+    await signIn(page, PEOPLE.accountService)
+    const link = (await (await page.request.post(`${job.api}/d/${job.brief.id}/client-link`)).json() as { url: string }).url
+    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } }) // no cookies, no account
+    const cp = await phone.newPage()
+    await cp.goto(link)
+    await cp.getByRole('button', { name: 'Confirm' }).click()
+    await expect(cp.getByText('Thank you')).toBeVisible()
+    const reviews = (await chainOf(page, job.brief.token)).filter(d => d.kind === 'client_review')
+    expect(reviews).toHaveLength(1)
+    expect(reviews[0].version).toBe((await chainOf(page, job.brief.token)).find(d => d.kind === 'approve')!.version) // that exact version
+    await phone.close()
+    await ctx.close()
+  })
+
+  test.fixme(t(18), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size)
+    await signIn(page, PEOPLE.planning) // has not answered the consent question
+    const job = await seedJ001(page, { ready: true })
+    await page.goto(`/#tool-${job.client}-brief`)
+    await page.getByTestId('work-item').first().click()
+    await page.waitForTimeout(3000) // long enough for a session, if one were being kept
+    const { tenant } = await sessionOf(page)
+    const r = await page.request.get(`/api/t/${tenant}/timesheet/sessions`)
+    expect(r.status()).toBe(200)
+    expect(await r.json()).toEqual([])
+    await ctx.close()
+  })
+}
