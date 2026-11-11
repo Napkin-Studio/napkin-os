@@ -565,6 +565,13 @@
             }
           }
         },
+        "draft_scorecard": { "$ref": "#/definitions/review/properties/scorecard", "$comment": "the same seven dimensions on the draft brief, kept beside the client's own (features/brief-gate.clan)" },
+        "gate": {
+          "type": "object", "additionalProperties": false, "required": ["checks"],
+          "$comment": "the Brief gate's two new checks, famous and baseline (features/brief-gate.clan)",
+          "properties": { "checks": { "type": "array", "items": { "type": "object", "required": ["check", "method", "status"],
+            "properties": { "check": { "type": "string" }, "method": { "type": "string" }, "status": { "type": "string" }, "note": { "type": "string" } } } } }
+        },
         "judge": {
           "type": "object",
           "additionalProperties": false,

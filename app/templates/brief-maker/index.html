@@ -2570,7 +2570,7 @@
   function addrLabel(a){ var f=fieldOfAddress(a.address); return a.label||(f?partLabel(f):pathOf(a.address)||''); }
   // What the review rates short of Good: the scorecard's dimensions that are
   // Too vague or Missing. The pills show them; the crew line has to agree.
-  function scoreGaps(){ var rv=get('review'); return rv&&rv.scorecard?arr(rv.scorecard.dimensions).filter(function(x){ return x&&x.verdict!=='pass'; }):[]; }
+  function scoreGaps(){ var rv=get('review'), card=rv&&(rv.draft_scorecard||rv.scorecard); return card?arr(card.dimensions).filter(function(x){ return x&&x.verdict!=='pass'; }):[]; }
   // The Review agent's line when its checks on the parts pass. "Nothing needs you" only
   // when the review agrees: with a dimension rated short, it says so instead.
   function holdsLine(passed, jOthers, gaps){
@@ -2652,7 +2652,7 @@
   function healthWords(n){ return n>=70?'in good shape':n<40?'needs work':'nearly there'; }
   function renderReview(){
     var el=$('review'); if(!el) return;
-    var rv=get('review'), sc=rv&&typeof rv==='object'?rv.scorecard:null, j=rv&&rv.judge;
+    var rv=get('review'), sc=rv&&typeof rv==='object'?(rv.draft_scorecard||rv.scorecard):null, j=rv&&rv.judge;
     var crew=$('crewline'), hasCrew=!!(crew&&crew.innerHTML.trim());
     if(!sc&&!hasCrew){ el.hidden=true; return; }
     var dims=sc?arr(sc.dimensions):[], gaps=dims.filter(function(x){ return x&&x.verdict!=='pass'; }), ok=dims.length-gaps.length;
