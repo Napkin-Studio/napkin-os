@@ -341,6 +341,10 @@ app:
    (§5.5).
 4. Source and target must be the same tenant; a cross-tenant hop is refused
    (`403`, §8).
+5. A spin-off out of a Brief Maker brief is refused `409` unless the brief is
+   open (§7.7): passed, signed by the agency, confirmed by the client and not
+   changed since. Creative work (Territories, Deck Maker) starts on a confirmed
+   brief. A no-op while `NAPKIN_BRIEF_GATE` is not `on`.
 
 ### 5.2 Where each part lands
 
@@ -680,6 +684,12 @@ default, 2026-09-29; may be reversed):
 6. **A client's rejection not yet answered** — a rejected part not edited
    since, or a rejected document whose parts are not known yet (§7.5.4). It
    can only arise on a locked document, so it bears on locking again.
+7. **A Brief gate item missing, or the brief unsigned** (*added 2026-11-11*,
+   `gate_item`; a Brief Maker brief only, and only while `NAPKIN_BRIEF_GATE=on`):
+   one blocker for each of the six gate items the brief does not meet, one for
+   a brief that does not name its two signers, and one while the planner has not
+   signed this content (§7.7). The host reads them from the brief's own data;
+   the middleware adds none.
 
 #### 7.2.1 Setting a carried item aside
 
@@ -1220,6 +1230,39 @@ whole-document unlock; what an exported seal means is unchanged).
    Parts reopened under the ended lock (§7.5.6) stop counting as reopened.
    Client answers stay in the chain, on the version they answered.
 4. The next `/approve` runs the whole §7.2 list and is a new lock.
+
+### 7.7 The Brief gate (features/brief-gate.clan)
+
+*Added 2026-11-11.* No creative work starts on a brief the client has not
+confirmed (build prompt v2 §6). The gate is a view over the brief, not a second
+record, and the host's lock list (§7.2, item 7) is its one enforcement point.
+
+1. **Six items**, each `pass` or `missing` with the brief's words as evidence:
+   one proposition (`single_minded_proposition`, one sentence), one insight,
+   one measurable objective (an `objectives` part with a number), feel or do
+   (`desired_response.feel` or `.do`), what would make this famous (`famous`),
+   and how we will know (`measurement` names a baseline and a number).
+2. **Two signers** are a list on the brief, read by the host:
+   `signers: [{role: planner, person: <id>}, {role: creative_director, person: <id>}]`.
+   The agency signs first, then the client confirms (owner default, 2026-11-11):
+   an answer is only recorded on a locked brief (§7.5), so the lock comes first.
+3. **`POST /sign {rationale?}`** as a signer. The planner writes one `sign`
+   decision (`action: planner_sign`) on the brief as it stands; it is refused
+   `409` while an item is missing, `403` for a person the brief does not name,
+   and it stops counting once the brief is edited. The creative director's
+   signature is `/approve` itself: one `approve` decision that locks the
+   version, refused until the planner has signed and for anyone but the creative
+   director the brief names.
+4. **`GET /gate`** answers the six items, the signers, and `planner_signed`,
+   `signed` (locked), `confirmed` (a `client_review` of `accepted` on the locked
+   version), `changed_since_lock` (an `edit` newer than the lock: the signed
+   version stays as it was, and a new version needs `/unapprove`, §7.6, then
+   signing again) and `open`: all met and nothing changed since. `open` is
+   always true while `NAPKIN_BRIEF_GATE` is not `on` (the default). The state is
+   computed from the decisions in any order; only the screen's wording depends
+   on the order of signing and confirming.
+5. The library listing carries a short form of it as `state.gate`, which is what
+   Territories and the desk's Changed brief alert read.
 
 ## 8. Routes — contract v1
 

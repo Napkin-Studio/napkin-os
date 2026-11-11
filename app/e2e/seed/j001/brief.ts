@@ -30,11 +30,14 @@ export const READY_BRIEF = {
     attitudinal: 'Move it from a drink for someone else to a drink for me.',
   },
   desired_response: { think: 'This is easy to start with.', feel: 'Welcome.', do: 'Order a first pour.' },
+  famous: 'A bar that closes its doors for one song.',
   reasons_to_believe: ['Triple distilled', 'Smooth enough to drink neat or in a long drink'],
   measurement: ['Baseline: 6% of bar orders in the target age band this autumn. Target: 14% by December, from till data.'],
   budget_and_scope: 'Production budget agreed in hours on the job record. Social, bars, shopper stand.',
   mandatories: ['Drink responsibly line', 'Age 18 plus only'],
   open_questions: [],
+  // Who signs this brief: the planner first, then the creative director (the people in people.ts).
+  signers: [{ role: 'planner', person: 'aoife@wk' }, { role: 'creative_director', person: 'dara@wk' }],
 }
 
 export const RESEARCH_TITLE = 'J001 research'

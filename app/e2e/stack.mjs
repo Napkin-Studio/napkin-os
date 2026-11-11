@@ -79,7 +79,9 @@ const middleware = createServer((req, res) => {
 middleware.listen(Number(mwPort), '127.0.0.1')
 // Placeholder people only, one per agency kit the screenshots compare (wk, tbwa) and Napkin's own.
 const roster = process.env.NAPKIN_E2E_ROSTER === '1' ? join(config, 'roster.tsv') : null
-if (roster) writeFileSync(roster, 'sam@wk\tSam Test\ntia@tbwa\tTia Test\nann@napkin\tAnn Test\n')
+if (roster) writeFileSync(roster, 'sam@wk\tSam Test\ntia@tbwa\tTia Test\nann@napkin\tAnn Test\n'
+  // The J001 people (e2e/seed/j001/people.ts), so the brief's two signers can sign in.
+  + 'aoife@wk\tAoife Test\ndara@wk\tDara Test\ncian@wk\tCian Test\nniamh@wk\tNiamh Test\n')
 writeFileSync(join(config, 'workspace.yaml'), `proxies:\n  middleware:\n    endpoint: http://127.0.0.1:${mwPort}/v1/tasks\n`)
 
 // Every provider key is unset for the server, whatever this shell holds (features/j001-pilot-suite.clan:
@@ -96,6 +98,8 @@ const server = spawn(join(root, 'target/debug/napkin-web'), [], {
   env: {
     ...env,
     NAPKIN_CANARY_KEY: CANARY,
+    // The Brief gate holds the lock list (features/brief-gate.clan); it is off by default elsewhere.
+    NAPKIN_BRIEF_GATE: 'on',
     NAPKIN_AUTH: roster ? 'roster' : 'none',
     // Signed sessions need a key: a throwaway one, made for this run and gone with it.
     ...(roster ? { NAPKIN_AUTH_ROSTER: roster, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),

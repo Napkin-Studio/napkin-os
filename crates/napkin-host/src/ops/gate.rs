@@ -405,6 +405,23 @@ pub fn may_lock(ctx: &Ctx, doc: &Document) -> HostResult<()> {
     Ok(())
 }
 
+/// A brief is spun off into another tool only once it has passed the gate, been signed and been
+/// confirmed (Contract 4 §5.1): creative work starts from it. Refused `409` with what is waiting.
+pub fn allow_spinoff(id: &crate::store::DocId, source: &clan_sdk::ClanFile) -> HostResult<()> {
+    if !enforced() || !applies_to(source) {
+        return Ok(());
+    }
+    let doc = Document::from_bytes(id.clone(), source.raw_bytes().to_vec())?;
+    let view = view(&doc, &super::decisions::decisions(&doc)?)?;
+    if view.open {
+        return Ok(());
+    }
+    Err(HostError::conflict(format!(
+        "creative work starts on a brief the client has confirmed; this one is not there yet. {}",
+        view.waiting_on.join(" ")
+    )))
+}
+
 // ── the view ────────────────────────────────────────────────────────────────
 
 /// The gate as `GET /gate` answers it, from the document and its decision view.

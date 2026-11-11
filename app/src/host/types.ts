@@ -111,6 +111,48 @@ export interface RecentState {
   /** Things a person must check before the lock, one per place (the document’s own "Needs you"). */
   needs_you: number
   locked: boolean
+  /** A Brief Maker brief's gate, in short (features/brief-gate.clan). Absent for any other document. */
+  gate?: GateSummary
+}
+
+/** The gate of one brief, as the library listing carries it. */
+export interface GateSummary {
+  /** The host holds the lock list to the gate (`NAPKIN_BRIEF_GATE=on`). */
+  enforced: boolean
+  passed: boolean
+  signed: boolean
+  confirmed: boolean
+  changed_since_lock: boolean
+  /** Territories may open on this brief. */
+  open: boolean
+}
+
+/** One of the gate's six items (`GET /gate`). */
+export interface GateItem {
+  id: 'proposition' | 'insight' | 'objective' | 'feel_or_do' | 'famous' | 'baseline'
+  label: string
+  state: 'pass' | 'missing'
+  /** The brief's own words the verdict rests on. */
+  evidence?: string
+  /** Why it is missing. */
+  why?: string
+}
+
+export interface GateSigner { role: string; person: string; signed: boolean }
+
+/** `GET /gate`: the Brief gate of the open brief. */
+export interface GateView {
+  enforced: boolean
+  items: GateItem[]
+  missing: number
+  passed: boolean
+  signers: GateSigner[]
+  planner_signed: boolean
+  signed: boolean
+  confirmed: boolean
+  changed_since_lock: boolean
+  open: boolean
+  waiting_on: string[]
 }
 
 // ── Clients and the library listing (`napkin_host::{clients, listing}`) ──────
@@ -698,6 +740,14 @@ export interface Host {
    * person and why — derived by the host, the same for every app.
    */
   getDecisions(): Promise<DecisionsView>
+  /** The Brief gate of the open brief: six items, the signers, the client's answer (`GET /gate`). */
+  getGate(): Promise<GateView>
+  /** The signer named on the brief signs this version (`POST /sign`): the planner's sign, or the creative director's lock. */
+  gateSign(rationale?: string): Promise<void>
+  /** A person's edit of the open brief from the gate (`POST /patch-data`), attributed to them. */
+  gatePatch(patch: Record<string, unknown>, action: string): Promise<void>
+  /** Start a new version of a signed brief that changed (`POST /unapprove`, with the reason). */
+  gateNewVersion(reason: string): Promise<void>
   /** A person accepts an agent's call ("Looks right"): `/acknowledge`. */
   acknowledge(decision: string): Promise<void>
   /**

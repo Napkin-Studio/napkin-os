@@ -10,7 +10,8 @@
 //   #tool-<id>-<tool>       one tool, for that client
 //
 // `<id>` is a client id (`cli_` and eight lowercase hex digits) and `<tool>`
-// one of `brief research idea deck prod ads`. Both are ASCII by construction:
+// one of `brief research idea deck prod ads territories` (Territories is a page, not a
+// circle: it sits behind the Brief gate, features/brief-gate.clan). Both are ASCII by construction:
 // a client's name never goes in a URL, so non-ASCII names, renames and hostile
 // hashes cannot make a link that points somewhere else. Anything that is not
 // exactly one of these four shapes is `#agency`.
@@ -18,7 +19,7 @@
 // The shell (App.tsx) owns the screen and writes the hash from it; a hashchange
 // only reads. This module is pure, so it is table-tested without a browser.
 
-export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads'] as const
+export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories'] as const
 export type ToolId = (typeof TOOL_IDS)[number]
 
 export type Route =

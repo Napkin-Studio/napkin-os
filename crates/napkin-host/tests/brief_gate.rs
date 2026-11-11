@@ -176,6 +176,14 @@ fn the_gate_holds_a_brief_until_it_passes_is_signed_twice_and_confirmed() {
         (json!(true), json!(false), json!(false))
     );
 
+    // Creative work (a spin-off of the brief) is refused until the client has answered.
+    let spin = |rig: &Rig| {
+        napkin_host::ops::gate::allow_spinoff(&rig.id, &ClanFile::open(rig.id.as_str()).unwrap())
+    };
+    let refused = spin(&rig).unwrap_err();
+    assert_eq!(refused.status, 409);
+    assert!(refused.to_string().contains("confirmed"), "{refused}");
+
     // The client's answer, recorded by staff, opens Territories.
     let (status, v) = post(
         &dara(),
@@ -188,6 +196,7 @@ fn the_gate_holds_a_brief_until_it_passes_is_signed_twice_and_confirmed() {
         (g["confirmed"].clone(), g["open"].clone()),
         (json!(true), json!(true))
     );
+    spin(&rig).expect("a confirmed brief spins off");
 
     // Editing after approval: the signed version stays, the change is flagged, Territories close.
     let signed = chain(&rig)

@@ -599,6 +599,9 @@ fn spinoff_from(
             ),
         ));
     }
+    // Creative work starts on a brief that has passed the Brief gate, been signed and
+    // been confirmed by the client (features/brief-gate.clan; a no-op unless the gate is on).
+    crate::ops::gate::allow_spinoff(source_id, source)?;
     // With `upstream` declared the SDK refuses a `map` (422, Contract 4
     // §5.1) and carries the source whole.
     let bytes = spinoff(

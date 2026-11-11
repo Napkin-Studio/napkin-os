@@ -635,7 +635,7 @@ export default function App() {
               onAgency={toAgency}
               onHome={toAgency}
               client={deskChip}
-              place={onLanding && route.level === 'tool' ? { tool: route.tool, label: (toolById(route.tool)?.noun[1] ?? '').replace(/^./, c => c.toUpperCase()) } : null}
+              place={onLanding && route.level === 'tool' ? { tool: route.tool, label: (toolById(route.tool)?.noun[1] ?? route.tool).replace(/^./, c => c.toUpperCase()) } : null}
               needs={deskNeeds}
               // On the desk, Decisions opens the calls across every client.
               onDecisions={onLanding ? () => setDeskDecisions(o => !o) : undefined}

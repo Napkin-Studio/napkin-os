@@ -26,6 +26,7 @@ import type {
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
+  GateView,
   Host,
   HostEvents,
   InstalledApp,
@@ -255,6 +256,10 @@ export const wasmHost: Host = {
     if (resp.status !== 200) throw new Error(`decisions: ${resp.status} ${body}`)
     return JSON.parse(body) as DecisionsView
   },
+  getGate: () => route<GateView>('/gate', '', new Uint8Array()),
+  gateSign: async rationale => { await post<unknown>('/sign', { rationale: rationale ?? '' }) },
+  gatePatch: async (patch, action) => { await post<unknown>('/patch-data', { patch, agent: 'human', action }) },
+  gateNewVersion: async reason => { await post<unknown>('/unapprove', { rationale: reason }) },
   acknowledge: async decision => {
     const resp = (await boot()).handle('/acknowledge', '', new TextEncoder().encode(JSON.stringify({ decision }))) as RawResponse
     if (resp.status !== 200) throw new Error(new TextDecoder().decode(asBytes(resp.body)))
