@@ -33,6 +33,18 @@ export type BarItem =
    *  the name alone) or `working` (the crew at work: the name and a status chip, "Working · step 1/4").
    *  At most one; none means the document itself, with every action. */
   | { kind: 'mode'; mode: 'ask' | 'working'; label: string }
+  /** One of the screen states the app is in, when it is not Normal (features/screen-states.clan). At most one;
+   *  none means Normal, so an app that never sends one is never left showing Loading. */
+  | { kind: 'state'; state: AppState }
+
+/** The states an app reports. The shell draws them; Normal is none, Empty and Failed save are the shell's own. */
+export type AppState =
+  | { name: 'loading'; what: string }
+  | { name: 'run-failed'; why: 'provider' | 'refused' | 'timeout' | 'other' }
+  | { name: 'long-run'; minutes: number; step: string }
+  | { name: 'changed-brief'; from: string; to: string; changes: string }
+  | { name: 'missing-access'; what: string; who: string }
+  | { name: 'not-right' }
 
 export type BarStatus = Extract<BarItem, { kind: 'status' }>
 
@@ -40,7 +52,7 @@ export type BarStatus = Extract<BarItem, { kind: 'status' }>
 export interface BarMenuItem { id: string; label: string; title: string }
 
 /** What one bar takes. The rest of an app's list is dropped, in order. */
-export const BAR_LIMITS = { button: 10, chip: 4, status: 1, gate: 1, mode: 1, label: 28, gateLabel: 200, id: 64, title: 140, menu: 6 } as const
+export const BAR_LIMITS = { button: 10, chip: 4, status: 1, gate: 1, mode: 1, state: 1, label: 28, gateLabel: 200, id: 64, title: 140, menu: 6 } as const
 
 /** The buttons drawn in the bar itself; any more go into More. */
 export const BAR_BUTTONS_SHOWN = 2
@@ -60,17 +72,23 @@ export function barFrom(message: unknown): BarItem[] {
   const m = message as { v?: unknown; items?: unknown } | null
   if (!m || m.v !== 1 || !Array.isArray(m.items)) return []
   const out: BarItem[] = []
-  const count = { button: 0, chip: 0, status: 0, gate: 0, mode: 0 }
+  const count = { button: 0, chip: 0, status: 0, gate: 0, mode: 0, state: 0 }
   const ids = new Set<string>()
   for (const raw of m.items) {
     const it = (raw ?? {}) as Record<string, unknown>
     const kind = it.kind
-    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate' && kind !== 'mode') continue // a kind from the future, or a retired tab
+    if (kind !== 'button' && kind !== 'chip' && kind !== 'status' && kind !== 'gate' && kind !== 'mode' && kind !== 'state') continue // a kind from the future, or a retired tab
     if (kind === 'mode') {
       if ((it.mode === 'ask' || it.mode === 'working') && count.mode < BAR_LIMITS.mode) {
         out.push({ kind, mode: it.mode, label: text(it.label, BAR_LIMITS.label) })
         count.mode++
       }
+      continue
+    }
+    if (kind === 'state') {
+      const state = stateFrom(it)
+      if (state && count.state < BAR_LIMITS.state) { out.push({ kind, state }); count.state++ }
+      else console.warn(`app bar: state ${JSON.stringify(it.state)} is not one the shell draws; left out`)
       continue
     }
     const label = text(it.label, kind === 'gate' ? BAR_LIMITS.gateLabel : BAR_LIMITS.label)
@@ -111,6 +129,35 @@ export function barFrom(message: unknown): BarItem[] {
     out.push({ kind, id, label, primary: it.primary === true, disabled: it.disabled === true, title, ...(menu.length ? { menu } : {}) })
   }
   return out
+}
+
+/** A state an app reported, as the shell will draw it: its name known, its words text, cut to length. */
+function stateFrom(it: Record<string, unknown>): AppState | null {
+  const line = (v: unknown) => text(v, BAR_LIMITS.title)
+  switch (it.state) {
+    case 'loading': return { name: 'loading', what: line(it.what) || 'this' }
+    case 'run-failed': return { name: 'run-failed', why: it.why === 'provider' || it.why === 'refused' || it.why === 'timeout' ? it.why : 'other' }
+    case 'long-run': {
+      const m = typeof it.minutes === 'number' && Number.isFinite(it.minutes) ? Math.min(Math.max(Math.round(it.minutes), 1), 999) : 1
+      return { name: 'long-run', minutes: m, step: line(it.step) }
+    }
+    case 'changed-brief': {
+      const from = line(it.from), to = line(it.to)
+      return from && to ? { name: 'changed-brief', from, to, changes: line(it.changes) } : null
+    }
+    case 'missing-access': {
+      const what = line(it.what), who = line(it.who)
+      return what && who ? { name: 'missing-access', what, who } : null
+    }
+    case 'not-right': return { name: 'not-right' }
+    default: return null
+  }
+}
+
+/** The state the app is in, when it said one; none is Normal. */
+export function stateOf(bar: BarItem[]): AppState | null {
+  const s = bar.find((i): i is Extract<BarItem, { kind: 'state' }> => i.kind === 'state')
+  return s ? s.state : null
 }
 
 type Button = Extract<BarItem, { kind: 'button' }>

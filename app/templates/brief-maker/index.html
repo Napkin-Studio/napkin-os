@@ -2899,7 +2899,7 @@
   // One job: {task, field, id, state, stage, progress, fields, proposals,
   // summary, error, applied, reason}. `onUpdate` re-draws whatever shows it.
   function runJob(j, input){
-    j.state='sending'; j.delay=900;
+    j.state='sending'; j.delay=900; j.input=input;
     window.clan.apiProxy('middleware', {task:j.task, input:input}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
   }
   function onJobReply(j, res){
@@ -4420,6 +4420,7 @@
     if(m.type==='clan:can-run?'){ announce(); return; }
     // The OS bar: draw the brief's buttons and pill again, or run a pressed button as the side tab's control runs it.
     if(m.type==='clan:bar?'){ sendBar(true); return; }
+    if(m.type==='clan:bar-action'&&m.id==='state-retry'){ retryDraft(); return; }
     if(m.type==='clan:bar-action'){ if(phase==='doc'&&ACTIONS.hasOwnProperty(m.id)) ACTIONS[m.id](); return; }
     // Client review is the shell's mode; the fields snippet draws it. The
     // brief only holds its parts still while it is on, and catches up after.
@@ -5160,7 +5161,11 @@
       // the mock's bar per step: the name alone at the ask; the name and the run's step while the crew work
       var j=DRAFT, at=j?Math.max(0,STAGES.indexOf(j.stage)):0;
       var mode=phase==='intake'?{kind:'mode', mode:'ask'}:{kind:'mode', mode:'working', label:!j?'Working':draftLive()?'Working · Step '+(at+1)+'/'+PLAN.length:j.state==='done'?'Done':'Stopped'};
-      return [mode, {kind:'status', label:'Draft', tone:null, locked:false}];
+      var out=[mode, {kind:'status', label:'Draft', tone:null, locked:false}];
+      // A draft that did not run is the shell's Run failed state (features/screen-states.clan): one plain line and
+      // Try again, which comes back as the bar action "state-retry". None means Normal. Kept inline: a bar item is a pure read.
+      if(j&&(j.state==='failed'||j.state==='unsent'||j.state==='stalled')){ var why=String(j.error||''); out.push({kind:'state', state:'run-failed', why:/refus|declin|policy/i.test(why)?'refused':/time ?out|timed out|too long/i.test(why)?'timeout':'provider'}); }
+      return out;
     }
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, L=docLocked();
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
@@ -5173,6 +5178,11 @@
     items.push({kind:'button', id:'plainPdf', label:'Plain PDF', title:'The plain layout as a PDF, without the grid'});
     items.push({kind:'button', id:'plainHtml', label:'Plain HTML', title:'The plain layout, without the grid'});
     return items;
+  }
+  // Try again: the same ask, sent again. What the person gave is still in the job; nothing was kept from the failed run.
+  function retryDraft(){
+    var j=DRAFT; if(!j||!j.input||draftLive()) return;
+    j.error=null; j.question=null; j.questions=null; renderProc(); runJob(j, j.input); renderProc();
   }
   var BAR_LAST=null;
   function sendBar(force){

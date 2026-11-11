@@ -84,7 +84,9 @@ function serviceWorker(): Plugin {
 function deepOBoot(): Plugin {
   return {
     name: 'napkin-deep-o-boot',
-    transformIndexHtml(html) {
+    transformIndexHtml(html, ctx) {
+      // Only the shell's own page carries the boot marks; states.html is a plain page.
+      if (!/(^|[\\/])index\.html$/.test(ctx.filename)) return html
       for (const mark of ['<!-- boot:look -->', '<!-- deep-o:boot -->']) {
         if (!html.includes(mark)) throw new Error(`index.html lost its ${mark} mark`)
       }
@@ -119,5 +121,7 @@ export default defineConfig({
     target: 'es2022',
     minify: 'esbuild',
     sourcemap: false,
+    // The shell, and the gallery of the nine screen states (states.html).
+    rollupOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), states: fileURLToPath(new URL('./states.html', import.meta.url)) } },
   },
 })

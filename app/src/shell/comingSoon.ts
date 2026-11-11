@@ -8,6 +8,7 @@
 // app with the same id is installed, its own card replaces the teaser.
 
 import type { InstalledApp } from './types'
+import type { Example } from '../components/states/words'
 
 export interface Teaser {
   app_id: string
@@ -20,6 +21,8 @@ export interface Teaser {
   colour: string
   /** A one-colour SVG on transparent, painted as a mask like an app's icon. */
   mark: string
+  /** A finished example of what the tool makes, de-identified: the Empty state shows it (features/screen-states.clan). */
+  example: Example
 }
 
 /** The Production Tool's quartered circle (production-tool/web/public/mark.svg), in one
@@ -37,6 +40,7 @@ export const TEASERS: readonly Teaser[] = [
     line: 'From a drawing and a script to a finished ad.',
     colour: '#2F64F5', // its --tool colour (production-tool/web/src/styles.css)
     mark: PRODUCTION_MARK,
+    example: { title: 'Example · Client A, an Irish whiskey', lines: ['A 30 second ad. The bar closes its doors for one song.'] },
   },
   {
     app_id: 'ie.napkin.deck-maker',
@@ -45,6 +49,7 @@ export const TEASERS: readonly Teaser[] = [
     line: 'A pitch deck from your research and your brief.',
     colour: '#7C4DFF', // purple, apart from the Production Tool's blue (owner, 2026-10-19)
     mark: DECK_MARK,
+    example: { title: 'Example · Client A, an Irish whiskey', lines: ['Territories for Client A, five slides.'] },
   },
 ]
 

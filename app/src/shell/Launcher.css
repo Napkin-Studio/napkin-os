@@ -93,6 +93,9 @@
 .ln-app-soon { cursor: default; }
 .ln-app-soon:hover { border-color: var(--line); box-shadow: none; transform: none; }
 .ln-app-soon .ln-app-go { color: var(--ink3); }
+/* The Empty state inside a coming-soon card wears the card's own ink, on the card's own ground. */
+.ln-app-soon .ns { --ns-ink: var(--ink); --ns-mid: var(--ink3); --ns-paper: transparent; }
+.ln-app-soon .ns-line { font-size: 13px; }
 
 /* A tool Napkin has just added, until it is first opened here. */
 .ln-app-new::after {

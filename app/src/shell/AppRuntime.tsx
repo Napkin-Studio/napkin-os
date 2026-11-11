@@ -14,6 +14,7 @@ import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
+import { writeFrom, type SaveQueue } from '../components/states/saveQueue'
 
 interface Props {
   htmlContent: string
@@ -45,6 +46,8 @@ interface Props {
   onChrome?: (mode: 'glass' | 'solid', tint: string | null) => void
   /** What the app asks the OS bar to show (`clan:bar`): its whole list, each time. */
   onBar?: (items: BarItem[]) => void
+  /** Where the app's writes are reported (`clan:write`) and retried (`clan:retry`). */
+  writes?: SaveQueue
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
 }
@@ -57,7 +60,7 @@ interface Props {
  */
 export default function AppRuntime({
   htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, insets,
+  onChrome, onBar, writes, insets,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -164,8 +167,14 @@ export default function AppRuntime({
   // What the app says about its parts. Its contentWindow is the frame's for
   // the frame's whole life, loads included, so nothing it posts before its
   // load event is missed. Only our own frame is heard.
-  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar })
-  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar } })
+  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, writes })
+  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, writes } })
+  // Try again for a write that did not land: the frame holds the write, the shell asks it to send it again.
+  useEffect(() => {
+    if (!writes) return
+    writes.attach(id => iframeRef.current?.contentWindow?.postMessage({ type: 'clan:retry', id }, '*'))
+    return () => writes.attach(null)
+  }, [writes])
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const frame = iframeRef.current?.contentWindow
@@ -182,6 +191,7 @@ export default function AppRuntime({
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
       else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
+      else if (m?.type === 'clan:write') { const w = writeFrom(m); if (w) handlers.current.writes?.report(w) }
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',

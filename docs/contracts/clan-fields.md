@@ -229,6 +229,15 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
   The `tab` kind is retired (owner removal of top tabs, features/new-ui-shell.clan,
   2026-11-09): the shell drops a tab like any unknown kind, and an app keeps its
   steps or sections in its own page.
+- `{kind: 'state', state, ...}` (features/screen-states.clan): the screen state the app is in when it is not
+  Normal, drawn by the shell between the bar and the app (app/src/components/states). `state` is `loading`
+  (`what`), `run-failed` (`why`: provider, refused, timeout or other), `long-run` (`minutes`, `step`),
+  `changed-brief` (`from`, `to`, `changes`), `missing-access` (`what`, `who`) or `not-right`. At most one; none
+  means Normal, so an app that sends nothing is never left Loading. Its buttons come back as
+  `clan:bar-action` ids `state-retry`, `state-update`, `state-ask` and `state-fix-1` to `state-fix-3`.
+- `clan:write {v: 1, id, state, field, text}` (app → shell, sent by the structured edit bridge for every
+  `clan.patchData`): `state` is saving, saved, failed or changed (HTTP 409). The shell keeps the text and shows
+  Failed save; Try again sends `clan:retry {id}` to the frame, which sends the held write again once.
 - `clan:bar?` (shell → app, on every frame load) — send it again.
 - `clan:bar-action {id}` (shell → app) — a button was pressed. The app
   does what its own button did; the shell runs nothing.
