@@ -16,6 +16,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DoorEntry, HomeView } from '../../host/http'
 import type { LibraryItem } from '../../host/types'
 import { doorIsLive, doorLabel, hello, homeEyebrow, needsLine, needsRows, NEEDS_FIRST } from './model'
+import { changedBriefs } from '../gate/words'
+import '../gate/gate.css'
 import './home.css'
 
 interface Props {
@@ -68,6 +70,13 @@ export function Home({ view, items, first, apps, onDoor, onOpenDocument, onMap, 
         </section>
 
         <main className="hm-main">
+          {changedBriefs(items).map(i => (
+            <div key={i.path} className="gate-alert" role="status" data-testid="alert">
+              <i aria-hidden />
+              <span><b>Changed brief</b> {i.title}{i.client ? `, ${i.client.name}` : ''}. The signed version stays as it was; the new one needs signing.</span>
+              <button type="button" className="ch-btn" onClick={() => onOpenDocument(i.path)}>Open the brief</button>
+            </div>
+          ))}
           <section className="hm-sec" aria-labelledby="hm-needs">
             <h2 className="hm-h" id="hm-needs">Needs you</h2>
             {needs.length === 0 ? (
