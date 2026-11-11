@@ -8,6 +8,11 @@
 //   #clients                the clients page: one circle per client
 //   #client-<id>            one client, with its tools around it
 //   #tool-<id>-<tool>       one tool, for that client
+//   #map                    the O: the map of the agency (features/roles-and-homes.clan)
+//   #door-<door>            one door of a home, e.g. #door-client-brains
+//   #home-<role>            another role's home, for the role switcher and the O
+//
+// For a person with a role, `#agency` is their home; with none it is the desk, as before.
 //
 // `<id>` is a client id (`cli_` and eight lowercase hex digits) and `<tool>`
 // one of `brief research idea deck prod ads`. Both are ASCII by construction:
@@ -26,10 +31,17 @@ export type Route =
   | { level: 'clients' }
   | { level: 'client'; client: string }
   | { level: 'tool'; client: string; tool: ToolId }
+  | { level: 'map' }
+  | { level: 'door'; door: string }
+  | { level: 'home'; as: string }
 
 export const AGENCY: Route = { level: 'agency' }
 
 const CLIENT_ID = /^cli_[0-9a-f]{8}$/
+
+// A door or a role is a lowercase word with hyphens, nothing a hash could use to point elsewhere.
+const WORD = /^[a-z][a-z0-9-]{0,39}$/
+export const isWord = (s: string): boolean => WORD.test(s)
 
 export const isClientId = (s: string): boolean => CLIENT_ID.test(s)
 export const isToolId = (s: string): s is ToolId => (TOOL_IDS as readonly string[]).includes(s)
@@ -39,6 +51,15 @@ export function parseRoute(hash: string): Route {
   const h = hash.startsWith('#') ? hash.slice(1) : hash
   if (h === 'agency') return AGENCY
   if (h === 'clients') return { level: 'clients' }
+  if (h === 'map') return { level: 'map' }
+  if (h.startsWith('door-')) {
+    const door = h.slice('door-'.length)
+    return isWord(door) ? { level: 'door', door } : AGENCY
+  }
+  if (h.startsWith('home-')) {
+    const as = h.slice('home-'.length)
+    return isWord(as) ? { level: 'home', as } : AGENCY
+  }
   if (h.startsWith('client-')) {
     const client = h.slice('client-'.length)
     return isClientId(client) ? { level: 'client', client } : AGENCY
@@ -61,6 +82,9 @@ export function formatRoute(r: Route): string {
     case 'clients': return '#clients'
     case 'client': return `#client-${r.client}`
     case 'tool': return `#tool-${r.client}-${r.tool}`
+    case 'map': return '#map'
+    case 'door': return `#door-${r.door}`
+    case 'home': return `#home-${r.as}`
   }
 }
 
@@ -73,6 +97,9 @@ export function ancestry(r: Route): Route[] {
     case 'clients': return [AGENCY]
     case 'client': return [AGENCY, { level: 'clients' }]
     case 'tool': return [AGENCY, { level: 'clients' }, { level: 'client', client: r.client }]
+    case 'map':
+    case 'door':
+    case 'home': return [AGENCY]
   }
 }
 
@@ -83,6 +110,9 @@ export function up(r: Route): Route {
     case 'clients': return AGENCY
     case 'client': return { level: 'clients' }
     case 'tool': return { level: 'client', client: r.client }
+    case 'map':
+    case 'door':
+    case 'home': return AGENCY
   }
 }
 

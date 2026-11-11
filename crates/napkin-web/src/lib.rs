@@ -21,6 +21,7 @@ pub mod events;
 pub mod exports;
 pub mod look;
 pub mod meter;
+pub mod roles;
 pub mod sandbox;
 pub mod state;
 pub mod store;
@@ -99,6 +100,9 @@ pub fn router_with(
                     ctx.clone(),
                     dogfood::capture_api,
                 ))
+                // the one permission check: the session's roles against the route
+                // (features/roles-and-homes.clan), after the tenant layer has named the person
+                .layer(axum::middleware::from_fn(roles::guard))
                 .layer(DefaultBodyLimit::max(UPLOAD_MAX))
                 .layer(axum::middleware::from_fn_with_state(
                     identity.clone(),

@@ -7,13 +7,15 @@
 #
 #   AWS_PROFILE=napkin ./create-users.sh <user-pool-id> accounts.tsv
 #
-# accounts.tsv: one account per line, `user@agency<TAB>Display name`.
+# accounts.tsv: one account per line, `user@agency<TAB>Display name<TAB>roles`.
+# The roles column is optional: roles separated by commas (planning,creative-director);
+# empty is no role, which is every door. It is stored in the pool's custom:roles attribute.
 # Lines starting with # are skipped.
 set -euo pipefail
 pool="${1:?user pool id (terraform output cognito_user_pool_id)}"
 file="${2:?accounts file: user@agency<TAB>Display name}"
 
-while IFS=$'\t' read -r user name; do
+while IFS=$'\t' read -r user name roles; do
   [[ -z "${user// }" || "$user" == \#* ]] && continue
   if ! [[ "$user" =~ ^[a-z0-9._-]+@[a-z0-9][a-z0-9-]*$ ]]; then
     echo "skip: $user is not user@agency (lower case, no dot after the agency)" >&2
@@ -30,6 +32,6 @@ while IFS=$'\t' read -r user name; do
     --username "$user" \
     --temporary-password "$temp" \
     --message-action SUPPRESS \
-    --user-attributes Name=name,Value="${name:-$user}" >/dev/null
+    --user-attributes Name=name,Value="${name:-$user}" ${roles:+Name=custom:roles,Value="$roles"} >/dev/null
   printf '%s\t%s\t(temporary; changed at first sign-in)\n' "$user" "$temp"
 done < "$file"

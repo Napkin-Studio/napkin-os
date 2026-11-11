@@ -25,8 +25,8 @@ const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', w
 
 /** Each test: its title, and the feature record that turns it on (null: it runs now). */
 const TESTS: Record<number, { title: string; slug: string | null }> = {
-  1: { title: 'each live role sees its own doors', slug: 'roles-and-homes' },
-  2: { title: 'Planning gets 403 on Scope and estimates', slug: 'roles-and-homes' },
+  1: { title: 'each live role sees its own doors', slug: null },
+  2: { title: 'Planning gets 403 on Scope and estimates', slug: null },
   3: { title: 'the creative director signs the brief with one approve decision', slug: 'brief-gate' },
   4: { title: 'editing after approval makes a new version and a Changed brief alert', slug: 'brief-gate' },
   5: { title: 'the dashboard shows a J001 stage change within 10 seconds', slug: 'job-index-dashboard' },
@@ -55,13 +55,20 @@ const MODES = ['white', 'grey', 'black'] as const
 
 type Decision = { kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
 
-async function open(browser: Browser, size: Size, mode: string = 'white'): Promise<{ ctx: BrowserContext; page: Page }> {
-  const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1 })
+/**
+ * The role tests sign people in, and a server has one auth mode per process: the existing specs run on
+ * anonymous sessions (NAPKIN_E2E_PORT), so stack.mjs also starts a roster server (NAPKIN_E2E_ROSTER_PORT)
+ * with the placeholder people and their roles. A test that signs in opens its context with `roster: true`.
+ */
+const rosterURL = `http://127.0.0.1:${process.env.NAPKIN_E2E_ROSTER_PORT || '18082'}`
+
+async function open(browser: Browser, size: Size, mode: string = 'white', opts: { roster?: boolean } = {}): Promise<{ ctx: BrowserContext; page: Page }> {
+  const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, ...(opts.roster ? { baseURL: rosterURL } : {}) })
   await ctx.addInitScript(m => { try { localStorage.setItem('napkin.theme', m) } catch { /* not kept */ } }, mode)
   return { ctx, page: await ctx.newPage() }
 }
 
-/** Sign in as a placeholder person (needs the roster stack, NAPKIN_E2E_ROSTER=1). */
+/** Sign in as a placeholder person (the context must be the roster server's: `open(..., { roster: true })`). */
 async function signIn(page: Page, who: { username: string }) {
   const r = await page.request.post('/api/auth/sign-in', { data: { username: who.username } })
   expect(r.status(), `sign in as ${who.username}`).toBe(200)
@@ -133,11 +140,12 @@ for (const size of SIZES) {
 
   // 1 to 12: as written in v2 section 10.
 
-  test.fixme(t(1), async ({ browser }) => {
+  test(t(1), async ({ browser }) => {
     for (const [role, doors] of Object.entries(DOORS)) {
-      const { ctx, page } = await open(browser, size)
+      const { ctx, page } = await open(browser, size, 'white', { roster: true })
       await signIn(page, PEOPLE[role as keyof typeof PEOPLE])
       await page.goto('/')
+      await expect(page.getByTestId('home')).toBeVisible()
       const shown = page.getByTestId('door')
       await expect(shown).toHaveCount(doors.length)
       expect(await shown.allInnerTexts()).toEqual([...doors])
@@ -145,8 +153,8 @@ for (const size of SIZES) {
     }
   })
 
-  test.fixme(t(2), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+  test(t(2), async ({ browser }) => {
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning)
     const job = await seedJ001(page, { ready: true })
     const r = await page.request.get(`${job.api}/jobs/J001/scope`)

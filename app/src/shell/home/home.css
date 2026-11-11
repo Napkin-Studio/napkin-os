@@ -1,0 +1,66 @@
+/* A role's home, its doors and the O (features/roles-and-homes.clan). Nothing new is defined: the
+   desk's header (.app-head, .hero-title), its pick-up rows' border and radius, the client circles'
+   disc shadow and name, and the shell's own tokens (shell/nui/tokens.css). Every colour is a token,
+   so the agency's colours and Black mode follow. Nothing moves except a hover. */
+
+.hm-tools:where(.nui, .nui *) { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; padding-bottom: 6px; }
+@media (max-width: 760px) { .hm-tools:where(.nui, .nui *) { align-items: flex-start; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0; } }
+.hm-switch:where(.nui, .nui *) { display: grid; gap: 4px; }
+.hm-switch:where(.nui, .nui *) .eyebrow { margin: 0; color: var(--muted); }
+.hm-switch:where(.nui, .nui *) select { height: 36px; min-width: 190px; padding: 0 28px 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--card); font: 600 13.5px var(--font-ui); color: var(--ink); }
+
+.hm-main:where(.nui, .nui *) { display: grid; gap: 40px; padding: 30px 0 56px; }
+.hm-sec:where(.nui, .nui *) { display: grid; gap: 12px; align-content: start; }
+.hm-h:where(.nui, .nui *) { margin: 0; font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.hm-none:where(.nui, .nui *) { padding: 0; }
+
+/* Needs you: the pick-up rows, with their next action as a button. */
+.hm-needs:where(.nui, .nui *) { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 760px; }
+.hm-need:where(.nui, .nui *) { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.hm-need-what:where(.nui, .nui *) b { display: block; font-size: 13.5px; }
+.hm-need-what:where(.nui, .nui *) small { color: var(--muted); font-size: 12px; }
+.hm-need-state:where(.nui, .nui *) { font: 600 10px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--warn); white-space: nowrap; }
+@media (max-width: 560px) {
+  .hm-need:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr) auto; }
+  .hm-need-state:where(.nui, .nui *) { grid-column: 1; grid-row: 2; }
+  .hm-need:where(.nui, .nui *) .btn-rect { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* The doors: five round buttons at most, the label inside. Ink where the tool exists, dashed where it comes later. */
+.hm-doors:where(.nui, .nui *) { display: flex; flex-wrap: wrap; gap: 22px 26px; }
+.hm-door:where(.nui, .nui *) {
+  width: 118px; height: 118px; border-radius: 50%; padding: 0 14px;
+  display: grid; place-items: center; text-align: center;
+  font: 700 14px/1.25 var(--font-ui); letter-spacing: -.01em; text-wrap: balance;
+  background: var(--ink); color: var(--paper); border: 1.5px solid var(--ink);
+  box-shadow: 0 10px 24px -14px rgba(20,20,19,.45);
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s;
+}
+.hm-door:not([data-live]):where(.nui, .nui *) { background: transparent; color: var(--ink); border: 1.5px dashed var(--line-strong); box-shadow: none; }
+.hm-door:hover:where(.nui, .nui *) { transform: translateY(-2px); box-shadow: 0 0 0 3px var(--ag-acc), 0 12px 26px -12px rgba(20,20,19,.5); }
+html[data-theme="dark"] .hm-door[data-live]:where(.nui, .nui *) { box-shadow: 0 0 0 1px rgba(255,253,248,.22), 0 10px 24px -10px rgba(0,0,0,.6); }
+@media (max-width: 480px) { .hm-doors:where(.nui, .nui *) { gap: 16px 14px; } .hm-door:where(.nui, .nui *) { width: 104px; height: 104px; font-size: 13px; padding: 0 10px; } }
+@media (prefers-reduced-motion: reduce) { .hm-door:where(.nui, .nui *) { transition: none; } .hm-door:hover:where(.nui, .nui *) { transform: none; } }
+
+/* More tools, and Other departments: a quiet text list. */
+.hm-more:where(.nui, .nui *) { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+
+/* The O: the logo in the middle, department circles round it. */
+.hm-o:where(.nui, .nui *) { position: relative; width: min(100%, 480px); aspect-ratio: 1; margin: 0 auto; }
+.hm-o:where(.nui, .nui *)::before { content: ""; position: absolute; inset: 13%; border: 1.5px solid var(--line); border-radius: 50%; }
+.hm-o-logo:where(.nui, .nui *), .hm-o-dept:where(.nui, .nui *) { box-sizing: border-box; }
+.hm-o-logo:where(.nui, .nui *) { position: absolute; left: 50%; top: 50%; width: 30%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; display: grid; place-items: center; overflow: hidden; background: var(--card); box-shadow: 0 10px 24px -14px rgba(20,20,19,.45); padding: 0 12px; text-align: center; font: 800 15px/1.15 var(--font-ui); letter-spacing: -.02em; color: var(--ink); }
+.hm-o-logo:where(.nui, .nui *) img { max-width: 64%; max-height: 64%; object-fit: contain; }
+.hm-o-logo:where(.nui, .nui *) img.wide { width: 78%; max-width: 78%; }
+.hm-o-dept:where(.nui, .nui *) {
+  position: absolute; width: 23%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; padding: 0 6px;
+  display: grid; place-items: center; text-align: center; font: 700 clamp(10.5px, 2.9vw, 14px)/1.2 var(--font-ui); letter-spacing: -.01em; text-wrap: balance;
+  background: var(--card); color: var(--ink); border: 1.5px solid var(--line-strong); box-shadow: 0 10px 24px -14px rgba(20,20,19,.45);
+  transition: background .15s, color .15s;
+}
+.hm-o-dept[data-mine]:where(.nui, .nui *) { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.hm-o-dept:hover:where(.nui, .nui *) { box-shadow: 0 0 0 3px var(--ag-acc), 0 12px 26px -12px rgba(20,20,19,.5); }
+.hm-other:where(.nui, .nui *) { justify-items: center; text-align: center; }
+.hm-other:where(.nui, .nui *) .hm-more { justify-content: center; }
+
+.hm-nb:where(.nui, .nui *) { white-space: nowrap; }

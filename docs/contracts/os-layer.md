@@ -1770,8 +1770,12 @@ Rules. Names are unique per tenant ignoring case and spacing, archived ones
 included (`409`). A rename changes the registry only; initials follow the name
 unless hand-set. Archive hides a client from the circles and keeps every
 document linked to it; archive and restore are idempotent; an archived client
-takes no new work (`409`). Every person in a tenant sees every client: there
-are no per-client permissions in this feature.
+takes no new work (`409`). Every person in a tenant still sees every client
+and the clients are not gated by role (the Clients door is open to Account service and
+Management, but `/clients` is an open route). Roles (features/roles-and-homes.clan) gate
+only the route groups of `napkin-web/src/roles.rs`: money, client brains and pitches, and
+proprietary data. There are no per-client permissions: the check takes `(roles, route, client)`
+and ignores `client`, so they can be added without a new check.
 
 ### 12.2 `manifest.client`
 

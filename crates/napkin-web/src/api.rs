@@ -45,6 +45,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/auth/new-password", post(new_password))
         .route("/auth/sign-out", post(sign_out))
         .route("/session", get(session))
+        .route("/t/{tenant}/doors", get(doors))
         .route("/dogfood/events", post(crate::dogfood::post_events))
         .route("/dogfood/consent", post(crate::dogfood::post_consent))
         .route("/dogfood/export", get(crate::dogfood::get_export))
@@ -82,6 +83,15 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/endpoint", get(agent_endpoint))
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
+        // A route that is not built yet answers 404 from here, so the layers around
+        // the API (the session, the role check) still see the request. Without it an
+        // unknown path fell through to the shell's index.html and a role was never asked.
+        .fallback(|| async {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "ok": false, "error": "no such route" })),
+            )
+        })
 }
 
 /// An opened document, plus what the shell needs to render it: the capability
@@ -132,6 +142,9 @@ struct SessionInfo {
     /// The signed-in person, when this server runs with accounts.
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<crate::auth::Account>,
+    /// The person's roles (also on `user`): none for an anonymous visitor and for
+    /// a person the roster gives no role.
+    roles: Vec<String>,
     /// This build records everything (features/dogfood-telemetry.clan), and
     /// whether this person has acknowledged that.
     dogfood: bool,
@@ -145,6 +158,7 @@ async fn session(
     user: Option<Extension<crate::auth::Account>>,
 ) -> Json<SessionInfo> {
     let user = user.map(|Extension(a)| a);
+    let roles = user.as_ref().map(|a| a.roles.clone()).unwrap_or_default();
     let dogfood = ctx.dogfood.is_some() && user.is_some();
     let consented = match (&ctx.dogfood, &user) {
         (Some(d), Some(a)) => d.consented(&a.username),
@@ -155,9 +169,32 @@ async fn session(
         sandbox_origin: ctx.sandbox_origin.clone(),
         quota: ctx.meter.usage(&tenant),
         user,
+        roles,
         dogfood,
         consented,
     })
+}
+
+/// `?as=<role>`: the home an admin or a demo wants to see.
+#[derive(Deserialize)]
+struct DoorsQuery {
+    r#as: Option<String>,
+}
+
+/// The person's home: their doors, More tools and the O's circles, from the
+/// roles in their session and the agency's door table (v2 section 4). The
+/// role switcher (`as`) is honoured for admins and demos only.
+async fn doors(
+    State(ctx): Ctx,
+    Tenant(_): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
+    Query(q): Query<DoorsQuery>,
+) -> Json<crate::roles::HomeView> {
+    let user = user.map(|Extension(a)| a);
+    let roles = user.as_ref().map(|a| a.roles.clone()).unwrap_or_default();
+    let agency = user.as_ref().map(|a| a.agency.as_str());
+    let table = crate::roles::Table::for_agency(ctx.roles_dir.as_deref(), agency);
+    Json(table.view(&roles, q.r#as.as_deref()))
 }
 
 // ── Signing in ───────────────────────────────────────────────────────────────
