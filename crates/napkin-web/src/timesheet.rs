@@ -288,7 +288,7 @@ pub fn gaps_of(sessions: &[Session], taken: &[i64]) -> Vec<Gap> {
     for w in sorted.windows(2) {
         let (a, b) = (w[0], w[1]);
         let len = b.start - a.end;
-        if len < GAP_MIN_MS || len > GAP_MAX_MS || taken.contains(&a.end) {
+        if !(GAP_MIN_MS..=GAP_MAX_MS).contains(&len) || taken.contains(&a.end) {
             continue;
         }
         out.push(Gap {
@@ -602,6 +602,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/timesheet/sessions", get(get_sessions))
         .route("/t/{tenant}/timesheet/day", get(get_day))
         .route("/t/{tenant}/timesheet/day/confirm", post(confirm_day))
+        .route("/t/{tenant}/timesheet/day/reopen", post(reopen_day))
         .route("/t/{tenant}/timesheet/lines", post(add_line))
         .route("/t/{tenant}/timesheet/lines/change", put(change_line))
         .route("/t/{tenant}/timesheet/corrections", get(get_corrections))
@@ -824,6 +825,26 @@ async fn confirm_day(
     });
     ts.store.save_day(&me, &b.date, &state)?;
     Ok(Json(day_for(ts, &me, &b.date, tz, &edits)?))
+}
+
+/// A confirmed day opened again for its person, until the Friday on or after it. It is a draft
+/// again, and nothing is confirmed until the person confirms it once more.
+async fn reopen_day(
+    State(ctx): State<Arc<AppCtx>>,
+    Extension(Person(me)): Extension<Person>,
+    Json(b): Json<DateBody>,
+) -> ApiResult<Json<Value>> {
+    let ts = &ctx.timesheets;
+    let d = NaiveDate::parse_from_str(&b.date, "%Y-%m-%d")
+        .map_err(|_| ApiError::new(400, "date must be YYYY-MM-DD"))?;
+    let today = chrono::DateTime::from_timestamp_millis(ts.now()).map(|t| t.date_naive());
+    if today.is_some_and(|n| n > editable_until(d)) {
+        return Err(ApiError::new(409, "This day can no longer be changed."));
+    }
+    let mut state = ts.store.day(&me, &b.date);
+    state.0.confirmed = None;
+    ts.store.save_day(&me, &b.date, &state)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 #[derive(Deserialize)]
