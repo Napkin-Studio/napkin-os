@@ -262,7 +262,7 @@ def extract_input(name: str, runlog_lines: list[str]) -> dict:
 
 
 # ============================================================================ pure: text, blinding
-_LABEL = re.compile(r"(?i)^\s*(to confirm|draft for testing|draft for confirmation|working proposal|hypothesis to test|"
+_LABEL = re.compile(r"(?i)^\s*(to confirm(?:\s+[a-z]+){0,3}|draft for testing|draft for confirmation|working proposal|hypothesis to test|"
                     r"hypothesis|assumption|proposed)\s*:\s*")
 
 
@@ -284,9 +284,14 @@ def tidy(text) -> str:
 _LEFT_LABEL = re.compile(r"^\s*(\S+\s+){0,4}?\S+:")
 
 
-def leftover_label(text: str) -> bool:
-    """R3's report: a shown text that still begins with four or fewer words followed by a colon."""
-    return bool(re.match(r"^\s*(?:\S+\s+){0,3}\S+:", str(text or "")))
+def leftover_label(text: str, brief_text: str | None = None) -> bool:
+    """R3's report: a shown text that still begins with four or fewer words followed by a colon. With `brief_text`, a
+    lead-in the brief itself contains word for word (the brand's name, as in "Black Quay: a proper pint since 1894") is
+    the text's own wording, not a label, and is not counted."""
+    m = re.match(r"^\s*((?:\S+\s+){0,3}\S+):", str(text or ""))
+    if not m:
+        return False
+    return not (brief_text and re.sub(r"\s+", " ", m.group(1)).strip().lower() in re.sub(r"\s+", " ", brief_text).lower())
 
 
 PRIMARY_COMPARISONS = ("T1vC1.ins", "SvO", "R1vR0")
@@ -1804,7 +1809,7 @@ def build_packets(inputs: list[dict], arms_by: dict, size: int | None = None):
             if cname in PRIMARY_COMPARISONS:      # R3: a text a rater sees must carry no label that could mark its arm
                 for side, texts in ((first, a), (second, c)):
                     for part, t in (("insight", texts[0]), ("proposition", texts[1])):
-                        if (question == QPROP or part == "insight") and leftover_label(t):
+                        if (question == QPROP or part == "insight") and leftover_label(t, inp["brief_text"]):
                             primary_left.append({"brief": b, "comparison": cname, "side": side, "part": part, "text": t[:80]})
             for it in pair_items(b, inp["brief_text"], cname, question, a, c):
                 m = it["meta"]

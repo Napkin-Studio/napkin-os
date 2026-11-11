@@ -205,6 +205,14 @@ def test_an_arm_cannot_be_told_from_its_labels_or_punctuation():
     assert len({ee.tidy(v) for v in variants}) == 1
 
 
+def test_a_to_confirm_label_with_a_few_more_words_is_stripped_and_a_brand_lead_in_is_not_a_label():
+    assert ee.tidy("To confirm in research: people say they shop on deals.") == "People say they shop on deals"
+    assert ee.tidy("To confirm with the client: one two") == "One two"
+    brief = "Client brief: Black Quay stout, a relaunch in Ireland."
+    assert ee.leftover_label("Black Quay: a proper pint since 1894") and not ee.leftover_label("Black Quay: a proper pint since 1894", brief)
+    assert ee.leftover_label("Nobody expected: a treat", brief)             # not the brief's words: still a label
+
+
 def test_leftover_label_report_finds_short_text_before_a_colon():
     assert ee.leftover_label("Nobody expected: a treat") and ee.leftover_label("Cheap, fast and good: pick two")
     assert not ee.leftover_label("A treat you choose on purpose") and not ee.leftover_label("One two three four five six: x")
