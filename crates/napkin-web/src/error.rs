@@ -12,6 +12,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use napkin_host::HostError;
 
+#[derive(Debug)]
 pub struct ApiError(pub HostError);
 
 pub type ApiResult<T> = Result<T, ApiError>;

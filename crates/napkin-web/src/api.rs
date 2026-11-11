@@ -96,6 +96,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/endpoint", get(agent_endpoint))
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
+        .merge(crate::timesheet::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.
@@ -357,7 +358,7 @@ async fn library_listing(
 
 /// The current index, rebuilt when any document has moved. A rebuild is timed
 /// and logged, so the cost of keeping it in memory is a number, not a guess.
-fn job_index(ws: &Workspace) -> ApiResult<napkin_host::jobindex::JobIndex> {
+pub(crate) fn job_index(ws: &Workspace) -> ApiResult<napkin_host::jobindex::JobIndex> {
     let before = ws.jobs.builds();
     let t = std::time::Instant::now();
     let index = ws.jobs.get(&*ws.store, chrono::Utc::now())?;

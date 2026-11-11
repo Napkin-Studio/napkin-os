@@ -107,6 +107,8 @@ pub struct AppCtx {
     pub dogfood: Option<Arc<crate::dogfood::Dogfood>>,
     /// Where an agency's own door table may be served from (`roles/<agency>.json`).
     pub roles_dir: Option<PathBuf>,
+    /// Each person's work sessions and days (features/timesheet-sessions.clan).
+    pub timesheets: crate::timesheet::Timesheets,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
 
@@ -118,6 +120,7 @@ impl AppCtx {
         agent_cap: u32,
     ) -> Self {
         Self {
+            timesheets: crate::timesheet::Timesheets::new(root.clone()),
             root,
             seed: None,
             config,
@@ -140,6 +143,12 @@ impl AppCtx {
         if let Some(s) = secret {
             self.link_key = crate::links::key_from(s);
         }
+        self
+    }
+
+    /// A clock for the timesheets, so a test sets the time of day.
+    pub fn with_timesheet_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
+        self.timesheets = self.timesheets.with_clock(clock);
         self
     }
 
