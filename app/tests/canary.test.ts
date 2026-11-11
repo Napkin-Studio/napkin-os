@@ -5,10 +5,9 @@
 // server/tests/test_client_wall.py.
 
 import assert from 'node:assert/strict'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 import { build } from 'vite'
@@ -35,7 +34,9 @@ function files(dir: string): string[] {
 }
 
 test('a canary key set on the server is not in the built bundle', { timeout: 600_000 }, async () => {
-  const root = fileURLToPath(new URL('..', import.meta.url))
+  // `npm test` runs from app/ (tests/run.mjs bundles each test into a temp dir inside tests/)
+  const root = process.cwd()
+  assert.ok(existsSync(join(root, 'vite.config.ts')), 'run from app/')
   const out = mkdtempSync(join(tmpdir(), 'napkin-canary-'))
   const saved: Record<string, string | undefined> = {}
   for (const k of SERVER_KEYS) {
