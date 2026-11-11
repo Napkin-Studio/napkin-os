@@ -11,7 +11,9 @@ import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
 import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
 import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
+import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
+import { activity as markActivity } from '../components/markStore'
 
 interface Props {
   htmlContent: string
@@ -132,7 +134,9 @@ export default function AppRuntime({
       const frame = iframeRef.current?.contentWindow
       if (!frame || e.source !== frame || (e.data as { type?: string })?.type !== 'clan:me?') return
       host.whoAmI().then(
-        me => frame.postMessage({ type: 'clan:me', actor: me.actor, id: me.id, name: me.name }, '*'),
+        // The agency's admin-set colours ride along (features/brief-new-ui.clan):
+        // a document wears its agency's base and accent on its own controls.
+        me => frame.postMessage({ type: 'clan:me', actor: me.actor, id: me.id, name: me.name, agency: coloursOf(agencyIdOf(me.id)) }, '*'),
         () => frame.postMessage({ type: 'clan:me', actor: null, id: null, name: null }, '*'),
       )
     }
@@ -171,6 +175,7 @@ export default function AppRuntime({
       else if (m?.type === 'clan:part-mark' && typeof m.address === 'string') {
         handlers.current.onPartMark?.({ address: m.address, marked: m.marked === true, words: typeof m.words === 'string' ? m.words : '' })
       } else if (m?.type === 'clan:edit-request') handlers.current.onEditRequest?.()
+      else if (m?.type === 'clan:activity') markActivity()
       // the dogfood build's listener inside the frame (recorder.ts FRAME_CAPTURE)
       else if (m?.type === 'clan:interaction') {
         const { kind, name } = m as { kind?: unknown; name?: unknown }
@@ -292,7 +297,9 @@ export default function AppRuntime({
       {...(host.frameLoad === 'srcdoc' ? { srcDoc: prepared } : { src: iframeSrc })}
       className="ch-frame"
       style={{ width: '100%', flex: 1, border: 'none', background: 'var(--paper)' }}
-      sandbox="allow-scripts allow-popups"
+      // A source link opens as a normal tab (owner, 2026-11-11: publisher pages need their cookies and
+      // storage, PDFs and decks must download). The frame itself stays sandboxed: no same-origin, no forms.
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       title={manifest.title}
       onLoad={() => {
         postScheme(getTheme())

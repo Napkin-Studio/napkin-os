@@ -38,10 +38,11 @@ export function isTyping(target: EventTarget | null): boolean {
 /** What the live region says on arriving at a level, so a screen reader knows where it is. */
 export function arrival(route: Route, names: { agency: string; client?: string; tool?: string; tools: number; open?: number }): string {
   switch (route.level) {
-    case 'agency': return `${names.agency}. Press Enter to open its clients.`
-    case 'clients': return 'Clients. Tab moves between them, Enter opens one, Escape goes back.'
+    case 'agency':
+    case 'clients':
+      return `${names.agency}: your desk. Arrow keys move between clients, Enter opens one's dial, 1 to ${names.tools} pick a tool on it, Escape closes it.`
     case 'client':
-      return `${names.client ?? 'Client'} opened with ${names.tools} tools. Arrow keys move, 1 to ${names.tools} pick a tool, Enter opens it, Escape goes back to all clients.`
+      return `${names.client ?? 'Client'} opened with ${names.tools} tools. 1 to ${names.tools} open a tool, Escape goes back to the desk.`
     case 'tool': {
       const n = names.open ?? 0
       return `${names.tool ?? 'Tool'} for ${names.client ?? 'the client'}. ${n === 0 ? 'Nothing open yet.' : `${n} open.`} Escape goes back to ${names.client ?? 'the client'}.`

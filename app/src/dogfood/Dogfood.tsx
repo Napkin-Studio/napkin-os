@@ -81,11 +81,22 @@ export function Thumbs({ on, extra, compact = false }: { on: string; extra?: Rec
 }
 
 /** In the OS bar: the Beta badge, and thumbs for this screen. Nothing when not recording. */
-export function DogfoodBadge() {
+export function DogfoodBadge({ variant }: { variant?: 'nui' } = {}) {
   const state = useDogfood()
   const [open, setOpen] = useState(false)
   if (!state.on) return null
   const where = currentScreen()
+  // The OS bar's dashed chip (the mock's #tb-beta), with the dot that pulses while it records.
+  if (variant === 'nui') {
+    return (
+      <>
+        <button type="button" className="tb-beta" id="tb-beta" data-dogfood="beta notice" onClick={() => setOpen(true)}
+          title="Beta: this session is recorded to fix what breaks"><i aria-hidden /><span className="bt">Beta</span></button>
+        {state.consented && <Thumbs key={`${where.screen}:${where.doc ?? ''}`} on="screen" extra={{ ...where }} compact />}
+        {open && <DogfoodNotice onClose={() => setOpen(false)} />}
+      </>
+    )
+  }
   return (
     <span className="df-bar">
       <button className="df-badge" data-dogfood="beta notice" onClick={() => setOpen(true)} title="This build records what you do. Click to read more.">Beta</button>

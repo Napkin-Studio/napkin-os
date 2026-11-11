@@ -11,7 +11,7 @@ import { test } from 'node:test'
 
 import type { ClientRecord, LibraryItem } from '../src/host/types.ts'
 import {
-  ACTIVITY_ORDER, ACTIVITY_WORD, activityOf, activityOfItem, agencySummary, newsOf, needsReason, runWords, stageActivity, strongest, boxFor, circleName, countsLine, FIRST_PAGE, initialsOf, matches, needsYou,
+  ACTIVITY_ORDER, ACTIVITY_WORD, activityOf, activityOfItem, agencySummary, jobOf, newsOf, needsReason, runWords, stageActivity, strongest, boxFor, circleName, countsLine, FIRST_PAGE, initialsOf, matches, needsYou,
   ordered, pageOf, plural, summarise, whoIs,
 } from '../src/shell/landing/model.ts'
 import { TOOLS, isLive, toolOfApp } from '../src/shell/landing/tools.ts'
@@ -43,7 +43,7 @@ test('a client is counted by tool, and the status line says only what is so', ()
   assert.equal(s.perTool.deck.open, 0)
   assert.equal(s.total.needsYou, 1, 'a document with things to check is one that needs you')
   assert.equal(s.total.running, 1)
-  assert.equal(s.status, '3 briefs · needs you · 1 running')
+  assert.equal(s.status, '3 briefs · 1 research · needs you · 1 running', 'every tool’s work is counted, not only briefs')
   assert.equal(s.activity, 'human')
 })
 
@@ -253,6 +253,15 @@ test('why a document needs you, and what a run says in words', () => {
   assert.equal(needsReason(item(a, BRIEF, { run: { state: 'waiting', label: 'Waiting for you' } })), 'Waiting for you')
   assert.equal(runWords(item(a, BRIEF, { run: running('extract') })), 'x')
   assert.equal(runWords(item(a, BRIEF, { run: { state: 'failed', label: '' } })), 'Failed')
+})
+
+test('the bar\'s job chip: a clean verb and a 1-based step, never the stage key or "(0 of 3)"', () => {
+  assert.deepEqual(jobOf({ label: 'Working: context (0 of 3)', progress: [0, 3] }), { verb: 'working', step: [1, 3] })
+  assert.deepEqual(jobOf({ label: 'Working: draft (2 of 4)', progress: [2, 4] }), { verb: 'working', step: [3, 4] })
+  assert.deepEqual(jobOf({ label: 'Rewriting', progress: [0, 3] }), { verb: 'rewriting', step: [1, 3] })
+  assert.deepEqual(jobOf({ label: 'Working', progress: [3, 3] }), { verb: 'working', step: [3, 3] }, 'all done stays on the last step')
+  assert.deepEqual(jobOf({ label: 'Working: extract' }), { verb: 'working', step: null })
+  assert.deepEqual(jobOf(null), { verb: 'working', step: null })
 })
 
 test('a refresh announces only what got worse', () => {

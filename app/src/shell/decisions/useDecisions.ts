@@ -10,6 +10,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { host } from '../../host'
 import type { DecisionsView } from '../../host'
 
+// The selectors are pure (needs.ts) so the bar's tests can use them with no host.
+export { needsOf, docStateOf } from './needs'
+
 export interface Decisions {
   view: DecisionsView | null
   error: string | null

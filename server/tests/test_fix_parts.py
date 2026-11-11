@@ -1,5 +1,5 @@
-"""fix_parts (brief/fix.py): a problem standing on a brief, fixed by the crew in one job. Sam plans
-the fix and researches what it lacks, Dara rewrites the named parts together, Jude checks them;
+"""fix_parts (brief/fix.py): a problem standing on a brief, fixed by the crew in one job. The Strategy agent plans
+the fix and researches what it lacks, the Brief agent rewrites the named parts together, the Review agent checks them;
 nothing else in the brief is written."""
 
 import copy
@@ -53,7 +53,7 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
     try:
         note = jude_note(host)
         assert sorted(t.split("#", 1)[1] for t in note["targets"]) == OBJ
-        # a person wrote the behavioural objective before Jude's note: they hold it
+        # a person wrote the behavioural objective before the Review agent's note: they hold it
         i = host.chain.index(note)
         host.chain.insert(i + 1, {"id": "d_person_edit", "kind": "edit", "action": "edit", "actor": "human:local",
                                   "targets": [f"{DOC}#objectives.behavioural"]})
@@ -66,7 +66,7 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
         host.data.setdefault("selection", {})["excluded"] = [{"fact_id": gone}]
         before = copy.deepcopy(host.data)
         s.research.calls.clear()
-        s.model.overrides["review_brief"] = s.model.overrides["review_brief_again"]  # Jude passes the fix
+        s.model.overrides["review_brief"] = s.model.overrides["review_brief_again"]  # the Review agent passes the fix
         replies = run(s, host, task="fix_parts", inp={"verdict": note["id"]})
         research_calls = list(s.research.calls)
     finally:
@@ -75,12 +75,12 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
     assert last["task"] == "fix_parts" and last["handler"] == "fix_parts@1.0"
     assert last["job"]["state"] == "done" and last["job"]["progress"] == {"done": 3, "total": 3}
     assert last["result"]["summary"].startswith("Fixed 1 of 2 part(s), 1 proposed")
-    # Sam: the problem in Jude's words, then the person's; only the named parts; the research it lacks
-    assert [p["by"] for p in seen["plan_fix"]["problem"]] == ["Jude", "a person"]
+    # The Strategy agent: the problem in the Review agent's words, then the person's; only the named parts; the research it lacks
+    assert [p["by"] for p in seen["plan_fix"]["problem"]] == ["the Review agent", "a person"]
     assert "last year's" in seen["plan_fix"]["problem"][1]["said"]
     assert sorted(seen["plan_fix"]["parts_to_fix"]) == OBJ
     assert research_calls == [("market_structure", "IE")]
-    # Dara: both parts together, with Sam's instructions; never the excluded fact
+    # The Brief agent: both parts together, with the Strategy agent's instructions; never the excluded fact
     assert sorted(seen["fix"]["rewrite"]) == OBJ
     assert seen["fix"]["rewrite"]["objectives.commercial"].startswith("give objectives.commercial a measure")
     assert gone not in {f["id"] for f in seen["fix"]["facts"]}
@@ -102,7 +102,7 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
     # the note is answered where the fix wrote; the held part still waits for the person
     mine = [d for d in host.chain if d.get("handler", "").startswith("fix_parts@1") and d["kind"] == "verdict"]
     assert not [d for d in mine if d.get("polarity") == "good" and any("#objectives" in t for t in d["targets"])], \
-        "Jude still notes the objectives: no pass"
+        "The Review agent still notes the objectives: no pass"
     assert all(any("#objectives" in t for t in d["targets"]) for d in mine), "no note on a part the fix left alone"
     got = standing_problem(DOC, host.chain, note["id"])
     assert got is not None and got[0] == ["objectives.behavioural"]
@@ -180,10 +180,10 @@ def test_with_jev_the_check_reads_only_the_named_parts_and_a_mended_argument_lea
     finally:
         s.stop()
     assert sorted(seen["explain"]["flagged"]) == OBJ, "jev reads the named parts only"
-    assert sorted(seen["rewrite"]["rewrite"]) == OBJ, "Jude's chain issue reaches only the named parts"
+    assert sorted(seen["rewrite"]["rewrite"]) == OBJ, "The Review agent's chain issue reaches only the named parts"
     # a rewritten assumption says it is one (feature brief-first-draft-checks)
     assert host.data["objectives"]["commercial"] == "To confirm: objectives.commercial: up 10% by August"
-    # Jude's notes on the drafts he sent back are recorded (redraft-provenance), each on a draft the
+    # The Review agent's notes on the drafts it sent back are recorded (redraft-provenance), each on a draft the
     # rewrite superseded; none stands on the brief as it is now
     back = {d["id"] for d in host.chain if d.get("superseded_by")}
     assert not [d for d in host.chain if d["kind"] == "verdict" and d.get("handler", "").startswith("fix_parts@1")

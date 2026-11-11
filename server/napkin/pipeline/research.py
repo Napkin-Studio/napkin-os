@@ -41,7 +41,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ..doc import (CONF, ISO_3166, LENS_NAMESPACE, LENSES, LICENCE_RANK, ctx_data, ctx_facts, decision,
                    field_value, lens_of_key, market_list, read_of)
-from ..layers import origin_uri
+from ..layers import layer_source_record, origin_uri
 from ..layers.http import LayersError
 from ..measures import BY_NAME, MEASURES, SYNONYM, UNITS as MEASURE_UNITS
 from ..metrics import UNIT, emit
@@ -51,7 +51,7 @@ from ..rules.figures import quote_supports
 from ..rules.quotes import verbatim
 from ..rules.tiering import registrable, tier_for
 from ..util import bad, iso, lid, slug, today, uid
-from .. import reasoning as rsn
+from .. import origin, reasoning as rsn
 
 log = logging.getLogger("napkin.research")
 # How much of the client's material one extraction call reads: excerpts of at
@@ -240,6 +240,7 @@ class Researcher:
         self.done = 0
         self.hits = []
         self._rows: dict = {}
+        self._row_recs: dict = {}  # source records of every layer row pinned (by `_pin`), by id
         self._rows_lock = threading.Lock()
 
     def _entity_rows(self, layer: str, entity: str) -> list[dict]:
@@ -676,13 +677,16 @@ class Researcher:
                                     "publisher": s["publisher"]} for sid, s in srcs.items()}}
         return result, change, self.hits
 
-    @staticmethod
-    def _source_records(facts_append, contests, srcs, cands) -> list[dict]:
+    def _source_records(self, facts_append, contests, srcs, cands) -> list[dict]:
         """The shared/sources.yaml records for every source a new pin or contest value cites:
         what it is and where to read it, so a citation in the document leads somewhere. A
-        source read this run has its full record; one reused from the layer has what the
-        layer row carried."""
-        from_layer = {r["id"]: r for c in cands for r in (c.get("records") or []) if r.get("id")}
+        source read this run has its full record; one the layer held has what the layer row
+        carried (`layer_source_record`), whatever that is: a person's confirmation is kept too."""
+        from_layer = {}
+        for r in [r for c in cands for r in (c.get("records") or [])] + list(self._row_recs.values()):
+            rec = layer_source_record(r)
+            if rec and rec["id"] not in from_layer:
+                from_layer[rec["id"]] = rec
         cited = [s for f in facts_append for s in f["sources"]] + \
                 [s for ct in contests for v in ct["values"] for s in v.get("sources") or []]
         out = []
@@ -693,11 +697,11 @@ class Researcher:
             if s:
                 rec = {"id": sid, "uri": s["url"], "title": s["title"], "publisher": s["publisher"],
                        "published_at": s["published_at"], "retrieved_at": s["retrieved_at"],
-                       "tier": s["tier"], "domain": s["domain"], "licence": s.get("licence") or "open"}
-            elif sid in from_layer and from_layer[sid].get("uri"):
-                r = from_layer[sid]
-                rec = {"id": sid, **{k: r[k] for k in ("uri", "title", "publisher", "published_at", "retrieved_at",
-                                                        "tier", "domain", "licence") if r.get(k) is not None}}
+                       "tier": s["tier"], "domain": s["domain"], "licence": s.get("licence") or "open",
+                       # the source card's origin: read by this run, or the client's own material
+                       origin.KEY: origin.CLIENT if str(s.get("url") or "").startswith("material:") else origin.RESEARCH}
+            elif sid in from_layer:
+                rec = from_layer[sid]
             else:
                 continue
             out.append({k: v for k, v in rec.items() if v not in (None, "")})
@@ -747,7 +751,7 @@ class Researcher:
              "retrieved_at": c["retrieved_at"], "sources": list(c["sources"]), "confidence": fact_confidence(recs),
              "licence": lic, "status": "active", "decision": did, "pinned_at": t_now,
              "pin_reason": "kept in this brief only", "layer": c["layer"], "method": c.get("method") or "report",
-             "kept_in_document": {"why": why, "measure_proposed": bool(proposed)}}
+             "kept_in_document": {"why": why, "measure_proposed": bool(proposed)}, origin.KEY: origin.RESEARCH}
         quotes = {s: q for s, q in (c.get("quotes") or {}).items()
                   if s in f["sources"] and isinstance(q, str) and q.strip()}
         if quotes:
@@ -801,6 +805,9 @@ class Researcher:
 
     def _pin(self, row: dict, c: dict, did: str, t_now: str) -> dict:
         recs = row.get("source_records") or c.get("records") or []
+        # what the row cites, kept for its source records: a corroborated row comes back citing
+        # sources the layer held before this run, which neither the run nor the candidate read
+        self._row_recs.update({r["id"]: r for r in row.get("source_records") or [] if r.get("id")})
         lic = max((r.get("licence", "open") for r in recs), key=LICENCE_RANK.index, default="open")
         f = {"id": row["id"], "entity": row["entity"], "key": row["key"], "value": row["value"], "unit": row["unit"],
              "as_of": row["as_of"], "retrieved_at": row["retrieved_at"], "sources": list(row["sources"]),
@@ -813,7 +820,9 @@ class Researcher:
                             f"{len(row['sources'])} source(s), tiers "
                             f"{'/'.join(sorted({r.get('tier', '?') for r in recs}))}"
                             + (" (reused from the layer)" if c.get("row") else "")),
-             "layer": row["layer"], "method": row.get("method") or "report"}
+             "layer": row["layer"], "method": row.get("method") or "report",
+             # a row the layers already held is the layer's; one this run found and filed is research's
+             origin.KEY: origin.LAYER if c.get("row") else origin.RESEARCH}
         quotes = {**_row_quotes(row), **(c.get("quotes") or {})}
         quotes = {s: q for s, q in quotes.items() if s in f["sources"] and isinstance(q, str) and q.strip()}
         if quotes:

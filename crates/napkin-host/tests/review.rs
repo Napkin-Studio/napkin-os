@@ -1123,9 +1123,11 @@ fn a_contest_resolved_before_the_hop_is_not_resolved_again() {
 fn review_routes_take_ancestor_addresses() {
     let parent = fixture();
     let p = parent.doc.clone();
+    // The brief has the part too: a carried call on a part the child does
+    // not have is the parent's alone, never a need here.
     let brief = child_of(
         &parent,
-        json!({}),
+        json!({ "campaign": { "problem": { "value": "Frozen is seen as second best", "origin": "stated" } } }),
         |data| {
             data["campaign"] = json!({ "problem": { "value": "Frozen is seen as second best", "origin": "stated" } })
         },
@@ -1350,6 +1352,7 @@ fn spun_off(f: Fixture, parent: &Fixture, extra: &[(&str, &str)]) -> Fixture {
             sources_sha256: None,
             last_decision: None,
         }),
+        attached: Vec::new(),
     });
     let mut b = clan_sdk::ClanBuilder::new(manifest);
     for (path, bytes) in clan.read_all_entries().unwrap() {
@@ -1968,7 +1971,13 @@ fn a_field_citing_a_superseded_finding_is_flagged_until_it_moves() {
     };
     let t = flags();
     assert_eq!(t.len(), 1, "{t:?}");
-    assert!(t[0].contains("superseded with fi_01JA0F3C"), "{}", t[0]);
+    // Named by what each finding says, never by its id (B4).
+    assert!(
+        t[0].contains("replaced with the finding “Frozen is growing in value”"),
+        "{}",
+        t[0]
+    );
+    assert!(!t[0].contains("fi_"), "{}", t[0]);
     // Moved to the replacement: no longer flagged.
     cite(&["fi_01JA0F3C"]);
     assert!(flags().is_empty());

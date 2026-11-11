@@ -261,7 +261,7 @@ def test_the_planned_flow_asks_the_library_once_after_the_plan_names_a_category(
     assert ask["where"] == {"category": clientcat.client_category(leaf)} and ask["k"] == 2
     assert ask["purpose"] == "loop4_insight"
     lib = [x for x in seen["draft"]["library"] if x["citation"].startswith("Award case library")]
-    assert len(lib) == 1, "Dara is given the library's precedent"
+    assert len(lib) == 1, "the Brief agent is given the library's precedent"
     assert not [x for x in seen["plan"]["library"] if x["citation"].startswith("Award case library")], \
         "the plan was made before the category was known, so it did not see it"
     assert lib[0]["id"] not in lib_ids(seen["plan"])

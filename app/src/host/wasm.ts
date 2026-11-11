@@ -34,7 +34,12 @@ import type {
   SpinoffTarget,
   Unlisten,
   UploadedAsset,
+  UpstreamUpdateReply,
   UpstreamView,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
+  SourceCard,
 } from './types'
 
 /** Bytes out of wasm arrive as an Array unless they already are a view. */
@@ -256,7 +261,16 @@ export const wasmHost: Host = {
     dispatch(resp)
   },
 
+  verify: async (finding, rationale) => { await post<unknown>('/verify', { finding, rationale }) },
+
   upstream: () => route<UpstreamView>('/upstream', '', new Uint8Array()),
+  updateFromUpstream: () => post<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => route<AttachTarget[]>('/attach-targets', '', new Uint8Array()),
+  attach: documentId => post<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => post<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => post<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => route<RelatedView>('/related', '', new Uint8Array()),
+  cites: async refs => (await post<{ cites: Record<string, SourceCard> }>('/cite', { refs })).cites,
 
   // Answered by the route table in the page, as on every host: the parts
   // the client's words name are found by the host's own matcher, in the

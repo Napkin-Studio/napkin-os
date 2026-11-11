@@ -73,6 +73,7 @@ fn app(name: &str, app_id: &str, spinoff: Option<SpinoffSpec>) -> AppInfo {
         prompt_templates: vec![],
         data_seed: None,
         spinoff,
+        attach: None,
     }
 }
 
@@ -632,7 +633,7 @@ fn a_clients_answer_to_the_research_is_in_the_clients_words() {
         "client_review",
         "suggest_part",
         &[&format!("{R}#campaign.objective")],
-        "Ellis matched it.",
+        "The Knowledge agent matched it.",
     );
     suggestion.actor = Some("process:client-parts-match".into());
 
@@ -645,7 +646,11 @@ fn a_clients_answer_to_the_research_is_in_the_clients_words() {
         .iter()
         .filter(|d| d["kind"] == "client_review")
         .collect();
-    assert_eq!(rows.len(), 2, "Ellis's suggestion is not a row");
+    assert_eq!(
+        rows.len(),
+        2,
+        "The Knowledge agent's suggestion is not a row"
+    );
     assert_eq!(rows[0]["who"], "Niamh Kelly");
     assert_eq!(rows[0]["role"], "client");
     assert_eq!(

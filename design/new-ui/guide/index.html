@@ -1,0 +1,84 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Napkin new UI guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet"><style>:root{--desk:#F6F1E7;--paper:#FFFDF8;--card:#fff;--ink:#141413;--ink-soft:#2A2620;--muted:#6D655A;--faint:#9A9082;--line:#E2D9C8;--warn:#B45309;--warn-soft:#FEF3DC;--ok:#1D8A4E;--ok-soft:#E6F6EC;--alert:#C9462A;--alert-soft:#FFF1EE;--acc:#515BFF;--hl:#F6E36B;
+--ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;--serif:"Newsreader",Georgia,serif;--mono:"Geist Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--desk:#121110;--paper:#1B1A18;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert-soft:#3a1f19;--acc:#C8CBFF}}
+:root[data-theme=dark]{--desk:#121110;--paper:#1B1A18;--card:#201E1B;--ink:#EFE9DE;--ink-soft:#D6CEC0;--muted:#A49B8D;--faint:#7B7367;--line:#34302A;--warn:#E09A4B;--warn-soft:#3A2A18;--ok:#5DBB83;--ok-soft:#1C2E23;--alert-soft:#3a1f19;--acc:#C8CBFF}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.55 var(--ui)}
+a{color:inherit;text-decoration-color:color-mix(in srgb,var(--acc) 55%,transparent);text-underline-offset:3px}
+code{font:12.5px var(--mono);background:color-mix(in srgb,var(--ink) 6%,transparent);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+pre{font:12px/1.5 var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto}
+.top{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 24px;background:color-mix(in srgb,var(--desk) 94%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .home{font-weight:800;letter-spacing:-.01em;text-decoration:none}.top .ver{font:11px var(--mono);color:var(--muted)}
+.wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;max-width:1360px;margin:0 auto;padding:0 24px}
+.side{position:sticky;top:58px;align-self:start;max-height:calc(100vh - 70px);overflow:auto;padding:26px 0;display:grid;gap:2px;font-size:13.5px}
+.side a{display:flex;gap:10px;padding:6px 10px;border-radius:7px;text-decoration:none;color:var(--ink-soft)}
+.side a span{font:600 11px/1.9 var(--mono);color:var(--faint)}
+.side a:hover{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+.side a[aria-current]{background:var(--ink);color:var(--paper)}.side a[aria-current] span{color:inherit;opacity:.7}
+.toc{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:1px}.toc b{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 10px 6px}.toc a{padding:4px 10px;font-size:12.5px}
+main{min-width:0;padding:34px 0 80px}
+.eyebrow{font:600 11.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px}
+h1{font-size:clamp(36px,5vw,56px);font-weight:800;letter-spacing:-.04em;line-height:1;margin:0 0 18px}
+h1 .dot{display:inline-block;width:.17em;height:.17em;border-radius:50%;background:var(--muted);margin-left:.04em}
+h2{font-size:28px;font-weight:800;letter-spacing:-.025em;line-height:1.15;margin:56px 0 14px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:32px 0 10px}
+h4{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+p,li{max-width:76ch}.lede{font-size:17px;color:var(--ink-soft);max-width:66ch}
+.fig{margin:22px 0 28px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 1px 2px rgba(20,20,19,.05),0 8px 24px -12px rgba(50,38,18,.18)}
+.fig .shot{position:relative;line-height:0;border-radius:6px;overflow:hidden;border:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.fig img{width:100%;height:auto;display:block}
+.co{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;background:#E8462A;color:#fff;font:700 12px/24px var(--mono);text-align:center;box-shadow:0 0 0 2px #fff,0 3px 8px rgba(0,0,0,.35);pointer-events:none}
+figcaption{font-size:13px;color:var(--muted);padding:10px 4px 2px}
+.legend{list-style:none;margin:8px 0 0;padding:0 4px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 18px;font-size:13px}
+.legend li{display:flex;gap:9px;align-items:baseline}.legend .cn{flex:none;width:20px;height:20px;border-radius:50%;background:#E8462A;color:#fff;font:700 11px/20px var(--mono);text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.two .fig,.three .fig{margin:8px 0}
+.grid-sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:14px 0}
+.sw{display:flex;gap:12px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px}
+.sw .chips{display:flex;flex:none}.sw .chips i{width:38px;height:38px;border-radius:6px;border:1px solid rgba(0,0,0,.12)}.sw .chips i+i{margin-left:-8px;box-shadow:-2px 0 0 var(--paper)}
+.sw code{background:none;padding:0;font-weight:600}.sw small{display:block;font:11.5px var(--mono);color:var(--muted)}.sw p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0 20px;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:block;overflow-x:auto}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:color-mix(in srgb,var(--ink) 3%,transparent)}
+td code{font-size:11.5px}
+.dd{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 22px}.dd>div{border-radius:10px;padding:12px 14px;border:1px solid var(--line);background:var(--paper)}
+.dd h5{margin:0 0 6px;font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase}.do{border-top:4px solid var(--ok)!important}.do h5{color:var(--ok)}.dont{border-top:4px solid var(--alert)!important}.dont h5{color:var(--alert)}
+.dd p{margin:4px 0;font-size:13.5px}.dd .fig{margin:6px 0 0;padding:6px}
+.note{border-left:3px solid var(--acc);background:var(--paper);border-radius:0 8px 8px 0;padding:10px 14px;margin:14px 0;font-size:13.5px}
+.note.mm{border-left-color:var(--warn);background:var(--warn-soft)}.note.ok{border-left-color:var(--ok)}
+.miss{padding:20px;border:1.5px dashed var(--line);border-radius:10px;color:var(--muted);font-size:13px;margin:14px 0}
+.spec{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:4px 16px;margin:12px 0}
+.spec>div{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line)}.spec>div:last-child{border:0}
+.spec small{font:11.5px/1.5 var(--mono);color:var(--muted)}
+.states{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:14px 0}
+.st{flex:1 1 140px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;justify-items:center;gap:6px;text-align:center;font-size:12.5px}
+.st b{font-size:13px}.st small{color:var(--muted);font-size:11.5px;line-height:1.35}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;font-size:13px}
+.flow .n{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:600}.flow .n.hot{background:var(--ink);color:var(--paper);border-color:var(--ink)}.flow .a{color:var(--faint);font:12px var(--mono)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:16px 0}
+.card{display:block;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;text-decoration:none;transition:border-color .15s}.card:hover{border-color:var(--ink)}
+.card small{font:700 10.5px var(--mono);letter-spacing:.1em;color:var(--muted)}.card b{display:block;font-size:17px;letter-spacing:-.02em;margin:4px 0}.card span{font-size:13px;color:var(--muted)}
+.rule{counter-increment:r;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+.rule h3{margin:0 0 6px}.rule h3::before{content:counter(r,decimal-leading-zero);font:700 12px var(--mono);color:var(--muted);margin-right:10px}
+.pn{display:flex;justify-content:space-between;margin-top:70px;padding-top:20px;border-top:1px solid var(--line);font-weight:600}
+.k{display:inline-block;font:600 11px var(--mono);border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:var(--paper)}
+.diag{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin:14px 0;overflow:auto}
+.diag svg{display:block;max-width:100%;height:auto}
+.marks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0}
+.mk{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 10px 10px;display:grid;justify-items:center;gap:6px;text-align:center}
+.mk b{font-size:13px}.mk small{font-size:11.5px;color:var(--muted);line-height:1.35}.mk .row{display:flex;align-items:center;gap:14px}
+.ag{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin:16px 0}
+.agc{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.agc .hd{display:flex;align-items:center;gap:12px;padding:14px}.agc .hd b{font-size:16px}.agc .hd small{display:block;font:11px var(--mono);color:var(--muted)}
+.agc .pill{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:999px;font:800 13px var(--ui);white-space:nowrap}
+.agc .bd{padding:0 14px 14px;font-size:12.5px}.agc table{font-size:11.5px;margin:6px 0 0}.agc td,.agc th{padding:5px 7px}
+.surf{display:grid;grid-template-columns:1fr 1fr}.surf>div{padding:12px;display:grid;gap:6px;font:11px var(--mono)}
+.surf .paper{border-radius:6px;padding:10px;border:1px solid}.surf .btn{display:inline-block;padding:6px 10px;border-radius:4px;font:600 12px var(--ui)}
+@media (max-width:900px){.wrap{grid-template-columns:1fr;gap:0;padding:0 16px}.side{position:static;max-height:none;padding:14px 0;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.toc{display:none}.two,.three,.dd{grid-template-columns:1fr}.spec>div{grid-template-columns:1fr}.top{padding:10px 16px}}
+ .hero{max-width:1100px;margin:0 auto;padding:40px 24px 80px}</style></head><body>
+<header class="top"><span class="home">Napkin Studio · new UI guide</span><span class="ver">feat/new-ui · captured 2026-11-11</span></header>
+<div class="hero"><p class="eyebrow">Visual documentation · for agents and designers</p><h1>The new UI<span class="dot"></span></h1>
+<p class="lede">How Napkin Studio's new interface looks and behaves, taken from the code and the live build: tokens, agency looks, the Deep O mark, the agents, the shell, Brief and Research, and the patterns between them. Every value names its source file. Where the live build and its design differ, the page says so.</p>
+<figure class="fig"><div class="shot"><img src="img/i-hero.jpg" width="1440" height="900" alt="The desk, TBWA\Dublin, light." loading="lazy"></div><figcaption>The desk, TBWA\Dublin, light.</figcaption></figure>
+<div class="cards"><a class="card" href="01-principles.html"><small>01</small><b>Principles</b><span>The eight rules every screen follows</span></a><a class="card" href="02-foundations.html"><small>02</small><b>Foundations</b><span>Colour, type, spacing, radii, shadows, paper</span></a><a class="card" href="03-agency-looks.html"><small>03</small><b>Agency looks</b><span>Nine agencies, one registry, derived tokens</span></a><a class="card" href="04-deep-o.html"><small>04</small><b>The Deep O logo</b><span>States, timing, follow, sleep, boot</span></a><a class="card" href="05-agents.html"><small>05</small><b>Agents</b><span>Roles, materials, sizes, the run stage</span></a><a class="card" href="06-shell.html"><small>06</small><b>The shell</b><span>Top bar, menus, Decisions drawer, desk, dial, client page</span></a><a class="card" href="07-brief.html"><small>07</small><b>Brief</b><span>The sheet, the side tab, editing, review, lock</span></a><a class="card" href="08-research.html"><small>08</small><b>Research</b><span>Report, visual vocabulary, panel, Evidence map</span></a><a class="card" href="09-patterns.html"><small>09</small><b>Patterns</b><span>Source cards, crumbs, Your call, empty, loading, dark, phone</span></a><a class="card" href="10-copy.html"><small>10</small><b>Copy rules</b><span>Plain words and the glossary</span></a><a class="card" href="11-gaps.html"><small>11</small><b>Known gaps and open decisions</b><span>What is not built or not decided</span></a></div>
+<h2>How to use it</h2><ul><li>Start with <a href="01-principles.html">Principles</a>, then <a href="02-foundations.html">Foundations</a>.</li><li>Building a screen: read its page, check the do/don't pairs, and copy the exact tokens and classes from the code paths given.</li><li>Before shipping: check <a href="10-copy.html">Copy rules</a> and add anything that does not match to <a href="11-gaps.html">Known gaps</a>.</li><li>For agents: <code>README.md</code> in this folder has a summary in text.</li></ul>
+<p style="color:var(--muted);font-size:13px">Screenshots use the local test documents only (roster users tia@tbwa, sam@wk, bo@boysandgirls, cat@catapult, plu@pluto) and were taken read-only, with every write blocked.</p></div></body></html>

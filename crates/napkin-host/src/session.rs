@@ -540,7 +540,8 @@ impl Session {
     /// applied here, by the host, and the app gets the envelope back with
     /// `change` replaced by `{applied: true, version, base_stale, applied_fields,
     /// contested_fields, contests}` or
-    /// `{applied: false, reason}`. When a change landed, the envelope also
+    /// `{applied: false, reason}`. When a change landed, or was `already
+    /// applied` by another poll, the envelope also
     /// carries `clan: {id, revision, version, data}` — the document as it now stands —
     /// so the view can refresh without writing anything. The app never writes
     /// middleware output itself; what it is handed is informational. Returns
@@ -587,6 +588,10 @@ impl Session {
         };
         let landed = settled.get("applied").and_then(Value::as_bool) == Some(true)
             && settled.get("noop").is_none();
+        // Someone else's poll (the shell's job watcher, another tab) applied
+        // this change first: the page asking now holds data from before it,
+        // so it is handed the document too, or it never redraws.
+        let caught_up = settled.get("reason").and_then(Value::as_str) == Some("already applied");
         envelope["data"]["change"] = settled;
         // The view holds its own copy of the data (`window.__CLAN__.data`) and
         // nothing re-reads the archive into it after a host-side write — a
@@ -595,7 +600,7 @@ impl Session {
         // in the same shape the request's `clan` had, for the bridge to swap
         // in and announce with `clan:dataupdated`. Outside `data`: that is the
         // middleware's body, and this is the host's.
-        if landed {
+        if landed || caught_up {
             if let Some(clan) = self.document_now() {
                 envelope["clan"] = clan;
             }

@@ -83,20 +83,24 @@ def decide_subject(brands: list[dict]) -> tuple[str, object]:
 
 
 def category_options(cands: list[tuple[str, dict | None]], origin: str, labels: dict) -> list[dict]:
-    """cands: ranked [(leaf, span|None)]. origin extracted needs a span each."""
+    """cands: ranked [(leaf, span|None)]. origin extracted needs a span each; a span carrying
+    `upstream_ref` (read from the carried brief) makes that option proposed, citing it."""
+    def cite(o, span):
+        # a leaf read from the brief a research started from is proposed, citing the brief
+        if origin == "extracted" and isinstance(span, dict) and span.get("upstream_ref"):
+            o.update(origin="proposed", upstream_refs=[span["upstream_ref"]])
+        elif origin == "extracted":
+            o["source"] = span
+        return o
+
     opts = []
     for leaf, span in cands:
-        o = {"id": leaf.replace(".", "_"), "label": labels.get(leaf, leaf), "value": [leaf], "origin": origin}
-        if origin == "extracted":
-            o["source"] = span
-        opts.append(o)
+        opts.append(cite({"id": leaf.replace(".", "_"), "label": labels.get(leaf, leaf), "value": [leaf],
+                          "origin": origin}, span))
     if len(cands) == 2:
-        o = {"id": "both", "label": f"Both: {labels.get(cands[0][0], cands[0][0])} and "
-                                    f"{labels.get(cands[1][0], cands[1][0])}",
-             "value": [cands[0][0], cands[1][0]], "origin": origin}
-        if origin == "extracted":
-            o["source"] = cands[0][1]
-        opts.append(o)
+        opts.append(cite({"id": "both", "label": f"Both: {labels.get(cands[0][0], cands[0][0])} and "
+                                                 f"{labels.get(cands[1][0], cands[1][0])}",
+                          "value": [cands[0][0], cands[1][0]], "origin": origin}, cands[0][1]))
     opts.append({"id": "other", "label": "Something else"})
     return opts
 

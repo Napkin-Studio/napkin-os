@@ -71,7 +71,7 @@ export interface AppHome {
   line?: string
   /** The button's words. */
   start?: string
-  /** Shared figure keys. */
+  /** The app's agents, by id (older apps list crew keys); the shell draws each as its role (shell/agents/engine.ts). */
   crew?: string[]
   /** What one document is called, and many. */
   noun?: string[]
@@ -165,6 +165,8 @@ export interface RunInfo {
   /** The stage it is at (`research`, `Layout`), when it says: what the ring shows. */
   stage?: string
   since?: string
+  /** Steps done and steps in all, when the job says. */
+  progress?: [number, number]
 }
 
 /** One piece of work in the library, with who it is for. */
@@ -176,6 +178,10 @@ export interface LibraryItem {
   client: ClientRef | null
   state?: RecentState | null
   run: RunInfo | null
+  /** Who last wrote it: the signed-in account's username (`name@agency`). Absent from an older host. */
+  last_editor?: string
+  /** Middleware jobs on it the host has not seen finish: the shell polls each (`settleJob`). */
+  jobs?: string[]
 }
 
 export interface LibraryListing {
@@ -291,7 +297,17 @@ export interface DecisionBlock {
 
 /** What a cite names, resolved by the host. */
 export interface CiteInfo {
-  kind: 'fact' | 'finding' | 'source' | 'material' | 'decision' | 'person' | 'address' | 'unknown'
+  kind:
+    | 'fact'
+    | 'finding'
+    | 'source'
+    | 'material'
+    | 'passage'
+    | 'capture'
+    | 'decision'
+    | 'person'
+    | 'address'
+    | 'unknown'
   label: string
   detail?: string
   quote?: string
@@ -304,6 +320,34 @@ export interface CiteInfo {
   title?: string
   published_at?: string
   tier?: string
+}
+
+/** Where a fact came from (OS-layer contract §8.3). `document` when nothing recorded it. */
+export type SourceOrigin = 'research' | 'client' | 'brand' | 'layer' | 'person' | 'document'
+
+/** One review verdict on a fact, finding or field. */
+export interface SourceReview {
+  verdict: 'verified' | 'rejected' | 'set_aside'
+  /** Who, as a person would say it. */
+  by: string
+  actor?: string
+  at?: string
+  decision?: string
+  note?: string
+  /** A later decision replaced it. */
+  superseded?: boolean
+}
+
+/** The source card for one ref (`GET /cite?ref=`, `POST /cite {refs}`). */
+export interface SourceCard extends CiteInfo {
+  ref: string
+  origin: SourceOrigin
+  /** Carried from an upstream document: which one. */
+  from?: { document_id: string; title?: string; app_id?: string; version?: string; path?: string }
+  /** The latest review that still stands. */
+  review?: SourceReview
+  /** Every review, newest first: what the card folds under Record. */
+  history?: SourceReview[]
 }
 
 export interface DecisionsView {
@@ -397,7 +441,7 @@ export interface ClientPartView {
   reopened: boolean
 }
 
-/** One of Ellis's suggestions nobody has confirmed or dismissed yet. */
+/** One of the Knowledge agent's suggestions nobody has confirmed or dismissed yet. */
 export interface ClientSuggestionView {
   decision: string
   review: string
@@ -500,11 +544,17 @@ export interface UpstreamEntry {
   in_store: boolean
   title?: string
   app_id?: string
+  /** What its app calls it ("report", "brief"), when it is in the store. */
+  noun?: string | null
   /** Where the shell opens it (the store's id for it); absent when it is not in the store. */
   path?: string
   version?: string
   locked?: boolean
   status: 'current' | 'changed' | 'not_compared' | 'unknown'
+  /** `made_from` (the direct parent), `linked` (attached, os-layer §5.7) or `carried` (further upstream). */
+  how?: 'made_from' | 'linked' | 'carried'
+  /** A linked document: how many times this one took it (1 on link, one more on each update). */
+  taken?: number | null
   changed?: { data: boolean; facts: boolean; findings: boolean; sources: boolean }
   decisions_since?: number | null
   pins?: { id: string; change: 'added' | 'replaced' | 'changed'; label: string; replaced_by?: string }[]
@@ -516,6 +566,65 @@ export interface UpstreamView {
   document_id: string
   carried: UpstreamCarried | null
   upstream: UpstreamEntry[]
+}
+
+// ── Links (os-layer §5.7, §8.1 item 9) ─────────────────────────────────────────
+
+/** A document the open one could link (`GET /attach-targets`). */
+export interface AttachTarget {
+  app_id: string
+  app_name: string
+  document_id: string
+  title: string
+  version?: number | null
+  path: string
+  updated_at: string
+  /** Linked to the open document now. */
+  attached: boolean
+  /** The open document may hold several of this app at once. */
+  many: boolean
+  /** The open document is locked, so a link would be refused. */
+  locked: boolean
+}
+
+/** `POST /attach`, `/attach/update` or `/attach/detach`: what was written. */
+export interface AttachReply {
+  ok: true
+  verb?: 'attached' | 'updated' | 'replaced'
+  decision: string | null
+  action: string
+  document_id: string
+}
+
+/** One document related to the open one (`GET /related`). */
+export interface RelatedDoc {
+  document_id: string
+  title?: string | null
+  app_id?: string | null
+  path?: string | null
+  how: 'made_from' | 'linked' | 'made_into' | 'linked_in'
+  noun?: string | null
+  taken?: number | null
+  status?: UpstreamEntry['status'] | null
+}
+
+export interface RelatedView {
+  document_id: string
+  upstream: RelatedDoc[]
+  downstream: RelatedDoc[]
+}
+
+/** `POST /upstream/update`: the parent's newer version, taken (Contract 4 §5.5, §8.1 item 8). */
+export interface UpstreamUpdateReply {
+  ok: true
+  /** The one decision written: `update_from_<noun>`. */
+  decision: string
+  action: string
+  /** The parent taken from, and the version taken. */
+  document_id: string
+  version: string
+  /** How many of the parent's decisions were new here. */
+  decisions_taken: number
 }
 
 /**
@@ -553,6 +662,21 @@ export interface Person {
   name: string | null
 }
 
+/** A stored document's own routes (`Host.docOps`), on a token of its own. */
+export interface DocOps {
+  decisions(): Promise<DecisionsView>
+  related(): Promise<RelatedView>
+  upstream(): Promise<UpstreamView>
+  /** "Looks right" on a finding: `POST /verify`. */
+  verify(finding: string, rationale: string): Promise<void>
+  /** "Looks right" on an agent's call: `POST /acknowledge`. */
+  acknowledge(decision: string): Promise<void>
+  /** Its data entry as stored (YAML or JSON text): what a tool home reads its lens coverage from. */
+  data(): Promise<string>
+  /** Lock it: `POST /approve`. Refused, in the host's words, while its lock list holds. */
+  approve(rationale: string): Promise<void>
+}
+
 export interface Host {
   // ── Who is here ───────────────────────────────────────────────────────────
   /** The signed-in person, as the host acts for them. Read-only. */
@@ -576,17 +700,43 @@ export interface Host {
   getDecisions(): Promise<DecisionsView>
   /** A person accepts an agent's call ("Looks right"): `/acknowledge`. */
   acknowledge(decision: string): Promise<void>
+  /**
+   * A person checks an agent's finding and finds it right: `POST /verify`, the
+   * same verification the app's own Verify records ("Looks right" on the
+   * Decisions card).
+   */
+  verify(finding: string, rationale: string): Promise<void>
   /** What changed upstream since this document was spun off (`GET /upstream`). */
   upstream(): Promise<UpstreamView>
+  /**
+   * Take the direct parent's newer version into this spin-off
+   * (`POST /upstream/update`). Refused on a locked document, and when the
+   * parent has not changed.
+   */
+  updateFromUpstream(): Promise<UpstreamUpdateReply>
+  /** The documents the open one could link (`GET /attach-targets`); empty when its app links nothing. */
+  attachTargets(): Promise<AttachTarget[]>
+  /** Link an existing document into the open one (`POST /attach`). Refused on a locked document, in the host's words. */
+  attach(documentId: string): Promise<AttachReply>
+  /** Take a linked document's newer version (`POST /upstream/update {document_id}`). */
+  updateLinked(documentId: string): Promise<AttachReply>
+  /** Let go of a linked document (`POST /attach/detach`). */
+  detach(documentId: string): Promise<AttachReply>
+  /** What it was made from and links, and what was made from it or links it (`GET /related`). */
+  related(): Promise<RelatedView>
+  /** Rename the open document (`POST /set-title`). Absent on a host that cannot. */
+  setTitle?(title: string): Promise<void>
+  /** The source card for each ref, in one call (`POST /cite`). */
+  cites(refs: string[]): Promise<Record<string, SourceCard>>
 
   // ── Client review (OS-layer contract §7.5) ────────────────────────────────
   /**
    * Record a client's answer to the locked document: `POST /client-review`.
    * The host's matcher suggests which parts it was about in the same reply
-   * (shown as Ellis's; nothing waits on a model).
+   * (shown as the Knowledge agent's; nothing waits on a model).
    */
   clientReview(body: ClientReviewBody): Promise<ClientReviewReply>
-  /** Confirm or dismiss one of Ellis's suggestions, or mark a part after the fact. */
+  /** Confirm or dismiss one of the Knowledge agent's suggestions, or mark a part after the fact. */
   clientReviewConfirm(body: ClientConfirmBody): Promise<ClientConfirmReply>
   /** "Make this change": reopen the one part a client's answer asked about. */
   clientReviewReopen(answer: string): Promise<ClientReopenReply>
@@ -637,8 +787,20 @@ export interface Host {
    * then keeps the Launcher as home).
    */
   listLibrary(filter?: LibraryFilter): Promise<LibraryListing>
+  /**
+   * Poll one middleware job of a document, open or not, the way its page
+   * does (`job_status`), so the host lands a change that finished after the
+   * page closed. Absent on a host with one document at a time.
+   */
+  settleJob?(path: string, jobId: string): Promise<unknown>
   /** The client registry. */
   readonly clients: ClientsApi
+  /**
+   * One stored document's own routes, open or not (the desk's Decisions and
+   * its Worth a look read and settle calls across documents with it). Absent
+   * on a host with one document at a time.
+   */
+  docOps?(path: string): Promise<DocOps>
 
   // ── Branching one document into another app ───────────────────────────────
   /**

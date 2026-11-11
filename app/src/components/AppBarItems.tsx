@@ -2,17 +2,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The open app's tabs, buttons and chips in the OS bar (shell/appBar.ts,
+// The open app's buttons and chips in the OS bar (shell/appBar.ts,
 // features/app-bar-actions.clan). Apart from Toolbar so it draws with nothing
 // but the list it is given, and a test can draw it alone.
 
-import { BAR_BUTTONS_SHOWN, type BarItem } from '../shell/appBar'
+import { useState } from 'react'
 
-type Tab = Extract<BarItem, { kind: 'tab' }>
+import { BAR_BUTTONS_SHOWN, type BarItem } from '../shell/appBar'
+import { Pop } from '../shell/nui/Pop'
+
 type Button = Extract<BarItem, { kind: 'button' }>
 type Chip = Extract<BarItem, { kind: 'chip' }>
 
-const tabsOf = (bar: BarItem[]) => bar.filter((i): i is Tab => i.kind === 'tab')
 const buttonsOf = (bar: BarItem[]) => bar.filter((i): i is Button => i.kind === 'button')
 const chipsOf = (bar: BarItem[]) => bar.filter((i): i is Chip => i.kind === 'chip')
 
@@ -23,36 +24,30 @@ export function BarChips({ bar }: { bar: BarItem[] }) {
   ))}</>
 }
 
-/** The app's screens or sections, one current. */
-export function BarTabs({ bar, onAction }: { bar: BarItem[]; onAction?: (id: string) => void }) {
-  const tabs = tabsOf(bar)
-  if (!tabs.length) return null
-  return (
-    <nav className="ch-bar-tabs" aria-label="Sections">
-      {tabs.map(t => (
-        <button
-          key={t.id}
-          className="ch-bar-tab"
-          aria-current={t.current ? 'step' : undefined}
-          disabled={t.disabled}
-          data-dogfood={`tab: ${t.label}`}
-          onClick={() => onAction?.(t.id)}
-        >{t.label}</button>
-      ))}
-    </nav>
-  )
-}
-
-/** The first two buttons; the app decides what pressing one does. */
+/** The first two buttons; the app decides what pressing one does. A button with a menu ("Save · PDF ▾")
+ *  opens it, and a choice tells the app its own id. */
 export function BarButtons({ bar, onAction }: { bar: BarItem[]; onAction?: (id: string) => void }) {
+  const [open, setOpen] = useState<{ id: string; anchor: HTMLElement } | null>(null)
   return <>{buttonsOf(bar).slice(0, BAR_BUTTONS_SHOWN).map(b => (
-    <button
-      key={b.id}
-      className={b.primary ? 'ch-btn ch-btn-primary' : 'ch-btn'}
-      disabled={b.disabled}
-      title={b.title || undefined}
-      data-dogfood={`button: ${b.label}`}
-      onClick={() => onAction?.(b.id)}
-    >{b.label}</button>
+    <span key={b.id} className={b.menu ? 'ch-menu-anchor' : undefined}>
+      <button
+        className={b.primary ? 'ch-btn ch-btn-primary' : 'ch-btn'}
+        disabled={b.disabled}
+        title={b.title || undefined}
+        data-dogfood={`button: ${b.label}`}
+        aria-haspopup={b.menu ? 'menu' : undefined}
+        aria-expanded={b.menu ? open?.id === b.id : undefined}
+        onClick={e => { if (!b.menu) { onAction?.(b.id); return } const el = e.currentTarget; setOpen(o => (o?.id === b.id ? null : { id: b.id, anchor: el })) }}
+      >{b.label}{b.menu && <span className="ch-btn-car" aria-hidden> ▾</span>}</button>
+      {b.menu && open?.id === b.id && (
+        <Pop anchor={open.anchor} align="right" onClose={refocus => { if (refocus) open.anchor.focus(); setOpen(null) }} label={b.label} testid={`bar-menu-${b.id}`}>
+          {b.menu.map(m => (
+            <button key={m.id} type="button" role="menuitem" data-dogfood={`menu: ${m.label}`} onClick={() => { setOpen(null); onAction?.(m.id) }}>
+              {m.label}{m.title && <small>{m.title}</small>}
+            </button>
+          ))}
+        </Pop>
+      )}
+    </span>
   ))}</>
 }

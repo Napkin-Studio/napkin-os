@@ -232,18 +232,31 @@ pub(super) fn chain_of(doc: &Document) -> HostResult<DecisionChain> {
 /// `approve` targets the parent it accepted; it does not lock this document.
 /// When more than one does — a document locked again after a part was
 /// reopened (§7.5.6) — the newest is the lock.
+///
+/// A whole-document `unlock` (`/unapprove`, §7.6) newer than the newest
+/// `approve` ends the lock: nothing holds until the next `/approve`.
 pub fn lock_of<'c>(chain: &'c DecisionChain, doc_id: &str) -> Option<&'c Decision> {
     lock_index(chain, doc_id).map(|i| &chain.decisions[i])
 }
 
 /// Where [`lock_of`]'s decision is in the (newest-first) chain.
 pub fn lock_index(chain: &DecisionChain, doc_id: &str) -> Option<usize> {
-    chain.decisions.iter().position(|d| {
-        d.kind.as_deref() == Some("approve")
-            && d.superseded_by.is_none()
-            && d.targets.iter().any(|t| t == doc_id)
-    })
+    for (i, d) in chain.decisions.iter().enumerate() {
+        if d.superseded_by.is_some() || !d.targets.iter().any(|t| t == doc_id) {
+            continue;
+        }
+        match d.kind.as_deref() {
+            Some("approve") => return Some(i),
+            Some(super::client_review::UNLOCK) if d.action == UNLOCK_DOCUMENT => return None,
+            _ => {}
+        }
+    }
+    None
 }
+
+/// The `unlock` action that ends the whole lock (`/unapprove`, §7.6), as
+/// against `reopen_part`, which reopens one part under it (§7.5.6).
+pub const UNLOCK_DOCUMENT: &str = "unlock_document";
 
 fn locked(d: &Decision) -> HostError {
     HostError::conflict(format!(
@@ -1675,7 +1688,7 @@ fn number_in(s: &str) -> Option<(f64, bool)> {
 /// A locked document with a part reopened for a client's request locks again
 /// (Contract 4 §7.5.6, item 3): the whole list is run, a client's unanswered
 /// rejection included, and the new `approve` — now the lock — closes every
-/// reopened part. The older one is not rewritten. Any of Ellis's suggestions
+/// reopened part. The older one is not rewritten. Any of the Knowledge agent's suggestions
 /// still unconfirmed is closed by it, one dismissal each, written after it
 /// (§7.5.3): they were about a version the new lock replaces.
 pub fn approve(ctx: &Ctx, doc: &Document, rationale: &str) -> HostResult<Outcome> {
@@ -1741,6 +1754,55 @@ pub fn approve(ctx: &Ctx, doc: &Document, rationale: &str) -> HostResult<Outcome
         d,
         closed,
         "locked",
+        &now,
+    )
+}
+
+/// `POST /unapprove`: `{rationale}`. Unlock: end the lock so the document can
+/// change again (owner, 2026-11-09, settling W5-Z1's whole-document unlock).
+/// A person, on a locked document, with a reason; one `unlock` decision
+/// (`action: unlock_document`) naming the `approve` it ends and the version
+/// that lock accepted. The `approve` is not rewritten: the chain reads lock,
+/// unlock and why, then whatever changed, then the next lock. Anything a part
+/// reopen left open stays open; the next `/approve` runs the whole list.
+pub fn unapprove(ctx: &Ctx, doc: &Document, rationale: &str) -> HostResult<Outcome> {
+    let who = person(ctx, "unlock the document")?;
+    let chain = chain_of(doc)?;
+    let clan = doc.clan();
+    let here = clan.document_id();
+    let lock =
+        lock_of(&chain, here).ok_or_else(|| HostError::conflict("the document is not locked"))?;
+    if rationale.trim().is_empty() {
+        return Err(HostError::bad_request(
+            "say why it is being unlocked: the reason is kept with the lock it ends",
+        ));
+    }
+    let lock_id = lock.id.clone().unwrap_or_default();
+    let locked_version = lock.version.clone();
+    let now = now();
+    let mut d = decided(
+        ctx,
+        &who,
+        super::client_review::UNLOCK,
+        UNLOCK_DOCUMENT,
+        vec![here.to_string()],
+        vec![lock_id.clone()],
+        rationale.trim().to_string(),
+        &now,
+    );
+    d.extra
+        .insert("lock".into(), serde_yaml::Value::String(lock_id));
+    if let Some(v) = locked_version {
+        d.extra
+            .insert("unlocks_version".into(), serde_yaml::Value::String(v));
+    }
+    commit_with(
+        doc,
+        data_of(clan)?,
+        Members::of(clan)?,
+        d,
+        Vec::new(),
+        "unlocked",
         &now,
     )
 }

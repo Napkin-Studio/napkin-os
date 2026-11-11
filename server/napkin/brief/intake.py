@@ -1,9 +1,9 @@
 """Intake: the few questions Brief Maker may ask before it plans (feature brief-intake-qa).
 
-Rules over the capture, no model call: Ellis has just read what the client said, so what a core
+Rules over the capture, no model call: the Knowledge agent has just read what the client said, so what a core
 item lacks is known. At most `cap` questions, in priority order, each a gap that one sentence from
 the planner would settle. Never asked: tone, insight, barrier, proposition, objection, reasons to
-believe, competitors. Those are the planner's and Sam's work (strategic-planning skill), not the
+believe, competitors. Those are the planner's and the Strategy agent's work (strategic-planning skill), not the
 client's to supply.
 
 An answer is the client's word, as the planner gave it: it becomes one material ("Intake answers")

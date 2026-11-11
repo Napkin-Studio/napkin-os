@@ -191,6 +191,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff: None,
+            attach: None,
         };
         ClanFile::from_bytes(make_template(&clan, app, MakeTemplateOptions::default()).unwrap())
             .unwrap()

@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest'
 import { AgentFigure } from './AgentFigure'
 import { sayer, whoIsWorking } from './cast'
 
-// The house sheet as the templates get it (generated from app/src/studio by app/scripts/agent-figures.mjs).
-const SHEET = readFileSync(new URL('../../../../../app/templates/shared/agent-figures.html', import.meta.url), 'utf8')
+// The house sheet as the templates last had it (app/scripts/agent-figures.mjs, removed when the other
+// tools moved to role spheres on 2026-11-10). A frozen copy, so this tool's crew keeps matching it until
+// the Production Tool moves to the shared agent engine too.
+const SHEET = readFileSync(new URL('./house-sheet.fixture.html', import.meta.url), 'utf8')
 
 /** Every path's d, in order, from one of the sheet's figures. */
 function sheetPaths(key: string): string[] {

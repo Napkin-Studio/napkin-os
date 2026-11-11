@@ -1,4 +1,4 @@
-"""The job, the barrier and the objection to beat: parts the brief writes and Jude judges (ADR 0034's
+"""The job, the barrier and the objection to beat: parts the brief writes and the Review agent judges (ADR 0034's
 sibling, feature brief-grid-template). The server's declaration, the template's and the schema must agree."""
 
 import json
@@ -48,7 +48,7 @@ def test_the_values_are_read_from_the_apps_keys():
 def test_the_template_declares_the_same_parts():
     schema = json.loads((REPO / "app/templates/brief-maker/schema.json").read_text())
     props = schema["properties"]
-    assert all(props[k] == {"type": "string"} for k in NEW)
+    assert all(props[k].get("type") == "string" and set(props[k]) <= {"type", "title"} for k in NEW)
     text = (REPO / "app/templates/brief-maker/app/pipeline.yaml").read_text()
     declared = dict(re.findall(r"^  ([\w.]+):\s+\{ class: (\w+)", text, re.M))
     assert {k: v["class"] for k, v in BUILTIN_FIELD_MAP.items()} == declared, "pipeline.yaml and fields.py declare one map"
@@ -91,7 +91,11 @@ def test_the_values_are_read_from_the_apps_keys_as_lists(k):
 
 def test_the_template_declares_both_lists_and_their_reasoning():
     schema = json.loads((REPO / "app/templates/brief-maker/schema.json").read_text())
-    assert all(schema["properties"][k] == {"type": "array", "items": {"type": "string"}} for k in LISTS)
+    # an array of strings; a part may also carry its display title (the new UI labels parts from it)
+    for k in LISTS:
+        p = dict(schema["properties"][k])
+        assert isinstance(p.pop("title", ""), str)
+        assert p == {"type": "array", "items": {"type": "string"}}, k
     text = (REPO / "app/templates/brief-maker/app/pipeline.yaml").read_text()
     for k in LISTS:
         assert re.search(rf"^  {k}:\s+\{{ class: drafted, rubric: {k}, loop: \w+ \}}", text, re.M)

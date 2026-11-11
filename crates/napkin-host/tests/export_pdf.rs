@@ -72,3 +72,47 @@ fn a_failed_render_says_why() {
         err.message
     );
 }
+
+/// Brief Maker's sheet (features/brief-new-ui.clan): each A4 page the app laid
+/// out is one PDF page, and an SVG logo inlined as a data URI does not stop it
+/// rendering (Chromium draws the SVG as vectors, so the page count is what is checked).
+#[test]
+fn a_laid_out_brief_prints_one_pdf_page_per_sheet_page() {
+    if !real_render_tests() {
+        return;
+    }
+    let logo = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjQzk0NjJBIi8+PC9zdmc+";
+    let page = |body: &str| {
+        format!(
+            "<div class=\"sheet a4 page\"><div class=\"pgrid\">{body}</div><div class=\"pfoot\"><span>Client A / Creative brief</span></div></div>"
+        )
+    };
+    let cell = |col: u8, w: u8, row: u8, words: &str| {
+        format!("<div class=\"row\" style=\"grid-column:{col} / span {w};grid-row:{row}\"><div class=\"lab\"><span>Part</span></div><div class=\"val\">{words}</div></div>")
+    };
+    let first = format!(
+        "<header class=\"shead\"><div class=\"slogos\"><img src=\"{logo}\" alt=\"Client\"></div></header>{}{}",
+        cell(1, 6, 1, "Background."),
+        cell(7, 6, 1, "The barrier.")
+    );
+    let html = format!(
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>\
+         @page{{size:A4;margin:0}}*{{box-sizing:border-box;margin:0}}\
+         .sheet.a4.page{{width:794px;height:1123px;overflow:hidden;position:relative;padding:56px 64px 64px;break-after:page;page-break-after:always}}\
+         .pgrid{{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:22px}}\
+         .slogos img{{height:36px}}.pfoot{{position:absolute;left:64px;right:64px;bottom:26px;font-size:9px}}\
+         </style></head><body class=\"paged\">{}{}{}</body></html>",
+        page(&first),
+        page(&cell(1, 12, 1, "The insight.")),
+        page(&cell(1, 4, 1, "Think."))
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let tmp = write_temp_html(&html).unwrap();
+    let dest = dir.path().join("brief.pdf");
+    finish_export("pdf", &tmp, dest.to_str().unwrap()).expect("the sheet renders");
+    let bytes = std::fs::read(&dest).unwrap();
+    assert!(bytes.starts_with(b"%PDF-"));
+    let text = String::from_utf8_lossy(&bytes);
+    let pages = text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
+    assert_eq!(pages, 3, "one PDF page per sheet page");
+}

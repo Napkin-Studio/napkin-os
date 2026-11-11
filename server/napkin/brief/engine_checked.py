@@ -1,8 +1,8 @@
 """draft_brief through Sai's engine, then the check loop (checkloop.py): the engine writes the
-brief; jev flags the parts that need rewriting; Jude says why; Dara rewrites them and fills
+brief; jev flags the parts that need rewriting; the Review agent says why; the Brief agent rewrites them and fills
 what the engine left empty. The owner's flow, 2026-10-01.
 
-Dara's rewrites read the same evidence as the planned flow's (provenance.evidence) and pass through
+The Brief agent's rewrites read the same evidence as the planned flow's (provenance.evidence) and pass through
 the same cleaner (provenance.clean_parts); the engine's own draft is not cleaned."""
 from __future__ import annotations
 
@@ -36,13 +36,13 @@ class EngineCheckedBriefJob(EngineBriefJob):
         mat_ids = [m.id for m in self.mats if m.readable]
         for k, v in res["rewritten"].items():
             prior = self.writer.get(k)
-            note = rsn.point("Jude named it for a rewrite of the engine's draft", [prior]) if prior else \
+            note = rsn.point("The Review agent named it for a rewrite of the engine's draft", [prior]) if prior else \
                 rsn.point("The brief engine left it empty")
             pts, cert, attn = prov.because(v, client, writer_note=note)
             cites = list(v["cites"]) + ([prior] if prior else [])
-            r = rsn.make(f"Rewrote the {LABELS.get(k, k)} on Jude's note." if prior else f"Wrote the {LABELS.get(k, k)}.",
+            r = rsn.make(f"Rewrote the {LABELS.get(k, k)} on the Review agent's note." if prior else f"Wrote the {LABELS.get(k, k)}.",
                          pts, cert, "the client says otherwise, or a person edits it",
-                         only_option="Jude named it for a rewrite", attention=attn)
+                         only_option="The Review agent named it for a rewrite", attention=attn)
             claims = {"claims": v["claims"]} if v.get("claims") else {}
             if self.held.get(k):
                 d = self.dec(("propose", k, "check"), "edit", "propose", [k], cites, r, "drafter",
@@ -68,8 +68,8 @@ class EngineCheckedBriefJob(EngineBriefJob):
                 fields[c["part"]]["checks"].append({"check": "claim_supported", "method": "auto",
                                                     "status": "pass" if c["verdict"] == "supported" else "review",
                                                     "note": _short(f"{c['claim']}: {c['note']}", 300)})
-            summary = (f"jev flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)} part(s); Jude sent "
-                       f"{len(res['todo'])} to Dara, who rewrote {len(res['rewritten'])}.") if res["before"] else "Checked."
+            summary = (f"jev flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)} part(s); the Review agent sent "
+                       f"{len(res['todo'])} to the Brief agent, who rewrote {len(res['rewritten'])}.") if res["before"] else "Checked."
             patch["review"] = {
                 "built_at": iso(), "handler": self.handler, "based_on": {"version": self.base},
                 "scorecard": {"dimensions": [{"dimension": d, "verdict": read["dims"][d]} for d in DIMS],
@@ -89,10 +89,10 @@ class EngineCheckedBriefJob(EngineBriefJob):
                              f"{sum(1 for d in DIMS if read['dims'][d] == 'vague')} vague, "
                              f"{sum(1 for d in DIMS if read['dims'][d] == 'missing')} missing", [f"{self.doc}#review"])]
             if disagreed:
-                pts.append(rsn.point("Jude kept what jev flagged in: " + ", ".join(LABELS.get(k, k) for k in disagreed),
+                pts.append(rsn.point("The Review agent kept what jev flagged in: " + ", ".join(LABELS.get(k, k) for k in disagreed),
                                      [f"{self.doc}#review"]))
-            r = rsn.make("Checked the engine's brief: jev flagged, Jude explained, Dara rewrote.", pts,
-                         rsn.certainty("medium", "jev's line is provisional; Jude read every flag"),
+            r = rsn.make("Checked the engine's brief: jev flagged, the Review agent explained, the Brief agent rewrote.", pts,
+                         rsn.certainty("medium", "jev's line is provisional; the Review agent read every flag"),
                          "a part changes and the brief is checked again", only_option="one check of the brief")
             decisions.append(self.dec(("review", "check"), "edit", "review", ["review"], vids, r, "judge"))
         qs = [q for q in res["questions"] if q]
@@ -101,7 +101,7 @@ class EngineCheckedBriefJob(EngineBriefJob):
             new = [q for q in qs if q not in have]
             if new:
                 r = rsn.make(f"Added {len(new)} question(s) only the client can answer.",
-                             [rsn.point("From Jude's check", [d["id"] for d in decisions] or mat_ids)],
+                             [rsn.point("From the Review agent's check", [d["id"] for d in decisions] or mat_ids)],
                              rsn.certainty("high", "each needs the client"), "the client answers",
                              only_option="the questions follow from what is missing")
                 put(patch, "open_questions", (have + new)[:12])

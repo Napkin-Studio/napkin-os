@@ -148,7 +148,7 @@ A gate stops the run. `run.gate` names it and every stage after it is `next`, ne
 `territories` (gate 2) shows `gate.territories` with the blind judge's `first_pick` marked and picked
 until the person picks another, and `idea` (gate 3) shows `gate.idea` (the line, its `executions`, what
 it `rests_on`). A gate the registry does not know gets generic words and whatever body its data carries;
-no gate assumes `beats`. Dex's note (`gate.dex`) on gates 2 and 3 is marked as proposed wording.
+no gate assumes `beats`. The Deck agent's note (`gate.dex`) on gates 2 and 3 is marked as proposed wording.
 
 Approving writes one patch under `run`: the gate's stage `done`, the next stage `now`, `gate: null`,
 `agent: null` (the feed described the gate), `approvals.<gate> = {by, at, decision: "approve", picked?,
@@ -156,7 +156,7 @@ note?}` and `decisions[]` with `{gate, kind: "approve", by, at}` added, with the
 At gate 2 the pick is view state until Pick this territory writes it as `approvals.territories.picked`;
 a pick that is not one of the territories is refused. Only the open gate can be approved.
 
-Edit and Ask Dex to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
+Edit and Ask the Deck agent to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
 and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or
 `retry <gate>`, and launch nothing: the engine acts on them once it is connected. The gate then says the
 request waits.
@@ -309,7 +309,7 @@ is not JSON gets one repair call. Bench cost ranges are assumptions, plus or min
 - Attaching documents from the app (the display list is written by the host).
 - Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
   writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
-  tags and `rests_on`, `territory_name` and Dex's notes come from the state fixtures only.
+  tags and `rests_on`, `territory_name` and the Deck agent's notes come from the state fixtures only.
 - File delivery for `exports` (Open and Download name the file and say where to find it), the animated deck,
   and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.

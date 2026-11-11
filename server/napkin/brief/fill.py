@@ -6,19 +6,20 @@ audience, the competitors, the objectives and the rest empty, and an empty
 part helps nobody. So, after the capture and before the drafters:
 
 - what the research found (the brief's pins, its findings, a research spin-off's
-  own audience and headline) fills a part the client did not state. Sam writes
+  own audience and headline) fills a part the client did not state. The Strategy agent writes
   it, citing the facts it rests on, and it is marked as the research's, never
   as the client's words;
-- what still has nothing behind it, Dara proposes as an assumption, marked so,
+- what still has nothing behind it, the Brief agent proposes as an assumption, marked so,
   for a person to confirm with the client. A figure is never assumed.
 
-Both are ordinary writes, judged by Jude like every part, and a person can
+Both are ordinary writes, judged by the Review agent like every part, and a person can
 change any of them. One model call for all of them.
 """
 from __future__ import annotations
 
 from ..doc import ctx_facts, ctx_findings
 from .fields import ARRAY_KEYS, LABELS, clean, filled
+from ..util import join_list
 
 # The parts the context fill may write, and what each is for the planner.
 PARTS = {
@@ -114,7 +115,7 @@ def fill(model, said: str, working: dict, empty: list[str], view: dict) -> dict:
         if not isinstance(r, dict):
             continue
         v = clean(k, r.get("value") if k in ARRAY_KEYS or not isinstance(r.get("value"), list)
-                  else "; ".join(r["value"]))
+                  else join_list(r["value"]))
         if v is None:
             continue
         cites = [c for c in dict.fromkeys(r.get("cites") or []) if c in ids]

@@ -1,6 +1,6 @@
-"""draft_brief, planned (brief/planned.py): Sam plans the whole brief and runs the research it
-asks for, Dara writes every part in one call, Jude reviews the whole brief once, Dara rewrites
-what he names, Jude scores again; and the run log records all of it."""
+"""draft_brief, planned (brief/planned.py): the Strategy agent plans the whole brief and runs the research it
+asks for, the Brief agent writes every part in one call, the Review agent reviews the whole brief once, the Brief agent rewrites
+what it names, the Review agent scores again; and the run log records all of it."""
 
 import json
 import time
@@ -77,7 +77,7 @@ def planned_model(seen):
         "review_brief_again": lambda p: (seen.setdefault("reviews", []).append(p), review(p, 6))[1],
         "rewrite_brief_parts": lambda p: (seen.__setitem__("rewrite", p), {k: {
             "value": "Grow under-30 visits by a measured share this summer", "basis": "assumption", "cites": [],
-            "builds_on_client": False, "why": "rewritten on Jude's note"} for k in p["parts"]})[1],
+            "builds_on_client": False, "why": "rewritten on the Review agent's note"} for k in p["parts"]})[1],
     })
     return m
 
@@ -97,17 +97,17 @@ def test_the_planned_brief_plans_researches_writes_whole_and_reviews_once(tmp_pa
     # the research the plan asked for, capped: two units, the market read as IE
     assert sorted(research_calls) == [("consumer_culture", "IE"), ("market_structure", "IE")]
     assert host.facts, "what the research found is pinned into the brief"
-    assert seen["draft"]["facts"], "Dara writes from the facts"
+    assert seen["draft"]["facts"], "The Brief agent writes from the facts"
     assert seen["draft"]["plan"]["strategy"].startswith("Make the oat iced latte")
     # every part written; the research claim cites a pinned fact; one citing nothing it was given is assumed
     by = {t.split("#", 1)[1]: d for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
     assert by["competitor_context"]["basis"] == "research" and by["competitor_context"]["cites"][0].startswith("f_")
     assert by["mandatories"]["basis"] == "assumption"
-    assert by["competitor_context"]["reasoning"]["attention"].startswith("Check:"), "Jude's partly-supported claim"
-    # Dara rewrote it on Jude's note; it is her proposal, so it says it is one (feature brief-first-draft-checks)
+    assert by["competitor_context"]["reasoning"]["attention"].startswith("Check:"), "The Review agent's partly-supported claim"
+    # The Brief agent rewrote it on the Review agent's note; it is the Brief agent's proposal, so it says it is one (feature brief-first-draft-checks)
     assert host.data["objectives"]["commercial"] == "To confirm: Grow under-30 visits by a measured share this summer"
-    # Jude: one note per issue (two notes, not one per part), the fix marked bad. His note on the
-    # draft he sent back is the loop's own verdict (test_the_loop_is_recorded_as_it_happened).
+    # The Review agent: one note per issue (two notes, not one per part), the fix marked bad. Its note on the
+    # draft it sent back is the loop's own verdict (test_the_loop_is_recorded_as_it_happened).
     back = {d["id"] for d in host.chain if d.get("superseded_by")}
     notes = [d for d in host.chain if d["kind"] == "verdict" and not set(d["cites"]) & back]
     assert len(notes) == 2 and {d["polarity"] for d in notes} == {"bad", "good"}
@@ -202,20 +202,20 @@ def test_the_check_loop_rewrites_what_jev_flags_and_jude_explains(tmp_path):
     finally:
         s.stop()
     assert sorted(seen["explain"]["flagged"]) == ["background", "tone_and_world"]
-    assert list(seen["rewrite"]["rewrite"]) == ["tone_and_world"], "Jude kept the background: only one rewrite"
+    assert list(seen["rewrite"]["rewrite"]) == ["tone_and_world"], "The Review agent kept the background: only one rewrite"
     assert host.data["tone_and_world"] == ["sunny", "quick-witted"]
     d = next(d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#tone_and_world"))
     # an assumption's why is in attention (brief-fact-provenance): never an uncited reason
-    assert "Rewritten on Jude's note: tone_and_world is generic" in d["reasoning"]["attention"]
-    # the loop is recorded (redraft-provenance): Jude's note on the draft he sent back, as the verdict
-    # it was, and his pass on the rewrite; the brief as it stands has no note on it
+    assert "Rewritten on the Review agent's note: tone_and_world is generic" in d["reasoning"]["attention"]
+    # the loop is recorded (redraft-provenance): the Review agent's note on the draft it sent back, as the verdict
+    # it was, and its pass on the rewrite; the brief as it stands has no note on it
     back = next(x for x in host.chain if x.get("superseded_by") == d["id"])
     verdicts = [x for x in host.chain if x["kind"] == "verdict"]
     assert [(x["polarity"], x["cites"]) for x in verdicts] == [("good", [d["id"]]), ("bad", [back["id"]])]
     sent = verdicts[1]
     assert sent["id"] in d["cites"]
-    assert any(p["point"].startswith("Jude's note: ") and p["cites"] == [sent["id"]] for p in d["reasoning"]["because"])
-    # Jude's "What is the budget?" and the plan's "What is the launch budget?" are one ask: it is
+    assert any(p["point"].startswith("The Review agent's note: ") and p["cites"] == [sent["id"]] for p in d["reasoning"]["because"])
+    # The Review agent's "What is the budget?" and the plan's "What is the launch budget?" are one ask: it is
     # asked once, in the plan's words, and the merge is in the run log.
     assert [q for q in host.data["open_questions"] if "budget" in q.lower()] == ["What is the launch budget?"]
     assert host.data["review"]["judge"]["health"] == 100
@@ -265,7 +265,7 @@ def test_a_missing_dimension_reaches_dara_and_client_is_only_what_ellis_captured
         s.stop()
     assert seen["explain"]["missing_dimensions"].keys() == {"evaluation_criteria"}
     assert seen["rewrite"]["rewrite"] == {"desired_response.do": "say how the work will be judged"}
-    # Dara's proposal says it is one (feature brief-first-draft-checks)
+    # The Brief agent's proposal says it is one (feature brief-first-draft-checks)
     assert host.data["desired_response"]["do"].startswith("To confirm: Visit twice in June")
     bg = next(d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#background"))
     assert bg["basis"] == "assumption", "the client said nothing about sales: not the client's words"
@@ -333,7 +333,7 @@ def test_a_brief_from_research_sees_every_fact_with_its_source_and_does_not_sear
         research_calls = list(s.research.calls)
     finally:
         s.stop()
-    # Sam and Dara see every fact the brief holds (not the first 80), each with where it was read
+    # The Strategy agent and the Brief agent see every fact the brief holds (not the first 80), each with where it was read
     assert len(seen["plan"]["facts"]) >= 100 and len(seen["draft"]["facts"]) >= 100
     assert seen["plan"]["facts"][0]["source"]["publisher"] == "CSO"
     # the market's players are held: that search is skipped; the audience is not: it runs
@@ -354,9 +354,41 @@ def test_the_job_the_barrier_and_the_objection_are_drafted_with_the_other_parts(
     assert replies[-1]["job"]["state"] == "done"
     drafted = {t.split("#", 1)[1] for d in host.chain if d.get("action") == "draft" for t in d["targets"]}
     for k in ("job", "barrier", "objection"):
-        assert k in seen["draft"]["parts"], f"Dara is asked for {k}"
+        assert k in seen["draft"]["parts"], f"The Brief agent is asked for {k}"
         assert str(host.data.get(k) or "").strip(), f"{k} is written, not left empty"
         assert k in drafted, f"{k} carries a draft decision with its reasons"
+
+
+def test_the_judge_has_room_for_a_full_brief_and_a_cut_off_review_is_asked_again(tmp_path):
+    """mw.log, 9 Nov: review_brief cut off at max_tokens, the judge stage failed and only 10 of
+    21 parts were written. The Review agent's whole-brief review asks for room for every part, and one still
+    cut off is asked once more with twice the room."""
+    from napkin.brief.planned import REVIEW_MAX_TOKENS
+    seen = {}
+    m = planned_model(seen)
+    orig, cut = m.create, {"n": 0}
+
+    def create(**kw):
+        r = orig(**kw)
+        if m.calls[-1][0] == "review_brief" and cut["n"] == 0:
+            cut["n"] += 1
+            r.stop_reason = "max_tokens"
+        return r
+
+    m.create = create
+    s = Server(tmp_path, model=m, retrieval=retrieval(),
+               settings_kw={"brief_flow": "planned", "brief_research_max": 2})
+    try:
+        host = Host()
+        replies = run(s, host, inp={"prompt": THIN, "attachments": []})
+    finally:
+        s.stop()
+    asks = [kw["max_tokens"] for p, _, kw in m.calls if p == "review_brief"]
+    assert REVIEW_MAX_TOKENS >= 16000, "a full brief's review runs past 8000 tokens"
+    assert asks == [REVIEW_MAX_TOKENS, REVIEW_MAX_TOKENS * 2]
+    assert replies[-1]["job"]["state"] == "done"
+    assert [e for e in replies[-1].get("result", {}).get("skipped", []) if "judge" in str(e)] == []
+    assert len(seen["reviews"]) >= 1, "the judge stage finished on the second ask"
 
 
 def _planned_run(tmp_path, seen, draft_edit):
@@ -377,7 +409,7 @@ def test_the_role_of_each_medium_and_the_measurement_are_drafted_in_the_one_call
     seen = {}
     host = _planned_run(tmp_path, seen, lambda out: out)
     for k in ("media_roles", "measurement"):
-        assert k in seen["draft"]["parts"], f"Dara is asked for {k} in the one draft call"
+        assert k in seen["draft"]["parts"], f"The Brief agent is asked for {k} in the one draft call"
         assert isinstance(host.data[k], list) and host.data[k], f"{k} is written as a list"
     assert "at most four" in seen["draft"]["parts"]["media_roles"] and "Judged by" in seen["draft"]["parts"]["measurement"]
     assert sum(1 for p in seen["reviews"] if p) == len(seen["reviews"]) and len(seen["reviews"]) == 2, "no extra review call"
@@ -435,7 +467,7 @@ def _timeline_label(monkeypatch):
 
 
 def intake_model(seen):
-    """The planned fakes, with Dara resting the budget on the client's words whenever there are some."""
+    """The planned fakes, with the Brief agent resting the budget on the client's words whenever there are some."""
     m = planned_model(seen)
     whole = m.overrides["draft_brief_whole"]
 
@@ -503,7 +535,7 @@ def test_intake_pauses_before_the_plan_and_an_answer_is_written_as_the_clients_w
     assert waiting["job"]["progress"]["total"] == 4 and waiting["job"]["questions_id"]
     # the plan was not called until the answer arrived, and it reads the answer as the client's words
     assert FIGURE in seen["plan"]["client_said"] and FIGURE in seen["draft"]["client_said"]
-    assert any(FIGURE in str(w) for r in seen["reviews"] for w in [r.get("client_said")]), "Jude reads it too"
+    assert any(FIGURE in str(w) for r in seen["reviews"] for w in [r.get("client_said")]), "the Review agent reads it too"
     # the part it feeds is the client's, not an assumption
     assert host.data["budget_and_scope"] == f"Budget: {FIGURE}."
     by = {t.split("#", 1)[1]: d for d in host.chain if d.get("action") == "draft" for t in d["targets"]}

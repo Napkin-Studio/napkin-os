@@ -27,8 +27,8 @@
 use clan_sdk::hash::sha256_prefixed;
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions,
+    AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -37,6 +37,9 @@ use std::path::{Path, PathBuf};
 mod app_ui;
 
 const APP_ID: &str = "ie.napkin.campaign-research";
+/// A brief can start a research: carried whole under `upstream.<brief id>`,
+/// so extract_ask proposes the ask from it (features/spinoff-and-links.clan).
+const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const FACTS_PATH: &str = "shared/facts.yaml";
 const FINDINGS_PATH: &str = "shared/findings.yaml";
@@ -147,13 +150,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "campaign-research.example.clan".to_string());
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
-    // The agent figures and the OS's fields are inlined at build (one
-    // snippet each, every app).
-    let index_html = app_ui::inline_fields(
+    // The OS's fields and the agent engine are inlined at build (one snippet
+    // each, every app).
+    let index_html = app_ui::inline_sphere(
         &dir.join(".."),
-        &app_ui::inline_figures(
+        &app_ui::inline_source_card(
             &dir.join(".."),
-            &fs::read_to_string(dir.join("index.html"))?,
+            &app_ui::inline_fields(
+                &dir.join(".."),
+                &fs::read_to_string(dir.join("index.html"))?,
+            )?,
         )?,
     )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
@@ -204,13 +210,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             app_id: APP_ID.into(),
             // 0.2: the Plan-zone identity; figures from the shared snippet.
             // 0.4: its card on the OS home (app.home).
-            version: "0.4.16".into(),
+            // 0.5: a brief can start a research, carried whole (app.spinoff).
+            version: "0.5.1".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
-            spinoff: None,
+            // Carried whole under upstream.<brief id>, so no map; and no lift:
+            // extract_ask proposes the ask from the brief, and a person
+            // confirms it (pipeline.yaml, extract_ask reads).
+            spinoff: Some(SpinoffSpec {
+                accepts: vec![BRIEF_APP_ID.into()],
+                upstream: true,
+                ..Default::default()
+            }),
             // The card on the OS home, in the app's own words.
             home: Some(AppHome {
                 colour: Some("#0F9488".into()),
@@ -221,9 +235,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 start: Some("Start research".into()),
                 crew: vec!["extract".into(), "market_structure".into(), "positioning".into(), "culture".into(), "synthesis".into(), "drafter".into()],
                 noun: vec!["research".into(), "research".into()],
-                untitled: Some("Untitled research".into()),
+                untitled: Some("New question".into()),
                 // "Napkin Studio Research" in the OS bar; it shares the OS's face (Geist).
                 brand: Some("Research".into()),
+                ..Default::default()
+            }),
+            // Link an existing brief into a research that exists: one
+            // research feeds many briefs, and a research may read several.
+            attach: Some(AttachSpec {
+                accepts: vec![BRIEF_APP_ID.into()],
+                many: vec![BRIEF_APP_ID.into()],
                 ..Default::default()
             }),
         },

@@ -107,10 +107,14 @@ export function activityOfItem(item: LibraryItem): Activity {
   return 'idle'
 }
 
-/** "3 briefs · 1 needs you · 1 running · 1 failed": nothing said about a zero. */
+/** "3 briefs · 2 research · 1 needs you · 1 running · 1 failed": each tool's work by its own noun, nothing said about a zero. */
 export function statusLine(perTool: Record<ToolId, Tally>, total: Tally): string {
-  const briefs = perTool.brief.open
-  const parts = [briefs ? plural(briefs, 'brief') : total.open ? plural(total.open, 'piece of work', 'pieces of work') : 'No work yet']
+  const byTool = TOOLS.filter(t => perTool[t.id].open).map(t => plural(perTool[t.id].open, t.noun[0], t.noun[1]))
+  const known = TOOLS.reduce((n, t) => n + perTool[t.id].open, 0)
+  const rest = total.open - known
+  const parts = byTool.length
+    ? [...byTool, ...(rest > 0 ? [`${rest} other`] : [])]
+    : [total.open ? plural(total.open, 'piece of work', 'pieces of work') : 'No work yet']
   if (total.needsYou) parts.push(total.needsYou === 1 ? 'needs you' : `${total.needsYou} need you`)
   if (total.failed) parts.push(`${total.failed} failed`)
   if (total.running) parts.push(`${total.running} running`)
@@ -235,6 +239,22 @@ export function needsReason(item: LibraryItem): string {
 /** What a running or failed document is doing, in words (the run's own label; Failed when it says nothing). */
 export const runWords = (item: LibraryItem): string =>
   item.run?.label || (item.run?.state === 'failed' ? 'Failed' : 'Running')
+
+/**
+ * A running job as the bar's chip says it (the mock's "Working · step 1/3"):
+ * a clean verb, never the run's stage key or its "(0 of 3)", and the step being
+ * worked, 1-based for people (the run counts steps done, so 0 of 3 is step 1).
+ * The verb is the label's own first word when that is a plain "-ing" verb with
+ * nothing after it ("Rewriting"); otherwise "working".
+ */
+export function jobOf(run: { label?: string | null; progress?: readonly [number, number] | null } | null | undefined): { verb: string; step: readonly [number, number] | null } {
+  const label = String(run?.label ?? '').trim()
+  const m = /^([A-Za-z]+ing)(?:\s+(?:again|it|the \w+(?: again)?))?\.?$/.exec(label)
+  const verb = m ? m[1].toLowerCase() : 'working'
+  const p = run?.progress
+  const step = p && p[1] > 0 ? [Math.min(Math.max(0, p[0]) + 1, p[1]), p[1]] as const : null
+  return { verb, step }
+}
 
 /** Which tool a document belongs to, for a strip's second line. */
 export const toolName = (item: LibraryItem): Tool | undefined => toolOfApp(item.app_id)

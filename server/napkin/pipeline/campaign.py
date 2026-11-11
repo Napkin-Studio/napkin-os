@@ -39,7 +39,7 @@ from ..doc import (CAMPAIGN_FIELDS, GATES, LENS_NAMESPACE, LENS_TITLES, LENSES, 
                    build_materials, ctx_data, ctx_decisions, ctx_facts, ctx_findings, decision, deep_merge, field_paths,
                    get_dotted, human_owned, known_ids, market_list, read_of)
 from ..jobs import Abandoned, Cancelled, abandon, abandoned, bounded
-from ..layers import origin_uri
+from ..layers import origin_uri, row_source_records
 from ..metrics import emit
 from ..model import ModelError
 from ..rules import identify as id_rules
@@ -47,7 +47,7 @@ from ..rules import markets as market_rules
 from ..rules.confidence import fact_confidence
 from ..rules.quotes import find_quote
 from ..util import TaskError, iso, lid, slug, uid, ulid_like
-from .. import reasoning as rsn
+from .. import origin, reasoning as rsn
 from . import extract as extract_stage
 from . import report as report_stage
 from . import synthesise as synth_stage
@@ -211,6 +211,18 @@ def combine(doc, chunks) -> dict | None:
             "facts_append": facts, "findings_append": findings, "sources_append": sources, "decisions": decs}
 
 
+class BriefText:
+    """One path of the carried brief's ask, read by identify like a material
+    (Material's id / name / kind / text / locator)."""
+
+    def __init__(self, brief, path, text):
+        self.id, self.name, self.kind, self.text = f"brief:{path}", f"the brief's {path}", "brief", text
+        self.ref = f"{brief}#{path}"
+
+    def locator(self, start):
+        return self.ref.partition("#")[2]
+
+
 class CampaignJob:
     def __init__(self, jid, doc, handler, clan, inp, caps, settings):
         self.id, self.doc, self.handler = jid, doc, handler
@@ -245,6 +257,7 @@ class CampaignJob:
         self._report_from = "landed"   # landed | working: which document the report composes from
         self._last_sent = set()        # the chunks the previous reply carried
         self._identify_call: Future | None = None  # identify started beside extract
+        self._layer_sources: dict = {}  # source records of the layer rows identify pinned (the roster's), by id
         self.latest_clan = clan
         self.W, self.W_facts, self.W_version, self.clan = {}, [], None, clan
         self.sync(clan)
@@ -270,8 +283,14 @@ class CampaignJob:
         self.W, self.W_facts, self.W_version, self.clan = W, facts, clan.get("version"), clan
 
     def wclan(self):
-        return {"id": self.doc, "version": self.W_version, "data": self.W, "facts": self.W_facts,
-                "findings": ctx_findings(self.clan), "decision_chain": self.clan.get("decision_chain") or {}}
+        out = {"id": self.doc, "version": self.W_version, "data": self.W, "facts": self.W_facts,
+               "findings": ctx_findings(self.clan), "decision_chain": self.clan.get("decision_chain") or {}}
+        # what the host tells the job beside the document: the brief it started
+        # from and the client it belongs to (features/spinoff-and-links)
+        for k in ("upstream_ask", "workspace_client"):
+            if self.clan.get(k):
+                out[k] = self.clan[k]
+        return out
 
     def did(self, *parts):
         return uid("d_", self.doc, self.id, *parts)
@@ -699,8 +718,23 @@ class CampaignJob:
         mats, _ = build_materials(self.inp, self.W)
         return mats
 
+    def brief_texts(self):
+        """The carried brief's ask, each path one text identify reads beside the
+        material (`brief:<path>`). A value read from one is proposed, citing
+        `<brief id>#<path>`, never extracted."""
+        ask = self.clan.get("upstream_ask") if isinstance(self.clan.get("upstream_ask"), dict) else {}
+        fields, brief = ask.get("fields"), ask.get("document_id")
+        if not isinstance(fields, dict) or not isinstance(brief, str):
+            return []
+        return [BriefText(brief, path, v) for path, v in fields.items() if isinstance(v, str) and v.strip()]
+
+    def brief_ref(self, material_id):
+        """`brief:<path>` -> `<brief id>#<path>`, or None for a real material."""
+        b = next((t for t in self.brief_texts() if t.id == material_id), None)
+        return b.ref if b else None
+
     def _span(self, material_id, quote, name=None):
-        mats = self.materials()
+        mats = self.materials() + self.brief_texts()
         by = {m.id: m for m in mats}
         for mat in ([by[material_id]] if material_id in by else []) + [m for m in mats if m.id != material_id]:
             pos = find_quote(mat.text, quote or "")
@@ -718,7 +752,7 @@ class CampaignJob:
         extract writes, so it can run beside extract."""
         leaves = self.caps.layers.leaves()
         return (leaves, ("identify", IDENTIFY_SYSTEM,
-                         {"materials": extract_stage.material_payload(self.materials()),
+                         {"materials": extract_stage.material_payload(self.materials() + self.brief_texts()),
                           "category_tree": [{"code": l["code"], "name": l["name"], "vertical": l["vertical_name"]}
                                             for l in leaves]},
                          identify_schema([l["code"] for l in leaves])))
@@ -773,9 +807,14 @@ class CampaignJob:
                 sp = self._span(c.get("material_id"), c.get("quote"))
                 if c.get("leaf") in codes and sp and c["leaf"] not in [x[0] for x in cats]:
                     cats.append((c["leaf"], sp))
+            grounds = raw.get("grounds")
+            if isinstance(grounds, dict):  # a point on the brief cites the brief's address
+                grounds = dict(grounds, because=[
+                    dict(p, cites=[self.brief_ref(c) or c for c in p.get("cites") or []]) if isinstance(p, dict) else p
+                    for p in grounds.get("because") or []])
             self._identify_raw = {"brands": brands, "client": client, "categories": cats[:2],
-                                  "grounds": raw.get("grounds"),
-                                  "material_ids": [m.id for m in self.materials()]}
+                                  "grounds": grounds,
+                                  "material_ids": [m.id for m in self.materials()] + [t.ref for t in self.brief_texts()]}
         return self._identify_raw
 
     # -- stages -----------------------------------------------------------------
@@ -801,6 +840,11 @@ class CampaignJob:
         self.add_chunk("extract", change["data_patch"], [dec], text=text)
         return True
 
+    def layer_sources(self, facts) -> list[dict]:
+        """The source records of the layer rows identify pinned that these facts cite."""
+        cited = dict.fromkeys(s for f in facts for s in f.get("sources") or [])
+        return [self._layer_sources[s] for s in cited if s in self._layer_sources]
+
     def ask(self, field, text, options, allow_text, intro, decisions=None, patch=None, facts=()):
         qid = uid("q_", self.doc, self.id, field, self.seq + 1, n=12)
         q = {"id": qid, "text": text, "options": options, "allow_text": allow_text,
@@ -809,7 +853,8 @@ class CampaignJob:
             self.default_answer(q, decisions, patch, facts)
             return None
         opt_cites = ([o["source"]["material_id"] for o in options if o.get("source")]
-                     + [f for o in options for f in o.get("fact_ids", [])])
+                     + [f for o in options for f in o.get("fact_ids", [])]
+                     + [r for o in options for r in o.get("upstream_refs", [])])
         named = [o["label"] for o in options if "value" in o]
         label = field.replace("_", " ")
         because = [rsn.point(intro, opt_cites) if intro and (opt_cites or not rsn.states_figure(intro))
@@ -831,7 +876,7 @@ class CampaignJob:
                          attention="Waiting for your answer: research does not start until it is given."))
         decs = list(decisions or []) + [d]
         self.add_chunk("identify", patch or {}, decs, facts=facts, text=f"{intro} {text}".strip(), question=q,
-                       msg_decision=d)
+                       msg_decision=d, sources=self.layer_sources(facts))
         with self.lock:
             self.question = q
         self.caps.runlog.question("identify", text, [o.get("label") for o in options])
@@ -857,7 +902,8 @@ class CampaignJob:
         label = fld.replace("_", " ")
         pick = None if fld == "brand" else next(
             (o for o in q["options"] if "value" in o and (o.get("origin") == "extracted" and o.get("source")
-                                                         or o.get("origin") == "proposed" and o.get("fact_ids"))),
+                                                         or o.get("origin") == "proposed"
+                                                         and (o.get("fact_ids") or o.get("upstream_refs")))),
             None)
         did = self.did("default", q["id"])
         patch = copy.deepcopy(patch) if patch else {}
@@ -871,6 +917,9 @@ class CampaignJob:
             if pick.get("fact_ids"):
                 env["fact_ids"] = list(pick["fact_ids"])
                 cites += list(pick["fact_ids"])
+            if pick.get("upstream_refs"):
+                env["upstream_refs"] = list(pick["upstream_refs"])
+                cites += list(pick["upstream_refs"])
             patch.setdefault("campaign", {})[fld] = env
         with self.lock:
             if not pick:
@@ -899,7 +948,8 @@ class CampaignJob:
         text = (f"Nobody answered in {waited}, so I went on with {pick['label']} for the {label}, as the material "
                 f"reads: confirm it." if pick else
                 f"Nobody answered in {waited}, so I went on without the {label}: {UNANSWERED[fld]}.")
-        self.add_chunk("identify", patch, list(decisions or []) + [d], facts=facts, text=text, msg_decision=d)
+        self.add_chunk("identify", patch, list(decisions or []) + [d], facts=facts, text=text, msg_decision=d,
+                       sources=self.layer_sources(facts))
 
     def stage_identify(self):
         camp = self.W.get("campaign") or {}
@@ -936,9 +986,25 @@ class CampaignJob:
                                 "Which brand is the client's? Type its name.", opts, True,
                                 f"From \"{pt['text']}\":" if found else f"\"{pt['text']}\" does not name a brand I can use.",
                                 ds, p, facts)
-            brands = self.identify_raw()["brands"]
+            raw_brands = self.identify_raw()["brands"]
+            brands = [b for b in raw_brands if not self.brief_ref(b["span"]["material_id"])]
             kind, what = id_rules.decide_subject(brands)
-            if kind == "subject":
+            if kind == "ask_text":  # the material names no brand: the brief it started from may
+                from_brief = self.brief_brand([b for b in raw_brands if self.brief_ref(b["span"]["material_id"])])
+                if from_brief:
+                    brand = from_brief["value"]
+                    write("brand", {"value": brand, "origin": "proposed", "upstream_refs": from_brief["refs"]})
+                    idec["cites"] += from_brief["refs"]
+                    notes.append(f"{brand['name']} is the brand, from the brief this research started from "
+                                 f"(proposed, to confirm).")
+                    ev_pins.append(rsn.point(f"The brief this research started from names {brand['name']}",
+                                             from_brief["refs"]))
+                    levels.append(("medium", f"{brand['name']} comes from the brief, not the client's material; "
+                                             f"confirm it"))
+                    kind = "brief"
+            if kind == "brief":
+                pass
+            elif kind == "subject":
                 brand = {"ref": what["ref"], "name": what["name"]}
                 write("brand", {"value": brand, "origin": "extracted", "source": what["span"]})
                 idec["cites"].append(what["span"]["material_id"])
@@ -996,7 +1062,8 @@ class CampaignJob:
                                   "decision": pin_did, "pinned_at": t,
                                   "pin_reason": f"Roster row ({r['key']}) from the brand layer, for campaign."
                                                 f"{'categories' if 'categories' in r['key'] else 'client_org'}",
-                                  "layer": "brand", "method": r.get("method") or "report"})
+                                  "layer": "brand", "method": r.get("method") or "report",
+                                  origin.KEY: origin.LAYER})
                 lv = rsn.lowest(f["confidence"] for f in facts)
                 tiers = sorted({x.get("tier", "?") for r in row["facts"] for x in r["source_records"]})
                 decs.append(decision(self.doc, pin_did, "pin", self.handler, "lookup",
@@ -1013,6 +1080,9 @@ class CampaignJob:
                                                            "the brand layer already holds a roster row for "
                                                            "this brand")])))
                 self.hits += [{"id": f["id"], "scope": "brand", "source": f["origin"]} for f in facts]
+                # what each roster row cites goes into the document with it, so a citation leads somewhere
+                for rec in row_source_records(row["facts"]):
+                    self._layer_sources.setdefault(rec["id"], rec)
                 pinned = pinned + facts
         cat_pins = sorted([f for f in pinned if f["key"] in ("roster.categories.primary", "roster.categories.secondary")
                            and re.fullmatch(r"[a-z0-9_]+\.[a-z0-9_]+", str(f.get("value")))],
@@ -1065,7 +1135,9 @@ class CampaignJob:
                     return self.ask("categories", "Which category is it? Name it as the tree does, e.g. "
                                                   "\"EV and charging\".", [], True,
                                     f"\"{pt['text']}\" does not match a category leaf I know.", ds, p, facts)
-                cands = self.identify_raw()["categories"]
+                cands = [(leaf, dict(sp, upstream_ref=self.brief_ref(sp["material_id"]))
+                          if self.brief_ref(sp["material_id"]) else sp)
+                         for leaf, sp in self.identify_raw()["categories"]]
                 if cands:
                     return self.ask("categories", "Which category is it?",
                                     id_rules.category_options(cands, "extracted", labels), True,
@@ -1125,13 +1197,15 @@ class CampaignJob:
                 ev_pins.append(rsn.point(f"The roster row names the client, {name}", org_pin["id"]))
                 lv = org_pin.get("confidence") if org_pin.get("confidence") in rsn.LEVELS else "low"
                 levels.append((lv, f"the client pin is {lv} (derived)"))
-            elif ext:
+            elif ext and not self.brief_ref(ext["span"]["material_id"]):
                 write("client_org", {"value": ext["value"], "origin": "extracted", "source": ext["span"]})
                 idec["cites"].append(ext["span"]["material_id"])
                 notes.append(f"Client: {ext['value']['name']} (read from the material).")
                 ev_material.append(rsn.point(f"The material names the client, {ext['value']['name']}",
                                              ext["span"]["material_id"]))
                 levels.append(("high", "the client is quoted verbatim from the material"))
+            else:
+                self.client_fallback(write, idec, notes, ev_pins, levels, ext)
 
         # 6. the subject is never its own comparator (a later stage rewriting an
         #    earlier stage's field: new decision, read = what extract wrote, §3)
@@ -1175,10 +1249,52 @@ class CampaignJob:
                                only_option="there was nothing left to identify"))]
         text = " ".join(notes) or (f"{bname}: brand, categories and markets are settled." if brand and
                                    not self.skipped_fields else "Went on with what is settled.")
-        self.add_chunk("identify", p, ds, facts=facts, text=text)
+        self.add_chunk("identify", p, ds, facts=facts, text=text, sources=self.layer_sources(facts))
         with self.lock:
             self.question = None
         return True
+
+    def brief_brand(self, read):
+        """The brand the carried brief names: what identify read from it (one
+        brand, not a comparator), else its client paragraph as a name. ->
+        {value, refs} or None."""
+        kind, what = id_rules.decide_subject(read) if read else ("ask_text", None)
+        if kind == "subject":
+            return {"value": {"ref": what["ref"], "name": what["name"]},
+                    "refs": [self.brief_ref(what["span"]["material_id"])]}
+        ask = self.clan.get("upstream_ask") if isinstance(self.clan.get("upstream_ask"), dict) else {}
+        fields = ask.get("fields") if isinstance(ask.get("fields"), dict) else {}
+        for path in ("brand", "client"):
+            name = extract_stage.brief_name(fields.get(path) or "", extract_stage.workspace_client(self.clan))
+            if name and isinstance(ask.get("document_id"), str):
+                return {"value": {"ref": id_rules.brand_ref(name), "name": name},
+                        "refs": [f"{ask['document_id']}#{path}"]}
+        return None
+
+    def client_fallback(self, write, idec, notes, ev_pins, levels, ext):
+        """No roster pin and no client in the material: the carried brief's client
+        (read by identify, else its paragraph as a name), then the client the
+        workspace belongs to. Each is proposed, to confirm."""
+        if ext and self.brief_ref(ext["span"]["material_id"]):
+            value, refs = ext["value"], [self.brief_ref(ext["span"]["material_id"])]
+        else:
+            p = extract_stage.upstream_proposals(self.clan).get("client_org")
+            value, refs = (p["value"], p["upstream_refs"]) if p else (None, None)
+        if value:
+            write("client_org", {"value": value, "origin": "proposed", "upstream_refs": refs})
+            idec["cites"] += refs
+            notes.append(f"Client: {value['name']} (from the brief this research started from, proposed).")
+            ev_pins.append(rsn.point(f"The brief this research started from names the client, {value['name']}",
+                                     refs))
+            levels.append(("medium", "the client comes from the brief; confirm it"))
+            return
+        wc = extract_stage.workspace_client(self.clan)
+        value = extract_stage.org_value(wc["name"]) if wc and wc["id"] else None
+        if value:
+            write("client_org", {"value": value, "origin": "proposed", "workspace_ref": wc["id"]})
+            notes.append(f"Client: {value['name']} (the client this research was started for, proposed).")
+            ev_pins.append(rsn.point(f"The research was started from {value['name']}'s client page"))
+            levels.append(("medium", "the client is the workspace's; confirm it"))
 
     def identify_reasoning(self, idec, ev_material, ev_pins, levels, rejected):
         """identify's reasoning: the model's points on the material (cite-checked

@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from .. import origin as _origin
+
 
 class Layers(Protocol):
     # category tree
@@ -64,3 +66,45 @@ def origin_uri(layer: str, entity: str, key: str, version: int) -> str:
     typ, _, rest = entity.partition("/")
     path = rest if typ == layer else entity
     return f"fact://{layer}/{path}/{key}@{version}"
+
+
+# The fields of a document source record (shared/sources.yaml) a layer row's
+# source record fills, in the order the host's projection copies them.
+SOURCE_FIELDS = ("uri", "title", "publisher", "published_at", "retrieved_at", "tier", "domain", "licence")
+
+
+def layer_source_record(r: dict) -> dict | None:
+    """The document's source record for one of a layer row's `source_records`,
+    as the row carried it: every path that pins a layer row (a roster row, a
+    reused research row, an answer's search) cites its sources with this.
+
+    A record is kept with whatever it has: a person's confirmation
+    (`human:<who>`, "confirmed in the chat") has no publisher or date, and is
+    still a record. One with no address at all is given `layer:<id>`, since
+    the host refuses a source with no uri. None when the id is not a `src_` id."""
+    sid = r.get("id") if isinstance(r, dict) else None
+    if not (isinstance(sid, str) and sid.startswith("src_") and len(sid) > 4):
+        return None
+    rec = {"id": sid}
+    for k in SOURCE_FIELDS:
+        v = r.get(k)
+        if v is None or (isinstance(v, str) and not v.strip()):
+            continue
+        rec[k] = v
+    rec.setdefault("uri", f"layer:{sid}")
+    rec[_origin.KEY] = _origin.LAYER
+    return rec
+
+
+def row_source_records(rows, cited=None) -> list[dict]:
+    """The source records of layer rows (each row's `source_records`), one per
+    id in first-seen order; only the ids in `cited` when it is given."""
+    want = None if cited is None else set(cited)
+    out, seen = [], set()
+    for row in rows or []:
+        for r in (row or {}).get("source_records") or []:
+            rec = layer_source_record(r)
+            if rec and rec["id"] not in seen and (want is None or rec["id"] in want):
+                seen.add(rec["id"])
+                out.append(rec)
+    return out

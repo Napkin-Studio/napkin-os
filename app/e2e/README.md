@@ -47,3 +47,7 @@ page, Add client (and its refusal), reload, open a client, back and forward, the
 starting a document for a client, hostile hashes, a second tenant, the Launcher fallback,
 the keyboard, reduced motion. `shots.spec.ts`: needs you, running and failed computed from
 the documents themselves, urgency order, accessible names.
+`research.spec.ts`: the SDK's packed research example uploaded and opened from its link; the report body
+(band, stats, the ask, numbered sections, the record as report sections), the evidence map widening the
+inspector beside the report, a summary line traced and a crumb back, a finding's card, a gap put into Ask the
+research (never sent), the record filtered, and the phone bottom sheet.

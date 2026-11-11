@@ -19,11 +19,16 @@
 
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
-    AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions, SpinoffSpec,
+    AppHome, AppInfo, AttachSpec, ClanBuilder, ClanFile, CreateOptions, FileEntry,
+    InstantiateOptions, MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
+
+// The agent engine every Napkin app draws (only the sphere is used here).
+#[allow(dead_code)]
+#[path = "shared/app_ui.rs"]
+mod app_ui;
 
 const APP_ID: &str = "ie.napkin.deck-maker";
 /// The apps a deck is spun off from, whole, under `upstream`.
@@ -58,7 +63,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "deck-maker.example.clan".to_string());
 
     let schema = fs::read_to_string(dir.join("schema.json"))?;
-    let index_html = fs::read_to_string(dir.join("index.html"))?;
+    // The agent engine is inlined at build, at the template's agent-sphere marker.
+    let index_html = app_ui::inline_sphere(
+        &dir.join(".."),
+        &fs::read_to_string(dir.join("index.html"))?,
+    )?;
     let requirements = fs::read_to_string(dir.join("agent/requirements.yaml"))?;
     let pipeline = fs::read_to_string(dir.join("app/pipeline.yaml"))?;
     let context = fs::read_to_string(dir.join("context.md"))?;
@@ -125,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
-            version: "0.2.0".into(),
+            version: "0.2.1".into(),
             icon: Some(ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -134,6 +143,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             spinoff: Some(SpinoffSpec {
                 accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
                 upstream: true,
+                ..Default::default()
+            }),
+            // Link an existing brief (one) or research (several) into a deck.
+            attach: Some(AttachSpec {
+                accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
+                many: vec![RESEARCH_APP_ID.into()],
                 ..Default::default()
             }),
         },
@@ -148,7 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The spin-off contract and version are asserted, not assumed: a regression
     // here must fail the packer (and the spinoff.rs test that runs it).
     let app_block = template.manifest().app.as_ref().expect("app block");
-    assert_eq!(app_block.version, "0.2.0", "the Deck template version");
+    assert_eq!(app_block.version, "0.2.1", "the Deck template version");
     let spin = app_block.spinoff.as_ref().expect("app.spinoff is declared");
     assert_eq!(
         spin.accepts,

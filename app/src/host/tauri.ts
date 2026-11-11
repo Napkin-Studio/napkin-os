@@ -22,8 +22,14 @@ import type {
   LibraryListing,
   OpenResult,
   RecentDoc,
+  SourceCard,
   SpinoffTarget,
   Unlisten,
+  UpstreamView,
+  UpstreamUpdateReply,
+  AttachTarget,
+  AttachReply,
+  RelatedView,
 } from './types'
 
 /**
@@ -34,6 +40,19 @@ function clanScheme(): string {
   return window.navigator.userAgent.includes('Windows')
     ? 'http://clan.localhost'
     : 'clan://localhost'
+}
+
+/** A clan:// route on the desktop: its reply, or the host's own words as the error. */
+async function clanRoute<T>(path: string, body?: unknown): Promise<T> {
+  const resp = await fetch(`${clanScheme()}${path}`, body === undefined ? undefined : { method: 'POST', body: JSON.stringify(body) })
+  const text = await resp.text()
+  let parsed: unknown = null
+  try { parsed = JSON.parse(text) } catch { /* not JSON: the body is the message */ }
+  if (!resp.ok) {
+    const err = (parsed as { error?: unknown } | null)?.error
+    throw new Error((typeof err === 'string' ? err : '') || text || `${path.slice(1)}: ${resp.status}`)
+  }
+  return parsed as T
 }
 
 export const tauriHost: Host = {
@@ -51,8 +70,22 @@ export const tauriHost: Host = {
   // The desktop viewer is parked; the web shell is where the panel lives.
   getDecisions: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   acknowledge: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
+  verify: () => Promise.reject(new Error('the decision view is not available on the desktop yet')),
   // Nor client review, which is read and answered from that view.
-  upstream: () => Promise.reject(new Error('what changed upstream is not available on the desktop yet')),
+  // The clan:// route table answers these, as it answers the frame.
+  upstream: () => clanRoute<UpstreamView>('/upstream'),
+  updateFromUpstream: () => clanRoute<UpstreamUpdateReply>('/upstream/update', {}),
+  attachTargets: () => clanRoute<AttachTarget[]>('/attach-targets'),
+  attach: documentId => clanRoute<AttachReply>('/attach', { document_id: documentId }),
+  updateLinked: documentId => clanRoute<AttachReply>('/upstream/update', { document_id: documentId }),
+  detach: documentId => clanRoute<AttachReply>('/attach/detach', { document_id: documentId }),
+  related: () => clanRoute<RelatedView>('/related'),
+  // The clan:// route answers it, as for the frame.
+  cites: async refs => {
+    const resp = await fetch(`${clanScheme()}/cite`, { method: 'POST', body: JSON.stringify({ refs }) })
+    if (!resp.ok) throw new Error(`cite: ${resp.status}`)
+    return ((await resp.json()) as { cites: Record<string, SourceCard> }).cites
+  },
   clientReview: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewConfirm: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewReopen: () => Promise.reject(new Error('client review is not available on the desktop yet')),

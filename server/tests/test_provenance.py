@@ -1,10 +1,10 @@
-"""brief-fact-provenance: what each part of a planned brief rests on, worked out after Dara wrote it
+"""brief-fact-provenance: what each part of a planned brief rests on, worked out after the Brief agent wrote it
 (brief/provenance.py, rules/derive.py). The owner's rule runs through every test here: a value is never
 edited, a worked-out conclusion is tied to its inputs, and no claim sends a part to a rewrite.
 
 The Lidl replay (staging job_565f98e45d8350f5e5fc, 2026-10-19): two facts outside the measure list (RTÉ,
 28 Sep: available from 5 October; TheJournal, 15 Oct: the offer has closed from today), a 63-character
-request, nothing captured, and Dara's correct conclusion that the offer was over in 10 days."""
+request, nothing captured, and the Brief agent's correct conclusion that the offer was over in 10 days."""
 
 import ast
 import copy
@@ -156,7 +156,7 @@ def test_lidl_offer_over_in_10_days(tmp_path, variant):
     finally:
         s.stop()
     a, b = seen["ids"]
-    # two kept pins, in this job's new pins, so in the facts Dara saw; never written to the layers
+    # two kept pins, in this job's new pins, so in the facts the Brief agent saw; never written to the layers
     kept = {f["id"]: f for f in host.facts if f.get("kept_in_document")}
     assert set(kept) == {a, b}
     assert {f["id"] for f in seen["draft"]["facts"]} >= {a, b}
@@ -166,7 +166,7 @@ def test_lidl_offer_over_in_10_days(tmp_path, variant):
         assert "origin" not in f and "version" not in f and f["pin_reason"] == "kept in this brief only"
         assert f["layer"] == "brand" and f["quotes"]
     jsonschema.Draft7Validator(FACTS_SCHEMA).validate({"facts": host.facts})
-    # the value is Dara's, byte for byte
+    # the value is the Brief agent's, byte for byte
     assert host.data["background"] == BG
     d = bg_decision(host)
     assert d["basis"] == "research", "the client said nothing about the offer: not the client's words"
@@ -183,7 +183,7 @@ def test_lidl_offer_over_in_10_days(tmp_path, variant):
     want = rsn.lowest([kept[a]["confidence"], kept[b]["confidence"]])
     assert d["reasoning"]["certainty"]["level"] == want
     assert "attention" not in d["reasoning"] or "Check:" not in d["reasoning"]["attention"]
-    assert not d["reasoning"]["decided"].endswith("after Jude's note.")
+    assert not d["reasoning"]["decided"].endswith("after the Review agent's note.")
     assert "builds on what the client wrote" not in json.dumps(d["reasoning"]), "nothing captured: not kept"
     # an assumption's figure-bearing why is in attention; no point borrows the plan or the materials
     plan_id = next(x["id"] for x in host.chain if x.get("action") == "plan")
@@ -400,7 +400,7 @@ def test_client_guard_all_paths(tmp_path, path):
         run(s, host, inp={"prompt": THIN, "attachments": []})
         if path == "fix_parts":
             note = next(d for d in host.chain if d["kind"] == "verdict" and d.get("polarity") == "bad")
-            m.overrides["review_brief"] = m.overrides["review_brief_again"]  # Jude passes the fix
+            m.overrides["review_brief"] = m.overrides["review_brief_again"]  # the Review agent passes the fix
             run(s, host, task="fix_parts", inp={"verdict": note["id"]})
     finally:
         s.stop()
@@ -627,7 +627,7 @@ FP = pin("f_PPPPPPPP", ENTITY, "positioning.new_price", "New sign-ups pay €12.
 
 
 def test_a_monthly_price_over_a_year_is_worked_out():
-    """The staging draft (2026-10-20): 12.99 x 12 = 155.88 is Dara's conclusion, though the comparison
+    """The staging draft (2026-10-20): 12.99 x 12 = 155.88 is the Brief agent's conclusion, though the comparison
     fact states €155.88 (about 48 and Clear Mobile); it was filed as a plain fact."""
     ctx, _ = ctx_for([FP, FG])
     sent = "At €12.99 a month, the first year comes to the same €155.88 as 48 and Clear Mobile."
@@ -683,6 +683,10 @@ def test_the_writers_to_confirm_line_stays_to_confirm():
     tbc = [c for c in got["claims"] if c["text"].startswith("To confirm")]
     assert len(tbc) == 2 and all(c["kind"] == "to_confirm" and c["cites"] == [] and c["by"] == "writer"
                                  for c in tbc)
+    # the attention says "To confirm:" once, not again for each claim that already starts with it
+    attn = placed(got, ctx.client)["attention"]
+    assert attn.startswith("To confirm: you can buy") and "To confirm: To confirm:" not in attn
+    assert attn.count("To confirm:") == 1, attn
 
 
 def test_a_brand_named_in_digits_is_not_a_figure():
@@ -758,7 +762,7 @@ def test_prompt_snapshot():
     assert "never a number that is not in a cited fact" not in d
     assert "Cite the cap_ ids\n  of the client's words (client_words) it rests on." in d
     assert "Cite nothing." not in d.split('basis "research"')[0]
-    # nothing else in DRAFT_SYSTEM moved: Dara's prompt, as before but for the listed edits
+    # nothing else in DRAFT_SYSTEM moved: the Brief agent's prompt, as before but for the listed edits
     before = d.replace("Cite the cap_ ids\n  of the client's words (client_words) it rests on.", "Cite nothing.") \
         .replace("Use their\n  numbers exactly as given.", "Use their\n  numbers exactly as given; never a number that "
                                                            "is not in a cited fact.")

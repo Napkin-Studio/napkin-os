@@ -1,0 +1,189 @@
+<!-- Where a document came from, shown on a tool's prompt: one card per source,
+     in the source tool's own identity (design/new-ui/app-build/phase2.py,
+     "Tool homes": Research is the ink band with its lens dots, Brief the
+     dog-eared sheet with a manila tab). Spliced into a template at its
+     source-card marker by the packer (crates/clan-sdk/examples/shared/app_ui.rs,
+     inline_source_card). Brief Maker uses it on its prompt; Deck Maker
+     (feat/deck-studio-new-ui) takes it by adding the marker and the packer call,
+     then NapkinSource.fromUpstream over data.upstream and NapkinSource.mount.
+     The card sits on the app's paper: its colours are the app's tokens (the
+     studio's --nd-*, else the build's --ink/--card), so every agency look,
+     light and dark, carries it. -->
+<style id="napkin-source-css">
+.nsrc-list{
+  --ns-ink:var(--nd-ink,var(--ink,#141413)); --ns-card:var(--nd-card,var(--card,#FFFFFF));
+  --ns-paper:var(--nd-paper,var(--paper,#FFFDF8)); --ns-muted:var(--nd-muted,var(--ink2,#6D655A));
+  --ns-line:var(--nd-line,var(--line,#E2D9C8)); --ns-ok:var(--nd-ok,#1D8A4E); --ns-ok-ink:color-mix(in srgb,var(--ns-ok) 80%,var(--ns-ink)); --ns-warn:var(--nd-warn,#B45309);
+  --ns-act:color-mix(in srgb,var(--ag-act-line,var(--ag-act,var(--ns-ink))) 85%,var(--ns-ink));
+  --ns-manila:#E7D5AC; --ns-manila-line:#C4AA75; --ns-manila-ink:#5A4A2A;
+  --ns-ui:var(--font-ui,var(--ui,system-ui,sans-serif)); --ns-serif:var(--font-serif,Georgia,serif); --ns-mono:var(--font-mono,var(--mono,ui-monospace,monospace));
+  display:grid;gap:10px;margin:0;padding:0;list-style:none;color:var(--ns-ink)
+}
+.nsrc{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;column-gap:12px;background:var(--ns-card);color:var(--ns-ink);border:1px solid var(--ns-line);border-radius:6px;cursor:pointer;transition:border-color .15s,box-shadow .15s;text-align:left}
+.nsrc:hover{border-color:color-mix(in srgb,var(--ns-ink) 35%,var(--ns-line))}
+.nsrc.open{border-color:var(--ns-ink)}
+.nsrc-main{all:unset;grid-column:1 / -1;display:grid;gap:7px;min-width:0;cursor:pointer;border-radius:5px 5px 0 0}
+.nsrc-main:focus-visible{outline:2px solid var(--ns-act);outline-offset:2px}
+.nsrc svg{width:15px;height:15px;flex:none}
+.nsrc-t{font:600 16.5px/1.3 var(--ns-ui);letter-spacing:-.01em;color:var(--ns-ink);padding:0 14px;overflow-wrap:anywhere}
+.nsrc-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:0 14px;font:400 11.5px/1.5 var(--ns-mono);color:var(--ns-muted)}
+.nsrc-row b{font-weight:600;color:var(--ns-ink)}
+.nsrc-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 14px 11px;font:400 12.5px/1.5 var(--ns-ui);color:var(--ns-muted);min-width:0}
+.nsrc-chip{display:inline-flex;align-items:center;gap:4px;font:600 10.5px/1.5 var(--ns-mono);letter-spacing:.08em;text-transform:uppercase;padding:0 7px;border-radius:99px;border:1px solid currentColor}
+.nsrc-chip.ok{color:var(--ns-ok-ink)}
+.nsrc-chip.draft{color:var(--ns-muted);border-style:dashed}
+.nsrc-chip.changed{color:var(--ns-warn)}
+.nsrc-open{all:unset;justify-self:end;margin:0 14px 11px 0;font:500 12.5px/1.5 var(--ns-ui);color:var(--ns-muted);cursor:pointer;white-space:nowrap;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;border-radius:3px}
+.nsrc-open:hover{color:var(--ns-ink);text-decoration-color:currentColor}
+.nsrc-open:focus-visible{outline:2px solid var(--ns-act);outline-offset:2px}
+/* Research: the ink band, sans, the lens dots */
+.nsrc-research{overflow:hidden}
+.nsrc-band{display:flex;align-items:center;gap:8px;background:var(--ns-ink);color:var(--ns-card);padding:6px 14px;font:700 10.5px/1.5 var(--ns-mono);letter-spacing:.12em;text-transform:uppercase}
+.nsrc-lens{display:inline-flex;gap:4px;align-items:center}
+.nsrc-lens i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ns-ink);box-sizing:border-box}
+.nsrc-lens i.filled{background:var(--ns-ink)}
+.nsrc-lens i.thin{background:linear-gradient(90deg,var(--ns-ink) 50%,transparent 50%)}
+.nsrc-lens i.empty{border-color:var(--ns-warn)}
+/* Brief: the dog-eared sheet under a manila tab, the title in serif */
+.nsrc-brief{margin-top:18px;background:var(--ns-paper);clip-path:polygon(0 -20px,calc(100% - 16px) -20px,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);border-top-right-radius:0}
+.nsrc-brief::after{content:"";position:absolute;top:-1px;right:-1px;width:16px;height:16px;background:linear-gradient(225deg,transparent 50%,color-mix(in srgb,var(--ns-ink) 14%,var(--ns-paper)) 50%);pointer-events:none}
+.nsrc-tab{position:absolute;top:-19px;left:14px;height:18px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;background:var(--ns-manila);border:1px solid var(--ns-manila-line);border-bottom:0;border-radius:4px 4px 0 0;font:600 10.5px/1 var(--ns-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ns-manila-ink)}
+.nsrc-tab svg{width:13px;height:13px}
+.nsrc-brief .nsrc-main{padding-top:12px;border-radius:0 0 5px 5px}
+.nsrc-brief .nsrc-t{font:600 19px/1.25 var(--ns-serif);letter-spacing:-.01em}
+.nsrc-list.many{gap:8px}
+.nsrc-list.many .nsrc-t{font-size:15px}
+.nsrc-list.many .nsrc-brief .nsrc-t{font-size:17px}
+</style>
+<script>
+var NapkinSource=(function(){
+  // The tools' marks (the mock's TOOL_ICON): Research is a category tree, Brief a folded sheet.
+  var ICON={
+    research:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5.5" r="2.3"/><circle cx="6.5" cy="18" r="2.3"/><circle cx="17.5" cy="18" r="2.3"/><path d="M12 7.8v4.2M6.5 15.7V12h11v3.7"/></svg>',
+    brief:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8.5l3.5 3.5v13.5H6z"/><path d="M14.5 3.5V7H18" opacity=".55"/><line x1="8.8" y1="11" x2="15.2" y2="11"/><line x1="8.8" y1="14" x2="15.2" y2="14"/><line x1="8.8" y1="17" x2="12.6" y2="17"/></svg>'
+  };
+  var NOUN={research:'research', brief:'brief'};
+  // The Research Tool's lenses, in its order (campaign-research LENSES).
+  var LENSES=[['market_structure','Market structure'],['brands_positioning','Brands & positioning'],['consumer_culture','Consumer & culture'],
+    ['category_codes','Category codes'],['rhythm_moments','Rhythm & moments'],['media_spend','Media & spend'],
+    ['regulation_clearance','Regulation & clearance'],['effectiveness_evidence','Effectiveness evidence']];
+  // The parts that make a frozen document a brief (a research keeps its own under campaign).
+  var BRIEF_KEYS=['single_minded_proposition','insight','objectives','audience','background','job','desired_response','reasons_to_believe','tone_and_world','mandatories','barrier','competitor_context','objection'];
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function obj(v){ return v&&typeof v==='object'&&!Array.isArray(v)?v:{}; }
+  function val(v){ return v&&typeof v==='object'&&!Array.isArray(v)&&'value' in v?v.value:v; }
+  function has(v){ v=val(v); return typeof v==='string'?!!v.trim():Array.isArray(v)?v.length>0:v&&typeof v==='object'?Object.keys(v).length>0:v!=null; }
+  function n(x){ return typeof x==='number'&&isFinite(x)?x:null; }
+  function count(v){ return Array.isArray(v)?v.length:v&&typeof v==='object'?Object.keys(v).length:null; }
+
+  /** What kind of tool's document a frozen upstream copy is: 'brief', 'research', or null. */
+  function kindOf(doc){
+    doc=obj(doc);
+    if(BRIEF_KEYS.some(function(k){ return has(doc[k]); })) return 'brief';
+    if(doc.campaign||doc.report||doc.selection||doc.projection) return 'research';
+    return null;
+  }
+  /** The lenses a research ran, with how well each is covered ('filled', 'thin', 'empty'). */
+  function lensesOf(doc){
+    var cov=obj(obj(obj(doc).selection).coverage);
+    return LENSES.filter(function(L){ return typeof cov[L[0]]==='string'; }).map(function(L){ return {k:L[0], l:L[1], cov:cov[L[0]]}; });
+  }
+  function titleOf(doc){
+    doc=obj(doc); var c=obj(doc.campaign);
+    var t=[val(doc.title), val(doc.project_name), val(c.name)].filter(function(x){ return typeof x==='string'&&x.trim(); })[0];
+    return t?String(t).trim():'';
+  }
+  /**
+   * A source card's facts from a frozen upstream document (data.upstream.<id>) and, when the
+   * app has it, its entry from GET /upstream (title, path, locked, status). `over` replaces
+   * any field (the app's own counts, a title it reads better). Never throws.
+   */
+  function fromUpstream(doc, entry, over){
+    doc=obj(doc); entry=obj(entry); over=obj(over);
+    var kind=kindOf(doc)||(entry.noun==='brief'?'brief':entry.noun==='research'?'research':null);
+    var pr=obj(doc.projection), fs=obj(pr.findings), fk=Object.keys(fs);
+    var conf={}; fk.forEach(function(k){ var c=obj(fs[k]).confidence; if(typeof c==='string') conf[c]=(conf[c]||0)+1; });
+    var top=Object.keys(conf).sort(function(a,b){ return conf[b]-conf[a]; })[0]||'';
+    var s={
+      kind:kind, id:entry.document_id||'', title:titleOf(doc)||String(entry.title||'').trim(),
+      path:entry.path||'', locked:entry.locked===true, status:entry.status||'',
+      lenses:kind==='research'?lensesOf(doc):[],
+      facts:count(pr.pins), findings:fk.length||null, sources:count(pr.sources),
+      verified:fk.filter(function(k){ return obj(fs[k]).status==='verified'; }).length||null,
+      confidence:top, version:''
+    };
+    Object.keys(over).forEach(function(k){ if(over[k]!==undefined) s[k]=over[k]; });
+    return s;
+  }
+
+  function stateHtml(s){
+    var h='';
+    if(s.kind==='research') h+='<span>Built from research</span>';
+    if(s.kind==='brief'&&s.version) h+='<span class="nsrc-v">'+esc(s.version)+'</span>';
+    h+=s.locked?'<span class="nsrc-chip ok">✓ Locked</span>':'<span class="nsrc-chip draft">Draft</span>';
+    if(s.status==='changed') h+='<span class="nsrc-chip changed">Changed since</span>';
+    return h;
+  }
+  function countsHtml(s){
+    var bits=[];
+    if(n(s.facts)) bits.push('<b>'+s.facts+'</b> '+(s.facts===1?'fact':'facts'));
+    if(n(s.findings)) bits.push('<b>'+s.findings+'</b> '+(s.findings===1?'finding':'findings'));
+    if(n(s.sources)) bits.push('<b>'+s.sources+'</b> '+(s.sources===1?'source':'sources'));
+    if(n(s.verified)) bits.push((s.verified===s.findings?'all ':'')+'<b>'+s.verified+'</b> verified');
+    else if(s.confidence) bits.push(esc(s.confidence)+' confidence');
+    return bits.join(' · ');
+  }
+  function lensHtml(ls){
+    if(!ls||!ls.length) return '';
+    var label=ls.length+(ls.length===1?' lens':' lenses')+': '+ls.map(function(L){ return L.l+' '+L.cov; }).join(', ');
+    return '<span class="nsrc-lens" role="img" aria-label="'+esc(label)+'" title="'+esc(label)+'">'
+      +ls.map(function(L){ return '<i class="'+esc(L.cov)+'"></i>'; }).join('')+'</span>';
+  }
+  /** One source as a card. `i` is its place in the list (data-i). */
+  function cardHtml(s, i){
+    s=obj(s); var k=s.kind==='brief'?'brief':'research', noun=NOUN[k];
+    var title=esc(s.title||('The '+noun+' this started from')), counts=k==='research'?countsHtml(s):'', lens=k==='research'?lensHtml(s.lenses):'';
+    var head=k==='research'?'<span class="nsrc-band">'+ICON.research+'Research</span>':'';
+    return '<div class="nsrc nsrc-'+k+'" data-i="'+(i|0)+'" data-kind="'+k+'">'
+      +(k==='brief'?'<span class="nsrc-tab" aria-hidden="true">'+ICON.brief+'Brief</span>':'')
+      +'<button type="button" class="nsrc-main" aria-expanded="false" title="What came with the '+noun+'">'+head
+      +'<span class="nsrc-t">'+(k==='brief'?'<span class="sr">Brief: </span>':'<span class="sr">Research: </span>')+title+'</span>'
+      +(lens||counts?'<span class="nsrc-row">'+lens+(counts?'<span class="nsrc-n">'+counts+'</span>':'')+'</span>':'')
+      +'</button>'
+      +'<span class="nsrc-foot">'+stateHtml(s)+'</span>'
+      +(s.path?'<button type="button" class="nsrc-open">Open the '+noun+' ↗</button>':'<span></span>')
+      +'</div>';
+  }
+  function listHtml(list){
+    list=Array.isArray(list)?list.filter(function(s){ return s&&s.kind; }):[];
+    return '<div class="nsrc-list'+(list.length>1?' many':'')+'">'+list.map(cardHtml).join('')+'</div>';
+  }
+  /**
+   * Draw `list` into `el` and wire it: a click on a card (not its Open) calls
+   * on.details(source, i, card); its "Open … ↗" calls on.open(source, i). The
+   * app marks the card open with setOpen(el, i|null) when its details show.
+   */
+  function mount(el, list, on){
+    if(!el) return;
+    list=Array.isArray(list)?list.filter(function(s){ return s&&s.kind; }):[]; on=on||{};
+    el.innerHTML=list.length?listHtml(list):'';
+    Array.prototype.forEach.call(el.querySelectorAll('.nsrc'), function(card){
+      var i=+card.getAttribute('data-i'), s=list[i];
+      card.addEventListener('click', function(e){
+        var t=e&&e.target;
+        if(t&&t.closest&&t.closest('.nsrc-open')){ if(e.stopPropagation) e.stopPropagation(); if(on.open) on.open(s, i); return; }
+        if(on.details) on.details(s, i, card);
+      });
+    });
+  }
+  function setOpen(el, i){
+    if(!el) return;
+    Array.prototype.forEach.call(el.querySelectorAll('.nsrc'), function(card){
+      var on=i!=null&&+card.getAttribute('data-i')===i;
+      card.classList[on?'add':'remove']('open');
+      var b=card.querySelector('.nsrc-main'); if(b) b.setAttribute('aria-expanded', on?'true':'false');
+    });
+  }
+  return {kindOf:kindOf, lensesOf:lensesOf, fromUpstream:fromUpstream, cardHtml:cardHtml, listHtml:listHtml, mount:mount, setOpen:setOpen, LENSES:LENSES};
+})();
+</script>

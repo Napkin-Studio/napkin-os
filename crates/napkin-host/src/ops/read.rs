@@ -495,6 +495,17 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "edits": members::edits_map(clan),
         "pipeline": pipeline,
     });
+    // A research started from a brief is told the brief's ask, and only
+    // that: extract_ask proposes from it (features/spinoff-and-links.clan).
+    if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
+        context["upstream_ask"] = ask;
+    }
+    // The client the document belongs to (its manifest's), so a research
+    // started from the client page knows whose it is (`napkin.middleware/1`
+    // §1, `workspace_client`).
+    if let Some(c) = m.client.as_ref() {
+        context["workspace_client"] = json!({ "id": c.id, "name": c.name });
+    }
     if runs_brief_tasks(doc, &context["pipeline"]) {
         if let Some(up) = upstream_payload(doc) {
             context["upstream_payload"] = up.payload;
@@ -516,6 +527,75 @@ pub const BRIEF_TASKS: &[&str] = &["draft_brief", "regenerate_field"];
 /// Brief Maker's app id: its documents run the brief tasks whether or not
 /// they carry a pipeline (the middleware's built-in map, §1).
 pub const BRIEF_APP: &str = "ie.napkin.brief-maker";
+
+/// The paths of a brief's ask that a research may be told: the client, who
+/// it is for, the background and the objectives. Nothing the brief's agents
+/// drafted (insight, proposition, reasons to believe) — research must not
+/// echo the brief's guesses back as findings.
+pub const BRIEF_ASK_PATHS: &[&str] = &[
+    "project_name",
+    "client",
+    "audience",
+    "background",
+    "objectives.commercial",
+    "objectives.behavioural",
+    "objectives.attitudinal",
+];
+
+/// For a document whose pipeline declares `extract_ask`, the ask of the brief
+/// it carries (`napkin.middleware/1` §1, `upstream_ask`): the direct parent
+/// when it is a brief, else the first carried brief in key order. A frozen
+/// copy is a brief when it holds no `campaign` and at least one ask path. Each
+/// value is the field's text, or its `value` when the brief holds it as an
+/// envelope; an empty one is left out. `None` when nothing is carried.
+pub fn upstream_ask(clan: &ClanFile, pipeline: &Value) -> Option<Value> {
+    let reads_ask = pipeline
+        .get("tasks")
+        .and_then(Value::as_object)
+        .is_some_and(|t| t.contains_key("extract_ask"));
+    if !reads_ask {
+        return None;
+    }
+    let data: Value = clan
+        .read_entry("shared/data.yaml")
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+        .and_then(|y| serde_json::to_value(y).ok())?;
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let text = |v: &Value| -> Option<String> {
+        let s = v
+            .as_str()
+            .or_else(|| v.get("value").and_then(Value::as_str))?;
+        let s = s.trim();
+        (!s.is_empty()).then(|| s.to_string())
+    };
+    let fields_of = |copy: &Value| -> serde_json::Map<String, Value> {
+        let mut out = serde_json::Map::new();
+        if copy.get("campaign").is_some() {
+            return out;
+        }
+        for path in BRIEF_ASK_PATHS {
+            let v = path.split('.').try_fold(copy, |v, k| v.get(k));
+            if let Some(t) = v.and_then(text) {
+                out.insert(path.to_string(), Value::String(t));
+            }
+        }
+        out
+    };
+    let direct = clan.manifest().carried().map(|c| c.document_id.clone());
+    let mut ids: Vec<&String> = up.keys().collect();
+    ids.sort_by_key(|id| (Some(id.as_str()) != direct.as_deref(), id.as_str()));
+    ids.into_iter().find_map(|id| {
+        let fields = fields_of(&up[id]);
+        (!fields.is_empty()).then(|| {
+            json!({
+                "document_id": id,
+                "direct": Some(id.as_str()) == direct.as_deref(),
+                "fields": fields,
+            })
+        })
+    })
+}
 
 /// Whether the brief tasks run on `doc`: its pipeline declares one, or it is
 /// a Brief Maker document.
@@ -622,42 +702,90 @@ pub fn upstream_index(clan: &ClanFile, upstream: &Value) -> Value {
 pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>) -> Value {
     let clan = doc.clan();
     let here = clan.document_id();
-    let Some(carried) = clan.manifest().carried() else {
+    let carried = clan.manifest().carried();
+    let attached = clan.manifest().attached();
+    if carried.is_none() && attached.is_empty() {
         return json!({ "document_id": here, "carried": null, "upstream": [] });
-    };
+    }
     let data = data_json(doc);
     let mut ids: Vec<String> = data
         .get(UPSTREAM_KEY)
         .and_then(Value::as_object)
         .map(|o| o.keys().cloned().collect())
         .unwrap_or_default();
-    if !ids.contains(&carried.document_id) {
-        ids.push(carried.document_id.clone());
+    for id in carried
+        .map(|c| c.document_id.clone())
+        .into_iter()
+        .chain(attached.iter().map(|a| a.carried.document_id.clone()))
+    {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
     }
-    // Direct first; the rest keep key order.
-    ids.sort_by_key(|id| *id != carried.document_id);
+    let direct_id = carried.map(|c| c.document_id.as_str());
+    let linked = |id: &str| attached.iter().find(|a| a.carried.document_id == id);
+    // Direct first, then what is linked; the rest keep key order.
+    ids.sort_by_key(|id| {
+        if Some(id.as_str()) == direct_id {
+            0
+        } else if linked(id).is_some() {
+            1
+        } else {
+            2
+        }
+    });
 
     let upstream: Vec<Value> = ids
         .iter()
         .map(|id| {
-            let direct = *id == carried.document_id;
+            let direct = Some(id.as_str()) == direct_id;
+            let link = (!direct).then(|| linked(id)).flatten();
+            let how = if direct {
+                "made_from"
+            } else if link.is_some() {
+                "linked"
+            } else {
+                "carried"
+            };
             let Some(p) = parent(id) else {
-                return json!({ "document_id": id, "direct": direct, "in_store": false, "status": "unknown" });
+                let mut out = json!({ "document_id": id, "direct": direct, "in_store": false, "status": "unknown", "how": how });
+                if let Some(a) = link {
+                    out["title"] = json!(a.title);
+                    out["app_id"] = json!(a.app_id);
+                    out["taken"] = json!(a.taken);
+                }
+                return out;
             };
             let pm = p.clan().manifest();
             let app_id = pm.app.as_ref().map(|a| a.app_id.clone());
             // where the shell opens it (`POST /open {path}`): the store's own id for it
             let path = p.id().to_string();
-            if !direct {
-                return json!({
-                    "document_id": id, "direct": false, "in_store": true,
-                    "title": pm.title, "app_id": app_id, "status": "not_compared", "path": path,
-                });
-            }
-            let mut entry = compare(doc, &data, carried, &p);
+            let mut entry = match (direct, link) {
+                (true, _) => compare(doc, &data, carried.expect("direct"), &p),
+                (false, Some(a)) => {
+                    let mut e = compare(doc, &data, &a.carried, &p);
+                    e["direct"] = false.into();
+                    e["taken"] = json!(a.taken);
+                    e["kit_version"] = json!(a.version);
+                    e["linked_at"] = json!(a.at);
+                    e
+                }
+                (false, None) => json!({
+                    "document_id": id, "direct": false, "in_store": true, "status": "not_compared",
+                }),
+            };
             entry["title"] = pm.title.clone().into();
             entry["app_id"] = json!(app_id);
             entry["path"] = path.into();
+            entry["how"] = how.into();
+            if let Some(noun) = pm
+                .app
+                .as_ref()
+                .and_then(|a| a.home.as_ref())
+                .and_then(|h| h.noun.first())
+            {
+                entry["noun"] = noun.clone().into();
+            }
             entry
         })
         .collect();
@@ -894,6 +1022,9 @@ fn build_clan_context(doc: &Document, data: &serde_yaml::Value) -> Value {
             "app_id": a.app_id,
             "version": a.version,
         })),
+        // Who the document is for: a view names its client before its own data does
+        // (Brief Maker's header, "McDonald's Ireland · New brief").
+        "client": m.client.as_ref().map(|c| serde_json::json!({ "id": c.id, "name": c.name })),
     });
 
     serde_json::json!({
@@ -940,6 +1071,7 @@ mod tests {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         }
     }
 
@@ -1131,6 +1263,117 @@ mod tests {
             "it does carry the research"
         );
         assert!(ctx.get("upstream_payload").is_none());
+    }
+
+    /// A brief as a person leaves it, then a research spun off from it.
+    fn research_from_brief() -> Document {
+        const B: &str = "3f2a6b1c-1d2e-4f3a-8b4c-5d6e7f8a9b0c";
+        let brief = doc(
+            "Lúnasa brief",
+            app("Brief Maker", BRIEF_APP, None),
+            Some(B),
+            &[(
+                "shared/data.yaml",
+                "client: Orchard Hill Cider\naudience: { value: Irish adults who skip alcohol on weeknights }\n\
+                 background: Sales of 0.0 grew, but Lúnasa is unknown.\nobjectives: { commercial: '', behavioural: Try it at a barbecue }\n\
+                 single_minded_proposition: The drafted SMP\ninsight: A drafted insight\n"
+                    .as_bytes(),
+                None,
+            )],
+        );
+        let scaffold = doc(
+            "Research Tool",
+            app("Research Tool", "ie.napkin.campaign-research", None),
+            None,
+            &[("app/pipeline.yaml", RESEARCH_PIPELINE, None)],
+        );
+        let spec = SpinoffSpec {
+            accepts: vec![BRIEF_APP.into()],
+            upstream: true,
+            ..Default::default()
+        };
+        let tpl = ClanFile::from_bytes(
+            make_template(
+                &scaffold,
+                app("Research Tool", "ie.napkin.campaign-research", Some(spec)),
+                MakeTemplateOptions::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let bytes = spinoff(&tpl, &brief, SpinoffOptions::default()).unwrap();
+        Document::from_bytes(DocId::new("research.clan"), bytes).unwrap()
+    }
+
+    #[test]
+    fn a_research_from_a_brief_is_told_the_briefs_ask_and_nothing_drafted() {
+        let r = research_from_brief();
+        let ask = &clan_context_for_agent(&r)["upstream_ask"];
+        assert_eq!(ask["document_id"], "3f2a6b1c-1d2e-4f3a-8b4c-5d6e7f8a9b0c");
+        assert_eq!(ask["direct"], true);
+        assert_eq!(
+            ask["fields"],
+            serde_json::json!({
+                "client": "Orchard Hill Cider",
+                "audience": "Irish adults who skip alcohol on weeknights",
+                "background": "Sales of 0.0 grew, but Lúnasa is unknown.",
+                "objectives.behavioural": "Try it at a barbecue",
+            }),
+            "the ask only: no empty field, nothing the brief's agents drafted"
+        );
+        // The frozen copy itself still travels as the index only.
+        assert!(clan_context_for_agent(&r)["data"]["upstream"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|v| v.get("client").is_none()));
+    }
+
+    #[test]
+    fn the_middleware_is_told_whose_client_the_document_is() {
+        // research() has no client: nothing is sent.
+        assert!(clan_context_for_agent(&open(&research()))
+            .get("workspace_client")
+            .is_none());
+        // A document opened from a client's page carries the client.
+        let base = research();
+        let mut manifest = base.manifest().clone();
+        manifest.client = Some(clan_sdk::manifest::ClientRef {
+            id: "cli_0b19a78d".into(),
+            name: "Guinness".into(),
+        });
+        let mut b = ClanBuilder::new(manifest);
+        for (p, v) in base.read_all_entries().unwrap() {
+            if p != MANIFEST_PATH {
+                b.add_entry(p, v);
+            }
+        }
+        let with = open(&ClanFile::from_bytes(b.build().unwrap()).unwrap());
+        assert_eq!(
+            clan_context_for_agent(&with)["workspace_client"],
+            serde_json::json!({ "id": "cli_0b19a78d", "name": "Guinness" })
+        );
+        // The view is told too (window.__CLAN__.manifest.client), before its data names one.
+        let view = build_clan_context(&with, &serde_yaml::Value::Null);
+        assert_eq!(
+            view["manifest"]["client"],
+            serde_json::json!({ "id": "cli_0b19a78d", "name": "Guinness" })
+        );
+        assert!(
+            build_clan_context(&open(&research()), &serde_yaml::Value::Null)["manifest"]["client"]
+                .is_null()
+        );
+    }
+
+    #[test]
+    fn a_brief_from_research_and_the_research_itself_get_no_ask() {
+        // A brief runs no extract_ask; the research carries nothing.
+        assert!(clan_context_for_agent(&brief())
+            .get("upstream_ask")
+            .is_none());
+        assert!(clan_context_for_agent(&open(&research()))
+            .get("upstream_ask")
+            .is_none());
     }
 
     #[test]

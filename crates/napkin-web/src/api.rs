@@ -71,6 +71,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}/patch", post(patch))
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
+        .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
         .route("/t/{tenant}/d/{doc}/download", get(download))
         .route("/t/{tenant}/d/{doc}/export", post(export_document))
         .route("/t/{tenant}/export/{handle}", get(export_download))
@@ -617,6 +618,57 @@ async fn patch(
     let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
     session.save_patch_as(&acting, &body.id, &body.content)?;
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+/// Poll one middleware job of a document the person may not have open, the
+/// way its page polls it (`clan://api-proxy`, task `job_status`), so a job
+/// that finished after the page closed still lands: the host applies its
+/// change exactly as for the page, once (a change it already holds is
+/// `already applied`). The shell's library watcher calls this for every job
+/// the listing says is unsettled (`LibraryItem.jobs`). A job the middleware
+/// no longer knows is forgotten. Not metered: `job_status` waits on work
+/// already charged.
+async fn settle_job(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+    Path((_t, doc, job)): Path<(String, String, String)>,
+) -> ApiResult<Response> {
+    if job.is_empty()
+        || job.len() > 128
+        || !job
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(ApiError::new(400, "not a job id"));
+    }
+    let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+    let body = serde_json::json!({
+        "request_kind": "middleware",
+        "payload": { "task": "job_status", "input": { "job_id": job } },
+    });
+    let resp = napkin_host::dispatch_async(
+        &tenant.ctx_for(&person),
+        &session,
+        &*ctx.config,
+        napkin_host::HostRequest::new("/api-proxy", "", body.to_string().into_bytes()),
+    )
+    .await;
+    for e in &resp.events {
+        ctx.events.publish(&tenant, e);
+    }
+    let reply: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
+    let lost = reply["data"]["error"]["type"] == "unknown_job"
+        || (reply["ok"] == false && reply["status"] == 404);
+    if lost {
+        ws.library.runs().forget_job(&id, &job);
+    }
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        resp.body,
+    )
+        .into_response())
 }
 
 /// The single-file handoff: the packed archive, exactly as stored.

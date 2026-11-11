@@ -3,12 +3,12 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // After a client's answer is recorded: what they said, above the document.
-// The banner (the answer, who, when, the evidence strength), Jude on what is
-// left to do, and — when the answer did not name its parts — Ellis's
+// The banner (the answer, who, when, the evidence strength), the Review agent
+// on what is left to do, and — when the answer did not name its parts — the Knowledge agent's
 // suggestions, each confirmed or turned down by a person, or the parts
 // marked by hand. Only a confirmed part counts (OS-layer contract §7.5.2).
 // The suggestions are the host's own matcher (the parts whose names the
-// client's sentences use), recorded as that process and shown as Ellis's;
+// client's sentences use), recorded as that process and shown as the Knowledge agent's;
 // they arrive with the Save's reply, so there is nothing to wait for.
 //
 // Everything here reads the host's view (`/decisions`, `client`); each
@@ -17,8 +17,8 @@
 import { useState } from 'react'
 import { host } from '../../host'
 import type { ClientSuggestionView, DecisionsView } from '../../host'
-import { AgentFigure } from '../../studio/AgentFigure'
-import { AGENTS } from '../../studio/model'
+import AgentSphere from '../agents/AgentSphere'
+import { roles } from '../agents/engine'
 import { Speak } from './ClientReviewPanel'
 import { afterLine, bannerWords, firstName, reasonWords, recordedFrom, settledSuggestions } from './review'
 
@@ -60,11 +60,12 @@ export default function ClientReviewBand({ view, noun, matched, onChanged }: Pro
   }
 
   const you = !!view.decisions.find(b => b.decision.id === a.decision)?.who.you
-  const who = firstName(a.client.name) || 'The client'
+  // Every use is mid-sentence: lower case when there is no name.
+  const who = firstName(a.client.name) || 'the client'
   const suggestions = c.suggestions.filter(s => s.review === a.decision)
   // Answered ones stay in the list, dimmed, with what was said to them.
   const done = settledSuggestions(view, a.decision)
-  // Each in the order Ellis made them, answered or not (the list is a flex column).
+  // Each in the order the Knowledge agent made them, answered or not (the list is a flex column).
   const orderOf = (at: number) => ({ order: view.decisions.length - at })
   const atOf = (id: string) => view.decisions.findIndex(b => b.decision.id === id)
   // Parts the client saw that this answer has not settled yet, for marking by hand.
@@ -101,14 +102,14 @@ export default function ClientReviewBand({ view, noun, matched, onChanged }: Pro
 
           {say && <Speak say={say} />}
           {mine?.reason && !suggestions.length && !a.parts_known && a.answer !== 'accepted' && (
-            <p className="cr-hint">{AGENTS.extract.given} could not look for the parts this time: {mine.reason}</p>
+            <p className="cr-hint">{roles.The('knowledge')} could not look for the parts this time: {mine.reason}</p>
           )}
 
           {suggestions.length + done.length > 0 && (
             <div className="cr-ellis">
-              <AgentFigure agent="extract" size={40} />
+              <AgentSphere agent="knowledge" size={40} label="" />
               <div>
-                <h3>{AGENTS.extract.given}: I think {who} meant these parts</h3>
+                <h3>{roles.name('knowledge')}: I think {who} meant these parts</h3>
                 <p>{suggestions.length ? 'Each is only a suggestion until you say yes.' : 'You’ve answered each suggestion.'}</p>
                 <ul>
                   {done.map(s => (

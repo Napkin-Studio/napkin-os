@@ -109,6 +109,7 @@ fn template(app_id: &str, name: &str, spinoff: Option<SpinoffSpec>) -> Vec<u8> {
             prompt_templates: vec![],
             data_seed: None,
             spinoff,
+            attach: None,
         },
         MakeTemplateOptions::default(),
     )
@@ -734,4 +735,52 @@ fn legacy_offer_names_the_documents_for_the_shell() {
     // Once adopted, the name is no longer on offer.
     clients::adopt(&s, &ctx(), &["Client A".into()]).unwrap();
     assert!(clients::legacy_offer(&s).unwrap().is_empty());
+}
+
+fn set_chain(s: &MemStore, doc: &DocId, yaml: &str) {
+    let clan = ClanFile::from_bytes(s.read(doc).unwrap()).unwrap();
+    let mut m = clan.manifest().clone();
+    m.next_revision();
+    let mut b = ClanBuilder::new(m);
+    for (p, by) in clan.read_all_entries().unwrap() {
+        if p != "manifest.yaml" && p != "agent/decision-chain.yaml" {
+            b.add_entry(p, by);
+        }
+    }
+    b.add_entry("agent/decision-chain.yaml", yaml.as_bytes().to_vec());
+    s.files
+        .lock()
+        .unwrap()
+        .insert(doc.to_string(), b.build().unwrap());
+}
+
+#[test]
+fn the_last_editor_is_the_newest_decision_a_person_made() {
+    let s = store_with_apps();
+    let doc = work(&s, DECK, "Edited", None);
+    set_chain(
+        &s,
+        &doc,
+        "decisions:\n\
+         - id: d_3\n  agent: process:crew\n  actor: process:crew\n  action: edit\n  rationale: crew\n  timestamp: \"2026-11-09T10:02:00Z\"\n\
+         - id: d_2\n  agent: human:tia@tbwa\n  actor: human:tia@tbwa\n  action: edit\n  rationale: tia\n  timestamp: \"2026-11-09T10:01:00Z\"\n\
+         - id: d_1\n  agent: human:sam@wk\n  actor: human:sam@wk\n  action: edit\n  rationale: sam\n  timestamp: \"2026-11-09T10:00:00Z\"\n",
+    );
+    let untouched = work(&s, DECK, "Untouched", None);
+    set_chain(
+        &s,
+        &untouched,
+        "decisions:\n- id: d_1\n  agent: process:crew\n  actor: process:crew\n  action: edit\n  rationale: crew\n  timestamp: \"2026-11-09T10:00:00Z\"\n",
+    );
+    let lib = list(&s, &LibraryFilter::default());
+    let by = |t: &str| {
+        lib.items
+            .iter()
+            .find(|i| i.title == t)
+            .unwrap()
+            .last_editor
+            .clone()
+    };
+    assert_eq!(by("Edited").as_deref(), Some("tia@tbwa"));
+    assert_eq!(by("Untouched"), None, "no person has changed it");
 }
