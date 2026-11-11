@@ -49,7 +49,7 @@ function generateJob(state: DocJob['state'] = 'queued'): DocJob {
 describe('the UI on the CLAN store', () => {
   const validate = makeAjv().getSchema(SCHEMA('document'))!
 
-  it('panel writes land in the .clan: named ones as entries, bookkeeping without', async () => {
+  it('panel writes land in the .clan: named ones as entries, bookkeeping as plain \'sync\' lines', async () => {
     const ctx: Record<string, JobCtx> = {}
     const s = make(ctx)
     await s.create({ participant: maya })
@@ -86,7 +86,11 @@ describe('the UI on the CLAN store', () => {
     void updateDoc(s, (d) => { d.stage = { current: 'storyboard' } }, 'stage')
 
     const chain = await s.chain()
-    const mine = chain.filter((e) => e.agent === 'maya').map((e) => e.action)
+    // Bookkeeping names the participant and the action "sync" (ADR-004): one entry per run of it.
+    const sync = chain.filter((e) => e.action === 'sync')
+    expect(sync.length).toBeGreaterThan(0)
+    expect(sync.every((e) => e.agent === 'maya')).toBe(true)
+    const mine = chain.filter((e) => e.agent === 'maya' && e.action !== 'sync').map((e) => e.action)
     expect(mine).toEqual(['published maya to the acme library', 'named @maya_front', 'generated from 1 input', 'named @maya_eyes', 'started the document'])
     const gen = chain.find((e) => e.action === 'generated from 1 input')!
     expect(gen.rationale).toContain('from @maya_eyes')
@@ -163,6 +167,29 @@ describe('the UI on the CLAN store', () => {
     expect(opened.clan).not.toBeNull()
     expect(opened.storeNote).toBeNull()
     expect((await opened.clan!.chain()).map((e) => e.action)).toContain('started the document')
+  })
+})
+
+describe('chain growth from bookkeeping', () => {
+  // 40 quiet edits, one every 20 ms: with the old 5 ms wait each is its own "sync" entry; with a
+  // wait longer than the gap the burst is one.
+  const burst = async (quietMs: number) => {
+    const s = new ClanBackedStore(new ClanDocumentStore({ wasm, persistence: null }), { debounceMs: 5, quietMs })
+    await s.create({ participant: maya })
+    for (let i = 0; i < 40; i++) {
+      void updateDoc(s, (d) => { d.stage = { current: 'storyboard', next_action: `Step ${i}.` } }, 'stage')
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    const chain = await s.chain()
+    const bytes = (await s.exportClan()).byteLength
+    return { syncs: chain.filter((e) => e.action === 'sync').length, entries: chain.length, bytes }
+  }
+  it('a burst of bookkeeping is one entry, not one per edit', async () => {
+    const each = await burst(5)
+    const folded = await burst(1000)
+    console.log(`\n[bookkeeping growth, 40 edits 20 ms apart] wait 5 ms: ${each.syncs} sync entries, ${each.entries} in all, ${each.bytes} bytes; wait 1000 ms: ${folded.syncs} sync entries, ${folded.entries} in all, ${folded.bytes} bytes\n`)
+    expect(each.syncs).toBeGreaterThan(10)
+    expect(folded.syncs).toBe(1)
   })
 })
 

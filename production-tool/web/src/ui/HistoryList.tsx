@@ -16,7 +16,8 @@ function who(agent: string, kind: AgentKind, handle: string): { label: string; d
 }
 
 export function HistoryList({ entries, handle, item }: { entries: ChainLike[]; handle: string; item?: HistoryItem }) {
-  const shown = entries.filter((e) => aboutItem(e, item))
+  // "sync" is bookkeeping the host needs a name for (ADR-004), not something the person did.
+  const shown = entries.filter((e) => e.action !== 'sync' && aboutItem(e, item))
   if (!shown.length) return <div className="history-empty faint">{item ? 'Nothing recorded about this yet.' : 'Nothing recorded yet.'}</div>
   return (
     <ol className="history-list">

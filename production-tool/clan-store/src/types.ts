@@ -52,8 +52,9 @@ export interface Why {
   agent?: string
   /** Never compressed: for verdicts and locks. */
   pinned?: boolean
-  /** Bookkeeping (a job's state, an asset list): change the data, write no
-   * decision-chain entry. */
+  /** Bookkeeping (a job's state, an asset list). The host takes no write without an agent and an
+   * action (ADR-004), so it still writes an entry: name the same action for the same kind of
+   * bookkeeping so the chain reads it as one line of work. */
   quiet?: boolean
 }
 

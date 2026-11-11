@@ -152,19 +152,18 @@ export class ClanDocumentStore implements DocumentStore {
       if (!why?.action?.trim()) throw new TypeError('why.action is required: it is the decision-chain entry')
       const next = mergePatch(this.get(), mergePatchBody)
       assertValid(next, 'the patched document')
-      // A body without `agent` writes the data and no decision (the host's
-      // rule), which is what a quiet write is.
+      // Every write names an agent and an action (ADR-004: the host refuses one that does not).
+      // A quiet write is bookkeeping: it still names them, but it asks for no rationale and is
+      // never pinned, so it reads as one plain line of work in the chain.
       const agent = why.agent?.trim() || this.get().participant.handle
-      route(h, '/patch-data', why.quiet
-        ? { patch: mergePatchBody }
-        : {
-            patch: mergePatchBody,
-            agent,
-            action: why.action,
-            rationale: why.rationale ?? '',
-            ...(why.pinned ? { pinned: true } : {}),
-          })
-      if (!why.quiet) this.recorded?.add(recordKey(agent, why.action))
+      route(h, '/patch-data', {
+        patch: mergePatchBody,
+        agent,
+        action: why.action,
+        rationale: why.rationale ?? '',
+        ...(why.pinned && !why.quiet ? { pinned: true } : {}),
+      })
+      this.recorded?.add(recordKey(agent, why.action))
       this.doc = this.readData()
       this.changed()
       this.scheduleSave()

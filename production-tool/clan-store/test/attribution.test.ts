@@ -104,8 +104,10 @@ describe('attribution: participant, director, provider', () => {
 
     const chain = await again.chain()
     expect(chain.filter((e) => e.action.endsWith(j.id))).toHaveLength(2)
-    // The quiet write left no entry.
-    expect(chain.map((e) => e.action)).not.toContain('job')
+    // The quiet write names its agent and an action too (ADR-004): the participant's, beside them.
+    const quiet = chain.filter((e) => e.action === 'job')
+    expect(quiet).toHaveLength(1)
+    expect(quiet[0].agent).toBe('maya')
     const kinds = chain.map((e) => agentKind(e.agent))
     expect(kinds).toContain('director')
     expect(kinds).toContain('provider')

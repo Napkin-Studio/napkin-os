@@ -51,13 +51,16 @@ export class ClanBackedStore implements DocumentStore {
   private readonly outcomes = new Set<string>()
   private readonly ctxOf: JobCtxOf
   private readonly delay: number
+  /** How long bookkeeping waits for the next one, so a burst of quiet edits is one chain entry. */
+  private readonly quietDelay: number
   /** The last write the .clan refused, if any. */
   trouble: string | null = null
 
-  constructor(clan: ClanDocumentStore, opts: { ctxOf?: JobCtxOf; debounceMs?: number } = {}) {
+  constructor(clan: ClanDocumentStore, opts: { ctxOf?: JobCtxOf; debounceMs?: number; quietMs?: number } = {}) {
     this.clan = clan
     this.ctxOf = opts.ctxOf ?? (() => undefined)
     this.delay = opts.debounceMs ?? 250
+    this.quietDelay = opts.quietMs ?? (opts.debounceMs ?? 1500)
   }
 
   /** The browser default: IndexedDB (a project's own database), napkin-wasm beside the bundle. */
@@ -207,11 +210,16 @@ export class ClanBackedStore implements DocumentStore {
   private schedule() {
     if (this.timer) clearTimeout(this.timer)
     // Typing into one field folds into one entry: wait for a pause.
-    const typing = !!this.pending.at(-1)?.why?.coalesce
+    // Bookkeeping with no decision of its own (a picture lands, a frame is drawn) waits the same
+    // way: the host takes no write without an agent and an action (ADR-004), so each batch of it
+    // is one "sync" entry, and a burst should be one batch.
+    const last = this.pending.at(-1)
+    const slow = !!last?.why?.coalesce
+    const quiet = last?.why === null
     this.timer = setTimeout(() => {
       this.timer = null
       void this.serial(() => this.drain())
-    }, typing ? Math.max(this.delay, 1500) : this.delay)
+    }, slow ? Math.max(this.delay, 1500) : quiet ? this.quietDelay : this.delay)
   }
 
   private async drain() {
