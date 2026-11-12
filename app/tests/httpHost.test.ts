@@ -41,7 +41,7 @@ function serve(delays: Record<string, number>) {
     if (url.endsWith('/home')) return reply(open('home-x', 'home-token'), delays.home ?? 0)
     const doc = /\/d\/([^/]+)$/.exec(url)
     if (doc) return reply(open(decodeURIComponent(doc[1]), `${doc[1]}-token`), delays[doc[1]] ?? 0)
-    if (url.endsWith('/human-html')) return new Response('<p>view</p>')
+    if (url.endsWith('/entry/data')) return new Response('verdict: yes')
     throw new Error(`unexpected ${url}`)
   }) as typeof fetch
   return seen
@@ -61,9 +61,13 @@ test('an open answered after a later one does not become the open document', asy
 
   // The frame's clan:// base names the document the shell is showing…
   assert.equal(httpHost.clanOrigin(), 'https://studio.test/s/doc-a-token')
-  // …and so does everything read or written on its behalf.
-  await httpHost.getHumanHtml()
-  assert.ok(seen.at(-1)?.endsWith('/d/doc-a/human-html'), seen.at(-1))
+  // …and so does everything read or written on its behalf: the frame's page too.
+  assert.equal(
+    httpHost.frameSrc({ model: 'authored', capture: false, theme: 'light', version: 'sha256:ab' }),
+    'https://studio.test/s/doc-a-token/document?model=authored&capture=0&theme=light&v=sha256%3Aab',
+  )
+  await httpHost.getData()
+  assert.ok(seen.at(-1)?.endsWith('/d/doc-a/entry/data'), seen.at(-1))
 })
 
 test('opens answered in order still end on the last one', async () => {
@@ -120,62 +124,13 @@ test('settling a job polls it through the shell API by its document, without ope
   assert.equal(httpHost.clanOrigin(), 'https://studio.test/s/doc-open-token')
 })
 
-// ── The composed page goes gzipped (features/doc-open-speed.clan) ────────────
+// ── The frame's page is one GET (features/doc-open-direct.clan) ────────────
 
-/** Record each preview-html post; `refuse` answers the gzipped ones 400, as a server that cannot unpack them would. */
-function servePosts(refuse = false) {
-  const posts: { encoding: string | null; body: Uint8Array | string }[] = []
-  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
-    const url = String(input)
-    if (url === '/api/session') return new Response(JSON.stringify({ tenant: TENANT, sandbox_origin: null, quota: { used: 0, cap: 40 } }))
-    const doc = /\/d\/([^/]+)$/.exec(url)
-    if (doc) {
-      return new Response(JSON.stringify({
-        path: doc[1], token: 't', sandbox_origin: null, manifest: { title: 'x' }, validation: 'OK',
-        has_human_view: true, render_model: 'authored', is_template: false, trusted: false,
-      }))
-    }
-    if (url.endsWith('/preview-html')) {
-      const encoding = new Headers(init?.headers).get('content-encoding')
-      posts.push({ encoding, body: init?.body as Uint8Array | string })
-      if (refuse && encoding) return new Response('Invalid UTF-8', { status: 400 })
-      return new Response('{"ok":true}')
-    }
-    throw new Error(`unexpected ${url}`)
-  }) as typeof fetch
-  return posts
-}
-
-async function gunzip(bytes: Uint8Array): Promise<string> {
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'))
-  return new Response(stream).text()
-}
-
-const BIG = `<!doctype html><html><body>${'<p>A finding, its source and its lens.</p>'.repeat(20_000)}</body></html>`
-
-test('a large composed page is posted gzipped and unpacks to the same page', async () => {
-  const posts = servePosts()
-  await httpHost.openClan('doc-g')
-  await httpHost.updatePreviewHtml(BIG)
-  assert.equal(posts.length, 1)
-  assert.equal(posts[0].encoding, 'gzip')
-  const body = posts[0].body as Uint8Array
-  assert.ok(body.byteLength * 10 < BIG.length, `${body.byteLength} bytes for ${BIG.length}`)
-  assert.equal(await gunzip(body), BIG)
-})
-
-test('a small page is posted as it is', async () => {
-  const posts = servePosts()
-  await httpHost.openClan('doc-s')
-  await httpHost.updatePreviewHtml('<p>short</p>')
-  assert.deepEqual(posts, [{ encoding: null, body: '<p>short</p>' }])
-})
-
-test('a server that refuses the gzipped page is sent it plain', async () => {
-  const posts = servePosts(true)
-  await httpHost.openClan('doc-r')
-  await httpHost.updatePreviewHtml(BIG)
-  assert.equal(posts.length, 2)
-  assert.equal(posts[1].encoding, null)
-  assert.equal(posts[1].body, BIG)
+test('opening a document asks for its page by address and posts nothing', async () => {
+  const seen = serve({ 'doc-f': 0 })
+  await httpHost.openClan('doc-f')
+  const src = httpHost.frameSrc({ model: 'legacy', capture: true, theme: 'dark', version: 'v1' })
+  assert.equal(src, 'https://studio.test/s/doc-f-token/document?model=legacy&capture=1&theme=dark&v=v1')
+  assert.ok(!seen.some(u => /human-html|preview-html/.test(u)), seen.join(' '))
+  await assert.rejects(httpHost.compose({ model: 'legacy', capture: false, theme: 'light', version: 'v1' }))
 })

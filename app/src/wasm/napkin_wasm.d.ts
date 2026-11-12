@@ -12,10 +12,6 @@ export class NapkinHost {
      */
     adoptClients(names: string): any;
     /**
-     * The free-text client names no client has yet, with their document counts.
-     */
-    legacyClientNames(): any;
-    /**
      * Compose a standalone document from the open `.clan` — bindings
      * resolved, assets inlined, scripts stripped, brand chrome. The same SDK
      * call every other shell makes; only the delivery differs, because there
@@ -30,6 +26,12 @@ export class NapkinHost {
     download(): Uint8Array;
     entry(path: string): string;
     /**
+     * The page the app frame loads from `srcdoc`, for the options in `query`
+     * (`model=&capture=&theme=`): the same composer as every host, with the
+     * device's CSP and rpc shim (napkin-host `frame`, `Reach::Device`).
+     */
+    framePage(query: string): string;
+    /**
      * The `clan://` surface, as a function call.
      *
      * `/patch-data`, `/assets/…`, `/chain`, `/apps`, `/launch` — the same
@@ -40,12 +42,15 @@ export class NapkinHost {
      * client's words were about is the host's own word match, no middleware.
      */
     handle(path: string, query: string, body: Uint8Array): any;
-    humanHtml(): string;
     /**
      * Install a template app from its packed bytes — fetched from wherever the
      * site publishes them.
      */
     installApp(bytes: Uint8Array): any;
+    /**
+     * The free-text client names no client has yet, with their document counts.
+     */
+    legacyClientNames(): any;
     listApps(): any;
     /**
      * The clients, live ones (or all, with `include_archived`).
@@ -71,7 +76,6 @@ export class NapkinHost {
     open(doc: string): any;
     setClientArchived(id: string, archived: boolean): any;
     setEditMode(active: boolean): void;
-    setPreviewHtml(html: string): void;
     /**
      * Branch the open document into another app, carrying its data and its
      * decisions, and open the result.
@@ -102,9 +106,10 @@ export interface InitOutput {
     readonly napkinhost_createClient: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly napkinhost_download: (a: number) => [number, number, number, number];
     readonly napkinhost_entry: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly napkinhost_framePage: (a: number, b: number, c: number) => [number, number, number, number];
     readonly napkinhost_handle: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
-    readonly napkinhost_humanHtml: (a: number) => [number, number, number, number];
     readonly napkinhost_installApp: (a: number, b: number, c: number) => [number, number, number];
+    readonly napkinhost_legacyClientNames: (a: number) => [number, number, number];
     readonly napkinhost_listApps: (a: number) => any;
     readonly napkinhost_listClients: (a: number, b: number) => [number, number, number];
     readonly napkinhost_listLibrary: (a: number, b: number, c: number, d: number, e: number) => any;
@@ -115,7 +120,6 @@ export interface InitOutput {
     readonly napkinhost_openHome: (a: number) => [number, number, number];
     readonly napkinhost_setClientArchived: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly napkinhost_setEditMode: (a: number, b: number) => void;
-    readonly napkinhost_setPreviewHtml: (a: number, b: number, c: number) => void;
     readonly napkinhost_spinoffDocument: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly napkinhost_spinoffTargets: (a: number) => any;
     readonly napkinhost_title: (a: number) => [number, number, number, number];

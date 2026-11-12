@@ -48,6 +48,8 @@ export interface OpenResult {
   render_model: 'authored' | 'legacy'
   is_template: boolean
   trusted: boolean
+  /** The installed app's version when the view is the library's (napkin-host `view`). */
+  view_version?: string | null
 }
 
 /** A template app installed in the local library, listed on the launcher. */
@@ -677,6 +679,18 @@ export interface DocOps {
   approve(rationale: string): Promise<void>
 }
 
+/** What the app frame's page is composed for: everything but the view (napkin-host `frame`). */
+export interface FrameOptions {
+  /** Which edit bridge: the document's `render_model`. */
+  model: 'authored' | 'legacy'
+  /** The dogfood build records, and the person agreed: add the frame listener. */
+  capture: boolean
+  /** Stamped on the page's `<html>`, so a light reader sees no dark flash. */
+  theme: 'light' | 'dark'
+  /** The document as opened (its sha256): a changed document is a new address. */
+  version: string
+}
+
 export interface Host {
   // ── Who is here ───────────────────────────────────────────────────────────
   /** The signed-in person, as the host acts for them. Read-only. */
@@ -691,7 +705,6 @@ export interface Host {
   takeLaunchFile(): Promise<string | null>
 
   // ── Reading the open document ─────────────────────────────────────────────
-  getHumanHtml(): Promise<string>
   getData(): Promise<string>
   /**
    * Every decision in the open document, newest first, with what needs a
@@ -745,7 +758,6 @@ export interface Host {
 
   // ── The render surface ────────────────────────────────────────────────────
   setEditMode(active: boolean): Promise<void>
-  updatePreviewHtml(html: string): Promise<void>
   savePatch(id: string, content: string): Promise<void>
   /**
    * Origin the sandboxed app frame reaches the clan:// API on. A custom URI
@@ -754,17 +766,22 @@ export interface Host {
    */
   clanOrigin(): string
   /**
-   * Last pass over a composed app page before the frame loads it. Identity on
-   * the desktop, where `clan://` is a real scheme; on the web it rewrites that
-   * base to the frame's own URL so app HTML runs unmodified.
-   */
-  prepareAppHtml(html: string): string
-  /**
-   * How the app frame gets its document. `'url'` means the host serves it and
-   * the frame loads it by address; `'srcdoc'` means there is no server to
-   * serve it from, so it is inlined.
+   * How the app frame gets its page. `'url'` means the host serves it and the
+   * frame loads it by address (`frameSrc`); `'srcdoc'` means there is no
+   * server to serve it from, so it is inlined (`compose`).
    */
   readonly frameLoad: 'url' | 'srcdoc'
+  /**
+   * The address of the open document's frame page, composed by the host on
+   * request (`{clanOrigin}/document?model=&capture=&theme=&v=`): the web and
+   * the desktop. Throws on the device host.
+   */
+  frameSrc(opts: FrameOptions): string
+  /**
+   * The open document's frame page itself, for a `srcdoc` frame: the device
+   * host, composed by the same napkin-host code. Rejects on the others.
+   */
+  compose(opts: FrameOptions): Promise<string>
   /**
    * Answer a `clan://` request the app frame made, when the shim routes those
    * through the shell instead of the network. Only the serverless host needs

@@ -16,6 +16,7 @@ Each input is composed for every host's last pass (web: the `clan://` rewrite
 and fetch shim for origin `https://napkin.test/s/no-token`; desktop: none;
 device: the CSP and the rpc shim), render model, dogfood capture and theme.
 
-Generated once, by `app/scripts/frame-golden.mjs` at the commit that added
-this directory, from the TypeScript composition as it then stood. The
-TypeScript is gone; these hashes are the record of what it made.
+Generated once, by `app/scripts/frame-golden.mjs` (in the history of
+features/doc-open-direct: `git log --diff-filter=D -- app/scripts/frame-golden.mjs`),
+from the TypeScript composition as it then stood. That TypeScript is gone with
+it; these hashes are the record of what it made.

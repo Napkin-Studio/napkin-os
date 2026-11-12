@@ -194,10 +194,9 @@ export default function App() {
   }, [refreshApps])
 
   const runArtifact = useCallback(async (n: number, open: OpenResult, source?: DeviceSource) => {
-    const html = open.has_human_view ? await host.getHumanHtml() : ''
     if (!isLatest(n)) return
     resetTheme() // clear any prior app's theme before this one (re)applies its own
-    setRunning({ artifactPath: open.path, open, htmlContent: html, editMode: false, source })
+    setRunning({ artifactPath: open.path, open, editMode: false, source })
     setScreen('app')
     // The browser's Back leaves the document for where it was opened from: the
     // document takes one history entry of its own (once, however many it opens).

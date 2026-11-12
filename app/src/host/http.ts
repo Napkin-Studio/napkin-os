@@ -10,12 +10,13 @@
 //    the HTTP API addresses documents explicitly. So this module remembers what
 //    the shell last opened, which is the same state, just held on this side.
 //  * Reaching the clan:// API. An app inside a .clan asks for
-//    `clan://localhost/patch-data`, a scheme no browser has. `prepareAppHtml`
-//    rewrites that base to the frame's own token URL, so app HTML runs
-//    unmodified.
+//    `clan://localhost/patch-data`, a scheme no browser has. The server
+//    composes the frame's page with that base rewritten to the frame's own
+//    token URL (`/s/{token}/document`), so app HTML runs unmodified.
 
 import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
+import { frameQuery } from './frame'
 import type {
   ClientConfirmReply,
   Adopted,
@@ -124,20 +125,6 @@ async function text(path: string, init?: RequestInit): Promise<string> {
   return asText(await request(path, init))
 }
 
-/** Pages shorter than this are posted as they are: gzip would save little. */
-const GZIP_FROM = 16 * 1024
-
-/** `text` gzipped, or null where the browser cannot (no CompressionStream). */
-export async function gzipText(text: string): Promise<Uint8Array | null> {
-  if (typeof CompressionStream !== 'function') return null
-  try {
-    const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))
-    return new Uint8Array(await new Response(stream).arrayBuffer())
-  } catch {
-    return null
-  }
-}
-
 function postJson(body: unknown): RequestInit {
   return { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
 }
@@ -228,25 +215,6 @@ function events(): Promise<EventSource> {
   return streamOnce
 }
 
-/** Put a shim ahead of every script the app has, not after them.
- *
- * Apps fetch on parse, not on DOMContentLoaded — the launcher asks for its app
- * list from an inline script in the body. A shim spliced at `</body>` installs
- * itself after that has already run, and quietly does nothing. */
-function injectFirst(html: string, script: string): string {
-  const head = /<head\b[^>]*>/i.exec(html)
-  if (head) {
-    const at = head.index + head[0].length
-    return html.slice(0, at) + script + html.slice(at)
-  }
-  const tag = /<html\b[^>]*>/i.exec(html)
-  if (tag) {
-    const at = tag.index + tag[0].length
-    return html.slice(0, at) + script + html.slice(at)
-  }
-  return script + html
-}
-
 /**
  * The open document as the server holds it now: its packed `.clan` and the
  * manifest that describes it. What "Present offline" keeps.
@@ -289,7 +257,6 @@ export const httpHost: Host = {
     return doc
   },
 
-  getHumanHtml: () => text(`/d/${requireDoc()}/human-html`),
   getData: () => text(`/d/${requireDoc()}/entry/data`),
   // A clan:// route, so it is the frame's token that reaches it.
   getDecisions: async () => {
@@ -326,59 +293,19 @@ export const httpHost: Host = {
   setEditMode: async active => {
     await request(`/d/${requireDoc()}/edit-mode`, postJson({ active }))
   },
-  // The composed page is about a megabyte for a real research, and posting it
-  // whole was most of the wait to open one (features/doc-open-speed.clan): it
-  // goes gzipped, and the server stores what it unpacks to.
-  updatePreviewHtml: async html => {
-    const path = `/d/${requireDoc()}/preview-html`
-    const packed = html.length >= GZIP_FROM ? await gzipText(html) : null
-    if (packed) {
-      const resp = await fetch(`${await base()}${path}`, {
-        credentials: 'same-origin',
-        method: 'POST',
-        headers: { 'content-type': 'text/html; charset=utf-8', 'content-encoding': 'gzip' },
-        body: packed as unknown as BodyInit,
-      })
-      if (resp.ok) return
-      // Not taken (a server from before it unpacked bodies, mid-deploy): send
-      // it plain, which also says the server's own words if it is refused.
-    }
-    await request(path, { method: 'POST', headers: { 'content-type': 'text/html; charset=utf-8' }, body: html })
-  },
   savePatch: async (id, content) => {
     await request(`/d/${requireDoc()}/patch`, postJson({ id, content }))
   },
 
   clanOrigin: () => `${sandboxOrigin ?? window.location.origin}/s/${openToken ?? 'no-token'}`,
 
-  // Apps compute their API base once, at parse time, from a scheme the browser
-  // does not have. Rewriting the two forms it can take — and patching `fetch`
-  // for anything built later — is what lets an unmodified .clan run here.
+  // The frame loads its page from the server, composed there from the view
+  // (napkin-host frame.rs): one GET, nothing posted (features/doc-open-direct.clan).
   frameLoad: 'url',
+  frameSrc: opts => `${httpHost.clanOrigin()}/document?${frameQuery(opts)}`,
+  compose: () => Promise.reject(new Error('the frame loads its page by address in this build')),
   handleFromFrame: () =>
     Promise.reject(new Error('the frame reaches the host directly in this build')),
-  prepareAppHtml: html => {
-    const origin = httpHost.clanOrigin()
-    const rewritten = html
-      .split('http://clan.localhost')
-      .join(origin)
-      .split('clan://localhost')
-      .join(origin)
-    const shim = `<script>(function(){
-  var BASE=${JSON.stringify(origin)};
-  var f=window.fetch;
-
-  window.fetch=function(input,init){
-    if(typeof input==='string'){
-      input=input.replace(/^clan:\\/\\/localhost/,BASE).replace(/^http:\\/\\/clan\\.localhost/,BASE);
-    }
-    return f.call(this,input,init);
-  };
-  var c=window.__CLAN__;
-  if(c&&c.assets){for(var k in c.assets){if(c.assets[k].charAt(0)==='/')c.assets[k]=BASE+c.assets[k];}}
-})();</script>`
-    return injectFirst(rewritten, shim)
-  },
 
   listApps: () => json<InstalledApp[]>('/apps'),
   installApp: srcPath =>
