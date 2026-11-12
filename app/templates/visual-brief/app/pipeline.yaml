@@ -1,10 +1,18 @@
 # Visual Brief pipeline contract. Travels into every instance.
-# Phase 1 declares no task: the page is written by people and locked by an approve decision.
+# Phase 1 declared no task; Phase 2 declares judge_work (features/judge.clan): the page is written by people and locked by an approve decision.
 # A later phase adds the reference-frame task here, behind the spend guard (server/napkin/spend.py).
 pipeline: napkin-visual-brief
 version: 1
-request_kind: none
+request_kind: middleware
 
-tasks: {}
+tasks:
+  judge_work:
+    handler: judge_work@1
+    job: short
+    kind: visual_brief
+    sends:
+      - "the territory, the tone, what must show and never show, and the reference frames' captions"
+      - "the brief's approved fields, by name (never a drafter's prompt, a proposal, an author or another client's material)"
+    reads: "Judge (features/judge.clan): thirty yes or no tests, the host adds up the passes and routes; a person sends it, the creative director decides"
 
 errors: non-2xx status; a 200 body must never contain an `error` key.

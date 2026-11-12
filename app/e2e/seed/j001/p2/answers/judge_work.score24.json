@@ -1,12 +1,19 @@
 {
-  "task": "judge_work", "handler": "judge_work@1.0",
-  "result": {
-    "tests": [
-      { "id": "idea.fame", "value": "pass", "evidence": "Tellable." },
-      { "id": "idea.single", "value": "pass", "evidence": "One thought." },
-      { "id": "craft.read_time", "value": "pass", "evidence": "29 seconds." }
-    ],
-    "backend": "fixture", "model": null, "rubric_version": "fixture-1", "score": { "total": 24, "idea": 8, "craft": 8, "effect": 8 }
+ "task": "judge_work",
+ "handler": "judge_work@1.0",
+ "_note": "24 of 30: goes to the creative director",
+ "result": {
+  "fail": {
+   "idea": 2,
+   "craft": 2,
+   "effect": 2
   },
-  "change": null, "trace": {}
+  "backend": "fixture",
+  "model": null,
+  "rubric_version": "1",
+  "prompt_hash": null,
+  "price_eur": 0
+ },
+ "change": null,
+ "trace": {}
 }

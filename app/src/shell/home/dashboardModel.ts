@@ -30,6 +30,25 @@ export interface Tile {
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
 
+/** Judge's tile: pieces scored, never people. With nothing scored it reads as it always did. The wording stays;
+ *  the numbers are the pieces scoring 27 or more, and how many are under 24 (advice until Judge is trusted). */
+function scoresTile(d: DashboardView): Tile {
+  const label = 'Work scoring 27 or more'
+  const s = d.scores
+  if (!s) return { id: 'scores', label, numbers: [], line: 'No scores yet. Send a script to Judge.', jobs: [] }
+  const door = formatRoute({ level: 'door', door: 'judge-scores' })
+  return {
+    id: 'scores',
+    label,
+    numbers: [
+      { text: `${s.at_27} of ${s.scored} ${plural(s.scored, 'piece', 'pieces')}`, href: door },
+      { text: `${s.under_24} under 24`, href: door },
+    ],
+    line: `Average ${s.average} out of 30. ${s.brave} Brave, ${s.overruled} overruled. ${s.awaiting_set} more decided ${plural(s.awaiting_set, 'piece', 'pieces')} before Judge's 24 is more than advice.`,
+    jobs: s.jobs.map(j => ({ job: { number: j.number, client: j.client, client_id: j.client_id, line: '' }, text: `${j.scored} scored, average ${j.average}, ${j.under_24} under 24.` })),
+  }
+}
+
 export function tiles(d: DashboardView): Tile[] {
   const all = d.by_stage.flatMap(s => s.jobs)
   const maxWait = [...d.waiting_on_client].sort((a, b) => Number(b.line) - Number(a.line))[0]
@@ -65,7 +84,7 @@ export function tiles(d: DashboardView): Tile[] {
       line: maxWait ? `The longest wait, on ${maxWait.number}.` : 'No brief is waiting on a client.',
       jobs: d.waiting_on_client.map(j => ({ job: j, text: `${j.line} ${plural(Number(j.line), 'day', 'days')}.` })),
     },
-    { id: 'scores', label: 'Work scoring 27 or more', numbers: [], line: 'No scores yet. Judge starts in Phase 2.', jobs: [] },
+    scoresTile(d),
     { id: 'results', label: 'Results against objectives', numbers: [], line: 'No results yet. No job has launched.', jobs: [] },
   ]
 }

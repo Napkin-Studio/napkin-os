@@ -5,10 +5,26 @@
 // Moved out of stack.mjs so a unit test can start it on a free port (app/tests/phase2Suite.test.ts).
 
 import { createServer } from 'node:http'
+import { readFileSync } from 'node:fs'
 import { answerFor } from './seed/j001/p2/answers.mjs'
 
+// Judge (features/judge.clan): the fixture backend of the stand-in. An answer for judge_work holds `result.fail`, how many tests of each
+// dimension fail ({ idea, craft, effect }); asked for a kind of work, the stand-in writes all thirty of that kind's tests from the rubric
+// (server/napkin/judge/rubric.json): the last N llm tests of a dimension fail, the rest pass, each with a line of evidence. The host adds
+// them up. An answer with `_status` and `error` is a refusal the middleware makes (ai_off, not_eu, not_configured, spend_refused).
+function judgeTests(rubric, kind, fail) {
+  const out = []
+  for (const dim of ['idea', 'craft', 'effect']) {
+    const set = rubric.tests.filter(t => t.dim === dim && (t.kind === null || t.kind === kind))
+    const llm = set.filter(t => t.method === 'llm')
+    const failing = new Set(llm.slice(Math.max(0, llm.length - (fail?.[dim] ?? 0))).map(t => t.id))
+    for (const t of set) out.push({ id: t.id, value: failing.has(t.id) ? 'fail' : 'pass', evidence: `Fixture evidence for ${t.id}.` })
+  }
+  return out
+}
+
 /** A new stand-in server (not listening yet): `standIn().listen(port, '127.0.0.1')`. */
-export function standIn(answersDir) {
+export function standIn(answersDir, rubricPath = new URL('../../server/napkin/judge/rubric.json', import.meta.url)) {
   let job = { state: 'running', stage: 'research' }
   const failNext = new Set()
   const variants = {}
@@ -32,7 +48,16 @@ export function standIn(answersDir) {
       if (typeof task === 'string' && failNext.delete(task)) {
         return send(502, { error: { type: 'provider_error', message: 'e2e stand-in: the provider failed' } })
       }
-      const answer = typeof task === 'string' ? answerFor(task, variants[task], answersDir) : null
+      let answer = typeof task === 'string' ? answerFor(task, variants[task], answersDir) : null
+      if (answer && answer._status) return send(answer._status, { error: answer.error })
+      if (answer && task === 'judge_work' && answer.result?.fail) {
+        let kind = null
+        try { kind = JSON.parse(body).payload?.input?.work?.kind ?? null } catch { /* no work named */ }
+        if (kind) {
+          const { fail, ...rest } = answer.result
+          answer = { ...answer, result: { ...rest, tests: judgeTests(JSON.parse(readFileSync(rubricPath, 'utf8')), kind, fail) } }
+        }
+      }
       if (answer) {
         return send(200, {
           api: 'napkin.middleware/1',

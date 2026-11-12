@@ -1,12 +1,20 @@
 # Script editor pipeline contract. Travels into every instance.
-# The editor declares no task yet: the page is written by people, marked up by a creative director and
+# The editor declares one task, judge_work (features/judge.clan), and no writing task yet: the page is written by people, marked up by a creative director and
 # answered by the writer. The two model tasks of the design, rewrite_line and headline_options, are not built:
 # when they are, their only write path is script.proposals (merge policy append), they run behind the spend
 # guard (server/napkin/spend.py) and the EU pin, and only NAPKIN_SCRIPT_AI turns them on.
 pipeline: napkin-script-editor
 version: 1
-request_kind: none
+request_kind: middleware
 
-tasks: {}
+tasks:
+  judge_work:
+    handler: judge_work@1
+    job: short
+    kind: script
+    sends:
+      - "the script as the page holds it (the beats, the format, the slot and the checks)"
+      - "the brief's approved fields, by name (never a drafter's prompt, a proposal, an author or another client's material)"
+    reads: "Judge (features/judge.clan): thirty yes or no tests, the host adds up the passes and routes; a person sends it, the creative director decides"
 
 errors: non-2xx status; a 200 body must never contain an `error` key.

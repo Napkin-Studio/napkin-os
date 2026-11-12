@@ -1,12 +1,19 @@
 {
-  "task": "judge_work", "handler": "judge_work@1.0",
-  "result": {
-    "tests": [
-      { "id": "idea.fame", "value": "pass", "evidence": "The headline can be told in one breath." },
-      { "id": "idea.single", "value": "pass", "evidence": "One thought, the easy way in." },
-      { "id": "craft.read_time", "value": "pass", "evidence": "28 seconds against a 30 second slot." }
-    ],
-    "backend": "fixture", "model": null, "rubric_version": "fixture-1", "score": { "total": 26, "idea": 9, "craft": 8, "effect": 9 }
+ "task": "judge_work",
+ "handler": "judge_work@1.0",
+ "_note": "default: 26 of 30, idea 9",
+ "result": {
+  "fail": {
+   "idea": 1,
+   "craft": 2,
+   "effect": 1
   },
-  "change": null, "trace": {}
+  "backend": "fixture",
+  "model": null,
+  "rubric_version": "1",
+  "prompt_hash": null,
+  "price_eur": 0
+ },
+ "change": null,
+ "trace": {}
 }

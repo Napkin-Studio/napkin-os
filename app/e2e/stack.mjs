@@ -110,6 +110,8 @@ function start(addr, data, auth, gate = false) {
       NAPKIN_WEB_STATIC: join(app, 'dist'),
       NAPKIN_WEB_SEED: seed,
       NAPKIN_CONFIG_DIR: config,
+      // Judge answers from the stand-in's fixture scores (features/judge.clan): the backend is named, never defaulted, and unset means not set up.
+      NAPKIN_JUDGE_BACKEND: 'fixture',
       // No model and no secrets: the only middleware is the local stand-in above.
       RUST_LOG: 'napkin_web=warn',
     },

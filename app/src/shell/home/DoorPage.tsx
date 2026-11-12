@@ -20,6 +20,7 @@ import { doorIsLive, doorTool } from './model'
 import { Dashboard } from './Dashboard'
 import { ApprovalsPage } from '../approvals/ApprovalsPage'
 import { LiveJobs } from '../job/LiveJobs'
+import { JudgeScoresPage } from '../judge/JudgeScoresPage'
 import './home.css'
 
 interface Props {
@@ -55,6 +56,9 @@ export function DoorPage({ door, name, clients, items, apps, rights = null, go }
   } else if (page === 'live-jobs') {
     // Every live job, soonest deadline first, each row its page (features/job-page.clan).
     body = <LiveJobs clients={clients} rights={rights} go={go} />
+  } else if (page === 'judge-scores') {
+    // Each piece of work and its score, by job: counts of pieces, never of people (record judge).
+    body = <JudgeScoresPage go={go} />
   } else if (page === 'clients') {
     // The client desk is the Clients door: the desk page itself, not a second list of clients.
     body = <Empty line="The desk lists your clients." verb="Open the desk" example={{ title: 'Example · Client A, an Irish whiskey', lines: ['Client A, an Irish whiskey. One live job, J001.'] }} onStart={() => go({ level: 'clients' })} />

@@ -1,0 +1,52 @@
+/* The score card (features/judge.clan). Tokens from index.css only: the Brief gate band's paper and ink, the pill buttons of
+   chrome.css, the accent for what is not passed. Buttons are at least 44 px tall on a phone. */
+
+.jb-band .bg-bar { padding-bottom: 6px; }
+.jb-card { display: grid; gap: 10px; padding: 4px 16px 16px; }
+.jb-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; }
+.jb-total { margin: 0; font-family: var(--f-display); letter-spacing: -.03em; color: var(--ink); }
+.jb-total b { font-size: 44px; line-height: 1; font-weight: 700; }
+.jb-total span { font-size: 15px; color: var(--ink2); margin-left: 4px; }
+.jb-dims { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--ink2); }
+.jb-dims li { display: inline-flex; gap: 4px; align-items: baseline; }
+.jb-dims b { color: var(--ink); font-size: 16px; }
+.jb-route { margin: 0; font-weight: 700; color: var(--ink); max-width: 70ch; }
+.jb-note { margin: 0; padding: 0 16px; color: var(--ink2); font-size: 13.5px; max-width: 70ch; }
+.jb-card .jb-note { padding: 0; }
+.jb-warn { color: var(--ink); border-left: 3px solid var(--create); padding-left: 10px; }
+.jb-card .jb-warn { padding-left: 10px; }
+.jb-why { display: grid; gap: 8px; }
+.jb-tests { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+.jb-tests li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 2px 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+.jb-dim { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink3); padding-top: 3px; }
+.jb-q { font-weight: 600; }
+.jb-ev { grid-column: 2; color: var(--ink2); font-size: 13.5px; }
+.jb-ev::before { content: '\201C'; }
+.jb-ev::after { content: '\201D'; }
+.jb-passed li { opacity: .8; }
+.jb-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.jb-btn { min-height: 36px; padding: 0 16px; font-weight: 600; font-size: 13px; }
+.jb-form { display: grid; gap: 8px; max-width: 60ch; }
+.jb-form label { font-weight: 600; }
+.jb-form textarea { font: inherit; padding: 10px 12px; border: 1.5px solid var(--line-strong, var(--ink)); border-radius: 12px; background: var(--card); color: var(--ink); resize: vertical; }
+@media (max-width: 640px) {
+  .jb-btn { min-height: 44px; }
+  .jb-tests li { grid-template-columns: minmax(0, 1fr); }
+  .jb-ev { grid-column: 1; }
+}
+
+/* The Judge scores door */
+.js-list { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1.5px solid var(--line-strong); }
+.js-row:where(.nui, .nui *) { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 4px 18px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--line-soft); }
+.js-score:where(.nui, .nui *) { font: 700 32px/1 var(--f-display); letter-spacing: -.03em; }
+.js-score small { font: 500 13px var(--f-body, inherit); color: var(--muted); letter-spacing: 0; }
+.js-main:where(.nui, .nui *) { display: grid; gap: 2px; min-width: 0; }
+.js-title:where(.nui, .nui *) { font-weight: 700; overflow-wrap: anywhere; }
+.js-sub:where(.nui, .nui *) { color: var(--muted); font-size: 13.5px; }
+.js-open:where(.nui, .nui *) { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+.js-counts:where(.nui, .nui *) { display: flex; flex-wrap: wrap; gap: 6px 26px; margin: 0 0 18px; padding: 0; list-style: none; }
+.js-counts li { display: grid; gap: 0; }
+.js-counts b { font: 700 28px/1.1 var(--f-display); letter-spacing: -.02em; }
+.js-counts span { font-size: 13px; color: var(--muted); }
+.js-note:where(.nui, .nui *) { margin: 0 0 18px; max-width: 64ch; color: var(--muted); font-size: 13.5px; }
+@media (max-width: 640px) { .js-row:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr); gap: 4px; } }

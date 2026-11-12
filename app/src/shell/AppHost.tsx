@@ -29,6 +29,10 @@ import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nou
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
 import { modeOf, statusOf, stateOf, type BarItem } from './appBar'
+import { STATE_ACTIONS } from '../components/states/words'
+import { JudgeBand } from './judge/JudgeBand'
+import { JUDGE_APPS, SEND_TO_JUDGE } from './judge/judgeModel'
+import { useJudge } from './judge/useJudge'
 import { createSaveQueue } from '../components/states/saveQueue'
 import { StateStrip } from '../components/states/StateStrip'
 import { useSaveState } from '../components/states/useSaveState'
@@ -92,6 +96,8 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
+const NO_ITEMS: BarItem[] = []
+
 export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
@@ -317,14 +323,21 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // empty bar until it sends its own. Client review keeps the bar to itself.
   const [barState, setBarState] = useState<{ doc: string | null; items: BarItem[] }>({ doc: null, items: [] })
   const onBar = useCallback((items: BarItem[]) => setBarState({ doc: docRef.current, items }), [])
-  const barItems = barState.doc === docPath && !clientOn ? barState.items : []
+  const appItems = barState.doc === docPath && !clientOn ? barState.items : NO_ITEMS
+  // Send to Judge (features/judge.clan): the shell's own button for a tool that sends work to Judge, drawn with the app's.
+  const judge = useJudge(docPath, !clientOn && !open.is_template && JUDGE_APPS.includes(appId ?? ''))
+  const barItems = judge.item ? [...appItems, judge.item] : appItems
+  const onBarAction = useCallback((id: string) => {
+    if (id === SEND_TO_JUDGE || (id === STATE_ACTIONS.retry && judge.state && !stateOf(appItems))) { void judge.send(); return }
+    barAction(id)
+  }, [judge, appItems])
   // The app's own word for its state wins over the shell's, where it sends one.
   const appStatus = statusOf(barItems)
   // How each write went (the bridge reports it) and the state the app is in, shown between the bar and the work.
   // One queue per document: a write that failed in another document is not this one's to retry.
   const writes = useMemo(() => createSaveQueue(), [docPath]) // eslint-disable-line react-hooks/exhaustive-deps
   const saveState = useSaveState(writes)
-  const appState = stateOf(barItems)
+  const appState = stateOf(barItems) ?? judge.state
   // The page says its agents are at work (the bar's working chip) before the host's run catches up:
   // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
   const pageRun = pageRunOf(modeOf(barItems))
@@ -394,7 +407,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           tool: brand,
           state: appStatus ?? docStateOf(decisions.view),
           bar: barItems,
-          onBarAction: barAction,
+          onBarAction,
           isTemplate: open.is_template,
           trusted: open.trusted,
           validation: open.validation,
@@ -450,7 +463,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           <button type="button" className="ch-link" onClick={() => setLinkError(null)}>Dismiss</button>
         </div>
       )}
-      <StateStrip queue={writes} app={appState} onAction={barAction} onRefresh={refreshApp} />
+      <StateStrip queue={writes} app={appState} onAction={onBarAction} onRefresh={refreshApp} />
       {/* A visual brief or a script answers one brief version: when the brief moves on, say so, and take the new one only into a version that is open. */}
       {!clientOn && (appId === VISUAL_BRIEF || appId === SCRIPT_EDITOR) && !open.is_template && (() => {
         const moved = briefMoved(upstream)
@@ -484,6 +497,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           {!clientOn && appId === SCRIPT_EDITOR && !open.is_template && (
             <VersionBand undo={briefUndo} docPath={docPath} onChanged={changed} />
           )}
+          {judge.item && <JudgeBand judge={judge} />}
           {!clientOn && decisions.view && (
             <ClientReviewBand
               view={decisions.view}

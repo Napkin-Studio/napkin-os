@@ -1,8 +1,7 @@
 // Phase 2 acceptance, record `script-editor` (features/script-editor.clan): tests 53 to 57 of docs/design/phase2-acceptance.md, run at 390
-// and 1440 px. Tests 53, 54 and 55 are live: the editor, the live check, tracked changes as human patches, versions and the undo. Test 56 stays
-// `test.fixme` for one reason: its Judge half (a draft goes to Judge and comes back with its score) needs the scoring route of record `judge`,
-// which is not on this branch. What of it is built (Send to Radio, Send to Film with its beat ids, Send to Judge recording the version and saying
-// Judge is not open yet) has its own live tests below, titled apart so the counter does not count them as test 56. Test 57 stays `test.fixme`:
+// and 1440 px. Tests 53, 54, 55 and 56 are live: the editor, the live check, tracked changes as human patches, versions and the undo, and the
+// hand-offs (test 56 is counted by record `judge`, which built the scoring route: a draft goes to Judge and comes back with its score). Send to
+// Radio, Send to Film with its beat ids and Send to Judge recording the version have their own live tests below. Test 57 stays `test.fixme`:
 // it is the rewrite run, behind NAPKIN_SCRIPT_AI, which this stage does not build (the model part of the record).
 // No model and no paid provider: the stand-in middleware answers from seed/j001/p2/answers/, and nothing here calls it (tests 53 asserts that).
 //
@@ -158,8 +157,8 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  // Test 56 waits on record `judge`: the scoring route and its score card. Radio and Film, and Judge's record of the version, are below.
-  test.fixme(t(56), async ({ browser }) => {
+  // Test 56: record `judge` turned on the scoring route and its score card. Radio and Film, and Judge's record of the version, are below.
+  test(t(56), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
@@ -169,7 +168,8 @@ for (const size of SIZES) {
     await open1(page, job)
     const app = frameOf(page)
     await app.getByRole('button', { name: 'Send to Judge' }).click()
-    await expect(app.getByTestId('judge-score')).toContainText('24') // ADJUST(judge): the shared score card the Judge record builds
+    await expect(app.getByTestId('judge-score')).toContainText('24')
+    await expect(page.getByTestId('score-card')).toContainText('24') // the shared score card, above the page
     await ctx.close()
   })
 
@@ -188,9 +188,10 @@ for (const size of SIZES) {
     expect(data).toMatch(/content_hash: [0-9a-f]{64}/)
     expect((await chainOf(page, radio.token)).some(d => d.action === 'send version 1 to Radio' && d.actor === `human:${PEOPLE.copywriter.username}`)).toBe(true)
     await shot(page, 'script-sent-radio', size)
-    // Judge: the draft is recorded and the page says plainly that Judge is not open yet. No dead button.
+    // Judge: the draft is recorded, scored by the fixture backend, and the page says so. No dead button.
+    await control(page, { variant: { judge_work: 'score24' } })
     await app.getByRole('button', { name: 'Send to Judge' }).click()
-    await expect(app.getByTestId('send-line')).toHaveText('Judge is not open yet. This script, version 1, is ready for it.')
+    await expect(app.getByTestId('send-line')).toHaveText('Judge scored version 1: 24 of 30. The card is above the page.')
     await ctx.close()
   })
 
