@@ -128,3 +128,41 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 **Phase 2, started.** Four read-only audits are done (Judge and the Brain; the bar, search, Ask Nap, voice, Needs you and the homes; sign-on, agency setup, approvals, the client link and timesheet signals; the Idea room and Script editor). No Phase 2 record is opened yet. Findings worth keeping: nothing scores creative work today and the calibrated judge backend is still planned; no bar, search, Ask Nap or voice code exists; larryob78/the-canon holds one Cannes data file and nothing usable; sign-on and the calendar, Slack and email signals each need an outside account a person registers.
 
 **Next action.** Open and design the Phase 2 records, in this order: approval-route, a job page with the full Needs you, remaining-homes, one-bar-search, idea-room (cards and the five-card gate first), script-editor, judge (routing and overrule first, on fixture scores), agency-setup, client-review-full, napkin-brain (page store first), first-day, ask-nap, sso, timesheet-signals, voice. Show Sai the designs, then build as in this session.
+
+## 2026-11-12 · Phase 2 · session 3
+
+**Run settings.** As session 2. Fable 5.2 directed and wrote the designs; builders on Sonnet 5.5, at most three at once; security reviews and the wave checks on Opus 5.5. From the next session the directing session moves to Sonnet 5.5 to cut cost (Sai, 12 Nov): Fable stays for design agents only.
+
+**Approvals, as given.** As session 2, repeated by Sai on 12 Nov ("take yes from Laurence's side"). Each record's `design.approved_by` reads "Sai (chat, 2026-11-11 and 12: approved all build phases; Laurence's approval relayed by Sai)". Laurence has signed nothing himself.
+
+**Designed.** 17 Phase 2 records: job-page, needs-you-full, remaining-homes, one-bar-search, first-day, ask-nap, voice, j001-phase2-suite, idea-room, script-editor, judge, napkin-brain, approval-route, client-review-full, agency-setup, sso, timesheet-signals. The acceptance list is `docs/design/phase2-acceptance.md`, tests 19 to 73.
+
+**Built and merged (11 of 17).** j001-phase2-suite, job-page, remaining-homes, approval-route, agency-setup (stages 1 to 3), idea-room (slice 1), script-editor (without the AI margin), needs-you-full, client-review-full, judge, one-bar-search. Also: the job index is stamped per document (`PartStore::stamp`, os-layer.md 13.3; 17 s down to 3 ms at 300 documents) and saves go through a temp file and a rename.
+
+**Checks.** `node app/e2e/phase2-fixme.mjs`: 38 of 55 Phase 2 tests live. Phase 1: 18 of 18. The wave check on `fix/phase2-verify-b` (13 commits) ran `scripts/check.sh --all` green (twelve suites) and a full e2e run with 149 passed and 6 failed (pilot tests 3, 10 and 14 at both widths: a signer was matched by display name). That is fixed and the six pass alone. A last full run was still going when this was written: read `/tmp/phase2-verify-b-cfg/r5.log`, or run it again, before merging.
+
+**What went wrong, and what was done.**
+
+- An Opus review of the client review link found five faults (pieces loaded by re-hashing, a staff member as their own approver, a second round leaving old links open, no limit on email codes, a missing actor check). All fixed on `fix/client-review-hardening`.
+- Four builders with a check running put the machine at a load of 26 to 36 and made e2e results unreadable. The cap is three builders, and the full e2e runs once per wave on a quiet machine.
+- Finished worktrees held about 150 GB of `target/`. They are deleted when a record merges. A builder runs its own `npm ci`; a linked `node_modules` was wiped once.
+- Finished builders re-sent their reports while waiting on their own background runs. Stop a builder once its work is merged.
+
+**Could not verify, or weaker than it reads.**
+
+- No model call was made. The Judge's rubric (`server/napkin/judge/rubric.json`) is a draft and no calibrated score exists; the Idea room's AI ideas and the Script editor's AI margin are not built.
+- The email code on the client link goes to a file in tests; no SES sender exists.
+- The per-client AI switch (`server/napkin/client_ai.py`) is a seam that returns False.
+- Nothing is applied to AWS.
+
+**For a person.** Everything in session 2's list still stands. New: Laurence reads the Judge rubric draft; the strict approver rule and the client link rounds; who may invite people; which Needs you rows can be marked done; whether budget hours count as money; Advertising Studio in the production image; the napkin-radio licence in writing; Shrey reads os-layer.md 7.8 to 7.10, 13.1 to 13.4, 14, 15 and `PartStore::stamp`; outside accounts for sso, timesheet-signals and the SES sender.
+
+**Cost.** Not read from inside the session. Run `/cost`. Builders used 300,000 to 550,000 tokens each.
+
+**Next action.**
+
+1. Merge `fix/phase2-verify-b` into `spike/fabletest` once its last e2e run is green, then push `spike/fabletest` (no pull request). Origin is at a658a60a; four records and the fixes are local only.
+2. Build `first-day`, `ask-nap` (the offline core) and `napkin-brain`, three at once, builders running only their own tests. Then one wave check on Sonnet.
+3. Then: the per-client AI switch as a small record; agency-setup stages 4 and 5; idea-room slices 2 and 3; the Script editor's AI margin (held until the spend cap is decided).
+4. Held until their outside accounts exist, unless Sai says otherwise: `sso`, `timesheet-signals`, `voice`.
+5. Write the Phase 2 close, then design Phases 3 and 4 (not started).
