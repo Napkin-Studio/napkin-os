@@ -16,7 +16,7 @@ use axum::extract::{Path, Query, RawQuery, State};
 use axum::http::{header, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, patch as patch_method, post};
+use axum::routing::{get, patch as patch_method, post, put};
 use axum::{Extension, Json, Router};
 use futures_core::Stream;
 use napkin_host::{
@@ -67,6 +67,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/jobs", get(list_jobs).post(create_job))
         .route("/t/{tenant}/jobs/{number}", get(get_job))
         .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
+        .route("/t/{tenant}/jobs/{number}/route", put(set_route))
         .route("/t/{tenant}/needs", get(needs))
         .route("/t/{tenant}/dashboard", get(dashboard))
         .route(
@@ -361,7 +362,7 @@ async fn library_listing(
 pub(crate) fn job_index(ws: &Workspace) -> ApiResult<napkin_host::jobindex::JobIndex> {
     let before = ws.jobs.builds();
     let t = std::time::Instant::now();
-    let index = ws.jobs.get(&*ws.store, chrono::Utc::now())?;
+    let index = ws.jobs.get(&*ws.store, ws.now())?;
     if ws.jobs.builds() != before {
         tracing::info!(
             target: "napkin_web::jobs",
@@ -402,6 +403,28 @@ async fn get_job(
         .cloned()
         .map(Json)
         .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")).into())
+}
+
+#[derive(Deserialize)]
+struct RouteBody {
+    route: Vec<napkin_host::jobs::RouteStep>,
+}
+
+/// Name who approves each stage of a job and by when (features/approval-route.clan). The route is
+/// replaced whole and the write is one attributed decision on the registry's chain; the briefs filed
+/// under the job that name no signers get the route's planner and creative director.
+/// Account service and management only (`roles.rs`).
+async fn set_route(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    Path((_t, number)): Path<(String, String)>,
+    Json(body): Json<RouteBody>,
+) -> ApiResult<Json<napkin_host::jobs::JobRecord>> {
+    let ws = ctx.workspace(&tenant);
+    let job = napkin_host::jobs::set_route(&*ws.store, &acting, &number, body.route)?;
+    napkin_host::jobs::fill_signers(&*ws.store, &acting, &number, &|id| ws.session(id))?;
+    Ok(Json(job))
 }
 
 /// A job's stage, as its documents' decisions have it. Read-only: it is never typed in.
@@ -589,6 +612,15 @@ async fn new_document(
     let doc = library::create_instance_for(&*ws.store, &body.app_id, body.title, client.as_ref())?;
     if let Some(j) = &job {
         napkin_host::jobs::link_document(&*ws.store, &doc, &j.number)?;
+        // a new brief under a job with a route names that route's two signers (never fails the new document)
+        if let Err(e) = napkin_host::jobs::fill_signers(
+            &*ws.store,
+            &tenant.ctx_for(&person),
+            &j.number,
+            &|id| ws.session(id),
+        ) {
+            tracing::warn!(job = %j.number, %e, "could not fill the brief's signers from the route");
+        }
     }
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }

@@ -20,6 +20,8 @@ export const DOOR_TARGETS: Readonly<Record<string, DoorTarget>> = {
   'ideas': { app: 'ie.napkin.idea-room' },
   'clients': { page: 'clients', built: true },
   'agency-dashboard': { page: 'agency-dashboard', built: true },
+  // Who approves each stage and by when (record approval-route).
+  'approvals': { page: 'approvals', built: true },
   // The job page (record job-page) turns built on.
   'live-jobs': { page: 'live-jobs', built: false },
 }

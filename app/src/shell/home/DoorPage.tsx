@@ -18,6 +18,7 @@ import type { Route } from '../route'
 import { doorTarget } from './doorTargets'
 import { doorIsLive, doorTool } from './model'
 import { Dashboard } from './Dashboard'
+import { ApprovalsPage } from '../approvals/ApprovalsPage'
 import './home.css'
 
 interface Props {
@@ -45,6 +46,9 @@ export function DoorPage({ door, name, clients, items, apps, go }: Props) {
   if (page === 'agency-dashboard') {
     // The dashboard reads the job index, behind the server's role check (a door of Management's home).
     body = <Dashboard go={go} />
+  } else if (page === 'approvals') {
+    // Who approves each stage and by when, who holds each job and for how long: read from the job index.
+    body = <ApprovalsPage go={go} />
   } else if (page === 'clients') {
     // The client desk is the Clients door: the desk page itself, not a second list of clients.
     body = <Empty line="The desk lists your clients." verb="Open the desk" example={{ title: 'Example · Client A, an Irish whiskey', lines: ['Client A, an Irish whiskey. One live job, J001.'] }} onStart={() => go({ level: 'clients' })} />
@@ -81,7 +85,7 @@ export function DoorPage({ door, name, clients, items, apps, go }: Props) {
   }
 
   return (
-    <div className="nui nui-page" ref={top} data-testid="door-page" data-door={door}>
+    <div className={`nui nui-page${door === 'approvals' ? ' ap-page' : ''}`} ref={top} data-testid="door-page" data-door={door}>
       <div className="studio-shell">
         <section className="app-head">
           <div className="app-head-text">

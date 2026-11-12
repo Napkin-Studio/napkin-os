@@ -11,6 +11,9 @@ export const PEOPLE: {
   readonly producer: { username: string; name: string; roles: string[] }
   readonly agencyBrain: { username: string; name: string; roles: string[] }
   readonly traffic: { username: string; name: string; roles: string[] }
+  readonly copywriter2: { username: string; name: string; roles: string[] }
   readonly planningAndCopywriter: { username: string; name: string; roles: string[] }
+  readonly otherAgency: { username: string; name: string; roles: string[] }
+  readonly otherAgencyAdmin: { username: string; name: string; roles: string[] }
 }
 export const ROSTER_LINES: string[]

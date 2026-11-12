@@ -2106,3 +2106,65 @@ The agents keep their spheres from the one agent engine
   A write of any kind to the index routes is 405.
 - **Never scores people.** The index and the dashboard hold jobs, stages and what each person is asked
   to do next. They hold no ranking or score of a person.
+
+### 13.1 The approval route (features/approval-route.clan)
+
+Who approves each stage of a job and by when. The route is a fact about the job; whether a step is
+approved, who holds the job and what is late are **derived** in the index from the documents' own
+decisions and the clock. There is no scheduler and no stored reminder state. `needs-you-full` and
+`job-page` build against exactly these fields. Fields are only added: nothing above was renamed or removed.
+
+- **`JobRecord.route`** (`jobs.rs`). A list of steps, in stage order, `#[serde(default)]` and left out
+  when empty, so every registry written before it still reads and a newer registry reads here (unknown
+  fields are ignored). A step is `{stage, party, role, approver, contact, due, rounds}`:
+  `stage` one of `jobindex::STAGES`; `party` `agency` or `client`; `role` optional (`planner`,
+  `creative_director`, or a free label, lower case); `approver` a sign-in name `user@agency` for an
+  agency step, a name for a client step; `contact` a client step's email, optional; `due` `YYYY-MM-DD`;
+  `rounds` a client step's plain number of rounds (1 to 20), optional, until Scope (Phase 3) is its source.
+  `(stage, role)` is unique within a route. `jobs::set_route(store, ctx, number, steps)` replaces the
+  route whole and `jobs::move_deadline(store, ctx, number, due)` moves the deadline; each records **one
+  decision on the registry's own chain** (`agent/decision-chain.yaml`, kind `edit`, `agent` and `actor` the
+  person, `action` `set_route` or `move_deadline`, `targets` the job number). A non-person actor is `403`.
+  `jobs::route_history` reads who set each route and when from that chain.
+- **`PUT /api/t/{tenant}/jobs/{number}/route`** with `{"route": [step, ...]}`. Replies `200` with the
+  `JobRecord`; `400` for an unknown stage, a date that is not `YYYY-MM-DD`, an agency approver that is not a
+  sign-in name, a contact that is not an email, or two approvers for one `(stage, role)`; `404` for an
+  unknown job; `405` for any other method. `roles.rs` `Group::Approvals` (account-service, management;
+  an admin or a demo opens everything) answers `403` to everyone else. `GET /jobs`, `/jobs/{number}`,
+  `/needs` and `/dashboard` keep their shapes and gain the fields below.
+- **`JobEntry.route`**: one `RouteStepState` per step, in route order:
+  `{stage, label, party, role, approver, contact, rounds, due, state, approved_by, approved_at, version,
+  document, held_since, days_held, days_late}`. `state` is `approved`, `waiting` (the one step the job is held at) or
+  `not_started`. A step is approved by a document filed under the job whose app maps to the step's stage
+  (`jobindex::APP_STAGES`, one table: a new tool adds a line) carrying, on its current content, the
+  planner's `sign` (a brief, role `planner`), an `approve` by the approver (an agency step), or an accepted
+  `client_review` (a client step). `approved_by`, `approved_at` and `version` are read from that decision,
+  never typed; unlocking or editing the document returns the step to `waiting`. `approver` shows the
+  brief's own signer when the brief names one for the role. `held_since`, `days_held` and `days_late` are
+  set only on the waiting step. `contact` and `rounds` are the record's, repeated so an editor can send a route back whole.
+- **`JobEntry.holder`**: `{party, person, role, stage, since, days, due, days_late}` or `null`: the first
+  step, in stage then route order, that is not approved. `since` is the timestamp of the decision that
+  approved the step before it, or of the `set_route` decision for the first. `days` is whole days since
+  then. A due date is a date: `days_late` is `0` through the due date and counts from the day after,
+  by the index's `today` (UTC). It is a fact about one job; the index has no total, average or order by
+  person (tests hold the replies to that). When the route has a client step, `waiting_on` and
+  `days_waiting_on_client` follow the holder: `client` and the days since the agency's last approval while
+  the client holds it, `agency` and none while the agency does.
+- **`Need`** gains `id`, `kind`, `stage` and `days_late`. `id` is stable, `{job}:{stage}:{role}:{kind}`
+  (role `any` when the step has none; a gate need's role is `planner`, `creative_director` or
+  `account_service`). `kind` is `gate` (the existing Brief gate needs), `approval` (the holder's step, for
+  the approver, from 48 hours before its due date, with `due` the step's own date and `days_late`), or
+  `approval-chase` (from two days late, for the person who set the route: a late client step is chased
+  this way too). `days_late` is `null` on a gate need. `path` is the step's document, or empty when none is
+  filed yet. The items appear from the clock and leave when the step is approved; nothing is stored.
+- **`Dashboard.at_risk`** carries late approvals: a job whose holder is late has a line
+  `"<Stage label> approval is N days late."`, joined to `"Due <date>."` when its deadline has also passed.
+  The dashboard stays six tiles.
+- **Signers.** The gate still enforces `brief.signers` and nothing else. `jobs::fill_signers` writes the
+  route's planner and creative director into a brief filed under the job that names none and is not locked,
+  by one attributed patch through the document's own session, when the route is set and when such a brief is
+  filed under the job.
+- **Test clock.** `AppCtx::with_jobs_clock` sets the day the index counts by; the e2e stack moves it by
+  writing an RFC 3339 time to the file `NAPKIN_TEST_CLOCK_FILE`. No deployment sets it.
+- **Stage 2, not built.** An hourly email digest of a person's open approval items, through
+  client-review-full's mailer, with a per-person-per-day marker file as its only state. In-app reminders stay stateless.

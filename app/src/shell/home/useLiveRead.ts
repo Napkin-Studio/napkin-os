@@ -7,14 +7,17 @@
 // already holds; the job index is the server's, so this reads the web host's), and on a slow poll as the safety net for a dropped stream. A stage change
 // reaches the screen well inside ten seconds (pilot test 5).
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { httpHost } from '../../host/http'
 
 /** The safety-net poll. The event stream is the fast path. */
 export const LIVE_POLL_MS = 4000
 
-export function useLiveRead<T>(read: () => Promise<T>, enabled: boolean, initial: T): { value: T; ready: boolean } {
+export function useLiveRead<T>(read: () => Promise<T>, enabled: boolean, initial: T): { value: T; ready: boolean; reload: () => void } {
   const [state, setState] = useState<{ value: T; ready: boolean }>({ value: initial, ready: false })
+  const loader = useRef<() => void>(() => {})
+  // A save asks for the answer now rather than at the next poll.
+  const reload = useCallback(() => loader.current(), [])
   useEffect(() => {
     if (!enabled) return
     let fresh = true
@@ -32,6 +35,7 @@ export function useLiveRead<T>(read: () => Promise<T>, enabled: boolean, initial
         if (again && fresh) { again = false; void load() }
       }
     }
+    loader.current = () => { void load() }
     void load()
     const timer = setInterval(() => { void load() }, LIVE_POLL_MS)
     let unlisten: (() => void) | undefined
@@ -40,5 +44,5 @@ export function useLiveRead<T>(read: () => Promise<T>, enabled: boolean, initial
   // `read` is a module function; the effect restarts only when the enabling changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled])
-  return state
+  return { ...state, reload }
 }

@@ -12,6 +12,7 @@
 import { expect, test, type Browser, type BrowserContext, type FrameLocator, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { PHASE2 } from './phase2/tests.mjs'
 import { asMe, gateOf, lockBrief, PEOPLE, recordClientConfirmation, seedJ001, signBrief } from './seed/j001'
 
 type Size = { tag: string; width: number; height: number }
@@ -20,17 +21,7 @@ const rosterURL = `http://127.0.0.1:${process.env.NAPKIN_E2E_ROSTER_PORT || '180
 const SHOTS = process.env.NAPKIN_E2E_SHOTS
 const IDEA_ROOM = 'ie.napkin.idea-room'
 
-const SHORT: Record<number, string> = {
-  45: 'humans first: the AI opens at the fifth team card',
-  46: 'the creative director opens the AI early and a copywriter gets 403',
-  47: 'ban the default flags a matching team card',
-  48: 'three routes are three forks and merging calls no model',
-  49: 'originality shows own-words precedents only',
-  50: 'the creative director picks the route and no AI task can',
-  51: 'a failed card save keeps the text and the creative director can reopen the choice',
-  52: 'a new brief version shows Changed brief in the Idea room',
-  70: 'J001 from brief to chosen route in one run',
-}
+const short = (n: number) => PHASE2.find(x => x.n === n)!.short
 
 type Decision = { id?: string; kind?: string; agent?: string; action?: string; actor?: string; version?: string; polarity?: string; reason_code?: string; reviewer_role?: string; superseded_by?: string; handler?: string; backend?: string }
 type Job = Awaited<ReturnType<typeof seedJ001>>
@@ -140,7 +131,7 @@ async function shot(page: Page, name: string, size: Size, at?: string) {
 }
 
 for (const size of SIZES) {
-  const t = (n: number) => `${n} ${SHORT[n]}, ${size.tag} px`
+  const t = (n: number) => `${n} ${short(n)}, ${size.tag} px`
 
   test(t(45), async ({ browser }) => {
     const { ctx, page } = await open(browser, size)
