@@ -32,7 +32,7 @@ pub fn tag_of(body: &[u8]) -> String {
 }
 
 /// Whether `If-None-Match` names `tag` (weak comparison, as RFC 9110 §13.1.2 asks).
-fn matches(if_none_match: &str, tag: &str) -> bool {
+pub fn matches(if_none_match: &str, tag: &str) -> bool {
     let opaque = |t: &str| t.trim().trim_start_matches("W/").to_string();
     let want = opaque(tag);
     if_none_match

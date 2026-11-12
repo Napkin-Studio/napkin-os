@@ -35,7 +35,6 @@ use axum::response::Html;
 use axum::Router;
 use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::compression::{CompressionLayer, CompressionLevel};
-use tower_http::decompression::RequestDecompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -117,11 +116,6 @@ pub fn router_with(
         )
         .merge(shell_service(static_dir))
         .layer(compression())
-        // A body sent with `Content-Encoding: gzip` (the shell's preview-html,
-        // features/doc-open-speed.clan) reaches every handler, and the dogfood
-        // record, as the plain bytes it stands for; the body limits above count
-        // those plain bytes. A body with no encoding passes through untouched.
-        .layer(RequestDecompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(ctx)
 }
