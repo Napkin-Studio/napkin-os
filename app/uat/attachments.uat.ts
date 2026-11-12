@@ -189,7 +189,8 @@ test('a brief\'s files are still there after leaving and coming back', async ({ 
   await page.goto('/')
   const t0 = Date.now()
   await page.goto(url)
-  const app = await appFrame(page, t0, 'reopen-brief-from-files', '#sheet, #prompt')
+  // The finished brief (#briefView); the intake's #prompt is in the page too, hidden, and came first (round 7).
+  const app = await appFrame(page, t0, 'reopen-brief-from-files', '#briefView')
   for (const n of [F.call, F.notes]) {
     await expect(app.locator('#chips .chip, #boards .board').filter({ hasText: n }).first(), `${n} is still among the brief's files on coming back`).toBeAttached({ timeout: BUDGET.docOpen })
   }
