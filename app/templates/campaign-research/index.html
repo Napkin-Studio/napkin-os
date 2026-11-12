@@ -4709,6 +4709,12 @@ details.pv-fold>summary:hover{background:var(--soft)}
     return null;
   }
   window.ClanFeedbackTarget=feedbackTarget;
+  // The report's own version, as the brief counts its own: one more for each approve (lock)
+  // decision on this document ("v1" until it is first locked); and its title.
+  function docVersion(){ var CF=window.ClanFields, V=CF&&CF.view?CF.view():null;
+    var n=arr(V&&V.decisions).filter(function(b){ return b&&b.decision&&b.decision.kind==='approve'&&arr(b.targets).some(function(t){ return t&&t.here!==false; }); }).length; return 'v'+Math.max(1,n); }
+  function feedbackDoc(){ return {version:docVersion(), title:researchTitle()}; }
+  window.ClanFeedbackDoc=feedbackDoc;
   function pinSid(id){ var p=pins()[id]; return arr(p&&p.sources).filter(function(x){ return /^src_/.test(x); })[0]||''; }
   // A pin's long name, for its tooltip: the sentence that cites it, its quote,
   // its label, its id. Never its key.

@@ -1745,6 +1745,9 @@
     return null;
   }
   window.ClanFeedbackTarget=feedbackTarget;
+  // The brief's own version and title for the note card ("Brief v1 · Welcome Back, Barista").
+  function feedbackDoc(){ return {version:docVersion(), title:String(get('project_name')||'').trim()||derivedTitle()}; }
+  window.ClanFeedbackDoc=feedbackDoc;
   function partLabel(f){
     if(f.sec==='Objectives') return f.label+' objective';
     if(f.sec==='Desired response') return 'What they should '+f.label.toLowerCase();

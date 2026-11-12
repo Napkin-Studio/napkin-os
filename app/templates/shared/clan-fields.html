@@ -2661,7 +2661,8 @@ var ClanFields=(function(){
   // ── feedback by pointing at it (the dogfood build; features/feedback-point.clan) ──
   // The shell asks (clan:feedback-pick {on}). While on, what is under the cursor is outlined
   // and named; one click picks it and presses nothing; Esc cancels. The answer goes up as
-  // clan:feedback-picked {target:{kind,id,label}|null, rect} (null: cancelled here). A tool
+  // clan:feedback-picked {target:{kind,id,label}|null, rect, version, title} (null: cancelled
+  // here; version and title are the document's, from window.ClanFeedbackDoc()). A tool
   // names its own things with window.ClanFeedbackTarget(el) → {kind,id,label,el}|null; else a
   // control is named by its label and a declared part by its label. The innermost one wins.
   // F pressed here, not while typing, asks the shell to start (clan:feedback-key).
@@ -2703,8 +2704,11 @@ var ClanFields=(function(){
   }
   function fbReply(t){
     var r=t?t.el.getBoundingClientRect():null;
+    // The document's own version ("v2") and title, as the page names them (window.ClanFeedbackDoc).
+    var d=t&&typeof window.ClanFeedbackDoc==='function'?(window.ClanFeedbackDoc()||{}):{};
     toShell({type:'clan:feedback-picked', target:t?{kind:t.kind, id:String(t.id||''), label:t.label}:null,
-      rect:r?{x:r.left, y:r.top, w:r.width, h:r.height}:null});
+      rect:r?{x:r.left, y:r.top, w:r.width, h:r.height}:null,
+      version:typeof d.version==='string'&&d.version?d.version:null, title:typeof d.title==='string'&&d.title?d.title:null});
   }
   function fbSet(on){
     FB.on=!!on; document.documentElement.classList.toggle('clf-fb-on',FB.on);

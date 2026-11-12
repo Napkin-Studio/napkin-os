@@ -38,7 +38,7 @@ export function NoteCard({ picked, at }: { picked: Picked; at: { left: number; t
   // its pixels, and the app has no canvas library. Not offered rather than faked.
   return (
     <div className="fbp-ui fbp-card" role="dialog" aria-label="Feedback" style={{ left: at.left, top: at.top }}>
-      <div className="fbp-about">ABOUT <span>· {aboutLine(picked.target, doc).replace(/^ABOUT · /, '')}</span></div>
+      <div className="fbp-about">ABOUT <span>· {aboutLine(picked.target, doc, picked.page).replace(/^ABOUT · /, '')}</span></div>
       <div className="fbp-kinds" role="radiogroup" aria-label="What kind of feedback">
         {KINDS.map(x => (
           <button key={x.k} type="button" role="radio" aria-checked={kind === x.k} className={kind === x.k ? 'on' : undefined}

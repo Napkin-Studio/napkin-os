@@ -153,11 +153,11 @@ test("a pick inside the tool's frame lands next to it; Esc there cancels; F ther
   assert.equal(pointState().phase, 'idle', 'Esc in the page cancels')
 
   startPointing()
-  fromFrame({ type: 'clan:feedback-picked', target: { kind: 'part', id: 'barrier', label: 'The barrier' }, rect: { x: 40, y: 100, w: 600, h: 44 } }, { x: 0, y: 52 })
+  fromFrame({ type: 'clan:feedback-picked', target: { kind: 'part', id: 'barrier', label: 'The barrier' }, rect: { x: 40, y: 100, w: 600, h: 44 }, version: 'v1', title: 'Welcome Back, Barista' }, { x: 0, y: 52 })
   const st = pointState()
   assert.equal(st.phase, 'note')
   if (st.phase !== 'note') return
-  assert.deepEqual(st.picked, { target: { kind: 'part', id: 'barrier', label: 'The barrier' }, in: 'app', rect: { x: 40, y: 152, w: 600, h: 44 } })
+  assert.deepEqual(st.picked, { target: { kind: 'part', id: 'barrier', label: 'The barrier' }, in: 'app', rect: { x: 40, y: 152, w: 600, h: 44 }, page: { version: 'v1', title: 'Welcome Back, Barista' } })
   cancelPointing()
 
   startPointing()
@@ -168,13 +168,16 @@ test("a pick inside the tool's frame lands next to it; Esc there cancels; F ther
 
 test('the note card says what it is about and what goes with it', () => {
   const t = { kind: 'part' as const, id: 'barrier', label: 'The barrier' }
-  assert.equal(aboutLine(t, DOC), 'ABOUT · The barrier · Brief v1.4.0 · Welcome Back, Barista')
+  const page = { version: 'v1', title: 'Welcome Back, Barista' }
+  assert.equal(aboutLine(t, DOC, page), 'ABOUT · The barrier · Brief v1 · Welcome Back, Barista', "the document's own version")
+  assert.equal(aboutLine(t, DOC), 'ABOUT · The barrier · Brief · Welcome Back, Barista', "a pick in the shell: no version, never the tool's")
+  assert.doesNotMatch(aboutLine(t, DOC), /1\.4\.0/)
   assert.equal(sentWithLine(t, DOC), "Sent with: your name, this part, the brief's version, and the job running now (job_7f3a).")
   assert.equal(sentWithLine({ ...t, kind: 'control' }, { ...DOC, jobs: [] }), "Sent with: your name, this button, the brief's version, and the job running now (none).")
   assert.equal(sentWithLine(t, null), 'Sent with: your name, this part, and the screen you are on.')
   setFeedbackDoc(DOC)
-  const html = renderToStaticMarkup(createElement(NoteCard, { picked: { target: t, in: 'app', rect: { x: 0, y: 0, w: 1, h: 1 } }, at: { left: 10, top: 20 } }))
-  for (const w of ['ABOUT', 'The barrier · Brief v1.4.0 · Welcome Back, Barista', '>Wrong<', '>Unclear<', '>Idea<', '>Cancel<', '>Send<', 'job running now (job_7f3a)'])
+  const html = renderToStaticMarkup(createElement(NoteCard, { picked: { target: t, in: 'app', rect: { x: 0, y: 0, w: 1, h: 1 }, page }, at: { left: 10, top: 20 } }))
+  for (const w of ['ABOUT', 'The barrier · Brief v1 · Welcome Back, Barista', '>Wrong<', '>Unclear<', '>Idea<', '>Cancel<', '>Send<', 'job running now (job_7f3a)'])
     assert.ok(html.includes(w), w)
   assert.doesNotMatch(html, /screenshot/i, 'no screenshot is offered: the frame cannot be captured')
   const spot = cardSpot({ x: 40, y: 100, w: 600, h: 44 }, { w: 1280, h: 800 })
@@ -187,7 +190,7 @@ test('Send records one feedback-point event with what was pointed at', () => {
   const sent = recordingNow()
   setFeedbackDoc(DOC)
   startPointing()
-  pick({ target: { kind: 'finding', id: 'fi_12', label: 'Finding 3 · Lapsed buyers' }, in: 'app', rect: { x: 0, y: 0, w: 1, h: 1 } })
+  pick({ target: { kind: 'finding', id: 'fi_12', label: 'Finding 3 · Lapsed buyers' }, in: 'app', rect: { x: 0, y: 0, w: 1, h: 1 }, page: { version: 'v2', title: 'Report title' } })
   sendNote('unclear', '  Which buyers?  ')
   assert.equal(pointState().phase, 'sent')
   const events = sent.flat()
@@ -199,10 +202,10 @@ test('Send records one feedback-point event with what was pointed at', () => {
     screen: undefined,
     kind: 'unclear', text: 'Which buyers?',
     target: { kind: 'finding', id: 'fi_12', label: 'Finding 3 · Lapsed buyers', in: 'app' },
-    doc_version: 'sha256:abc123', doc_title: 'Welcome Back, Barista', tool: 'Brief', tool_version: '1.4.0', job: 'job_7f3a',
+    doc_version: 'sha256:abc123', doc_version_label: 'v2', doc_title: 'Report title', tool: 'Brief', tool_version: '1.4.0', job: 'job_7f3a',
   })
   assert.deepEqual(pointFeedbackData('idea', 'x', { target: { kind: 'control', id: 'Share', label: 'Share' }, in: 'shell', rect: { x: 0, y: 0, w: 0, h: 0 } }, null),
-    { kind: 'idea', text: 'x', target: { kind: 'control', id: 'Share', label: 'Share', in: 'shell' }, doc_version: null, doc_title: null, tool: null, tool_version: null, job: null })
+    { kind: 'idea', text: 'x', target: { kind: 'control', id: 'Share', label: 'Share', in: 'shell' }, doc_version: null, doc_version_label: null, doc_title: null, tool: null, tool_version: null, job: null })
   __test({ on: false, consented: false })
   __resetPoint()
 })

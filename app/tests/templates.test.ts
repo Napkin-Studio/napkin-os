@@ -5102,14 +5102,14 @@ const FB_FNS = ['fbClip', 'fbTyping', 'fbControl', 'fbPart', 'fbTarget', 'fbShow
 type FbF = { fbTarget(el: unknown): { kind: string; id: string; label: string } | null; fbSet(on: boolean): void; fbShow(t: unknown): void; fbClick(e: unknown): void; fbKey(e: unknown): void }
 
 /** The snippet's driver, with `own` as the tool's namer; what it posts and draws. */
-function fbDriver(own: (el: unknown) => unknown) {
+function fbDriver(own: (el: unknown) => unknown, doc?: () => unknown) {
   const posts: Record<string, unknown>[] = []
   const box = { style: {} as Record<string, string>, className: '', children: [] as { textContent: string }[], setAttribute() {}, appendChild(c: { textContent: string }) { box.children.push(c) } }
   let made = 0
   const cls = new Set<string>()
   const FB = { on: false, box: null as unknown, tag: null as unknown }
   const env = {
-    FB, window: { ClanFeedbackTarget: own }, toShell: (m: Record<string, unknown>) => { posts.push(m) },
+    FB, window: { ClanFeedbackTarget: own, ClanFeedbackDoc: doc }, toShell: (m: Record<string, unknown>) => { posts.push(m) },
     words: (p: string) => String(p).split('.').pop(),
     document: {
       createElement: () => (made++ === 0 ? box : { className: '', textContent: '' }),
@@ -5174,7 +5174,8 @@ test('Research names a fact, a finding and a section', () => {
 test('pointing in a page: outlined and named on hover, one click picks it and presses nothing, Esc cancels', () => {
   // the brief: a part
   const bmT = lift<{ feedbackTarget(el: unknown): unknown }>(BM, ['feedbackTarget'], { FIELDS: [], headOf: () => '' }).feedbackTarget
-  const bm = fbDriver(bmT)
+  const bmDoc = lift<{ feedbackDoc(): unknown }>(BM, ['feedbackDoc'], { docVersion: () => 'v1', get: (k: string) => (k === 'project_name' ? ' Welcome Back, Barista ' : ''), derivedTitle: () => 'derived' }).feedbackDoc
+  const bm = fbDriver(bmT, bmDoc)
   const val = new FbEl('DIV', [], {}, 'Habit has moved on.')
   new FbEl('DIV', ['#fields .row[data-clan-part]', '[data-clan-part]'], { 'data-clan-part': 'barrier', 'data-clan-part-label': 'Barrier' })
     .at(40, 100, 600, 44).add(new FbEl('DIV', ['.lab']).add(new FbEl('SPAN', ['.lab > span'], {}, 'The barrier')), val)
@@ -5185,7 +5186,7 @@ test('pointing in a page: outlined and named on hover, one click picks it and pr
   assert.equal(h.tag, 'The barrier')
   assert.deepEqual([h.style.display, h.style.left, h.style.top, h.style.width, h.style.height], ['block', '37px', '97px', '606px', '50px'])
   assert.equal(bm.click(val), 2, 'the click is stopped: nothing under it is pressed')
-  assert.deepEqual(bm.posts.at(-1), { type: 'clan:feedback-picked', target: { kind: 'part', id: 'barrier', label: 'The barrier' }, rect: { x: 40, y: 100, w: 600, h: 44 } })
+  assert.deepEqual(bm.posts.at(-1), { type: 'clan:feedback-picked', target: { kind: 'part', id: 'barrier', label: 'The barrier' }, rect: { x: 40, y: 100, w: 600, h: 44 }, version: 'v1', title: 'Welcome Back, Barista' })
   assert.equal(bm.pointing(), false, 'one pick, then the page stops')
   // the part's words made clickable (role="button") are still the part; a real button in it is the button
   const words = new FbEl('DIV', ['[role="button"]'], { 'aria-label': 'Barrier: select it' }, 'Habit…')
@@ -5201,7 +5202,12 @@ test('pointing in a page: outlined and named on hover, one click picks it and pr
   assert.equal(bm.f.fbTarget(field)?.kind, 'part')
 
   // Research: a section, a fact, a finding, and a button inside the section
-  const rt = fbDriver(researchTarget())
+  const rtDoc = lift<{ feedbackDoc(): unknown }>(RT, ['docVersion', 'feedbackDoc'], {
+    arr, researchTitle: () => 'Lúnasa · Ireland',
+    window: { ClanFields: { view: () => ({ decisions: [{ decision: { kind: 'approve' }, targets: [{ here: true }] }, { decision: { kind: 'approve' }, targets: [{}] }, { decision: { kind: 'verify' }, targets: [{}] }] }) } },
+  }).feedbackDoc
+  assert.deepEqual(rtDoc(), { version: 'v2', title: 'Lúnasa · Ireland' }, 'the report counts its own locks, as the brief does')
+  const rt = fbDriver(researchTarget(), rtDoc)
   const fact = new FbEl('CLAN-FIELD', ['clan-field[ref^="f_"]'], { ref: 'f_ABC' }).at(200, 300, 60, 18)
   const findingP = new FbEl('P', ['[data-anchor^="fi_"]'], { 'data-anchor': 'fi_12' }, 'Lapsed buyers…').at(30, 400, 700, 40)
   const go = new FbEl('BUTTON', ['button'], { 'data-act': 'ev-sec', 'aria-label': 'What is behind this section' }).at(30, 250, 120, 20)
@@ -5209,7 +5215,7 @@ test('pointing in a page: outlined and named on hover, one click picks it and pr
   new FbEl('SECTION', ['section.rp-sec'], { id: 'rs-media' }).at(20, 240, 720, 220)
     .add(new FbEl('DIV', ['.rs-h']).add(go, new FbEl('H3', ['h3'], {}, 'Where lapsed buyers see us')), para, findingP)
   const pickIn = (el: FbEl) => { rt.f.fbSet(true); const shown = rt.hover(el).tag; rt.click(el); return { shown, sent: rt.posts.at(-1) as { target: unknown } } }
-  assert.deepEqual(pickIn(para), { shown: 'Where lapsed buyers see us', sent: { type: 'clan:feedback-picked', target: { kind: 'section', id: 'rs-media', label: 'Where lapsed buyers see us' }, rect: { x: 20, y: 240, w: 720, h: 220 } } })
+  assert.deepEqual(pickIn(para), { shown: 'Where lapsed buyers see us', sent: { type: 'clan:feedback-picked', target: { kind: 'section', id: 'rs-media', label: 'Where lapsed buyers see us' }, rect: { x: 20, y: 240, w: 720, h: 220 }, version: 'v2', title: 'Lúnasa · Ireland' } })
   assert.deepEqual(pickIn(fact).sent.target, { kind: 'fact', id: 'f_ABC', label: 'Market size · €120m' })
   assert.deepEqual(pickIn(findingP).sent.target, { kind: 'finding', id: 'fi_12', label: 'Finding 3 · Lapsed buyers left because the drink split in coffee, not becau…' })
   assert.deepEqual(pickIn(go).sent.target, { kind: 'control', id: 'ev-sec', label: 'What is behind this section' }, 'the innermost wins: a button in a section is the button')
@@ -5218,7 +5224,7 @@ test('pointing in a page: outlined and named on hover, one click picks it and pr
   rt.f.fbSet(true)
   let stopped = 0
   rt.f.fbKey({ key: 'Escape', target: para, preventDefault() { stopped++ }, stopPropagation() {} })
-  assert.deepEqual(rt.posts.at(-1), { type: 'clan:feedback-picked', target: null, rect: null })
+  assert.deepEqual(rt.posts.at(-1), { type: 'clan:feedback-picked', target: null, rect: null, version: null, title: null })
   assert.equal(stopped, 1)
   assert.equal(rt.FB.on, false)
   const n = rt.posts.length

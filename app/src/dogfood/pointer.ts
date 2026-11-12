@@ -12,8 +12,8 @@
 //
 // The frame is sandboxed and cross-origin, so the two talk by postMessage:
 //   shell → page  {type:'clan:feedback-pick', on}
-//   page → shell  {type:'clan:feedback-picked', target:{kind,id,label}|null, rect}
-//                 (null: the person pressed Esc in the page)
+//   page → shell  {type:'clan:feedback-picked', target:{kind,id,label}|null, rect, version, title}
+//                 (null: the person pressed Esc in the page; version and title are the document's own)
 //   page → shell  {type:'clan:feedback-key'}  (F pressed in the page, not typing)
 
 import { feedbackPoint, recording } from './recorder'
@@ -24,7 +24,9 @@ export type NoteKind = 'wrong' | 'unclear' | 'idea'
 /** What the person pointed at: a part, section, fact or finding by its id, a button by its label. */
 export interface FeedbackTarget { kind: TargetKind; id: string; label: string }
 export interface Rect { x: number; y: number; w: number; h: number }
-export interface Picked { target: FeedbackTarget; in: 'shell' | 'app'; rect: Rect }
+/** The document's own version ("v1") and title, as its page named them; absent for a pick in the shell. */
+export interface PageDoc { version: string | null; title: string | null }
+export interface Picked { target: FeedbackTarget; in: 'shell' | 'app'; rect: Rect; page?: PageDoc }
 
 export type PointState =
   | { phase: 'idle' }
@@ -159,7 +161,7 @@ function rectFrom(x: unknown): Rect {
  * what was picked. Returns whether it was one of ours.
  */
 export function fromFrame(m: unknown, offset: { x: number; y: number }): boolean {
-  const msg = m as { type?: unknown; target?: unknown; rect?: unknown } | null
+  const msg = m as { type?: unknown; target?: unknown; rect?: unknown; version?: unknown; title?: unknown } | null
   if (msg?.type === 'clan:feedback-key') {
     if (state.phase === 'idle' || state.phase === 'sent') startPointing()
     return true
@@ -169,7 +171,8 @@ export function fromFrame(m: unknown, offset: { x: number; y: number }): boolean
   const target = targetFrom(msg.target)
   if (!target) { cancelPointing(); return true }
   const r = rectFrom(msg.rect)
-  pick({ target, in: 'app', rect: { x: r.x + offset.x, y: r.y + offset.y, w: r.w, h: r.h } })
+  const page = { version: str(msg.version, 40).trim() || null, title: str(msg.title, 160).trim() || null }
+  pick({ target, in: 'app', rect: { x: r.x + offset.x, y: r.y + offset.y, w: r.w, h: r.h }, page })
   return true
 }
 
@@ -213,10 +216,13 @@ export function describeShell(el: Node0 | null): { target: FeedbackTarget; el: N
 
 const NOUN: Record<TargetKind, string> = { part: 'part', section: 'section', fact: 'fact', finding: 'finding', control: 'button' }
 
-/** "ABOUT · The barrier · Brief v1.2.0 · Welcome Back, Barista". */
-export function aboutLine(t: FeedbackTarget, d: FeedbackDoc | null): string {
-  const tool = d?.tool ? `${d.tool}${d.toolVersion ? ` v${d.toolVersion}` : ''}` : ''
-  return ['ABOUT', t.label, tool, d?.title ?? ''].filter(Boolean).join(' · ')
+/**
+ * "ABOUT · The barrier · Brief v1 · Welcome Back, Barista": the document's own version, as its
+ * page names it; a pick in the shell has none, and the tool stands alone (never the tool's version).
+ */
+export function aboutLine(t: FeedbackTarget, d: FeedbackDoc | null, page?: PageDoc): string {
+  const tool = d?.tool ? `${d.tool}${page?.version ? ` ${page.version}` : ''}` : ''
+  return ['ABOUT', t.label, tool, page?.title || d?.title || ''].filter(Boolean).join(' · ')
 }
 
 /** The plain line that says what goes with the note. */
@@ -240,7 +246,8 @@ export function pointFeedbackData(kind: NoteKind, text: string, p: Picked, d: Fe
     text: text.trim(),
     target: { kind: p.target.kind, id: p.target.id, label: p.target.label, in: p.in },
     doc_version: d?.version ?? null,
-    doc_title: d?.title ?? null,
+    doc_version_label: p.page?.version ?? null,
+    doc_title: p.page?.title || d?.title || null,
     tool: d?.tool ?? null,
     tool_version: d?.toolVersion ?? null,
     job: d?.jobs[0] ?? null,
