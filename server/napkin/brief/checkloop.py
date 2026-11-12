@@ -13,6 +13,12 @@ need rewriting, the Review agent says why, the Brief agent rewrites those parts.
      The loop holds no cleaning of its own, and no claim's kind or verdict puts a part in `todo`.
   4. jev again on what changed, for the log: did the rewrite help?
 
+What code can measure is never left to a probability (the owner, 2026-11-12): a caller may pass `code`, the parts
+code sends back with their instructions (checks.revisions), and those join the rewrite set whatever jev or the
+Review agent says. A caller that passes `tests` (the planning skill's tests, checks.tests) and `part_checks`
+(checks.facts) has the Review agent judge the tested parts against them and say whether the brief is
+single-minded, in the call it already makes.
+
 jev not configured or not answering: the loop says so in the log and the brief stands as written.
 """
 from __future__ import annotations
@@ -57,20 +63,38 @@ when only the client can supply it, put it in `questions` instead and leave its 
 inputs, and a claim "to_confirm" is already marked for the client. Never ask for a rewrite only because a
 claim is worked out or marked to confirm. Plain British English."""
 
+TESTS_NOTE = """
+`tests` holds the planning skill's tests for the parts named there (the agency's planning skill), and `part_checks` what
+code measured (words against the limit, items against the cap, sentences, and whether the proposition has a
+standalone 'and'). Judge each of those parts against its tests: each part that fails one goes in `failed_tests` with
+the test's id and one instruction that names the test and the fix. A flagged 'and' is yours to decide: it fails when
+it joins two thoughts, and passes when it sits inside one. `code_sent_back` names the parts code already sends back
+and why: you need not repeat them.
+single_mindedness {verdict single|multiple, split_into}: "multiple" when the brief serves more than one problem,
+audience or message, or the client's input was a wish-list never narrowed to one: say in split_into what the one
+choice is."""
+
 
 def _obj(props):
     return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
 
 
-def review_schema(keys):
+def review_schema(keys, tested=None):
+    """The Review agent's answer on the parts in `keys`; with `tested` (a caller that passes the skill's tests), its
+    verdict on each tested part and on the brief's single-mindedness too."""
     s = {"type": "string"}
+    extra = {} if tested is None else {
+        "failed_tests": {"type": "array", "items": _obj({"part": {"type": "string", "enum": list(tested) or [""]},
+                                                          "test": s, "instruction": s})},
+        "single_mindedness": _obj({"verdict": {"type": "string", "enum": ["single", "multiple"]},
+                                   "split_into": {"type": "array", "items": s}})}
     return _obj({"parts": _obj({k: _obj({"rework": {"type": "boolean"}, "why": s, "instruction": s}) for k in keys}),
                  "dimensions": {"type": "array", "items": _obj({
                      "dimension": {"type": "string", "enum": DIMS}, "instruction": s,
                      "parts": {"type": "array", "items": {"type": "string", "enum": list(KEYS)}}})},
                  "chain": _obj({"issue": {"anyOf": [s, {"type": "null"}]},
                                 "parts": {"type": "array", "items": {"type": "string", "enum": list(KEYS)}}}),
-                 "questions": {"type": "array", "items": s}})
+                 "questions": {"type": "array", "items": s}, **extra})
 
 
 def text_of(v) -> str:
@@ -108,24 +132,27 @@ def jev_read(job, values: dict, said: str, parts: list, what: str) -> dict | Non
 
 
 def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: list, plan=None, *, clean,
-        claims=None) -> dict:
+        claims=None, code=None, tests=None, part_checks=None) -> dict:
     """The loop over the brief as it stands. Returns {"before", "after", "jude", "rewritten", "todo"}:
     rewritten = `clean(the Brief agent's answer, the parts)` (provenance.clean_parts), `why` being the Review agent's. `claims`:
-    each part's claims as they stand, for the Review agent and the rewrite."""
+    each part's claims as they stand, for the Review agent and the rewrite. `code`: {part: instruction} that code
+    sends back (each is rewritten). `tests`, `part_checks`: the skill's tests and what code measured, for the
+    Review agent (module docstring)."""
     claims = claims or {}
+    code = {k: v for k, v in (code or {}).items() if k in open_keys and k != "open_questions"}
     rl = job.caps.runlog
     written = [k for k in open_keys if filled(values.get(k)) and k != "open_questions"]
     empty = [k for k in open_keys if not filled(values.get(k)) and k != "open_questions"]
     before = jev_read(job, values, said, written, "jev_before")
     out = {"before": before, "after": None, "jude": {}, "rewritten": {}, "todo": {}, "questions": []}
-    if before is None and not empty:
+    if before is None and not empty and not code:
         return out
     flagged = [k for k in written if before and before["p"][k] >= FLAG_AT]
     chain_doubt = bool(before and before["chain"] < FLAG_AT)
     missing = [d for d in DIMS if before and before["dims"].get(d) == "missing"]
     ask = flagged + empty
-    if not ask and not chain_doubt and not missing:
-        rl.note("check_clean", detail="jev flagged nothing and every part is written")
+    if not ask and not chain_doubt and not missing and not code:
+        rl.note("check_clean", detail="jev flagged nothing, code sends nothing back and every part is written")
         return out
     payload = {"brief": {k: values.get(k) for k in KEYS if filled(values.get(k))}, "client_said": said[:8000],
                "flagged": {k: round(before["p"][k], 3) for k in flagged} if before else {},
@@ -134,11 +161,21 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
                "facts": evidence.get("facts") or [], "findings": evidence.get("findings") or [],
                "claims": {k: [{x: c[x] for x in ("text", "kind", "cites", "working") if x in c} for c in cs]
                           for k, cs in claims.items() if cs}}
-    jude = job.caps.model.structured("explain_flags", REVIEW_SYSTEM, payload, review_schema(ask),
+    system, tested = REVIEW_SYSTEM, None
+    if tests is not None:
+        tested = [k for k in tests if filled(values.get(k))]
+        payload.update(tests={k: tests[k] for k in tested}, part_checks=part_checks or {}, code_sent_back=code)
+        system = REVIEW_SYSTEM + TESTS_NOTE
+    jude = job.caps.model.structured("explain_flags", system, payload, review_schema(ask, tested),
                                      max_tokens=6000)
     out["jude"] = jude
     todo = {k: v["instruction"] for k, v in (jude.get("parts") or {}).items()
             if k in ask and v.get("rework") and str(v.get("instruction") or "").strip()}
+    failed = [x for x in jude.get("failed_tests") or []
+              if x.get("part") in (tested or []) and str(x.get("instruction") or "").strip()]
+    for x in failed:  # a part that fails one of the skill's tests goes back, the test named in its instruction
+        k = x["part"]
+        todo[k] = (todo[k] + " Also: " + x["instruction"]) if k in todo else x["instruction"]
     chain = jude.get("chain") or {}
     if chain.get("issue"):
         for k in chain.get("parts") or []:
@@ -149,11 +186,15 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
         for k in dfix.get("parts") or []:
             if ins and k in open_keys and k != "open_questions":
                 todo[k] = (todo[k] + " Also: " + ins) if k in todo else ins
+    for k, ins in code.items():  # what code measured goes back whatever jev or the Review agent said
+        todo.setdefault(k, ins)
     out["questions"] = list(jude.get("questions") or [])
     disagreed = [k for k in flagged if not (jude.get("parts") or {}).get(k, {}).get("rework")]
     rl.note("jude_on_flags", flagged=flagged, empty=empty, rework=sorted(todo), disagreed_with_jev=disagreed,
             chain_issue=bool(chain.get("issue")), missing_dimensions=missing,
-            dimension_fixes=[{"dimension": x.get("dimension"), "parts": x.get("parts")} for x in jude.get("dimensions") or []])
+            dimension_fixes=[{"dimension": x.get("dimension"), "parts": x.get("parts")} for x in jude.get("dimensions") or []],
+            **({"code_sent_back": sorted(code), "failed_tests": [{"part": x["part"], "test": x.get("test")} for x in failed],
+                "single_mindedness": (jude.get("single_mindedness") or {}).get("verdict")} if tested is not None else {}))
     out["todo"] = todo
     if not todo:
         return out
@@ -165,7 +206,9 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
     got = job.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, pay,
                                     draft_schema(list(todo)), max_tokens=8000)
     for k, v in clean(got, list(todo)).items():
-        why = ((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue") or ""
+        why = (((jude.get("parts") or {}).get(k) or {}).get("why") or chain.get("issue")
+               or next((f"it fails the planning skill's test {x.get('test')}" for x in failed if x["part"] == k), "")
+               or ("code measured it: " + code[k] if k in code else ""))
         out["rewritten"][k] = {**v, "why": _short(f"Rewritten on the Review agent's note: {why}", 300), "revised": True,
                                # placing records the loop: the Review agent's note, in its words, on the draft it sent back
                                "sent_back": {"instruction": _short(todo[k], 400), "why": _short(why, 400)}}

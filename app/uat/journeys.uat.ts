@@ -216,6 +216,8 @@ test('leave a Brief mid-way and come back: it carries on and finishes (paid)', a
   await page.goto(url)
   const back = page.frameLocator('iframe').first()
   await expect(back.locator('#sheet').or(back.getByText(/Step [1-4] of 4/)).first()).toBeVisible({ timeout: 60_000 })
+  // The shell tells the page its running job (clan:jobs): back to the Agents screen, never the ask.
+  await expect(back.locator('#prompt'), 'a running brief reopens on its run, not intake').toBeHidden()
   measure('return-to-brief', Date.now() - t0, BUDGET.docOpen)
   await driveRun(page, back, back.locator('#sheet'), BUDGET.research)
   await expect(back.locator('#sheet')).toBeVisible({ timeout: 1_000 })

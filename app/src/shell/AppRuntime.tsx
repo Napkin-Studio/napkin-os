@@ -9,6 +9,7 @@ import { partsFrom } from './clientReview/review'
 import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
+import { jobsMessage } from './openJobs'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
@@ -46,6 +47,11 @@ interface Props {
   onBar?: (items: BarItem[]) => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
+  /**
+   * The open document's jobs the host has not seen finish (`LibraryItem.jobs`), told to its page
+   * (`clan:jobs`) on every load and whenever they change, so a run still going resumes on open.
+   */
+  jobs?: readonly string[]
 }
 
 /**
@@ -61,7 +67,7 @@ export const DOC_LOADED = 'napkin:doc-loaded'
 
 export default function AppRuntime({
   hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, insets,
+  onChrome, onBar, insets, jobs,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -229,6 +235,14 @@ export default function AppRuntime({
   // `insets` is a new object only when a value changed (AppHost keeps the old one otherwise).
   useEffect(() => { insetsRef.current = insets; postInsets() }, [insets, postInsets])
 
+  // The document's running jobs, the whole list each time (openJobs.ts): on load and when they change.
+  const jobsRef = useRef<readonly string[]>(jobs ?? [])
+  const postJobs = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(jobsMessage(jobsRef.current), '*')
+  }, [])
+  // `jobs` is a new array only when its ids changed (AppHost keys it by them).
+  useEffect(() => { jobsRef.current = jobs ?? []; postJobs() }, [jobs, postJobs])
+
   // The dogfood build listens inside the frame too, once the person has agreed.
   const dogfood = useSyncExternalStore(onDogfood, dogfoodState, dogfoodState)
   const capture = dogfood.on && dogfood.consented
@@ -282,6 +296,7 @@ export default function AppRuntime({
         postScheme(getTheme())
         postClientMode()
         postInsets()
+        postJobs()
         // An app that declared its parts before the shell heard says them again.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:parts?' }, '*')
         // Likewise the tabs and buttons it wants in the OS bar.

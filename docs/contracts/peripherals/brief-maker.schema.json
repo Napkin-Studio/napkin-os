@@ -134,7 +134,7 @@
             "single_mindedness": {
               "type": "object", "additionalProperties": false, "required": ["verdict", "split_into"],
               "properties": {
-                "verdict": { "type": "string", "enum": ["single", "multiple"] },
+                "verdict": { "type": "string", "enum": ["single", "multiple", "unchecked"] },
                 "split_into": { "type": "array", "items": { "type": "string" } }
               }
             },
