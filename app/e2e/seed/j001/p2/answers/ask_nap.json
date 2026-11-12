@@ -1,0 +1,10 @@
+{
+  "task": "ask_nap", "handler": "ask_nap@1.0",
+  "result": {
+    "suggestions": ["Summarise this brief in three lines", "What is missing before the gate?", "Make the proposition shorter"],
+    "answer": "The brief names one proposition and no baseline for the second objective.",
+    "source": "J001 brief, version 2",
+    "proposed_change": { "path": "single_minded_proposition", "text": "The easy way in." }
+  },
+  "change": null, "trace": {}
+}

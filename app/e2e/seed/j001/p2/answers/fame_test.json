@@ -1,0 +1,5 @@
+{
+  "task": "fame_test", "handler": "fame_test@1.0",
+  "result": { "headline": "The pub that shut for one song.", "friend_line": "You have to hear about the bar that closes its doors for one song." },
+  "change": null, "trace": {}
+}

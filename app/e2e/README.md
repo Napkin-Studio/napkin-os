@@ -97,3 +97,44 @@ client, a territory typed on the Territories page, the visual brief that is spun
 gradient PNGs made in the test; nothing generates an image. The Territories retrieval check runs the engine's mix path over
 stand-in rows (`seed/visual-brief/territoryTrace.py`) with `cannes`, `effie` and `warc` rows. `VISUAL_BRIEF_SHOTS=<dir>`
 also writes a screenshot of each new screen. No pilot test carries the slug `visual-brief`, so `phase1-fixme.mjs` is unchanged.
+
+## The Phase 2 suite (feature `j001-phase2-suite`)
+
+`docs/design/phase2-acceptance.md` lists tests 19 to 73, one or more per Phase 2 record. Each is written in full before its
+screen exists, in **one spec file per record**, `j001-p2-<slug>.spec.ts` (17 files: sixteen records and the suite's own, tests 71
+to 73), at 390 and 1440 px. A test whose record has not built its screen is `test.fixme(t(N), ...)`; a plain `npm run e2e` skips it
+and runs the rest. `j001-pilot.spec.ts` is Phase 1's and is not edited; its 18 tests still run in the same plain run.
+
+```bash
+node e2e/phase2-fixme.mjs                    # each fixme test with its record's slug, and the count
+node e2e/phase2-fixme.mjs --gate             # the same; exits 1 while the count is above 0 (2 if the files disagree)
+node e2e/phase2-fixme.mjs --slug idea-room   # one record's burn-down
+npx playwright test e2e/j001-p2-idea-room.spec.ts   # one record's tests (a Phase 2 run alone: e2e/j001-p2-*.spec.ts)
+```
+
+- `phase2/tests.mjs` is the **read-only registry**: number, slug, spec file, short title and the fact as the acceptance document words
+  it. It is never edited when a test is turned on: live or fixme is read from the spec file alone (`phase2/count.mjs`). A unit test
+  (`app/tests/phase2Suite.test.ts`) compares it with the document, and the counter refuses a number declared twice, in the wrong file
+  or not at all, a fixme with no slug, and a record with live tests and no page.
+- **To turn a test on** (the owning record): in your own spec file, change `test.fixme(` to `test(` for the test, replace every line
+  marked `ADJUST(<slug>)` with what you built (the selectors, routes and test ids in a fixme body are guesses from the design; the facts
+  read from the chain and the API are the part to keep), make it pass at both widths, and add your pages to your own
+  `j001-p2-<slug>.pages.ts` (`export const PAGES: Phase2Page[]`, see `phase2/pages.ts`). You edit only your spec, your pages file, your seed
+  file under `seed/j001/p2/` and your answer files.
+- **Tests 71 to 73 run from the first day** (`j001-p2-j001-phase2-suite.spec.ts`): attributed writes over every Phase 2 document the seed
+  writes (`seedPhase2`, which skips a document whose app is not installed yet and says so); axe in the three modes, a 44 px primary button
+  at 390 px and no em dash on every page in every `j001-p2-*.pages.ts`; the canary key and a retrieval trace with no Cannes, Effie or WARC
+  hit, and a run log with no model event. A primary button is `.ch-btn-primary`, `.ns-primary` or `[data-primary]`: mark yours if it uses
+  another class.
+- **The stand-in middleware** (`standin.mjs`, started by `stack.mjs`) answers a task from `seed/j001/p2/answers/<task>.json` when that
+  file exists (the reply's own keys: `task`, `handler`, `result`, `change`, `trace`; the stand-in adds `api` and `job`) and a variant
+  from `<task>.<variant>.json`, picked by `POST /control {variant: {<task>: <name>}}`. `POST /control {fail: <task>}` makes the next
+  request for that task return a 502 `provider_error` once. `GET /control/log` lists the tasks asked and the time, and nothing else. Any
+  other task gets the old canned `start_campaign` reply, so every Phase 1 spec is unchanged. `pilot.ts` has `control(page, ...)` and
+  `middlewareLog(page)`. A record that adds an answer file adds a middleware pytest that validates it against its handler's output schema.
+- **The seed** (`seed/j001/p2/`): one file per record (placeholder content only, "Client A, an Irish whiskey"), `documents.mjs` listing
+  the documents each record's app makes (each must hold every key its template schema declares; the unit test checks a document as soon as
+  its `app/templates/<app>/schema.json` exists), `wall.mjs` with the canary sentence and `plantCanary` for the wall tests, and
+  `reviewers.mjs`. `seed/j001/people.mjs` gains the five Phase 2 roles, a second copywriter, a person with a Phase 1 and a Phase 2 role, and
+  a second agency (`@bq`, its own workspace). The deny-list check (`seed/j001/denyList.mjs`) reads the whole folder.
+- The suite calls no model and no paid provider. It is not part of `check.sh --all`.

@@ -1,0 +1,5 @@
+{
+  "task": "rewrite_line", "handler": "rewrite_line@1.0",
+  "result": { "proposals": [ { "beat": "beat_1", "was": "Tonight, try something new.", "text": "Tonight, pour the first one.", "kind": "rewrite", "note": "Shorter, one verb." } ] },
+  "change": null, "trace": {}
+}

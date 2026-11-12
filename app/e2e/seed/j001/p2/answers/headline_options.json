@@ -1,0 +1,8 @@
+{
+  "task": "headline_options", "handler": "headline_options@1.0",
+  "result": { "proposals": [
+    { "beat": "beat_1", "text": "The easy way in.", "kind": "headline", "note": "Proposition as a line." },
+    { "beat": "beat_1", "text": "Your first pour.", "kind": "headline", "note": "Behavioural: order it." }
+  ] },
+  "change": null, "trace": {}
+}

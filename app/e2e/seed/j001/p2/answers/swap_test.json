@@ -1,0 +1,5 @@
+{
+  "task": "swap_test", "handler": "swap_test@1.0",
+  "result": { "answer": "fail", "reason": "Swap the name for any other whiskey and the card still reads the same." },
+  "change": null, "trace": {}
+}
