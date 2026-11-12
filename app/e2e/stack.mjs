@@ -50,8 +50,14 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+// The roster server's mail goes to a file, never to a network (features/client-review-full.clan): each mail is one JSON line,
+// so a test reads the emailed code from it. The primary server has no mail, so the code option is not offered there.
+const outboxFile = join(tmpdir(), `napkin-e2e-outbox-${rosterPort}.jsonl`)
+rmSync(outboxFile, { force: true })
+
 function cleanup() {
   rmSync(join(tmpdir(), `napkin-e2e-clock-${rosterPort}`), { force: true })
+  rmSync(outboxFile, { force: true })
   rmSync(work, { recursive: true, force: true })
 }
 
@@ -101,7 +107,7 @@ function start(addr, data, auth, gate = false) {
       // The Brief gate holds the lock list (features/brief-gate.clan). On for the J001 roster stack only, where the
       // pilot tests sign in; off on the primary, as it is by default, so the specs that count what needs a person are unchanged.
       NAPKIN_BRIEF_GATE: gate ? 'on' : 'off',
-      ...(gate ? { NAPKIN_TEST_CLOCK_FILE: clockFile } : {}),
+      ...(gate ? { NAPKIN_TEST_CLOCK_FILE: clockFile, NAPKIN_MAIL_OUTBOX: outboxFile } : {}),
       NAPKIN_AUTH: auth ? 'roster' : 'none',
       // Signed sessions need a key: a throwaway one, made for this run and gone with it.
       ...(auth ? { NAPKIN_AUTH_ROSTER: auth, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),

@@ -162,6 +162,60 @@ export interface ClientLinkRow {
   made: string
 }
 
+/** One reviewer in a round, as the agency sees them. */
+export interface RoundReviewer {
+  id: string
+  name: string
+  email: string
+  role: 'approver' | 'reviewer'
+  /** `open`, `answered`, `withdrawn`, `expired` or `superseded`. */
+  state: string
+  answer: string | null
+  answered: string | null
+  /** Only the approver's answer is the client's decision. */
+  counts: boolean
+}
+
+/** A reviewer's comment, with the flags two fixed rules gave it (`split`, `same spot`). */
+export interface RoundComment {
+  id: string
+  link: string
+  piece: number
+  pin: { x?: number; y?: number; t_ms?: number } | null
+  tag: string
+  text: string
+  at: string
+  by: { name: string; email: string }
+  role: 'approver' | 'reviewer'
+  flags: string[]
+}
+
+export interface RoundPiece { n: number; label: string; kind: string; ai: string; approved_by: string[]; changes_by: string[]; split: boolean }
+
+/** `GET /d/{doc}/client-review/round`: the round last sent for the locked version, merged. */
+export interface ClientRoundView {
+  review: string
+  round: number
+  /** How many rounds the job's route gives, when it says. */
+  rounds_in_scope: number | null
+  version: string
+  /** False when the document has moved on since the round was sent. */
+  current: boolean
+  code: boolean
+  pieces: RoundPiece[]
+  reviewers: RoundReviewer[]
+  comments: RoundComment[]
+  approver_answer: string | null
+}
+
+/** What `POST /d/{doc}/client-link/round` returns: one link a reviewer, shown once. */
+export interface ClientRoundMade {
+  review: string
+  round: number
+  expires: string
+  links: { id: string; name: string; email: string; role: 'approver' | 'reviewer'; path: string }[]
+}
+
 export interface GateView {
   enforced: boolean
   items: GateItem[]

@@ -26,6 +26,7 @@ pub mod exports;
 pub mod jobview;
 pub mod links;
 pub mod look;
+pub mod mail;
 pub mod meter;
 pub mod roles;
 pub mod sandbox;

@@ -10,6 +10,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { host } from '../../host'
 import type { ClientLinkRow } from '../../host'
+import { makeRound, readRound, roundOptions } from '../../host/http'
+import type { ClientRoundMade, ClientRoundView } from '../../host/types'
+import { RoundView } from '../clientReview/RoundView'
 
 const STATE_WORDS: Record<string, string> = {
   open: 'Waiting for the client',
@@ -96,6 +99,81 @@ export default function ClientLinkPanel({ client, onChanged }: Props) {
         </ul>
       )}
       {error && <p className="bg-err" role="alert">{error}</p>}
+      <RoundPanel client={client} onChanged={() => { load(); onChanged?.() }} />
     </section>
+  )
+}
+
+interface Person { name: string; email: string }
+
+/** Send the signed version to several people at the client, one of them the approver, and read the round back. */
+function RoundPanel({ client, onChanged }: { client: string; onChanged: () => void }) {
+  const [people, setPeople] = useState<Person[]>([{ name: '', email: '' }, { name: '', email: '' }])
+  const [lead, setLead] = useState(0)
+  const [code, setCode] = useState(false)
+  const [canCode, setCanCode] = useState(false)
+  const [made, setMade] = useState<ClientRoundMade | null>(null)
+  const [round, setRound] = useState<ClientRoundView | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const load = useCallback(() => { void readRound().then(setRound) }, [])
+  useEffect(() => {
+    load()
+    void roundOptions().then(o => setCanCode(o.code))
+    const offs = [host.on('clan-data-changed', load)]
+    return () => { for (const off of offs) off.then(f => f()).catch(() => {}) }
+  }, [load])
+
+  const set = (i: number, k: keyof Person) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setPeople(ps => ps.map((p, j) => (j === i ? { ...p, [k]: e.target.value } : p)))
+  const filled = people.map((p, i) => ({ ...p, i })).filter(p => p.name.trim() && p.email.trim())
+  const ready = filled.length > 0 && filled.some(p => p.i === lead)
+
+  const send = (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true); setError(null); setCopied(null)
+    makeRound(filled.map(p => ({ name: p.name.trim(), email: p.email.trim(), approver: p.i === lead })), code && canCode).then(
+      m => { setMade(m); load(); onChanged() },
+      err => setError(String(err instanceof Error ? err.message : err)),
+    ).finally(() => setBusy(false))
+  }
+
+  const copy = (id: string, path: string) =>
+    navigator.clipboard?.writeText(`${window.location.origin}${path}`).then(() => setCopied(id), () => setCopied(null))
+
+  return (
+    <div className="cr-people-block" data-testid="client-round-panel">
+      <h3 className="bg-h3">Send to several people at {client}</h3>
+      <p className="bg-mid">Each person gets their own link to this signed version, and sees nothing of the others. One of them is the approver: only their answer counts as the client&apos;s decision.</p>
+      <form className="bg-form cr-people" onSubmit={send}>
+        {people.map((p, i) => (
+          <div className="cr-person" key={i}>
+            <label className="bg-field"><span>Name {i + 1}</span><input value={p.name} onChange={set(i, 'name')} autoComplete="off" data-testid={`round-name-${i}`} /></label>
+            <label className="bg-field"><span>Email {i + 1}</span><input type="email" value={p.email} onChange={set(i, 'email')} autoComplete="off" data-testid={`round-email-${i}`} /></label>
+            <label className="cr-lead"><input type="radio" name="approver" checked={lead === i} onChange={() => setLead(i)} /> The approver</label>
+          </div>
+        ))}
+        {canCode && <label className="cr-lead"><input type="checkbox" checked={code} onChange={e => setCode(e.target.checked)} data-testid="round-code" /> Ask each person for a code we email them first</label>}
+        <div className="cr-people-act">
+          {people.length < 12 && <button type="button" className="ch-btn ch-btn-quiet" onClick={() => setPeople(ps => [...ps, { name: '', email: '' }])}>Add a person</button>}
+          <button type="submit" className="ch-btn" disabled={busy || !ready} data-testid="round-send">Send for review</button>
+        </div>
+      </form>
+      {made && (
+        <ul className="bg-list cl-rows" aria-label="Links made" data-testid="round-links">
+          {made.links.map(l => (
+            <li key={l.id}>
+              <span>{l.name}{l.role === 'approver' ? ' (approver)' : ''}</span>
+              <button type="button" className="ch-btn ch-btn-primary" onClick={() => copy(l.id, l.path)}>{copied === l.id ? 'Copied' : 'Copy the link'}</button>
+            </li>
+          ))}
+          <li><span className="bg-reason">Shown once. Send each link yourself.</span></li>
+        </ul>
+      )}
+      {error && <p className="bg-err" role="alert">{error}</p>}
+      {round && <RoundView round={round} />}
+    </div>
   )
 }

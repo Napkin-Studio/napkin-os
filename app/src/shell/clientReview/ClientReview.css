@@ -324,3 +324,15 @@ label.cr-drop { justify-content: center; }
 @media (prefers-reduced-motion: reduce) {
   .cr-answer, .cr-how button, .cr-reasons button, .cr-said summary::before, .cr-mark summary::before { transition: none; }
 }
+
+/* The merged round (RoundView.tsx): the same list look as the gate's. */
+.cr-round { display: flex; flex-direction: column; gap: 10px; }
+.cr-comments li { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cr-c-where { font-family: var(--mono, 'Geist Mono', monospace); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink2); }
+.cr-c-text { overflow-wrap: anywhere; }
+.cr-c-by { font-size: 13px; color: var(--ink2); }
+.cr-flag { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1.5px solid var(--ink); font-size: 12px; font-weight: 600; }
+.cr-people { display: flex; flex-direction: column; gap: 10px; }
+.cr-person { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
+.cr-person .bg-field:first-child { grid-column: 1 / -1; }
+.cr-lead { display: flex; align-items: center; gap: 8px; min-height: 44px; }
