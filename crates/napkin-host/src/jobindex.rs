@@ -135,7 +135,9 @@ pub struct JobEntry {
     /// filter of Needs you reads; sent to nobody (`jobview.rs` does not list it).
     pub people: Vec<String>,
     /// The latest Judge score of each piece of work in the job's documents (features/judge.clan): numbers,
-    /// ids and codes of pieces, with no field that names a person.
+    /// ids and codes of pieces, with no field that names a person. Left out of the wire while there are none, so a job
+    /// that nothing scored reads as it always did.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub scores: Vec<PieceScore>,
 }
 

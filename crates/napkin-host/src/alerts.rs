@@ -676,10 +676,7 @@ mod tests {
 
     #[test]
     fn what_a_score_asks_of_people_differs_by_trust_state_exactly_as_the_design_says() {
-        let team = [
-            Audience::Role("copywriter"),
-            Audience::Role("art-director"),
-        ];
+        let team = [Audience::Role("copywriter"), Audience::Role("art-director")];
         let cd = Audience::Person("dara@wk".into());
         let advice = "Judge is not yet trusted here. Advice only.";
         // trust earned: under 24 with the idea under 9 goes to the team and not to the creative director
@@ -688,15 +685,30 @@ mod tests {
         // not earned (none or shadow): the team has the notes and the creative director still has the work, marked advice only
         for trust in ["none", "shadow"] {
             let (who, needs) = judge_rows(&scored("team", trust), Some("dara@wk"));
-            assert_eq!(who, vec![team[0].clone(), team[1].clone(), cd.clone()], "{trust}");
+            assert_eq!(
+                who,
+                vec![team[0].clone(), team[1].clone(), cd.clone()],
+                "{trust}"
+            );
             assert!(needs[2].text.contains(advice), "{}", needs[2].text);
-            assert!(!needs[0].text.contains("Advice only"), "the team's notes are the notes");
+            assert!(
+                !needs[0].text.contains("Advice only"),
+                "the team's notes are the notes"
+            );
         }
         // Brave: the creative director with the mark, and the team with the craft notes, in either state
         for trust in ["none", "earned"] {
             let (who, needs) = judge_rows(&scored("cd_brave", trust), Some("dara@wk"));
-            assert_eq!(who, vec![team[0].clone(), team[1].clone(), cd.clone()], "{trust}");
-            assert!(needs[2].text.contains("Brave, fix the craft"), "{}", needs[2].text);
+            assert_eq!(
+                who,
+                vec![team[0].clone(), team[1].clone(), cd.clone()],
+                "{trust}"
+            );
+            assert!(
+                needs[2].text.contains("Brave, fix the craft"),
+                "{}",
+                needs[2].text
+            );
             assert_eq!(needs[2].text.contains(advice), trust != "earned");
         }
         // 24 or more: the creative director alone; with no creative director named, their role
@@ -706,18 +718,24 @@ mod tests {
         let (who, _) = judge_rows(&scored("cd", "earned"), None);
         assert_eq!(who, vec![Audience::Role("creative-director")]);
         for (_, needs) in [judge_rows(&scored("team", "shadow"), None)] {
-            assert!(needs.iter().all(|n| !n.can_done && (n.kind == JUDGE_RETURN || n.kind == JUDGE_REVIEW)));
+            assert!(needs
+                .iter()
+                .all(|n| !n.can_done && (n.kind == JUDGE_RETURN || n.kind == JUDGE_REVIEW)));
         }
     }
 
     #[test]
-    fn an_overruled_a_decided_or_a_changed_piece_asks_for_less_and_a_need_quotes_no_words_of_the_work() {
+    fn an_overruled_a_decided_or_a_changed_piece_asks_for_less_and_a_need_quotes_no_words_of_the_work(
+    ) {
         // the creative director sent it back: the team, with their reason on the card, and no more for the creative director
         let mut p = scored("cd", "shadow");
         p.overruled = true;
         p.route = "team".into();
         let (who, needs) = judge_rows(&p, Some("dara@wk"));
-        assert_eq!(who, vec![Audience::Role("copywriter"), Audience::Role("art-director")]);
+        assert_eq!(
+            who,
+            vec![Audience::Role("copywriter"), Audience::Role("art-director")]
+        );
         assert!(needs[0].text.contains("sent it back to the team"));
         // the creative director kept it: nothing is asked
         p.route = "cd".into();
