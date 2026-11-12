@@ -39,11 +39,13 @@ interface Props {
   onTimesheet?: () => void
   /** Opens the agency's setup flow: offered to an admin while a step is still to do. */
   onSetup?: () => void
+  /** An admin's own pages: the people and roles, and the audit view. */
+  onAdmin?: (page: 'people' | 'audit') => void
   /** The role switcher (admins and demos): another role's home, or null for your own. */
   onSwitch: (role: string | null) => void
 }
 
-export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSetup, onSwitch }: Props) {
+export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSetup, onAdmin, onSwitch }: Props) {
   // Asked once, here, at the person's first sign-in: only a signed-in person has a timesheet to ask about.
   const consent = useConsent()
   const top = useRef<HTMLDivElement>(null)
@@ -77,6 +79,12 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
               </label>
             )}
             <button type="button" className="side-link" data-testid="open-map" onClick={onMap}>The map of the agency</button>
+            {onAdmin && view.roles.includes('admin') && !view.viewing && (
+              <>
+                <button type="button" className="side-link" data-testid="open-people" onClick={() => onAdmin('people')}>Your people and their roles</button>
+                <button type="button" className="side-link" data-testid="open-audit" onClick={() => onAdmin('audit')}>The audit view</button>
+              </>
+            )}
             {onTimesheet && consent !== null && <button type="button" className="side-link" data-testid="open-timesheet" onClick={onTimesheet}>Your timesheet</button>}
           </div>
         </section>

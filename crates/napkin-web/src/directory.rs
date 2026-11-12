@@ -88,6 +88,15 @@ impl RegistryDirectory {
     /// everyone out, and writes refuse it instead.
     fn registry(&self, agency: &str) -> Arc<Registry> {
         let now = (self.clock)();
+        // An agency nobody has opened has no folder, and asking about it must not make one: the name
+        // comes from a sign-in form, so anyone can type any.
+        if !self
+            .root
+            .join(TenantId::of_agency(agency).as_str())
+            .is_dir()
+        {
+            return Arc::new(Registry::default());
+        }
         let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(c) = cache.get(agency) {
             if now - c.read_at < CACHE_SECS {

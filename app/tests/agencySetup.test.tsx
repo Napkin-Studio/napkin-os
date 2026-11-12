@@ -18,6 +18,9 @@ import { ImportBody, type Phase } from '../src/shell/setup/CsvImport.tsx'
 import { StepPage } from '../src/shell/setup/SetupFlow.tsx'
 import { PeopleBody } from '../src/shell/setup/PeoplePage.tsx'
 import { SetupCardBody } from '../src/shell/setup/SetupCard.tsx'
+import { AuditBody } from '../src/shell/setup/AuditPage.tsx'
+import type { AuditEntry } from '../src/shell/setup/api.ts'
+import { auditFilterOf, auditShown, versionWords, whenWords } from '../src/shell/setup/model.ts'
 import { parseRoute, formatRoute } from '../src/shell/route.ts'
 
 const status = (done: string[]): SetupStatus => ({
@@ -176,4 +179,47 @@ test('roles are said as titles, and the routes for setup, people and the audit v
     assert.deepEqual(parseRoute(formatRoute({ level })), { level })
   }
   assert.deepEqual(parseRoute('#setupx'), { level: 'agency' })
+})
+
+const entries: AuditEntry[] = [
+  { at: '2026-11-12T09:41:02Z', who: 'dara@cr', kind: 'approval', what: 'Locked Brief for Client A.', doc: 'doc-1', version: 'sha256:a31631598d1e92882a1dc1dbebe9082b6ca182ab48b946dacf8a9db974543690' },
+  { at: '2026-11-12T09:30:00Z', who: 'cian@cr', kind: 'link', what: 'Made a link for the client to open.', doc: 'doc-1' },
+  { at: '2026-11-12T09:20:00Z', who: 'cara@cr', kind: 'permission', what: 'Changed the roles of niamh@cr from management to management, traffic.', doc: 'niamh@cr' },
+  { at: '2026-11-12T09:10:00Z', who: 'ghost@cr', kind: 'sign-in', what: 'Sign-in refused.', ip: '203.0.113.7' },
+  { at: '2026-11-12T09:05:00Z', who: 'cara@cr', kind: 'settings', what: "Changed the agency's settings." },
+]
+const audit = (over: Record<string, unknown> = {}) => renderToStaticMarkup(createElement(AuditBody, {
+  lines: entries, filter: 'all', verified: null, checking: false, onFilter: () => {}, onCheck: () => {}, ...over,
+}))
+
+test('the audit view lists who did what, to which version, and from where a sign-in came, and has no control that changes a line', () => {
+  const html = audit()
+  assert.equal((html.match(/data-testid="audit-line"/g) ?? []).length, 5)
+  assert.match(html, /Locked Brief for Client A\./)
+  assert.match(html, /dara@cr · version a3163159/)
+  assert.match(html, /from 203\.0\.113\.7/)
+  assert.doesNotMatch(html, /Edit|Delete|Remove/)
+  assert.equal(html.includes('\u2014'), false)
+  // narrowing: settings and permission changes are one filter
+  assert.deepEqual(auditShown(entries, 'people').map(l => l.kind), ['permission', 'settings'])
+  assert.equal(auditShown(entries, 'all').length, 5)
+  assert.equal(auditFilterOf('permission'), 'people')
+  assert.match(audit({ filter: 'export' }), /Nothing of this kind has happened yet/)
+  assert.match(audit({ filter: 'link' }), /aria-pressed="true"[^>]*data-testid="audit-filter" data-filter="link"|data-filter="link"/)
+})
+
+test('checking the log says plainly whether a saved line was changed', () => {
+  assert.match(audit({ verified: { ok: true, lines: 9 } }), /Nothing was changed\. 9 saved lines checked\./)
+  assert.match(audit({ verified: { ok: true, lines: 1 } }), /1 saved line checked/)
+  const bad = audit({ verified: { ok: false, lines: 9, line: 4, problem: 'a line was changed after it was written' } })
+  assert.match(bad, /A saved line was changed \(line 4\)\. a line was changed after it was written/)
+  assert.match(bad, /data-ok="false"/)
+  assert.match(audit({ checking: true }), /disabled/)
+})
+
+test('a time and a version are said short', () => {
+  assert.equal(versionWords('sha256:a31631598d1e'), 'a3163159')
+  assert.equal(versionWords(undefined), null)
+  assert.match(whenWords('2026-11-12T09:41:02Z'), /^12 Nov, \d\d:\d\d$/)
+  assert.equal(whenWords('not a time'), 'not a time')
 })

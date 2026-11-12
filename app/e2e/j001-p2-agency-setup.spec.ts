@@ -105,6 +105,10 @@ for (const size of SIZES) {
     expect((await page.request.delete(`/api/t/${tenant}/agency/people/${person(1)}`)).status()).toBe(200)
     expect((await who.page.request.get(`/api/t/${tenant}/doors`)).status()).toBe(401)
     await who.ctx.close()
+    // The change is in the audit view, attributed to the admin, and the log's chain holds.
+    const view = (await (await page.request.get(`/api/t/${tenant}/audit?kind=permission`)).json()) as { lines: { who: string; what: string }[] }
+    expect(view.lines.some(l => l.who === agency.first_admin && /traffic/.test(l.what))).toBe(true)
+    expect((await page.request.get(`/api/t/${tenant}/audit/verify`)).status()).toBe(200)
     // The last admin stays.
     expect((await page.request.delete(`/api/t/${tenant}/agency/people/${agency.first_admin}`)).status()).toBe(409)
     // A second agency's admin sees none of the first's people, and cannot name its tenant.

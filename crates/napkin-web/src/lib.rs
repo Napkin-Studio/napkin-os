@@ -15,6 +15,7 @@
 
 pub mod agency;
 pub mod api;
+pub mod audit;
 pub mod auth;
 pub mod clean;
 pub mod directory;

@@ -287,6 +287,7 @@ fn person_of(ctx: &Ctx) -> HostResult<String> {
 }
 
 /// One decision on the registry's chain: `who` did `action` to `target`, from `before` to `after`.
+#[allow(clippy::too_many_arguments)]
 fn decision(
     ctx: &Ctx,
     who: &str,
@@ -772,6 +773,8 @@ pub fn set_settings(store: &dyn DocStore, ctx: &Ctx, patch: SettingsPatch) -> Ho
 /// One change to the people or the settings, as the registry's chain records it.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Edit {
+    /// The decision's own id, so a copy of it can be told from the original.
+    pub id: Option<String>,
     /// The sign-in name of the person who made it.
     pub who: String,
     pub action: String,
@@ -799,6 +802,7 @@ pub fn history(store: &dyn DocStore) -> HostResult<Vec<Edit>> {
         .decisions
         .iter()
         .map(|d| Edit {
+            id: d.id.clone(),
             who: d
                 .agent
                 .strip_prefix("human:")

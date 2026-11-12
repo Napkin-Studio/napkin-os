@@ -272,7 +272,7 @@ impl Report {
     }
 }
 
-fn cell<'a>(row: &'a [String], i: Option<usize>) -> &'a str {
+fn cell(row: &[String], i: Option<usize>) -> &str {
     i.and_then(|i| row.get(i)).map_or("", |c| c.trim())
 }
 

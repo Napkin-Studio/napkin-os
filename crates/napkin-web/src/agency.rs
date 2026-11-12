@@ -179,6 +179,7 @@ async fn invite(
         &known,
     )?;
     ctx.directory.changed(&me.agency);
+    crate::audit::sync_registry(&ctx, &tenant);
     Ok((StatusCode::CREATED, Json(admin_view(p))))
 }
 
@@ -201,6 +202,7 @@ async fn edit_person(
         &known,
     )?;
     ctx.directory.changed(&me.agency);
+    crate::audit::sync_registry(&ctx, &tenant);
     Ok(Json(admin_view(p)))
 }
 
@@ -215,6 +217,7 @@ async fn remove_person(
     let username = of_my_agency(&me, &username)?;
     let p = agency::remove_person(&*ctx.workspace(&tenant).store, &acting, &username)?;
     ctx.directory.changed(&me.agency);
+    crate::audit::sync_registry(&ctx, &tenant);
     Ok(Json(admin_view(p)))
 }
 
@@ -345,6 +348,7 @@ async fn put_settings(
     };
     let s = agency::set_settings(&*ctx.workspace(&tenant).store, &acting, patch)?;
     ctx.directory.changed(&me.agency);
+    crate::audit::sync_registry(&ctx, &tenant);
     Ok(Json(serde_json::json!({
         "name": s.name,
         "credit_cap_month_eur": s.credit_cap_month_eur,
@@ -458,6 +462,7 @@ fn file_of(headers: &HeaderMap, body: &Bytes) -> ApiResult<Vec<u8>> {
 
 /// Import people, clients or jobs from a CSV file, with `?dry_run=1` to check without writing.
 /// Admin only. The reply is the report: a result per row, the bad rows by line, and the counts.
+#[allow(clippy::too_many_arguments)]
 async fn import_csv(
     State(ctx): State<Arc<AppCtx>>,
     Acting(acting): Acting,
@@ -491,6 +496,7 @@ async fn import_csv(
     };
     if !dry {
         ctx.directory.changed(&me.agency);
+        crate::audit::sync_registry(&ctx, &tenant);
     }
     Ok(Json(report))
 }

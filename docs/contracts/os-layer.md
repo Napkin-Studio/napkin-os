@@ -2200,3 +2200,46 @@ someone not on the list; `409` for a name already on the list or the last admin.
 for an agency with no directory also names the admin who writes, as `admin`, so the writer is never locked
 out. Roles are `Group::Admin`, `Group::Control` in `roles.rs`: `/audit` and `/setup/*` are admin-only
 (a person with no role is refused, not let through), `/control/*` needs `napkin-admin`.
+
+### 14.1 Settings, setup and import (stage 2)
+
+All admin only (`403` otherwise), all on the signed-in person's own agency (another agency's tenant in the
+path is `403` from the tenant extractor).
+
+- `GET /api/t/{tenant}/agency` answers an admin `{name, credit_cap_month_eur, time_zone, look}` and anyone else
+  `{name, look}`. `PUT /agency` takes `{name?, credit_cap_month_eur?, time_zone?}` and records one
+  `set_settings` decision; a cap that is not a number, or is below zero, is `400`. The cap is euros per
+  calendar month, stored and shown; nothing enforces it until the cost engine. `PUT /agency/look` (the logo)
+  is the admin's once the agency has a directory.
+- `GET /setup` answers `{steps: [{id, done}], next, complete, people, has_directory}`: the setup flow's
+  progress, **read from the data** (a logo, a name, a person besides the admin, a client, a job), never stored.
+- `POST /setup/import/{people|clients|jobs}[?dry_run=1]` takes the file as the raw body or one
+  `multipart/form-data` part (up to 1 MB and 5,000 rows) and answers a report
+  `{kind, dry_run, rows, ok, errors: [{line, reason}], created, updated, unchanged, committed, results:
+  [{line, status: new|changed|same|error, label, reason?}], starts_directory, made_before_failure}`. A dry run
+  writes nothing. Without it the rows that are fine are written (people in **one** registry write and one
+  `import_people` decision; clients and jobs one by one, the report naming which were made if one fails) and the
+  bad ones are listed by line. The same file again changes nothing. People columns: `email`, `name`, `roles`
+  (roles separated by `;`, `,` or `|`), optional `username`; the sign-in name is the email's local part at the
+  agency. Clients: `name`, optional `material`. Jobs: `client` (a client's name that exists), optional `number`,
+  `title`, `owner`, `opened_on`, `due`, `budget_hours`. A file may be UTF-8, with or without a byte order mark,
+  or Windows-1252, comma, semicolon or tab separated. Cells are kept as typed; a cell that begins with `=`, `+`,
+  `-` or `@` is quoted when a list is written out (`import::export_cell`). The first people list starts the
+  directory and keeps the importing admin on it as an admin (a file that would demote them is refused on its line).
+- `GET /agency/accounts.tsv` is the people as `infra/scripts/create-users.sh` reads them: `user@agency`, name,
+  roles, tab separated.
+
+### 14.2 The audit view (stage 3)
+
+`GET /api/t/{tenant}/audit[?kind=&limit=]`, admin only, newest first: `{total, lines: [{at, who, kind, what,
+doc?, version?, ip?}]}` with `kind` one of `approval`, `export`, `link`, `sign-in`, `permission`, `settings`.
+Approvals (a signature, a lock, a client's answer) are read from the documents' decision chains each time.
+Permission and settings changes are the registry's own decisions, copied into the file once each. Exports, client
+links and sign-ins (a refused one included, with its source address, 30 an agency in ten minutes, only for an
+agency that already has a workspace) are lines of an append-only file per tenant, `audit.jsonl`, behind
+`trait AuditLog`. Each line carries the hash of the one before and the newest hash is kept in `audit.head`;
+`GET /audit/verify` answers `200 {ok: true, lines}` or `409 {ok: false, line, problem}` after an edited, inserted,
+removed or cut-off line. It is tamper-evident, not tamper-proof (S1 anchors the head elsewhere). One web task
+writes the file at a time; with several tasks on one disk it needs a lock file. It never holds a timesheet, a
+correction or a signal consent. Retention (default 12 months, for the owner to confirm) is not built: it needs a
+checkpoint line so a trimmed log still verifies.

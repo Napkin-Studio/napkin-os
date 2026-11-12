@@ -122,6 +122,8 @@ pub struct AppCtx {
     pub timesheets: crate::timesheet::Timesheets,
     /// Who works in each agency and with which roles (features/agency-setup.clan).
     pub directory: Arc<dyn crate::directory::Directory>,
+    /// What no document's chain holds: exports, links, sign-ins and copies of permission changes.
+    pub audit: Arc<dyn crate::audit::AuditLog>,
     jobs_clock: JobsClock,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
@@ -136,6 +138,7 @@ impl AppCtx {
         Self {
             timesheets: crate::timesheet::Timesheets::new(root.clone()),
             directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
+            audit: Arc::new(crate::audit::FileAudit::new(root.clone())),
             root,
             seed: None,
             config,

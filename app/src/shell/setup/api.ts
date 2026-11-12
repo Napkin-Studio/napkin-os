@@ -73,3 +73,15 @@ export const editPerson = (username: string, patch: { name?: string; email?: str
   call<Person>(`agency/people/${encodeURIComponent(username)}`, { method: 'PUT', json: patch })
 export const removePerson = (username: string) =>
   call<Person>(`agency/people/${encodeURIComponent(username)}`, { method: 'DELETE' })
+
+export type AuditKind = 'approval' | 'export' | 'link' | 'sign-in' | 'permission' | 'settings'
+export interface AuditEntry { at: string; who: string; kind: AuditKind; what: string; doc?: string; version?: string; ip?: string }
+export const readAudit = () => call<{ total: number; lines: AuditEntry[] }>('audit')
+export interface Verified { ok: boolean; lines: number; line?: number; problem?: string }
+/** The log's chain: a 409 answers with the first line that breaks it, which is an answer here, not an error. */
+export async function verifyAudit(): Promise<Result<Verified>> {
+  const r = await call<Verified>('audit/verify')
+  if (r.ok) return r
+  if (r.status === 409) return { ok: true, data: { ok: false, lines: 0, problem: r.message || 'The log was changed.' } }
+  return r
+}
