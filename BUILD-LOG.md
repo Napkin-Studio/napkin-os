@@ -163,7 +163,7 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 
 **Next action.**
 
-1. Merge `origin/develop` into `spike/fabletest` on `chore/merge-develop` (worktree `napkin-b-merge-develop`), keep both sides' behaviour, run all checks and the full e2e (this also re-runs pilot tests 7 and 18). Merge it in, then push `spike/fabletest` (no pull request; the push needs Sai's permission rule or his own hand).
+1. PAUSED by Sai on 12 Nov before it finished; nothing is running. The merge of `origin/develop` is committed on `chore/merge-develop` (worktree `napkin-b-merge-develop`) with follow-up fixes, but it is unproven: the agent was stopped while three check suites were failing and before any e2e run. It is NOT merged into `spike/fabletest`. On resume: read that branch's commits, then finish it. The task was: merge `origin/develop` on `chore/merge-develop`, keep both sides' behaviour, run all checks and the full e2e (this also re-runs pilot tests 7 and 18). Merge it in, then push `spike/fabletest` (no pull request; the push needs Sai's permission rule or his own hand).
 2. Re-read three designs against develop and amend them where it changes them: `judge` (jev now exists, so a calibrated score may back the threshold), `client-review-full` and the Cmd K frame fix (the frame is loaded differently), `job-page` (new job end states). Small fix records where needed.
 3. From then on merge develop into this branch at the start of every wave, so the gap never grows past a day.
 4. Build `first-day`, `ask-nap` (the offline core) and `napkin-brain`, three at once, builders running only their own tests. Then one wave check on Sonnet.
