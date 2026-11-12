@@ -120,6 +120,8 @@ pub struct AppCtx {
     pub roles_dir: Option<PathBuf>,
     /// Each person's work sessions and days (features/timesheet-sessions.clan).
     pub timesheets: crate::timesheet::Timesheets,
+    /// Who works in each agency and with which roles (features/agency-setup.clan).
+    pub directory: Arc<dyn crate::directory::Directory>,
     jobs_clock: JobsClock,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
@@ -133,6 +135,7 @@ impl AppCtx {
     ) -> Self {
         Self {
             timesheets: crate::timesheet::Timesheets::new(root.clone()),
+            directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
             root,
             seed: None,
             config,
@@ -164,6 +167,13 @@ impl AppCtx {
     /// A clock for the timesheets, so a test sets the time of day.
     pub fn with_timesheet_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
         self.timesheets = self.timesheets.with_clock(clock);
+        self
+    }
+
+    /// A clock for the directory's cache, in seconds, so a test moves past its minute.
+    pub fn with_directory_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
+        self.directory =
+            Arc::new(crate::directory::RegistryDirectory::new(self.root.clone()).with_clock(clock));
         self
     }
 

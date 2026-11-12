@@ -20,6 +20,7 @@
 //! desktop binds that to a custom URI scheme and Tauri events; a web server
 //! binds the same table to HTTP.
 
+pub mod agency;
 pub mod clients;
 pub mod config;
 pub mod ctx;

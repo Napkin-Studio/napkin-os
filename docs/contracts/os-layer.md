@@ -2126,3 +2126,77 @@ decisions and the clock. There is no scheduler and no stored reminder state. `ne
   writing an RFC 3339 time to the file `NAPKIN_TEST_CLOCK_FILE`. No deployment sets it.
 - **Stage 2, not built.** An hourly email digest of a person's open approval items, through
   client-review-full's mailer, with a per-person-per-day marker file as its only state. In-app reminders stay stateless.
+
+## 14. The agency directory (features/agency-setup.clan)
+
+An agency's people are a third registry (after clients and jobs): one CLAN document per tenant,
+`document_type: agency-registry`, kept beside the home app (`Library::home("agency-v1")`,
+`crates/napkin-host/src/agency.rs`), whose `shared/data.yaml` holds `settings` and `people`. It is
+written through `Change` under one lock and never touches `std::fs`, so it stays wasm32-clean. Needs
+Shrey's review: it is the agency's own store today, and approach B (control-plane tables in Aurora) can
+replace it behind `Directory` without a caller changing.
+
+**One rule.** An agency has a *directory* once it names people. While it has one, the directory is the
+only source of who may sign in and with which roles, and the roster column and the identity provider's
+`custom:roles` are ignored for that agency. While it has none, sign-in is exactly as it was.
+
+- **`Person`**: `{username, name, email, roles, state, invited_by, at}`. `username` is the sign-in
+  name `user@agency`; `state` is `invited` (named, not yet signed in), `active` (a first sign-in turns
+  `invited` into `active`) or `removed` (kept for the record, cannot sign in). `roles` is never empty in a
+  directory, each one a role the agency's door table knows, or `admin`; `demo` is not given to anyone.
+- **`Settings`**: `{name, credit_cap_month_eur, time_zone}` (default zone `Europe/Dublin`). The cap is
+  euros per calendar month, stored and shown, not enforced.
+- **Every change is one attributed decision** on the registry's own chain: `agent` is `human:<admin>`, the
+  `action` is `add_person`, `set_roles`, `edit_person`, `remove_person`, `activate`, `import_people` or
+  `set_settings`, and the decision's `before` and `after` hold the roles (or the settings) either side. A
+  write by anything but a person is `403`. The last admin cannot be removed or lose the role (`409`).
+- **`trait Directory`** (`crates/napkin-web/src/directory.rs`), on `AppCtx.directory`:
+
+  ```rust
+  pub trait Directory: Send + Sync {
+      fn has(&self, agency: &str) -> bool;                              // the agency names people
+      fn person(&self, agency: &str, username: &str) -> Option<Person>; // any state, removed included
+      fn people(&self, agency: &str) -> Vec<Person>;                    // in the order they were named
+      fn changed(&self, agency: &str) {}                                // this process just wrote
+  }
+  ```
+
+  `agency` is the slug (the part after `@`). `RegistryDirectory` answers it from the registry with a cache
+  keyed by the registry's version, re-checked after 60 seconds; a registry that does not parse is served from
+  the last good read, else as no directory, with a warning (writes to it fail). A test moves the cache's
+  clock with `AppCtx::with_directory_clock`.
+- **Live roles.** `directory::live_roles`, a layer between the tenant layer and the permission check,
+  replaces the session's roles with the directory's on every request. A removed person, or one not on the
+  list, gets `401 {signin: true}` and the session cookie is cleared; a listed person with no roles gets
+  `403` on everything. The session cookie keeps carrying roles as a hint only. A role change or a removal
+  is seen by the next request after the cache window (at once by the process that wrote it). The
+  sandbox's per-document tokens are not covered: they last until they expire.
+- **Sign-in.** `agency::sign_in`: with a directory and no passwords (the roster) the name alone is looked
+  up in it; with a password provider the provider proves the person and the directory then has the last
+  word. The refusal is the roster's own line, *That name is not on this studio's list. Ask your studio
+  admin to add you.*
+
+### `GET /api/t/{tenant}/agency/people`
+
+Any signed-in person of the agency. The tenant is always the signed-in person's own: naming another
+agency's tenant is `403` from the tenant extractor. An allow list, by reader:
+
+- **A member**: `[{username, name, roles}]`, people who are not removed. No email.
+- **An admin**: `[{username, name, roles, email, state, invited_by, at}]`, removed people included.
+- An agency with no directory answers `[]` (its roster is not a directory), as does an anonymous session.
+
+`username` is `user@agency`, `roles` a list of role ids as `roles.rs` has them, `at` RFC 3339.
+
+### Writes (admin of the agency only; `403` otherwise)
+
+| Route | Body | Reply |
+| --- | --- | --- |
+| `POST /agency/people/invite` | `{username?, email, name, roles}` (`username` defaults to the email's local part at this agency) | `201` an admin person |
+| `PUT /agency/people/{username}` | `{name?, email?, roles?}` | `200` an admin person |
+| `DELETE /agency/people/{username}` | none | `200` the person, now `removed` |
+
+`400` for a name outside the signed-in agency, an unknown or empty role list, a bad email; `404` for
+someone not on the list; `409` for a name already on the list or the last admin. The first person named
+for an agency with no directory also names the admin who writes, as `admin`, so the writer is never locked
+out. Roles are `Group::Admin`, `Group::Control` in `roles.rs`: `/audit` and `/setup/*` are admin-only
+(a person with no role is refused, not let through), `/control/*` needs `napkin-admin`.

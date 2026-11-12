@@ -98,6 +98,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
         .merge(crate::timesheet::router())
+        .merge(crate::agency::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.
@@ -281,6 +282,7 @@ fn answer(identity: &crate::tenant::Identity, out: crate::auth::SignIn) -> Respo
 }
 
 async fn sign_in(
+    State(ctx): Ctx,
     Extension(identity): Extension<Arc<crate::tenant::Identity>>,
     headers: header::HeaderMap,
     Json(b): Json<SignInBody>,
@@ -289,7 +291,7 @@ async fn sign_in(
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
     let name = b.sign_in_name();
-    let out = provider.sign_in(&name, &b.password).await;
+    let out = crate::agency::sign_in(&ctx, provider, &name, &b.password).await;
     // Every attempt, with where it came from: under the roster nothing else
     // proves who signed in, so this log is how a misuse would be traced.
     let outcome = match &out {
@@ -308,6 +310,7 @@ async fn sign_in(
 }
 
 async fn new_password(
+    State(ctx): Ctx,
     Extension(identity): Extension<Arc<crate::tenant::Identity>>,
     Json(b): Json<NewPasswordBody>,
 ) -> Response {
@@ -320,7 +323,7 @@ async fn new_password(
     let out = provider
         .new_password(&b.username, &b.session, &b.password)
         .await;
-    answer(&identity, out)
+    answer(&identity, crate::agency::decide(&ctx, out))
 }
 
 async fn sign_out(Extension(identity): Extension<Arc<crate::tenant::Identity>>) -> Response {
