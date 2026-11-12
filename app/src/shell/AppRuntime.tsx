@@ -10,6 +10,7 @@ import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
 import { jobsMessage } from './openJobs'
+import { editModeMessage } from './editMode'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
@@ -72,13 +73,19 @@ export default function AppRuntime({
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
 
-  useEffect(() => { editModeRef.current = editMode }, [editMode])
-
-  const sendEditMode = useCallback((active: boolean) => {
-    host.setEditMode(active).catch(console.error)
+  // Edit mode goes to the host (its record of the session) and to the page
+  // itself, on every change and again on every load (`clan:edit-mode`). The
+  // page's bridge used to ask clan://edit-mode every 0.4 s instead
+  // (features/edit-mode-pushed.clan).
+  const postEditMode = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(editModeMessage(editModeRef.current), '*')
   }, [])
 
-  useEffect(() => { sendEditMode(editMode) }, [editMode, sendEditMode])
+  useEffect(() => {
+    editModeRef.current = editMode
+    host.setEditMode(editMode).catch(console.error)
+    postEditMode()
+  }, [editMode, postEditMode])
 
   // Legacy views save HTML-fragment patches; the backend echoes a
   // clan-patch-saved event. The edit is already in the DOM — don't reload.
@@ -294,6 +301,7 @@ export default function AppRuntime({
       title={manifest.title}
       onLoad={() => {
         postScheme(getTheme())
+        postEditMode()
         postClientMode()
         postInsets()
         postJobs()

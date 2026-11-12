@@ -2,484 +2,484 @@
   "origin": "https://napkin.test/s/no-token",
   "cases": {
     "brief/web/authored/plain/light": {
-      "sha256": "bb75cee3b1e661087a43eadfc56b6acaba67649568f56654f1eee492f0a311b5",
-      "len": 861610
+      "sha256": "9db6d9e68588299719a0e86fc1eccfed942f57e1b498691256a2183a266bc298",
+      "len": 862715
     },
     "brief/web/authored/plain/dark": {
-      "sha256": "27f8250b64924237e063c2e0b0bd844d8695aa09ec772a8ad241f666fd979dd4",
-      "len": 861609
+      "sha256": "dc59eb7bc8b9589cf09bd12edcc32cf74f046672cb857447bd3b7e2bf4cc350f",
+      "len": 862714
     },
     "brief/web/authored/capture/light": {
-      "sha256": "22965305a181e7a5f7f5266a582b7bea7ac921de0dfe6467aa5ad2cdabe153b3",
-      "len": 863328
+      "sha256": "9ded7f0fb4ae00b481b7d22a3153ab927374a72fe1b369c5dde1c35a057377b3",
+      "len": 864433
     },
     "brief/web/authored/capture/dark": {
-      "sha256": "82e8658532cb34bf26c342b7eb85accace3c9d4e189f0f7358b10da49debf61d",
-      "len": 863327
+      "sha256": "88917683fe5494b1747b9fca0d310129dc6c0114c66a8eac4fe0a879efa97826",
+      "len": 864432
     },
     "brief/web/legacy/plain/light": {
-      "sha256": "7776f27f91b18e1ee1c6d67f83a12477b321626494f73fe2c3e2065a8ee42073",
-      "len": 855837
+      "sha256": "f6618b27d24172329a0334c4333c4193c9f00b5a373595d013de400376e7bd44",
+      "len": 856049
     },
     "brief/web/legacy/plain/dark": {
-      "sha256": "5da0b2b29e59f79869f4ae81aca3a965ec756641c78272e5bad5023b8287cce0",
-      "len": 855836
+      "sha256": "09371440263bacde27cd67aa0c8fb05341abacfc5bd931b9c959178602851f34",
+      "len": 856048
     },
     "brief/web/legacy/capture/light": {
-      "sha256": "919daa05f3590dc724ac50ecac5f3995910effb1e1137f1ae97ca65bc6c17a99",
-      "len": 857555
+      "sha256": "30d3c130424832383edb6aa3773dfea86eeff8d985e96cc2b2793c1944dfb9ba",
+      "len": 857767
     },
     "brief/web/legacy/capture/dark": {
-      "sha256": "ef953f18f9503e1a220c14a229deafbb65a9e10b600c8b16b1a936103303764b",
-      "len": 857554
+      "sha256": "83dd84b96c1ef93eb9ec912863f6f863c9e63c652657e034abc15cf1b37469c5",
+      "len": 857766
     },
     "brief/desktop/authored/plain/light": {
-      "sha256": "b77834f490df89ab7d0dae29c10ecb45d6e66ef6a7eba3f3a33540568dcf5e41",
-      "len": 859512
+      "sha256": "29ee783a26aa5df0200c9dfd8cb11b853571431571a84d96cae188c34fcd30b1",
+      "len": 860617
     },
     "brief/desktop/authored/plain/dark": {
-      "sha256": "e74947deae955a0f92dcce047f1a923796061bb00daec25a90c7ff18a763412b",
-      "len": 859511
+      "sha256": "9e5c1572529d79261aeb443fd8e23e536d632af41d502e90ba1c094b6a03ab24",
+      "len": 860616
     },
     "brief/desktop/authored/capture/light": {
-      "sha256": "be68da575f607e8edce599d24740b56be68df9c6102d11d39729950eed890587",
-      "len": 861230
+      "sha256": "f8ecb4ac69cc8d4a00e7116746340fd7e8b490e8dee861b6caea907d9f026954",
+      "len": 862335
     },
     "brief/desktop/authored/capture/dark": {
-      "sha256": "25822f85c0a0576cbd5c3ff72217b133efcbfd3117caa9edc67feb68065b76ef",
-      "len": 861229
+      "sha256": "a8c51f5fb9e8268d124db90409d5eb808112a3ed3af840564d4d4c7c918a7cb5",
+      "len": 862334
     },
     "brief/desktop/legacy/plain/light": {
-      "sha256": "d46e6603950c5e1892d5e0f05d58dcb09ffe3b391c50e7436fd991dde5d0d0cd",
-      "len": 853739
+      "sha256": "d95845a71bbdefe01fa49ce1602652fb1d2846cce8668fcaad07d455a19fa8af",
+      "len": 853951
     },
     "brief/desktop/legacy/plain/dark": {
-      "sha256": "6d8c2d916c65d6f09f489722c38e742d168dd4d70d8580e31ba7e59ecdad529f",
-      "len": 853738
+      "sha256": "f8d6f73484004518d62646da25733d65a77c2e1b6c1fe48c54d948d2593b2c24",
+      "len": 853950
     },
     "brief/desktop/legacy/capture/light": {
-      "sha256": "de8d5ef6d390be8544546359e3a8aa5188a1a651ce6130db105fd6fa7cd1022d",
-      "len": 855457
+      "sha256": "4130c1c2e5b534ff5fd2e7a16506bf882ffab4aa8cf71b5b1716ca0a6ab9370b",
+      "len": 855669
     },
     "brief/desktop/legacy/capture/dark": {
-      "sha256": "426efe00548b5bf98f1b1633cc1c07c0cba3afaa60fbab6d2b2c02ec05261ffe",
-      "len": 855456
+      "sha256": "b6f88d6ae655007bdcfc6808a58fad4c5e2366e1ede8565692932dce25f350c7",
+      "len": 855668
     },
     "brief/device/authored/plain/light": {
-      "sha256": "81d87fd6c78dd45e2189e63f2a7284a7a28cfe7477af64e9f174c6e0a1e4c12c",
-      "len": 862187
+      "sha256": "afb10be64198456a067c00aa6d1652687cd01c87fc22b60e26d6a5576beb934f",
+      "len": 863292
     },
     "brief/device/authored/plain/dark": {
-      "sha256": "cfe86e9f438b537090efe0b32a5b7a6322d46891b76c82ad0eb6e3ed31d35837",
-      "len": 862186
+      "sha256": "e710d13b76e2f4d5d054aa81a6c638e239d38feae5ba9deeab101f7a414a485b",
+      "len": 863291
     },
     "brief/device/authored/capture/light": {
-      "sha256": "23075a2720d8c964fe84a43ea79e895c51e16896b2670a59c1c6e475419d6eb8",
-      "len": 863905
+      "sha256": "a18a122ab43de4c2910044d5af7143ddecda56f04440a75795ce4f4943afbbb3",
+      "len": 865010
     },
     "brief/device/authored/capture/dark": {
-      "sha256": "c746a3cfbe0e8bf711fddd1f321508b8a3e202a697cd2d0ab250657b4f00c93f",
-      "len": 863904
+      "sha256": "7ea6644056719b8f698a938d2b714916570800b9b475f33870db0990e37c07b2",
+      "len": 865009
     },
     "brief/device/legacy/plain/light": {
-      "sha256": "4460beab789b6777c1c475fdb0ffb50aafd27ae36d69850cd539278d5d036545",
-      "len": 856414
+      "sha256": "13a2974fcb11bfe045787127984c0e7f7be3da07bcd8c67e32857d4a21205b78",
+      "len": 856626
     },
     "brief/device/legacy/plain/dark": {
-      "sha256": "1f760bf42f29ff54f1230b79768f4635c7b34bf676d1f68a27dd9bdd2242ae5d",
-      "len": 856413
+      "sha256": "418f595d2130f838dc0ac6098de858ac395e113d80c565a256d531af0552a448",
+      "len": 856625
     },
     "brief/device/legacy/capture/light": {
-      "sha256": "55614eeec878c694db5221080ce23d85e35aa7844b1a5197c0914530b61dfd95",
-      "len": 858132
+      "sha256": "f84ac5015dc45ab7275f6e0f538393120f342ec32a45b7dbc86fb7dada56f995",
+      "len": 858344
     },
     "brief/device/legacy/capture/dark": {
-      "sha256": "04c3695bc500cd2a6972cc74bae1101b4de3fcfc5cefeb7b2930f8bdb52c0c56",
-      "len": 858131
+      "sha256": "0b64c5de997c728c7b584ee52234bb529959cb3eaabd6f163508d354bf8dcbdf",
+      "len": 858343
     },
     "edge/web/authored/plain/light": {
-      "sha256": "fbeaba0473348d60af99d3c150f1415ed5c58df916f4129124513394c3bdac9f",
-      "len": 13476
+      "sha256": "6f8767827506a0d88fd515147cfa2ffd81d89481930d4ac5884680eb049efa92",
+      "len": 14581
     },
     "edge/web/authored/plain/dark": {
-      "sha256": "fbeaba0473348d60af99d3c150f1415ed5c58df916f4129124513394c3bdac9f",
-      "len": 13476
+      "sha256": "6f8767827506a0d88fd515147cfa2ffd81d89481930d4ac5884680eb049efa92",
+      "len": 14581
     },
     "edge/web/authored/capture/light": {
-      "sha256": "b1561c6f89a1f1283c88fe384647849814128ed1d7552b6cc1a7a0d52f908fe0",
-      "len": 15194
+      "sha256": "96bc19ef58b7abc013bf8ce12c12a4ad3a869d2d1a122bdb979a81f22f612d1c",
+      "len": 16299
     },
     "edge/web/authored/capture/dark": {
-      "sha256": "b1561c6f89a1f1283c88fe384647849814128ed1d7552b6cc1a7a0d52f908fe0",
-      "len": 15194
+      "sha256": "96bc19ef58b7abc013bf8ce12c12a4ad3a869d2d1a122bdb979a81f22f612d1c",
+      "len": 16299
     },
     "edge/web/legacy/plain/light": {
-      "sha256": "4b3957dc96bcb7128c2a7c46a987ede549198a827fc717b5149ba2ed2fa64abc",
-      "len": 7703
+      "sha256": "4000d16c2ce592990c5e0c7ed50e71643af7108fd29de0315bfe5b205cf92ac2",
+      "len": 7915
     },
     "edge/web/legacy/plain/dark": {
-      "sha256": "4b3957dc96bcb7128c2a7c46a987ede549198a827fc717b5149ba2ed2fa64abc",
-      "len": 7703
+      "sha256": "4000d16c2ce592990c5e0c7ed50e71643af7108fd29de0315bfe5b205cf92ac2",
+      "len": 7915
     },
     "edge/web/legacy/capture/light": {
-      "sha256": "f85de12fd52791c46cee0d69a10b599a3f8a4aada5536f4a71eb739566682729",
-      "len": 9421
+      "sha256": "ea9d6d39d2627cb0cab9422c501a2c08c58eb661ce4854fe43df994b030fc88f",
+      "len": 9633
     },
     "edge/web/legacy/capture/dark": {
-      "sha256": "f85de12fd52791c46cee0d69a10b599a3f8a4aada5536f4a71eb739566682729",
-      "len": 9421
+      "sha256": "ea9d6d39d2627cb0cab9422c501a2c08c58eb661ce4854fe43df994b030fc88f",
+      "len": 9633
     },
     "edge/desktop/authored/plain/light": {
-      "sha256": "aac810cf9a5cd37d86f4f6d4c37b5d5c735774a8a4819e6b427a584db0679955",
-      "len": 11424
+      "sha256": "57214ed37ef4c6d926d54aab3e12b82dfade0e58b35d7b78d5ee2e0228f1a69e",
+      "len": 12529
     },
     "edge/desktop/authored/plain/dark": {
-      "sha256": "aac810cf9a5cd37d86f4f6d4c37b5d5c735774a8a4819e6b427a584db0679955",
-      "len": 11424
+      "sha256": "57214ed37ef4c6d926d54aab3e12b82dfade0e58b35d7b78d5ee2e0228f1a69e",
+      "len": 12529
     },
     "edge/desktop/authored/capture/light": {
-      "sha256": "c0813d19df686d4e8ec7ef33432c3ddea7a51ad735c066019586f433eaf13a72",
-      "len": 13142
+      "sha256": "73eda8e74c8788fc57fa5edbb95a83b0ffe4e56650f590930fcb9fe942e0d373",
+      "len": 14247
     },
     "edge/desktop/authored/capture/dark": {
-      "sha256": "c0813d19df686d4e8ec7ef33432c3ddea7a51ad735c066019586f433eaf13a72",
-      "len": 13142
+      "sha256": "73eda8e74c8788fc57fa5edbb95a83b0ffe4e56650f590930fcb9fe942e0d373",
+      "len": 14247
     },
     "edge/desktop/legacy/plain/light": {
-      "sha256": "68cce7dfac277f0e117a5991abed22c6836de6360897fc5844ee9c1ec21d0366",
-      "len": 5651
+      "sha256": "196008d770cdaf26cf53e9f4abd825350dbe7211d01ac79c6134190b72773895",
+      "len": 5863
     },
     "edge/desktop/legacy/plain/dark": {
-      "sha256": "68cce7dfac277f0e117a5991abed22c6836de6360897fc5844ee9c1ec21d0366",
-      "len": 5651
+      "sha256": "196008d770cdaf26cf53e9f4abd825350dbe7211d01ac79c6134190b72773895",
+      "len": 5863
     },
     "edge/desktop/legacy/capture/light": {
-      "sha256": "e3a4807d8148b3766627a85457b650e437cf06ef22ec0635d22c9fd0c682a707",
-      "len": 7369
+      "sha256": "e58781eddcbf102886e8c96ade7aba4594886b7330c708b3a149a497b957106f",
+      "len": 7581
     },
     "edge/desktop/legacy/capture/dark": {
-      "sha256": "e3a4807d8148b3766627a85457b650e437cf06ef22ec0635d22c9fd0c682a707",
-      "len": 7369
+      "sha256": "e58781eddcbf102886e8c96ade7aba4594886b7330c708b3a149a497b957106f",
+      "len": 7581
     },
     "edge/device/authored/plain/light": {
-      "sha256": "243062e8c567836575aa2d66477315c952ce445f64f654cbea5f2626b571c8d8",
-      "len": 14099
+      "sha256": "647c181d2610493af35fe1875486b9279054ac2bd6ed32b3912f25f81f6ae041",
+      "len": 15204
     },
     "edge/device/authored/plain/dark": {
-      "sha256": "243062e8c567836575aa2d66477315c952ce445f64f654cbea5f2626b571c8d8",
-      "len": 14099
+      "sha256": "647c181d2610493af35fe1875486b9279054ac2bd6ed32b3912f25f81f6ae041",
+      "len": 15204
     },
     "edge/device/authored/capture/light": {
-      "sha256": "ce690b931a54a580155b08f35e2bfe0d7214768070caf7e7f9fc6944b3b65715",
-      "len": 15817
+      "sha256": "6cc87e361badc1f4f7dc0ee864b988ce70c2a69696bc21679f2211c166404619",
+      "len": 16922
     },
     "edge/device/authored/capture/dark": {
-      "sha256": "ce690b931a54a580155b08f35e2bfe0d7214768070caf7e7f9fc6944b3b65715",
-      "len": 15817
+      "sha256": "6cc87e361badc1f4f7dc0ee864b988ce70c2a69696bc21679f2211c166404619",
+      "len": 16922
     },
     "edge/device/legacy/plain/light": {
-      "sha256": "fa8151cfa0947bcda8bb558bb012a3df713970b54242eaa04f2414c404f0021e",
-      "len": 8326
+      "sha256": "ad42165e19f86494051bcdc8199451360fa6853a6962e500232c7555b9a1ebc5",
+      "len": 8538
     },
     "edge/device/legacy/plain/dark": {
-      "sha256": "fa8151cfa0947bcda8bb558bb012a3df713970b54242eaa04f2414c404f0021e",
-      "len": 8326
+      "sha256": "ad42165e19f86494051bcdc8199451360fa6853a6962e500232c7555b9a1ebc5",
+      "len": 8538
     },
     "edge/device/legacy/capture/light": {
-      "sha256": "e576cfbb354630dd51608810a3e5d2e13fd98433ef0bbfeee9cdc8fcf246c881",
-      "len": 10044
+      "sha256": "03800018497517d9be8d32b6e093159c46b1805844fd4ffc760e7d8716f0511f",
+      "len": 10256
     },
     "edge/device/legacy/capture/dark": {
-      "sha256": "e576cfbb354630dd51608810a3e5d2e13fd98433ef0bbfeee9cdc8fcf246c881",
-      "len": 10044
+      "sha256": "03800018497517d9be8d32b6e093159c46b1805844fd4ffc760e7d8716f0511f",
+      "len": 10256
     },
     "fragment/web/authored/plain/light": {
-      "sha256": "9e1174c9c396205fc98691b98d49f93697717ddc821d89e58b4a856059049e53",
-      "len": 14598
+      "sha256": "1ba0e5b8d5b8220a99703b33eb564b94d73aac451141376911f67d8663380b33",
+      "len": 15703
     },
     "fragment/web/authored/plain/dark": {
-      "sha256": "5818f61ac15d8a01280521ceaff047d7c358140366fef54ac91a8ce7a766ee95",
-      "len": 14597
+      "sha256": "be198099a9782801e2ba9113dfcbd1068f9cf193b00c5ba0c5386cf1478bba7d",
+      "len": 15702
     },
     "fragment/web/authored/capture/light": {
-      "sha256": "16c6c34dd1d57fc6bdae70dafb90e228aa7abfc8e8f123d71c00db36872c82d3",
-      "len": 16316
+      "sha256": "3d3ed6c9f803e4bddc2a0ec28d0524ea47d8b3166eb908369d0ba4562a90a879",
+      "len": 17421
     },
     "fragment/web/authored/capture/dark": {
-      "sha256": "67e551d81d237b82533425ede3b70f1ba689e5c8c03ef763447787eb17248246",
-      "len": 16315
+      "sha256": "1e2da2462161ee5cb48c6d09381886cc02a44145b16009d602e96c75cd99bba4",
+      "len": 17420
     },
     "fragment/web/legacy/plain/light": {
-      "sha256": "f3f7216a2222920332146192fa45876918c1e1e3917f2a46f76abbe2efc36597",
-      "len": 8825
+      "sha256": "103702a9484bf225b13b4362872604ba9bd3e40f9c45f6c0304a73bf63659d4c",
+      "len": 9037
     },
     "fragment/web/legacy/plain/dark": {
-      "sha256": "42381352b6cdf282fa17050b7eafca7fecf89f4fdd670a1decc83f3600dfb2ab",
-      "len": 8824
+      "sha256": "59e4162da63564d820e43e9fe3e40f8613aa807c7c16fb32b6ea9aebe8bb64e0",
+      "len": 9036
     },
     "fragment/web/legacy/capture/light": {
-      "sha256": "b0793ef3030fb27ba514bd9d2f53f5e529ec0567117a2d82ff09d85ac17db403",
-      "len": 10543
+      "sha256": "f2b6d83a618c90f28214404b15530dd4ae91b2aa012da18820033bf46694dc9b",
+      "len": 10755
     },
     "fragment/web/legacy/capture/dark": {
-      "sha256": "14c7ad738a8ae0c34a4a8fac4637050dd77a9847c4408aa0f935219b3b662770",
-      "len": 10542
+      "sha256": "818c608a9bfe71e2e13a472c4fd0f9be4544e4f53a169c1167d0bc876888ad79",
+      "len": 10754
     },
     "fragment/desktop/authored/plain/light": {
-      "sha256": "3b8f21746e9737c1e0407a19e1ebd40f452f231e8d8728fc184d6532e1f86db3",
-      "len": 12523
+      "sha256": "8bec3b9af6c95e8c678b24d3ef1b0d0139a10e3ca3234336344f8f2fd44d4fb3",
+      "len": 13628
     },
     "fragment/desktop/authored/plain/dark": {
-      "sha256": "22591af93f765f394843282d0f502d3596b6bb717c5fff3b482feaf7599cd9d0",
-      "len": 12522
+      "sha256": "656bedf090243745abe9222eab8772c0d69a397dae3677fea20ab1be98640835",
+      "len": 13627
     },
     "fragment/desktop/authored/capture/light": {
-      "sha256": "badb5532e40317582c08be84175b55fc0a22e9764e09aafb418a301b71e9e348",
-      "len": 14241
+      "sha256": "0cb93774039cfaf518e1d2c7ef6aba4b5f56dc51c84485fc88acc8ce91a82eee",
+      "len": 15346
     },
     "fragment/desktop/authored/capture/dark": {
-      "sha256": "9e32549230f1a03b0e4095b31ae879072864b679767eafc7ce7f00a7ab4aa1c8",
-      "len": 14240
+      "sha256": "c3376906bd0c86daca8fe4f41fc29f7d299bf61de951babc85ada71bcfb80303",
+      "len": 15345
     },
     "fragment/desktop/legacy/plain/light": {
-      "sha256": "93ead392416715d7bdd6dfb18ea3cef36a948ec3cf4dc8486159b896959e5c52",
-      "len": 6750
+      "sha256": "f7b179f7b0418f905d64e9006a07ed67086fbe731784cc86a8c97b74555bd5f2",
+      "len": 6962
     },
     "fragment/desktop/legacy/plain/dark": {
-      "sha256": "bbc7d8d66d0f8bc3b8a3fb6b6a3592cfd840b71156be570d70cbdd2c267ba539",
-      "len": 6749
+      "sha256": "fa6dc72cd6cd213757d5d365fadb4af6f9e5d52c3ec1e1a176eb8ab0fffe695d",
+      "len": 6961
     },
     "fragment/desktop/legacy/capture/light": {
-      "sha256": "c8609f51e6f67503fb91101d37dcbbeee860b2401b20753ef1dcb096b4c39c31",
-      "len": 8468
+      "sha256": "53bdf52cc4e36c163099a4660fe9f40cc178a896ae534b5de3eb19af600e4f15",
+      "len": 8680
     },
     "fragment/desktop/legacy/capture/dark": {
-      "sha256": "bfefb709c0c52d4bdb10f71ffb1989c0500cd63842e3c72acce8c63927ffd46f",
-      "len": 8467
+      "sha256": "393c2b1278c6c3a2eec2cf5cb097a0d75a14864795b251a06cdc64a538561b22",
+      "len": 8679
     },
     "fragment/device/authored/plain/light": {
-      "sha256": "4619a688f179f91d328406093fe22a97dfbc8593951b7bde72d18860ae1b7c3a",
-      "len": 15198
+      "sha256": "d3ea9ddaa3efdc45a3cd3146b97d68d1640db77f3284bf2ce8effb52599a651b",
+      "len": 16303
     },
     "fragment/device/authored/plain/dark": {
-      "sha256": "cdabf03b4e4691acb32d14ffae587459a0b3ff83ce79cb939dcbf739030805a4",
-      "len": 15197
+      "sha256": "1b9fa67e8d8036a3e872fd954a380728f3267f4d6d46ab3f463e010b39d2831f",
+      "len": 16302
     },
     "fragment/device/authored/capture/light": {
-      "sha256": "72a4f2887a0acda4a9582051a677721bba00d07a4e407a974e5c8f8685bc5f88",
-      "len": 16916
+      "sha256": "767205531f6ae103f41adddd2e1f803e4c38eb447c92e6e70632fe7e3cbef64a",
+      "len": 18021
     },
     "fragment/device/authored/capture/dark": {
-      "sha256": "9b5feab21889944dfaa375cd539434549b4dc8e370333c76e75c26d64225552c",
-      "len": 16915
+      "sha256": "082fbb550466757afbddb5efbc925732f841a700cf64f6bd03e733ad404e43b9",
+      "len": 18020
     },
     "fragment/device/legacy/plain/light": {
-      "sha256": "46e435ffb390f64381a15992f95096d6b9135496e29fd2603756b33d5e02992d",
-      "len": 9425
+      "sha256": "05498c854852413e34b4cd5a71e10473d79705ae9a8affd2c5c13859dcee3730",
+      "len": 9637
     },
     "fragment/device/legacy/plain/dark": {
-      "sha256": "263144beb7cfe476c5a911fce57d9abd894ded5d31ee40e9847faefdf439a50e",
-      "len": 9424
+      "sha256": "cd47567502a8b314d806f5fc0acfb2a76a7251d677a16631641e56ecd283671a",
+      "len": 9636
     },
     "fragment/device/legacy/capture/light": {
-      "sha256": "5bbb298b727b4c4d72f32f86cf9335e55f58b4176dbaa68b671c707a02913f36",
-      "len": 11143
+      "sha256": "228bc328ea250a67689c4f50ce200573c8cee1fc73f273ead38db132721e0b42",
+      "len": 11355
     },
     "fragment/device/legacy/capture/dark": {
-      "sha256": "bcdbe74766d492c0c4224f154defe5fb611f9df759c67f7bbdb249d359d32123",
-      "len": 11142
+      "sha256": "8464608b004c4c70230f9d45611f53b60882a5b7eaa06aac89233adb7633b711",
+      "len": 11354
     },
     "nobody/web/authored/plain/light": {
-      "sha256": "3552e174b32921c66ae2847324fd7e6c8407e10095f366d7ae272862be608f54",
-      "len": 13193
+      "sha256": "c247ab89b78748c3a437a508858bfa04f455222ebfb03da6171ca58615b141ea",
+      "len": 14298
     },
     "nobody/web/authored/plain/dark": {
-      "sha256": "f1e4472168b330ce4b35071e0c8303959faed7bf25987892425b618a800b040d",
-      "len": 13192
+      "sha256": "d0d45e8eda7d121a1fa3af49e7de750d9d7b297913899b96968472221b006783",
+      "len": 14297
     },
     "nobody/web/authored/capture/light": {
-      "sha256": "9b8be978f56eeace293ef7d21d77894a7683e8ae6f411241627fdf931259a4bd",
-      "len": 14911
+      "sha256": "d879773f9b83d1fbc4667466192cff55ac3ec2add28972fe318c0a57fd9cff96",
+      "len": 16016
     },
     "nobody/web/authored/capture/dark": {
-      "sha256": "5c0bd8b093d6046f3a5f278cbbaeefc3ef2499d6b93af33a8bae663a0c8d0299",
-      "len": 14910
+      "sha256": "05a61294144d2e05977b98049d91fe12ea98f538a456b58f99136fbce5ccde0a",
+      "len": 16015
     },
     "nobody/web/legacy/plain/light": {
-      "sha256": "d894e7dbb862d5946c83dcfe5c518697b42711925d8167a3b1f640aefe5512b6",
-      "len": 7420
+      "sha256": "a72549ddaf43f145d0b47f27930f93faf7f4b7bf5525050bb6098f01963d3e87",
+      "len": 7632
     },
     "nobody/web/legacy/plain/dark": {
-      "sha256": "3db0f982816e19568a439548e38bd0e506244e310996ba0bdb4180b43491fc6e",
-      "len": 7419
+      "sha256": "d047eb4a458286b8bd894b8e0482c7b1c517603808032cd909244b42fedf29ee",
+      "len": 7631
     },
     "nobody/web/legacy/capture/light": {
-      "sha256": "f6021a4f2b8f05b896599669e4b8bb08d43cf06d8adb7c11893df2f46d1b544f",
-      "len": 9138
+      "sha256": "6c9263b628b8f0d25797bb04846d123c03c6bdeac0daea8d2ed55ae84e54f6ed",
+      "len": 9350
     },
     "nobody/web/legacy/capture/dark": {
-      "sha256": "2250c0da4a0df89b4f48ac8f5768506087869c36f0395185b6aaeda13e97a93e",
-      "len": 9137
+      "sha256": "1dcb1b1d278e47155c5585990f94c549fabc15029b5a6714342dfa6f558ac165",
+      "len": 9349
     },
     "nobody/desktop/authored/plain/light": {
-      "sha256": "f8719d3dd2915074410d69f9afd1afb8d9b81d9a2d94762b80ceb10a9e3b857b",
-      "len": 11155
+      "sha256": "fce4972736fdc66357b218f68af24c3c9c85ced53fd26615799e31be309eb8df",
+      "len": 12260
     },
     "nobody/desktop/authored/plain/dark": {
-      "sha256": "172d4db596088f85bd00b8e322c7d780245f817c1e5d2f2903b7dbdbd54f23b8",
-      "len": 11154
+      "sha256": "e948f2e8e31e8e79997c64dd1e9e341ea30990ac73aaa2c9ffa52ff0aa6ab7a7",
+      "len": 12259
     },
     "nobody/desktop/authored/capture/light": {
-      "sha256": "439fa52327cd1e812f3fe93faae863219e5f1358fc84acbaadd139963ab38f4d",
-      "len": 12873
+      "sha256": "3c5137370ff7e10bb92dff3829248afebf127784722e7eeebfced8d296eb9460",
+      "len": 13978
     },
     "nobody/desktop/authored/capture/dark": {
-      "sha256": "d8d28429c3e423125165c0f3489c5fc6c8456bf4c92d8ccf5eb1ce490e8fadb8",
-      "len": 12872
+      "sha256": "b1859021255d29958b9ef5fbe088dad896568d2353c7751984db9a855a2bcb1f",
+      "len": 13977
     },
     "nobody/desktop/legacy/plain/light": {
-      "sha256": "bc80a70babae2974955162bcbce6033948dd37cfab886a91d478b99d126478fd",
-      "len": 5382
+      "sha256": "8c2f0a5578b48ae70b7888944706f31acb638880d3c88b1c296f58e321be0386",
+      "len": 5594
     },
     "nobody/desktop/legacy/plain/dark": {
-      "sha256": "b93fdc003af2024899bab2ac7a20aa18d54bfe765a27e83ed374e8e5b3975139",
-      "len": 5381
+      "sha256": "2e822be4fedf5b215f1fae6c272ce90edcd8d530f5a24a1211bfeac078bd8019",
+      "len": 5593
     },
     "nobody/desktop/legacy/capture/light": {
-      "sha256": "1c86c665f1b19a61faaee79e8325c14cf74d4a9e4bc8b831ca765808ecd0e2d4",
-      "len": 7100
+      "sha256": "be325a8f8840671a98bfa18f7346941fb9aa8597d55ba8ddc1cc40f6b09d317e",
+      "len": 7312
     },
     "nobody/desktop/legacy/capture/dark": {
-      "sha256": "7b4dbef7cef7559b0775daf03d04f03e164ad087e08104a1cee2f6a4d0439ca6",
-      "len": 7099
+      "sha256": "18ced0dc3685b5df1eb6d897ee489a679de112bcdf9c5bdc921fc797459e58e5",
+      "len": 7311
     },
     "nobody/device/authored/plain/light": {
-      "sha256": "21ec1b143b3f7f344b462cc2156af40d7df1c367e03a6011bbee80a1b0a48231",
-      "len": 13830
+      "sha256": "78e89073f463a1bda1ab41a9def1debb8dcfaf84aa2e0851715447d3dcd2ad0e",
+      "len": 14935
     },
     "nobody/device/authored/plain/dark": {
-      "sha256": "584494be300f1f3d42be9ccd73c7817445f3fbdb9614cb16ad436cbcf9eff5eb",
-      "len": 13829
+      "sha256": "d64fcbd6bd154948f0f25f353031b66d4475b09d9cae3e4a20c973e77b61eb5f",
+      "len": 14934
     },
     "nobody/device/authored/capture/light": {
-      "sha256": "22c72d57ca2e089cca46b182673fbfb3d8c1090ed48af88f0d48d3ac7a04f953",
-      "len": 15548
+      "sha256": "0f35215097c49875f57d418cd0461062a8af068a8b904c03d061b2a847373cef",
+      "len": 16653
     },
     "nobody/device/authored/capture/dark": {
-      "sha256": "90802fe307c59e3b89ca9664e5e5ea5c4f841602804201e36719f8fc576e4c37",
-      "len": 15547
+      "sha256": "20a6f04ce9eed123d86810330ee2383f82860b48e3e026a30a3a282c0d1ad9b4",
+      "len": 16652
     },
     "nobody/device/legacy/plain/light": {
-      "sha256": "9acc7543716aa7d23317449c4f9d4b9f98be9f0c7779f3cf9a6d217c3db69d34",
-      "len": 8057
+      "sha256": "e8bf0b899bbda9c947642f72ed7b5e3cb3592363d991f85ef67c4862bff5747b",
+      "len": 8269
     },
     "nobody/device/legacy/plain/dark": {
-      "sha256": "25cf34583af2899c91ae8bc77b75dcde31442e8cc3a98b2330e1645fa8712dba",
-      "len": 8056
+      "sha256": "6be95c4cf923c5628bc31cbecff490749326e68a049221153c52cbf524a63dec",
+      "len": 8268
     },
     "nobody/device/legacy/capture/light": {
-      "sha256": "a20f708ef44c38ca416f1cfd32ea32f3e228428dfe2728c8a4842f2f9693ea5f",
-      "len": 9775
+      "sha256": "76e5458737ce685de9227d2d856847dd744e231ef42725b1242a492345b74a7a",
+      "len": 9987
     },
     "nobody/device/legacy/capture/dark": {
-      "sha256": "fe9416157c0c2618f61fc7900a28f5084cf0b6fae84833462827029baf19a2c5",
-      "len": 9774
+      "sha256": "2a303ed628f296a973fd2873f8c9610438f2739cf4c01ebc5ebeec99e9de3356",
+      "len": 9986
     },
     "research/web/authored/plain/light": {
-      "sha256": "8c2f66079167076e19ba2a4275a8ebfa5ba0e74f783acb4969fe43bea482ba53",
-      "len": 1017578
+      "sha256": "1cebd65d9aaefd9cdaa144e36098cbff8689d956a2a71a9faa2934cff324e4e6",
+      "len": 1018683
     },
     "research/web/authored/plain/dark": {
-      "sha256": "d7e9c56ab09747490caa387cdc0ab3c33b6865a1a07efb7793774abc39467bc7",
-      "len": 1017577
+      "sha256": "ae3af348128319eb43979f198bf948ee1f3eefd2e583a27e8069a4e67fe87a02",
+      "len": 1018682
     },
     "research/web/authored/capture/light": {
-      "sha256": "f5f9c5e9a6aaf61e64b28163f1fbad93e56916db00e19bc14b299219ef888997",
-      "len": 1019296
+      "sha256": "ff8e63bc626350ca0cce98ba068c3ea2661682cfc1ec45887da81b5c48940cca",
+      "len": 1020401
     },
     "research/web/authored/capture/dark": {
-      "sha256": "2ccac62ca10785fd40bfdbf146f7e5d8f68b03bf96b6285b9330fe8d131fe8ef",
-      "len": 1019295
+      "sha256": "4f99fc392311a280ed852354e42c9bc9a3475cf738f919426f55f45d6cc7bfe9",
+      "len": 1020400
     },
     "research/web/legacy/plain/light": {
-      "sha256": "558a26358be89d8669f3fcd2eb3c7650aeff8843acd7180ec3660448f70f599c",
-      "len": 1011805
+      "sha256": "2e2b5aa6361cad3b8430c802fa436d1bce13783cdb9ef753bb7a37e8a7af2cd4",
+      "len": 1012017
     },
     "research/web/legacy/plain/dark": {
-      "sha256": "c747e161dbb1c937303c1eda9c922c5a4b8c1807390c24b00a3e48ed7e29fa03",
-      "len": 1011804
+      "sha256": "f8c42378c67a35523e410b4613539ba2395541f8c147dec14ebaa3a2310cb68c",
+      "len": 1012016
     },
     "research/web/legacy/capture/light": {
-      "sha256": "0e7a3bea65b86a23f161ac7d4e531cd975c8cb616847e51b2f11a1d687bdab38",
-      "len": 1013523
+      "sha256": "2ffdc643ca19641659072db6ff910dc613e80ee060162d861cecd3610c9658ab",
+      "len": 1013735
     },
     "research/web/legacy/capture/dark": {
-      "sha256": "cb1c8bde721ac252feea8b1175c62deceadcd7127672a14fac9429863cf5e462",
-      "len": 1013522
+      "sha256": "91338124be8a5043437656ef52a2e46c1da5397aa259b404b8c2f267c82e4950",
+      "len": 1013734
     },
     "research/desktop/authored/plain/light": {
-      "sha256": "a7f547e7da22a1b51f871bfc80a476d39febaae17e1881f3034d7d78cf91626d",
-      "len": 1015480
+      "sha256": "2d845db85ac21053ec50d67867fe79f46607722df30ebbedc3678cd466d519a1",
+      "len": 1016585
     },
     "research/desktop/authored/plain/dark": {
-      "sha256": "5f0fe10671fc72a13baffb4bf1ee74a3f4a9d53ac0ad8fcd96b5d2672b2363cf",
-      "len": 1015479
+      "sha256": "c0debbed0e38cf0152739d89897175426ac80e67a14c72f9f0531fd4f274f431",
+      "len": 1016584
     },
     "research/desktop/authored/capture/light": {
-      "sha256": "0f2e567969570599daca449d887e3b8cf9937059d1e8f8250ca7cf56f06f4811",
-      "len": 1017198
+      "sha256": "afe9cc6ed6f95f4bc86ef9d0723008d5344bd66fd0b7c82c9f8a587bd94c8ce0",
+      "len": 1018303
     },
     "research/desktop/authored/capture/dark": {
-      "sha256": "4483fef621cda9dc397a6c162a82020a44f2c73db92027026a2ee73ff33111e5",
-      "len": 1017197
+      "sha256": "862deec7cc9e8d9f74fb66e75b1a9beeab1f412d39c81ce24ce8841133ac651e",
+      "len": 1018302
     },
     "research/desktop/legacy/plain/light": {
-      "sha256": "d3ac42ad22e5711cc8b02c238cd3d59b3bcd5dcd0539e0abf870ed8a5cffa1a5",
-      "len": 1009707
+      "sha256": "9ef04bf04a1ce3fd6e59fe01e5be1504f18f83538a7dd07b4b95104db4ee4e4a",
+      "len": 1009919
     },
     "research/desktop/legacy/plain/dark": {
-      "sha256": "5ca9b088e8208857a1b5cf40496ac3fd37041a8e36df016631b46657b93f679e",
-      "len": 1009706
+      "sha256": "c0134d4c1f61a35a1c6140f5b3818eb9015a4e53a199dd24558d55b5a12ad235",
+      "len": 1009918
     },
     "research/desktop/legacy/capture/light": {
-      "sha256": "a3641381203a1752138cb6a5f68d84713e0d925751760347cf1ab0d6719302ef",
-      "len": 1011425
+      "sha256": "88ea5bb6216595b471490d8480a5452df598786358561e5a95f6616131a36610",
+      "len": 1011637
     },
     "research/desktop/legacy/capture/dark": {
-      "sha256": "f4f8edbc8c4137442e52d81b99e9ef22219265004ace2988306ffdbf31da4e3d",
-      "len": 1011424
+      "sha256": "36dd526e8588d1a99b05e770ddbb107a1026e5b5566de50ffcfed246e7402d81",
+      "len": 1011636
     },
     "research/device/authored/plain/light": {
-      "sha256": "8d31ef8311d070b781c213626959892bd482f2ea3d55663ab87252d6c8edf95a",
-      "len": 1018155
+      "sha256": "d692bd55c74646840f1f7975b0793da36907676d15e4f7d0f792c3c25fa4827f",
+      "len": 1019260
     },
     "research/device/authored/plain/dark": {
-      "sha256": "ecae475acab4d43a58cf4a7b3e82d028fceee3a23d597cc65fbe7956d0ef1ecd",
-      "len": 1018154
+      "sha256": "67fc2198fdd52c02bb84447cadc91fbf736bcae188a1fd2f7439212704bc2121",
+      "len": 1019259
     },
     "research/device/authored/capture/light": {
-      "sha256": "91e21eee2324e48d04ce26805341b16cc09d47c43f22598dc016bd4711ae408a",
-      "len": 1019873
+      "sha256": "615c32da915e2caa79427b9d0293c9660fac30c0819311d96aea2eed62dda320",
+      "len": 1020978
     },
     "research/device/authored/capture/dark": {
-      "sha256": "fc9ac46fedb67e392768b5d93ba906aab6004e558dd0b855eeb16c527dd4c28a",
-      "len": 1019872
+      "sha256": "5644cd80379c91e51a4b805bf2842732d5b81f3ab4f33e0e31a9ff918e5a619d",
+      "len": 1020977
     },
     "research/device/legacy/plain/light": {
-      "sha256": "47e5a97950735ef6007db5268365de3c38e384468e3f501eba617d653074f312",
-      "len": 1012382
+      "sha256": "a486e64a15fd10447d5a41a2a77561d3a796edd54f60770ca3670a2c45bea242",
+      "len": 1012594
     },
     "research/device/legacy/plain/dark": {
-      "sha256": "ee0ba5c2cf37d39ac75cdf9cd2d25768f56661436938e12852028a053b09f248",
-      "len": 1012381
+      "sha256": "d615555438abaf7feb1c75188630ea420753f7b5822b1f3d14d1c85c41bd6154",
+      "len": 1012593
     },
     "research/device/legacy/capture/light": {
-      "sha256": "88d7d0475b5d728510835eca0d3b68f607182294bcb7a5dee9411e78b8256afe",
-      "len": 1014100
+      "sha256": "fc789520d319e12a3cc36937a8c5c7dc0abdb3f5ca19be52d67dd480282eb5a7",
+      "len": 1014312
     },
     "research/device/legacy/capture/dark": {
-      "sha256": "7df028b00e3553a8a7edf42383ec28123b9583ddf92ff9e26fdd49275fb2d87c",
-      "len": 1014099
+      "sha256": "6418c07bbeea74f709be876c4bc682e990ac37d155106c27f3f58dbf675da429",
+      "len": 1014311
     }
   }
 }
