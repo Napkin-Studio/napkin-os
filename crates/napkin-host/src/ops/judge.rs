@@ -460,16 +460,23 @@ pub fn brief_of(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Option<Brief
     let mut found: Option<Document> = None;
     for id in store.documents() {
         let Ok(bytes) = store.read(&id) else { continue };
-        let Ok(d) = Document::from_bytes(id, bytes) else {
+        // The manifest says whether it is this job's brief. Only a brief of the job is opened as a document
+        // (which hashes the archive and checks its app): a tenant of hundreds of documents is otherwise hashed
+        // whole on every read of a score card, and the card is read while its document is held.
+        let Ok(clan) = clan_sdk::ClanFile::from_bytes(bytes) else {
             continue;
         };
-        if super::gate::applies(&d) && d.clan().manifest().job.as_deref() == Some(job.as_str()) {
-            let better = found.as_ref().is_none_or(|f| {
-                super::versions::approved_count(&d) >= super::versions::approved_count(f)
-            });
-            if better {
-                found = Some(d);
-            }
+        if !super::gate::applies_to(&clan) || clan.manifest().job.as_deref() != Some(job.as_str()) {
+            continue;
+        }
+        let Ok(d) = Document::from_bytes(id, clan.raw_bytes().to_vec()) else {
+            continue;
+        };
+        let better = found.as_ref().is_none_or(|f| {
+            super::versions::approved_count(&d) >= super::versions::approved_count(f)
+        });
+        if better {
+            found = Some(d);
         }
     }
     let b = found?;
