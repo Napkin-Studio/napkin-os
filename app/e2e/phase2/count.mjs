@@ -52,7 +52,7 @@ export function count(read, registry = PHASE2) {
   // A record with live tests shows its pages to the suite's axe, 44 px and em dash checks (tests 72 and 73).
   for (const slug of new Set([...live.values()])) {
     const text = read(`j001-p2-${slug}.pages.ts`)
-    if (text === null || !/\bname: '/.test(text)) problems.push(`${slug} has live tests but exports no page (j001-p2-${slug}.pages.ts)`)
+    if (text === null || !/\bname: ['"`]/.test(text)) problems.push(`${slug} has live tests but exports no page (j001-p2-${slug}.pages.ts)`)
   }
   return { problems, fixme, live, total: registry.length }
 }

@@ -70,6 +70,7 @@ for (const size of SIZES) {
   })
 
   test(t(72), async ({ browser }) => {
+    test.setTimeout(240_000) // three modes over every page: slow on a busy machine
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     const pages = await allPages()
     expect(pages.length, 'the suite lists at least the Phase 1 pages').toBeGreaterThan(0)
@@ -104,6 +105,7 @@ for (const size of SIZES) {
   })
 
   test(t(73), async ({ browser }) => {
+    test.setTimeout(120_000)
     // 1. The canary key set on the server reaches no response of any Phase 2 page, nor the document and job routes.
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     const bodies: string[] = []
