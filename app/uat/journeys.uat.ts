@@ -232,3 +232,16 @@ test('ask about a fact, click away, come back: it kept going and the answer is t
   await app.locator(`button.pv-row[data-pv="${ref}"]`).first().click()
   await expect(app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 120_000 })
 })
+
+test('tidy: the round archives its own client (it can be restored)', async ({ page }) => {
+  // Round 4: nine rounds of 'UAT …' clients filled the desk past its first page. Archiving is
+  // reversible (POST …/clients/{id}/restore); only this round's client is touched.
+  const tenant = await signIn(page, ACCOUNT)
+  const r = await page.request.get(`/api/t/${tenant}/clients`)
+  expect(r.status()).toBe(200)
+  const body = await r.json() as { clients?: { id: string; name: string }[] } | { id: string; name: string }[]
+  const list = Array.isArray(body) ? body : body.clients ?? []
+  const mine = list.filter(c => c.name === client)
+  for (const c of mine) expect((await page.request.post(`/api/t/${tenant}/clients/${c.id}/archive`)).status()).toBe(200)
+  measure('tidy', 0, undefined, { archived: mine.length })
+})
