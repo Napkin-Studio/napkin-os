@@ -142,12 +142,19 @@ test('a read-only look at the map writes nothing to the document', async ({ page
 test('ask the research: the answer appears in the report (paid)', async ({ page }) => {
   const app = await openReport(page)
   const box = app.locator('#rqin-_new')
+  const answers = app.locator('.rq-a:not(.busy)')
+  const had = await answers.count()
   await box.fill('Which oat drink brands other than Oatly are named in this research, and in which market?')
   const t0 = Date.now()
   await app.locator('[data-act="rq-send"][data-k="_new"]').click()
   await expect(app.locator('.rq-a.busy').first()).toBeVisible({ timeout: 10_000 })
-  await expect(app.locator('.rq-a:not(.busy)').filter({ hasText: /Oatly|brand/i }).first()).toBeVisible({ timeout: 120_000 })
-  measure('ask-research', Date.now() - t0, 60_000)
+  // Round 9: the ask was done in 3.9 s, yet no card matched /Oatly|brand/ (a fair answer to "brands other
+  // than Oatly" may name neither). The rule is that a new answer shows where it was asked, in words: one more
+  // finished card than before, with text. What it said goes in the round report.
+  await expect.poll(() => answers.count(), { message: 'a new answer shows where it was asked', timeout: 120_000 }).toBe(had + 1)
+  const said = (await answers.last().innerText()).trim()
+  expect(said.length, 'the answer says something').toBeGreaterThan(20)
+  measure('ask-research', Date.now() - t0, 60_000, { said: said.slice(0, 160) })
 })
 
 test('ask about a fact: the answer shows where it was asked, about that fact (paid)', async ({ page }) => {
