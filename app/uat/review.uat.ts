@@ -79,6 +79,14 @@ async function needsCount(app: FrameLocator) {
   return Number((/·\s*(\d+)/.exec(await h.innerText()) || [])[1] ?? NaN)
 }
 
+/** What is left to settle: one per Needs you row, except the open questions' row, which counts each question
+ *  ("Open questions · 8 open questions" is eight to answer; round 10: answering one leaves the row). */
+async function needsLeft(app: FrameLocator) {
+  if (!await needsCount(app)) return 0
+  const rows = await app.locator('#lockList:not([hidden]) .lkitem').allInnerTexts()
+  return rows.reduce((n, t) => n + (Number((/(\d+)\s+open questions/i.exec(t) || [])[1]) || 1), 0)
+}
+
 /** A part of the sheet, by the heading it carries (Single-minded proposition, Budget & scope). */
 const partRow = (app: FrameLocator, head: string) =>
   app.locator('#fields .row').filter({ has: app.locator('.lab > span:first-child', { hasText: new RegExp(`^${head.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&')}$`) }) }).first()
@@ -146,15 +154,15 @@ test('review: Needs you is settled part by part, and only then can the brief loc
   const done: string[] = []
   let n = await needsCount(app)
   measure('needs-you', 0, undefined, { count: n })
-  for (let round = 0; n > 0 && round < 25; round++) {
+  for (let round = 0; n > 0 && round < 40; round++) {
     expect.soft(await lock.isDisabled(), `Lock the brief stays off while Needs you holds ${n}`).toBe(true)
     if (await lock.isDisabled()) {
       await expect.soft(app.locator('#lockWhy'), 'the lock says why it waits').toHaveText(/Settle \d+ first|has to be settled first/)
     }
     const t0 = Date.now()
+    const before = await needsLeft(app) || n
     done.push(await settleFirst(app, page))
-    const before = n
-    await expect.poll(() => needsCount(app), { timeout: 60_000, message: `settling "${done[done.length - 1]}" takes one off Needs you (was ${before})` }).toBeLessThan(before)
+    await expect.poll(() => needsLeft(app), { timeout: 60_000, message: `settling "${done[done.length - 1]}" takes one off what Needs you holds (was ${before})` }).toBeLessThan(before)
     n = await needsCount(app)
     measure('settle-needs-item', Date.now() - t0, 15_000, { item: done[done.length - 1], left: n })
   }
