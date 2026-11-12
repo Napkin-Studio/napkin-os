@@ -1578,6 +1578,9 @@ fn a_keyed_entry_is_named_by_what_it_says_not_its_id() {
     let data = "asks:
   ask_01M77D6TJWPA7S001: { topic: Oatly ASAI ruling timing, question: When was the ruling? }
   ask_02: { status: answered }
+intake:
+  messages:
+    msg_01M77J3VPZQL64002: { role: user, text: Win back lapsed buyers in Dublin and Cork this spring }
 ";
     let chain = "decisions:
 - id: d_1
@@ -1586,7 +1589,7 @@ fn a_keyed_entry_is_named_by_what_it_says_not_its_id() {
   actor: process:middleware
   handler: ask_research@1
   action: ask_research
-  targets: ['7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_01M77D6TJWPA7S001]', '7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_02]']
+  targets: ['7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_01M77D6TJWPA7S001]', '7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_02]', '7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#intake.messages[msg_01M77J3VPZQL64002]']
   rationale: Answered.
   timestamp: 2026-11-12T08:00:00Z
 ";
@@ -1600,5 +1603,14 @@ fn a_keyed_entry_is_named_by_what_it_says_not_its_id() {
         .iter()
         .map(|t| t.label.as_str())
         .collect();
-    assert_eq!(labels, ["Asks · Oatly ASAI ruling timing", "Asks · ask_02"]);
+    assert_eq!(
+        labels[..2],
+        ["Asks · Oatly ASAI ruling timing", "Asks · ask_02"]
+    );
+    // A message is named by its words (round 4: "Intake › Messages · msg_01M77J3VPZQL64002").
+    assert!(
+        labels[2].ends_with("Messages · Win back lapsed buyers in Dublin and Cork this spring"),
+        "{}",
+        labels[2]
+    );
 }
