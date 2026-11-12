@@ -788,6 +788,7 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
                     e["taken"] = json!(a.taken);
                     e["kit_version"] = json!(a.version);
                     e["linked_at"] = json!(a.at);
+                    e["holds"] = holds(doc, &p);
                     e
                 }
                 (false, None) => json!({
@@ -810,6 +811,20 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
         })
         .collect();
     json!({ "document_id": here, "carried": carried, "upstream": upstream })
+}
+
+/// How many of a linked document's facts and findings `doc` holds now: what
+/// the link brought in (merged by id), for a view to say so
+/// (features/brief-link-redraft.clan).
+fn holds(doc: &Document, p: &Document) -> Value {
+    let count = |m: members::Member| {
+        let ours = by_id(doc.clan(), m);
+        by_id(p.clan(), m)
+            .keys()
+            .filter(|id| ours.contains_key(*id))
+            .count()
+    };
+    json!({ "facts": count(FACTS), "findings": count(FINDINGS) })
 }
 
 /// The direct parent `p` now, against what `doc` carried from it.

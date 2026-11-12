@@ -557,6 +557,8 @@ export interface UpstreamEntry {
   how?: 'made_from' | 'linked' | 'carried'
   /** A linked document: how many times this one took it (1 on link, one more on each update). */
   taken?: number | null
+  /** A linked document in the store: how many of its facts and findings this one holds now (what the link brought in). */
+  holds?: { facts: number; findings: number }
   changed?: { data: boolean; facts: boolean; findings: boolean; sources: boolean }
   decisions_since?: number | null
   pins?: { id: string; change: 'added' | 'replaced' | 'changed'; label: string; replaced_by?: string }[]
