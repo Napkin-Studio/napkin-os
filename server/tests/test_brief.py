@@ -666,11 +666,14 @@ def test_errors_and_concurrency(tmp_path):
 def test_the_pipeline_declaration_resolves():
     from napkin import registry
     path = REPO / "app/templates/brief-maker/app/pipeline.yaml"
+    # answer_question: the intake's answers (UAT round 4, features/brief-intake-answers.clan).
     assert registry.parse_pipeline(path.read_text()) == {"draft_brief": "draft_brief@1",
+                                                         "answer_question": "answer_question@1",
                                                          "regenerate_field": "regenerate_field@1",
                                                          "fix_parts": "fix_parts@1"}
     resolved = registry.resolve_at_startup([str(path)])
-    assert set(resolved.values()) == {"draft_brief@1.0", "regenerate_field@1.0", "fix_parts@1.0"}
+    assert set(resolved.values()) == {"draft_brief@1.0", "answer_question@1.0", "regenerate_field@1.0",
+                                      "fix_parts@1.0"}
 
 
 def test_what_the_client_leaves_empty_is_filled_from_the_research_or_assumed(tmp_path):
