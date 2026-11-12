@@ -79,6 +79,8 @@ export async function openTool(page: Page, client: string, tool: Tool) {
 export async function appFrame(page: Page, t0: number, label: string, ready: string) {
   const app = page.frameLocator('iframe').first()
   await expect(app.locator(ready).first()).toBeVisible({ timeout: 60_000 })
+  // Visible is not ready: a page still downloading shows its controls before its script wires them (round 5).
+  await expect.poll(() => app.locator('html').evaluate(() => document.readyState), { timeout: 60_000 }).toBe('complete')
   measure(label, Date.now() - t0, BUDGET.docOpen)
   return app
 }

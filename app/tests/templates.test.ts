@@ -2761,6 +2761,15 @@ test('research: the report body is the mock’s, and every section of the record
   assert.match(fn(RT, 'doAsk'), /rqlens-/)
 })
 
+// UAT round 5: a new brief's page took 3.4 s to download; Write the brief showed before its click was wired, and a
+// press then did nothing. It is drawn disabled and turned on by renderIntake, after the listener, at start-up.
+test('brief: Write the brief is not offered before its click is wired', () => {
+  assert.match(BM, /<button type="button" class="go" id="genBtn" disabled>Write the brief<\/button>/)
+  assert.match(fn(BM, 'renderIntake'), /\$\('genBtn'\)\.disabled=off;/)
+  const wired = BM.indexOf("$('genBtn').addEventListener('click'"), boot = BM.lastIndexOf('\n  render();')
+  assert.ok(wired > 0 && boot > wired, 'the first render, which enables it, runs after the click is wired')
+})
+
 // Owner, 2026-11-11 ("follows old UI"): the Ask box is one composed field in the new UI's language, with About as a
 // chip that opens the shell's menu of plain section names, never a native select, and Ask as the shell's button.
 test('research: the Ask box is one field with an About chip, no native select', () => {
