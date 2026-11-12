@@ -301,12 +301,21 @@ impl Session {
     /// Read `id` as it stands now and make it the open snapshot, shown with
     /// the installed app's view when the library has one of the same major
     /// ([`crate::view`]).
+    ///
+    /// The view lock is held from the read until the snapshot is in place, as
+    /// [`Self::perform`] holds it across a write. Read outside it, a reopen
+    /// racing a write could read the bytes from before the write and put them
+    /// back over the snapshot the write had moved on: the open document went
+    /// back a version, and the reply to the write carried the old data (UAT
+    /// round 12: the desk re-read a Research document while its report was
+    /// being written, and the page was handed the document without it).
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
+        let mut state = self.view.lock().unwrap();
         // One read: the snapshot holds the bytes it was built from (#10).
         let doc = Document::load(self.store.parts(), id)?;
         let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
         let result = read::describe(&doc);
-        self.view.lock().unwrap().open = Some(doc);
+        state.open = Some(doc);
         Ok(result)
     }
 
@@ -897,5 +906,121 @@ mod tests {
         let err = session.chain_json().unwrap_err();
         assert_eq!(err.status, 409);
         assert_eq!(err.to_string(), "no file open");
+    }
+
+    /// A store that, when armed, holds its next read open after taking the
+    /// bytes: it says the read is done and waits (a short while at most) for
+    /// a write to land, so a test can put a write between a reopen's read and
+    /// its snapshot.
+    struct HeldRead {
+        inner: FsStore,
+        armed: std::sync::atomic::AtomicBool,
+        read_done: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+        write_done: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    }
+
+    impl crate::store::PartStore for HeldRead {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            let bytes = self.inner.read(id)?;
+            if self.armed.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                if let Some(tx) = self.read_done.lock().unwrap().take() {
+                    tx.send(()).unwrap();
+                }
+                if let Some(rx) = self.write_done.lock().unwrap().take() {
+                    let _ = rx.recv_timeout(std::time::Duration::from_millis(300));
+                }
+            }
+            Ok(bytes)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.inner.exists(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.inner.apply(change)
+        }
+    }
+
+    impl crate::store::Library for HeldRead {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.inner.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.inner.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            self.inner.documents()
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.inner.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.inner.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.inner.fork_branch(parent, agent)
+        }
+    }
+
+    // UAT round 12: the desk reopened a Research document (GET /d/<path>)
+    // while the run's last reply was writing the report into it. The reopen
+    // read the bytes from before the write and put them back over the
+    // snapshot the write had moved on, so the reply carried the document
+    // without its report and the page never showed it.
+    #[test]
+    fn a_reopen_racing_a_write_never_puts_the_old_document_back() {
+        use crate::store::PartStore;
+        let dir = tempfile::tempdir().unwrap();
+        let id = DocId::from(dir.path().join("test.clan"));
+        let bytes = clan_sdk::create(clan_sdk::CreateOptions {
+            title: "Race Test".into(),
+            brief: "test brief".into(),
+            document_type: None,
+            no_render: false,
+            schema: None,
+        })
+        .unwrap();
+        std::fs::write(id.as_str(), bytes).unwrap();
+        let (read_tx, read_rx) = std::sync::mpsc::channel();
+        let (write_tx, write_rx) = std::sync::mpsc::channel();
+        let store = Arc::new(HeldRead {
+            inner: FsStore::new(dir.path().to_path_buf()),
+            armed: std::sync::atomic::AtomicBool::new(false),
+            read_done: Mutex::new(Some(read_tx)),
+            write_done: Mutex::new(Some(write_rx)),
+        });
+        let session = Arc::new(Session::new(store.clone()));
+        session.open(id.clone()).unwrap();
+
+        // The reopen reads, then waits for the write.
+        store.armed.store(true, std::sync::atomic::Ordering::SeqCst);
+        let reopen = {
+            let (session, id) = (session.clone(), id.clone());
+            std::thread::spawn(move || session.open(id).unwrap())
+        };
+        read_rx.recv().unwrap();
+        // The write, while the reopen holds the bytes from before it.
+        let write = {
+            let session = session.clone();
+            std::thread::spawn(move || {
+                session.set_context("the report is in", false).unwrap();
+                let _ = write_tx.send(());
+            })
+        };
+        reopen.join().unwrap();
+        write.join().unwrap();
+
+        let on_disk = store.version(&id).unwrap();
+        assert_eq!(
+            session.current_version().unwrap(),
+            on_disk,
+            "the open snapshot is the document as the store holds it"
+        );
+        assert!(
+            session
+                .entry_string("agent/context.md")
+                .unwrap()
+                .contains("the report is in"),
+            "the write is in what the session reads back"
+        );
     }
 }
