@@ -2785,8 +2785,8 @@ test('brief: a file that cannot be added is named, and Write waits for the uploa
     : { status: 200, json: () => Promise.resolve({ internal_path: 'human/assets/x' }) })
   const env = { $: el, UPLOADING: 0, noMiddleware: () => false, data: () => ({ reference_assets: assets }), clanScheme: 'clan://localhost',
     patch: (_k: string, v: unknown[]) => { assets.splice(0, assets.length, ...v) }, fileType: () => 'doc', mediaTypeOf: () => 'application/pdf',
-    sha256Hex: () => Promise.resolve('0'.repeat(64)), fetch }
-  const f = lift<{ uploadList(l: unknown[], s: unknown, d?: () => void): void }>(BM, ['genOff', 'upWhy', 'uploadList'], env)
+    sha256Hex: () => Promise.resolve('0'.repeat(64)), fetch, READ_EXT: /^(pdf|zip)$/ }
+  const f = lift<{ uploadList(l: unknown[], s: unknown, d?: () => void): void }>(BM, ['genOff', 'upWhy', 'unreadNote', 'uploadList'], env)
   const file = (name: string, size: number) => ({ name, size, type: '', arrayBuffer: () => Promise.resolve(new ArrayBuffer(size)) })
   let finished = false
   f.uploadList([file('notes.pdf', 10), file('bad.zip', 10), file('empty.pdf', 0)], el('intakeStatus'), () => { finished = true })
@@ -2799,6 +2799,29 @@ test('brief: a file that cannot be added is named, and Write waits for the uploa
   assert.equal(assets.length, 1, 'the good file is on the desk')
   assert.match(el('intakeStatus').textContent, /^Could not add bad\.zip \(not a file the studio keeps\), empty\.pdf \(it is empty\)\.$/)
   assert.ok(el('intakeStatus').cls.has('err'), 'said as an error')
+})
+
+// Owner, 2026-11-12 (UAT round 7): a file the agents can't read is kept, and the person is told when they add it.
+test('brief: a file the agents cannot read is added, and the person is told so', async () => {
+  const els: Record<string, { textContent: string; disabled: boolean; cls: Set<string>; classList: unknown }> = {}
+  const el = (id: string) => els[id] ||= (() => { const cls = new Set<string>(); return { textContent: '', disabled: false, cls,
+    classList: { remove: (c: string) => cls.delete(c), toggle: (c: string, on: boolean) => (on ? cls.add(c) : cls.delete(c)) } } })()
+  const assets: unknown[] = []
+  const env = { $: el, UPLOADING: 0, noMiddleware: () => false, data: () => ({ reference_assets: assets }), clanScheme: 'clan://localhost',
+    patch: (_k: string, v: unknown[]) => { assets.splice(0, assets.length, ...v) }, fileType: () => 'doc', mediaTypeOf: () => '',
+    sha256Hex: () => Promise.resolve('0'.repeat(64)),
+    fetch: () => Promise.resolve({ status: 200, json: () => Promise.resolve({ internal_path: 'human/assets/x' }) }),
+    READ_EXT: /^(txt|text|md|markdown|csv|tsv|json|ya?ml|log|pdf|docx|pptx|png|jpe?g|gif|webp)$/ }
+  const f = lift<{ uploadList(l: unknown[], s: unknown, d?: () => void): void; unreadNote(n: string[]): string }>(BM, ['genOff', 'upWhy', 'unreadNote', 'uploadList'], env)
+  const file = (name: string) => ({ name, size: 10, type: '', arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)) })
+  let finished = false
+  f.uploadList([file('kestrel-archive.zip'), file('kestrel-shelf.png'), file('notes.txt')], el('intakeStatus'), () => { finished = true })
+  for (let i = 0; i < 50 && !finished; i++) await new Promise(r => setTimeout(r, 0))
+  assert.equal(assets.length, 3, 'all three are kept with the brief')
+  assert.equal(el('intakeStatus').textContent, 'kestrel-archive.zip is added, but the agents can’t read .zip files. They read PDF, Word, PowerPoint, pictures and text.')
+  assert.ok(!el('intakeStatus').cls.has('err'), 'a note, not an error')
+  assert.equal(f.unreadNote(['a.zip', 'b.key']), 'a.zip, b.key are added, but the agents can’t read .zip or .key. They read PDF, Word, PowerPoint, pictures and text.')
+  assert.match(BM, /var READ_EXT=\/\^\(txt\|text\|md\|markdown\|csv\|tsv\|json\|ya\?ml\|log\|pdf\|docx\|pptx\|png\|jpe\?g\|gif\|webp\)\$\/;/, 'the same list as the test')
 })
 
 // UAT round 5: the fact panel is drawn again on every document change, and the question being typed was lost, so
