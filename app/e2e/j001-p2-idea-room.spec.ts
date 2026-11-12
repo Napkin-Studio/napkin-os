@@ -127,7 +127,8 @@ async function shot(page: Page, name: string, size: Size, at?: string) {
   if (await page.locator('iframe').count()) await frameOf(page).locator('body').evaluate((_b, sel) => { const el = sel ? document.querySelector(sel) : null; window.scrollTo(0, el ? el.getBoundingClientRect().top + window.scrollY - 12 : 0) }, at ?? '')
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.waitForTimeout(600)
-  await page.screenshot({ path: join(SHOTS, `${name}-${size.tag}.png`), fullPage: size.width < 1000 })
+  // The roster agency wears a real agency's name: it is masked, never shown.
+  await page.screenshot({ path: join(SHOTS, `${name}-${size.tag}.png`), fullPage: size.width < 1000, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
 }
 
 for (const size of SIZES) {
