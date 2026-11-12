@@ -599,7 +599,7 @@
   .redge::after{content:"";position:absolute;left:3px;top:0;bottom:0;width:2px;border-radius:1px;background:var(--brief-accent)}
   .row:hover > .grip,.row.sel > .grip,.row:hover > .redge,.row.sel > .redge,.grip:focus-visible,.redge:focus-visible{opacity:1}
   .row.resizing{box-shadow:inset 0 0 0 1.5px var(--brief-accent)}
-  /* Confidential (owner, 9 Nov): a hatch and a tag; the client copy leaves the part out. */
+  /* Confidential (owner, 9 Nov; meaning 13 Nov): a hatch and a tag. Napkin never learns from the part; the client copy shows it. */
   .pgrid > .row.conf{background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--ink) 6%,transparent) 7px 8px)}
   .conftag{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;line-height:16px;padding:0 7px;border-radius:var(--r-pill);border:1px solid currentColor;color:var(--ink2);opacity:.85}
   .sp-acts button.sp-conf[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
@@ -1671,7 +1671,8 @@
   function style(){ return 'basic'; }
   function lockedList(){ var l=get('locked_fields'); return Array.isArray(l)?l:[]; }
   function isLocked(k){ return lockedList().indexOf(k)!==-1; }
-  // Confidential parts (owner, 9 Nov): kept in the agency's copies, left out of the client copy.
+  // Confidential parts (owner, 2026-11-13): Napkin's systems never learn from them (no knowledge layer, RAG,
+  // harvest, eval or training). The agency and the client see them in full, in every copy.
   function confList(){ return arr(get('confidential_fields')).filter(function(k){ return typeof k==='string'; }); }
   function isConf(k){ return confList().indexOf(k)!==-1; }
   var forceIntake=false, handWrite=false, phase='intake';
@@ -2248,7 +2249,7 @@
   }
   function gridCell(c, ctx){
     var v=ctx.get(c.key), has=gridHas(v), mk=exportMarkHtml((ctx.cit.marks||{})[c.key]);
-    var cf=arr(ctx.conf).indexOf(c.key)!==-1;   // a confidential part: hatched and tagged in this, an agency copy
+    var cf=arr(ctx.conf).indexOf(c.key)!==-1;   // a confidential part: hatched and tagged in the agency copy
     var step=gridStep(gridWords(v), gridLimit(c.key)), cls='box'+(c.kind==='hero'?' dark':'')+(step?' fit'+step:'')+(cf?' conf':'');
     var tab='<div class="lab"><b>'+esc(c.num)+'</b>'+esc(c.label)+(cf?'<span class="cf">Confidential</span>':'')+'</div>', body, missing='<p class="todo">Missing: ask the Brief agent to write this part.</p>';
     if(c.kind==='sources'){
@@ -3908,7 +3909,7 @@
       provHtml(f)+
       (locked?' <span class="lockbadge">'+IC.lock+'locked</span>':'')+
       (reo?' <span class="lockbadge">open for the client’s change</span>':'')+
-      (conf?' <span class="conftag" title="Kept in the agency copy, left out of the client copy">Confidential</span>':'')+
+      (conf?' <span class="conftag" title="Napkin never learns from this part. The client copy shows it.">Confidential</span>':'')+
       '</div>'+valHtml+
       regenLine(f)+
       '<div class="notes">'+notesHtml(f)+'</div>'+
@@ -4209,13 +4210,13 @@
 
   // lock toggle
   function toggleLock(f){ setLock(f.key, !isLocked(f.key)); }
-  // Confidential: a person's call on who may read a part. A locked brief changes only a reopened part.
+  // Confidential: a person's call that Napkin never learns from a part (the client still sees it). A locked brief changes only a reopened part.
   function toggleConf(f){
     if(!canWrite(f.key)){ toast('The brief is locked. Reopen a part to change it.'); return; }
     var on=!isConf(f.key), cur=confList(), next=on?cur.concat([f.key]):cur.filter(function(k){ return k!==f.key; });
-    Promise.resolve(patch('confidential_fields', next, {actor:'human', pinned:false, action:(on?'mark ':'share ')+f.key+(on?' confidential':' again'),
-      rationale:on?'Kept in the agency copy, left out of the client copy.':'In the client copy again.'})).then(function(){
-      toast(on?'“'+headOf(f)+'” is confidential: it stays in the agency copy and is left out of the client copy.':'“'+headOf(f)+'” is shared again.'); });
+    Promise.resolve(patch('confidential_fields', next, {actor:'human', pinned:false, action:(on?'mark ':'unmark ')+f.key+' confidential',
+      rationale:on?'Napkin never learns from this part. The agency and the client still see it.':'No longer confidential.'})).then(function(){
+      toast(on?'“'+headOf(f)+'” is confidential: Napkin never learns from it. The client copy still shows it.':'“'+headOf(f)+'” is no longer confidential.'); });
   }
   function setLock(key, on){
     var cur=lockedList(); var has=cur.indexOf(key)!==-1;
@@ -4897,12 +4898,6 @@
     var t=row[j]; row[j]=row[a[1]]; row[a[1]]=t;
     return fromRows(rows);
   }
-  // The parts without `keys` (the client copy leaves the confidential ones out): each row closes up.
-  function layoutWithout(items, keys){
-    var rows=layoutRows(items);
-    arr(keys).forEach(function(k){ var a=rowAt(rows, k); if(a) takeOut(rows, a); });
-    return fromRows(rows);
-  }
   // Can Move up / Move down do anything? -> [up, down]
   function layoutCanStep(items, key){
     var rows=layoutRows(items), a=rowAt(rows, key);
@@ -5244,7 +5239,7 @@
     renderProv();
   }
   function keepBtn(f,A,kept){ return !A?'<button type="button" class="sp-btn sp-keep" data-sp="keep" aria-pressed="'+kept+'" title="'+(kept?'Let the agents change this again':'Keep this part as it is when the brief is drafted again')+'">'+(kept?IC.lock:IC.unlock)+(kept?'Kept as is':'Keep as is')+'</button>':''; }
-  function confBtn(f,wr,conf){ return '<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: left out of the client copy. Click to share it.':'Mark confidential: kept in the agency copy, left out of the client copy')+'">Confidential</button>'; }
+  function confBtn(f,wr,conf){ return '<button type="button" class="sp-btn sp-conf" data-sp="conf" aria-pressed="'+conf+'"'+(wr?'':' disabled')+' title="'+(!wr?'The brief is locked. Reopen a part to change it.':conf?'Confidential: Napkin never learns from this part. Click to unmark it.':'Mark confidential: Napkin never learns from this part. The client still sees it.')+'">Confidential</button>'; }
   // The state chips, one line: how sure the writing is and how many facts it rests on (from the
   // record), and Kept, Confidential or Open for the client's change only when they are on.
   function chipsHtml(f){
@@ -5439,7 +5434,7 @@
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
     if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
-    items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The sheet without the parts marked Confidential, for the client':'Lock the brief first: the client sees the version you lock'});
+    items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The locked sheet, every part in it, for the client':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});
     items.push({kind:'button', id:'gridPdf', label:'Grid PDF', title:'The grid template: two sheets of boxes, as before the new page'});
     items.push({kind:'button', id:'gridHtml', label:'Grid HTML', title:'The grid template as a web page'});
@@ -5802,10 +5797,8 @@
   // The page's own styles, which the printed sheet is drawn with (the probe that measures it is in this page).
   function pageCss(){ return [].map.call(document.querySelectorAll('head style:not(#sheetCss)'), function(s){ return s.textContent; }).join('\n'); }
   (function(){ var st=document.createElement('style'); st.id='sheetCss'; st.textContent=SHEET_PRINT_CSS; document.head.appendChild(st); })();
-  // What a sheet export prints: the agency's copy (every part; confidential ones hatched and tagged) or
-  // the client's (no confidential part, and nothing it cites).
-  // The client copy leaves the confidential parts out, and their rows close up (layoutWithout).
-  function sheetItems(copy){ var items=layoutItems(); return copy==='client'?layoutWithout(items, confList()):items; }
+  // What a sheet export prints: every part, in both copies. The agency's copy hatches and tags the confidential
+  // ones; the client's prints them plain (owner, 2026-11-13: confidential keeps a part from Napkin, never from the client).
   // Measure one long sheet, A4 wide, off the screen in this page (whose styles it is drawn with; an app
   // frame is sandboxed, so a frame inside it could not be read). -> blocks for sheetPaginate, or null
   // when it could not be measured within `wait` ms: an unmeasured sheet is not printed.
@@ -5841,7 +5834,7 @@
   }
   // The context sheetDoc needs, from the brief as it is now. logos/boards are inlined by the caller.
   function sheetCtx(copy, extra){
-    var items=sheetItems(copy), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
+    var items=layoutItems(), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
     var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:layoutPack(items), items:items,
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
       look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],

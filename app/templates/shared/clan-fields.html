@@ -1806,15 +1806,13 @@ var ClanFields=(function(){
   }
   // "Keep it private", with what private means, under every review.
   function privBlock(){
-    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private keeps it out of the agency’s shared memory, so work for other clients never learns from it. The client still sees it, and our agents still use it on this document.</p></div>';
+    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private means Napkin never learns from it: it stays out of the shared memory, out of other campaigns and out of training. The agency and the client still see it, in every copy and export.</p></div>';
   }
   function confForm(ref,target){
     return '<form class="clf-form" data-clf-form="classify" data-target="'+esc(target)+'"><b>Keep it private</b>'
       +(confidential(ref)?'<p class="clf-muted">It is already private. What you choose now replaces what was chosen before.</p>':'')
-      +'<p class="clf-ex">Tick what may still happen with it. Anything you leave unticked is kept from it.</p>'
-      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
-      +'<label class="clf-toggle"><input type="checkbox" name="export" checked><span>It may go in files you send out<small>If not ticked, it is left out of anything that leaves the workspace.</small></span></label>'
-      +'<label class="clf-toggle"><input type="checkbox" name="corpus"><span>Other campaigns may learn from it<small>If not ticked, it stays out of the agency’s shared memory.</small></span></label>'
+      +'<p class="clf-ex">Napkin never learns from it: not the shared memory, not other campaigns, not training. The agency and the client still see it, in every copy and export.</p>'
+      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it on this document<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
       +'<label><span>Why keep it private? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
       +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it private</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div></form>';
   }
@@ -2452,7 +2450,7 @@ var ClanFields=(function(){
       top().fix=false; act('/correct',{fact:ref,value:String(fd.get('value')).trim(),source_uri:String(fd.get('src')||'').trim(),rationale:why},form,'Saved. The old value is kept on record.'); }
     else if(!why){ showError(form,kind==='bad'?'Say what is wrong, so it can be fixed.':kind==='aside'?'Say why this can go ahead without it.':'Say why, in a few words.'); return; }
     else if(kind==='aside') act('/acknowledge',{target:form.getAttribute('data-target'),rationale:why},form,'Set aside. Your reason is kept with it.');
-    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:fd.get('export')==='on',corpus:fd.get('corpus')==='on',rationale:why},form,'Saved. It is kept private.');
+    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:true,corpus:false,rationale:why},form,'Saved. It is kept private.');
     else if(kind==='bad') act('/verdict',{target:form.getAttribute('data-target'),polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.');
     else if(kind==='override') act('/verdict',{target:form.getAttribute('data-target'),polarity:'good',rationale:why},form,'Saved. It stays as it is, with your reason.');
   }

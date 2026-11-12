@@ -26,7 +26,7 @@ rep('\n</style>', r"""
 
 # ═══ per-part Confidential (from the real tool's "Confidential…") ═══
 rep("        const why = briefLocked ? LOCKED_WHY : p.keep ? 'Kept as it is. Click \"Kept\" to let it change.' : '';",
-    "        if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type=\"button\" class=\"sp-btn sp-conf ${p.conf ? 'on' : ''}\" data-p35-conf aria-pressed=\"${!!p.conf}\" title=\"${p.conf ? 'Confidential: left out of the client copy. Click to share it.' : 'Mark confidential: kept in the agency copy, left out of the client copy'}\">${p.conf ? '● Confidential' : 'Confidential'}</button>`);\n"
+    "        if (acts && p.as !== 'cell') acts.insertAdjacentHTML('beforeend', `<button type=\"button\" class=\"sp-btn sp-conf ${p.conf ? 'on' : ''}\" data-p35-conf aria-pressed=\"${!!p.conf}\" title=\"${p.conf ? 'Confidential: Napkin never learns from this part. Click to unmark it.' : 'Mark confidential: Napkin never learns from this part. The client still sees it.'}\">${p.conf ? '● Confidential' : 'Confidential'}</button>`);\n"
     "        const why = briefLocked ? LOCKED_WHY : p.keep ? 'Kept as it is. Click \"Kept\" to let it change.' : '';")
 rep("        gi.classList.toggle('kept', !!p.keep);", "        gi.classList.toggle('kept', !!p.keep);\n        gi.classList.toggle('is-conf', !!p.conf);")
 rep("  renderBriefPage();\n  syncNavigation();\n  const urlBrand", r'''  document.addEventListener('click', e => {
