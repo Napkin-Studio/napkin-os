@@ -62,6 +62,9 @@ CACHE_READ, CACHE_WRITE = 0.1, 1.25
 _cfg = {"dir": None, "bodies": False}
 RESULT_CHARS = 4000  # of each search result's text, with bodies on
 HEARTBEAT_S = 30.0   # a running stage writes a heartbeat at least this often
+# In-flight kinds with a bounded wait of their own, which the stall budget does not cut short: a person's
+# answers (the intake wait) and the briefing engine's call (its own timeout, then the fallback).
+OWN_WAIT = frozenset({"person", "engine"})
 ERROR_CHARS = 1000   # of an error's message, in stage_end
 _out = logging.getLogger("napkin.runlog")
 # Never on stdout (CloudWatch), bodies on or off: what a call sent or got back, what a search
@@ -74,6 +77,10 @@ STDOUT_DROPS = frozenset({"payload", "reply", "results", "query", "queries", "de
 def stdout_record(rec: dict) -> dict:
     """What of a run-log event goes to stdout: everything but the body keys."""
     return {k: v for k, v in rec.items() if k not in STDOUT_DROPS}
+
+
+def timeout_message(stage: str, secs: float, waiting_on: str) -> str:
+    return f"timed out in {stage} after {int(round(secs))} s waiting on {waiting_on}"
 
 
 def error_parts(e: BaseException) -> dict:
@@ -161,6 +168,7 @@ class RunLog:
         self._busy: dict = {}       # token -> (kind, what, t0): what is in flight now
         self._failed: list = []     # [{stage, error_type, error, cause} | {stage, timed_out}]
         self._ended = False
+        self.last_progress = time.monotonic()  # the last event that was not a heartbeat
 
     @property
     def on(self) -> bool:
@@ -172,6 +180,8 @@ class RunLog:
         rec = {"t": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="milliseconds"),
                "s": round(time.monotonic() - self.t0, 3), "ev": ev, "job": self.job}
         rec.update({k: v for k, v in kw.items() if v is not None})
+        if ev != "heartbeat":  # a heartbeat says the stage is alive, never that it moved
+            self.last_progress = time.monotonic()
         if self.echo:
             try:
                 out = {"ev": ev, "job": self.job, "task": self.task, "org": self.org,
@@ -233,6 +243,15 @@ class RunLog:
             return "nothing in flight"
         return "; ".join(f"{x['kind']}{' ' + x['what'] if x['what'] else ''} ({x['secs']} s)" for x in items[:4])
 
+    def stalled(self, budget: float) -> bool:
+        """No event but heartbeats for `budget` seconds, while nothing with a wait of its own is in flight
+        (a person's answer, the briefing engine's call: OWN_WAIT): the stage is making no progress. A log
+        that writes nothing (NULL, no job bound) cannot tell, and never says so."""
+        if not self.on or time.monotonic() - self.last_progress <= budget:
+            return False
+        with self._lock:
+            return not any(k in OWN_WAIT for k, _w, _t in self._busy.values())
+
     def _beat(self, name: str, t: float, stop: threading.Event):
         while not stop.wait(HEARTBEAT_S):
             if self._ended:
@@ -266,9 +285,8 @@ class RunLog:
             stop.set()
             with self._lock:
                 tot = dict(self._tot(name))
-            fail = st.error or ({"error_type": "timeout", "error": f"timed out in {name} after "
-                                 f"{st.timed_out['after_s']} s waiting on {st.timed_out['waiting_on']}"}
-                                if st.timed_out else None)
+            fail = st.error or ({"error_type": "timeout", "error": timeout_message(
+                name, st.timed_out["after_s"], st.timed_out["waiting_on"])} if st.timed_out else None)
             if fail:
                 with self._lock:
                     self._failed.append({"stage": name, **fail})
