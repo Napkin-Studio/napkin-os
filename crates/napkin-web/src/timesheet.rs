@@ -23,7 +23,7 @@
 //! The store is an interface (`Store`: record, list, confirm) with a file store behind it
 //! so the agency database can replace the files without touching the routes.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -528,13 +528,16 @@ impl Timesheets {
 
 // ── the day for a person ─────────────────────────────────────────────────────
 
+/// The person's own edits by document, within `[from, to)`, read only from the documents in `only`.
+type Edits<'a> = dyn Fn(&str, i64, i64, &BTreeSet<String>) -> BTreeMap<String, usize> + 'a;
+
 /// The day `date` as `person` has it. Nothing here reads anyone else.
 pub fn day_for(
     ts: &Timesheets,
     person: &str,
     date: &str,
     tz_min: i64,
-    edits: &dyn Fn(&str, i64, i64) -> BTreeMap<String, usize>,
+    edits: &Edits<'_>,
 ) -> ApiResult<Day> {
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .map_err(|_| ApiError::new(400, "date must be YYYY-MM-DD"))?;
@@ -562,7 +565,10 @@ pub fn day_for(
     } else {
         vec![]
     };
-    let counted = edits(person, from, to);
+    // Only a line's own documents are counted: the day reads the documents its sessions name, not every
+    // document of the agency.
+    let worked: BTreeSet<String> = sessions.iter().map(|s| s.doc.clone()).collect();
+    let counted = edits(person, from, to, &worked);
     let mut lines = lines_from(&sessions, &counted, &state.overrides);
     let taken: Vec<i64> = state.added.iter().filter_map(|a| a.from).collect();
     for a in &state.added {
@@ -724,7 +730,7 @@ async fn get_sessions(
 fn edits_in(
     ctx: &AppCtx,
     tenant: &crate::tenant::TenantId,
-) -> impl Fn(&str, i64, i64) -> BTreeMap<String, usize> {
+) -> impl Fn(&str, i64, i64, &BTreeSet<String>) -> BTreeMap<String, usize> {
     let ws = ctx.workspace(tenant);
     let docs: Vec<String> = crate::api::job_index(&ws)
         .map(|i| {
@@ -734,10 +740,10 @@ fn edits_in(
                 .collect()
         })
         .unwrap_or_default();
-    move |person: &str, from: i64, to: i64| {
+    move |person: &str, from: i64, to: i64, only: &BTreeSet<String>| {
         let me = format!("human:{person}");
         let mut out = BTreeMap::new();
-        for doc in &docs {
+        for doc in docs.iter().filter(|d| only.contains(*d)) {
             let Ok(s) = ws.session(&DocId::new(doc)) else {
                 continue;
             };
@@ -999,8 +1005,41 @@ mod tests {
         ev(t, p, EventKind::Close, doc, to);
     }
 
-    fn no_edits(_: &str, _: i64, _: i64) -> BTreeMap<String, usize> {
+    fn no_edits(_: &str, _: i64, _: i64, _: &BTreeSet<String>) -> BTreeMap<String, usize> {
         BTreeMap::new()
+    }
+
+    #[test]
+    fn a_day_counts_edits_only_in_the_documents_its_sessions_name() {
+        // The edits behind a line are read from that line's documents, not from every document of the agency:
+        // the day asks about exactly the documents its sessions name (and nothing for a person with none).
+        let dir = tempfile::tempdir().unwrap();
+        let t = ts(dir.path());
+        let asked = std::cell::RefCell::new(Vec::<BTreeSet<String>>::new());
+        let edits = |_: &str, _: i64, _: i64, only: &BTreeSet<String>| {
+            asked.borrow_mut().push(only.clone());
+            only.iter()
+                .map(|d| (d.clone(), 2))
+                .collect::<BTreeMap<_, _>>()
+        };
+        day_for(&t, "p", "2025-11-11", 0, &edits).unwrap();
+        assert_eq!(
+            asked.borrow_mut().pop().unwrap(),
+            BTreeSet::new(),
+            "no sessions, no document read"
+        );
+        t.store.set_consent("p", "p", true, T0).unwrap();
+        work(&t, "p", "doc-brief", T0, T0 + 3_600_000);
+        let day = day_for(&t, "p", "2025-11-11", 0, &edits).unwrap();
+        assert_eq!(
+            asked.borrow_mut().pop().unwrap(),
+            BTreeSet::from(["doc-brief".to_string()])
+        );
+        assert_eq!(day.lines.len(), 1);
+        assert_eq!(
+            day.lines[0].edits, 2,
+            "the line still carries its document's edits"
+        );
     }
 
     #[test]
