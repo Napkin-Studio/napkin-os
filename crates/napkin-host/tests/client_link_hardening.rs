@@ -304,6 +304,85 @@ fn the_gate_and_the_round_view_name_who_confirmed_in_full_and_a_reviewer_never_s
     assert!(!own.contains(A_MAIL) && !own.contains("Alex"), "{own}");
 }
 
+const D: &str = "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4";
+const E: &str = "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5";
+const D_MAIL: &str = "newapprover@client-a.example";
+const E_MAIL: &str = "newsecond@client-a.example";
+
+#[test]
+fn a_second_round_on_the_same_lock_withdraws_the_first_rounds_open_links() {
+    let r = Rig::locked_brief();
+    assert_eq!(r.three(REVIEW).0, 200);
+    // B answers in round 1 (advice: not the approver) and keeps that answer
+    assert_eq!(r.answer(B_MAIL, B, "confirm").0, 200);
+    let (s, v) = r.round(
+        REVIEW2,
+        json!([
+            { "id": D, "name": "Dee", "email": D_MAIL, "approver": true },
+            { "id": E, "name": "Eve", "email": E_MAIL },
+        ]),
+    );
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(v["round"], 2, "the next number, not round 1 again");
+    // round 1's open links are dead, in the history, by the person who sent round 2
+    for (mail, id) in [(A_MAIL, A), (C_MAIL, C)] {
+        assert_eq!(
+            r.state(mail, id),
+            (410, json!({ "ok": false, "state": "withdrawn" }))
+        );
+        assert_eq!(
+            r.answer(mail, id, "confirm").0,
+            410,
+            "{id} cannot answer now"
+        );
+    }
+    let withdrawn = r.of("withdraw_link");
+    assert_eq!(withdrawn.len(), 2, "A and C, and not B who answered");
+    for w in &withdrawn {
+        assert_eq!(w.agent, "human:aoife");
+        let l = serde_json::to_value(w.extra.get("link").unwrap()).unwrap();
+        assert!([A, C].contains(&l.as_str().unwrap()));
+        assert_eq!(
+            serde_json::to_value(w.extra.get("replaced_by").unwrap()).unwrap(),
+            REVIEW2
+        );
+    }
+    // B's answer is where it was given
+    assert_eq!(r.state(B_MAIL, B).1["state"], "answered");
+    // the new approver is the only one the gate hears
+    assert_eq!(r.answer(D_MAIL, D, "confirm").0, 200);
+    assert_eq!(r.of("client_answer").len(), 1);
+    let (_, g) = r.call(&staff(), "/gate", json!({}));
+    assert_eq!(g["confirmed_by"]["email"], D_MAIL);
+    // the round view is the newest round, and shows the one before
+    let (_, view) = r.call(&staff(), "/client-review/round", json!({}));
+    assert_eq!(view["review"], REVIEW2);
+    assert_eq!(view["round"], 2);
+    let before = &view["earlier_rounds"][0];
+    assert_eq!(before["review"], REVIEW);
+    assert_eq!(before["round"], 1);
+    let states: Vec<(&str, &str)> = before["reviewers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| (x["email"].as_str().unwrap(), x["state"].as_str().unwrap()))
+        .collect();
+    assert!(states.contains(&(A_MAIL, "withdrawn")));
+    assert!(states.contains(&(B_MAIL, "answered")));
+    // a third round numbers 3, and an answered or withdrawn link is not withdrawn twice
+    let (s, v) = r.round(
+        "cccccccccccccccccccccccccccccccc",
+        json!([{ "id": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6", "name": "Fay", "email": "fay@client-a.example", "approver": true }]),
+    );
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(v["round"], 3);
+    assert_eq!(
+        r.of("withdraw_link").len(),
+        3,
+        "only E's link was still open"
+    );
+}
+
 #[test]
 #[ignore]
 fn measure_comment_on_a_large_document() {

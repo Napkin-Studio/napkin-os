@@ -863,17 +863,12 @@ pub fn issue_round(ctx: &Ctx, doc: &Document, input: IssueRound) -> HostResult<O
             return Err(HostError::conflict("a link id is already used"));
         }
     }
-    // The round: how many distinct locks a review has been sent for, this one included.
-    let mut locks: Vec<String> = reviews
-        .iter()
-        .filter_map(|d| link_of(d)?.get("lock")?.as_str().map(String::from))
-        .collect();
-    if !locks.contains(&lock_id) {
-        locks.push(lock_id.clone());
-    }
-    locks.sort();
-    locks.dedup();
-    let round = locks.len() as u32;
+    // The round: how many rounds have been sent for this document, this one included. A round is a
+    // review id, so sending again on the same lock is round 2, as sending after a new lock is.
+    let mut sent: Vec<String> = reviews.iter().filter_map(|d| review_of(d)).collect();
+    sent.sort();
+    sent.dedup();
+    let round = sent.len() as u32 + 1;
 
     let now_s = now();
     let end = parse_time(&input.expires)
@@ -890,6 +885,38 @@ pub fn issue_round(ctx: &Ctx, doc: &Document, input: IssueRound) -> HostResult<O
     let piece_json: Vec<Value> = now_pieces.iter().map(Piece::to_json).collect();
     let mut made: Vec<Decision> = Vec::new();
     let mut links: Vec<Value> = Vec::new();
+    // A new round replaces an open one: its links that no one has answered are withdrawn in this same
+    // change, by the person sending, so two rounds never take answers on one lock. An answer already
+    // given stays where it is.
+    for d in &reviews {
+        let Some(old) = issued_of(d) else { continue };
+        let open = matches!(
+            state_in(&chain, &here, &hash, &old.id, &now_s, &|| Some(
+                now_pieces.clone()
+            )),
+            LinkState::Open(_)
+        );
+        if !open {
+            continue;
+        }
+        let mut w = attributed(ctx, "", KIND);
+        w.id = Some(new_decision_id());
+        w.agent = who.clone();
+        w.action = WITHDRAW.to_string();
+        w.targets = vec![here.clone()];
+        w.cites = vec![d.id.clone().unwrap_or_default()];
+        w.timestamp = now_s.clone();
+        w.rationale = format!(
+            "{} withdrew {}'s link from round {} when sending round {round}.",
+            person_name(&who),
+            old.name,
+            old.round
+        );
+        w.extra.insert("link".into(), to_yaml(&json!(old.id))?);
+        w.extra
+            .insert("replaced_by".into(), to_yaml(&json!(input.review))?);
+        made.push(w);
+    }
     for r in &input.reviewers {
         let mut d = attributed(ctx, "", KIND);
         d.id = Some(new_decision_id());
@@ -1361,6 +1388,42 @@ pub fn round_view(doc: &Document) -> HostResult<Value> {
         .map(|(_, i)| i)
         .collect();
     let first = mine[0];
+    // The rounds before this one, newest first: who was asked, and what each did. Their comments are
+    // not merged in: a round's answers stand where they were given.
+    let mut earlier: Vec<Value> = Vec::new();
+    let mut listed: Vec<&str> = vec![review_id.as_str()];
+    for (d, i) in &issues {
+        let Some(rid) = i.review.as_deref() else {
+            continue;
+        };
+        if listed.contains(&rid) {
+            continue;
+        }
+        listed.push(rid);
+        let people: Vec<Value> = issues
+            .iter()
+            .filter(|(_, o)| o.review.as_deref() == Some(rid))
+            .rev()
+            .map(|(_, o)| {
+                let st = state_in(&chain, &here, &hash, &o.id, &at, &|| now_pieces.clone());
+                let ans = chain.decisions.iter().find(|a| {
+                    (action_is(a, CLIENT_ANSWER) || action_is(a, ADVICE)) && about_link(a, &o.id)
+                });
+                json!({
+                    "id": o.id, "name": o.name, "email": o.email,
+                    "role": if o.approver { "approver" } else { "reviewer" },
+                    "state": st.word(),
+                    "answer": ans.and_then(|a| extra_str(a, "answer")),
+                    "answered": ans.map(|a| a.timestamp.clone()),
+                    "comments": comments_of(&chain, &here, &o.id).len(),
+                })
+            })
+            .collect();
+        earlier.push(json!({
+            "review": rid, "round": i.round, "version": i.version, "lock": i.lock,
+            "sent": d.timestamp, "reviewers": people,
+        }));
+    }
     let mut reviewers: Vec<Value> = Vec::new();
     let mut comments: Vec<Value> = Vec::new();
     // piece n -> [(reviewer link id, approved)]
@@ -1479,7 +1542,7 @@ pub fn round_view(doc: &Document) -> HostResult<Value> {
         "ok": true, "review": review_id, "round": first.round, "version": first.version,
         "lock": first.lock, "current": current, "code": first.code,
         "pieces": piece_rows, "reviewers": reviewers, "comments": comments,
-        "approver_answer": approver_answer,
+        "approver_answer": approver_answer, "earlier_rounds": earlier,
     }))
 }
 

@@ -206,6 +206,15 @@ export interface ClientRoundView {
   reviewers: RoundReviewer[]
   comments: RoundComment[]
   approver_answer: string | null
+  /** The rounds sent before this one, newest first: who was asked and where each stood. */
+  earlier_rounds?: EarlierRound[]
+}
+
+export interface EarlierRound {
+  review: string
+  round: number
+  sent: string
+  reviewers: { id: string; name: string; email: string; role: 'approver' | 'reviewer'; state: string; answer: string | null; comments: number }[]
 }
 
 /** What `POST /d/{doc}/client-link/round` returns: one link a reviewer, shown once. */

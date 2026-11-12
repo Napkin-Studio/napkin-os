@@ -26,12 +26,23 @@ export function RoundView({ round }: { round: ClientRoundView }) {
         {round.reviewers.map(r => (
           <li key={r.id} data-state={r.state} data-role={r.role}>
             <span>
-              <b>{r.name}</b>{r.role === 'approver' ? ' (approver)' : ''}: {r.answer ? (ANSWER[r.answer] ?? r.answer) : (STATE[r.state] ?? r.state)}
+              <b>{r.name}</b>{r.role === 'approver' ? ' (approver)' : ''} <span className="bg-mid" data-testid="reviewer-email">{r.email}</span>: {r.answer ? (ANSWER[r.answer] ?? r.answer) : (STATE[r.state] ?? r.state)}
               {r.answer && !r.counts ? ', counts as advice' : ''}
             </span>
           </li>
         ))}
       </ul>
+      {(round.earlier_rounds?.length ?? 0) > 0 && (
+        <ul className="bg-list cr-reviewers" aria-label="Earlier rounds" data-testid="round-earlier">
+          {round.earlier_rounds!.map(e => (
+            <li key={e.review} data-round={e.round}>
+              <span>
+                <b>Round {e.round}</b>: {e.reviewers.map(r => `${r.name} ${r.answer ? (ANSWER[r.answer] ?? r.answer) : (STATE[r.state] ?? r.state).toLowerCase()}`).join(', ')}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {round.pieces.some(p => p.split) && (
         <p className="bg-mid" data-testid="round-split">
           {round.pieces.filter(p => p.split).map(p => `${p.label}: ${p.approved_by.join(', ')} approved, ${p.changes_by.join(', ')} asked for changes.`).join(' ')}
