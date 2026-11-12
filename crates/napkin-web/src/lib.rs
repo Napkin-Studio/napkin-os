@@ -65,9 +65,39 @@ fn shell_service(static_dir: Option<&Path>) -> Router<Arc<AppCtx>> {
             .route_service("/view/", ServeFile::new(dir.join("index.html")))
             .fallback_service(
                 ServeDir::new(dir).not_found_service(ServeFile::new(dir.join("index.html"))),
-            ),
+            )
+            .layer(axum::middleware::from_fn(shell_cache)),
         None => Router::new().fallback(|| async { Html(NO_BUILD) }),
     }
+}
+
+/// How long a browser may keep a shell file. The build's `/assets/` names carry a
+/// content hash, so they never change and are kept for a year. Everything else
+/// (index.html, the manifest, the worker, the icons) is revalidated on every load:
+/// without a Cache-Control a browser guesses a lifetime from Last-Modified and kept
+/// running the previous shell against a new server after a deploy (UAT round 3,
+/// 2026-11-12: the old shell posted to a route the new server had removed).
+async fn shell_cache(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let hashed = req.uri().path().starts_with("/assets/");
+    let mut res = next.run(req).await;
+    // A shell route the build has no file for is answered with index.html (status 404), so
+    // every non-asset answer is marked; an asset only when it was really served.
+    let ok = res.status().is_success() || res.status() == axum::http::StatusCode::NOT_MODIFIED;
+    let v = match (hashed, ok) {
+        (true, true) => Some("public, max-age=31536000, immutable"),
+        (true, false) => None,
+        (false, _) => Some("no-cache"),
+    };
+    if let Some(v) = v {
+        res.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static(v),
+        );
+    }
+    res
 }
 
 /// Assemble the whole service. Kept separate from `main` so tests can drive the

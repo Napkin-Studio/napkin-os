@@ -678,6 +678,12 @@ fn server_with_shell() -> (Server, tempfile::TempDir) {
     )
     .unwrap();
     std::fs::write(shell.path().join("sw.js"), "// worker").unwrap();
+    std::fs::create_dir(shell.path().join("assets")).unwrap();
+    std::fs::write(
+        shell.path().join("assets").join("index-abc123.js"),
+        "// app",
+    )
+    .unwrap();
     let mut s = server(40);
     s.app = napkin_web::router(s.ctx.clone(), Some(shell.path()), false);
     (s, shell)
@@ -3134,4 +3140,29 @@ async fn a_polled_list_that_has_not_changed_answers_304() {
     let r = send(&s, after).await;
     assert_eq!(r.status, StatusCode::OK);
     assert_eq!(r.json()["items"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn the_shell_page_is_revalidated_and_hashed_assets_are_kept() {
+    // UAT round 3: index.html had no Cache-Control, so a browser kept the old shell after a deploy.
+    let (s, _shell) = server_with_shell();
+    for path in ["/", "/view", "/some/shell/route"] {
+        let r = get(&s, path, None).await;
+        // An unknown shell route is index.html with 404, as before; it is still revalidated.
+        assert!(
+            String::from_utf8_lossy(&r.body).contains("<title>shell</title>"),
+            "{path}"
+        );
+        assert_eq!(
+            r.headers.get(header::CACHE_CONTROL).unwrap(),
+            "no-cache",
+            "{path}"
+        );
+    }
+    let a = get(&s, "/assets/index-abc123.js", None).await;
+    assert_eq!(a.status, StatusCode::OK);
+    assert_eq!(
+        a.headers.get(header::CACHE_CONTROL).unwrap(),
+        "public, max-age=31536000, immutable"
+    );
 }
