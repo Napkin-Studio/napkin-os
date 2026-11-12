@@ -248,3 +248,18 @@ def test_a_search_still_running_at_the_deadline_is_cut_to_a_gap(store):
     run = next(d for d in ch["decisions"] if d["action"] == "research_run")
     assert "failed: out of time" in run["rationale"] and any("#selection.gaps[" in t or t.startswith("selection.gaps[")
                                                              for t in run["targets"]), "the cut unit is a recorded gap"
+
+
+# UAT round 6: an answer with no sentences and a missing list naming a year failed the whole ask
+# ("reasoning.because[1] states a figure and cites nothing"). The check rests on the ask itself.
+def test_nothing_to_cite_and_a_year_in_what_is_missing_still_answers(store):
+    clan = researched(store)
+    empty = lambda p: {"sentences": [], "missing": ["the 2024 figure for TV share"], "lens": "media_spend", "topic": "TV"}
+    result, change, _ = ask(store, clan, q="What share of spend is on TV?", jev=FakeJev(0.1),
+                            model=FakeModel({"ask_answer": empty}))
+    chk = change["decisions"][0]
+    assert chk["action"] == "check_answer"
+    for p in chk["reasoning"]["because"]:
+        assert p.get("cites"), p
+    assert any("#asks[" in c for p in chk["reasoning"]["because"] for c in p["cites"])
+    assert result["status"] in ("partial", "not_found")
