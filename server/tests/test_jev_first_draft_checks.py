@@ -116,10 +116,17 @@ def test_a_part_failing_a_skill_test_goes_back_and_the_review_agents_verdict_is_
     check_change_rules(host)
 
 
-def test_nothing_judged_the_brief_so_single_mindedness_is_unchecked_not_single(tmp_path):
-    seen = {}
+def test_a_clean_brief_is_still_judged_by_the_skills_tests(tmp_path):
+    # Owner, 2026-11-12: "judge every brief". jev and code flag nothing, yet the Review agent reads the skill's
+    # tests once, and its single-mindedness verdict is recorded (not "unchecked").
+    seen, calls = {}, []
     m = planned_model(seen)
-    m.overrides["explain_flags"] = lambda p: pytest.fail("jev and code flagged nothing: no Review agent call")
+
+    def explain(p):
+        calls.append(p)
+        return explained(p, {"parts": {}, "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": [],
+                             "failed_tests": []}, "single")
+    m.overrides["explain_flags"] = explain
     s = Server(tmp_path, model=m, retrieval=retrieval(), jev=FakeJev(),
                settings_kw={"brief_flow": "planned", "brief_judge": "jev"})
     try:
@@ -127,8 +134,9 @@ def test_nothing_judged_the_brief_so_single_mindedness_is_unchecked_not_single(t
         run(s, host, inp={"prompt": THIN, "attachments": []})
     finally:
         s.stop()
-    assert host.data["review"]["scorecard"]["single_mindedness"] == {"verdict": "unchecked", "split_into": []}
-    check_change_rules(host)  # 'unchecked' is in Brief Maker's schema
+    assert len(calls) == 1 and calls[0].get("tests"), "one Review agent call, with the skill's tests"
+    assert host.data["review"]["scorecard"]["single_mindedness"]["verdict"] == "single"
+    check_change_rules(host)
 
 
 def test_the_review_judge_sends_back_the_same_draft_as_before(tmp_path):
