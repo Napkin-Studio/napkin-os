@@ -10,22 +10,23 @@
 
 import type { DoorEntry, HomeView, MapCircle } from '../../host/http'
 import type { JobNeed, LibraryItem } from '../../host/types'
-import { toolById } from '../landing/tools'
+import { toolOfApp } from '../landing/tools'
 import { callsIn, clientName, stateWords } from '../nui/deskData'
 import type { ToolId } from '../route'
 import { greeting } from '../when'
+import { doorTarget } from './doorTargets'
 
-/** The doors whose tool exists today, and the tool of the landing each opens. Every other door is a later phase's. */
-const DOOR_TOOL: Readonly<Record<string, ToolId>> = { brief: 'brief', research: 'research', presentations: 'deck' }
+/** The tool of the landing a door opens, when its target is an app that has one. */
+export function doorTool(id: string): ToolId | null {
+  const t = doorTarget(id)
+  return t && 'app' in t ? toolOfApp(t.app)?.id ?? null : null
+}
 
-export const doorTool = (id: string): ToolId | null => DOOR_TOOL[id] ?? null
-
-/** Clients opens the client desk and the Agency dashboard reads the job index, both already here; the others need their tool's app installed. */
+/** A door is live when its page is built, or its app is installed. The table is doorTargets.ts. */
 export function doorIsLive(id: string, apps: readonly string[]): boolean {
-  if (id === 'clients' || id === 'agency-dashboard') return true
-  const tool = doorTool(id)
-  const appId = tool ? toolById(tool)?.appId : null
-  return !!appId && apps.includes(appId)
+  const t = doorTarget(id)
+  if (!t) return false
+  return 'page' in t ? t.built : apps.includes(t.app)
 }
 
 /** The five rows Needs you shows before Show all. */
