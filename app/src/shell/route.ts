@@ -25,7 +25,7 @@
 // The shell (App.tsx) owns the screen and writes the hash from it; a hashchange
 // only reads. This module is pure, so it is table-tested without a browser.
 
-export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories'] as const
+export const TOOL_IDS = ['brief', 'research', 'idea', 'deck', 'prod', 'ads', 'territories', 'script'] as const
 export type ToolId = (typeof TOOL_IDS)[number]
 
 export type Route =
