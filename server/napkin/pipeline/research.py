@@ -37,7 +37,7 @@ import logging
 import re
 import threading
 import time as _time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from ..doc import (CONF, ISO_3166, LENS_NAMESPACE, LENSES, LICENCE_RANK, ctx_data, ctx_facts, decision,
                    field_value, lens_of_key, market_list, read_of)
@@ -518,16 +518,35 @@ class Researcher:
         return g
 
     # -- the run ------------------------------------------------------------------
-    def run(self, progress=None, focus=None):
+    def run(self, progress=None, focus=None, deadline=None):
+        """`deadline` (time.monotonic()): a unit not finished by then is a gap marked out of time, and the
+        run merges what finished (a person's question waits on it; features/fact-ask-time-budget.clan).
+        Its thread is left to end on its own timeouts; what it finds is not used."""
         units = []
-        with ThreadPoolExecutor(max_workers=max(1, self.concurrency)) as ex:
-            futs = [ex.submit(self.unit, l, m, focus) for l, m in self.pairs]
-            for fu in futs:
-                units.append(fu.result())
+        ex = ThreadPoolExecutor(max_workers=max(1, self.concurrency))
+        try:
+            futs = [(l, m, ex.submit(self.unit, l, m, focus)) for l, m in self.pairs]
+            for l, m, fu in futs:
+                try:
+                    units.append(fu.result(timeout=None if deadline is None else max(0.0, deadline - _time.monotonic())))
+                except FuturesTimeout:
+                    units.append(self.out_of_time(l, m))
                 self.done += 1
                 if progress:
                     progress(self.done)
+        finally:
+            ex.shutdown(wait=deadline is None, cancel_futures=True)
         return self.merge(units)
+
+    def out_of_time(self, lens, market) -> dict:
+        """A unit the deadline cut: gaps for what it was after, carrying why, never a silent success."""
+        _q, wanted = LENS_QUESTIONS[lens]
+        note = "out of time: the search did not finish within the question's time budget"
+        emit("unit_out_of_time", lens=lens, market=market, job=self.caps.attribution.get("job"))
+        self.caps.runlog.note("unit_out_of_time", lens=lens, market=market)
+        log.warning("research unit %s/%s cut by the deadline", lens, market)
+        return {"lens": lens, "market": market, "cands": [], "reused": 0, "sources": [], "queries": [],
+                "error": "out of time", "gaps": [self._gap(lens, market, w, note=note) for w in wanted[:2]]}
 
     def merge(self, units):
         doc, handler = self.doc, self.handler

@@ -16,6 +16,7 @@ do not). jev's scores go in the decisions' reasoning, never on the page.
 from __future__ import annotations
 
 import logging
+import time
 
 from ..doc import LENS_TITLES, LENSES, build_materials, ctx_data, ctx_facts, ctx_findings, decision, field_value, \
     lens_of_key, out_of_use, read_of
@@ -31,6 +32,11 @@ log = logging.getLogger("napkin.ask")
 ANSWERS = 0.6
 # at most this many web searches for one question
 SEARCHES = 2
+# A person waits on the answer: it is written within ASK_BUDGET_S of the job starting (owner, 2026-11-12:
+# no longer than a whole brief or research, about 3 minutes). A search starts only with SEARCH_NEEDS_S
+# left; one still running at the deadline is cut, and the answer is written from what it found by then.
+ASK_BUDGET_S = 150.0
+SEARCH_NEEDS_S = 75.0
 MAX_PINS = 160
 
 SYSTEM = """You answer an advertising planner's question about their campaign research, from the pinned
@@ -180,6 +186,7 @@ class Asker:
 
     # -- the job ---------------------------------------------------------------------
     def run(self, progress=None):
+        deadline = time.monotonic() + ASK_BUDGET_S
         pin_by, fi_by = self.evidence(self.lens)
         s1, missing1, lens, topic, dropped1 = self.answer(self.lens, pin_by, fi_by)
         j1, why1 = self.check(s1, pin_by, fi_by)
@@ -205,11 +212,20 @@ class Asker:
             sel_contested = []
             focus = self.question
             for n in range(SEARCHES):
+                left = deadline - time.monotonic()
+                if left < SEARCH_NEEDS_S:
+                    # Too little time for a search and an answer after it: answer from what is here.
+                    self.caps.runlog.note("ask_search_skipped", search=n + 1, left_s=round(left, 1),
+                                          detail="out of time: the question's time budget is nearly spent")
+                    searches.append({"focus": focus[:300], "sources": 0, "urls": [], "facts": 0,
+                                     "skipped": "out of time"})
+                    break
                 clan_now = dict(self.clan, facts=list(ctx_facts(self.clan)) + facts_append)
                 r = Researcher(self.doc, self.base, clan_now, self.handler, self.caps, [lens], markets, cats,
                                reuse_days=self.settings.reuse_days, concurrency=self.settings.research_concurrency,
                                seed=f"{self.aid}/{n}", question_first=True)
-                res, rch, h = r.run(focus=focus)
+                # leave time to answer over what it found
+                res, rch, h = r.run(focus=focus, deadline=deadline - 25.0)
                 hits += h
                 found = rch["facts_append"]
                 facts_append += [f for f in found if f["id"] not in {x["id"] for x in facts_append}]
@@ -236,6 +252,7 @@ class Asker:
                     break
                 focus = f"{self.question} Specifically: {'; '.join(missing[:2])}"
             new_ids = [f["id"] for f in facts_append]
+            search = any(not x.get("skipped") for x in searches)
             if sel_contested:
                 old = [c for c in (self.data.get("selection") or {}).get("contested") or []
                        if c.get("id") not in {x["id"] for x in sel_contested}]

@@ -162,10 +162,11 @@ test('ask about a fact: the answer shows where it was asked, about that fact (pa
   await app.locator('[data-act="pv-ask"]').click()
   // Round 1: the answer went to a report section out of sight, and the ask did not carry the fact.
   const card = app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first()
-  // A fact question the research cannot answer searches the web and reads what it finds (53 s on UAT,
-  // 2026-11-12): allow four minutes; over two is reported as slow.
-  await expect(card, 'answer shown under the fact where it was asked').toBeVisible({ timeout: 240_000 })
-  measure('ask-fact', Date.now() - t0, 120_000)
+  // A fact question the research cannot answer searches the web (45-62 s on UAT, 2026-11-12). Owner, 2026-11-12:
+  // never longer than a whole brief or research, about 3 minutes; the middleware's budget is 150 s
+  // (ASK_BUDGET_S in server/napkin/pipeline/ask.py), so over that is slow and past 3 minutes fails.
+  await expect(card, 'answer shown under the fact where it was asked').toBeVisible({ timeout: 180_000 })
+  measure('ask-fact', Date.now() - t0, 150_000)
   // The approved mock (research-fact-answer-v1): not in the report until added; Add, then Take out.
   await card.locator('[data-act="pvq-add"]').click()
   await expect(card.locator('[data-act="pvq-out"]')).toBeVisible({ timeout: 15_000 })
@@ -237,7 +238,7 @@ test('ask about a fact, click away, come back: it kept going and the answer is t
   // Back to the same fact: the answer is there (or still coming, then lands).
   await openFindingFromMap(app)
   await app.locator(`button.pv-row[data-pv="${ref}"]`).first().click()
-  await expect(app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 240_000 })
+  await expect(app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 180_000 })
 })
 
 test('tidy: the round archives its own client (it can be restored)', async ({ page }) => {

@@ -209,3 +209,42 @@ def test_without_about_the_record_says_none(store):
     assert seen[0]["about"] is None
     rec = next(iter(change["data_patch"]["asks"].values()))
     assert rec["about"] is None and rec["in_report"] is True
+
+
+# Owner, 2026-11-12: a question on a fact can not take longer than a whole brief or research (about 3 minutes).
+def test_with_too_little_time_left_no_search_starts_and_the_answer_is_written(store, monkeypatch):
+    import napkin.pipeline.ask as ask_mod
+    clan = researched(store)
+    monkeypatch.setattr(ask_mod, "ASK_BUDGET_S", 10.0)  # under SEARCH_NEEDS_S from the start
+    research, jev = FakeResearch(), FakeJev(0.2)
+    result, change, _ = ask(store, clan, q="What share of spend is on TV?", jev=jev, research=research)
+    assert research.calls == [] and not result["searched"]
+    rec = next(iter(change["data_patch"]["asks"].values()))
+    assert rec["status"] == "partial" and rec["answer"] and not rec["searched"]
+    assert rec["searches"] == [{"focus": "What share of spend is on TV?", "sources": 0, "urls": [], "facts": 0,
+                                "skipped": "out of time"}]
+
+
+class SlowResearch(FakeResearch):
+    def __init__(self, secs):
+        super().__init__()
+        self.secs = secs
+
+    def search(self, *a, **k):
+        import time
+        time.sleep(self.secs)
+        return super().search(*a, **k)
+
+
+def test_a_search_still_running_at_the_deadline_is_cut_to_a_gap(store):
+    import time
+    clan = researched(store)
+    r = Researcher(DOC, "3", clan, "t@1.0", caps_for(store, research=SlowResearch(3.0)), ["media_spend"], ["IE"],
+                   ["automotive.ev_charging"], seed="late", question_first=True)
+    t0 = time.monotonic()
+    res, ch, _ = r.run(focus="What share of spend is on TV?", deadline=time.monotonic() + 0.3)
+    assert time.monotonic() - t0 < 2.0, "the run does not wait for the late unit"
+    assert ch["facts_append"] == []
+    run = next(d for d in ch["decisions"] if d["action"] == "research_run")
+    assert "failed: out of time" in run["rationale"] and any("#selection.gaps[" in t or t.startswith("selection.gaps[")
+                                                             for t in run["targets"]), "the cut unit is a recorded gap"
