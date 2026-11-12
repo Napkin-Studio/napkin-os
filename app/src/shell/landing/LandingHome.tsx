@@ -32,6 +32,8 @@ import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
 import { Timesheet } from '../../timesheet/Timesheet'
+import { SetupFlow } from '../setup/SetupFlow'
+import { PeoplePage } from '../setup/PeoplePage'
 import './landing.css'
 
 const NONE: never[] = []
@@ -177,6 +179,10 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     )
   } else if (route.level === 'timesheet') {
     body = <Timesheet go={go} />
+  } else if (route.level === 'setup') {
+    body = <SetupFlow go={go} />
+  } else if (route.level === 'people') {
+    body = <PeoplePage go={go} />
   } else if (homed && route.level === 'map') {
     body = (
       <TheO
@@ -202,6 +208,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenDocument={onOpenDocument}
         onMap={() => go({ level: 'map' })}
         onTimesheet={() => go({ level: 'timesheet' })}
+        onSetup={() => go({ level: 'setup' })}
         onSwitch={role => go(role ? { level: 'home', as: role } : { level: 'agency' })}
       />
     )

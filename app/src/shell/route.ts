@@ -12,6 +12,7 @@
 //   #door-<door>            one door of a home, e.g. #door-client-brains
 //   #home-<role>            another role's home, for the role switcher and the O
 //   #timesheet              the person's own day (features/timesheet-sessions.clan)
+//   #setup #people #audit   setting the agency up, its people and roles, and its audit view (features/agency-setup.clan)
 //
 // For a person with a role, `#agency` is their home; with none it is the desk, as before.
 //
@@ -37,6 +38,9 @@ export type Route =
   | { level: 'door'; door: string }
   | { level: 'home'; as: string }
   | { level: 'timesheet' }
+  | { level: 'setup' }
+  | { level: 'people' }
+  | { level: 'audit' }
 
 export const AGENCY: Route = { level: 'agency' }
 
@@ -56,6 +60,7 @@ export function parseRoute(hash: string): Route {
   if (h === 'clients') return { level: 'clients' }
   if (h === 'map') return { level: 'map' }
   if (h === 'timesheet') return { level: 'timesheet' }
+  if (h === 'setup' || h === 'people' || h === 'audit') return { level: h }
   if (h.startsWith('door-')) {
     const door = h.slice('door-'.length)
     return isWord(door) ? { level: 'door', door } : AGENCY
@@ -90,6 +95,9 @@ export function formatRoute(r: Route): string {
     case 'door': return `#door-${r.door}`
     case 'home': return `#home-${r.as}`
     case 'timesheet': return '#timesheet'
+    case 'setup': return '#setup'
+    case 'people': return '#people'
+    case 'audit': return '#audit'
   }
 }
 
@@ -105,6 +113,9 @@ export function ancestry(r: Route): Route[] {
     case 'map':
     case 'door':
     case 'home':
+    case 'setup':
+    case 'people':
+    case 'audit':
     case 'timesheet': return [AGENCY]
   }
 }
@@ -119,6 +130,9 @@ export function up(r: Route): Route {
     case 'map':
     case 'door':
     case 'home':
+    case 'setup':
+    case 'people':
+    case 'audit':
     case 'timesheet': return AGENCY
   }
 }

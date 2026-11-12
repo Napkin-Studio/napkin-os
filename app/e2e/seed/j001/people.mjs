@@ -27,6 +27,10 @@ export const PEOPLE = {
   // a second agency, its own suffix and so its own workspace: the wall tests (27, 38, 40, 62, 67)
   otherAgency: { username: 'bria@bq', name: 'Bria Test', roles: ['planning', 'account-service'] },
   otherAgencyAdmin: { username: 'barra@bq', name: 'Barra Test', roles: ['admin'] },
+  // agency-setup: the admin of a new agency, one agency per width so a run at 390 and a run at 1440 each start from nothing.
+  // The agency has no directory until its admin imports people; the roster stands in for the control list (stage 4).
+  newAgencyAdmin: { username: 'cara@cr', name: 'Cara Test', roles: ['admin'] },
+  newAgencyAdmin2: { username: 'cara@cs', name: 'Cara Test', roles: ['admin'] },
 }
 
 /** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`. */

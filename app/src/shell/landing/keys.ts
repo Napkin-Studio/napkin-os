@@ -49,6 +49,12 @@ export function arrival(route: Route, names: { agency: string; client?: string; 
       return `${names.tool ?? 'A door'}. Escape goes back to your home.`
     case 'timesheet':
       return `${names.agency}: your timesheet. Escape goes back to your home.`
+    case 'setup':
+      return `${names.agency}: setting up. Escape goes back to your home.`
+    case 'people':
+      return `${names.agency}: your people. Escape goes back to your home.`
+    case 'audit':
+      return `${names.agency}: the audit view. Escape goes back to your home.`
     case 'home':
       return `${names.agency}: a home. Tab moves between doors, Enter opens one.`
     case 'tool': {
