@@ -51,8 +51,10 @@ export async function signIn(page: Page, account: Mock) {
 
 /** A new client through the UI, named so a round's leftovers are easy to find and archive. */
 export async function addClient(page: Page, name: string) {
-  const add = page.getByText(/Add your first client|New client/).first()
+  // The circle's own button (round 4: a text match hit another element and the form never opened).
+  const add = page.getByRole('button', { name: /^(Add your first client|New client)\b/ }).first()
   await add.click()
+  await expect(page.getByPlaceholder('e.g. Kerrygold'), 'the add-client form opens').toBeVisible({ timeout: 10_000 })
   await page.getByPlaceholder('e.g. Kerrygold').fill(name)
   await page.getByPlaceholder('e.g. Dairy · Export').fill('Dairy alternatives · FMCG')
   await page.getByRole('button', { name: 'Add client' }).click()
