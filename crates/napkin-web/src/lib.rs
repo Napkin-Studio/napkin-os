@@ -20,6 +20,7 @@ pub mod dogfood;
 pub mod error;
 pub mod events;
 pub mod exports;
+pub mod jobview;
 pub mod links;
 pub mod look;
 pub mod meter;

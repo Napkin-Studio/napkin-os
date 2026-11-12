@@ -9,7 +9,7 @@
 // and its starting verb, never an error and never a blank box (v2 section 8).
 
 import { useEffect, useRef } from 'react'
-import type { ClientRecord, LibraryItem } from '../../host/types'
+import type { ClientRecord, JobRights, LibraryItem } from '../../host/types'
 import { Empty } from '../../components/states/ScreenStates'
 import { doorById } from '../../components/states/doors'
 import { clientLook, clientName, monogramOf } from '../nui/deskData'
@@ -19,6 +19,7 @@ import { doorTarget } from './doorTargets'
 import { doorIsLive, doorTool } from './model'
 import { Dashboard } from './Dashboard'
 import { ApprovalsPage } from '../approvals/ApprovalsPage'
+import { LiveJobs } from '../job/LiveJobs'
 import './home.css'
 
 interface Props {
@@ -28,10 +29,12 @@ interface Props {
   clients: readonly ClientRecord[]
   items: readonly LibraryItem[]
   apps: readonly string[]
+  /** What this person may do with jobs (the home view's): who gets the Open a job button. */
+  rights?: JobRights | null
   go: (r: Route) => void
 }
 
-export function DoorPage({ door, name, clients, items, apps, go }: Props) {
+export function DoorPage({ door, name, clients, items, apps, rights = null, go }: Props) {
   const top = useRef<HTMLDivElement>(null)
   useEffect(() => { top.current?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true }) }, [door])
   const content = doorById(door)
@@ -49,6 +52,9 @@ export function DoorPage({ door, name, clients, items, apps, go }: Props) {
   } else if (page === 'approvals') {
     // Who approves each stage and by when, who holds each job and for how long: read from the job index.
     body = <ApprovalsPage go={go} />
+  } else if (page === 'live-jobs') {
+    // Every live job, soonest deadline first, each row its page (features/job-page.clan).
+    body = <LiveJobs clients={clients} rights={rights} go={go} />
   } else if (page === 'clients') {
     // The client desk is the Clients door: the desk page itself, not a second list of clients.
     body = <Empty line="The desk lists your clients." verb="Open the desk" example={{ title: 'Example · Client A, an Irish whiskey', lines: ['Client A, an Irish whiskey. One live job, J001.'] }} onStart={() => go({ level: 'clients' })} />
@@ -85,7 +91,7 @@ export function DoorPage({ door, name, clients, items, apps, go }: Props) {
   }
 
   return (
-    <div className={`nui nui-page${door === 'approvals' ? ' ap-page' : ''}`} ref={top} data-testid="door-page" data-door={door}>
+    <div className={`nui nui-page${door === 'approvals' ? ' ap-page' : door === 'live-jobs' ? ' jp-page' : ''}`} ref={top} data-testid="door-page" data-door={door}>
       <div className="studio-shell">
         <section className="app-head">
           <div className="app-head-text">

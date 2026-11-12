@@ -269,16 +269,9 @@ fn every_route_write_is_attributed_on_the_registrys_chain() {
     let store = FsStore::new(dir.path().to_path_buf());
     let me = ctx("cian@wk");
     open_job(&store, &me);
-    assert!(
-        !store
-            .home("jobs-v1")
-            .map(|id| {
-                let clan = ClanFile::from_bytes(store.read(&id).unwrap()).unwrap();
-                clan.has_entry("agent/decision-chain.yaml")
-            })
-            .unwrap(),
-        "opening a job records nothing, as before"
-    );
+    // opening a job is one decision too (features/job-page.clan)
+    assert_eq!(registry_chain(&store).decisions.len(), 1);
+    assert_eq!(registry_chain(&store).decisions[0].action, "open_job");
 
     jobs::set_route(
         &store,
@@ -293,7 +286,7 @@ fn every_route_write_is_attributed_on_the_registrys_chain() {
     )
     .unwrap();
     let chain = registry_chain(&store);
-    assert_eq!(chain.decisions.len(), 1);
+    assert_eq!(chain.decisions.len(), 2);
     let d = &chain.decisions[0];
     assert_eq!(
         (d.agent.as_str(), d.action.as_str()),
@@ -306,7 +299,7 @@ fn every_route_write_is_attributed_on_the_registrys_chain() {
         jobs::move_deadline(&store, &ctx("niamh@wk"), "J001", Some("2026-11-27".into())).unwrap();
     assert_eq!(moved.due.as_deref(), Some("2026-11-27"));
     let chain = registry_chain(&store);
-    assert_eq!(chain.decisions.len(), 2, "one entry each");
+    assert_eq!(chain.decisions.len(), 3, "one entry each");
     assert_eq!(
         (
             chain.decisions[0].agent.as_str(),
@@ -315,6 +308,7 @@ fn every_route_write_is_attributed_on_the_registrys_chain() {
         ("human:niamh@wk", "move_deadline")
     );
     assert_eq!(chain.decisions[1].action, "set_route");
+    assert_eq!(chain.decisions[2].action, "open_job");
     assert_eq!(
         jobs::move_deadline(&store, &me, "J001", Some("soon".into()))
             .unwrap_err()
@@ -348,7 +342,7 @@ fn every_route_write_is_attributed_on_the_registrys_chain() {
     }
     assert_eq!(
         registry_chain(&store).decisions.len(),
-        2,
+        3,
         "the refusals wrote nothing"
     );
 }

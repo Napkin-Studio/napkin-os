@@ -55,7 +55,7 @@ export const DOORS: readonly Door[] = [
     example: { title: A, lines: ['Note: The first line should sound like it is leaving the room.'] } },
   { id: 'clients', name: 'Clients', homes: ['account-service', 'management'], appId: 'ie.napkin.landing', line: 'Your clients go here.', verb: 'Add a client',
     example: { title: A, lines: ['Client A, an Irish whiskey. One live job, J001.'] } },
-  { id: 'live-jobs', name: 'Live jobs', homes: ['account-service', 'management', 'producer', 'traffic'], appId: null, line: 'Every job in flight goes here.', verb: 'Open job J001',
+  { id: 'live-jobs', name: 'Live jobs', homes: ['account-service', 'management', 'producer', 'traffic'], appId: null, line: 'Every job in flight goes here.', verb: 'Open a job',
     example: { title: A, lines: ['J001, Client A. Brief signed. Territories next, due Friday.'] } },
   { id: 'approvals', name: 'Approvals', homes: ['account-service'], appId: null, line: 'Who approves each stage of a job, and by when, goes here.', verb: 'Set the route for J001',
     example: { title: A, lines: ['J001 waits on the creative director for the brief, due Friday.'] } },

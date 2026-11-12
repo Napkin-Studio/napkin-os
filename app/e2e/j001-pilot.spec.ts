@@ -252,8 +252,8 @@ for (const size of SIZES) {
     await expect(mgr.page.getByTestId(/^tile-(stage|risk|hours|waiting|scores|results)$/)).toHaveCount(6)
     const row = mgr.page.getByTestId('tile-stage').locator(`[data-job="${job.job}"]`)
     await expect(row).toHaveAttribute('data-stage', 'client-brief')
-    // the number on the tile is a link, and it opens the client the job is for
-    await expect(mgr.page.getByTestId('tile-stage').getByTestId('tile-number').first()).toHaveAttribute('href', /^#(client-cli_[0-9a-f]{8}|door-live-jobs)$/)
+    // the number on the tile is a link, and it opens the job page (or Live jobs, for several jobs)
+    await expect(mgr.page.getByTestId('tile-stage').getByTestId('tile-number').first()).toHaveAttribute('href', /^#(job-J\d{3,6}|door-live-jobs)$/)
 
     // the gate passes: Brief check
     const patched = await planner.page.request.post(`/s/${job.brief.token}/patch-data`, { data: { patch: READY_BRIEF, agent: 'human', action: 'answer the gate items' } })

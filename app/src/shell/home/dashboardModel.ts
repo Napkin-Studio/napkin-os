@@ -10,12 +10,12 @@
 import type { DashboardView, JobLine } from '../../host/types'
 import { formatRoute } from '../route'
 
-/** Where a number goes: the job's client page for one job, the Live jobs door for several. */
+/** Where a number goes: the job's page for one job, the Live jobs door for several. */
 export function jobHref(jobs: readonly JobLine[]): string {
-  return jobs.length === 1 && jobs[0] ? formatRoute({ level: 'client', client: jobs[0].client_id }) : formatRoute({ level: 'door', door: 'live-jobs' })
+  return jobs.length === 1 && jobs[0] ? formatRoute({ level: 'job', number: jobs[0].number }) : formatRoute({ level: 'door', door: 'live-jobs' })
 }
 
-export const jobLink = (j: JobLine): string => formatRoute({ level: 'client', client: j.client_id })
+export const jobLink = (j: JobLine): string => formatRoute({ level: 'job', number: j.number })
 
 export interface Tile {
   id: 'stage' | 'risk' | 'hours' | 'waiting' | 'scores' | 'results'
