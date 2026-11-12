@@ -124,6 +124,20 @@ async function text(path: string, init?: RequestInit): Promise<string> {
   return asText(await request(path, init))
 }
 
+/** Pages shorter than this are posted as they are: gzip would save little. */
+const GZIP_FROM = 16 * 1024
+
+/** `text` gzipped, or null where the browser cannot (no CompressionStream). */
+export async function gzipText(text: string): Promise<Uint8Array | null> {
+  if (typeof CompressionStream !== 'function') return null
+  try {
+    const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
 function postJson(body: unknown): RequestInit {
   return { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
 }
@@ -312,8 +326,24 @@ export const httpHost: Host = {
   setEditMode: async active => {
     await request(`/d/${requireDoc()}/edit-mode`, postJson({ active }))
   },
+  // The composed page is about a megabyte for a real research, and posting it
+  // whole was most of the wait to open one (features/doc-open-speed.clan): it
+  // goes gzipped, and the server stores what it unpacks to.
   updatePreviewHtml: async html => {
-    await request(`/d/${requireDoc()}/preview-html`, { method: 'POST', body: html })
+    const path = `/d/${requireDoc()}/preview-html`
+    const packed = html.length >= GZIP_FROM ? await gzipText(html) : null
+    if (packed) {
+      const resp = await fetch(`${await base()}${path}`, {
+        credentials: 'same-origin',
+        method: 'POST',
+        headers: { 'content-type': 'text/html; charset=utf-8', 'content-encoding': 'gzip' },
+        body: packed as unknown as BodyInit,
+      })
+      if (resp.ok) return
+      // Not taken (a server from before it unpacked bodies, mid-deploy): send
+      // it plain, which also says the server's own words if it is refused.
+    }
+    await request(path, { method: 'POST', headers: { 'content-type': 'text/html; charset=utf-8' }, body: html })
   },
   savePatch: async (id, content) => {
     await request(`/d/${requireDoc()}/patch`, postJson({ id, content }))

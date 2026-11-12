@@ -272,10 +272,20 @@ export default function AppRuntime({
 
   // With a host behind a URL, hand it the page and point the frame at it.
   // With no server there is nothing to hand it to: the page is inlined below.
+  // One post at a time, and only the newest page points the frame: on a slow
+  // link a post takes seconds, and a page composed again meanwhile used to load
+  // the frame once per post, or leave the older page stored if its post landed
+  // last (features/doc-open-speed.clan). A page already superseded is not sent.
+  const published = useRef(0)
+  const posting = useRef<Promise<void>>(Promise.resolve())
   useEffect(() => {
     if (!prepared || host.frameLoad === 'srcdoc') return
-    host.updatePreviewHtml(prepared).then(() => {
-      setIframeSrc(host.clanOrigin() + '/document?t=' + Date.now())
+    const mine = ++published.current
+    const latest = () => mine === published.current
+    posting.current = posting.current.then(async () => {
+      if (!latest()) return
+      await host.updatePreviewHtml(prepared)
+      if (latest()) setIframeSrc(host.clanOrigin() + '/document?t=' + Date.now())
     }).catch(console.error)
   }, [prepared])
 
