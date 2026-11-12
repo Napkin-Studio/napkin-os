@@ -17,7 +17,9 @@ export default defineConfig({
   testDir: '.',
   testMatch: '*.uat.ts',
   fullyParallel: false,
-  workers: 1,
+  // One file per worker (each file has its own client); UAT_WORKERS=3 runs the files side by side,
+  // which is also a small concurrency test. Journeys within a file stay in order (fullyParallel off).
+  workers: Number(process.env.UAT_WORKERS || 1),
   retries: 0,
   reporter: [['list'], ['json', { outputFile: process.env.UAT_JSON || 'uat-results.json' }]],
   // A Research run takes two to four minutes, plus its questions.
