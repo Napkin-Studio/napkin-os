@@ -22,7 +22,7 @@
 
 use std::path::PathBuf;
 
-use napkin_host::{Change, DocId, HostError, HostResult, Library, PartStore, Version};
+use napkin_host::{Change, DocId, HostError, HostResult, Library, PartStore, Stamp, Version};
 
 pub struct TenantStore {
     root: PathBuf,
@@ -67,6 +67,44 @@ impl TenantStore {
     }
 }
 
+/// A file of its own beside `path` for a write to land in before it is renamed over `path`: hidden, and
+/// not a `.clan`, so no listing takes it for a document; unique to this process and this write, so two
+/// web tasks writing the same document never share one.
+fn temp_beside(path: &std::path::Path) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("document");
+    path.with_file_name(format!(".{name}.{}.{n}.tmp", std::process::id()))
+}
+
+#[cfg(unix)]
+fn stat_stamp(m: &std::fs::Metadata) -> String {
+    use std::os::unix::fs::MetadataExt;
+    format!(
+        "{}:{}:{}:{}.{}:{}.{}",
+        m.len(),
+        m.dev(),
+        m.ino(),
+        m.mtime(),
+        m.mtime_nsec(),
+        m.ctime(),
+        m.ctime_nsec()
+    )
+}
+
+#[cfg(not(unix))]
+fn stat_stamp(m: &std::fs::Metadata) -> String {
+    let at = |t: std::io::Result<std::time::SystemTime>| {
+        t.ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_nanos())
+    };
+    format!("{}:{}:{}", m.len(), at(m.modified()), at(m.created()))
+}
+
 /// Keep an id URL- and path-safe: everything outside the allowed set collapses
 /// to `-`. Dots survive because app ids are reverse-DNS (`ie.napkin.home`) and
 /// fork branches are `<slug>.<agent>`.
@@ -100,14 +138,34 @@ impl PartStore for TenantStore {
         self.path_for(id).map(|p| p.exists()).unwrap_or(false)
     }
 
+    /// What a stat gives, without reading the file (docs/contracts/os-layer.md 13.2): its size, its
+    /// modified and changed times to the nanosecond the filesystem keeps, and its inode. `apply` writes
+    /// a new file and renames it into place, so every write lands on a new inode while the old one is
+    /// still held: two writes of the same size inside one tick of a coarse clock still differ. Every
+    /// web task on the same disk sees the same stat, which a counter in one task's memory would not.
+    fn stamp(&self, id: &DocId) -> HostResult<Stamp> {
+        let path = self.path_for(id)?;
+        let m = std::fs::metadata(&path).map_err(|e| HostError::not_found(format!("{id}: {e}")))?;
+        Ok(Stamp::new(stat_stamp(&m)))
+    }
+
     /// The only write. Unchecked until W2-A4: `change.base` against
-    /// `self.version(&change.doc)` belongs here.
+    /// `self.version(&change.doc)` belongs here. The bytes go to a file of
+    /// their own beside the document and are renamed over it: a reader sees
+    /// the old document or the new one, never half of one, and the new file's
+    /// inode is part of its [`stamp`](PartStore::stamp).
     fn apply(&self, change: &Change) -> HostResult<Version> {
         let path = self.path_for(&change.doc)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| HostError::internal(e.to_string()))?;
         }
-        std::fs::write(&path, &change.bytes).map_err(|e| HostError::internal(e.to_string()))?;
+        let tmp = temp_beside(&path);
+        let written =
+            std::fs::write(&tmp, &change.bytes).and_then(|_| std::fs::rename(&tmp, &path));
+        if let Err(e) = written {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(HostError::internal(e.to_string()));
+        }
         Ok(change.archive_version())
     }
 }
