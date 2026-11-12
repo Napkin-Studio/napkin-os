@@ -1,0 +1,13 @@
+$ scripts/check.sh --all    # feat/discovery at 86091659, uv 0.13.7, no provider key set, 11 Nov 2026
+suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool
+── rust          pass  (27s)
+── wasm          pass  (1s)
+── conformance   pass  (1s)
+── frontend      pass  (16s)
+── desktop       pass  (1s)
+── engine        pass  (15s)
+── middleware    pass  (63s)
+── mock-backend  pass  (17s)
+── terraform     pass  (50s)
+── production-tool pass  (45s)
+all checks passed: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool
