@@ -1,0 +1,564 @@
+{
+ "schema": 1,
+ "version": "1",
+ "note": "First draft from v2 section 7 for Laurence to read and edit before any real score. A change is a new version. Ten tests a dimension, each yes or no with a one line evidence.",
+ "dimensions": [
+  "idea",
+  "craft",
+  "effect"
+ ],
+ "kinds": [
+  "script",
+  "idea_route",
+  "visual_brief"
+ ],
+ "tests": [
+  {
+   "id": "idea.answers_proposition",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Does the idea answer the brief's single-minded proposition?",
+   "pass_when": "The idea is plainly a way of saying the proposition, and nothing else is competing with it.",
+   "brief_fields": [
+    "single_minded_proposition"
+   ],
+   "reason_code": "judge.fail.idea_answers_proposition"
+  },
+  {
+   "id": "idea.not_a_competitor",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Could a competitor not run this idea with their name on it?",
+   "pass_when": "Swapping the brand name for a rival's makes the idea stop working.",
+   "brief_fields": [
+    "single_minded_proposition",
+    "competitor_context"
+   ],
+   "reason_code": "judge.fail.idea_not_a_competitor"
+  },
+  {
+   "id": "idea.not_banned",
+   "dim": "idea",
+   "kind": null,
+   "method": "code",
+   "question": "Is the idea absent from the agency's Banned list?",
+   "pass_when": "No Banned-list match is recorded on the work.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.idea_not_banned"
+  },
+  {
+   "id": "idea.headline",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Could a journalist headline it in one line?",
+   "pass_when": "A single sentence says what the idea is without the brand name explaining it.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.idea_headline"
+  },
+  {
+   "id": "idea.one_thought",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Is it one thought?",
+   "pass_when": "The idea can be said once and the second half does not argue with the first.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.idea_one_thought"
+  },
+  {
+   "id": "idea.insight_link",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it start from the brief's insight?",
+   "pass_when": "The idea visibly grows out of the insight and does not ignore it.",
+   "brief_fields": [
+    "insight"
+   ],
+   "reason_code": "judge.fail.idea_insight_link"
+  },
+  {
+   "id": "idea.audience_would_say",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Would the audience repeat it to a friend?",
+   "pass_when": "It is easy to retell, and a friend would get it without the ad.",
+   "brief_fields": [
+    "audience"
+   ],
+   "reason_code": "judge.fail.idea_audience_would_say"
+  },
+  {
+   "id": "idea.surprise",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it say something the audience does not expect from this category?",
+   "pass_when": "It breaks a category habit and does not repeat one.",
+   "brief_fields": [
+    "background",
+    "audience"
+   ],
+   "reason_code": "judge.fail.idea_surprise"
+  },
+  {
+   "id": "idea.tellable_short",
+   "dim": "idea",
+   "kind": null,
+   "method": "code",
+   "question": "Is it said in 30 words or fewer?",
+   "pass_when": "The work's idea line is 30 words or fewer.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.idea_tellable_short"
+  },
+  {
+   "id": "idea.reason_to_believe",
+   "dim": "idea",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it give the audience a reason to believe it?",
+   "pass_when": "The idea carries, or points at, one of the brief's reasons to believe.",
+   "brief_fields": [
+    "reasons_to_believe"
+   ],
+   "reason_code": "judge.fail.idea_reason_to_believe"
+  },
+  {
+   "id": "effect.objective",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Is it tied to the brief's objective?",
+   "pass_when": "The work would move the objective the brief names and nothing else.",
+   "brief_fields": [
+    "objectives"
+   ],
+   "reason_code": "judge.fail.effect_objective"
+  },
+  {
+   "id": "effect.measure",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Can its effect be measured with the brief's measure?",
+   "pass_when": "One of the brief's measures would show whether it worked.",
+   "brief_fields": [
+    "measurement"
+   ],
+   "reason_code": "judge.fail.effect_measure"
+  },
+  {
+   "id": "effect.feel_or_do",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it say what people will feel or do?",
+   "pass_when": "A person can say what the audience will feel or do after meeting it.",
+   "brief_fields": [
+    "desired_response"
+   ],
+   "reason_code": "judge.fail.effect_feel_or_do"
+  },
+  {
+   "id": "effect.barrier",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it deal with the barrier the brief names?",
+   "pass_when": "The work takes on the barrier and does not step round it.",
+   "brief_fields": [
+    "barrier"
+   ],
+   "reason_code": "judge.fail.effect_barrier"
+  },
+  {
+   "id": "effect.objection",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it answer the audience's objection?",
+   "pass_when": "The objection is met in the work, not left for the audience to resolve.",
+   "brief_fields": [
+    "objection"
+   ],
+   "reason_code": "judge.fail.effect_objection"
+  },
+  {
+   "id": "effect.job",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it do the job the brief gives the work?",
+   "pass_when": "It does what the brief's job line asks of this piece of work.",
+   "brief_fields": [
+    "job"
+   ],
+   "reason_code": "judge.fail.effect_job"
+  },
+  {
+   "id": "effect.audience_fit",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Is it made for the audience the brief names?",
+   "pass_when": "The language and the world belong to that audience.",
+   "brief_fields": [
+    "audience",
+    "tone_and_world"
+   ],
+   "reason_code": "judge.fail.effect_audience_fit"
+  },
+  {
+   "id": "effect.tone",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Does it keep the brief's tone?",
+   "pass_when": "The tone is the tone the brief sets, not a neighbour of it.",
+   "brief_fields": [
+    "tone_and_world"
+   ],
+   "reason_code": "judge.fail.effect_tone"
+  },
+  {
+   "id": "effect.mandatories",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Is it free of anything the brief rules out?",
+   "pass_when": "Nothing in the work breaks a mandatory or a limit the brief sets.",
+   "brief_fields": [
+    "mandatories"
+   ],
+   "reason_code": "judge.fail.effect_mandatories"
+  },
+  {
+   "id": "effect.response_path",
+   "dim": "effect",
+   "kind": null,
+   "method": "llm",
+   "question": "Is the next step for the audience clear?",
+   "pass_when": "A person can see what to do or think next.",
+   "brief_fields": [
+    "desired_response",
+    "media_roles"
+   ],
+   "reason_code": "judge.fail.effect_response_path"
+  },
+  {
+   "id": "craft.script.mandatory_present",
+   "dim": "craft",
+   "kind": "script",
+   "method": "code",
+   "question": "Is every mandatory line in the script?",
+   "pass_when": "Each mandatory line the checks list appears in the beats.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_mandatory_present"
+  },
+  {
+   "id": "craft.script.no_banned_word",
+   "dim": "craft",
+   "kind": "script",
+   "method": "code",
+   "question": "Is every banned word absent?",
+   "pass_when": "No banned word from the checks appears in the beats.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_no_banned_word"
+  },
+  {
+   "id": "craft.script.fits_the_slot",
+   "dim": "craft",
+   "kind": "script",
+   "method": "code",
+   "question": "Does it fit the slot?",
+   "pass_when": "For a timed format the words read within the slot at 2.5 words a second, with a second to spare.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_fits_the_slot"
+  },
+  {
+   "id": "craft.script.no_dash",
+   "dim": "craft",
+   "kind": "script",
+   "method": "code",
+   "question": "Is it free of em and en dashes?",
+   "pass_when": "No beat holds an em or an en dash.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_no_dash"
+  },
+  {
+   "id": "craft.script.spoken_line",
+   "dim": "craft",
+   "kind": "script",
+   "method": "code",
+   "question": "Is there at least one line to say?",
+   "pass_when": "At least one beat has words in it.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_spoken_line"
+  },
+  {
+   "id": "craft.script.first_line",
+   "dim": "craft",
+   "kind": "script",
+   "method": "llm",
+   "question": "Does the first line earn the second?",
+   "pass_when": "The opening line gives the listener a reason to stay.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_first_line"
+  },
+  {
+   "id": "craft.script.no_repeat",
+   "dim": "craft",
+   "kind": "script",
+   "method": "llm",
+   "question": "Does each beat add something new?",
+   "pass_when": "No beat only repeats the one before it.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_no_repeat"
+  },
+  {
+   "id": "craft.script.sounds_spoken",
+   "dim": "craft",
+   "kind": "script",
+   "method": "llm",
+   "question": "Does it sound like a person saying it?",
+   "pass_when": "Read aloud it is speech, not copy.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_sounds_spoken"
+  },
+  {
+   "id": "craft.script.ends_on_line",
+   "dim": "craft",
+   "kind": "script",
+   "method": "llm",
+   "question": "Does it end on the brand line or the proposition?",
+   "pass_when": "The last beat lands the idea.",
+   "brief_fields": [
+    "single_minded_proposition"
+   ],
+   "reason_code": "judge.fail.craft_script_ends_on_line"
+  },
+  {
+   "id": "craft.script.every_word_works",
+   "dim": "craft",
+   "kind": "script",
+   "method": "llm",
+   "question": "Does every word earn its place?",
+   "pass_when": "Cutting any beat would lose something that matters.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_script_every_word_works"
+  },
+  {
+   "id": "craft.idea_route.has_bet",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "code",
+   "question": "Does the route state its bet?",
+   "pass_when": "The route has a bet of one sentence.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_has_bet"
+  },
+  {
+   "id": "craft.idea_route.has_cards",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "code",
+   "question": "Does it hold at least one card?",
+   "pass_when": "At least one card is in the route.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_has_cards"
+  },
+  {
+   "id": "craft.idea_route.team_made",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "code",
+   "question": "Did the team write the cards first?",
+   "pass_when": "Every card in the route was first written by a person.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_team_made"
+  },
+  {
+   "id": "craft.idea_route.named",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "code",
+   "question": "Is the route named?",
+   "pass_when": "The route has a name of one to six words.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_named"
+  },
+  {
+   "id": "craft.idea_route.bet_short",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "code",
+   "question": "Is the bet short?",
+   "pass_when": "The bet is 35 words or fewer.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_bet_short"
+  },
+  {
+   "id": "craft.idea_route.bet_testable",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "llm",
+   "question": "Could the bet be proved wrong?",
+   "pass_when": "A result could show the bet was wrong.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_bet_testable"
+  },
+  {
+   "id": "craft.idea_route.cards_cohere",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "llm",
+   "question": "Do the cards point the same way?",
+   "pass_when": "The cards are parts of one route and do not pull apart.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_cards_cohere"
+  },
+  {
+   "id": "craft.idea_route.can_be_made",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "llm",
+   "question": "Could the team make it with the means the brief gives?",
+   "pass_when": "Budget, time and channels in the brief allow it.",
+   "brief_fields": [
+    "budget_and_scope",
+    "media_roles"
+   ],
+   "reason_code": "judge.fail.craft_idea_route_can_be_made"
+  },
+  {
+   "id": "craft.idea_route.next_step",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "llm",
+   "question": "Is it clear what to make first?",
+   "pass_when": "A first piece of work follows plainly from the route.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_next_step"
+  },
+  {
+   "id": "craft.idea_route.range",
+   "dim": "craft",
+   "kind": "idea_route",
+   "method": "llm",
+   "question": "Does it stretch into more than one piece of work?",
+   "pass_when": "The route can make more than one thing and stay itself.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_idea_route_range"
+  },
+  {
+   "id": "craft.visual_brief.has_territory",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "code",
+   "question": "Does it name a territory with its line?",
+   "pass_when": "The territory has a name and a one sentence line.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_has_territory"
+  },
+  {
+   "id": "craft.visual_brief.must_show",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "code",
+   "question": "Does it say what must show?",
+   "pass_when": "At least one must-show line is written.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_must_show"
+  },
+  {
+   "id": "craft.visual_brief.never_show",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "code",
+   "question": "Does it say what must never show?",
+   "pass_when": "At least one never-show line is written.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_never_show"
+  },
+  {
+   "id": "craft.visual_brief.tone",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "code",
+   "question": "Does it carry the tone?",
+   "pass_when": "At least one tone word is written.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_tone"
+  },
+  {
+   "id": "craft.visual_brief.frame",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "code",
+   "question": "Does it carry a reference frame?",
+   "pass_when": "At least one reference frame is attached.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_frame"
+  },
+  {
+   "id": "craft.visual_brief.territory_clear",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "llm",
+   "question": "Is the territory clear enough to shoot from?",
+   "pass_when": "A person could picture the first frame from the line.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_territory_clear"
+  },
+  {
+   "id": "craft.visual_brief.consistent",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "llm",
+   "question": "Do the must-show and never-show lines agree?",
+   "pass_when": "No line contradicts another.",
+   "brief_fields": [],
+   "reason_code": "judge.fail.craft_visual_brief_consistent"
+  },
+  {
+   "id": "craft.visual_brief.proposition_visible",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "llm",
+   "question": "Can the proposition be seen in it?",
+   "pass_when": "The proposition would show in the pictures.",
+   "brief_fields": [
+    "single_minded_proposition"
+   ],
+   "reason_code": "judge.fail.craft_visual_brief_proposition_visible"
+  },
+  {
+   "id": "craft.visual_brief.product_role",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "llm",
+   "question": "Is the product's place in the picture clear?",
+   "pass_when": "It says how the product shows.",
+   "brief_fields": [
+    "mandatories"
+   ],
+   "reason_code": "judge.fail.craft_visual_brief_product_role"
+  },
+  {
+   "id": "craft.visual_brief.distinct",
+   "dim": "craft",
+   "kind": "visual_brief",
+   "method": "llm",
+   "question": "Is it unlike what the category already looks like?",
+   "pass_when": "The look is not the category's usual look.",
+   "brief_fields": [
+    "competitor_context"
+   ],
+   "reason_code": "judge.fail.craft_visual_brief_distinct"
+  }
+ ]
+}

@@ -69,6 +69,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
         .route("/t/{tenant}/jobs/{number}/route", put(set_route))
         .route("/t/{tenant}/dashboard", get(dashboard))
+        .route("/t/{tenant}/judge/telemetry", get(judge_telemetry))
         .route(
             "/t/{tenant}/agency/look",
             get(crate::look::get_look).put(crate::look::put_look),
@@ -528,6 +529,17 @@ async fn dashboard(
     Tenant(tenant): Tenant,
 ) -> ApiResult<Json<napkin_host::jobindex::Dashboard>> {
     Ok(Json(job_index(&ctx.workspace(&tenant))?.dashboard()))
+}
+
+/// What leaves the vault of Judge's scores (features/judge.clan): one row per score, ids, hashes, numbers,
+/// codes and what the creative director then did, computed from the chains. No evidence, no reason, no
+/// title, no name. Management's: the route is behind the role check.
+async fn judge_telemetry(State(ctx): Ctx, Tenant(tenant): Tenant) -> ApiResult<Json<Value>> {
+    let ws = ctx.workspace(&tenant);
+    Ok(Json(serde_json::json!({
+        "schema": 1,
+        "rows": napkin_host::ops::judge::telemetry_rows(&*ws.store),
+    })))
 }
 
 // ── Clients ──────────────────────────────────────────────────────────────────

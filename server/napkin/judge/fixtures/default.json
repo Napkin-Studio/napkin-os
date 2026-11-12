@@ -1,0 +1,65 @@
+{
+ "schema": 1,
+ "note": "Fixture answers for NAPKIN_JUDGE_BACKEND=fixture: no model. Code tests are always run in code.",
+ "default": {
+  "fail": [
+   "idea.surprise",
+   "effect.objection"
+  ]
+ },
+ "kinds": {
+  "script": {
+   "fail": [
+    "idea.surprise",
+    "craft.script.every_word_works",
+    "effect.objection"
+   ]
+  },
+  "idea_route": {
+   "fail": [
+    "idea.surprise",
+    "craft.idea_route.range"
+   ]
+  },
+  "visual_brief": {
+   "fail": [
+    "craft.visual_brief.distinct"
+   ]
+  }
+ },
+ "evidence": {
+  "idea.answers_proposition": "Fixture: The idea is plainly a way of saying the proposition, and nothing else is competing with it.",
+  "idea.not_a_competitor": "Fixture: Swapping the brand name for a rival's makes the idea stop working.",
+  "idea.headline": "Fixture: A single sentence says what the idea is without the brand name explaining it.",
+  "idea.one_thought": "Fixture: The idea can be said once and the second half does not argue with the first.",
+  "idea.insight_link": "Fixture: The idea visibly grows out of the insight and does not ignore it.",
+  "idea.audience_would_say": "Fixture: It is easy to retell, and a friend would get it without the ad.",
+  "idea.surprise": "Fixture: It breaks a category habit and does not repeat one.",
+  "idea.reason_to_believe": "Fixture: The idea carries, or points at, one of the brief's reasons to believe.",
+  "effect.objective": "Fixture: The work would move the objective the brief names and nothing else.",
+  "effect.measure": "Fixture: One of the brief's measures would show whether it worked.",
+  "effect.feel_or_do": "Fixture: A person can say what the audience will feel or do after meeting it.",
+  "effect.barrier": "Fixture: The work takes on the barrier and does not step round it.",
+  "effect.objection": "Fixture: The objection is met in the work, not left for the audience to resolve.",
+  "effect.job": "Fixture: It does what the brief's job line asks of this piece of work.",
+  "effect.audience_fit": "Fixture: The language and the world belong to that audience.",
+  "effect.tone": "Fixture: The tone is the tone the brief sets, not a neighbour of it.",
+  "effect.mandatories": "Fixture: Nothing in the work breaks a mandatory or a limit the brief sets.",
+  "effect.response_path": "Fixture: A person can see what to do or think next.",
+  "craft.script.first_line": "Fixture: The opening line gives the listener a reason to stay.",
+  "craft.script.no_repeat": "Fixture: No beat only repeats the one before it.",
+  "craft.script.sounds_spoken": "Fixture: Read aloud it is speech, not copy.",
+  "craft.script.ends_on_line": "Fixture: The last beat lands the idea.",
+  "craft.script.every_word_works": "Fixture: Cutting any beat would lose something that matters.",
+  "craft.idea_route.bet_testable": "Fixture: A result could show the bet was wrong.",
+  "craft.idea_route.cards_cohere": "Fixture: The cards are parts of one route and do not pull apart.",
+  "craft.idea_route.can_be_made": "Fixture: Budget, time and channels in the brief allow it.",
+  "craft.idea_route.next_step": "Fixture: A first piece of work follows plainly from the route.",
+  "craft.idea_route.range": "Fixture: The route can make more than one thing and stay itself.",
+  "craft.visual_brief.territory_clear": "Fixture: A person could picture the first frame from the line.",
+  "craft.visual_brief.consistent": "Fixture: No line contradicts another.",
+  "craft.visual_brief.proposition_visible": "Fixture: The proposition would show in the pictures.",
+  "craft.visual_brief.product_role": "Fixture: It says how the product shows.",
+  "craft.visual_brief.distinct": "Fixture: The look is not the category's usual look."
+ }
+}

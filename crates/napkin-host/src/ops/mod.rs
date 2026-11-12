@@ -22,6 +22,7 @@ pub mod decisions;
 pub mod edit;
 pub mod gate;
 pub mod ideas;
+pub mod judge;
 pub mod members;
 pub mod middleware;
 pub mod office;

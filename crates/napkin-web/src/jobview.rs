@@ -34,6 +34,7 @@ pub const JOB_KEYS: &[&str] = &[
     "documents",
     "route",
     "holder",
+    "scores",
 ];
 /// Held back from every role: the people on the job feed the on-the-job filter of Needs you and are
 /// nobody's to read off the job.
@@ -51,6 +52,27 @@ const DOC_KEYS: &[&str] = &[
     "locked",
     "version",
     "changed_since_lock",
+];
+/// What is sent of a piece's latest Judge score, by name: numbers, ids and codes, and no field that names a
+/// person (features/judge.clan). Only agency roles are sent jobs; a client's link never carries them.
+const SCORE_KEYS: &[&str] = &[
+    "doc",
+    "title",
+    "piece",
+    "kind",
+    "score",
+    "at",
+    "total",
+    "idea",
+    "craft",
+    "effect",
+    "advised_route",
+    "route",
+    "brave",
+    "trust",
+    "overruled",
+    "decided",
+    "current",
 ];
 const HOLDER_KEYS: &[&str] = &[
     "party",
@@ -160,6 +182,9 @@ pub fn job_view(entry: &JobEntry, roles: &[String]) -> Value {
     if let Some(x) = v.get("route").cloned() {
         v.insert("route".into(), pick_all(&x, &step_keys));
     }
+    if let Some(x) = v.get("scores").cloned() {
+        v.insert("scores".into(), pick_all(&x, SCORE_KEYS));
+    }
     Value::Object(v)
 }
 
@@ -168,6 +193,7 @@ mod tests {
     use super::*;
     use clan_sdk::ClientRef;
     use napkin_host::jobindex::{Holder, JobDoc, RouteStepState, StageInfo};
+    use napkin_host::ops::judge::PieceScore;
 
     /// Every field of a job set, so a field the lists forget shows as a key that is missing or extra.
     fn seeded() -> JobEntry {
@@ -229,6 +255,25 @@ mod tests {
                 days_late: 0,
             }),
             people: vec!["aoife@wk".into(), "dara@wk".into()],
+            scores: vec![PieceScore {
+                doc: "a.clan".into(),
+                title: "Script".into(),
+                piece: "script".into(),
+                kind: "script".into(),
+                score: "d_1".into(),
+                at: "2026-11-12T10:00:00Z".into(),
+                total: 22,
+                idea: 7,
+                craft: 7,
+                effect: 8,
+                advised_route: "team".into(),
+                route: "team".into(),
+                brave: false,
+                trust: "shadow".into(),
+                overruled: false,
+                decided: Some("kept".into()),
+                current: true,
+            }],
         }
     }
 
@@ -260,6 +305,7 @@ mod tests {
         assert_eq!(keys(&full["stage"]), sorted(STAGE_KEYS, &[]));
         assert_eq!(keys(&full["documents"][0]), sorted(DOC_KEYS, &[]));
         assert_eq!(keys(&full["holder"]), sorted(HOLDER_KEYS, &[]));
+        assert_eq!(keys(&full["scores"][0]), sorted(SCORE_KEYS, &[]));
     }
 
     #[test]

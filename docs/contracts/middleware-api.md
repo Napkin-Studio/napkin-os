@@ -1785,3 +1785,36 @@ stand-in. The host finds the parts itself, deterministically, from the
 client's words and the app's part names (Contract 4 §7.5.2a), and nothing in
 client review calls the middleware. A request for `find_client_parts` is
 `400 unknown_task`.
+
+## 12. Judge: `judge_work` (features/judge.clan)
+
+One short task, `judge_work@1.0`, answers the rubric's thirty yes or no tests for one piece of work. **It returns test answers only. The host adds them up, routes and writes the verdict; no model and no handler returns a number or a total.**
+
+**Input** (`payload.input`; the request's `clan` carries `{id, version}` and nothing else):
+
+```
+{ "work":  { "kind": "script | idea_route | visual_brief", "content": { allow-listed fields of the work } },
+  "brief": { the brief's approved fields },
+  "rubric_version": "1",
+  "quote": true }                       // optional: price the run, run nothing
+```
+
+The handler builds what it reads from allow lists, one function (`napkin/judge/core.py: assemble_input`): the work's fields per kind (script: format, slot_s, proposition, cast, beats with their own fields, the mandatory and banned lists; idea route: the route's name and bet and each card's text, kind, brief link and banned match, never a card's author or votes; visual brief: territory, proposition, tone, must and never show, frame captions) and the brief fields `background, objectives, audience, competitor_context, insight, single_minded_proposition, job, barrier, objection, reasons_to_believe, desired_response, tone_and_world, measurement, mandatories, media_roles, budget_and_scope`. Any other key is dropped. It never receives a drafter's prompt or another client's material.
+
+**Result:** `{tests: [{id, value: pass|fail, evidence}], backend, model, rubric_version, prompt_hash, price_eur}`: exactly the rubric's thirty ids for the kind (`napkin/judge/rubric.json`: ten idea, ten craft of the kind, ten effect), in rubric order. A reply that misses, doubles or adds an id, or lacks a value or an evidence line, is `502 judge_malformed` and never a pass. `change` is null. A quote answers `{quote: {price_eur, backend, tests: 30}}`.
+
+**Backend:** `NAPKIN_JUDGE_BACKEND` is `fixture` or `llm-judge` (`jev` later). Unset or any other value is `503 not_configured`; it never falls through. Tests marked `code` in the rubric are always answered in code. `fixture` answers the rest from a file (`NAPKIN_JUDGE_FIXTURE`, default `napkin/judge/fixtures/default.json`: failing ids per work kind and an evidence line per id), makes no model call and costs nothing. `llm-judge` asks the model once per dimension (purposes `judge_idea`, `judge_craft`, `judge_effect`, routed through `model_routes`, never the writers' alias); the call is `private`, so its bodies are never written to the run log.
+
+| Refusal | Status | `error.type` | When (checked before any call) |
+|---|---|---|---|
+| not set up | 503 | `not_configured` | backend unset or unknown; fixture file unreadable; no model port |
+| AI off | 403 | `ai_off` | `llm-judge` and `client_ai.written_yes_recorded(scope, client_id)` is false (always false until a record builds the switch; the seam is `napkin/client_ai.py`, shared by every creative tool) |
+| not EU | 403 | `not_eu` | `NAPKIN_MODEL_PIN=eu` or a deployed `NAPKIN_ENV`, and a judge route resolves to a `global.` profile, to a non-eu. id, or runs on a wire other than bedrock |
+| spend | 429 | `spend_refused` | `spend.allow(price, env, run)` says no (price `NAPKIN_JUDGE_PRICE_EUR`, default 0.05 euro) |
+| malformed | 502 | `judge_malformed` | see Result |
+| provider | 502 | `provider_error` | the model failed |
+| bad input | 400 | `invalid_input` | unknown work kind or rubric version |
+
+**The wall:** work content and brief text are not logged (the handler logs the kind, backend and counts), and not written to the run log. Only the host's telemetry export, built from an allow list of ids, numbers and codes, leaves the vault.
+
+**Calibration:** `python -m napkin.judge.calibrate <export.json>` reads the telemetry rows and prints agreement with the creative director (point value and the lower bound of a 95 percent Wilson interval), repeatability, the tests that flip, and `earned: yes|no` against the proposed trust numbers (60 decided pieces with 20 kept and 20 returned, lower bound 0.80, repeat 0.95, no test flipping over 10 percent).

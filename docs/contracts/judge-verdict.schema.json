@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "judge-verdict.schema.json",
+  "title": "Judge verdicts (features/judge.clan)",
+  "description": "A Judge score is one verdict decision in the work's own file; the creative director's overrule is a second verdict that cites it. Both are ordinary decisions of the document's chain (clan-sdk Decision): the fields below are the ones a reader may rely on, and unknown fields survive in `extra`. The `judge` block is versioned by `schema`; a reader reads by that number. A score field is never present on a Judge verdict: the backend explains, so it holds no calibrated number (judgement-architecture.clan, gate C1).",
+  "oneOf": [{ "$ref": "#/definitions/score" }, { "$ref": "#/definitions/overrule" }],
+  "definitions": {
+    "route": { "enum": ["team", "cd_brave", "cd"] },
+    "test": {
+      "type": "object",
+      "required": ["id", "dim", "method", "value", "evidence", "reason_code"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "A test of the rubric, e.g. idea.headline." },
+        "dim": { "enum": ["idea", "craft", "effect"] },
+        "method": { "enum": ["code", "llm", "jev"] },
+        "question": { "type": "string", "description": "The test's question, as the rubric words it." },
+        "value": { "enum": ["pass", "fail"] },
+        "evidence": { "type": "string", "minLength": 1, "description": "One line that quotes the work or names the brief point it was tested against." },
+        "reason_code": { "type": "string", "description": "pass, or the rubric's code for a failed test." }
+      }
+    },
+    "score": {
+      "type": "object",
+      "required": ["kind", "agent", "handler", "backend", "version", "targets", "reason_code", "taxonomy_version", "rationale", "judge"],
+      "properties": {
+        "kind": { "const": "verdict" },
+        "agent": { "const": "judge" },
+        "action": { "const": "score_work" },
+        "handler": { "type": "string", "pattern": "^judge_work@" },
+        "backend": { "enum": ["fixture", "llm-judge", "jev"] },
+        "version": { "type": "string", "description": "The exact version scored: the hash of the work's allow-listed content." },
+        "targets": { "type": "array", "minItems": 1, "items": { "type": "string", "description": "<document id>#<address of the piece>: script, territory or routes[<id>]." } },
+        "cites": { "type": "array", "items": { "type": "string", "description": "The brief's approve decision, when it holds one." } },
+        "polarity": { "not": {}, "description": "Never present on a score: a bad verdict stops a lock and a good one answers a person's bad one, and Judge never blocks and never answers. The route is in reason_code." },
+        "reason_code": { "enum": ["judge.return", "judge.brave", "judge.forward"] },
+        "taxonomy_version": { "type": "string", "description": "The rubric version." },
+        "rationale": { "type": "string", "description": "The notes in one line." },
+        "score": { "not": {}, "description": "Never present: an uncalibrated backend yields pass or fail." },
+        "judge": {
+          "type": "object",
+          "required": ["schema", "version", "rubric_version", "backend", "total", "sub", "tests", "advised_route", "trust", "brief_version", "brief_hash", "work_kind", "work_hash", "piece"],
+          "properties": {
+            "schema": { "const": 1 },
+            "version": { "type": "string", "description": "The Judge version: rubric-<v>/<backend>/<model alias or none>/<prompt hash or none>. A trust decision names it." },
+            "rubric_version": { "type": "string" },
+            "prompt_hash": { "type": ["string", "null"] },
+            "backend": { "type": "string" },
+            "model": { "type": ["string", "null"] },
+            "total": { "type": "integer", "minimum": 0, "maximum": 30 },
+            "sub": {
+              "type": "object",
+              "required": ["idea", "craft", "effect"],
+              "additionalProperties": false,
+              "properties": {
+                "idea": { "type": "integer", "minimum": 0, "maximum": 10 },
+                "craft": { "type": "integer", "minimum": 0, "maximum": 10 },
+                "effect": { "type": "integer", "minimum": 0, "maximum": 10 }
+              }
+            },
+            "tests": { "type": "array", "minItems": 30, "maxItems": 30, "items": { "$ref": "#/definitions/test" } },
+            "advised_route": { "$ref": "#/definitions/route" },
+            "trust": { "enum": ["none", "shadow", "earned"], "description": "While not earned, the route is advice and the work still reaches the creative director." },
+            "brief_version": { "type": "string" },
+            "brief_hash": { "type": "string" },
+            "work_kind": { "enum": ["script", "idea_route", "visual_brief"] },
+            "work_hash": { "type": "string" },
+            "piece": { "type": "string" },
+            "price_eur": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "overrule": {
+      "type": "object",
+      "required": ["kind", "agent", "actor", "targets", "cites", "polarity", "reason_code", "reviewer_role", "rationale", "judge"],
+      "properties": {
+        "kind": { "const": "verdict" },
+        "action": { "const": "overrule_score" },
+        "actor": { "type": "string", "pattern": "^human:", "description": "The creative director named on the brief. Never a process." },
+        "targets": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "cites": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "description": "The id of the Judge verdict it answers. That verdict stays as it was." } },
+        "polarity": { "enum": ["good", "bad"] },
+        "reason_code": { "const": "judge.overruled" },
+        "reviewer_role": { "const": "creative-director" },
+        "rationale": { "type": "string", "minLength": 1, "description": "The creative director's written reason: required." },
+        "judge": {
+          "type": "object",
+          "required": ["route"],
+          "additionalProperties": false,
+          "properties": { "route": { "enum": ["team", "cd"] } }
+        }
+      }
+    }
+  }
+}
