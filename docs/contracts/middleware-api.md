@@ -162,7 +162,7 @@ name the stand-in, its port, or branch on which implementation answered.
 | `start_campaign` | `{ "prompt": "...", "attachments": [{ "material_id", "name", "sha256", "text"? }] }` | The chat intake (§8). Long. Each `material_id` must be a key of `clan.data.materials` with that `sha256` (the view indexes the file first). Nothing to read at all is `400 invalid_input`, as for `extract_ask` |
 | `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "...", "skip"?: true }` | Exactly one of `option_id` / `text` / `skip` (§8.3; *`skip` added 2026-11-12*). For a `draft_brief` job waiting at intake it is `{ "job_id", "questions_id", "answers": { "<question id>": "<text>" \| null } }` instead (§10.3) |
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
-| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
+| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true, "redraft"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
 | `fix_parts` | `{ "verdict": "<decision id>", "guidance"?: "..." }` | Brief Maker (§10.15). Long. `verdict` a bad verdict still standing on the brief |
 | `ask_research` | `{ "question": "...", "lens"?: "<lens id>", "about"?: "f_…" \| "fi_…", "attachments"?: [{ "name", "sha256", "text"? }] }` | Research Tool. Long. `question` up to 1000 characters. `lens` puts the answer after that lens's section; without it the answer gets a section of its own. `about` is the fact or finding the question was asked from: it must be in the document and in use (a fact not superseded, excluded or rejected; a finding `proposed` or `verified` that cites no fact out of use), else `400 invalid_input`. It leads the evidence, and the prompt says the question is about it. The answer is written to `data.asks[<id>]`, which records `about` (`null` when none was given) and `in_report`: `true` for a general question, `false` for one with `about`, whose answer the view shows under that item until a person adds it to the report (their attributed write of `in_report: true`, `in_report_by`, `in_report_at`; Take out writes `false`). Needs markets and categories, as `research_lens` does (*`about`, `in_report` added 2026-11-12*) |
@@ -878,7 +878,7 @@ not reach a brief; and the data flag let a view lock around the lock list.
 
 ### 10.1 Input
 
-`draft_brief`: `{ "prompt"?, "attachments": [...], "intake"? }`.
+`draft_brief`: `{ "prompt"?, "attachments": [...], "intake"?, "redraft"? }`.
 
 - `prompt` — the planner's typed ask (`data.brief_input`). It is a material
   (`kind: prompt`, sha256 of its UTF-8 bytes).
@@ -897,6 +897,14 @@ not reach a brief; and the data flag let a view lock around the lock list.
   never waits, exactly as before. Anything else is `400 invalid_input`. The
   field-by-field flow and the engine path ignore it, and so do `regenerate_field`
   and `fix_parts`.
+- `redraft` — optional boolean, false when absent (*added 2026-11-12*,
+  brief-redraft-in-place). `true` says Draft it again on a drafted brief, run in
+  place. Anything else is `400 invalid_input`. The planned flow reads the parts as
+  they stand from the document either way: on a brief that already holds written
+  parts, the plan and the whole draft are given `current` (each open part's words,
+  capped, and `by`: `person` or `agent`, from its last writer). Locked parts are
+  never in it, and the holder rule is unchanged: a part a person wrote last is
+  proposed, not written.
 
 The drafters also read `clan.facts` and `clan.findings` (§1) — in a brief
 spun off from research, the pins and findings it carried (§10.13); capture
