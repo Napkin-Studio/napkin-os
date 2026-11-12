@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use clan_sdk::{ClanBuilder, ClanFile};
 use napkin_host::jobindex::{Audience, IndexCache, JobIndex};
 use napkin_host::jobs::{self, NewJob};
@@ -345,5 +345,359 @@ fn a_job_lists_its_documents_and_the_index_is_read_from_their_chains() {
     assert_eq!(d.live_jobs, 2);
     assert_eq!(d.hours.budget, 120.0);
     assert!(d.scores.is_none() && d.results.is_none());
+
+    // 6. The approval route (features/approval-route.clan): states, the holder and the reminders are
+    // read from the chains and the clock, with nothing stored. J003 is a job with a route.
+    {
+        use napkin_host::jobs::RouteStep;
+        let base = Utc::now();
+        let day = |n: i64| {
+            (base + chrono::Duration::days(n))
+                .format("%Y-%m-%d")
+                .to_string()
+        };
+        let at_day = |n: i64| {
+            Utc.from_utc_datetime(
+                &(base + chrono::Duration::days(n))
+                    .date_naive()
+                    .and_hms_opt(12, 0, 0)
+                    .unwrap(),
+            )
+        };
+        let step = |role: &str, who: &str, due: String| RouteStep {
+            stage: "brief-check".into(),
+            party: "agency".into(),
+            role: Some(role.into()),
+            approver: who.into(),
+            contact: None,
+            due,
+            rounds: None,
+        };
+        let cian = ctx("cian@wk");
+        let route_client = client.id.clone();
+        jobs::create_job(
+            &store,
+            &me,
+            NewJob {
+                number: Some("J003".into()),
+                client_id: route_client.clone(),
+                title: Some("J003 brief".into()),
+                owner: Some("aoife@wk".into()),
+                opened_on: Some(day(0)),
+                due: Some(day(30)),
+                budget_hours: None,
+            },
+        )
+        .unwrap();
+        let b3 = document(
+            dir.path(),
+            "brief3.clan",
+            BRIEF_MAKER,
+            "J003 brief",
+            (route_client.as_str(), "Client A"),
+            "J003",
+        );
+        let by = |who: &str| at(dir.path(), &b3, who);
+        assert_eq!(
+            post(
+                &by("aoife@wk"),
+                "/patch-data",
+                json!({ "agent": "human", "action": "edit", "patch": ready() })
+            ),
+            200
+        );
+        let (due_p, due_cd, due_client) = (day(1), day(2), day(6));
+        jobs::set_route_at(
+            &store,
+            &cian,
+            "J003",
+            vec![
+                step("planner", "aoife@wk", due_p.clone()),
+                step("creative_director", "dara@wk", due_cd.clone()),
+                RouteStep {
+                    stage: "brief-check".into(),
+                    party: "client".into(),
+                    role: Some("client".into()),
+                    approver: "Client A contact".into(),
+                    contact: Some("contact@client-a.example".into()),
+                    due: due_client,
+                    rounds: Some(2),
+                },
+            ],
+            base,
+        )
+        .unwrap();
+        let kinds = |index: &JobIndex, who: &str| -> Vec<(&'static str, Option<i64>)> {
+            index
+                .needs_for(Some(who), &[])
+                .into_iter()
+                .filter(|n| n.job == "J003")
+                .map(|n| (n.kind, n.days_late))
+                .collect()
+        };
+        let build = |n: i64| JobIndex::build(&store, at_day(n)).unwrap();
+
+        // the first step is held from the moment the route was set; nobody has approved yet
+        let idx = build(0);
+        let j = idx.job("J003").unwrap();
+        let h = j.holder.clone().unwrap();
+        assert_eq!(
+            (
+                h.party.as_str(),
+                h.person.as_str(),
+                h.role.as_deref(),
+                h.stage.as_str()
+            ),
+            ("agency", "aoife@wk", Some("planner"), "brief-check")
+        );
+        assert_eq!((h.due.as_str(), h.days_late), (due_p.as_str(), 0));
+        assert_eq!(h.since, jobs::route_history(&store).unwrap()["J003"].at);
+        assert_eq!(
+            j.route.iter().map(|s| s.state).collect::<Vec<_>>(),
+            ["waiting", "not_started", "not_started"]
+        );
+        assert_eq!(j.waiting_on, "agency");
+        assert_eq!(
+            j.days_waiting_on_client, None,
+            "absent while the agency holds the job"
+        );
+
+        // days late at -3, 0, 1 and 2 days around the planner's due date, and the reminder from 48 hours before
+        let planner_day = |n: i64| build(1 + n);
+        assert_eq!(
+            planner_day(-3)
+                .job("J003")
+                .unwrap()
+                .holder
+                .as_ref()
+                .unwrap()
+                .days_late,
+            0
+        );
+        assert_eq!(
+            planner_day(0)
+                .job("J003")
+                .unwrap()
+                .holder
+                .as_ref()
+                .unwrap()
+                .days_late,
+            0
+        );
+        assert_eq!(
+            planner_day(1)
+                .job("J003")
+                .unwrap()
+                .holder
+                .as_ref()
+                .unwrap()
+                .days_late,
+            1
+        );
+        assert_eq!(
+            planner_day(2)
+                .job("J003")
+                .unwrap()
+                .holder
+                .as_ref()
+                .unwrap()
+                .days_late,
+            2
+        );
+        assert_eq!(
+            kinds(&planner_day(-3), "aoife@wk"),
+            vec![("gate", None)],
+            "three days ahead: nothing yet"
+        );
+        assert_eq!(
+            kinds(&planner_day(-2), "aoife@wk"),
+            vec![("approval", Some(0)), ("gate", None)],
+            "from 48 hours before, by its own date first"
+        );
+        // at one day late only the approver has the item; at two days late the person who set the route has one too
+        assert_eq!(kinds(&planner_day(1), "cian@wk"), vec![]);
+        assert_eq!(
+            kinds(&planner_day(2), "cian@wk"),
+            vec![("approval-chase", Some(2))]
+        );
+        let late = planner_day(2);
+        let item = late
+            .needs_for(Some("aoife@wk"), &[])
+            .into_iter()
+            .find(|n| n.kind == "approval")
+            .unwrap();
+        assert_eq!(
+            (item.days_late, item.due.as_deref(), item.stage.as_str()),
+            (Some(2), Some(due_p.as_str()), "brief-check")
+        );
+        assert_eq!(item.id, "J003:brief-check:planner:approval");
+        assert!(item.text.contains("2 days late"), "{}", item.text);
+        assert!(
+            kinds(&late, "dara@wk")
+                .iter()
+                .all(|(k, _)| *k != "approval"),
+            "not the creative director's yet"
+        );
+        let dash = late.dashboard();
+        let line = dash.at_risk.iter().find(|l| l.number == "J003").unwrap();
+        assert!(
+            line.line.contains("Brief check") && line.line.contains("2 days late"),
+            "{}",
+            line.line
+        );
+        // nothing was written for any of that: the day alone made the item
+        let cache = IndexCache::new();
+        assert!(cache
+            .get(&store, at_day(-3 + 1))
+            .unwrap()
+            .needs_for(Some("aoife@wk"), &[])
+            .iter()
+            .all(|n| n.kind != "approval"));
+        assert!(cache
+            .get(&store, at_day(-2 + 1))
+            .unwrap()
+            .needs_for(Some("aoife@wk"), &[])
+            .iter()
+            .any(|n| n.kind == "approval"));
+
+        // the planner signs: the holder moves to the creative director and `since` is the signature's own time
+        assert_eq!(post(&by("aoife@wk"), "/sign", json!({})), 200);
+        let chain_of = |id: &DocId| {
+            let clan = ClanFile::from_bytes(std::fs::read(id.as_str()).unwrap()).unwrap();
+            clan_sdk::DecisionChain::from_yaml(
+                &clan.read_entry("agent/decision-chain.yaml").unwrap(),
+            )
+            .unwrap()
+        };
+        let signed = chain_of(&b3)
+            .decisions
+            .iter()
+            .find(|d| d.kind.as_deref() == Some("sign"))
+            .unwrap()
+            .clone();
+        let sign_at = DateTime::parse_from_rfc3339(&signed.timestamp)
+            .unwrap()
+            .with_timezone(&Utc);
+        let idx = JobIndex::build(&store, sign_at + chrono::Duration::days(2)).unwrap();
+        let j = idx.job("J003").unwrap();
+        let h = j.holder.clone().unwrap();
+        assert_eq!(
+            (h.person.as_str(), h.role.as_deref()),
+            ("dara@wk", Some("creative_director"))
+        );
+        assert_eq!((h.since.as_str(), h.days), (signed.timestamp.as_str(), 2));
+        assert_eq!(j.route[0].state, "approved");
+        assert_eq!(
+            (
+                j.route[0].approved_by.as_deref(),
+                j.route[0].version.as_deref()
+            ),
+            (Some("aoife@wk"), signed.version.as_deref())
+        );
+
+        // the creative director's lock approves the next step: who and which exact version, read from the file
+        assert_eq!(post(&by("dara@wk"), "/sign", json!({})), 200);
+        let lock = chain_of(&b3)
+            .decisions
+            .iter()
+            .find(|d| d.kind.as_deref() == Some("approve"))
+            .unwrap()
+            .clone();
+        let lock_at = DateTime::parse_from_rfc3339(&lock.timestamp)
+            .unwrap()
+            .with_timezone(&Utc);
+        let idx = JobIndex::build(&store, lock_at + chrono::Duration::days(3)).unwrap();
+        let j = idx.job("J003").unwrap();
+        assert_eq!(j.route[1].state, "approved");
+        assert_eq!(
+            (
+                j.route[1].approved_by.as_deref(),
+                j.route[1].version.as_deref(),
+                j.route[1].approved_at.as_deref()
+            ),
+            (
+                Some("dara@wk"),
+                lock.version.as_deref(),
+                Some(lock.timestamp.as_str())
+            )
+        );
+        // the job now waits on the client, counted from the agency's last approval before it
+        let h = j.holder.clone().unwrap();
+        assert_eq!(
+            (h.party.as_str(), h.since.as_str()),
+            ("client", lock.timestamp.as_str())
+        );
+        assert_eq!(
+            (j.waiting_on, j.days_waiting_on_client),
+            ("client", Some(3))
+        );
+        assert!(
+            kinds(&idx, "dara@wk").iter().all(|(k, _)| *k != "approval"),
+            "a client step is not anyone's item"
+        );
+
+        // unlocking the brief returns the step to waiting
+        assert_eq!(
+            post(
+                &by("dara@wk"),
+                "/unapprove",
+                json!({ "rationale": "Reopened to change the proposition." })
+            ),
+            200
+        );
+        let idx = JobIndex::build(&store, lock_at + chrono::Duration::days(3)).unwrap();
+        let j = idx.job("J003").unwrap();
+        assert_eq!(j.route[1].state, "waiting");
+        assert_eq!(j.holder.as_ref().unwrap().person, "dara@wk");
+        assert_eq!(j.route[1].approved_by, None);
+        assert_eq!(j.days_waiting_on_client, None, "the agency holds it again");
+
+        // locked again, and the client accepts: nothing is left to hold
+        assert_eq!(post(&by("dara@wk"), "/sign", json!({})), 200);
+        assert_eq!(
+            post(
+                &by("dara@wk"),
+                "/client-review",
+                json!({ "answer": "accepted", "client": { "name": "Client A contact" }, "channel": "none", "parts": [] })
+            ),
+            200
+        );
+        let idx = JobIndex::build(&store, Utc::now() + chrono::Duration::days(1)).unwrap();
+        let j = idx.job("J003").unwrap();
+        assert!(
+            j.route.iter().all(|s| s.state == "approved"),
+            "{:?}",
+            j.route
+        );
+        assert_eq!(j.route[2].approved_by.as_deref(), Some("Client A contact"));
+        assert!(j.holder.is_none());
+        assert!(
+            idx.needs
+                .iter()
+                .all(|n| n.job != "J003" || n.kind == "gate"),
+            "the approval items left with the approvals"
+        );
+
+        // a job with no route is what it was; a rebuilt index equals the live one
+        assert!(
+            idx.job("J001").unwrap().route.is_empty() && idx.job("J001").unwrap().holder.is_none()
+        );
+        let live = cache.get(&store, at_day(0)).unwrap();
+        cache.delete();
+        assert_eq!(cache.get(&store, at_day(0)).unwrap(), live);
+
+        // nothing here scores a person: no total, average or ordering by person in what the index says
+        let wire = serde_json::to_string(&live).unwrap()
+            + &serde_json::to_string(&live.dashboard()).unwrap();
+        for key in [
+            "per_person",
+            "by_person",
+            "average_days",
+            "average",
+            "total_days",
+        ] {
+            assert!(!wire.contains(key), "{key} in {wire}");
+        }
+    }
     std::env::remove_var("NAPKIN_BRIEF_GATE");
 }

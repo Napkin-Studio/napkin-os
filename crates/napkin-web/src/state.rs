@@ -46,17 +46,28 @@ pub struct Workspace {
     /// The job index, read-only and disposable (napkin-host `jobindex`): rebuilt
     /// from the documents whenever one has moved.
     pub jobs: napkin_host::jobindex::IndexCache,
+    /// What the index counts days by: the real time, unless a test moved it.
+    clock: JobsClock,
 }
 
+/// The clock the job index reads: due dates and days late come from it.
+pub type JobsClock = Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync>;
+
 impl Workspace {
-    fn new(store: Arc<dyn DocStore>, ctx: Ctx) -> Self {
+    fn new(store: Arc<dyn DocStore>, ctx: Ctx, clock: JobsClock) -> Self {
         Self {
             store,
             ctx,
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
             jobs: napkin_host::jobindex::IndexCache::new(),
+            clock,
         }
+    }
+
+    /// Now, as the job index counts it.
+    pub fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        (self.clock)()
     }
 
     /// The session for one document, opening it if this is the first request.
@@ -109,6 +120,7 @@ pub struct AppCtx {
     pub roles_dir: Option<PathBuf>,
     /// Each person's work sessions and days (features/timesheet-sessions.clan).
     pub timesheets: crate::timesheet::Timesheets,
+    jobs_clock: JobsClock,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
 
@@ -133,6 +145,7 @@ impl AppCtx {
             sandbox_origin,
             dogfood: None,
             roles_dir: None,
+            jobs_clock: Arc::new(chrono::Utc::now),
             workspaces: Mutex::new(HashMap::new()),
         }
     }
@@ -152,6 +165,29 @@ impl AppCtx {
     pub fn with_timesheet_clock(mut self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
         self.timesheets = self.timesheets.with_clock(clock);
         self
+    }
+
+    /// A clock for the job index, so a test sets the day an approval is late by.
+    pub fn with_jobs_clock(
+        mut self,
+        clock: impl Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync + 'static,
+    ) -> Self {
+        self.jobs_clock = Arc::new(clock);
+        self
+    }
+
+    /// The e2e stack moves the clock by writing an RFC 3339 time to this file (`NAPKIN_TEST_CLOCK_FILE`);
+    /// with no file, or one that holds no time, it is the real time. Never set in a deployment.
+    pub fn with_jobs_clock_file(self, file: Option<PathBuf>) -> Self {
+        match file {
+            None => self,
+            Some(file) => self.with_jobs_clock(move || {
+                std::fs::read_to_string(&file)
+                    .ok()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok())
+                    .map_or_else(chrono::Utc::now, |t| t.with_timezone(&chrono::Utc))
+            }),
+        }
     }
 
     /// Templates installed into every new workspace.
@@ -186,7 +222,7 @@ impl AppCtx {
         if let Some(seed) = &self.seed {
             seed_library(&*store, seed);
         }
-        let workspace = Arc::new(Workspace::new(store, tenant.ctx()));
+        let workspace = Arc::new(Workspace::new(store, tenant.ctx(), self.jobs_clock.clone()));
         workspaces.insert(tenant.clone(), workspace.clone());
         workspace
     }

@@ -292,6 +292,13 @@ export interface LibraryItem {
 
 /** One thing a person is asked to do next on a job (napkin-host `jobindex::Need`). */
 export interface JobNeed {
+  /** Stable, `{job}:{stage}:{role}:{kind}`. Absent from an older host. */
+  id?: string
+  /** `gate`, `approval` or `approval-chase`. Absent from an older host. */
+  kind?: 'gate' | 'approval' | 'approval-chase'
+  stage?: string
+  /** An approval: whole days past the step's due date, 0 until the day after; null on a gate need. */
+  days_late?: number | null
   job: string
   client: string
   client_id: string
@@ -303,6 +310,74 @@ export interface JobNeed {
   path: string
   /** The job's deadline (`YYYY-MM-DD`): what the list is ordered by. */
   due: string | null
+}
+
+/** One stage's approval: who approves it and by when (napkin-host `jobs::RouteStep`). */
+export interface RouteStep {
+  stage: string
+  party: 'agency' | 'client'
+  role?: string | null
+  /** An agency step: a sign-in name, `user@agency`. A client step: a name. */
+  approver: string
+  /** A client step: the approver's email. */
+  contact?: string | null
+  /** `YYYY-MM-DD`. */
+  due: string
+  /** A client step: the rounds of changes the client may ask for. */
+  rounds?: number | null
+}
+
+/** A route step as the documents' decisions have it (napkin-host `jobindex::RouteStepState`). */
+export interface RouteStepState {
+  stage: string
+  label: string
+  party: 'agency' | 'client'
+  role: string | null
+  approver: string
+  contact: string | null
+  rounds: number | null
+  due: string
+  state: 'not_started' | 'waiting' | 'approved'
+  /** Read from the approving decision, never typed in. */
+  approved_by: string | null
+  approved_at: string | null
+  version: string | null
+  document: string | null
+  /** The waiting step only. */
+  held_since: string | null
+  days_held: number | null
+  days_late: number | null
+}
+
+/** Who a job waits on and for how long: a fact about one job. */
+export interface Holder {
+  party: 'agency' | 'client'
+  person: string
+  role: string | null
+  stage: string
+  since: string
+  days: number
+  due: string
+  days_late: number
+}
+
+/** One job as the index has it (`GET /jobs`, `GET /jobs/{number}`). */
+export interface JobEntry {
+  number: string
+  title: string
+  client: ClientRef
+  owner: string
+  opened_on: string
+  due: string | null
+  budget_hours: number | null
+  stage: { id: string; step: number; label: string }
+  status: string
+  waiting_on: 'agency' | 'client'
+  days_waiting_on_client: number | null
+  at_risk: boolean
+  documents: { path: string; title: string; app_id: string | null; needs_you: number; locked: boolean }[]
+  route: RouteStepState[]
+  holder: Holder | null
 }
 
 /** A job named on a dashboard tile. */

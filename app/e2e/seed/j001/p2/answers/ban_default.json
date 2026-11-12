@@ -1,0 +1,14 @@
+{
+  "task": "ban_default",
+  "handler": "ban_default@1.0",
+  "result": {
+    "banned": [
+      { "id": "ban_1", "idea": "A bar that goes quiet for one song, with a countdown on the till screen.", "why": "The first thing anyone says for an Irish whiskey launch in bars." },
+      { "id": "ban_2", "idea": "A grandfather's hands pouring a measure, in black and white.", "why": "Heritage as a stock image of age." },
+      { "id": "ban_3", "idea": "A cheerful toast with strangers in a pub.", "why": "Every Irish drinks brand has run it." }
+    ],
+    "note": "e2e fixture: three ideas posted as Banned"
+  },
+  "change": null,
+  "trace": {}
+}

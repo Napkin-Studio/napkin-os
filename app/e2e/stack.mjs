@@ -21,13 +21,13 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { createServer } from 'node:http'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CANARY } from './seed/j001/canary.mjs'
 import { ROSTER_LINES } from './seed/j001/people.mjs'
+import { standIn } from './standin.mjs'
 
 const app = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const root = resolve(app, '..')
@@ -51,6 +51,7 @@ function run(cmd, args, opts = {}) {
 }
 
 function cleanup() {
+  rmSync(join(tmpdir(), `napkin-e2e-clock-${rosterPort}`), { force: true })
   rmSync(work, { recursive: true, force: true })
 }
 
@@ -65,26 +66,9 @@ example('make_visual_brief', join(seed, 'visual-brief.app.clan'), join(scratch, 
 example('make_script_editor', join(seed, 'script-editor.app.clan'), join(scratch, 'script-editor.example.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
-// A stand-in middleware, local and free: it answers every task as one job whose
-// state the test sets (POST /control {state, stage}). No model, no network.
-// It speaks napkin.middleware/1 only as far as the job block the landing reads.
-let job = { state: 'running', stage: 'research' }
-const middleware = createServer((req, res) => {
-  let body = ''
-  req.on('data', c => { body += c })
-  req.on('end', () => {
-    const send = (code, v) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(v)) }
-    if (req.url === '/control' && req.method === 'POST') {
-      job = { ...job, ...JSON.parse(body || '{}') }
-      return send(200, job)
-    }
-    send(200, {
-      api: 'napkin.middleware/1', task: 'start_campaign', handler: 'start_campaign@1.0',
-      job: { id: 'job_e2e0001', state: job.state, stage: job.stage, progress: { done: 2, total: 6 }, started_at: '2026-11-04T09:00:00Z' },
-      result: { summary: 'e2e stand-in' }, change: null, trace: {},
-    })
-  })
-})
+// A stand-in middleware, local and free (standin.mjs): it answers every task as one job whose state the test sets
+// (POST /control {state, stage}), and from fixture files for the tasks Phase 2 names (seed/j001/p2/answers/). No model, no network.
+const middleware = standIn()
 middleware.listen(Number(mwPort), '127.0.0.1')
 // Placeholder people only, one per agency kit the screenshots compare (wk, tbwa) and Napkin's own.
 const roster = process.env.NAPKIN_E2E_ROSTER === '1' ? join(config, 'roster.tsv') : null
@@ -99,6 +83,11 @@ const unset = Object.keys(env).filter(k => PROVIDER.test(k) && !k.startsWith('NA
 for (const k of unset) delete env[k]
 console.log(`e2e stack: provider keys unset (${unset.length} removed from the server's environment), no model route`)
 
+// The test clock of the roster server (features/approval-route.clan): "today" for the job index is read from this
+// file when it exists, so a test can put a deadline two days in the past. Only this server is given it.
+const clockFile = join(tmpdir(), `napkin-e2e-clock-${rosterPort}`)
+rmSync(clockFile, { force: true })
+
 function start(addr, data, auth, gate = false) {
   return spawn(join(root, 'target/debug/napkin-web'), [], {
     stdio: 'inherit',
@@ -109,6 +98,7 @@ function start(addr, data, auth, gate = false) {
       // The Brief gate holds the lock list (features/brief-gate.clan). On for the J001 roster stack only, where the
       // pilot tests sign in; off on the primary, as it is by default, so the specs that count what needs a person are unchanged.
       NAPKIN_BRIEF_GATE: gate ? 'on' : 'off',
+      ...(gate ? { NAPKIN_TEST_CLOCK_FILE: clockFile } : {}),
       NAPKIN_AUTH: auth ? 'roster' : 'none',
       // Signed sessions need a key: a throwaway one, made for this run and gone with it.
       ...(auth ? { NAPKIN_AUTH_ROSTER: auth, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
