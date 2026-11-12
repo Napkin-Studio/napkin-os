@@ -247,4 +247,76 @@ fn a_comment_or_a_request_for_changes_through_the_review_link_is_account_service
     // no need holds the client's words
     let wire = serde_json::to_string(&after.needs).unwrap();
     assert!(!wire.contains(MARK) && !wire.contains("another"), "{wire}");
+
+    // A script under the same job, sent to the client the same way: its comment is account service's need too, at the
+    // client approval stage (the Script editor is in APP_STAGES), with none of the words.
+    let script = document(
+        dir.path(),
+        "s1.clan",
+        "ie.napkin.script-editor",
+        "J001 radio script",
+        c,
+        "J001",
+    );
+    let writer = at(dir.path(), &script, "maeve@wk");
+    assert_eq!(
+        post(
+            &writer,
+            "/patch-data",
+            json!({ "agent": "human", "action": "edit", "patch": {
+                "format": "radio", "slot_s": 30,
+                "script": { "beats": [{ "id": "b1", "kind": "voice", "role": "FVO", "text": "Tonight, try something new." }], "proposals": [], "seq": 1 },
+            } })
+        ),
+        200
+    );
+    assert_eq!(
+        post(&at(dir.path(), &script, "dara@wk"), "/approve", json!({})),
+        200
+    );
+    let s = at(dir.path(), &script, "aoife@wk");
+    let issued = dispatch(
+        &ctx("aoife@wk"),
+        &s,
+        &NoConfig,
+        HostRequest::new(
+            "/client-link/issue-round",
+            "",
+            json!({ "review": "dddddddddddddddddddddddddddddddd", "expires": (now + chrono::Duration::days(20)).format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+                    "reviewers": [
+                        { "id": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3", "name": "Alex", "email": "approver@client-a.example", "approver": true },
+                        { "id": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4", "name": "Bea", "email": "second@client-a.example" },
+                    ] })
+            .to_string()
+            .into_bytes(),
+        ),
+    );
+    assert_eq!(
+        issued.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&issued.body)
+    );
+    let (st, v) = as_client(
+        &s,
+        "second@client-a.example",
+        "/client-link/comment",
+        json!({ "id": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4", "piece": 1, "tag": "preference", "text": MARK }),
+    );
+    assert_eq!(st, 200, "{v}");
+    let index = JobIndex::build(&store, now).unwrap();
+    let on_script: Vec<Need> = changes(&index)
+        .into_iter()
+        .filter(|n| n.path == script.as_str())
+        .collect();
+    assert_eq!(on_script.len(), 1, "{:?}", index.needs);
+    assert_eq!(on_script[0].audience, Audience::Role("account-service"));
+    assert_eq!(on_script[0].stage, "client-approval");
+    assert!(
+        on_script[0].text.contains("J001 radio script") && on_script[0].text.contains("commented"),
+        "{}",
+        on_script[0].text
+    );
+    let wire = serde_json::to_string(&index.needs).unwrap();
+    assert!(!wire.contains(MARK), "{wire}");
 }
