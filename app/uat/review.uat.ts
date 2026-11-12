@@ -91,6 +91,14 @@ async function needsLeft(app: FrameLocator) {
 const partRow = (app: FrameLocator, head: string) =>
   app.locator('#fields .row').filter({ has: app.locator('.lab > span:first-child', { hasText: new RegExp(`^${head.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&')}$`) }) }).first()
 
+/** The audience part, by whichever heading this brief carries (round 12: "Who we are talking to", not "Audience"). */
+async function audienceHead(app: FrameLocator) {
+  for (const h of ['Audience', 'Who we are talking to', 'The audience']) {
+    if (await partRow(app, h).isVisible().catch(() => false)) return h
+  }
+  throw new Error('no audience part on this brief (looked for Audience, Who we are talking to)')
+}
+
 async function selectPart(app: FrameLocator, head: string) {
   await partRow(app, head).locator('.lab > span:first-child').click()
   await expect(app.locator('#selPart'), `selecting ${head} shows its part view`).toBeVisible()
@@ -213,11 +221,12 @@ test('review: lock: the brief says it is locked and its parts cannot be edited',
   await expect(bar.getByRole('button', { name: /^(Client review|New client answer)$/ }), 'the OS bar offers Client review on a locked brief').toBeVisible()
 
   // No part can be edited: the part view offers "Reopen this part…" in place of Edit and Redraft.
-  await selectPart(app, 'Audience')
+  const AUD = await audienceHead(app)
+  await selectPart(app, AUD)
   await expect(app.locator('#selPart [data-sp="reopen"]'), 'a locked part offers only Reopen this part…').toBeVisible()
   await expect(app.locator('#selPart [data-sp="edit"]'), 'a locked part has no Edit').toHaveCount(0)
   await expect(app.locator('#selPart [data-sp="regen"]'), 'a locked part has no Redraft').toHaveCount(0)
-  await partRow(app, 'Audience').locator('.val').dblclick()
+  await partRow(app, AUD).locator('.val').dblclick()
   await page.waitForTimeout(1_000)
   await expect(app.locator('#fields .ined'), 'a double-click does not open the editor on a locked part').toHaveCount(0)
   await backToBrief(app, page)
@@ -338,7 +347,8 @@ test('review: back at the agency, the answer is on the brief and the part reopen
   await expect(app.locator('#spRat'), 'a change to a reopened part asks why').toBeVisible()
   await app.locator('#selPart [data-sp="cancel"]').click()
   await backToBrief(app, page)
-  await selectPart(app, 'Audience')
+  const AUD = await audienceHead(app)
+  await selectPart(app, AUD)
   await expect(app.locator('#selPart [data-sp="edit"]'), 'every other part stays locked').toHaveCount(0)
   await expect(app.locator('#selPart [data-sp="reopen"]')).toBeVisible()
 })
