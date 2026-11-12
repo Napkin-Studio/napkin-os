@@ -179,6 +179,7 @@ def test_the_fact_asked_about_leads_the_evidence_and_the_prompt_names_it(store):
     assert seen[0]["about"] == last and seen[0]["pins"][0]["id"] == last
     rec = next(iter(change["data_patch"]["asks"].values()))
     assert rec["about"] == last
+    assert rec["in_report"] is False  # under the fact until a person adds it
     # grounded on it: the answer cites the item asked about
     assert last in rec["answer"][0]["cites"]
 
@@ -206,4 +207,5 @@ def test_without_about_the_record_says_none(store):
         return answering()(p)
     _, change, _ = ask(store, clan, jev=FakeJev(0.9), model=FakeModel({"ask_answer": r}))
     assert seen[0]["about"] is None
-    assert next(iter(change["data_patch"]["asks"].values()))["about"] is None
+    rec = next(iter(change["data_patch"]["asks"].values()))
+    assert rec["about"] is None and rec["in_report"] is True

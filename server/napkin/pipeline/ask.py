@@ -246,8 +246,9 @@ class Asker:
             status = "answered" if j["answers"] >= ANSWERS else ("partial" if sentences else "not_found")
         else:
             status = "answered" if sentences and not missing else ("partial" if sentences else "not_found")
-        rec = {"id": self.aid, "question": self.question, "about": self.about, "lens": lens,
-               "in_section": self.lens is not None,
+        # asked from a fact or finding: shown under it, in the report only once a person adds it (their write)
+        rec = {"id": self.aid, "question": self.question, "about": self.about, "in_report": self.about is None,
+               "lens": lens, "in_section": self.lens is not None,
                "topic": topic, "answer": sentences, "missing": missing, "status": status, "searched": search,
                "new_facts": new_ids, "searches": searches,
                "web_sources": len({u for x in searches for u in x["urls"]}), "asked_at": iso(), "answered_at": iso()}
