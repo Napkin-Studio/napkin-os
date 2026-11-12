@@ -83,7 +83,7 @@ def test_the_jev_judge_sends_back_what_code_measures_and_measures_again(tmp_path
     assert "Sales are flat." in host.data["background"]
     assert host.data["single_minded_proposition"].endswith("Quick and cheap, every morning.")
     # code still finds a standalone 'and': the brief is not recorded as single-minded
-    sm = host.data["review"]["scorecard"]["single_mindedness"]
+    sm = host.data["review"]["draft_scorecard"]["single_mindedness"]
     assert sm["verdict"] == "multiple"
     check_change_rules(host)  # the document, 'multiple' included, validates against Brief Maker's schema
     assert [sorted(n["parts"]) for n in notes(tmp_path, "checks_sent_back")] == [["background", "single_minded_proposition"]]
@@ -112,7 +112,7 @@ def test_a_part_failing_a_skill_test_goes_back_and_the_review_agents_verdict_is_
         s.stop()
     told = seen["rewrite"]["rewrite"]
     assert told["job"] == "Ask for one change." and "background" in told
-    assert host.data["review"]["scorecard"]["single_mindedness"]["verdict"] == "multiple"
+    assert host.data["review"]["draft_scorecard"]["single_mindedness"]["verdict"] == "multiple"
     check_change_rules(host)
 
 
@@ -135,7 +135,7 @@ def test_a_clean_brief_is_still_judged_by_the_skills_tests(tmp_path):
     finally:
         s.stop()
     assert len(calls) == 1 and calls[0].get("tests"), "one Review agent call, with the skill's tests"
-    assert host.data["review"]["scorecard"]["single_mindedness"]["verdict"] == "single"
+    assert host.data["review"]["draft_scorecard"]["single_mindedness"]["verdict"] == "single"
     check_change_rules(host)
 
 
@@ -156,7 +156,7 @@ def test_the_review_judge_sends_back_the_same_draft_as_before(tmp_path):
     assert "3 sentences" in first["rewrite"]["single_minded_proposition"]
     assert set(again["rewrite"]) == {"single_minded_proposition"}
     assert [c[0] for c in m.calls].count("review_brief_again") == 2, "the Review agent reads each rewrite"
-    assert host.data["review"]["scorecard"]["single_mindedness"]["verdict"] == "single", "the Review agent's own verdict"
+    assert host.data["review"]["draft_scorecard"]["single_mindedness"]["verdict"] == "single", "the Review agent's own verdict"
     assert [n["parts"] for n in notes(tmp_path, "checks_sent_back_again")] == [["single_minded_proposition"]]
     check_change_rules(host)
 
