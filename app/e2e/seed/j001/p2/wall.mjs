@@ -8,7 +8,9 @@ export const CANARY_SENTENCE = 'Canary sentence of Client A: the orange door ope
 const NOT_TEXT = new Set(['id', 'kind', 'state', 'status', 'type', 'schema', 'version', 'by', 'at', 'role', 'person', 'actor', 'agent', 'action',
   'uri', 'url', 'path', 'doc', 'decision', 'fact', 'slug', 'page', 'beat', 'route', 'card', 'source', 'rule', 'rights', 'origin', 'email', 'username',
   'sha256', 'text_sha256', 'handler', 'backend', 'model', 'rubric_version', 'taxonomy_version', 'reason_code', 'polarity', 'advised_route', 'trust',
-  'date', 'due', 'since', 'format', 'tag', 'branch', 'hash', 'value', 'dim', 'method', 'superseded_by', 'brief_version', 'cites', 'upstream'])
+  'date', 'due', 'since', 'format', 'tag', 'branch', 'hash', 'value', 'dim', 'method', 'superseded_by', 'brief_version', 'cites', 'upstream',
+  // keys the Brief Maker schema holds to an enum or a pattern (client-review-full): a canary there is refused 422, and it is not free text
+  'key', 'gaps', 'material_id', 'dimension', 'verdict', 'licence', 'pack', 'scope', 'pack_version', 'retrieved_at'])
 
 /** A copy of `doc` with the canary sentence appended to every free-text string, and the number of strings it reached. */
 export function plantCanary(doc, sentence = CANARY_SENTENCE) {

@@ -49,3 +49,39 @@
   .cl-bar-in { flex-direction: row; }
   .cl-bar-in .cl-btn { flex: 1; }
 }
+
+/* The review page (ReviewLink.tsx): one piece at a time, full width, the same tokens. */
+.cl-review { gap: 20px; }
+.cl-round { font-family: var(--mono, 'Geist Mono', monospace); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink2); }
+.cl-piece { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cl-piece-head { display: flex; flex-direction: column; gap: 6px; }
+.cl-piece-meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 14px; color: var(--ink2); }
+.cl-ai { font-weight: 600; color: var(--ink); }
+.cl-piece-title { font-size: 24px; overflow-wrap: anywhere; }
+.cl-stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cl-tap { position: relative; display: block; width: 100%; padding: 0; border: 1.5px solid var(--line); border-radius: 16px; background: var(--card); overflow: hidden; cursor: crosshair; touch-action: manipulation; }
+.cl-tap img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
+.cl-media { width: 100%; max-height: 60vh; border-radius: 16px; background: #000; }
+audio.cl-media { background: transparent; }
+.cl-hint { font-size: 13.5px; color: var(--ink2); }
+.cl-pin { position: absolute; transform: translate(-50%, -50%); width: 26px; height: 26px; border-radius: 50%; background: var(--agency, var(--ink)); color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); pointer-events: none; }
+.cl-pin-static { position: static; transform: none; flex: none; }
+.cl-frame-piece { height: 62vh; min-height: 360px; }
+.cl-remarks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cl-remarks li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--card); }
+.cl-remarks li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cl-text-sm { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.cl-link { background: none; border: 0; padding: 10px 0; min-height: 44px; font: inherit; font-size: 14px; color: var(--ink2); text-decoration: underline; cursor: pointer; }
+.cl-add { align-self: flex-start; }
+.cl-pager { display: flex; gap: 10px; }
+.cl-pager .cl-btn { flex: 1; }
+.cl-dot { color: var(--ink2); }
+
+/* The comment sheet sits where the answer bar sits. */
+.cl-sheet { position: sticky; bottom: 0; margin-top: auto; display: flex; flex-direction: column; gap: 8px; background: var(--paper); border-top: 1.5px solid var(--ink); padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; }
+.cl-sheet textarea, .cl-sheet select, .cl-ask input {
+  width: 100%; border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink);
+  font: inherit; font-size: 16px; line-height: 1.45; padding: 12px 14px; min-height: 48px;
+}
+.cl-ask input { letter-spacing: 0.4em; font-size: 22px; text-align: center; }
+.cl-sheet .cl-bar-in { padding-top: 4px; }

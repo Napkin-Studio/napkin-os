@@ -10,6 +10,7 @@
 //! The clean copy itself is the export with provenance off
 //! (`Session::compose_export(false, true)`); a test holds both to it.
 
+use napkin_host::ops::client_pieces::{self, Shape, BEAT_KEYS};
 use napkin_host::ops::{decisions, gate, read};
 use napkin_host::Document;
 use serde::Serialize;
@@ -45,50 +46,15 @@ const SECTIONS: &[(&str, &[&str])] = &[
 /// layout, nor a key a later schema adds. A new key is shown only by being put here, on purpose
 /// (`tests/client_link.rs` holds every key of the Brief Maker schema to this list or to a list of
 /// those never shown). Each field is read in the shape its schema gives it, see [`shape`].
-pub const FIELDS: &[(&str, &str)] = &[
-    ("client", "Client"),
-    ("background", "Background"),
-    ("audience", "Audience"),
-    ("insight", "Insight"),
-    ("single_minded_proposition", "The one thing to say"),
-    ("tone_and_world", "Tone and world"),
-    ("objectives", "Objectives"),
-    ("desired_response", "What people should think, feel and do"),
-    ("famous", "What would make it famous"),
-    ("reasons_to_believe", "Reasons to believe"),
-    ("measurement", "How we will know it worked"),
-    ("budget_and_scope", "Budget and scope"),
-    ("mandatories", "Mandatories"),
-];
-
-/// What a field holds, from the Brief Maker schema.
-enum Shape {
-    /// A string.
-    Text,
-    /// A list of strings.
-    Lines,
-    /// An object with these string parts and no others.
-    Parts(&'static [(&'static str, &'static str)]),
-}
-
-fn shape(key: &str) -> Shape {
-    match key {
-        "tone_and_world" | "reasons_to_believe" | "measurement" | "mandatories" => Shape::Lines,
-        "objectives" => Shape::Parts(&[
-            ("commercial", "Commercial"),
-            ("behavioural", "Behavioural"),
-            ("attitudinal", "Attitudinal"),
-        ]),
-        "desired_response" => Shape::Parts(&[("think", "Think"), ("feel", "Feel"), ("do", "Do")]),
-        _ => Shape::Text,
-    }
-}
+pub use napkin_host::ops::client_pieces::BRIEF_FIELDS as FIELDS;
 
 /// What the client reads of one field.
 enum Body {
     Text(String),
     Lines(Vec<String>),
     Parts(Vec<(&'static str, String)>),
+    /// A script's beats: each a list of (label, words).
+    Beats(Vec<Vec<(&'static str, String)>>),
 }
 
 /// A string, or an envelope holding one; anything else is not words.
@@ -100,6 +66,14 @@ fn leaf(v: &Value) -> Option<String> {
     v.as_str()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+}
+
+/// A beat's word: a string, or a number (a duration).
+fn beat_leaf(v: &Value) -> Option<String> {
+    match v {
+        Value::Number(n) => Some(n.to_string()),
+        other => leaf(other),
+    }
 }
 
 /// Parts a person marked Confidential: the whole field (`audience`) or one part of it
@@ -118,7 +92,7 @@ fn confidential(data: &Value) -> Vec<String> {
 
 /// One allow-listed field as the client reads it: its schema's shape and no more, and none of
 /// it if confidential. `None` when there are no words.
-fn body_of(key: &str, data: &Value, conf: &[String]) -> Option<Body> {
+fn body_of(app: &str, key: &str, data: &Value, conf: &[String]) -> Option<Body> {
     if conf.iter().any(|c| c == key) {
         return None;
     }
@@ -127,7 +101,7 @@ fn body_of(key: &str, data: &Value, conf: &[String]) -> Option<Body> {
         Value::Object(o) if o.contains_key("value") && o.contains_key("origin") => &o["value"],
         other => other,
     };
-    match shape(key) {
+    match client_pieces::shape(app, key) {
         Shape::Text => leaf(v).map(Body::Text),
         Shape::Lines => {
             let lines: Vec<String> = match v {
@@ -145,6 +119,20 @@ fn body_of(key: &str, data: &Value, conf: &[String]) -> Option<Body> {
                 .collect();
             (!got.is_empty()).then_some(Body::Parts(got))
         }
+        Shape::Beats => {
+            let beats = v.get("beats")?.as_array()?;
+            let rows: Vec<Vec<(&'static str, String)>> = beats
+                .iter()
+                .map(|b| {
+                    BEAT_KEYS
+                        .iter()
+                        .filter_map(|(k, label)| Some((*label, beat_leaf(b.get(*k)?)?)))
+                        .collect::<Vec<_>>()
+                })
+                .filter(|r| !r.is_empty())
+                .collect();
+            (!rows.is_empty()).then_some(Body::Beats(rows))
+        }
     }
 }
 
@@ -155,6 +143,11 @@ fn text_of(b: &Body) -> String {
         Body::Parts(p) => p
             .iter()
             .map(|(_, t)| t.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+        Body::Beats(rows) => rows
+            .iter()
+            .flat_map(|r| r.iter().map(|(_, t)| t.as_str()))
             .collect::<Vec<_>>()
             .join(" "),
     }
@@ -180,6 +173,18 @@ fn body_html(b: &Body) -> String {
             .iter()
             .map(|(label, t)| format!("<p><b>{}</b> {}</p>", escape(label), escape(t)))
             .collect(),
+        Body::Beats(rows) => format!(
+            "<ol>{}</ol>",
+            rows.iter()
+                .map(|r| format!(
+                    "<li>{}</li>",
+                    r.iter()
+                        .map(|(label, t)| format!("<b>{}</b> {}", escape(label), escape(t)))
+                        .collect::<Vec<_>>()
+                        .join("<br>")
+                ))
+                .collect::<String>()
+        ),
     }
 }
 
@@ -189,16 +194,14 @@ fn body_html(b: &Body) -> String {
 /// script stripped, which for the Brief Maker is an empty form, so a brief is drawn from its data
 /// here.) The heading is the document's own title, not a field of the data.
 pub fn sheet(doc: &Document) -> Option<String> {
-    if !gate::applies(doc) {
-        return None;
-    }
+    let spec = client_pieces::spec_of(doc)?;
     let data = read::data_json(doc);
     data.as_object()?;
     let conf = confidential(&data);
     let title = doc.title().trim().to_string();
     let mut body = String::new();
-    for (k, label) in FIELDS {
-        let Some(b) = body_of(k, &data, &conf) else {
+    for (k, label) in spec.fields {
+        let Some(b) = body_of(spec.app_id, k, &data, &conf) else {
             continue;
         };
         body.push_str(&format!(
@@ -214,7 +217,7 @@ body{{margin:0;padding:20px 20px 28px;background:#fff;color:#14161b;font:16px/1.
 h1{{margin:0 0 6px;font-size:24px;line-height:1.15;letter-spacing:-0.02em}}\
 section{{padding:14px 0 4px;border-top:1px solid #e7e9ee}}\
 h2{{margin:0 0 6px;font:500 11px/1.4 'Geist Mono',ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#737987}}\
-p{{margin:0 0 10px;overflow-wrap:anywhere}}b{{font-weight:600}}ul{{margin:0 0 10px;padding-left:20px}}li{{margin:0 0 4px;overflow-wrap:anywhere}}\
+p{{margin:0 0 10px;overflow-wrap:anywhere}}b{{font-weight:600}}ul,ol{{margin:0 0 10px;padding-left:20px}}li{{margin:0 0 4px;overflow-wrap:anywhere}}\
 </style></head><body><h1>{t}</h1>{body}</body></html>",
         t = escape(&title),
     ))
@@ -223,11 +226,14 @@ p{{margin:0 0 10px;overflow-wrap:anywhere}}b{{font-weight:600}}ul{{margin:0 0 10
 pub fn page_of(doc: &Document) -> Page {
     let data = read::data_json(doc);
     let conf = confidential(&data);
+    // the short sections are the brief's own; another document type shows its page in full
+    let brief = gate::applies(doc);
     let summary = SECTIONS
         .iter()
+        .filter(|_| brief)
         .filter_map(|(label, keys)| {
             keys.iter()
-                .filter_map(|k| body_of(k, &data, &conf))
+                .filter_map(|k| body_of(gate::BRIEF_MAKER, k, &data, &conf))
                 .map(|b| text_of(&b))
                 .find(|t| !t.is_empty())
                 .map(|text| Section { label, text })
@@ -275,9 +281,15 @@ mod tests {
         assert_eq!(leaf(&v).as_deref(), Some("Younger drinkers pass it by."));
         assert_eq!(leaf(&json!(["a", "b"])), None);
         let data = json!({ "tone_and_world": ["a", { "note": "x" }, "b"], "audience": "x" });
-        let tone = body_of("tone_and_world", &data, &[]).unwrap();
+        let tone = body_of(gate::BRIEF_MAKER, "tone_and_world", &data, &[]).unwrap();
         assert_eq!(text_of(&tone), "a b");
-        assert!(body_of("audience", &data, &["audience".to_string()]).is_none());
+        assert!(body_of(
+            gate::BRIEF_MAKER,
+            "audience",
+            &data,
+            &["audience".to_string()]
+        )
+        .is_none());
     }
 
     #[test]
