@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { count } from '../e2e/phase2/count.mjs'
 import { PHASE2, SLUGS } from '../e2e/phase2/tests.mjs'
@@ -96,7 +96,12 @@ test('every seed document carries every key its template schema declares (once t
   const checked: string[] = []
   for (const d of P2_DOCS as { slug: string; title: string; schema: string; data: unknown }[]) {
     const file = join(root, d.schema)
-    if (!existsSync(file)) continue // the owning record has not written its template yet: it lands with its schema, and this check starts then
+    if (!existsSync(file)) {
+      // the owning record has not written its template yet: it lands with its schema, and this check starts then. A template
+      // that is there with no schema at this path is not skipped quietly.
+      assert.ok(!existsSync(dirname(file)), `${d.title}: ${dirname(d.schema)} exists but has no schema.json`)
+      continue
+    }
     const schema = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
     assert.deepEqual(missingKeys(schema, d.data), [], `${d.title} lacks keys its schema declares`)
     checked.push(d.title)
@@ -105,7 +110,7 @@ test('every seed document carries every key its template schema declares (once t
   const schema = { properties: { a: { properties: { b: {} } }, list: { items: { properties: { c: {} } } } } }
   assert.deepEqual(missingKeys(schema, { a: { b: 1 }, list: [{ c: 1 }] }), [])
   assert.deepEqual(missingKeys(schema, { a: {}, list: [{}] }), ['$.a.b', '$.list[0].c'])
-  assert.ok(Array.isArray(checked))
+  assert.ok(checked.length > 0, 'at least one Phase 2 document is checked (the Idea room and the two scripts so far)')
 })
 
 test('the Phase 2 seed and its answers hold no em dash, name no model and use placeholder people only', () => {
