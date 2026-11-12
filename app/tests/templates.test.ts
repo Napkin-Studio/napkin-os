@@ -2765,9 +2765,40 @@ test('research: the report body is the mock’s, and every section of the record
 // press then did nothing. It is drawn disabled and turned on by renderIntake, after the listener, at start-up.
 test('brief: Write the brief is not offered before its click is wired', () => {
   assert.match(BM, /<button type="button" class="go" id="genBtn" disabled>Write the brief<\/button>/)
-  assert.match(fn(BM, 'renderIntake'), /\$\('genBtn'\)\.disabled=off;/)
+  assert.match(fn(BM, 'renderIntake'), /genOff\(\);/)
+  assert.match(fn(BM, 'genOff'), /g\.disabled=noMiddleware\(\)\|\|UPLOADING>0/)
   const wired = BM.indexOf("$('genBtn').addEventListener('click'"), boot = BM.lastIndexOf('\n  render();')
   assert.ok(wired > 0 && boot > wired, 'the first render, which enables it, runs after the click is wired')
+})
+
+// UAT attachment journeys, 2026-11-12: a file that could not be added was dropped silently and "Adding…" stayed for
+// good; Write the brief could start a draft while files were still going up.
+test('brief: a file that cannot be added is named, and Write waits for the upload', async () => {
+  const els: Record<string, { textContent: string; disabled: boolean; cls: Set<string>; classList: unknown }> = {}
+  const el = (id: string) => els[id] ||= (() => { const cls = new Set<string>(); return { textContent: '', disabled: false, cls,
+    classList: { remove: (c: string) => cls.delete(c), toggle: (c: string, on: boolean) => (on ? cls.add(c) : cls.delete(c)) } } })()
+  let release!: () => void
+  const gate = new Promise<void>(r => { release = r })
+  const assets: unknown[] = []
+  const fetch = (url: string) => gate.then(() => url.includes('.zip')
+    ? { status: 400, json: () => Promise.resolve({ error: { type: 'bad_request', message: 'not a file the studio keeps' } }) }
+    : { status: 200, json: () => Promise.resolve({ internal_path: 'human/assets/x' }) })
+  const env = { $: el, UPLOADING: 0, noMiddleware: () => false, data: () => ({ reference_assets: assets }), clanScheme: 'clan://localhost',
+    patch: (_k: string, v: unknown[]) => { assets.splice(0, assets.length, ...v) }, fileType: () => 'doc', mediaTypeOf: () => 'application/pdf',
+    sha256Hex: () => Promise.resolve('0'.repeat(64)), fetch }
+  const f = lift<{ uploadList(l: unknown[], s: unknown, d?: () => void): void }>(BM, ['genOff', 'upWhy', 'uploadList'], env)
+  const file = (name: string, size: number) => ({ name, size, type: '', arrayBuffer: () => Promise.resolve(new ArrayBuffer(size)) })
+  let finished = false
+  f.uploadList([file('notes.pdf', 10), file('bad.zip', 10), file('empty.pdf', 0)], el('intakeStatus'), () => { finished = true })
+  assert.equal(el('intakeStatus').textContent, 'Adding 3 files…')
+  assert.equal(el('genBtn').disabled, true, 'Write the brief waits while files go up')
+  release()
+  for (let i = 0; i < 50 && !finished; i++) await new Promise(r => setTimeout(r, 0))
+  assert.ok(finished, 'the upload ends')
+  assert.equal(el('genBtn').disabled, false, 'and Write the brief is back')
+  assert.equal(assets.length, 1, 'the good file is on the desk')
+  assert.match(el('intakeStatus').textContent, /^Could not add bad\.zip \(not a file the studio keeps\), empty\.pdf \(it is empty\)\.$/)
+  assert.ok(el('intakeStatus').cls.has('err'), 'said as an error')
 })
 
 // UAT round 5: the fact panel is drawn again on every document change, and the question being typed was lost, so

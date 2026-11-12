@@ -2767,7 +2767,7 @@
     var nm=$('noMw'), off=noMiddleware();
     // The button is drawn disabled and turned on here, once its click is wired: a page still
     // loading must not offer a press that does nothing (UAT round 5).
-    nm.hidden=!off; $('genBtn').disabled=off;
+    nm.hidden=!off; genOff();
     if(off){
       nm.innerHTML=fig('drafter',{decorative:true})+say('drafter', esc(NO_MW)+'<span class="answers"><button type="button" id="handBtn">Write it by hand</button></span>','left');
       $('handBtn').addEventListener('click',function(){ handWrite=true; forceIntake=false; render(); });
@@ -2845,17 +2845,39 @@
 
   function fileType(f){var m=f.type||'';return m.indexOf('image/')===0?'image':m.indexOf('audio/')===0?'audio':m.indexOf('video/')===0?'video':'document';}
   function uploadFiles(input, statusEl){ uploadList(input.files, statusEl, function(){ input.value=''; }); }
+  // While files go up, Write the brief waits: a draft started now would go without them. A file that
+  // could not be added is named, with why; "Adding…" never stays (UAT attachment journeys, 2026-11-12).
+  var UPLOADING=0;
+  function genOff(){ var g=$('genBtn'); if(g) g.disabled=noMiddleware()||UPLOADING>0; }
+  function upWhy(res, file){
+    var e=res&&res.error; if(e&&typeof e==='object') e=e.message||e.type;
+    return e?String(e):'the studio did not take '+(file.name||'it');
+  }
   function uploadList(list, statusEl, done){
     var files=Array.prototype.slice.call(list||[]); if(!files.length) return;
-    if(statusEl) statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…';
+    var failed=[];
+    UPLOADING++; genOff();
+    if(statusEl){ statusEl.classList.remove('err'); statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…'; }
     files.reduce(function(p,file,i){return p.then(function(){
+      if(!file.size){ failed.push(file.name+' (it is empty)'); return; }
       var type=fileType(file), ext=(file.name.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
       var name=type+'-'+Date.now()+'-'+i+'.'+ext;
       return file.arrayBuffer().then(function(buf){ return sha256Hex(buf).then(function(h){
           return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf})
-            .then(function(r){return r.json();}).then(function(res){if(res&&res.internal_path){var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});patch('reference_assets',n);}});
-        }); });
-    });},Promise.resolve()).then(function(){if(statusEl)statusEl.textContent='';if(done)done();});
+            .then(function(r){return r.json().catch(function(){ return {error:'the studio answered '+r.status}; });}).then(function(res){
+              if(!(res&&res.internal_path)){ failed.push(file.name+' ('+upWhy(res, file)+')'); return; }
+              var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});
+              return patch('reference_assets',n);
+            });
+        }); }).catch(function(e){ failed.push(file.name+' ('+(e&&e.message||e)+')'); });
+    });},Promise.resolve()).then(function(){
+      UPLOADING=Math.max(0,UPLOADING-1); genOff();
+      if(statusEl){
+        statusEl.textContent=failed.length?'Could not add '+failed.join(', ')+'.':'';
+        statusEl.classList.toggle('err', !!failed.length);
+      }
+      if(done) done();
+    });
   }
   $('addAny').addEventListener('change',function(){ uploadFiles(this, $('intakeStatus')); });
   // Files dropped anywhere on the page are added, as the attach button adds
