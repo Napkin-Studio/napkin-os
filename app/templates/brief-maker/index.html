@@ -734,9 +734,11 @@
 
   /* the desk: an A4-ish sheet (860) and the 440 side tab, 32 apart, 28 under the bar */
   .app.wide{max-width:none;padding-left:0;padding-right:0}
-  #structured .bdesk{grid-template-columns:minmax(0,860px) minmax(320px,440px);gap:32px;justify-content:center;align-items:start;margin-top:0;padding:28px 16px 40px}
-  @media (max-width:1400px){ #structured .bdesk{grid-template-columns:minmax(0,860px) 380px;gap:24px} }
-  @media (max-width:1260px){ #structured .bdesk{grid-template-columns:minmax(0,860px) 350px;gap:20px} }
+  /* --trk is the Booth's column: the selection's width (--bw, set by boothApply: whole brief 420, a part 440),
+     narrower windows today's 380 and 350 (features/booth.clan) */
+  #structured .bdesk{--trk:var(--bw,440px);grid-template-columns:minmax(0,860px) var(--trk);gap:32px;justify-content:center;align-items:start;margin-top:0;padding:28px 16px 40px}
+  @media (max-width:1400px){ #structured .bdesk{--trk:380px;gap:24px} }
+  @media (max-width:1260px){ #structured .bdesk{--trk:350px;gap:20px} }
   @media (max-width:1100px){ #structured .bdesk{grid-template-columns:minmax(0,1fr)} }
   #structured .sheetcol{padding-top:16px}
 
@@ -1428,6 +1430,49 @@
   @media (max-width:880px){ .paperc{max-width:none} }
   @media (max-width:760px){ .ahead{grid-template-columns:1fr;position:relative} .ahead-right{justify-content:space-between} .flow > li.fl-crew{position:static} }
   @media (max-width:520px){ .app.p-start{padding:0 16px 40px} .paperc{padding:18px} }
+  /* ── the Booth (features/booth.clan; mock panel-v3, B · Full): the side tab hides to the window's right
+     edge and comes back. It never floats over the sheet: its column closes and the sheet recentres alone;
+     opening, the column opens and the sheet moves left to make room. Below 1100px nothing hides. ── */
+  :root{--booth-dur:460ms;--booth-ease:cubic-bezier(.2,.7,.2,1)}
+  #structured .stab > .booth-hd{display:flex;align-items:center;gap:8px;margin:-18px -18px 0;padding:9px 10px 9px 18px;border-bottom:1px solid var(--nd-line)}
+  #structured .stab > .booth-hd + .side-agent{margin-top:-16px}
+  .booth-hd .booth-nm{font:500 10.5px var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--nd-muted)}
+  .booth-hd .booth-sp{flex:1}
+  #structured .booth-hd .booth-hide{all:unset;box-sizing:border-box;cursor:pointer;height:30px;padding:0 10px 0 12px;border-radius:999px;border:1px solid var(--nd-line);display:inline-flex;align-items:center;gap:6px;color:var(--nd-ink-soft);flex:none;font:500 12px var(--font-ui);background:var(--nd-paper)}
+  #structured .booth-hd .booth-hide svg{width:14px;height:14px}
+  #structured .booth-hd .booth-hide:hover{background:color-mix(in srgb,var(--ag-base) 8%,var(--nd-paper));color:var(--nd-ink);border-color:color-mix(in srgb,var(--ag-base) 30%,var(--nd-line))}
+  #structured .booth-hd .booth-hide:focus-visible{outline:2px solid var(--ag-base)}
+  .booth-edge{all:unset;box-sizing:border-box;cursor:pointer;position:fixed;right:var(--clan-right,0px);top:calc(var(--clan-top,0px) + 56px);z-index:40;width:38px;padding:14px 0 16px;
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    border:1px solid var(--nd-line);border-right:0;border-radius:9px 0 0 9px;background:var(--nd-paper);color:var(--nd-ink-soft);
+    box-shadow:-1px 0 0 color-mix(in srgb,var(--ag-base) 18%,transparent);
+    transform:translate(0,0);transition:transform .32s var(--booth-ease) .14s,opacity .2s ease .14s,width .18s var(--booth-ease),color .15s,visibility 0s}
+  .booth-edge:hover{width:44px;color:var(--nd-ink);border-color:color-mix(in srgb,var(--ag-base) 25%,var(--nd-line))}
+  .booth-edge:focus-visible{outline:2px solid var(--ag-base);outline-offset:2px}
+  .booth-edge .booth-lb{writing-mode:vertical-rl;transform:rotate(180deg);font:600 12px var(--font-mono);letter-spacing:.2em;text-transform:uppercase}
+  .booth-edge svg{flex:none;width:16px;height:16px}
+  .booth-edge .booth-ct{position:absolute;left:-7px;top:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--nd-warn);color:#fff;font:600 9.5px/15px var(--font-ui);text-align:center;border:1.5px solid var(--nd-desk);display:none;box-sizing:border-box}
+  .booth-edge.has .booth-ct{display:block}
+  .booth-edge.ping .booth-ct{animation:booth-ping 1.1s var(--booth-ease) 2}
+  @keyframes booth-ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--nd-warn) 45%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+  body:not(.booth-folded) .booth-edge{transform:translate(110%,0);opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s var(--booth-ease),opacity .15s ease,visibility 0s linear .2s}
+  @media (min-width:1101px){
+    #structured{overflow-x:clip}
+    #structured .bdesk{transition:grid-template-columns var(--booth-dur) var(--booth-ease),gap var(--booth-dur) var(--booth-ease)}
+    #structured .bdesk > .stab{width:var(--trk);transition:transform var(--booth-dur) var(--booth-ease),opacity .3s ease .06s,visibility 0s}
+    #structured .bdesk.booth-off{grid-template-columns:minmax(0,860px) 0px;gap:0}
+    #structured .bdesk.booth-off > .stab{opacity:0;visibility:hidden;pointer-events:none;transform:translateX(28px);transition:transform var(--booth-dur) var(--booth-ease),opacity .22s ease,visibility 0s linear var(--booth-dur)}
+  }
+  @media (max-width:1100px){ .booth-edge,#structured .booth-hd .booth-hide{display:none} }
+  #structured .bdesk.booth-instant,#structured .bdesk.booth-instant > .stab,.booth-edge.booth-instant{transition:none!important}
+  /* reduced motion: a short fade, nothing moves */
+  @media (prefers-reduced-motion:reduce){
+    #structured .bdesk{transition:none!important}
+    #structured .bdesk > .stab{transform:none!important;transition:opacity .15s ease,visibility 0s!important}
+    #structured .bdesk.booth-off > .stab{transition:opacity .15s ease,visibility 0s linear .15s!important}
+    .booth-edge,body:not(.booth-folded) .booth-edge{transform:none!important;transition:opacity .15s ease,visibility 0s!important}
+    .booth-edge.ping .booth-ct{animation:none}
+  }
 </style>
 <!-- @napkin:clan-fields -->
 <!-- @napkin:source-card -->
@@ -1528,7 +1573,8 @@
         </article>
       </div>
 
-      <aside class="stab" id="stab" aria-label="The brief’s controls">
+      <aside class="stab" id="stab" aria-label="Booth: the brief’s controls">
+        <div class="booth-hd"><span class="booth-nm">Booth</span><span class="booth-sp"></span><button type="button" class="booth-hide" data-booth="hide" aria-label="Hide the Booth" aria-expanded="true" aria-controls="stab" aria-keyshortcuts="]">Hide<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></button></div>
         <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
         <div class="side-stop" id="sideStop" hidden></div>
         <!-- One thing at a time (features/brief-new-ui.clan, the side tab design): the BRIEF view while
@@ -1594,6 +1640,8 @@
   <footer class="foot"><span>Nothing gets lost.</span><span class="dot"></span><span>Every brief stored and searchable.</span></footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- the hidden Booth: a tab on the window's right edge (features/booth.clan) -->
+<button type="button" class="booth-edge" id="boothEdge" aria-controls="stab" aria-expanded="true" aria-label="Open the Booth" aria-keyshortcuts="]" tabindex="-1"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg><span class="booth-lb">Booth</span><span class="booth-ct" id="boothCt"></span></button>
 <div class="dropveil" id="dropveil" hidden>Drop to add to your brief</div>
 
 <!-- @napkin:agent-sphere -->
@@ -2768,6 +2816,7 @@
     document.querySelector('.app').classList.toggle('p-start', p!=='doc');
     document.querySelector('.app').classList.toggle('p-intake', p==='intake');
     if(p!=='doc') SEL=null;
+    boothApply(false);   // the edge tab is the open sheet's only
     sendBar();
   }
   function render(){
@@ -4155,6 +4204,8 @@
             status:'step '+n+' of '+(st==='revising'?3:2), progress:(n-1)/(st==='revising'?3:2), onGo:go(k)}; } }
     }
     renderSideStop();
+    // an agent waiting on the person while the sheet is open: the hidden Booth shows it, then comes in
+    boothAsk(phase==='doc'&&DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0);
     if(ROLES&&ROLES.sideSet){ ROLES.sideSet(el, job); return; }
     el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(AGENT_NAME[job.role]||'An agent')+'</b> · '+esc(job.doing)+'</span>':'';
   }
@@ -4958,6 +5009,7 @@
     document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
     var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
     renderSelPart();
+    if(SEL) boothPick(); boothApply(false);   // the Booth: back on the part, and at its width (420 whole, 440 a part)
   }
   // A part's place on the sheet, and the handles that move and size it.
   function placeRow(row, f, p){
@@ -5141,6 +5193,83 @@
     if(e.target.closest('#fields > .row,button,a,input,label,select,textarea,.boards,.board,[contenteditable]')) return;
     select(null);
   }); })();
+  // ---------- the Booth (features/booth.clan; mock panel-v3, B · Full) ----------
+  // The side tab hides to the window's right edge and comes back. It never floats over the sheet: its
+  // column closes and the sheet recentres alone. While it is hidden, a click on a part brings the whole
+  // Booth back on that part, and an agent's question shows a dot on the edge tab, then brings it in.
+  // Hidden or shown is the shell's to remember, per person and tool (clan:booth): this frame is
+  // sandboxed and its storage throws. ] hides and shows it; nothing on screen says so.
+  var BOOTH={open:true, ask:0, t:0}, BOOTH_MIN=1101, BOOTH_ASK_MS=1000, BOOTH_DUR=470;
+  // At 1100px and below nothing hides, as before.
+  function boothCanHide(w){ return w>=BOOTH_MIN; }
+  // The Booth's width for what is selected: the whole brief 420, a part 440.
+  function boothWidth(sel){ return sel?440:420; }
+  // The next state for an event: {t:'toggle'|'hide'|'show'|'pick'|'shell'|'ask'|'arrive', open?, n?} at window
+  // width w. `later` is how long until an agent's question brings the hidden Booth in.
+  function boothStep(s, ev, w){
+    var n={open:s.open, ask:s.ask, later:0};
+    if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
+    if(!boothCanHide(w)) return n;
+    if(ev.t==='hide') n.open=false;
+    else if(ev.t==='toggle') n.open=!s.open;
+    return n;
+  }
+  function boothApply(instant){
+    if(!BOOTH) return;
+    var d=document.querySelector('#structured .bdesk'), p=$('stab'), e=$('boothEdge'), hid=!BOOTH.open; if(!d||!p) return;
+    if(instant){ d.classList.add('booth-instant'); if(e) e.classList.add('booth-instant'); }
+    d.style.setProperty('--bw', boothWidth(SEL)+'px');
+    d.classList.toggle('booth-off', hid); document.body.classList.toggle('booth-folded', hid&&phase==='doc');
+    p.inert=hid&&boothCanHide(window.innerWidth);
+    var hb=p.querySelector('.booth-hide'); if(hb) hb.setAttribute('aria-expanded', String(!hid));
+    if(e){
+      var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
+      e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+    }
+    if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
+  }
+  // An agent's question brings it in on the whole brief, as the mock does.
+  function boothWhole(){ if(SEL) select(null); }
+  function boothSet(ev){
+    var was=BOOTH.open, had=BOOTH.ask, n=boothStep(BOOTH, ev, window.innerWidth), p=$('stab'), e=$('boothEdge');
+    var focusIn=!!(p&&p.contains(document.activeElement)), fromEdge=!!(e&&document.activeElement===e);
+    BOOTH.open=n.open; BOOTH.ask=n.ask;
+    if(ev.t==='arrive'&&BOOTH.open&&!was) boothWhole();
+    if(n.later){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ boothSet({t:'arrive'}); }, n.later); }
+    if(BOOTH.open||!BOOTH.ask) clearTimeout(BOOTH.t);
+    boothApply(ev.t==='shell');
+    if(e&&BOOTH.ask>had&&!BOOTH.open){ e.classList.remove('ping'); void e.offsetWidth; e.classList.add('ping'); }
+    if(was===BOOTH.open) return;
+    if(ev.t!=='shell'){ try{ window.parent.postMessage({type:'clan:booth', open:BOOTH.open}, '*'); }catch(x){} }
+    if(!BOOTH.open&&focusIn) setTimeout(function(){ if(!BOOTH.open&&e) e.focus({preventScroll:true}); }, BOOTH_DUR);
+    if(BOOTH.open&&fromEdge) setTimeout(function(){ var hb=p&&p.querySelector('.booth-hide'); if(BOOTH.open&&hb) hb.focus({preventScroll:true}); }, BOOTH_DUR);
+  }
+  // A click on the document (B · Full): the whole Booth comes back on it.
+  // (Both may run before this block has: BOOTH is still undefined then, and the shell's word comes after.)
+  function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
+  function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  (function(){
+    document.addEventListener('click', function(e){
+      var t=e.target&&e.target.closest?e.target:null; if(!t) return;
+      if(t.closest('[data-booth="hide"]')){ boothSet({t:'hide'}); return; }
+      if(t.closest('#boothEdge')) boothSet({t:'show'});
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key!==']'||e.defaultPrevented||e.metaKey||e.ctrlKey||e.altKey||phase!=='doc'||typing(e.target)) return;
+      e.preventDefault(); boothSet({t:'toggle'});
+    });
+    // The shell says what this person last had, on every load (AppRuntime.tsx).
+    window.addEventListener('message', function(e){
+      var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:booth') return;
+      boothSet({t:'shell', open:m.open!==false});
+    });
+    window.addEventListener('resize', function(){ boothApply(false); });
+    boothApply(true);
+  })();
+
   // The hint shows until the first selection, then never again on this device.
   function hintSeen(){ try{ window.localStorage.setItem('napkin.brief.hinted','1'); }catch(e){} var h=$('sideHint'); if(h) h.hidden=true; }
   function hintShown(){ try{ return window.localStorage.getItem('napkin.brief.hinted')!=='1'; }catch(e){ return true; } }

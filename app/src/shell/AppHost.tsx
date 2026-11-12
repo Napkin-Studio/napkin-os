@@ -480,6 +480,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onBar={onBar}
             insets={shown}
             jobs={openJobs}
+            person={user}
           />
         </main>
         {clientOn ? (
