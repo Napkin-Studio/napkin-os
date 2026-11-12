@@ -107,7 +107,7 @@ fn data_and_patch_events_name_their_document() {
     let resp = post(
         &f,
         "/patch-data",
-        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
     );
     let [HostEvent::DataChanged(v)] = resp.events.as_slice() else {
         panic!("one clan-data-changed")

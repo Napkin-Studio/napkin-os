@@ -382,7 +382,7 @@ async fn a_token_from_before_a_restart_is_refused_as_stale_and_a_reopen_mints_on
         ctx,
     };
 
-    let body = serde_json::json!({ "patch": { "note": "kept" } }).to_string();
+    let body = serde_json::json!({ "patch": { "note": "kept" }, "agent": "human", "action": "edit" }).to_string();
     for reply in [
         post(&after, &format!("/s/{token}/patch-data"), "", body.clone()).await,
         get(&after, &format!("/s/{token}/document"), None).await,
@@ -3408,7 +3408,7 @@ async fn an_unchanged_frame_page_answers_304_and_a_changed_one_does_not() {
         &s,
         &format!("/s/{token}/patch-data"),
         &b.cookie,
-        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+        r#"{"patch":{"verdict":"yes"},"agent":"human","action":"edit"}"#,
     )
     .await;
     assert_eq!(patched.status, StatusCode::OK);
