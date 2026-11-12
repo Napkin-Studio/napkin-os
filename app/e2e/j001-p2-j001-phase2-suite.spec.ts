@@ -8,13 +8,13 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
 import { answerFor, answeredTasks } from './seed/j001/p2/answers.mjs'
 import { PHASE2 } from './phase2/tests.mjs'
 import { chainOf, MODES, middlewareLog, open, SIZES, signIn } from './pilot'
 import type { Phase2Page } from './phase2/pages'
-import { PEOPLE, READY_BRIEF, seedJ001 } from './seed/j001'
+import { PEOPLE, READY_BRIEF, seedJ001, type SeededJob } from './seed/j001'
 import { seedPhase2 } from './seed/j001/p2'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -39,6 +39,16 @@ async function allPages(): Promise<Phase2Page[]> {
  * whose primary button uses another class adds `data-primary` to it, so the check sees it.
  */
 const PRIMARY = '.ch-btn-primary, .ns-primary, [data-primary]'
+
+/**
+ * The job test 72's pages are drawn over: one per width and mode, seeded by the first record's test that needs it and read by
+ * the others, as the single test did. Seeding one per record would add about sixty jobs to the shared stack each run.
+ */
+const JOBS = new Map<string, Promise<SeededJob>>()
+function jobFor(page: Page, key: string): Promise<SeededJob> {
+  if (!JOBS.has(key)) JOBS.set(key, seedJ001(page, { ready: true, fresh: true }))
+  return JOBS.get(key)!
+}
 
 /** One record's pages in three modes: about half a minute to two minutes on a quiet machine (12 Nov 2026), so four is ample. */
 const TIMEOUT_72 = 240_000
@@ -89,7 +99,7 @@ for (const size of SIZES) {
     for (const mode of MODES) {
       const { ctx, page } = await open(browser, size, mode, { roster: true })
       await signIn(page, PEOPLE.planning)
-      const job = await seedJ001(page, { ready: true, fresh: true })
+      const job = await jobFor(page, `${size.tag} ${mode}`)
       for (const p of pages) {
         await signIn(page, p.as)
         await page.goto('/'); await page.reload() // the page is loaded again as this person: its tenant is read at load
