@@ -97,7 +97,7 @@ are only for a person to set.
 ## Git workflow (locked 2026-10-05)
 
 - **Branches:** `<type>/<short-kebab>`, where type is one of feat, fix, docs,
-  chore, eval, refactor, spike. Use lowercase and keep it to 40 characters or
+  chore, eval, refactor, spike, hotfix. Use lowercase and keep it to 40 characters or
   fewer. A feature's branch is `feat/<slug>`. Delete branches after they merge.
 - **Commit subject:** `<area>: <imperative summary>`, 72 characters or fewer,
   for example `shell: name the tool in the OS bar`. The area is a component:
@@ -130,12 +130,17 @@ direct push, no force-push, no deletion, all 9 CI checks green), and
 3. **Release.** Open a PR from `develop` into `main`, titled
    `release: <what changes for people>`, and merge it with a **merge commit**,
    never a squash, so main and develop stay in step. CI's `Release source`
-   check refuses a PR into main from any branch other than develop.
+   check refuses a PR into main from any branch other than develop or
+   `hotfix/*`.
 4. **Make it live.** If the release touches `infra/`, follow "Infrastructure
    changes" below (apply before the deploy). Then verify on staging.
 
 A fix that must reach staging urgently still goes through develop: merge it
-there, then release at once.
+there, then release at once. When develop carries work that must not ship
+yet, and the owner asks, cut `hotfix/<short-kebab>` from `main` with only
+the fix, land the same fix on develop too, squash-merge the hotfix PR into
+`main`, then open a PR from `main` into `develop` (merge commit) so the two
+stay in step.
 
 ## Infrastructure changes reach AWS only by `terraform apply`
 

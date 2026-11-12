@@ -16,18 +16,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # main takes releases from develop only (CLAUDE.md, Branches).
+  # main takes releases from develop, and hotfix/* branches cut from main
+  # (CLAUDE.md, Branches).
   release-source:
     name: Release source
     runs-on: ubuntu-latest
     steps:
-      - name: A PR into main comes from develop
+      - name: A PR into main comes from develop or a hotfix/* branch
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          if [ "${{ github.head_ref }}" != "develop" ]; then
-            echo "::error::A PR into main must come from develop, not ${{ github.head_ref }}. Target develop instead."
-            exit 1
-          fi
+          case "$HEAD_REF" in
+            develop|hotfix/*) ;;
+            *)
+              echo "::error::A PR into main must come from develop or hotfix/*, not $HEAD_REF. Target develop instead."
+              exit 1
+              ;;
+          esac
 
   rust:
     name: Rust — fmt · clippy · test
