@@ -14,6 +14,7 @@ import { editModeMessage } from './editMode'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
+import { fromFrame as feedbackFromFrame, setFeedbackFrame } from '../dogfood/pointer'
 
 interface Props {
   hasHumanView: boolean
@@ -222,6 +223,11 @@ export default function AppRuntime({
         record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
       }
       else if (m?.type === 'clan:bar') handlers.current.onBar?.(barFrom(m))
+      // feedback by pointing at it, inside the page (dogfood/pointer.ts): what was picked, or F
+      else if (m?.type === 'clan:feedback-picked' || m?.type === 'clan:feedback-key') {
+        const r = iframeRef.current?.getBoundingClientRect()
+        feedbackFromFrame(m, { x: r?.left ?? 0, y: r?.top ?? 0 })
+      }
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',
@@ -229,7 +235,7 @@ export default function AppRuntime({
       }
     }
     window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
+    return () => { window.removeEventListener('message', onMessage); setFeedbackFrame(null) }
   }, [])
 
   // What the glass chrome covers, sent whenever it changes (and on load).
@@ -310,6 +316,7 @@ export default function AppRuntime({
         // Likewise the tabs and buttons it wants in the OS bar.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:bar?' }, '*')
         setExportFrame(iframeRef.current?.contentWindow ?? null)
+        setFeedbackFrame(iframeRef.current?.contentWindow ?? null)
         // The page is in: the shell's background reads (the desk's facts) may start (App.tsx).
         window.dispatchEvent(new Event(DOC_LOADED))
       }}

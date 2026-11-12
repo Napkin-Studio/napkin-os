@@ -32,6 +32,7 @@ import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { dogfoodState, subscribe as subscribeDogfood } from '../dogfood/recorder'
 import { betaNoticeOpener } from '../dogfood/notice'
+import { feedbackOpener } from '../dogfood/pointer'
 import { BarButtons, BarChips } from './AppBarItems'
 import { Pop } from '../shell/nui/Pop'
 import { usePop } from '../shell/nui/popKit'
@@ -94,7 +95,7 @@ function Rows({ items, close }: { items: MenuItem[]; close: (refocus: boolean) =
         data-dogfood={`menu: ${item.label}`}
         onClick={() => { if (item.disabled) return; close(true); item.run() }}
       >
-        {item.label}
+        {item.label}{item.key && <kbd className="mi-key">{item.key}</kbd>}
         {item.hint && <small>{item.hint}</small>}
       </button>
     </Fragment>
@@ -431,8 +432,9 @@ export default function Toolbar({
     return { top: (slot?.top ?? r.top) + 40, left: r.left }
   }, [])
 
-  const recording = useSyncExternalStore(subscribeDogfood, dogfoodState, dogfoodState).on
-  const acct = accountItems(account, user, onSignOut, betaNoticeOpener(recording))
+  const dogfood = useSyncExternalStore(subscribeDogfood, dogfoodState, dogfoodState)
+  const recording = dogfood.on
+  const acct = accountItems(account, user, onSignOut, betaNoticeOpener(recording), feedbackOpener(dogfood.on && dogfood.consented))
   const me = account ? <AccountButton account={account} open={pop.open?.key === 'account'} onMenu={el => pop.toggle('account', el)} /> : null
   const lead = (
     <>

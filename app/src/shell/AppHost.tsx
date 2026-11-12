@@ -14,6 +14,7 @@ import { openInApp, setBeforeOpen } from './appExport'
 import { refOfAddress } from './decisions/words'
 import { lockWords } from './nui/drawerData'
 import { setScreen } from '../dogfood/recorder'
+import { setFeedbackDoc } from '../dogfood/pointer'
 import { docStateOf, needsOf, useDecisions } from './decisions/useDecisions'
 import { splitAside } from './decisions/needs'
 import { useSetAside } from './decisions/useSetAside'
@@ -159,6 +160,13 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // the dogfood build records where people go (a no-op elsewhere)
   const appId = open.manifest.app?.app_id ?? null
   useEffect(() => { setScreen({ screen: 'app', doc: docPath, app: appId }) }, [docPath, appId])
+  // What feedback by pointing at it says about the open document (dogfood/pointer.ts).
+  const appVersion = open.manifest.app?.version ?? null
+  const docVersion = open.manifest.sha256
+  useEffect(() => {
+    setFeedbackDoc({ path: docPath, title: barTitle, appId, tool: brandName ?? null, toolVersion: appVersion, version: docVersion, noun, jobs: openJobs })
+  }, [docPath, barTitle, appId, brandName, appVersion, docVersion, noun, openJobs])
+  useEffect(() => () => setFeedbackDoc(null), [])
   useEffect(() => {
     document.title = brandName ? `Napkin Studio ${brandName} — ${barTitle}` : `${barTitle} — Napkin Studio`
     return () => { document.title = 'Napkin Studio' }

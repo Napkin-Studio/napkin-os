@@ -4690,6 +4690,25 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function plural(n, w, ws){ return n+' '+(n===1?w:(ws||w+'s')); }
   function evSec(id){ return arr(evm().sections).filter(function(s){ return s.id===id; })[0]||null; }
   function secName(s){ return s.title||lensName(s.lens)||'Section'; }
+  // Feedback by pointing at it (the dogfood build; features/feedback-point.clan): the shared
+  // snippet outlines what is under the cursor and asks this page to name it: a fact by what
+  // it measures and its value, a finding by its number and what it says, a section by its
+  // heading. A field of the ask is the snippet's own (a declared part); a button, its label.
+  function feedbackTarget(el){
+    if(!el||!el.closest) return null;
+    var c, id, clip=function(s, n){ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; };
+    if((c=el.closest('clan-field[ref^="f_"],tr[id^="fact-"]'))){
+      id=c.getAttribute('ref')||String(c.getAttribute('id')).replace(/^fact-/,''); var p=pins()[id];
+      return {kind:'fact', id:id, label:p?clip(pinLabelBare(p)+(fmtAny(p)?' · '+fmtAny(p):''), 80):'Fact '+id, el:c}; }
+    if((c=el.closest('[data-anchor^="fi_"],[data-anchor^="fnd_"],article[id^="finding-"]'))){
+      id=c.getAttribute('data-anchor')||String(c.getAttribute('id')).replace(/^finding-/,''); var f=fnds()[id];
+      return {kind:'finding', id:id, label:'Finding '+fno(id)+(f&&f.statement?' · '+clip(f.statement, 64):''), el:c}; }
+    if((c=el.closest('section.rp-sec,section.region'))){
+      var h=c.querySelector('h3,h2'), sec=c.querySelector('[data-sec]');
+      return {kind:'section', id:(sec&&sec.getAttribute('data-sec'))||c.getAttribute('id')||'', label:clip(h&&h.textContent||c.getAttribute('aria-label')||'This section', 80), el:c}; }
+    return null;
+  }
+  window.ClanFeedbackTarget=feedbackTarget;
   function pinSid(id){ var p=pins()[id]; return arr(p&&p.sources).filter(function(x){ return /^src_/.test(x); })[0]||''; }
   // A pin's long name, for its tooltip: the sentence that cites it, its quote,
   // its label, its id. Never its key.

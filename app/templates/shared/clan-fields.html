@@ -530,6 +530,11 @@ clan-chart .clf-chart{cursor:pointer}
 @media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
   .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
 @media (prefers-reduced-motion:reduce){.clf-drawer,.clf-scrim,.clf-toast,.clf{transition:none}.clf-flash{animation:none}}
+/* Feedback by pointing at it (the dogfood build; features/feedback-point.clan): what is under the
+   cursor is outlined and named while the shell asks (clan:feedback-pick). */
+html.clf-fb-on,html.clf-fb-on *{cursor:crosshair!important}
+.clf-fb{position:fixed;z-index:2147483000;pointer-events:none;border-radius:5px;outline:2px solid #515BFF;background:color-mix(in srgb,#515BFF 6%,transparent);display:none}
+.clf-fb-tag{position:absolute;right:6px;top:-11px;background:#515BFF;color:#fff;font:600 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 <script>
 /* The OS's fields. Everything a field shows comes from the record the host
@@ -2652,6 +2657,71 @@ var ClanFields=(function(){
     SENT_PARTS=sig; toShell({type:'clan:parts', parts:ps});
   }
   function postMark(a,marked,said){ toShell({type:'clan:part-mark', address:a, marked:!!marked, words:said||''}); }
+
+  // ── feedback by pointing at it (the dogfood build; features/feedback-point.clan) ──
+  // The shell asks (clan:feedback-pick {on}). While on, what is under the cursor is outlined
+  // and named; one click picks it and presses nothing; Esc cancels. The answer goes up as
+  // clan:feedback-picked {target:{kind,id,label}|null, rect} (null: cancelled here). A tool
+  // names its own things with window.ClanFeedbackTarget(el) → {kind,id,label,el}|null; else a
+  // control is named by its label and a declared part by its label. The innermost one wins.
+  // F pressed here, not while typing, asks the shell to start (clan:feedback-key).
+  var FB={on:false, box:null};
+  function fbClip(s,n){ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>n?s.slice(0,n-1)+'…':s; }
+  function fbTyping(el){
+    if(!el) return false; var t=String(el.tagName||'').toUpperCase();
+    if(t==='TEXTAREA'||t==='SELECT') return true;
+    if(t==='INPUT') return /^(?:text|search|email|url|tel|password|number|date|datetime-local|month|time|week)?$/i.test(String(el.type||''));
+    return !!(el.isContentEditable||(el.closest&&el.closest('[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]')));
+  }
+  function fbControl(el){
+    var c=el.closest('button,a,[role="button"],[role="menuitem"],[role="tab"],summary,select,input,textarea'); if(!c) return null;
+    var l=fbClip(c.getAttribute('aria-label')||c.getAttribute('title')||c.textContent,80)||String(c.tagName||'control').toLowerCase();
+    return {kind:'control', id:c.getAttribute('data-act')||c.getAttribute('id')||l, label:l, el:c};
+  }
+  function fbPart(el){
+    var p=el.closest('[data-clan-part]'); if(!p) return null; var a=p.getAttribute('data-clan-part');
+    return {kind:'part', id:a, label:fbClip(p.getAttribute('data-clan-part-label')||words(a),80), el:p};
+  }
+  function fbTarget(el){
+    if(!el||!el.closest||el.closest('.clf-fb')) return null;
+    var own=typeof window.ClanFeedbackTarget==='function'?window.ClanFeedbackTarget(el):null, best=null;
+    [fbPart(el), own, fbControl(el)].forEach(function(t){ if(t&&t.el&&t.label&&(!best||best.el===t.el||best.el.contains(t.el))) best=t; });
+    return best;
+  }
+  function fbShow(t){
+    if(!FB.box){ FB.box=document.createElement('div'); FB.box.className='clf-fb'; FB.box.setAttribute('aria-hidden','true');
+      FB.tag=document.createElement('span'); FB.tag.className='clf-fb-tag'; FB.box.appendChild(FB.tag); document.body.appendChild(FB.box); }
+    if(!t){ FB.box.style.display='none'; return; }
+    var r=t.el.getBoundingClientRect();
+    FB.box.style.display='block'; FB.box.style.left=(r.left-3)+'px'; FB.box.style.top=(r.top-3)+'px';
+    FB.box.style.width=(r.width+6)+'px'; FB.box.style.height=(r.height+6)+'px'; FB.tag.textContent=t.label;
+  }
+  function fbReply(t){
+    var r=t?t.el.getBoundingClientRect():null;
+    toShell({type:'clan:feedback-picked', target:t?{kind:t.kind, id:String(t.id||''), label:t.label}:null,
+      rect:r?{x:r.left, y:r.top, w:r.width, h:r.height}:null});
+  }
+  function fbSet(on){
+    FB.on=!!on; document.documentElement.classList.toggle('clf-fb-on',FB.on);
+    if(!FB.on&&FB.box) fbShow(null);
+  }
+  function fbMove(e){ if(FB.on) fbShow(fbTarget(e.target)); }
+  function fbClick(e){
+    if(!FB.on) return;
+    e.preventDefault(); e.stopPropagation();
+    if(e.type!=='click') return;
+    var t=fbTarget(e.target); if(!t) return;
+    fbSet(false); fbReply(t);
+  }
+  function fbKey(e){
+    if(FB.on&&e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); fbSet(false); fbReply(null); return; }
+    if(!FB.on&&(e.key==='f'||e.key==='F')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.repeat&&!fbTyping(e.target)) toShell({type:'clan:feedback-key'});
+  }
+  window.addEventListener('message',function(e){ var m=e.data; if(e.source===window.parent&&m&&m.type==='clan:feedback-pick') fbSet(m.on===true); });
+  document.addEventListener('pointermove',fbMove,true);
+  ['pointerdown','mousedown','click'].forEach(function(t){ document.addEventListener(t,fbClick,true); });
+  document.addEventListener('keydown',fbKey,true);
+  window.addEventListener('scroll',function(){ if(FB.on&&FB.box) fbShow(null); },true);
 
   // What /decisions says of client review, by this document's bare path.
   function cview(){ return obj(VIEW&&VIEW.client); }
