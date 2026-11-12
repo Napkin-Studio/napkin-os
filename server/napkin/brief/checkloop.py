@@ -152,8 +152,13 @@ def run(job, values: dict, said: str, open_keys: list, evidence: dict, library: 
     missing = [d for d in DIMS if before and before["dims"].get(d) == "missing"]
     ask = flagged + empty
     if not ask and not chain_doubt and not missing and not code:
-        rl.note("check_clean", detail="jev flagged nothing, code sends nothing back and every part is written")
-        return out
+        if tests is None:
+            rl.note("check_clean", detail="jev flagged nothing, code sends nothing back and every part is written")
+            return out
+        # Owner, 2026-11-12: every brief is judged by the skill's tests, a clean one too (one Review agent call),
+        # so its single-mindedness is a verdict, never "unchecked".
+        rl.note("check_clean", detail="jev flagged nothing and code sends nothing back; the Review agent still judges "
+                                      "the skill's tests")
     payload = {"brief": {k: values.get(k) for k in KEYS if filled(values.get(k))}, "client_said": said[:8000],
                "flagged": {k: round(before["p"][k], 3) for k in flagged} if before else {},
                "empty": empty, "chain_holds": round(before["chain"], 3) if before else None,
