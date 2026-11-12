@@ -253,6 +253,34 @@ pub fn client_change(s: &Subject, stage: &str, title: &str, path: &str, answer_i
     )
 }
 
+/// The same row, for a remark made through a client's review link: a comment, or a reviewer's own
+/// request for changes (the approver's answer is [`client_change`]). The cause is the decision, so a
+/// new remark is a new notice. Never the remark's words: only the job, the document and that a client
+/// commented.
+pub fn client_remark(
+    s: &Subject,
+    stage: &str,
+    title: &str,
+    path: &str,
+    decision_id: &str,
+    asks_for_changes: bool,
+) -> Need {
+    need(
+        s,
+        CLIENT_CHANGE,
+        stage,
+        "account_service",
+        (path, decision_id),
+        if asks_for_changes {
+            format!("{title}: a client reviewer has asked for changes.")
+        } else {
+            format!("{title}: a client has commented.")
+        },
+        "Open the document",
+        Audience::Role("account-service"),
+    )
+}
+
 /// Deadline within 48 hours: the job's deadline is today or in the next two days. For the job owner.
 /// A passed deadline is the dashboard's at-risk line, not a notice. The cause is the date, so a moved
 /// deadline is a new notice.

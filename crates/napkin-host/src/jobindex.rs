@@ -739,10 +739,15 @@ fn entry_of(
         people.extend(f.planner.iter().chain(f.creative_director.iter()).cloned());
     }
     for e in &evidence {
+        let stage = stage_of_app(e.app, jobs::CLIENT).unwrap_or("client-approval");
         if let Some(answer) = &e.client_change {
-            let stage = stage_of_app(e.app, jobs::CLIENT).unwrap_or("client-approval");
             needs.push(alerts::client_change(
                 &subject, stage, &e.title, &e.path, answer,
+            ));
+        } else if let Some((remark, asks)) = &e.client_remark {
+            // one notice a document: the approver's own answer, when there is one, says it
+            needs.push(alerts::client_remark(
+                &subject, stage, &e.title, &e.path, remark, *asks,
             ));
         }
     }
@@ -819,6 +824,10 @@ struct Evidence {
     /// The client's newest answer to the locked version when it asks for changes or turns it down:
     /// the decision's id. Its words are never read into the index.
     client_change: Option<String>,
+    /// The newest remark a client made through a review link on the locked version that stands: a
+    /// comment (not taken back), or a reviewer's own request for changes. The decision's id, and
+    /// whether it asks for changes. Its words are never read into the index.
+    client_remark: Option<(String, bool)>,
 }
 
 /// One approving decision: who, when, and the exact version.
@@ -899,6 +908,9 @@ fn evidence_of(doc: &Document, id: &DocId, app: &str, client_step: bool) -> Evid
     } else {
         None
     };
+    let client_remark = lock_at
+        .and_then(|i| chain.decisions[i].id.as_deref())
+        .and_then(|lock_id| client_remark(&chain, doc_id, lock_id));
     let signers = if gate::applies(doc) {
         decisions::decisions(doc)
             .ok()
@@ -917,7 +929,40 @@ fn evidence_of(doc: &Document, id: &DocId, app: &str, client_step: bool) -> Evid
         signs,
         client,
         client_change,
+        client_remark,
     }
+}
+
+/// What a reviewer on a review link last said about the locked version, by the chain alone: the
+/// newest comment that has not been taken back, or advice that asks for changes.
+fn client_remark(
+    chain: &clan_sdk::DecisionChain,
+    doc_id: &str,
+    lock_id: &str,
+) -> Option<(String, bool)> {
+    use crate::ops::client_link::{ADVICE, COMMENT, COMMENT_WITHDRAW};
+    use crate::ops::client_review::{extra_str, KIND};
+    let of = |d: &clan_sdk::Decision, action: &str| {
+        d.kind.as_deref() == Some(KIND) && d.action == action
+    };
+    let taken_back: Vec<&str> = chain
+        .decisions
+        .iter()
+        .filter(|d| of(d, COMMENT_WITHDRAW))
+        .filter_map(|d| d.cites.first().map(String::as_str))
+        .collect();
+    chain.decisions.iter().find_map(|d| {
+        let on_this = d.targets.iter().any(|t| t == doc_id)
+            && d.cites.first().map(String::as_str) == Some(lock_id);
+        let id = d.id.clone()?;
+        if !on_this {
+            return None;
+        }
+        if of(d, COMMENT) && !taken_back.contains(&id.as_str()) {
+            return Some((id, false));
+        }
+        (of(d, ADVICE) && extra_str(d, "answer") != Some("accepted")).then_some((id, true))
+    })
 }
 
 /// The days between two dates, 0 when `due` is today or ahead: late from the
