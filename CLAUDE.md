@@ -57,6 +57,13 @@ Details: `features/README.md`. Schema: `features/feature.schema.json`.
 and runs only those. Use `--all` for everything, `--only rust,wasm` to pick
 suites, and `--list` to see what would run.
 
+**Run the full checks once, in the push.** The pre-push hook runs `scripts/check.sh`.
+While building, don't run it by hand, and don't run whole suites one by one either
+(all of vitest, lint or `build:web`, all of the relay's pytest). Run only the tests
+for what you changed, lint on the files you changed, and one typecheck. A UI change
+still gets a browser click-through on a copy or a mock stack, limited to the flows
+that changed (owner, 2026-10-16 and 2026-10-21).
+
 | Suite | Runs | Triggered by |
 |---|---|---|
 | rust | fmt, clippy, test on clan-sdk, clan-cli, napkin-host, napkin-web | `crates/`, `Cargo.*`, `spec/` |
