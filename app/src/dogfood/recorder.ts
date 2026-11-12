@@ -172,8 +172,8 @@ export async function acknowledge(): Promise<boolean> {
  * element (' · '), with dates and times taken out. A click on no control is
  * 'background', never the page's text. A name is at most 80 characters.
  *
- * Self-contained on purpose: FRAME_CAPTURE carries this function's own source
- * into app frames, so the shell and the frames name things by one rule.
+ * Self-contained on purpose: src/shell/bridge/frameCapture.js carries the same
+ * function into app frames, so the shell and the frames name things by one rule.
  */
 export function nameOf(el: Element | null): string {
   const CONTROLS = '[data-dogfood],button,a,[role="button"],[role="menuitem"],[role="tab"],input,select,textarea,summary,label'
@@ -222,28 +222,11 @@ function startCapture() {
 }
 
 // ── capture inside app frames ───────────────────────────────────────────────
-
-/**
- * The listener the shell adds to an app frame's page when this build records:
- * it only listens (capture phase, passive) and tells the shell what was
- * clicked or submitted, named by `nameOf` itself. No app changes; a template
- * can name things with `data-dogfood`.
- */
-export const FRAME_CAPTURE = `<script data-dogfood-capture>(function(){
-var nameOf=${nameOf.toString()};
-function tell(kind,e){if(!e.isTrusted)return;try{parent.postMessage({type:'clan:interaction',kind:kind,name:nameOf(e.target)},'*')}catch(_){}}
-document.addEventListener('click',function(e){tell('click',e)},{capture:true,passive:true});
-document.addEventListener('submit',function(e){tell('submit',e)},{capture:true,passive:true});
-})();</script>`
-
-/**
- * What to add to an app page beside the edit bridge: the frame listener when
- * this build records, else nothing. (The bridge is spliced in at the page's
- * last `</body>`; an app's script may hold an earlier one in a string.)
- */
-export function frameCapture(on: boolean): string {
-  return on ? FRAME_CAPTURE : ''
-}
+//
+// The frame's own listener is src/shell/bridge/frameCapture.js, which carries
+// a copy of `nameOf`; napkin-host puts it in an app's page when the frame's
+// options ask for capture (AppRuntime: the build records and the person has
+// agreed). tests/dogfood.test.tsx holds the two copies to the same answers.
 
 /** For tests: set the state and the transport directly. */
 export function __test(next: DogfoodState, send?: Send) {

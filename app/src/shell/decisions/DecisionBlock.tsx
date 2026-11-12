@@ -18,6 +18,7 @@ import {
   sourcesOf, sureWord, upper, whereOf, whoOf, withCountry,
 } from './words'
 import type { WhoIs } from './words'
+import { verdictWords, type Need } from './needs'
 
 /** The agent's sphere, or a person's initial. */
 export function Face({ block, size = 30, needs = false }: { block?: DecisionBlock; size?: number; needs?: boolean }) {
@@ -74,7 +75,7 @@ export function NeedsCard({ item, block, actions, aside }: { item: AttentionItem
         <Face block={block} size={40} needs />
         <div>
           {who && <Sign who={who} />}
-          <div className="dp-card-what">{TITLE[item.code] ?? 'Needs you'}</div>
+          <div className="dp-card-what">{item.code === 'bad_verdict' ? verdictWords(block?.who.kind ?? (item as Need).by) : TITLE[item.code] ?? 'Needs you'}</div>
           {raisedBy && <div className="dp-card-who">{raisedBy}</div>}
         </div>
       </div>

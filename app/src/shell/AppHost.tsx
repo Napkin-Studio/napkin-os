@@ -46,6 +46,7 @@ import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
+import { openDocJobs } from './openJobs'
 import '../components/chrome.css'
 import './clientReview/ClientReview.css'
 import { afterLock, editOn, setEditFor, type EditState } from './editMode'
@@ -168,6 +169,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // Read links and the source again when another document changes, or the page is back in view.
   const wake = useWakeTick()
   const others = othersStamp(library, docPath)
+  // The document's runs the host has not seen finish, for its page to pick up (clan:jobs). The list
+  // is keyed by its contents, so a re-read listing with the same jobs posts nothing new.
+  const jobsKey = openDocJobs(library, docPath).join('\n')
+  const openJobs = useMemo(() => (jobsKey ? jobsKey.split('\n') : []), [jobsKey])
   const stamp = `${wake}:${others}`
   // The tab says it too: "Napkin Studio Research — Bulmers · Ireland".
   const brandName = brand?.name
@@ -445,13 +450,14 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           madeInto,
           linked,
           linkTargets: links.targets,
+          onContinueOpen: links.refresh,
           onLink: open.is_template ? undefined : links.link,
           onUpdateLinked: decisions.view?.lock.locked || open.is_template ? undefined : links.update,
           onUnlink: decisions.view?.lock.locked || open.is_template ? undefined : links.unlink,
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
-          saved: saved ? <SaveStatus docPath={docPath} state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          saved: saved ? <SaveStatus state={saveState} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.
@@ -520,8 +526,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             />
           )}
           <AppRuntime
-            htmlContent={running.htmlContent}
             hasHumanView={open.has_human_view}
+            version={open.view_version ? `${open.manifest.sha256}:${open.view_version}` : open.manifest.sha256}
             manifest={open.manifest}
             renderModel={authored ? 'authored' : 'legacy'}
             editMode={editMode}
@@ -536,6 +542,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onUndoKey={briefUndo.onFrameKey}
             onBarKey={() => openBar()}
             insets={shown}
+            jobs={openJobs}
           />
         </main>
         {clientOn ? (

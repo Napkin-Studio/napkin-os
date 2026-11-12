@@ -1066,6 +1066,13 @@
   .b-up ul{margin:0 12px 8px 28px;display:grid;gap:4px;font-size:12.5px;line-height:1.45;color:var(--nd-ink-soft)}
   .b-up ul .m{color:var(--nd-muted)}
   .b-up-acts{display:flex;gap:10px;align-items:center;padding:0 12px 12px}
+  /* a research linked into the brief: what came in, and one press to write it again with it */
+  .lk-h{display:flex;align-items:center;gap:8px;padding:10px 12px 0;font:600 13px/1.55 var(--font-ui);color:var(--nd-ink)}
+  .lk-h i{width:7px;height:7px;border-radius:50%;background:var(--ag-base);flex:none}
+  :root[data-color-scheme="dark"] .lk-h i{background:var(--ag-acc)}
+  .lknote .b-up-m{margin:6px 12px 10px;font-size:12.5px}
+  .lknote .lk-small{margin-top:-2px;font-size:11.5px}
+  #fields .lk-chg{background:color-mix(in srgb,var(--clf-hl) 55%,transparent)}
   /* the state chip when locked */
   #structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   /* Record the client's answer */
@@ -1455,7 +1462,7 @@
           <label class="attach" title="Add the client’s files"><span aria-hidden="true">+</span><span class="sr">Add the client’s files</span><input type="file" class="sr" id="addAny" multiple /></label>
           <span class="cfoot-hint">Drop decks, PDFs, brand books, or voice notes.</span>
         </div>
-        <button type="button" class="go" id="genBtn">Write the brief</button>
+        <button type="button" class="go" id="genBtn" disabled>Write the brief</button>
       </div>
       <div class="note" id="intakeStatus" role="status"></div>
       <div class="nomw" id="noMw" hidden></div>
@@ -1520,6 +1527,7 @@
             <div class="b-state" id="bState"><b>Brief<span class="pill" id="statusPill" role="status"></span></b><span class="b-state-t" id="stateLine"></span></div>
             <span class="muted status" id="status" role="status"></span>
           </div>
+          <div class="upnote lknote" id="linkNote" role="status" hidden></div>
           <div class="upnote" id="upNote" role="status" hidden></div>
           <div class="locklist" id="lockList" hidden></div>
           <div class="b-lockslot">
@@ -1790,7 +1798,7 @@
       fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
         .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
         .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy();
+        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy(); renderLinkNote();
           // The selected part's calls follow the chain, unless someone is typing in the panel.
           var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderProv(); else renderSelPart(); });
     }, 120);
@@ -2757,7 +2765,9 @@
   function renderIntake(){
     buildIntroCrew(); syncKind(); renderFromUp();
     var nm=$('noMw'), off=noMiddleware();
-    nm.hidden=!off; $('genBtn').disabled=off;
+    // The button is drawn disabled and turned on here, once its click is wired: a page still
+    // loading must not offer a press that does nothing (UAT round 5).
+    nm.hidden=!off; genOff();
     if(off){
       nm.innerHTML=fig('drafter',{decorative:true})+say('drafter', esc(NO_MW)+'<span class="answers"><button type="button" id="handBtn">Write it by hand</button></span>','left');
       $('handBtn').addEventListener('click',function(){ handWrite=true; forceIntake=false; render(); });
@@ -2835,17 +2845,51 @@
 
   function fileType(f){var m=f.type||'';return m.indexOf('image/')===0?'image':m.indexOf('audio/')===0?'audio':m.indexOf('video/')===0?'video':'document';}
   function uploadFiles(input, statusEl){ uploadList(input.files, statusEl, function(){ input.value=''; }); }
+  // While files go up, Write the brief waits: a draft started now would go without them. A file that
+  // could not be added is named, with why; "Adding…" never stays (UAT attachment journeys, 2026-11-12).
+  var UPLOADING=0;
+  function genOff(){ var g=$('genBtn'); if(g) g.disabled=noMiddleware()||UPLOADING>0; }
+  function upWhy(res, file){
+    var e=res&&res.error; if(e&&typeof e==='object') e=e.message||e.type;
+    return e?String(e):'the studio did not take '+(file.name||'it');
+  }
+  // What the agents read: the text the host extracts (crates/napkin-host/src/ops/mod.rs extract_text), and
+  // pictures, which they look at. Anything else is kept with the brief but not read, and the person is told
+  // when they add it, before a run is paid for (owner, 2026-11-12, UAT round 7).
+  var READ_EXT=/^(txt|text|md|markdown|csv|tsv|json|ya?ml|log|pdf|docx|pptx|png|jpe?g|gif|webp)$/;
+  function unreadNote(names){
+    if(!names.length) return '';
+    var exts=[]; names.forEach(function(n){ var e=(n.split('.').length>1?n.split('.').pop():'').toLowerCase(); if(exts.indexOf(e)===-1) exts.push(e); });
+    var what=exts.map(function(e){ return e?'.'+e:'files without a type'; }).join(' or ');
+    return names.join(', ')+(names.length===1?' is':' are')+' added, but the agents can’t read '+what+(exts.length===1&&exts[0]?' files':'')
+      +'. They read PDF, Word, PowerPoint, pictures and text.';
+  }
   function uploadList(list, statusEl, done){
     var files=Array.prototype.slice.call(list||[]); if(!files.length) return;
-    if(statusEl) statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…';
+    var failed=[], unread=[];
+    UPLOADING++; genOff();
+    if(statusEl){ statusEl.classList.remove('err'); statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…'; }
     files.reduce(function(p,file,i){return p.then(function(){
+      if(!file.size){ failed.push(file.name+' (it is empty)'); return; }
       var type=fileType(file), ext=(file.name.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
       var name=type+'-'+Date.now()+'-'+i+'.'+ext;
       return file.arrayBuffer().then(function(buf){ return sha256Hex(buf).then(function(h){
           return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf})
-            .then(function(r){return r.json();}).then(function(res){if(res&&res.internal_path){var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});patch('reference_assets',n);}});
-        }); });
-    });},Promise.resolve()).then(function(){if(statusEl)statusEl.textContent='';if(done)done();});
+            .then(function(r){return r.json().catch(function(){ return {error:'the studio answered '+r.status}; });}).then(function(res){
+              if(!(res&&res.internal_path)){ failed.push(file.name+' ('+upWhy(res, file)+')'); return; }
+              if(!READ_EXT.test(ext)) unread.push(file.name);
+              var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});
+              return patch('reference_assets',n);
+            });
+        }); }).catch(function(e){ failed.push(file.name+' ('+(e&&e.message||e)+')'); });
+    });},Promise.resolve()).then(function(){
+      UPLOADING=Math.max(0,UPLOADING-1); genOff();
+      if(statusEl){
+        statusEl.textContent=[failed.length?'Could not add '+failed.join(', ')+'.':'', unreadNote(unread)].filter(Boolean).join(' ');
+        statusEl.classList.toggle('err', !!failed.length);
+      }
+      if(done) done();
+    });
   }
   $('addAny').addEventListener('change',function(){ uploadFiles(this, $('intakeStatus')); });
   // Files dropped anywhere on the page are added, as the attach button adds
@@ -2881,11 +2925,16 @@
   function noMiddleware(){ return MW.configured===false; }
   var NO_MW='This workspace has no middleware set up, so the agents can’t write here. You can still write the brief by hand.';
   function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
+  // A job the middleware no longer knows (404 unknown_job): jobs live in its memory, so a restart
+  // (a deploy) ends every run in flight. The run is over; say so and offer it again.
+  var INTERRUPTED='This run was interrupted (the service restarted). Run it again.';
+  function interrupted(res){ return !!(res&&res.error&&typeof res.error==='object'&&res.error.type==='unknown_job'); }
   function hostErr(res){
     if(!res) return 'Empty reply from the host.';
     if(res.error){
       var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       if(e&&e.type==='no_middleware'){ MW.configured=false; return NO_MW; }
+      if(interrupted(res)) return INTERRUPTED;
       return typeof e==='string'?e+st:(e.type?e.type+st+': ':'')+(e.message||JSON.stringify(e));
     }
     if(res.ok===false) return 'The host could not complete the call'+(res.status?' (status '+res.status+')':'')+'. Nothing was applied.';
@@ -2893,9 +2942,6 @@
     if(!b||typeof b!=='object'||b.api!==MW_API) return 'Not a '+MW_API+' reply'+(b&&b.api?' (got '+b.api+')':'')+'. Nothing was applied.';
     return null;
   }
-  function store(k, v){ try{ if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); }catch(e){} }
-  function stored(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
-  function jobKey(task, field){ return 'clan.brief.job.'+docId()+'.'+task+(field?'.'+field:''); }
   // One job: {task, field, id, state, stage, progress, fields, proposals,
   // summary, error, applied, reason}. `onUpdate` re-draws whatever shows it.
   function runJob(j, input){
@@ -2904,7 +2950,7 @@
   }
   function onJobReply(j, res){
     var err=hostErr(res);
-    if(err){ j.error=err; if(j.state==='sending'||j.state==='checking') j.state='unsent'; else j.state='stalled'; endJob(j); return; }
+    if(err){ j.error=err; j.interrupted=interrupted(res); j.state=j.interrupted?'failed':j.state==='sending'||j.state==='checking'?'unsent':'stalled'; endJob(j); return; }
     var b=mwBody(res);
     j.error=null;
     if(b.job&&typeof b.job==='object'){
@@ -2922,7 +2968,6 @@
       if(Array.isArray(b.result.proposals)){ j.proposals=b.result.proposals; LAST_PROPOSALS=b.result.proposals; }
     }
     if(b.change&&typeof b.change==='object'){ j.applied=landed(b.change); j.reason=b.change.reason; if(j.applied){ loadChain(); render(); } }
-    if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running'||j.state==='needs_input')?j.id:null);
     if(j.state==='queued'||j.state==='running'||j.state==='needs_input'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
     else endJob(j);
   }
@@ -2935,7 +2980,7 @@
     window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
   }
   function unreachable(j, e){ j.error='The middleware could not be reached: '+(e&&e.message||e); j.state=j.state==='sending'?'unsent':'stalled'; endJob(j); }
-  function endJob(j){ store(jobKey(j.task,j.field), null); loadChain(); j.onEnd(j); }
+  function endJob(j){ loadChain(); j.onEnd(j); }
   // The planner's answers to intake's questions ({question id: text, or null to skip}; {} skips them all).
   // The reply is the job's, as a poll's. A refusal (the wait ran out, the job went on) is not the job's
   // end: say so and keep polling.
@@ -3164,11 +3209,12 @@
     $('tilesSum').textContent='See each part as it is written · '+written+' of '+FIELDS.length;
     // Stop: a person may cancel it at any stage (cancel_job); what the crew already sent stays.
     var acts=$('procActs'), canStop=live&&j.id&&j.state!=='checking';
-    acts.innerHTML=canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+    acts.innerHTML=j.interrupted&&!live?'<button type="button" class="sp-btn" id="procAgain">Run it again</button>':canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
       :'<button type="button" class="sp-btn" id="procStop">Stop</button>'):'';
     var stp=$('procStop'); if(stp) stp.addEventListener('click',function(){ j.stopAsk=true; renderProc(); var y=$('procStopYes'); if(y) y.focus(); });
     var sno=$('procStopNo'); if(sno) sno.addEventListener('click',function(){ j.stopAsk=false; renderProc(); });
     var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
+    var again=$('procAgain'); if(again) again.addEventListener('click',function(){ if(DRAFT===j) DRAFT=null; draftNow(''); });
     syncHead(); sendBar();
   }
   // ---------- the agent asks, on the one screen (owner, 2026-11-09) ----------
@@ -3262,7 +3308,7 @@
   function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input'); }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
-      renderProc();
+      renderProc(); linkRunEnded(j);
       if(j.state==='done') setTimeout(function(){ if(DRAFT!==j) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); }, reduce?200:1100);
     }};
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
@@ -3344,14 +3390,44 @@
   }
   $('genBtn').addEventListener('click',function(){ draftNow($('prompt').value.trim()); });
 
-  // On open: pick up a job this tab started on this document, with one free poll.
-  function resumeJobs(){
-    if(!(window.clan&&window.clan.apiProxy)) return;
-    var id=stored(jobKey('draft_brief'));
-    if(id) startDraft('', [], id);
-    FIELDS.forEach(function(f){ var rid=stored(jobKey('regenerate_field', f.key)); if(rid) regenField(f, '', rid); });
-    var fid=stored(jobKey('fix_parts')); if(fid) fixParts('', fid);
+  // On open, and while the brief is open: the runs still going on it. The shell says which of the
+  // document's jobs the host has not seen finish (clan:jobs, ids only), on load and whenever its
+  // listing changes. Each id this page is not already polling gets one free job_status poll, whose
+  // reply names the job's task; a live draft goes back to the Agents screen (questions and all), a
+  // redraft or a fix back to its row, and from then on this page polls it, so a finished run lands
+  // without leaving (the shell's settler skips the open document). The page used to keep the ids in
+  // sessionStorage, but the frame is sandboxed without allow-same-origin, so storage always threw.
+  var SEEN_JOBS={};
+  var LIVE_JOB={queued:1, running:1, needs_input:1};
+  function ownJob(id){
+    if(DRAFT&&DRAFT.id===id||FIX&&FIX.id===id) return true;
+    return Object.keys(REGEN).some(function(k){ return REGEN[k]&&REGEN[k].id===id; });
   }
+  function resumeJobs(ids){
+    if(!(window.clan&&window.clan.apiProxy)) return;
+    arr(ids).forEach(function(id){
+      if(typeof id!=='string'||!id||SEEN_JOBS[id]||ownJob(id)) return;
+      SEEN_JOBS[id]=1;
+      window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:id}}).then(function(r){ resumeJob(id, r); }, function(){ delete SEEN_JOBS[id]; });
+    });
+  }
+  // A redraft's field: the one part its reply has in flight (the rest are kept, done or absent).
+  function regenFieldOf(b){
+    var fs=b.result&&b.result.fields||{}, at=Object.keys(fs).filter(function(k){ return fs[k]&&(fs[k].state==='waiting'||BUSY[fs[k].state]); });
+    return at.length===1?fieldOf(at[0]):null;
+  }
+  function resumeJob(id, r){
+    if(hostErr(r)||ownJob(id)) return;
+    var b=mwBody(r), st=b.job&&b.job.state;
+    if(!LIVE_JOB[st]){ loadChain(); return; }   // it ended: the host applied what the reply carried
+    if(b.task==='draft_brief'){ if(!DRAFT) startDraft('', [], id); }
+    else if(b.task==='fix_parts'){ if(!FIX) fixParts('', id); }
+    else if(b.task==='regenerate_field'){ var f=regenFieldOf(b); if(f&&!REGEN[f.key]) regenField(f, '', id); }
+  }
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:jobs') return;
+    resumeJobs(m.jobs);
+  });
 
   // A working title while project_name is empty: the product and the move the
   // commercial objective names ("Relaunch Glenmore 12 to …" → "Glenmore 12
@@ -3531,9 +3607,103 @@
     UP.t=setTimeout(function(){
       fetch(clanScheme+'/upstream').then(function(r){ return r.ok?r.json():null; })
         .then(function(v){ if(v&&typeof v==='object'){ UP.res=v; UP.state='ok'; } }, function(){ UP.state='unavailable'; })
-        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
+        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderLinkNote(); renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
     }, 300);
   }
+
+  // ---------- a research linked into this brief (features/brief-link-redraft.clan) ----------
+  // Linked after the brief was written (Continue in › Link to an existing one), a research's facts
+  // and findings are in the brief, and the brief was written without them. The notice says what came
+  // in and offers one press to write it again with it: the same Draft it again (draftNow, the same
+  // job and Agents screen), unarmed, since choosing it is the confirmation. A person's edits and kept
+  // parts stay, as in any redraft. It stays on later visits until used or put off (Not now), recorded
+  // per research and per version taken (data.link_notice), and comes back when another research is
+  // linked or this one is taken again. Never on a locked brief. After the run: what changed.
+  var LINK={run:null, done:null, shown:false, off:false};
+  function linkSeen(){ var s=get('link_notice'); return s&&typeof s==='object'&&!Array.isArray(s)?s:{}; }
+  // The linked research this brief has not used or put off yet, the latest link first.
+  function linkedNew(){
+    var seen=linkSeen(), u=get('upstream')||{};
+    return (UP.res?arr(UP.res.upstream):[]).filter(function(e){
+      if(!e||e.how!=='linked'||e.noun==='brand'||isBrandKit(u[e.document_id])) return false;
+      var s=seen[e.document_id]; return !(s&&typeof s.taken==='number'&&s.taken>=(e.taken||1));
+    }).sort(function(a,b){ var x=String(a.linked_at||''), y=String(b.linked_at||''); return x>y?-1:x<y?1:0; });
+  }
+  function linkMark(es, how){
+    var s=Object.assign({}, linkSeen());
+    es.forEach(function(e){ s[e.document_id]={taken:e.taken||1, how:how}; });
+    return patch('link_notice', s, {actor:'human', pinned:false, action:how==='used'?'rewrite the brief with the linked research':'put off the linked research',
+      rationale:(how==='used'?'Rewrote the brief with ':'Not now: ')+listWords(es.map(function(e){ return '“'+(e.title||'the research')+'”'; }))});
+  }
+  function linkRewrite(){
+    if(LINK.run||approveLocked()||draftLive()) return;
+    var es=linkedNew(); if(!es.length) return;
+    var before={}; FIELDS.forEach(function(f){ before[f.key]=valToText(get(f.key),f.type); });
+    LINK.run={title:es[0].title||'the research', before:before}; LINK.done=null; LINK.shown=false;
+    var go=function(){ draftNow(''); };
+    Promise.resolve(linkMark(es,'used')).then(go, go);
+  }
+  function linkLater(){
+    var es=linkedNew(); if(!es.length) return;
+    LINK.off=true; renderLinkNote();
+    var back=function(){ LINK.off=false; renderLinkNote(); };
+    Promise.resolve(linkMark(es,'later')).then(back, back);
+  }
+  // The draft this notice started ended: done, it says what changed; else it says nothing more.
+  function linkRunEnded(j){
+    if(!LINK.run||!j||j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input') return;
+    if(j.state==='done') LINK.done=LINK.run;
+    LINK.run=null;
+  }
+  // What the rewrite changed, from the parts as they stood at the press.
+  function linkChanges(){
+    var d=LINK.done, changed=[], kept=[], cites=[];
+    FIELDS.forEach(function(f){
+      var was=d.before[f.key], now=valToText(get(f.key),f.type);
+      if(was!==now){ changed.push(f); partCites(f.key).forEach(function(c){ if(/^f_/.test(c)&&cites.indexOf(c)===-1) cites.push(c); }); }
+      else if(String(was||'').trim()&&(isLocked(f.key)||isHuman(decisionsFor(f.key)[0]))) kept.push(f);
+    });
+    return {changed:changed, kept:kept, cites:cites.length};
+  }
+  function linkNoteHtml(){
+    if(phase!=='doc'||approveLocked()||draftLive()||LINK.run) return '';
+    var es=LINK.off?[]:linkedNew();
+    if(es.length) LINK.done=null;   // another research linked since: that one is what to say
+    else if(LINK.done){
+      var c=linkChanges(), lab=function(fs){ return listWords(fs.map(function(f){ return f.label; })); };
+      var said=c.changed.length
+        ?lab(c.changed)+(c.changed.length===1?' now rests':' now rest')+' on the research'+(c.cites?' ('+c.cites+(c.cites===1?' fact':' facts')+' cited)':'')+'.'
+        :'Nothing changed: the brief already said what the research says.';
+      if(c.kept.length) said+=' '+lab(c.kept)+' kept your words.';
+      return '<div class="lk-h"><i aria-hidden="true"></i>'+esc('Rewritten with '+LINK.done.title)+'</div><p class="b-up-m">'+esc(said)+'</p>'
+        +(c.changed.length?'<div class="b-up-acts"><button type="button" class="side-link" data-lk="show">'+(LINK.shown?'Hide what changed':'Show what changed')+'</button></div>':'');
+    }
+    if(!es.length) return '';
+    var e=es[0], h=e.holds||{}, n=[];
+    if(h.facts) n.push(h.facts+(h.facts===1?' fact':' facts'));
+    if(h.findings) n.push(h.findings+(h.findings===1?' finding':' findings'));
+    var came=n.length?listWords(n)+' came in.':'Its facts and findings came in.';
+    return '<div class="lk-h"><i aria-hidden="true"></i>'+esc('Research linked: '+(e.title||'the research'))+'</div>'
+      +'<p class="b-up-m">'+esc(came+' The brief was written without them. Rewrite it with the research: your edits and the parts you kept stay as they are.')+'</p>'
+      +'<div class="b-up-acts"><button type="button" class="btn-primary" data-lk="go">Rewrite with the research</button><button type="button" class="side-link" data-lk="later">Not now</button></div>'
+      +'<p class="b-up-m lk-small">Answers you already gave are used, not asked again.</p>';
+  }
+  function linkMarkRows(){
+    var ks=LINK.done&&LINK.shown?linkChanges().changed.map(function(f){ return f.key; }):[];
+    document.querySelectorAll('#fields .row[data-clan-part]').forEach(function(r){ r.classList.toggle('lk-chg', ks.indexOf(r.getAttribute('data-clan-part'))!==-1); });
+    return ks;
+  }
+  function renderLinkNote(){
+    var el=$('linkNote'); if(!el) return;
+    var h=linkNoteHtml(); el.hidden=!h; el.innerHTML=h; linkMarkRows();
+  }
+  document.addEventListener('click', function(e){
+    var b=e.target&&e.target.closest&&e.target.closest('#linkNote [data-lk]'); if(!b) return;
+    var a=b.getAttribute('data-lk');
+    if(a==='go') linkRewrite();
+    else if(a==='later') linkLater();
+    else if(a==='show'){ LINK.shown=!LINK.shown; renderLinkNote(); var ks=linkMarkRows(), r=ks.length&&document.querySelector('#fields .row[data-clan-part="'+ks[0]+'"]'); if(r&&LINK.shown) r.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
+  });
 
   // ---------- structured ----------
   var REGEN={};   // field key → true while its Drafter is redrafting it
@@ -3651,7 +3821,7 @@
     $('boardsNote').hidden=!showBoards;
     $('boards').classList.toggle('on',showBoards);
     if(showBoards) renderBoards(false);
-    renderLock(); renderUpNote($('upNote'));
+    renderLock(); renderLinkNote(); renderUpNote($('upNote'));
     renderCrewline(); renderReview();
     renderLook(); renderSelPart(); scheduleBreaks();
     LOCK_SIG=lockSig();
@@ -4278,6 +4448,15 @@
   var KIND_WORD={open_contest:'Sources disagree', unverified_finding:'Is this right?', flagged_field:'Rests on something marked wrong',
     bad_verdict:'Marked wrong', unmerged_branch:'Copy not brought back', client_rejected:'The client said no',
     client_rejected_parts_unknown:'Which parts?'};
+  // What kind of thing a lock item is, in words. A bad verdict says whose it is: the Review agent's
+  // own check is not someone marking the part wrong (the decision's who, from the host's view).
+  function kindWord(x, view){
+    if(x.code!=='bad_verdict') return KIND_WORD[x.code]||'Needs you';
+    var b=arr(view&&view.decisions).filter(function(d){ return d&&d.decision&&d.decision.id===x.decision; })[0], w=b&&b.who;
+    if(w&&w.kind==='agent') return 'Review agent said no';
+    if(w&&w.you) return 'You marked it wrong';
+    return w&&w.name?'Marked wrong by '+w.name:KIND_WORD.bad_verdict;
+  }
   function refOfAddress(a){ var p=String(a||'').split('#')[1]||'', m=/^(?:findings|facts|materials)\[([^\]]+)\]$/.exec(p)||/^selection\.contested\[([^\]]+)\]$/.exec(p); return m?m[1]:p; }
   function fieldOfAddress(a){ var p=pathOf(a); if(p==null) return null; return FIELDS.filter(function(f){ return f.key===p||p.indexOf(f.key+'.')===0; })[0]||null; }
   // One line per part and kind: a part the whole-brief check and its own
@@ -4288,7 +4467,7 @@
       if(!a||!a.blocks_lock) return false;
       var k=a.code+'|'+(a.address||a.decision||a.text); if(seen[k]) return false; seen[k]=1; return true;
     }).map(function(a){
-      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
+      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', decision:a.decision||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
     });
   }
   // What the lock waits for besides the parts the Review agent already names in its line.
@@ -4300,7 +4479,7 @@
   var LOCK_SIG='';
   function lkItemHtml(x){
     return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'"'+(x.key?' data-key="'+esc(x.key)+'"':'')+'>'
-      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||KIND_WORD[x.code]||'Needs you')+'</small></button>';
+      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||kindWord(x, osView()))+'</small></button>';
   }
   // A part of this brief is settled at the part: the row selects it (the part view, Your call first);
   // anything else (a carried contest, a finding) opens where it came from, in the panel.
@@ -5643,7 +5822,6 @@
   // ---------- boot ----------
   render();
   checkMiddleware();
-  resumeJobs();
   announce();
   loadUpstream();
   // A write lands: re-render, and re-read the chain it was recorded in.

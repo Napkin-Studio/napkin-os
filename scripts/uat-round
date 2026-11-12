@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# One UAT round (features/uat-loop.clan): deploy a ref to UAT, check UAT runs it, run the UAT
+# suite against it, then classify every middleware job the round started. Writes a round report.
+#
+#   scripts/uat-round                      deploy develop, test, report
+#   scripts/uat-round --ref fix/foo        deploy that branch instead
+#   scripts/uat-round --no-deploy          test whatever UAT runs now
+#   scripts/uat-round --grep "sign in"     only the matching journeys (free ones skip paid runs)
+#   scripts/uat-round --dry-run            print what it would do
+#
+# Needs: gh (signed in), aws sso login --profile napkin, app/node_modules (npm ci in app/).
+# Only ever targets environment=uat. Staging, main and production are never touched.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+ref=develop deploy=1 dry=0 grep=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ref) ref="$2"; shift 2 ;;
+    --no-deploy) deploy=0; shift ;;
+    --grep) grep="$2"; shift 2 ;;
+    --dry-run) dry=1; shift ;;
+    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+export AWS_PROFILE="${AWS_PROFILE:-napkin}" AWS_REGION="${AWS_REGION:-eu-west-1}"
+CLUSTER=napkin-uat
+out="${UAT_REPORTS:-$HOME/.cache/napkin-uat/rounds}/$(date -u +%Y%m%dT%H%M%SZ)"
+run() { if [[ $dry -eq 1 ]]; then echo "+ $*"; else "$@"; fi; }
+
+aws sts get-caller-identity >/dev/null 2>&1 || { echo "AWS session expired: run aws sso login --profile napkin" >&2; exit 1; }
+
+image_sha() { # the commit the running service's task definition carries
+  local td; td=$(aws ecs describe-services --cluster $CLUSTER --services "$1" --query 'services[0].taskDefinition' --output text)
+  aws ecs describe-task-definition --task-definition "$td" --query 'taskDefinition.containerDefinitions[0].image' --output text | sed 's/.*://'
+}
+
+git -C "$root" fetch -q origin
+sha=$(git -C "$root" rev-parse "origin/$ref" 2>/dev/null || git -C "$root" rev-parse "$ref")
+echo "round: ref $ref = ${sha:0:8}; report in $out"
+
+if [[ $deploy -eq 1 ]]; then
+  if [[ "$(image_sha web)" == "$sha" && "$(image_sha middleware)" == "$sha" ]]; then
+    echo "UAT already runs ${sha:0:8}; no deploy"
+  else
+    before=$(gh run list --workflow deploy.yml --limit 1 --json databaseId -q '.[0].databaseId')
+    run gh workflow run deploy.yml --ref develop -f environment=uat -f ref="$sha"
+    if [[ $dry -eq 0 ]]; then
+      id=""
+      for _ in $(seq 30); do
+        id=$(gh run list --workflow deploy.yml --limit 1 --json databaseId -q '.[0].databaseId')
+        [[ "$id" != "$before" ]] && break; sleep 4
+      done
+      echo "deploy run $id"
+      gh run watch "$id" --exit-status --interval 20 >/dev/null || { echo "deploy run $id failed" >&2; gh run view "$id" --log-failed | tail -40 >&2; exit 1; }
+      aws ecs wait services-stable --cluster $CLUSTER --services web middleware
+    fi
+  fi
+  if [[ $dry -eq 0 ]]; then
+    for s in web middleware; do
+      got=$(image_sha $s)
+      [[ "$got" == "$sha" ]] || { echo "UAT $s runs ${got:0:8}, not ${sha:0:8}: deployed, not live" >&2; exit 1; }
+    done
+    echo "UAT web and middleware run ${sha:0:8}"
+  fi
+fi
+
+if [[ $deploy -eq 0 ]]; then  # report what UAT runs, not the ref asked for
+  sha=$(image_sha web); ref="(running on UAT)"
+  echo "UAT runs ${sha:0:8}"
+fi
+
+[[ $dry -eq 1 ]] && { echo "+ playwright test -c uat/uat.config.ts ${grep:+-g \"$grep\"}"; echo "+ uat-watch over the round's jobs"; exit 0; }
+
+mkdir -p "$out"
+started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+set +e
+( cd "$root/app" && UAT_JSON="$out/results.json" UAT_MEASURES="$out/measures.jsonl" UAT_STATE="$out/state.json" \
+    npx playwright test -c uat/uat.config.ts --output "$out/artifacts" ${grep:+-g "$grep"} ) 2>&1 | tee "$out/suite.log" | grep -E "✓|✘|uat-measure|Error:|passed|failed"
+suite=${PIPESTATUS[0]}
+# Every job the round started, classified (watch exits 1 when any is hung or failed).
+"$root/scripts/uat-watch" --json > "$out/jobs.jsonl"
+"$root/scripts/uat-watch" | tee "$out/jobs.txt"
+jobs=${PIPESTATUS[0]}
+set -e
+
+python3 -I - "$out" "$sha" "$ref" "$started" <<'PY'
+import json, sys, pathlib
+out, sha, ref, started = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+res = json.loads((out / "results.json").read_text()) if (out / "results.json").exists() else {"suites": []}
+def specs(s):
+    for x in s.get("specs", []): yield x
+    for c in s.get("suites", []): yield from specs(c)
+rows = [(sp["title"], sp["tests"][0]["results"][-1]["status"] if sp["tests"][0]["results"] else "skipped") for su in res["suites"] for sp in specs(su)]
+meas = [json.loads(l) for l in (out / "measures.jsonl").read_text().splitlines()] if (out / "measures.jsonl").exists() else []
+jobs = [json.loads(l) for l in (out / "jobs.jsonl").read_text().splitlines() if l.strip()]
+jobs = [j for j in jobs if (j.get("first") or "") >= started]
+cost = sum(j.get("cost") or 0 for j in jobs)
+md = [f"# UAT round {out.name}", f"ref `{ref}` = `{sha[:8]}`", "", "## Journeys"]
+md += [f"- {'PASS' if st == 'passed' else st.upper()}: {t}" for t, st in rows]
+md += ["", "## Timings (over budget marked)"]
+md += [f"- {m['step']}: {m['ms']} ms" + (f" / budget {m['budget']}" if m.get('budget') else "") + (" **OVER**" if m.get('over') else "")
+       + "".join(f", {k} {v}" for k, v in m.items() if k not in ('step', 'ms', 'budget', 'over')) for m in meas]
+md += ["", f"## Jobs this round: {len(jobs)}, paid estimate {cost:.2f} USD"]
+md += [f"- {j.get('verdict')}: {j.get('job')} {j.get('task')} {j.get('account')}: {j.get('why')}"
+       + ("; slow " + ", ".join(f"{s['stage']} +{s['other_s']}s" for s in j['slow']) if j.get('slow') else "") for j in jobs]
+(out / "report.md").write_text("\n".join(md) + "\n")
+print("\n".join(md))
+PY
+echo "report: $out/report.md"
+[[ $suite -eq 0 && $jobs -eq 0 ]]

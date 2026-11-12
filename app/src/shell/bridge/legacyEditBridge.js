@@ -1,7 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+//
 // Edit bridge for LEGACY (AI-generated HTML) views. Injected by the viewer
 // (trusted — not from the agent). Makes elements with data-adf-id
 // contenteditable and POSTs clan://patch (an HTML-fragment patch into
@@ -9,7 +9,11 @@
 //
 // Authored Napkin apps do NOT use this — they use the structured edit bridge,
 // which writes the DATA layer via clan://patch-data with attribution.
-export const LEGACY_EDIT_BRIDGE = `
+//
+// napkin-host reads this file (crates/napkin-host/src/frame.rs, include_str!)
+// and puts it in the frame page as it is, after these leading `//` lines. The
+// frame golden (crates/napkin-host/tests/frame_golden.rs) holds its bytes.
+
 (function() {
   var clanScheme = window.navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
   if (window.__clan_bridge_listening) return;
@@ -149,4 +153,3 @@ export const LEGACY_EDIT_BRIDGE = `
     if (m && m.type === 'clan:colorscheme') applyColorScheme(m.scheme);
   });
 })();
-`

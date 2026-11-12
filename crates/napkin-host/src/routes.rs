@@ -247,10 +247,12 @@ pub async fn dispatch_async(
                 "a client's link reaches its own answer and nothing else",
             );
         }
-        return match api_proxy(ctx, session, cfg, &req.body_str()).await {
+        let doc = session.current_id();
+        let resp = match api_proxy(ctx, session, cfg, &req.body_str()).await {
             Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
             Err(e) => e.into(),
         };
+        return name_document(resp, doc.as_ref());
     }
     // Send to Judge (features/judge.clan): the one scoring route, for every tool whose app declares judge_work.
     #[cfg(feature = "native")]
@@ -325,6 +327,30 @@ pub fn dispatch(
     cfg: &dyn HostConfig,
     req: HostRequest,
 ) -> HostResponse {
+    let doc = session.current_id();
+    name_document(route(ctx, session, cfg, req), doc.as_ref())
+}
+
+/// Each `clan-data-changed` and `clan-patch-saved` names the document it is
+/// about: `path`, the id the shell opened it by (`OpenResult.path`). Every
+/// shell gets these on one stream for the whole workspace (the server's SSE is
+/// per tenant), so a listener acts only on its own document's
+/// (os-layer.md §8.4). The document is the one the request was about, read
+/// before the route ran.
+fn name_document(mut resp: HostResponse, doc: Option<&crate::store::DocId>) -> HostResponse {
+    let Some(doc) = doc else { return resp };
+    for e in &mut resp.events {
+        if let HostEvent::DataChanged(v) | HostEvent::PatchSaved(v) = e {
+            if !v.is_object() {
+                *v = serde_json::json!({ "value": v.take() });
+            }
+            v["path"] = Value::String(doc.as_str().to_string());
+        }
+    }
+    resp
+}
+
+fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -> HostResponse {
     let path = req.path.as_str();
     // A client's context is the one thing here that is not a person, a job or a
     // tool, and it reaches two routes: the state of its own link and its answer
@@ -354,7 +380,13 @@ pub fn dispatch(
             },
         ),
 
-        "/document" => HostResponse::new(200, "text/html", session.preview_html().into_bytes()),
+        // The app frame's page, composed on request from the open view
+        // (features/doc-open-direct.clan). Over `clan://` the scheme is real,
+        // so nothing is rewritten; napkin-web answers its own /document.
+        "/document" => match session.frame_page(&req.query, crate::frame::Reach::Scheme) {
+            Ok(page) => HostResponse::new(200, "text/html", page.into_bytes()),
+            Err(e) => HostResponse::error(e.status, &e.message),
+        },
 
         "/snapshot" => {
             if let Ok(html) = String::from_utf8(req.body.clone()) {

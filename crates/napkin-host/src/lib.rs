@@ -31,6 +31,7 @@ pub mod error;
 pub mod event;
 #[cfg(feature = "native")]
 pub mod export;
+pub mod frame;
 pub mod html;
 pub mod import;
 pub mod jobindex;

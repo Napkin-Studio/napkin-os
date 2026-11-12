@@ -12,6 +12,7 @@ and a message never carries request content. Never a 200 with a fallback.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import logging
@@ -96,6 +97,19 @@ class Middleware:
         self.jobs = JobStore()
         self.research_sem = threading.Semaphore(max(1, settings.research_concurrency))
         self.model_sem = threading.Semaphore(max(1, settings.model_concurrency))
+
+    def shutdown(self):
+        """The middleware is stopping (a deploy's SIGTERM, a restart): every job still unfinished dies with
+        the process, since jobs live in its memory. Each is logged, and its run log ended `lost` with the
+        stage it was in and what it was waiting on, so a job that vanished is never mistaken for one that hangs."""
+        for job in self.jobs.running():
+            try:
+                rl = job.caps.runlog
+                log.error("stopping with %s %s unfinished (%s) at stage %s, waiting on %s: it is lost", job.task,
+                          job.id, job.state, rl.stage_name, rl.waiting_on())
+                rl.lost("the middleware stopped (a deploy or a restart) while the job ran")
+            except Exception:  # noqa: BLE001 - the shutdown goes on
+                log.exception("shutdown: job %s could not be recorded", getattr(job, "id", "?"))
 
     def caps(self, handler: str, scope: dict | None = None) -> Capabilities:
         return Capabilities(handler=handler, scope=scope or self.settings.scope, model_port=self.model_port,
@@ -268,7 +282,13 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
     if settings.env != "local" and not settings.model_pin:
         log.warning("NAPKIN_ENV=%s with no NAPKIN_MODEL_PIN: client text may use model routes outside the EU "
                     "(docs/adr/0004-client-wall.md)", settings.env)
-    app = FastAPI(title="napkin-middleware", docs_url=None, redoc_url=None, openapi_url=None)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
+        yield
+        mw.shutdown()
+
+    app = FastAPI(title="napkin-middleware", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.mw = mw
 
     def err(status, etype, message):
@@ -314,9 +334,22 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
     return app
 
 
+def log_thread_errors():
+    """An exception that escapes any thread (a job's, a stage's, a pool's) is logged with its traceback
+    through logging, so it reaches CloudWatch in the same format as everything else."""
+    def hook(args):
+        if args.exc_type is SystemExit:
+            return
+        name = args.thread.name if args.thread is not None else "?"
+        log.error("uncaught %s in thread %s: %s", args.exc_type.__name__, name, args.exc_value,
+                  exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+    threading.excepthook = hook
+
+
 def main():
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    log_thread_errors()
     settings = Settings.from_env()
     metrics.enable_by_default()
     if settings.port in (8080, 8090, 8790, 8791, 8792, 8796):

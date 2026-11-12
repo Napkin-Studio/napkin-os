@@ -16,6 +16,7 @@ do not). jev's scores go in the decisions' reasoning, never on the page.
 from __future__ import annotations
 
 import logging
+import time
 
 from ..doc import LENS_TITLES, LENSES, build_materials, ctx_data, ctx_facts, ctx_findings, decision, field_value, \
     lens_of_key, out_of_use, read_of
@@ -31,6 +32,11 @@ log = logging.getLogger("napkin.ask")
 ANSWERS = 0.6
 # at most this many web searches for one question
 SEARCHES = 2
+# A person waits on the answer: it is written within ASK_BUDGET_S of the job starting (owner, 2026-11-12:
+# no longer than a whole brief or research, about 3 minutes). A search starts only with SEARCH_NEEDS_S
+# left; one still running at the deadline is cut, and the answer is written from what it found by then.
+ASK_BUDGET_S = 150.0
+SEARCH_NEEDS_S = 75.0
 MAX_PINS = 160
 
 SYSTEM = """You answer an advertising planner's question about their campaign research, from the pinned
@@ -39,7 +45,8 @@ it rests on. State no number that is not the value of a pin you cite (or written
 When the facts do not answer the question, say what they do show, if anything, and list in `missing` what
 would be needed to answer it; never fill a gap from outside knowledge. `lens` is the research lens the
 question belongs to (keep the one given, when one is given). `topic` is a short heading for the question,
-two to five words."""
+two to five words. When `about` names a pin or finding, the person asked from that item: the question is
+about it ("this", "it", "the figure" mean it), so answer about that item first, citing it."""
 
 
 def _obj(props: dict) -> dict:
@@ -55,7 +62,30 @@ def schema(cite_ids: list[str]) -> dict:
                  "topic": {"type": "string"}})
 
 
-def validate(clan: dict, inp: dict) -> tuple[str, str | None]:
+def check_about(clan: dict, about) -> str | None:
+    """`input.about`: the fact (`f_…`) or finding (`fi_…`) the question was asked from. It must be in the
+    document and still in use: not superseded, excluded or rejected, and a finding none of whose cites is."""
+    if about is None:
+        return None
+    if not isinstance(about, str) or not about.startswith(("f_", "fi_")):
+        raise bad("input.about, when given, is a fact id (f_…) or a finding id (fi_…)")
+    excluded = out_of_use(clan)
+    if about.startswith("fi_"):
+        f = next((x for x in ctx_findings(clan) if x.get("id") == about), None)
+        if f is None:
+            raise bad(f"input.about: no finding {about} in this document")
+        if f.get("status") not in ("proposed", "verified") or set(f.get("cites") or []) & excluded:
+            raise bad(f"input.about: finding {about} is out of use (rejected, or it cites an excluded fact)")
+        return about
+    p = next((x for x in ctx_facts(clan) if x.get("id") == about), None)
+    if p is None:
+        raise bad(f"input.about: no fact {about} in this document")
+    if p.get("status") == "superseded" or about in excluded:
+        raise bad(f"input.about: fact {about} is out of use (excluded, rejected or replaced)")
+    return about
+
+
+def validate(clan: dict, inp: dict) -> tuple[str, str | None, str | None]:
     q = inp.get("question")
     if not isinstance(q, str) or not q.strip():
         raise bad("input.question is required: what the person asked")
@@ -64,14 +94,17 @@ def validate(clan: dict, inp: dict) -> tuple[str, str | None]:
     lens = inp.get("lens")
     if lens is not None and lens not in LENSES:
         raise bad(f"input.lens, when given, is one of {LENSES}")
+    about = check_about(clan, inp.get("about"))
     validate_research(clan, {"lenses": [lens or LENSES[0]]})  # markets and categories, as research needs
-    return q.strip(), lens
+    return q.strip(), lens, about
 
 
 class Asker:
-    def __init__(self, doc, base, clan, handler, caps, question, lens, settings, attachments=()):
+    def __init__(self, doc, base, clan, handler, caps, question, lens, settings, attachments=(), about=None):
         self.doc, self.base, self.clan, self.handler, self.caps = doc, base, clan, handler, caps
         self.question, self.lens, self.settings = question, lens, settings
+        # the fact or finding the question was asked from (checked by validate): first in the evidence
+        self.about = about
         self.data = ctx_data(clan)
         # a search reads the documents attached to the campaign too (the host adds their text)
         self.materials, _ = build_materials({"attachments": list(attachments or [])}, self.data)
@@ -86,12 +119,22 @@ class Asker:
         if lens:
             mine = [p for p in pins if lens_of_key(p.get("key")) == lens]
             pins = mine + [p for p in pins if p not in mine]  # its own first; the rest may answer it too
+        # the item asked about leads: a fact itself, or what a finding cites (never cut by MAX_PINS)
+        about_fi = next((f for f in ctx_findings(self.clan) if f.get("id") == self.about), None) \
+            if str(self.about or "").startswith("fi_") else None
+        first = set(about_fi.get("cites") or []) if about_fi else {self.about}
+        pins = [p for p in pins if p["id"] in first] + [p for p in pins if p["id"] not in first]
         pins = list({p["id"]: p for p in pins}.values())[:MAX_PINS]
         ids = {p["id"] for p in pins}
         fis = [f for f in ctx_findings(self.clan) if f.get("status") in ("proposed", "verified")
                and str(f.get("id", "")).startswith("fi_") and set(f.get("cites") or []) & ids
                and not set(f.get("cites") or []) & excluded]
+        fis = [f for f in fis if f["id"] == self.about] + [f for f in fis if f["id"] != self.about]
         return {p["id"]: p for p in pins}, {f["id"]: f for f in fis}
+
+    def about_in(self, pin_by, fi_by):
+        """The item asked about, when it is still in the evidence (a review may have taken it out since)."""
+        return self.about if self.about in pin_by or self.about in fi_by else None
 
     def names(self):
         brand = field_value(self.data, "brand") or {}
@@ -101,7 +144,7 @@ class Asker:
     # -- one answer ----------------------------------------------------------------
     def answer(self, lens, pin_by, fi_by):
         """-> (sentences, missing, lens, topic, dropped)."""
-        payload = {"question": self.question, "lens": lens,
+        payload = {"question": self.question, "about": self.about_in(pin_by, fi_by), "lens": lens,
                    "lens_title": LENS_TITLES.get(lens) if lens else None,
                    "brand": (field_value(self.data, "brand") or {}).get("name"),
                    "markets": field_value(self.data, "markets") or [],
@@ -143,6 +186,7 @@ class Asker:
 
     # -- the job ---------------------------------------------------------------------
     def run(self, progress=None):
+        deadline = time.monotonic() + ASK_BUDGET_S
         pin_by, fi_by = self.evidence(self.lens)
         s1, missing1, lens, topic, dropped1 = self.answer(self.lens, pin_by, fi_by)
         j1, why1 = self.check(s1, pin_by, fi_by)
@@ -168,11 +212,20 @@ class Asker:
             sel_contested = []
             focus = self.question
             for n in range(SEARCHES):
+                left = deadline - time.monotonic()
+                if left < SEARCH_NEEDS_S:
+                    # Too little time for a search and an answer after it: answer from what is here.
+                    self.caps.runlog.note("ask_search_skipped", search=n + 1, left_s=round(left, 1),
+                                          detail="out of time: the question's time budget is nearly spent")
+                    searches.append({"focus": focus[:300], "sources": 0, "urls": [], "facts": 0,
+                                     "skipped": "out of time"})
+                    break
                 clan_now = dict(self.clan, facts=list(ctx_facts(self.clan)) + facts_append)
                 r = Researcher(self.doc, self.base, clan_now, self.handler, self.caps, [lens], markets, cats,
                                reuse_days=self.settings.reuse_days, concurrency=self.settings.research_concurrency,
                                seed=f"{self.aid}/{n}", question_first=True)
-                res, rch, h = r.run(focus=focus)
+                # leave time to answer over what it found
+                res, rch, h = r.run(focus=focus, deadline=deadline - 25.0)
                 hits += h
                 found = rch["facts_append"]
                 facts_append += [f for f in found if f["id"] not in {x["id"] for x in facts_append}]
@@ -199,6 +252,7 @@ class Asker:
                     break
                 focus = f"{self.question} Specifically: {'; '.join(missing[:2])}"
             new_ids = [f["id"] for f in facts_append]
+            search = any(not x.get("skipped") for x in searches)
             if sel_contested:
                 old = [c for c in (self.data.get("selection") or {}).get("contested") or []
                        if c.get("id") not in {x["id"] for x in sel_contested}]
@@ -209,7 +263,9 @@ class Asker:
             status = "answered" if j["answers"] >= ANSWERS else ("partial" if sentences else "not_found")
         else:
             status = "answered" if sentences and not missing else ("partial" if sentences else "not_found")
-        rec = {"id": self.aid, "question": self.question, "lens": lens, "in_section": self.lens is not None,
+        # asked from a fact or finding: shown under it, in the report only once a person adds it (their write)
+        rec = {"id": self.aid, "question": self.question, "about": self.about, "in_report": self.about is None,
+               "lens": lens, "in_section": self.lens is not None,
                "topic": topic, "answer": sentences, "missing": missing, "status": status, "searched": search,
                "new_facts": new_ids, "searches": searches,
                "web_sources": len({u for x in searches for u in x["urls"]}), "asked_at": iso(), "answered_at": iso()}
@@ -231,16 +287,20 @@ class Asker:
     # -- the record ------------------------------------------------------------------------
     def check_decision(self, did, sentences, missing, j, why, search, lens, dropped):
         cites = list(dict.fromkeys(c for s in sentences for c in s["cites"]))
+        # With no answer yet there is nothing to cite, and a point naming a year or a figure must cite
+        # something (UAT round 6: "states a figure and cites nothing" failed the whole ask): it rests on
+        # the ask itself, where the answer and its missing list are written, as answer_decision does.
+        ref = cites or [f"{self.doc}#asks[{self.aid}]"]
         where = LENS_TITLES.get(lens, lens)
         if j is not None:
             scored = f"jev: answers the question {j['answers']:.2f}, rests on what it cites {j['grounded']:.2f}"
-            because = [rsn.point(scored, cites)]
+            because = [rsn.point(scored, ref)]
             basis = f"jev judged whether the answer from the facts already here answers the question ({scored})"
         else:
-            because = [rsn.point(f"Not checked by jev: {why}", cites)]
+            because = [rsn.point(f"Not checked by jev: {why}", ref)]
             basis = "without jev, the answer's own list of what is missing decides"
         if missing:
-            because.append(rsn.point(f"What the facts here do not show: {'; '.join(missing)}", cites))
+            because.append(rsn.point(f"What the facts here do not show: {'; '.join(missing)}", ref))
         rejected = [rsn.rej("answer from the facts already here", "they do not answer it")] if search else \
             [rsn.rej("search the web", "the facts already here answer it; a search would spend for nothing")]
         r = rsn.make(f"{'Search' if search else 'No search'} for “{self.question[:100]}” ({where}).", because,

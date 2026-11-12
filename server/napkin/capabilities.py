@@ -22,6 +22,7 @@ trusted not to.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import threading
@@ -74,13 +75,20 @@ class ModelCap:
                            "X-Napkin-Job": str(self._attr.get("job") or "-")})
         _not_cancelled(self._stopped)
         t0, out, err = time.monotonic(), None, None
+        rl = self._log()
         try:
             if self._sem is None:
-                out = self._port.call(purpose, system, payload, schema, **kw)
-            else:
-                with self._sem:
-                    _not_cancelled(self._stopped)  # it may have waited for a slot
+                with _busy(rl, "model", purpose):
                     out = self._port.call(purpose, system, payload, schema, **kw)
+            else:
+                _slot(self._sem, rl, "model", purpose)
+                try:
+                    _not_cancelled(self._stopped)  # it may have waited for a slot
+                    t0 = time.monotonic()  # the call's own seconds; the slot's wait is its own event
+                    with _busy(rl, "model", purpose):
+                        out = self._port.call(purpose, system, payload, schema, **kw)
+                finally:
+                    self._sem.release()
             return out
         except Exception as e:
             err = f"{getattr(e, 'kind', type(e).__name__)}: {str(e)[:300]}"
@@ -120,12 +128,14 @@ class ResearchCap:
         if self._port is None:
             raise ResearchError("no research service is configured")
         _not_cancelled(self._stopped)
-        with self._sem:
+        _slot(self._sem, self._log(), "research", f"{lens}/{market}")
+        try:
             _not_cancelled(self._stopped)  # it may have waited for a slot
             t0, out, err = time.monotonic(), None, None
             try:
-                out = self._port.search(query, lens, market, entity=entity, category=category,
-                                        max_sources=max_sources, attribution=dict(self._attr))
+                with _busy(self._log(), "research", f"{lens}/{market}"):
+                    out = self._port.search(query, lens, market, entity=entity, category=category,
+                                            max_sources=max_sources, attribution=dict(self._attr))
                 return out
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:300]}"
@@ -146,6 +156,8 @@ class ResearchCap:
                      sources=len((out or {}).get("sources") or []), queries=len(tr.get("queries") or []),
                      error=err.split(":", 1)[0] if err else None,
                      job=self._attr.get("job"), handler=self._attr.get("handler"))
+        finally:
+            self._sem.release()
 
 
 class JevCap:
@@ -167,7 +179,8 @@ class JevCap:
         t0, out, err = time.monotonic(), None, None
         chars = len(json.dumps(state, ensure_ascii=False, default=str)) + len(json.dumps(questions))
         try:
-            out = self._port.ask(state, questions)
+            with _busy(self._log(), "jev", what):
+                out = self._port.ask(state, questions)
             return out
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:300]}"
@@ -208,8 +221,9 @@ class RetrievalCap:
         _not_cancelled(self._stopped)
         t0, out, err = time.monotonic(), None, None
         try:
-            out = self._port.retrieve(self._scope, dict(self._attr), query, k, packs=packs, where=where,
-                                      purpose=purpose)
+            with _busy(self._log(), "retrieval", purpose):
+                out = self._port.retrieve(self._scope, dict(self._attr), query, k, packs=packs, where=where,
+                                          purpose=purpose)
             return out
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:300]}"
@@ -221,6 +235,60 @@ class RetrievalCap:
                 found = len(out.get("passages") or out.get("hits") or [])
             self._log().retrieval(purpose=purpose, k=k, secs=time.monotonic() - t0, found=found, error=err,
                                   query=query)
+
+
+def _busy(rl, kind: str, what: str | None):
+    """The run log's in-flight mark for a call (a log without one, a test's, marks nothing)."""
+    busy = getattr(rl, "busy", None)
+    return busy(kind, what) if busy is not None else contextlib.nullcontext()
+
+
+SLOT_WAIT_S = 1.0  # a wait for a model or research slot longer than this is a `waiting` event
+
+
+def _slot(sem: threading.Semaphore, rl, kind: str, what: str):
+    """Acquire `sem` (the caller releases it). A wait longer than SLOT_WAIT_S is in flight while it lasts
+    (the heartbeat names it) and a `waiting` event afterwards: every slot was taken by other calls."""
+    if sem.acquire(blocking=False):
+        return
+    t0 = time.monotonic()
+    with _busy(rl, "slot", f"a {kind} slot for {what}"):
+        sem.acquire()
+    secs = time.monotonic() - t0
+    if secs >= SLOT_WAIT_S and hasattr(rl, "waiting"):
+        rl.waiting(f"a {kind} slot", call=what, secs=round(secs, 2))
+
+
+class LayersCap:
+    """The layers, as the job sees them: every call timed and logged (`layers` event) and in flight
+    while it runs. A store that connects lazily (PgLayers) is handed hooks for its connects, so a
+    connect that takes long (a paused Aurora resuming) is a `waiting` event while it lasts and a
+    `layers_connect` event with its seconds. Returns and raises exactly what the layers do."""
+
+    def __init__(self, inner, runlog_of):
+        self._inner, self._log = inner, runlog_of
+        if hasattr(inner, "on_wait"):
+            inner.on_wait = lambda what, **kw: self._log().waiting(what, **kw)
+        if hasattr(inner, "on_connect"):
+            inner.on_connect = lambda **kw: self._log().layers_connect(**kw)
+
+    def __getattr__(self, name):
+        attr = getattr(self._inner, name)
+        if not callable(attr) or name.startswith("_"):
+            return attr
+
+        def call(*a, **kw):
+            rl = self._log()
+            t0, err = time.monotonic(), None
+            try:
+                with _busy(rl, "layers", name):
+                    return attr(*a, **kw)
+            except Exception as e:
+                err = f"{type(e).__name__}: {str(e)[:300]}"
+                raise
+            finally:
+                rl.layers(op=name, secs=time.monotonic() - t0, error=err)
+        return call
 
 
 class JobCap:
@@ -276,14 +344,15 @@ class Capabilities:
         self.retrieval = RetrievalCap(retrieval_port, self._scope, self.attribution, of, st)
         self.jev = JevCap(jev_port, of, st)
         try:
-            self.layers = layer_store.open(self._scope, self.attribution)
+            layers = layer_store.open(self._scope, self.attribution)
         except TypeError:  # a store whose open() takes the scope only
-            self.layers = layer_store.open(self._scope)
+            layers = layer_store.open(self._scope)
+        self.layers = LayersCap(layers, of)
 
     def bind_job(self, job_id: str):
         """The job id every later call is attributed to, and the job's run log."""
         self.attribution["job"] = job_id
-        self.runlog = runlog.open_log(job_id, self.handler)
+        self.runlog = runlog.open_log(job_id, self.handler, self._scope.get("org"))
 
     def capture_view(self) -> CaptureView:
         return CaptureView(self.model, self.jobs, self.handler)

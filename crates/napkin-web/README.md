@@ -49,7 +49,7 @@ GET  /api/t/{t}/d/{doc}                        open it
 GET  /api/t/{t}/d/{doc}/human-html             the rendered human view
 GET  /api/t/{t}/d/{doc}/entry/{data|chain|state|context}
 POST /api/t/{t}/d/{doc}/edit-mode              {active}
-POST /api/t/{t}/d/{doc}/preview-html           the composed page for the frame
+POST /api/t/{t}/d/{doc}/preview-html           410: gone, the frame's page is composed here
 POST /api/t/{t}/d/{doc}/patch                  {id, content}
 GET  /api/t/{t}/d/{doc}/download               the archive, byte for byte
 POST /api/t/{t}/d/{doc}/export                 → {handle}, and an event
@@ -57,8 +57,17 @@ GET  /api/t/{t}/export/{handle}?kind=pdf|html  claim it (single use)
 GET  /api/t/{t}/agent/endpoint
 POST /api/t/{t}/agent/prompt                   {text} — metered
 GET  /api/t/{t}/events                         SSE
+GET  /s/{token}/document?model=&capture=&theme=&v=   the frame's page, composed
 ANY  /s/{token}/…                              the clan:// surface
 ```
+
+`/s/{token}/document` is the page the app frame loads, composed on request
+from the session's view by `napkin_host::frame::compose`
+(features/doc-open-direct.clan): `model` (`authored` | `legacy`, default the
+document's own), `capture=1` for the dogfood listener, `theme` (`light` |
+`dark`), and `v`, the document's version, which only makes a changed document
+a new address. It carries a weak ETag of its bytes with `Cache-Control:
+private, no-cache`, so an unchanged re-open is a `304`.
 
 `/s/{token}/api-proxy` is metered like `agent/prompt`: each call spends one
 unit of `NAPKIN_AGENT_CAP`. The one exception is a `request_kind: middleware`
@@ -147,19 +156,18 @@ workspace, so a first-time visitor lands on a launcher with something in it.
 
 ## Not stateless yet
 
-Six things live in process memory, which is why this wants a container rather
+Five things live in process memory, which is why this wants a container rather
 than a serverless function:
 
 | | |
 |---|---|
 | session cache, workspace map | fine to lose — the packed blob is the source of truth |
-| `Session.preview_html` | written by one request, read by another |
 | `Session.edit_mode` | written by the shell, polled by the app frame |
 | `TokenStore` | losing it invalidates every open app frame |
 | `ExportStore` + its temp file | a composed export would vanish before it is claimed |
 | `EventBus`, `Meter` | one process's broadcast, one process's counter |
 
-The first two go away with the two changes already worth making — composing
-`/document` server-side, and moving edit mode onto the postMessage channel the
-shell now has. The rest are small: sign the sandbox token instead of storing
+The first goes away with moving edit mode onto the postMessage channel the
+shell now has (`/document` is composed server-side since
+features/doc-open-direct.clan). The rest are small: sign the sandbox token instead of storing
 it, return export bytes directly, and put the meter in a shared store.

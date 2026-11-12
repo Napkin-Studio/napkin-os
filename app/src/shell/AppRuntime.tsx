@@ -4,21 +4,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { host } from '../host'
-import type { ClientAnswerKind, ClientPartRef, ManifestInfo } from '../host'
+import type { ClientAnswerKind, ClientPartRef, FrameOptions, ManifestInfo } from '../host'
 import { partsFrom } from './clientReview/review'
 import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
-import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
-import { BAR_KEY_FORWARDER, STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
+import { jobsMessage } from './openJobs'
 import { agencyIdOf, coloursOf } from './agency/palette'
-import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
+import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
 import { writeFrom, type SaveQueue } from '../components/states/saveQueue'
 
 interface Props {
-  htmlContent: string
   hasHumanView: boolean
+  /** The document as opened (manifest sha256, and its view's version): a new one is a new page. */
+  version: string
   manifest: ManifestInfo
   /** "authored" → structured (data-layer) bridge; "legacy" → contenteditable. */
   renderModel: 'authored' | 'legacy'
@@ -56,17 +56,27 @@ interface Props {
   onBarKey?: () => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
+  /**
+   * The open document's jobs the host has not seen finish (`LibraryItem.jobs`), told to its page
+   * (`clan:jobs`) on every load and whenever they change, so a run still going resumes on open.
+   */
+  jobs?: readonly string[]
 }
 
 /**
- * The render surface for one running app. Renders the human view inside a
- * sandboxed iframe served from the backend's clan://document slot, and injects
- * the appropriate edit bridge: the structured (data-layer) bridge for authored
- * Napkin apps, or the legacy contenteditable bridge for AI-generated HTML.
+ * The render surface for one running app: the human view inside a sandboxed
+ * iframe. The host composes the page (napkin-host frame.rs) with the edit
+ * bridge the render model asks for — the structured (data-layer) bridge for
+ * authored Napkin apps, the legacy contenteditable bridge for AI-generated
+ * HTML — and the frame loads it from the host's clan://document, or, with no
+ * server, from srcdoc.
  */
+/** Fired on window when the open document's page has loaded. */
+export const DOC_LOADED = 'napkin:doc-loaded'
+
 export default function AppRuntime({
-  htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, writes, insets, onSaved, onUndoKey, onBarKey,
+  hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
+  onChrome, onBar, writes, insets, jobs, onSaved, onUndoKey, onBarKey,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -153,6 +163,29 @@ export default function AppRuntime({
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
+  // A token the server no longer holds (a deploy restarts napkin-web, which
+  // keeps tokens in memory): the frame's fetch shim asks for this document's
+  // origin now ("clan:token?", with the one it was refused on), and sends its
+  // call again on the answer, once. The page stays as it is, edit and all.
+  // Only our own frame is answered; null tells it to give up.
+  useEffect(() => {
+    const renew = host.frameLoad === 'url' ? host.renewToken : undefined
+    if (!renew) return
+    const onMessage = (e: MessageEvent) => {
+      const frame = iframeRef.current?.contentWindow
+      const m = e.data as { type?: string; held?: unknown }
+      if (!frame || e.source !== frame || m?.type !== 'clan:token?') return
+      const reply = (origin: string | null) => frame.postMessage({ type: 'clan:token', origin }, '*')
+      renew(typeof m.held === 'string' ? m.held : undefined).then(origin => {
+        // The new process holds no edit mode either: say it again.
+        if (origin) host.setEditMode(editModeRef.current).catch(console.error)
+        reply(origin)
+      }, () => reply(null))
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
   // ── client review ─────────────────────────────────────────────────────────
   // The mode is the shell's; the app's fields draw the per-part controls. The
   // mode goes to the frame whenever it changes and again on every load, so a
@@ -224,91 +257,40 @@ export default function AppRuntime({
   // `insets` is a new object only when a value changed (AppHost keeps the old one otherwise).
   useEffect(() => { insetsRef.current = insets; postInsets() }, [insets, postInsets])
 
-  const [iframeSrc, setIframeSrc] = useState<string>('')
+  // The document's running jobs, the whole list each time (openJobs.ts): on load and when they change.
+  const jobsRef = useRef<readonly string[]>(jobs ?? [])
+  const postJobs = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(jobsMessage(jobsRef.current), '*')
+  }, [])
+  // `jobs` is a new array only when its ids changed (AppHost keys it by them).
+  useEffect(() => { jobsRef.current = jobs ?? []; postJobs() }, [jobs, postJobs])
+
   // The dogfood build listens inside the frame too, once the person has agreed.
   const dogfood = useSyncExternalStore(onDogfood, dogfoodState, dogfoodState)
   const capture = dogfood.on && dogfood.consented
 
-  // Composing the page is a pure derivation of the view, the render model and
-  // the theme — not an effect. The effect below only has to publish it.
-  const prepared = useMemo(() => {
-    if (!hasHumanView) return ''
+  // What the page is composed for; the host composes it (features/
+  // doc-open-direct.clan). The theme is read when the page is asked for, not
+  // followed: a later change is posted to the frame (clan:colorscheme) rather
+  // than reloading it.
+  const opts = useMemo<FrameOptions | null>(
+    () => (hasHumanView ? { model: renderModel, capture, theme: getTheme(), version } : null),
+    [hasHumanView, renderModel, capture, version],
+  )
 
-    const isFullDoc = /^\s*<!doctype\s+html/i.test(htmlContent) || /^\s*<html/i.test(htmlContent)
-    const bridgeScript = renderModel === 'authored' ? STRUCTURED_EDIT_BRIDGE : LEGACY_EDIT_BRIDGE
-    const bridge = `<script>${bridgeScript}</script>${frameCapture(capture)}`
-    // The bar's key is listened for from the top of the page, before the app's own scripts and the bridge run.
-    const early = `<script>${BAR_KEY_FORWARDER}</script>`
-    let fullHtml: string
+  // A host behind an address serves the page there: the frame's src is all
+  // the shell sets, and the one GET is the whole open.
+  const iframeSrc = useMemo(() => (opts && host.frameLoad === 'url' ? host.frameSrc(opts) : ''), [opts])
 
-    if (isFullDoc) {
-      // Inject at the LAST </body>: an app's inline script may legitimately
-      // contain '</body>' inside a string literal (e.g. an HTML-export
-      // builder), and splicing the bridge there is a syntax error that kills
-      // the app's whole script.
-      const closeIdx = htmlContent.toLowerCase().lastIndexOf('</body>')
-      const withBridge = closeIdx >= 0
-        ? htmlContent.slice(0, closeIdx) + bridge + htmlContent.slice(closeIdx)
-        : htmlContent + bridge
-      // The early script goes just inside the first <head> (or <html>): the first such tag is the page's own,
-      // before any script of the app's that could hold the text.
-      const open = /<head\b[^>]*>/i.exec(withBridge) ?? /<html\b[^>]*>/i.exec(withBridge)
-      fullHtml = open
-        ? withBridge.slice(0, open.index + open[0].length) + early + withBridge.slice(open.index + open[0].length)
-        : early + withBridge
-    } else {
-      fullHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  ${early}
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&display=swap">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    /* A bare fragment gets the studio's paper, ink and type (the values of
-       the shell's tokens, which do not cross into the frame). */
-    :root { color-scheme: light; --paper: #FFFFFF; --ink: #14161B; --line: #D6DAE2; }
-    html[data-color-scheme="dark"] { color-scheme: dark; --paper: #0F1114; --ink: #F2F3F5; --line: #2A2F38; }
-    body {
-      background: var(--paper);
-      color: var(--ink);
-      font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.65;
-      -webkit-font-smoothing: antialiased;
-    }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-  </style>
-</head>
-<body>
-  ${htmlContent}
-  ${bridge}
-</body>
-</html>`
-    }
-
-    // Stamp the scheme into the markup as well as posting it: the message
-    // arrives after load, and a light user should not see a dark flash first.
-    const themed = fullHtml.replace(
-      /<html\b([^>]*)>/i,
-      (m, attrs: string) =>
-        /data-color-scheme=/i.test(attrs) ? m : `<html${attrs} data-color-scheme="${getTheme()}">`,
-    )
-
-    return host.prepareAppHtml(themed)
-  }, [htmlContent, hasHumanView, renderModel, capture])
-
-  // With a host behind a URL, hand it the page and point the frame at it.
-  // With no server there is nothing to hand it to: the page is inlined below.
+  // With no server, the host in this tab composes it for srcdoc. Only the
+  // newest page is shown: one composed for older options never replaces it.
+  const [srcDoc, setSrcDoc] = useState('')
+  const composed = useRef(0)
   useEffect(() => {
-    if (!prepared || host.frameLoad === 'srcdoc') return
-    host.updatePreviewHtml(prepared).then(() => {
-      setIframeSrc(host.clanOrigin() + '/document?t=' + Date.now())
-    }).catch(console.error)
-  }, [prepared])
+    if (!opts || host.frameLoad !== 'srcdoc') return
+    const mine = ++composed.current
+    host.compose(opts).then(page => { if (mine === composed.current) setSrcDoc(page) }, console.error)
+  }, [opts])
 
   if (!hasHumanView) {
     return (
@@ -329,7 +311,7 @@ export default function AppRuntime({
   return (
     <iframe
       ref={iframeRef}
-      {...(host.frameLoad === 'srcdoc' ? { srcDoc: prepared } : { src: iframeSrc })}
+      {...(host.frameLoad === 'srcdoc' ? { srcDoc } : { src: iframeSrc })}
       className="ch-frame"
       style={{ width: '100%', flex: 1, border: 'none', background: 'var(--paper)' }}
       // A source link opens as a normal tab (owner, 2026-11-11: publisher pages need their cookies and
@@ -340,11 +322,14 @@ export default function AppRuntime({
         postScheme(getTheme())
         postClientMode()
         postInsets()
+        postJobs()
         // An app that declared its parts before the shell heard says them again.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:parts?' }, '*')
         // Likewise the tabs and buttons it wants in the OS bar.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:bar?' }, '*')
         setExportFrame(iframeRef.current?.contentWindow ?? null)
+        // The page is in: the shell's background reads (the desk's facts) may start (App.tsx).
+        window.dispatchEvent(new Event(DOC_LOADED))
       }}
     />
   )

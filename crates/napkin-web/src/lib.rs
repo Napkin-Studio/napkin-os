@@ -21,6 +21,7 @@ pub mod clean;
 pub mod directory;
 pub mod dogfood;
 pub mod error;
+pub mod etag;
 pub mod events;
 pub mod exports;
 pub mod jobview;
@@ -44,6 +45,8 @@ use std::sync::Arc;
 use axum::extract::DefaultBodyLimit;
 use axum::response::Html;
 use axum::Router;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
+use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -73,9 +76,39 @@ fn shell_service(static_dir: Option<&Path>) -> Router<Arc<AppCtx>> {
             .route_service("/view/", ServeFile::new(dir.join("index.html")))
             .fallback_service(
                 ServeDir::new(dir).not_found_service(ServeFile::new(dir.join("index.html"))),
-            ),
+            )
+            .layer(axum::middleware::from_fn(shell_cache)),
         None => Router::new().fallback(|| async { Html(NO_BUILD) }),
     }
+}
+
+/// How long a browser may keep a shell file. The build's `/assets/` names carry a
+/// content hash, so they never change and are kept for a year. Everything else
+/// (index.html, the manifest, the worker, the icons) is revalidated on every load:
+/// without a Cache-Control a browser guesses a lifetime from Last-Modified and kept
+/// running the previous shell against a new server after a deploy (UAT round 3,
+/// 2026-11-12: the old shell posted to a route the new server had removed).
+async fn shell_cache(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let hashed = req.uri().path().starts_with("/assets/");
+    let mut res = next.run(req).await;
+    // A shell route the build has no file for is answered with index.html (status 404), so
+    // every non-asset answer is marked; an asset only when it was really served.
+    let ok = res.status().is_success() || res.status() == axum::http::StatusCode::NOT_MODIFIED;
+    let v = match (hashed, ok) {
+        (true, true) => Some("public, max-age=31536000, immutable"),
+        (true, false) => None,
+        (false, _) => Some("no-cache"),
+    };
+    if let Some(v) = v {
+        res.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static(v),
+        );
+    }
+    res
 }
 
 /// Assemble the whole service. Kept separate from `main` so tests can drive the
@@ -139,6 +172,7 @@ pub fn router_with(
             links::router().layer(DefaultBodyLimit::max(32 * 1024)),
         )
         .merge(shell_service(static_dir))
+        .layer(compression())
         // The request's span names the method and the path, never the query string: a search's words, a
         // document's path and a token ride in the query, and none of them belongs in a log. A path that
         // itself carries a token (a client's link, a document's session) is logged as its route.
@@ -165,6 +199,26 @@ pub fn logged_path(path: &str) -> std::borrow::Cow<'_, str> {
         }
     }
     path.into()
+}
+
+/// Responses go out gzip- or brotli-compressed when the browser says it takes
+/// them: an app's page is about 1 MB of HTML and the shell's script half a
+/// megabyte, and the ALB in front compresses nothing. Level 5 is most of the
+/// saving for a fraction of brotli's top level's time. Already-compressed
+/// bodies (images, media, a `.clan`, a PDF) and the event stream are left alone.
+fn compression() -> CompressionLayer<impl Predicate> {
+    CompressionLayer::new()
+        .quality(CompressionLevel::Precise(5))
+        .compress_when(
+            DefaultPredicate::new()
+                .and(NotForContentType::const_new("application/zip"))
+                .and(NotForContentType::const_new("application/pdf"))
+                .and(NotForContentType::const_new("application/octet-stream"))
+                .and(NotForContentType::const_new("font/"))
+                // a whole video or sound file sent compressed loses its byte ranges, so seeking
+                .and(NotForContentType::const_new("video/"))
+                .and(NotForContentType::const_new("audio/")),
+        )
 }
 
 /// Find the built shell without being told: next to the working directory in a

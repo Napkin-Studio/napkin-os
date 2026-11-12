@@ -134,6 +134,26 @@ pub fn human_html(doc: &Document) -> HostResult<String> {
     Ok(inject_clan_data(&styled_html, &context_json))
 }
 
+/// The page the app frame loads: the view ([`human_html`]) composed for
+/// `query`'s options (`model`, `capture`, `theme`; [`crate::frame`]), with the
+/// document's own render model when the query names none.
+pub fn frame_page(doc: &Document, query: &str, reach: crate::frame::Reach) -> HostResult<String> {
+    let authored = doc
+        .clan()
+        .manifest()
+        .view
+        .as_ref()
+        .and_then(|v| v.source.as_deref())
+        == Some("app");
+    let model = if authored {
+        crate::frame::RenderModel::Authored
+    } else {
+        crate::frame::RenderModel::Legacy
+    };
+    let opts = crate::frame::FrameOptions::from_query(query, model, reach);
+    Ok(crate::frame::compose(&human_html(doc)?, &opts))
+}
+
 /// `shared/data.yaml` as JSON — what a view holds as `window.__CLAN__.data`.
 /// `null` when the document has none or it does not parse.
 pub fn data_json(doc: &Document) -> Value {
@@ -800,6 +820,7 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
                     e["taken"] = json!(a.taken);
                     e["kit_version"] = json!(a.version);
                     e["linked_at"] = json!(a.at);
+                    e["holds"] = holds(doc, &p);
                     e
                 }
                 (false, None) => json!({
@@ -822,6 +843,20 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
         })
         .collect();
     json!({ "document_id": here, "carried": carried, "upstream": upstream })
+}
+
+/// How many of a linked document's facts and findings `doc` holds now: what
+/// the link brought in (merged by id), for a view to say so
+/// (features/brief-link-redraft.clan).
+fn holds(doc: &Document, p: &Document) -> Value {
+    let count = |m: members::Member| {
+        let ours = by_id(doc.clan(), m);
+        by_id(p.clan(), m)
+            .keys()
+            .filter(|id| ours.contains_key(*id))
+            .count()
+    };
+    json!({ "facts": count(FACTS), "findings": count(FINDINGS) })
 }
 
 /// The direct parent `p` now, against what `doc` carried from it.

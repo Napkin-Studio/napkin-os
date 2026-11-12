@@ -1,7 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+//
 // Structured edit bridge for AUTHORED Napkin apps. Injected by the viewer
 // (trusted). Unlike the legacy bridge it does NOT patch rendered HTML — it
 // writes the DATA layer via clan://patch-data with attribution
@@ -18,7 +18,11 @@
 // On a successful write the bridge updates window.__CLAN__.data in place and
 // dispatches a `clan:dataupdated` CustomEvent — no iframe reload, so the app's
 // own state is preserved.
-export const STRUCTURED_EDIT_BRIDGE = `
+//
+// napkin-host reads this file (crates/napkin-host/src/frame.rs, include_str!)
+// and puts it in the frame page as it is, after these leading `//` lines. The
+// frame golden (crates/napkin-host/tests/frame_golden.rs) holds its bytes.
+
 (function() {
   var clanScheme = window.navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
   if (window.__clan_structured_bridge) return;
@@ -355,21 +359,3 @@ export const STRUCTURED_EDIT_BRIDGE = `
     }).catch(function() {});
   }, 400);
 })();
-`
-
-// Cmd or Ctrl K inside the app is the shell's bar (features/one-bar-search.clan), in a text field too: the key is
-// forwarded and takes no other, and the shell opens the bar and moves focus there. The viewer injects this at the top
-// of the page, before anything of the app's, for every render model: a key pressed while the page is still loading
-// (the edit bridge sits at the foot of the body, after the app's own scripts) reaches the shell all the same.
-export const BAR_KEY_FORWARDER = `
-(function() {
-  if (window.__clan_bar_key || window.parent === window) return;
-  window.__clan_bar_key = true;
-  window.addEventListener('keydown', function(e) {
-    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-    if (String(e.key).toLowerCase() !== 'k') return;
-    e.preventDefault();
-    window.parent.postMessage({ type: 'clan:bar-key' }, '*');
-  });
-})();
-`

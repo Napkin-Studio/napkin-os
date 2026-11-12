@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // What the desk reads of recent documents' own chains (deskData.ts DocFacts):
-// who touched each last, what blocks its lock, its thin findings and whether
+// who touched each last, what blocks its lock, what rests on thin evidence and whether
 // what it was made from changed. There is no tenant-wide route for any of it
 // (gaps.md §12), so the desk asks each recent document itself
 // (Host.docOps), at most MAX of them, and again only when one changes.
@@ -13,7 +13,8 @@ import { hasServer, host } from '../../host'
 import type { DecisionsView, LibraryItem, UpstreamView } from '../../host'
 import { needsOf } from '../decisions/needs'
 import { needsYou } from '../landing/model'
-import type { DocFacts, Facts } from './deskData'
+import { thinOf, type DocFacts, type Facts } from './deskData'
+import { limiter, READING } from './limiter'
 
 /** How many documents the desk reads: the newest, and every one that needs a call. */
 export const MAX = 10
@@ -37,7 +38,7 @@ export function factsOf(view: DecisionsView, up: UpstreamView | null): DocFacts 
   return {
     editor: newest ? { name: newest.who.name, you: !!newest.who.you, at: newest.decision.timestamp } : null,
     calls: needsOf(view),
-    thin: view.attention.filter(a => a.code === 'unverified_finding' || a.code === 'low_certainty').map(a => ({ text: a.label || a.text })),
+    thin: thinOf(view.attention),
     upstreamChanged: parent ? { title: parent.title || 'What it was made from', ...(parent.path ? { path: parent.path } : {}) } : null,
     locked: !!view.lock.locked && !view.lock.reopened?.length,
     canLock: view.lock.can_lock,
@@ -48,14 +49,17 @@ export function factsOf(view: DecisionsView, up: UpstreamView | null): DocFacts 
 export function useDeskFacts(items: readonly LibraryItem[] | null, enabled: boolean): { facts: Facts; refresh: (path: string) => void } {
   const [facts, setFacts] = useState<Record<string, DocFacts>>({})
   const read = useRef(new Map<string, string>())
+  const slot = useRef(limiter(READING))
   const ops = enabled && hasServer && typeof host.docOps === 'function'
 
   const load = useCallback(async (item: LibraryItem) => {
     const stamp = stampOf(item)
     read.current.set(item.path, stamp)
     try {
-      const doc = await host.docOps!(item.path)
-      const [view, up] = await Promise.all([doc.decisions(), doc.upstream().catch(() => null)])
+      const [view, up] = await slot.current(async () => {
+        const doc = await host.docOps!(item.path)
+        return Promise.all([doc.decisions(), doc.upstream().catch(() => null)])
+      })
       if (view.problem) return
       const f = factsOf(view, up)
       setFacts(prev => ({ ...prev, [item.path]: f }))

@@ -16,7 +16,7 @@
 // module never stores anything.)
 
 import init, { NapkinHost } from '../wasm/napkin_wasm'
-import { prepareFrameHtml } from './wasmFrame'
+import { frameQuery } from './frame'
 import type {
   Adopted,
   LegacyName,
@@ -250,7 +250,6 @@ export const wasmHost: Host = {
   // one. Nothing to take.
   takeLaunchFile: async () => null,
 
-  getHumanHtml: async () => (await boot()).humanHtml(),
   getData: async () => (await boot()).entry('shared/data.yaml'),
   getDecisions: async () => {
     const resp = (await boot()).handle('/decisions', '', new Uint8Array()) as RawResponse
@@ -295,8 +294,6 @@ export const wasmHost: Host = {
   uploadAsset: (name, bytes) => route<UploadedAsset>('/upload-asset', `name=${encodeURIComponent(name)}`, bytes),
 
   setEditMode: async active => { (await boot()).setEditMode(active) },
-  // The frame is loaded from srcdoc, so there is no document slot to fill.
-  updatePreviewHtml: async () => {},
   savePatch: async (id, content) => {
     const h = await boot()
     const body = new TextEncoder().encode(JSON.stringify({ id, content }))
@@ -307,7 +304,10 @@ export const wasmHost: Host = {
   clanOrigin: () => 'clan://localhost',
   frameLoad: 'srcdoc',
 
-  prepareAppHtml: prepareFrameHtml,
+  // No server to serve the page from: the host in this tab composes it, with
+  // the CSP and the shim that routes the frame's calls back here.
+  frameSrc: () => { throw new Error('the frame is loaded from srcdoc in this build') },
+  compose: async opts => (await boot()).framePage(frameQuery(opts)),
 
   handleFromFrame: async (path, query, body) => {
     const resp = (await boot()).handle(path, query, body) as RawResponse

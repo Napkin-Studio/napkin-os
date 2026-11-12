@@ -15,7 +15,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import {
-  AGENCY_ALIASES, AGENCY_COLOURS, accentInkOf, agencyOfSignInName, canonicalAgencyId, coloursOf, contrast, groundOf, iconOf,
+  AGENCY_ALIASES, AGENCY_COLOURS, accentInkOf, agencyIdOf, agencyOfSignInName, canonicalAgencyId, coloursOf, contrast, groundOf, iconOf,
   markOf, paletteOf, pillLogoOf, pillOf, surfaceCss, wordmarkOf,
 } from '../src/shell/agency/palette.ts'
 import { ICON_PNG, ICON_SVG, WORDMARK_SVG } from '../src/shell/agency/logos.ts'
@@ -23,6 +23,7 @@ import { recolourSvg, sanitiseSvg } from '../src/shell/agency/svgSanitise.ts'
 import { signInLookOf } from '../src/shell/agency/signInLook.ts'
 import { bootLooks } from '../src/brand/bootLook.ts'
 import { AgencyPill } from '../src/components/Toolbar.tsx'
+import { whoIs } from '../src/shell/landing/model.ts'
 import { logosModule, stripPng } from '../scripts/agency-logos.mjs'
 
 const NEW = { boysandgirls: 'Boys+Girls', catapult: 'Catapult', pluto: 'Pluto' } as const
@@ -167,6 +168,15 @@ test('Napkin’s own pill says Napkin Studio once; every other agency keeps its 
   const lockup = own.slice(own.indexOf('id="header-lockup"'))
   assert.equal((lockup.match(/Napkin/g) || []).length, 1, 'Napkin appears once on the pill')
   assert.match(pill('Wieden+Kennedy', 'wk'), /<span class="sl-mono">.*Napkin Studio<\/span>/)
+})
+
+// Owner, 2026-11-12: a signed-out or agency-less view showed "Your studio" over "Napkin Studio".
+test('with no agency the pill says Napkin Studio once', () => {
+  const name = whoIs(null).agency
+  const html = renderToStaticMarkup(createElement(AgencyPill, { agency: name, logo: pillLogoOf(coloursOf(agencyIdOf(null))), onDesk: () => {} }))
+  const lockup = html.slice(html.indexOf('id="header-lockup"'))
+  assert.equal((lockup.match(/Napkin Studio/g) || []).length, 1)
+  assert.doesNotMatch(lockup, /Your studio|sl-mono/)
 })
 
 test('no script, style, link or handler survives the sanitiser', () => {

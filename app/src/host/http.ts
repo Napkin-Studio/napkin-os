@@ -10,12 +10,13 @@
 //    the HTTP API addresses documents explicitly. So this module remembers what
 //    the shell last opened, which is the same state, just held on this side.
 //  * Reaching the clan:// API. An app inside a .clan asks for
-//    `clan://localhost/patch-data`, a scheme no browser has. `prepareAppHtml`
-//    rewrites that base to the frame's own token URL, so app HTML runs
-//    unmodified.
+//    `clan://localhost/patch-data`, a scheme no browser has. The server
+//    composes the frame's page with that base rewritten to the frame's own
+//    token URL (`/s/{token}/document`), so app HTML runs unmodified.
 
 import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
+import { frameQuery } from './frame'
 import type {
   ClientConfirmReply,
   Adopted,
@@ -297,6 +298,58 @@ function postJson(body: unknown): RequestInit {
   return { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
 }
 
+/** What napkin-web says as `code` when the token itself is refused (sandbox.rs `STALE_TOKEN`). */
+export const STALE_TOKEN = 'sandbox_token'
+
+/** Whether `resp` is napkin-web refusing a token it does not hold (a deploy, or its TTL). */
+export async function isStaleToken(resp: Response): Promise<boolean> {
+  if (resp.status !== 403) return false
+  try {
+    return ((await resp.clone().json()) as { code?: unknown } | null)?.code === STALE_TOKEN
+  } catch {
+    return false
+  }
+}
+
+let renewing: Promise<string | null> | null = null
+
+/**
+ * The open document's frame origin after a token was refused as stale: the
+ * document is opened again, which mints a token the server holds now. `held`
+ * is the origin the caller was refused on; when the open document already has
+ * another, that one is the answer and nothing is asked. One open at a time,
+ * however many calls were refused together. Null when there is no document
+ * open, the open fails, or the shell moved to another document meanwhile.
+ */
+export function renewToken(held?: string): Promise<string | null> {
+  const doc = openDoc
+  if (!doc) return Promise.resolve(null)
+  if (held && held !== httpHost.clanOrigin()) return Promise.resolve(httpHost.clanOrigin())
+  renewing ??= json<OpenView>(`/d/${encodeURIComponent(doc)}`)
+    .then(view => {
+      if (openDoc !== doc) return null
+      openToken = view.token
+      openFrame = view.frame ?? null
+      sandboxOrigin = view.sandbox_origin
+      return httpHost.clanOrigin()
+    }, () => null)
+    .finally(() => { renewing = null })
+  return renewing
+}
+
+/**
+ * Fetch a `clan://` route on the frame's token URL; when the token is refused
+ * as stale, open the document again and send the same request once more.
+ * Once: a second refusal is the caller's to see, so this never loops.
+ */
+async function clanFetch(route: string, init?: RequestInit): Promise<Response> {
+  const held = httpHost.clanOrigin()
+  const resp = await fetch(`${held}${route}`, init)
+  if (!(await isStaleToken(resp))) return resp
+  const origin = await renewToken(held)
+  return origin && origin !== held ? fetch(`${origin}${route}`, init) : resp
+}
+
 /**
  * A `clan://` route, reached as the frame reaches it: on the frame's token
  * URL, so it acts on the document the frame shows. No content type, as the
@@ -304,7 +357,7 @@ function postJson(body: unknown): RequestInit {
  * answers across origins. A refusal is thrown as the host's own words.
  */
 async function clanCall<T>(route: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(`${httpHost.clanOrigin()}${route}`, init)
+  const resp = await clanFetch(route, init)
   const body = await resp.text()
   let parsed: unknown = null
   try { parsed = JSON.parse(body) } catch { /* not JSON: the body is the message */ }
@@ -383,25 +436,6 @@ function events(): Promise<EventSource> {
   return streamOnce
 }
 
-/** Put a shim ahead of every script the app has, not after them.
- *
- * Apps fetch on parse, not on DOMContentLoaded — the launcher asks for its app
- * list from an inline script in the body. A shim spliced at `</body>` installs
- * itself after that has already run, and quietly does nothing. */
-function injectFirst(html: string, script: string): string {
-  const head = /<head\b[^>]*>/i.exec(html)
-  if (head) {
-    const at = head.index + head[0].length
-    return html.slice(0, at) + script + html.slice(at)
-  }
-  const tag = /<html\b[^>]*>/i.exec(html)
-  if (tag) {
-    const at = tag.index + tag[0].length
-    return html.slice(0, at) + script + html.slice(at)
-  }
-  return script + html
-}
-
 /**
  * The open document as the server holds it now: its packed `.clan` and the
  * manifest that describes it. What "Present offline" keeps.
@@ -444,11 +478,10 @@ export const httpHost: Host = {
     return doc
   },
 
-  getHumanHtml: () => text(`/d/${requireDoc()}/human-html`),
   getData: () => text(`/d/${requireDoc()}/entry/data`),
   // A clan:// route, so it is the frame's token that reaches it.
   getDecisions: async () => {
-    const resp = await fetch(`${httpHost.clanOrigin()}/decisions`)
+    const resp = await clanFetch('/decisions')
     if (!resp.ok) throw new Error(`decisions: ${resp.status}`)
     return resp.json() as Promise<DecisionsView>
   },
@@ -464,7 +497,7 @@ export const httpHost: Host = {
   getCurrent: () => clanCall<{ data: Record<string, unknown>; version: string }>('/current'),
   restoreVersion: async n => { await clanPost<unknown>('/restore', { version: n }) },
   acknowledge: async decision => {
-    const resp = await fetch(`${httpHost.clanOrigin()}/acknowledge`, { method: 'POST', body: JSON.stringify({ decision }) })
+    const resp = await clanFetch('/acknowledge', { method: 'POST', body: JSON.stringify({ decision }) })
     if (!resp.ok) throw new Error(((await resp.json().catch(() => null)) as { error?: string } | null)?.error ?? `acknowledge: ${resp.status}`)
   },
 
@@ -492,43 +525,20 @@ export const httpHost: Host = {
   setEditMode: async active => {
     await request(`/d/${requireDoc()}/edit-mode`, postJson({ active }))
   },
-  updatePreviewHtml: async html => {
-    await request(`/d/${requireDoc()}/preview-html`, { method: 'POST', body: html })
-  },
   savePatch: async (id, content) => {
     await request(`/d/${requireDoc()}/patch`, postJson({ id, content }))
   },
 
   clanOrigin: () => `${sandboxOrigin ?? window.location.origin}/s/${openToken ?? 'no-token'}`,
+  renewToken,
 
-  // Apps compute their API base once, at parse time, from a scheme the browser
-  // does not have. Rewriting the two forms it can take — and patching `fetch`
-  // for anything built later — is what lets an unmodified .clan run here.
+  // The frame loads its page from the server, composed there from the view
+  // (napkin-host frame.rs): one GET, nothing posted (features/doc-open-direct.clan).
   frameLoad: 'url',
+  frameSrc: opts => `${httpHost.clanOrigin()}/document?${frameQuery(opts)}`,
+  compose: () => Promise.reject(new Error('the frame loads its page by address in this build')),
   handleFromFrame: () =>
     Promise.reject(new Error('the frame reaches the host directly in this build')),
-  prepareAppHtml: html => {
-    const origin = httpHost.clanOrigin()
-    const rewritten = html
-      .split('http://clan.localhost')
-      .join(origin)
-      .split('clan://localhost')
-      .join(origin)
-    const shim = `<script>(function(){
-  var BASE=${JSON.stringify(origin)};
-  var f=window.fetch;
-
-  window.fetch=function(input,init){
-    if(typeof input==='string'){
-      input=input.replace(/^clan:\\/\\/localhost/,BASE).replace(/^http:\\/\\/clan\\.localhost/,BASE);
-    }
-    return f.call(this,input,init);
-  };
-  var c=window.__CLAN__;
-  if(c&&c.assets){for(var k in c.assets){if(c.assets[k].charAt(0)==='/')c.assets[k]=BASE+c.assets[k];}}
-})();</script>`
-    return injectFirst(rewritten, shim)
-  },
 
   listApps: () => json<InstalledApp[]>('/apps'),
   installApp: srcPath =>

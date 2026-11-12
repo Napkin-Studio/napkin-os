@@ -47,7 +47,7 @@ from ..rules import markets as market_rules
 from ..rules.confidence import fact_confidence
 from ..rules.quotes import find_quote
 from ..util import TaskError, iso, lid, slug, uid, ulid_like
-from .. import origin, reasoning as rsn
+from .. import origin, reasoning as rsn, runlog
 from . import extract as extract_stage
 from . import report as report_stage
 from . import synthesise as synth_stage
@@ -60,6 +60,7 @@ log = logging.getLogger("napkin.campaign")
 QUESTION_WAIT = 30 * 60      # a question waits this long for the person, then the stated default
 REPORT_WAIT = 10 * 60        # the report stage waits this long for a poll bringing the earlier stages
 STAGE_TIMEOUT = 2 * 60 * 60  # a stage still running after this is left behind
+STALL_TIMEOUT = 10 * 60      # a stage with no run-log event but heartbeats for this long fails the job
 REFUSED_AFTER = 3            # polls a change is missing from, sent with others and then alone: refused
 
 # The decision a gap records carries the stage's own action, so the person's
@@ -249,9 +250,11 @@ class CampaignJob:
         self._identify_raw = None
         self._identify_failed = None   # why identify's model call gave nothing, when it did not answer
         self.gaps = []                 # [{stage, reason}]: every step the job went on without
-        self.skipped_fields = set()    # campaign fields a question asked and nobody answered
+        self.skipped_fields = set()    # campaign fields a question asked that nobody answered, or the person skipped
         self.unattended = False        # a question went unanswered: later ones go on at once
+        self.person_skipped = []       # campaign fields whose question the person skipped (answer_question skip)
         self.reported = False
+        self.stage_errors = []         # [(stage, message)]: the stages that raised or ran out of time
         self._asked_at = None
         self._report_wait_from = None
         self._report_from = "landed"   # landed | working: which document the report composes from
@@ -361,7 +364,7 @@ class CampaignJob:
         finally:
             with self.lock:
                 state, err, gaps = self.state, self.error, list(self.gaps)
-            self.caps.runlog.end(state, summary=(err or {}).get("message"), gaps=gaps)
+            self.caps.runlog.end(state, summary=(err or {}).get("message"), gaps=gaps, error=err)
 
     def cancel(self) -> bool:
         """A person stopped the job: it is `cancelled` at once and holds its
@@ -410,7 +413,7 @@ class CampaignJob:
                     continue
             finished = self._stage(stage)
             with self.lock:
-                if self.state == "cancelled":
+                if self.state in ("cancelled", "failed"):
                     return
                 if finished is None:
                     continue  # the stage runs again: identify, once a question went on without its answer
@@ -420,10 +423,28 @@ class CampaignJob:
                     continue
                 self.stage_idx += 1
                 if self.stage_idx >= len(STAGES):
+                    if self.stage_errors and not self._has_output():
+                        self._nothing_to_show()
+                        return
                     self.state = "done"
                     self.finished_at = iso()
                     self.cond.notify_all()
                     return
+
+    def _has_output(self) -> bool:
+        """(Under the lock.) The run found something to show: a fact, a finding or a report it wrote."""
+        return any(c.facts or c.findings or "report" in (c.patch or {})
+                   for c in self.chunks if not c.refused and not c.gap)
+
+    def _nothing_to_show(self):
+        """Every stage that could have produced something failed, and nothing came of the run: it ends
+        `failed` with the first real error (owner, 2026-11-12). A run with any output ends `done`."""
+        stage, message = self.stage_errors[0]
+        n = len(self.stage_errors)
+        self.end_failed(stage, "stages_failed", message,
+                        f"I had to stop: {n} step(s) hit an error and nothing came of this run, so there is nothing "
+                        f"to show. The first error: {message}",
+                        "Steps of the run failed with errors and it found nothing: no fact, finding or report")
 
     def _report_ready(self) -> bool:
         """(Under the lock.) The report composes from the first poll whose
@@ -431,15 +452,21 @@ class CampaignJob:
         them within REPORT_WAIT, from the job's own copy. Never a wait for
         ever: a change the host refused is not waited on (reply_change)."""
         earlier = set().union(*(c.ids for c in self.chunks if not c.refused))
+        what = "a poll bringing the earlier stages into the document"
         if earlier <= known_ids(self.latest_clan):
             self._report_from = "landed"
+            if self._report_wait_from is not None:
+                self.caps.runlog.waiting(what, stage="report", ended="landed",
+                                         secs=round(time.monotonic() - self._report_wait_from, 2))
             return True
         now = time.monotonic()
         if self._report_wait_from is None:
             self._report_wait_from = now
+            self.caps.runlog.waiting(what, stage="report", budget_s=self._limit("report_wait"))
         left = self._report_wait_from + self._limit("report_wait") - now
         if left <= 0:
             self._report_from = "working"
+            self.caps.runlog.waiting(what, stage="report", ended="gave_up", secs=round(now - self._report_wait_from, 2))
             return True
         self.cond.wait(timeout=min(left, 30))
         return False
@@ -448,11 +475,24 @@ class CampaignJob:
         """One stage, in its own thread for at most STAGE_TIMEOUT. -> True
         (finished, or went on without it), False (asked the person), None (run
         it again). What it raises, however it fails, is a gap, never the end."""
-        limit = self._limit("stage_timeout")
+        limit, stall = self._limit("stage_timeout"), self._limit("stall_timeout")
         t_stage = time.monotonic()
-        with self.caps.runlog.stage(stage):
+        rl = self.caps.runlog
+        waiting_on, stalled = None, []
+
+        def no_progress():
+            if rl.stalled(stall):
+                stalled.append(time.monotonic() - t_stage)
+                return True
+            return False
+        with rl.stage(stage) as st:
             value, err, left = bounded(getattr(self, "stage_" + stage), limit, f"campaign-{self.id}-{stage}",
-                                       stop=lambda: self.caps.jobs.cancelled)
+                                       stop=lambda: self.caps.jobs.cancelled, stalled=no_progress)
+            if left is not None and not self.caps.jobs.cancelled:
+                waiting_on = rl.waiting_on()
+                st.ran_out(time.monotonic() - t_stage, waiting_on)
+            elif err is not None:
+                st.failed(err)
         emit("stage", stage=stage, secs=round(time.monotonic() - t_stage, 2),
              finished=bool(value) and err is None and left is None, job=self.id)
         if self.caps.jobs.cancelled:
@@ -463,10 +503,22 @@ class CampaignJob:
             with self.lock:
                 abandon(left)
                 self.question = None
-            log.warning("start_campaign %s stage %s outlived %ss; going on without it", self.id, stage, limit)
+            if stalled:  # no progress for STALL_TIMEOUT: the job fails, saying where and on what
+                msg = runlog.timeout_message(stage, stalled[0], waiting_on)
+                log.error("start_campaign %s %s", self.id, msg)
+                self.stage_errors.append((stage, msg))
+                self.end_failed(stage, "timeout", msg,
+                                f"I had to stop: the {stage} step made no progress for {_minutes(stall)} "
+                                f"(waiting on {waiting_on}). What already landed stays; run it again.",
+                                f"The {stage} step made no progress within its time budget")
+                return True
+            log.warning("start_campaign %s stage %s outlived %ss waiting on %s; going on without it", self.id,
+                        stage, limit, waiting_on)
+            self.stage_errors.append((stage, runlog.timeout_message(stage, time.monotonic() - t_stage, waiting_on)))
             self.skip(stage, "timeout", f"it did not finish within {_minutes(limit)}")
             return True
         if err is not None:
+            self.stage_errors.append((stage, f"{stage} failed: {type(err).__name__}: {str(err)[:400]}"))
             kind, detail = _why(err)
             if kind == "raised":
                 log.error("start_campaign %s stage %s failed: %s\n%s", self.id, stage, err,
@@ -581,6 +633,33 @@ class CampaignJob:
         text = gap_words("research", kind) + (" Ask to look again from Selection." if gaps else "")
         self.add_chunk("research", patch, [own] + decs, text=text, msg_decision=own, gap=True)
 
+    def end_failed(self, stage, etype, message, words, why):
+        """End the job `failed` at `stage` with the real error: one decision and a chat message say so,
+        and the view shows the step it failed at. What already landed stays."""
+        emit("stage", stage=stage, failed=True, error=etype, job=self.id)
+        try:
+            d = decision(self.doc, self.did(stage, "failed", etype), "edit", self.handler, "stage_failed",
+                         f"The run stopped at the {stage} step: {message}", [],
+                         reasoning=rsn.make(
+                             f"Stopped the run at the {stage} step; what landed before it stays.",
+                             [rsn.point(why)],
+                             rsn.certainty("high", "the error is the one the step raised"),
+                             "the cause is fixed and the run is started again",
+                             only_option="there is nothing the run can go on to produce",
+                             attention=f"Stopped at the {stage} step: {message[:300]}"))
+            self.add_chunk(stage, {}, [d], text=words, gap=True)
+        except Exception:  # noqa: BLE001 - the job still ends
+            log.exception("start_campaign %s: could not record the failure", self.id)
+        with self.lock:
+            if self.state == "cancelled":
+                return
+            self.stage_idx = STAGES.index(stage)
+            self.state = "failed"
+            self.error = {"type": etype, "message": message[:1000]}
+            self.finished_at = iso()
+            self.question = None
+            self.cond.notify_all()
+
     def fail(self, stage, etype, message):
         emit("stage", stage=stage, failed=True, error=etype, job=self.id)
         """The runner itself failed (never a stage: a stage is a gap, see skip)."""
@@ -677,9 +756,10 @@ class CampaignJob:
         return f"{v['stage']}: {self.stage_idx} of {len(STAGES)} stage(s) done"
 
     def answer(self, clan, inp):
-        self.caps.runlog.answer("identify", inp)
         """answer_question: validate, record, continue. Raises TaskError."""
         from ..util import bad
+        skipped = inp.get("skip") is True
+        self.caps.runlog.answer("identify", inp, skipped=skipped)
         with self.lock:
             if self.state != "needs_input":
                 why = "; nobody answered in time, so it went on with a stated default" if self.unattended else ""
@@ -687,11 +767,23 @@ class CampaignJob:
             q = self.question
             if inp.get("question_id") != q["id"]:
                 raise bad("question_id is not the job's open question")
-            has_opt, has_text = "option_id" in inp, "text" in inp
-            if has_opt == has_text:
-                raise bad("answer with exactly one of option_id and text")
+            if "skip" in inp and not skipped:
+                raise bad("skip, when given, must be true")
+            if [k in inp for k in ("option_id", "text", "skip")].count(True) != 1:
+                raise bad("answer with exactly one of option_id, text and skip")
             fld = q["address"].partition("#campaign.")[2]
-            if has_opt:
+            by = next((m.get("by") for m in ((ctx_data(clan).get("intake") or {}).get("messages") or {}).values()
+                       if isinstance(m, dict) and (m.get("answer") or {}).get("question_id") == q["id"]), None)
+            by = by if isinstance(by, str) and by.startswith("human:") else None
+            if skipped:
+                self.question = None
+                self.state = "running"
+                self.sync(clan)  # the skip's document is the base from here
+                self.latest_clan = clan
+                self.skip_answer(q, by)
+                self.cond.notify_all()
+                return
+            if "option_id" in inp:
                 opt = next((o for o in q["options"] if o["id"] == inp["option_id"]), None)
                 if opt is None:
                     raise bad("option_id is not one of the question's options")
@@ -704,9 +796,7 @@ class CampaignJob:
                 if not isinstance(inp["text"], str) or not inp["text"].strip():
                     raise bad("text must be a non-empty string")
                 self.pending_text = {"field": fld, "text": inp["text"].strip()}
-            by = next((m.get("by") for m in ((ctx_data(clan).get("intake") or {}).get("messages") or {}).values()
-                       if isinstance(m, dict) and (m.get("answer") or {}).get("question_id") == q["id"]), None)
-            self.answer_by = by if isinstance(by, str) and by.startswith("human:") else self.answer_by
+            self.answer_by = by or self.answer_by
             self.question = None
             self.state = "running"
             self.sync(clan)  # the answer's document is the base from here
@@ -950,6 +1040,38 @@ class CampaignJob:
                 f"Nobody answered in {waited}, so I went on without the {label}: {UNANSWERED[fld]}.")
         self.add_chunk("identify", patch, list(decisions or []) + [d], facts=facts, text=text, msg_decision=d,
                        sources=self.layer_sources(facts))
+
+    def skip_answer(self, q, by=None):
+        """(Under the lock.) The person skipped the question (answer_question `skip: true`, §8.3): the
+        field stays empty and the job goes on as it does for a question nobody answers, with no default
+        picked, and later questions are still asked. Recorded as a gap, a decision and a chat message."""
+        fld = q["address"].partition("#campaign.")[2]
+        label = fld.replace("_", " ")
+        who = by or "The person"
+        self.skipped_fields.add(fld)
+        if fld not in self.person_skipped:
+            self.person_skipped.append(fld)
+        if (self.pending_text or {}).get("field") == fld:
+            self.pending_text = None
+        self.gaps.append({"stage": "identify", "reason": "skipped"})
+        named = [o["label"] for o in q["options"] if "value" in o]
+        rejected = [rsn.rej("ask the question again", "the person chose to skip it")]
+        if named:
+            rejected.append(rsn.rej(f"take {named[0]} as the {label}", "the person skipped the question; nothing "
+                                                                         "is guessed for them"))
+        d = decision(self.doc, self.did("skip", q["id"]), "edit", self.handler, "identify",
+                     f"{who} skipped the question about the {label} ({q['text']}); it stays open.", [],
+                     reasoning=rsn.make(
+                         f"Went on without the {label}: you skipped the question.",
+                         [rsn.point(f"{who} skipped the question about the {label}"),
+                          rsn.point(f"Without it, {UNANSWERED[fld]}")],
+                         rsn.certainty("high", "nothing was chosen, so nothing was written"),
+                         f"the person sets the {label}, or starts the campaign again with it",
+                         rejected=rejected,
+                         attention=f"You skipped the question, so the job went on without the {label}: "
+                                   f"{UNANSWERED[fld]}."))
+        self.add_chunk("identify", {}, [d], text=f"You skipped it, so I went on without the {label}: "
+                                                 f"{UNANSWERED[fld]}.", msg_decision=d)
 
     def stage_identify(self):
         camp = self.W.get("campaign") or {}
@@ -1293,7 +1415,9 @@ class CampaignJob:
         if value:
             write("client_org", {"value": value, "origin": "proposed", "workspace_ref": wc["id"]})
             notes.append(f"Client: {value['name']} (the client this research was started for, proposed).")
-            ev_pins.append(rsn.point(f"The research was started from {value['name']}'s client page"))
+            # Cite the workspace client: a name may hold digits ("3 Mobile", "UAT 11120718"), and an
+            # uncited point with a digit is refused as a figure, which failed the whole identify stage.
+            ev_pins.append(rsn.point(f"The research was started from {value['name']}'s client page", wc["id"]))
             levels.append(("medium", "the client is the workspace's; confirm it"))
 
     def identify_reasoning(self, idec, ev_material, ev_pins, levels, rejected):
@@ -1555,7 +1679,9 @@ class CampaignJob:
         report, and the job ends saying why and what it went on without."""
         with self.lock:
             self.gaps.append({"stage": "report", "reason": "nothing_to_cite"})
-            stages = list(dict.fromkeys(g["stage"] for g in self.gaps if g["stage"] != "report"))
+            stages = list(dict.fromkeys(g["stage"] for g in self.gaps
+                                        if g["stage"] != "report" and g["reason"] != "skipped"))
+            skipped_by_you = list(self.person_skipped)
         without = f" It went on without: {', '.join(stages)}." if stages else ""
         d = decision(self.doc, self.did("report", "none"), "edit", self.handler, "report", "", [], reasoning=rsn.make(
             "Wrote no report: the document holds nothing to cite.",
@@ -1568,6 +1694,8 @@ class CampaignJob:
             attention=f"No report: {reason[:200]}.{without} Refresh report composes one once research lands."))
         skipped = [DOING.get(st, st) for st in stages]
         said = f" We couldn't finish {', '.join(skipped)}." if skipped else ""
+        if skipped_by_you:
+            said += f" You skipped the question about the {' and the '.join(skipped_by_you)}."
         self.add_chunk("report", {}, [d], text=f"There's no report: nothing was looked up that it could cite.{said} "
                                                f"Refresh report writes one once there is.", gap=True)
         return True

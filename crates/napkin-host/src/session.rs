@@ -133,8 +133,6 @@ pub struct ViewState {
     pub open: Option<Document>,
     /// Whether the edit bridge is live (`clan://edit-mode`).
     pub edit_mode: bool,
-    /// The legacy preview the shell last rendered (`clan://document`).
-    pub preview_html: String,
 }
 
 /// The thin wrapper the desktop and browser shells use: a store, the context
@@ -327,6 +325,12 @@ impl Session {
         self.read(read::human_html)
     }
 
+    /// The page the app frame loads (`clan://document?model=&capture=&theme=`),
+    /// composed from the open view for the frame's `reach` ([`crate::frame`]).
+    pub fn frame_page(&self, query: &str, reach: crate::frame::Reach) -> HostResult<String> {
+        self.read(|d| read::frame_page(d, query, reach))
+    }
+
     /// `GET /assets/<rel>` — serve a binary asset from inside the artifact ZIP.
     pub fn serve_asset(&self, rel: &str) -> HostResult<(String, Vec<u8>)> {
         read::check_asset_path(rel)?;
@@ -400,14 +404,6 @@ impl Session {
 
     pub fn edit_mode(&self) -> bool {
         self.view.lock().unwrap().edit_mode
-    }
-
-    pub fn set_preview_html(&self, html: String) {
-        self.view.lock().unwrap().preview_html = html;
-    }
-
-    pub fn preview_html(&self) -> String {
-        self.view.lock().unwrap().preview_html.clone()
     }
 
     // ── Writing ─────────────────────────────────────────────────────────────

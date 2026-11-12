@@ -106,3 +106,27 @@ test('at 390 px the report fits and the inspector is a bottom sheet', async ({ p
   await expect(insp).toHaveClass(/\bopen\b/)
   await expect(app.locator('#rbox #lockBtn')).toBeVisible()
 })
+
+// UAT round 4 (features/research-narrow-overlap.clan): between the 900 px bottom sheet and a wide
+// window, the report and the inspector sit side by side and never overlap, even when the report
+// holds an unbroken word (a source's file name, a link) wider than its column. Before, such a word
+// widened the report's grid track, and the band, the stat line and the ask ran under the panel.
+for (const width of [1200, 1050]) {
+  test(`at ${width} px the inspector never covers the report`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const app = await openExample(page)
+    await app.locator('#rp-body .rp-fs').first().evaluate(el => el.append(' (source: Oatly_IE_UK_oat_drink_category_size_2024_2025_share_by_brand_final_v2.xlsx)'))
+    const apart = async () => {
+      const insp = (await app.locator('#insp').boundingBox())!
+      for (const sel of ['#report', '.rp-band', '.rp-stats', '#rp-ask', '#rp-body .rp-fs >> nth=0']) {
+        const b = (await app.locator(sel).boundingBox())!
+        expect(b.x + b.width, `${sel} ends before the inspector`).toBeLessThanOrEqual(insp.x + 0.5)
+      }
+    }
+    await apart()
+    // The evidence map widens the inspector; the report still stands beside it.
+    await app.locator('[data-view="map"]').click()
+    await expect(app.locator('#pv-msvg')).toBeVisible()
+    await apart()
+  })
+}

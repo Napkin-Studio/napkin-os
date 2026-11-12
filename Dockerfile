@@ -31,6 +31,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
+# The frame scripts napkin-host compiles in (crates/napkin-host/src/frame.rs).
+COPY app/src/shell/bridge/ ./app/src/shell/bridge/
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
 # The CLI must be the exact version the crate pins, or the bindings are
 # rejected at load.
@@ -73,6 +75,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
+# The frame scripts napkin-host compiles in (crates/napkin-host/src/frame.rs).
+COPY app/src/shell/bridge/ ./app/src/shell/bridge/
 # The Tauri app is a workspace member that needs GTK/WebKit to build. It is not
 # part of this image, so drop it rather than resolve its whole dependency tree.
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml

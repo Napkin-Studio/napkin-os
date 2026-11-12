@@ -21,7 +21,8 @@ napkin-host = { path = "../napkin-host" }
 clan-sdk = { path = "../clan-sdk" }
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
-tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+# compression-*: responses gzip/br when the browser accepts them (features/doc-open-speed.clan)
+tower-http = { version = "0.6", features = ["fs", "trace", "cors", "compression-gzip", "compression-br"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = "0.1"
@@ -43,3 +44,5 @@ tempfile = { workspace = true }
 serde_yaml = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# gunzip bodies in the compression tests
+flate2 = "1"

@@ -5,8 +5,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { host } from '../host'
-import type { AttachTarget, RelatedView, SpinoffTarget, UpstreamView } from '../host'
-import { madeFromOf } from './barMenus'
+import type { SpinoffTarget, UpstreamView } from '../host'
+import { linksRead, madeFromOf, type LinksRead } from './barMenus'
 
 /**
  * A count that goes up when the page comes back into view or the window is
@@ -93,18 +93,19 @@ export function useMadeFrom(docPath: string, onTaken: () => void, onError: (mess
  * own words for a refusal (a locked document says why).
  */
 export function useLinks(docPath: string, onChanged: () => void, onError: (message: string) => void, stamp = '') {
-  const [got, setGot] = useState<{ docPath: string; targets: AttachTarget[]; related: RelatedView | null } | null>(null)
+  const [got, setGot] = useState<LinksRead | null>(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let live = true
-    // Chrome, never the document: a host that cannot answer offers nothing.
+    // Chrome, never the document: a host that cannot answer offers nothing new.
     Promise.all([
-      host.attachTargets().catch(() => [] as AttachTarget[]),
+      host.attachTargets().catch(() => null),
       host.related().catch(() => null),
-    ]).then(([targets, related]) => { if (live) setGot({ docPath, targets, related }) })
+    ]).then(([targets, related]) => { if (live) setGot(prev => linksRead(prev, docPath, targets, related)) })
     return () => { live = false }
     // `stamp`: a linked document changed, was unlinked or renamed elsewhere.
+    // `tick`: a link was written here, or Continue in ▾ is opening (`refresh`).
   }, [docPath, tick, stamp])
 
   const run = useCallback((write: () => Promise<unknown>, then?: (reply: unknown) => void) => {
@@ -117,6 +118,8 @@ export function useLinks(docPath: string, onChanged: () => void, onError: (messa
   return {
     targets: mine?.targets ?? [],
     related: mine?.related ?? null,
+    /** Read them again: Continue in ▾ calls it as it opens. */
+    refresh: () => setTick(t => t + 1),
     link: (id: string, then?: () => void) => run(() => host.attach(id), then),
     update: (id: string) => run(() => host.updateLinked(id)),
     unlink: (id: string) => run(() => host.detach(id)),

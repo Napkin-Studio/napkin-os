@@ -19,7 +19,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import Toolbar, { AgencyPill } from '../src/components/Toolbar.tsx'
-import { accountItems, continueItems, deskItems, docMenuItems, linksOf, madeFromOf, moreItems, shareItems, type DocBar } from '../src/components/barMenus.ts'
+import { accountItems, continueItems, deskItems, docMenuItems, linksOf, linksRead, madeFromOf, moreItems, pressContinue, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 
@@ -77,6 +77,12 @@ test('the desk: medallion, the agency pill back to the desk, the client chip, th
   assert.deepEqual(labels(deskItems('sam@studio-a', noop, noop)), ['Open…', 'Sign out'])
   assert.deepEqual(labels(deskItems(null, noop, noop)), ['Open…'])
   assert.doesNotMatch(html, /data-attention/, 'the desk never lights the medallion')
+})
+
+test('no client, no rule after the pill: nothing stands for a missing chip (owner, 2026-11-12)', () => {
+  assert.doesNotMatch(bar(), /tb-vsep/)
+  const withClient = bar({ client: { name: 'Client A', mono: 'CA', look: { cl: '#123456', ink: '#ffffff' } } as never })
+  assert.match(withClient, /tb-vsep/)
 })
 
 test('the agency pill takes you to the desk; the avatar menu is a proper menu button', () => {
@@ -315,6 +321,31 @@ test('Link to an existing one: each document it could link, then Update and Unli
   const locked = continueItems(doc({ linkTargets: [target('r1', 'Irish summer treats', { locked: true })], onLink: noop }))
   assert.equal(locked.link[0].disabled, true)
   assert.match(locked.link[0].hint ?? '', /locked/)
+})
+
+// UAT round 4 (2026-11-12): "Link to an existing one" said there was nothing to link while a
+// finished Research on the same client existed; a reload listed it (features/stale-token-and-menus.clan).
+test('Continue in ▾ reads what it lists again as it opens, and a failed read never empties it', () => {
+  const asked: string[] = []
+  let open = false
+  const d = { onContinueOpen: () => { asked.push('read') } }
+  const toggle = () => { open = !open }
+  pressContinue(d, open, toggle)
+  assert.deepEqual(asked, ['read'], 'opening reads /attach-targets again')
+  assert.equal(open, true)
+  pressContinue(d, open, toggle)
+  assert.deepEqual(asked, ['read'], 'closing asks nothing')
+  assert.equal(open, false)
+  pressContinue({}, false, toggle)
+  assert.equal(open, true, 'a bar with nothing to read still opens')
+
+  const t = (id: string) => ({ app_id: 'ie.napkin.campaign-research', app_name: 'Research Tool', document_id: id, title: id, path: `store/${id}`, updated_at: '', attached: false, many: true, locked: false })
+  const first = linksRead(null, 'brief-1', [], null)
+  assert.deepEqual(first.targets, [], 'nothing yet')
+  const later = linksRead(first, 'brief-1', [t('research-1')], null)
+  assert.deepEqual(later.targets.map(x => x.document_id), ['research-1'], 'a research finished since is listed on the next read')
+  assert.deepEqual(linksRead(later, 'brief-1', null, null).targets.map(x => x.document_id), ['research-1'], 'a read that failed keeps the list; it never says "nothing to link"')
+  assert.deepEqual(linksRead(later, 'brief-2', null, null).targets, [], 'another document starts from nothing')
 })
 
 test('linksOf reads /related into the lineage chips, both ways, and what was made from it', () => {
