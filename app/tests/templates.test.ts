@@ -3983,7 +3983,7 @@ function tabsEnv() {
   els.mapview.hidden = true
   const store: Record<string, string> = {}
   const env = {
-    $: (id: string) => els[id] ?? null, VIEW: { v: 'report', sel: null as string | null, trail: [] as unknown[] }, PV: { keySeen: true, keyOpen: false, surf: false },
+    $: (id: string) => els[id] ?? null, VIEW: { v: 'report', sel: null as string | null, trail: [] as unknown[] } as { v: string; sel: string | null; trail: unknown[]; mem?: unknown }, PV: { keySeen: true, keyOpen: false, surf: false, root: 'report' as string },
     D: () => ({ report: {} }), isObj: (x: unknown) => !!x && typeof x === 'object',
     renderMapV: () => { els.mapview.innerHTML = 'MAP' }, keepScroll: (f: () => void) => f(), markReport: () => {}, endSurf: () => {},
     reportViewHtml: () => 'REPORT', reportFootHtml: () => '', itemHtml: (r: string) => 'ITEM ' + r, litPage: () => {},
@@ -3994,6 +3994,30 @@ function tabsEnv() {
   const pressed = () => btns.filter(b => b.attrs['aria-pressed'] === 'true').map(b => b.attrs['data-view'])
   return { f, els, env, pressed, store }
 }
+
+test('research panel: each tab remembers what it had open (owner, 2026-11-12)', () => {
+  const { f, els, env } = tabsEnv()
+  // a finding opened on the Report tab
+  env.VIEW.sel = 'fi_2'; env.VIEW.trail = [{ ref: 'fi_2' }]; env.PV.root = 'report'; f.renderSel()
+  f.setView('map')
+  assert.equal(env.VIEW.sel, null, 'the map opens on the map, not on the report\'s item')
+  assert.equal(els.mapview.hidden, false)
+  // a fact opened from the map
+  env.VIEW.sel = 'f_1'; env.VIEW.trail = [{ ref: 'f_1' }]; env.PV.root = 'map'; f.renderSel()
+  f.setView('report')
+  assert.equal(env.VIEW.sel, 'fi_2', 'Report comes back to the finding it had open')
+  assert.equal(env.PV.root, 'report'); assert.equal(els.pv.innerHTML, 'ITEM fi_2')
+  assert.equal(els.mapview.hidden, true, 'and the map is gone')
+  f.setView('map')
+  assert.equal(env.VIEW.sel, 'f_1', 'the map comes back to the fact it had open'); assert.equal(env.PV.root, 'map')
+  // pressing the tab you are on starts it fresh
+  f.setView('map')
+  assert.equal(env.VIEW.sel, null)
+  f.setView('report'); f.setView('map')
+  assert.equal(env.VIEW.sel, null, 'a fresh start is not undone by the next visit')
+  // Show on map keeps the report's item for the way back
+  assert.match(RT, /function showOnMap\(ref\)\{ setView\('map'\); VIEW\.sel=null;/)
+})
 
 test('research panel: the pressed tab and the content are one state, both ways and after a selection', () => {
   const { f, els, env, pressed, store } = tabsEnv()
