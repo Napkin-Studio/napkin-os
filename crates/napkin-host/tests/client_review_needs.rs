@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};
 use clan_sdk::{ClanBuilder, ClanFile};
-use napkin_host::jobindex::{Audience, IndexCache, JobIndex, Need};
+use napkin_host::jobindex::{Audience, JobIndex, Need};
 use napkin_host::jobs::{self, NewJob};
 use napkin_host::{
     clients, dispatch, handle, Actor, Ctx, DocId, FsStore, HostRequest, NoConfig, Session,
