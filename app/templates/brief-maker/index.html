@@ -4580,7 +4580,10 @@
   var NEEDS_N=null, READY_NUDGE=false;
   function renderLockBtn(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
-    var again=A&&re.length>0, items=lockItems(), n=items.length, busy=draftLive(), wait=(!!l&&!l.can_lock)||busy;
+    // Needs you is the one settle-before-lock list: the host's lock list and the open questions nobody has
+    // answered. Lock waits on all of it, and "Settle n first" counts what Needs you shows (UAT round 9: Lock was on
+    // with an open question left, because only the host's can_lock was read).
+    var again=A&&re.length>0, rows=needsRows(), n=rows.length, busy=draftLive(), wait=(!!l&&!l.can_lock)||n>0||busy;
     lb.classList.toggle('locked', L&&!again);
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
     // button carries no badge of its own; why it waits is said in words.
@@ -4594,7 +4597,6 @@
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
     // The last call settled while a part is selected: a one-line nudge under the crumb (Lock is out of view).
-    var rows=needsRows();
     if(NEEDS_N!==null&&NEEDS_N>0&&rows.length===0&&SEL&&!wait) READY_NUDGE=true;
     NEEDS_N=rows.length;
     var el=$('lockList'), show=(!L||again)&&rows.length>0;
