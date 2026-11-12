@@ -60,11 +60,14 @@ def _numbers_in(text: str) -> list[float]:
     return out
 
 
-def allowed_numbers_for(cites, pins: dict, findings: dict, names=()) -> list[float]:
+def allowed_numbers_for(cites, pins: dict, findings: dict, names=(), more=None) -> list[float]:
     """The numbers a claim may state: those in the cited pins (value, the percentage of a proportion, the
     numbers inside a text or date value, the year of the as-of date) and cited findings, and the digits in
-    entity names ("BMW i4" names a car, not a figure)."""
+    entity names ("BMW i4" names a car, not a figure). `more` ({id: [number]}) adds what a caller lets a
+    claim citing that id state as well (an ask about a fact: the numbers in its quote and its dates)."""
     out: list[float] = []
+    for c in cites:
+        out += list((more or {}).get(c) or [])
     for c in cites:
         if c in pins:
             pin = pins[c]
@@ -102,8 +105,13 @@ def unsupported_figures(text: str, allowed: list[float]) -> list[str]:
     return [raw for raw, value, scale, dec in figures(text) if not _supported(value, scale, dec, allowed)]
 
 
-def unsourced_figures(text: str, cites, pins: dict, findings: dict, names=()) -> list[str]:
-    return unsupported_figures(text, allowed_numbers_for(cites, pins, findings, names))
+# A pin, finding or source id written in a sentence ("… (f_A5563F579269124A6011D028)"): its digits name the
+# item, they are not figures (UAT round 12: an answer citing its fact inline was dropped for "states 5563").
+ID_IN_TEXT = re.compile(r"(?<![\w])(?:f|fi|fnd|src|cap|psg|d)_[0-9A-Za-z_]{2,}")
+
+
+def unsourced_figures(text: str, cites, pins: dict, findings: dict, names=(), more=None) -> list[str]:
+    return unsupported_figures(ID_IN_TEXT.sub(" ", text or ""), allowed_numbers_for(cites, pins, findings, names, more))
 
 
 _MULT = {"k": 1e3, "thousand": 1e3, "m": 1e6, "mn": 1e6, "million": 1e6, "bn": 1e9, "b": 1e9,
