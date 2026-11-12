@@ -78,7 +78,7 @@ export function LiveJobsBody({ jobs, ready, clients, rights, go, reload, open }:
         ))}
       </ul>
       {form}
-      {may && !opening && <div className="jp-act"><button type="button" className="ch-btn" data-testid="open-a-job" onClick={() => setOpening(true)}>Open a job</button></div>}
+      {may && !opening && <div className="jp-act"><button type="button" className="ch-btn" data-testid="open-a-job" data-primary onClick={() => setOpening(true)}>Open a job</button></div>}
       {!may && rights && <p className="jp-note" data-testid="live-no-open">Planning, account service, management and producers open jobs.</p>}
     </div>
   )

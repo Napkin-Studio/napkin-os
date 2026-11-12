@@ -186,6 +186,11 @@ test('a Live jobs row is named by the words it shows: no aria-label that replace
   assert.match(row, />J001</)
 })
 
+test('each page marks its one primary button for the phone check (44 px at 390): Open a job, and Change this job', () => {
+  assert.match(live([job('J001')], true), /<button[^>]*data-testid="open-a-job"[^>]*data-primary/)
+  assert.match(page(view()), /<button[^>]*data-testid="job-edit"[^>]*data-primary/)
+})
+
 test('with no job Live jobs is the Empty state and its one verb is Open a job', () => {
   const html = live([], true)
   assert.match(html, /data-state="empty"/)
