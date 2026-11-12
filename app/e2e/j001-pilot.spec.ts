@@ -231,7 +231,11 @@ for (const size of SIZES) {
     expect((await gateOf(page, job.brief)).changed_since_lock).toBe(true)
     await page.goto('/')
     await page.reload()
-    await expect(page.getByTestId('alert').filter({ hasText: `Changed brief J001 brief, ${job.clientName}.` })).toBeVisible()
+    // a changed brief is a row of Needs you like any other (needs-you-full): the notice, for everyone on the job
+    await expect(page.getByTestId('needs-you')).toBeVisible()
+    const showAll = page.getByTestId('needs-show-all') // five rows show; this person's list may hold more by now
+    if (await showAll.isVisible()) await showAll.click()
+    await expect(page.locator('[data-testid="need"][data-kind="brief-changed"]').filter({ hasText: `${job.job}, ${job.clientName}` })).toBeVisible()
     await ctx.close()
   })
 
