@@ -40,7 +40,8 @@ async function shot(page: Page, name: string, size: Size) {
   if (!shots) return
   mkdirSync(shots, { recursive: true })
   await page.waitForTimeout(400)
-  await page.screenshot({ path: join(shots, `${name}-${size.tag}.png`), fullPage: size.width < 1000 })
+  // The roster agency wears a real agency's name: it is masked, never shown.
+  await page.screenshot({ path: join(shots, `${name}-${size.tag}.png`), fullPage: size.width < 1000, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
 }
 
 for (const size of SIZES) {
