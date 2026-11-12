@@ -24,6 +24,9 @@ import type {
   DashboardView,
   JobNeed,
   JobEntry,
+  JobPatch,
+  JobRights,
+  JobView,
   RouteStep,
   LibraryFilter,
   LibraryListing,
@@ -80,6 +83,8 @@ export interface HomeView {
   map: { circles: MapCircle[]; other: MapCircle[] }
   /** Every role's home, for admins and demos; null for everyone else. */
   switcher: { id: string; title: string }[] | null
+  /** What this person may do with jobs (open one, change it, set its budget). */
+  jobs: JobRights
 }
 
 /** The person's home. `as` asks for another role's (an admin or a demo only; the server ignores it otherwise). */
@@ -99,6 +104,34 @@ export async function jobNeeds(): Promise<JobNeed[]> {
 export async function jobsView(): Promise<JobEntry[] | null> {
   try { return await json<JobEntry[]>('/jobs') } catch { return null }
 }
+
+/** One job's page: the job as this person may see it, and what it asks of them. `missing` for a number that is not in this agency (404). */
+export async function jobView(number: string): Promise<JobView | 'missing' | 'forbidden' | null> {
+  try {
+    const r = await fetch(`${await base()}/jobs/${encodeURIComponent(number)}`, { credentials: 'same-origin' })
+    if (r.status === 404) return 'missing'
+    if (r.status === 403) return 'forbidden'
+    return r.ok ? ((await r.json()) as JobView) : null
+  } catch { return null }
+}
+
+/** What a job write came to: done, or why not, with the server's own sentence. */
+export type JobSaved = { ok: true } | { ok: false; status: number; message: string }
+
+async function jobWrite(method: 'POST' | 'PATCH', path: string, body: unknown): Promise<JobSaved & { number?: string }> {
+  try {
+    const r = await fetch(`${await base()}/jobs${path}`, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    const answer = await r.json().catch(() => null) as { error?: string; number?: string } | null
+    if (r.ok) return { ok: true, number: answer?.number }
+    return { ok: false, status: r.status, message: answer?.error ?? '' }
+  } catch { return { ok: false, status: 0, message: '' } }
+}
+
+/** Open a job for a client (`POST /jobs`): planning, account service, management and producers. */
+export const openJob = (body: { client_id: string; title?: string; due?: string; budget_hours?: number }) => jobWrite('POST', '', body)
+
+/** Change a job's title, owner, deadline or budget in hours (`PATCH /jobs/{number}`). */
+export const updateJob = (number: string, patch: JobPatch) => jobWrite('PATCH', `/${encodeURIComponent(number)}`, patch)
 
 /** What a route save came to: done, refused with the server's own sentence (`400`), or why not (`403`, or a failure). */
 export type RouteSaved = { ok: true } | { ok: false; status: number; message: string }

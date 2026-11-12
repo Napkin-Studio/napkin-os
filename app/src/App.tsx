@@ -93,6 +93,10 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   // Where the landing is (the URL hash).
   const [route, go] = useRoute()
+  // The job page a document was opened from, so the way back from the document returns to the job (features/job-page.clan).
+  const routeRef = useRef(route)
+  useEffect(() => { routeRef.current = route }, [route])
+  const cameFrom = useRef<Route | null>(null)
   const [running, setRunning] = useState<RunningApp | null>(null)
   const [installed, setInstalled] = useState<InstalledApp[]>([])
   const [pendingLaunch, setPendingLaunch] = useState<OpenResult | null>(null)
@@ -274,6 +278,7 @@ const [lookOpen, setLookOpen] = useState(false)
   // there (another person's, or gone) is let go quietly, and home stays.
   const openPathAs = useCallback(async (path: string, remembered: boolean) => {
     const n = nextOpen()
+    cameFrom.current = routeRef.current.level === 'job' ? routeRef.current : null
     setLoading(true); setError(null)
     try {
       const result = await host.openClan(path)
@@ -296,6 +301,7 @@ const [lookOpen, setLookOpen] = useState(false)
 
   const launchApp = useCallback(async (appId: string, clientId?: string) => {
     const n = nextOpen()
+    cameFrom.current = null
     setLoading(true); setError(null)
     try {
       const result = await host.newDocumentFromApp(appId, null, clientId)
@@ -431,6 +437,7 @@ const [lookOpen, setLookOpen] = useState(false)
 
   // A level of the trail, chosen from inside a document: leave the document for it.
   const leaveTo = useCallback((r: Route) => {
+    cameFrom.current = null
     retireDocEntry()
     go(r, true)
     openHome()
@@ -550,7 +557,11 @@ const [lookOpen, setLookOpen] = useState(false)
   const docClient = docRoute && docClientRef
     ? landing.data?.clients.find(c => c.id === docClientRef.id) ?? { id: docClientRef.id, name: docClientRef.name, initials: initialsOf(docClientRef.name) }
     : null
-  const docChip: ClientChip | null = docClient ? { ...chipOf(docClient), onOpen: () => leaveTo({ level: 'client', client: docClient.id }) } : null
+  const docChip: ClientChip | null = docClient ? { ...chipOf(docClient), onOpen: () => {
+    // Back from a document opened on a job's page lands on that page; any other document goes to its client.
+    const from = cameFrom.current
+    leaveTo(from && from.level === 'job' && from.number === landing.data?.items.find(i => i.path === running?.open.path)?.job ? from : { level: 'client', client: docClient.id })
+  } } : null
 
   // The desk's needs-your-call count: across all the agency's clients (owner,
   // 9 Nov 2026). It never lights the medallion; only an open document does.

@@ -21,8 +21,8 @@ export const DOOR_TARGETS: Readonly<Record<string, DoorTarget>> = {
   'agency-dashboard': { page: 'agency-dashboard', built: true },
   // Who approves each stage and by when (record approval-route).
   'approvals': { page: 'approvals', built: true },
-  // The job page (record job-page) turns built on.
-  'live-jobs': { page: 'live-jobs', built: false },
+  // Every live job, each opening its page (record job-page).
+  'live-jobs': { page: 'live-jobs', built: true },
 }
 
 export const doorTarget = (id: string): DoorTarget | null => DOOR_TARGETS[id] ?? null

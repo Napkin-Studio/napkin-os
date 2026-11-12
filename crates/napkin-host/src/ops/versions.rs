@@ -95,6 +95,13 @@ fn approvals(chain: &DecisionChain, doc_id: &str) -> Vec<usize> {
         .collect()
 }
 
+/// How many versions of this document have been approved: the number of the newest (0 before the first).
+pub fn approved_count(doc: &Document) -> usize {
+    review::chain_of(doc)
+        .map(|chain| approvals(&chain, &doc.clan().document_id().to_string()).len())
+        .unwrap_or(0)
+}
+
 fn person_of(d: &Decision) -> String {
     let who = d.actor.as_deref().unwrap_or(&d.agent);
     who.strip_prefix("human:").unwrap_or(who).to_string()
