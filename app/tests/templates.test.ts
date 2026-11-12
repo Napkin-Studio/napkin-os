@@ -438,7 +438,6 @@ function rolesWindow(): Record<string, unknown> {
 type Job = { task: string; input: { events: { kind: string; id: string; decision: string; replaced_by?: string }[] }; then: ((j: Job) => void) | null; error?: string; jobId?: string; quiet?: boolean }
 function reconEnv(locked = false) {
   const runs: Job[] = []
-  const kept: (string | null)[] = []
   const RECON = { queue: [] as unknown[], job: null as Job | null }
   const classes = new Set<string>()
   const walker = { innerHTML: '', classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } } }
@@ -454,14 +453,13 @@ function reconEnv(locked = false) {
     calm: () => false,
     setTimeout: () => 0, clearTimeout: () => {},
     pathOf: (a: string) => (a.includes('#') ? a.slice(a.indexOf('#') + 1) : a),
-    store: (_k: string, v: string | null) => { kept.push(v) },
     docId: () => 'doc1',
     reportLocked: () => locked,
     window: { ...rolesWindow(), clan: { apiProxy: () => Promise.resolve() } },
     runTask: (task: string, input: Job['input'], then: Job['then'], quiet?: boolean) => { const j = { task, input, then, quiet }; runs.push(j); return j },
   }
   type F = { reviewed(route: string, body: unknown, res: unknown): void; reviewEvent(route: string, body: unknown, res: unknown): unknown }
-  return { f: lift<F>(RT, RECON_FNS, env), runs, kept, RECON, walker, side }
+  return { f: lift<F>(RT, RECON_FNS, env), runs, RECON, walker, side }
 }
 /** The job is over: the view tells whoever started it, once. */
 const finish = (j: Job, how: Partial<Job> = { jobId: 'job_1' }) => { Object.assign(j, how); const t = j.then; j.then = null; t?.(j) }
@@ -491,7 +489,7 @@ test('each review the host accepted is one reconsider event', () => {
 })
 
 test('a review made while a reconsider job runs is held and sent with the next run', () => {
-  const { f, runs, kept, RECON } = reconEnv()
+  const { f, runs, RECON } = reconEnv()
   const res = (d: string, t: string) => ({ ok: true, decision: d, targets: [`doc1#${t}`] })
   f.reviewed('/verdict', { polarity: 'bad' }, res('d_1', 'facts[f_01A]'))
   assert.equal(runs.length, 1)
@@ -503,7 +501,6 @@ test('a review made while a reconsider job runs is held and sent with the next r
   f.reviewed('/verdict', { polarity: 'good' }, res('d_3', 'facts[f_01C]'))
   assert.equal(runs.length, 1, 'one job per document at a time')
   assert.deepEqual(RECON.queue.map(e => (e as { decision: string }).decision), ['d_2', 'd_3'])
-  assert.ok(kept.at(-1)?.includes('d_3'), 'the held reviews outlive a reload')
 
   // It finishes: the next run takes both, together.
   finish(runs[0])
@@ -513,7 +510,6 @@ test('a review made while a reconsider job runs is held and sent with the next r
   finish(runs[1])
   assert.equal(runs.length, 2, 'nothing left to send')
   assert.equal(RECON.job, null)
-  assert.equal(kept.at(-1), null)
 })
 
 test('reviews a reconsider job never started wait for the next one', () => {
@@ -610,10 +606,9 @@ test('a locked report starts no reconsider job', () => {
 
 // A research started from a brief, or with one linked (features/spinoff-and-links):
 // with nothing else to read, the brief's ask is read once, on open.
-function askEnv(over: { data?: Record<string, unknown>; chain?: unknown[]; thread?: unknown[]; jobs?: unknown[]; asked?: boolean; bridge?: boolean } = {}) {
+function askEnv(over: { data?: Record<string, unknown>; chain?: unknown[]; thread?: unknown[]; jobs?: unknown[]; bridge?: boolean } = {}) {
   const runs: { task: string; input: unknown; quiet?: boolean }[] = []
   const toasts: string[] = []
-  const kept: Record<string, string> = over.asked ? { 'clan.research.askedFromBrief.doc1': '1' } : {}
   const data = over.data ?? { upstream: { b1: { client: 'Orchard Hill Cider', audience: 'Irish adults' } }, campaign: {} }
   const env = {
     ASK_FIELDS: ['client', 'audience', 'background', 'objectives'],
@@ -625,12 +620,10 @@ function askEnv(over: { data?: Record<string, unknown>; chain?: unknown[]; threa
     thread: () => over.thread ?? [], JOBS: over.jobs ?? [],
     decs: () => over.chain ?? [],
     docId: () => 'doc1',
-    stored: (k: string) => kept[k] ?? null,
-    store: (k: string, v: string) => { kept[k] = v },
     runTask: (task: string, input: unknown, _then: unknown, quiet?: boolean) => { runs.push({ task, input, quiet }) },
     toast: (t: string) => { toasts.push(t) },
   }
-  return { f: lift<{ askFromBrief(): void; briefUpstream(): string | null }>(RT, ['briefUpstream', 'askFromBrief'], env), runs, toasts, kept }
+  return { f: lift<{ askFromBrief(): void; briefUpstream(): string | null }>(RT, ['briefUpstream', 'askFromBrief'], env), runs, toasts }
 }
 
 test('a research from a brief reads the brief’s ask once on open, and never over anything already there', () => {
@@ -649,7 +642,6 @@ test('a research from a brief reads the brief’s ask once on open, and never ov
   assert.equal(none({ chain: [{ handler: 'extract_ask@1.0', action: 'extract_ask' }] }), 0, 'the ask was read already')
   assert.equal(none({ thread: [{ id: 'm1' }] }), 0, 'the intake has begun')
   assert.equal(none({ jobs: [{ task: 'research_lens' }] }), 0, 'a job is running')
-  assert.equal(none({ asked: true }), 0, 'asked already in this session')
   assert.equal(none({ bridge: false }), 0, 'no bridge yet: it waits for it')
 })
 
@@ -4109,7 +4101,7 @@ test('the job block says a question’s gist, the whole question in its tooltip'
   assert.equal(f.askGist('Can you find more sources for it?'), 'finding more sources')
   assert.equal(f.askGist('Please check the GB figure.'), 'checking the GB figure')
   assert.equal(f.askGist('What do Gen Z spend on treats?'), 'answering “What do Gen Z spend on treats”')
-  assert.match(fn(RT, 'sideAgent'), /title:'Asked: “'\+aj\.question\+'”'/)
+  assert.match(fn(RT, 'sideAgent'), /title:aj\.question\?'Asked: “'\+aj\.question\+'”'/)
   assert.match(fn(RT, 'sideAgent'), /onGo:function\(\)\{ goTo\(aj\.ref\|\|\(sec\?'sec:'\+sec\.id:null\), aj\.lens\); \}/)
 })
 
@@ -4410,6 +4402,69 @@ test('Brief Maker: clan:jobs resumes a running draft once, a fix and a redraft, 
   assert.doesNotMatch(BM, /sessionStorage\.(get|set)Item/)
 })
 
+// ── Research Tool: its running jobs resume when reopened (research-resumes-from-shell) ──
+
+// Same message as Brief Maker's: each new id gets one job_status poll, and its reply's task says which
+// resume path takes it (a run to the run screen, a question back under the report, a reconsider to the jobs).
+test('Research: clan:jobs resumes a running campaign and a running ask once, and ignores other tasks', async () => {
+  type Reply = { task: string; job: { id: string; state: string } }
+  const replies: Record<string, Reply> = {
+    job_c: { task: 'start_campaign', job: { id: 'job_c', state: 'running' } },
+    job_a: { task: 'ask_research', job: { id: 'job_a', state: 'running' } },
+    job_x: { task: 'draft_brief', job: { id: 'job_x', state: 'running' } },
+    job_e: { task: 'ask_research', job: { id: 'job_e', state: 'done' } },
+  }
+  const polls: string[] = [], runs: unknown[] = [], asks: unknown[] = []
+  let chains = 0
+  const listeners: ((e: { source: unknown; data: unknown }) => void)[] = []
+  const parent = {}
+  const CHAT: { job: Record<string, unknown> | null } = { job: null }
+  const ASK = { jobs: [] as Record<string, unknown>[] }
+  const env = {
+    window: {
+      parent,
+      clan: { apiProxy: (_: string, p: { task: string; input: { job_id: string } }) => { polls.push(p.input.job_id); return Promise.resolve(replies[p.input.job_id]) } },
+      addEventListener: (t: string, h: (e: { source: unknown; data: unknown }) => void) => { if (t === 'message') listeners.push(h) },
+    },
+    arr, mwError: () => null, mwBody: (r: unknown) => r, loadChain: () => { chains += 1 }, render: () => {},
+    CHAT, ASK, JOBS: [] as unknown[], RECON: { job: null },
+    jobActive: () => !!(CHAT.job && /^(sending|checking|queued|running)$/.test(String(CHAT.job.state))),
+    onJobReply: (r: Reply) => { runs.push(r); Object.assign(CHAT.job ?? {}, { state: r.job.state }) },
+    onAskReply: (j: Record<string, unknown>, r: Reply) => { asks.push({ j: { ...j }, r }) },
+    jobFrom: () => {}, renderJobs: () => {}, keepRecon: () => {}, poll: () => {}, reconsider: () => {},
+  }
+  const lib = fn(RT, 'ownJob') + fn(RT, 'resumeJobs') + fn(RT, 'resumeShellJob')
+  const at = RT.indexOf('var SEEN_JOBS={}')
+  const listen = RT.slice(RT.indexOf("window.addEventListener('message'", at), RT.indexOf('});', RT.indexOf("window.addEventListener('message'", at)) + 3)
+  assert.match(listen, /m\.type!=='clan:jobs'\) return;\s*resumeJobs\(m\.jobs\);/)
+  new Function(...Object.keys(env), `var SEEN_JOBS={}, SHELL_JOBS=[]; var LIVE_JOB={queued:1, running:1, needs_input:1};\n${lib}\n${listen}`)(...Object.values(env))
+  const post = (data: unknown, source: unknown = parent) => listeners.forEach(h => h({ source, data }))
+  const settle = () => new Promise(r => setTimeout(r, 0))
+
+  post({ type: 'clan:jobs', jobs: ['job_c'] }, {})   // not from the shell: not heard
+  await settle()
+  assert.deepEqual(polls, [])
+  post({ type: 'clan:jobs', jobs: ['job_c', 'job_a', 'job_x'] })
+  await settle()
+  assert.deepEqual(polls, ['job_c', 'job_a', 'job_x'])
+  assert.equal(runs.length, 1, 'the run goes back to the run screen through onJobReply')
+  assert.equal(CHAT.job?.id, 'job_c')
+  assert.equal(asks.length, 1, 'the ask goes back through onAskReply')
+  assert.deepEqual((asks[0] as { j: unknown }).j, { jobId: 'job_a', question: '', lens: null, ref: null, about: null, state: 'running' })
+  // the listing changes and says the same ids again: nothing is resumed twice, nor polled again
+  post({ type: 'clan:jobs', jobs: ['job_c', 'job_a', 'job_x', 'job_e'] })
+  await settle()
+  assert.deepEqual(polls, ['job_c', 'job_a', 'job_x', 'job_e'])
+  assert.equal(runs.length, 1, 'a run resumes once')
+  assert.equal(asks.length, 1, 'an ask resumes once, and one that ended is not resumed')
+  assert.equal(chains, 1, 'a job that already ended: the research re-reads what it wrote')
+  // an unknown task (job_x) started nothing
+  assert.equal((env.JOBS as unknown[]).length, 0)
+  // and the storage the sandbox refused is gone: no job ids kept in sessionStorage
+  assert.doesNotMatch(RT, /function (store|stored|saveAskJobs|resumeAsks)\(/)
+  assert.doesNotMatch(RT, /clan\.research\.(job|asks|reconsider|askedFromBrief)\./)
+})
+
 test('a needs_input reply keeps the poll alive, carries the questions, and a running reply resumes', () => {
   type J = Record<string, unknown> & { state: string; questions?: unknown; questions_id?: unknown }
   const ended: J[] = [], polled: string[] = []
@@ -4615,9 +4670,6 @@ test('a question asked from a fact or finding goes with it as ask_research input
   assert.equal('about' in sent[2].input, false)
   assert.equal('about' in sent[3].input, false)
   assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\);/)
-  // kept across a reload with the job
-  assert.match(fn(RT, 'saveAskJobs'), /about:j\.about\|\|null/)
-  assert.match(fn(RT, 'resumeAsks'), /about:x\.about\|\|null/)
 })
 
 // ── a run the middleware lost (a deploy restarts it; jobs live in its memory) ──
@@ -4626,11 +4678,10 @@ const UNKNOWN_JOB = { ok: false, status: 404, data: null, error: { type: 'unknow
 const INTERRUPTED_WORDS = 'This run was interrupted (the service restarted). Run it again.'
 
 test('Research: a run lost to a restart ends as stopped, says it was interrupted and offers to run it again', () => {
-  const stored: Record<string, unknown> = {}
   const CHAT: { job: Record<string, unknown> | null } = { job: { id: 'job_1', state: 'running', stage: 'research' } }
   const env = {
     CHAT, INTERRUPTED: INTERRUPTED_WORDS, MW_API: 'napkin.middleware/1', isObj, arr,
-    mwBody: (r: { data?: unknown }) => r.data, store: (k: string, v: unknown) => { stored[k] = v }, jobKey: () => 'k',
+    mwBody: (r: { data?: unknown }) => r.data,
     render: () => {}, jobActive: () => /^(sending|checking|queued|running)$/.test(String(CHAT.job?.state)),
     loadChain: () => {}, landed: () => false, schedulePoll: () => {},
   }
@@ -4639,7 +4690,6 @@ test('Research: a run lost to a restart ends as stopped, says it was interrupted
   assert.equal(CHAT.job?.state, 'failed')
   assert.equal(CHAT.job?.interrupted, true)
   assert.equal(CHAT.job?.error, INTERRUPTED_WORDS)
-  assert.equal(stored.k, null, 'the lost id is not polled again on open')
   // on open (resume) too: the run is shown as interrupted, not dropped
   CHAT.job = { id: 'job_2', state: 'checking' }
   f.onJobReply(UNKNOWN_JOB, true)
@@ -4797,7 +4847,7 @@ test('a fact ask keeps going when you move elsewhere, says so on the side, and l
   const { env, ASK, data } = factEnv({}, {
     VIEW, LENS: { regulation_clearance: {} }, attachments: () => [], toast: (m: string, act?: { label: string; run(): void }) => toasts.push({ m, act }),
     openAsked: (r: string) => opened.push(r), askWhere: () => '', renderAsks: () => {}, render: () => {}, loadChain: () => {},
-    saveAskJobs: () => {}, mwError: () => null, mwBody: (r: { data: unknown }) => r.data, setTimeout: (f: () => void) => { timers.push(f) },
+    mwError: () => null, mwBody: (r: { data: unknown }) => r.data, setTimeout: (f: () => void) => { timers.push(f) },
     $: (id: string) => (id === 'rqin-_new' ? { value: 'When was the ruling?' } : null),
     window: { clan: { apiProxy: (_k: string, p: { task: string; input: Record<string, unknown> }) => { sent.push(p); return new Promise(r => replies.push(r)) } } },
   })
@@ -4830,10 +4880,9 @@ test('a fact ask keeps going when you move elsewhere, says so on the side, and l
   assert.match(f.factAsksHtml(FACT), /The ruling was issued in December 2023\./)
 })
 
-test('reloading mid-ask resumes it under its fact; one lost to a restart says so with Ask again', () => {
+test('a fact ask lost to a restart says so with Ask again', () => {
   const { env, ASK } = factEnv({}, { INTERRUPTED: INTERRUPTED_WORDS })
   const f = lift<FactFns>(RT, FACT_FNS, env)
-  assert.match(fn(RT, 'resumeAsks'), /about:x\.about\|\|null, state:'running'/)
   ASK.jobs.push({ about: FACT, question: 'When was the ruling?', state: 'running', jobId: 'job_1', error: INTERRUPTED_WORDS })
   const h = f.factAsksHtml(FACT)
   assert.match(h, /Not answered: This run was interrupted \(the service restarted\)\. Run it again\./)
