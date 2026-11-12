@@ -36,15 +36,19 @@ struct Server {
 }
 
 fn server() -> Server {
+    server_with(|c| c)
+}
+
+fn server_with(tune: impl FnOnce(AppCtx) -> AppCtx) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let mail = Arc::new(Memory::default());
     let clock = Arc::new(AtomicU64::new(1_800_000_000));
     let c = clock.clone();
-    let ctx = Arc::new(
+    let ctx = Arc::new(tune(
         AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
             .with_mailer(mail.clone() as Arc<dyn Mailer>, 200)
             .with_code_clock(move || c.load(Ordering::SeqCst)),
-    );
+    ));
     let app = napkin_web::router(ctx.clone(), None, false);
     Server {
         _dir: dir,
@@ -994,6 +998,110 @@ async fn a_piece_is_served_as_data_from_a_fixed_list_with_the_headers_that_stop_
     }
 }
 
+/// A big film: every Range request on it must cost the document one read, not one each.
+fn big_film(len: usize) -> Vec<u8> {
+    let mut f = mp4();
+    f.resize(len, 7);
+    f
+}
+
+#[tokio::test]
+async fn many_ranges_of_one_film_read_the_document_once_and_the_lock_is_free_after() {
+    let s = server();
+    let a = agency(
+        &s,
+        VISUAL,
+        visual_data(),
+        &[
+            ("a.png", b"a".to_vec()),
+            ("b.png", b"b".to_vec()),
+            ("c.mp4", big_film(2_000_000)),
+        ],
+    )
+    .await;
+    let r = round(&s, &a).await;
+    let tok = &r.links[0].1;
+    for i in 0..30usize {
+        let lo = i * 50_000;
+        let got = send_with(
+            &s,
+            "GET",
+            &format!("/c/{tok}/piece/3"),
+            &[("range", &format!("bytes={lo}-{}", lo + 999))],
+            None,
+        )
+        .await;
+        assert_eq!(got.status, StatusCode::PARTIAL_CONTENT);
+        assert_eq!(got.body.len(), 1000);
+    }
+    assert_eq!(
+        s.ctx.pieces.decodes(),
+        1,
+        "the film was read once, not once a request"
+    );
+    // staff are not kept out of the document while a piece is out: the lock is not held across the
+    // body (the reply is built from a buffer the document no longer guards)
+    let ws = s
+        .ctx
+        .workspace(&napkin_web::tenant::TenantId::parse(&a.tenant).unwrap());
+    let sess = ws.session(&napkin_host::DocId::new(a.doc.clone())).unwrap();
+    let held = sess.read(|_| Ok(())).is_ok();
+    assert!(held);
+}
+
+#[tokio::test]
+async fn a_link_may_be_sent_only_so_many_bytes_a_minute() {
+    let s = server_with(|c| c.with_piece_byte_cap(5_000));
+    let a = agency(
+        &s,
+        VISUAL,
+        visual_data(),
+        &[
+            ("a.png", b"a".to_vec()),
+            ("b.png", b"b".to_vec()),
+            ("c.mp4", big_film(100_000)),
+        ],
+    )
+    .await;
+    let r = round(&s, &a).await;
+    let (first, other) = (&r.links[0].1, &r.links[1].1);
+    let ask = |tok: String, lo: usize, hi: usize| {
+        let s = &s;
+        async move {
+            send_with(
+                s,
+                "GET",
+                &format!("/c/{tok}/piece/3"),
+                &[("range", &format!("bytes={lo}-{hi}"))],
+                None,
+            )
+            .await
+        }
+    };
+    assert_eq!(
+        ask(first.clone(), 0, 3_999).await.status,
+        StatusCode::PARTIAL_CONTENT
+    );
+    // 4,000 of 5,000 spent: another 4,000 is refused, a smaller one is not
+    assert_eq!(
+        ask(first.clone(), 4_000, 7_999).await.status,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(
+        ask(first.clone(), 4_000, 4_999).await.status,
+        StatusCode::PARTIAL_CONTENT
+    );
+    assert_eq!(
+        ask(first.clone(), 5_000, 5_000).await.status,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    // the budget is the link's own: another reviewer's link is not spent
+    assert_eq!(
+        ask(other.clone(), 0, 3_999).await.status,
+        StatusCode::PARTIAL_CONTENT
+    );
+}
+
 // ── the email code ──────────────────────────────────────────────────────────
 
 #[derive(Clone, Default)]
@@ -1206,6 +1314,139 @@ async fn a_brute_forced_code_is_stopped_after_five_tries_and_the_sends_are_cappe
         StatusCode::TOO_MANY_REQUESTS
     );
     assert_eq!(s.mail.outbox().len(), 3);
+}
+
+const SECRET: &[u8] = b"a session secret of thirty-two bytes!";
+
+/// A second server over the first's data folder with the same secret: the same process restarted.
+fn restarted(of: &Server, tune: impl FnOnce(AppCtx) -> AppCtx) -> Server {
+    let mail = Arc::new(Memory::default());
+    let clock = Arc::new(AtomicU64::new(of.clock.load(Ordering::SeqCst)));
+    let c = clock.clone();
+    let ctx = Arc::new(tune(
+        AppCtx::new(of._dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
+            .with_link_secret(Some(SECRET))
+            .with_mailer(mail.clone() as Arc<dyn Mailer>, 200)
+            .with_code_clock(move || c.load(Ordering::SeqCst)),
+    ));
+    let app = napkin_web::router(ctx.clone(), None, false);
+    Server {
+        _dir: tempfile::tempdir().unwrap(),
+        ctx,
+        app,
+        mail,
+        clock,
+    }
+}
+
+#[tokio::test]
+async fn a_links_code_dies_after_its_lifetime_of_wrong_tries_even_across_a_restart() {
+    let s = server_with(|c| c.with_link_secret(Some(SECRET)).with_code_limits(3, 5));
+    let a = brief(&s).await;
+    let r = round_with(&s, &a, true).await;
+    let (alex, bea) = (r.links[0].1.clone(), r.links[1].1.clone());
+    assert_eq!(
+        send(&s, "POST", &format!("/c/{alex}/code"), None, None)
+            .await
+            .status,
+        StatusCode::OK
+    );
+    let right = code_of(&s.mail.outbox()[0]);
+    let wrong = if right == "000000" {
+        "111111"
+    } else {
+        "000000"
+    };
+    for _ in 0..2 {
+        let w = send(
+            &s,
+            "POST",
+            &format!("/c/{alex}/code"),
+            None,
+            Some(json!({ "code": wrong })),
+        )
+        .await;
+        assert_eq!(w.status, StatusCode::UNAUTHORIZED);
+    }
+    // the process restarts: the two failures are remembered (a fresh limiter would have forgotten)
+    let s2 = restarted(&s, |c| c.with_code_limits(3, 5));
+    let w = send(
+        &s2,
+        "POST",
+        &format!("/c/{alex}/code"),
+        None,
+        Some(json!({ "code": wrong })),
+    )
+    .await;
+    assert_eq!(
+        w.status,
+        StatusCode::UNAUTHORIZED,
+        "the third wrong try is still a wrong try"
+    );
+    // now the limit is spent: even the right code is refused, no mail goes out, the view says why
+    let late = send(
+        &s2,
+        "POST",
+        &format!("/c/{alex}/code"),
+        None,
+        Some(json!({ "code": right })),
+    )
+    .await;
+    assert_eq!(late.status, StatusCode::GONE, "{}", late.text());
+    assert_eq!(late.json()["state"], "locked");
+    assert!(late.headers.get(header::SET_COOKIE).is_none());
+    let more = send(&s2, "POST", &format!("/c/{alex}/code"), None, None).await;
+    assert_eq!(more.status, StatusCode::GONE);
+    assert!(s2.mail.outbox().is_empty());
+    assert_eq!(
+        send(&s2, "GET", &format!("/c/{alex}/view"), None, None)
+            .await
+            .status,
+        StatusCode::GONE
+    );
+    // it is that link's own: another reviewer's code still works
+    assert_eq!(
+        send(&s2, "POST", &format!("/c/{bea}/code"), None, None)
+            .await
+            .status,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn one_link_may_send_only_so_many_codes_a_day_and_the_rest_of_the_agency_is_untouched() {
+    let s = server_with(|c| c.with_link_secret(Some(SECRET)).with_code_limits(12, 2));
+    let a = brief(&s).await;
+    let r = round_with(&s, &a, true).await;
+    let (alex, bea) = (r.links[0].1.clone(), r.links[1].1.clone());
+    let ask = |s: &Server, t: &str| {
+        let uri = format!("/c/{t}/code");
+        let s = s.app.clone();
+        async move {
+            let req = Request::builder()
+                .method("POST")
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap();
+            s.oneshot(req).await.unwrap().status()
+        }
+    };
+    assert_eq!(ask(&s, &alex).await, StatusCode::OK);
+    assert_eq!(ask(&s, &alex).await, StatusCode::OK);
+    assert_eq!(
+        ask(&s, &alex).await,
+        StatusCode::TOO_MANY_REQUESTS,
+        "the third in a day"
+    );
+    assert_eq!(s.mail.outbox().len(), 2);
+    // the count is on disk: a restart does not give the day back
+    let s2 = restarted(&s, |c| c.with_code_limits(12, 2));
+    assert_eq!(ask(&s2, &alex).await, StatusCode::TOO_MANY_REQUESTS);
+    // another reviewer's link is not spent
+    assert_eq!(ask(&s2, &bea).await, StatusCode::OK);
+    // the next day it sends again
+    s2.clock.fetch_add(86_400, Ordering::SeqCst);
+    assert_eq!(ask(&s2, &alex).await, StatusCode::OK);
 }
 
 #[tokio::test]

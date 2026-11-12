@@ -32,7 +32,7 @@
 //! does). The view is always there to read.
 
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use clan_sdk::{Decision, DecisionChain};
 
@@ -113,6 +113,11 @@ pub struct GateView {
     pub signed: bool,
     /// The client has accepted the locked version.
     pub confirmed: bool,
+    /// Who gave that confirmation, as the record names them (name and address in full), so
+    /// whoever reads a confirmation can see who it came from. For the agency's eyes only: the gate
+    /// is never shown to a client.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmed_by: Option<Value>,
     /// The brief was edited after it was signed: the signed version stays as
     /// it was and the changed one needs signing again.
     pub changed_since_lock: bool,
@@ -520,6 +525,17 @@ pub fn view(doc: &Document, decisions: &DecisionsView) -> HostResult<GateView> {
         .as_ref()
         .is_some_and(|a| a.answer == "accepted" && a.current);
 
+    let confirmed_by = decisions
+        .client
+        .answer
+        .as_ref()
+        .filter(|a| confirmed && a.answer == "accepted" && a.current)
+        .map(|a| {
+            json!({
+                "name": a.client.get("name"), "email": a.client.get("email"),
+                "channel": a.channel, "at": a.at,
+            })
+        });
     let list = signer_list(&data);
     let planner = list
         .iter()
@@ -569,6 +585,7 @@ pub fn view(doc: &Document, decisions: &DecisionsView) -> HostResult<GateView> {
         planner_signed,
         signed,
         confirmed,
+        confirmed_by,
         changed_since_lock: changed,
         open,
         waiting_on: if open { Vec::new() } else { waiting },

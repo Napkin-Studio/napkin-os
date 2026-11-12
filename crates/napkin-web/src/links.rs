@@ -173,6 +173,8 @@ pub fn ends() -> (String, u64) {
 #[derive(Default)]
 pub struct Limiter {
     seen: Mutex<HashMap<String, (Instant, u32)>>,
+    /// What each key has spent this window, in bytes (`spend`).
+    spent: Mutex<HashMap<String, (Instant, u64)>>,
 }
 
 const WINDOW: Duration = Duration::from_secs(60);
@@ -199,6 +201,171 @@ impl Limiter {
         }
         e.1 += 1;
         e.1 <= cap
+    }
+}
+
+impl Limiter {
+    /// Spend `n` bytes of `key`'s budget of `cap` over `window`: `false`, and nothing spent, when
+    /// that would go past it. A window starts at a key's first spend.
+    pub fn spend(&self, key: &str, n: u64, cap: u64, window: Duration) -> bool {
+        let mut spent = self.spent.lock().unwrap();
+        let now = Instant::now();
+        if spent.len() > 10_000 {
+            spent.retain(|_, (at, _)| now.duration_since(*at) < Duration::from_secs(3600));
+        }
+        let e = spent.entry(key.to_string()).or_insert((now, 0));
+        if now.duration_since(e.0) >= window {
+            *e = (now, 0);
+        }
+        if e.1.saturating_add(n) > cap {
+            return false;
+        }
+        e.1 += n;
+        true
+    }
+}
+
+/// The bytes of the pieces served lately, so a film's many Range requests read the document once.
+/// Keyed by tenant, document and the piece's recorded hash, so an entry is only ever the bytes that
+/// hash names, and held to a total size, oldest out first.
+#[derive(Default)]
+pub struct PieceCache {
+    entries: Mutex<Vec<(String, Bytes)>>,
+    decodes: std::sync::atomic::AtomicUsize,
+}
+
+/// The most the cache holds, in bytes. A piece bigger than this is read for each request.
+const PIECE_CACHE_BYTES: usize = 192 * 1024 * 1024;
+
+impl PieceCache {
+    pub fn get(&self, key: &str) -> Option<Bytes> {
+        let mut e = self.entries.lock().unwrap();
+        let at = e.iter().position(|(k, _)| k == key)?;
+        let hit = e.remove(at);
+        let out = hit.1.clone();
+        e.push(hit); // most recently used last
+        Some(out)
+    }
+
+    pub fn put(&self, key: String, bytes: Bytes) {
+        self.decodes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if bytes.len() > PIECE_CACHE_BYTES {
+            return;
+        }
+        let mut e = self.entries.lock().unwrap();
+        e.retain(|(k, _)| *k != key);
+        e.push((key, bytes));
+        let mut total: usize = e.iter().map(|(_, b)| b.len()).sum();
+        while total > PIECE_CACHE_BYTES && e.len() > 1 {
+            total -= e.remove(0).1.len();
+        }
+    }
+
+    /// How many times a piece was read out of a document to fill the cache (for tests).
+    pub fn decodes(&self) -> usize {
+        self.decodes.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+/// What an emailed code may cost, for good, per link: failed tries over its whole life. Twelve: a
+/// person mistypes a few, and a link lives 30 days, but with two codes good at a time twelve tries
+/// guess one in about 40,000. Past it the link's code is dead and the agency makes the link again.
+pub const CODE_FAILED_LIFETIME: u32 = 12;
+/// Mails of the code one link may send a day: five. A reviewer asks once or twice a day; a round
+/// of twelve at five is sixty, under a third of the tenant's 200, so one forwarded link cannot use
+/// up the agency's codes.
+pub const CODE_SENDS_PER_DAY: u32 = 5;
+
+#[derive(Default, Serialize, Deserialize)]
+struct CodeRecord {
+    /// Wrong codes tried on this link, ever.
+    failed: u32,
+    /// Mails sent today, and which day (Unix day number).
+    day: u64,
+    sent: u32,
+}
+
+/// The counts that must outlive a restart: failed tries and mails per link, one small file each
+/// under `<root>/link-codes/<tenant>/`.
+pub struct CodeGuard {
+    dir: std::path::PathBuf,
+    lock: Mutex<()>,
+}
+
+impl CodeGuard {
+    pub fn new(dir: std::path::PathBuf) -> Self {
+        Self {
+            dir,
+            lock: Mutex::new(()),
+        }
+    }
+
+    fn file(&self, tenant: &str, id: &str) -> std::path::PathBuf {
+        let safe = |s: &str| -> String {
+            s.chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect()
+        };
+        self.dir
+            .join(safe(tenant))
+            .join(format!("{}.json", safe(id)))
+    }
+
+    fn read(&self, tenant: &str, id: &str) -> CodeRecord {
+        std::fs::read(self.file(tenant, id))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    fn write(&self, tenant: &str, id: &str, r: &CodeRecord) {
+        let f = self.file(tenant, id);
+        if let Some(d) = f.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let tmp = f.with_extension("tmp");
+        if std::fs::write(&tmp, serde_json::to_vec(r).unwrap_or_default()).is_ok() {
+            let _ = std::fs::rename(&tmp, &f);
+        } else {
+            tracing::warn!("a link's code counts could not be saved");
+        }
+    }
+
+    /// Has this link used up its failed tries?
+    pub fn locked(&self, tenant: &str, id: &str, max: u32) -> bool {
+        let _g = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        self.read(tenant, id).failed >= max
+    }
+
+    /// Count one wrong code.
+    pub fn failed(&self, tenant: &str, id: &str) {
+        let _g = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut r = self.read(tenant, id);
+        r.failed = r.failed.saturating_add(1);
+        self.write(tenant, id, &r);
+    }
+
+    /// May this link send another mail on `day`? Counted when it may.
+    pub fn may_send(&self, tenant: &str, id: &str, day: u64, cap: u32) -> bool {
+        let _g = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut r = self.read(tenant, id);
+        if r.day != day {
+            r.day = day;
+            r.sent = 0;
+        }
+        if r.sent >= cap {
+            return false;
+        }
+        r.sent += 1;
+        self.write(tenant, id, &r);
+        true
     }
 }
 
@@ -461,6 +628,10 @@ async fn answer(
 
 /// Reads of a piece's bytes, a minute (a film is fetched in several ranges).
 const PER_PIECE: u32 = 240;
+/// Bytes of pieces one link may be sent in a minute: 256 MiB. A person watching a film of a few
+/// tens of megabytes twice and scrubbing through it stays well under; a link forwarded to a script
+/// is held to about 34 megabits a second, however many ranges it asks for.
+pub const PIECE_BYTES_PER_MINUTE: u64 = 256 * 1024 * 1024;
 /// Tries at the emailed code, per link, in one window.
 const CODE_TRIES: u32 = 5;
 /// Mails of the code, per link, in one window.
@@ -601,6 +772,12 @@ fn review_ctx(
         });
     }
     if st["code"] == true && !cookie_ok(ctx, headers, &claims.id) {
+        if ctx
+            .code_guard
+            .locked(&claims.tenant, &claims.id, ctx.code_failed_max)
+        {
+            return Err(gone("locked"));
+        }
         return Err(need_code());
     }
     let email = st["client"]["email"].as_str().unwrap_or_default();
@@ -646,12 +823,12 @@ fn json_body(body: &Bytes, cap: usize) -> Result<Value, Response> {
     })
 }
 
-/// How many rounds the job's route gives this document's job, when it says (the client step's `rounds`).
-pub fn rounds_in_scope(
+/// The client step of the route of this document's job, when the job has one.
+pub fn client_step(
     ctx: &AppCtx,
     tenant: &TenantId,
     session: &napkin_host::Session,
-) -> Option<u32> {
+) -> Option<napkin_host::jobs::RouteStep> {
     let job = session
         .read(|d| Ok(d.clan().manifest().job.clone()))
         .ok()
@@ -662,9 +839,77 @@ pub fn rounds_in_scope(
         .into_iter()
         .find(|r| r.number == job)?
         .route
-        .iter()
+        .into_iter()
         .find(|st| st.party == napkin_host::jobs::CLIENT)
-        .and_then(|st| st.rounds)
+}
+
+/// How many rounds the job's route gives this document's job, when it says (the client step's `rounds`).
+pub fn rounds_in_scope(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    session: &napkin_host::Session,
+) -> Option<u32> {
+    client_step(ctx, tenant, session).and_then(|st| st.rounds)
+}
+
+/// Who may be the client's reviewer or approver on a link an agency person makes (the review of
+/// 12 Nov 2026, finding 2). An agency person must not be able to answer as the client:
+///
+/// - an address that belongs to someone in the agency's own directory is refused, in any state and
+///   whatever the case, spaces or plus tag (`Aoife+client@studio.ie` is `aoife@studio.ie`);
+/// - so is the address of the person making the link, with a directory or without one;
+/// - when the job's route has a client step with a contact, the approver is that contact.
+///
+/// An agency with no directory cannot make the first check: only the maker's own sign-in name is
+/// refused there. `who` is each reviewer's address and whether they are an approver. Errors are the
+/// plain 400 to show the person making the link.
+pub fn admit(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    session: &napkin_host::Session,
+    maker: &str,
+    who: &[(String, bool)],
+) -> Result<(), (u16, String)> {
+    use client_link::canonical_email as canon;
+    let agency = crate::tenant::agency_of(maker);
+    let (mut own, mut mine): (Vec<String>, Vec<String>) = (Vec::new(), vec![canon(maker)]);
+    if let Some(agency) = agency.as_deref().filter(|a| ctx.directory.has(a)) {
+        for p in ctx.directory.people(agency) {
+            if p.username == maker {
+                mine.push(canon(&p.email));
+            }
+            own.push(canon(&p.email));
+        }
+    }
+    let contact = client_step(ctx, tenant, session)
+        .and_then(|st| st.contact)
+        .map(|c| canon(&c));
+    for (email, approver) in who {
+        let e = canon(email);
+        if mine.contains(&e) {
+            return Err((
+                400,
+                "That address is yours: a client's reviewer has to be someone else.".into(),
+            ));
+        }
+        if own.contains(&e) {
+            return Err((
+                400,
+                "That address belongs to someone in your own studio: a client's reviewer has to be outside it.".into(),
+            ));
+        }
+        if *approver {
+            if let Some(c) = &contact {
+                if &e != c {
+                    return Err((
+                        400,
+                        format!("This job's route names {c} as the client's approver: send the approval to that address."),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The page of a review link: the pieces one at a time, this reviewer's own comments, and the words
@@ -750,25 +995,53 @@ async fn piece(
         Ok(r) => r,
         Err(r) => return r,
     };
-    let resp = call(
+    // Is the link open and the piece current? Answered from what the host has already hashed for
+    // this version: nothing is read from the document.
+    let head = call(
         &ctx,
         &tenant,
         &session,
         &who,
         "/client-link/piece",
-        json!({ "id": claims.id, "n": n }),
+        json!({ "id": claims.id, "n": n, "head": true }),
     );
-    if resp.status != 200 {
-        let v: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
-        return refused(resp.status, &v);
+    let head_json: Value = serde_json::from_slice(&head.body).unwrap_or(Value::Null);
+    if head.status != 200 {
+        return refused(head.status, &head_json);
     }
-    let ctype = resp
-        .headers
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-        .map(|(_, v)| v.clone())
-        .unwrap_or_else(|| "application/octet-stream".into());
-    let total = resp.body.len();
+    let ctype = head_json["content_type"]
+        .as_str()
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let key = format!(
+        "{}|{}|{}",
+        claims.tenant,
+        claims.doc,
+        head_json["sha256"].as_str().unwrap_or_default()
+    );
+    // The bytes are read out of the document only when no recent request has: the document's lock
+    // is held for that read and not while they are sent.
+    let bytes = match ctx.pieces.get(&key) {
+        Some(b) => b,
+        None => {
+            let resp = call(
+                &ctx,
+                &tenant,
+                &session,
+                &who,
+                "/client-link/piece",
+                json!({ "id": claims.id, "n": n }),
+            );
+            if resp.status != 200 {
+                let v: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
+                return refused(resp.status, &v);
+            }
+            let b = Bytes::from(resp.body);
+            ctx.pieces.put(key, b.clone());
+            b
+        }
+    };
+    let total = bytes.len();
     // Range: one range, as a video element asks for it
     let (status, lo, hi) = match headers
         .get(header::RANGE)
@@ -788,10 +1061,20 @@ async fn piece(
             return r;
         }
     };
+    let sent = if total == 0 { 0 } else { hi - lo + 1 } as u64;
+    if !ctx.limiter.spend(
+        &format!("{}:bytes", claims.id),
+        sent,
+        ctx.piece_byte_cap,
+        WINDOW,
+    ) {
+        return too_many();
+    }
+    // a slice of the one buffer, not a copy of it
     let body = if total == 0 {
-        Vec::new()
+        Bytes::new()
     } else {
-        resp.body[lo..=hi].to_vec()
+        bytes.slice(lo..=hi)
     };
     let mut r = (status, body).into_response();
     let h = r.headers_mut();
@@ -947,6 +1230,13 @@ async fn code(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>, body: B
     };
     let now = (ctx.code_clock)();
     let w = now / CODE_WINDOW_S;
+    // a link whose code has been tried wrong too often is dead: the agency makes the link again
+    if ctx
+        .code_guard
+        .locked(&claims.tenant, &claims.id, ctx.code_failed_max)
+    {
+        return gone("locked");
+    }
     let Some(entered) = sent.get("code").and_then(Value::as_str) else {
         // send
         if !ctx
@@ -954,6 +1244,18 @@ async fn code(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>, body: B
             .allow_in(&format!("{}:send", claims.id), CODE_SENDS, CODE_WINDOW)
         {
             return too_many();
+        }
+        // and a day's share of its own, well under the agency's: one holder cannot use up the codes
+        if !ctx.code_guard.may_send(
+            &claims.tenant,
+            &claims.id,
+            now / 86_400,
+            ctx.code_sends_per_day,
+        ) {
+            return plain(
+                StatusCode::TOO_MANY_REQUESTS,
+                json!({ "ok": false, "error": "no more codes can be sent for this link today" }),
+            );
         }
         let to = st["client"]["email"]
             .as_str()
@@ -986,6 +1288,7 @@ async fn code(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>, body: B
     let right = same(entered, &code_for(&ctx.code_key, &claims.id, w))
         | (w > 0 && same(entered, &code_for(&ctx.code_key, &claims.id, w - 1)));
     if !right {
+        ctx.code_guard.failed(&claims.tenant, &claims.id);
         return plain(
             StatusCode::UNAUTHORIZED,
             json!({ "ok": false, "state": "code", "error": "that code is not right" }),

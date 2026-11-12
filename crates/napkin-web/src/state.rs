@@ -108,6 +108,13 @@ pub struct AppCtx {
     /// Signs the client's links (`links`); the session secret's child, or a key for this run.
     pub link_key: Vec<u8>,
     pub limiter: crate::links::Limiter,
+    /// The pieces served lately (`links::PieceCache`) and the bytes one link may be sent a minute.
+    pub pieces: crate::links::PieceCache,
+    /// Failed code tries and code mails per link, kept on disk (`links::CodeGuard`), and their limits.
+    pub code_guard: crate::links::CodeGuard,
+    pub code_failed_max: u32,
+    pub code_sends_per_day: u32,
+    pub piece_byte_cap: u64,
     /// Signs the emailed code and the cookie that proves it (`links`), under its own label.
     pub code_key: Vec<u8>,
     /// The only way mail leaves the server (`mail`): off unless a sender is configured.
@@ -148,12 +155,17 @@ impl AppCtx {
             done: Arc::new(crate::needs::FileDone::new(root.join("needs-done"))),
             directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
             audit: Arc::new(crate::audit::FileAudit::new(root.clone())),
+            code_guard: crate::links::CodeGuard::new(root.join("link-codes")),
             root,
             seed: None,
             config,
             tokens: TokenStore::default(),
             link_key: crate::links::fresh_key(),
             limiter: crate::links::Limiter::default(),
+            pieces: crate::links::PieceCache::default(),
+            code_failed_max: crate::links::CODE_FAILED_LIFETIME,
+            code_sends_per_day: crate::links::CODE_SENDS_PER_DAY,
+            piece_byte_cap: crate::links::PIECE_BYTES_PER_MINUTE,
             code_key: crate::links::fresh_key(),
             mail: crate::mail::Mail::off(),
             code_clock: Arc::new(crate::links::unix_now),
@@ -195,6 +207,19 @@ impl AppCtx {
             get("NAPKIN_MAIL_DAILY_CAP").as_deref(),
         );
         self.with_mailer(m, cap)
+    }
+
+    /// The bytes of pieces one review link may be sent a minute, for a test that wants a small one.
+    pub fn with_piece_byte_cap(mut self, cap: u64) -> Self {
+        self.piece_byte_cap = cap;
+        self
+    }
+
+    /// The limits on one link's emailed code: failed tries over its life, and mails a day.
+    pub fn with_code_limits(mut self, failed_lifetime: u32, sends_per_day: u32) -> Self {
+        self.code_failed_max = failed_lifetime;
+        self.code_sends_per_day = sends_per_day;
+        self
     }
 
     /// A clock for the emailed code's window, in Unix seconds, so a test moves past ten minutes.

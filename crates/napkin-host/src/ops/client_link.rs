@@ -203,6 +203,23 @@ fn find_issue<'c>(chain: &'c DecisionChain, here: &str, id: &str) -> Option<&'c 
     })
 }
 
+/// A client's context reaches its own link and no other: `403` when the actor is a client and the
+/// link's issue record names someone else. A link that does not exist is left to the caller's 404,
+/// and a person on staff is not confined.
+fn confine(ctx: &Ctx, doc: &Document, id: &str) -> HostResult<()> {
+    if !ctx.actor.is_client() {
+        return Ok(());
+    }
+    let chain = chain_of(doc)?;
+    let here = doc.clan().document_id().to_string();
+    if let Some(issued) = find_issue(&chain, &here, id).and_then(issued_of) {
+        if ctx.actor.as_str() != format!("client:{}", issued.email) {
+            return Err(HostError::new(403, "this link is for someone else"));
+        }
+    }
+    Ok(())
+}
+
 /// What the link `id` is worth now, from the chain and the document's data.
 pub fn state(doc: &Document, id: &str) -> HostResult<LinkState> {
     let chain = chain_of(doc)?;
@@ -315,6 +332,17 @@ impl Issue {
             email,
             expires,
         })
+    }
+}
+
+/// An address as two people would call the same mailbox: trimmed, lower case, and with a plus tag
+/// dropped from the part before the `@` (`Aoife+client@studio.ie` is `aoife@studio.ie`). What a rule
+/// about who an address belongs to compares; nothing stored or sent is changed.
+pub fn canonical_email(e: &str) -> String {
+    let e = e.trim().to_lowercase();
+    match e.split_once('@') {
+        Some((local, domain)) => format!("{}@{domain}", local.split('+').next().unwrap_or(local)),
+        None => e,
     }
 }
 
@@ -852,17 +880,12 @@ pub fn issue_round(ctx: &Ctx, doc: &Document, input: IssueRound) -> HostResult<O
             return Err(HostError::conflict("a link id is already used"));
         }
     }
-    // The round: how many distinct locks a review has been sent for, this one included.
-    let mut locks: Vec<String> = reviews
-        .iter()
-        .filter_map(|d| link_of(d)?.get("lock")?.as_str().map(String::from))
-        .collect();
-    if !locks.contains(&lock_id) {
-        locks.push(lock_id.clone());
-    }
-    locks.sort();
-    locks.dedup();
-    let round = locks.len() as u32;
+    // The round: how many rounds have been sent for this document, this one included. A round is a
+    // review id, so sending again on the same lock is round 2, as sending after a new lock is.
+    let mut sent: Vec<String> = reviews.iter().filter_map(|d| review_of(d)).collect();
+    sent.sort();
+    sent.dedup();
+    let round = sent.len() as u32 + 1;
 
     let now_s = now();
     let end = parse_time(&input.expires)
@@ -879,6 +902,38 @@ pub fn issue_round(ctx: &Ctx, doc: &Document, input: IssueRound) -> HostResult<O
     let piece_json: Vec<Value> = now_pieces.iter().map(Piece::to_json).collect();
     let mut made: Vec<Decision> = Vec::new();
     let mut links: Vec<Value> = Vec::new();
+    // A new round replaces an open one: its links that no one has answered are withdrawn in this same
+    // change, by the person sending, so two rounds never take answers on one lock. An answer already
+    // given stays where it is.
+    for d in &reviews {
+        let Some(old) = issued_of(d) else { continue };
+        let open = matches!(
+            state_in(&chain, &here, &hash, &old.id, &now_s, &|| Some(
+                now_pieces.clone()
+            )),
+            LinkState::Open(_)
+        );
+        if !open {
+            continue;
+        }
+        let mut w = attributed(ctx, "", KIND);
+        w.id = Some(new_decision_id());
+        w.agent = who.clone();
+        w.action = WITHDRAW.to_string();
+        w.targets = vec![here.clone()];
+        w.cites = vec![d.id.clone().unwrap_or_default()];
+        w.timestamp = now_s.clone();
+        w.rationale = format!(
+            "{} withdrew {}'s link from round {} when sending round {round}.",
+            person_name(&who),
+            old.name,
+            old.round
+        );
+        w.extra.insert("link".into(), to_yaml(&json!(old.id))?);
+        w.extra
+            .insert("replaced_by".into(), to_yaml(&json!(input.review))?);
+        made.push(w);
+    }
     for r in &input.reviewers {
         let mut d = attributed(ctx, "", KIND);
         d.id = Some(new_decision_id());
@@ -1247,8 +1302,9 @@ pub fn comment_withdraw(ctx: &Ctx, doc: &Document, id: &str, comment: &str) -> H
 
 // ── a piece's bytes ─────────────────────────────────────────────────────────
 
-/// `POST /client-link/piece`: `{id, n}` (n from 1).
-pub fn parse_piece(raw: &str) -> HostResult<(String, usize)> {
+/// `POST /client-link/piece`: `{id, n, head?}` (n from 1). With `head` the reply is the piece's
+/// content type and hash and no bytes: the link and the piece are checked, nothing is read.
+pub fn parse_piece(raw: &str) -> HostResult<(String, usize, bool)> {
     let v = body(raw)?;
     let id = required(&v, "id")?;
     if !valid_id(&id) {
@@ -1258,13 +1314,15 @@ pub fn parse_piece(raw: &str) -> HostResult<(String, usize)> {
         .get("n")
         .and_then(Value::as_u64)
         .ok_or_else(|| bad("`n` is the number of a piece, from 1"))? as usize;
+    let head = v.get("head").and_then(Value::as_bool).unwrap_or(false);
     // a piece 0 is no piece: the same answer as any number outside the list
-    Ok((id, n))
+    Ok((id, n, head))
 }
 
-/// The bytes of piece `n` of an open review link, and its content type: only when the link is open,
-/// the piece is one the issue recorded, and the file still hashes to what the issue recorded.
-pub fn piece_bytes(doc: &Document, id: &str, n: usize) -> HostResult<(String, Vec<u8>)> {
+/// The piece `n` of an open review link, as the issue recorded it: only when the link is open and
+/// the piece is a file the issue named.
+fn open_piece(ctx: &Ctx, doc: &Document, id: &str, n: usize) -> HostResult<Piece> {
+    confine(ctx, doc, id)?;
     let st = state(doc, id)?;
     let issued = match st {
         LinkState::Open(i) => i,
@@ -1286,7 +1344,26 @@ pub fn piece_bytes(doc: &Document, id: &str, n: usize) -> HostResult<(String, Ve
     if piece.kind == "text" {
         return Err(HostError::not_found("that piece is words, not a file"));
     }
-    let (ctype, bytes) = pieces::bytes_of(doc, piece)
+    Ok(piece.clone())
+}
+
+/// What a piece will be served as, and the hash it was recorded with, without reading its bytes.
+pub fn piece_head(ctx: &Ctx, doc: &Document, id: &str, n: usize) -> HostResult<(String, String)> {
+    let piece = open_piece(ctx, doc, id, n)?;
+    let ctype = pieces::content_type_of(&piece)
+        .ok_or_else(|| HostError::new(410, "this link is superseded"))?;
+    // the same check the bytes get: the piece, as this version hashes it, is what was recorded
+    if !pieces::pieces_of(doc).is_some_and(|now| now.iter().any(|p| p.same_as(&piece))) {
+        return Err(HostError::new(410, "this link is superseded"));
+    }
+    Ok((ctype.to_string(), piece.sha256))
+}
+
+/// The bytes of piece `n` of an open review link, and its content type: only when the link is open,
+/// the piece is one the issue recorded, and the file still is what the issue recorded.
+pub fn piece_bytes(ctx: &Ctx, doc: &Document, id: &str, n: usize) -> HostResult<(String, Vec<u8>)> {
+    let piece = open_piece(ctx, doc, id, n)?;
+    let (ctype, bytes) = pieces::bytes_of(doc, &piece)
         .ok_or_else(|| HostError::new(410, "this link is superseded"))?;
     Ok((ctype.to_string(), bytes))
 }
@@ -1329,6 +1406,42 @@ pub fn round_view(doc: &Document) -> HostResult<Value> {
         .map(|(_, i)| i)
         .collect();
     let first = mine[0];
+    // The rounds before this one, newest first: who was asked, and what each did. Their comments are
+    // not merged in: a round's answers stand where they were given.
+    let mut earlier: Vec<Value> = Vec::new();
+    let mut listed: Vec<&str> = vec![review_id.as_str()];
+    for (d, i) in &issues {
+        let Some(rid) = i.review.as_deref() else {
+            continue;
+        };
+        if listed.contains(&rid) {
+            continue;
+        }
+        listed.push(rid);
+        let people: Vec<Value> = issues
+            .iter()
+            .filter(|(_, o)| o.review.as_deref() == Some(rid))
+            .rev()
+            .map(|(_, o)| {
+                let st = state_in(&chain, &here, &hash, &o.id, &at, &|| now_pieces.clone());
+                let ans = chain.decisions.iter().find(|a| {
+                    (action_is(a, CLIENT_ANSWER) || action_is(a, ADVICE)) && about_link(a, &o.id)
+                });
+                json!({
+                    "id": o.id, "name": o.name, "email": o.email,
+                    "role": if o.approver { "approver" } else { "reviewer" },
+                    "state": st.word(),
+                    "answer": ans.and_then(|a| extra_str(a, "answer")),
+                    "answered": ans.map(|a| a.timestamp.clone()),
+                    "comments": comments_of(&chain, &here, &o.id).len(),
+                })
+            })
+            .collect();
+        earlier.push(json!({
+            "review": rid, "round": i.round, "version": i.version, "lock": i.lock,
+            "sent": d.timestamp, "reviewers": people,
+        }));
+    }
     let mut reviewers: Vec<Value> = Vec::new();
     let mut comments: Vec<Value> = Vec::new();
     // piece n -> [(reviewer link id, approved)]
@@ -1447,8 +1560,14 @@ pub fn round_view(doc: &Document) -> HostResult<Value> {
         "ok": true, "review": review_id, "round": first.round, "version": first.version,
         "lock": first.lock, "current": current, "code": first.code,
         "pieces": piece_rows, "reviewers": reviewers, "comments": comments,
-        "approver_answer": approver_answer,
+        "approver_answer": approver_answer, "earlier_rounds": earlier,
     }))
+}
+
+/// [`state_reply`] for a request: a client's context is held to its own link first.
+pub fn state_reply_as(ctx: &Ctx, doc: &Document, id: &str) -> HostResult<Value> {
+    confine(ctx, doc, id)?;
+    state_reply(doc, id)
 }
 
 /// `POST /client-link/state`: `{id}`. A read, for the client or an agency person.

@@ -206,6 +206,15 @@ export interface ClientRoundView {
   reviewers: RoundReviewer[]
   comments: RoundComment[]
   approver_answer: string | null
+  /** The rounds sent before this one, newest first: who was asked and where each stood. */
+  earlier_rounds?: EarlierRound[]
+}
+
+export interface EarlierRound {
+  review: string
+  round: number
+  sent: string
+  reviewers: { id: string; name: string; email: string; role: 'approver' | 'reviewer'; state: string; answer: string | null; comments: number }[]
 }
 
 /** What `POST /d/{doc}/client-link/round` returns: one link a reviewer, shown once. */
@@ -225,6 +234,8 @@ export interface GateView {
   planner_signed: boolean
   signed: boolean
   confirmed: boolean
+  /** Who gave the confirmation, name and address in full: for the agency only. */
+  confirmed_by?: { name?: string; email?: string; channel?: string }
   changed_since_lock: boolean
   open: boolean
   waiting_on: string[]

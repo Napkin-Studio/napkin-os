@@ -519,7 +519,8 @@ pub fn dispatch(
             Err(e) => e.into(),
         },
         "/client-link/state" => match session.read(|d| {
-            crate::ops::client_link::state_reply(
+            crate::ops::client_link::state_reply_as(
+                ctx,
                 d,
                 &crate::ops::client_link::id_of(&req.body_str())?,
             )
@@ -560,8 +561,17 @@ pub fn dispatch(
             crate::ops::client_link::comment_withdraw(c, d, &id, &comment)
         }),
         "/client-link/piece" => match session.read(|d| {
-            let (id, n) = crate::ops::client_link::parse_piece(&req.body_str())?;
-            crate::ops::client_link::piece_bytes(d, &id, n)
+            let (id, n, head) = crate::ops::client_link::parse_piece(&req.body_str())?;
+            if head {
+                let (ctype, sha256) = crate::ops::client_link::piece_head(ctx, d, &id, n)?;
+                let body =
+                    serde_json::json!({ "ok": true, "content_type": ctype, "sha256": sha256 });
+                return Ok((
+                    String::from("application/json"),
+                    body.to_string().into_bytes(),
+                ));
+            }
+            crate::ops::client_link::piece_bytes(ctx, d, &id, n)
         }) {
             Ok((ctype, bytes)) => HostResponse::new(200, &ctype, bytes),
             Err(e) => e.into(),
