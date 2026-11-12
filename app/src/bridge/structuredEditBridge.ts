@@ -136,14 +136,8 @@ export const STRUCTURED_EDIT_BRIDGE = `
     window.parent.postMessage({ type: 'clan:undo-key', dir: dir }, '*');
   });
 
-  // Cmd or Ctrl K inside the app is the shell's bar (features/one-bar-search.clan), in a text field too: the key is
-  // forwarded and takes no other. The shell opens the bar and focus moves there.
-  window.addEventListener('keydown', function(e) {
-    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || window.parent === window) return;
-    if (String(e.key).toLowerCase() !== 'k') return;
-    e.preventDefault();
-    window.parent.postMessage({ type: 'clan:bar-key' }, '*');
-  });
+  // Cmd or Ctrl K inside the app is the shell's bar: BAR_KEY_FORWARDER below, which the viewer puts at the top of
+  // the page so the key is never lost while the rest of the page (and this bridge, at its foot) is still loading.
 
   function apiProxy(kind, payload) {
     return fetch(clanScheme + '/api-proxy', {
@@ -360,5 +354,22 @@ export const STRUCTURED_EDIT_BRIDGE = `
       }
     }).catch(function() {});
   }, 400);
+})();
+`
+
+// Cmd or Ctrl K inside the app is the shell's bar (features/one-bar-search.clan), in a text field too: the key is
+// forwarded and takes no other, and the shell opens the bar and moves focus there. The viewer injects this at the top
+// of the page, before anything of the app's, for every render model: a key pressed while the page is still loading
+// (the edit bridge sits at the foot of the body, after the app's own scripts) reaches the shell all the same.
+export const BAR_KEY_FORWARDER = `
+(function() {
+  if (window.__clan_bar_key || window.parent === window) return;
+  window.__clan_bar_key = true;
+  window.addEventListener('keydown', function(e) {
+    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+    if (String(e.key).toLowerCase() !== 'k') return;
+    e.preventDefault();
+    window.parent.postMessage({ type: 'clan:bar-key' }, '*');
+  });
 })();
 `

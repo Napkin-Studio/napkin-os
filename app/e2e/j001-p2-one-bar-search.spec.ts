@@ -65,12 +65,11 @@ for (const size of SIZES) {
     // Inside the brief: the key works with focus in the tool's frame; Esc returns focus to the frame.
     await expect(page.locator('[data-where="document"]')).toBeVisible()
     if (!phone) {
-      // The frame's bridge listens once it has loaded (a document's page is never network-idle: it listens for events): try until it does.
-      await expect(async () => {
-        await page.frameLocator('iframe').first().locator('body').click({ position: { x: 5, y: 5 } })
-        await page.keyboard.press('Meta+k')
-        await expect(page.getByTestId('bar-search-input')).toBeFocused({ timeout: 2_000 })
-      }).toPass({ timeout: 40_000 })
+      // At once, one press: the frame is drawn only with its page, and the page forwards the key from its first line
+      // (the shell's BAR_KEY_FORWARDER), so a person pressing Cmd K while the brief still loads is not ignored.
+      await page.frameLocator('iframe').first().locator('body').click({ position: { x: 5, y: 5 } })
+      await page.keyboard.press('Meta+k')
+      await expect(page.getByTestId('bar-search-input')).toBeFocused()
       await page.keyboard.press('Escape')
       await expect(page.getByTestId('bar-panel')).toHaveCount(0)
     }
