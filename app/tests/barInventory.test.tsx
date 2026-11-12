@@ -21,6 +21,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import Toolbar, { AgencyPill, LinkPicker, LinkedList } from '../src/components/Toolbar.tsx'
 import { accountItems, continueItems, deskItems, docMenuItems, linkList, linkedChip, linkedRows, linksOf, linksRead, madeFromOf, moreItems, pressContinue, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
+import { betaNoticeOpen, betaNoticeOpener, closeBetaNotice } from '../src/dogfood/notice.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 
 const noop = () => {}
@@ -56,7 +57,7 @@ test('the desk: medallion, the agency pill back to the desk, the client chip, th
   assert.match(html, /data-testid="client-chip"[^>]*>.*Client A/, 'on a client page: the chip, a switcher')
   assert.match(html, /id="p33-cswitch"[^>]*title="Switch client"/)
   assert.match(html, />Offline</, 'a caller\'s own tools still have a place')
-  assert.match(html, />Beta</, 'DogfoodBadge')
+  assert.doesNotMatch(html, /tb-beta|>Beta</, 'no Beta chip in the bar (owner, 2026-11-13)')
   assert.match(html, /Switch to (light|dark) mode/, 'ThemeToggle')
   assert.match(html, /aria-label="Decisions: 3 need your call"/)
   assert.match(html, /data-testid="needs-count">3</)
@@ -508,4 +509,32 @@ test('a long title never pushes the bar\'s tools off: the document slot shrinks 
   assert.match(css, /\.nui \.tb-app > \.tba-name \{ flex-shrink: 1;/)
   const html = bar({ doc: doc({ title: 'A'.repeat(200), onToggleEdit: undefined, onClientReview: noop }) })
   assert.ok(html.indexOf('>Client review<') > html.indexOf('tb-spacer'), 'Client review sits with the tools, after the slot')
+})
+
+test('no Beta chip and no thumbs in the bar; the notice is in the account menu (owner, 2026-11-13)', () => {
+  dogfood({ on: true, consented: true })
+  for (const html of [bar({ user: 'sam@studio-a', onSignOut: noop, account: sam }), bar({ user: 'sam@studio-a', onSignOut: noop, account: sam, doc: doc() })]) {
+    assert.doesNotMatch(html, /tb-beta|>Beta</, 'no Beta chip')
+    assert.doesNotMatch(html, /df-thumb|👍|👎/, 'no screen thumbs in the bar')
+    assert.doesNotMatch(html, /records everything you do/, 'the notice is closed until chosen')
+  }
+  // The bar passes an opener only while recording, and the menu has the row only then.
+  assert.equal(betaNoticeOpener(false), undefined)
+  assert.deepEqual(labels(accountItems(sam, 'sam@studio-a', noop, betaNoticeOpener(false))), ['Offline copies', 'Sign out'], 'dogfood off: no row')
+  const items = accountItems(sam, 'sam@studio-a', noop, betaNoticeOpener(true))
+  assert.deepEqual(labels(items), ['Offline copies', 'About this beta', 'Sign out'])
+  assert.equal(items[1].hint, 'What this beta records, and why')
+  assert.ok(items[2].apart, 'Sign out sits apart, last')
+  assert.ok(accountItems({ ...sam, onOffline: undefined }, 'sam@studio-a', noop, noop)[1].apart)
+
+  // Choosing it opens the notice in the bar, to read again: Close, not I understand.
+  items[1].run()
+  assert.ok(betaNoticeOpen())
+  const shown = bar({ user: 'sam@studio-a', onSignOut: noop, account: sam })
+  assert.match(shown, /records everything you do/)
+  assert.match(shown, />Close</)
+  assert.doesNotMatch(shown, /I understand/)
+  closeBetaNotice()
+  assert.doesNotMatch(bar({ user: 'sam@studio-a', onSignOut: noop, account: sam }), /records everything you do/)
+  dogfood({ on: false, consented: false })
 })
