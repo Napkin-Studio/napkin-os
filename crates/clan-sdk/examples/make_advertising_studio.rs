@@ -46,6 +46,19 @@ fn research_carry() -> BTreeMap<String, SourceCarry> {
             ..Default::default()
         },
     );
+    // A script is carried whole under upstream too, and its Film-shaped script (every beat under its own id,
+    // written by the Script editor when it sends a version to Film) becomes this document's `script`
+    // (features/script-editor.clan).
+    let mut from_script = BTreeMap::new();
+    from_script.insert("film.script".to_string(), "script".to_string());
+    by_source.insert(
+        "ie.napkin.script-editor".to_string(),
+        SourceCarry {
+            upstream: true,
+            lift: from_script,
+            ..Default::default()
+        },
+    );
     by_source
 }
 

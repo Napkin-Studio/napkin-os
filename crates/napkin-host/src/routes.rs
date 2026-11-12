@@ -702,6 +702,13 @@ pub fn dispatch(
             Some(v) => HostResponse::json(200, &v),
             None => HostError::no_file_open().into(),
         },
+        // Tracked changes on a script (features/script-editor.clan): a person's mark-up, and the writer's answer.
+        "/script/propose" => review(session, ctx, |c, d| {
+            crate::ops::script::propose(c, d, &req.body_json())
+        }),
+        "/script/answer" => review(session, ctx, |c, d| {
+            crate::ops::script::answer(c, d, &req.body_json())
+        }),
         "/restore" => review(session, ctx, |c, d| {
             let n = req
                 .body_json()

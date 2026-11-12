@@ -39,7 +39,15 @@ pub const RESTORE_PREFIX: &str = "restore v";
 
 /// Top-level keys that are not the brief's words: the host's own, and the
 /// document's records of who signs and what is held. A version holds the rest.
-const NOT_CONTENT: &[&str] = &["projection", "upstream", "signers", "locked_fields"];
+const NOT_CONTENT: &[&str] = &[
+    "projection",
+    "upstream",
+    "signers",
+    "locked_fields",
+    // A script's record of where a version was sent (features/script-editor.clan).
+    "handoffs",
+    "film",
+];
 
 /// What each of `keys` holds in the stored data now (null when it holds nothing):
 /// the inverse of a write that patches exactly these keys.
