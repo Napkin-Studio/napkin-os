@@ -5237,9 +5237,15 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   var VIEW={v:'report', sel:null, model:null, trail:[]};
   function setView(v){
-    VIEW.v=v==='map'?'map':'report';
+    // Each tab remembers what its panel had open (owner, 2026-11-12): leaving a tab keeps its item,
+    // trail and way back; coming back restores them. Pressing the tab you are on starts it fresh.
+    var to=v==='map'?'map':'report', was=VIEW.v, mem=VIEW.mem||(VIEW.mem={});
+    if(was!==to) mem[was]={sel:VIEW.sel, trail:(VIEW.trail||[]).slice(), root:PV.root};
+    VIEW.v=to;
     if(VIEW.v==='map'){ if(PV.keySeen) PV.keyOpen=false; PV.keySeen=true; try{ localStorage.setItem('clan.research.mapkey','1'); }catch(e){} }
-    VIEW.sel=null; VIEW.trail=[]; endSurf();
+    var m=was!==to?mem[to]:null;
+    if(m&&m.sel){ VIEW.sel=m.sel; VIEW.trail=m.trail; PV.root=m.root; } else { VIEW.sel=null; VIEW.trail=[]; if(was===to) delete mem[to]; }
+    endSurf();
     try{ sessionStorage.setItem('clan.research.view.'+docId(), VIEW.v); }catch(e){}
     // One source of truth: VIEW.v. renderPanel draws the tabs, the content and the panel's width from it.
     renderSel();
@@ -6886,7 +6892,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function mapIntoView(){ var f=MAPV?mapFocus(MAPV.G)[0]:null; if(!f) return; var el=document.querySelector('#pv-canvas .nd[data-node="'+f.split('"').join('')+'"]');
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:calm()?'auto':'smooth'}); }
   function keepScroll(fn){ var ip=$('insp'), t=ip?ip.scrollTop:0; fn(); if(ip) ip.scrollTop=t; }
-  function showOnMap(ref){ VIEW.sel=null; VIEW.trail=[]; setView('map'); renderSel(); renderMapV(); var id=mapNodeOf(ref); if(id) mapSelect(id); }
+  function showOnMap(ref){ setView('map'); VIEW.sel=null; VIEW.trail=[]; renderSel(); renderMapV(); var id=mapNodeOf(ref); if(id) mapSelect(id); }
 
   // ════════════════════════════════════════════════════════════════════════
   // wiring
