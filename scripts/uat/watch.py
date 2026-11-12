@@ -79,8 +79,12 @@ def summarise(events: list[dict], now: dt.datetime, hang: float = 120.0, slack: 
         return out
     idle = (now - parse_ts(last["t"])).total_seconds()
     out["idle_s"] = round(idle, 1)
-    if last.get("ev") == "question":
-        out.update(verdict="waiting", why=f"asked a person: {last.get('text')!r} {idle:.0f} s ago")
+    # A question with no answer after it means the job waits on a person, whatever it logged after
+    # asking (round 2: identify logged stage_end after its question and was called hung).
+    q = next((e for e in reversed(events) if e.get("ev") in ("question", "answer")), None)
+    if q is not None and q.get("ev") == "question":
+        asked = (now - parse_ts(q["t"])).total_seconds()
+        out.update(verdict="waiting", why=f"asked a person: {q.get('text')!r} {asked:.0f} s ago")
     elif idle > hang:
         out.update(verdict="hung", why=f"no event for {idle:.0f} s in stage {last.get('stage')} (last: {last.get('ev')})")
     else:

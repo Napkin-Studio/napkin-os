@@ -2,7 +2,7 @@
 // infra/scripts/accounts.uat.tsv: a real person's workspace is never touched.
 
 import { appendFileSync } from 'node:fs'
-import { expect, type Page } from '@playwright/test'
+import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test'
 
 export const MOCKS = ['plu@pluto', 'bo@boysandgirls', 'tia@tbwa', 'sam@wk', 'oli@ogilvy', 'hal@harbour', 'dee@droga', 'ann@napkin', 'cat@catapult'] as const
 export type Mock = (typeof MOCKS)[number]
@@ -79,4 +79,43 @@ export async function appFrame(page: Page, t0: number, label: string, ready: str
   await expect(app.locator(ready).first()).toBeVisible({ timeout: 60_000 })
   measure(label, Date.now() - t0, BUDGET.docOpen)
   return app
+}
+
+/** What the suite types when an agent asks in words (round 2: "Which brand is this campaign for? Type its name."). */
+const TYPED: [RegExp, string][] = [
+  [/brand/i, 'Oatly'],
+  [/market|country|where/i, 'Ireland'],
+  [/category/i, 'Plant-based drinks'],
+  [/audience|who/i, 'Urban coffee drinkers aged 25-40'],
+  [/name/i, 'UAT test'],
+]
+
+/**
+ * Answer whatever the run asks (an offered option, else typed words) until `done` shows or the
+ * budget runs out. Returns how many questions were answered. Fails at once on an error banner.
+ */
+export async function driveRun(page: Page, app: FrameLocator, done: Locator, budget: number) {
+  const t0 = Date.now()
+  let questions = 0
+  const failed = app.locator('.rs-err, [role="alert"]')
+  while (Date.now() - t0 < budget) {
+    if (await done.first().isVisible()) return questions
+    if (await failed.first().isVisible()) throw new Error('run shows an error: ' + await failed.first().innerText())
+    const card = app.locator('#qcard')
+    if (await card.isVisible()) {
+      const opt = card.locator('[data-act="q-opt"]:not(.escape):not([disabled])').first()
+      const box = card.locator('input[type="text"], textarea').first()
+      if (await opt.isVisible()) { await opt.click(); questions++; continue }
+      if (await box.isVisible() && await box.isEnabled()) {
+        const q = await card.locator('.qtext, .aq-q').first().innerText().catch(() => '')
+        await box.fill(TYPED.find(([re]) => re.test(q))?.[1] ?? 'Oatly')
+        await card.getByRole('button', { name: /^Send$/ }).click()
+        questions++
+        await page.waitForTimeout(1_000)
+        continue
+      }
+    }
+    await page.waitForTimeout(2_000)
+  }
+  return questions
 }
