@@ -488,7 +488,9 @@ class PlannedBriefJob(BriefJob):
         if not asked:
             return
         t0 = time.monotonic()
-        answers, timed_out = self.ask(asked, self.intake_wait)
+        rl.waiting("a person's answers to the intake questions", budget_s=self.intake_wait, asked=len(asked))
+        with rl.busy("person", "intake answers"):
+            answers, timed_out = self.ask(asked, self.intake_wait)
         if self.caps.jobs.cancelled:
             return
         mat, new, done, skipped = intake.answer_items(asked, answers)

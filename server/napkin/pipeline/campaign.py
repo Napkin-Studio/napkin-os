@@ -361,7 +361,7 @@ class CampaignJob:
         finally:
             with self.lock:
                 state, err, gaps = self.state, self.error, list(self.gaps)
-            self.caps.runlog.end(state, summary=(err or {}).get("message"), gaps=gaps)
+            self.caps.runlog.end(state, summary=(err or {}).get("message"), gaps=gaps, error=err)
 
     def cancel(self) -> bool:
         """A person stopped the job: it is `cancelled` at once and holds its
@@ -431,15 +431,21 @@ class CampaignJob:
         them within REPORT_WAIT, from the job's own copy. Never a wait for
         ever: a change the host refused is not waited on (reply_change)."""
         earlier = set().union(*(c.ids for c in self.chunks if not c.refused))
+        what = "a poll bringing the earlier stages into the document"
         if earlier <= known_ids(self.latest_clan):
             self._report_from = "landed"
+            if self._report_wait_from is not None:
+                self.caps.runlog.waiting(what, stage="report", ended="landed",
+                                         secs=round(time.monotonic() - self._report_wait_from, 2))
             return True
         now = time.monotonic()
         if self._report_wait_from is None:
             self._report_wait_from = now
+            self.caps.runlog.waiting(what, stage="report", budget_s=self._limit("report_wait"))
         left = self._report_wait_from + self._limit("report_wait") - now
         if left <= 0:
             self._report_from = "working"
+            self.caps.runlog.waiting(what, stage="report", ended="gave_up", secs=round(now - self._report_wait_from, 2))
             return True
         self.cond.wait(timeout=min(left, 30))
         return False
@@ -450,9 +456,16 @@ class CampaignJob:
         it again). What it raises, however it fails, is a gap, never the end."""
         limit = self._limit("stage_timeout")
         t_stage = time.monotonic()
-        with self.caps.runlog.stage(stage):
+        rl = self.caps.runlog
+        waiting_on = None
+        with rl.stage(stage) as st:
             value, err, left = bounded(getattr(self, "stage_" + stage), limit, f"campaign-{self.id}-{stage}",
                                        stop=lambda: self.caps.jobs.cancelled)
+            if left is not None and not self.caps.jobs.cancelled:
+                waiting_on = rl.waiting_on()
+                st.ran_out(time.monotonic() - t_stage, waiting_on)
+            elif err is not None:
+                st.failed(err)
         emit("stage", stage=stage, secs=round(time.monotonic() - t_stage, 2),
              finished=bool(value) and err is None and left is None, job=self.id)
         if self.caps.jobs.cancelled:
@@ -463,7 +476,8 @@ class CampaignJob:
             with self.lock:
                 abandon(left)
                 self.question = None
-            log.warning("start_campaign %s stage %s outlived %ss; going on without it", self.id, stage, limit)
+            log.warning("start_campaign %s stage %s outlived %ss waiting on %s; going on without it", self.id,
+                        stage, limit, waiting_on)
             self.skip(stage, "timeout", f"it did not finish within {_minutes(limit)}")
             return True
         if err is not None:

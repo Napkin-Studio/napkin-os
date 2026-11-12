@@ -20,6 +20,7 @@ cancelled job stops spending.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -125,8 +126,20 @@ class LongJob:
             if self.state == "cancelled":
                 return
             self.state = "running"
+        rl = getattr(self.caps, "runlog", None)
+        if rl is not None:
+            rl.start(self.task, self.doc, [self.task], runs=self.caps.jobs.total)
         try:
-            out = self.work()
+            self._work(rl)
+        finally:
+            if rl is not None:
+                rl.end(self.state, error=self.error)
+
+    def _work(self, rl):
+        stage = rl.stage(self.task) if rl is not None else contextlib.nullcontext()
+        try:
+            with stage:  # what the work raises is the stage's error in the run log
+                out = self.work()
             with self._lock:
                 if self.state == "cancelled":
                     return  # what it computed after the person cancelled it is dropped
@@ -139,6 +152,7 @@ class LongJob:
         except TaskError as e:
             if self.state == "cancelled":
                 return
+            log.warning("%s %s failed: %s: %s", self.handler, self.id, e.etype, e.message)
             self.error, self.finished_at, self.state = {"type": e.etype, "message": e.message}, iso(), "failed"
         except Exception as e:
             if self.state == "cancelled":
@@ -184,6 +198,11 @@ class JobStore:
         with self._lock:
             return [j for j in self._jobs.values() if getattr(j, "task", None) in tasks and j.doc == doc
                     and j.scope == scope and _blocking(j)]
+
+    def running(self) -> list:
+        """Every job still unfinished, whatever its tenant or document (the shutdown's account)."""
+        with self._lock:
+            return [j for j in self._jobs.values() if getattr(j, "state", None) in UNFINISHED]
 
     def unfinished_campaign(self, scope: dict, doc: str):
         with self._lock:

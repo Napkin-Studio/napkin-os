@@ -203,6 +203,19 @@ def agency_slug(org: str) -> str:
     return org.split("/", 1)[1].replace("-", "_")
 
 
+WAKE_S = 3.0  # a fresh connect still going after this is the database waking (Aurora's auto-pause)
+
+
+def _quiet(fn):
+    """`fn`, made unable to raise: an observer must never stop a call."""
+    def call(*a, **kw):
+        try:
+            fn(*a, **kw)
+        except Exception:  # noqa: BLE001
+            log.exception("layers: an observer failed")
+    return call
+
+
 class _Pool:
     """A few idle connections per database, so a job's many calls do not each
     pay a TLS handshake. Connections are autocommit off; each use is one
@@ -220,7 +233,10 @@ class _Pool:
         self._idle: list[tuple[psycopg.Connection, float]] = []
         self._lock = threading.Lock()
 
-    def get(self) -> psycopg.Connection:
+    def get(self, on_slow=None, on_connect=None) -> psycopg.Connection:
+        """An idle connection, else a fresh one. `on_slow()` is called once a fresh connect has taken
+        WAKE_S (a scale-to-zero Aurora resuming takes 15-25 s); `on_connect(secs, error)` after every
+        fresh connect. Neither may stop the connect."""
         stale = []
         try:
             with self._lock:
@@ -233,6 +249,23 @@ class _Pool:
         finally:
             for c in stale:
                 self.drop(c)
+        t0, timer, err = time.monotonic(), None, None
+        if on_slow is not None:
+            timer = threading.Timer(WAKE_S, _quiet(on_slow))
+            timer.daemon = True
+            timer.start()
+        try:
+            return self._connect()
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:200]}"
+            raise
+        finally:
+            if timer is not None:
+                timer.cancel()
+            if on_connect is not None:
+                _quiet(on_connect)(time.monotonic() - t0, err)
+
+    def _connect(self) -> psycopg.Connection:
         return psycopg.connect(self.info, connect_timeout=max(1, int(self.timeout)))
 
     def put(self, c: psycopg.Connection):
@@ -338,6 +371,23 @@ class PgLayers:
         self._s = store
         self._org, self._brand = scope["org"], scope["brand"]
         self._attr = attribution if attribution is not None else {"handler": "-", "job": "-"}
+        # observers the job sets (capabilities.LayersCap): on_wait(what, **kw) once a fresh connect is
+        # slow; on_connect(db=, secs=, error=) after each fresh connect
+        self.on_wait = None
+        self.on_connect = None
+
+    def _get(self, pool: "_Pool", db: str) -> psycopg.Connection:
+        wait, done = self.on_wait, self.on_connect
+        slow = (lambda: wait("knowledge layers waking", db=db, after_s=WAKE_S)) if wait else None
+        conn = (lambda secs, error: done(db=db, secs=secs, error=error)) if done else None
+        t0 = time.monotonic()
+        try:
+            return pool.get(on_slow=slow, on_connect=conn)
+        finally:
+            secs = time.monotonic() - t0
+            if secs >= WAKE_S:
+                log.info("layers %s: connecting took %.1fs [%s job=%s]", db, secs, self._attr.get("handler"),
+                         self._attr.get("job"))
 
     # -- transactions --------------------------------------------------------
     def _run(self, db: str, op: str, work):
@@ -348,7 +398,7 @@ class PgLayers:
         last = None
         for _attempt in (1, 2):
             try:
-                conn = pool.get()
+                conn = self._get(pool, db)
             except psycopg.OperationalError as e:
                 last = e
                 continue
