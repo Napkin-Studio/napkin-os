@@ -44,6 +44,7 @@ import './shell/nui/tokens.css'
 import './shell/nui/nui.css'
 import './shell/nui/shell.css'
 import { roles } from './shell/agents/engine'
+import { DOC_LOADED } from './shell/AppRuntime'
 
 // Theme keys an immersive app may recolor → CSS variables on the shell root.
 // These are the design tokens; the legacy names (--bg, --surface, --text,
@@ -133,7 +134,19 @@ export default function App() {
   // Decisions on the desk: every call across the documents it has read.
   const [deskDecisions, setDeskDecisions] = useState(false)
   // What the desk reads of recent documents' own chains: last editor, calls, thin findings, upstream changes.
-  const { facts, refresh: refreshFacts } = useDeskFacts(landing.data?.items ?? null, landing.state === 'ready' && !(device && !serverless))
+  // While a document opens, the desk's reads wait for its page: they load whole documents on the server and
+  // held the one being opened behind them (UAT, 2026-11-12: 5-7.6 s opens). The desk is not on screen then.
+  const openDocPath = screen === 'app' ? running?.artifactPath ?? null : null
+  const [docIn, setDocIn] = useState<string | null>(null)
+  useEffect(() => {
+    if (!openDocPath) return
+    const on = () => setDocIn(openDocPath)
+    window.addEventListener(DOC_LOADED, on)
+    return () => window.removeEventListener(DOC_LOADED, on)
+  }, [openDocPath])
+  const deskMayRead = !openDocPath || docIn === openDocPath
+  const { facts, refresh: refreshFacts } = useDeskFacts(landing.data?.items ?? null,
+    landing.state === 'ready' && !(device && !serverless) && deskMayRead)
   const offlineCopies = useOfflineCopies()
 
   const notify = useCallback((title: string, body: string, ms = 5000) => {
