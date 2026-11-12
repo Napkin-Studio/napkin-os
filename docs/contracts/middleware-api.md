@@ -253,6 +253,22 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
   staged changes it carries no change; a failed `start_campaign` carries the
   change for any stages finished since the previous reply, plus an agent
   message saying which stage failed. What already landed stays.
+- *Amended 2026-11-12 (the owner, features/job-end-states.clan).* Besides a
+  fault in the job runner (`type: internal`), a `start_campaign` or brief job
+  (`draft_brief`, `regenerate_field`, `fix_parts`) ends `failed` in two cases,
+  and `job.stage` is the stage it failed at:
+  - **Nothing to show** (`type: stages_failed`): a stage failed (raised, its
+    model call refused or invalid, or out of its time) and nothing came of the
+    job — for `start_campaign` no fact, finding or report; for a brief job
+    nothing written into the brief. Every stage still runs first (§8.4,
+    §10.9); `message` is the first failure, `<stage> failed: <error type>:
+    <error>`. A job with any output still ends `done` with its gaps.
+  - **No progress** (`type: timeout`): a running stage wrote no event to the
+    job's run log (heartbeats do not count) for its stall budget, ten minutes
+    in the real middleware, while it was not waiting on a person (intake) or on
+    the briefing engine (§10.14, its own time limit and fallback). `message` is
+    `timed out in <stage> after <N> s waiting on <what was in flight>`. The
+    stages after it do not run.
 
 ## 3. `change`
 
@@ -734,10 +750,11 @@ is `409 job_state`, saying that nobody answered in time.
   minutes in the real middleware), the report is composed from the job's own
   copy of the document, and its decision's `attention` says so; **Refresh
   report** composes it again from the document.
-- **No stage halts the job** (the owner, 2026-09-30). A stage can raise, have
+- **No stage halts the job** (the owner, 2026-09-30; *amended 2026-11-12*,
+  see the end of this item). A stage can raise, have
   its model call refused or answered with output that never validates, run
   out of its time, or have its change refused by the host. None of these
-  fails the job. The stage becomes a **gap**: a decision with the stage's own
+  stops the job. The stage becomes a **gap**: a decision with the stage's own
   action (`extract`, `identify`, `select`, `research`, `synthesise`,
   `report`) and no field target. Its reasoning says why the stage did not
   finish and what the job does without it, and an agent message says the
@@ -750,8 +767,14 @@ is `409 job_state`, saying that nobody answered in time.
   `research_run` decision per pair, so the report names them and the view
   can offer to look again. With no model plan, `select` runs every lens in
   every market. With nothing to cite, the `report` stage writes no report,
-  and its decision says why. `failed` is left for a fault in the job runner
-  itself.
+  and its decision says why. `failed` is for a fault in the job runner
+  itself and, *since 2026-11-12* (§2, Jobs), for a job that ran every stage
+  and has nothing to show — a stage failed and no fact, finding or report
+  came of it, `error.type: stages_failed` with the first stage's error and a
+  `stage_failed` decision and agent message saying so — and for a stage that
+  made no progress for its stall budget (`error.type: timeout`; the job stops
+  there, with the same decision and message). A job with any output ends
+  `done` with its gaps.
 
 ### 8.5 The report
 
@@ -1384,7 +1407,11 @@ field whose decisions are all in the chain.
   `failed`. Then the next stage runs, and the job ends `done`, with
   `result.gaps` listing `[{stage, reason, detail}]` (display only; absent
   when there are none). A judge stage that does not finish writes no draft
-  unjudged. What landed stays.
+  unjudged. What landed stays. *Amended 2026-11-12 (§2, Jobs):* when a stage
+  failed and nothing was written into the brief, the job ends `failed`
+  (`error.type: stages_failed`, the first stage's error, `job.stage` that
+  stage); a stage with no progress for its stall budget ends it `failed`
+  (`error.type: timeout`) and the stages after it do not run.
 - The `done` poll carries the last change; later polls repeat it.
 
 ### 10.10 `regenerate_field`
@@ -1652,7 +1679,7 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    when the fallback's own capture does not finish either, to that stage's
    gap decision, whose action is also `capture`, §10.11) and to
    `result.summary`; the job still ends `done` with `result.gaps` (no stage
-   halts the brief, §8.4). A readable reply that is thin is not a failure:
+   halts the brief, §8.4), unless nothing came of it at all (§10.9). A readable reply that is thin is not a failure:
    what it has lands, and the rest is `absent` and named in `abstained`.
    The engine call runs inside the `extract` stage, so that stage's time
    limit (60 minutes) covers the engine's 900 s plus the fallback capture.
@@ -1731,6 +1758,11 @@ contract, because client material is confidential.
   (`infra/modules/services` variable `middleware_runlog_bodies`, `true` only
   in `infra/envs/staging`; `stack.tftest.hcl` asserts it). Locally, set it
   for test prompts only.
+- **Stdout** (*added 2026-11-12*, job-observability). Every run-log event is
+  also one stdout line, `runlog {json}`, with the job, task and org, whether
+  or not `NAPKIN_RUNLOG_DIR` is set. It never carries a body key (payload,
+  reply, results, queries, a decision's words, answers, question text,
+  strategy, brand names), bodies on or off (`runlog.STDOUT_DROPS`).
 - **`provenance`**, one note per clean (§10.3):
 
   ```yaml
