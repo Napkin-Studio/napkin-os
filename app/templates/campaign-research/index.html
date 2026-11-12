@@ -5446,9 +5446,11 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function plainDay(s){ var d=new Date(s); if(!s||isNaN(d)) return String(s||''); try{ return d.toLocaleDateString('en-GB',{day:'2-digit', month:'short', year:'numeric'}); }catch(e){ return String(s).slice(0,10); } }
   function renderSel(){
+    var ae=document.activeElement, keep=ae&&ae.id==='pv-askq'?{s:ae.selectionStart, e:ae.selectionEnd}:null;
     var ins=$('insp'); if(ins) ins.classList.toggle('has-sel', !!VIEW.sel);
     markReport(); renderPanel();
-    var ip=$('insp'); if(ip&&VIEW.sel) ip.scrollTop=0;
+    var ip=$('insp'); if(ip&&VIEW.sel&&!keep) ip.scrollTop=0;
+    if(keep){ var q=$('pv-askq'); if(q){ try{ q.focus({preventScroll:true}); q.setSelectionRange(keep.s, keep.e); }catch(e){} } }
   }
   // Draw the card again where the reader is (a family opened, more rows).
   function reSel(){ var ip=$('insp'), t=ip?ip.scrollTop:0; renderSel(); if(ip) ip.scrollTop=t; }
@@ -6210,6 +6212,9 @@ details.pv-fold>summary:hover{background:var(--soft)}
   document.addEventListener('input', function(e){
     var t=e.target, id=t&&t.id;
     if(id==='cmp-prompt'){ CHAT.draft=t.value; grow(t); }
+    // A question typed about a fact or finding is kept per item: the panel is drawn again whenever
+    // the document changes, and a redraw must never lose what is being typed (UAT round 5).
+    else if(id==='pv-askq'){ if(VIEW.sel) PV.askDraft[VIEW.sel]=t.value; }
     else if(id==='cmp-name') CHAT.name=t.value;
     else if(id==='pk-from'||id==='pk-to'){ picks()[id==='pk-from'?'from':'to']=t.value.replace(/[^0-9]/g,'').slice(0,4); }
     else if(id==='cmp-who') CHAT.who=t.value.trim();
@@ -6294,7 +6299,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // three bars say how sure; the panel names a thing by glyph and number and
   // lights it on the page, never quoting it.
   // ════════════════════════════════════════════════════════════════════════
-  var PV={touched:false, root:'report', cut:{}, q:'', mapSel:null, mapRef:null, mapSet:null, open:{}, auto:[], leftOut:false, moreSrc:false, keyOpen:true, keySeen:false, mapScroll:null};
+  var PV={askDraft:{}, touched:false, root:'report', cut:{}, q:'', mapSel:null, mapRef:null, mapSet:null, open:{}, auto:[], leftOut:false, moreSrc:false, keyOpen:true, keySeen:false, mapScroll:null};
   try{ PV.keySeen=localStorage.getItem('clan.research.mapkey')==='1'; PV.keyOpen=!PV.keySeen; }catch(e){}
   var CONFW=['','Thin','Fairly sure','Sure'], LVN={high:3, medium:2, med:2, low:1};
   var TIERW={first:'First-hand', firm:'Research firm', press:'Press and web', checked:'Checked by a person'};
@@ -6359,7 +6364,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function histFor(ref){ var p=/^f_/.test(ref)?'facts['+ref+']':/^fi_/.test(ref)?'findings['+ref+']':/^src_/.test(ref)?'sources['+ref+']':ref;
     return decs().filter(function(d){ return touches(d, p)||arr(d.cites).indexOf(ref)!==-1; }); }
   function histRow(ref){ var n=histFor(ref).length; return '<button type="button" class="pv-row" data-pv="hist:'+esc(ref)+'"><span class="g">⟲</span><span class="nm">History'+(n?' · '+n:'')+'</span>'+chev()+'</button>'; }
-  function askHtml(ph){ return askField({cls:'pv-ask', id:'pv-askq', act:'pv-ask', ph:ph, label:ph}); }
+  function askHtml(ph){ return askField({cls:'pv-ask', id:'pv-askq', act:'pv-ask', ph:ph, label:ph, draft:(VIEW.sel&&PV.askDraft[VIEW.sel])||''}); }
   function warnHtml(t){ return t?'<div class="pv-warn" role="note"><b>!</b><span>'+esc(t)+'</span></div>':''; }
   function chipsUsedIn(refs){ return refs.map(function(r){ return /^fi_/.test(r)?findChip(r):lineChip(r); }).join(''); }
   // What a finding, a fact or a source is used in: findings, then the lines (summary, headline, sentences).
@@ -6999,6 +7004,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'pv-cutx': delete PV.cut[b.getAttribute('data-ref')]; renderPanel(); break;
       case 'pv-next': CHK.at=chkAfter(CHK.at)||CHK.at; CHK.picked=true; renderPanel(); break;
       case 'pv-ask': var pq=$('pv-askq'), pqv=String(pq&&pq.value||'').trim(); if(!pqv){ toast('Type a question first.'); if(pq) pq.focus(); break; }
+        if(VIEW.sel) delete PV.askDraft[VIEW.sel];
         var pl=refLens(VIEW.sel||'')||(/^sec:/.test(VIEW.sel||'')&&evSec(VIEW.sel.slice(4))?evSec(VIEW.sel.slice(4)).lens:'');
         ASK.ui._new={draft:pqv, lens:pl}; renderAsks(); var nb=$('rqin-_new'); if(nb) nb.value=pqv; var nls=$('rqlens-_new'); if(nls) nls.value=pl;
         // The question goes with this item (input.about) and its lens, and its answer is written in

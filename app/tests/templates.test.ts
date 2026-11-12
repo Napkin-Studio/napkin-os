@@ -2770,13 +2770,26 @@ test('brief: Write the brief is not offered before its click is wired', () => {
   assert.ok(wired > 0 && boot > wired, 'the first render, which enables it, runs after the click is wired')
 })
 
+// UAT round 5: the fact panel is drawn again on every document change, and the question being typed was lost, so
+// pressing Ask sent nothing. The draft is kept per selected item, put back on redraw, the caret kept, cleared on send.
+test('research: a question typed about a fact survives a redraw', () => {
+  const env = { esc, slug: (x: string) => x, LENSES: [], LENS: {}, ASK: { ui: {} }, secByLens: () => null, secName: (x: { title: string }) => x.title,
+    lensName: (k: string) => k, VIEW: { sel: 'fact:f1' }, PV: { askDraft: { 'fact:f1': 'Is <this> true?' } } }
+  const f = lift<{ askHtml(ph: string): string }>(RT, ['askField', 'aboutHtml', 'aboutName', 'askHtml'], env)
+  assert.match(f.askHtml('Ask about this fact…'), /<textarea id="pv-askq"[^>]*>Is (&lt;|&#60;)this(&gt;|&#62;) true\?<\/textarea>/, 'the draft is drawn back, escaped')
+  assert.match(RT, /else if\(id==='pv-askq'\)\{ if\(VIEW\.sel\) PV\.askDraft\[VIEW\.sel\]=t\.value; \}/, 'kept as typed, per item')
+  assert.match(fn(RT, 'renderSel'), /ae\.id==='pv-askq'[\s\S]*q\.focus\(\{preventScroll:true\}\); q\.setSelectionRange/, 'focus and caret survive the redraw')
+  assert.match(RT, /case 'pv-ask':[^\n]*\n\s*if\(VIEW\.sel\) delete PV\.askDraft\[VIEW\.sel\];/, 'cleared once sent')
+})
+
 // Owner, 2026-11-11 ("follows old UI"): the Ask box is one composed field in the new UI's language, with About as a
 // chip that opens the shell's menu of plain section names, never a native select, and Ask as the shell's button.
 test('research: the Ask box is one field with an About chip, no native select', () => {
   const LENSES = [{ k: 'market', l: 'Market' }, { k: 'audience', l: 'Audience' }], LENS = { market: LENSES[0], audience: LENSES[1] }
   const secs: Record<string, { n: number; title: string; lens: string }> = { market: { n: 1, title: 'The market', lens: 'market' } }
   const env = { esc, slug: (x: string) => x.replace(/[^a-z0-9_-]/gi, '-'), LENSES, LENS, ASK: { ui: { _new: { draft: 'Why?', lens: 'market' } } },
-    secByLens: (k: string) => secs[k] || null, secName: (x: { title: string }) => x.title, lensName: (k: string) => (LENS as Record<string, { l: string }>)[k]?.l || k }
+    secByLens: (k: string) => secs[k] || null, secName: (x: { title: string }) => x.title, lensName: (k: string) => (LENS as Record<string, { l: string }>)[k]?.l || k,
+    VIEW: { sel: null }, PV: { askDraft: {} } }
   const f = lift<{ askBoxHtml(k: string, l: string): string; askHtml(ph: string): string }>(RT, ['askBoxHtml', 'askField', 'aboutHtml', 'aboutName', 'askHtml'], env)
   const box = f.askBoxHtml('_new', 'Ask the research')
   assert.doesNotMatch(box, /<select/, 'no native select in the Ask box')
