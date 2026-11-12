@@ -1231,6 +1231,8 @@ the `.clan` is what export, handoff and the offline presenter use, and old
 majors still run, so the route surface is a contract apps depend on: add
 freely, never redefine.
 
+- `/document` is the frame's page, composed from the view for the query's
+  options (§8.4); it no longer serves a page the shell stored.
 - Existing routes stay as they are: `/patch`, `/patch-data`, `/fork`,
   `/upload-asset`, `/assets/*`, `/chain`, `/api-proxy`, `/spinoff`,
   `/spinoff-targets`, `/set-title`, `/set-context`, `/export`, `/notify`,
@@ -1682,6 +1684,54 @@ address. A card is that `Cite` — the same resolver, so the same words — with
   a review of a fact.
 
 ---
+
+### 8.4 The frame's page: `/document` and `napkin_host::frame`
+
+*Landed 2026-11-12 (features/doc-open-direct.clan).* The page an app frame
+loads is composed by the host, on request, from the open document's view —
+one composer, `napkin_host::frame::compose(human_html, FrameOptions)`, for
+every host. It is pure string work (wasm32-clean):
+
+- the edit bridge for the render model (`authored`: structured, writes the
+  data layer; `legacy`: contenteditable) at the view's **last** `</body>`
+  (an app's script may hold an earlier one in a string), or at the end when
+  there is none; a fragment (no `<!doctype html` or `<html` first) gets the
+  studio's page around it;
+- the dogfood frame listener after the bridge when `capture` is on;
+- `data-color-scheme="light|dark"` stamped on the first `<html>`, unless the
+  page set its own (the shell still posts `clan:colorscheme` after load);
+- the host's last pass, `Reach`: **Origin** (the web) rewrites the literal
+  `clan://localhost` and `http://clan.localhost` bases to the frame's token
+  URL and puts a fetch shim first in `<head>`; **Scheme** (the desktop)
+  leaves the page alone; **Device** (the WebAssembly host) puts the frame CSP
+  first and an rpc shim that routes every `clan://` call to the shell.
+
+The scripts are browser code and live with the shell,
+`app/src/shell/bridge/*.js` (linted there); napkin-host compiles them in with
+`include_str!`, without their leading `//` lines.
+`crates/napkin-host/tests/frame_golden.rs` holds the composer to the 120 pages
+the shell's TypeScript made before it moved, byte for byte.
+
+The options travel as one query string, `model=&capture=0|1&theme=&v=`: a
+missing or unknown `model` is the document's own render model, a missing theme
+light, `capture` on only for `1`; `v` (the document's sha256, and its view's
+version when the library's) is not read — it makes a changed document a new
+address.
+
+| Host | The frame loads | Composed by |
+|---|---|---|
+| web | `GET /s/{token}/document?…` (src) | napkin-web, `Reach::Origin` (the sandbox origin, else `Host` and `X-Forwarded-Proto`, then `/s/{token}`); weak ETag of the page, `Cache-Control: private, no-cache`, `304` when unchanged; compressed |
+| desktop | `clan://localhost/document?…` (src) | the `/document` route, `Reach::Scheme` |
+| device | `srcdoc` | `NapkinHost.framePage(query)`, `Reach::Device` |
+
+`Host` (`app/src/host/types.ts`) names the page with `frameSrc(opts)` on a
+host whose `frameLoad` is `url`, and gets it with `compose(opts)` on the
+`srcdoc` one. Gone, with nothing stored in their place: `updatePreviewHtml`,
+`getHumanHtml` and `prepareAppHtml` on `Host`; `Session::{set_,}preview_html`;
+the Tauri commands `update_preview_html` and `get_human_html`; the wasm
+exports `setPreviewHtml` and `humanHtml`. `POST /api/t/{t}/d/{doc}/preview-html`
+answers `410` with the reason for one release, then goes.
+`GET /api/t/{t}/d/{doc}/human-html` stays (the view as stored, for tools).
 
 ## 9. Retrieval scope
 
