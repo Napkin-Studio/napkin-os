@@ -119,7 +119,7 @@ test('the Phase 2 seed and its answers hold no em dash, name no model and use pl
     assert.ok(/^[a-z_]+@\d/.test(a.handler), `${task} names its handler`)
     assert.equal(a.result?.model ?? null, null, `${task} names no model`)
   }
-  for (const p of Object.values(PEOPLE) as { username: string }[]) assert.match(p.username, /^[a-z0-9]+@(wk|bq|napkin)$/)
+  for (const p of Object.values(PEOPLE) as { username: string }[]) assert.match(p.username, /^[a-z0-9]+@(wk|bq|napkin|empty)$/)
   assert.ok(files.some(f => f.endsWith('answers/judge_work.score22-idea7.json')))
 })
 

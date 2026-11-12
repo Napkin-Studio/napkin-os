@@ -118,7 +118,9 @@ pub fn job_view(entry: &JobEntry, roles: &[String]) -> Value {
         ("holder", HOLDER_KEYS),
     ];
     for (k, allowed) in nested {
-        if let Some(x) = v.get(k).cloned() {
+        // A part the job does not have (no holder: no route yet, or every step approved) stays null.
+        // Picking from null would send `{}`, which a reader takes for a holder with no fields.
+        if let Some(x) = v.get(k).cloned().filter(Value::is_object) {
             v.insert(k.to_string(), pick(&x, allowed));
         }
     }
@@ -253,6 +255,20 @@ mod tests {
                 "{roles:?}"
             );
             assert_eq!(v.get("budget_hours").is_some(), money, "{roles:?}");
+        }
+    }
+
+    #[test]
+    fn a_job_with_no_holder_is_sent_a_null_holder_not_an_empty_one() {
+        let mut entry = seeded();
+        entry.holder = None;
+        for roles in [
+            vec!["account-service".to_string()],
+            vec!["planning".to_string()],
+            vec![],
+        ] {
+            let v = job_view(&entry, &roles);
+            assert!(v["holder"].is_null(), "{roles:?}: {}", v["holder"]);
         }
     }
 }
