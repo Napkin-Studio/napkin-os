@@ -359,7 +359,8 @@ class Reconsider:
             if not isinstance(a, dict) or not {c for s in a.get("answer") or [] if isinstance(s, dict)
                                                for c in s.get("cites") or []} & touched:
                 continue
-            asker = Asker(doc, self.base, clan3, handler, self.caps, a.get("question") or "", a.get("lens"), self.settings)
+            asker = Asker(doc, self.base, clan3, handler, self.caps, a.get("question") or "", a.get("lens"), self.settings,
+                          about=a.get("about"))
             asker.aid = aid
             pb, fb = asker.evidence(a.get("lens"))
             try:

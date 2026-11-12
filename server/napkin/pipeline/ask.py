@@ -39,7 +39,8 @@ it rests on. State no number that is not the value of a pin you cite (or written
 When the facts do not answer the question, say what they do show, if anything, and list in `missing` what
 would be needed to answer it; never fill a gap from outside knowledge. `lens` is the research lens the
 question belongs to (keep the one given, when one is given). `topic` is a short heading for the question,
-two to five words."""
+two to five words. When `about` names a pin or finding, the person asked from that item: the question is
+about it ("this", "it", "the figure" mean it), so answer about that item first, citing it."""
 
 
 def _obj(props: dict) -> dict:
@@ -55,7 +56,30 @@ def schema(cite_ids: list[str]) -> dict:
                  "topic": {"type": "string"}})
 
 
-def validate(clan: dict, inp: dict) -> tuple[str, str | None]:
+def check_about(clan: dict, about) -> str | None:
+    """`input.about`: the fact (`f_…`) or finding (`fi_…`) the question was asked from. It must be in the
+    document and still in use: not superseded, excluded or rejected, and a finding none of whose cites is."""
+    if about is None:
+        return None
+    if not isinstance(about, str) or not about.startswith(("f_", "fi_")):
+        raise bad("input.about, when given, is a fact id (f_…) or a finding id (fi_…)")
+    excluded = out_of_use(clan)
+    if about.startswith("fi_"):
+        f = next((x for x in ctx_findings(clan) if x.get("id") == about), None)
+        if f is None:
+            raise bad(f"input.about: no finding {about} in this document")
+        if f.get("status") not in ("proposed", "verified") or set(f.get("cites") or []) & excluded:
+            raise bad(f"input.about: finding {about} is out of use (rejected, or it cites an excluded fact)")
+        return about
+    p = next((x for x in ctx_facts(clan) if x.get("id") == about), None)
+    if p is None:
+        raise bad(f"input.about: no fact {about} in this document")
+    if p.get("status") == "superseded" or about in excluded:
+        raise bad(f"input.about: fact {about} is out of use (excluded, rejected or replaced)")
+    return about
+
+
+def validate(clan: dict, inp: dict) -> tuple[str, str | None, str | None]:
     q = inp.get("question")
     if not isinstance(q, str) or not q.strip():
         raise bad("input.question is required: what the person asked")
@@ -64,14 +88,17 @@ def validate(clan: dict, inp: dict) -> tuple[str, str | None]:
     lens = inp.get("lens")
     if lens is not None and lens not in LENSES:
         raise bad(f"input.lens, when given, is one of {LENSES}")
+    about = check_about(clan, inp.get("about"))
     validate_research(clan, {"lenses": [lens or LENSES[0]]})  # markets and categories, as research needs
-    return q.strip(), lens
+    return q.strip(), lens, about
 
 
 class Asker:
-    def __init__(self, doc, base, clan, handler, caps, question, lens, settings, attachments=()):
+    def __init__(self, doc, base, clan, handler, caps, question, lens, settings, attachments=(), about=None):
         self.doc, self.base, self.clan, self.handler, self.caps = doc, base, clan, handler, caps
         self.question, self.lens, self.settings = question, lens, settings
+        # the fact or finding the question was asked from (checked by validate): first in the evidence
+        self.about = about
         self.data = ctx_data(clan)
         # a search reads the documents attached to the campaign too (the host adds their text)
         self.materials, _ = build_materials({"attachments": list(attachments or [])}, self.data)
@@ -86,12 +113,22 @@ class Asker:
         if lens:
             mine = [p for p in pins if lens_of_key(p.get("key")) == lens]
             pins = mine + [p for p in pins if p not in mine]  # its own first; the rest may answer it too
+        # the item asked about leads: a fact itself, or what a finding cites (never cut by MAX_PINS)
+        about_fi = next((f for f in ctx_findings(self.clan) if f.get("id") == self.about), None) \
+            if str(self.about or "").startswith("fi_") else None
+        first = set(about_fi.get("cites") or []) if about_fi else {self.about}
+        pins = [p for p in pins if p["id"] in first] + [p for p in pins if p["id"] not in first]
         pins = list({p["id"]: p for p in pins}.values())[:MAX_PINS]
         ids = {p["id"] for p in pins}
         fis = [f for f in ctx_findings(self.clan) if f.get("status") in ("proposed", "verified")
                and str(f.get("id", "")).startswith("fi_") and set(f.get("cites") or []) & ids
                and not set(f.get("cites") or []) & excluded]
+        fis = [f for f in fis if f["id"] == self.about] + [f for f in fis if f["id"] != self.about]
         return {p["id"]: p for p in pins}, {f["id"]: f for f in fis}
+
+    def about_in(self, pin_by, fi_by):
+        """The item asked about, when it is still in the evidence (a review may have taken it out since)."""
+        return self.about if self.about in pin_by or self.about in fi_by else None
 
     def names(self):
         brand = field_value(self.data, "brand") or {}
@@ -101,7 +138,7 @@ class Asker:
     # -- one answer ----------------------------------------------------------------
     def answer(self, lens, pin_by, fi_by):
         """-> (sentences, missing, lens, topic, dropped)."""
-        payload = {"question": self.question, "lens": lens,
+        payload = {"question": self.question, "about": self.about_in(pin_by, fi_by), "lens": lens,
                    "lens_title": LENS_TITLES.get(lens) if lens else None,
                    "brand": (field_value(self.data, "brand") or {}).get("name"),
                    "markets": field_value(self.data, "markets") or [],
@@ -209,7 +246,8 @@ class Asker:
             status = "answered" if j["answers"] >= ANSWERS else ("partial" if sentences else "not_found")
         else:
             status = "answered" if sentences and not missing else ("partial" if sentences else "not_found")
-        rec = {"id": self.aid, "question": self.question, "lens": lens, "in_section": self.lens is not None,
+        rec = {"id": self.aid, "question": self.question, "about": self.about, "lens": lens,
+               "in_section": self.lens is not None,
                "topic": topic, "answer": sentences, "missing": missing, "status": status, "searched": search,
                "new_facts": new_ids, "searches": searches,
                "web_sources": len({u for x in searches for u in x["urls"]}), "asked_at": iso(), "answered_at": iso()}
