@@ -2,36 +2,36 @@
   "origin": "https://napkin.test/s/no-token",
   "cases": {
     "brief/web/authored/plain/light": {
-      "sha256": "3e4f9331cc644284a1adafa56da7a374224359fb7f06bde91bcf96439f0a2c22",
-      "len": 860041
+      "sha256": "bb75cee3b1e661087a43eadfc56b6acaba67649568f56654f1eee492f0a311b5",
+      "len": 861610
     },
     "brief/web/authored/plain/dark": {
-      "sha256": "99ad0aa60ad8630ff56016865c376d9d117124909460b933dee1a3baf624628b",
-      "len": 860040
+      "sha256": "27f8250b64924237e063c2e0b0bd844d8695aa09ec772a8ad241f666fd979dd4",
+      "len": 861609
     },
     "brief/web/authored/capture/light": {
-      "sha256": "36f3269e1f8f6b5ed0ec2c475143bcdecd59f18fc1dd416a79709a2467c67991",
-      "len": 861759
+      "sha256": "22965305a181e7a5f7f5266a582b7bea7ac921de0dfe6467aa5ad2cdabe153b3",
+      "len": 863328
     },
     "brief/web/authored/capture/dark": {
-      "sha256": "f0253b7054b7a36c1b9c8bc438e0652c901747798cf363e2e7098d5d5608dfc7",
-      "len": 861758
+      "sha256": "82e8658532cb34bf26c342b7eb85accace3c9d4e189f0f7358b10da49debf61d",
+      "len": 863327
     },
     "brief/web/legacy/plain/light": {
-      "sha256": "6584be6541af5577ebc283a9cb9b8314067561ae667d99296431bbd64f613198",
-      "len": 854268
+      "sha256": "7776f27f91b18e1ee1c6d67f83a12477b321626494f73fe2c3e2065a8ee42073",
+      "len": 855837
     },
     "brief/web/legacy/plain/dark": {
-      "sha256": "74f4ece26fa701baf4003192b9d5a47ec17ee9b12ab31984c60876d2d070ed80",
-      "len": 854267
+      "sha256": "5da0b2b29e59f79869f4ae81aca3a965ec756641c78272e5bad5023b8287cce0",
+      "len": 855836
     },
     "brief/web/legacy/capture/light": {
-      "sha256": "a74f44093c8483fbf7cdb03fc50d881502970e7bf40dd1aeff086b9527b9b8fe",
-      "len": 855986
+      "sha256": "919daa05f3590dc724ac50ecac5f3995910effb1e1137f1ae97ca65bc6c17a99",
+      "len": 857555
     },
     "brief/web/legacy/capture/dark": {
-      "sha256": "c1e61b25c234de674d7ddfef916c841e46afb66d28cf0386093d7f2469906ecb",
-      "len": 855985
+      "sha256": "ef953f18f9503e1a220c14a229deafbb65a9e10b600c8b16b1a936103303764b",
+      "len": 857554
     },
     "brief/desktop/authored/plain/light": {
       "sha256": "b77834f490df89ab7d0dae29c10ecb45d6e66ef6a7eba3f3a33540568dcf5e41",
@@ -98,36 +98,36 @@
       "len": 858131
     },
     "edge/web/authored/plain/light": {
-      "sha256": "69a14744ba76f6d5b4c8813fd1d002eae8c75aee3355f547e178c1e36bf0c9b1",
-      "len": 11907
+      "sha256": "fbeaba0473348d60af99d3c150f1415ed5c58df916f4129124513394c3bdac9f",
+      "len": 13476
     },
     "edge/web/authored/plain/dark": {
-      "sha256": "69a14744ba76f6d5b4c8813fd1d002eae8c75aee3355f547e178c1e36bf0c9b1",
-      "len": 11907
+      "sha256": "fbeaba0473348d60af99d3c150f1415ed5c58df916f4129124513394c3bdac9f",
+      "len": 13476
     },
     "edge/web/authored/capture/light": {
-      "sha256": "eca67aa46cab3e210c0c3b898bfd31c9681c81d9f0a0b4101dd874bad7d2d5b8",
-      "len": 13625
+      "sha256": "b1561c6f89a1f1283c88fe384647849814128ed1d7552b6cc1a7a0d52f908fe0",
+      "len": 15194
     },
     "edge/web/authored/capture/dark": {
-      "sha256": "eca67aa46cab3e210c0c3b898bfd31c9681c81d9f0a0b4101dd874bad7d2d5b8",
-      "len": 13625
+      "sha256": "b1561c6f89a1f1283c88fe384647849814128ed1d7552b6cc1a7a0d52f908fe0",
+      "len": 15194
     },
     "edge/web/legacy/plain/light": {
-      "sha256": "0ce8c48a4b5d8a083d5659e000787699b722e3d46745259a521b97b115f172fd",
-      "len": 6134
+      "sha256": "4b3957dc96bcb7128c2a7c46a987ede549198a827fc717b5149ba2ed2fa64abc",
+      "len": 7703
     },
     "edge/web/legacy/plain/dark": {
-      "sha256": "0ce8c48a4b5d8a083d5659e000787699b722e3d46745259a521b97b115f172fd",
-      "len": 6134
+      "sha256": "4b3957dc96bcb7128c2a7c46a987ede549198a827fc717b5149ba2ed2fa64abc",
+      "len": 7703
     },
     "edge/web/legacy/capture/light": {
-      "sha256": "da82da6f22e55c777706a2650080c8ee42d61c56f7eca6c95525440586b771e2",
-      "len": 7852
+      "sha256": "f85de12fd52791c46cee0d69a10b599a3f8a4aada5536f4a71eb739566682729",
+      "len": 9421
     },
     "edge/web/legacy/capture/dark": {
-      "sha256": "da82da6f22e55c777706a2650080c8ee42d61c56f7eca6c95525440586b771e2",
-      "len": 7852
+      "sha256": "f85de12fd52791c46cee0d69a10b599a3f8a4aada5536f4a71eb739566682729",
+      "len": 9421
     },
     "edge/desktop/authored/plain/light": {
       "sha256": "aac810cf9a5cd37d86f4f6d4c37b5d5c735774a8a4819e6b427a584db0679955",
@@ -194,36 +194,36 @@
       "len": 10044
     },
     "fragment/web/authored/plain/light": {
-      "sha256": "8a1a6a1a6d60baebbe01222a31ef3f4d6437cb240d7cca2352d552f1274f3be0",
-      "len": 13029
+      "sha256": "9e1174c9c396205fc98691b98d49f93697717ddc821d89e58b4a856059049e53",
+      "len": 14598
     },
     "fragment/web/authored/plain/dark": {
-      "sha256": "f9ef9f100b8aa65567fe4d68d0fb0d92139fe4207506c5f3c8cef59c420e4002",
-      "len": 13028
+      "sha256": "5818f61ac15d8a01280521ceaff047d7c358140366fef54ac91a8ce7a766ee95",
+      "len": 14597
     },
     "fragment/web/authored/capture/light": {
-      "sha256": "96e690cf6f86d4bebf6c831144e40500e7fa26210fb8aa0f4896cabe3cb6b067",
-      "len": 14747
+      "sha256": "16c6c34dd1d57fc6bdae70dafb90e228aa7abfc8e8f123d71c00db36872c82d3",
+      "len": 16316
     },
     "fragment/web/authored/capture/dark": {
-      "sha256": "be2cb0002c0b3dae407e0634ee57ba950cfd7cdc580fd9a78c579286acdc6bb1",
-      "len": 14746
+      "sha256": "67e551d81d237b82533425ede3b70f1ba689e5c8c03ef763447787eb17248246",
+      "len": 16315
     },
     "fragment/web/legacy/plain/light": {
-      "sha256": "cb9e89002aa922e928e230dc7f75871e1118b1617a20c3ce9bf5b086168ca67c",
-      "len": 7256
+      "sha256": "f3f7216a2222920332146192fa45876918c1e1e3917f2a46f76abbe2efc36597",
+      "len": 8825
     },
     "fragment/web/legacy/plain/dark": {
-      "sha256": "1975bf9badfbcb89634744ee233f65c98edfad102c54ea6277e196b95285fd17",
-      "len": 7255
+      "sha256": "42381352b6cdf282fa17050b7eafca7fecf89f4fdd670a1decc83f3600dfb2ab",
+      "len": 8824
     },
     "fragment/web/legacy/capture/light": {
-      "sha256": "743c8a17389d115aff134556032a0ab9c19a03ac2448bfef90b1c2179b1e84df",
-      "len": 8974
+      "sha256": "b0793ef3030fb27ba514bd9d2f53f5e529ec0567117a2d82ff09d85ac17db403",
+      "len": 10543
     },
     "fragment/web/legacy/capture/dark": {
-      "sha256": "a56b9a492bc8b493f623f8e39cf31720b5b3753badc779bddc1d308ffd2c1b9b",
-      "len": 8973
+      "sha256": "14c7ad738a8ae0c34a4a8fac4637050dd77a9847c4408aa0f935219b3b662770",
+      "len": 10542
     },
     "fragment/desktop/authored/plain/light": {
       "sha256": "3b8f21746e9737c1e0407a19e1ebd40f452f231e8d8728fc184d6532e1f86db3",
@@ -290,36 +290,36 @@
       "len": 11142
     },
     "nobody/web/authored/plain/light": {
-      "sha256": "cf072d0bd0eb0fd322409e08a78949567f4aa8401bd8319dc4f560605a56cfe1",
-      "len": 11624
+      "sha256": "3552e174b32921c66ae2847324fd7e6c8407e10095f366d7ae272862be608f54",
+      "len": 13193
     },
     "nobody/web/authored/plain/dark": {
-      "sha256": "312648145515f45d44032afadf9653c21bef9388501636ca229366ac04315a23",
-      "len": 11623
+      "sha256": "f1e4472168b330ce4b35071e0c8303959faed7bf25987892425b618a800b040d",
+      "len": 13192
     },
     "nobody/web/authored/capture/light": {
-      "sha256": "57098cdf807940f9d4927c0e924b8c5b7d6948cdcb497e52753d7ca7a7dcd39c",
-      "len": 13342
+      "sha256": "9b8be978f56eeace293ef7d21d77894a7683e8ae6f411241627fdf931259a4bd",
+      "len": 14911
     },
     "nobody/web/authored/capture/dark": {
-      "sha256": "43e399bff07dadc65538b52acd74e1bcf30e3cfbb848608247e57fc75538009f",
-      "len": 13341
+      "sha256": "5c0bd8b093d6046f3a5f278cbbaeefc3ef2499d6b93af33a8bae663a0c8d0299",
+      "len": 14910
     },
     "nobody/web/legacy/plain/light": {
-      "sha256": "b0413202fcd6ba0b6f2f5720cbbcb6f2f8588bce29395fc541fac2326af115f3",
-      "len": 5851
+      "sha256": "d894e7dbb862d5946c83dcfe5c518697b42711925d8167a3b1f640aefe5512b6",
+      "len": 7420
     },
     "nobody/web/legacy/plain/dark": {
-      "sha256": "b175f70e575e373a4e4e2a9d922ef67eecc07f558433f2d37775c68c8438009f",
-      "len": 5850
+      "sha256": "3db0f982816e19568a439548e38bd0e506244e310996ba0bdb4180b43491fc6e",
+      "len": 7419
     },
     "nobody/web/legacy/capture/light": {
-      "sha256": "a74cbeac4f8150ceb0b77e914f7ea13707cf9af0609df459cdf8b8ab7c459db6",
-      "len": 7569
+      "sha256": "f6021a4f2b8f05b896599669e4b8bb08d43cf06d8adb7c11893df2f46d1b544f",
+      "len": 9138
     },
     "nobody/web/legacy/capture/dark": {
-      "sha256": "f8b4000f03df068fa9e61b08b53e60ecfa45ce03041cd82d46fc3e230cb5f77e",
-      "len": 7568
+      "sha256": "2250c0da4a0df89b4f48ac8f5768506087869c36f0395185b6aaeda13e97a93e",
+      "len": 9137
     },
     "nobody/desktop/authored/plain/light": {
       "sha256": "f8719d3dd2915074410d69f9afd1afb8d9b81d9a2d94762b80ceb10a9e3b857b",
@@ -386,36 +386,36 @@
       "len": 9774
     },
     "research/web/authored/plain/light": {
-      "sha256": "8b219011d0526a1a7c1670bf6d8104f70286daa9d355b6d5f2c770a494fa0434",
-      "len": 1016009
+      "sha256": "8c2f66079167076e19ba2a4275a8ebfa5ba0e74f783acb4969fe43bea482ba53",
+      "len": 1017578
     },
     "research/web/authored/plain/dark": {
-      "sha256": "f943edbd29dd21ca0f1505f815ede06ad1bb2e1efb68dcec7ac924df9ece043a",
-      "len": 1016008
+      "sha256": "d7e9c56ab09747490caa387cdc0ab3c33b6865a1a07efb7793774abc39467bc7",
+      "len": 1017577
     },
     "research/web/authored/capture/light": {
-      "sha256": "736ebe06acfbfa0ad349451a59c82f10c3e5cf92a0e9465c32580a6a4cdcb094",
-      "len": 1017727
+      "sha256": "f5f9c5e9a6aaf61e64b28163f1fbad93e56916db00e19bc14b299219ef888997",
+      "len": 1019296
     },
     "research/web/authored/capture/dark": {
-      "sha256": "41c4960bc411315eaa4b4bae9a01ec99f2bada2bd19e03d4d7803141b942e649",
-      "len": 1017726
+      "sha256": "2ccac62ca10785fd40bfdbf146f7e5d8f68b03bf96b6285b9330fe8d131fe8ef",
+      "len": 1019295
     },
     "research/web/legacy/plain/light": {
-      "sha256": "c68bfcf27b7cb795608b53b709b597366d5910560f27b43833d3bed80c6a2090",
-      "len": 1010236
+      "sha256": "558a26358be89d8669f3fcd2eb3c7650aeff8843acd7180ec3660448f70f599c",
+      "len": 1011805
     },
     "research/web/legacy/plain/dark": {
-      "sha256": "09b8776e018cfb2f333bea1fd404973d2fa179d4f9b4556bd638f2a58afc5f62",
-      "len": 1010235
+      "sha256": "c747e161dbb1c937303c1eda9c922c5a4b8c1807390c24b00a3e48ed7e29fa03",
+      "len": 1011804
     },
     "research/web/legacy/capture/light": {
-      "sha256": "2f3468ca6efa1615f5dfbc72b3fa6f4ea0c79f7a7da1949073a2768b79f39900",
-      "len": 1011954
+      "sha256": "0e7a3bea65b86a23f161ac7d4e531cd975c8cb616847e51b2f11a1d687bdab38",
+      "len": 1013523
     },
     "research/web/legacy/capture/dark": {
-      "sha256": "3e727d397d54a68f476f7d07bba88673aa1c2cecc54e6d71328f13e557c068e2",
-      "len": 1011953
+      "sha256": "cb1c8bde721ac252feea8b1175c62deceadcd7127672a14fac9429863cf5e462",
+      "len": 1013522
     },
     "research/desktop/authored/plain/light": {
       "sha256": "a7f547e7da22a1b51f871bfc80a476d39febaae17e1881f3034d7d78cf91626d",

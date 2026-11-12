@@ -359,6 +359,73 @@ async fn the_sandbox_token_is_the_only_authority_it_needs() {
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
 }
 
+/// A deploy restarts the server, and sandbox tokens live in its memory: every
+/// open page's token is dead. The refusal says so in a way the page can tell
+/// from every other one (`code`), so the shell can open the document again
+/// for a fresh token and retry (features/stale-token-and-menus.clan).
+#[tokio::test]
+async fn a_token_from_before_a_restart_is_refused_as_stale_and_a_reopen_mints_one_that_works() {
+    let s = server(40);
+    let b = browser(&s).await;
+    let (doc, token) = upload(&s, &b, "Survives").await;
+
+    // The same data, a new process: what a deploy does.
+    let ctx = Arc::new(AppCtx::new(
+        s._dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
+    let after = Server {
+        _dir: tempfile::tempdir().unwrap(),
+        app: napkin_web::router(ctx.clone(), None, false),
+        ctx,
+    };
+
+    let body = serde_json::json!({ "patch": { "note": "kept" } }).to_string();
+    for reply in [
+        post(&after, &format!("/s/{token}/patch-data"), "", body.clone()).await,
+        get(&after, &format!("/s/{token}/document"), None).await,
+        get(&after, &format!("/s/{token}/chain"), None).await,
+    ] {
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        let v = reply.json();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["code"], napkin_web::sandbox::STALE_TOKEN);
+        assert_eq!(v["error"], "invalid or expired sandbox token");
+    }
+
+    // Any other refusal carries no such code: only a dead token makes the
+    // page ask for a new one.
+    let other = post(&s, &format!("/s/{token}/attach"), "", "{}").await;
+    assert_eq!(other.status, StatusCode::BAD_REQUEST);
+    assert!(other.json().get("code").is_none(), "{:?}", other.json());
+
+    // Opening the document again, as the shell does, mints a token the new
+    // process holds, and the write goes through on it.
+    let reopened = get(
+        &after,
+        &format!("/api/t/{}/d/{doc}", b.tenant),
+        Some(&b.cookie),
+    )
+    .await;
+    assert_eq!(
+        reopened.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&reopened.body)
+    );
+    let fresh = reopened.json()["token"].as_str().unwrap().to_string();
+    assert_ne!(fresh, token);
+    let wrote = post(&after, &format!("/s/{fresh}/patch-data"), "", body).await;
+    assert_eq!(
+        wrote.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&wrote.body)
+    );
+}
+
 /// The same document answers the same way on the server and in the browser.
 ///
 /// napkin-wasm is `napkin_host::handle` over a session acting as the local

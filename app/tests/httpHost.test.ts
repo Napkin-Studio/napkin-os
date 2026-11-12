@@ -18,7 +18,7 @@
 import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
 
-import { httpHost } from '../src/host/http.ts'
+import { httpHost, renewToken } from '../src/host/http.ts'
 
 const TENANT = '00000000-0000-4000-8000-000000000000'
 
@@ -133,4 +133,80 @@ test('opening a document asks for its page by address and posts nothing', async 
   assert.equal(src, 'https://studio.test/s/doc-f-token/document?model=legacy&capture=1&theme=dark&v=v1')
   assert.ok(!seen.some(u => /human-html|preview-html/.test(u)), seen.join(' '))
   await assert.rejects(httpHost.compose({ model: 'legacy', capture: false, theme: 'light', version: 'v1' }))
+})
+
+// ── A token from before a deploy (features/stale-token-and-menus.clan) ────────
+// napkin-web keeps sandbox tokens in memory, so a deploy ends every open
+// page's token. A call refused as stale opens the document again for a new
+// token and is sent once more on it; a second refusal is the caller's.
+
+const STALE = () => new Response(JSON.stringify({ ok: false, error: 'invalid or expired sandbox token', code: 'sandbox_token' }), { status: 403 })
+
+/** The web API after a restart: `dead` tokens are refused; each open of a document mints the next token. */
+function afterDeploy(dead: Set<string>, routeReply: (token: string) => Response) {
+  const seen: string[] = []
+  let minted = 0
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input)
+    seen.push(url)
+    if (url === '/api/session') return new Response(JSON.stringify({ tenant: TENANT, sandbox_origin: null, quota: { used: 0, cap: 40 } }))
+    const doc = /\/d\/([^/]+)$/.exec(url)
+    if (doc) {
+      const token = `${doc[1]}-t${minted++}`
+      return new Response(JSON.stringify({ path: doc[1], token, sandbox_origin: null, manifest: { title: doc[1] }, validation: 'OK', has_human_view: true, render_model: 'authored', is_template: false, trusted: false }))
+    }
+    const tok = /\/s\/([^/]+)\//.exec(url)
+    if (tok) return dead.has(tok[1]) ? STALE() : routeReply(tok[1])
+    throw new Error(`unexpected ${url}`)
+  }) as typeof fetch
+  return seen
+}
+
+test('a write refused for a stale token opens the document again and is sent once more, on the new token', async () => {
+  const dead = new Set<string>()
+  const seen = afterDeploy(dead, () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
+  await httpHost.openClan('doc-s')
+  assert.equal(httpHost.clanOrigin(), 'https://studio.test/s/doc-s-t0')
+  dead.add('doc-s-t0') // the deploy
+  await httpHost.verify('f_1', 'checked')
+  const verifies = seen.filter(u => u.endsWith('/verify'))
+  assert.deepEqual(verifies, ['https://studio.test/s/doc-s-t0/verify', 'https://studio.test/s/doc-s-t1/verify'])
+  assert.equal(seen.filter(u => u.endsWith('/d/doc-s')).length, 2, 'one open, one re-open')
+  // Everything after it, the frame's page included, is on the new token.
+  assert.equal(httpHost.clanOrigin(), 'https://studio.test/s/doc-s-t1')
+  await httpHost.getDecisions().catch(() => null)
+  assert.equal(seen.filter(u => u.includes('/s/doc-s-t0/')).length, 1, 'the dead token is never used again')
+})
+
+test('a second stale refusal is thrown, never retried again: no loop', async () => {
+  const dead = new Set<string>()
+  // every token is dead: the server refuses whatever the shell gets
+  const seen = afterDeploy(dead, () => STALE())
+  await httpHost.openClan('doc-l')
+  dead.add('doc-l-t0')
+  await assert.rejects(httpHost.verify('f_1', 'checked'), /invalid or expired sandbox token/)
+  assert.equal(seen.filter(u => u.endsWith('/verify')).length, 2, 'the call and one retry')
+  assert.equal(seen.filter(u => u.endsWith('/d/doc-l')).length, 2, 'one re-open')
+})
+
+test('any other refusal is the caller\'s at once: nothing is re-opened', async () => {
+  const seen = afterDeploy(new Set(), () => new Response(JSON.stringify({ ok: false, error: 'locked' }), { status: 403 }))
+  await httpHost.openClan('doc-o')
+  await assert.rejects(httpHost.verify('f_1', 'x'), /locked/)
+  assert.equal(seen.filter(u => u.endsWith('/verify')).length, 1)
+  assert.equal(seen.filter(u => u.endsWith('/d/doc-o')).length, 1)
+})
+
+test('the frame asks for a token the shell already renewed: the answer is the new one, with no second open', async () => {
+  const dead = new Set<string>()
+  const seen = afterDeploy(dead, () => new Response('{}', { status: 200 }))
+  await httpHost.openClan('doc-r')
+  const held = httpHost.clanOrigin()
+  // two refused calls at once share one re-open
+  const [a, b] = await Promise.all([renewToken(held), renewToken(held)])
+  assert.equal(a, 'https://studio.test/s/doc-r-t1')
+  assert.equal(b, a)
+  // the frame, still on the old one, is told the new one without asking the server
+  assert.equal(await renewToken(held), 'https://studio.test/s/doc-r-t1')
+  assert.equal(seen.filter(u => u.endsWith('/d/doc-r')).length, 2)
 })

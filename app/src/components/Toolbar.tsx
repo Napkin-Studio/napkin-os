@@ -21,7 +21,7 @@
 
 import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
-import { accountItems, continueItems, docMenuItems, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
+import { accountItems, continueItems, docMenuItems, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type MenuItem } from './barMenus'
 import { DeepOMark } from '../brand/DeepOMark'
 import type { MarkTarget } from './medallionMotion'
 import { modeOf } from '../shell/appBar'
@@ -483,7 +483,7 @@ export default function Toolbar({
             {!mode && <Lineage doc={doc} />}
             {!mode && <span className="tba-acts">
               <button type="button" className="tba-btn tba-cont" data-tba="b-cont" aria-haspopup="menu" aria-expanded={pop.open?.key === 'cont'}
-                onClick={e => pop.toggle('cont', e.currentTarget)}>Continue in ▾</button>
+                onClick={e => { const el = e.currentTarget; pressContinue(doc, pop.open?.key === 'cont', () => pop.toggle('cont', el)) }}>Continue in ▾</button>
               <button type="button" className="tba-btn tba-share" data-p36-share aria-haspopup="menu" aria-expanded={pop.open?.key === 'share'}
                 onClick={e => pop.toggle('share', e.currentTarget)}>Share</button>
             </span>}

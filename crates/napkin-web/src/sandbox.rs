@@ -61,9 +61,7 @@ async fn dispatch(
     }
 
     let Some(grant) = ctx.tokens.resolve(&token) else {
-        // Deliberately indistinguishable from an expired one: a caller probing
-        // tokens learns nothing about which documents exist.
-        return refuse(StatusCode::FORBIDDEN, "invalid or expired sandbox token");
+        return stale_token();
     };
 
     let path = format!("/{}", rest.trim_start_matches('/'));
@@ -172,7 +170,7 @@ async fn document(
     headers: HeaderMap,
 ) -> Response {
     let Some(grant) = ctx.tokens.resolve(&token) else {
-        return refuse(StatusCode::FORBIDDEN, "invalid or expired sandbox token");
+        return stale_token();
     };
     let session = match ctx.workspace(&grant.tenant).session(&grant.doc) {
         Ok(s) => s,
@@ -281,6 +279,34 @@ fn preflight() -> Response {
             (header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type"),
             (header::ACCESS_CONTROL_MAX_AGE, "600"),
         ],
+    )
+        .into_response()
+}
+
+/// What `code` says on a refusal of the token itself, and on nothing else.
+pub const STALE_TOKEN: &str = "sandbox_token";
+
+/// A token this server does not hold: never minted, past its TTL, or minted
+/// by a process that has since restarted (a deploy) — tokens live in memory.
+///
+/// Deliberately the same answer for each: a caller probing tokens learns
+/// nothing about which documents exist. It carries `code` so the page that
+/// held the token can tell it from every other refusal, ask the shell to open
+/// the document again for a fresh one, and retry the call once
+/// (`app/src/shell/bridge/webShim.js`, `app/src/host/http.ts`).
+fn stale_token() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        [
+            (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".to_string()),
+            (header::CONTENT_TYPE, "application/json".to_string()),
+        ],
+        serde_json::json!({
+            "ok": false,
+            "error": "invalid or expired sandbox token",
+            "code": STALE_TOKEN,
+        })
+        .to_string(),
     )
         .into_response()
 }
