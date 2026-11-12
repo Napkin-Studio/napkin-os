@@ -2118,9 +2118,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(!briefUpstream()||Object.keys(mats()).length||thread().length||JOBS.length) return;
     var asked=['client_org','audience_stated','problem','objective'].some(function(k){ var e=camp()[k]; return isObj(e)&&e.value!=null&&e.value!==''; });
     var ran=decs().some(function(d){ return /^extract_ask@/.test(String(d.handler||''))||d.action==='extract_ask'||d.action==='extract'; });
-    var key='clan.research.askedFromBrief.'+docId();
-    if(asked||ran||stored(key)) return;
-    store(key, '1');
+    // Once per open (askFromBrief.done); the decision it writes guards later opens. It used to mark
+    // the document in sessionStorage, but the frame is sandboxed without allow-same-origin, so storage threw.
+    if(asked||ran||askFromBrief.done) return;
+    askFromBrief.done=true;
     runTask('extract_ask', {prompt:'', attachments:[]}, null, true);
     toast('Reading the ask from the brief this research started from.');
   }
@@ -2131,8 +2132,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // findings, the answers and the report sections that cite it (reconsider).
   // One job per document at a time: reviews made while one runs wait, and go
   // together in the next.
+  // The queue lives in this page only: it was kept in sessionStorage, but the frame is sandboxed
+  // without allow-same-origin, so storage always threw. A reconsider already running comes back
+  // on open through the shell's clan:jobs (resumeJobs).
   var RECON={queue:[], job:null};
-  try{ RECON.queue=arr(JSON.parse(stored('clan.research.reconsider.'+docId())||'[]')); }catch(e){}
   // What the host's reply to a review says was reviewed, as a reconsider event.
   function reviewEvent(route, body, res){
     var d=res&&res.decision; if(!d||!body) return null;
@@ -2148,7 +2151,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var ev=reviewEvent(route, body, res); if(!ev) return;
     RECON.queue.push(ev); keepRecon(); reconsider();
   }
-  function keepRecon(){ store('clan.research.reconsider.'+docId(), RECON.queue.length?JSON.stringify(RECON.queue):null); walk(); }
+  function keepRecon(){ walk(); }
   // While a reconsider job runs, the Strategy agent's sphere works at the
   // bottom edge of the window, so the person sees the agents at work without
   // the page moving.
@@ -2177,7 +2180,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
         job={role:'research', key:'ask|'+aj.question, doing:'answering about '+fl, title:'Asked: “'+aj.question+'” · '+fl,
           onGo:function(){ openAsked(aj.about); }}; }
       else if(aj){ var sec=aj.lens&&secByLens(aj.lens), about=aj.lens&&LENS[aj.lens]?lensName(aj.lens):aj.ref?selLabel(aj.ref):'';
-        job={role:'research', key:'ask|'+aj.question, doing:askGist(aj.question)+(about?' for '+about:''), title:'Asked: “'+aj.question+'”'+(about?' · '+about:''),
+        job={role:'research', key:'ask|'+(aj.question||aj.jobId), doing:aj.question?askGist(aj.question)+(about?' for '+about:''):'answering a question asked earlier', title:aj.question?'Asked: “'+aj.question+'”'+(about?' · '+about:''):askedQ(aj),
           onGo:function(){ goTo(aj.ref||(sec?'sec:'+sec.id:null), aj.lens); }}; }
       else if(tj){ var R=roles(), k=R&&R.of(tj.task)||'research', ln=tj.input&&tj.input.lens||tj.lens, s2=ln&&secByLens(ln);
         job={role:k, doing:tj.task==='research_lens'?'researching '+(ln&&LENS[ln]?lensName(ln):'a lens')+' again':String(tj.task||'working').replace(/_/g,' '),
@@ -3333,9 +3336,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
     return s;
   }
   function nowIso(){ return new Date().toISOString(); }
-  function store(k, v){ try{ if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); }catch(e){} }
-  function stored(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
-  function jobKey(){ return 'clan.research.job.'+docId(); }
+  // No job ids in sessionStorage: the frame is sandboxed without allow-same-origin, so storage
+  // always threw. The shell says which of the document's jobs are still running (clan:jobs, resumeJobs).
   function hexOf(buf){ return Array.prototype.map.call(new Uint8Array(buf), function(x){ return ('0'+x.toString(16)).slice(-2); }).join(''); }
   // SHA-256, for the material index (sha256 of the bytes; of the UTF-8 text for
   // the prompt). WebCrypto when the frame has it, else a plain implementation.
@@ -4128,9 +4130,9 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function onJobReply(res, resume){
     var j=CHAT.job||(CHAT.job={}), err=hostErr(res);
     // the run was lost with the middleware's memory, on open or while following it: it stopped
-    if(err&&interrupted(res)){ j.state='failed'; j.interrupted=true; j.error=err; store(jobKey(), null); render(); return; }
+    if(err&&interrupted(res)){ j.state='failed'; j.interrupted=true; j.error=err; render(); return; }
     if(err){
-      if(resume){ CHAT.job=null; store(jobKey(), null); }
+      if(resume){ CHAT.job=null; }
       else { j.error=err; if(j.state==='sending') j.state='unsent'; else if(jobActive()) j.state='stalled'; }
       render(); return;
     }
@@ -4147,7 +4149,6 @@ details.pv-fold>summary:hover{background:var(--soft)}
       arr(b.result.messages).forEach(function(m){ if(isObj(m)&&m.id&&m.text&&!CHAT.live[m.id]) CHAT.live[m.id]={role:'agent', text:m.text, stage:m.stage, job_id:j.id}; });
     }
     if(isObj(b.change)){ j.applied=landed(b.change); j.reason=b.change.reason; if(j.applied) loadChain(); }
-    if(j.id) store(jobKey(), /^(done|failed|cancelled)$/.test(j.state||'')?null:j.id);
     render();
     if(j.state==='queued'||j.state==='running') schedulePoll();
   }
@@ -4164,15 +4165,16 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function pollNow(resume){
     var j=CHAT.job; if(!j||!j.id) return;
-    window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ onJobReply(r, resume===true); }, function(e){ if(resume===true){ CHAT.job=null; render(); } else unreachable(e); });
+    // a reply for a run this page no longer follows (the shell's clan:jobs brought a newer one) is dropped
+    window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ if(CHAT.job===j) onJobReply(r, resume===true); }, function(e){ if(CHAT.job!==j) return; if(resume===true){ CHAT.job=null; render(); } else unreachable(e); });
   }
-  // On open: pick up a job this document started (the id kept for this tab, or
-  // the thread's newest job unless its report has landed) with one free poll.
+  // On open: pick up a job this document started (the thread's newest job unless its report has
+  // landed) with one free poll, unless the shell's clan:jobs already brought one back.
   function resumeJob(){
-    if(!(window.clan&&window.clan.apiProxy)) return;
-    var id=stored(jobKey()), T=thread(), last=null, lastStage=null;
+    if(!(window.clan&&window.clan.apiProxy)||CHAT.job) return;
+    var id=null, T=thread(), last=null, lastStage=null;
     T.forEach(function(x){ if(x.m.job_id){ last=x.m.job_id; if(x.m.role==='agent') lastStage=x.m.stage; } });
-    if(!id){ if(!last||(lastStage==='report'&&isObj(D().report))) return; id=last; }
+    if(!last||(lastStage==='report'&&isObj(D().report))) return; id=last;
     CHAT.job={id:id, state:'checking'}; renderChat();
     pollNow(true);
   }
@@ -5936,10 +5938,12 @@ details.pv-fold>summary:hover{background:var(--soft)}
       var h=u.replace(/^https?:\/\/(www\.)?/,'').split('/')[0];
       return '<li><a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">'+esc(h)+'</a> <span>'+esc(u.replace(/^https?:\/\/[^/]+/,'').slice(0,80))+'</span></li>'; }).join('')+'</ul></details>';
   }
+  // A question brought back by the shell's clan:jobs: its reply does not say what was asked.
+  function askedQ(j){ return j.question||'A question asked before this page opened'; }
   function askPendingHtml(j){
     var i=ASK.jobs.indexOf(j);
-    return '<div class="rq-a busy no-print" role="status"><p class="rq-q">'+esc(j.question)+'</p>'
-      +(j.error?'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(j.error)+'</span></p><div class="answers sm"><button type="button" class="ans" data-act="rq-retry" data-i="'+i+'">Ask again</button><button type="button" class="ans" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div>'
+    return '<div class="rq-a busy no-print" role="status"><p class="rq-q">'+esc(askedQ(j))+'</p>'
+      +(j.error?'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(j.error)+'</span></p><div class="answers sm">'+(j.question?'<button type="button" class="ans" data-act="rq-retry" data-i="'+i+'">Ask again</button>':'')+'<button type="button" class="ans" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div>'
         :'<p class="rq-how">Looking into it… the Research agent searches only if what’s here doesn’t answer it.</p>'
           +(j.jobId?'<div class="answers sm"><button type="button" class="ans" data-act="rq-stop" data-i="'+i+'"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Stop')+'</button></div>':''))+'</div>';
   }
@@ -6083,11 +6087,6 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var id=ASK.reveal, el=id&&$('rq-'+slug(id)); if(!el) return;
     ASK.reveal=null; el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
   }
-  function askStoreKey(){ return 'clan.research.asks.'+docId(); }
-  function saveAskJobs(){
-    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens, ref:j.ref||null, about:j.about||null}; });
-    store(askStoreKey(), o.length?JSON.stringify(o):null);
-  }
   // `about`: the fact or finding the question is asked from (the inspector's Ask); it goes with the
   // question as ask_research's input.about, so the answer is about that item.
   function doAsk(key, about){
@@ -6110,17 +6109,17 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function pollAsk(j){
     window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.jobId}}).then(function(res){ onAskReply(j, res); },
-      function(e){ j.error='the middleware could not be reached ('+(e&&e.message||e)+')'; saveAskJobs(); renderAsks(); });
+      function(e){ j.error='the middleware could not be reached ('+(e&&e.message||e)+')'; renderAsks(); });
   }
   function onAskReply(j, res){
     if(ASK.jobs.indexOf(j)===-1) return;
     var err=mwError(res);
-    if(err){ j.error=err.replace(/^Job failed: /,''); saveAskJobs(); renderAsks(); return; }
+    if(err){ j.error=err.replace(/^Job failed: /,''); renderAsks(); return; }
     var b=mwBody(res);
     if(isObj(b.job)){ j.jobId=b.job.id||j.jobId; j.state=b.job.state||j.state; }
-    if(j.state==='cancelled'){ ASK.jobs.splice(ASK.jobs.indexOf(j), 1); saveAskJobs(); renderAsks(); return; }
+    if(j.state==='cancelled'){ ASK.jobs.splice(ASK.jobs.indexOf(j), 1); renderAsks(); return; }
     if(j.state==='queued'||j.state==='running'){
-      saveAskJobs(); renderAsks();
+      renderAsks();
       j.delay=Math.min((j.delay||1200)*1.4, 8000); setTimeout(function(){ pollAsk(j); }, j.delay); return;
     }
     var ch=isObj(b.change)?b.change:null;
@@ -6132,13 +6131,53 @@ details.pv-fold>summary:hover{background:var(--soft)}
       if(j.about&&aid){ if(VIEW.sel!==j.about) toast('Answered: '+selLabel(j.about), {label:'Open it', run:function(){ openAsked(j.about); }}); }
       else if(j.from==='pv'&&aid){ ASK.reveal=aid; toast('Answered '+askWhere(j.lens)+'.'); }
     }
-    saveAskJobs(); loadChain(); render();
+    loadChain(); render();
   }
-  function resumeAsks(){
-    if(!(window.clan&&window.clan.apiProxy)) return;
-    var o=[]; try{ o=JSON.parse(stored(askStoreKey())||'[]'); }catch(e){}
-    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, ref:x.ref||null, about:x.about||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
+  // On open, and while the research is open: the runs still going on it. The shell says which of
+  // the document's jobs the host has not seen finish (clan:jobs, ids only), on load and whenever its
+  // listing changes. Each id this page is not already following gets one free job_status poll, whose
+  // reply names the job's task: a run (start_campaign) goes back to the run screen, a question
+  // (ask_research) back under the report or its fact, a reconsider or extract_ask back to the jobs,
+  // and from then on this page polls it, so it lands without leaving (the shell's settler skips the
+  // open document). Other tasks are left alone. The page used to keep run and ask ids in
+  // sessionStorage, but the frame is sandboxed without allow-same-origin, so storage always threw.
+  var SEEN_JOBS={}, SHELL_JOBS=[];
+  var LIVE_JOB={queued:1, running:1, needs_input:1};
+  function ownJob(id){
+    if(CHAT.job&&CHAT.job.id===id) return true;
+    return ASK.jobs.some(function(j){ return j.jobId===id; })||JOBS.some(function(j){ return j.jobId===id; });
   }
+  function resumeJobs(ids){
+    if(ids) SHELL_JOBS=arr(ids);
+    if(!(window.clan&&window.clan.apiProxy)) return;   // the bridge is not in yet: the load hook asks again
+    SHELL_JOBS.forEach(function(id){
+      if(typeof id!=='string'||!id||SEEN_JOBS[id]||ownJob(id)) return;
+      SEEN_JOBS[id]=1;
+      window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:id}}).then(function(r){ resumeShellJob(id, r); }, function(){ delete SEEN_JOBS[id]; });
+    });
+  }
+  function resumeShellJob(id, r){
+    if(mwError(r)||ownJob(id)) return;
+    var b=mwBody(r), st=b.job&&b.job.state;
+    if(!LIVE_JOB[st]){ loadChain(); render(); return; }   // it ended: the host applied what the reply carried
+    if(b.task==='start_campaign'){
+      if(jobActive()&&CHAT.job.state!=='checking') return;   // one run per document; this page follows it
+      CHAT.job={id:id, state:'checking'}; onJobReply(r);
+    }
+    else if(b.task==='ask_research'){
+      // The reply does not carry the question, so it shows as one asked before this page opened.
+      var j={jobId:id, question:'', lens:null, ref:null, about:null, state:st}; ASK.jobs.push(j); onAskReply(j, r);
+    }
+    else if(b.task==='reconsider'||b.task==='extract_ask'){
+      var t={task:b.task, input:{}, state:st};
+      if(b.task==='reconsider'){ if(RECON.job) return; RECON.job=t; t.then=function(){ RECON.job=null; keepRecon(); reconsider(); }; }
+      jobFrom(t, b); JOBS.unshift(t); renderJobs(); keepRecon(); poll(t, 1200);
+    }
+  }
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:jobs') return;
+    resumeJobs(m.jobs);
+  });
   function onAskAct(act, b){
     var k=b.getAttribute('data-k')||'', j=ASK.jobs[+b.getAttribute('data-i')];
     switch(act){
@@ -6150,14 +6189,14 @@ details.pv-fold>summary:hover{background:var(--soft)}
         lu.lens=b.getAttribute('data-lens')||''; renderAsks();
         var lf=$('rqin-'+slug(k)); if(lf){ try{ lf.focus({preventScroll:true}); }catch(e){} } break;
       case 'rq-retry': if(j){ sendAsk(j); renderAsks(); } break;
-      case 'rq-drop': if(j){ ASK.jobs.splice(ASK.jobs.indexOf(j), 1); saveAskJobs(); renderAsks(); } break;
+      case 'rq-drop': if(j){ ASK.jobs.splice(ASK.jobs.indexOf(j), 1); renderAsks(); } break;
       case 'rq-stop':
         if(!j||!j.jobId||j.stopping) break;
         j.stopping=true; renderAsks();
         window.clan.apiProxy('middleware', {task:'cancel_job', input:{job_id:j.jobId}}).then(function(res){
           var err=mwError(res); j.stopping=false;
           if(err){ toast('Not stopped: '+err); renderAsks(); return; }
-          ASK.jobs.splice(ASK.jobs.indexOf(j), 1); saveAskJobs(); renderAsks(); toast('Stopped. Nothing from it was saved.');
+          ASK.jobs.splice(ASK.jobs.indexOf(j), 1); renderAsks(); toast('Stopped. Nothing from it was saved.');
         }, function(e){ j.stopping=false; toast('Not stopped: the middleware could not be reached ('+(e&&e.message||e)+').'); renderAsks(); });
         break;
     }
@@ -7235,8 +7274,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
   loadChain();
   // The host injects the bridge after this script, so window.clan exists only
   // once the document has parsed.
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ readShellWho(); resumeJob(); resumeAsks(); render(); askFromBrief(); });
-  else setTimeout(function(){ readShellWho(); resumeJob(); resumeAsks(); render(); askFromBrief(); }, 0);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ readShellWho(); resumeJobs(); resumeJob(); render(); askFromBrief(); });
+  else setTimeout(function(){ readShellWho(); resumeJobs(); resumeJob(); render(); askFromBrief(); }, 0);
 })();
 </script>
 </body>
