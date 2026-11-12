@@ -287,16 +287,20 @@ class Asker:
     # -- the record ------------------------------------------------------------------------
     def check_decision(self, did, sentences, missing, j, why, search, lens, dropped):
         cites = list(dict.fromkeys(c for s in sentences for c in s["cites"]))
+        # With no answer yet there is nothing to cite, and a point naming a year or a figure must cite
+        # something (UAT round 6: "states a figure and cites nothing" failed the whole ask): it rests on
+        # the ask itself, where the answer and its missing list are written, as answer_decision does.
+        ref = cites or [f"{self.doc}#asks[{self.aid}]"]
         where = LENS_TITLES.get(lens, lens)
         if j is not None:
             scored = f"jev: answers the question {j['answers']:.2f}, rests on what it cites {j['grounded']:.2f}"
-            because = [rsn.point(scored, cites)]
+            because = [rsn.point(scored, ref)]
             basis = f"jev judged whether the answer from the facts already here answers the question ({scored})"
         else:
-            because = [rsn.point(f"Not checked by jev: {why}", cites)]
+            because = [rsn.point(f"Not checked by jev: {why}", ref)]
             basis = "without jev, the answer's own list of what is missing decides"
         if missing:
-            because.append(rsn.point(f"What the facts here do not show: {'; '.join(missing)}", cites))
+            because.append(rsn.point(f"What the facts here do not show: {'; '.join(missing)}", ref))
         rejected = [rsn.rej("answer from the facts already here", "they do not answer it")] if search else \
             [rsn.rej("search the web", "the facts already here answer it; a search would spend for nothing")]
         r = rsn.make(f"{'Search' if search else 'No search'} for “{self.question[:100]}” ({where}).", because,
