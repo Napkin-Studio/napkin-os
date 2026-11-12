@@ -5014,7 +5014,7 @@
     document.querySelectorAll('#fields .row.sel').forEach(function(r){ r.classList.remove('sel'); });
     var r=SEL&&rowOf(SEL); if(r) r.classList.add('sel');
     renderSelPart();
-    if(SEL) boothPick(); else boothApply(false);   // the Booth: back on the part, at the part's width
+    if(SEL) boothPick(); boothApply(false);   // the Booth: back on the part, and at its width (420 whole, 440 a part)
   }
   // A part's place on the sheet, and the handles that move and size it.
   function placeRow(row, f, p){
@@ -5236,10 +5236,13 @@
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
+  // An agent's question brings it in on the whole brief, as the mock does.
+  function boothWhole(){ if(SEL) select(null); }
   function boothSet(ev){
     var was=BOOTH.open, had=BOOTH.ask, n=boothStep(BOOTH, ev, window.innerWidth), p=$('stab'), e=$('boothEdge');
     var focusIn=!!(p&&p.contains(document.activeElement)), fromEdge=!!(e&&document.activeElement===e);
     BOOTH.open=n.open; BOOTH.ask=n.ask;
+    if(ev.t==='arrive'&&BOOTH.open&&!was) boothWhole();
     if(n.later){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ boothSet({t:'arrive'}); }, n.later); }
     if(BOOTH.open||!BOOTH.ask) clearTimeout(BOOTH.t);
     boothApply(ev.t==='shell');

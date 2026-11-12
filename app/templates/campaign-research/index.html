@@ -1836,7 +1836,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
    edge and comes back. It never floats over the report: its column closes and the report recentres alone
    (at most 980 wide); opening, the column opens and the report moves left. Below 1100px nothing hides. ── */
 :root{--booth-dur:460ms;--booth-ease:cubic-bezier(.2,.7,.2,1)}
-.insp-body > .booth-hd{display:flex;align-items:center;gap:8px;margin:0 -18px;padding:9px 10px 9px 18px;border-bottom:1px solid var(--line)}
+.insp-body > .booth-hd{max-width:none;display:flex;align-items:center;gap:8px;margin:0 -18px;padding:9px 10px 9px 18px;border-bottom:1px solid var(--line)}
 .booth-hd .booth-nm{font:500 10.5px var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .booth-hd .booth-sp{flex:1}
 .insp .booth-hd .booth-hide{all:unset;box-sizing:border-box;cursor:pointer;height:30px;padding:0 10px 0 12px;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:6px;color:var(--ink-soft);flex:none;font:500 12px var(--font-ui);background:var(--paper)}
@@ -5432,10 +5432,13 @@ body.fresh .booth-edge{display:none}
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
+  // An agent's question brings it in on the whole report, as the mock does.
+  function boothWhole(){ if(VIEW.sel){ VIEW.sel=null; VIEW.trail=[]; traceSel(); renderSel(); } }
   function boothSet(ev){
     var was=BOOTH.open, had=BOOTH.ask, n=boothStep(BOOTH, ev, window.innerWidth), p=$('insp'), e=$('boothEdge');
     var focusIn=!!(p&&p.contains(document.activeElement)), fromEdge=!!(e&&document.activeElement===e);
     BOOTH.open=n.open; BOOTH.ask=n.ask;
+    if(ev.t==='arrive'&&BOOTH.open&&!was) boothWhole();
     if(n.later){ clearTimeout(BOOTH.t); BOOTH.t=setTimeout(function(){ boothSet({t:'arrive'}); }, n.later); }
     if(BOOTH.open||!BOOTH.ask) clearTimeout(BOOTH.t);
     boothApply(ev.t==='shell');

@@ -5247,6 +5247,7 @@ function booth(src: string, width: number) {
   const posted: unknown[] = []
   const timers: { f: () => void; ms: number }[] = []
   const applied: boolean[] = []
+  const wholes: number[] = []
   const BOOTH: BoothState = { open: true, ask: 0, t: 0 }
   const edge = { classList: { remove() {}, add() {} }, offsetWidth: 0, focus() {} }
   const f = lift<{
@@ -5262,8 +5263,9 @@ function booth(src: string, width: number) {
     setTimeout: (fn: () => void, ms: number) => { timers.push({ f: fn, ms }); return timers.length },
     clearTimeout: () => {},
     boothApply: (instant: boolean) => applied.push(!!instant),
+    boothWhole: () => { wholes.push(1) },
   })
-  return { ...f, BOOTH, posted, timers, applied }
+  return { ...f, BOOTH, posted, timers, applied, wholes }
 }
 
 for (const [name, src] of [['Brief Maker', BM], ['Research', RT]] as const) {
@@ -5305,6 +5307,7 @@ for (const [name, src] of [['Brief Maker', BM], ['Research', RT]] as const) {
     assert.equal(b.timers[0].ms, 1000)
     b.timers[0].f()
     assert.equal(b.BOOTH.open, true, 'in on the question')
+    assert.equal(b.wholes.length, 1, 'on the whole document, where the question is')
     // answered before it came in: it stays hidden
     const c = booth(src, 1440)
     c.boothSet({ t: 'hide' }); c.boothAsk(1); c.boothAsk(0); c.timers[0].f()
