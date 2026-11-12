@@ -4355,7 +4355,100 @@ test('Research names the Strategy agent for picking what to look into (roles.js 
   const { stageLabel } = lift<{ stageLabel(k: string): string }>(RT, ['stageLabel', 'TheAgent', 'theAgent'], { roles: () => R, STAGE: {} })
   assert.equal(stageLabel('select'), 'The Strategy agent picks what to look into')
   assert.match(fn(RT, 'picksHtml'), /Leave these and '\+esc\(theAgent\('strategy'\)\)\+' picks the lenses/)
-  assert.match(RT, /S\.who=TheAgent\(S\.k==='select'\?'strategy':WORK_ROLE\[S\.k\]\)/)
+  assert.match(RT, /S\.who=TheAgent\(WORK_ROLE\[S\.k\]\)/)
+})
+
+test('the Research select stage wears the Strategy agent\'s sphere (owner, 2026-11-12)', () => {
+  const WORK_ROLE = new Function(`${obj(RT, 'WORK_ROLE')} return WORK_ROLE;`)() as Record<string, string>
+  assert.equal(WORK_ROLE.select, 'strategy')
+  assert.match(RT, /sphereTag\(WORK_ROLE\[S\.k\], 44,/)
+})
+
+test('a question asked from a fact or finding goes with it as ask_research input.about', () => {
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const ASK = { ui: {} as Record<string, unknown>, jobs: [] as Record<string, unknown>[] }
+  const env = {
+    $: (id: string) => (id === 'rqin-_new' ? { value: 'When was the ruling?' } : null), slug: (s: string) => s, ASK,
+    toast: () => {}, LENS: { regulation_clearance: {} }, VIEW: { sel: 'f_01ABC' }, renderAsks: () => {},
+    attachments: () => [], onAskReply: () => {}, isObj,
+    window: { clan: { apiProxy: (_k: string, p: { task: string; input: Record<string, unknown> }) => { sent.push(p); return new Promise(() => {}) } } },
+  }
+  const f = lift<{ doAsk(k: string, about?: string | null): Record<string, unknown> }>(RT, ['doAsk', 'sendAsk'], env)
+  ASK.ui._new = { lens: 'regulation_clearance' }
+  const j = f.doAsk('_new', 'f_01ABC')
+  assert.equal(j.about, 'f_01ABC')
+  assert.deepEqual(sent[0], { task: 'ask_research', input: { question: 'When was the ruling?', lens: 'regulation_clearance', about: 'f_01ABC' } })
+  f.doAsk('_new', 'fi_01XYZ')
+  assert.equal(sent[1].input.about, 'fi_01XYZ')
+  // the general box sends none, whatever the inspector has selected; a section is not an item
+  f.doAsk('_new')
+  f.doAsk('_new', 'sec:regulation')
+  assert.equal('about' in sent[2].input, false)
+  assert.equal('about' in sent[3].input, false)
+  assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\);/)
+  // kept across a reload with the job
+  assert.match(fn(RT, 'saveAskJobs'), /about:j\.about\|\|null/)
+  assert.match(fn(RT, 'resumeAsks'), /about:x\.about\|\|null/)
+})
+
+// ── a run the middleware lost (a deploy restarts it; jobs live in its memory) ──
+
+const UNKNOWN_JOB = { ok: false, status: 404, data: null, error: { type: 'unknown_job', message: 'no such job for this document' } }
+const INTERRUPTED_WORDS = 'This run was interrupted (the service restarted). Run it again.'
+
+test('Research: a run lost to a restart ends as stopped, says it was interrupted and offers to run it again', () => {
+  const stored: Record<string, unknown> = {}
+  const CHAT: { job: Record<string, unknown> | null } = { job: { id: 'job_1', state: 'running', stage: 'research' } }
+  const env = {
+    CHAT, INTERRUPTED: INTERRUPTED_WORDS, MW_API: 'napkin.middleware/1', isObj, arr,
+    mwBody: (r: { data?: unknown }) => r.data, store: (k: string, v: unknown) => { stored[k] = v }, jobKey: () => 'k',
+    render: () => {}, jobActive: () => /^(sending|checking|queued|running)$/.test(String(CHAT.job?.state)),
+    loadChain: () => {}, landed: () => false, schedulePoll: () => {},
+  }
+  const f = lift<{ onJobReply(r: unknown, resume?: boolean): void; interrupted(r: unknown): boolean }>(RT, ['onJobReply', 'hostErr', 'interrupted'], env)
+  f.onJobReply(UNKNOWN_JOB)
+  assert.equal(CHAT.job?.state, 'failed')
+  assert.equal(CHAT.job?.interrupted, true)
+  assert.equal(CHAT.job?.error, INTERRUPTED_WORDS)
+  assert.equal(stored.k, null, 'the lost id is not polled again on open')
+  // on open (resume) too: the run is shown as interrupted, not dropped
+  CHAT.job = { id: 'job_2', state: 'checking' }
+  f.onJobReply(UNKNOWN_JOB, true)
+  assert.equal(CHAT.job?.interrupted, true)
+  assert.equal(f.interrupted({ ok: false, status: 404, error: { type: 'invalid_input', message: 'x' } }), false)
+  // the desk's words and the re-run action: the existing failure state
+  const sp = lift<{ speech(T: unknown[]): Record<string, string> }>(RT, ['speech'], {
+    CHAT, liveQuestion: () => null, jobActive: () => false, isObj, arr, D: () => ({}), STAGE: { research: {} }, runRole: () => 'research',
+    firstPrompt: () => ({ text: 'go' }), theAgent: () => 'the Research agent', camp: () => ({}), pins: () => ({}), LENSES: [],
+  }).speech([])
+  assert.equal(sp.text, 'I had to stop. What we already found stays in the document.')
+  assert.equal(sp.err, INTERRUPTED_WORDS)
+  assert.match(sp.acts, /data-act="chat-retry">Run it again</)
+  // other jobs (research runs, asks) say the same words
+  assert.equal(lift<{ mwError(r: unknown): string }>(RT, ['mwError', 'interrupted'], { INTERRUPTED: INTERRUPTED_WORDS }).mwError(UNKNOWN_JOB), INTERRUPTED_WORDS)
+})
+
+test('Brief Maker: a draft lost to a restart stops with "We had to stop", the words, and Run it again', () => {
+  const ended: Record<string, unknown>[] = []
+  const env = {
+    INTERRUPTED: INTERRUPTED_WORDS, MW: { configured: true }, NO_MW: '', MW_API: 'napkin.middleware/1',
+    mwBody: (r: { data?: unknown }) => r.data, endJob: (j: Record<string, unknown>) => ended.push(j),
+  }
+  const f = lift<{ onJobReply(j: Record<string, unknown>, r: unknown): void }>(BM, ['onJobReply', 'hostErr', 'interrupted'], env)
+  const running = { task: 'draft_brief', id: 'job_1', state: 'running', stage: 'draft' }
+  f.onJobReply(running, UNKNOWN_JOB)
+  assert.equal(running.state, 'failed')
+  assert.equal((running as Record<string, unknown>).error, INTERRUPTED_WORDS)
+  assert.equal(ended.length, 1)
+  // picked up on open (checking) it is interrupted too, not "couldn't start"
+  const resumed = { task: 'draft_brief', id: 'job_2', state: 'checking' }
+  f.onJobReply(resumed, UNKNOWN_JOB)
+  assert.equal(resumed.state, 'failed')
+  const rp = fn(BM, 'renderProc')
+  assert.match(rp, /failed:'We had to stop'/)
+  assert.match(rp, /l2\.textContent=j\.error\?j\.error:/)
+  assert.match(rp, /j\.interrupted&&!live\?'<button type="button" class="sp-btn" id="procAgain">Run it again<\/button>'/)
+  assert.match(rp, /\$\('procAgain'\); if\(again\) again\.addEventListener\('click',function\(\)\{ if\(DRAFT===j\) DRAFT=null; draftNow\(''\); \}\)/)
 })
 
 test('asking from the inspector says where the answer will appear and brings it into view when it lands', () => {
@@ -4367,7 +4460,7 @@ test('asking from the inspector says where the answer will appear and brings it 
   assert.equal(askWhere('media_spend'), 'at the end of the report')
   assert.equal(askWhere(null), 'at the end of the report')
   // pv-ask marks its job, empties its box and says where; the reply names the answer to reveal.
-  assert.match(RT, /var pj=doAsk\('_new'\); if\(pj\)\{ pj\.from='pv'; if\(pq\) pq\.value=''; toast\('Asked\. The answer will appear '\+askWhere\(pj\.lens\)\+'\.'\); \}/)
+  assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\); if\(pj\)\{ pj\.from='pv'; if\(pq\) pq\.value=''; toast\('Asked\. The answer will appear '\+askWhere\(pj\.lens\)\+'\.'\); \}/)
   assert.match(fn(RT, 'onAskReply'), /if\(j\.from==='pv'&&aid\)\{ ASK\.reveal=aid; toast\('Answered '\+askWhere\(j\.lens\)\+'\.'\); \}/)
   assert.match(fn(RT, 'renderAsks'), /revealAsk\(\);\s*\}$/)
   assert.match(fn(RT, 'doAsk'), /return j;/)

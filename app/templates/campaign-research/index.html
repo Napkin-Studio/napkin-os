@@ -3056,8 +3056,13 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // error} (plus `clan` when a change landed); the middleware's own reply is
   // its `data`. Read the reply there, and the host's refusals from the envelope.
   function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
+  // A job the middleware no longer knows (404 unknown_job): jobs live in its memory, so a restart
+  // (a deploy) ends every run in flight. The run is over; say so and offer it again.
+  var INTERRUPTED='This run was interrupted (the service restarted). Run it again.';
+  function interrupted(res){ return !!(res&&res.error&&typeof res.error==='object'&&res.error.type==='unknown_job'); }
   function mwError(res){
     if(!res) return 'Empty reply from the host.';
+    if(interrupted(res)) return INTERRUPTED;
     if(res.error){
       var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       if(typeof e==='string') return e+st;
@@ -3233,12 +3238,12 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // Who does each stage, by role (NapkinRoles, the agent engine the packer
   // inlines at the agent-sphere marker). The words about a stage's own work
   // name the role that does it: reading what was sent is the Knowledge
-  // agent's, picking the lenses the Strategy agent's (roles.js STAGES.research.select; the stage's
-  // sphere still wears Review's colour, WORK_ROLE.select, until the owner says otherwise), each lens
+  // agent's, picking the lenses the Strategy agent's (roles.js STAGES.research.select; its sphere
+  // wears Strategy's colour too, owner 2026-11-12), each lens
   // the Research agent's, finding the points and writing the report the
   // Synthesis agent's (the mock's "Composed by Synthesis agent"). The run's stage on the desk (the pills, the
   // caption, the sphere, the question's signature) follows PLAN: runRole().
-  var WORK_ROLE={extract:'knowledge', identify:'knowledge', select:'review', research:'research', synthesise:'synthesis', report:'synthesis'};
+  var WORK_ROLE={extract:'knowledge', identify:'knowledge', select:'strategy', research:'research', synthesise:'synthesis', report:'synthesis'};
   var ROLE_NM={knowledge:'Knowledge', strategy:'Strategy', research:'Research', synthesis:'Synthesis', brief:'Brief', review:'Review'};
   function roles(){ return window.NapkinRoles||null; }
   // 'Review agent'; 'the Review agent', and with a capital to start a sentence.
@@ -3256,7 +3261,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // A role's sphere at about the old figure's size: the static frame now, a live
   // sphere once NapkinRoles.auto() hydrates it (without WebGL the frame stays).
   function sphereTag(r, size, state){ var R=roles(); return R?R.tag(r, {size:size, state:state||'idle', decorative:true}):''; }
-  STAGES.forEach(function(S){ S.who=TheAgent(S.k==='select'?'strategy':WORK_ROLE[S.k]); });
+  STAGES.forEach(function(S){ S.who=TheAgent(WORK_ROLE[S.k]); });
   function lensOf(from){ var m=/^([a-z_]+)(\/|$)/.exec(String(from||'')); return m&&LENS[m[1]]?m[1]:''; }
   // What the Research agent says it will do on each lens, and what it looks
   // into, in plain words.
@@ -3574,7 +3579,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
       sp.mood='needs';
       sp.text=j.state==='failed'?'I had to stop. What we already found stays in the document.':'I can’t reach the agents right now.';
       sp.err=j.error||'';
-      if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>';
+      if(j.interrupted&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Run it again</button>';
+      else if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>';
       else if(!j.id&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Try again</button>';
       return sp;
     }
@@ -4072,6 +4078,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // ── the job: replies, polling, questions ───────────────────────────────────
   function hostErr(res){
     if(!res) return 'Empty reply from the host.';
+    if(interrupted(res)) return INTERRUPTED;
     if(res.error){ var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       return typeof e==='string'?e+st:(e.type?e.type+st+': ':'')+(e.message||JSON.stringify(e)); }
     if(res.ok===false) return 'The host could not complete the call'+(res.status?' (status '+res.status+')':'')+'. Nothing was applied.';
@@ -4081,6 +4088,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function onJobReply(res, resume){
     var j=CHAT.job||(CHAT.job={}), err=hostErr(res);
+    // the run was lost with the middleware's memory, on open or while following it: it stopped
+    if(err&&interrupted(res)){ j.state='failed'; j.interrupted=true; j.error=err; store(jobKey(), null); render(); return; }
     if(err){
       if(resume){ CHAT.job=null; store(jobKey(), null); }
       else { j.error=err; if(j.state==='sending') j.state='unsent'; else if(jobActive()) j.state='stalled'; }
@@ -5927,22 +5936,24 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function askStoreKey(){ return 'clan.research.asks.'+docId(); }
   function saveAskJobs(){
-    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens, ref:j.ref||null}; });
+    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens, ref:j.ref||null, about:j.about||null}; });
     store(askStoreKey(), o.length?JSON.stringify(o):null);
   }
-  function doAsk(key){
+  // `about`: the fact or finding the question is asked from (the inspector's Ask); it goes with the
+  // question as ask_research's input.about, so the answer is about that item.
+  function doAsk(key, about){
     // what is in the box, whatever the view has kept of it
     var box=$('rqin-'+slug(key)), ui=ASK.ui[key]||{}, q=String((box&&box.value)||ui.draft||'').trim();
     if(!q){ toast('Type a question first.'); var i=$('rqin-'+slug(key)); if(i) i.focus(); return; }
     if(!(window.clan&&window.clan.apiProxy)){ toast('Asking runs through the host.'); return; }
     var ls=$('rqlens-'+slug(key)), lens=key==='_new'?((ls&&ls.value)||ui.lens||null):key;
-    var j={lens:lens&&LENS[lens]?lens:null, question:q, ref:VIEW.sel||null, state:'sending'};
+    var j={lens:lens&&LENS[lens]?lens:null, question:q, ref:VIEW.sel||null, about:/^fi?_[A-Za-z0-9_-]+$/.test(about||'')?about:null, state:'sending'};
     ASK.jobs.push(j); ASK.ui[key]={open:false, draft:''}; renderAsks();
     sendAsk(j);
     return j;
   }
   function sendAsk(j){
-    var input={question:j.question}; if(j.lens) input.lens=j.lens;
+    var input={question:j.question}; if(j.lens) input.lens=j.lens; if(j.about) input.about=j.about;
     if(attachments().length) input.attachments=attachments();
     j.error=null; j.state='sending';
     window.clan.apiProxy('middleware', {task:'ask_research', input:input}).then(function(res){ onAskReply(j, res); },
@@ -5976,7 +5987,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function resumeAsks(){
     if(!(window.clan&&window.clan.apiProxy)) return;
     var o=[]; try{ o=JSON.parse(stored(askStoreKey())||'[]'); }catch(e){}
-    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, ref:x.ref||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
+    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, ref:x.ref||null, about:x.about||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
   }
   function onAskAct(act, b){
     var k=b.getAttribute('data-k')||'', j=ASK.jobs[+b.getAttribute('data-i')];
@@ -6837,9 +6848,9 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'pv-ask': var pq=$('pv-askq'), pqv=String(pq&&pq.value||'').trim(); if(!pqv){ toast('Type a question first.'); if(pq) pq.focus(); break; }
         var pl=refLens(VIEW.sel||'')||(/^sec:/.test(VIEW.sel||'')&&evSec(VIEW.sel.slice(4))?evSec(VIEW.sel.slice(4)).lens:'');
         ASK.ui._new={draft:pqv, lens:pl}; renderAsks(); var nb=$('rqin-_new'); if(nb) nb.value=pqv; var nls=$('rqlens-_new'); if(nls) nls.value=pl;
-        // The question goes with this item's lens only (ask_research@1 takes no item), and its answer
-        // is written in the report, not here: say where, and bring it into view when it lands.
-        var pj=doAsk('_new'); if(pj){ pj.from='pv'; if(pq) pq.value=''; toast('Asked. The answer will appear '+askWhere(pj.lens)+'.'); } break;
+        // The question goes with this item (input.about) and its lens, and its answer is written in
+        // the report, not here: say where, and bring it into view when it lands.
+        var pj=doAsk('_new', VIEW.sel); if(pj){ pj.from='pv'; if(pq) pq.value=''; toast('Asked. The answer will appear '+askWhere(pj.lens)+'.'); } break;
       case 'pv-askfocus': var pa=$('pv-askq'); if(pa) pa.focus(); break;
       case 'pv-jump': var jd=b.closest('details'); if(jd) jd.open=false; var jt=$(b.getAttribute('data-to')); if(jt){ if(jt.tagName==='DETAILS') jt.open=true; jt.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
       case 'pv-showmap': showOnMap(b.getAttribute('data-ref')); break;

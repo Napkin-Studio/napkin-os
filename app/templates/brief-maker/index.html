@@ -2881,11 +2881,16 @@
   function noMiddleware(){ return MW.configured===false; }
   var NO_MW='This workspace has no middleware set up, so the agents can’t write here. You can still write the brief by hand.';
   function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
+  // A job the middleware no longer knows (404 unknown_job): jobs live in its memory, so a restart
+  // (a deploy) ends every run in flight. The run is over; say so and offer it again.
+  var INTERRUPTED='This run was interrupted (the service restarted). Run it again.';
+  function interrupted(res){ return !!(res&&res.error&&typeof res.error==='object'&&res.error.type==='unknown_job'); }
   function hostErr(res){
     if(!res) return 'Empty reply from the host.';
     if(res.error){
       var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       if(e&&e.type==='no_middleware'){ MW.configured=false; return NO_MW; }
+      if(interrupted(res)) return INTERRUPTED;
       return typeof e==='string'?e+st:(e.type?e.type+st+': ':'')+(e.message||JSON.stringify(e));
     }
     if(res.ok===false) return 'The host could not complete the call'+(res.status?' (status '+res.status+')':'')+'. Nothing was applied.';
@@ -2904,7 +2909,7 @@
   }
   function onJobReply(j, res){
     var err=hostErr(res);
-    if(err){ j.error=err; if(j.state==='sending'||j.state==='checking') j.state='unsent'; else j.state='stalled'; endJob(j); return; }
+    if(err){ j.error=err; j.interrupted=interrupted(res); j.state=j.interrupted?'failed':j.state==='sending'||j.state==='checking'?'unsent':'stalled'; endJob(j); return; }
     var b=mwBody(res);
     j.error=null;
     if(b.job&&typeof b.job==='object'){
@@ -3164,11 +3169,12 @@
     $('tilesSum').textContent='See each part as it is written · '+written+' of '+FIELDS.length;
     // Stop: a person may cancel it at any stage (cancel_job); what the crew already sent stays.
     var acts=$('procActs'), canStop=live&&j.id&&j.state!=='checking';
-    acts.innerHTML=canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+    acts.innerHTML=j.interrupted&&!live?'<button type="button" class="sp-btn" id="procAgain">Run it again</button>':canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="sp-btn" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="sp-btn" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
       :'<button type="button" class="sp-btn" id="procStop">Stop</button>'):'';
     var stp=$('procStop'); if(stp) stp.addEventListener('click',function(){ j.stopAsk=true; renderProc(); var y=$('procStopYes'); if(y) y.focus(); });
     var sno=$('procStopNo'); if(sno) sno.addEventListener('click',function(){ j.stopAsk=false; renderProc(); });
     var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
+    var again=$('procAgain'); if(again) again.addEventListener('click',function(){ if(DRAFT===j) DRAFT=null; draftNow(''); });
     syncHead(); sendBar();
   }
   // ---------- the agent asks, on the one screen (owner, 2026-11-09) ----------

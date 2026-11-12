@@ -246,6 +246,12 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
 - A job belongs to the tenant (from auth) and the document it was started on.
   Polling it from another tenant or another `clan.id` is `404`, the same as an
   id that never existed.
+- Jobs live in the middleware's memory: a restart (a deploy) ends every job in
+  flight, and later polls of one are `404 unknown_job`. There is no drain and
+  no durable job store. The app treats `unknown_job` on a job it was following
+  as the run's end: the run was interrupted, it says so ("This run was
+  interrupted (the service restarted). Run it again.") in its existing failure
+  state, and offers to run it again. What already landed stays (*2026-11-12*).
 - The host also reads `job` for the landing's Running and Needs you: `queued` and
   `running` are working, `needs_input` is waiting on a person, `failed` is failed,
   `done` is finished (os-layer.md section 12.3, `RunTracker`). It adds no route and
