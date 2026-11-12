@@ -78,7 +78,7 @@ suite=${PIPESTATUS[0]}
 # Every job the round started, classified (watch exits 1 when any is hung or failed).
 "$root/scripts/uat-watch" --json > "$out/jobs.jsonl"
 "$root/scripts/uat-watch" | tee "$out/jobs.txt"
-jobs=$?
+jobs=${PIPESTATUS[0]}
 set -e
 
 python3 -I - "$out" "$sha" "$ref" "$started" <<'PY'

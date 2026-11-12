@@ -45,6 +45,17 @@ class Summarise(unittest.TestCase):
         self.assertEqual(s["verdict"], "hung")
         self.assertIn("draft", s["why"])
 
+    def test_waiting_after_stage_end(self):
+        # Round 2: identify asked, then logged stage_end; the job waits on a person, it is not hung.
+        e = [START, ev(28, ev="question", stage="identify", text="Which brand?"),
+             ev(28, ev="stage_end", stage="identify", secs=0.3)]
+        self.assertEqual(summarise(e, T0 + dt.timedelta(seconds=600), hang=120)["verdict"], "waiting")
+
+    def test_answered_question_then_silence_is_hung(self):
+        e = [START, ev(28, ev="question", stage="identify", text="Which brand?"),
+             ev(40, ev="answer", stage="identify"), ev(41, ev="stage_start", stage="select")]
+        self.assertEqual(summarise(e, T0 + dt.timedelta(seconds=600), hang=120)["verdict"], "hung")
+
     def test_working(self):
         e = [START, ev(5, ev="model", stage="research")]
         self.assertEqual(summarise(e, T0 + dt.timedelta(seconds=30))["verdict"], "working")
