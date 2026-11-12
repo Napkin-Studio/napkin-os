@@ -142,9 +142,9 @@ test('initials follow the host\'s rule', () => {
 test('who is signed in gives a first name and an agency, and says nothing it does not know', () => {
   assert.deepEqual(whoIs({ id: 'sam.lee@studio-a', name: null }), { first: 'Sam.Lee', agency: 'Studio-A' })
   assert.deepEqual(whoIs({ id: 'sam@studio', name: 'Sam Lee' }), { first: 'Sam', agency: 'Studio' })
-  assert.deepEqual(whoIs({ id: '3f9a2b1c', name: null }), { first: null, agency: 'Your studio' })
-  assert.deepEqual(whoIs({ id: 'local', name: null }), { first: null, agency: 'Your studio' })
-  assert.deepEqual(whoIs(null), { first: null, agency: 'Your studio' })
+  assert.deepEqual(whoIs({ id: '3f9a2b1c', name: null }), { first: null, agency: 'Napkin Studio' })
+  assert.deepEqual(whoIs({ id: 'local', name: null }), { first: null, agency: 'Napkin Studio' })
+  assert.deepEqual(whoIs(null), { first: null, agency: 'Napkin Studio' })
 })
 
 test('the tool table: six tools, each live only with its app installed', () => {

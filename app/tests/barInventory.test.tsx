@@ -79,6 +79,12 @@ test('the desk: medallion, the agency pill back to the desk, the client chip, th
   assert.doesNotMatch(html, /data-attention/, 'the desk never lights the medallion')
 })
 
+test('no client, no rule after the pill: nothing stands for a missing chip (owner, 2026-11-12)', () => {
+  assert.doesNotMatch(bar(), /tb-vsep/)
+  const withClient = bar({ client: { name: 'Client A', mono: 'CA', look: { cl: '#123456', ink: '#ffffff' } } as never })
+  assert.match(withClient, /tb-vsep/)
+})
+
 test('the agency pill takes you to the desk; the avatar menu is a proper menu button', () => {
   let went = 0
   const pill = AgencyPill({ agency: 'Studio A', onDesk: () => { went++ } })

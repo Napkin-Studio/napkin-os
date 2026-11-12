@@ -348,7 +348,9 @@ export default function Toolbar({
         <Medallion onHome={onHome} attention={!!doc && attention} mark={mark} target={doc ? markTarget : undefined} />
         <AgencyPill agency={agency} logo={agencyLogo} onDesk={onAgency ?? onHome} />
       </div>
-      <span className="tb-vsep" aria-hidden />
+      {/* Only between the pill and a client: with no client the document's own rule follows the
+          pill, and two rules around an empty gap read as something missing (owner, 2026-11-12). */}
+      {client && <span className="tb-vsep" aria-hidden />}
       <nav className="tb-trail" id="tb-trail" aria-label="Where you are">
         {client && (
           <button

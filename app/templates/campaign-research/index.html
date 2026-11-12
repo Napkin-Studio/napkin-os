@@ -2352,7 +2352,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function renderNotices(){
     var h='', d=D();
-    if(d.example_notice) h+='<div class="notice" role="note"><div><b>Example.</b> '+esc(d.example_notice)+'</div></div>';
+    if(d.example_notice) h+='<div class="notice" role="note"><div>'+esc(d.example_notice)+'</div></div>';
     var p=proj();
     if(!p && citesMembers()) h+='<div class="notice" role="note"><div><b>No projection.</b> The host has not built <span class="mono">projection</span> from shared/facts.yaml and shared/findings.yaml, so pins and findings cannot be shown. The members are the authority.</div></div>';
     if(CHAIN.state==='unavailable') h+='<div class="notice info no-print" role="note"><div>The decision chain could not be read (<span class="mono">clan://chain</span>: '+esc(CHAIN.err)+'). Verdicts, confidential marks and history are not shown.</div></div>';

@@ -270,19 +270,23 @@ export function initialsOf(name: string): string {
 
 const titleCase = (s: string): string => s.replace(/(^|[\s._-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase())
 
+/** With no agency (anonymous, the desktop, a local server) the studio is Napkin Studio itself, named
+ *  once: the agency pill shows "Napkin Studio" alone, never a placeholder over it (owner, 2026-11-12). */
+const STUDIO = 'Napkin Studio'
+
 /** Who is signed in, from the host's `Person`: a first name for the greeting and the agency's name. */
 export function whoIs(person: { id: string; name: string | null } | null): { first: string | null; agency: string } {
-  if (!person) return { first: null, agency: 'Your studio' }
+  if (!person) return { first: null, agency: STUDIO }
   const at = person.id.indexOf('@')
   if (at < 0) {
     // Anonymous or the desktop: the id is a tenant or "local", not someone's name.
-    return { first: person.name ? person.name.split(/\s+/)[0] : null, agency: 'Your studio' }
+    return { first: person.name ? person.name.split(/\s+/)[0] : null, agency: STUDIO }
   }
   const local = person.id.slice(0, at)
   const agency = person.id.slice(at + 1)
   return {
     first: person.name ? person.name.split(/\s+/)[0] : titleCase(local),
-    agency: agency ? titleCase(agency) : 'Your studio',
+    agency: agency ? titleCase(agency) : STUDIO,
   }
 }
 
