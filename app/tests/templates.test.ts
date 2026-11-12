@@ -2845,6 +2845,17 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
   assert.equal(el2('lockBtn').disabled, true, 'the lock list not loaded yet: Lock waits')
 })
 
+// Booth screenshots, 2026-11-13: the pill said READY TO LOCK while Lock said "Settle 1 first" (an open question).
+test('brief: the status pill agrees with Lock about Needs you', () => {
+  const seen: Record<string, unknown>[] = []
+  const f = lift<{ statusNow(): unknown }>(BM, ['statusNow'], { arr, lockState: () => ({ can_lock: true, reopened: [] }), docLocked: () => false,
+    approveLocked: () => false, lockItems: () => [], needsRows: () => [{ code: 'open_question' }], DRAFT: null, hasContent: () => true,
+    briefStatus: (o: Record<string, unknown>) => { seen.push(o); return o } })
+  f.statusNow()
+  assert.equal(seen[0].needs, 1, 'the open question counts')
+  assert.equal(seen[0].canLock, false, 'not ready to lock while Needs you holds it')
+})
+
 // UAT round 5: the fact panel is drawn again on every document change, and the question being typed was lost, so
 // pressing Ask sent nothing. The draft is kept per selected item, put back on redraw, the caret kept, cleared on send.
 test('research: a question typed about a fact survives a redraw', () => {

@@ -5511,7 +5511,9 @@
     var l=lockState();
     // Nothing written yet, or the crew still writing it, is a draft whatever
     // the host's lock says (it has nothing to block on yet).
-    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:lockItems().length, canLock:!!(l&&l.can_lock)&&!DRAFT&&hasContent()});
+    // The pill agrees with Lock: both read Needs you (the host's lock list and the open questions).
+    var n=needsRows().length;
+    return briefStatus({locked:docLocked(), reopened:approveLocked()&&arr(l&&l.reopened).length>0, needs:n, canLock:!!(l&&l.can_lock)&&n===0&&!DRAFT&&hasContent()});
   }
   function renderPill(){
     var p=$('statusPill'); if(!p) return; var s=statusNow();
