@@ -18,7 +18,7 @@
 //! holds jobs, stages and what each person is asked to do next. It holds no
 //! ranking and no score of anyone, and has no field that could.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -223,6 +223,7 @@ enum Progress {
     Confirmed,
 }
 
+#[derive(Clone)]
 struct BriefFacts {
     progress: Progress,
     planner_signed: bool,
@@ -273,19 +274,28 @@ fn days_between(from: &str, now: DateTime<Utc>) -> Option<i64> {
 impl JobIndex {
     /// Build the index from the registry and the documents, as of `now`.
     pub fn build(store: &dyn DocStore, now: DateTime<Utc>) -> HostResult<JobIndex> {
+        Self::build_from(store, now, |id| {
+            store.read(id).ok().and_then(|b| facts_of(id, b))
+        })
+    }
+
+    /// [`build`](Self::build), with each document's facts from `facts`: read
+    /// afresh by `build`, or kept per version by [`IndexCache`]. The answer is
+    /// the same either way, because the facts are read from a document's bytes alone.
+    fn build_from(
+        store: &dyn DocStore,
+        now: DateTime<Utc>,
+        mut facts: impl FnMut(&DocId) -> Option<DocFacts>,
+    ) -> HostResult<JobIndex> {
         let records = jobs::list(store)?;
         let names: BTreeMap<String, String> = clients::list(store, true)?
             .into_iter()
             .map(|c| (c.id, c.name))
             .collect();
-        let mut docs: BTreeMap<String, Vec<(DocId, ClanFile)>> = BTreeMap::new();
+        let mut docs: BTreeMap<String, Vec<DocFacts>> = BTreeMap::new();
         for id in store.documents() {
-            let Ok(bytes) = store.read(&id) else { continue };
-            let Ok(clan) = ClanFile::from_bytes(bytes) else {
-                continue;
-            };
-            if let Some(n) = clan.manifest().job.clone() {
-                docs.entry(n).or_default().push((id, clan));
+            if let Some(f) = facts(&id) {
+                docs.entry(f.job.clone()).or_default().push(f);
             }
         }
         let history = jobs::route_history(store)?;
@@ -295,7 +305,7 @@ impl JobIndex {
         for rec in records {
             let mut mine = docs.remove(&rec.number).unwrap_or_default();
             // Newest path last is not a meaning: order by path so a rebuild is identical.
-            mine.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+            mine.sort_by(|a, b| a.listed.path.cmp(&b.listed.path));
             let name = names
                 .get(&rec.client_id)
                 .cloned()
@@ -343,10 +353,64 @@ impl JobIndex {
     }
 }
 
+/// What one document gives the index, read from its bytes alone (never from
+/// another document, the registry or the clock), so it can be kept per
+/// document version and a rebuild re-reads only the documents that moved.
+#[derive(Clone)]
+struct DocFacts {
+    /// `manifest.job`: a document with none is not in the index.
+    job: String,
+    listed: JobDoc,
+    /// A tool with an approval step (`APP_STAGES`): what its chain says. The
+    /// client's answer is always read; a job with no client step drops it.
+    evidence: Option<Evidence>,
+    /// A gated brief: how far it has got.
+    brief: Option<BriefFacts>,
+}
+
+/// The facts of the document `id` holding `bytes`; `None` for a document that
+/// names no job or cannot be read, which the index leaves out.
+fn facts_of(id: &DocId, bytes: Vec<u8>) -> Option<DocFacts> {
+    let clan = ClanFile::from_bytes(bytes).ok()?;
+    let job = clan.manifest().job.clone()?;
+    let doc = Document::from_bytes(id.clone(), clan.raw_bytes().to_vec()).ok()?;
+    let state = crate::library::recent_state(id.clone(), clan.raw_bytes().to_vec());
+    let m = clan.manifest();
+    let listed = JobDoc {
+        path: id.to_string(),
+        title: m.title.clone(),
+        app_id: m.app.as_ref().map(|a| a.app_id.clone()),
+        needs_you: state.as_ref().map_or(0, |s| s.needs_you),
+        locked: state.as_ref().is_some_and(|s| s.locked),
+        version: state
+            .as_ref()
+            .is_some_and(|s| s.gate.is_some())
+            .then(|| crate::ops::versions::approved_count(&doc))
+            .filter(|n| *n > 0),
+        changed_since_lock: state
+            .as_ref()
+            .and_then(|s| s.gate.as_ref())
+            .is_some_and(|g| g.changed_since_lock),
+    };
+    let evidence = m
+        .app
+        .as_ref()
+        .map(|a| a.app_id.as_str())
+        .filter(|app| APP_STAGES.iter().any(|(a, ..)| a == app))
+        .map(|app| evidence_of(&doc, id, app, true));
+    let brief = gate::applies(&doc).then(|| brief_facts(&doc)).flatten();
+    Some(DocFacts {
+        job,
+        listed,
+        evidence,
+        brief,
+    })
+}
+
 fn entry_of(
     rec: &JobRecord,
     client_name: &str,
-    docs: Vec<(DocId, ClanFile)>,
+    docs: Vec<DocFacts>,
     route_set: Option<&RouteSet>,
     now: DateTime<Utc>,
     today: NaiveDate,
@@ -360,41 +424,20 @@ fn entry_of(
     // The furthest brief of the job sets its stage.
     let mut best: Option<(Progress, BriefFacts, String, String)> = None;
     let mut evidence: Vec<Evidence> = Vec::new();
-    for (id, clan) in docs {
-        let Ok(doc) = Document::from_bytes(id.clone(), clan.raw_bytes().to_vec()) else {
-            continue;
-        };
-        let state = crate::library::recent_state(id.clone(), clan.raw_bytes().to_vec());
-        let m = clan.manifest();
-        listed.push(JobDoc {
-            path: id.to_string(),
-            title: m.title.clone(),
-            app_id: m.app.as_ref().map(|a| a.app_id.clone()),
-            needs_you: state.as_ref().map_or(0, |s| s.needs_you),
-            locked: state.as_ref().is_some_and(|s| s.locked),
-            version: state
-                .as_ref()
-                .is_some_and(|s| s.gate.is_some())
-                .then(|| crate::ops::versions::approved_count(&doc))
-                .filter(|n| *n > 0),
-            changed_since_lock: state
-                .as_ref()
-                .and_then(|s| s.gate.as_ref())
-                .is_some_and(|g| g.changed_since_lock),
-        });
-        if let Some(app) = m.app.as_ref().map(|a| a.app_id.as_str()) {
-            if APP_STAGES.iter().any(|(a, ..)| *a == app) {
-                let client_step = rec.route.iter().any(|st| st.party == jobs::CLIENT);
-                evidence.push(evidence_of(&doc, &id, app, client_step));
+    let client_step = rec.route.iter().any(|st| st.party == jobs::CLIENT);
+    for f in docs {
+        if let Some(mut e) = f.evidence {
+            if !client_step {
+                e.client = None;
+            }
+            evidence.push(e);
+        }
+        if let Some(b) = f.brief {
+            if best.as_ref().is_none_or(|(p, ..)| b.progress > *p) {
+                best = Some((b.progress, b, f.listed.path.clone(), f.listed.title.clone()));
             }
         }
-        if gate::applies(&doc) {
-            if let Some(f) = brief_facts(&doc) {
-                if best.as_ref().is_none_or(|(p, ..)| f.progress > *p) {
-                    best = Some((f.progress, f, id.to_string(), m.title.clone()));
-                }
-            }
-        }
+        listed.push(f.listed);
     }
 
     let (stage_id, status, waiting_on, days) = match &best {
@@ -570,6 +613,7 @@ fn entry_of(
 // ── the approval route (features/approval-route.clan) ───────────────────────
 
 /// What a document's own chain says about approvals: read, never typed.
+#[derive(Clone)]
 struct Evidence {
     path: String,
     title: String,
@@ -1018,10 +1062,17 @@ impl JobIndex {
 
 // ── keeping it ──────────────────────────────────────────────────────────────
 
+/// Each document's facts by its id: the version they were read at, and the facts.
+type KeptFacts = HashMap<String, (String, Option<DocFacts>)>;
+
 /// The last index, and what it was built from. One beside each tenant's store.
 #[derive(Default)]
 pub struct IndexCache {
     last: Mutex<Option<(Vec<(String, String)>, JobIndex)>>,
+    /// Each document's facts, by the version they were read at: a rebuild
+    /// reads again only a document whose version moved, so its cost grows with
+    /// what changed, not with how many documents the agency holds.
+    facts: Mutex<KeptFacts>,
     builds: std::sync::atomic::AtomicUsize,
 }
 
@@ -1034,8 +1085,9 @@ impl IndexCache {
     /// rebuild. The stamp is every document's id and version plus the
     /// registry's, so any applied change, to any document, makes a new index.
     /// The date is part of the answer (at risk, days waiting), so a new day does too.
+    /// A rebuild takes each unmoved document's facts from the last one.
     pub fn get(&self, store: &dyn DocStore, now: DateTime<Utc>) -> HostResult<JobIndex> {
-        let mut stamp: Vec<(String, String)> = store
+        let versions: HashMap<String, String> = store
             .documents()
             .into_iter()
             .filter_map(|id| {
@@ -1044,6 +1096,10 @@ impl IndexCache {
                     .ok()
                     .map(|v| (id.to_string(), v.as_str().to_string()))
             })
+            .collect();
+        let mut stamp: Vec<(String, String)> = versions
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         if let Ok(reg) = store.home("jobs-v1") {
             if let Ok(v) = store.version(&reg) {
@@ -1063,16 +1119,37 @@ impl IndexCache {
                 return Ok(index.clone());
             }
         }
-        let index = JobIndex::build(store, now)?;
+        let mut kept = self.facts.lock().unwrap_or_else(|e| e.into_inner());
+        // a document that is gone is forgotten
+        kept.retain(|id, _| versions.contains_key(id));
+        let index = JobIndex::build_from(store, now, |id| {
+            let key = id.to_string();
+            let now_at = versions.get(&key);
+            if let Some((at, f)) = kept.get(&key) {
+                if Some(at) == now_at {
+                    return f.clone();
+                }
+            }
+            let bytes = store.read(id).ok()?;
+            let f = facts_of(id, bytes);
+            // Kept under the version the stamp saw. A write between the stamp and the read only costs a
+            // second read: the next stamp holds the newer version, which matches nothing kept.
+            if let Some(at) = now_at {
+                kept.insert(key, (at.clone(), f.clone()));
+            }
+            f
+        })?;
         self.builds
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         *last = Some((stamp, index.clone()));
         Ok(index)
     }
 
-    /// Delete the index: the next [`get`](Self::get) rebuilds it from the documents.
+    /// Delete the index: the next [`get`](Self::get) rebuilds it from the documents,
+    /// every one read again.
     pub fn delete(&self) {
         *self.last.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.facts.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     /// How many times it has been built. (No clock here: this crate builds for the

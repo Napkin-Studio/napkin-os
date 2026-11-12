@@ -340,6 +340,35 @@ fn a_job_lists_its_documents_and_the_index_is_read_from_their_chains() {
     assert_eq!(post(&dara(), "/patch-data", edit), 200);
     assert_ne!(cache.get(&store, now).unwrap(), live);
 
+    // A rebuild after one document moved reads that document again, not every document: its cost grows with
+    // what changed, not with how many documents the agency holds. Counted as reads of the store, against a
+    // build from nothing, and the cached rebuild still equals that build.
+    {
+        let counted = Counted::new(&store);
+        let cache = IndexCache::new();
+        cache.get(&counted, now).unwrap();
+        let edit =
+            json!({ "agent": "human", "action": "edit", "patch": { "insight": "A third line." } });
+        assert_eq!(post(&dara(), "/patch-data", edit), 200);
+        let before = counted.reads();
+        let moved = cache.get(&counted, now).unwrap();
+        let cached = counted.reads() - before;
+        let before = counted.reads();
+        let fresh = JobIndex::build(&counted, now).unwrap();
+        let full = counted.reads() - before;
+        assert_eq!(
+            moved, fresh,
+            "the cached rebuild equals a build from the documents"
+        );
+        let documents = napkin_host::Library::documents(&store).len();
+        assert!(documents > 3, "enough documents to tell the two apart");
+        assert_eq!(
+            full - cached,
+            documents - 1,
+            "the rebuild read one document again ({cached} reads), not all {documents} ({full} reads)"
+        );
+    }
+
     // The dashboard reads the same index: six tiles' worth of facts, no scores yet.
     let d = rebuilt.dashboard();
     assert_eq!(d.live_jobs, 2);
@@ -700,4 +729,61 @@ fn a_job_lists_its_documents_and_the_index_is_read_from_their_chains() {
         }
     }
     std::env::remove_var("NAPKIN_BRIEF_GATE");
+}
+
+/// A store that counts its reads, for the cost of a rebuild. `version` is the inner store's, uncounted, so
+/// only the reads a build makes are counted.
+struct Counted<'a> {
+    inner: &'a FsStore,
+    reads: std::sync::atomic::AtomicUsize,
+}
+
+impl<'a> Counted<'a> {
+    fn new(inner: &'a FsStore) -> Self {
+        Self {
+            inner,
+            reads: Default::default(),
+        }
+    }
+    fn reads(&self) -> usize {
+        self.reads.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl napkin_host::PartStore for Counted<'_> {
+    fn read(&self, id: &DocId) -> napkin_host::HostResult<Vec<u8>> {
+        self.reads
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        napkin_host::PartStore::read(self.inner, id)
+    }
+    fn exists(&self, id: &DocId) -> bool {
+        napkin_host::PartStore::exists(self.inner, id)
+    }
+    fn version(&self, id: &DocId) -> napkin_host::HostResult<napkin_host::Version> {
+        napkin_host::PartStore::version(self.inner, id)
+    }
+    fn apply(&self, change: &napkin_host::Change) -> napkin_host::HostResult<napkin_host::Version> {
+        napkin_host::PartStore::apply(self.inner, change)
+    }
+}
+
+impl napkin_host::Library for Counted<'_> {
+    fn app_candidates(&self) -> Vec<DocId> {
+        napkin_host::Library::app_candidates(self.inner)
+    }
+    fn app_template(&self, app_id: &str) -> DocId {
+        napkin_host::Library::app_template(self.inner, app_id)
+    }
+    fn documents(&self) -> Vec<DocId> {
+        napkin_host::Library::documents(self.inner)
+    }
+    fn new_document(&self, app_id: &str, id_short: &str) -> napkin_host::HostResult<DocId> {
+        napkin_host::Library::new_document(self.inner, app_id, id_short)
+    }
+    fn home(&self, version_tag: &str) -> napkin_host::HostResult<DocId> {
+        napkin_host::Library::home(self.inner, version_tag)
+    }
+    fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+        napkin_host::Library::fork_branch(self.inner, parent, agent)
+    }
 }
