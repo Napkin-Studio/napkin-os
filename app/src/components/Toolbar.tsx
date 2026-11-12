@@ -76,6 +76,8 @@ interface Props {
   doc?: DocBar
   /** A tool's home for the client (no document): named in the app slot, as the mock's "Briefs". */
   place?: BarPlace | null
+  /** The one bar's field (shell/bar): between the place and the tool's buttons, on every screen but a client's review. */
+  barField?: ReactNode
 }
 
 type PopKey = 'account' | 'client' | 'doc' | 'cont' | 'share'
@@ -331,7 +333,7 @@ function DocName({ doc, onMenu, open, renaming, setRenaming }: {
 }
 
 export default function Toolbar({
-  agency, agencyLogo, onAgency, onHome, mark = markOf(null), attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place,
+  agency, agencyLogo, onAgency, onHome, mark = markOf(null), attention, markTarget, client, needs, onDecisions, decisionsOpen, tools, user, onSignOut, account, doc, place, barField,
 }: Props) {
   const pop = usePop<PopKey>()
   const appRef = useRef<HTMLDivElement>(null)
@@ -422,6 +424,7 @@ export default function Toolbar({
               )}
             </div>
             <span className="tb-spacer" />
+            {barField}
             {tools}
             {right}
             {me}
@@ -490,6 +493,7 @@ export default function Toolbar({
             </span>}
           </div>
           <span className="tb-spacer" />
+          {barField}
           <span className="tb-tools">
             {mode?.mode === 'working'
               ? <span className="tb-status" data-testid="working-chip" data-st="working" title={`Agents: ${mode.label || 'Working'}`}><i className="sdot" aria-hidden />{mode.label || 'Working'}</span>

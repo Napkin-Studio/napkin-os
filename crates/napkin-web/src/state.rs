@@ -46,6 +46,10 @@ pub struct Workspace {
     /// The job index, read-only and disposable (napkin-host `jobindex`): rebuilt
     /// from the documents whenever one has moved.
     pub jobs: napkin_host::jobindex::IndexCache,
+    /// What the one bar finds, read-only and disposable (napkin-host `searchindex`), kept beside the job
+    /// index and rebuilt from the same documents by the same stamps. One per tenant, so a search never
+    /// crosses an agency.
+    pub search: napkin_host::searchindex::SearchCache,
     /// What the index counts days by: the real time, unless a test moved it.
     clock: JobsClock,
 }
@@ -61,6 +65,7 @@ impl Workspace {
             sessions: Mutex::new(SessionCache::default()),
             library: LibraryCache::new(),
             jobs: napkin_host::jobindex::IndexCache::new(),
+            search: napkin_host::searchindex::SearchCache::new(),
             clock,
         }
     }

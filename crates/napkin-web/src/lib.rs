@@ -31,6 +31,7 @@ pub mod meter;
 pub mod needs;
 pub mod roles;
 pub mod sandbox;
+pub mod search;
 pub mod state;
 pub mod store;
 pub mod tenant;
@@ -138,7 +139,18 @@ pub fn router_with(
             links::router().layer(DefaultBodyLimit::max(32 * 1024)),
         )
         .merge(shell_service(static_dir))
-        .layer(TraceLayer::new_for_http())
+        // The request's span names the method and the path, never the query string: a search's words, a
+        // document's path and a token ride in the query, and none of them belongs in a log.
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
+                tracing::debug_span!(
+                    "request",
+                    method = %request.method(),
+                    uri = %request.uri().path(),
+                    version = ?request.version(),
+                )
+            }),
+        )
         .with_state(ctx)
 }
 

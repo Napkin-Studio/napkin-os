@@ -98,6 +98,26 @@ export async function homeView(as?: string | null): Promise<HomeView | null> {
   } catch { return null }
 }
 
+/** One result of the one bar (napkin-web/src/search.rs): an allow list of fields, never a document's words. */
+export interface SearchItem {
+  kind: string
+  id: string
+  title: string
+  line: string
+  /** What the shell does on Enter: go to a page (`route`), open a document, or show a person's card. */
+  open: { action: 'route' | 'document' | 'person'; target: string }
+  client_id?: string
+  job?: string
+  /** A person only: the numbers of the jobs they own. */
+  jobs?: string[]
+}
+export interface SearchAnswer { total: number; groups: { kind: string; items: SearchItem[] }[] }
+
+/** What the one bar finds for `q` (`GET /search?q=`): only what this person may open. Null when the server does not answer. */
+export async function barSearch(q: string, signal?: AbortSignal): Promise<SearchAnswer | null> {
+  try { return await json<SearchAnswer>(`/search?q=${encodeURIComponent(q)}&limit=12`, { signal }) } catch { return null }
+}
+
 /** What the signed-in person is asked to do next, by deadline (`GET /needs`); empty where there is no server answer. */
 export async function jobNeeds(): Promise<NeedsAnswer> {
   // the timesheet reminder is from 16:00 where the person is: minutes east of UTC, as the timesheet routes take it

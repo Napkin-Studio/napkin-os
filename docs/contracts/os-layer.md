@@ -2589,3 +2589,38 @@ removed or cut-off line. It is tamper-evident, not tamper-proof (S1 anchors the 
 writes the file at a time; with several tasks on one disk it needs a lock file. It never holds a timesheet, a
 correction or a signal consent. Retention (default 12 months, for the owner to confirm) is not built: it needs a
 checkpoint line so a trimmed log still verifies.
+
+## 15. Search: the one bar (features/one-bar-search.clan)
+
+What the bar finds is one read-only index per agency, in memory, built from the documents and the two registries, with
+no model and no network (`crates/napkin-host/src/searchindex.rs`, held as `Workspace.search` beside the job index).
+
+- **`GET /api/t/{tenant}/search?q=&limit=`** answers `{total, groups: [{kind, items: [{kind, id, title, line, route,
+  open: {action, target}, client_id?, job?, jobs?}]}]}`. `kind` is `job`, `brief`, `script`, `idea`, `document`,
+  `asset`, `client` or `person`; the groups come best first (the first item of the first group is what Enter opens),
+  then by kind. `open.action` is `route` (a shell hash such as `#job-J001`), `document` (a path to open) or `person`
+  (a card); `jobs` is a person's own jobs. `limit` is 12 by default and 50 at most. No write verb: 405. An empty or
+  hostile query answers `{total: 0, groups: []}`. The tenant is the session's (403 for any other, from the `Tenant`
+  extractor), so one agency's search never reaches another's index.
+- **The walls.** Every entry carries the API route that opens it (`/d/{doc}`, `/jobs/{n}`, `/jobs/{n}/scope`,
+  `/client-brains/{doc}`, `/proprietary/{doc}`, `/clients`, `/agency/people`) and its client. `roles::allowed(roles, route,
+  client)` is asked of every entry **before** it is scored, ranked or counted, so a role never finds, and `total` never
+  counts, what its own GET of that route would answer 403. Money documents are those whose app id is `ie.napkin.scope`,
+  `.estimate`, `.invoice` or `.change-order` (or `-` and more), or whose document type says so (`searchindex::MONEY`); a
+  brain is a client's or the agency's by its vault's `kind`, and any other value is read as the agency's (the stricter).
+- **What an entry holds** is an allow list: kind, title, the client's name, the job number, the tool's name, a date, the
+  names of the people who wrote in it (the sign-in name's local part, as words only), and an asset's file name and type.
+  Never a document's words, a budget, an hour, a timesheet or an email: the index reads a document's manifest, the
+  actors of its chain, the names of its assets folder and the kind of vault a brain is, and nothing else.
+- **People** are not in the index. They come from `trait Directory` (section 14) at each query, a member's view of it: names
+  and roles, nobody removed, no email, and no people at all for an anonymous visitor or an agency with no directory.
+- **Cost.** `SearchCache` keeps the last index and what it learned of each document by the document's stamp
+  (`PartStore::stamp`, 13.3): an unchanged tenant is searched with no read and no hash; a write is found by the next query
+  (the stamp is read on every one) and re-reads only the documents whose stamp moved. `SearchCache::delete` and a restart
+  rebuild it from the documents, and the rebuilt index equals the live one (tested). The log line of a search holds counts
+  and milliseconds, never the words typed; the request's trace span holds the path and never the query string.
+- **The bar** is `app/src/shell/bar/`: a combobox field in the OS bar above 720 px (Cmd or Ctrl K, or a click), one 44 px
+  button below it that opens a full-width sheet, a command table (`commands.ts`: `{id, title, keywords, shortcut?, undoable,
+  available, run}`) that the bar searches and the `?` sheet prints, and a provider list (`BarProvider`) that Ask Nap and
+  voice join from their own folders. A command that cannot be undone (sign out) shows what it will do and waits for a second
+  Enter. Phone width is `max-width: 720px`, the shell's own breakpoint.

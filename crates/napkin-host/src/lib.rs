@@ -45,6 +45,7 @@ pub mod ops;
 pub mod proxy;
 pub mod routes;
 pub mod runs;
+pub mod searchindex;
 pub mod session;
 pub mod store;
 pub mod view;

@@ -238,6 +238,12 @@ bar of its own (`app/src/shell/appBar.ts`, features/app-bar-actions.clan):
 - `clan:write {v: 1, id, state, field, text}` (app → shell, sent by the structured edit bridge for every
   `clan.patchData`): `state` is saving, saved, failed or changed (HTTP 409). The shell keeps the text and shows
   Failed save; Try again sends `clan:retry {id}` to the frame, which sends the held write again once.
+- `clan:bar-key` (app → shell, sent by the structured edit bridge; features/one-bar-search.clan): Cmd or Ctrl K was
+  pressed inside the frame. The bridge sends it for that key alone, in a text field too (the shell's bar owns it), and
+  after `preventDefault`; the shell opens its one bar and takes focus. No other key is forwarded this way, so a tool's own
+  shortcuts (the Production Tool's canvas keys) stay its own. The shell's `?` (the shortcuts sheet) is not forwarded:
+  it is a key typed in a page, which a frame has focus in, and a tool that wants it asks the person to leave the frame.
+  Beside `clan:undo-key {dir}`, which is Cmd or Ctrl Z and Y where no field owns the key.
 - `clan:bar?` (shell → app, on every frame load) — send it again.
 - `clan:bar-action {id}` (shell → app) — a button was pressed. The app
   does what its own button did; the shell runs nothing.
