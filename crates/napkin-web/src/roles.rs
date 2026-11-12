@@ -639,6 +639,8 @@ pub fn group_of(route: &str) -> Group {
         Some("client-brains" | "pitches") => Group::Brains,
         Some("proprietary") => Group::Proprietary,
         Some("dashboard") => Group::Management,
+        // what Judge's telemetry holds leaves the vault by this one export, for management and admin
+        Some("judge") if rest.first().copied() == Some("telemetry") => Group::Management,
         Some("audit" | "setup") => Group::Admin,
         Some("agency") if rest.first().copied() == Some("accounts.tsv") => Group::Admin,
         Some("control") => Group::Control,

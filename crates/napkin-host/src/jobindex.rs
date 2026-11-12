@@ -30,6 +30,7 @@ use crate::clients;
 use crate::document::Document;
 use crate::error::HostResult;
 use crate::jobs::{self, JobRecord, RouteSet, RouteStep};
+use crate::ops::judge::{self, PieceScore, ScoreTile};
 use crate::ops::{decisions, gate, review};
 use crate::store::{DocId, DocStore};
 
@@ -133,6 +134,11 @@ pub struct JobEntry {
     /// who has written a decision in one of its documents (sign-in names, sorted). What the on-the-job
     /// filter of Needs you reads; sent to nobody (`jobview.rs` does not list it).
     pub people: Vec<String>,
+    /// The latest Judge score of each piece of work in the job's documents (features/judge.clan): numbers,
+    /// ids and codes of pieces, with no field that names a person. Left out of the wire while there are none, so a job
+    /// that nothing scored reads as it always did.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub scores: Vec<PieceScore>,
 }
 
 /// One step of the route, as the documents' decisions have it.
@@ -491,6 +497,8 @@ struct DocFacts {
     brief: Option<BriefFacts>,
     /// The people who have written a decision in this document (sign-in names, sorted): who is on the job.
     writers: Vec<String>,
+    /// The latest Judge score of each piece of work in it.
+    scores: Vec<PieceScore>,
 }
 
 /// The facts of the document `id` holding `bytes`; `None` for a document that
@@ -532,12 +540,14 @@ fn facts_of(id: &DocId, bytes: Vec<u8>) -> Option<DocFacts> {
         .collect();
     writers.sort();
     writers.dedup();
+    let scores = judge::piece_scores(&doc);
     Some(DocFacts {
         job,
         listed,
         evidence,
         brief,
         writers,
+        scores,
     })
 }
 
@@ -559,6 +569,7 @@ fn entry_of(
     let mut best: Option<(Progress, BriefFacts, String, String)> = None;
     let mut evidence: Vec<Evidence> = Vec::new();
     let client_step = rec.route.iter().any(|st| st.party == jobs::CLIENT);
+    let mut scores: Vec<(PieceScore, &'static str)> = Vec::new();
     let mut people: Vec<String> = vec![rec.owner.clone()];
     people.extend(
         rec.route
@@ -575,6 +586,12 @@ fn entry_of(
             people.extend(e.signers.iter().map(|(_, p)| p.clone()));
             evidence.push(e);
         }
+        let stage_of = if f.listed.app_id.as_deref() == Some(crate::ops::ideas::IDEA_ROOM) {
+            "ideas"
+        } else {
+            "production"
+        };
+        scores.extend(f.scores.iter().cloned().map(|p| (p, stage_of)));
         if let Some(b) = f.brief {
             if best.as_ref().is_none_or(|(p, ..)| b.progress > *p) {
                 best = Some((b.progress, b, f.listed.path.clone(), f.listed.title.clone()));
@@ -752,6 +769,14 @@ fn entry_of(
         }
     }
     needs.extend(alerts::deadline_soon(&subject, today));
+    // Judge's scores ask the team or the creative director, by the score's own trust state.
+    let cd = best
+        .as_ref()
+        .and_then(|(_, f, ..)| f.creative_director.as_deref());
+    for (p, stage_id) in &scores {
+        needs.extend(alerts::judge_needs(&subject, p, stage_id, cd));
+    }
+    scores.sort_by(|a, b| (&a.0.doc, &a.0.piece).cmp(&(&b.0.doc, &b.0.piece)));
     fold_approvals(&mut needs);
     for n in &mut needs {
         alerts::finish(n, today);
@@ -783,6 +808,7 @@ fn entry_of(
             route,
             holder,
             people,
+            scores: scores.into_iter().map(|(p, _)| p).collect(),
         },
         needs,
     )
@@ -1226,7 +1252,7 @@ pub struct Hours {
     pub jobs: Vec<JobLine>,
 }
 
-/// The six tiles. Judge scores and results hold no numbers in Phase 1.
+/// The six tiles. Judge scores hold numbers once a piece is scored; results hold none yet.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Dashboard {
     pub live_jobs: usize,
@@ -1234,7 +1260,8 @@ pub struct Dashboard {
     pub at_risk: Vec<JobLine>,
     pub hours: Hours,
     pub waiting_on_client: Vec<JobLine>,
-    pub scores: Option<()>,
+    /// Judge's tile: counts of pieces, never of people. `None` until a piece is scored.
+    pub scores: Option<ScoreTile>,
     pub results: Option<()>,
 }
 
@@ -1305,7 +1332,20 @@ impl JobIndex {
                 .iter()
                 .filter_map(|j| j.days_waiting_on_client.map(|d| line(j, format!("{d}"))))
                 .collect(),
-            scores: None,
+            scores: judge::tile(
+                &self
+                    .jobs
+                    .iter()
+                    .map(|j| {
+                        (
+                            j.number.as_str(),
+                            j.client.name.as_str(),
+                            j.client.id.as_str(),
+                            j.scores.as_slice(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ),
             results: None,
         }
     }

@@ -702,6 +702,7 @@
       var same = ref.content_hash === handoffRef(c.beats, ref.revision).content_hash;
       h += '<p class="sendnote" data-testid="sent-' + to + '">' + esc(SENT[to](ref.revision, same)) + '</p>';
     });
+    if(S.judge) h += '<p class="sendnote" data-testid="judge-score">Judge: ' + esc(S.judge.total) + ' of 30 for version ' + esc(S.judge.version) + '. Judge advises; the creative director decides.</p>';
     if(S.sent) h += '<p class="sendnote" role="status" data-testid="send-line">' + esc(S.sent) + '</p>';
     h += '</section>';
     $('side').innerHTML = h;
@@ -710,7 +711,7 @@
   var SENT = {
     radio: function(v, same){ return 'Radio comes in Phase 3. This script, version ' + v + ', is waiting for it.' + (same ? '' : ' It has changed since.'); },
     film: function(v, same){ return 'Sent to Film at version ' + v + '.' + (same ? '' : ' It has changed since.'); },
-    judge: function(v, same){ return 'Judge is not open yet. This script, version ' + v + ', is ready for it.' + (same ? '' : ' It has changed since.'); }
+    judge: function(v, same){ return 'Sent to Judge at version ' + v + '.' + (same ? '' : ' It has changed since.'); }
   };
   function ruleName(f){ return ({ dash: 'Dash', stage_direction: 'Stage direction', repetition: 'Repeats', length_off: 'Length', cast_count: 'Voices', no_spoken_lines: 'No spoken lines' })[f.rule] || f.rule; }
   function draw(force){ drawHead(); drawSetup(); drawTime(); drawBody(force); drawSide(); }
@@ -797,6 +798,16 @@
         if(to === 'film') return call('/spinoff', { app_id: 'ie.napkin.film' }).then(function(j){
           if(!j || j.ok === false) throw new Error((j && j.error) || 'Film could not open from here.');
           S.sent = 'Film is opening with every line under the same id.';
+        });
+        if(to === 'judge') return call('/judge', { target: 'script' }).then(function(j){
+          if(!j || j.ok === false){
+            var m = String((j && j.error) || '');
+            S.judge = null;
+            S.sent = 'Judge did not score it. ' + (m.replace(/^[a-z_]+:\s*/, '') || 'Nothing was changed.');
+            return;
+          }
+          S.judge = { total: j.score && j.score.total, version: st.n };
+          S.sent = 'Judge scored version ' + st.n + ': ' + (j.score ? j.score.total : '') + ' of 30. The card is above the page.';
         });
         S.sent = SENT[to](st.n, true);
       });

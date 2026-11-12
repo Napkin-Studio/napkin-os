@@ -137,7 +137,7 @@ test('plantCanary reaches every free-text string and leaves ids alone', () => {
 })
 
 test('the stand-in middleware: a named task, a failed task once, an unknown task keeps the old reply', async () => {
-  const server = standIn(answers)
+  const server = standIn(answers, join(e2e, '../../server/napkin/judge/rubric.json'))
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   const ask = (task: string) => fetch(`${base}/v1/tasks`, { method: 'POST', body: JSON.stringify({ request_kind: 'middleware', payload: { task } }) })
@@ -153,7 +153,17 @@ test('the stand-in middleware: a named task, a failed task once, an unknown task
     assert.equal((await failed.json()).error.type, 'provider_error')
     assert.equal((await ask('judge_work')).status, 200) // once
     await control({ variant: { judge_work: 'score22-idea7' } })
-    assert.equal((await (await ask('judge_work')).json()).result.score.total, 22)
+    assert.equal((await (await ask('judge_work')).json()).result.fail.idea, 3)
+    // Asked for a kind of work, the Judge fixture writes all thirty of its tests, and a refusal variant answers with its status.
+    const judged = await fetch(`${base}/v1/tasks`, { method: 'POST', body: JSON.stringify({ request_kind: 'middleware', payload: { task: 'judge_work', input: { work: { kind: 'script' } } } }) })
+    const tests = (await judged.json()).result.tests as { id: string; value: string }[]
+    assert.equal(tests.length, 30)
+    assert.equal(tests.filter(t => t.value === 'fail').length, 8)
+    await control({ variant: { judge_work: 'ai-off' } })
+    const refused = await ask('judge_work')
+    assert.equal(refused.status, 403)
+    assert.equal((await refused.json()).error.type, 'ai_off')
+    await control({ variant: { judge_work: 'score24' } })
     // Any other task: the old canned reply, byte for byte.
     const unknown = await ask('start_campaign')
     assert.equal(await unknown.text(), JSON.stringify({
@@ -162,7 +172,7 @@ test('the stand-in middleware: a named task, a failed task once, an unknown task
       result: { summary: 'e2e stand-in' }, change: null, trace: {},
     }))
     const log = await (await fetch(`${base}/control/log`)).json() as { task: string }[]
-    assert.deepEqual(log.map(e => e.task), ['ban_default', 'ban_default', 'judge_work', 'judge_work', 'judge_work', 'start_campaign'])
+    assert.deepEqual(log.map(e => e.task), ['ban_default', 'ban_default', 'judge_work', 'judge_work', 'judge_work', 'judge_work', 'judge_work', 'start_campaign'])
     assert.ok(log.every(e => Object.keys(e).sort().join() === 'at,task'), 'the log holds the task and the time and nothing else')
   } finally {
     server.close()

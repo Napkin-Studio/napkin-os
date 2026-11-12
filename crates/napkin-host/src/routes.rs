@@ -35,6 +35,8 @@ pub struct HostRequest {
     pub path: String,
     pub query: String,
     pub body: Vec<u8>,
+    /// The request was a POST: `/judge` reads on a GET and scores on a POST. False unless a shell says so.
+    pub post: bool,
 }
 
 impl HostRequest {
@@ -43,7 +45,14 @@ impl HostRequest {
             path: path.into(),
             query: query.into(),
             body,
+            post: false,
         }
+    }
+
+    /// This request is a POST (see [`HostRequest::post`]).
+    pub fn posting(mut self) -> Self {
+        self.post = true;
+        self
     }
 
     fn body_str(&self) -> String {
@@ -239,6 +248,17 @@ pub async fn dispatch_async(
             );
         }
         return match api_proxy(ctx, session, cfg, &req.body_str()).await {
+            Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
+            Err(e) => e.into(),
+        };
+    }
+    // Send to Judge (features/judge.clan): the one scoring route, for every tool whose app declares judge_work.
+    #[cfg(feature = "native")]
+    if req.path == "/judge" && req.post {
+        if !ctx.actor.is_human() {
+            return HostResponse::error(403, "only a person sends work to Judge");
+        }
+        return match crate::judge_run::run(ctx, session, cfg, &req.body_str()).await {
             Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
             Err(e) => e.into(),
         };
@@ -811,6 +831,26 @@ pub fn dispatch(
             Some(v) => HostResponse::json(200, &v),
             None => HostError::no_file_open().into(),
         },
+        // Judge (features/judge.clan): the score card of a piece of work (a POST scores it, in dispatch_async),
+        // and the creative director's overrule of a score, with a written reason.
+        "/judge" => {
+            if req.post {
+                return HostResponse::error(501, "Judge scores through the server, not this build");
+            }
+            let store = session.store().clone();
+            let target = query_param(&req.query, "target");
+            match session.read(|d| crate::ops::judge::card(&*store, ctx, d, target.as_deref())) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
+        }
+        "/judge/overrule" => {
+            let store = session.store().clone();
+            let body = req.body_json();
+            review(session, ctx, |c, d| {
+                crate::ops::judge::overrule(&*store, c, d, &body)
+            })
+        }
         // Tracked changes on a script (features/script-editor.clan): a person's mark-up, and the writer's answer.
         "/script/propose" => review(session, ctx, |c, d| {
             crate::ops::script::propose(c, d, &req.body_json())

@@ -63,7 +63,7 @@ class ModelCap:
         return self._port.api if self._port else None
 
     def structured(self, purpose: str, system: str, payload: dict, schema: dict, max_tokens: int | None = None,
-                   effort: str | None = None, images=None, vision: bool = False) -> dict:
+                   effort: str | None = None, images=None, vision: bool = False, private: bool = False) -> dict:
         if self._port is None:
             raise ModelError("no model is configured", "server")
         attr = _attr_str(self._attr)
@@ -98,7 +98,7 @@ class ModelCap:
                         t[k] += u[k]
             log_ = self._log()
             if log_.on:
-                body = runlog.bodies()
+                body = runlog.bodies() and not private  # private: a client's work is never written to the run log
                 pj = json.dumps(payload, ensure_ascii=False, default=str)
                 log_.model(purpose=purpose, model=next(iter(mine.by_model), None) or self._port.model, secs=time.monotonic() - t0,
                            tin=mine.input_tokens, tout=mine.output_tokens, cache_read=mine.cache_read,

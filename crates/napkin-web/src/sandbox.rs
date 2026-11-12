@@ -79,7 +79,9 @@ async fn dispatch(
     // The one route that spends money is metered before it is dispatched —
     // every call through it but a middleware `job_status` poll, which waits on
     // work already charged (`meter::charged`; an unreadable body is charged).
-    let charged = path == "/api-proxy" && crate::meter::charged(&body);
+    // Send to Judge is one more route that spends: a POST to /judge is a scoring run, charged like a task.
+    let scoring = path == "/judge" && method == Method::POST;
+    let charged = scoring || (path == "/api-proxy" && crate::meter::charged(&body));
     if charged {
         if let Err(usage) = ctx.meter.try_spend(&grant.tenant) {
             return refuse(
@@ -99,7 +101,10 @@ async fn dispatch(
     };
 
     let started = std::time::Instant::now();
-    let req = HostRequest::new(path.clone(), query.unwrap_or_default(), body.to_vec());
+    let mut req = HostRequest::new(path.clone(), query.unwrap_or_default(), body.to_vec());
+    if method == Method::POST {
+        req = req.posting();
+    }
     // The grant, not the request, says who this is: an app frame cannot name
     // its own actor or scope.
     let resp = napkin_host::dispatch_async(
@@ -141,6 +146,10 @@ async fn dispatch(
     // A run that failed gives its charge back (meter::Meter::settle).
     if path == "/api-proxy" {
         ctx.meter.settle(&grant.tenant, charged, &resp.body);
+    }
+    // A scoring run that refused or failed wrote nothing, so its charge comes back.
+    if scoring && resp.status != 200 {
+        ctx.meter.refund(&grant.tenant);
     }
     let job = (ctx.dogfood.is_some() && path == "/api-proxy")
         .then(|| crate::dogfood::job_of(&resp.body))

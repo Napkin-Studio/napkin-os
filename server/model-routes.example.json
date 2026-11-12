@@ -7,6 +7,10 @@
     "draft_brief_whole": {"effort": "medium"},
     "extract_facts": {"model": "opus-4.6", "effort": null, "schema": "auto"},
     "extract_category_facts": {"model": "opus-4.6", "effort": null, "schema": "auto"},
-    "write_dossier_cell": {"model": "sonnet-5.5"}
+    "write_dossier_cell": {"model": "sonnet-5.5"},
+    "judge": {"model": "opus-4.6", "effort": null},
+    "judge_idea": {"model": "opus-4.6", "effort": null},
+    "judge_craft": {"model": "opus-4.6", "effort": null},
+    "judge_effect": {"model": "opus-4.6", "effort": null}
   }
 }

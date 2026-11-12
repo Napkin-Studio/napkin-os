@@ -1,0 +1,7 @@
+{
+ "_status": 429,
+ "error": {
+  "type": "spend_refused",
+  "message": "e2e stand-in: the middleware refused"
+ }
+}

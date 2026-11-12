@@ -352,11 +352,22 @@ test('Send to Film writes the Advertising Studio revision with the same ids, the
   assert.deepEqual(p.posts.filter(x => x.url === '/spinoff').map(x => x.body), [{ app_id: 'ie.napkin.film' }])
 })
 
-test('Send to Judge records the draft and says Judge is not open yet', async () => {
-  const p = await page()
+test('Send to Judge records the draft, asks the host to score it and shows the total', async () => {
+  const p = await page({ reply: (url) => (url === '/judge' ? { ok: true, score: { total: 24 } } : { ok: true }) })
   p.click('[data-send="judge"]')
   await p.settle()
-  assert.equal(p.text('[data-testid="send-line"]'), 'Judge is not open yet. This script, version 1, is ready for it.')
+  assert.deepEqual(p.posts.filter(x => x.url === '/judge').map(x => x.body), [{ target: 'script' }])
+  assert.equal(p.text('[data-testid="send-line"]'), 'Judge scored version 1: 24 of 30. The card is above the page.')
+  assert.match(p.text('[data-testid="judge-score"]')!, /24 of 30/)
+  assert.ok(p.writes.some(w => (w.opts as Json).action === 'send version 1 to Judge'), 'the version sent is recorded')
+})
+
+test('Send to Judge says in the host\'s words when Judge will not score it, and shows no score', async () => {
+  const p = await page({ reply: (url) => (url === '/judge' ? { ok: false, error: 'not_configured: Judge is not set up here.' } : { ok: true }) })
+  p.click('[data-send="judge"]')
+  await p.settle()
+  assert.equal(p.text('[data-testid="send-line"]'), 'Judge did not score it. Judge is not set up here.')
+  assert.equal(p.text('[data-testid="judge-score"]'), null)
 })
 
 test('the content hash is a real SHA-256 and a handed-off version says when it has changed since', async () => {
@@ -452,5 +463,5 @@ test('the e2e seed carries every key of the schema, so a test never runs on a mi
   // and the page opens it
   const p = await page({ data: seed.FULL_SCRIPT })
   assert.equal(p.all('.beat').length, 1)
-  assert.match(p.text('[data-testid="sent-judge"]')!, /Judge is not open yet/)
+  assert.match(p.text('[data-testid="sent-judge"]')!, /Sent to Judge at version/)
 })

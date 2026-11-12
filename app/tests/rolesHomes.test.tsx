@@ -184,7 +184,7 @@ test('every word on a home says no em dash', () => {
 
 test('every door with no tool opens its own Empty state: its line, its verb, its example and the reason', () => {
   const none = DOORS.filter(d => !doorIsLive(d.id, APPS))
-  assert.ok(none.length >= 29)
+  assert.ok(none.length >= 28) // one fewer each time a record gives a door its page (Judge scores did)
   for (const d of none) {
     const html = renderToStaticMarkup(createElement(DoorPage, { door: d.id, name: d.name, clients: [], items: [], apps: [], go: noop }))
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/'/g, '&#x27;')

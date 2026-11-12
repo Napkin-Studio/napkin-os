@@ -1,0 +1,7 @@
+{
+ "_status": 503,
+ "error": {
+  "type": "not_configured",
+  "message": "e2e stand-in: the middleware refused"
+ }
+}

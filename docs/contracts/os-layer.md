@@ -2433,6 +2433,46 @@ soonest job deadline (today or later) on a job the person is on, or `null`; an o
 - **The timesheet reminder** is built per request for the caller alone, from their own consent and their own day (never another's),
   from 16:00 at the caller's `tz`, once a day (its id carries the date), only to a person who has answered the consent question.
 
+### 13.5 Judge (features/judge.clan)
+
+Judge is gate C1 on the judgement port of `judgement-architecture.clan`, not a service: a piece of work is scored out of 30, the
+host adds up the passes and routes, and the score is one verdict in the work's own file. Verdict shapes: `docs/contracts/judge-verdict.schema.json`.
+
+- **The rubric** is `server/napkin/judge/rubric.json` (a copy, held identical by a test, is `crates/napkin-host/src/ops/judge_rubric.json`):
+  ten yes or no tests of the idea, ten of the craft of the kind of work (`script`, `idea_route`, `visual_brief`), ten of the effect. A
+  test is answered `pass` or `fail` with one line of evidence; some by code (`method: code`), the rest by the middleware's judge. No model
+  returns a number. A change to the rubric is a new version, which starts untrusted.
+- **One API for every tool.** `POST /s/{token}/judge {target?}` on any document whose app declares `judge_work` in `app/pipeline.yaml`
+  sends the allow-listed work (never the proposals, hand-offs, authors or the carried brief) and the brief's approved fields to the
+  middleware task `judge_work` (`middleware-api.md` section 12), tallies the reply (a missing, doubled or unknown test, or one with no
+  evidence, is `502 judge_malformed` and never a pass) and writes one verdict. `GET /s/{token}/judge[?target=]` is the score card: the
+  newest score (failed tests first), the older ones, whether the work or the brief has moved on since (`current`, `out_of_date`), the
+  setup (backend, price, trust) and `can_overrule`. Refusals keep their codes in the message: `ai_off` 403, `not_eu` 403, `not_configured`
+  503 (also when `NAPKIN_JUDGE_BACKEND` is unset on the web task, before anything is sent), `spend_refused` 429. A refused or failed run
+  writes nothing and returns its credit. A client's link refuses the route.
+- **The verdict.** `kind: verdict`, `agent: judge`, `action: score_work`, `handler: judge_work@1.x`, `backend`, `version` (the hash of the
+  work's allow-listed content: a new word is a new version; the old score stays on the old one), `targets: [<doc>#<piece>]`, `cites` (the
+  brief's approve decision), no `polarity` (a bad verdict stops a lock, so Judge's carries none), `reason_code` (`judge.return`, `judge.brave`, `judge.forward`), `taxonomy_version`
+  (the rubric version), and the `judge` block `{schema: 1, version, total, sub{idea, craft, effect}, tests[{id, dim, method, value,
+  evidence, reason_code}], advised_route: team|cd_brave|cd, trust: none|shadow|earned, brief_version, brief_hash, work_kind, work_hash,
+  piece}`. `score` is empty. Routing, in code (`ops/judge.rs`): total under 24 and idea under 9 is `team`; under 24 with idea 9 or 10 is
+  `cd_brave` (Brave, fix the craft); 24 or more is `cd`.
+- **Judge advises, the creative director decides.** `NAPKIN_JUDGE_TRUST` is unset (`none`), `shadow`, or `earned:<judge version>`; a different
+  Judge version starts at shadow. Until a version is `earned` the 24 is advice: the team gets the notes, the creative director still has the
+  work in Ready for review marked "Judge is not yet trusted here. Advice only.", and the screen says so. When earned, under 24 with the idea
+  under 9 goes to the team only. No operation that approves, picks or sends to a client reads a score (a test greps for it).
+- **The overrule.** `POST /s/{token}/judge/overrule {reason, route?, score?}`: only the creative director named on the brief (`403` for anyone
+  else and for a process), a written reason required (`400`). It is their own verdict (`reason_code: judge.overruled`, `reviewer_role:
+  creative-director`, cites the score); Judge's verdict stays as it was; the effective route is theirs.
+- **The index.** `JobEntry.scores` is the latest score of each piece (`PieceScore`: numbers, ids, codes; no field that names a person) read
+  from the per-document facts the stamp-keyed cache holds, so an index read on an unchanged tenant reads and hashes nothing.
+  `Dashboard.scores` is `{scored, average, under_24, at_27, brave, overruled, awaiting_set, jobs[]}` or null, counted by piece and job only.
+  The alerts row "Work scores under 24" is live: `judge-return` needs for the copywriter and art director roles, `judge-review` for the
+  creative director named on the brief (else their role).
+- **Telemetry.** `GET /api/t/{tenant}/judge/telemetry` (management and admin) answers `{schema, rows}`, one per score, built from an allow
+  list: ids, hashes, numbers, test ids with pass or fail, codes, route, trust, cost, and what the creative director then did. No evidence, no
+  reason, no title, no name. `python -m napkin.judge.calibrate <export>` reads it.
+
 ## 14. The agency directory (features/agency-setup.clan)
 
 An agency's people are a third registry (after clients and jobs): one CLAN document per tenant,

@@ -54,6 +54,7 @@ import type {
   AttachReply,
   RelatedView,
   SourceCard,
+  JudgeCardView,
 } from './types'
 
 interface SessionInfo {
@@ -540,6 +541,11 @@ export const httpHost: Host = {
       acknowledge: async (decision: string) => { await post('/acknowledge', { decision }) },
       data: () => text(`/d/${encodeURIComponent(path)}/entry/data`),
       approve: async (rationale: string) => { await post('/approve', { rationale }) },
+      judge: {
+        card: (target?: string) => call<JudgeCardView>(`/judge${target ? `?target=${encodeURIComponent(target)}` : ''}`),
+        send: (target?: string) => call<JudgeCardView>('/judge', { method: 'POST', body: JSON.stringify(target ? { target } : {}) }),
+        overrule: async (reason: string, route?: 'team' | 'cd') => { await post('/judge/overrule', { reason, ...(route ? { route } : {}) }) },
+      },
     }
   },
   clients: {

@@ -24,6 +24,8 @@ export const DOOR_TARGETS: Readonly<Record<string, DoorTarget>> = {
   'approvals': { page: 'approvals', built: true },
   // Every live job, each opening its page (record job-page).
   'live-jobs': { page: 'live-jobs', built: true },
+  // Each piece of work with its score out of 30, read from the job index (record judge).
+  'judge-scores': { page: 'judge-scores', built: true },
 }
 
 export const doorTarget = (id: string): DoorTarget | null => DOOR_TARGETS[id] ?? null

@@ -360,7 +360,7 @@ export interface JobNeed {
   /** Stable, `{job}:{stage}:{role}:{kind}`. Absent from an older host. */
   id?: string
   /** A task (`gate`, `approval`, `approval-chase`) or a notice (`brief-changed`, `client-change`, `deadline`, `timesheet`). Absent from an older host. */
-  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet'
+  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet' | 'judge-return' | 'judge-review' | 'judge-return' | 'judge-review'
   stage?: string
   /** An approval: whole days past the step's due date, 0 until the day after; null on a gate need. */
   days_late?: number | null
@@ -456,6 +456,8 @@ export interface JobEntry {
   documents: JobDocument[]
   route: RouteStepState[]
   holder: Holder | null
+  /** The latest Judge score of each piece of work in the job. Absent from an older host. */
+  scores?: PieceScore[]
 }
 
 /** A document filed under a job. `version` and `changed_since_lock` are a gated brief's: its newest signed version, and whether the draft has moved on. */
@@ -489,8 +491,88 @@ export interface DashboardView {
   hours: { budget: number; confirmed: number | null; jobs: JobLine[] }
   /** `line` is the whole days the client has waited. */
   waiting_on_client: JobLine[]
-  scores: null
+  /** Judge's tile (features/judge.clan): counts of pieces and jobs, never of people. Null until a piece is scored. */
+  scores: ScoreTile | null
   results: null
+}
+
+/** One piece of work's latest Judge score as the job index holds it: numbers, ids and codes, no person. */
+export interface PieceScore {
+  doc: string
+  title: string
+  piece: string
+  kind: 'script' | 'idea_route' | 'visual_brief' | string
+  score: string
+  at: string
+  total: number
+  idea: number
+  craft: number
+  effect: number
+  advised_route: 'team' | 'cd_brave' | 'cd'
+  /** Where it goes now: the creative director's overrule, else Judge's advice. */
+  route: 'team' | 'cd_brave' | 'cd'
+  brave: boolean
+  trust: 'none' | 'shadow' | 'earned'
+  overruled: boolean
+  decided: 'kept' | 'returned' | null
+  /** Still the version that was scored. */
+  current: boolean
+}
+
+export interface ScoreTile {
+  scored: number
+  average: number
+  under_24: number
+  at_27: number
+  brave: number
+  overruled: number
+  /** How many more decided pieces the set needs before trust can be earned. */
+  awaiting_set: number
+  jobs: { number: string; client: string; client_id: string; scored: number; average: number; under_24: number; at_27: number; brave: number; overruled: number }[]
+}
+
+/** One test of a score, as the card shows it. */
+export interface JudgeTest {
+  id: string
+  dim: 'idea' | 'craft' | 'effect'
+  method: 'code' | 'llm' | 'jev'
+  value: 'pass' | 'fail'
+  evidence: string
+  reason_code: string
+  question?: string
+}
+
+/** The score card of one piece of work (`GET /judge`). */
+export interface JudgeCardView {
+  ok: true
+  kind: 'script' | 'idea_route' | 'visual_brief'
+  piece: string | null
+  pieces: string[]
+  can_score: boolean
+  why_not: string | null
+  setup: { backend: string | null; configured: boolean; price_eur: number | null; trust: 'none' | 'shadow' | 'earned'; not_trusted: string; calibration: string; rubric_version: string }
+  score: null | {
+    id: string; at: string; version: string
+    /** The work is still the version that was scored. */
+    current: boolean
+    /** The brief moved on since. */
+    out_of_date: boolean
+    total: number
+    sub: { idea: number; craft: number; effect: number }
+    /** Failed first. */
+    tests: JudgeTest[]
+    advised_route: 'team' | 'cd_brave' | 'cd'
+    route: 'team' | 'cd_brave' | 'cd'
+    brave: boolean
+    route_line: string
+    trust: 'none' | 'shadow' | 'earned'
+    judge_version: string
+    overruled: null | { route: 'team' | 'cd'; at: string; reason: string }
+    decided: 'kept' | 'returned' | null
+  }
+  older: { id: string; at: string; total: number; version: string; route: string }[]
+  can_overrule: boolean
+  creative_director_named: boolean
 }
 
 export interface LibraryListing {
@@ -984,6 +1066,13 @@ export interface DocOps {
   data(): Promise<string>
   /** Lock it: `POST /approve`. Refused, in the host's words, while its lock list holds. */
   approve(rationale: string): Promise<void>
+  /** Judge (features/judge.clan): the score card, a score, and the creative director's overrule. */
+  judge: {
+    card(target?: string): Promise<JudgeCardView>
+    /** Send to Judge. Rejects with the host's words (`ai_off: ...`, `not_configured: ...`) when it will not score. */
+    send(target?: string): Promise<JudgeCardView>
+    overrule(reason: string, route?: 'team' | 'cd'): Promise<void>
+  }
 }
 
 export interface Host {

@@ -35,6 +35,8 @@ pub mod html;
 pub mod import;
 pub mod jobindex;
 pub mod jobs;
+#[cfg(feature = "native")]
+pub mod judge_run;
 pub mod library;
 pub mod listing;
 pub mod log;
