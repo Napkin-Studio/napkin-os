@@ -3233,7 +3233,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // Who does each stage, by role (NapkinRoles, the agent engine the packer
   // inlines at the agent-sphere marker). The words about a stage's own work
   // name the role that does it: reading what was sent is the Knowledge
-  // agent's, picking the lenses (and the checks) the Review agent's, each lens
+  // agent's, picking the lenses the Strategy agent's (roles.js STAGES.research.select; the stage's
+  // sphere still wears Review's colour, WORK_ROLE.select, until the owner says otherwise), each lens
   // the Research agent's, finding the points and writing the report the
   // Synthesis agent's (the mock's "Composed by Synthesis agent"). The run's stage on the desk (the pills, the
   // caption, the sphere, the question's signature) follows PLAN: runRole().
@@ -3255,7 +3256,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // A role's sphere at about the old figure's size: the static frame now, a live
   // sphere once NapkinRoles.auto() hydrates it (without WebGL the frame stays).
   function sphereTag(r, size, state){ var R=roles(); return R?R.tag(r, {size:size, state:state||'idle', decorative:true}):''; }
-  STAGES.forEach(function(S){ S.who=TheAgent(WORK_ROLE[S.k]); });
+  STAGES.forEach(function(S){ S.who=TheAgent(S.k==='select'?'strategy':WORK_ROLE[S.k]); });
   function lensOf(from){ var m=/^([a-z_]+)(\/|$)/.exec(String(from||'')); return m&&LENS[m[1]]?m[1]:''; }
   // What the Research agent says it will do on each lens, and what it looks
   // into, in plain words.
@@ -3505,7 +3506,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   // Each stage, signed by the agent who does it.
   function stageLabel(k){
-    return {extract:TheAgent('knowledge')+' reads what you sent', identify:TheAgent('knowledge')+' finds the brand', select:TheAgent('review')+' picks what to look into',
+    return {extract:TheAgent('knowledge')+' reads what you sent', identify:TheAgent('knowledge')+' finds the brand', select:TheAgent('strategy')+' picks what to look into',
       research:TheAgent('research')+' looks it up', synthesise:TheAgent('synthesis')+' finds the points', report:TheAgent('synthesis')+' writes the report'}[k]
       ||(STAGE[k]||{}).l||k;
   }
@@ -3884,7 +3885,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var P=picks(), more=CHAT.mkMore||P.markets.some(function(m){ return MK_OFFER.indexOf(m)>=MK_FIRST; });
     var mks=more?MK_OFFER:MK_OFFER.slice(0, MK_FIRST);
     return '<div class="rt-picks">'
-      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(theAgent('review'))+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
+      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(theAgent('strategy'))+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
         return '<button type="button" class="rt-chip'+(on?' on':'')+'" data-act="pk-lens" data-k="'+esc(L.k)+'" aria-pressed="'+on+'" title="'+esc(L.l)+'" aria-label="'+esc(L.l)+'"'+off+'>'+esc(LENS_SHORT[L.k]||L.l)+'</button>'; }).join('')+'</span></div>'
       +'<div class="rt-pk"><span class="rt-pl">Markets</span><span class="rt-chips">'+mks.map(function(m){ var on=P.markets.indexOf(m)!==-1; return '<button type="button" class="rt-mk'+(on?' on':'')+'" data-act="pk-mk" data-k="'+m+'" aria-pressed="'+on+'" title="'+esc(MARKET[m]||m)+'"'+off+'>'+m+'</button>'; }).join('')
         +(more?'':'<button type="button" class="rt-mk rt-mkmore" data-act="pk-mkmore" aria-label="More markets" title="More markets"'+off+'>+</button>')+'</span></div>'
@@ -5785,7 +5786,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // of its own. The middleware answers from the facts the document holds, and
   // the Research agent searches only when jev says that answer does not answer it.
   // The answers are the document's (data.asks); this view asks and shows them.
-  var ASK={ui:{}, jobs:[]};
+  var ASK={ui:{}, jobs:[], reveal:null};
   var KEY_LENS={market:'market_structure', positioning:'brands_positioning', consumer:'consumer_culture', codes:'category_codes',
     rhythm:'rhythm_moments', media:'media_spend', regulation:'regulation_clearance', effectiveness:'effectiveness_evidence',
     awareness:'brands_positioning', launch:'brands_positioning', product:'brands_positioning', share:'market_structure'};
@@ -5914,6 +5915,15 @@ details.pv-fold>summary:hover{background:var(--soft)}
     }
     if(cites&&window.ClanFields) ClanFields.refresh();
     if(keep){ var n=$(keep.id); if(n){ try{ n.focus({preventScroll:true}); if(keep.s!=null&&n.setSelectionRange) n.setSelectionRange(keep.s, keep.e); }catch(e){} } }
+    revealAsk();
+  }
+  // Where an answer to a question about this lens goes on the page, in words: after its section,
+  // else in its own section at the end (renderAsks).
+  function askWhere(lens){ return lens&&askSections()[lens]?'under '+aboutName(lens):'at the end of the report'; }
+  // An answer asked from the inspector, brought into view once it is on the page (ASK.reveal).
+  function revealAsk(){
+    var id=ASK.reveal, el=id&&$('rq-'+slug(id)); if(!el) return;
+    ASK.reveal=null; el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
   }
   function askStoreKey(){ return 'clan.research.asks.'+docId(); }
   function saveAskJobs(){
@@ -5929,6 +5939,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var j={lens:lens&&LENS[lens]?lens:null, question:q, ref:VIEW.sel||null, state:'sending'};
     ASK.jobs.push(j); ASK.ui[key]={open:false, draft:''}; renderAsks();
     sendAsk(j);
+    return j;
   }
   function sendAsk(j){
     var input={question:j.question}; if(j.lens) input.lens=j.lens;
@@ -5954,7 +5965,12 @@ details.pv-fold>summary:hover{background:var(--soft)}
     }
     var ch=isObj(b.change)?b.change:null;
     if(ch&&!ch.applied&&ch.reason&&ch.reason!=='already applied') j.error='the host did not save the answer: '+ch.reason;
-    else ASK.jobs.splice(ASK.jobs.indexOf(j), 1);
+    else {
+      ASK.jobs.splice(ASK.jobs.indexOf(j), 1);
+      // Asked from the inspector: the answer is in the report, not there; say so and bring it into view.
+      var aid=isObj(b.result)&&b.result.ask;
+      if(j.from==='pv'&&aid){ ASK.reveal=aid; toast('Answered '+askWhere(j.lens)+'.'); }
+    }
     saveAskJobs(); loadChain(); render();
   }
   function resumeAsks(){
@@ -6820,7 +6836,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'pv-next': CHK.at=chkAfter(CHK.at)||CHK.at; CHK.picked=true; renderPanel(); break;
       case 'pv-ask': var pq=$('pv-askq'), pqv=String(pq&&pq.value||'').trim(); if(!pqv){ toast('Type a question first.'); if(pq) pq.focus(); break; }
         var pl=refLens(VIEW.sel||'')||(/^sec:/.test(VIEW.sel||'')&&evSec(VIEW.sel.slice(4))?evSec(VIEW.sel.slice(4)).lens:'');
-        ASK.ui._new={draft:pqv, lens:pl}; renderAsks(); var nb=$('rqin-_new'); if(nb) nb.value=pqv; var nls=$('rqlens-_new'); if(nls) nls.value=pl; doAsk('_new'); break;
+        ASK.ui._new={draft:pqv, lens:pl}; renderAsks(); var nb=$('rqin-_new'); if(nb) nb.value=pqv; var nls=$('rqlens-_new'); if(nls) nls.value=pl;
+        // The question goes with this item's lens only (ask_research@1 takes no item), and its answer
+        // is written in the report, not here: say where, and bring it into view when it lands.
+        var pj=doAsk('_new'); if(pj){ pj.from='pv'; if(pq) pq.value=''; toast('Asked. The answer will appear '+askWhere(pj.lens)+'.'); } break;
       case 'pv-askfocus': var pa=$('pv-askq'); if(pa) pa.focus(); break;
       case 'pv-jump': var jd=b.closest('details'); if(jd) jd.open=false; var jt=$(b.getAttribute('data-to')); if(jt){ if(jt.tagName==='DETAILS') jt.open=true; jt.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
       case 'pv-showmap': showOnMap(b.getAttribute('data-ref')); break;

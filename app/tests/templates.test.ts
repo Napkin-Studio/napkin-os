@@ -529,7 +529,7 @@ test('the research names its agents by role, draws them as spheres, and asks on 
   assert.deepEqual(['extract', 'identify', 'select', 'research', 'synthesise', 'report'].map(runRole), ['strategy', 'strategy', 'strategy', 'research', 'synthesis', 'review'])
   assert.equal(TheAgent('synthesis'), 'The Synthesis agent')
   assert.equal(TheAgent('knowledge'), 'The Knowledge agent')
-  assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('review'\)\+' picks what to look into'/s)
+  assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('strategy'\)\+' picks what to look into'/s)
   assert.match(fn(RT, 'stageLabel'), /synthesise:TheAgent\('synthesis'\)\+' finds the points', report:TheAgent\('synthesis'\)\+' writes the report'/)
   assert.match(fn(RT, 'rpBand'), /' by '\+theAgent\('synthesis'\)/, 'the report is written by the Synthesis agent')
   assert.match(fn(RT, 'questionCard'), /k=runRole\(Q\.stage\)/)
@@ -4316,4 +4316,57 @@ test('only the new draft asks for intake', () => {
   assert.deepEqual(runs[0].input.attachments, [{ name: 'a.pdf' }])
   // the redraft and the part fixes go through other jobs and ask nothing
   for (const name of ['regenField', 'fixParts']) assert.doesNotMatch(fn(BM, name), /intake/)
+})
+
+// ── UAT 2026-11-12: words that say what is true ────────────────────────────
+
+test('Brief Maker says whose bad verdict it is: the Review agent’s own check is not someone marking a part wrong', () => {
+  const { kindWord } = lift<{ kindWord(x: unknown, view: unknown): string }>(BM, ['kindWord'], { arr, KIND_WORD: new Function(`${obj(BM, 'KIND_WORD')} return KIND_WORD`)() })
+  const view = { decisions: [
+    { decision: { id: 'd_agent' }, who: { kind: 'agent', id: 'agent:review', name: 'Review agent' } },
+    { decision: { id: 'd_me' }, who: { kind: 'person', id: 'human:a', name: 'Ann', you: true } },
+    { decision: { id: 'd_bo' }, who: { kind: 'person', id: 'human:b', name: 'Bo' } },
+  ] }
+  const bad = (decision: string) => ({ code: 'bad_verdict', decision })
+  assert.equal(kindWord(bad('d_agent'), view), 'Review agent said no')
+  assert.equal(kindWord(bad('d_me'), view), 'You marked it wrong')
+  assert.equal(kindWord(bad('d_bo'), view), 'Marked wrong by Bo')
+  assert.equal(kindWord(bad('d_gone'), view), 'Marked wrong')
+  assert.equal(kindWord({ code: 'open_contest' }, view), 'Sources disagree')
+  assert.equal(kindWord({ code: 'something_new' }, view), 'Needs you')
+  assert.match(fn(BM, 'lkItemHtml'), /kindWord\(x, osView\(\)\)/)
+  assert.match(fn(BM, 'lockItems'), /decision:a\.decision/)
+})
+
+test('the shared field chip says an agent said no, and keeps "marked wrong" for a person', () => {
+  const blocks: Record<string, unknown> = { d_agent: { decision: { actor: 'agent:review' } }, d_p: { decision: { actor: 'human:ann' } } }
+  const { needTag } = lift<{ needTag(a: unknown): string }>(CLF, ['needTag', 'isPerson'], {
+    blockOf: (id: string) => blocks[id] ?? null, NEED_TAG: { flagged_field: 'needs changing', bad_verdict: 'marked wrong' },
+  })
+  assert.equal(needTag({ code: 'bad_verdict', decision: 'd_agent' }), 'an agent said no')
+  assert.equal(needTag({ code: 'bad_verdict', decision: 'd_p' }), 'marked wrong')
+  assert.equal(needTag({ code: 'flagged_field', decision: 'd_agent' }), 'needs changing')
+})
+
+test('Research names the Strategy agent for picking what to look into (roles.js STAGES.research.select)', () => {
+  const R = { the: (r: string) => `the ${r[0].toUpperCase()}${r.slice(1)} agent` }
+  const { stageLabel } = lift<{ stageLabel(k: string): string }>(RT, ['stageLabel', 'TheAgent', 'theAgent'], { roles: () => R, STAGE: {} })
+  assert.equal(stageLabel('select'), 'The Strategy agent picks what to look into')
+  assert.match(fn(RT, 'picksHtml'), /Leave these and '\+esc\(theAgent\('strategy'\)\)\+' picks the lenses/)
+  assert.match(RT, /S\.who=TheAgent\(S\.k==='select'\?'strategy':WORK_ROLE\[S\.k\]\)/)
+})
+
+test('asking from the inspector says where the answer will appear and brings it into view when it lands', () => {
+  const secs: Record<string, unknown> = { regulation_clearance: {} }
+  const { askWhere } = lift<{ askWhere(l: string | null): string }>(RT, ['askWhere'], {
+    askSections: () => secs, aboutName: (k: string) => (k === 'regulation_clearance' ? 'Regulation and clearance' : k),
+  })
+  assert.equal(askWhere('regulation_clearance'), 'under Regulation and clearance')
+  assert.equal(askWhere('media_spend'), 'at the end of the report')
+  assert.equal(askWhere(null), 'at the end of the report')
+  // pv-ask marks its job, empties its box and says where; the reply names the answer to reveal.
+  assert.match(RT, /var pj=doAsk\('_new'\); if\(pj\)\{ pj\.from='pv'; if\(pq\) pq\.value=''; toast\('Asked\. The answer will appear '\+askWhere\(pj\.lens\)\+'\.'\); \}/)
+  assert.match(fn(RT, 'onAskReply'), /if\(j\.from==='pv'&&aid\)\{ ASK\.reveal=aid; toast\('Answered '\+askWhere\(j\.lens\)\+'\.'\); \}/)
+  assert.match(fn(RT, 'renderAsks'), /revealAsk\(\);\s*\}$/)
+  assert.match(fn(RT, 'doAsk'), /return j;/)
 })

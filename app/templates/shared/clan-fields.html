@@ -959,6 +959,8 @@ var ClanFields=(function(){
   function needsAt(path){ var me=docId()+'#'+path; return arr(VIEW&&VIEW.attention).filter(function(a){ return a.address===me; }); }
   // (A client's answer on a part shows as its chip, beside the part.)
   var NEED_TAG={flagged_field:'needs changing',bad_verdict:'marked wrong'};
+  // An agent's own bad verdict is not someone marking the part wrong: say whose it is.
+  function needTag(a){ var vb=a.code==='bad_verdict'&&blockOf(a.decision); return vb&&!isPerson(vb.decision)?'an agent said no':NEED_TAG[a.code]; }
 
   // ── the host ────────────────────────────────────────────────────────
   function post(route, body){
@@ -1036,9 +1038,9 @@ var ClanFields=(function(){
     var v=valueAt(path), t=textOf(v), ok=editableValue(v)&&canEdit(path);
     var org=provenance(path), need=needsAt(path).filter(function(a){ return NEED_TAG[a.code]; })[0], prop=!need&&proposalOf(path);
     var block=as==='block'||as==='big'||(typeof v==='string'&&v.length>80);
-    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+NEED_TAG[need.code]:prop?' — a new version is proposed':''))+'">'
+    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+needTag(need):prop?' — a new version is proposed':''))+'">'
       +(t?esc(t):'<span class="empty">nothing yet</span>')+(org?'<span class="org">'+esc(org)+'</span>':'')
-      +(need?'<span class="tag">'+esc(NEED_TAG[need.code])+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
+      +(need?'<span class="tag">'+esc(needTag(need))+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
   }
   // A passage, a capture item or a material, as a field shows it.
   // A material by its name; the person's own typed words have none worth showing.

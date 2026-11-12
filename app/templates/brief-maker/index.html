@@ -4278,6 +4278,15 @@
   var KIND_WORD={open_contest:'Sources disagree', unverified_finding:'Is this right?', flagged_field:'Rests on something marked wrong',
     bad_verdict:'Marked wrong', unmerged_branch:'Copy not brought back', client_rejected:'The client said no',
     client_rejected_parts_unknown:'Which parts?'};
+  // What kind of thing a lock item is, in words. A bad verdict says whose it is: the Review agent's
+  // own check is not someone marking the part wrong (the decision's who, from the host's view).
+  function kindWord(x, view){
+    if(x.code!=='bad_verdict') return KIND_WORD[x.code]||'Needs you';
+    var b=arr(view&&view.decisions).filter(function(d){ return d&&d.decision&&d.decision.id===x.decision; })[0], w=b&&b.who;
+    if(w&&w.kind==='agent') return 'Review agent said no';
+    if(w&&w.you) return 'You marked it wrong';
+    return w&&w.name?'Marked wrong by '+w.name:KIND_WORD.bad_verdict;
+  }
   function refOfAddress(a){ var p=String(a||'').split('#')[1]||'', m=/^(?:findings|facts|materials)\[([^\]]+)\]$/.exec(p)||/^selection\.contested\[([^\]]+)\]$/.exec(p); return m?m[1]:p; }
   function fieldOfAddress(a){ var p=pathOf(a); if(p==null) return null; return FIELDS.filter(function(f){ return f.key===p||p.indexOf(f.key+'.')===0; })[0]||null; }
   // One line per part and kind: a part the whole-brief check and its own
@@ -4288,7 +4297,7 @@
       if(!a||!a.blocks_lock) return false;
       var k=a.code+'|'+(a.address||a.decision||a.text); if(seen[k]) return false; seen[k]=1; return true;
     }).map(function(a){
-      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
+      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', decision:a.decision||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
     });
   }
   // What the lock waits for besides the parts the Review agent already names in its line.
@@ -4300,7 +4309,7 @@
   var LOCK_SIG='';
   function lkItemHtml(x){
     return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'"'+(x.key?' data-key="'+esc(x.key)+'"':'')+'>'
-      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||KIND_WORD[x.code]||'Needs you')+'</small></button>';
+      +'<span class="x">'+esc(x.field?headOf(x.field):(x.label||x.text))+'</span><small class="k">'+esc(x.tag||kindWord(x, osView()))+'</small></button>';
   }
   // A part of this brief is settled at the part: the row selects it (the part view, Your call first);
   // anything else (a carried contest, a finding) opens where it came from, in the panel.
