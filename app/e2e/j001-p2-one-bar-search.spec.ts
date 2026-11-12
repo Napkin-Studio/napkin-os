@@ -66,7 +66,7 @@ for (const size of SIZES) {
     await expect(page.locator('[data-where="document"]')).toBeVisible()
     if (!phone) {
       // At once, one press: the frame is drawn only with its page, and the page forwards the key from its first line
-      // (the shell's BAR_KEY_FORWARDER), so a person pressing Cmd K while the brief still loads is not ignored.
+      // (the host's bar key forwarder, shell/bridge/barKeyForwarder.js), so a person pressing Cmd K while the brief still loads is not ignored.
       await page.frameLocator('iframe').first().locator('body').click({ position: { x: 5, y: 5 } })
       await page.keyboard.press('Meta+k')
       await expect(page.getByTestId('bar-search-input')).toBeFocused()
