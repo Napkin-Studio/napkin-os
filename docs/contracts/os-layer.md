@@ -2124,7 +2124,7 @@ The agents keep their spheres from the one agent engine
   (gate not passed), Brief check (passed, signed, waiting on the client), then Scope and estimate (client
   confirmed). Phase 1 reads only the Brief; the later steps of the eleven are named and wait for their
   tools' decisions. The index is read-only, disposable and rebuilt from the documents when any document's
-  version moves (`IndexCache`); a rebuilt index equals the live one (tested).
+  stamp moves (`IndexCache`, 13.3); a rebuilt index equals the live one (tested).
 - **Routes**, all under `/api/t/{tenant}`: `GET /jobs`, `GET /jobs/{number}`, `PATCH /jobs/{number}`, `GET /jobs/{number}/stage`,
   `GET /needs` (the signed-in person's lines, by deadline) and `GET /dashboard` (the six tiles;
   Management, an admin or a demo, else 403 from `roles.rs`). `POST /jobs` opens a job in the registry and
@@ -2229,6 +2229,32 @@ One screen opens one job. It draws the job index and nothing else: it holds no s
   the page's Changed brief reads them (`Update to brief v2` opens the brief, where the new version is signed).
 - **Linking to a job from another record:** `<a href="#job-J001">`, or `go({ level: 'job', number })`
   (`formatRoute`). A document opened from the page returns to it through the document's client chip.
+### 13.3 The index's change signal: `PartStore::stamp` (decided 2026-11-12)
+
+The index must know when a document changed without reading every document on every read (Phase 2
+verification measured 10 ms a document in the debug server just to hash them, about 3 s at 280).
+
+- **`PartStore::stamp(&self, id) -> HostResult<Stamp>`** (`crates/napkin-host/src/store.rs`): a cheap
+  value that changes whenever the document's bytes change. `Stamp` is opaque and compared for equality
+  only; it is never a version a write is checked against (that stays `version`, the archive hash). The
+  default returns `version()`, so a store that does not override it (the desktop's `FsStore`, the
+  browser host, the test stores) stays correct and only pays the hash.
+- **The web's file store** (`crates/napkin-web/src/store.rs`, `TenantStore`) overrides it with what a stat
+  gives, without opening the file: size, device and inode, and the modified and changed times to the
+  nanosecond. `TenantStore::apply` writes the new bytes to a hidden file beside the document and renames
+  it into place, so every write lands on a new inode while the old one is still held: two writes of the
+  same size inside one tick of a coarse clock still give two stamps, and a reader never sees half a file.
+  A stat is what every web task on a shared disk sees; a counter in one task's memory would miss another
+  task's write, which is why a counter was not chosen.
+- **The index** (`IndexCache`) stamps every document and the two registries on each read. An unchanged
+  tenant answers from the last index with no read and no hash; a rebuild reads again only the documents
+  whose stamp moved, and the first read after start (an empty cache) is one full build. `/jobs`,
+  `/jobs/{number}`, `/needs`, `/dashboard` and the Approvals page read through it. The timesheet does not
+  read the index: an event reads its own document's manifest and the job registry.
+- **If a stamp change were missed** (a filesystem reporting the same stat for different bytes), the index
+  would show that document as it last read it until the next write to it. The index writes nothing, so
+  nothing is lost; `IndexCache::delete` or a restart of the server clears it. There is no route for it.
+
 ## 14. The agency directory (features/agency-setup.clan)
 
 An agency's people are a third registry (after clients and jobs): one CLAN document per tenant,

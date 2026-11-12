@@ -69,5 +69,5 @@ pub use runs::RunTracker;
 pub use session::{AppMeta, Applied, LineageInfo, ManifestInfo, OpenResult, Session, ViewState};
 #[cfg(feature = "native")]
 pub use store::FsStore;
-pub use store::{DocId, DocStore, Library, PartStore};
+pub use store::{DocId, DocStore, Library, PartStore, Stamp};
 pub use view::{LibraryView, ViewSource};

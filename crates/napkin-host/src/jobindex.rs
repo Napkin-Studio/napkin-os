@@ -10,7 +10,7 @@
 //! nothing writes to it, no tool and no route, and deleting it loses nothing:
 //! [`JobIndex::build`] on the same documents gives the same index. A
 //! [`IndexCache`] keeps the last one and rebuilds it when any document's
-//! version moved, which is how a change shows without anyone telling the index.
+//! stamp moved (`PartStore::stamp`), which is how a change shows without anyone telling the index.
 //!
 //! The **stage** of a job is never stored. It is read from the decisions of
 //! the job's Brief documents (the Brief gate: passed, signed, confirmed), so
@@ -280,7 +280,7 @@ impl JobIndex {
     }
 
     /// [`build`](Self::build), with each document's facts from `facts`: read
-    /// afresh by `build`, or kept per version by [`IndexCache`]. The answer is
+    /// afresh by `build`, or kept per stamp by [`IndexCache`]. The answer is
     /// the same either way, because the facts are read from a document's bytes alone.
     fn build_from(
         store: &dyn DocStore,
@@ -1062,15 +1062,15 @@ impl JobIndex {
 
 // ── keeping it ──────────────────────────────────────────────────────────────
 
-/// Each document's facts by its id: the version they were read at, and the facts.
+/// Each document's facts by its id: the stamp they were read at, and the facts.
 type KeptFacts = HashMap<String, (String, Option<DocFacts>)>;
 
 /// The last index, and what it was built from. One beside each tenant's store.
 #[derive(Default)]
 pub struct IndexCache {
     last: Mutex<Option<(Vec<(String, String)>, JobIndex)>>,
-    /// Each document's facts, by the version they were read at: a rebuild
-    /// reads again only a document whose version moved, so its cost grows with
+    /// Each document's facts, by the stamp they were read at: a rebuild
+    /// reads again only a document whose stamp moved, so its cost grows with
     /// what changed, not with how many documents the agency holds.
     facts: Mutex<KeptFacts>,
     builds: std::sync::atomic::AtomicUsize,
@@ -1082,33 +1082,38 @@ impl IndexCache {
     }
 
     /// The current index: the last one when no document has moved, else a
-    /// rebuild. The stamp is every document's id and version plus the
-    /// registry's, so any applied change, to any document, makes a new index.
-    /// The date is part of the answer (at risk, days waiting), so a new day does too.
-    /// A rebuild takes each unmoved document's facts from the last one.
+    /// rebuild. What "moved" means is the store's [`stamp`](crate::store::PartStore::stamp)
+    /// of every document and of the two registries: on the web's file store a
+    /// stat (size, modified time, inode), so an index read on an unchanged
+    /// tenant reads no document and hashes none, and a write by any handle on
+    /// the same disk (another web task) is seen on the next read. The date is
+    /// part of the answer (at risk, days waiting), so a new day makes a new
+    /// index too. A rebuild reads again only the documents whose stamp moved,
+    /// and the first read after start (an empty cache) is one full build.
+    ///
+    /// What a missed stamp change would cost: if a filesystem ever reported the
+    /// same stamp for different bytes, the index would show that document as it
+    /// last read it until the next write to it. Nothing is written from the
+    /// index, so nothing is lost; [`delete`](Self::delete) or a restart of the
+    /// server (a new cache) clears it. There is no route for it today.
     pub fn get(&self, store: &dyn DocStore, now: DateTime<Utc>) -> HostResult<JobIndex> {
-        let versions: HashMap<String, String> = store
+        let stamps: HashMap<String, String> = store
             .documents()
             .into_iter()
             .filter_map(|id| {
                 store
-                    .version(&id)
+                    .stamp(&id)
                     .ok()
                     .map(|v| (id.to_string(), v.as_str().to_string()))
             })
             .collect();
-        let mut stamp: Vec<(String, String)> = versions
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        if let Ok(reg) = store.home("jobs-v1") {
-            if let Ok(v) = store.version(&reg) {
-                stamp.push(("jobs-v1".into(), v.as_str().to_string()));
-            }
-        }
-        if let Ok(reg) = store.home("clients-v1") {
-            if let Ok(v) = store.version(&reg) {
-                stamp.push(("clients-v1".into(), v.as_str().to_string()));
+        let mut stamp: Vec<(String, String)> =
+            stamps.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        for reg in ["jobs-v1", "clients-v1"] {
+            if let Ok(id) = store.home(reg) {
+                if let Ok(v) = store.stamp(&id) {
+                    stamp.push((reg.into(), v.as_str().to_string()));
+                }
             }
         }
         stamp.push(("day".into(), now.date_naive().to_string()));
@@ -1121,10 +1126,10 @@ impl IndexCache {
         }
         let mut kept = self.facts.lock().unwrap_or_else(|e| e.into_inner());
         // a document that is gone is forgotten
-        kept.retain(|id, _| versions.contains_key(id));
+        kept.retain(|id, _| stamps.contains_key(id));
         let index = JobIndex::build_from(store, now, |id| {
             let key = id.to_string();
-            let now_at = versions.get(&key);
+            let now_at = stamps.get(&key);
             if let Some((at, f)) = kept.get(&key) {
                 if Some(at) == now_at {
                     return f.clone();
@@ -1132,8 +1137,8 @@ impl IndexCache {
             }
             let bytes = store.read(id).ok()?;
             let f = facts_of(id, bytes);
-            // Kept under the version the stamp saw. A write between the stamp and the read only costs a
-            // second read: the next stamp holds the newer version, which matches nothing kept.
+            // Kept under the stamp taken above. A write between the stamp and the read only costs a second
+            // read: the next stamp is the newer one, which matches nothing kept.
             if let Some(at) = now_at {
                 kept.insert(key, (at.clone(), f.clone()));
             }

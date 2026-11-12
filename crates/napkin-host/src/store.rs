@@ -63,6 +63,20 @@ impl From<PathBuf> for DocId {
     }
 }
 
+/// See [`PartStore::stamp`]: opaque, compared for equality only.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Stamp(String);
+
+impl Stamp {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Document bytes, and the single write funnel.
 pub trait PartStore: Send + Sync {
     /// The document as it stands now.
@@ -73,6 +87,18 @@ pub trait PartStore: Send + Sync {
     /// The version `id` is at now. For a packed archive, its hash.
     fn version(&self, id: &DocId) -> HostResult<Version> {
         Ok(Version::of_archive(&self.read(id)?))
+    }
+
+    /// A cheap value that changes whenever the document's bytes change: what a
+    /// cache compares to know whether to read a document again (the job index,
+    /// docs/contracts/os-layer.md 13.2). Equal stamps mean "not changed"; a
+    /// stamp says nothing else and is never a version a write is checked
+    /// against. The default is the full [`version`](Self::version), so a store
+    /// that does not override it stays correct and only pays the hash. A store
+    /// on a filesystem overrides it with what a stat gives, without reading
+    /// the file.
+    fn stamp(&self, id: &DocId) -> HostResult<Stamp> {
+        Ok(Stamp::new(self.version(id)?.as_str()))
     }
 
     /// Make `change` true, and report the version the document is now at.
