@@ -28,8 +28,8 @@ use serde::Serialize;
 use crate::clients;
 use crate::document::Document;
 use crate::error::HostResult;
-use crate::jobs::{self, JobRecord};
-use crate::ops::{decisions, gate};
+use crate::jobs::{self, JobRecord, RouteSet, RouteStep};
+use crate::ops::{decisions, gate, review};
 use crate::store::{DocId, DocStore};
 
 /// The eleven steps of a job (v2 section 3), in order: `(id, label)`.
@@ -46,6 +46,29 @@ pub const STAGES: [(&str, &str); 11] = [
     ("invoice-ready", "Invoice-ready lines"),
     ("case-study", "Case study"),
 ];
+
+/// Which stage each tool's approvals belong to: `(app id, stage an agency
+/// approval counts for, stage a client approval counts for)`. One table; a new
+/// tool adds one line. A tool not listed here has no approval step.
+pub const APP_STAGES: [(&str, &str, &str); 3] = [
+    ("ie.napkin.brief-maker", "brief-check", "brief-check"),
+    ("ie.napkin.visual-brief", "ideas", "client-approval"),
+    ("ie.napkin.deck-maker", "decks", "client-approval"),
+];
+
+/// The stage an approval of `app_id`'s documents counts for, by `party`.
+pub fn stage_of_app(app_id: &str, party: &str) -> Option<&'static str> {
+    APP_STAGES
+        .iter()
+        .find(|(a, ..)| *a == app_id)
+        .map(|(_, agency, client)| {
+            if party == jobs::CLIENT {
+                *client
+            } else {
+                *agency
+            }
+        })
+}
 
 /// Where a job is, as its documents say it.
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -96,6 +119,53 @@ pub struct JobEntry {
     /// The deadline is past and the job is not finished.
     pub at_risk: bool,
     pub documents: Vec<JobDoc>,
+    /// The approval route, each step with its state read from the documents'
+    /// own decisions. Empty when the job has no route.
+    pub route: Vec<RouteStepState>,
+    /// Who the job waits on now: the first step not approved.
+    pub holder: Option<Holder>,
+}
+
+/// One step of the route, as the documents' decisions have it.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct RouteStepState {
+    pub stage: String,
+    pub label: &'static str,
+    pub party: String,
+    pub role: Option<String>,
+    /// The route's approver; the brief's own signer when the brief names one.
+    pub approver: String,
+    /// A client step's contact email and rounds, as the route has them (so an editor can send them back).
+    pub contact: Option<String>,
+    pub rounds: Option<u32>,
+    pub due: String,
+    /// `not_started`, `waiting` or `approved`.
+    pub state: &'static str,
+    /// Read from the approving decision, never typed in.
+    pub approved_by: Option<String>,
+    pub approved_at: Option<String>,
+    /// The exact version the approval is for.
+    pub version: Option<String>,
+    /// The document the step looks at (its path).
+    pub document: Option<String>,
+    /// A waiting step only: since when it has waited, the days, and the days late.
+    pub held_since: Option<String>,
+    pub days_held: Option<i64>,
+    pub days_late: Option<i64>,
+}
+
+/// Who a job waits on, and for how long: a fact about one job.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Holder {
+    pub party: String,
+    pub person: String,
+    pub role: Option<String>,
+    pub stage: String,
+    pub since: String,
+    pub days: i64,
+    pub due: String,
+    /// 0 until the day after the due date.
+    pub days_late: i64,
 }
 
 /// Who a need is for: one named person, or everyone in a role.
@@ -109,6 +179,14 @@ pub enum Audience {
 /// One thing a person is asked to do next on a job.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Need {
+    /// Stable: `{job}:{stage}:{role}:{kind}`, so a later record can key on it.
+    pub id: String,
+    /// `gate`, `approval` or `approval-chase`.
+    pub kind: &'static str,
+    /// The stage the need is about.
+    pub stage: String,
+    /// An approval need: whole days past the step's due date (0 until the day after).
+    pub days_late: Option<i64>,
     pub job: String,
     pub client: String,
     pub client_id: String,
@@ -118,7 +196,8 @@ pub struct Need {
     pub action: String,
     /// The document the action opens.
     pub path: String,
-    /// The job's deadline: what the list is ordered by.
+    /// The job's deadline: what the list is ordered by. An approval need carries
+    /// its step's own due date.
     pub due: Option<String>,
     pub audience: Audience,
 }
@@ -205,6 +284,7 @@ impl JobIndex {
                 docs.entry(n).or_default().push((id, clan));
             }
         }
+        let history = jobs::route_history(store)?;
         let today = now.date_naive();
         let mut entries = Vec::new();
         let mut needs = Vec::new();
@@ -216,7 +296,7 @@ impl JobIndex {
                 .get(&rec.client_id)
                 .cloned()
                 .unwrap_or_else(|| rec.client_id.clone());
-            let (entry, mut n) = entry_of(&rec, &name, mine, now, today);
+            let (entry, mut n) = entry_of(&rec, &name, mine, history.get(&rec.number), now, today);
             entries.push(entry);
             needs.append(&mut n);
         }
@@ -263,6 +343,7 @@ fn entry_of(
     rec: &JobRecord,
     client_name: &str,
     docs: Vec<(DocId, ClanFile)>,
+    route_set: Option<&RouteSet>,
     now: DateTime<Utc>,
     today: NaiveDate,
 ) -> (JobEntry, Vec<Need>) {
@@ -274,6 +355,7 @@ fn entry_of(
     let mut needs = Vec::new();
     // The furthest brief of the job sets its stage.
     let mut best: Option<(Progress, BriefFacts, String, String)> = None;
+    let mut evidence: Vec<Evidence> = Vec::new();
     for (id, clan) in docs {
         let Ok(doc) = Document::from_bytes(id.clone(), clan.raw_bytes().to_vec()) else {
             continue;
@@ -287,6 +369,12 @@ fn entry_of(
             needs_you: state.as_ref().map_or(0, |s| s.needs_you),
             locked: state.as_ref().is_some_and(|s| s.locked),
         });
+        if let Some(app) = m.app.as_ref().map(|a| a.app_id.as_str()) {
+            if APP_STAGES.iter().any(|(a, ..)| *a == app) {
+                let client_step = rec.route.iter().any(|st| st.party == jobs::CLIENT);
+                evidence.push(evidence_of(&doc, &id, app, client_step));
+            }
+        }
         if gate::applies(&doc) {
             if let Some(f) = brief_facts(&doc) {
                 if best.as_ref().is_none_or(|(p, ..)| f.progress > *p) {
@@ -299,8 +387,17 @@ fn entry_of(
     let (stage_id, status, waiting_on, days) = match &best {
         None => ("client-brief", "No brief yet.".to_string(), "agency", None),
         Some((p, f, path, title)) => {
-            let mut push = |audience: Audience, text: String, action: &str| {
+            let gate_stage = match p {
+                Progress::Drafting => "client-brief",
+                Progress::Passed | Progress::Signed => "brief-check",
+                Progress::Confirmed => "scope-estimate",
+            };
+            let mut push = |audience: Audience, role: &str, text: String, action: &str| {
                 needs.push(Need {
+                    id: format!("{}:{gate_stage}:{role}:gate", rec.number),
+                    kind: "gate",
+                    stage: gate_stage.to_string(),
+                    days_late: None,
                     job: rec.number.clone(),
                     client: client_name.to_string(),
                     client_id: rec.client_id.clone(),
@@ -320,6 +417,7 @@ fn entry_of(
                     let n = f.missing;
                     push(
                         person(&f.planner, "planning"),
+                        "planner",
                         format!(
                             "{title}: {n} gate {} to answer.",
                             if n == 1 { "item" } else { "items" }
@@ -341,11 +439,13 @@ fn entry_of(
                         let text = format!("{title}: changed after it was signed.");
                         push(
                             person(&f.planner, "planning"),
+                            "planner",
                             text.clone(),
                             "Sign the changed brief",
                         );
                         push(
                             person(&f.creative_director, "creative-director"),
+                            "creative_director",
                             text,
                             "Sign the changed brief",
                         );
@@ -358,6 +458,7 @@ fn entry_of(
                     } else if f.planner_signed {
                         push(
                             person(&f.creative_director, "creative-director"),
+                            "creative_director",
                             format!("{title}: the planner has signed. It needs your signature."),
                             "Sign and lock",
                         );
@@ -370,6 +471,7 @@ fn entry_of(
                     } else {
                         push(
                             person(&f.planner, "planning"),
+                            "planner",
                             format!("{title}: passed the gate. It needs your signature."),
                             "Sign the brief",
                         );
@@ -384,6 +486,7 @@ fn entry_of(
                 Progress::Signed => {
                     push(
                         Audience::Role("account-service"),
+                        "account_service",
                         format!("{title}: signed. The client has not confirmed it."),
                         "Open the brief",
                     );
@@ -403,6 +506,26 @@ fn entry_of(
             }
         }
     };
+
+    // The approval route: its states and its holder are read from the same
+    // chains, from the clock alone. A job with no route is as it always was.
+    let (route, holder) = derive_route(rec, route_set, &evidence, now, today);
+    let (waiting_on, days) = match (&holder, rec.route.iter().any(|s| s.party == jobs::CLIENT)) {
+        // a client step on the route: the client's wait counts from when the agency handed it over
+        (Some(h), true) if h.party == jobs::CLIENT => ("client", Some(h.days)),
+        (Some(_), true) => ("agency", None),
+        _ => (waiting_on, days),
+    };
+    route_needs(
+        rec,
+        client_name,
+        &holder,
+        &evidence,
+        &route,
+        route_set,
+        today,
+        &mut needs,
+    );
 
     let at_risk = rec
         .due
@@ -424,9 +547,346 @@ fn entry_of(
             days_waiting_on_client: days,
             at_risk,
             documents: listed,
+            route,
+            holder,
         },
         needs,
     )
+}
+
+// ── the approval route (features/approval-route.clan) ───────────────────────
+
+/// What a document's own chain says about approvals: read, never typed.
+struct Evidence {
+    path: String,
+    title: String,
+    app: &'static str,
+    /// A brief's signers, when it names any: `(role, person)`.
+    signers: Vec<(String, String)>,
+    /// The lock that holds on the current content.
+    lock: Option<Mark>,
+    /// The `sign` decisions that hold on the current content.
+    signs: Vec<Mark>,
+    /// The client's accepted answer to the locked version.
+    client: Option<Mark>,
+}
+
+/// One approving decision: who, when, and the exact version.
+#[derive(Clone)]
+struct Mark {
+    person: String,
+    at: String,
+    version: Option<String>,
+}
+
+fn person_name(d: &clan_sdk::Decision) -> String {
+    let a = d.actor.as_deref().unwrap_or(&d.agent);
+    a.strip_prefix("human:").unwrap_or(a).to_string()
+}
+
+fn mark_of(d: &clan_sdk::Decision) -> Mark {
+    Mark {
+        person: person_name(d),
+        at: d.timestamp.clone(),
+        version: d.version.clone(),
+    }
+}
+
+fn evidence_of(doc: &Document, id: &DocId, app: &str, client_step: bool) -> Evidence {
+    let clan = doc.clan();
+    let app = APP_STAGES
+        .iter()
+        .find(|(a, ..)| *a == app)
+        .map_or("", |(a, ..)| *a);
+    let chain = if clan.has_entry("agent/decision-chain.yaml") {
+        clan.read_entry("agent/decision-chain.yaml")
+            .ok()
+            .and_then(|b| clan_sdk::DecisionChain::from_yaml(&b).ok())
+            .unwrap_or_default()
+    } else {
+        clan_sdk::DecisionChain::default()
+    };
+    let doc_id = clan.document_id();
+    let lock_at = review::lock_index(&chain, doc_id).filter(|i| !gate::edited_since(&chain, *i));
+    let lock = lock_at.map(|i| mark_of(&chain.decisions[i]));
+    let signs = chain
+        .decisions
+        .iter()
+        .enumerate()
+        .filter(|(i, d)| {
+            d.superseded_by.is_none()
+                && d.kind.as_deref() == Some(gate::SIGN)
+                && d.targets.iter().any(|t| t == doc_id)
+                && !gate::edited_since(&chain, *i)
+        })
+        .map(|(_, d)| mark_of(d))
+        .collect();
+    let client = if client_step {
+        decisions::decisions(doc)
+            .ok()
+            .filter(|v| v.problem.is_none())
+            .and_then(|v| v.client.answer)
+            .filter(|a| a.answer == "accepted" && a.current)
+            .map(|a| Mark {
+                person: a
+                    .client
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .map(str::to_string)
+                    .unwrap_or(a.recorded_by.name),
+                at: a.at,
+                version: lock.as_ref().and_then(|l| l.version.clone()),
+            })
+    } else {
+        None
+    };
+    let signers = if gate::applies(doc) {
+        decisions::decisions(doc)
+            .ok()
+            .and_then(|v| gate::view(doc, &v).ok())
+            .map(|g| g.signers.into_iter().map(|s| (s.role, s.person)).collect())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    Evidence {
+        path: id.to_string(),
+        title: clan.manifest().title.clone(),
+        app,
+        signers,
+        lock,
+        signs,
+        client,
+    }
+}
+
+/// The days between two dates, 0 when `due` is today or ahead: late from the
+/// day after it, counted by the index's own `today`.
+fn days_late(due: &str, today: NaiveDate) -> i64 {
+    NaiveDate::parse_from_str(due, "%Y-%m-%d")
+        .map(|d| (today - d).num_days().max(0))
+        .unwrap_or(0)
+}
+
+/// The approver a step answers to: the brief's own signer when a brief names
+/// one for the role (one truth per brief), else the route's.
+fn approver_of(step: &RouteStep, evs: &[Evidence]) -> String {
+    if step.stage == "brief-check" && step.party == jobs::AGENCY {
+        if let Some(role) = step.role.as_deref() {
+            for e in evs.iter().filter(|e| e.app == gate::BRIEF_MAKER) {
+                if let Some((_, p)) = e.signers.iter().find(|(r, _)| r == role) {
+                    return p.clone();
+                }
+            }
+        }
+    }
+    step.approver.clone()
+}
+
+/// The decision that satisfies a step, and the document it is on: a planner's
+/// `sign` on the brief, an `approve` by the approver on the current lock for an
+/// agency step, an accepted client answer for a client step. The newest wins.
+fn approval_of<'e>(
+    step: &RouteStep,
+    approver: &str,
+    evs: &'e [Evidence],
+) -> Option<(Mark, &'e Evidence)> {
+    let mut found: Vec<(Mark, &Evidence)> = Vec::new();
+    for e in evs
+        .iter()
+        .filter(|e| stage_of_app(e.app, &step.party) == Some(step.stage.as_str()))
+    {
+        let mark = if step.party == jobs::CLIENT {
+            e.client.clone()
+        } else if e.app == gate::BRIEF_MAKER && step.role.as_deref() == Some(gate::PLANNER) {
+            e.signs.iter().find(|m| m.person == approver).cloned()
+        } else {
+            e.lock.clone().filter(|m| m.person == approver)
+        };
+        if let Some(m) = mark {
+            found.push((m, e));
+        }
+    }
+    found.into_iter().max_by(|a, b| a.0.at.cmp(&b.0.at))
+}
+
+fn stage_label(id: &str) -> &'static str {
+    STAGES
+        .iter()
+        .find(|(s, _)| *s == id)
+        .map_or("", |(_, l)| *l)
+}
+
+fn derive_route(
+    rec: &JobRecord,
+    set: Option<&RouteSet>,
+    evs: &[Evidence],
+    now: DateTime<Utc>,
+    today: NaiveDate,
+) -> (Vec<RouteStepState>, Option<Holder>) {
+    if rec.route.is_empty() {
+        return (Vec::new(), None);
+    }
+    let approvers: Vec<String> = rec.route.iter().map(|s| approver_of(s, evs)).collect();
+    let approvals: Vec<Option<(Mark, &Evidence)>> = rec
+        .route
+        .iter()
+        .zip(&approvers)
+        .map(|(s, a)| approval_of(s, a, evs))
+        .collect();
+    let holder_at = approvals.iter().position(Option::is_none);
+    let mut states = Vec::with_capacity(rec.route.len());
+    let mut holder = None;
+    for (i, step) in rec.route.iter().enumerate() {
+        let approver = approvers[i].clone();
+        let pending = holder_at == Some(i);
+        let state = match (&approvals[i], pending) {
+            (Some(_), _) => "approved",
+            (None, true) => "waiting",
+            (None, false) => "not_started",
+        };
+        // where the step is looked at: the document that approved it, else the first of its stage
+        let document = approvals[i]
+            .as_ref()
+            .map(|(_, e)| e.path.clone())
+            .or_else(|| {
+                evs.iter()
+                    .find(|e| stage_of_app(e.app, &step.party) == Some(step.stage.as_str()))
+                    .map(|e| e.path.clone())
+            });
+        // held since: the decision that satisfied the step before it, or the route's own time for the first
+        let since = pending.then(|| {
+            if i == 0 {
+                set.map_or_else(|| rec.created_at.clone(), |s| s.at.clone())
+            } else {
+                approvals[i - 1]
+                    .as_ref()
+                    .map_or_else(|| rec.created_at.clone(), |(m, _)| m.at.clone())
+            }
+        });
+        let days_held = since.as_deref().and_then(|t| days_between(t, now));
+        let late = pending.then(|| days_late(&step.due, today));
+        if pending {
+            holder = Some(Holder {
+                party: step.party.clone(),
+                person: approver.clone(),
+                role: step.role.clone(),
+                stage: step.stage.clone(),
+                since: since.clone().unwrap_or_default(),
+                days: days_held.unwrap_or(0),
+                due: step.due.clone(),
+                days_late: late.unwrap_or(0),
+            });
+        }
+        states.push(RouteStepState {
+            stage: step.stage.clone(),
+            label: stage_label(&step.stage),
+            party: step.party.clone(),
+            role: step.role.clone(),
+            approver,
+            contact: step.contact.clone(),
+            rounds: step.rounds,
+            due: step.due.clone(),
+            state,
+            approved_by: approvals[i].as_ref().map(|(m, _)| m.person.clone()),
+            approved_at: approvals[i].as_ref().map(|(m, _)| m.at.clone()),
+            version: approvals[i].as_ref().and_then(|(m, _)| m.version.clone()),
+            document,
+            held_since: since,
+            days_held,
+            days_late: late,
+        });
+    }
+    (states, holder)
+}
+
+/// An approval is asked for from 48 hours before it is due.
+const REMIND_DAYS: i64 = 2;
+/// From this many days late, the person who set the route is told as well.
+const CHASE_DAYS: i64 = 2;
+
+fn days_word(n: i64) -> String {
+    format!("{n} day{}", if n == 1 { "" } else { "s" })
+}
+
+/// The needs the route gives, from the clock alone: the approver's own item
+/// from 48 hours before the due date, and, two days late, the person who set
+/// the route is asked to chase it. Nothing is stored; the item leaves when the
+/// step is approved.
+fn route_needs(
+    rec: &JobRecord,
+    client_name: &str,
+    holder: &Option<Holder>,
+    docs: &[Evidence],
+    route: &[RouteStepState],
+    set: Option<&RouteSet>,
+    today: NaiveDate,
+    needs: &mut Vec<Need>,
+) {
+    let (Some(h), Some(step)) = (holder, route.iter().find(|s| s.state == "waiting")) else {
+        return;
+    };
+    let until_due =
+        NaiveDate::parse_from_str(&h.due, "%Y-%m-%d").map_or(i64::MAX, |d| (d - today).num_days());
+    let role = h.role.clone().unwrap_or_else(|| "any".to_string());
+    let path = step.document.clone().unwrap_or_default();
+    let what = docs.iter().find(|e| e.path == path).map_or_else(
+        || step.label.to_string(),
+        |e| format!("{}: {}", step.label, e.title),
+    );
+    let mut push = |kind: &'static str, audience: Audience, text: String, action: &str| {
+        needs.push(Need {
+            id: format!("{}:{}:{role}:{kind}", rec.number, h.stage),
+            kind,
+            stage: h.stage.clone(),
+            days_late: Some(h.days_late),
+            job: rec.number.clone(),
+            client: client_name.to_string(),
+            client_id: rec.client_id.clone(),
+            text,
+            action: action.to_string(),
+            path: path.clone(),
+            due: Some(h.due.clone()),
+            audience,
+        });
+    };
+    if h.party == jobs::AGENCY && until_due <= REMIND_DAYS {
+        let when = if h.days_late > 0 {
+            format!("{} late, due {}", days_word(h.days_late), h.due)
+        } else {
+            format!("due {}", h.due)
+        };
+        push(
+            "approval",
+            Audience::Person(h.person.clone()),
+            format!("{what}: your approval is {when}."),
+            "Review and approve",
+        );
+    }
+    if h.days_late >= CHASE_DAYS {
+        let text = if h.party == jobs::CLIENT {
+            format!(
+                "{what}: the client's approval is {} late, due {}.",
+                days_word(h.days_late),
+                h.due
+            )
+        } else {
+            format!(
+                "{what}: {} is {} late with an approval, due {}.",
+                h.person,
+                days_word(h.days_late),
+                h.due
+            )
+        };
+        let audience = match set {
+            Some(s) if s.by != h.person => Some(Audience::Person(s.by.clone())),
+            Some(_) => None,
+            None => Some(Audience::Role("account-service")),
+        };
+        if let Some(audience) = audience {
+            push("approval-chase", audience, text, "Chase the approval");
+        }
+    }
 }
 
 // ── the dashboard ───────────────────────────────────────────────────────────
@@ -501,8 +961,24 @@ impl JobIndex {
             at_risk: self
                 .jobs
                 .iter()
-                .filter(|j| j.at_risk)
-                .map(|j| line(j, format!("Due {}.", j.due.clone().unwrap_or_default())))
+                .filter_map(|j| {
+                    let late = j.holder.as_ref().filter(|h| h.days_late > 0).map(|h| {
+                        format!(
+                            "{} approval is {} late.",
+                            stage_label(&h.stage),
+                            days_word(h.days_late)
+                        )
+                    });
+                    let due = j
+                        .at_risk
+                        .then(|| format!("Due {}.", j.due.clone().unwrap_or_default()));
+                    let text = [due, late]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    (!text.is_empty()).then(|| line(j, text))
+                })
                 .collect(),
             hours: Hours {
                 budget: self.jobs.iter().filter_map(|j| j.budget_hours).sum(),

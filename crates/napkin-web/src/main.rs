@@ -124,6 +124,21 @@ fn env_string(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
 
+/// The file the e2e stack moves the job index's clock through (`NAPKIN_TEST_CLOCK_FILE`).
+/// Only a local run may move the clock: with `NAPKIN_ENV` naming a deployed environment
+/// (anything but unset, `local`, `dev` or `test`, as the spend guard reads it) the setting is
+/// ignored and said so, so nobody can change what "late" means on a real stack.
+fn test_clock_file() -> Option<std::path::PathBuf> {
+    let file = env_string("NAPKIN_TEST_CLOCK_FILE")?;
+    let env = env_string("NAPKIN_ENV").unwrap_or_default().to_lowercase();
+    if matches!(env.as_str(), "" | "local" | "dev" | "test") {
+        Some(std::path::PathBuf::from(file))
+    } else {
+        eprintln!("napkin-web: NAPKIN_TEST_CLOCK_FILE is ignored when NAPKIN_ENV={env}");
+        None
+    }
+}
+
 /// Where to listen.
 ///
 /// `NAPKIN_WEB_ADDR` wins when set. Otherwise `PORT` — which every container
@@ -223,6 +238,8 @@ async fn main() {
         .with_seed(settings.seed_dir.clone())
         .with_dogfood(dogfood.clone())
         .with_roles_dir(Some(settings.config_dir.clone()))
+        // the e2e stack moves the job index's clock through a file; a deployed server ignores it
+        .with_jobs_clock_file(test_clock_file())
         // client links are signed with a child of the session secret (none in the anonymous demo)
         .with_link_secret(
             env_string("NAPKIN_SESSION_SECRET")

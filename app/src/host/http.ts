@@ -23,6 +23,8 @@ import type {
   ClientRecord,
   DashboardView,
   JobNeed,
+  JobEntry,
+  RouteStep,
   LibraryFilter,
   LibraryListing,
   ClientReopenReply,
@@ -91,6 +93,26 @@ export async function homeView(as?: string | null): Promise<HomeView | null> {
 /** What the signed-in person is asked to do next, by deadline (`GET /needs`); empty where there is no server answer. */
 export async function jobNeeds(): Promise<JobNeed[]> {
   try { return (await json<{ items: JobNeed[] }>('/needs')).items } catch { return [] }
+}
+
+/** Every job as the index has it, with its route and who holds it (`GET /jobs`); null when the server does not answer. */
+export async function jobsView(): Promise<JobEntry[] | null> {
+  try { return await json<JobEntry[]>('/jobs') } catch { return null }
+}
+
+/** What a route save came to: done, refused with the server's own sentence (`400`), or why not (`403`, or a failure). */
+export type RouteSaved = { ok: true } | { ok: false; status: number; message: string }
+
+/** Name who approves each stage of a job and by when (`PUT /jobs/{number}/route`): account service and management. */
+export async function setJobRoute(number: string, route: RouteStep[]): Promise<RouteSaved> {
+  try {
+    const r = await fetch(`${await base()}/jobs/${encodeURIComponent(number)}/route`, {
+      method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ route }),
+    })
+    if (r.ok) return { ok: true }
+    const body = await r.json().catch(() => null) as { error?: string } | null
+    return { ok: false, status: r.status, message: body?.error ?? '' }
+  } catch { return { ok: false, status: 0, message: '' } }
 }
 
 /** The agency dashboard's tiles; `forbidden` when this role may not open it (403), null when the server does not answer. */

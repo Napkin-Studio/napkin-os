@@ -1,0 +1,58 @@
+/* The Approvals page and the route strip (features/approval-route.clan). Nothing new is defined for the
+   shell: its tokens (--ink, --muted, --line, --warn, --paper), the home's section label (.hm-h), the
+   shell's text link (.side-link) and the pill buttons (.ch-btn). The strip is a row of steps on a line on a
+   desk and a column on a phone. Late is said in words and in the warn colour, never by colour alone. */
+
+.ap:where(.nui, .nui *) { display: grid; gap: 44px; max-width: 1100px; }
+.ap-job:where(.nui, .nui *) { display: grid; gap: 14px; align-content: start; padding-top: 14px; border-top: 1.5px solid var(--line-strong); }
+.ap-holder:where(.nui, .nui *) { margin: 0; font: 600 19px/1.3 var(--f-display); letter-spacing: -.02em; max-width: 60ch; text-wrap: balance; }
+.ap-holder[data-late]:where(.nui, .nui *) { color: var(--warn-text, var(--warn)); }
+.ap-act:where(.nui, .nui *) { display: flex; gap: 10px; }
+
+/* the strip */
+.rs:where(.nui, .nui *) { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, 1fr); gap: 0; overflow-x: auto; }
+.rs-step:where(.nui, .nui *) { position: relative; display: grid; gap: 4px; align-content: start; padding: 22px 16px 6px 0; border-top: 1.5px solid var(--line); }
+.rs-dot:where(.nui, .nui *) { position: absolute; top: -7px; left: 0; width: 13px; height: 13px; border-radius: 50%; box-sizing: border-box; background: var(--paper); border: 1.5px dashed var(--muted); }
+.rs-step[data-state='waiting']:where(.nui, .nui *) { border-top-color: var(--ink); }
+.rs-step[data-state='waiting']:where(.nui, .nui *) .rs-dot { border: 2px solid var(--ink); background: var(--ag-acc, var(--paper)); }
+.rs-step[data-state='approved']:where(.nui, .nui *) { border-top-color: var(--ink); }
+.rs-step[data-state='approved']:where(.nui, .nui *) .rs-dot { background: var(--ink); border: 1.5px solid var(--ink); }
+.rs-step[data-late]:where(.nui, .nui *) .rs-dot { border-color: var(--warn); background: var(--warn); }
+.rs-stage:where(.nui, .nui *) { font: 600 15px/1.25 var(--f-display); letter-spacing: -.01em; }
+.rs-who:where(.nui, .nui *) { display: grid; font-size: 13px; overflow-wrap: anywhere; }
+.rs-who:where(.nui, .nui *) small { font: 600 10px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.rs-state:where(.nui, .nui *) { font-size: 13px; color: var(--ink); }
+.rs-step[data-late]:where(.nui, .nui *) .rs-state { color: var(--warn-text, var(--warn)); font-weight: 600; }
+.rs-step[data-state='not_started']:where(.nui, .nui *) .rs-state { color: var(--muted); }
+.rs-held:where(.nui, .nui *) { font-size: 12.5px; color: var(--muted); }
+.rs-sr:where(.nui, .nui *) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* the editor */
+.re:where(.nui, .nui *) { display: grid; gap: 18px; max-width: 760px; }
+.re-row:where(.nui, .nui *) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; margin: 0; padding: 14px 0 4px; border: 0; border-top: 1px solid var(--line); min-width: 0; }
+.re-legend:where(.nui, .nui *) { padding: 0 8px 0 0; font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.re-f:where(.nui, .nui *) { display: grid; gap: 4px; min-width: 0; }
+.re-f:where(.nui, .nui *) span { font: 600 10.5px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.re-f:where(.nui, .nui *) :is(input, select) { height: 40px; min-width: 0; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--card); font: 500 14px var(--font-ui); color: var(--ink); }
+.re-f:where(.nui, .nui *) :is(input, select):focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.re-remove:where(.nui, .nui *) { justify-self: start; align-self: end; min-height: 40px; }
+.re-more:where(.nui, .nui *) { display: flex; }
+.re-problem:where(.nui, .nui *) { margin: 0; font-size: 14px; font-weight: 600; color: var(--warn-text, var(--warn)); max-width: 60ch; }
+.re-act:where(.nui, .nui *) { display: flex; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 760px) {
+  .re-row:where(.nui, .nui *) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .ap:where(.nui, .nui *) { gap: 34px; }
+  .ap-holder:where(.nui, .nui *) { font-size: 17px; }
+  /* the strip stands up: a line down the left, a dot on it for each step */
+  .rs:where(.nui, .nui *) { grid-auto-flow: row; grid-auto-columns: auto; overflow: visible; }
+  .rs-step:where(.nui, .nui *) { padding: 0 0 22px 26px; border-top: 0; border-left: 1.5px solid var(--line); margin-left: 6px; }
+  .rs-step[data-state='waiting']:where(.nui, .nui *), .rs-step[data-state='approved']:where(.nui, .nui *) { border-left-color: var(--ink); }
+  .rs-dot:where(.nui, .nui *) { top: 2px; left: -8px; }
+  .re-row:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr); }
+  .re-f:where(.nui, .nui *) :is(input, select) { height: 44px; }
+  /* every primary button on a phone is at least 44 px tall, the states' own included */
+  .ap-primary:where(.nui, .nui *), .ap :is(.ns-primary, .ns-btn):where(.nui, .nui *), .ap-page :is(.ns-primary, .ns-btn):where(.nui, .nui *) { min-height: 44px; padding: 0 20px; font-size: 14px; }
+}
