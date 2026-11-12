@@ -175,7 +175,14 @@ test('ask about a fact: the answer shows where it was asked, about that fact (pa
   await expect(card, 'answer shown under the fact where it was asked').toBeVisible({ timeout: 180_000 })
   measure('ask-fact', Date.now() - t0, 150_000)
   // The approved mock (research-fact-answer-v1): not in the report until added; Add, then Take out.
-  await card.locator('[data-act="pvq-add"]').click()
+  // Round 12: an answer that found nothing ("Nothing in the research … answers this yet") has nothing to add.
+  const add = card.locator('[data-act="pvq-add"]')
+  if (!await add.isVisible().catch(() => false)) {
+    measure('ask-fact-not-found', 0, undefined, { said: (await card.innerText()).replace(/\s+/g, ' ').slice(0, 200) })
+    await expect(card.locator('[data-act="pvq-again"], button', { hasText: /Ask again/ }).first(), 'an answer that found nothing offers Ask again').toBeVisible()
+    return
+  }
+  await add.click()
   await expect(card.locator('[data-act="pvq-out"]')).toBeVisible({ timeout: 15_000 })
   await card.locator('[data-act="pvq-out"]').click()
   await expect(card.locator('[data-act="pvq-add"]')).toBeVisible({ timeout: 15_000 })
