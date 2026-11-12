@@ -1462,7 +1462,7 @@
           <label class="attach" title="Add the client’s files"><span aria-hidden="true">+</span><span class="sr">Add the client’s files</span><input type="file" class="sr" id="addAny" multiple /></label>
           <span class="cfoot-hint">Drop decks, PDFs, brand books, or voice notes.</span>
         </div>
-        <button type="button" class="go" id="genBtn">Write the brief</button>
+        <button type="button" class="go" id="genBtn" disabled>Write the brief</button>
       </div>
       <div class="note" id="intakeStatus" role="status"></div>
       <div class="nomw" id="noMw" hidden></div>
@@ -2765,6 +2765,8 @@
   function renderIntake(){
     buildIntroCrew(); syncKind(); renderFromUp();
     var nm=$('noMw'), off=noMiddleware();
+    // The button is drawn disabled and turned on here, once its click is wired: a page still
+    // loading must not offer a press that does nothing (UAT round 5).
     nm.hidden=!off; $('genBtn').disabled=off;
     if(off){
       nm.innerHTML=fig('drafter',{decorative:true})+say('drafter', esc(NO_MW)+'<span class="answers"><button type="button" id="handBtn">Write it by hand</button></span>','left');
