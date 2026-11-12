@@ -178,6 +178,14 @@ test('Live jobs lists each job as a link to its page, soonest deadline first', (
   assert.match(html, /data-testid="open-a-job"/)
 })
 
+test('a Live jobs row is named by the words it shows: no aria-label that replaces them (axe label-content-name-mismatch)', () => {
+  const html = live([job('J001')], true)
+  const row = html.slice(html.indexOf('<a class="jp-row"'), html.indexOf('</a>', html.indexOf('<a class="jp-row"')))
+  assert.ok(row.length > 0)
+  assert.doesNotMatch(row, /aria-label=/)
+  assert.match(row, />J001</)
+})
+
 test('with no job Live jobs is the Empty state and its one verb is Open a job', () => {
   const html = live([], true)
   assert.match(html, /data-state="empty"/)

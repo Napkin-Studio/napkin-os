@@ -67,7 +67,7 @@ export function LiveJobsBody({ jobs, ready, clients, rights, go, reload, open }:
       <ul className="jp-list" data-testid="live-job-list">
         {orderLive(jobs).map(j => (
           <li key={j.number} data-job={j.number} data-stage={j.stage.id} data-testid="live-job">
-            <a className="jp-row" href={formatRoute({ level: 'job', number: j.number })} data-testid="live-job-link" aria-label={`${j.number}, ${j.title}, ${j.client.name}. ${stageLine(j)} ${dueLine(j)}. Opens the job page`}>
+            <a className="jp-row" href={formatRoute({ level: 'job', number: j.number })} data-testid="live-job-link">
               <span className="jp-row-id">{j.number}</span>
               <span className="jp-row-what"><b>{j.title}</b><small>{j.client.name}</small></span>
               <span className="jp-row-stage">{stageLine(j)}</span>
