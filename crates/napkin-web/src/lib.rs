@@ -27,6 +27,7 @@ pub mod sandbox;
 pub mod state;
 pub mod store;
 pub mod tenant;
+pub mod timing;
 pub mod tokens;
 
 use std::path::Path;
@@ -147,6 +148,8 @@ pub fn router_with(
             sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
         )
         .merge(shell_service(static_dir))
+        // one timing line per routed request, by route template (timing.rs)
+        .route_layer(axum::middleware::from_fn(timing::layer))
         .layer(compression())
         .layer(TraceLayer::new_for_http())
         .with_state(ctx)

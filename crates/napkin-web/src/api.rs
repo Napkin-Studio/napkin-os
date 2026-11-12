@@ -119,8 +119,9 @@ fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenRe
     }
 }
 
-/// Open `doc` and describe it. The session is cached, so this is cheap on the
-/// second call and every tab of the same document shares one archive.
+/// Open `doc` and describe it. The session is cached, so every tab of the same
+/// document shares one archive; a cold open reads the archive once
+/// ([`Workspace::open`]), a warm one re-reads it as it stands now.
 fn open_view(
     ctx: &AppCtx,
     tenant: &TenantId,
@@ -128,9 +129,10 @@ fn open_view(
     ws: &Workspace,
     doc: DocId,
 ) -> ApiResult<OpenView> {
-    let session = ws.session(&doc)?;
-    let open = session.open(doc.clone())?;
-    Ok(view(ctx, tenant, person, &doc, open))
+    let (_session, open) = crate::timing::phase("session", || ws.open(&doc))?;
+    Ok(crate::timing::phase("token", || {
+        view(ctx, tenant, person, &doc, open)
+    }))
 }
 
 // ── Session ──────────────────────────────────────────────────────────────────
@@ -538,7 +540,7 @@ fn doc_session(
 ) -> ApiResult<(Arc<Workspace>, Arc<napkin_host::Session>, DocId)> {
     let ws = ctx.workspace(tenant);
     let id = DocId::new(doc);
-    let session = ws.session(&id)?;
+    let session = crate::timing::phase("session", || ws.session(&id))?;
     Ok((ws, session, id))
 }
 

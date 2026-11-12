@@ -211,6 +211,7 @@ pub async fn layer(
                 .and_then(TenantId::parse);
             let is_new = existing.is_none();
             let tenant = existing.unwrap_or_else(TenantId::mint);
+            crate::timing::note_who(tenant.as_str(), tenant.as_str());
             parts.extensions.insert(tenant.clone());
             parts.extensions.insert(Person(tenant.to_string()));
             let mut response = next
@@ -234,7 +235,9 @@ pub async fn layer(
             let path = parts.uri.path().to_string();
             match account {
                 Some(a) => {
-                    parts.extensions.insert(TenantId::of_agency(&a.agency));
+                    let tenant = TenantId::of_agency(&a.agency);
+                    crate::timing::note_who(tenant.as_str(), &a.username);
+                    parts.extensions.insert(tenant);
                     parts.extensions.insert(Person(a.username.clone()));
                     parts.extensions.insert(a);
                 }

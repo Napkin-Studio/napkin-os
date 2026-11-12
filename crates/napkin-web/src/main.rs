@@ -176,11 +176,20 @@ impl Settings {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    // Every target through the ordinary formatter, but the per-request
+    // timing lines, which go out as bare JSON objects (timing.rs).
+    use tracing_subscriber::prelude::*;
+    tracing_subscriber::registry()
+        .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "napkin_web=info,tower_http=warn".into()),
         )
+        .with(
+            tracing_subscriber::fmt::layer().with_filter(tracing_subscriber::filter::filter_fn(
+                |m| m.target() != napkin_web::timing::TARGET,
+            )),
+        )
+        .with(napkin_web::timing::Lines)
         .init();
 
     let settings = Settings::from_env();
