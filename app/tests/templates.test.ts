@@ -4460,8 +4460,153 @@ test('asking from the inspector says where the answer will appear and brings it 
   assert.equal(askWhere('media_spend'), 'at the end of the report')
   assert.equal(askWhere(null), 'at the end of the report')
   // pv-ask marks its job, empties its box and says where; the reply names the answer to reveal.
-  assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\); if\(pj\)\{ pj\.from='pv'; if\(pq\) pq\.value=''; toast\('Asked\. The answer will appear '\+askWhere\(pj\.lens\)\+'\.'\); \}/)
+  // a fact or finding ask shows under its item instead (factAsksHtml), so only a section's ask says where
+  assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\); if\(pj\)\{ pj\.from='pv'; if\(pq\) pq\.value=''; if\(!pj\.about\) toast\('Asked\. The answer will appear '\+askWhere\(pj\.lens\)\+'\.'\); \}/)
   assert.match(fn(RT, 'onAskReply'), /if\(j\.from==='pv'&&aid\)\{ ASK\.reveal=aid; toast\('Answered '\+askWhere\(j\.lens\)\+'\.'\); \}/)
   assert.match(fn(RT, 'renderAsks'), /revealAsk\(\);\s*\}$/)
   assert.match(fn(RT, 'doAsk'), /return j;/)
+})
+
+// ── a question asked from a fact: its answer under the fact, in the report only when added ──
+// (research-fact-answer-v1, owner 2026-11-12)
+
+type Ask = Record<string, unknown>
+const FACT = 'f_01RULING'
+function factEnv(asksData: Record<string, Ask>, extra: Record<string, unknown> = {}) {
+  const ASK = { ui: {}, jobs: [] as Ask[], reveal: null as unknown, writing: null as unknown }
+  const data = { report: {}, asks: asksData }
+  return {
+    ASK, data,
+    env: {
+      ASK, esc, arr, isObj, D: () => data, hasHost: () => true, reportLocked: () => false, me: () => 'ann',
+      agentName: () => 'Research agent', TheAgent: () => 'The Research agent', clipT: (t: string) => t,
+      selLabel: (r: string) => (r === FACT ? 'Advertising standards ruling, 2023' : r), citeName: () => 'Press', pins: () => ({}), fmtAny: () => '',
+      findChip: (id: string) => `<chip ${id}>`, secByLens: (l: string) => (l === 'regulation_clearance' ? { n: 7, title: 'Clearance' } : null),
+      secWords: (s: { n: number; title: string }) => `§${s.n} ${s.title}`, plainDay: (s: string) => s, slug: (s: string) => s,
+      askCite: (ids: string[]) => ` [${ids.join(' ')}]`,
+      asks: () => Object.values(data.asks).sort((x, y) => (String(x.asked_at) < String(y.asked_at) ? -1 : 1)),
+      ...extra,
+    },
+  }
+}
+const FACT_FNS = ['inReport', 'aboutWord', 'askAddedHtml', 'whenWords', 'nameOf', 'faCite', 'inRepWhere', 'factAnswerHtml', 'factPendingHtml', 'factAsksHtml']
+type FactFns = { inReport(a: Ask): boolean; factAsksHtml(r: string): string; askAddedHtml(a: Ask): string }
+const answered = (more: Ask = {}): Ask => ({
+  id: 'ask_1', question: 'When was the ruling?', about: FACT, in_report: false, lens: 'regulation_clearance', in_section: true, asked_at: '2026-11-12T10:00:00Z',
+  answer: [{ text: 'The ruling was issued in December 2023.', cites: [FACT] }, { text: 'The brand ran a censored poster.', cites: ['f_02POSTER'] }],
+  missing: ['whether the original poster was withdrawn'], status: 'partial', ...more,
+})
+
+test('a fact ask shows pending, then its answer, under the fact; not in the report until added', () => {
+  const { env, ASK, data } = factEnv({})
+  const f = lift<FactFns>(RT, FACT_FNS, env)
+  ASK.jobs.push({ about: FACT, question: 'When was the ruling?', state: 'running', jobId: 'job_1' })
+  const busy = f.factAsksHtml(FACT)
+  assert.match(busy, /pv-fa busy/)
+  assert.match(busy, /The Research agent is answering “When was the ruling\?”, from this fact first…/)
+  assert.equal(f.factAsksHtml('f_OTHER').includes('pv-fa'), false, 'another fact shows nothing of it')
+  ASK.jobs.length = 0
+  data.asks = { ask_1: answered() }
+  const h = f.factAsksHtml(FACT)
+  assert.match(h, /Research agent · about this fact/)
+  assert.match(h, /<li>The ruling was issued in December 2023\.<span class="pv-chip pv-fa-this">this fact<\/span><\/li>/)
+  assert.match(h, /data-pv="f_02POSTER"/)
+  assert.match(h, /<p class="pv-fa-miss">Not on record: whether the original poster was withdrawn\.<\/p>/)
+  assert.match(h, /data-act="pvq-add" data-ask="ask_1">Add to report<\/button>/)
+  assert.match(h, /data-act="pvq-again" data-ask="ask_1">Ask again<\/button>/)
+  // the report leaves it out; a general question's answer stays in it as before
+  assert.equal(f.inReport(answered()), false)
+  assert.equal(f.inReport({ id: 'ask_g', question: 'Q', about: null }), true)
+  assert.equal(f.inReport({ id: 'ask_old', question: 'Q' }), true, 'an answer from before about is in the report')
+  assert.match(fn(RT, 'renderAsks'), /all=asks\(\)\.filter\(inReport\)/)
+  assert.match(fn(RT, 'renderAsks'), /rjobs=ASK\.jobs\.filter\(function\(j\)\{ return !j\.about; \}\)/)
+  assert.ok(RT.includes("histRow(id)+askHtml('Ask about this fact…')+factAsksHtml(id);"))
+  assert.match(fn(RT, 'viewFindingHtml'), /askHtml\('Ask about this finding…'\)\+factAsksHtml\(fid\)/)
+})
+
+test('Add to report writes in_report as the person; the answer shows in the report; Take out puts it back', async () => {
+  const writes: { patch: Record<string, Record<string, Ask>>; action: string; rationale: string }[] = []
+  const toasts: string[] = []
+  const { env, data } = factEnv({ ask_1: answered() }, {
+    doWho: () => {}, mintDecisionId: () => 'd_01ADD', nowIso: () => new Date().toISOString(), addr: (p: string) => `doc#${p}`,
+    renderFactAsks: () => {}, renderAsks: () => {}, toast: (m: string) => toasts.push(m),
+    humanWrite: (patch: Record<string, Record<string, Ask>>, action: string, rationale: string) => {
+      writes.push({ patch, action, rationale })
+      for (const [k, v] of Object.entries(patch.asks)) data.asks[k] = { ...data.asks[k], ...v }
+      return Promise.resolve({ ok: true })
+    },
+  })
+  const f = lift<FactFns & { setInReport(id: string, on: boolean): Promise<void> }>(RT, [...FACT_FNS, 'setInReport'], env)
+  await f.setInReport('ask_1', true)
+  assert.equal(writes[0].action, 'add_ask_to_report')
+  assert.equal(writes[0].patch.asks.ask_1.in_report, true)
+  assert.equal(writes[0].patch.asks.ask_1.in_report_by, 'human:ann')
+  assert.match(writes[0].rationale, /^d_01ADD · add · doc#asks\[ask_1\]\.in_report · put the answer to “When was the ruling\?” in the report under §7 Clearance, by human:ann$/)
+  assert.equal(f.inReport(data.asks.ask_1), true)
+  const card = f.factAsksHtml(FACT)
+  assert.match(card, /✓ In the report under §7 Clearance · <button type="button" class="pv-link" data-act="pvq-show" data-ask="ask_1">Show<\/button> · <button type="button" class="pv-link" data-act="pvq-out" data-ask="ask_1">Take out<\/button>/)
+  assert.equal(card.includes('Add to report'), false)
+  const rep = f.askAddedHtml(data.asks.ask_1)
+  assert.match(rep, /class="rq-a rq-added" id="rq-ask_1"/)
+  assert.match(rep, /<p class="rq-q">You asked: When was the ruling\?<\/p>/)
+  assert.match(rep, /Research agent · added by you just now · rests on 2 facts/)
+  assert.deepEqual(toasts, ['In the report under §7 Clearance.'])
+  await f.setInReport('ask_1', false)
+  assert.equal(writes[1].action, 'take_ask_out_of_report')
+  assert.equal(writes[1].patch.asks.ask_1.in_report, false)
+  assert.equal(f.inReport(data.asks.ask_1), false)
+  assert.match(f.factAsksHtml(FACT), /Add to report/)
+})
+
+test('a fact ask keeps going when you move elsewhere, says so on the side, and lands under its fact', () => {
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const replies: ((r: unknown) => void)[] = []
+  const toasts: { m: string; act?: { label: string; run(): void } }[] = []
+  const opened: string[] = []
+  const timers: (() => void)[] = []
+  const VIEW = { sel: FACT as string | null }
+  const { env, ASK, data } = factEnv({}, {
+    VIEW, LENS: { regulation_clearance: {} }, attachments: () => [], toast: (m: string, act?: { label: string; run(): void }) => toasts.push({ m, act }),
+    openAsked: (r: string) => opened.push(r), askWhere: () => '', renderAsks: () => {}, render: () => {}, loadChain: () => {},
+    saveAskJobs: () => {}, mwError: () => null, mwBody: (r: { data: unknown }) => r.data, setTimeout: (f: () => void) => { timers.push(f) },
+    $: (id: string) => (id === 'rqin-_new' ? { value: 'When was the ruling?' } : null),
+    window: { clan: { apiProxy: (_k: string, p: { task: string; input: Record<string, unknown> }) => { sent.push(p); return new Promise(r => replies.push(r)) } } },
+  })
+  const f = lift<FactFns & { doAsk(k: string, about?: string): Ask; onAskReply(j: Ask, r: unknown): void }>(RT, [...FACT_FNS, 'doAsk', 'sendAsk', 'pollAsk', 'onAskReply'], env)
+  const j = f.doAsk('_new', FACT)
+  // the reply comes back while the person has gone to another fact, then to the report
+  VIEW.sel = 'f_OTHER'
+  f.onAskReply(j, { ok: true, data: { job: { id: 'job_9', state: 'running' } } })
+  assert.equal(timers.length, 1, 'still polled')
+  VIEW.sel = null
+  timers[0]()
+  assert.deepEqual(sent[1], { task: 'job_status', input: { job_id: 'job_9' } })
+  assert.equal(ASK.jobs.length, 1)
+  // the side agent names the fact while it runs, and opens it
+  const el: { innerHTML: string; hidden: boolean } = { innerHTML: '', hidden: true }
+  lift<{ sideAgent(): void }>(RT, ['sideAgent'], {
+    ...env, $: () => el, document: { body: { classList: { contains: () => false } } }, JOBS: [], RECON: {}, CHAT: {},
+    roles: () => null, TheAgent: () => 'The Research agent',
+  }).sideAgent()
+  assert.equal(el.innerHTML, '<span><b>Research agent</b> · answering about Advertising standards ruling, 2023</span>')
+  // it lands: stored under the fact, and the notice opens it
+  data.asks = { ask_1: answered({ in_report: false }) }
+  f.onAskReply(j, { ok: true, data: { job: { id: 'job_9', state: 'done' }, result: { ask: 'ask_1' }, change: { applied: true } } })
+  assert.equal(ASK.jobs.length, 0)
+  assert.equal(toasts.at(-1)?.m, 'Answered: Advertising standards ruling, 2023')
+  toasts.at(-1)?.act?.run()
+  assert.deepEqual(opened, [FACT])
+  assert.equal(ASK.reveal, null, 'the report is not scrolled to it: it is not there')
+  VIEW.sel = FACT
+  assert.match(f.factAsksHtml(FACT), /The ruling was issued in December 2023\./)
+})
+
+test('reloading mid-ask resumes it under its fact; one lost to a restart says so with Ask again', () => {
+  const { env, ASK } = factEnv({}, { INTERRUPTED: INTERRUPTED_WORDS })
+  const f = lift<FactFns>(RT, FACT_FNS, env)
+  assert.match(fn(RT, 'resumeAsks'), /about:x\.about\|\|null, state:'running'/)
+  ASK.jobs.push({ about: FACT, question: 'When was the ruling?', state: 'running', jobId: 'job_1', error: INTERRUPTED_WORDS })
+  const h = f.factAsksHtml(FACT)
+  assert.match(h, /Not answered: This run was interrupted \(the service restarted\)\. Run it again\./)
+  assert.match(h, /data-act="rq-retry" data-i="0">Ask again<\/button>/)
 })
