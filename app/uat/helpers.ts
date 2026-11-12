@@ -123,3 +123,28 @@ export async function driveRun(page: Page, app: FrameLocator, done: Locator, bud
   }
   return questions
 }
+
+/**
+ * A new document's app, once its frame has stopped changing. Round 1 of this file: the tool's
+ * frame showed a notes box, then the new document loaded over it two seconds later, and a file
+ * set in between went to the page that was being replaced (nothing uploaded, nothing shown).
+ */
+export async function newDocApp(page: Page, start: string, label: string, ready: string) {
+  const before = page.url()
+  const t0 = Date.now()
+  await page.getByText(start).click()
+  // A new brief gets its address at once; a new research question may only on sending.
+  await expect.poll(() => page.url(), { timeout: 10_000 }).not.toBe(before).catch(() => {})
+  const app = await appFrame(page, t0, label, ready)
+  const frame = page.locator('iframe').first()
+  const where = () => frame.evaluate((f: HTMLIFrameElement) => `${f.contentWindow?.location.href}|${f.contentDocument?.readyState}`).catch(() => '')
+  let last = await where(), since = Date.now()
+  const until = Date.now() + 30_000
+  while (Date.now() - since < 3_000 && Date.now() < until) {
+    await page.waitForTimeout(250)
+    const now = await where()
+    if (now !== last || !now.endsWith('|complete')) { last = now; since = Date.now() }
+  }
+  await expect(app.locator(ready).first(), 'the new document\'s app is showing').toBeVisible()
+  return app
+}
