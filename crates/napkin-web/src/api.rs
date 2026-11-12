@@ -471,9 +471,11 @@ async fn get_job(
         .into_iter()
         .filter(|n| n.job == number)
         .collect();
-    Ok(Json(
-        serde_json::json!({ "job": crate::jobview::job_view(job, &roles), "needs": needs }),
-    ))
+    Ok(Json(serde_json::json!({
+        "job": crate::jobview::job_view(job, &roles),
+        "needs": needs,
+        "can": crate::roles::job_rights(&roles),
+    })))
 }
 
 #[derive(Deserialize)]

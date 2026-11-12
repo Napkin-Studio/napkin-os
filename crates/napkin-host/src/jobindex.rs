@@ -97,6 +97,10 @@ pub struct JobDoc {
     /// Things a person must check before this document's lock.
     pub needs_you: usize,
     pub locked: bool,
+    /// A gated brief only: the number of its newest signed version, and whether the draft has moved on
+    /// since it was signed (the job page's Changed brief). `None` and `false` for any other document.
+    pub version: Option<usize>,
+    pub changed_since_lock: bool,
 }
 
 /// One job, as the index has it.
@@ -368,6 +372,15 @@ fn entry_of(
             app_id: m.app.as_ref().map(|a| a.app_id.clone()),
             needs_you: state.as_ref().map_or(0, |s| s.needs_you),
             locked: state.as_ref().is_some_and(|s| s.locked),
+            version: state
+                .as_ref()
+                .is_some_and(|s| s.gate.is_some())
+                .then(|| crate::ops::versions::approved_count(&doc))
+                .filter(|n| *n > 0),
+            changed_since_lock: state
+                .as_ref()
+                .and_then(|s| s.gate.as_ref())
+                .is_some_and(|g| g.changed_since_lock),
         });
         if let Some(app) = m.app.as_ref().map(|a| a.app_id.as_str()) {
             if APP_STAGES.iter().any(|(a, ..)| *a == app) {

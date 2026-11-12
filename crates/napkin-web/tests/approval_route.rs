@@ -195,7 +195,7 @@ async fn only_account_service_and_management_name_a_route_and_a_bad_one_is_refus
     assert_eq!(job["route"].as_array().unwrap().len(), 3);
 
     // the registry holds the steps, and the job says who holds it
-    let (_, entry, _) = call(
+    let (_, answer, _) = call(
         &r,
         "GET",
         &format!("/api/t/{}/jobs/J001", cian.tenant),
@@ -203,6 +203,7 @@ async fn only_account_service_and_management_name_a_route_and_a_bad_one_is_refus
         None,
     )
     .await;
+    let entry = &answer["job"]; // the job page's answer: { job, needs, can }
     assert_eq!(entry["route"].as_array().unwrap().len(), 3);
     assert_eq!(entry["holder"]["person"], "aoife@wk");
     assert_eq!(entry["route"][0]["state"], "waiting");
@@ -245,7 +246,7 @@ async fn only_account_service_and_management_name_a_route_and_a_bad_one_is_refus
             "{why}"
         );
     }
-    let (_, entry, _) = call(
+    let (_, answer, _) = call(
         &r,
         "GET",
         &format!("/api/t/{}/jobs/J001", cian.tenant),
@@ -253,6 +254,7 @@ async fn only_account_service_and_management_name_a_route_and_a_bad_one_is_refus
         None,
     )
     .await;
+    let entry = &answer["job"]; // the job page's answer: { job, needs, can }
     assert_eq!(
         entry["route"].as_array().unwrap().len(),
         3,

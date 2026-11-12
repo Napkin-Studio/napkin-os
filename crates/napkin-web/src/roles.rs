@@ -324,6 +324,25 @@ pub struct HomeView {
     pub map: Map,
     /// Every role's home, for admins and demos; none for anyone else.
     pub switcher: Option<Vec<RoleInfo>>,
+    /// What this person may do with jobs; the shell draws a control only when it is true, and the
+    /// server refuses the write in any case (features/job-page.clan).
+    pub jobs: JobRights,
+}
+
+/// What a person may do with jobs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct JobRights {
+    /// Open a job; change its title, owner and deadline.
+    pub manage: bool,
+    /// Set the budget in hours.
+    pub budget: bool,
+}
+
+pub fn job_rights(roles: &[String]) -> JobRights {
+    JobRights {
+        manage: may_manage_jobs(roles),
+        budget: may_set_budget(roles),
+    }
 }
 
 pub fn is_switcher(roles: &[String]) -> bool {
@@ -510,6 +529,7 @@ impl Table {
             more,
             map: self.map_for(roles),
             switcher,
+            jobs: job_rights(roles),
         }
     }
 

@@ -414,7 +414,12 @@ async fn each_role_is_sent_exactly_the_fields_it_may_see_and_another_agency_sees
         );
         let (s, one) = jobs(&r, p, "GET", "/J001", None).await;
         assert_eq!(s, StatusCode::OK);
-        assert_eq!(key_set(&one), expect(&["job", "needs"]));
+        assert_eq!(key_set(&one), expect(&["job", "needs", "can"]));
+        assert_eq!(
+            one["can"]["budget"],
+            json!(has_money && role != "traffic"),
+            "{role}"
+        );
         assert_eq!(key_set(&one["job"]), expect(&top), "one as {role:?}");
         assert_eq!(
             key_set(&one["job"]["route"][1]),

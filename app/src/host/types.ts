@@ -369,16 +369,37 @@ export interface JobEntry {
   owner: string
   opened_on: string
   due: string | null
-  budget_hours: number | null
+  /** Sent to the Money roles only: absent for every other role. */
+  budget_hours?: number | null
   stage: { id: string; step: number; label: string }
   status: string
   waiting_on: 'agency' | 'client'
   days_waiting_on_client: number | null
   at_risk: boolean
-  documents: { path: string; title: string; app_id: string | null; needs_you: number; locked: boolean }[]
+  documents: JobDocument[]
   route: RouteStepState[]
   holder: Holder | null
 }
+
+/** A document filed under a job. `version` and `changed_since_lock` are a gated brief's: its newest signed version, and whether the draft has moved on. */
+export interface JobDocument {
+  path: string
+  title: string
+  app_id: string | null
+  needs_you: number
+  locked: boolean
+  version: number | null
+  changed_since_lock: boolean
+}
+
+/** What this person may do with jobs; the server refuses the write in any case. */
+export interface JobRights { manage: boolean; budget: boolean }
+
+/** One job page's answer (`GET /jobs/{number}`): the job as this person may see it, what it asks of them, and what they may do. */
+export interface JobView { job: JobEntry; needs: JobNeed[]; can: JobRights }
+
+/** What a person may change on a job (`PATCH /jobs/{number}`); `due: null` clears the deadline. */
+export interface JobPatch { title?: string; owner?: string; due?: string | null; budget_hours?: number }
 
 /** A job named on a dashboard tile. */
 export interface JobLine { number: string; client: string; client_id: string; line: string }

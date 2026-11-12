@@ -147,7 +147,7 @@ test('the door table: Phase 1 answers are unchanged, and a door with no line is 
   assert.equal(doorIsLive('brief', ['ie.napkin.deck-maker']), false, 'an app that is not installed is not live')
   assert.equal(doorIsLive('clients', []), true)
   assert.equal(doorIsLive('agency-dashboard', []), true)
-  assert.equal(doorIsLive('live-jobs', APPS_ALL), false, 'the job page is built by its own record')
+  assert.equal(doorIsLive('live-jobs', APPS_ALL), true, 'Live jobs is built by features/job-page.clan')
   assert.equal(doorIsLive('script-editor', APPS_ALL), false, 'no line, no tool')
   assert.equal(doorTool('brief'), 'brief')
   assert.equal(doorTool('research'), 'research')
@@ -183,8 +183,8 @@ test('every word on a home says no em dash', () => {
 })
 
 test('every door with no tool opens its own Empty state: its line, its verb, its example and the reason', () => {
-  const none = DOORS.filter(d => !doorIsLive(d.id, APPS) || d.id === 'live-jobs')
-  assert.ok(none.length >= 30)
+  const none = DOORS.filter(d => !doorIsLive(d.id, APPS))
+  assert.ok(none.length >= 29)
   for (const d of none) {
     const html = renderToStaticMarkup(createElement(DoorPage, { door: d.id, name: d.name, clients: [], items: [], apps: [], go: noop }))
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/'/g, '&#x27;')

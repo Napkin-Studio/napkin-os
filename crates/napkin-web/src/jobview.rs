@@ -40,7 +40,15 @@ pub const MONEY_KEYS: &[&str] = &["budget_hours"];
 
 const CLIENT_KEYS: &[&str] = &["id", "name"];
 const STAGE_KEYS: &[&str] = &["id", "step", "label"];
-const DOC_KEYS: &[&str] = &["path", "title", "app_id", "needs_you", "locked"];
+const DOC_KEYS: &[&str] = &[
+    "path",
+    "title",
+    "app_id",
+    "needs_you",
+    "locked",
+    "version",
+    "changed_since_lock",
+];
 const HOLDER_KEYS: &[&str] = &[
     "party",
     "person",
@@ -157,6 +165,8 @@ mod tests {
                 app_id: Some("ie.napkin.brief-maker".into()),
                 needs_you: 1,
                 locked: false,
+                version: Some(1),
+                changed_since_lock: true,
             }],
             route: vec![RouteStepState {
                 stage: "brief-check".into(),

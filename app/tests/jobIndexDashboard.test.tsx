@@ -71,7 +71,7 @@ const dash = (over: Partial<DashboardView> = {}): DashboardView => ({
 test('the dashboard has six tiles, each number a link to the job or to Live jobs', () => {
   const t = tiles(dash())
   assert.deepEqual(t.map(x => x.id), ['stage', 'risk', 'hours', 'waiting', 'scores', 'results'])
-  assert.deepEqual(t[0].numbers, [{ text: '1 in Brief check', href: '#client-cli_00000001' }])
+  assert.deepEqual(t[0].numbers, [{ text: '1 in Brief check', href: '#job-J001' }])
   assert.equal(t[1].numbers[0].text, '0')
   assert.equal(t[1].line, 'No job is past a deadline.')
   assert.equal(t[2].numbers[0].text, 'No hours yet')
@@ -83,7 +83,7 @@ test('the dashboard has six tiles, each number a link to the job or to Live jobs
   // several jobs behind one number: it opens Live jobs
   const two = [{ number: 'J001', client: 'A', client_id: 'cli_00000001', line: '' }, { number: 'J002', client: 'A', client_id: 'cli_00000001', line: '' }]
   assert.equal(jobHref(two), '#door-live-jobs')
-  assert.equal(jobHref(two.slice(0, 1)), '#client-cli_00000001')
+  assert.equal(jobHref(two.slice(0, 1)), '#job-J001')
 })
 
 test('the dashboard names no person and ranks nothing', () => {
@@ -110,7 +110,7 @@ test('a role that may not open it sees Missing access, and the first read is Loa
 test('with jobs the dashboard draws six tiles, each number a link, and J001 on the stage tile', () => {
   const html = body(dash())
   assert.equal((html.match(/data-testid="tile-(stage|risk|hours|waiting|scores|results)"/g) || []).length, 6)
-  assert.match(html, /<a class="db-n" href="#client-cli_00000001" data-testid="tile-number">1 in Brief check<\/a>/)
+  assert.match(html, /<a class="db-n" href="#job-J001" data-testid="tile-number">1 in Brief check<\/a>/)
   assert.match(html, /data-job="J001" data-stage="brief-check"/)
   assert.match(html, /Signed\. Waiting for the client to confirm\./)
 })
