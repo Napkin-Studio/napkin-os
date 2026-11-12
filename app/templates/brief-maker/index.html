@@ -2853,9 +2853,20 @@
     var e=res&&res.error; if(e&&typeof e==='object') e=e.message||e.type;
     return e?String(e):'the studio did not take '+(file.name||'it');
   }
+  // What the agents read: the text the host extracts (crates/napkin-host/src/ops/mod.rs extract_text), and
+  // pictures, which they look at. Anything else is kept with the brief but not read, and the person is told
+  // when they add it, before a run is paid for (owner, 2026-11-12, UAT round 7).
+  var READ_EXT=/^(txt|text|md|markdown|csv|tsv|json|ya?ml|log|pdf|docx|pptx|png|jpe?g|gif|webp)$/;
+  function unreadNote(names){
+    if(!names.length) return '';
+    var exts=[]; names.forEach(function(n){ var e=(n.split('.').length>1?n.split('.').pop():'').toLowerCase(); if(exts.indexOf(e)===-1) exts.push(e); });
+    var what=exts.map(function(e){ return e?'.'+e:'files without a type'; }).join(' or ');
+    return names.join(', ')+(names.length===1?' is':' are')+' added, but the agents can’t read '+what+(exts.length===1&&exts[0]?' files':'')
+      +'. They read PDF, Word, PowerPoint, pictures and text.';
+  }
   function uploadList(list, statusEl, done){
     var files=Array.prototype.slice.call(list||[]); if(!files.length) return;
-    var failed=[];
+    var failed=[], unread=[];
     UPLOADING++; genOff();
     if(statusEl){ statusEl.classList.remove('err'); statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…'; }
     files.reduce(function(p,file,i){return p.then(function(){
@@ -2866,6 +2877,7 @@
           return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf})
             .then(function(r){return r.json().catch(function(){ return {error:'the studio answered '+r.status}; });}).then(function(res){
               if(!(res&&res.internal_path)){ failed.push(file.name+' ('+upWhy(res, file)+')'); return; }
+              if(!READ_EXT.test(ext)) unread.push(file.name);
               var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});
               return patch('reference_assets',n);
             });
@@ -2873,7 +2885,7 @@
     });},Promise.resolve()).then(function(){
       UPLOADING=Math.max(0,UPLOADING-1); genOff();
       if(statusEl){
-        statusEl.textContent=failed.length?'Could not add '+failed.join(', ')+'.':'';
+        statusEl.textContent=[failed.length?'Could not add '+failed.join(', ')+'.':'', unreadNote(unread)].filter(Boolean).join(' ');
         statusEl.classList.toggle('err', !!failed.length);
       }
       if(done) done();

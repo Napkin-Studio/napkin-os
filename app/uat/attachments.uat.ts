@@ -112,19 +112,18 @@ test('a brief from the client\'s files alone, no words (paid)', async ({ page })
 test('a brief from words, a picture, a text file and an unreadable file (paid)', async ({ page }) => {
   const app = await newBrief(page)
   await app.locator('#prompt').fill('Kestrel Oat, an Irish oat drink: a brief for a spring retail push. Use what is in the files.')
-  // The zip may be refused at the door (then it must say so) or put on the desk (then the
-  // agents must say they could not read it): either way the person is told.
+  // The zip is kept with the brief, and the person is told the agents can't read it.
   await attachToBrief(app, [F.shelf, F.txt, F.zip], [F.shelf, F.txt])
+  // Owner, 2026-11-12: told when it is added, before a run is paid for, in the line under the notes.
+  const NAMED = /kestrel-archive|\.zip\b|archive/i
+  const CANT = /could ?n[o’']t (be )?(read|open)|can[’']?not (be )?(read|open)|can[’']t (read|open)|unable to (read|open)|not (been )?read|unread|unsupported|not supported/i
+  await expect(app.locator('#intakeStatus'), 'an unreadable file is reported to the person when they add it').toHaveText(NAMED, { timeout: 15_000 })
+  const told = await app.locator('#intakeStatus').innerText()
+  measure('unreadable-file-told', 0, undefined, { lines: [told] })
+  expect(CANT.test(told), `the note says the agents can't read it: "${told}"`).toBe(true)
   const sheet = await writeBrief(page, app, 'brief-from-mixed-files')
   const text = await sheet.innerText()
   expect(text, 'the brief carries a fact from the picture (Dunnes Stores, Cork) or the text file (Glenmore Oat)').toMatch(/Dunnes|Cork|Glenmore/i)
-  // Told somewhere visible: in the tool, or in the studio around it.
-  const NAMED = /kestrel-archive|\.zip\b|archive/i
-  const CANT = /could ?n[o’']t (be )?(read|open)|can[’']?not (be )?(read|open)|can[’']t (read|open)|unable to (read|open)|not (been )?read|unread|unsupported|not supported/i
-  const seen = [await app.locator('body').innerText(), await page.locator('body').innerText()]
-    .flatMap(t => t.split('\n')).filter(l => NAMED.test(l) && CANT.test(l))
-  measure('unreadable-file-told', 0, undefined, { lines: seen.slice(0, 3) })
-  expect(seen.length, 'an unreadable file is not reported to the person').toBeGreaterThan(0)
 })
 
 test('a bad file never leaves the box stuck', async ({ page }) => {
