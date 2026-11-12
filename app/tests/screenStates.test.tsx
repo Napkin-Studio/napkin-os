@@ -38,7 +38,7 @@ const { Gallery } = await import('../src/components/states/Gallery.tsx')
 const { loadingPhase, RECTS_AFTER_MS, SPINNER_AFTER_MS } = await import('../src/components/states/loading.ts')
 const { createSaveQueue, writeFrom } = await import('../src/components/states/saveQueue.ts')
 const { StateStrip } = await import('../src/components/states/StateStrip.tsx')
-const { PHASE1_DOORS, doorsWithoutTool, hasTool } = await import('../src/components/states/doors.ts')
+const { DOORS, PHASE1_DOORS, ROLES, doorsWithoutTool, hasTool, doorById } = await import('../src/components/states/doors.ts')
 const { barFrom, stateOf } = await import('../src/shell/appBar.ts')
 const { STRUCTURED_EDIT_BRIDGE } = await import('../src/bridge/structuredEditBridge.ts')
 const { TEASERS } = await import('../src/shell/comingSoon.ts')
@@ -346,15 +346,19 @@ test('Brief Maker and Research report a failed run and answer state-retry', () =
 
 const INSTALLED = ['ie.napkin.brief-maker', 'ie.napkin.campaign-research', 'ie.napkin.deck-maker', 'ie.napkin.landing']
 
-test('each Phase 1 home has five doors, as the doors table says', () => {
-  for (const home of ['planning', 'creative-director', 'account-service', 'management'] as const) {
-    assert.equal(PHASE1_DOORS.filter(d => d.homes.includes(home)).length, 5, home)
+test('each of the nine homes has five doors, as the doors table says', () => {
+  assert.equal(ROLES.length, 9)
+  for (const home of ROLES) {
+    assert.equal(DOORS.filter(d => d.homes.includes(home)).length, 5, home)
   }
+  assert.equal(PHASE1_DOORS, DOORS, 'the old name stays as an alias')
+  assert.equal(new Set(DOORS.map(d => d.id)).size, DOORS.length, 'one entry per door')
+  assert.ok(doorById('script-editor'), 'every door of the table has its own content')
 })
 
-test('each Phase 1 door with no tool yet renders Empty with its J001 example and one starting verb', async () => {
+test('each door with no tool yet renders Empty with its J001 example and one starting verb', async () => {
   const empty = doorsWithoutTool(INSTALLED)
-  assert.ok(empty.length >= 10, 'most doors have no tool yet')
+  assert.ok(empty.length >= 30, 'most doors have no tool yet')
   assert.ok(!empty.some(d => hasTool(d, INSTALLED)))
   for (const door of empty) {
     const r = await draw(createElement(S.Empty, { line: door.line, example: door.example, verb: door.verb, reason: 'Comes with its tool' }))

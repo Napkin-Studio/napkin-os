@@ -13,6 +13,14 @@ export const PEOPLE = {
   admin: { username: 'ann@napkin', name: 'Ann Test', roles: ['admin'] },
   // no role at all: every door, as before roles existed
   noRole: { username: 'sam@wk', name: 'Sam Test', roles: [] },
+  // the five roles whose homes come with remaining-homes, one person each, appended after the Phase 1 people
+  artDirector: { username: 'oisin@wk', name: 'Oisin Test', roles: ['art-director'] },
+  copywriter: { username: 'maeve@wk', name: 'Maeve Test', roles: ['copywriter'] },
+  producer: { username: 'ruairi@wk', name: 'Ruairi Test', roles: ['producer'] },
+  agencyBrain: { username: 'sinead@wk', name: 'Sinead Test', roles: ['agency-brain'] },
+  traffic: { username: 'fionn@wk', name: 'Fionn Test', roles: ['traffic'] },
+  // a Phase 1 role and a Phase 2 role: one merged home of five doors
+  planningAndCopywriter: { username: 'eoin@wk', name: 'Eoin Test', roles: ['planning', 'copywriter'] },
 }
 
 /** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`. */

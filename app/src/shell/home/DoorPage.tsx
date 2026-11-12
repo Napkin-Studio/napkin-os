@@ -15,6 +15,7 @@ import { doorById } from '../../components/states/doors'
 import { clientLook, clientName, monogramOf } from '../nui/deskData'
 import { toolById } from '../landing/tools'
 import type { Route } from '../route'
+import { doorTarget } from './doorTargets'
 import { doorIsLive, doorTool } from './model'
 import { Dashboard } from './Dashboard'
 import './home.css'
@@ -37,12 +38,14 @@ export function DoorPage({ door, name, clients, items, apps, go }: Props) {
   const toolId = doorTool(door)
   const tool = toolId ? toolById(toolId) : undefined
   const live = doorIsLive(door, apps)
+  const target = doorTarget(door)
+  const page = live && target && 'page' in target ? target.page : null
 
   let body
-  if (door === 'agency-dashboard') {
+  if (page === 'agency-dashboard') {
     // The dashboard reads the job index, behind the server's role check (a door of Management's home).
     body = <Dashboard go={go} />
-  } else if (door === 'clients') {
+  } else if (page === 'clients') {
     // The client desk is the Clients door: the desk page itself, not a second list of clients.
     body = <Empty line="The desk lists your clients." verb="Open the desk" example={{ title: 'Example · Client A, an Irish whiskey', lines: ['Client A, an Irish whiskey. One live job, J001.'] }} onStart={() => go({ level: 'clients' })} />
   } else if (tool && live && clients.length > 0) {
