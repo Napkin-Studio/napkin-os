@@ -834,6 +834,15 @@
   .sheet.a4 .pgrid > .row.needs::before{content:"Needs your call";position:absolute;top:14px;right:10px;padding:2px 8px;border-radius:999px;background:#B45309;color:#fff;font:700 9.5px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;z-index:2}
   .sheet.a4 .pgrid > .row.needs .lab{padding-right:130px}
   .sheet.a4 .pgrid > .row.needs:hover{background-color:color-mix(in srgb,#B45309 11%,transparent)}
+  /* Draft it again, in place (napkin-app-v1 .brief-page.all-working, features/brief-redraft-in-place): a part
+     the run is writing sweeps with the accent and dims, until the run ends. */
+  @keyframes aw-sheen{from{background-position:150% 0}to{background-position:-50% 0}}
+  #fields .row.working{background-image:linear-gradient(100deg,transparent 30%,color-mix(in srgb,var(--accent) 6%,transparent) 50%,transparent 70%);background-size:200% 100%;animation:aw-sheen 1.4s linear infinite}
+  #fields .row.working > *{opacity:.55;transition:opacity .3s}
+  @media (prefers-reduced-motion: reduce){#fields .row.working{animation:none;background-image:none}}
+  .side-stop{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 14px;padding:8px 0 10px;border-bottom:1px solid var(--nd-line,var(--line))}
+  .side-stop[hidden]{display:none}
+  .side-stop .stopq{flex-basis:100%;font:13px/1.35 var(--font-ui);color:var(--nd-muted,var(--ink2))}
   .sheet.a4 .pgrid > .row.needs.sel{background-color:color-mix(in srgb,#B45309 7%,transparent);box-shadow:inset 3px 0 0 #B45309,inset 0 0 0 1px color-mix(in srgb,#B45309 45%,transparent)}
   /* Why notes: hidden on the sheet unless the side tab says Show all (layout.why) */
   .sheet.a4:not(.why-show) .prov,.sheet.a4:not(.why-show) .org,.sheet.a4:not(.why-show) .row > .why{display:none!important}
@@ -1520,6 +1529,7 @@
 
       <aside class="stab" id="stab" aria-label="The brief’s controls">
         <div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden></div>
+        <div class="side-stop" id="sideStop" hidden></div>
         <!-- One thing at a time (features/brief-new-ui.clan, the side tab design): the BRIEF view while
              nothing is selected, the PART view (#selPart) while a part is. Never both. -->
         <div class="bview" id="briefView">
@@ -3310,12 +3320,28 @@
   // (No skipping a live run: the sheet opens when the run ends.)
   // (the mock's Skip: the sheet at once, its parts arriving as the crew write them)
   function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input'); }
-  function startDraft(prompt, atts, resumeId){
-    var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
-      renderProc(); linkRunEnded(j);
+  // In place (Draft it again on a drafted brief, features/brief-redraft-in-place): the same job and the same
+  // polling, but the sheet stays on screen. Each part the run is writing sweeps (markSweep), the agent at work
+  // is in the side panel (sideAgent), and the agents ask nothing (intake false: their defaults apply).
+  function startDraft(prompt, atts, resumeId, inPlace){
+    var j=DRAFT={task:'draft_brief', fields:{}, inPlace:!!inPlace, onUpdate:inPlace?draftInPlace:renderProc, onEnd:function(j){
+      linkRunEnded(j);
+      if(j.inPlace){
+        store(jobKey('draft_brief','inplace'), null);
+        if(DRAFT===j) DRAFT=null;
+        if(j.state!=='done'&&j.error) toast(j.error);
+        render(); draftInPlace(j); return;
+      }
+      renderProc();
       if(j.state==='done') setTimeout(function(){ if(DRAFT!==j) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); }, reduce?200:1100);
     }};
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
+    if(inPlace){
+      store(jobKey('draft_brief','inplace'), '1');
+      if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; pollJob(j); }
+      else runJob(j, {prompt:prompt, attachments:atts, intake:false, redraft:true});
+      draftInPlace(j); return;
+    }
     setPhase('proc'); window.scrollTo(0,0);
     if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; renderProc(); pollJob(j); return; }
     runJob(j, {prompt:prompt, attachments:atts, intake:true});  // the planner is here to answer: ask first (§10.1)
@@ -3379,17 +3405,18 @@
   // A draft: the planner's words (else the ask already recorded, else, in a
   // brief started from research, the ask that started the research) and the
   // client's files, the ones that came with the research included.
-  function draftNow(prompt){
+  // `inPlace`: Draft it again on the sheet (startDraft). A first draft from the ask goes to the Agents screen.
+  function draftNow(prompt, inPlace){
     var typed=!!prompt, ask=prompt||String(get('brief_input')||'').trim()||(isResearchFed()?upPrompt():'');
     if(!window.clan){ $('intakeStatus').textContent='No host bridge — open this inside the studio.'; return; }
-    if(draftLive()){ setPhase('proc'); renderProc(); return; }   // one draft at a time: back to the crew at work
+    if(draftLive()){ if(!DRAFT.inPlace){ setPhase('proc'); renderProc(); } return; }   // one draft at a time: back to the crew at work, or the sheet it is writing
     if(noMiddleware()){ renderIntake(); return; }
     if(!ask&&!(data().reference_assets||[]).length&&!upMaterials().length){ $('intakeStatus').textContent='Say what the brief is, or attach the client’s material.'; return; }
     $('intakeStatus').classList.remove('err'); $('intakeStatus').textContent='';
     // The ask is the planner's own words: theirs to write.
     var why=typed||!isResearchFed()?'The ask, in the planner’s words':'The ask that started the research “'+(upTitle()||'it')+'”, in the planner’s words';
     var ready=(ask&&ask!==get('brief_input'))?Promise.resolve(patch('brief_input',ask,{actor:'human',pinned:false,action:'edit brief_input',rationale:why})):Promise.resolve();
-    ready.then(attachmentsFor).then(function(atts){ startDraft(ask, atts); })
+    ready.then(attachmentsFor).then(function(atts){ startDraft(ask, atts, null, !!inPlace&&phase==='doc'); })
       .catch(function(e){ $('intakeStatus').textContent='Could not read the attachments: '+(e&&e.message||e); $('intakeStatus').classList.add('err'); });
   }
   $('genBtn').addEventListener('click',function(){ draftNow($('prompt').value.trim()); });
@@ -3398,7 +3425,7 @@
   function resumeJobs(){
     if(!(window.clan&&window.clan.apiProxy)) return;
     var id=stored(jobKey('draft_brief'));
-    if(id) startDraft('', [], id);
+    if(id) startDraft('', [], id, !!stored(jobKey('draft_brief','inplace')));
     FIELDS.forEach(function(f){ var rid=stored(jobKey('regenerate_field', f.key)); if(rid) regenField(f, '', rid); });
     var fid=stored(jobKey('fix_parts')); if(fid) fixParts('', fid);
   }
@@ -3614,7 +3641,7 @@
     var es=linkedNew(); if(!es.length) return;
     var before={}; FIELDS.forEach(function(f){ before[f.key]=valToText(get(f.key),f.type); });
     LINK.run={title:es[0].title||'the research', before:before}; LINK.done=null; LINK.shown=false;
-    var go=function(){ draftNow(''); };
+    var go=function(){ draftNow('', true); };
     Promise.resolve(linkMark(es,'used')).then(go, go);
   }
   function linkLater(){
@@ -3797,7 +3824,7 @@
     if(showBoards) renderBoards(false);
     renderLock(); renderLinkNote(); renderUpNote($('upNote'));
     renderCrewline(); renderReview();
-    renderLook(); renderSelPart(); scheduleBreaks();
+    renderLook(); renderSelPart(); scheduleBreaks(); markSweep();
     LOCK_SIG=lockSig();
     // The clan-fields inside the rows render, and the snippet finds the
     // parts again (and puts back what it shows under them).
@@ -4026,13 +4053,54 @@
       :WRITER_+' is writing '+f.label.toLowerCase()+' again…';
     return '<div class="regen-now"><span>'+esc(t)+'</span></div>';
   }
+  // ---------- Draft it again, in place (features/brief-redraft-in-place) ----------
+  // The parts the in-place run is writing now: those the job reports still in hand; before it reports
+  // any, every unlocked part. None once it ends (done, failed or stopped).
+  var SWEEP={waiting:1, extracting:1, drafting:1, judging:1, revising:1};
+  function sweepKeys(j){
+    if(!j||!j.inPlace||DRAFT!==j||!draftLive()) return [];
+    var fs=j.fields||{}, told=Object.keys(fs).length>0;
+    return FIELDS.filter(function(f){ if(isLocked(f.key)) return false; var x=fs[f.key]; return told?!!(x&&SWEEP[x.state]):true; }).map(function(f){ return f.key; });
+  }
+  function markSweep(){
+    var ks=sweepKeys(DRAFT);
+    document.querySelectorAll('#fields .row[data-clan-part]').forEach(function(r){ r.classList.toggle('working', ks.indexOf(r.getAttribute('data-clan-part'))!==-1); });
+    return ks;
+  }
+  // The side panel's line for the run: who works the stage the job is at, and what they do.
+  var DRAFT_SIDE={extract:'reading what you sent', context:'planning the brief', draft:'writing every part', judge:'checking every part'};
+  function draftSide(j){
+    var st=STAGES.indexOf(j.stage)>=0?j.stage:'extract', n=STAGES.indexOf(st)+1, fs=j.fields||{};
+    var rev=st==='judge'&&Object.keys(fs).some(function(k){ return fs[k]&&fs[k].state==='revising'; });
+    return {role:roleOf(rev?'drafter':STAGE_K[st]), key:'draft|'+st+(rev?'|rev':''), doing:rev?'rewriting on the review’s note':DRAFT_SIDE[st],
+      status:'step '+n+' of '+STAGES.length, progress:(n-1)/STAGES.length};
+  }
+  // Stop, under the agent: asked once, as on the Agents screen. What is written so far stays.
+  function renderSideStop(){
+    var el=$('sideStop'); if(!el) return;
+    var j=DRAFT, on=phase==='doc'&&!!j&&j.inPlace&&!!j.id&&draftLive();
+    el.hidden=!on;
+    el.innerHTML=!on?'':j.stopAsk
+      ?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="side-link" data-ds="yes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="side-link" data-ds="no"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+      :'<button type="button" class="side-link" data-ds="stop">Stop</button>';
+  }
+  document.addEventListener('click', function(e){
+    var b=e.target&&e.target.closest&&e.target.closest('#sideStop [data-ds]'), j=DRAFT; if(!b||!j||!j.inPlace) return;
+    var a=b.getAttribute('data-ds');
+    if(a==='stop'){ j.stopAsk=true; renderSideStop(); }
+    else if(a==='no'){ j.stopAsk=false; renderSideStop(); }
+    else if(a==='yes') cancelJob(j);
+  });
+  // A step of the in-place run: the sweep, the side panel, the notice (hidden while it runs) and the bar.
+  function draftInPlace(){ markSweep(); sideAgent(); renderLinkNote(); renderPill(); sendBar(); }
   // The agent at work while the sheet is open, at the top of the side tab: one sphere, small, and one
   // line, "<Role> agent · <what it is doing>". Gone when the job ends; the run screen keeps its own stage.
   function sideAgent(){
     var el=$('sideAgent'); if(!el) return;
     var job=null, go=function(k){ return k&&fieldOf(k)?function(){ select(k); var r=rowOf(k); if(r&&r.scrollIntoView) r.scrollIntoView({block:'center', behavior:'smooth'}); }:null; };
     if(phase==='doc'){
-      if(FIX){ var st0=FIX.stage||'context', n0=st0==='draft'?2:st0==='judge'?3:1, fk=Object.keys(FIX.fields||{})[0];
+      if(DRAFT&&DRAFT.inPlace&&draftLive()) job=draftSide(DRAFT);
+      else if(FIX){ var st0=FIX.stage||'context', n0=st0==='draft'?2:st0==='judge'?3:1, fk=Object.keys(FIX.fields||{})[0];
         job={role:roleOf(st0==='draft'?'drafter':st0==='judge'?'judge':'synthesis'), doing:st0==='draft'?'rewriting the parts the note names':st0==='judge'?'checking the fix':'looking up what the fix needs',
           status:'step '+n0+' of 3', progress:(n0-1)/3, onGo:go(fk)}; }
       else { var k=Object.keys(REGEN)[0], j=k&&REGEN[k], f=k&&fieldOf(k);
@@ -4041,6 +4109,7 @@
             doing:st==='judging'?'checking the new '+w:st==='revising'?'rewriting '+w+' on the review’s note':'writing '+w+' again',
             status:'step '+n+' of '+(st==='revising'?3:2), progress:(n-1)/(st==='revising'?3:2), onGo:go(k)}; } }
     }
+    renderSideStop();
     if(ROLES&&ROLES.sideSet){ ROLES.sideSet(el, job); return; }
     el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(AGENT_NAME[job.role]||'An agent')+'</b> · '+esc(job.doing)+'</span>':'';
   }
@@ -5281,13 +5350,14 @@
   // redraft", 4 s), a second runs the whole crew, so a stray click never redrafts a brief.
   function redraftClick(){
     if(approveLocked()){ toast('The brief is locked. Unlock it to draft it again.'); return; }
+    if(draftLive()) return;   // one at a time: the button is off while the agents write
     if(!REDRAFT_ARMED){
       REDRAFT_ARMED=setTimeout(function(){ REDRAFT_ARMED=null; sendBar(); }, 4000);
       sendBar(); return;
     }
     clearTimeout(REDRAFT_ARMED); REDRAFT_ARMED=null;
     sendBar();
-    draftNow('');
+    draftNow('', true);
   }
   var ACTIONS={
     pdf:function(){ doExport('pdf'); },
@@ -5317,7 +5387,7 @@
     }
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, L=docLocked();
     var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
-    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
+    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
     items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The sheet without the parts marked Confidential, for the client':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});

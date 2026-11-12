@@ -830,7 +830,7 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
   const said: string[] = []
   let locked = false
   const env = {
-    FIX: null, DRAFT: null, FIX_SAY, walker, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
+    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
     REGEN: {}, fieldOf: () => null, roleOf: (k: string) => k,
     ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', auto: () => {},
@@ -2575,7 +2575,7 @@ test('nothing the brief did before is gone: every control is still on the page',
   // new brief are the shell's own (the document menu's Save as…, Continue in › Start fresh).
   const bar = fn(BM, 'barItems')
   for (const id of ['pdf', 'redraft', 'client', 'html', 'gridPdf', 'gridHtml', 'plainPdf', 'plainHtml', 'unlock', 'reopen']) assert.match(bar, new RegExp(`id:'${id}'`), `${id} is in the OS bar`)
-  assert.match(fn(BM, 'redraftClick'), /if\(!REDRAFT_ARMED\)\{[\s\S]*draftNow\(''\);/, 'Draft it again still takes two clicks')
+  assert.match(fn(BM, 'redraftClick'), /if\(!REDRAFT_ARMED\)\{[\s\S]*draftNow\('', true\);/, 'Draft it again still takes two clicks')
   assert.match(BM, /See each part as it is written/)
   // Per-part: the way into why stays on the part; edit, write again and keep as is (locked_fields)
   // are the Selected part panel's, as the mock (no hover icons on the part).
@@ -4815,7 +4815,7 @@ test('Rewrite with the research runs the draft once, with no arming, and says wh
   assert.match(h, /Background now rests on the research \(2 facts cited\)\. Project kept your words\./)
   assert.match(h, /data-lk="show">Show what changed</)
   // the redraft itself is the bar's: draftNow, and the two-press arming stays only on the bar's button
-  assert.match(fn(BM, 'linkRewrite'), /draftNow\(''\)/)
+  assert.match(fn(BM, 'linkRewrite'), /draftNow\('', true\)/)
   assert.doesNotMatch(fn(BM, 'linkRewrite'), /REDRAFT_ARMED|setTimeout/)
 })
 
@@ -4844,4 +4844,94 @@ test('a locked brief, or one not on its sheet, never shows it', () => {
   const locked = linkPage({ locked: true })
   locked.api.linkRewrite()
   assert.deepEqual(locked.drafts, [], 'and pressing nothing on it runs nothing')
+})
+
+// ── Draft it again, in place (features/brief-redraft-in-place) ──────────────
+// The same draft_brief job, but the sheet stays: each unlocked part sweeps while the run writes it, the
+// agent at work is in the side panel with a Stop, and the agents ask nothing (intake false).
+function redraftPage(o: { locked?: string[] } = {}) {
+  type J = { task: string; inPlace: boolean; id?: string; state: string; stage?: string; error?: string | null; fields: Record<string, { state: string; by?: string }>; onUpdate(j: J): void; onEnd(j: J): void }
+  const runs: { j: J; input: Record<string, unknown> }[] = []
+  const phases: string[] = []
+  const toasts: string[] = []
+  let rendered = 0
+  const FIELDS = [{ key: 'background', label: 'Background' }, { key: 'insight', label: 'Insight' }, { key: 'audience', label: 'Audience' }]
+  const rows = FIELDS.map(f => {
+    const cls = new Set<string>()
+    return { key: f.key, cls, getAttribute: () => f.key, classList: { toggle: (c: string, on: boolean) => { if (on) cls.add(c); else cls.delete(c) } } }
+  })
+  const side = { innerHTML: '', hidden: true }
+  const stop = { innerHTML: '', hidden: true }
+  const env = {
+    DRAFT: null, forceIntake: false, reduce: true, phase: 'doc', FIX: null, REGEN: {}, FIELDS, arr,
+    STAGES: ['extract', 'context', 'draft', 'judge'], STAGE_K: { extract: 'extract', context: 'synthesis', draft: 'drafter', judge: 'judge' },
+    SWEEP: new Function(`${obj(BM, 'SWEEP')} return SWEEP`)(), DRAFT_SIDE: new Function(`${obj(BM, 'DRAFT_SIDE')} return DRAFT_SIDE`)(),
+    isLocked: (k: string) => (o.locked || []).includes(k), roleOf: (k: string) => k, fieldOf: () => null,
+    document: { querySelectorAll: () => rows }, $: (id: string) => (id === 'sideAgent' ? side : id === 'sideStop' ? stop : null),
+    ROLES: { sideSet: (el: { hidden: boolean; innerHTML: string }, job: { role: string; doing: string; status: string } | null) => { el.hidden = !job; el.innerHTML = job ? `${job.role} · ${job.doing} · ${job.status}` : '' } },
+    esc, renderProc: () => { phases.push('renderProc') }, setPhase: (p: string) => { phases.push(p) }, render: () => { rendered++ },
+    renderLinkNote: () => {}, renderPill: () => {}, sendBar: () => {}, linkRunEnded: () => {}, toast: (m: string) => { toasts.push(m) },
+    store: () => {}, stored: () => null, jobKey: (t: string, f?: string) => t + (f ? '.' + f : ''), pollJob: () => {},
+    window: { scrollTo: () => {} }, setTimeout: () => 0,
+    runJob: (j: J, input: Record<string, unknown>) => { j.state = 'sending'; runs.push({ j, input }) },
+  }
+  const f = lift<{ startDraft(p: string, a: unknown[], id?: string | null, inPlace?: boolean): void; sweepKeys(j: unknown): string[] }>(BM,
+    ['startDraft', 'draftLive', 'sweepKeys', 'markSweep', 'draftSide', 'renderSideStop', 'draftInPlace', 'sideAgent'], env)
+  const swept = () => rows.filter(r => r.cls.has('working')).map(r => r.key)
+  return { f, runs, phases, rows, side, stop, swept, toasts, rendered: () => rendered }
+}
+
+test('Draft it again runs in place: the sheet stays, intake is off, and the server is told it is a redraft', () => {
+  const p = redraftPage()
+  p.f.startDraft('the ask', [{ name: 'a.pdf' }], null, true)
+  assert.deepEqual(p.phases, [], 'no Agents screen: the phase stays doc')
+  assert.equal(p.runs[0].j.task, 'draft_brief')
+  assert.deepEqual(p.runs[0].input, { prompt: 'the ask', attachments: [{ name: 'a.pdf' }], intake: false, redraft: true })
+  // a first draft from the ask still goes to the Agents screen and asks
+  const q = redraftPage()
+  q.f.startDraft('the ask', [])
+  assert.deepEqual(q.phases.slice(0, 1), ['proc'])
+  assert.equal(q.runs[0].input.intake, true)
+  assert.equal('redraft' in q.runs[0].input, false)
+  // the bar's Draft it again and the linked-research notice both run it in place; one at a time
+  assert.match(fn(BM, 'draftNow'), /if\(draftLive\(\)\)\{ if\(!DRAFT\.inPlace\)\{ setPhase\('proc'\); renderProc\(\); \} return; \}/)
+  assert.match(fn(BM, 'draftNow'), /startDraft\(ask, atts, null, !!inPlace&&phase==='doc'\)/)
+  assert.match(fn(BM, 'redraftClick'), /if\(draftLive\(\)\) return;/)
+  assert.match(fn(BM, 'barItems'), /label:REDRAFT_ARMED\?'Click again to redraft':'Draft it again', disabled:draftLive\(\)/, 'off while it runs')
+  assert.match(fn(BM, 'linkNoteHtml'), /if\(phase!=='doc'\|\|approveLocked\(\)\|\|draftLive\(\)\|\|LINK\.run\) return '';/, 'the notice is hidden while it runs')
+})
+
+for (const end of ['done', 'failed', 'cancelled']) {
+  test(`the in-place sweep follows the parts the run is writing and clears when it is ${end}`, () => {
+    const p = redraftPage({ locked: ['audience'] })
+    p.f.startDraft('', [], null, true)
+    assert.deepEqual(p.swept(), ['background', 'insight'], 'every unlocked part sweeps before the job reports any')
+    const j = p.runs[0].j
+    j.id = 'job_1'; j.state = 'running'; j.stage = 'draft'
+    j.fields = { background: { state: 'done' }, insight: { state: 'drafting', by: 'drafter' }, audience: { state: 'kept' } }
+    j.onUpdate(j)
+    assert.deepEqual(p.swept(), ['insight'], 'keyed on the part states: a part written stops sweeping')
+    assert.ok(!p.side.hidden)
+    assert.equal(p.side.innerHTML, 'drafter · writing every part · step 3 of 4', 'the side panel shows DRAFT: the Brief agent, writing')
+    assert.ok(!p.stop.hidden)
+    assert.match(p.stop.innerHTML, /data-ds="stop">Stop</)
+    j.stage = 'context'; j.onUpdate(j)
+    assert.equal(p.side.innerHTML, 'synthesis · planning the brief · step 2 of 4')
+    j.state = end; if (end === 'failed') j.error = 'The draft failed.'
+    j.onEnd(j)
+    assert.deepEqual(p.swept(), [], 'the sweep is cleared')
+    assert.ok(p.side.hidden && p.stop.hidden, 'the agent and the Stop fold away')
+    assert.ok(p.rendered() > 0, 'the brief is drawn again with what landed')
+    assert.deepEqual(p.toasts, end === 'failed' ? ['The draft failed.'] : [])
+  })
+}
+
+test('the sweep is the mock’s aw-sheen in the app’s accent, and still with reduced motion', () => {
+  assert.match(BM, /@keyframes aw-sheen\{from\{background-position:150% 0\}to\{background-position:-50% 0\}\}/)
+  assert.match(BM, /#fields \.row\.working\{background-image:linear-gradient\(100deg,transparent 30%,color-mix\(in srgb,var\(--accent\) 6%,transparent\) 50%,transparent 70%\);background-size:200% 100%;animation:aw-sheen 1\.4s linear infinite\}/)
+  assert.match(BM, /#fields \.row\.working > \*\{opacity:\.55;/)
+  assert.match(BM, /@media \(prefers-reduced-motion: reduce\)\{#fields \.row\.working\{animation:none;background-image:none\}\}/, 'no sweep, the dim stays')
+  assert.match(fn(BM, 'renderStructured'), /markSweep\(\);/, 'a redraw keeps the sweep on the parts still in hand')
+  assert.match(BM, /<div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden><\/div>\s*<div class="side-stop" id="sideStop" hidden><\/div>/)
+  assert.match(fn(BM, 'resumeJobs'), /startDraft\('', \[\], id, !!stored\(jobKey\('draft_brief','inplace'\)\)\)/, 'a reload picks the run up in place')
 })
