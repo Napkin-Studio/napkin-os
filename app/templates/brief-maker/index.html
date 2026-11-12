@@ -1066,6 +1066,13 @@
   .b-up ul{margin:0 12px 8px 28px;display:grid;gap:4px;font-size:12.5px;line-height:1.45;color:var(--nd-ink-soft)}
   .b-up ul .m{color:var(--nd-muted)}
   .b-up-acts{display:flex;gap:10px;align-items:center;padding:0 12px 12px}
+  /* a research linked into the brief: what came in, and one press to write it again with it */
+  .lk-h{display:flex;align-items:center;gap:8px;padding:10px 12px 0;font:600 13px/1.55 var(--font-ui);color:var(--nd-ink)}
+  .lk-h i{width:7px;height:7px;border-radius:50%;background:var(--ag-base);flex:none}
+  :root[data-color-scheme="dark"] .lk-h i{background:var(--ag-acc)}
+  .lknote .b-up-m{margin:6px 12px 10px;font-size:12.5px}
+  .lknote .lk-small{margin-top:-2px;font-size:11.5px}
+  #fields .lk-chg{background:color-mix(in srgb,var(--clf-hl) 55%,transparent)}
   /* the state chip when locked */
   #structured .b-state .pill.ok{background:var(--nd-ok);color:#fff}
   /* Record the client's answer */
@@ -1520,6 +1527,7 @@
             <div class="b-state" id="bState"><b>Brief<span class="pill" id="statusPill" role="status"></span></b><span class="b-state-t" id="stateLine"></span></div>
             <span class="muted status" id="status" role="status"></span>
           </div>
+          <div class="upnote lknote" id="linkNote" role="status" hidden></div>
           <div class="upnote" id="upNote" role="status" hidden></div>
           <div class="locklist" id="lockList" hidden></div>
           <div class="b-lockslot">
@@ -1790,7 +1798,7 @@
       fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
         .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
         .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
-        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy();
+        .then(function(){ chainMoved(); if(phase!=='doc') return; refreshWhy(); renderLinkNote();
           // The selected part's calls follow the chain, unless someone is typing in the panel.
           var sp=$('selPart'); if(sp&&sp.contains(document.activeElement)) renderProv(); else renderSelPart(); });
     }, 120);
@@ -3268,7 +3276,7 @@
   function draftLive(){ var j=DRAFT; return !!j&&(j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input'); }
   function startDraft(prompt, atts, resumeId){
     var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
-      renderProc();
+      renderProc(); linkRunEnded(j);
       if(j.state==='done') setTimeout(function(){ if(DRAFT!==j) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); }, reduce?200:1100);
     }};
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
@@ -3537,9 +3545,103 @@
     UP.t=setTimeout(function(){
       fetch(clanScheme+'/upstream').then(function(r){ return r.ok?r.json():null; })
         .then(function(v){ if(v&&typeof v==='object'){ UP.res=v; UP.state='ok'; } }, function(){ UP.state='unavailable'; })
-        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
+        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderLinkNote(); renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
     }, 300);
   }
+
+  // ---------- a research linked into this brief (features/brief-link-redraft.clan) ----------
+  // Linked after the brief was written (Continue in › Link to an existing one), a research's facts
+  // and findings are in the brief, and the brief was written without them. The notice says what came
+  // in and offers one press to write it again with it: the same Draft it again (draftNow, the same
+  // job and Agents screen), unarmed, since choosing it is the confirmation. A person's edits and kept
+  // parts stay, as in any redraft. It stays on later visits until used or put off (Not now), recorded
+  // per research and per version taken (data.link_notice), and comes back when another research is
+  // linked or this one is taken again. Never on a locked brief. After the run: what changed.
+  var LINK={run:null, done:null, shown:false, off:false};
+  function linkSeen(){ var s=get('link_notice'); return s&&typeof s==='object'&&!Array.isArray(s)?s:{}; }
+  // The linked research this brief has not used or put off yet, the latest link first.
+  function linkedNew(){
+    var seen=linkSeen(), u=get('upstream')||{};
+    return (UP.res?arr(UP.res.upstream):[]).filter(function(e){
+      if(!e||e.how!=='linked'||e.noun==='brand'||isBrandKit(u[e.document_id])) return false;
+      var s=seen[e.document_id]; return !(s&&typeof s.taken==='number'&&s.taken>=(e.taken||1));
+    }).sort(function(a,b){ var x=String(a.linked_at||''), y=String(b.linked_at||''); return x>y?-1:x<y?1:0; });
+  }
+  function linkMark(es, how){
+    var s=Object.assign({}, linkSeen());
+    es.forEach(function(e){ s[e.document_id]={taken:e.taken||1, how:how}; });
+    return patch('link_notice', s, {actor:'human', pinned:false, action:how==='used'?'rewrite the brief with the linked research':'put off the linked research',
+      rationale:(how==='used'?'Rewrote the brief with ':'Not now: ')+listWords(es.map(function(e){ return '“'+(e.title||'the research')+'”'; }))});
+  }
+  function linkRewrite(){
+    if(LINK.run||approveLocked()||draftLive()) return;
+    var es=linkedNew(); if(!es.length) return;
+    var before={}; FIELDS.forEach(function(f){ before[f.key]=valToText(get(f.key),f.type); });
+    LINK.run={title:es[0].title||'the research', before:before}; LINK.done=null; LINK.shown=false;
+    var go=function(){ draftNow(''); };
+    Promise.resolve(linkMark(es,'used')).then(go, go);
+  }
+  function linkLater(){
+    var es=linkedNew(); if(!es.length) return;
+    LINK.off=true; renderLinkNote();
+    var back=function(){ LINK.off=false; renderLinkNote(); };
+    Promise.resolve(linkMark(es,'later')).then(back, back);
+  }
+  // The draft this notice started ended: done, it says what changed; else it says nothing more.
+  function linkRunEnded(j){
+    if(!LINK.run||!j||j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking'||j.state==='needs_input') return;
+    if(j.state==='done') LINK.done=LINK.run;
+    LINK.run=null;
+  }
+  // What the rewrite changed, from the parts as they stood at the press.
+  function linkChanges(){
+    var d=LINK.done, changed=[], kept=[], cites=[];
+    FIELDS.forEach(function(f){
+      var was=d.before[f.key], now=valToText(get(f.key),f.type);
+      if(was!==now){ changed.push(f); partCites(f.key).forEach(function(c){ if(/^f_/.test(c)&&cites.indexOf(c)===-1) cites.push(c); }); }
+      else if(String(was||'').trim()&&(isLocked(f.key)||isHuman(decisionsFor(f.key)[0]))) kept.push(f);
+    });
+    return {changed:changed, kept:kept, cites:cites.length};
+  }
+  function linkNoteHtml(){
+    if(phase!=='doc'||approveLocked()||draftLive()||LINK.run) return '';
+    var es=LINK.off?[]:linkedNew();
+    if(es.length) LINK.done=null;   // another research linked since: that one is what to say
+    else if(LINK.done){
+      var c=linkChanges(), lab=function(fs){ return listWords(fs.map(function(f){ return f.label; })); };
+      var said=c.changed.length
+        ?lab(c.changed)+(c.changed.length===1?' now rests':' now rest')+' on the research'+(c.cites?' ('+c.cites+(c.cites===1?' fact':' facts')+' cited)':'')+'.'
+        :'Nothing changed: the brief already said what the research says.';
+      if(c.kept.length) said+=' '+lab(c.kept)+' kept your words.';
+      return '<div class="lk-h"><i aria-hidden="true"></i>'+esc('Rewritten with '+LINK.done.title)+'</div><p class="b-up-m">'+esc(said)+'</p>'
+        +(c.changed.length?'<div class="b-up-acts"><button type="button" class="side-link" data-lk="show">'+(LINK.shown?'Hide what changed':'Show what changed')+'</button></div>':'');
+    }
+    if(!es.length) return '';
+    var e=es[0], h=e.holds||{}, n=[];
+    if(h.facts) n.push(h.facts+(h.facts===1?' fact':' facts'));
+    if(h.findings) n.push(h.findings+(h.findings===1?' finding':' findings'));
+    var came=n.length?listWords(n)+' came in.':'Its facts and findings came in.';
+    return '<div class="lk-h"><i aria-hidden="true"></i>'+esc('Research linked: '+(e.title||'the research'))+'</div>'
+      +'<p class="b-up-m">'+esc(came+' The brief was written without them. Rewrite it with the research: your edits and the parts you kept stay as they are.')+'</p>'
+      +'<div class="b-up-acts"><button type="button" class="btn-primary" data-lk="go">Rewrite with the research</button><button type="button" class="side-link" data-lk="later">Not now</button></div>'
+      +'<p class="b-up-m lk-small">Answers you already gave are used, not asked again.</p>';
+  }
+  function linkMarkRows(){
+    var ks=LINK.done&&LINK.shown?linkChanges().changed.map(function(f){ return f.key; }):[];
+    document.querySelectorAll('#fields .row[data-clan-part]').forEach(function(r){ r.classList.toggle('lk-chg', ks.indexOf(r.getAttribute('data-clan-part'))!==-1); });
+    return ks;
+  }
+  function renderLinkNote(){
+    var el=$('linkNote'); if(!el) return;
+    var h=linkNoteHtml(); el.hidden=!h; el.innerHTML=h; linkMarkRows();
+  }
+  document.addEventListener('click', function(e){
+    var b=e.target&&e.target.closest&&e.target.closest('#linkNote [data-lk]'); if(!b) return;
+    var a=b.getAttribute('data-lk');
+    if(a==='go') linkRewrite();
+    else if(a==='later') linkLater();
+    else if(a==='show'){ LINK.shown=!LINK.shown; renderLinkNote(); var ks=linkMarkRows(), r=ks.length&&document.querySelector('#fields .row[data-clan-part="'+ks[0]+'"]'); if(r&&LINK.shown) r.scrollIntoView({block:'center', behavior:reduce?'auto':'smooth'}); }
+  });
 
   // ---------- structured ----------
   var REGEN={};   // field key → true while its Drafter is redrafting it
@@ -3657,7 +3759,7 @@
     $('boardsNote').hidden=!showBoards;
     $('boards').classList.toggle('on',showBoards);
     if(showBoards) renderBoards(false);
-    renderLock(); renderUpNote($('upNote'));
+    renderLock(); renderLinkNote(); renderUpNote($('upNote'));
     renderCrewline(); renderReview();
     renderLook(); renderSelPart(); scheduleBreaks();
     LOCK_SIG=lockSig();
