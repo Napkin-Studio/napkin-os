@@ -5,13 +5,15 @@
 // What a person sees of the dogfood build (features/dogfood-telemetry.clan):
 // - once per account, a notice that everything here is recorded, which they
 //   acknowledge before anything is;
-// - a "Beta" badge in the OS bar that shows the notice again;
-// - thumbs up or down, with an optional note, for the screen (beside the
-//   badge) and for each of an agent's results (in the decision history).
+// - "About this beta" in the account menu, which shows the notice again (the
+//   bar's Beta chip and its screen thumbs are gone: owner, 2026-11-13);
+// - thumbs up or down, with an optional note, for each of an agent's results
+//   (in the decision history).
 // Nothing renders when the build does not record.
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { CONTACT, acknowledge, currentScreen, dogfoodState, feedback, feedbackNote, loadDogfood, subscribe } from './recorder'
+import { betaNoticeOpen, closeBetaNotice, subscribeBetaNotice } from './notice'
 import './Dogfood.css'
 
 function useDogfood() {
@@ -80,23 +82,20 @@ export function Thumbs({ on, extra, compact = false }: { on: string; extra?: Rec
   )
 }
 
-/** In the OS bar: the Beta badge, and thumbs for this screen. Nothing when not recording. */
+/**
+ * In the OS bar: only the notice, when the account menu's "About this beta"
+ * opens it. The nui bar shows no Beta chip and no screen thumbs (owner,
+ * 2026-11-13). Nothing when not recording.
+ */
 export function DogfoodBadge({ variant }: { variant?: 'nui' } = {}) {
   const state = useDogfood()
   const [open, setOpen] = useState(false)
+  const fromMenu = useSyncExternalStore(subscribeBetaNotice, betaNoticeOpen, betaNoticeOpen)
   if (!state.on) return null
-  const where = currentScreen()
-  // The OS bar's dashed chip (the mock's #tb-beta), with the dot that pulses while it records.
   if (variant === 'nui') {
-    return (
-      <>
-        <button type="button" className="tb-beta" id="tb-beta" data-dogfood="beta notice" onClick={() => setOpen(true)}
-          title="Beta: this session is recorded to fix what breaks"><i aria-hidden /><span className="bt">Beta</span></button>
-        {state.consented && <Thumbs key={`${where.screen}:${where.doc ?? ''}`} on="screen" extra={{ ...where }} compact />}
-        {open && <DogfoodNotice onClose={() => setOpen(false)} />}
-      </>
-    )
+    return fromMenu ? <DogfoodNotice onClose={closeBetaNotice} /> : null
   }
+  const where = currentScreen()
   return (
     <span className="df-bar">
       <button className="df-badge" data-dogfood="beta notice" onClick={() => setOpen(true)} title="This build records what you do. Click to read more.">Beta</button>

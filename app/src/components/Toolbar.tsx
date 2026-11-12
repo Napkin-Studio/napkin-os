@@ -19,7 +19,7 @@
 // Pure: everything it shows comes in as props, so a test can draw every state
 // with no host.
 
-import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { LogoSpinner } from '../brand/LogoSpinner'
 import { accountItems, continueItems, docMenuItems, linkList, linkedChip, linkedRows, plural, pressContinue, shareItems, type Account, type BarPlace, type ClientChip, type Crew, type DocBar, type LinkRow, type LinkedRow, type MenuItem } from './barMenus'
 import { DeepOMark } from '../brand/DeepOMark'
@@ -30,6 +30,8 @@ import { markOf, type AgencyLogo } from '../shell/agency/palette'
 import ThemeToggle from './ThemeToggle'
 import { roles } from '../shell/agents/engine'
 import { DogfoodBadge } from '../dogfood/Dogfood'
+import { dogfoodState, subscribe as subscribeDogfood } from '../dogfood/recorder'
+import { betaNoticeOpener } from '../dogfood/notice'
 import { BarButtons, BarChips } from './AppBarItems'
 import { Pop } from '../shell/nui/Pop'
 import { usePop } from '../shell/nui/popKit'
@@ -429,7 +431,8 @@ export default function Toolbar({
     return { top: (slot?.top ?? r.top) + 40, left: r.left }
   }, [])
 
-  const acct = accountItems(account, user, onSignOut)
+  const recording = useSyncExternalStore(subscribeDogfood, dogfoodState, dogfoodState).on
+  const acct = accountItems(account, user, onSignOut, betaNoticeOpener(recording))
   const me = account ? <AccountButton account={account} open={pop.open?.key === 'account'} onMenu={el => pop.toggle('account', el)} /> : null
   const lead = (
     <>
