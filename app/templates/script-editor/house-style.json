@@ -51,6 +51,8 @@
     "stage_direction": "A stage direction sits inside a spoken line. Give it a line of its own as SFX or MUSIC.",
     "repetition": "Lines or phrases repeat. Read it aloud and cut what loops.",
     "length_off": "The words do not fit the slot.",
+    "length_long": "Too many words for the slot. Cut until it reads in time.",
+    "length_short": "Well short of the slot. There is room for more words, or a held pause.",
     "cast_count": "The number of voices is not the number the brief asks for.",
     "no_spoken_lines": "No spoken lines yet."
   }

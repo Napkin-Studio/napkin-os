@@ -139,7 +139,22 @@ test('the findings carry advice and no field of a changed string: nothing in a f
   const p = await page()
   const f = p.core.findingsOf({ format: 'radio', slot_s: 10, beats: [{ id: 'b1', kind: 'voice', role: 'VO', text: 'We leverage — it' }], mandatory: [], banned: [] })
   assert.ok(f.length >= 2)
-  for (const x of f) assert.deepEqual(Object.keys(x).filter(k => !['rule', 'beat', 'advice', 'text', 'words', 'target', 'ratio', 'voices', 'cast'].includes(k)), [])
+  for (const x of f) assert.deepEqual(Object.keys(x).filter(k => !['rule', 'beat', 'advice', 'text', 'words', 'target', 'over', 'ratio', 'voices', 'cast'].includes(k)), [])
+})
+
+test('the length line says which way the words miss the slot: too many, or well short with time to spare', async () => {
+  const line = (p: Awaited<ReturnType<typeof page>>) => p.all('[data-testid="finding"]').find(f => f.getAttribute('data-rule') === 'length_off')?.textContent ?? ''
+  // 18 spoken words in a 30 second slot: about 78 fill it, and the read time has time to spare
+  const short = await page({ data: { ...RADIO, script: { ...RADIO.script, beats: [{ id: 'b1', kind: 'voice', role: 'VO', text: 'One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen.' }] } } })
+  assert.match(line(short), /Well short of the slot/)
+  assert.match(line(short), /18 words, about 78 fill it\./)
+  assert.doesNotMatch(line(short), /do not fit|Too many/)
+  // 120 spoken words in the same slot: too many
+  const long = await page({ data: { ...RADIO, script: { ...RADIO.script, beats: [{ id: 'b1', kind: 'voice', role: 'VO', text: Array.from({ length: 120 }, () => 'word').join(' ') + '.' }] } } })
+  assert.match(line(long), /Too many words for the slot/)
+  assert.match(line(long), /120 words, about 78 fit\./)
+  assert.doesNotMatch(line(long), /short/)
+  for (const t of [line(short), line(long)]) assert.ok(!t.includes('\u2014'), 'no em dash')
 })
 
 // ── beats keep their ids ─────────────────────────────────────────────────────────────────────────────
