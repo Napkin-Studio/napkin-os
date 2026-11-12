@@ -11,7 +11,7 @@ export type Size = { tag: string; width: number; height: number }
 export const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', width: 1440, height: 900 }]
 export const MODES = ['white', 'grey', 'black'] as const
 
-export type Decision = { id?: string; kind?: string; agent?: string; action?: string; edited_by?: string; version?: string; actor?: string; source?: string }
+export type Decision = { id?: string; kind?: string; agent?: string; action?: string; version?: string; actor?: string; source?: string }
 export type Person = { username: string; name?: string; roles?: string[] }
 
 /** The roster server of the stack (stack.mjs): the people sign in here, one auth mode per process. */

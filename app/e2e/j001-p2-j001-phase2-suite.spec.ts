@@ -47,8 +47,7 @@ for (const size of SIZES) {
       for (const d of await chainOf(page, doc.token)) {
         expect(d.agent, 'a write with no agent').toBeTruthy()
         expect(d.action, 'a write with no action').toBeTruthy()
-        // A human edit is marked as a person's: agent `human` and the person's own name as its actor. (Phase 1 test 11 reads
-        // `edited_by`, a key the chain's decisions do not carry, so its check never ran; see the report.)
+        // A human edit is marked as a person's: agent `human` and the person's own name as its actor (Phase 1 test 11 checks the same).
         if (d.agent === 'human') expect(d.actor ?? '', 'a human edit names the person').toBeTruthy()
       }
     }
