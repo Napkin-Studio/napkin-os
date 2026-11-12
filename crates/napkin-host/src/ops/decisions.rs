@@ -763,9 +763,17 @@ impl<'a> Lookup<'a> {
                         _ => v.get(*k),
                     });
                     let named = node.and_then(|e| {
-                        ["topic", "name", "title", "label", "question", "statement"]
-                            .iter()
-                            .find_map(|f| str_of(e, f))
+                        [
+                            "topic",
+                            "name",
+                            "title",
+                            "label",
+                            "question",
+                            "statement",
+                            "text",
+                        ]
+                        .iter()
+                        .find_map(|f| str_of(e, f))
                     });
                     out.push_str(" · ");
                     out.push_str(&named.map_or_else(|| k.to_string(), |n| clip(n, 60)));
