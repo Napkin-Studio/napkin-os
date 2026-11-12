@@ -326,6 +326,9 @@ for (const size of SIZES) {
   })
 
   test(t(7), async ({ browser }) => {
+    // Three modes, each seeding and signing off a job and scanning six pages: measured 46 to 52 s alone, so the default 60 s is too close
+    // and times out when the machine is busy. The scan is unchanged; only the time it is given.
+    test.setTimeout(240_000)
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     // The Phase 1 pages that exist on this branch: the desk, the clients page, a client, its Brief
     // page, Territories (the visual brief's choose-a-territory form), and the Agency look panel. The pages other records build (gate, dashboard, timesheet,
@@ -401,6 +404,9 @@ for (const size of SIZES) {
 
   // A person who says yes keeps that answer on the roster stack, so this one is not the planner test 18 needs unanswered.
   test(t(9), async ({ browser }) => {
+    // Seeds a job, opens the brief and waits for a work session to be captured before the confirm button enables: 8 to 13 s alone,
+    // but the click retries until the session is in, which under load runs past the default 60 s.
+    test.setTimeout(150_000)
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
     await signIn(page, PEOPLE.planningAndCreative)
     const job = await seedJ001(page, { ready: true, fresh: true })
