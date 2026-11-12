@@ -2173,7 +2173,6 @@ type Lay = {
   layoutShift(items: Item[], key: string, d: number): Item[]
   layoutJoin(items: Item[], key: string, target: string, after: boolean): Item[]
   layoutNewRow(items: Item[], key: string, target: string, below: boolean): Item[]
-  layoutWithout(items: Item[], keys: string[]): Item[]
   layoutCanStep(items: Item[], key: string): [boolean, boolean]
   layoutResize(items: Item[], key: string, w: number): Item[]
   layoutLook(items: Item[], key: string, prop: string, v: string): Item[]
@@ -2181,7 +2180,7 @@ type Lay = {
 }
 const BM_FIELDS = new Function(`${BM.slice(BM.indexOf('var FIELDS=['), BM.indexOf('];', BM.indexOf('var FIELDS=[')) + 2)} return FIELDS;`)() as { key: string; sec: string }[]
 const lay = () => lift<Lay>(BM, ['clampW', 'withLook', 'partCopy', 'layoutOrder', 'layoutFlow', 'layoutRows', 'fitRow', 'fromRows', 'rowsFit', 'rowAt', 'takeOut', 'layoutPack', 'layoutParts', 'layoutIndex',
-  'layoutResize', 'layoutJoin', 'layoutNewRow', 'layoutStep', 'layoutShift', 'layoutWithout', 'layoutCanStep', 'layoutLook', 'boxGaps'],
+  'layoutResize', 'layoutJoin', 'layoutNewRow', 'layoutStep', 'layoutShift', 'layoutCanStep', 'layoutLook', 'boxGaps'],
   { GRID_COLS: 12, MIN_W: 3, ROW_MAX: 4, arr, DEFAULT_W: new Function(`${obj(BM, 'DEFAULT_W')} return DEFAULT_W;`)(), META_KEYS: ['client', 'project_name', 'budget_and_scope'],
     AS_KINDS: ['prose', 'bullets', 'callout', 'statement', 'cell'], TONES: ['plain', 'tint', 'inverse'] })
 const keysOf = (xs: { key?: string }[]) => xs.filter(x => x.key).map(x => x.key)
@@ -2319,9 +2318,6 @@ test('dropping between rows makes a row of its own; dragging a part out gives it
   // Out of a row with free space: the rest grows by what was freed, the free space stays.
   const free = L.layoutResize(L.layoutResize(items, 'background', 6), 'barrier', 3)
   assert.deepEqual(rowWith(L, L.layoutNewRow(free, 'barrier', 'job', true), 'background'), ['background:9'])
-  // The client copy leaves a confidential part out the same way: its row closes up.
-  assert.deepEqual(rowWith(L, L.layoutWithout(items, ['barrier']), 'background'), ['background:12'])
-  assert.ok(!keysOf(L.layoutWithout(items, ['barrier'])).includes('barrier'))
 })
 
 test('Move up / Move down and the arrow keys: out of a shared row into one of its own, or a lone row past its neighbour', () => {
@@ -2623,7 +2619,7 @@ test('the selected part shows the OS part view, compact; a selected line only wh
 
 // ── per-part Confidential (owner, 9 Nov) ─────────────────────────────────────
 
-test('a part marked Confidential is hatched and tagged, kept in the agency copy and left out of the client copy', () => {
+test('a part marked Confidential is hatched and tagged in the agency copy, and the client copy prints it in full', () => {
   const schema = JSON.parse(page('brief-maker/schema.json')) as { properties: Record<string, { type?: string; 'x-clan-appearance'?: boolean }> }
   assert.equal(schema.properties.confidential_fields.type, 'array')
   assert.equal(schema.properties.confidential_fields['x-clan-appearance'], undefined, 'who may read a part is not its look: Reset look keeps it')
@@ -2637,8 +2633,16 @@ test('a part marked Confidential is hatched and tagged, kept in the agency copy 
   assert.match(fn(BM, 'fieldRow'), /row\.classList\.toggle\('conf', conf\)/)
   assert.match(fn(BM, 'fieldRow'), /class="conftag"/)
   assert.match(BM, /\.pgrid > \.row\.conf\{background-image:repeating-linear-gradient\(135deg/)
-  // The client copy prints no confidential part; the agency copy prints them hatched and tagged.
-  assert.match(fn(BM, 'sheetItems'), /copy==='client'\?layoutWithout\(items, confList\(\)\):items/)
+  // Confidential means Napkin never learns from the part (owner, 2026-11-13): both copies print every part.
+  // The agency copy hatches and tags the confidential ones; the client copy prints them plain.
+  const ctxFn = fn(BM, 'sheetCtx')
+  assert.match(ctxFn, /var items=layoutItems\(\),/, 'the client copy lays out every part')
+  assert.match(ctxFn, /conf:copy==='client'\?\[\]:confList\(\)/)
+  assert.doesNotMatch(BM, /layoutWithout|left out of the client copy|leaves the part out/)
+  // The toggle says what it means: Napkin never learns from the part, and the client still sees it.
+  assert.match(fn(BM, 'confBtn'), /Napkin never learns from this part\. The client still sees it\./)
+  assert.match(fn(BM, 'toggleConf'), /Napkin never learns from it\. The client copy still shows it\./)
+  assert.match(fn(BM, 'barItems'), /id:'client', label:'Client copy · PDF', disabled:!L, title:L\?'The locked sheet, every part in it, for the client'/)
   const g = grid()
   const out = g.gridBody({ ...ctxOf({ budget_and_scope: 'Secret money.' }), conf: ['budget_and_scope'] }).html
   assert.match(out, /class="box conf"><div class="lab"><b>06<\/b>Budget and scope<span class="cf">Confidential<\/span>/)
@@ -3445,8 +3449,8 @@ test('a header row shows its whole text, never truncated (owner, 2026-11-10); th
   assert.match(fn(BM, 'sheetCells'), /'<div class="row k-'\+kd\+toneClass\(c\.tone\)/)
   assert.match(fn(BM, 'sheetCells'), /kd=kindOf\(f, c\.as\)/)
   assert.doesNotMatch(fn(BM, 'sheetCells'), /c\.version/)
-  // The client copy leaves a confidential header part out like any other.
-  assert.match(fn(BM, 'sheetItems'), /copy==='client'\?layoutWithout\(items, confList\(\)\):items/)
+  // The client copy prints a confidential header part like any other.
+  assert.match(fn(BM, 'sheetCtx'), /var items=layoutItems\(\),/)
 })
 
 // ── Show as and Tone: how a part looks (owner, 2026-11-10) ──────────────────
@@ -3564,6 +3568,11 @@ test('print draws every kind and tone: prose, bullets, callout, statement, field
   assert.match(row('insight'), /^<div class="row k-callout tone-tint"/)
   assert.match(row('single_minded_proposition'), /^<div class="row k-statement tone-inverse conf"/, 'a confidential part keeps its tag in the agency copy')
   assert.match(row('single_minded_proposition'), /class="val spp"/)
+  // The client copy (sheetCtx: every part, conf []) prints the confidential part's words in full, plain (owner, 2026-11-13).
+  const client = sheetCellsOf().sheetCells(cells, { ...ctx, conf: [] }, null)
+  assert.match(client, /<span>Single-minded proposition<\/span>/)
+  assert.match(client, /Two spoons\./, 'the client sees the confidential part')
+  assert.doesNotMatch(client, /conftag| conf"/, 'and no tag: it is the client’s own')
   assert.match(row('client'), /^<div class="row k-cell/)
   assert.match(row('barrier'), /^<div class="row k-cell/)
   assert.match(row('mandatories'), /^<div class="row k-callout[ "]/)

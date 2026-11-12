@@ -100,7 +100,7 @@ now stands, which replaces `window.__CLAN__.data` and fires `clan:dataupdated`.
 | Verify (a finding) | `/verify` — recorded in this document; shared with the agency once the client accepts the work |
 | Reject (a finding) | `/verdict` bad on `findings[id]` (reason required) |
 | Use this value (a contest) | `/resolve` (reason required) |
-| Confidential… | `/classify` — model, export, corpus, and why |
+| Confidential… | `/classify` — model, and why; `corpus: false` and `export: true` always (Napkin never learns from it; the client sees it: os-layer §4 C4) |
 | Use the proposal (a data path, §6) | `/edit {path, value: <proposed_value>, rationale: "Used proposal <decision id>"}` |
 | Lock <noun> (the tray) | `/approve` — disabled while the tray lists anything |
 

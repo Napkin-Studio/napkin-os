@@ -11,8 +11,9 @@
 //   Reopen a part… in the OS bar, every part's Edit gone (a part shows "Reopen this part…").
 // - There is no client link and no client account: a client is data, never an actor (os-layer §7.5
 //   item 5). What the client gets is the client copy, a PDF from the brief's "Client copy · PDF"
-//   (the document menu): the sheet without the parts marked Confidential. The Share menu's
-//   "Send the client copy" is shown disabled.
+//   (the document menu, and Share's "Send the client copy" on a locked brief): the whole locked
+//   sheet. Confidential keeps a part from Napkin's systems, never from the client (owner,
+//   2026-11-13), so the client copy prints the confidential part too.
 // - The client's answer is recorded by the agency person it reached (POST /client-review): the
 //   brief's "Record the client's answer" (#crOpen) or the OS bar's Client review. The shell shows it
 //   above the brief (section.cr-band); a part the client said no to is offered under Reopen a part…
@@ -192,7 +193,7 @@ test('review: Needs you is settled part by part, and only then can the brief loc
 
 test('review: lock: the brief says it is locked and its parts cannot be edited', async ({ page }) => {
   const app = await openBrief(page, 'open-review-brief')
-  // One part confidential before the lock, so the client copy can be checked for leaving it out.
+  // One part confidential before the lock, so the client copy can be checked for keeping it.
   for (const head of ['Budget & scope', 'Mandatories', 'Competitor context']) {
     const val = partRow(app, head).locator('.val:not(.empty)')
     if (!await val.isVisible().catch(() => false)) continue
@@ -239,27 +240,26 @@ test('review: lock: the brief says it is locked and its parts cannot be edited',
   await expect(again.locator('#lockedBadge'), 'the brief is still locked when opened again').toBeVisible({ timeout: 30_000 })
 })
 
-test('review: the client copy leaves out the agency\'s chrome and the confidential part', async ({ page, browser }) => {
+test('review: the client copy leaves out the agency\'s chrome and keeps the confidential part', async ({ page, browser }) => {
   const app = await openBrief(page, 'open-review-brief')
   await expect(app.locator('#lockedBadge'), 'the client copy is made from the locked brief').toBeVisible({ timeout: 30_000 })
 
-  // Share first, as a person would look for it.
+  // The brief's own client copy is in the document menu: "Client copy · PDF".
+  await page.getByTestId('doc-name').click()
+  await expect(page.getByRole('menuitem', { name: /^Client copy · PDF/ }), 'a locked brief offers its client copy in the document menu').toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // Share, as a person would look for it: "Send the client copy" runs that same export.
   await page.locator('[data-p36-share]').click()
   const send = page.getByTestId('share-menu').getByRole('menuitem', { name: /Send the client copy/ })
   await expect(send, 'Share lists the client copy').toBeVisible()
   const sendOff = await send.getAttribute('aria-disabled')
   measure('share-client-copy', 0, undefined, { disabled: sendOff === 'true', says: (await send.innerText()).replace(/\s+/g, ' ') })
-  expect.soft(sendOff, 'on a locked brief, Share offers "Send the client copy"').not.toBe('true')
-  await page.keyboard.press('Escape')
-
-  // The brief's own client copy: the document menu's "Client copy · PDF".
-  await page.getByTestId('doc-name').click()
-  const item = page.getByRole('menuitem', { name: /^Client copy · PDF/ })
-  await expect(item, 'a locked brief offers its client copy in the document menu').toBeVisible()
+  expect(sendOff, 'on a locked brief, Share offers "Send the client copy"').not.toBe('true')
   const t0 = Date.now()
   const pushed = page.waitForRequest(r => r.method() === 'POST' && /\/export$/.test(new URL(r.url()).pathname), { timeout: 60_000 })
   const download = page.waitForEvent('download', { timeout: 90_000 })
-  await item.click()
+  await send.click()
   const req = await pushed.catch(async () => { throw new Error('no client copy was made; the brief said: ' + await app.locator('#toast').textContent()) })
   const sent = req.postDataJSON() as { kind: string; filename: string; html: string }
   const file = await download
@@ -284,7 +284,8 @@ test('review: the client copy leaves out the agency\'s chrome and the confidenti
     }
     const confHead = got('confHead'), confText = got('confText').replace(/\s+/g, ' ')
     if (confHead) {
-      expect.soft(text, `the part marked Confidential (${confHead}) is left out of the client copy`).not.toContain(confText.slice(0, 25))
+      // Confidential means Napkin never learns from it; the client gave it, and sees it.
+      expect(text, `the part marked Confidential (${confHead}) is in the client copy`).toContain(confText.slice(0, 25))
       expect.soft(text, 'nothing in the client copy is labelled Confidential').not.toMatch(/\bConfidential\b/)
     }
   } finally {

@@ -28,7 +28,7 @@ rep("  renderBriefPage();\n  syncNavigation();\n  const urlBrand", r'''  (functi
       const conf = (BRIEF_DATA[curBriefKey] || { parts: [] }).parts.filter(p => p.conf).length;
       return `<div class="pp-h">Share</div>
         <button type="button" class="p36-mi" data-p36="link"><b>Copy link</b><small>People in your agency open it in Napkin Studio</small></button>
-        <button type="button" class="p36-mi" data-p36="client"><b>Send the client copy</b><small>${activeTool === 'brief' ? (conf ? conf + ' confidential part' + (conf > 1 ? 's' : '') + ' left out' : 'Nothing marked confidential') : 'Confidential pins left out'}${activeTool === 'brief' && !briefLocked ? ' · lock it first' : ''}</small></button>
+        <button type="button" class="p36-mi" data-p36="client"><b>Send the client copy</b><small>The locked version, every part in it${activeTool === 'brief' && !briefLocked ? ' · lock it first' : ''}</small></button>
         <button type="button" class="p36-mi" data-p36="crew"><b>Invite to the crew</b><small>They can edit and answer calls</small></button>`;
     };
     document.addEventListener('click', e => {

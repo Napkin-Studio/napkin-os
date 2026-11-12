@@ -136,7 +136,7 @@ one Postgres transaction. This is the single write funnel — the version check
 | `superseded_by` | The decision that replaced this one |
 | `actor`, `handler`, `backend`, `scope` | Copied from `Ctx` — never from the body |
 | `polarity`, `reason_code`, `taxonomy_version`, `reviewer_role` | Verdicts |
-| `licence` | Classify: `{model, export, corpus}` per C2 |
+| `licence` | Classify: `{model, export, corpus}` per C2; `export` is always `true` and not read (C4) |
 | `rationale` | Required for `resolve`, `verdict` with polarity bad, `lease` force-take, and `approve`. The plain one-line summary older readers show: with `reasoning`, `decided` + its first `because` point, unless the writer supplied one |
 | `reasoning` | Why, in the shape of the foundation spec's decisions (below). Optional in the format — a person's edit has none. Required of the middleware on every `pin`, `contest`, `finding` and `verdict` and every proposal, and on what the document's app declares in the `reasoning` block of its `app/pipeline.yaml` (`kinds`, and `edits`: the data paths an edit must say why it wrote) — the layer applies the declaration and knows no app's fields (`napkin.middleware/1` §3). Never rewritten by compression |
 | `#[serde(flatten)] rest` | Unknown fields survive a read-modify-write |
@@ -214,15 +214,35 @@ predates it.
 
 ### Confidential (C4)
 
-A `classify` decision setting the three C2 destinations: may it reach the
-model, may it appear in an export, may it enter the corpus.
+**What Confidential means** (owner, 2026-11-13; it replaces every earlier
+reading). There are three players: Napkin, the ad agency and the client. The
+client owns the confidential material and shares it with the agency; the
+agency makes something with it and shares that with the client. The only
+party that must not see it is **Napkin's own systems**. So a part, fact or
+material marked Confidential (a `classify` mark with `corpus: false`, a brief
+part in `confidential_fields`, or a source or material whose licence is
+`client-confidential`) **is shown in full to the agency and to the client**:
+in the document, the client copy, the PDF and every other export, and Share.
+It is **never** written to Napkin's shared knowledge layers (brand or
+category) or to RAG, never harvested into a layer (client-accepted harvest
+included), never used for evals, golden sets or training, and never kept in
+any Napkin-side store that outlives the agency's own documents (run logs
+with bodies included). Confidential is not an export filter: nothing a client
+sees is filtered by it.
+
+A `classify` decision records the mark. Its licence keeps the C2 shape
+`{model, export, corpus}`: `corpus: false` is the mark; `model` says whether
+the agency's own agents may read it on this document (a person's call, kept);
+`export` is always `true` and is not read (the client copy hides nothing).
 
 - On a field backed by a pinned fact, the mark supersedes the **fact's
   licence in the layer**, with the decision behind it. A document-only mark
   would still leak through the layer into the next campaign.
 - On authored text, it is a licence on the field in the document.
-- Enforced at gate G4 (prompt selection), `compose_export` (this layer), and
-  the dossier promotion check (W5-Z2).
+- Enforced at gate G4 (prompt selection, `model: false` only), at every
+  Napkin-side write (layer writes, harvest, the corpus extract
+  (`clan-extract.md` §5), evals and run logs), and at the dossier promotion
+  check (W5-Z2). `compose_export` does not read it.
 
 ### Good and bad (L4)
 
@@ -833,8 +853,9 @@ email, attached as a file, or noted from a call.
    `recorded_by` is refused `400`. The client is data — a name and an email
    the recorder typed — and nothing checks that the client is that person;
    the record states its evidence (§7.5.2), never more.
-6. **Confidential is not a filter here** (owner, 2026-09-29: confidential
-   means only "kept out of RAG and the corpus"). Clients see everything, so
+6. **Confidential is not a filter here** (owner, 2026-09-29, restated
+   2026-11-13: confidential means only that Napkin's systems never see it,
+   §4 C4). Clients see everything, so
    nothing in client review — the records, `/decisions`, the extract's
    rendering (§7.5.8) — filters by a `classify` mark. Nothing in client review
    reaches a model or the middleware (*2026-09-30*: the parts are found by the
@@ -1263,6 +1284,7 @@ freely, never redefine.
     may stay empty. Neither holds: `404`, as before.
   - `/classify {target, model, export, corpus, rationale}` — the mark is
     recorded; taking it to the fact's licence in the layer (§4) is not built.
+    The view always sends `export: true, corpus: false` (§4 C4).
   - `/resolve {contest, chosen, rationale}` — the contest resolved; a chosen
     value not yet pinned is pinned from the copy the research froze beside it,
     and a pin of the same identity it replaces is kept, marked `replaced_by`.

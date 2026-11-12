@@ -372,16 +372,25 @@ export function accountItems(account: Account | undefined, user?: string | null,
  * "Share ▾" in the slot (owner, 9 Nov 2026): a link for the agency, the
  * client's copy, and the crew; with the download that was the bar's Share.
  * What the studio cannot do yet is shown and says so, never faked.
+ *
+ * Send the client copy runs the app's own client copy export (its bar's
+ * `client` button, e.g. Brief Maker's "Client copy · PDF") on a locked
+ * document. The client copy hides nothing: Confidential keeps a part from
+ * Napkin's systems, never from the client (owner, 2026-11-13).
  */
-export function shareItems(doc: Pick<DocBar, 'onCopyLink' | 'onSave' | 'locked'>): MenuItem[] {
+export function shareItems(doc: Pick<DocBar, 'onCopyLink' | 'onSave' | 'locked' | 'bar' | 'onBarAction'>): MenuItem[] {
+  const client = (doc.bar ?? []).find(b => b.kind === 'button' && b.id === 'client')
+  const send = !doc.locked
+    ? { label: 'Send the client copy', hint: 'Lock it first: the client sees the version you lock', run: () => {}, disabled: true, apart: true }
+    : client && doc.onBarAction
+      ? { label: 'Send the client copy', hint: 'The locked version as a PDF, every part in it', run: () => doc.onBarAction?.('client'), apart: true }
+      : { label: 'Send the client copy', hint: 'This tool has no client copy yet', run: () => {}, disabled: true, apart: true }
   return [
     ...(doc.onCopyLink
       ? [{ label: 'Copy link', hint: 'People in your agency open it in Napkin Studio', run: doc.onCopyLink }]
       : []),
     { label: 'Download a copy', hint: 'A .clan to send. It opens in Napkin with everything in it.', run: doc.onSave },
-    doc.locked
-      ? { label: 'Send the client copy', hint: 'Leaving the confidential parts out is not built yet', run: () => {}, disabled: true, apart: true }
-      : { label: 'Send the client copy', hint: 'Lock it first: the client sees the version you lock', run: () => {}, disabled: true, apart: true },
+    send,
     { label: 'Invite to the crew', hint: 'Not built yet: the crew needs accounts that can be invited', run: () => {}, disabled: true },
   ]
 }

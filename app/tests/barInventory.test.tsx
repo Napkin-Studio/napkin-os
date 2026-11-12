@@ -263,12 +263,20 @@ test('one needs indicator: Decisions is amber with the count; the state pill nev
   assert.match(bar({ needs: 5, attention: true }), /data-testid="medallion-mark" data-state="sleep"/, 'the desk count never lights it')
 })
 
-test('Share ▾: Copy link where there is a server, Download a copy always; client copy and crew say what is not built', () => {
-  const on = shareItems({ onSave: noop, onCopyLink: noop, locked: false })
+test('Share ▾: Copy link where there is a server, Download a copy always; the client copy once locked; the crew says it is not built', () => {
+  const clientBtn = { kind: 'button' as const, id: 'client', label: 'Client copy · PDF', primary: false, disabled: false, title: '' }
+  const on = shareItems({ onSave: noop, onCopyLink: noop, locked: false, bar: [clientBtn], onBarAction: noop })
   assert.deepEqual(labels(on), ['Copy link', 'Download a copy', 'Send the client copy', 'Invite to the crew'])
-  assert.match(on[2].hint ?? '', /Lock it first/)
+  assert.match(on[2].hint ?? '', /Lock it first: the client sees the version you lock/)
   assert.ok(on[2].disabled && on[3].disabled, 'shown, never faked')
-  assert.match(shareItems({ onSave: noop, locked: true })[1].hint ?? '', /confidential parts out is not built yet/)
+  // Locked: it runs the app's own client copy export (Confidential hides nothing from the client; owner, 2026-11-13).
+  const ran: string[] = []
+  const locked = shareItems({ onSave: noop, locked: true, bar: [clientBtn], onBarAction: id => { ran.push(id) } })[1]
+  assert.ok(!locked.disabled, 'enabled on a locked document')
+  assert.doesNotMatch(locked.hint ?? '', /confidential|not built/i)
+  locked.run()
+  assert.deepEqual(ran, ['client'], 'the brief’s own Client copy · PDF')
+  assert.ok(shareItems({ onSave: noop, locked: true, bar: [], onBarAction: noop })[1].disabled, 'a tool with no client copy says so')
   assert.deepEqual(labels(shareItems({ onSave: noop })), ['Download a copy', 'Send the client copy', 'Invite to the crew'], 'no server: no link')
   let saved = 0
   shareItems({ onSave: () => { saved++ } })[0].run()

@@ -564,7 +564,7 @@ and §6; this app uses them as follows.
 | asks more about a field | `/history?address=` (a read — no decision) | `#campaign.<field>` |
 | sees provenance | the envelope + `/history` | `#campaign.<field>` |
 | accepts / corrects an extracted or proposed field | `edit`; origin becomes `confirmed` | `#campaign.<field>` |
-| marks something confidential | `classify` `{model, export, corpus}` | the field; on a fact-backed field it supersedes the fact's licence in the layer |
+| marks something confidential | `classify` `{model, export, corpus}` | the field; on a fact-backed field it supersedes the fact's licence in the layer. Napkin's systems never learn from it; the agency and the client see it in full (os-layer §4 C4) |
 | resolves a contest | `resolve`, rationale required | `#selection.contested[<id>]` |
 | marks a fact right or wrong | `verdict`, good or bad; writes `review` on the pin (§6.4) | `#facts[<id>]` |
 | corrects a fact | `edit`, action `correct_fact`; a new pin, the old one `replaced_by` (§6.4) | `#facts[<id>]` |

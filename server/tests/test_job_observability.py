@@ -265,3 +265,23 @@ def test_an_exception_escaping_a_thread_is_logged_with_its_traceback(caplog, mon
     t.join()
     rec = next(r for r in caplog.records if r.name == "napkin.app" and "a worker fell over" in r.getMessage())
     assert "campaign-job_x-extract" in rec.getMessage() and rec.exc_info and rec.exc_info[0] is RuntimeError
+
+
+def test_with_bodies_off_the_file_keeps_no_query_or_question_words(tmp_path):
+    """Confidential means Napkin keeps none of the client's material (os-layer §4 C4, owner 2026-11-13):
+    with bodies off, a search's query and a question's words are not written to the run-log file."""
+    runlog.configure(str(tmp_path / "runs"), bodies=False)
+    try:
+        secret = "CLIENT-CONFIDENTIAL-WORDS"
+        rl = runlog.open_log("job_0bs2", "start_campaign@1.0", "org/test-agency")
+        rl.start("start_campaign", "doc-1", ["research"], model="claude-x")
+        with rl.stage("research"):
+            rl.research(lens="market", market="IE", query=secret, queries=[secret], secs=1.0, sources=1)
+            rl.question("research", f"Is {secret} right?", options=[secret])
+        rl.end("done")
+        raw = "\n".join(p.read_text() for p in (tmp_path / "runs").rglob("*.jsonl"))
+        assert raw and secret not in raw
+        q = next(e for e in file_events(tmp_path / "runs") if e["ev"] == "question")
+        assert q["chars"] == len(f"Is {secret} right?")
+    finally:
+        runlog.configure(None)
