@@ -95,11 +95,6 @@ fn take_launch_file(state: State<AppState>) -> Option<String> {
 }
 
 #[tauri::command]
-fn get_human_html(app: tauri::AppHandle) -> Result<String, String> {
-    host(&app).session.human_html().map_err(String::from)
-}
-
-#[tauri::command]
 fn get_data(app: tauri::AppHandle) -> Result<String, String> {
     host(&app)
         .session
@@ -134,11 +129,6 @@ fn get_context(app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 fn set_edit_mode(app: tauri::AppHandle, active: bool) {
     host(&app).session.set_edit_mode(active);
-}
-
-#[tauri::command]
-fn update_preview_html(app: tauri::AppHandle, html: String) {
-    host(&app).session.set_preview_html(html);
 }
 
 #[tauri::command]
@@ -274,8 +264,8 @@ fn spinoff_document(
     ctx.session.open(id).map_err(String::from)
 }
 
-/// Open the home CLAN app as the current document (the React shell then pulls
-/// its rendered HTML via `get_human_html`).
+/// Open the home CLAN app as the current document (the React shell's frame
+/// then loads `clan://localhost/document`, composed by napkin-host).
 #[tauri::command]
 fn open_home(app: tauri::AppHandle) -> Result<OpenResult, String> {
     let ctx = host(&app);
@@ -417,14 +407,12 @@ fn main() {
         .manage(AppState::new(launch_file))
         .invoke_handler(tauri::generate_handler![
             open_clan,
-            get_human_html,
             get_data,
             get_chain,
             get_agent_state,
             get_context,
             save_patch,
             set_edit_mode,
-            update_preview_html,
             take_launch_file,
             list_apps,
             install_app,

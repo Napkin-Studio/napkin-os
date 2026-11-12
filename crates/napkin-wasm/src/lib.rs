@@ -246,9 +246,14 @@ impl NapkinHost {
             .map_err(err)
     }
 
-    #[wasm_bindgen(js_name = humanHtml)]
-    pub fn human_html(&self) -> Result<String, JsValue> {
-        self.session.human_html().map_err(err)
+    /// The page the app frame loads from `srcdoc`, for the options in `query`
+    /// (`model=&capture=&theme=`): the same composer as every host, with the
+    /// device's CSP and rpc shim (napkin-host `frame`, `Reach::Device`).
+    #[wasm_bindgen(js_name = framePage)]
+    pub fn frame_page(&self, query: &str) -> Result<String, JsValue> {
+        self.session
+            .frame_page(query, napkin_host::frame::Reach::Device)
+            .map_err(err)
     }
 
     pub fn entry(&self, path: &str) -> Result<String, JsValue> {
@@ -283,11 +288,6 @@ impl NapkinHost {
     #[wasm_bindgen(js_name = setEditMode)]
     pub fn set_edit_mode(&self, active: bool) {
         self.session.set_edit_mode(active);
-    }
-
-    #[wasm_bindgen(js_name = setPreviewHtml)]
-    pub fn set_preview_html(&self, html: String) {
-        self.session.set_preview_html(html);
     }
 
     /// The `clan://` surface, as a function call.

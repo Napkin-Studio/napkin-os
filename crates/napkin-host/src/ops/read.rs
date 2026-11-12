@@ -134,6 +134,26 @@ pub fn human_html(doc: &Document) -> HostResult<String> {
     Ok(inject_clan_data(&styled_html, &context_json))
 }
 
+/// The page the app frame loads: the view ([`human_html`]) composed for
+/// `query`'s options (`model`, `capture`, `theme`; [`crate::frame`]), with the
+/// document's own render model when the query names none.
+pub fn frame_page(doc: &Document, query: &str, reach: crate::frame::Reach) -> HostResult<String> {
+    let authored = doc
+        .clan()
+        .manifest()
+        .view
+        .as_ref()
+        .and_then(|v| v.source.as_deref())
+        == Some("app");
+    let model = if authored {
+        crate::frame::RenderModel::Authored
+    } else {
+        crate::frame::RenderModel::Legacy
+    };
+    let opts = crate::frame::FrameOptions::from_query(query, model, reach);
+    Ok(crate::frame::compose(&human_html(doc)?, &opts))
+}
+
 /// `shared/data.yaml` as JSON — what a view holds as `window.__CLAN__.data`.
 /// `null` when the document has none or it does not parse.
 pub fn data_json(doc: &Document) -> Value {

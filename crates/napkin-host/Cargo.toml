@@ -32,6 +32,10 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # Extract text from attached PDFs so the agent sees document contents, not just names.
 pdf-extract = { version = "0.7", optional = true }
 
+[dev-dependencies]
+# The frame golden's two big inputs are kept gzipped (tests/fixtures/frame).
+flate2 = "1"
+
 [features]
 default = ["native"]
 # A host with an OS underneath it: filesystem storage, subprocess export, and

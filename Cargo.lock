@@ -2694,6 +2694,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "clan-sdk",
+ "flate2",
  "pdf-extract",
  "reqwest 0.12.28",
  "serde",

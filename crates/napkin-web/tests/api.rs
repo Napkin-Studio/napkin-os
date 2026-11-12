@@ -2970,13 +2970,6 @@ async fn a_job_the_middleware_lost_is_no_longer_offered_to_settle() {
 
 // ── Opening a document quickly (features/doc-open-speed.clan) ───────────────
 
-fn gzip(bytes: &[u8]) -> Vec<u8> {
-    use std::io::Write;
-    let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-    e.write_all(bytes).unwrap();
-    e.finish().unwrap()
-}
-
 fn gunzip(bytes: &[u8]) -> Vec<u8> {
     use std::io::Read;
     let mut out = Vec::new();
@@ -2986,62 +2979,175 @@ fn gunzip(bytes: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A page the size of a real research's: about a megabyte of HTML.
-fn a_big_page() -> String {
-    let row = "<tr><td class=\"finding\">A finding with its source and its lens</td><td>cited</td></tr>\n";
-    format!(
-        "<!doctype html><html><head><title>big</title></head><body><table>{}</table></body></html>",
-        row.repeat(12_000)
+/// The frame's GET for its page, as a browser on `https://uat.example` sends it.
+fn frame_get(token: &str, query: &str, extra: &[(header::HeaderName, &str)]) -> Request<Body> {
+    let mut req = Request::builder()
+        .uri(format!("/s/{token}/document{query}"))
+        .header(header::HOST, "uat.example")
+        .header("x-forwarded-proto", "https");
+    for (k, v) in extra {
+        req = req.header(k, *v);
+    }
+    req.body(Body::empty()).unwrap()
+}
+
+// features/doc-open-direct.clan: the shell no longer composes and posts the
+// page; the frame's one GET is composed here from the session's view.
+#[tokio::test]
+async fn the_frame_page_is_composed_from_the_view_for_the_query() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (_doc, token) = upload(&s, &b, "Composed").await;
+
+    let r = send(
+        &s,
+        frame_get(&token, "?model=legacy&capture=1&theme=dark&v=1", &[]),
     )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(
+        r.headers.get(header::CONTENT_TYPE).unwrap(),
+        "text/html; charset=utf-8"
+    );
+    let page = String::from_utf8(r.body.to_vec()).unwrap();
+    let base = format!("https://uat.example/s/{token}");
+    assert!(
+        page.contains(&format!("var BASE=\"{base}\";")),
+        "the fetch shim names the frame's own URL"
+    );
+    assert!(!page.contains("clan://localhost") && !page.contains("http://clan.localhost"));
+    assert!(
+        page.contains("__clan_bridge_listening"),
+        "the legacy bridge, as asked"
+    );
+    assert!(page.contains("data-dogfood-capture"));
+    assert!(page.contains("data-color-scheme=\"dark\""));
+
+    // Nothing asked: the document's own model, no listener, light.
+    let r = send(&s, frame_get(&token, "", &[])).await;
+    let page = String::from_utf8(r.body.to_vec()).unwrap();
+    assert!(!page.contains("data-dogfood-capture"));
+    assert!(page.contains("data-color-scheme=\"light\""));
 }
 
 #[tokio::test]
-async fn a_large_page_goes_out_gzipped_when_the_browser_takes_gzip() {
+async fn the_frame_page_goes_out_compressed_when_the_browser_takes_it() {
     let s = server(5);
     let b = browser(&s).await;
-    let (doc, token) = upload(&s, &b, "Compressed").await;
-    let page = a_big_page();
-    let set = post(
+    let (_doc, token) = upload(&s, &b, "Compressed").await;
+    let plain = send(&s, frame_get(&token, "?model=authored", &[])).await;
+    assert!(plain.headers.get(header::CONTENT_ENCODING).is_none());
+
+    let packed = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=authored",
+            &[(header::ACCEPT_ENCODING, "gzip")],
+        ),
+    )
+    .await;
+    assert_eq!(packed.status, StatusCode::OK);
+    assert_eq!(
+        packed.headers.get(header::CONTENT_ENCODING).unwrap(),
+        "gzip"
+    );
+    assert!(packed.body.len() < plain.body.len());
+    assert_eq!(gunzip(&packed.body), plain.body);
+}
+
+#[tokio::test]
+async fn an_unchanged_frame_page_answers_304_and_a_changed_one_does_not() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (_doc, token) = upload(&s, &b, "Revalidated").await;
+    let first = send(&s, frame_get(&token, "?model=legacy&theme=light&v=1", &[])).await;
+    let tag = first
+        .headers
+        .get(header::ETAG)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(tag.starts_with("W/\""));
+    assert_eq!(
+        first.headers.get(header::CACHE_CONTROL).unwrap(),
+        "private, no-cache"
+    );
+
+    let again = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=legacy&theme=light&v=1",
+            &[(header::IF_NONE_MATCH, &tag)],
+        ),
+    )
+    .await;
+    assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+    assert!(again.body.is_empty());
+
+    // Another option is another page.
+    let dark = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=legacy&theme=dark&v=1",
+            &[(header::IF_NONE_MATCH, &tag)],
+        ),
+    )
+    .await;
+    assert_eq!(dark.status, StatusCode::OK);
+
+    // A write changes the page, so the browser's copy is not served again.
+    let patched = post(
+        &s,
+        &format!("/s/{token}/patch-data"),
+        &b.cookie,
+        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+    )
+    .await;
+    assert_eq!(patched.status, StatusCode::OK);
+    let after = send(
+        &s,
+        frame_get(
+            &token,
+            "?model=legacy&theme=light&v=2",
+            &[(header::IF_NONE_MATCH, &tag)],
+        ),
+    )
+    .await;
+    assert_eq!(after.status, StatusCode::OK);
+    assert_ne!(
+        after.headers.get(header::ETAG).unwrap().to_str().unwrap(),
+        tag
+    );
+}
+
+#[tokio::test]
+async fn a_bad_token_gets_no_frame_page() {
+    let s = server(5);
+    let r = send(&s, frame_get("not-a-token", "", &[])).await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn posting_a_preview_page_is_gone_and_says_why() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (doc, _token) = upload(&s, &b, "Gone").await;
+    let r = post(
         &s,
         &format!("/api/t/{}/d/{doc}/preview-html", b.tenant),
         &b.cookie,
-        page.clone(),
+        "<p>a page</p>",
     )
     .await;
-    assert_eq!(set.status, StatusCode::OK);
-
-    // A browser that takes gzip is sent gzip, and it unpacks to the page.
-    let req = Request::builder()
-        .uri(format!("/s/{token}/document"))
-        .header(header::ACCEPT_ENCODING, "gzip")
-        .body(Body::empty())
-        .unwrap();
-    let r = send(&s, req).await;
-    assert_eq!(r.status, StatusCode::OK);
-    assert_eq!(r.headers.get(header::CONTENT_ENCODING).unwrap(), "gzip");
-    assert!(
-        r.body.len() * 10 < page.len(),
-        "{} bytes for a {}-byte page",
-        r.body.len(),
-        page.len()
-    );
-    assert_eq!(gunzip(&r.body), page.as_bytes());
-
-    // The shell's own reads of the document's page are compressed too.
-    let req = Request::builder()
-        .uri(format!("/api/t/{}/d/{doc}/human-html", b.tenant))
-        .header(header::COOKIE, &b.cookie)
-        .header(header::ACCEPT_ENCODING, "gzip, deflate, br")
-        .body(Body::empty())
-        .unwrap();
-    let r = send(&s, req).await;
-    assert_eq!(r.status, StatusCode::OK);
-    assert!(r.headers.get(header::CONTENT_ENCODING).is_some());
-
-    // One that says nothing is sent the plain page.
-    let r = get(&s, &format!("/s/{token}/document"), None).await;
-    assert!(r.headers.get(header::CONTENT_ENCODING).is_none());
-    assert_eq!(r.body, page.as_bytes());
+    assert_eq!(r.status, StatusCode::GONE);
+    assert!(r.json()["error"]
+        .as_str()
+        .unwrap()
+        .contains("/s/{token}/document"));
 }
 
 #[tokio::test]
@@ -3057,35 +3163,6 @@ async fn the_event_stream_is_never_compressed() {
     let resp = s.app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
-}
-
-#[tokio::test]
-async fn a_gzipped_preview_page_is_stored_as_the_page_it_stands_for() {
-    let s = server(5);
-    let b = browser(&s).await;
-    let (doc, token) = upload(&s, &b, "Posted gzipped").await;
-    let page = a_big_page();
-    let packed = gzip(page.as_bytes());
-    assert!(packed.len() * 10 < page.len());
-    let req = Request::builder()
-        .method("POST")
-        .uri(format!("/api/t/{}/d/{doc}/preview-html", b.tenant))
-        .header(header::COOKIE, &b.cookie)
-        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(header::CONTENT_ENCODING, "gzip")
-        .body(Body::from(packed))
-        .unwrap();
-    let r = send(&s, req).await;
-    assert_eq!(
-        r.status,
-        StatusCode::OK,
-        "{}",
-        String::from_utf8_lossy(&r.body)
-    );
-
-    let r = get(&s, &format!("/s/{token}/document"), None).await;
-    assert_eq!(r.status, StatusCode::OK);
-    assert_eq!(r.body, page.as_bytes());
 }
 
 #[tokio::test]

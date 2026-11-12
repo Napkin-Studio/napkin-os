@@ -4,20 +4,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { host } from '../host'
-import type { ClientAnswerKind, ClientPartRef, ManifestInfo } from '../host'
+import type { ClientAnswerKind, ClientPartRef, FrameOptions, ManifestInfo } from '../host'
 import { partsFrom } from './clientReview/review'
 import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
-import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
-import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
 import { agencyIdOf, coloursOf } from './agency/palette'
-import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
+import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
 
 interface Props {
-  htmlContent: string
   hasHumanView: boolean
+  /** The document as opened (manifest sha256, and its view's version): a new one is a new page. */
+  version: string
   manifest: ManifestInfo
   /** "authored" → structured (data-layer) bridge; "legacy" → contenteditable. */
   renderModel: 'authored' | 'legacy'
@@ -50,13 +49,15 @@ interface Props {
 }
 
 /**
- * The render surface for one running app. Renders the human view inside a
- * sandboxed iframe served from the backend's clan://document slot, and injects
- * the appropriate edit bridge: the structured (data-layer) bridge for authored
- * Napkin apps, or the legacy contenteditable bridge for AI-generated HTML.
+ * The render surface for one running app: the human view inside a sandboxed
+ * iframe. The host composes the page (napkin-host frame.rs) with the edit
+ * bridge the render model asks for — the structured (data-layer) bridge for
+ * authored Napkin apps, the legacy contenteditable bridge for AI-generated
+ * HTML — and the frame loads it from the host's clan://document, or, with no
+ * server, from srcdoc.
  */
 export default function AppRuntime({
-  htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
+  hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
   onChrome, onBar, insets,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -202,92 +203,32 @@ export default function AppRuntime({
   // `insets` is a new object only when a value changed (AppHost keeps the old one otherwise).
   useEffect(() => { insetsRef.current = insets; postInsets() }, [insets, postInsets])
 
-  const [iframeSrc, setIframeSrc] = useState<string>('')
   // The dogfood build listens inside the frame too, once the person has agreed.
   const dogfood = useSyncExternalStore(onDogfood, dogfoodState, dogfoodState)
   const capture = dogfood.on && dogfood.consented
 
-  // Composing the page is a pure derivation of the view, the render model and
-  // the theme — not an effect. The effect below only has to publish it.
-  const prepared = useMemo(() => {
-    if (!hasHumanView) return ''
+  // What the page is composed for; the host composes it (features/
+  // doc-open-direct.clan). The theme is read when the page is asked for, not
+  // followed: a later change is posted to the frame (clan:colorscheme) rather
+  // than reloading it.
+  const opts = useMemo<FrameOptions | null>(
+    () => (hasHumanView ? { model: renderModel, capture, theme: getTheme(), version } : null),
+    [hasHumanView, renderModel, capture, version],
+  )
 
-    const isFullDoc = /^\s*<!doctype\s+html/i.test(htmlContent) || /^\s*<html/i.test(htmlContent)
-    const bridgeScript = renderModel === 'authored' ? STRUCTURED_EDIT_BRIDGE : LEGACY_EDIT_BRIDGE
-    const bridge = `<script>${bridgeScript}</script>${frameCapture(capture)}`
-    let fullHtml: string
+  // A host behind an address serves the page there: the frame's src is all
+  // the shell sets, and the one GET is the whole open.
+  const iframeSrc = useMemo(() => (opts && host.frameLoad === 'url' ? host.frameSrc(opts) : ''), [opts])
 
-    if (isFullDoc) {
-      // Inject at the LAST </body>: an app's inline script may legitimately
-      // contain '</body>' inside a string literal (e.g. an HTML-export
-      // builder), and splicing the bridge there is a syntax error that kills
-      // the app's whole script.
-      const closeIdx = htmlContent.toLowerCase().lastIndexOf('</body>')
-      fullHtml = closeIdx >= 0
-        ? htmlContent.slice(0, closeIdx) + bridge + htmlContent.slice(closeIdx)
-        : htmlContent + bridge
-    } else {
-      fullHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&display=swap">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    /* A bare fragment gets the studio's paper, ink and type (the values of
-       the shell's tokens, which do not cross into the frame). */
-    :root { color-scheme: light; --paper: #FFFFFF; --ink: #14161B; --line: #D6DAE2; }
-    html[data-color-scheme="dark"] { color-scheme: dark; --paper: #0F1114; --ink: #F2F3F5; --line: #2A2F38; }
-    body {
-      background: var(--paper);
-      color: var(--ink);
-      font-family: 'Geist', 'Helvetica Neue', Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.65;
-      -webkit-font-smoothing: antialiased;
-    }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-  </style>
-</head>
-<body>
-  ${htmlContent}
-  ${bridge}
-</body>
-</html>`
-    }
-
-    // Stamp the scheme into the markup as well as posting it: the message
-    // arrives after load, and a light user should not see a dark flash first.
-    const themed = fullHtml.replace(
-      /<html\b([^>]*)>/i,
-      (m, attrs: string) =>
-        /data-color-scheme=/i.test(attrs) ? m : `<html${attrs} data-color-scheme="${getTheme()}">`,
-    )
-
-    return host.prepareAppHtml(themed)
-  }, [htmlContent, hasHumanView, renderModel, capture])
-
-  // With a host behind a URL, hand it the page and point the frame at it.
-  // With no server there is nothing to hand it to: the page is inlined below.
-  // One post at a time, and only the newest page points the frame: on a slow
-  // link a post takes seconds, and a page composed again meanwhile used to load
-  // the frame once per post, or leave the older page stored if its post landed
-  // last (features/doc-open-speed.clan). A page already superseded is not sent.
-  const published = useRef(0)
-  const posting = useRef<Promise<void>>(Promise.resolve())
+  // With no server, the host in this tab composes it for srcdoc. Only the
+  // newest page is shown: one composed for older options never replaces it.
+  const [srcDoc, setSrcDoc] = useState('')
+  const composed = useRef(0)
   useEffect(() => {
-    if (!prepared || host.frameLoad === 'srcdoc') return
-    const mine = ++published.current
-    const latest = () => mine === published.current
-    posting.current = posting.current.then(async () => {
-      if (!latest()) return
-      await host.updatePreviewHtml(prepared)
-      if (latest()) setIframeSrc(host.clanOrigin() + '/document?t=' + Date.now())
-    }).catch(console.error)
-  }, [prepared])
+    if (!opts || host.frameLoad !== 'srcdoc') return
+    const mine = ++composed.current
+    host.compose(opts).then(page => { if (mine === composed.current) setSrcDoc(page) }, console.error)
+  }, [opts])
 
   if (!hasHumanView) {
     return (
@@ -304,7 +245,7 @@ export default function AppRuntime({
   return (
     <iframe
       ref={iframeRef}
-      {...(host.frameLoad === 'srcdoc' ? { srcDoc: prepared } : { src: iframeSrc })}
+      {...(host.frameLoad === 'srcdoc' ? { srcDoc } : { src: iframeSrc })}
       className="ch-frame"
       style={{ width: '100%', flex: 1, border: 'none', background: 'var(--paper)' }}
       // A source link opens as a normal tab (owner, 2026-11-11: publisher pages need their cookies and

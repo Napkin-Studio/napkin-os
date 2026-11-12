@@ -12,10 +12,11 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { existsSync, readFileSync } from 'node:fs'
 
 import { DogfoodBadge, DogfoodNotice, ResultThumbs } from '../src/dogfood/Dogfood.tsx'
 import {
-  CONTACT, FRAME_CAPTURE, Recorder, __test, acknowledge, feedback, feedbackNote, frameCapture, nameOf, record, recording, setScreen,
+  CONTACT, Recorder, __test, acknowledge, feedback, feedbackNote, nameOf, record, recording, setScreen,
   type ShellEvent,
 } from '../src/dogfood/recorder.ts'
 
@@ -84,7 +85,16 @@ const asEl = (f: Fake) => f as unknown as Element
 /** Send what the recorder holds (feedback() flushes; a plain record waits for its timer). */
 const flushNow = () => feedback('flush', 'up')
 
-/** The function the frame script defines, taken back out of FRAME_CAPTURE. */
+/** The frame's listener, as napkin-host puts it in an app's page (frame.rs). */
+const FRAME_CAPTURE = (() => {
+  let root = new URL('.', import.meta.url)
+  while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
+  const file = readFileSync(new URL('src/shell/bridge/frameCapture.js', root), 'utf8')
+  // its leading comment lines stay in the file; the rest is the script
+  return file.replace(/^(?:\/\/.*\n)*/, '')
+})()
+
+/** The function the frame script defines, taken back out of it. */
 const frameNameOf = (() => {
   const src = /var nameOf=([\s\S]*?);\nfunction tell/.exec(FRAME_CAPTURE)?.[1]
   assert.ok(src, 'FRAME_CAPTURE defines nameOf')
@@ -148,9 +158,7 @@ test('clicks the page makes itself are not recorded, in the shell or in frames',
   }
 })
 
-test('the frame listener is added only when recording, and only posts', () => {
-  assert.equal(frameCapture(false), '')
-  assert.equal(frameCapture(true), FRAME_CAPTURE)
+test('the frame listener only listens, and only posts', () => {
   assert.match(FRAME_CAPTURE, /clan:interaction/)
   assert.match(FRAME_CAPTURE, /passive:true/)
   assert.doesNotMatch(FRAME_CAPTURE, /preventDefault|stopPropagation|fetch\(/)

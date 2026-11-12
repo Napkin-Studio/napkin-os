@@ -452,8 +452,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             />
           )}
           <AppRuntime
-            htmlContent={running.htmlContent}
             hasHumanView={open.has_human_view}
+            version={open.view_version ? `${open.manifest.sha256}:${open.view_version}` : open.manifest.sha256}
             manifest={open.manifest}
             renderModel={authored ? 'authored' : 'legacy'}
             editMode={editMode}
