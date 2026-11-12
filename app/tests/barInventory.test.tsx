@@ -18,8 +18,8 @@ import { test } from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import Toolbar, { AgencyPill } from '../src/components/Toolbar.tsx'
-import { accountItems, continueItems, deskItems, docMenuItems, linksOf, linksRead, madeFromOf, moreItems, pressContinue, shareItems, type DocBar } from '../src/components/barMenus.ts'
+import Toolbar, { AgencyPill, LinkPicker, LinkedList } from '../src/components/Toolbar.tsx'
+import { accountItems, continueItems, deskItems, docMenuItems, linkList, linkedChip, linkedRows, linksOf, linksRead, madeFromOf, moreItems, pressContinue, shareItems, type DocBar } from '../src/components/barMenus.ts'
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { barFrom } from '../src/shell/appBar.ts'
 
@@ -298,29 +298,151 @@ test('lineage chips beside the name; the crew is people only, and a job shows as
   assert.doesNotMatch(bar({ doc: doc() }), /tba-line/, 'made from nothing: no chips')
 })
 
-test('Link to an existing one: each document it could link, then Update and Unlink for what is linked', () => {
+const HERE = { id: 'cli_aaaa0001', name: 'UAT 11121025' }
+const target = (id: string, title: string, over: Record<string, unknown> = {}) => ({
+  app_id: 'ie.napkin.campaign-research', app_name: 'Research Tool', document_id: id, title,
+  path: `store/${id}`, updated_at: '2026-11-09T10:00:00Z', attached: false, many: true, locked: false,
+  client: HERE as { id: string; name: string } | null, ...over,
+})
+
+test('Link to an existing one: the way into the Link list, then Update and Unlink for what is linked', () => {
   const ran: string[] = []
-  const target = (id: string, title: string, over = {}) => ({
-    app_id: 'ie.napkin.campaign-research', app_name: 'Research Tool', document_id: id, title,
-    path: `store/${id}`, updated_at: '2026-11-09T10:00:00Z', attached: false, many: true, locked: false, ...over,
-  })
+  let listed = 0
   const cont = continueItems(doc({
     linkTargets: [target('r1', 'Irish summer treats'), target('r2', 'Oat milk', { attached: true })],
     onLink: id => { ran.push(`link:${id}`) },
     linked: [{ documentId: 'r2', title: 'Oat milk', dir: 'in', changed: true, taken: 1 }, { documentId: 'd9', title: 'Q3 deck', dir: 'out' }],
     onUpdateLinked: id => { ran.push(`update:${id}`) },
     onUnlink: id => { ran.push(`unlink:${id}`) },
-  }))
-  assert.deepEqual(labels(cont.link), ['↔ Irish summer treats', 'Update Oat milk', 'Unlink Oat milk'], 'linked already: not offered again; linked into another: not here')
-  assert.match(cont.link[0].hint ?? '', /^Research · each keeps its own version/)
+  }), () => { listed++ })
+  assert.deepEqual(labels(cont.link), ['↔ Link research…', 'Update Oat milk', 'Unlink Oat milk'], 'one way into the list; linked into another: not here')
+  assert.match(cont.link[0].hint ?? '', /^This client’s research, newest first; search finds any client’s/)
   assert.match(cont.link[1].hint ?? '', /\(v1\)/)
   assert.ok(cont.link[1].apart, 'what is linked sits apart from what could be')
   cont.link.forEach(i => i.run())
-  assert.deepEqual(ran, ['link:r1', 'update:r2', 'unlink:r2'])
-  // Locked: offered, disabled, saying why; no Update or Unlink.
-  const locked = continueItems(doc({ linkTargets: [target('r1', 'Irish summer treats', { locked: true })], onLink: noop }))
+  assert.equal(listed, 1, 'Link research… opens the Link list')
+  assert.deepEqual(ran, ['update:r2', 'unlink:r2'])
+  // Locked: offered, disabled, saying why.
+  const locked = continueItems(doc({ linkTargets: [target('r1', 'Irish summer treats', { locked: true })], onLink: noop }), noop)
   assert.equal(locked.link[0].disabled, true)
   assert.match(locked.link[0].hint ?? '', /locked/)
+  assert.deepEqual(continueItems(doc({ linkTargets: [], onLink: noop }), noop).link, [], 'nothing to link: the group says so')
+})
+
+test('the linked chip: one chip for any number of links, the dot when one changed, and its list', () => {
+  assert.equal(linkedChip([]), null)
+  const ran: string[] = []
+  const linked: DocBar['linked'] = [
+    { documentId: 'r1', title: 'Oatly · Ireland and Great Britain', path: 'store/r1', dir: 'in', changed: true, taken: 1, noun: 'research' },
+    { documentId: 'r2', title: 'Guinness 0.0 · Ireland', path: 'store/r2', dir: 'in', changed: false, taken: 2, noun: 'research' },
+    { documentId: 'r3', title: 'Barista milk · cafés', path: 'store/r3', dir: 'in', taken: 1, noun: 'research' },
+    { documentId: 'd1', title: 'Q3 deck', path: 'store/d1', dir: 'out', noun: 'deck' },
+  ]
+  for (const n of [1, 2, 4]) {
+    const html = bar({ doc: doc({ linked: linked.slice(0, n), onOpenDocument: noop }) })
+    assert.equal(html.match(/data-testid="lineage-linked"/g)?.length, 1, `${n} links: one chip`)
+    assert.match(html, new RegExp(`data-testid="lineage-linked"[^>]*>↔ <b>${n} linked</b>`))
+    assert.ok(!html.includes('Oatly'), 'no title on the bar: the name keeps its room')
+  }
+  assert.match(bar({ doc: doc({ linked: linked.slice(0, 2) }) }), /<b>2 linked<\/b><i class="ch-line-dot"/, 'one changed: the dot')
+  assert.doesNotMatch(bar({ doc: doc({ linked: linked.slice(1, 3) }) }), /ch-line-dot/, 'none changed: no dot')
+  assert.deepEqual(linkedChip(linked), { count: 4, changed: true })
+
+  const d = doc({
+    linked, linkTargets: [target('r9', 'Oat drinks')], onLink: noop,
+    onOpenDocument: p => { ran.push(`open:${p}`) }, onUpdateLinked: id => { ran.push(`update:${id}`) }, onUnlink: id => { ran.push(`unlink:${id}`) },
+  })
+  const { into, out } = linkedRows(d)
+  assert.deepEqual(into.map(r => [r.sub, labels(r.actions)]), [
+    ['Research · v1 taken · changed since', ['Update', 'Open', 'Unlink']],
+    ['Research · v2 taken', ['Open', 'Unlink']],
+    ['Research · v1 taken', ['Open', 'Unlink']],
+  ], 'Update only when it changed')
+  assert.deepEqual(out.map(r => labels(r.actions)), [['Open']], 'linked into another: open it, unlink there')
+  into[0].actions.forEach(a => a.run())
+  assert.deepEqual(ran, ['update:r1', 'open:store/r1', 'unlink:r1'])
+  // Locked: no Update or Unlink.
+  assert.deepEqual(labels(linkedRows({ linked, onOpenDocument: noop }).into[0].actions), ['Open'])
+
+  const html = renderToStaticMarkup(createElement(LinkedList, { doc: d, close: noop, onLinkAnother: noop }))
+  assert.match(html, />Linked into this brief</)
+  assert.match(html, />This brief is linked into</)
+  assert.equal(html.match(/data-testid="linked-row" data-dir="in"/g)?.length, 3)
+  assert.match(html, /aria-label="Update Oatly · Ireland and Great Britain"/)
+  assert.match(html, /data-testid="link-another"[^>]*>＋ Link another research…</)
+})
+
+test('the Link list: this client first and newest first, a search over every client, and all clients grouped', () => {
+  const now = new Date('2026-11-12T12:00:00Z')
+  const linked: string[] = []
+  const d = doc({
+    client: HERE,
+    onLink: id => { linked.push(id) },
+    linkTargets: [
+      target('m1', 'Barista milk · cafés in Dublin', { updated_at: '2026-11-09T12:00:00Z', version: 3 }),
+      target('m2', 'Oatly · Ireland and Great Britain', { updated_at: '2026-11-12T10:00:00Z', version: 1, attached: true }),
+      target('m3', 'Oat drinks · UK supermarkets', { updated_at: '2026-11-11T12:00:00Z', version: 1 }),
+      target('o1', 'Oat milk pricing · Germany', { client: { id: 'cli_bbbb0002', name: 'Alpro' } }),
+      target('o2', 'Oat drinks · Ireland', { client: { id: 'cli_cccc0003', name: 'UAT Edge' } }),
+      target('o3', 'Coffee culture', { client: { id: 'cli_bbbb0002', name: 'Alpro' } }),
+      target('u1', 'An old oat study', { client: null }),
+    ],
+  })
+  const l = linkList(d, '', now)
+  assert.equal(l.noun, 'research')
+  assert.equal(l.here, 'UAT 11121025')
+  assert.equal(l.locked, null)
+  assert.deepEqual(l.mine.map(r => r.target.document_id), ['m2', 'm3', 'm1'], 'this client only, newest first')
+  assert.deepEqual(l.mine.map(r => r.sub), ['v1 · 2 hours ago', 'v1 · 1 day ago', 'v3 · 3 days ago'])
+  assert.deepEqual(l.mine.map(r => r.state), ['linked', 'link', 'link'], 'linked already: LINKED, not Link')
+  assert.deepEqual(l.others, [], 'other clients only by searching')
+  l.mine.forEach(r => r.run())
+  assert.deepEqual(linked, ['m3', 'm1'], 'Link runs onLink; a linked one does nothing')
+
+  // Searching: other clients' research by title or by client name, each naming its client.
+  const s = linkList(d, 'oat', now)
+  assert.equal(s.mine.length, 3, 'this client stays listed')
+  assert.deepEqual(s.others.map(r => [r.target.document_id, r.sub]), [['o1', 'Alpro'], ['o2', 'UAT Edge'], ['u1', 'Unknown client']])
+  assert.deepEqual(linkList(d, 'alpro', now).others.map(r => r.target.document_id), ['o1', 'o3'], 'by client name')
+
+  // All clients: grouped, this client first, unknown last; the search narrows each.
+  assert.deepEqual(l.groups.map(g => [g.name, g.here, g.rows.map(r => r.target.document_id)]), [
+    ['UAT 11121025', true, ['m2', 'm3', 'm1']],
+    ['Alpro', false, ['o1', 'o3']],
+    ['UAT Edge', false, ['o2']],
+    ['Unknown client', false, ['u1']],
+  ])
+  assert.deepEqual(linkList(d, 'coffee', now).groups.map(g => g.name), ['Alpro'])
+
+  // Locked: listed, Link disabled, the reason said once.
+  const lk = linkList({ ...d, linkTargets: d.linkTargets!.map(t => ({ ...t, locked: true })) }, '', now)
+  assert.match(lk.locked ?? '', /locked/)
+  assert.deepEqual(lk.mine.map(r => r.state), ['linked', 'locked', 'locked'])
+  linked.length = 0
+  lk.mine.forEach(r => r.run())
+  assert.deepEqual(linked, [], 'a locked document links nothing')
+
+  // Drawn: the client view, a search, and all clients.
+  const draw = (props: { startQuery?: string; startAll?: boolean }, over: Partial<DocBar> = {}) =>
+    renderToStaticMarkup(createElement(LinkPicker, { doc: { ...d, ...over }, close: noop, ...props }))
+  const mine = draw({})
+  assert.match(mine, />Link research · UAT 11121025</)
+  assert.equal(mine.match(/data-testid="link-row"/g)?.length, 3)
+  assert.match(mine, /data-state="linked"[^]*?>Linked</)
+  assert.match(mine, /placeholder="Search research for other clients"/)
+  assert.match(mine, /data-testid="link-all"[^>]*>Show research for all clients</)
+  assert.doesNotMatch(mine, /Other clients/)
+  const found = draw({ startQuery: 'oat' })
+  assert.match(found, />Other clients</)
+  assert.match(found, /<b>Oat milk pricing · Germany<\/b><small>Alpro<\/small>/)
+  const every = draw({ startAll: true })
+  assert.match(every, />Link research · all clients</)
+  assert.match(every, />UAT 11121025 · this client</)
+  assert.ok(every.indexOf('UAT 11121025 · this client') < every.indexOf('>Alpro<'), 'this client first')
+  assert.match(every, /data-testid="link-only-here"[^>]*>Only this client</)
+  const shut = draw({}, { linkTargets: d.linkTargets!.map(t => ({ ...t, locked: true })) })
+  assert.match(shut, /data-testid="link-locked"/)
+  assert.match(shut, /aria-disabled="true"[^>]*>Link</)
 })
 
 // UAT round 4 (2026-11-12): "Link to an existing one" said there was nothing to link while a
@@ -339,7 +461,7 @@ test('Continue in ▾ reads what it lists again as it opens, and a failed read n
   pressContinue({}, false, toggle)
   assert.equal(open, true, 'a bar with nothing to read still opens')
 
-  const t = (id: string) => ({ app_id: 'ie.napkin.campaign-research', app_name: 'Research Tool', document_id: id, title: id, path: `store/${id}`, updated_at: '', attached: false, many: true, locked: false })
+  const t = (id: string) => ({ app_id: 'ie.napkin.campaign-research', app_name: 'Research Tool', document_id: id, title: id, path: `store/${id}`, updated_at: '', attached: false, many: true, locked: false, client: null })
   const first = linksRead(null, 'brief-1', [], null)
   assert.deepEqual(first.targets, [], 'nothing yet')
   const later = linksRead(first, 'brief-1', [t('research-1')], null)
@@ -366,8 +488,9 @@ test('linksOf reads /related into the lineage chips, both ways, and what was mad
   assert.deepEqual(madeInto, { count: 2, noun: 'deck', path: 'store/d1' })
   assert.deepEqual(linked.map(l => [l.documentId, l.dir, !!l.changed]), [['r1', 'in', true], ['p1', 'out', false]])
   const html = bar({ doc: doc({ linked, madeInto, onOpenDocument: noop }) })
-  assert.match(html, /data-testid="lineage-linked"[^>]*>↔ <b>Oat milk<\/b><small class="ch-line-v"> v3<\/small><i class="ch-line-dot"/)
-  assert.match(html, /data-testid="lineage-linked-in"[^>]*>↔ in <b>Spring film<\/b>/)
+  assert.match(html, /data-testid="lineage-linked"[^>]*>↔ <b>2 linked<\/b><i class="ch-line-dot"/, 'both ways under one chip')
+  assert.deepEqual(linkedRows({ linked }).into.map(r => r.sub), ['Linked · v3 taken · changed since'])
+  assert.deepEqual(linkedRows({ linked }).out.map(r => [r.doc.title, r.sub]), [['Spring film', 'Production · holds this one']])
 })
 
 test('the bar: who and where, then the document left-aligned (phase 36), then the tools after the spacer', () => {

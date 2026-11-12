@@ -8,6 +8,7 @@
 import type { ReactNode } from 'react'
 import type { AttachTarget, RelatedView, SpinoffTarget, UpstreamView } from '../host/types'
 import { overflowButtons, type BarItem, type BarStatus } from '../shell/appBar'
+import { ago, clientName } from '../shell/nui/deskData'
 
 /** A tool as the bar names it: its own name, colour and face (its app.home). */
 export interface ToolBrand {
@@ -73,6 +74,8 @@ export interface DocBar {
   linked?: LinkedDoc[]
   /** "Continue in ▾ › Link to an existing one": what it could link (`GET /attach-targets`). */
   linkTargets?: AttachTarget[]
+  /** The open document's own client (its manifest's), for the Link list's "this client"; null when it has none. */
+  client?: { id: string; name: string } | null
   /** "Continue in ▾" is opening: read what it lists again, so a document made since is there. */
   onContinueOpen?: () => void
   /** Link that document into this one (`POST /attach`). */
@@ -240,6 +243,8 @@ export function pressContinue(doc: Pick<DocBar, 'onContinueOpen'>, open: boolean
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
 export function continueItems(
   doc: Pick<DocBar, 'targets' | 'onSpinoff' | 'madeFrom' | 'onUpdateFromUpstream' | 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'> & Partial<Pick<DocBar, 'tool' | 'onStartFresh'>>,
+  /** Open the Link list (the client's documents, a search, all clients); Toolbar passes it. */
+  openLinkList?: () => void,
 ): { spin: MenuItem[]; link: MenuItem[]; update: MenuItem[]; fresh: MenuItem[] } {
   const from = doc.madeFrom
   const since = from?.decisionsSince
@@ -251,7 +256,7 @@ export function continueItems(
       hint: spinHint(t, noun),
       run: () => doc.onSpinoff(t.app_id),
     })),
-    link: linkItems(doc),
+    link: linkItems(doc, openLinkList),
     // Start fresh (gaps.md §7 L2): the same app, the same client, new notes.
     fresh: doc.onStartFresh
       ? [{ label: `New ${noun === 'one' ? 'document' : noun} for this client`, hint: 'From new notes; this one stays as it is', run: doc.onStartFresh }]
@@ -385,25 +390,29 @@ function signOutItem(user?: string | null, onSignOut?: () => void): MenuItem[] {
 }
 
 
+/** What a locked document says where it would link. */
+const LOCKED_HINT = 'It is locked: a locked version keeps what it holds. Reopen it to link.'
+
 /**
- * "Link to an existing one": each document it could link, then, apart, the
- * ones linked into it now: Update when one changed, and Unlink. A locked
- * document shows what it could link, disabled, saying why (the host refuses
- * it too).
+ * "Link to an existing one": one way into the Link list (the client's
+ * documents, a search, all clients: {@link linkList}), then, apart, the ones
+ * linked into it now: Update when one changed, and Unlink (the same as the
+ * linked chip's list). A locked document says why it cannot link (the host
+ * refuses it too).
  */
 function linkItems(
   doc: Pick<DocBar, 'linkTargets' | 'onLink' | 'linked' | 'onUpdateLinked' | 'onUnlink'>,
+  openLinkList?: () => void,
 ): MenuItem[] {
   const out: MenuItem[] = []
-  for (const t of doc.linkTargets ?? []) {
-    if (t.attached) continue
-    const locked = t.locked || !doc.onLink
+  const targets = doc.linkTargets ?? []
+  if (targets.length) {
+    const noun = linkNoun(targets)
+    const locked = targets.some(t => t.locked) || !doc.onLink || !openLinkList
     out.push({
-      label: `↔ ${t.title}`,
-      hint: locked
-        ? 'It is locked: a locked version keeps what it holds. Reopen it to link.'
-        : `${shortTool(t.app_name)} · each keeps its own version; changes show as updates.`,
-      run: () => doc.onLink?.(t.document_id),
+      label: `↔ Link ${noun}…`,
+      hint: locked ? LOCKED_HINT : `This client’s ${plural(noun)}, newest first; search finds any client’s.`,
+      run: () => openLinkList?.(),
       ...(locked ? { disabled: true } : {}),
     })
   }
@@ -429,4 +438,141 @@ function linkItems(
     }
   }
   return out
+}
+
+/** What the targets are, as the Link list says it: "research", "brief"; "document" when they are of several apps. */
+export function linkNoun(targets: Pick<AttachTarget, 'app_name'>[]): string {
+  const names = new Set(targets.map(t => shortTool(t.app_name).toLowerCase()))
+  return names.size === 1 ? [...names][0] : 'document'
+}
+
+/** "research" stays "research"; a brief is "briefs". */
+export function plural(noun: string): string {
+  return /research$/i.test(noun) ? noun : `${noun}s`
+}
+
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** The bar's one linked chip ("↔ N linked ▾"): how many, and whether one changed since it was taken. Null with none. */
+export function linkedChip(linked?: LinkedDoc[]): { count: number; changed: boolean } | null {
+  const all = linked ?? []
+  return all.length ? { count: all.length, changed: all.some(l => l.dir === 'in' && !!l.changed) } : null
+}
+
+/** One linked document in the chip's list: its line under the title, and what can be done with it. */
+export interface LinkedRow { doc: LinkedDoc; sub: string; actions: MenuItem[] }
+
+/**
+ * The linked chip's list: what is linked into this one (Update when it
+ * changed, Open, Unlink) and what this one is linked into (Open). The same
+ * Update and Unlink as Continue in ▾ › Link to an existing one.
+ */
+export function linkedRows(doc: Pick<DocBar, 'linked' | 'onOpenDocument' | 'onUpdateLinked' | 'onUnlink'>): { into: LinkedRow[]; out: LinkedRow[] } {
+  const open = (l: LinkedDoc): MenuItem[] => (l.path && doc.onOpenDocument
+    ? [{ label: 'Open', hint: `Open ${l.title}`, run: () => doc.onOpenDocument!(l.path!) }]
+    : [])
+  const into: LinkedRow[] = []
+  const out: LinkedRow[] = []
+  for (const l of doc.linked ?? []) {
+    const noun = capital(l.noun || 'linked')
+    if (l.dir === 'in') {
+      into.push({
+        doc: l,
+        sub: `${noun}${l.taken ? ` · v${l.taken} taken` : ''}${l.changed ? ' · changed since' : ''}`,
+        actions: [
+          ...(l.changed && doc.onUpdateLinked
+            ? [{ label: 'Update', hint: 'Take its newer version; your own work here stays', run: () => doc.onUpdateLinked!(l.documentId) }]
+            : []),
+          ...open(l),
+          ...(doc.onUnlink
+            ? [{ label: 'Unlink', hint: 'Let go of it here; what this took from it stays', run: () => doc.onUnlink!(l.documentId) }]
+            : []),
+        ],
+      })
+    } else {
+      out.push({ doc: l, sub: `${noun} · holds this one`, actions: open(l) })
+    }
+  }
+  return { into, out }
+}
+
+/** One document in the Link list. */
+export interface LinkRow {
+  target: AttachTarget
+  /** Its line under the title: "v2 · 3 days ago", or its client's name in a search of other clients. */
+  sub: string
+  /** `linked`: linked here already (LINKED, no button); `locked`: the open document is locked (Link disabled). */
+  state: 'link' | 'linked' | 'locked'
+  run: () => void
+}
+
+/** A client's documents in the Link list's all-clients view. */
+export interface LinkGroup { name: string; here: boolean; rows: LinkRow[] }
+
+/** The Link list, as {@link linkList} lays it out. */
+export interface LinkList {
+  /** "research", "brief": what the targets are. */
+  noun: string
+  /** This client's name ("No client" when the open document has none). */
+  here: string
+  /** Why nothing can be linked now (the open document is locked); null when it can. */
+  locked: string | null
+  /** This client's documents, newest first. */
+  mine: LinkRow[]
+  /** Other clients' documents that match the search (empty with no search). */
+  others: LinkRow[]
+  /** All clients: every document grouped by client, this client first; the search narrows each. */
+  groups: LinkGroup[]
+}
+
+/** A target's client as the list names it. */
+const clientOf = (t: AttachTarget) => (t.client ? clientName(t.client) : 'Unknown client')
+
+/**
+ * The Link list (Continue in ▾ › Link, and the linked chip's "Link another…";
+ * features/linked-research-bar.clan): this client's documents newest first; a
+ * search that finds any client's by title or client name, each naming its
+ * client; and all clients, grouped, this client first. Linked ones say so
+ * rather than offer Link again.
+ */
+export function linkList(
+  doc: Pick<DocBar, 'linkTargets' | 'onLink' | 'client'>,
+  query = '',
+  now = new Date(),
+): LinkList {
+  const targets = [...(doc.linkTargets ?? [])].sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0))
+  const hereId = doc.client?.id ?? null
+  const isHere = (t: AttachTarget) => (t.client?.id ?? null) === hereId
+  const locked = targets.some(t => t.locked) || !doc.onLink ? LOCKED_HINT : null
+  const when = (t: AttachTarget) => [t.version ? `v${t.version}` : '', ago(t.updated_at, now)].filter(Boolean).join(' · ')
+  const row = (t: AttachTarget, sub: string): LinkRow => ({
+    target: t,
+    sub,
+    state: t.attached ? 'linked' : locked ? 'locked' : 'link',
+    run: () => { if (!t.attached && !locked) doc.onLink?.(t.document_id) },
+  })
+  const q = query.trim().toLowerCase()
+  const hit = (t: AttachTarget) => !q || t.title.toLowerCase().includes(q) || clientOf(t).toLowerCase().includes(q)
+  const here = doc.client ? clientName(doc.client) : 'No client'
+
+  const byClient = new Map<string, LinkGroup>()
+  for (const t of targets.filter(hit)) {
+    const mine = isHere(t)
+    const key = mine ? '' : t.client?.id ?? '~'
+    const g = byClient.get(key) ?? { name: mine ? here : clientOf(t), here: mine, rows: [] }
+    g.rows.push(row(t, when(t)))
+    byClient.set(key, g)
+  }
+  const groups = [...byClient.entries()]
+    .sort(([a, ga], [b, gb]) => (a === '' ? -1 : b === '' ? 1 : a === '~' ? 1 : b === '~' ? -1 : ga.name.localeCompare(gb.name)))
+    .map(([, g]) => g)
+
+  return {
+    noun: linkNoun(targets),
+    here,
+    locked,
+    mine: targets.filter(isHere).map(t => row(t, when(t))),
+    others: q ? targets.filter(t => !isHere(t) && hit(t)).map(t => row(t, clientOf(t))) : [],
+    groups,
+  }
 }

@@ -400,6 +400,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           madeInto,
           linked,
           linkTargets: links.targets,
+          client: open.manifest.client ?? null,
           onContinueOpen: links.refresh,
           onLink: open.is_template ? undefined : links.link,
           onUpdateLinked: decisions.view?.lock.locked || open.is_template ? undefined : links.update,

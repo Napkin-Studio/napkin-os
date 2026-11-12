@@ -1,7 +1,7 @@
 // Links (features/spinoff-and-links.clan, os-layer §5.7) against the real
 // stack: an existing brief linked into an existing deck from Continue in ▾,
-// the lineage chips on both sides, the update notice when the brief changes,
-// taking its newer version, and letting go. Clients are placeholders; no
+// the one linked chip and its list on both sides (features/linked-research-bar.clan),
+// the update notice when the brief changes, taking its newer version, and letting go. Clients are placeholders; no
 // model is called.
 
 import { expect, test, type Page } from '@playwright/test'
@@ -36,12 +36,17 @@ test('a brief links into a deck, shows on both sides, updates when it changes, a
 
   const cont = page.getByRole('button', { name: /^Continue in/ })
   await cont.click()
-  const link = page.getByRole('menuitem', { name: /↔ Summer Spoons/ })
+  await page.getByRole('menuitem', { name: /↔ Link brief…/ }).click()
+  // The Link list: this client's briefs, Summer Spoons among them.
+  const link = page.getByTestId('link-menu').getByRole('menuitem', { name: 'Link Summer Spoons' })
   await expect(link).toBeVisible()
   await link.click()
   const chip = page.getByTestId('lineage-linked')
-  await expect(chip).toContainText('Summer Spoons', { timeout: 15_000 })
-  await expect(chip).toContainText('v1')
+  await expect(chip).toContainText('1 linked', { timeout: 15_000 })
+  await chip.click()
+  await expect(page.getByTestId('linked-row')).toContainText('Summer Spoons')
+  await expect(page.getByTestId('linked-row')).toContainText('v1 taken')
+  await page.keyboard.press('Escape')
   await expect(page.getByTestId('link-changed')).toHaveCount(0)
   const shots = process.env.NAPKIN_E2E_SHOTS
   if (shots) await page.screenshot({ path: `${shots}/links-linked.png` })
@@ -55,17 +60,21 @@ test('a brief links into a deck, shows on both sides, updates when it changes, a
   if (shots) await page.screenshot({ path: `${shots}/links-changed.png` })
   await notice.getByRole('button', { name: 'Update' }).click()
   await expect(notice).toHaveCount(0, { timeout: 15_000 })
-  await expect(page.getByTestId('lineage-linked')).toContainText('v2')
+  await page.getByTestId('lineage-linked').click()
+  await expect(page.getByTestId('linked-row')).toContainText('v2 taken')
+  await page.keyboard.press('Escape')
 
   // The brief says where it is used.
   await openWork(page, client, 'brief', 'Summer Spoons')
-  await expect(page.getByTestId('lineage-linked-in')).toContainText('Pitch deck', { timeout: 15_000 })
+  await page.getByTestId('lineage-linked').click({ timeout: 15_000 })
+  await expect(page.locator('[data-testid="linked-row"][data-dir="out"]')).toContainText('Pitch deck')
+  await page.keyboard.press('Escape')
 
   // Let go of it from the deck.
   await openWork(page, client, 'deck', 'Pitch deck')
   await expect(page.getByTestId('lineage-linked')).toBeVisible({ timeout: 15_000 })
-  await page.getByRole('button', { name: /^Continue in/ }).click()
+  await page.getByTestId('lineage-linked').click()
   if (shots) await page.screenshot({ path: `${shots}/links-menu.png` })
-  await page.getByRole('menuitem', { name: /Unlink Summer Spoons/ }).click()
+  await page.getByRole('menuitem', { name: 'Unlink Summer Spoons' }).click()
   await expect(page.getByTestId('lineage-linked')).toHaveCount(0, { timeout: 15_000 })
 })

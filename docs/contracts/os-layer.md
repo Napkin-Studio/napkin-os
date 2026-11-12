@@ -1475,10 +1475,13 @@ body or reply changes meaning.
 9. **Links** (§5.7, *added 2026-11-09*). Writes as the person in `Ctx`; the
    reply carries `clan` and `backrefs` as the review routes do.
    - `GET /attach-targets` — `[{app_id, app_name, document_id, title,
-     version, path, updated_at, attached, many, locked}]`, by title: this
-     tenant's documents the open document's app accepts, never a fork, a
+     version, path, updated_at, attached, many, locked, client}]`, by title:
+     this tenant's documents the open document's app accepts, never a fork, a
      template, itself or what it was made from. `locked` says a link would be
-     refused, so the shell says why instead of offering it.
+     refused, so the shell says why instead of offering it. `client` is
+     `{id, name} | null`, named as the library names it (the registry's name,
+     else the manifest's); the shell's Link list filters and groups by it
+     (*added 2026-11-12*, features/linked-research-bar.clan).
    - `POST /attach {document_id}` — link it. Reply `{ok, verb: attached |
      replaced, decision, action, document_id, attached: <record>, seeded,
      kept, carried_decisions, backrefs, clan}`.
