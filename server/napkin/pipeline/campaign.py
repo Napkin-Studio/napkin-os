@@ -1371,7 +1371,9 @@ class CampaignJob:
         if value:
             write("client_org", {"value": value, "origin": "proposed", "workspace_ref": wc["id"]})
             notes.append(f"Client: {value['name']} (the client this research was started for, proposed).")
-            ev_pins.append(rsn.point(f"The research was started from {value['name']}'s client page"))
+            # Cite the workspace client: a name may hold digits ("3 Mobile", "UAT 11120718"), and an
+            # uncited point with a digit is refused as a figure, which failed the whole identify stage.
+            ev_pins.append(rsn.point(f"The research was started from {value['name']}'s client page", wc["id"]))
             levels.append(("medium", "the client is the workspace's; confirm it"))
 
     def identify_reasoning(self, idec, ev_material, ev_pins, levels, rejected):
