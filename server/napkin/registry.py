@@ -67,7 +67,10 @@ def lookup(declared: str, task: str):
 
 # Tasks added after documents were made: a document whose pipeline predates
 # one may still use it, through the built-in handler, until it declares it.
-LATER_TASKS = {"ask_research", "reconsider", "fix_parts"}
+# Tasks added after documents already carried their pipeline: such a document resolves them from the
+# built-in map. answer_question: a brief made before Brief Maker declared it could never answer its
+# intake questions (UAT round 4, 2026-11-12: every answer refused as unknown_task, the job waited 90 s).
+LATER_TASKS = {"ask_research", "reconsider", "fix_parts", "answer_question"}
 
 
 def resolve(task: str, clan: dict):
