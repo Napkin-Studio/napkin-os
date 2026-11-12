@@ -17,6 +17,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { DoorEntry, HomeView, MapCircle } from '../src/host/http.ts'
 import type { LibraryItem } from '../src/host/types.ts'
 import { DoorPage } from '../src/shell/home/DoorPage.tsx'
+import { DOORS } from '../src/components/states/doors.ts'
 import { Home } from '../src/shell/home/Home.tsx'
 import { TheO } from '../src/shell/home/TheO.tsx'
 import { doorIsLive, doorTool, hello, needsLine, needsRows, NEEDS_FIRST, placeOf } from '../src/shell/home/model.ts'
@@ -127,10 +128,31 @@ test('a door whose tool comes in a later phase opens its Empty state, not an err
   assert.match(html, /Example · Client A, an Irish whiskey/)
   assert.doesNotMatch(html, /role="alert"|error|Something went wrong/i)
   assert.match(html, />Client brains<span class="period-dot"/)
-  // a Phase 2 door that has no Empty content written yet still opens a plain Empty state
+  // a door of one of the five newer homes has its own words, not the generic line
   const later = renderToStaticMarkup(createElement(DoorPage, { door: 'stills', name: 'Stills', clients: [], items: [], apps: APPS, go: noop }))
   assert.match(later, /data-state="empty"/)
-  assert.match(later, /Stills goes here\./)
+  assert.match(later, /Stills for a job go here, each with how it was made\./)
+  assert.doesNotMatch(later, /Stills goes here\./)
+  // an id the table does not know (an agency's own door) still opens a plain Empty state
+  const own = renderToStaticMarkup(createElement(DoorPage, { door: 'wall-chart', name: 'Wall chart', clients: [], items: [], apps: APPS, go: noop }))
+  assert.match(own, /data-state="empty"/)
+  assert.match(own, /Wall chart goes here\./)
+})
+
+test('the door table: Phase 1 answers are unchanged, and a door with no line is not live', () => {
+  const APPS_ALL = ['ie.napkin.brief-maker', 'ie.napkin.campaign-research', 'ie.napkin.deck-maker']
+  assert.equal(doorIsLive('brief', APPS_ALL), true)
+  assert.equal(doorIsLive('research', APPS_ALL), true)
+  assert.equal(doorIsLive('presentations', APPS_ALL), true)
+  assert.equal(doorIsLive('brief', ['ie.napkin.deck-maker']), false, 'an app that is not installed is not live')
+  assert.equal(doorIsLive('clients', []), true)
+  assert.equal(doorIsLive('agency-dashboard', []), true)
+  assert.equal(doorIsLive('live-jobs', APPS_ALL), false, 'the job page is built by its own record')
+  assert.equal(doorIsLive('script-editor', APPS_ALL), false, 'no line, no tool')
+  assert.equal(doorTool('brief'), 'brief')
+  assert.equal(doorTool('research'), 'research')
+  assert.equal(doorTool('presentations'), 'deck')
+  for (const id of ['clients', 'agency-dashboard', 'live-jobs', 'stills', 'approvals']) assert.equal(doorTool(id), null, id)
 })
 
 test('a door whose tool exists asks which client, and says how many it has of each', () => {
@@ -158,4 +180,19 @@ test('every word on a home says no em dash', () => {
   assert.doesNotMatch(html, /—|–/)
   const door = renderToStaticMarkup(createElement(DoorPage, { door: 'client-brains', name: 'Client brains', clients: [], items: [], apps: APPS, go: noop }))
   assert.doesNotMatch(door, /—|–/)
+})
+
+test('every door with no tool opens its own Empty state: its line, its verb, its example and the reason', () => {
+  const none = DOORS.filter(d => !doorIsLive(d.id, APPS) || d.id === 'live-jobs')
+  assert.ok(none.length >= 30)
+  for (const d of none) {
+    const html = renderToStaticMarkup(createElement(DoorPage, { door: d.id, name: d.name, clients: [], items: [], apps: [], go: noop }))
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/'/g, '&#x27;')
+    assert.match(html, /data-state="empty"/, d.id)
+    assert.ok(html.includes(esc(d.line)), `${d.id} shows its own line`)
+    assert.ok(html.includes(esc(d.example.lines[0])), `${d.id} shows its own example`)
+    assert.ok(html.includes(`>${esc(d.verb)}<`), `${d.id} shows its own verb`)
+    assert.match(html, /This tool comes in a later phase/, d.id)
+    assert.doesNotMatch(html, /goes here\.<\/p>.*will list the J001 work here/, d.id)
+  }
 })

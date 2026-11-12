@@ -54,7 +54,8 @@ pub struct Home {
     /// What the home is called: `Planning`, `Creative director`.
     pub title: String,
     pub department: String,
-    /// False for the five homes that go live in Phase 2: they exist as door lists only.
+    /// Whether the home is switched on. All nine of the default table are; nothing reads it yet,
+    /// and it is kept as the place for an agency's own table to hide a home.
     pub live: bool,
     pub doors: Vec<Entry>,
     pub more: Vec<Entry>,
@@ -179,7 +180,7 @@ impl Default for Table {
                 "art-director",
                 "Art director",
                 "creative",
-                false,
+                true,
                 &[
                     ("ideas", "Ideas"),
                     ("stills", "Stills"),
@@ -197,7 +198,7 @@ impl Default for Table {
                 "copywriter",
                 "Copywriter",
                 "creative",
-                false,
+                true,
                 &[
                     ("ideas", "Ideas"),
                     ("script-editor", "Script editor"),
@@ -216,7 +217,7 @@ impl Default for Table {
                 "producer",
                 "Producer",
                 "production",
-                false,
+                true,
                 &[
                     ("live-jobs", "Live jobs"),
                     ("video-motion", "Video and motion"),
@@ -234,7 +235,7 @@ impl Default for Table {
                 "agency-brain",
                 "Agency Brain",
                 "agency-brain",
-                false,
+                true,
                 &[
                     ("client-brains", "Client brains"),
                     ("pitches", "Pitches"),
@@ -251,7 +252,7 @@ impl Default for Table {
                 "traffic",
                 "Traffic",
                 "production",
-                false,
+                true,
                 &[
                     ("traffic-board", "Traffic board"),
                     ("timesheets", "Timesheets"),
@@ -418,10 +419,14 @@ impl Table {
         out
     }
 
-    /// The department a role belongs to, and the role whose home a circle opens.
-    fn circle(&self, d: &Department, mine: bool) -> Circle {
+    /// A circle on the O. It opens the home of the first role in its department; a person's
+    /// own department opens the person's own role (`own_role`), so an art director's Creative
+    /// circle carries the art director's home, not the creative director's.
+    fn circle(&self, d: &Department, own_role: Option<&str>) -> Circle {
         let opens = if d.id == "clients" {
             None
+        } else if let Some(role) = own_role {
+            Some(role.to_string())
         } else {
             self.homes
                 .iter()
@@ -431,22 +436,32 @@ impl Table {
         Circle {
             id: d.id.clone(),
             name: d.name.clone(),
-            mine,
+            mine: own_role.is_some(),
             opens,
         }
     }
 
     pub fn map_for(&self, roles: &[String]) -> Map {
-        let own: Vec<String> = roles
-            .iter()
-            .filter_map(|r| self.home_of(self.landing_role(r)))
-            .map(|h| h.department.clone())
-            .collect();
+        // For each of the person's own departments, the role that put them there (the first).
+        let mut own: Vec<(String, String)> = Vec::new();
+        for r in roles {
+            let landing = self.landing_role(r);
+            if let Some(h) = self.home_of(landing) {
+                if !own.iter().any(|(d, _)| *d == h.department) {
+                    own.push((h.department.clone(), landing.to_string()));
+                }
+            }
+        }
         let open = self.open_departments(roles);
         let mut circles = Vec::new();
         let mut other = Vec::new();
         for (i, d) in open.iter().enumerate() {
-            let c = self.circle(d, own.contains(&d.id));
+            let c = self.circle(
+                d,
+                own.iter()
+                    .find(|(o, _)| *o == d.id)
+                    .map(|(_, role)| role.as_str()),
+            );
             if i < MAX_CIRCLES {
                 circles.push(c);
             } else {
@@ -937,5 +952,212 @@ mod tests {
             Table::default()
         );
         assert_eq!(Table::for_agency(None, None), Table::default());
+    }
+
+    fn all_roles() -> Vec<String> {
+        Table::default()
+            .homes
+            .iter()
+            .map(|h| h.role.clone())
+            .collect()
+    }
+
+    #[test]
+    fn all_nine_homes_are_live_with_the_doors_of_the_v2_table() {
+        let t = Table::default();
+        assert_eq!(t.homes.len(), 9);
+        assert!(t.homes.iter().all(|h| h.live), "no home is marked not live");
+        let v = |role: &str| t.view(&r(&[role]), None);
+        let check = |role: &str, doors: &[&str], more: &[&str]| {
+            assert_eq!(names(&v(role).doors), doors, "{role} doors");
+            assert_eq!(names(&v(role).more), more, "{role} more tools");
+        };
+        check(
+            "art-director",
+            &[
+                "Ideas",
+                "Stills",
+                "Video and motion",
+                "Formats and in situ",
+                "Shopper stands",
+            ],
+            &["Experiential", "Presentations", "Craft review"],
+        );
+        check(
+            "copywriter",
+            &[
+                "Ideas",
+                "Script editor",
+                "Radio",
+                "Video and motion",
+                "Formats and in situ",
+            ],
+            &[
+                "Shopper stands",
+                "Experiential",
+                "Presentations",
+                "Craft review",
+            ],
+        );
+        check(
+            "producer",
+            &[
+                "Live jobs",
+                "Video and motion",
+                "Radio",
+                "Scope and estimates",
+                "Timetables",
+            ],
+            &["Formats and in situ", "Shopper stands", "Traffic board"],
+        );
+        check(
+            "agency-brain",
+            &[
+                "Client brains",
+                "Pitches",
+                "Awards",
+                "Case studies",
+                "Proprietary data",
+            ],
+            &["Judge scores (read only)", "Job memory"],
+        );
+        check(
+            "traffic",
+            &[
+                "Traffic board",
+                "Timesheets",
+                "Resources",
+                "Live jobs",
+                "Timetables",
+            ],
+            &["Scope and estimates (read only)"],
+        );
+    }
+
+    #[test]
+    fn the_o_shows_at_most_five_circles_for_every_role_and_pair() {
+        let t = Table::default();
+        let ids = all_roles();
+        let mut sets: Vec<Vec<String>> = ids.iter().map(|a| r(&[a])).collect();
+        for a in &ids {
+            for b in &ids {
+                sets.push(r(&[a, b]));
+            }
+        }
+        sets.push(r(&["admin"]));
+        sets.push(r(&["demo"]));
+        for roles in sets {
+            let m = t.map_for(&roles);
+            assert!(m.circles.len() <= MAX_CIRCLES, "{roles:?}");
+            assert!(!m.circles.is_empty(), "{roles:?}");
+            assert!(
+                m.circles[0].mine || is_switcher(&roles),
+                "{roles:?} own first"
+            );
+            let seen: Vec<&str> = m
+                .circles
+                .iter()
+                .chain(&m.other)
+                .map(|c| c.id.as_str())
+                .collect();
+            let mut unique = seen.clone();
+            unique.dedup();
+            assert_eq!(seen.len(), unique.len(), "{roles:?} no circle twice");
+        }
+    }
+
+    #[test]
+    fn a_persons_own_department_opens_their_own_home() {
+        let t = Table::default();
+        let opens = |roles: &[&str], dept: &str| {
+            let m = t.map_for(&r(roles));
+            m.circles
+                .iter()
+                .chain(&m.other)
+                .find(|c| c.id == dept)
+                .and_then(|c| c.opens.clone())
+        };
+        assert_eq!(
+            opens(&["art-director"], "creative").as_deref(),
+            Some("art-director")
+        );
+        assert_eq!(
+            opens(&["copywriter"], "creative").as_deref(),
+            Some("copywriter")
+        );
+        assert_eq!(
+            opens(&["traffic"], "production").as_deref(),
+            Some("traffic")
+        );
+        assert_eq!(
+            opens(&["producer"], "production").as_deref(),
+            Some("producer")
+        );
+        assert_eq!(
+            opens(&["creative-director"], "creative").as_deref(),
+            Some("creative-director")
+        );
+        // an admin has no department of their own beyond Management: the other circles open what they did
+        assert_eq!(
+            opens(&["admin"], "management").as_deref(),
+            Some("management")
+        );
+        assert_eq!(
+            opens(&["admin"], "creative").as_deref(),
+            Some("creative-director")
+        );
+        assert_eq!(opens(&["admin"], "production").as_deref(), Some("producer"));
+        assert_eq!(opens(&["admin"], "clients"), None);
+    }
+
+    #[test]
+    fn the_permission_groups_hold_for_the_five_new_roles() {
+        let scope = "/t/x/jobs/J001/scope";
+        let prop = "/t/x/proprietary/rates";
+        let brains = "/t/x/client-brains/c1";
+        assert!(!allowed(&r(&["copywriter"]), scope, None));
+        assert!(allowed(&r(&["producer"]), scope, None));
+        assert!(allowed(&r(&["traffic"]), scope, None));
+        assert!(allowed(&r(&["agency-brain"]), brains, None));
+        assert!(allowed(&r(&["agency-brain"]), prop, None));
+        assert!(!allowed(&r(&["art-director"]), brains, None));
+        assert!(!allowed(&r(&["art-director"]), prop, None));
+        assert!(!allowed(&r(&["copywriter"]), prop, None));
+        // a Phase 1 role with a Phase 2 role: either may open it
+        assert!(allowed(&r(&["copywriter", "agency-brain"]), prop, None));
+    }
+
+    /// The server's table and the shell's door content must not drift: every id a home lists
+    /// (door or More tools) has its own Empty content in doors.ts, and doors.ts names no other id.
+    #[test]
+    fn every_door_has_its_content_in_the_shell() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../app/src/components/states/doors.ts"
+        );
+        let text = std::fs::read_to_string(path).expect("doors.ts");
+        let in_shell: Vec<&str> = text
+            .lines()
+            .filter_map(|l| l.trim_start().strip_prefix("{ id: '"))
+            .filter_map(|l| l.split('\'').next())
+            .collect();
+        let t = Table::default();
+        let mut wanted: Vec<&str> = Vec::new();
+        for h in &t.homes {
+            for e in h.doors.iter().chain(&h.more) {
+                if !wanted.contains(&e.id.as_str()) {
+                    wanted.push(&e.id);
+                }
+            }
+        }
+        for id in &wanted {
+            assert!(in_shell.contains(id), "doors.ts has no entry for {id}");
+        }
+        for id in &in_shell {
+            assert!(
+                wanted.contains(id),
+                "doors.ts names {id}, which no home lists"
+            );
+        }
     }
 }

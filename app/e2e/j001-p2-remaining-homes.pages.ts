@@ -1,10 +1,13 @@
-// The five Phase 2 homes, for tests 72 and 73 (axe in three modes, 44 px buttons at 390 px, no em dash). The remaining-homes record
-// adds the pages of the doors it builds here.
-import { expect } from '@playwright/test'
+// The pages of record remaining-homes for the suite's axe, 44 px and em dash checks (tests 72 and 73): the five new homes.
+import { expect, type Page } from '@playwright/test'
 import { PEOPLE } from './seed/j001'
-import type { Phase2Page } from './phase2/pages'
 
-const home = async (page: import('@playwright/test').Page) => { await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible() }
+const home = async (page: Page) => { await page.goto('/'); await expect(page.getByTestId('home')).toBeVisible() }
 
-export const PAGES: Phase2Page[] = (['artDirector', 'copywriter', 'producer', 'agencyBrain', 'traffic'] as const)
-  .map(who => ({ name: `home of ${who}`, as: PEOPLE[who], show: home }))
+export const PAGES = [
+  { name: 'home of the art director', as: PEOPLE.artDirector, show: home },
+  { name: 'home of the copywriter', as: PEOPLE.copywriter, show: home },
+  { name: 'home of the producer', as: PEOPLE.producer, show: home },
+  { name: 'home of the Agency Brain', as: PEOPLE.agencyBrain, show: home },
+  { name: 'home of traffic', as: PEOPLE.traffic, show: home },
+]
