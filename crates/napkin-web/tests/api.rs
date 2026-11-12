@@ -487,7 +487,7 @@ async fn a_token_reaches_exactly_one_document() {
 async fn sandbox_writes_reach_the_shell_as_events() {
     let s = server(40);
     let b = browser(&s).await;
-    let (_doc, token) = upload(&s, &b, "Events").await;
+    let (doc, token) = upload(&s, &b, "Events").await;
 
     let tenant = napkin_web::tenant::TenantId::parse(&b.tenant).unwrap();
     let mut rx = s.ctx.events.subscribe(&tenant);
@@ -502,6 +502,8 @@ async fn sandbox_writes_reach_the_shell_as_events() {
 
     let event = rx.try_recv().expect("a data write must reach the shell");
     assert_eq!(event.name, "clan-data-changed");
+    // the stream is the whole tenant's: the event names its document
+    assert_eq!(event.data["path"], doc.as_str());
 }
 
 #[tokio::test]

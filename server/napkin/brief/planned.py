@@ -520,7 +520,10 @@ class PlannedBriefJob(BriefJob):
             why = "nobody answered within the wait" if timed_out else "a person chose to skip them"
             rl.note("intake_unanswered" if timed_out else "intake_skipped", keys=[q["key"] for q in skipped])
             r = rsn.make(f"Went on without an answer to {len(skipped)} intake question(s): {why}.",
-                         [rsn.point(f"“{q['text']}” was asked and not answered: {why}") for q in skipped],
+                         # The question's key, not its wording: a planner's question may hold a digit ("Is the 2025
+                         # date fixed?"), and an uncited point with a digit is refused as a figure.
+                         [rsn.point(f"The {q['key'].replace('_', ' ')} question was asked and not answered: {why}")
+                          for q in skipped],
                          rsn.certainty("high", "the questions were asked and no answer came"),
                          "the client answers, or a person edits the part",
                          only_option="nothing is invented to stand for an answer",

@@ -117,6 +117,21 @@ def test_a_research_from_the_client_page_proposes_the_workspace_client(store):
     _research_schema_validator().validate({"campaign": {"client_org": co}})
 
 
+def test_a_client_name_with_digits_does_not_fail_identify(store):
+    # UAT round 2 (2026-11-12): the workspace client "UAT 11120718" put an uncited point with
+    # digits in identify's reasoning; make() refused it as a figure and the whole stage raised,
+    # leaving the run with no categories and an empty report. The point now cites the client.
+    host = Host(LABELLED, workspace={"id": "cli_7e1e7e11", "name": "7-Eleven 2025"}, categories=TONIC)
+    job = start(store, host)
+    run_until_settled(job, host)
+    co = host.data["campaign"]["client_org"]
+    assert co["origin"] == "proposed" and co["workspace_ref"] == "cli_7e1e7e11"
+    idec = [d for d in host.chain if "Settled" in (d.get("reasoning") or {}).get("decided", "")]
+    assert idec, "identify wrote its decision"
+    pts = idec[-1]["reasoning"]["because"]
+    assert any(p.get("cites") == ["cli_7e1e7e11"] and "7-Eleven 2025" in p["point"] for p in pts)
+
+
 def test_without_a_workspace_or_brief_the_client_stays_open(store):
     host = Host(LABELLED, categories=TONIC)
     job = start(store, host)

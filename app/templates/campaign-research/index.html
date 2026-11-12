@@ -427,6 +427,9 @@ details.preview pre{font-family:var(--mono);font-size:11px;background:var(--soft
 
 .toast{position:fixed;left:50%;bottom:calc(24px + var(--clan-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:13px;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:opacity .25s var(--ease),transform .25s var(--ease);z-index:90;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
+.toast.on.act{pointer-events:auto}
+.toast button{all:unset;cursor:pointer;margin-left:10px;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.toast button:focus-visible{outline:2px solid var(--paper);outline-offset:2px}
 
 .empty-state{padding:22px;border:1px dashed var(--line);border-radius:16px;color:var(--ink2);background:var(--soft);font-size:13.5px}
 .empty-state b{color:var(--ink)}
@@ -710,6 +713,25 @@ body.done:not(.show-run):not(.no-report) #start{display:none}
 .rq-s{margin:6px 0 0}
 .rq-how{margin:6px 0 0;font-size:13px;color:var(--ink3)}
 .rq-warn{color:var(--create-ink)}
+/* An answer asked from a fact or finding: under its Ask box in the inspector, and, once a person adds it,
+   in the report under the fact's section (research-fact-answer-v1). */
+.pv-fa{border:1px solid var(--line);border-left:1px solid var(--line);border-radius:10px;background:var(--soft);padding:12px 14px;margin:12px 0 0;font-size:13.5px;line-height:1.5;max-width:none}
+.pv-fa.busy{display:flex;align-items:center;gap:10px;color:var(--ink2);border-left-color:var(--line)}
+.pv-fa-who{font:600 10.5px/1.4 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+.pv-fa .rq-q{margin:4px 0 8px;font-size:14px}
+.pv-fa ol{margin:0 0 8px;padding-left:18px;display:grid;gap:6px}
+.pv-fa .pv-chip{margin-left:4px;vertical-align:1px}
+.pv-fa-this{font:600 10.5px var(--mono);background:var(--line-soft);color:var(--ink2)}
+.pv-fa-miss{margin:6px 0 10px;font-size:12.5px;color:var(--amber-ink)}
+.pv-fa .pv-acts{padding:0;border:0;margin:0}
+.pv-fa-in{margin:0;font-size:12.5px;color:var(--green-ink);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pv-fa-in .pv-link{font-size:12.5px;font-weight:500}
+.pv-fa-dot{width:8px;height:8px;border-radius:50%;background:var(--ink3);flex:none;animation:pvfa 1s infinite alternate}
+@keyframes pvfa{from{opacity:.3}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.pv-fa-dot{animation:none}}
+.rq-a.rq-added{border-left-color:var(--amber);background:var(--amber-soft);border-radius:0 6px 6px 0;padding:10px 12px;font-size:15px}
+.rq-added .rq-q{font-size:12.5px;color:var(--amber-ink)}
+.rq-added .rq-how{font:11.5px/1.4 var(--mono);color:var(--amber-ink)}
 .rq-own{display:grid;gap:12px;margin:0 calc(-1*clamp(20px,5vw,64px));padding:40px clamp(20px,5vw,64px) 8px;border-top:1px solid var(--line)}
 .rep .rq-own{margin:0;padding:24px 0 8px}
 .rq-own h2{margin:0;font-size:22px;letter-spacing:-.02em}
@@ -1998,7 +2020,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // A moment as a person says it, in their own time: "28 Sept, 16:48".
   function fmtWhen(s){ var d=new Date(s); if(!s||isNaN(d)) return '';
     try{ return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+', '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return fmtDate(s); } }
-  function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove('on');},3800); }
+  // `act` {label, run}: one action on the notice (an answer that landed while you were elsewhere: Open it).
+  function toast(msg, act){ var t=$('toast'); t.textContent=msg; t.classList.toggle('act', !!act);
+    if(act){ var b=document.createElement('button'); b.type='button'; b.textContent=act.label; b.addEventListener('click', function(){ t.classList.remove('on'); act.run(); }); t.appendChild(b); }
+    t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove('on');}, act?6500:3800); }
   function hasHost(){ return !!(window.clan && window.clan.patchData); }
 
   var ICON = {
@@ -2142,6 +2167,9 @@ details.pv-fold>summary:hover{background:var(--soft)}
       var aj=ASK.jobs.filter(live)[0], tj=JOBS.filter(function(j){ return live(j)&&j!==RECON.job; })[0];
       if(RECON.job) job={role:'strategy', doing:'bringing the report in step with your review'};
       else if(CHAT.reportBusy) job={role:'synthesis', doing:'writing the report again'};
+      else if(aj&&aj.about){ var fl=selLabel(aj.about);
+        job={role:'research', key:'ask|'+aj.question, doing:'answering about '+fl, title:'Asked: “'+aj.question+'” · '+fl,
+          onGo:function(){ openAsked(aj.about); }}; }
       else if(aj){ var sec=aj.lens&&secByLens(aj.lens), about=aj.lens&&LENS[aj.lens]?lensName(aj.lens):aj.ref?selLabel(aj.ref):'';
         job={role:'research', key:'ask|'+aj.question, doing:askGist(aj.question)+(about?' for '+about:''), title:'Asked: “'+aj.question+'”'+(about?' · '+about:''),
           onGo:function(){ goTo(aj.ref||(sec?'sec:'+sec.id:null), aj.lens); }}; }
@@ -3056,8 +3084,13 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // error} (plus `clan` when a change landed); the middleware's own reply is
   // its `data`. Read the reply there, and the host's refusals from the envelope.
   function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
+  // A job the middleware no longer knows (404 unknown_job): jobs live in its memory, so a restart
+  // (a deploy) ends every run in flight. The run is over; say so and offer it again.
+  var INTERRUPTED='This run was interrupted (the service restarted). Run it again.';
+  function interrupted(res){ return !!(res&&res.error&&typeof res.error==='object'&&res.error.type==='unknown_job'); }
   function mwError(res){
     if(!res) return 'Empty reply from the host.';
+    if(interrupted(res)) return INTERRUPTED;
     if(res.error){
       var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       if(typeof e==='string') return e+st;
@@ -3233,11 +3266,12 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // Who does each stage, by role (NapkinRoles, the agent engine the packer
   // inlines at the agent-sphere marker). The words about a stage's own work
   // name the role that does it: reading what was sent is the Knowledge
-  // agent's, picking the lenses (and the checks) the Review agent's, each lens
+  // agent's, picking the lenses the Strategy agent's (roles.js STAGES.research.select; its sphere
+  // wears Strategy's colour too, owner 2026-11-12), each lens
   // the Research agent's, finding the points and writing the report the
   // Synthesis agent's (the mock's "Composed by Synthesis agent"). The run's stage on the desk (the pills, the
   // caption, the sphere, the question's signature) follows PLAN: runRole().
-  var WORK_ROLE={extract:'knowledge', identify:'knowledge', select:'review', research:'research', synthesise:'synthesis', report:'synthesis'};
+  var WORK_ROLE={extract:'knowledge', identify:'knowledge', select:'strategy', research:'research', synthesise:'synthesis', report:'synthesis'};
   var ROLE_NM={knowledge:'Knowledge', strategy:'Strategy', research:'Research', synthesis:'Synthesis', brief:'Brief', review:'Review'};
   function roles(){ return window.NapkinRoles||null; }
   // 'Review agent'; 'the Review agent', and with a capital to start a sentence.
@@ -3505,7 +3539,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   // Each stage, signed by the agent who does it.
   function stageLabel(k){
-    return {extract:TheAgent('knowledge')+' reads what you sent', identify:TheAgent('knowledge')+' finds the brand', select:TheAgent('review')+' picks what to look into',
+    return {extract:TheAgent('knowledge')+' reads what you sent', identify:TheAgent('knowledge')+' finds the brand', select:TheAgent('strategy')+' picks what to look into',
       research:TheAgent('research')+' looks it up', synthesise:TheAgent('synthesis')+' finds the points', report:TheAgent('synthesis')+' writes the report'}[k]
       ||(STAGE[k]||{}).l||k;
   }
@@ -3573,7 +3607,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
       sp.mood='needs';
       sp.text=j.state==='failed'?'I had to stop. What we already found stays in the document.':'I can’t reach the agents right now.';
       sp.err=j.error||'';
-      if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>';
+      if(j.interrupted&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Run it again</button>';
+      else if(j.id&&j.error&&j.state!=='failed') sp.acts='<button type="button" class="ans" data-act="chat-poll">Check again</button>';
       else if(!j.id&&started) sp.acts='<button type="button" class="rs-go" data-act="chat-retry">Try again</button>';
       return sp;
     }
@@ -3884,7 +3919,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var P=picks(), more=CHAT.mkMore||P.markets.some(function(m){ return MK_OFFER.indexOf(m)>=MK_FIRST; });
     var mks=more?MK_OFFER:MK_OFFER.slice(0, MK_FIRST);
     return '<div class="rt-picks">'
-      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(theAgent('review'))+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
+      +'<div class="rt-pk"><span class="rt-pl" title="Leave these and '+esc(theAgent('strategy'))+' picks the lenses from your question. Whatever you pick goes in with it.">Lenses</span><span class="rt-chips">'+LENSES.map(function(L){ var on=P.lenses.indexOf(L.k)!==-1;
         return '<button type="button" class="rt-chip'+(on?' on':'')+'" data-act="pk-lens" data-k="'+esc(L.k)+'" aria-pressed="'+on+'" title="'+esc(L.l)+'" aria-label="'+esc(L.l)+'"'+off+'>'+esc(LENS_SHORT[L.k]||L.l)+'</button>'; }).join('')+'</span></div>'
       +'<div class="rt-pk"><span class="rt-pl">Markets</span><span class="rt-chips">'+mks.map(function(m){ var on=P.markets.indexOf(m)!==-1; return '<button type="button" class="rt-mk'+(on?' on':'')+'" data-act="pk-mk" data-k="'+m+'" aria-pressed="'+on+'" title="'+esc(MARKET[m]||m)+'"'+off+'>'+m+'</button>'; }).join('')
         +(more?'':'<button type="button" class="rt-mk rt-mkmore" data-act="pk-mkmore" aria-label="More markets" title="More markets"'+off+'>+</button>')+'</span></div>'
@@ -4071,6 +4106,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // ── the job: replies, polling, questions ───────────────────────────────────
   function hostErr(res){
     if(!res) return 'Empty reply from the host.';
+    if(interrupted(res)) return INTERRUPTED;
     if(res.error){ var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
       return typeof e==='string'?e+st:(e.type?e.type+st+': ':'')+(e.message||JSON.stringify(e)); }
     if(res.ok===false) return 'The host could not complete the call'+(res.status?' (status '+res.status+')':'')+'. Nothing was applied.';
@@ -4080,6 +4116,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function onJobReply(res, resume){
     var j=CHAT.job||(CHAT.job={}), err=hostErr(res);
+    // the run was lost with the middleware's memory, on open or while following it: it stopped
+    if(err&&interrupted(res)){ j.state='failed'; j.interrupted=true; j.error=err; store(jobKey(), null); render(); return; }
     if(err){
       if(resume){ CHAT.job=null; store(jobKey(), null); }
       else { j.error=err; if(j.state==='sending') j.state='unsent'; else if(jobActive()) j.state='stalled'; }
@@ -5785,7 +5823,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // of its own. The middleware answers from the facts the document holds, and
   // the Research agent searches only when jev says that answer does not answer it.
   // The answers are the document's (data.asks); this view asks and shows them.
-  var ASK={ui:{}, jobs:[]};
+  var ASK={ui:{}, jobs:[], reveal:null};
   var KEY_LENS={market:'market_structure', positioning:'brands_positioning', consumer:'consumer_culture', codes:'category_codes',
     rhythm:'rhythm_moments', media:'media_spend', regulation:'regulation_clearance', effectiveness:'effectiveness_evidence',
     awareness:'brands_positioning', launch:'brands_positioning', product:'brands_positioning', share:'market_structure'};
@@ -5887,23 +5925,27 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function renderAsks(){
     try{ sideAgent(); }catch(e){}
+    renderFactAsks();
     var root=$('report'), side=$('insp-ask'); if(!root) return;
     var ae=document.activeElement, keep=ae&&ae.id&&ae.closest&&ae.closest('.rq')?{id:ae.id, s:ae.selectionStart, e:ae.selectionEnd}:null;
     Array.prototype.forEach.call(root.querySelectorAll('.rq'), function(n){ n.remove(); });
     if(side) side.innerHTML='';
     if(root.hidden||!isObj(D().report)) return;
-    var can=hasHost()&&!reportLocked(), secs=askSections(), all=asks(), own=[], ownJobs=[], cites=false;
+    // An answer asked from a fact or finding is in the report only once a person adds it (in_report); until
+    // then, and while it runs, it is shown under that item in the inspector (factAsksHtml).
+    var can=hasHost()&&!reportLocked(), secs=askSections(), all=asks().filter(inReport), own=[], ownJobs=[], cites=false,
+      rjobs=ASK.jobs.filter(function(j){ return !j.about; }), one=function(a){ return a.about?askAddedHtml(a):askAnswerHtml(a); };
     function put(el, html, where){ var d=document.createElement('div'); d.className='rq'; d.innerHTML=html; el.insertAdjacentElement(where, d); cites=cites||/<clan-cite/.test(html); }
     LENSES.forEach(function(L){
-      var mine=all.filter(function(a){ return a.in_section&&a.lens===L.k; }), jobs=ASK.jobs.filter(function(j){ return j.lens===L.k; }), el=secs[L.k];
+      var mine=all.filter(function(a){ return a.in_section&&a.lens===L.k; }), jobs=rjobs.filter(function(j){ return j.lens===L.k; }), el=secs[L.k];
       if(!el){ own=own.concat(mine); ownJobs=ownJobs.concat(jobs); return; }
       // One Ask the research box (the inspector's): a question about this lens is asked there, with About set to it.
-      var h=mine.map(askAnswerHtml).join('')+jobs.map(askPendingHtml).join('');
+      var h=mine.map(one).join('')+jobs.map(askPendingHtml).join('');
       if(h) put(el, h, 'afterend');
     });
     own=all.filter(function(a){ return !a.in_section; }).concat(own);
-    ownJobs=ASK.jobs.filter(function(j){ return !j.lens; }).concat(ownJobs);
-    var tail=own.map(function(a){ return '<section class="rq-own"><h2>'+esc(a.topic||a.question)+'</h2>'+askAnswerHtml(a)+'</section>'; }).join('')
+    ownJobs=rjobs.filter(function(j){ return !j.lens; }).concat(ownJobs);
+    var tail=own.map(function(a){ return '<section class="rq-own"><h2>'+esc(a.topic||a.question)+'</h2>'+one(a)+'</section>'; }).join('')
       +ownJobs.map(askPendingHtml).join('');
     // The general question is asked from the inspector (ask_research@1, written to asks[<id>]); its answer gets a section here.
     var box=can?askBoxHtml('_new', 'Ask the research'):'';
@@ -5914,24 +5956,114 @@ details.pv-fold>summary:hover{background:var(--soft)}
     }
     if(cites&&window.ClanFields) ClanFields.refresh();
     if(keep){ var n=$(keep.id); if(n){ try{ n.focus({preventScroll:true}); if(keep.s!=null&&n.setSelectionRange) n.setSelectionRange(keep.s, keep.e); }catch(e){} } }
+    revealAsk();
+  }
+  // ── a question asked from a fact or finding (asks[id].about) ──────────────────
+  // Its answer is the person's to put in the report: until they add it (asks[id].in_report, their write),
+  // it shows only under the item in the inspector. A general question's answer is in the report as before.
+  function inReport(a){ return !a.about||a.in_report===true; }
+  function aboutWord(ref){ return /^fi_/.test(ref||'')?'finding':'fact'; }
+  // The answer in the report once added: "You asked", the answer as prose, who added it and what it rests on.
+  function askAddedHtml(a){
+    var s=arr(a.answer), n={}; s.forEach(function(x){ arr(x&&x.cites).forEach(function(c){ n[c]=1; }); });
+    var by=String(a.in_report_by||''), who=by?nameOf(by):'you', k=Object.keys(n).length;
+    return '<div class="rq-a rq-added" id="rq-'+esc(slug(a.id||''))+'"><p class="rq-q">You asked: '+esc(a.question)+'</p>'
+      +'<p class="rq-s">'+s.map(function(x){ return esc(x&&x.text); }).join(' ')+'</p>'
+      +'<p class="rq-how">'+esc(agentName('research'))+' · added by '+esc(who)+' '+esc(whenWords(a.in_report_at))+(k?' · rests on '+k+' '+(k===1?'fact':'facts'):'')+'</p></div>';
+  }
+  function whenWords(at){ var t=Date.parse(at||''); if(!t) return ''; return Date.now()-t<120000?'just now':'on '+plainDay(at); }
+  function nameOf(actor){ var id=String(actor).replace(/^human:/,''); return id===me()?'you':id; }
+  // A cite under the item's answer: the item itself is "this fact"; another fact or finding opens in the inspector.
+  function faCite(id, about){
+    if(id===about) return '<span class="pv-chip pv-fa-this">this '+aboutWord(about)+'</span>';
+    if(/^fi_/.test(id)) return findChip(id);
+    return '<button type="button" class="pv-chip" data-pv="'+esc(id)+'" title="'+esc(selLabel(id))+'">'+esc(clipT((pins()[id]&&fmtAny(pins()[id]))||citeName(id)||'fact', 18))+'</button>';
+  }
+  // Where the lens's section is in the report, in words: "§7 Clearance".
+  function inRepWhere(a){ var es=a.lens&&secByLens(a.lens); return es?'under '+secWords(es):'at the end of the report'; }
+  function factAnswerHtml(a){
+    var s=arr(a.answer), miss=arr(a.missing).filter(Boolean), can=hasHost()&&!reportLocked();
+    var h='<div class="rq-a pv-fa" id="pvq-'+esc(slug(a.id||''))+'"><div class="pv-fa-who">'+esc(agentName('research'))+' · about this '+aboutWord(a.about)+'</div>'
+      +'<p class="rq-q">'+esc(a.question)+'</p>';
+    if(s.length) h+='<ol>'+s.map(function(x){ return '<li>'+esc(x&&x.text)+arr(x&&x.cites).map(function(c){ return faCite(c, a.about); }).join('')+'</li>'; }).join('')+'</ol>';
+    else h+='<p class="rq-how">Nothing in the research'+(a.searched?' or the new search':'')+' answers this yet.</p>';
+    if(miss.length) h+='<p class="pv-fa-miss">Not on record: '+esc(miss.join('; '))+'.</p>';
+    if(a.in_report===true) h+='<p class="pv-fa-in">✓ In the report '+esc(inRepWhere(a))+' · <button type="button" class="pv-link" data-act="pvq-show" data-ask="'+esc(a.id)+'">Show</button>'
+      +(can?' · <button type="button" class="pv-link" data-act="pvq-out" data-ask="'+esc(a.id)+'"'+(ASK.writing===a.id?' disabled':'')+'>Take out</button>':'')+'</p>';
+    else if(can&&s.length) h+='<div class="pv-acts"><button type="button" class="pv-btn primary" data-act="pvq-add" data-ask="'+esc(a.id)+'"'+(ASK.writing===a.id?' disabled':'')+'>Add to report</button>'
+      +'<button type="button" class="pv-btn" data-act="pvq-again" data-ask="'+esc(a.id)+'">Ask again</button></div>';
+    else if(can) h+='<div class="pv-acts"><button type="button" class="pv-btn" data-act="pvq-again" data-ask="'+esc(a.id)+'">Ask again</button></div>';
+    return h+'</div>';
+  }
+  function factPendingHtml(j){
+    var i=ASK.jobs.indexOf(j);
+    if(j.error) return '<div class="rq-a pv-fa"><div class="pv-fa-who">'+esc(agentName('research'))+' · about this '+aboutWord(j.about)+'</div><p class="rq-q">'+esc(j.question)+'</p>'
+      +'<p class="rq-how"><span class="rq-warn">Not answered: '+esc(j.error)+'</span></p><div class="pv-acts"><button type="button" class="pv-btn" data-act="rq-retry" data-i="'+i+'">Ask again</button><button type="button" class="pv-link muted" data-act="rq-drop" data-i="'+i+'">Dismiss</button></div></div>';
+    return '<div class="rq-a pv-fa busy" role="status"><span class="pv-fa-dot" aria-hidden="true"></span><span>'+esc(TheAgent('research'))+' is answering “'+esc(clipT(j.question, 80))+'”, from this '+aboutWord(j.about)+' first…</span></div>';
+  }
+  // Under the Ask box of a fact or finding: what is being asked about it now, then its answers, newest first.
+  // Drawn from ASK.jobs and data.asks, so it is the same wherever you were when it ran or landed.
+  function factAsksHtml(ref){
+    var jobs=ASK.jobs.filter(function(j){ return j.about===ref; }), done=asks().filter(function(a){ return a.about===ref; }).reverse();
+    return '<div class="pv-answers" id="pv-answers" data-ref="'+esc(ref)+'">'+jobs.map(factPendingHtml).join('')+done.map(factAnswerHtml).join('')+'</div>';
+  }
+  function renderFactAsks(){
+    var el=$('pv-answers'); if(!el) return;
+    var t=document.createElement('div'); t.innerHTML=factAsksHtml(el.getAttribute('data-ref')); el.innerHTML=t.firstChild.innerHTML;
+  }
+  // Open the item a question was asked about (the side agent, the notice when its answer lands).
+  function openAsked(ref){ if(!ref) return; VIEW.origin=null; select(ref, false, true); }
+  // Add to report / Take out: the person's write on the ask, attributed like any other.
+  function setInReport(id, on){
+    var a=(isObj(D().asks)?D().asks:{})[id]; if(!isObj(a)||ASK.writing) return;
+    var who=me(); if(!who){ doWho(function(){ if(me()) setInReport(id, on); }); return; }
+    var by='human:'+who, did=mintDecisionId(), patch={asks:{}};
+    patch.asks[id]=on?{in_report:true, in_report_by:by, in_report_at:nowIso()}:{in_report:false, in_report_by:null, in_report_at:null};
+    var rationale=did+' · '+(on?'add':'take out')+' · '+addr('asks['+id+'].in_report')+' · '+(on?'put the answer to “'+clipT(a.question, 100)+'” in the report '+inRepWhere(a):'took the answer to “'+clipT(a.question, 100)+'” out of the report')+', by '+by;
+    ASK.writing=id; renderFactAsks();
+    return humanWrite(patch, on?'add_ask_to_report':'take_ask_out_of_report', rationale).then(function(res){
+      ASK.writing=null;
+      if(!(res&&res.ok)) throw new Error((res&&(res.error||res.message))||'the host refused the write');
+      renderAsks(); toast(on?'In the report '+inRepWhere(a)+'.':'Taken out of the report.');
+    }).catch(function(e){ ASK.writing=null; renderAsks(); toast('Not saved: '+(e&&e.message||e)); });
+  }
+  function showInReport(id){
+    if(VIEW.v!=='report') setView('report');
+    var el=$('rq-'+slug(id)); if(el) el.scrollIntoView({block:'center', behavior:calm()?'auto':'smooth'});
+  }
+  // Ask again: the question back in this item's box, to change or send as it is.
+  function askAgain(id){
+    var a=(isObj(D().asks)?D().asks:{})[id], q=$('pv-askq'); if(!q||!isObj(a)) return;
+    q.value=a.question||''; try{ q.focus(); q.setSelectionRange(q.value.length, q.value.length); }catch(e){}
+  }
+  // Where an answer to a question about this lens goes on the page, in words: after its section,
+  // else in its own section at the end (renderAsks).
+  function askWhere(lens){ return lens&&askSections()[lens]?'under '+aboutName(lens):'at the end of the report'; }
+  // An answer asked from the inspector, brought into view once it is on the page (ASK.reveal).
+  function revealAsk(){
+    var id=ASK.reveal, el=id&&$('rq-'+slug(id)); if(!el) return;
+    ASK.reveal=null; el.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'});
   }
   function askStoreKey(){ return 'clan.research.asks.'+docId(); }
   function saveAskJobs(){
-    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens, ref:j.ref||null}; });
+    var o=ASK.jobs.filter(function(j){ return j.jobId&&!j.error; }).map(function(j){ return {jobId:j.jobId, question:j.question, lens:j.lens, ref:j.ref||null, about:j.about||null}; });
     store(askStoreKey(), o.length?JSON.stringify(o):null);
   }
-  function doAsk(key){
+  // `about`: the fact or finding the question is asked from (the inspector's Ask); it goes with the
+  // question as ask_research's input.about, so the answer is about that item.
+  function doAsk(key, about){
     // what is in the box, whatever the view has kept of it
     var box=$('rqin-'+slug(key)), ui=ASK.ui[key]||{}, q=String((box&&box.value)||ui.draft||'').trim();
     if(!q){ toast('Type a question first.'); var i=$('rqin-'+slug(key)); if(i) i.focus(); return; }
     if(!(window.clan&&window.clan.apiProxy)){ toast('Asking runs through the host.'); return; }
     var ls=$('rqlens-'+slug(key)), lens=key==='_new'?((ls&&ls.value)||ui.lens||null):key;
-    var j={lens:lens&&LENS[lens]?lens:null, question:q, ref:VIEW.sel||null, state:'sending'};
+    var j={lens:lens&&LENS[lens]?lens:null, question:q, ref:VIEW.sel||null, about:/^fi?_[A-Za-z0-9_-]+$/.test(about||'')?about:null, state:'sending'};
     ASK.jobs.push(j); ASK.ui[key]={open:false, draft:''}; renderAsks();
     sendAsk(j);
+    return j;
   }
   function sendAsk(j){
-    var input={question:j.question}; if(j.lens) input.lens=j.lens;
+    var input={question:j.question}; if(j.lens) input.lens=j.lens; if(j.about) input.about=j.about;
     if(attachments().length) input.attachments=attachments();
     j.error=null; j.state='sending';
     window.clan.apiProxy('middleware', {task:'ask_research', input:input}).then(function(res){ onAskReply(j, res); },
@@ -5954,13 +6086,19 @@ details.pv-fold>summary:hover{background:var(--soft)}
     }
     var ch=isObj(b.change)?b.change:null;
     if(ch&&!ch.applied&&ch.reason&&ch.reason!=='already applied') j.error='the host did not save the answer: '+ch.reason;
-    else ASK.jobs.splice(ASK.jobs.indexOf(j), 1);
+    else {
+      ASK.jobs.splice(ASK.jobs.indexOf(j), 1);
+      // Asked from the inspector: the answer is in the report, not there; say so and bring it into view.
+      var aid=isObj(b.result)&&b.result.ask;
+      if(j.about&&aid){ if(VIEW.sel!==j.about) toast('Answered: '+selLabel(j.about), {label:'Open it', run:function(){ openAsked(j.about); }}); }
+      else if(j.from==='pv'&&aid){ ASK.reveal=aid; toast('Answered '+askWhere(j.lens)+'.'); }
+    }
     saveAskJobs(); loadChain(); render();
   }
   function resumeAsks(){
     if(!(window.clan&&window.clan.apiProxy)) return;
     var o=[]; try{ o=JSON.parse(stored(askStoreKey())||'[]'); }catch(e){}
-    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, ref:x.ref||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
+    arr(o).forEach(function(x){ if(!isObj(x)||!x.jobId) return; var j={jobId:x.jobId, question:x.question, lens:x.lens||null, ref:x.ref||null, about:x.about||null, state:'running'}; ASK.jobs.push(j); pollAsk(j); });
   }
   function onAskAct(act, b){
     var k=b.getAttribute('data-k')||'', j=ASK.jobs[+b.getAttribute('data-i')];
@@ -6390,7 +6528,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     var why=isObj(f.reasoning)?f.reasoning:{};
     h+='<details class="pv-fold"><summary><span title="Worked out by '+esc(theAgent('synthesis'))+'">Why it says this</span></summary><div class="pv-why"><p><b>Because</b> '+esc(why.because?(Array.isArray(why.because)?why.because.map(function(b){ return isObj(b)?b.point:b; }).join(' '):String(why.because)):'It draws on '+plural(cs.length, 'fact')+(pk.length?' from '+andListW(pk.slice(0,3).map(function(k){ return srcPub(pubs[k].sid); })):'')+'.')+'</p>'
       +'<p><b>Would change if</b> '+esc(why.would_change_if||'A fact under it is marked wrong, or a source is found that says otherwise.')+'</p></div></details>';
-    h+=histRow(fid)+askHtml('Ask about this finding…');
+    h+=histRow(fid)+askHtml('Ask about this finding…')+factAsksHtml(fid);
     return h;
   }
   function andListW(a){ return a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1]; }
@@ -6418,7 +6556,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     if(p.retrieved_at||p.pinned_at) from.push((p.retrieved_at?'Read on '+plainDay(p.retrieved_at):'')+(p.pinned_at?(p.retrieved_at?' · ':'')+'kept as it was on '+plainDay(p.pinned_at):''));
     if(licenceWords(p.licence)) from.push(licenceWords(p.licence));
     h+='<details class="pv-fold"><summary>Where it came from</summary><div class="pv-why">'+from.map(function(x){ return '<p>'+esc(x)+'.</p>'; }).join('')+'</div></details>';
-    h+=histRow(id)+askHtml('Ask about this fact…');
+    h+=histRow(id)+askHtml('Ask about this fact…')+factAsksHtml(id);
     return h;
   }
   function viewSourceHtml(sid){
@@ -6811,6 +6949,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'ev-more': EV.pages[b.getAttribute('data-k')]=+b.getAttribute('data-n')||40; if(b.closest('#insp-sel')) reSel(); else evBody(); break;
       case 'ev-ask': evAsk(b.getAttribute('data-lens')); break;
       case 'rq-open': case 'rq-cancel': case 'rq-send': case 'rq-retry': case 'rq-drop': case 'rq-lens': onAskAct(act, b); break;
+      case 'pvq-add': setInReport(b.getAttribute('data-ask'), true); break;
+      case 'pvq-out': setInReport(b.getAttribute('data-ask'), false); break;
+      case 'pvq-show': showInReport(b.getAttribute('data-ask')); break;
+      case 'pvq-again': askAgain(b.getAttribute('data-ask')); break;
       case 'export-html': doExport('html'); var sm=b.closest('details'); if(sm) sm.open=false; break;
       case 'export-pdf': doExport('pdf'); var sm2=b.closest('details'); if(sm2) sm2.open=false; break;
       case 'pv-keep': pvKeep(b.getAttribute('data-ref')); break;
@@ -6820,7 +6962,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'pv-next': CHK.at=chkAfter(CHK.at)||CHK.at; CHK.picked=true; renderPanel(); break;
       case 'pv-ask': var pq=$('pv-askq'), pqv=String(pq&&pq.value||'').trim(); if(!pqv){ toast('Type a question first.'); if(pq) pq.focus(); break; }
         var pl=refLens(VIEW.sel||'')||(/^sec:/.test(VIEW.sel||'')&&evSec(VIEW.sel.slice(4))?evSec(VIEW.sel.slice(4)).lens:'');
-        ASK.ui._new={draft:pqv, lens:pl}; renderAsks(); var nb=$('rqin-_new'); if(nb) nb.value=pqv; var nls=$('rqlens-_new'); if(nls) nls.value=pl; doAsk('_new'); break;
+        ASK.ui._new={draft:pqv, lens:pl}; renderAsks(); var nb=$('rqin-_new'); if(nb) nb.value=pqv; var nls=$('rqlens-_new'); if(nls) nls.value=pl;
+        // The question goes with this item (input.about) and its lens, and its answer is written in
+        // the report, not here: say where, and bring it into view when it lands.
+        var pj=doAsk('_new', VIEW.sel); if(pj){ pj.from='pv'; if(pq) pq.value=''; if(!pj.about) toast('Asked. The answer will appear '+askWhere(pj.lens)+'.'); } break;
       case 'pv-askfocus': var pa=$('pv-askq'); if(pa) pa.focus(); break;
       case 'pv-jump': var jd=b.closest('details'); if(jd) jd.open=false; var jt=$(b.getAttribute('data-to')); if(jt){ if(jt.tagName==='DETAILS') jt.open=true; jt.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); } break;
       case 'pv-showmap': showOnMap(b.getAttribute('data-ref')); break;

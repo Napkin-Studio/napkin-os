@@ -136,8 +136,12 @@ def test_every_stage_failing_is_on_stdout_with_its_type_message_and_cause(store,
     caplog.set_level(logging.INFO, logger="napkin.runlog")
     host = MiniHost(LABELLED)
     job = _start(_RaisingStore(store), host)
-    drive(job, host)
+    v = drive(job, host)
     job.thread.join(5)
+    # UAT's case: nothing came of the run, so it ends failed with the layers' own error (job-end-states)
+    assert v["state"] == "failed" and v["stage"] == "extract" and v["error"]["type"] == "stages_failed"
+    assert v["error"]["message"] == ('extract failed: LayersError: layers categories refused: internal: relation '
+                                     '"layers.categories" does not exist')
     lines = stdout_events(caplog)
     ends = {x["stage"]: x for x in lines if x["ev"] == "stage_end"}
     for stage in ("extract", "identify", "select"):

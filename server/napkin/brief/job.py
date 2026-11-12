@@ -35,7 +35,7 @@ import threading
 import time
 import traceback
 
-from .. import reasoning as rsn
+from .. import reasoning as rsn, runlog
 from ..doc import apply_patch, ctx_data, ctx_decisions, decision, deep_merge
 from ..jobs import Abandoned, abandon, abandoned, bounded
 from ..model import ModelError
@@ -53,6 +53,7 @@ from .rubric import DEPENDENCIES, FAIL, PASS, REVIEW, health, reason_code
 log = logging.getLogger("napkin.brief")
 TAXONOMY = "reason-codes/1"
 STAGE_TIMEOUT = 60 * 60  # seconds a stage may run; one still running is left behind and the job goes on
+STALL_TIMEOUT = 10 * 60  # a stage with no run-log event but heartbeats for this long fails the job
 IN_FLIGHT = ("waiting", "extracting", "drafting", "judging", "revising")
 
 # A gap's decision: the action of the stage's own work, and the worker who does it.
@@ -155,6 +156,7 @@ class BriefJob:
         self.state, self.stage_idx = "queued", 0
         self.started_at, self.finished_at, self.error = iso(), None, None
         self.chunks: list[Chunk] = []
+        self.stage_errors = []  # [(stage, message)]: the stages that raised or ran out of time
         self.last_change = None
         self.hits, self.proposals, self.notes = [], [], []
         self.locked = {k for k in KEYS if locked(self.data0, k)}
@@ -305,7 +307,7 @@ class BriefJob:
         try:
             for i, stage in enumerate(self.stages):
                 with self.lock:
-                    if self.state == "cancelled":
+                    if self.state in ("cancelled", "failed"):
                         break
                     self.stage_idx = i
                 self._stage(stage)
@@ -319,10 +321,21 @@ class BriefJob:
             self._log_end()
             return
         with self.lock:
-            if self.state != "cancelled":
-                self.stage_idx = len(self.stages)
-                self.state, self.finished_at = "done", iso()
+            if self.state not in ("cancelled", "failed"):
+                if self.stage_errors and not self._has_output():
+                    # every stage that could write failed and nothing came of the job: `failed`, with the
+                    # first real error (owner, 2026-11-12); a job with any output ends `done` with its gaps
+                    stage, message = self.stage_errors[0]
+                    self.stage_idx = self.stages.index(stage)
+                    self._fail(stage, "stages_failed", message)
+                else:
+                    self.stage_idx = len(self.stages)
+                    self.state, self.finished_at = "done", iso()
         self._log_end()
+
+    def _has_output(self) -> bool:
+        """(Under the lock.) The job wrote something into the brief: a chunk with a patch or a pin."""
+        return any(c.patch or c.facts for c in self.chunks)
 
     def _log_end(self):
         try:
@@ -338,10 +351,16 @@ class BriefJob:
         with self.lock:
             before = {k: f["state"] for k, f in self.fields.items()}
         rl = self.caps.runlog
-        t_stage, waiting_on = time.monotonic(), None
+        t_stage, waiting_on, stalled = time.monotonic(), None, []
+
+        def no_progress():
+            if rl.stalled(STALL_TIMEOUT):
+                stalled.append(time.monotonic() - t_stage)
+                return True
+            return False
         with rl.stage(stage) as st:
             _, err, left = bounded(getattr(self, "stage_" + stage), STAGE_TIMEOUT, f"{self.task}-{self.id}-{stage}",
-                                   stop=lambda: self.caps.jobs.cancelled)
+                                   stop=lambda: self.caps.jobs.cancelled, stalled=no_progress)
             if left is not None and not self.caps.jobs.cancelled:
                 waiting_on = rl.waiting_on()
                 st.ran_out(time.monotonic() - t_stage, waiting_on)
@@ -359,10 +378,18 @@ class BriefJob:
             with self.lock:
                 self._abandoned.add(stage)
                 abandon(left)
+            if stalled:  # no progress for STALL_TIMEOUT: the job fails, saying where and on what
+                msg = runlog.timeout_message(stage, stalled[0], waiting_on)
+                log.error("%s %s %s", self.task, self.id, msg)
+                self.stage_errors.append((stage, msg))
+                self._fail(stage, "timeout", msg)
+                return
+            self.stage_errors.append((stage, runlog.timeout_message(stage, time.monotonic() - t_stage, waiting_on)))
             log.warning("%s %s stage %s outlived %ss waiting on %s; going on without it", self.task, self.id, stage,
                         STAGE_TIMEOUT, waiting_on)
             self._gap(stage, "timeout", f"it did not finish within {round(STAGE_TIMEOUT / 60)} minute(s)")
         elif err is not None:
+            self.stage_errors.append((stage, f"{stage} failed: {type(err).__name__}: {str(err)[:400]}"))
             kind, detail = _why(err)
             if kind == "raised":
                 log.error("%s %s stage %s failed: %s\n%s", self.task, self.id, stage, err,
@@ -411,6 +438,8 @@ class BriefJob:
 
     def _fail(self, stage, etype, message):
         with self.lock:
+            if self.state == "cancelled":
+                return
             for k, f in self.fields.items():
                 if f["state"] in ("waiting", "extracting", "drafting", "judging", "revising"):
                     self.fields[k] = {"state": "failed", "by": f["by"]}

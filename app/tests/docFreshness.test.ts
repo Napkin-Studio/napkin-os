@@ -7,9 +7,15 @@
 // renamed it (features/spinoff-and-links).
 
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { LibraryItem } from '../src/host/types.ts'
+import SaveStatus from '../src/components/SaveStatus.tsx'
 import { lastSaved, listedTitle, listedUpdated, othersStamp, savedWords } from '../src/shell/docFreshness.ts'
 
 const it = (path: string, updated_at: string, title = path): LibraryItem => ({
@@ -47,4 +53,14 @@ test('the saved line always has a time when the document has updated_at (the moc
   // No time anywhere: the word alone.
   assert.equal(savedWords(lastSaved(null, ''), now), 'saved')
   assert.equal(savedWords(lastSaved(null, 'not a date'), now), 'saved')
+})
+
+test('the saved line is the open document’s own updated_at, never a workspace-wide event (UAT 2026-11-12: looking at the map said "saved just now")', () => {
+  const html = renderToStaticMarkup(createElement(SaveStatus, { updatedAt: new Date(Date.now() - 19 * 60_000).toISOString() }))
+  assert.match(html, /saved 19m ago/)
+  // The host's events say no document: a write anywhere must not move this line.
+  let dir = dirname(fileURLToPath(import.meta.url))
+  while (!existsSync(join(dir, 'src', 'components', 'SaveStatus.tsx')) && dirname(dir) !== dir) dir = dirname(dir)
+  const src = readFileSync(join(dir, 'src', 'components', 'SaveStatus.tsx'), 'utf8')
+  assert.doesNotMatch(src, /host\.on\(|from '\.\.\/host'/)
 })

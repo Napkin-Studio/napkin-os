@@ -56,9 +56,10 @@ def abandoned() -> bool:
     return getattr(threading.current_thread(), "napkin_abandoned", False)
 
 
-def bounded(fn, seconds, name, stop=None):
+def bounded(fn, seconds, name, stop=None, stalled=None):
     """Run `fn()` in its own thread for at most `seconds`, or until `stop()`
-    says the job was cancelled.
+    says the job was cancelled, or `stalled()` says it has made no progress
+    for too long (the caller tells which by asking `stalled` again).
 
     -> (value, error, left): `error` is what it raised (None when it returned);
     `left` is the thread still running after `seconds` (None when it finished),
@@ -78,11 +79,12 @@ def bounded(fn, seconds, name, stop=None):
     t = threading.Thread(target=go, name=name, daemon=True)
     t.start()
     end = time.monotonic() + seconds
-    while t.is_alive() and not (stop is not None and stop()):
+    poll = stop is not None or stalled is not None
+    while t.is_alive() and not (stop is not None and stop()) and not (stalled is not None and stalled()):
         left = end - time.monotonic()
         if left <= 0:
             break
-        t.join(min(left, 0.5) if stop is not None else left)
+        t.join(min(left, 0.5) if poll else left)
     if t.is_alive():
         return None, None, t
     return box.get("value"), box.get("error"), None

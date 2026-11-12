@@ -72,3 +72,9 @@ export function looksRightOf(a: AttentionItem): { finding: string } | null {
   const m = /#findings\[([^\]]+)\]$/.exec(a.address ?? '')
   return m ? { finding: m[1] } : null
 }
+
+/** Whether a host event (`clan-data-changed`, `clan-patch-saved`) is about `docPath`:
+ * they come on one stream for the whole workspace and name their document (os-layer.md §8.4). */
+export function isFor(payload: { path?: unknown } | null | undefined, docPath: string): boolean {
+  return !!payload && typeof payload === 'object' && payload.path === docPath
+}

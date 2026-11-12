@@ -529,7 +529,7 @@ test('the research names its agents by role, draws them as spheres, and asks on 
   assert.deepEqual(['extract', 'identify', 'select', 'research', 'synthesise', 'report'].map(runRole), ['strategy', 'strategy', 'strategy', 'research', 'synthesis', 'review'])
   assert.equal(TheAgent('synthesis'), 'The Synthesis agent')
   assert.equal(TheAgent('knowledge'), 'The Knowledge agent')
-  assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('review'\)\+' picks what to look into'/s)
+  assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('strategy'\)\+' picks what to look into'/s)
   assert.match(fn(RT, 'stageLabel'), /synthesise:TheAgent\('synthesis'\)\+' finds the points', report:TheAgent\('synthesis'\)\+' writes the report'/)
   // Step 1's sub-questions are picked by the agent at work then: select runs as the Strategy agent (runRole above).
   assert.match(fn(RT, 'railsFor'), /'Sub-questions queued', right, \['Not picked yet', TheAgent\('strategy'\)\+' picks what to look into, one question per lens\.'\]/)
@@ -4318,4 +4318,295 @@ test('only the new draft asks for intake', () => {
   assert.deepEqual(runs[0].input.attachments, [{ name: 'a.pdf' }])
   // the redraft and the part fixes go through other jobs and ask nothing
   for (const name of ['regenField', 'fixParts']) assert.doesNotMatch(fn(BM, name), /intake/)
+})
+
+// ── UAT 2026-11-12: words that say what is true ────────────────────────────
+
+test('Brief Maker says whose bad verdict it is: the Review agent’s own check is not someone marking a part wrong', () => {
+  const { kindWord } = lift<{ kindWord(x: unknown, view: unknown): string }>(BM, ['kindWord'], { arr, KIND_WORD: new Function(`${obj(BM, 'KIND_WORD')} return KIND_WORD`)() })
+  const view = { decisions: [
+    { decision: { id: 'd_agent' }, who: { kind: 'agent', id: 'agent:review', name: 'Review agent' } },
+    { decision: { id: 'd_me' }, who: { kind: 'person', id: 'human:a', name: 'Ann', you: true } },
+    { decision: { id: 'd_bo' }, who: { kind: 'person', id: 'human:b', name: 'Bo' } },
+  ] }
+  const bad = (decision: string) => ({ code: 'bad_verdict', decision })
+  assert.equal(kindWord(bad('d_agent'), view), 'Review agent said no')
+  assert.equal(kindWord(bad('d_me'), view), 'You marked it wrong')
+  assert.equal(kindWord(bad('d_bo'), view), 'Marked wrong by Bo')
+  assert.equal(kindWord(bad('d_gone'), view), 'Marked wrong')
+  assert.equal(kindWord({ code: 'open_contest' }, view), 'Sources disagree')
+  assert.equal(kindWord({ code: 'something_new' }, view), 'Needs you')
+  assert.match(fn(BM, 'lkItemHtml'), /kindWord\(x, osView\(\)\)/)
+  assert.match(fn(BM, 'lockItems'), /decision:a\.decision/)
+})
+
+test('the shared field chip says an agent said no, and keeps "marked wrong" for a person', () => {
+  const blocks: Record<string, unknown> = { d_agent: { decision: { actor: 'agent:review' } }, d_p: { decision: { actor: 'human:ann' } } }
+  const { needTag } = lift<{ needTag(a: unknown): string }>(CLF, ['needTag', 'isPerson'], {
+    blockOf: (id: string) => blocks[id] ?? null, NEED_TAG: { flagged_field: 'needs changing', bad_verdict: 'marked wrong' },
+  })
+  assert.equal(needTag({ code: 'bad_verdict', decision: 'd_agent' }), 'an agent said no')
+  assert.equal(needTag({ code: 'bad_verdict', decision: 'd_p' }), 'marked wrong')
+  assert.equal(needTag({ code: 'flagged_field', decision: 'd_agent' }), 'needs changing')
+})
+
+test('Research names the Strategy agent for picking what to look into (roles.js STAGES.research.select)', () => {
+  const R = { the: (r: string) => `the ${r[0].toUpperCase()}${r.slice(1)} agent` }
+  const { stageLabel } = lift<{ stageLabel(k: string): string }>(RT, ['stageLabel', 'TheAgent', 'theAgent'], { roles: () => R, STAGE: {} })
+  assert.equal(stageLabel('select'), 'The Strategy agent picks what to look into')
+  assert.match(fn(RT, 'picksHtml'), /Leave these and '\+esc\(theAgent\('strategy'\)\)\+' picks the lenses/)
+  assert.match(RT, /S\.who=TheAgent\(WORK_ROLE\[S\.k\]\)/)
+})
+
+test('the Research select stage wears the Strategy agent\'s sphere (owner, 2026-11-12)', () => {
+  const WORK_ROLE = new Function(`${obj(RT, 'WORK_ROLE')} return WORK_ROLE;`)() as Record<string, string>
+  assert.equal(WORK_ROLE.select, 'strategy')
+  assert.match(RT, /sphereTag\(WORK_ROLE\[S\.k\], 44,/)
+})
+
+test('a question asked from a fact or finding goes with it as ask_research input.about', () => {
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const ASK = { ui: {} as Record<string, unknown>, jobs: [] as Record<string, unknown>[] }
+  const env = {
+    $: (id: string) => (id === 'rqin-_new' ? { value: 'When was the ruling?' } : null), slug: (s: string) => s, ASK,
+    toast: () => {}, LENS: { regulation_clearance: {} }, VIEW: { sel: 'f_01ABC' }, renderAsks: () => {},
+    attachments: () => [], onAskReply: () => {}, isObj,
+    window: { clan: { apiProxy: (_k: string, p: { task: string; input: Record<string, unknown> }) => { sent.push(p); return new Promise(() => {}) } } },
+  }
+  const f = lift<{ doAsk(k: string, about?: string | null): Record<string, unknown> }>(RT, ['doAsk', 'sendAsk'], env)
+  ASK.ui._new = { lens: 'regulation_clearance' }
+  const j = f.doAsk('_new', 'f_01ABC')
+  assert.equal(j.about, 'f_01ABC')
+  assert.deepEqual(sent[0], { task: 'ask_research', input: { question: 'When was the ruling?', lens: 'regulation_clearance', about: 'f_01ABC' } })
+  f.doAsk('_new', 'fi_01XYZ')
+  assert.equal(sent[1].input.about, 'fi_01XYZ')
+  // the general box sends none, whatever the inspector has selected; a section is not an item
+  f.doAsk('_new')
+  f.doAsk('_new', 'sec:regulation')
+  assert.equal('about' in sent[2].input, false)
+  assert.equal('about' in sent[3].input, false)
+  assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\);/)
+  // kept across a reload with the job
+  assert.match(fn(RT, 'saveAskJobs'), /about:j\.about\|\|null/)
+  assert.match(fn(RT, 'resumeAsks'), /about:x\.about\|\|null/)
+})
+
+// ── a run the middleware lost (a deploy restarts it; jobs live in its memory) ──
+
+const UNKNOWN_JOB = { ok: false, status: 404, data: null, error: { type: 'unknown_job', message: 'no such job for this document' } }
+const INTERRUPTED_WORDS = 'This run was interrupted (the service restarted). Run it again.'
+
+test('Research: a run lost to a restart ends as stopped, says it was interrupted and offers to run it again', () => {
+  const stored: Record<string, unknown> = {}
+  const CHAT: { job: Record<string, unknown> | null } = { job: { id: 'job_1', state: 'running', stage: 'research' } }
+  const env = {
+    CHAT, INTERRUPTED: INTERRUPTED_WORDS, MW_API: 'napkin.middleware/1', isObj, arr,
+    mwBody: (r: { data?: unknown }) => r.data, store: (k: string, v: unknown) => { stored[k] = v }, jobKey: () => 'k',
+    render: () => {}, jobActive: () => /^(sending|checking|queued|running)$/.test(String(CHAT.job?.state)),
+    loadChain: () => {}, landed: () => false, schedulePoll: () => {},
+  }
+  const f = lift<{ onJobReply(r: unknown, resume?: boolean): void; interrupted(r: unknown): boolean }>(RT, ['onJobReply', 'hostErr', 'interrupted'], env)
+  f.onJobReply(UNKNOWN_JOB)
+  assert.equal(CHAT.job?.state, 'failed')
+  assert.equal(CHAT.job?.interrupted, true)
+  assert.equal(CHAT.job?.error, INTERRUPTED_WORDS)
+  assert.equal(stored.k, null, 'the lost id is not polled again on open')
+  // on open (resume) too: the run is shown as interrupted, not dropped
+  CHAT.job = { id: 'job_2', state: 'checking' }
+  f.onJobReply(UNKNOWN_JOB, true)
+  assert.equal(CHAT.job?.interrupted, true)
+  assert.equal(f.interrupted({ ok: false, status: 404, error: { type: 'invalid_input', message: 'x' } }), false)
+  // the desk's words and the re-run action: the existing failure state
+  const sp = lift<{ speech(T: unknown[]): Record<string, string> }>(RT, ['speech'], {
+    CHAT, liveQuestion: () => null, jobActive: () => false, isObj, arr, D: () => ({}), STAGE: { research: {} }, runRole: () => 'research',
+    firstPrompt: () => ({ text: 'go' }), theAgent: () => 'the Research agent', camp: () => ({}), pins: () => ({}), LENSES: [],
+  }).speech([])
+  assert.equal(sp.text, 'I had to stop. What we already found stays in the document.')
+  assert.equal(sp.err, INTERRUPTED_WORDS)
+  assert.match(sp.acts, /data-act="chat-retry">Run it again</)
+  // other jobs (research runs, asks) say the same words
+  assert.equal(lift<{ mwError(r: unknown): string }>(RT, ['mwError', 'interrupted'], { INTERRUPTED: INTERRUPTED_WORDS }).mwError(UNKNOWN_JOB), INTERRUPTED_WORDS)
+})
+
+test('Brief Maker: a draft lost to a restart stops with "We had to stop", the words, and Run it again', () => {
+  const ended: Record<string, unknown>[] = []
+  const env = {
+    INTERRUPTED: INTERRUPTED_WORDS, MW: { configured: true }, NO_MW: '', MW_API: 'napkin.middleware/1',
+    mwBody: (r: { data?: unknown }) => r.data, endJob: (j: Record<string, unknown>) => ended.push(j),
+  }
+  const f = lift<{ onJobReply(j: Record<string, unknown>, r: unknown): void }>(BM, ['onJobReply', 'hostErr', 'interrupted'], env)
+  const running = { task: 'draft_brief', id: 'job_1', state: 'running', stage: 'draft' }
+  f.onJobReply(running, UNKNOWN_JOB)
+  assert.equal(running.state, 'failed')
+  assert.equal((running as Record<string, unknown>).error, INTERRUPTED_WORDS)
+  assert.equal(ended.length, 1)
+  // picked up on open (checking) it is interrupted too, not "couldn't start"
+  const resumed = { task: 'draft_brief', id: 'job_2', state: 'checking' }
+  f.onJobReply(resumed, UNKNOWN_JOB)
+  assert.equal(resumed.state, 'failed')
+  const rp = fn(BM, 'renderProc')
+  assert.match(rp, /failed:'We had to stop'/)
+  assert.match(rp, /l2\.textContent=j\.error\?j\.error:/)
+  assert.match(rp, /j\.interrupted&&!live\?'<button type="button" class="sp-btn" id="procAgain">Run it again<\/button>'/)
+  assert.match(rp, /\$\('procAgain'\); if\(again\) again\.addEventListener\('click',function\(\)\{ if\(DRAFT===j\) DRAFT=null; draftNow\(''\); \}\)/)
+})
+
+test('asking from the inspector says where the answer will appear and brings it into view when it lands', () => {
+  const secs: Record<string, unknown> = { regulation_clearance: {} }
+  const { askWhere } = lift<{ askWhere(l: string | null): string }>(RT, ['askWhere'], {
+    askSections: () => secs, aboutName: (k: string) => (k === 'regulation_clearance' ? 'Regulation and clearance' : k),
+  })
+  assert.equal(askWhere('regulation_clearance'), 'under Regulation and clearance')
+  assert.equal(askWhere('media_spend'), 'at the end of the report')
+  assert.equal(askWhere(null), 'at the end of the report')
+  // pv-ask marks its job, empties its box and says where; the reply names the answer to reveal.
+  // a fact or finding ask shows under its item instead (factAsksHtml), so only a section's ask says where
+  assert.match(RT, /var pj=doAsk\('_new', VIEW\.sel\); if\(pj\)\{ pj\.from='pv'; if\(pq\) pq\.value=''; if\(!pj\.about\) toast\('Asked\. The answer will appear '\+askWhere\(pj\.lens\)\+'\.'\); \}/)
+  assert.match(fn(RT, 'onAskReply'), /if\(j\.from==='pv'&&aid\)\{ ASK\.reveal=aid; toast\('Answered '\+askWhere\(j\.lens\)\+'\.'\); \}/)
+  assert.match(fn(RT, 'renderAsks'), /revealAsk\(\);\s*\}$/)
+  assert.match(fn(RT, 'doAsk'), /return j;/)
+})
+
+// ── a question asked from a fact: its answer under the fact, in the report only when added ──
+// (research-fact-answer-v1, owner 2026-11-12)
+
+type Ask = Record<string, unknown>
+const FACT = 'f_01RULING'
+function factEnv(asksData: Record<string, Ask>, extra: Record<string, unknown> = {}) {
+  const ASK = { ui: {}, jobs: [] as Ask[], reveal: null as unknown, writing: null as unknown }
+  const data = { report: {}, asks: asksData }
+  return {
+    ASK, data,
+    env: {
+      ASK, esc, arr, isObj, D: () => data, hasHost: () => true, reportLocked: () => false, me: () => 'ann',
+      agentName: () => 'Research agent', TheAgent: () => 'The Research agent', clipT: (t: string) => t,
+      selLabel: (r: string) => (r === FACT ? 'Advertising standards ruling, 2023' : r), citeName: () => 'Press', pins: () => ({}), fmtAny: () => '',
+      findChip: (id: string) => `<chip ${id}>`, secByLens: (l: string) => (l === 'regulation_clearance' ? { n: 7, title: 'Clearance' } : null),
+      secWords: (s: { n: number; title: string }) => `§${s.n} ${s.title}`, plainDay: (s: string) => s, slug: (s: string) => s,
+      askCite: (ids: string[]) => ` [${ids.join(' ')}]`,
+      asks: () => Object.values(data.asks).sort((x, y) => (String(x.asked_at) < String(y.asked_at) ? -1 : 1)),
+      ...extra,
+    },
+  }
+}
+const FACT_FNS = ['inReport', 'aboutWord', 'askAddedHtml', 'whenWords', 'nameOf', 'faCite', 'inRepWhere', 'factAnswerHtml', 'factPendingHtml', 'factAsksHtml']
+type FactFns = { inReport(a: Ask): boolean; factAsksHtml(r: string): string; askAddedHtml(a: Ask): string }
+const answered = (more: Ask = {}): Ask => ({
+  id: 'ask_1', question: 'When was the ruling?', about: FACT, in_report: false, lens: 'regulation_clearance', in_section: true, asked_at: '2026-11-12T10:00:00Z',
+  answer: [{ text: 'The ruling was issued in December 2023.', cites: [FACT] }, { text: 'The brand ran a censored poster.', cites: ['f_02POSTER'] }],
+  missing: ['whether the original poster was withdrawn'], status: 'partial', ...more,
+})
+
+test('a fact ask shows pending, then its answer, under the fact; not in the report until added', () => {
+  const { env, ASK, data } = factEnv({})
+  const f = lift<FactFns>(RT, FACT_FNS, env)
+  ASK.jobs.push({ about: FACT, question: 'When was the ruling?', state: 'running', jobId: 'job_1' })
+  const busy = f.factAsksHtml(FACT)
+  assert.match(busy, /pv-fa busy/)
+  assert.match(busy, /The Research agent is answering “When was the ruling\?”, from this fact first…/)
+  assert.equal(f.factAsksHtml('f_OTHER').includes('pv-fa'), false, 'another fact shows nothing of it')
+  ASK.jobs.length = 0
+  data.asks = { ask_1: answered() }
+  const h = f.factAsksHtml(FACT)
+  assert.match(h, /Research agent · about this fact/)
+  assert.match(h, /<li>The ruling was issued in December 2023\.<span class="pv-chip pv-fa-this">this fact<\/span><\/li>/)
+  assert.match(h, /data-pv="f_02POSTER"/)
+  assert.match(h, /<p class="pv-fa-miss">Not on record: whether the original poster was withdrawn\.<\/p>/)
+  assert.match(h, /data-act="pvq-add" data-ask="ask_1">Add to report<\/button>/)
+  assert.match(h, /data-act="pvq-again" data-ask="ask_1">Ask again<\/button>/)
+  // the report leaves it out; a general question's answer stays in it as before
+  assert.equal(f.inReport(answered()), false)
+  assert.equal(f.inReport({ id: 'ask_g', question: 'Q', about: null }), true)
+  assert.equal(f.inReport({ id: 'ask_old', question: 'Q' }), true, 'an answer from before about is in the report')
+  assert.match(fn(RT, 'renderAsks'), /all=asks\(\)\.filter\(inReport\)/)
+  assert.match(fn(RT, 'renderAsks'), /rjobs=ASK\.jobs\.filter\(function\(j\)\{ return !j\.about; \}\)/)
+  assert.ok(RT.includes("histRow(id)+askHtml('Ask about this fact…')+factAsksHtml(id);"))
+  assert.match(fn(RT, 'viewFindingHtml'), /askHtml\('Ask about this finding…'\)\+factAsksHtml\(fid\)/)
+})
+
+test('Add to report writes in_report as the person; the answer shows in the report; Take out puts it back', async () => {
+  const writes: { patch: Record<string, Record<string, Ask>>; action: string; rationale: string }[] = []
+  const toasts: string[] = []
+  const { env, data } = factEnv({ ask_1: answered() }, {
+    doWho: () => {}, mintDecisionId: () => 'd_01ADD', nowIso: () => new Date().toISOString(), addr: (p: string) => `doc#${p}`,
+    renderFactAsks: () => {}, renderAsks: () => {}, toast: (m: string) => toasts.push(m),
+    humanWrite: (patch: Record<string, Record<string, Ask>>, action: string, rationale: string) => {
+      writes.push({ patch, action, rationale })
+      for (const [k, v] of Object.entries(patch.asks)) data.asks[k] = { ...data.asks[k], ...v }
+      return Promise.resolve({ ok: true })
+    },
+  })
+  const f = lift<FactFns & { setInReport(id: string, on: boolean): Promise<void> }>(RT, [...FACT_FNS, 'setInReport'], env)
+  await f.setInReport('ask_1', true)
+  assert.equal(writes[0].action, 'add_ask_to_report')
+  assert.equal(writes[0].patch.asks.ask_1.in_report, true)
+  assert.equal(writes[0].patch.asks.ask_1.in_report_by, 'human:ann')
+  assert.match(writes[0].rationale, /^d_01ADD · add · doc#asks\[ask_1\]\.in_report · put the answer to “When was the ruling\?” in the report under §7 Clearance, by human:ann$/)
+  assert.equal(f.inReport(data.asks.ask_1), true)
+  const card = f.factAsksHtml(FACT)
+  assert.match(card, /✓ In the report under §7 Clearance · <button type="button" class="pv-link" data-act="pvq-show" data-ask="ask_1">Show<\/button> · <button type="button" class="pv-link" data-act="pvq-out" data-ask="ask_1">Take out<\/button>/)
+  assert.equal(card.includes('Add to report'), false)
+  const rep = f.askAddedHtml(data.asks.ask_1)
+  assert.match(rep, /class="rq-a rq-added" id="rq-ask_1"/)
+  assert.match(rep, /<p class="rq-q">You asked: When was the ruling\?<\/p>/)
+  assert.match(rep, /Research agent · added by you just now · rests on 2 facts/)
+  assert.deepEqual(toasts, ['In the report under §7 Clearance.'])
+  await f.setInReport('ask_1', false)
+  assert.equal(writes[1].action, 'take_ask_out_of_report')
+  assert.equal(writes[1].patch.asks.ask_1.in_report, false)
+  assert.equal(f.inReport(data.asks.ask_1), false)
+  assert.match(f.factAsksHtml(FACT), /Add to report/)
+})
+
+test('a fact ask keeps going when you move elsewhere, says so on the side, and lands under its fact', () => {
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const replies: ((r: unknown) => void)[] = []
+  const toasts: { m: string; act?: { label: string; run(): void } }[] = []
+  const opened: string[] = []
+  const timers: (() => void)[] = []
+  const VIEW = { sel: FACT as string | null }
+  const { env, ASK, data } = factEnv({}, {
+    VIEW, LENS: { regulation_clearance: {} }, attachments: () => [], toast: (m: string, act?: { label: string; run(): void }) => toasts.push({ m, act }),
+    openAsked: (r: string) => opened.push(r), askWhere: () => '', renderAsks: () => {}, render: () => {}, loadChain: () => {},
+    saveAskJobs: () => {}, mwError: () => null, mwBody: (r: { data: unknown }) => r.data, setTimeout: (f: () => void) => { timers.push(f) },
+    $: (id: string) => (id === 'rqin-_new' ? { value: 'When was the ruling?' } : null),
+    window: { clan: { apiProxy: (_k: string, p: { task: string; input: Record<string, unknown> }) => { sent.push(p); return new Promise(r => replies.push(r)) } } },
+  })
+  const f = lift<FactFns & { doAsk(k: string, about?: string): Ask; onAskReply(j: Ask, r: unknown): void }>(RT, [...FACT_FNS, 'doAsk', 'sendAsk', 'pollAsk', 'onAskReply'], env)
+  const j = f.doAsk('_new', FACT)
+  // the reply comes back while the person has gone to another fact, then to the report
+  VIEW.sel = 'f_OTHER'
+  f.onAskReply(j, { ok: true, data: { job: { id: 'job_9', state: 'running' } } })
+  assert.equal(timers.length, 1, 'still polled')
+  VIEW.sel = null
+  timers[0]()
+  assert.deepEqual(sent[1], { task: 'job_status', input: { job_id: 'job_9' } })
+  assert.equal(ASK.jobs.length, 1)
+  // the side agent names the fact while it runs, and opens it
+  const el: { innerHTML: string; hidden: boolean } = { innerHTML: '', hidden: true }
+  lift<{ sideAgent(): void }>(RT, ['sideAgent'], {
+    ...env, $: () => el, document: { body: { classList: { contains: () => false } } }, JOBS: [], RECON: {}, CHAT: {},
+    roles: () => null, TheAgent: () => 'The Research agent',
+  }).sideAgent()
+  assert.equal(el.innerHTML, '<span><b>Research agent</b> · answering about Advertising standards ruling, 2023</span>')
+  // it lands: stored under the fact, and the notice opens it
+  data.asks = { ask_1: answered({ in_report: false }) }
+  f.onAskReply(j, { ok: true, data: { job: { id: 'job_9', state: 'done' }, result: { ask: 'ask_1' }, change: { applied: true } } })
+  assert.equal(ASK.jobs.length, 0)
+  assert.equal(toasts.at(-1)?.m, 'Answered: Advertising standards ruling, 2023')
+  toasts.at(-1)?.act?.run()
+  assert.deepEqual(opened, [FACT])
+  assert.equal(ASK.reveal, null, 'the report is not scrolled to it: it is not there')
+  VIEW.sel = FACT
+  assert.match(f.factAsksHtml(FACT), /The ruling was issued in December 2023\./)
+})
+
+test('reloading mid-ask resumes it under its fact; one lost to a restart says so with Ask again', () => {
+  const { env, ASK } = factEnv({}, { INTERRUPTED: INTERRUPTED_WORDS })
+  const f = lift<FactFns>(RT, FACT_FNS, env)
+  assert.match(fn(RT, 'resumeAsks'), /about:x\.about\|\|null, state:'running'/)
+  ASK.jobs.push({ about: FACT, question: 'When was the ruling?', state: 'running', jobId: 'job_1', error: INTERRUPTED_WORDS })
+  const h = f.factAsksHtml(FACT)
+  assert.match(h, /Not answered: This run was interrupted \(the service restarted\)\. Run it again\./)
+  assert.match(h, /data-act="rq-retry" data-i="0">Ask again<\/button>/)
 })

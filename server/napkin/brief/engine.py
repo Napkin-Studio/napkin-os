@@ -318,7 +318,8 @@ class EngineBriefJob(BriefJob):
                 import time as _t
                 t0 = _t.monotonic()
                 try:
-                    reply = self.port.draft(body, dict(self.caps.attribution))
+                    with self.caps.runlog.busy("engine", self.port.url):
+                        reply = self.port.draft(body, dict(self.caps.attribution))
                 finally:
                     self.caps.runlog.note("engine_call", secs=round(_t.monotonic() - t0, 2), url=self.port.url)
                 meta = reply.get("meta") if isinstance(reply, dict) and isinstance(reply.get("meta"), dict) else {}

@@ -406,7 +406,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           // A locked version keeps what it was made from; the host refuses it too.
           onUpdateFromUpstream: decisions.view?.lock.locked || open.is_template ? undefined : updateFromUpstream,
           loading: false,
-          saved: saved ? <SaveStatus docPath={docPath} updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
+          saved: saved ? <SaveStatus updatedAt={listedUpdated(library, docPath) ?? open.manifest.updated_at} /> : undefined,
           editMode,
           // A locked document with nothing reopened takes no edit: Client
           // review stands where Edit was.

@@ -1683,6 +1683,24 @@ address. A card is that `Cite` — the same resolver, so the same words — with
   record's own `review`, `verification` or `rejection`. "Looks right" is not
   a review of a fact.
 
+### 8.4 Events name their document
+
+A route's `HostEvent`s reach the shell as events of the same name: Tauri
+events on the desktop, SSE frames on napkin-web's per-tenant stream
+(`/api/t/{tenant}/events`), and straight back from the call in the browser
+host (`napkin-wasm`). The web stream is the whole tenant's (in accounts mode,
+the whole agency's), so every shell hears every document's writes.
+
+`clan-data-changed` and `clan-patch-saved` therefore carry `path`: the id of
+the document the request was about, as the shell opened it
+(`OpenResult.path`; the document's id in its store, a file path on the
+desktop). The host adds it to the payload in one place
+(`napkin_host::routes::dispatch` and `dispatch_async`), on every host alike;
+what the payload said before stays (a payload that was not an object moves
+under `value`). A listener acts only on events whose `path` is its own
+document, and ignores one without a `path`
+(`app/src/shell/decisions/needs.ts isFor`). *Added 2026-11-12.*
+
 ---
 
 ### 8.4 The frame's page: `/document` and `napkin_host::frame`

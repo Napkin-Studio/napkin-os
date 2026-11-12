@@ -231,10 +231,12 @@ pub async fn dispatch_async(
 ) -> HostResponse {
     #[cfg(feature = "native")]
     if req.path == "/api-proxy" {
-        return match api_proxy(ctx, session, cfg, &req.body_str()).await {
+        let doc = session.current_id();
+        let resp = match api_proxy(ctx, session, cfg, &req.body_str()).await {
             Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
             Err(e) => e.into(),
         };
+        return name_document(resp, doc.as_ref());
     }
     dispatch(ctx, session, cfg, req)
 }
@@ -298,6 +300,30 @@ pub fn dispatch(
     cfg: &dyn HostConfig,
     req: HostRequest,
 ) -> HostResponse {
+    let doc = session.current_id();
+    name_document(route(ctx, session, cfg, req), doc.as_ref())
+}
+
+/// Each `clan-data-changed` and `clan-patch-saved` names the document it is
+/// about: `path`, the id the shell opened it by (`OpenResult.path`). Every
+/// shell gets these on one stream for the whole workspace (the server's SSE is
+/// per tenant), so a listener acts only on its own document's
+/// (os-layer.md §8.4). The document is the one the request was about, read
+/// before the route ran.
+fn name_document(mut resp: HostResponse, doc: Option<&crate::store::DocId>) -> HostResponse {
+    let Some(doc) = doc else { return resp };
+    for e in &mut resp.events {
+        if let HostEvent::DataChanged(v) | HostEvent::PatchSaved(v) = e {
+            if !v.is_object() {
+                *v = serde_json::json!({ "value": v.take() });
+            }
+            v["path"] = Value::String(doc.as_str().to_string());
+        }
+    }
+    resp
+}
+
+fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -> HostResponse {
     let path = req.path.as_str();
     match path {
         #[cfg(feature = "native")]

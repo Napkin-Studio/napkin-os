@@ -2,7 +2,7 @@
 // Each journey asserts what a person must see and how long they wait; over a budget fails it.
 
 import { expect, test } from '@playwright/test'
-import { addClient, appFrame, BUDGET, dialButton, measure, openTool, signIn, stamp } from './helpers'
+import { addClient, appFrame, BUDGET, dialButton, driveRun, measure, openTool, signIn, stamp } from './helpers'
 
 const ACCOUNT = 'plu@pluto' as const
 const client = `UAT ${stamp()}`
@@ -45,21 +45,13 @@ test('a Research run reaches a report with sources and pins (paid)', async ({ pa
   await page.getByText('+ New research question').click()
   const app = await appFrame(page, t0, 'open-new-research', '#cmp-prompt')
 
-  await app.locator('#cmp-prompt').fill('Oat drinks in Ireland and the UK: how big is the category in 2024-2025, who are the main brands, and what share does the leader hold?')
+  await app.locator('#cmp-prompt').fill('Oatly in Ireland and the UK: how big is the oat drink category in 2024-2025, who are the main brands, and what share does Oatly hold?')
   const run0 = Date.now()
   await app.locator('[data-act="cmp-send"]').click()
 
-  // Answer every question with its first offered option until the report is drawn.
+  // Answer whatever the run asks until the report is drawn.
   const report = app.locator('.rp-band')
-  const failed = app.locator('.rs-err, [role="alert"]')
-  let questions = 0
-  while (Date.now() - run0 < BUDGET.research) {
-    if (await report.isVisible()) break
-    if (await failed.first().isVisible()) throw new Error('run shows an error: ' + await failed.first().innerText())
-    const opt = app.locator('#qcard [data-act="q-opt"]:not(.escape):not([disabled])').first()
-    if (await opt.isVisible()) { await opt.click(); questions++; continue }
-    await page.waitForTimeout(2_000)
-  }
+  const questions = await driveRun(page, app, report, BUDGET.research)
   await expect(report, 'report drawn within budget').toBeVisible({ timeout: 1_000 })
   measure('research-run', Date.now() - run0, BUDGET.research, { questions })
 
@@ -151,13 +143,12 @@ test('leave a Research run mid-way and come back: it carries on and finishes (pa
   await openTool(page, client, 'Research')
   await page.getByText('+ New research question').click()
   const app = await appFrame(page, Date.now(), 'open-new-research', '#cmp-prompt')
-  await app.locator('#cmp-prompt').fill('Plant-based yoghurt in Ireland in 2025: market size and the top three brands.')
+  await app.locator('#cmp-prompt').fill('Alpro plant-based yoghurt in Ireland in 2025: market size, and Alpro against the top two rival brands.')
   await app.locator('[data-act="cmp-send"]').click()
   const href = page.url().includes('open=') ? page.url() : ''
-  // Answer the first question if one comes, then leave while it works.
-  const opt = app.locator('#qcard [data-act="q-opt"]:not(.escape):not([disabled])').first()
-  await opt.click({ timeout: 90_000 }).catch(() => {})
-  await expect(app.getByText(/Step [2-4] of 4/).first()).toBeVisible({ timeout: 120_000 })
+  // Answer what it asks until it is past step 1, then leave while it works.
+  await driveRun(page, app, app.getByText(/Step [2-4] of 4/), 180_000)
+  await expect(app.getByText(/Step [2-4] of 4/).first()).toBeVisible({ timeout: 1_000 })
   const url = href || page.url()
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /^Clients/ })).toBeVisible()
@@ -170,12 +161,7 @@ test('leave a Research run mid-way and come back: it carries on and finishes (pa
   await expect(back.locator('#cmp-prompt')).toBeHidden()
   measure('return-to-run', Date.now() - t0, BUDGET.docOpen)
   // And it finishes without anyone watching.
-  while (!(await back.locator('.rp-band').isVisible())) {
-    const o = back.locator('#qcard [data-act="q-opt"]:not(.escape):not([disabled])').first()
-    if (await o.isVisible()) await o.click()
-    if (Date.now() - t0 > BUDGET.research) break
-    await page.waitForTimeout(3_000)
-  }
+  await driveRun(page, back, back.locator('.rp-band'), BUDGET.research)
   await expect(back.locator('.rp-band')).toBeVisible({ timeout: 1_000 })
 })
 
@@ -195,5 +181,30 @@ test('leave a Brief mid-way and come back: it carries on and finishes (paid)', a
   const back = page.frameLocator('iframe').first()
   await expect(back.locator('#sheet').or(back.getByText(/Step [1-4] of 4/)).first()).toBeVisible({ timeout: 60_000 })
   measure('return-to-brief', Date.now() - t0, BUDGET.docOpen)
-  await expect(back.locator('#sheet')).toBeVisible({ timeout: BUDGET.research })
+  await driveRun(page, back, back.locator('#sheet'), BUDGET.research)
+  await expect(back.locator('#sheet')).toBeVisible({ timeout: 1_000 })
+})
+
+test('ask about a fact, click away, come back: it kept going and the answer is there (paid)', async ({ page }) => {
+  // Owner, 2026-11-12: clicking away must not stop the ask; the agent on top shows it working,
+  // or the answer shows when the fact is opened again.
+  const app = await openReport(page)
+  await app.locator('[data-view="map"]').click()
+  await app.locator('#mapview [data-map^="fi"], #mapview [data-map*="fi_"]').first().click()
+  await app.locator('[data-act="pv-mapopen"]').click()
+  const fact = app.locator('#insp-sel [data-sel^="f_"]').first()
+  const ref = await fact.getAttribute('data-sel')
+  await fact.click()
+  await app.locator('#pv-askq').fill('Which source says this, and how recent is it?')
+  await app.locator('[data-act="pv-ask"]').click()
+  // Away at once: another fact, then the report.
+  await app.locator('[data-sel-back]').first().click()
+  await app.locator('[data-view="report"]').click()
+  await expect(app.locator('#sideAgent'), 'the agent on top shows the ask working').toContainText(/answering|asking|Research agent/i, { timeout: 10_000 })
+  // Back to the same fact: the answer is there (or still coming, then lands).
+  await app.locator('[data-view="map"]').click()
+  await app.locator('#mapview [data-map^="fi"], #mapview [data-map*="fi_"]').first().click()
+  await app.locator('[data-act="pv-mapopen"]').click()
+  await app.locator(`#insp-sel [data-sel="${ref}"]`).first().click()
+  await expect(app.locator('#insp .rq-a:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 120_000 })
 })
