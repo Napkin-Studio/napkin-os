@@ -69,7 +69,7 @@ for (const size of SIZES) {
   })
 
   test(t(72), async ({ browser }) => {
-    test.setTimeout(240_000) // three modes over every page: slow on a busy machine
+    test.setTimeout(420_000) // three modes over every page (each record adds its pages): slow on a busy machine
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     const pages = await allPages()
     expect(pages.length, 'the suite lists at least the Phase 1 pages').toBeGreaterThan(0)

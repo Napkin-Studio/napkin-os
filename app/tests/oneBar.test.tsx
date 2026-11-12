@@ -17,7 +17,7 @@ import { BarInput } from '../src/shell/bar/BarField.tsx'
 import { ShortcutRows } from '../src/shell/bar/Shortcuts.tsx'
 import { commandsFor, keysText, matchCommands, shortcutRows, type BarEnv, type Command } from '../src/shell/bar/commands.ts'
 import { barKeyOf, type KeyLike } from '../src/shell/bar/keys.ts'
-import { flatten, optionId, optionName } from '../src/shell/bar/listModel.ts'
+import { flatten, optionId } from '../src/shell/bar/listModel.ts'
 import { commandResult, runProviders, type BarGroup, type BarProvider } from '../src/shell/bar/providers.ts'
 
 const key = (o: Partial<KeyLike>): KeyLike => ({ key: 'k', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, target: null, ...o })
@@ -114,9 +114,11 @@ test('the results are a listbox of options: the active one is selected and each 
   assert.match(html, /id="bar-opt-0"[^>]*aria-selected="false"|aria-selected="false"[^>]*id="bar-opt-0"/)
   assert.match(html, /aria-selected="true"/)
   assert.equal((html.match(/aria-selected="true"/g) ?? []).length, 1)
-  assert.ok(html.includes('aria-label="Brief: J001 brief, Brief Maker · Client A"'))
-  assert.ok(html.includes('aria-label="Person: Aoife Test, Planning"'))
-  assert.deepEqual(flatten(groups).map(optionName), ['Brief: J001 brief, Brief Maker · Client A', 'Person: Aoife Test, Planning'])
+  // the kind is the first words of the option's own text, so its name is what it shows with the kind before it (no aria-label to mismatch)
+  assert.ok(html.includes('<span class="bar-sr">Brief: </span><span class="bar-o-main"><b>J001 brief</b>'))
+  assert.ok(html.includes('<span class="bar-sr">Person: </span><span class="bar-o-main"><b>Aoife Test</b>'))
+  assert.ok(!html.includes('aria-label="Brief') && !html.includes('aria-label="Person'), 'no label to disagree with the text')
+  assert.deepEqual(flatten(groups).map(r => r.kind), ['brief', 'person'])
   assert.equal(optionId(1), 'bar-opt-1')
 })
 

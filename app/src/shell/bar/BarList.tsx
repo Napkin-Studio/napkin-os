@@ -8,7 +8,7 @@
 
 import type { BarGroup } from './providers'
 import { KIND_WORD } from './providers'
-import { LIST_ID, optionId, optionName } from './listModel'
+import { LIST_ID, optionId } from './listModel'
 
 export interface ListProps {
   groups: readonly BarGroup[]
@@ -35,7 +35,6 @@ export function BarList({ groups, active, onPick, onHover, confirm }: ListProps)
                 id={optionId(i)}
                 role="option"
                 aria-selected={on}
-                aria-label={optionName(r)}
                 className="bar-opt"
                 data-active={on || undefined}
                 data-kind={r.kind}
@@ -45,6 +44,8 @@ export function BarList({ groups, active, onPick, onHover, confirm }: ListProps)
                 onClick={() => onPick(i)}
                 onMouseMove={() => { if (!on) onHover(i) }}
               >
+                {/* The kind is said first, in the option's own text, so its name is what it shows (WCAG 2.5.3) with the kind before it. */}
+                <span className="bar-sr">{KIND_WORD[r.kind] ?? r.kind}: </span>
                 <span className="bar-o-main"><b>{r.title}</b>{r.line && <small>{r.line}</small>}</span>
                 {r.kind === 'command' ? (r.hint ? <kbd className="bar-hint" aria-hidden>{r.hint}</kbd> : null)
                   : r.kind === 'recent' ? null
