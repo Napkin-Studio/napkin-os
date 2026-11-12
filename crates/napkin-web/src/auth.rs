@@ -95,6 +95,15 @@ impl Provider {
         !matches!(self, Provider::Roster(_))
     }
 
+    /// Whether a signed-in session still stands: under the roster, a person
+    /// removed from the People page is signed out at their next request.
+    pub fn still_allowed(&self, username: &str) -> bool {
+        match self {
+            Provider::Roster(r) => r.people.active(username).is_some(),
+            _ => true,
+        }
+    }
+
     pub async fn sign_in(&self, username: &str, password: &str) -> SignIn {
         let Some((username, _)) = Account::parse_username(username) else {
             return SignIn::Refused("Use your user name and your agency's name.".into());
@@ -330,58 +339,41 @@ impl Local {
 
 // ── the roster: names, no passwords ─────────────────────────────────────────
 
-/// The people who may sign in, one per line: `user@agency<TAB>Display name`
-/// (the format of infra/scripts/accounts.napkin.tsv; `#` lines are comments).
-/// The file is read at each sign-in, so a person added to it can sign in
-/// without a restart.
+/// The people who may sign in: the people store (crate::people), seeded once
+/// from the roster file (`user@agency<TAB>Display name`, the format of
+/// infra/scripts/accounts.napkin.tsv). Changed from the People page, and read
+/// at each sign-in, so a person added there signs in without a restart.
 pub struct Roster {
-    path: PathBuf,
+    people: std::sync::Arc<crate::people::People>,
 }
 
 impl Roster {
-    /// Refuses to start on a roster that cannot be read or names no one: a
-    /// studio nobody can sign in to is a misconfiguration, not a quiet state.
-    pub fn new(path: PathBuf) -> Result<Self, String> {
-        let r = Self { path };
-        let people = r.load()?;
-        if people.is_empty() {
-            return Err(format!("the roster {} names no one", r.path.display()));
-        }
-        Ok(r)
+    /// The store in `store_dir`, seeded from the roster file `seed` the first
+    /// time. Refuses to start on a store or seed that cannot be read or names no one.
+    pub fn open(store_dir: PathBuf, seed: &std::path::Path) -> Result<Self, String> {
+        Ok(Self {
+            people: std::sync::Arc::new(crate::people::People::open(store_dir, seed)?),
+        })
     }
 
-    fn load(&self) -> Result<BTreeMap<String, Option<String>>, String> {
-        let text = std::fs::read_to_string(&self.path)
-            .map_err(|e| format!("cannot read the roster {}: {e}", self.path.display()))?;
-        Ok(text
-            .lines()
-            .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
-            .filter_map(|l| {
-                let (user, name) = l.split_once('\t').unwrap_or((l, ""));
-                let (u, _) = Account::parse_username(user)?;
-                let name = name.trim();
-                Some((u, (!name.is_empty()).then(|| name.to_string())))
-            })
-            .collect())
+    /// The store behind it, for the People routes.
+    pub fn people(&self) -> &crate::people::People {
+        &self.people
     }
 
     fn sign_in(&self, username: &str) -> SignIn {
-        match self.load() {
-            Ok(people) => match people.get(username) {
-                Some(name) => {
-                    let (u, agency) = Account::parse_username(username).unwrap_or_default();
-                    SignIn::Done(Account {
-                        username: u,
-                        agency,
-                        name: name.clone(),
-                    })
-                }
-                None => SignIn::Refused(
-                    "That name is not on this studio's list. Ask your studio admin to add you."
-                        .into(),
-                ),
-            },
-            Err(e) => SignIn::Refused(format!("Sign-in is not available right now ({e}).")),
+        match self.people.active(username) {
+            Some(p) => {
+                let (u, agency) = Account::parse_username(username).unwrap_or_default();
+                SignIn::Done(Account {
+                    username: u,
+                    agency,
+                    name: p.name,
+                })
+            }
+            None => SignIn::Refused(
+                "That name is not on this studio's list. Ask your studio admin to add you.".into(),
+            ),
         }
     }
 }
@@ -618,7 +610,7 @@ mod tests {
             "# the studio's accounts\nengineer@napkin\tShrey\n\nmock@napkin\nnot a name\tX\n",
         )
         .unwrap();
-        let r = Roster::new(path.clone()).unwrap();
+        let r = Roster::open(dir.path().join("_people"), &path).unwrap();
         match r.sign_in("engineer@napkin") {
             SignIn::Done(a) => {
                 assert_eq!(a.username, "engineer@napkin");
@@ -633,17 +625,22 @@ mod tests {
         }
         assert!(matches!(r.sign_in("visionary@napkin"), SignIn::Refused(_)));
         assert!(matches!(r.sign_in("engineer@javelin"), SignIn::Refused(_)));
-        // a person added to the file signs in without a restart
-        std::fs::write(
-            &path,
-            "engineer@napkin\tShrey\nvisionary@napkin\tLaurance\n",
-        )
-        .unwrap();
+        // a person added to the store signs in without a restart
+        r.people()
+            .add(
+                "engineer@napkin",
+                &crate::people::NewPerson {
+                    name: "Laurance".into(),
+                    agency: "napkin".into(),
+                    username: Some("visionary@napkin".into()),
+                },
+            )
+            .unwrap();
         assert!(matches!(r.sign_in("visionary@napkin"), SignIn::Done(_)));
-        // a roster that names no one, or is missing, stops the server at start
+        // a seed that names no one, or is missing, stops the server at its first start
         std::fs::write(&path, "# nobody yet\n").unwrap();
-        assert!(Roster::new(path).is_err());
-        assert!(Roster::new(dir.path().join("missing.tsv")).is_err());
+        assert!(Roster::open(dir.path().join("other"), &path).is_err());
+        assert!(Roster::open(dir.path().join("x"), &dir.path().join("missing.tsv")).is_err());
     }
 
     #[tokio::test]
@@ -651,7 +648,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("accounts.tsv");
         std::fs::write(&path, "engineer@napkin\tShrey\n").unwrap();
-        let p = Provider::Roster(Roster::new(path).unwrap());
+        let p = Provider::Roster(Roster::open(dir.path().join("_people"), &path).unwrap());
         assert!(!p.uses_passwords());
         assert!(matches!(
             p.sign_in(" Engineer@Napkin ", "").await,

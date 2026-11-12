@@ -1987,3 +1987,42 @@ no switch. The 3D client-circle engine (`app/src/orbs/`), its "Flat circles"
 setting (`napkin.circles.flat`) and the `<html data-orbs…>` attributes are gone.
 The agents keep their spheres from the one agent engine
 (`app/templates/shared/agent-sphere`, `app/src/shell/agents/AgentSphere.tsx`).
+
+## 13. People and agencies (napkin-web only)
+
+Who may sign in under `NAPKIN_AUTH=roster`, changed from the shell's People
+page (features/people-admin.clan). Not tenant-addressed: under `/api`, on the
+cookie session. Errors keep the `{ok:false, error:"message"}` shape.
+
+**Store.** `<NAPKIN_WEB_DATA>/_people/people.json` (`{people, agencies}`) on the
+web data volume, replaced whole (tmp + rename) and re-read when its mtime or
+length changes (checked at most every 2 s, so a second web task sees a change
+within that). `_people/changes.jsonl` keeps one line per change: `at`, `by`,
+`what` and the detail; each change is on the server log too
+(`napkin_web::people`), and a consenting account's calls on the dogfood record.
+Seeded once, from the roster file `NAPKIN_AUTH_ROSTER`, the first time a server
+starts without the store; after that the file is not read.
+
+**Admins.** `crates/napkin-web/src/people.rs` `PEOPLE_ADMINS` (`engineer@napkin`).
+Every `/admin/*` route is `403` for anyone else (`401` with no session), and `404`
+on a server without the roster. The shell's `PEOPLE_ADMINS`
+(`app/src/shell/people/model.ts`) only hides the menu entry.
+
+**Recognising an agency.** An id, a name or an alias, any case: the shell
+registry's (`palette.ts` `AGENCY_COLOURS`, `AGENCY_ALIASES`, mirrored as
+`CODE_AGENCIES`, `CODE_ALIASES`; `app/tests/peopleAdmin.test.tsx` keeps them the
+same), then the added agencies'.
+
+| Route | Does |
+|---|---|
+| `GET /admin/people` | `{people: [Person], agencies: [Agency], admins: [id]}`. `people` includes the removed (`removed_at` set). |
+| `POST /admin/people {name, agency, username?}` | `201` + the Person. `agency` is recognised as above (`400` when nothing matches: add the agency first). `username` defaults to `firstname@agency`; its agency must be the recognised id (`400`). `409` when they can already sign in; a removed person is brought back. |
+| `PATCH /admin/people/{id} {name}` | The Person, renamed (the sign-in name stays). `404`. |
+| `DELETE /admin/people/{id}` | The Person with `removed_at`. They cannot sign in, and a session they hold is answered `401` at its next request; their documents and decisions stay. `409` for an admin, `404`. |
+| `GET /admin/agencies` | `[Agency]`: the registry's (`source: "code"`) and the added (`"added"`), each with `people`, the number who can sign in. |
+| `POST /admin/agencies {name, base, accent, id?, aliases?}` | `201` + the added agency. `base`, `accent` `#rrggbb` (`400`); `id` defaults to the name, lower case, `+`/`&` as "and", letters and digits only. `409` when the id, name or an alias is an agency already. |
+| `GET /agency-looks` | Public (no session). `[{id, name, base, accent, aliases}]` of the added agencies; the shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows, so their people wear their look. |
+
+`Person` is `{id, name?, agency, admin, added_by, added_at, removed_at?}`
+(`added_by` is `roster` for the seed). `Agency` (admin list) is `{id, name, base,
+accent, aliases, source, people}`.
