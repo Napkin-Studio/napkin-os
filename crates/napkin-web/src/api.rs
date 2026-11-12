@@ -68,7 +68,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/jobs/{number}", get(get_job).patch(update_job))
         .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
         .route("/t/{tenant}/jobs/{number}/route", put(set_route))
-        .route("/t/{tenant}/needs", get(needs))
         .route("/t/{tenant}/dashboard", get(dashboard))
         .route(
             "/t/{tenant}/agency/look",
@@ -98,6 +97,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
         .merge(crate::timesheet::router())
+        .merge(crate::needs::router())
         .merge(crate::agency::router())
         .merge(crate::audit::router())
         // A route that is not built yet answers 404 from here, so the layers around
@@ -471,14 +471,13 @@ async fn get_job(
         .job(&number)
         .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")))?;
     let roles = roles_of(&user);
-    let needs: Vec<_> = index
-        .needs_for(
-            user.as_ref().map(|Extension(a)| a.username.as_str()),
-            &roles,
-        )
-        .into_iter()
-        .filter(|n| n.job == number)
-        .collect();
+    let needs = crate::needs::job_items(
+        &ctx,
+        &index,
+        user.as_ref().map(|Extension(a)| a),
+        &number,
+        ctx.workspace(&tenant).now().date_naive(),
+    );
     Ok(Json(serde_json::json!({
         "job": crate::jobview::job_view(job, &roles),
         "needs": needs,
@@ -521,24 +520,6 @@ async fn job_stage(
     Ok(Json(serde_json::json!({
         "job": job.number, "stage": job.stage, "status": job.status, "waiting_on": job.waiting_on,
     })))
-}
-
-/// What the signed-in person is asked to do next, by deadline. Everyone's own list:
-/// two people on one job see different lines. An anonymous visitor sees them all.
-async fn needs(
-    State(ctx): Ctx,
-    Tenant(tenant): Tenant,
-    user: Option<Extension<crate::auth::Account>>,
-) -> ApiResult<Json<Value>> {
-    let index = job_index(&ctx.workspace(&tenant))?;
-    let user = user.map(|Extension(a)| a);
-    let items = index.needs_for(
-        user.as_ref().map(|a| a.username.as_str()),
-        user.as_ref().map(|a| a.roles.as_slice()).unwrap_or(&[]),
-    );
-    Ok(Json(
-        serde_json::json!({ "total": items.len(), "items": items }),
-    ))
 }
 
 /// The six tiles. Management's: the route is behind the role check.

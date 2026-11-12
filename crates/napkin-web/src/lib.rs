@@ -27,6 +27,7 @@ pub mod jobview;
 pub mod links;
 pub mod look;
 pub mod meter;
+pub mod needs;
 pub mod roles;
 pub mod sandbox;
 pub mod state;

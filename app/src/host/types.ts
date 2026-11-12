@@ -294,8 +294,8 @@ export interface LibraryItem {
 export interface JobNeed {
   /** Stable, `{job}:{stage}:{role}:{kind}`. Absent from an older host. */
   id?: string
-  /** `gate`, `approval` or `approval-chase`. Absent from an older host. */
-  kind?: 'gate' | 'approval' | 'approval-chase'
+  /** A task (`gate`, `approval`, `approval-chase`) or a notice (`brief-changed`, `client-change`, `deadline`, `timesheet`). Absent from an older host. */
+  kind?: 'gate' | 'approval' | 'approval-chase' | 'brief-changed' | 'client-change' | 'deadline' | 'timesheet'
   stage?: string
   /** An approval: whole days past the step's due date, 0 until the day after; null on a gate need. */
   days_late?: number | null
@@ -308,9 +308,21 @@ export interface JobNeed {
   action: string
   /** The document the action opens. */
   path: string
-  /** The job's deadline (`YYYY-MM-DD`): what the list is ordered by. */
+  /** The need's own deadline (`YYYY-MM-DD`): what the list is ordered by. */
   due: string | null
+  /** Where `due` came from: the approval route's stage deadline, the job's, or a day's own reminder. */
+  due_source?: 'stage' | 'job' | 'day'
+  /** Due within 48 hours, or past. */
+  urgent?: boolean
+  /** A notice may be marked done; a task leaves when the work is done. */
+  can_done?: boolean
 }
+
+/** The soonest deadline on the person's own jobs: what an empty Needs you names. */
+export interface NextDeadline { job: string; client: string; client_id: string; due: string }
+
+/** What `GET /needs` answers: the person's items, and the next deadline (null: none set; undefined: an older host). */
+export interface NeedsAnswer { items: JobNeed[]; next_deadline?: NextDeadline | null }
 
 /** One stage's approval: who approves it and by when (napkin-host `jobs::RouteStep`). */
 export interface RouteStep {

@@ -2255,6 +2255,42 @@ verification measured 10 ms a document in the debug server just to hash them, ab
   would show that document as it last read it until the next write to it. The index writes nothing, so
   nothing is lost; `IndexCache::delete` or a restart of the server clears it. There is no route for it.
 
+### 13.4 Needs you in full (features/needs-you-full.clan)
+
+`GET /api/t/{tenant}/needs[?tz=<minutes east of UTC>]` answers the signed-in person `{total, items, next_deadline}`.
+`total` counts what is left after the person's done marks. `next_deadline` is `{job, client, client_id, due}` for the
+soonest job deadline (today or later) on a job the person is on, or `null`; an older host sends no key.
+
+- **A need** (sent by the allow list `NEED_KEYS` in `jobview.rs`, never with its audience): `id`, `kind`, `stage`, `days_late`,
+  `job`, `client`, `client_id`, `text`, `action`, `path`, `due`, `due_source` (`stage`, the Approval route's date for the stage,
+  else `job`, or `day` for a day's own reminder), `urgent` (due within 48 hours, or past) and `can_done`. `GET /jobs/{number}` sends
+  the same items for that job.
+- **Kinds.** Tasks leave when the work is done and have no Done (`can_done: false`): `gate` (the Brief gate's asks),
+  `approval`, `approval-chase`. Notices have one: `brief-changed`, `client-change`, `deadline`, `timesheet`. An approver on a
+  stage the gate also asks about sees one row: the approval's, with the gate's row for the same person on the same stage folded in.
+- **The alerts table** is `ALERTS` in `crates/napkin-host/src/alerts.rs`, the eight rows of v2 section 4, each `Live(rule)` or
+  `Waiting(record)`. Live: Brief changes version (everyone on the job), Client comment or change request (account service),
+  Approval overdue (the approver, then whoever set the route; every stage, since the route names them), Deadline within 48 hours
+  (the job owner), Today's timesheet not confirmed (that person). Waiting: Work scores under 24 (`judge`), Request out of scope
+  and Job hours near budget (Phase 3). The rules are pure functions of a job's facts and the date, run inside the index from
+  what the cache holds per document (a document's decision writers, its newest edit after the lock, the client's newest answer
+  that asks for changes), so an index read on an unchanged tenant reads and hashes nothing (`job_index_stamp.rs`). A need's text is
+  built from a job number, a client name, a document title, a stage label and a date; it never quotes a document or a comment.
+- **Ids are stable.** `{job}:{stage}:{who}:{kind}` for a task; for a notice, the same with `:{FNV-1a hash of job, kind, document
+  and cause}` where the cause is the newest edit after the lock, the client's answer, or the deadline's date. The same event
+  keeps its id across rebuilds and a new event has a new one.
+- **Whose list.** A person with no name and no role, an admin and a demo see every item, as before. Anyone else sees items of the
+  jobs they are on (owner, a signer of its brief, an agency approver on its route, anyone who has written a decision in one of its
+  documents), addressed to them by name, to everyone on the job, or to a role they hold. A role's item on a job where nobody known
+  to hold the role is on the job (the agency's `Directory`, when it has one; an agency without a directory knows no one's roles)
+  reaches everyone with the role: nothing is orphaned. `JobEntry.people` feeds this and is sent to nobody.
+- **Done and Undo.** `POST /needs/{id}/done` marks a notice done for the signed-in person (`404` for an id that is not theirs,
+  `409` for a task, `403` without a sign-in); `DELETE` on the same path takes it back. A mark is one person's own, kept in one small
+  file each (`needs-done/<person>.json` beside the timesheets, behind `trait DoneStore`, at most 2,000 per person), read by nobody
+  else and counted by nothing. The shell shows Done and Undo for five seconds, then the row is gone. A write to `/needs` itself is `405`.
+- **The timesheet reminder** is built per request for the caller alone, from their own consent and their own day (never another's),
+  from 16:00 at the caller's `tz`, once a day (its id carries the date), only to a person who has answered the consent question.
+
 ## 14. The agency directory (features/agency-setup.clan)
 
 An agency's people are a third registry (after clients and jobs): one CLAN document per tenant,

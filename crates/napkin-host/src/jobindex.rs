@@ -25,6 +25,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use clan_sdk::{ClanFile, ClientRef};
 use serde::Serialize;
 
+use crate::alerts;
 use crate::clients;
 use crate::document::Document;
 use crate::error::HostResult;
@@ -128,6 +129,10 @@ pub struct JobEntry {
     pub route: Vec<RouteStepState>,
     /// Who the job waits on now: the first step not approved.
     pub holder: Option<Holder>,
+    /// The people on the job: its owner, the signers of its brief, the approvers of its route, and anyone
+    /// who has written a decision in one of its documents (sign-in names, sorted). What the on-the-job
+    /// filter of Needs you reads; sent to nobody (`jobview.rs` does not list it).
+    pub people: Vec<String>,
 }
 
 /// One step of the route, as the documents' decisions have it.
@@ -178,6 +183,8 @@ pub struct Holder {
 pub enum Audience {
     Person(String),
     Role(&'static str),
+    /// Everyone on the job (`JobEntry::people`).
+    Job,
 }
 
 /// One thing a person is asked to do next on a job.
@@ -185,7 +192,7 @@ pub enum Audience {
 pub struct Need {
     /// Stable: `{job}:{stage}:{role}:{kind}`, so a later record can key on it.
     pub id: String,
-    /// `gate`, `approval` or `approval-chase`.
+    /// `gate`, `approval`, `approval-chase`, or a notice: `brief-changed`, `client-change`, `deadline`, `timesheet`.
     pub kind: &'static str,
     /// The stage the need is about.
     pub stage: String,
@@ -203,7 +210,23 @@ pub struct Need {
     /// The job's deadline: what the list is ordered by. An approval need carries
     /// its step's own due date.
     pub due: Option<String>,
+    /// Where `due` came from: `stage` (the approval route's deadline for the stage), `job` (the job's)
+    /// or `day` (a day's own reminder).
+    pub due_source: &'static str,
+    /// Due within 48 hours, or past.
+    pub urgent: bool,
+    /// A notice the person may mark done; a task leaves when the work is done.
+    pub can_done: bool,
     pub audience: Audience,
+}
+
+/// The soonest deadline on a person's jobs: what an empty Needs you names.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct NextDeadline {
+    pub job: String,
+    pub client: String,
+    pub client_id: String,
+    pub due: String,
 }
 
 /// The index.
@@ -232,6 +255,33 @@ struct BriefFacts {
     signed_at: Option<String>,
     planner: Option<String>,
     creative_director: Option<String>,
+    /// The newest edit made after the lock, when the brief changed since it was signed: what a
+    /// Brief-changes-version notice is caused by.
+    edit_cause: Option<String>,
+}
+
+/// A document's decision chain, newest first; empty when it has none or cannot be read.
+fn chain_of_doc(doc: &Document) -> clan_sdk::DecisionChain {
+    let clan = doc.clan();
+    if clan.has_entry("agent/decision-chain.yaml") {
+        clan.read_entry("agent/decision-chain.yaml")
+            .ok()
+            .and_then(|b| clan_sdk::DecisionChain::from_yaml(&b).ok())
+            .unwrap_or_default()
+    } else {
+        clan_sdk::DecisionChain::default()
+    }
+}
+
+/// The newest edit after the document's lock: its decision id (else its time), `None` when nothing was
+/// edited since the lock or there is no lock.
+fn edit_cause_of(doc: &Document) -> Option<String> {
+    let chain = chain_of_doc(doc);
+    let at = review::lock_index(&chain, doc.clan().document_id())?;
+    chain.decisions[..at]
+        .iter()
+        .find(|d| d.superseded_by.is_none() && d.kind.as_deref() == Some("edit"))
+        .map(|d| d.id.clone().unwrap_or_else(|| d.timestamp.clone()))
 }
 
 fn brief_facts(doc: &Document) -> Option<BriefFacts> {
@@ -263,6 +313,11 @@ fn brief_facts(doc: &Document) -> Option<BriefFacts> {
         signed_at: gate::signed_at(doc),
         planner: person(gate::PLANNER),
         creative_director: person(gate::CREATIVE_DIRECTOR),
+        edit_cause: if g.changed_since_lock {
+            edit_cause_of(doc)
+        } else {
+            None
+        },
     })
 }
 
@@ -331,21 +386,89 @@ impl JobIndex {
 
     /// What `person` (with `roles`) is asked to do, by deadline. A person with
     /// no name and no role is unrestricted and sees everything, as before roles
-    /// existed; an admin or a demo sees everything too.
+    /// existed; an admin or a demo sees everything too. For anyone else it is
+    /// the items of the jobs they are on, addressed to them by name or to a role
+    /// they hold; see [`needs_visible`](Self::needs_visible) for the one rule
+    /// about a role nobody on the job holds. Here no one's roles are known but
+    /// the caller's own, so that rule treats every role as unheld.
     pub fn needs_for(&self, person: Option<&str>, roles: &[String]) -> Vec<Need> {
-        let everyone = (person.is_none() && roles.is_empty())
-            || roles.iter().any(|r| r == "admin" || r == "demo");
+        self.needs_visible(person, roles, &|_| Vec::new())
+    }
+
+    /// [`needs_for`](Self::needs_for) with `roles_of`, which gives the roles of
+    /// a person on a job (the agency's directory, when it has one). A role's item
+    /// on a job reaches a person who holds the role and is on the job; and, when
+    /// nobody on the job holds the role (or no one's roles are known), everyone
+    /// with the role: the item is never orphaned. An item for the job's people
+    /// ([`Audience::Job`]) reaches exactly them.
+    pub fn needs_visible(
+        &self,
+        person: Option<&str>,
+        roles: &[String],
+        roles_of: &dyn Fn(&str) -> Vec<String>,
+    ) -> Vec<Need> {
+        let everyone = Self::sees_everything(person, roles);
         self.needs
             .iter()
             .filter(|n| {
-                everyone
-                    || match &n.audience {
-                        Audience::Person(p) => person == Some(p.as_str()),
-                        Audience::Role(r) => roles.iter().any(|x| x == r),
+                if everyone {
+                    return true;
+                }
+                let on_job = person.is_some_and(|p| self.is_on(&n.job, p));
+                match &n.audience {
+                    Audience::Person(p) => person == Some(p.as_str()),
+                    Audience::Job => {
+                        on_job
+                            || (self.job(&n.job).is_some_and(|j| j.people.is_empty())
+                                && roles.iter().any(|r| r == "account-service"))
                     }
+                    Audience::Role(r) => {
+                        roles.iter().any(|x| x == r)
+                            && (on_job
+                                || !self.job(&n.job).is_some_and(|j| {
+                                    j.people.iter().any(|p| roles_of(p).iter().any(|x| x == r))
+                                }))
+                    }
+                }
             })
             .cloned()
             .collect()
+    }
+
+    fn sees_everything(person: Option<&str>, roles: &[String]) -> bool {
+        (person.is_none() && roles.is_empty()) || roles.iter().any(|r| r == "admin" || r == "demo")
+    }
+
+    /// Whether `person` is on the job: its owner, a signer of its brief, an approver on its route, or
+    /// someone who has written a decision in one of its documents.
+    pub fn is_on(&self, job: &str, person: &str) -> bool {
+        self.job(job)
+            .is_some_and(|j| j.people.iter().any(|p| p == person))
+    }
+
+    /// The next deadline on the jobs `person` is on (every job for a person who sees everything): the
+    /// soonest job deadline that is today or later, ties by job number.
+    pub fn next_deadline(
+        &self,
+        person: Option<&str>,
+        roles: &[String],
+        today: NaiveDate,
+    ) -> Option<NextDeadline> {
+        let everyone = Self::sees_everything(person, roles);
+        self.jobs
+            .iter()
+            .filter(|j| everyone || person.is_some_and(|p| j.people.iter().any(|x| x == p)))
+            .filter_map(|j| {
+                let due = j.due.as_deref()?;
+                (alerts::days_until(due, today)? >= 0).then(|| (due.to_string(), j))
+            })
+            .min_by(|a, b| (&a.0, &a.1.number).cmp(&(&b.0, &b.1.number)))
+            .map(|(due, j)| NextDeadline {
+                job: j.number.clone(),
+                client: j.client.name.clone(),
+                client_id: j.client.id.clone(),
+                due,
+            })
     }
 
     pub fn job(&self, number: &str) -> Option<&JobEntry> {
@@ -366,6 +489,8 @@ struct DocFacts {
     evidence: Option<Evidence>,
     /// A gated brief: how far it has got.
     brief: Option<BriefFacts>,
+    /// The people who have written a decision in this document (sign-in names, sorted): who is on the job.
+    writers: Vec<String>,
 }
 
 /// The facts of the document `id` holding `bytes`; `None` for a document that
@@ -399,11 +524,20 @@ fn facts_of(id: &DocId, bytes: Vec<u8>) -> Option<DocFacts> {
         .filter(|app| APP_STAGES.iter().any(|(a, ..)| a == app))
         .map(|app| evidence_of(&doc, id, app, true));
     let brief = gate::applies(&doc).then(|| brief_facts(&doc)).flatten();
+    let mut writers: Vec<String> = chain_of_doc(&doc)
+        .decisions
+        .iter()
+        .filter(|d| d.actor.as_deref().is_some_and(|a| a.starts_with("human:")))
+        .map(person_name)
+        .collect();
+    writers.sort();
+    writers.dedup();
     Some(DocFacts {
         job,
         listed,
         evidence,
         brief,
+        writers,
     })
 }
 
@@ -425,11 +559,20 @@ fn entry_of(
     let mut best: Option<(Progress, BriefFacts, String, String)> = None;
     let mut evidence: Vec<Evidence> = Vec::new();
     let client_step = rec.route.iter().any(|st| st.party == jobs::CLIENT);
+    let mut people: Vec<String> = vec![rec.owner.clone()];
+    people.extend(
+        rec.route
+            .iter()
+            .filter(|st| st.party == jobs::AGENCY)
+            .map(|st| st.approver.clone()),
+    );
     for f in docs {
+        people.extend(f.writers.iter().cloned());
         if let Some(mut e) = f.evidence {
             if !client_step {
                 e.client = None;
             }
+            people.extend(e.signers.iter().map(|(_, p)| p.clone()));
             evidence.push(e);
         }
         if let Some(b) = f.brief {
@@ -448,6 +591,7 @@ fn entry_of(
                 Progress::Passed | Progress::Signed => "brief-check",
                 Progress::Confirmed => "scope-estimate",
             };
+            let (gate_due, gate_due_source) = alerts::due_of(rec, gate_stage);
             let mut push = |audience: Audience, role: &str, text: String, action: &str| {
                 needs.push(Need {
                     id: format!("{}:{gate_stage}:{role}:gate", rec.number),
@@ -460,7 +604,10 @@ fn entry_of(
                     text,
                     action: action.to_string(),
                     path: path.clone(),
-                    due: rec.due.clone(),
+                    due: gate_due.clone(),
+                    due_source: gate_due_source,
+                    urgent: false,
+                    can_done: false,
                     audience,
                 });
             };
@@ -583,6 +730,31 @@ fn entry_of(
         &mut needs,
     );
 
+    // The notices (features/needs-you-full.clan): each is a rule of `alerts.rs` over facts the cache holds.
+    let subject = alerts::Subject { rec, client_name };
+    if let Some((_, f, path, title)) = &best {
+        if let (true, Some(cause)) = (f.changed, f.edit_cause.as_deref()) {
+            needs.push(alerts::brief_changed(&subject, title, path, cause));
+        }
+        people.extend(f.planner.iter().chain(f.creative_director.iter()).cloned());
+    }
+    for e in &evidence {
+        if let Some(answer) = &e.client_change {
+            let stage = stage_of_app(e.app, jobs::CLIENT).unwrap_or("client-approval");
+            needs.push(alerts::client_change(
+                &subject, stage, &e.title, &e.path, answer,
+            ));
+        }
+    }
+    needs.extend(alerts::deadline_soon(&subject, today));
+    fold_approvals(&mut needs);
+    for n in &mut needs {
+        alerts::finish(n, today);
+    }
+    people.retain(|p| !p.is_empty());
+    people.sort();
+    people.dedup();
+
     let at_risk = rec
         .due
         .as_deref()
@@ -605,9 +777,27 @@ fn entry_of(
             documents: listed,
             route,
             holder,
+            people,
         },
         needs,
     )
+}
+
+/// An approver on a stage the Brief gate also asks about sees one row, not two: the approval's (it
+/// carries the route's deadline and how late it is, and its id is the one a later record keys on), and
+/// the gate's row for the same person on the same stage goes.
+fn fold_approvals(needs: &mut Vec<Need>) {
+    let approvals: Vec<(String, Audience)> = needs
+        .iter()
+        .filter(|n| n.kind == "approval")
+        .map(|n| (n.stage.clone(), n.audience.clone()))
+        .collect();
+    needs.retain(|n| {
+        n.kind != "gate"
+            || !approvals
+                .iter()
+                .any(|(stage, who)| *stage == n.stage && *who == n.audience)
+    });
 }
 
 // ── the approval route (features/approval-route.clan) ───────────────────────
@@ -626,6 +816,9 @@ struct Evidence {
     signs: Vec<Mark>,
     /// The client's accepted answer to the locked version.
     client: Option<Mark>,
+    /// The client's newest answer to the locked version when it asks for changes or turns it down:
+    /// the decision's id. Its words are never read into the index.
+    client_change: Option<String>,
 }
 
 /// One approving decision: who, when, and the exact version.
@@ -678,11 +871,20 @@ fn evidence_of(doc: &Document, id: &DocId, app: &str, client_step: bool) -> Evid
         })
         .map(|(_, d)| mark_of(d))
         .collect();
+    let view = client_step
+        .then(|| {
+            decisions::decisions(doc)
+                .ok()
+                .filter(|v| v.problem.is_none())
+        })
+        .flatten();
+    let client_change = view
+        .as_ref()
+        .and_then(|v| v.client.answer.as_ref())
+        .filter(|a| a.answer != "accepted" && a.current)
+        .map(|a| a.decision.clone());
     let client = if client_step {
-        decisions::decisions(doc)
-            .ok()
-            .filter(|v| v.problem.is_none())
-            .and_then(|v| v.client.answer)
+        view.and_then(|v| v.client.answer)
             .filter(|a| a.answer == "accepted" && a.current)
             .map(|a| Mark {
                 person: a
@@ -714,6 +916,7 @@ fn evidence_of(doc: &Document, id: &DocId, app: &str, client_step: bool) -> Evid
         lock,
         signs,
         client,
+        client_change,
     }
 }
 
@@ -904,6 +1107,9 @@ fn route_needs(
             action: action.to_string(),
             path: path.clone(),
             due: Some(h.due.clone()),
+            due_source: "stage",
+            urgent: false,
+            can_done: false,
             audience,
         });
     };

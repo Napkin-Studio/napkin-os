@@ -521,8 +521,13 @@ impl Timesheets {
         self
     }
 
-    fn now(&self) -> i64 {
+    pub(crate) fn now(&self) -> i64 {
         (self.clock)()
+    }
+
+    /// Whether `person`'s own day `date` is confirmed: one small file of their own, nobody else's.
+    pub(crate) fn day_confirmed(&self, person: &str, date: &str) -> bool {
+        self.store.day(person, date).0.confirmed.is_some()
     }
 }
 

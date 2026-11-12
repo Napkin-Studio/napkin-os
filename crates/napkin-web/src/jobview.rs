@@ -35,6 +35,9 @@ pub const JOB_KEYS: &[&str] = &[
     "route",
     "holder",
 ];
+/// Held back from every role: the people on the job feed the on-the-job filter of Needs you and are
+/// nobody's to read off the job.
+pub const HELD_BACK_KEYS: &[&str] = &["people"];
 /// The Money group only.
 pub const MONEY_KEYS: &[&str] = &["budget_hours"];
 
@@ -96,6 +99,33 @@ fn pick_all(v: &Value, keys: &[&str]) -> Value {
         Value::Array(items) => Value::Array(items.iter().map(|i| pick(i, keys)).collect()),
         other => other.clone(),
     }
+}
+
+/// What is sent of a need, by name (features/needs-you-full.clan): the audience (who else it was for) is
+/// held back, and so is anything a later field might add until it is named here.
+pub const NEED_KEYS: &[&str] = &[
+    "id",
+    "kind",
+    "stage",
+    "days_late",
+    "job",
+    "client",
+    "client_id",
+    "text",
+    "action",
+    "path",
+    "due",
+    "due_source",
+    "urgent",
+    "can_done",
+];
+
+/// A need as the signed-in person is sent it.
+pub fn need_view(need: &napkin_host::jobindex::Need) -> Value {
+    pick(
+        &serde_json::to_value(need).unwrap_or(Value::Null),
+        NEED_KEYS,
+    )
 }
 
 /// `entry` as a person with `roles` is sent it.
@@ -198,6 +228,7 @@ mod tests {
                 due: "2026-11-20".into(),
                 days_late: 0,
             }),
+            people: vec!["aoife@wk".into(), "dara@wk".into()],
         }
     }
 
@@ -215,13 +246,47 @@ mod tests {
     #[test]
     fn the_lists_name_every_field_of_a_job_exactly_once() {
         let full = serde_json::to_value(seeded()).unwrap();
-        assert_eq!(keys(&full), sorted(JOB_KEYS, MONEY_KEYS));
+        let sent = sorted(JOB_KEYS, MONEY_KEYS);
+        assert_eq!(
+            keys(&full),
+            sorted(
+                &sent.iter().map(String::as_str).collect::<Vec<_>>(),
+                HELD_BACK_KEYS
+            )
+        );
         let step = &full["route"][0];
         assert_eq!(keys(step), sorted(STEP_KEYS, APPROVER_KEYS));
         assert_eq!(keys(&full["client"]), sorted(CLIENT_KEYS, &[]));
         assert_eq!(keys(&full["stage"]), sorted(STAGE_KEYS, &[]));
         assert_eq!(keys(&full["documents"][0]), sorted(DOC_KEYS, &[]));
         assert_eq!(keys(&full["holder"]), sorted(HOLDER_KEYS, &[]));
+    }
+
+    #[test]
+    fn a_need_is_sent_by_name_and_never_says_who_else_it_was_for() {
+        use napkin_host::jobindex::{Audience, Need};
+        let need = Need {
+            id: "J001:brief-check:everyone:brief-changed:abc".into(),
+            kind: "brief-changed",
+            stage: "brief-check".into(),
+            days_late: None,
+            job: "J001".into(),
+            client: "Client A".into(),
+            client_id: "cli_00000001".into(),
+            text: "Brief: changed after it was signed.".into(),
+            action: "Open the brief".into(),
+            path: "documents/b.clan".into(),
+            due: Some("2026-12-18".into()),
+            due_source: "job",
+            urgent: false,
+            can_done: true,
+            audience: Audience::Person("dara@wk".into()),
+        };
+        let full = serde_json::to_value(&need).unwrap();
+        assert_eq!(keys(&full), sorted(NEED_KEYS, &["audience"]));
+        let sent = need_view(&need);
+        assert_eq!(keys(&sent), sorted(NEED_KEYS, &[]));
+        assert!(sent.get("audience").is_none());
     }
 
     #[test]

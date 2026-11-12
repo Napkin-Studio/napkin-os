@@ -20,10 +20,16 @@
 .hm-need-what:where(.nui, .nui *) b { display: block; font-size: 13.5px; }
 .hm-need-what:where(.nui, .nui *) small { color: var(--muted); font-size: 12px; }
 .hm-need-state:where(.nui, .nui *) { font: 600 10px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--warn); white-space: nowrap; }
+.hm-need-acts:where(.nui, .nui *) { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
+.hm-done:where(.nui, .nui *) { font: 600 12.5px var(--font-ui); color: var(--muted); min-height: 32px; }
+.hm-need[data-urgent]:where(.nui, .nui *) { border-color: var(--warn); }
+.hm-need-done:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr) auto; background: transparent; border-style: dashed; }
+.hm-need-done:where(.nui, .nui *) .hm-need-what b { font-weight: 600; }
 @media (max-width: 560px) {
   .hm-need:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr) auto; }
   .hm-need-state:where(.nui, .nui *) { grid-column: 1; grid-row: 2; }
-  .hm-need:where(.nui, .nui *) .btn-rect { grid-column: 2; grid-row: 1 / span 2; }
+  .hm-need:where(.nui, .nui *) .hm-need-acts { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .hm-done:where(.nui, .nui *) { min-height: 44px; padding: 0 6px; }
 }
 
 /* The doors: five round buttons at most, the label inside. Ink where the tool exists, dashed where it comes later. */

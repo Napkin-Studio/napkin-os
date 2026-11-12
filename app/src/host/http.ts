@@ -22,7 +22,7 @@ import type {
   LegacyName,
   ClientRecord,
   DashboardView,
-  JobNeed,
+  NeedsAnswer,
   JobEntry,
   JobPatch,
   JobRights,
@@ -96,8 +96,19 @@ export async function homeView(as?: string | null): Promise<HomeView | null> {
 }
 
 /** What the signed-in person is asked to do next, by deadline (`GET /needs`); empty where there is no server answer. */
-export async function jobNeeds(): Promise<JobNeed[]> {
-  try { return (await json<{ items: JobNeed[] }>('/needs')).items } catch { return [] }
+export async function jobNeeds(): Promise<NeedsAnswer> {
+  // the timesheet reminder is from 16:00 where the person is: minutes east of UTC, as the timesheet routes take it
+  try { return await json<NeedsAnswer>(`/needs?tz=${-new Date().getTimezoneOffset()}`) } catch { return { items: [] } }
+}
+
+/** Mark one of the signed-in person's own notices done (`POST /needs/{id}/done`); false when the server refuses. Private to them. */
+export async function markNeedDone(id: string): Promise<boolean> {
+  try { return (await fetch(`${await base()}/needs/${encodeURIComponent(id)}/done?tz=${-new Date().getTimezoneOffset()}`, { method: 'POST', credentials: 'same-origin' })).ok } catch { return false }
+}
+
+/** Take the mark back (Undo). */
+export async function undoNeedDone(id: string): Promise<boolean> {
+  try { return (await fetch(`${await base()}/needs/${encodeURIComponent(id)}/done`, { method: 'DELETE', credentials: 'same-origin' })).ok } catch { return false }
 }
 
 /** Every job as the index has it, with its route and who holds it (`GET /jobs`); null when the server does not answer. */
