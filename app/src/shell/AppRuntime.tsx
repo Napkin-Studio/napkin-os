@@ -11,6 +11,7 @@ import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
 import { jobsMessage } from './openJobs'
 import { editModeMessage } from './editMode'
+import { boothFrom, boothKey, boothMessage, readBooth, writeBooth } from './booth'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
@@ -54,6 +55,11 @@ interface Props {
    * (`clan:jobs`) on every load and whenever they change, so a run still going resumes on open.
    */
   jobs?: readonly string[]
+  /**
+   * Who is signed in: the Booth's hidden or shown is kept per person and tool
+   * (`clan:booth`, booth.ts), and posted to the page on every load.
+   */
+  person?: string | null
 }
 
 /**
@@ -69,7 +75,7 @@ export const DOC_LOADED = 'napkin:doc-loaded'
 
 export default function AppRuntime({
   hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, insets, jobs,
+  onChrome, onBar, insets, jobs, person,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -256,6 +262,24 @@ export default function AppRuntime({
   // `jobs` is a new array only when its ids changed (AppHost keys it by them).
   useEffect(() => { jobsRef.current = jobs ?? []; postJobs() }, [jobs, postJobs])
 
+  // The Booth hidden or shown (features/booth.clan): the page says it when the person changes it, and
+  // hears the stored choice on every load. Kept per person and per tool, never in the frame (sandboxed).
+  const boothAt = boothKey(person, manifest.app?.app_id)
+  const boothRef = useRef(boothAt)
+  useEffect(() => { boothRef.current = boothAt }, [boothAt])
+  const postBooth = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(boothMessage(readBooth(boothRef.current)), '*')
+  }, [])
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (!iframeRef.current?.contentWindow || e.source !== iframeRef.current.contentWindow) return
+      const open = boothFrom(e.data)
+      if (open !== null) writeBooth(boothRef.current, open)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
   // The dogfood build listens inside the frame too, once the person has agreed.
   const dogfood = useSyncExternalStore(onDogfood, dogfoodState, dogfoodState)
   const capture = dogfood.on && dogfood.consented
@@ -311,6 +335,7 @@ export default function AppRuntime({
         postClientMode()
         postInsets()
         postJobs()
+        postBooth()
         // An app that declared its parts before the shell heard says them again.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:parts?' }, '*')
         // Likewise the tabs and buttons it wants in the OS bar.

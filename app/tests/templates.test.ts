@@ -822,7 +822,7 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
   const said: string[] = []
   let locked = false
   const env = {
-    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
+    FIX: null, DRAFT: null, FIX_SAY, walker, renderSideStop: () => {}, boothAsk: () => {}, STRAT_: 'The Strategy agent', WRITER: 'the Brief agent', REV: 'the Review agent', NO_MW: 'no middleware', phase: 'doc', reduce: false,
     $: (id: string) => (id === 'walker' ? walker : id === 'sideAgent' ? side : null),
     REGEN: {}, fieldOf: () => null, roleOf: (k: string) => k,
     ROLES: { of: (k: string) => k, name: (k: string) => ({ synthesis: 'Strategy agent' } as Record<string, string>)[k] || 'An agent', auto: () => {},
@@ -4134,6 +4134,7 @@ function tabsEnv() {
     reportViewHtml: () => 'REPORT', reportFootHtml: () => '', itemHtml: (r: string) => 'ITEM ' + r, litPage: () => {},
     docId: () => 'd1', document: { activeElement: null }, window: {}, setTimeout: () => 0, clearTimeout: () => {},
     localStorage: { setItem() {} }, sessionStorage: { setItem: (k: string, v: string) => { store[k] = v } },
+    boothApply: () => {},
   }
   const f = lift<{ setView(v: string): void; renderSel(): void; renderPanel(): void }>(RT, ['setView', 'renderSel', 'renderPanel'], env)
   const pressed = () => btns.filter(b => b.attrs['aria-pressed'] === 'true').map(b => b.attrs['data-view'])
@@ -4231,7 +4232,7 @@ test('research map: on the Map tab a click in the report lights the map; the OS 
   const f = lift<{ select(r: string, push?: boolean, open?: boolean): void }>(RT, ['select'], {
     VIEW, PV: {}, endSurf: () => {}, mapLight: (r: string) => calls.push('light ' + r), selLabel: (r: string) => r,
     traceSel: () => {}, renderSel: () => calls.push('render'), checks: () => [], CHK: {}, chkId: () => '', renderChecks: () => {},
-    $: () => null, window: {},
+    $: () => null, window: {}, boothPick: () => {},
   })
   f.select('report.sections[s1].blocks[2]', false)
   assert.deepEqual(calls, ['light report.sections[s1].blocks[2]']); assert.equal(VIEW.sel, null, 'the map is not swapped for a detail')
@@ -5007,6 +5008,7 @@ function redraftPage(o: { locked?: string[] } = {}) {
     pollJob: () => {},
     window: { scrollTo: () => {} }, setTimeout: () => 0,
     runJob: (j: J, input: Record<string, unknown>) => { j.state = 'sending'; runs.push({ j, input }) },
+    boothAsk: () => {},
   }
   const f = lift<{ startDraft(p: string, a: unknown[], id?: string | null, inPlace?: boolean): void; sweepKeys(j: unknown): string[] }>(BM,
     ['startDraft', 'draftLive', 'sweepKeys', 'markSweep', 'draftSide', 'renderSideStop', 'draftInPlace', 'sideAgent'], env)
@@ -5235,4 +5237,129 @@ test('pointing in a page: outlined and named on hover, one click picks it and pr
   { const s = new FbEl('SPAN'); new FbEl('DIV', ['[contenteditable="true"]']).add(s); rt.f.fbKey({ key: 'f', target: s }) }
   rt.f.fbKey({ key: 'f', ctrlKey: true, target: para })
   assert.equal(rt.posts.length, n + 1, 'typing, editable text and a modifier ask nothing')
+})
+
+// ── the Booth (features/booth.clan): the right-hand panel hides to the edge and comes back ──────────
+// Brief Maker and Research carry the same Booth code: its state steps, its width per selection, and
+// what it tells the shell, lifted from each page and run against stand-ins.
+type BoothState = { open: boolean; ask: number; t: number }
+function booth(src: string, width: number) {
+  const posted: unknown[] = []
+  const timers: { f: () => void; ms: number }[] = []
+  const applied: boolean[] = []
+  const BOOTH: BoothState = { open: true, ask: 0, t: 0 }
+  const edge = { classList: { remove() {}, add() {} }, offsetWidth: 0, focus() {} }
+  const f = lift<{
+    boothSet(ev: { t: string; open?: boolean; n?: number }): void
+    boothPick(): void
+    boothAsk(n: number): void
+    boothStep(s: BoothState, ev: { t: string; open?: boolean; n?: number }, w: number): BoothState & { later: number }
+  }>(src, ['boothCanHide', 'boothStep', 'boothSet', 'boothPick', 'boothAsk'], {
+    BOOTH, BOOTH_MIN: 1101, BOOTH_ASK_MS: 1000, BOOTH_DUR: 470,
+    $: (id: string) => (id === 'boothEdge' ? edge : { contains: () => false, querySelector: () => null }),
+    document: { activeElement: null },
+    window: { innerWidth: width, parent: { postMessage: (m: unknown) => posted.push(m) } },
+    setTimeout: (fn: () => void, ms: number) => { timers.push({ f: fn, ms }); return timers.length },
+    clearTimeout: () => {},
+    boothApply: (instant: boolean) => applied.push(!!instant),
+  })
+  return { ...f, BOOTH, posted, timers, applied }
+}
+
+for (const [name, src] of [['Brief Maker', BM], ['Research', RT]] as const) {
+  test(`${name}: the Booth hides and shows, and the shell hears each change`, () => {
+    const b = booth(src, 1440)
+    b.boothSet({ t: 'hide' })
+    assert.equal(b.BOOTH.open, false)
+    assert.deepEqual(b.posted, [{ type: 'clan:booth', open: false }])
+    b.boothSet({ t: 'toggle' })
+    assert.equal(b.BOOTH.open, true)
+    assert.deepEqual(b.posted.at(-1), { type: 'clan:booth', open: true })
+    b.boothSet({ t: 'shell', open: false })
+    assert.equal(b.BOOTH.open, false, 'the stored choice is applied on load')
+    assert.equal(b.posted.length, 2, 'and is not told back to the shell')
+    assert.equal(b.applied.at(-1), true, 'the stored choice lands without the motion')
+  })
+
+  test(`${name}: a click on the document while the Booth is hidden brings the whole Booth back`, () => {
+    const b = booth(src, 1440)
+    b.boothSet({ t: 'hide' })
+    b.boothPick()
+    assert.equal(b.BOOTH.open, true)
+    assert.deepEqual(b.posted.at(-1), { type: 'clan:booth', open: true })
+    const n = b.posted.length
+    b.boothPick()
+    assert.equal(b.posted.length, n, 'open already: nothing to say')
+    // the page's selection calls it: a part, a finding, a fact or a section
+    const sel = fn(src, 'select')
+    assert.match(sel, /boothPick\(\)/, 'select() brings the Booth back')
+  })
+
+  test(`${name}: an agent asking while it is hidden shows the dot, then the Booth comes in about 1 s later`, () => {
+    const b = booth(src, 1440)
+    b.boothSet({ t: 'hide' })
+    b.boothAsk(1)
+    assert.equal(b.BOOTH.ask, 1, 'the edge tab counts the question')
+    assert.equal(b.BOOTH.open, false, 'not yet')
+    assert.equal(b.timers.length, 1)
+    assert.equal(b.timers[0].ms, 1000)
+    b.timers[0].f()
+    assert.equal(b.BOOTH.open, true, 'in on the question')
+    // answered before it came in: it stays hidden
+    const c = booth(src, 1440)
+    c.boothSet({ t: 'hide' }); c.boothAsk(1); c.boothAsk(0); c.timers[0].f()
+    assert.equal(c.BOOTH.open, false)
+    // open already: no timer
+    const d = booth(src, 1440)
+    d.boothAsk(1)
+    assert.equal(d.timers.length, 0)
+  })
+
+  test(`${name}: at 1100px and below nothing hides`, () => {
+    const b = booth(src, 1100)
+    b.boothSet({ t: 'hide' }); b.boothSet({ t: 'toggle' })
+    assert.equal(b.BOOTH.open, true)
+    assert.equal(b.posted.length, 0)
+    b.boothSet({ t: 'hide' }); b.boothAsk(1)
+    assert.equal(b.timers.length, 0, 'no timer when it cannot hide')
+    assert.equal(booth(src, 1101).boothStep({ open: true, ask: 0, t: 0 }, { t: 'hide' }, 1101).open, false)
+    // the CSS that hides it sits only inside the wide-window rule
+    const css = src.slice(src.indexOf('the Booth (features/booth.clan'), src.indexOf('</style>', src.indexOf('the Booth (features/booth.clan')))
+    const wide = css.indexOf('@media (min-width:1101px){')
+    assert.ok(wide >= 0, 'a wide-window rule')
+    const end = balanced(css, css.indexOf('{', wide))
+    let at = css.indexOf('booth-off')
+    assert.ok(at >= 0)
+    for (; at >= 0; at = css.indexOf('booth-off', at + 1)) {
+      if (at > wide && at < end) continue
+      // outside it, only how it moves (reduced motion), never what hides it
+      assert.doesNotMatch(css.slice(at, css.indexOf('}', at)), /visibility:hidden|opacity:0[;}]|\b0px/, 'booth-off hides only above 1100px')
+    }
+    assert.match(css, /@media \(max-width:1100px\)\{[^}]*\.booth-edge[^}]*display:none/, 'no edge tab at 1100 and below')
+  })
+
+  test(`${name}: no ] hint on screen; ] still toggles`, () => {
+    const hd = src.slice(src.indexOf('<div class="booth-hd">'), src.indexOf('</div>', src.indexOf('<div class="booth-hd">')))
+    const edge = src.slice(src.lastIndexOf('<', src.indexOf('id="boothEdge"')), src.indexOf('</button>', src.indexOf('id="boothEdge"')))
+    for (const h of [hd, edge]) {
+      assert.ok(h.length > 20)
+      assert.doesNotMatch(h, /<kbd/i)
+      assert.doesNotMatch(h.replace(/<[^>]*>/g, ''), /\]/, 'no visible ] in the Booth')
+    }
+    assert.match(hd, />Hide<svg/, 'the Hide › pill')
+    assert.match(hd, /class="booth-nm">Booth</, 'the header names it')
+    assert.match(edge, /class="booth-lb">Booth</)
+    assert.match(src, /e\.key!==']'[^\n]*\n[^\n]*\n?[^\n]*boothSet\(\{t:'toggle'\}\)/, '] toggles')
+  })
+}
+
+test('the Booth comes back at the size of what is selected', () => {
+  const bm = lift<{ boothWidth(sel: string | null): number }>(BM, ['boothWidth'], {})
+  assert.equal(bm.boothWidth(null), 420, 'the whole brief')
+  assert.equal(bm.boothWidth('insight'), 440, 'a part')
+  const cr = lift<{ boothWidth(view: string, avail: number): number }>(RT, ['boothWidth'], {})
+  assert.equal(cr.boothWidth('report', 1300), 440, 'the report, a finding or a fact')
+  assert.equal(cr.boothWidth('map', 1500), 744, 'the evidence map')
+  assert.equal(cr.boothWidth('map', 1000), 640, 'the map leaves the report 360')
+  assert.equal(cr.boothWidth('map', 700), 440, 'never under 440')
 })
