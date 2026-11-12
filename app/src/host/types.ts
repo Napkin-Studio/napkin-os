@@ -225,6 +225,8 @@ export interface GateView {
   planner_signed: boolean
   signed: boolean
   confirmed: boolean
+  /** Who gave the confirmation, name and address in full: for the agency only. */
+  confirmed_by?: { name?: string; email?: string; channel?: string }
   changed_since_lock: boolean
   open: boolean
   waiting_on: string[]

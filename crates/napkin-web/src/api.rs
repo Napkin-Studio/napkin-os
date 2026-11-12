@@ -843,6 +843,19 @@ fn client_link_call(
     }
 }
 
+/// Who may be a client's reviewer: nobody from the agency (`links::admit`).
+fn admit_reviewers(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    person: &str,
+    doc: &str,
+    who: &[(String, bool)],
+) -> ApiResult<()> {
+    let (_ws, session, _) = doc_session(ctx, tenant, doc)?;
+    crate::links::admit(ctx, tenant, &session, person, who)
+        .map_err(|(status, why)| ApiError::new(status, &why))
+}
+
 /// `POST /d/{doc}/client-link` `{name, email}`: a link the client opens on a phone with no
 /// account, to this locked version (features/client-confirm-link.clan). The token is in the
 /// answer once; the chain keeps the rest.
@@ -853,6 +866,8 @@ async fn make_client_link(
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<ClientLinkBody>,
 ) -> ApiResult<Json<Value>> {
+    // a Phase 1 link's one client is its approver: the same rule as a round's
+    admit_reviewers(&ctx, &tenant, &person, &doc, &[(body.email.clone(), true)])?;
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (expires, exp) = crate::links::ends();
     let made = client_link_call(
@@ -929,6 +944,17 @@ async fn make_round(
     if body.reviewers.len() > 12 {
         return Err(ApiError::new(400, "a round has at most 12 reviewers"));
     }
+    admit_reviewers(
+        &ctx,
+        &tenant,
+        &person,
+        &doc,
+        &body
+            .reviewers
+            .iter()
+            .map(|r| (r.email.clone(), r.approver))
+            .collect::<Vec<_>>(),
+    )?;
     let review = uuid::Uuid::new_v4().simple().to_string();
     let (expires, exp) = crate::links::ends();
     let ids: Vec<String> = body

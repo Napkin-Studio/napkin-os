@@ -716,12 +716,12 @@ fn json_body(body: &Bytes, cap: usize) -> Result<Value, Response> {
     })
 }
 
-/// How many rounds the job's route gives this document's job, when it says (the client step's `rounds`).
-pub fn rounds_in_scope(
+/// The client step of the route of this document's job, when the job has one.
+pub fn client_step(
     ctx: &AppCtx,
     tenant: &TenantId,
     session: &napkin_host::Session,
-) -> Option<u32> {
+) -> Option<napkin_host::jobs::RouteStep> {
     let job = session
         .read(|d| Ok(d.clan().manifest().job.clone()))
         .ok()
@@ -732,9 +732,77 @@ pub fn rounds_in_scope(
         .into_iter()
         .find(|r| r.number == job)?
         .route
-        .iter()
+        .into_iter()
         .find(|st| st.party == napkin_host::jobs::CLIENT)
-        .and_then(|st| st.rounds)
+}
+
+/// How many rounds the job's route gives this document's job, when it says (the client step's `rounds`).
+pub fn rounds_in_scope(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    session: &napkin_host::Session,
+) -> Option<u32> {
+    client_step(ctx, tenant, session).and_then(|st| st.rounds)
+}
+
+/// Who may be the client's reviewer or approver on a link an agency person makes (the review of
+/// 12 Nov 2026, finding 2). An agency person must not be able to answer as the client:
+///
+/// - an address that belongs to someone in the agency's own directory is refused, in any state and
+///   whatever the case, spaces or plus tag (`Aoife+client@studio.ie` is `aoife@studio.ie`);
+/// - so is the address of the person making the link, with a directory or without one;
+/// - when the job's route has a client step with a contact, the approver is that contact.
+///
+/// An agency with no directory cannot make the first check: only the maker's own sign-in name is
+/// refused there. `who` is each reviewer's address and whether they are an approver. Errors are the
+/// plain 400 to show the person making the link.
+pub fn admit(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    session: &napkin_host::Session,
+    maker: &str,
+    who: &[(String, bool)],
+) -> Result<(), (u16, String)> {
+    use client_link::canonical_email as canon;
+    let agency = crate::tenant::agency_of(maker);
+    let (mut own, mut mine): (Vec<String>, Vec<String>) = (Vec::new(), vec![canon(maker)]);
+    if let Some(agency) = agency.as_deref().filter(|a| ctx.directory.has(a)) {
+        for p in ctx.directory.people(agency) {
+            if p.username == maker {
+                mine.push(canon(&p.email));
+            }
+            own.push(canon(&p.email));
+        }
+    }
+    let contact = client_step(ctx, tenant, session)
+        .and_then(|st| st.contact)
+        .map(|c| canon(&c));
+    for (email, approver) in who {
+        let e = canon(email);
+        if mine.contains(&e) {
+            return Err((
+                400,
+                "That address is yours: a client's reviewer has to be someone else.".into(),
+            ));
+        }
+        if own.contains(&e) {
+            return Err((
+                400,
+                "That address belongs to someone in your own studio: a client's reviewer has to be outside it.".into(),
+            ));
+        }
+        if *approver {
+            if let Some(c) = &contact {
+                if &e != c {
+                    return Err((
+                        400,
+                        format!("This job's route names {c} as the client's approver: send the approval to that address."),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The page of a review link: the pieces one at a time, this reviewer's own comments, and the words

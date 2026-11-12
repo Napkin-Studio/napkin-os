@@ -64,6 +64,18 @@ async fn dispatch(
 
     let path = format!("/{}", rest.trim_start_matches('/'));
 
+    // A client's link is made through the API, where the agency's directory is checked: an app frame
+    // (or anyone holding its token) cannot make one around that check.
+    if matches!(
+        path.as_str(),
+        "/client-link/issue" | "/client-link/issue-round"
+    ) {
+        return refuse(
+            StatusCode::FORBIDDEN,
+            "a client's link is made from the studio's own screen",
+        );
+    }
+
     // The one route that spends money is metered before it is dispatched —
     // every call through it but a middleware `job_status` poll, which waits on
     // work already charged (`meter::charged`; an unreadable body is charged).

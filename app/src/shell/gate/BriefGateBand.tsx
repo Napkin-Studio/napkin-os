@@ -154,7 +154,12 @@ export default function BriefGateBand({ gate, client, onChanged, undo, docPath }
                 <>
                   <ul className="bg-list" data-testid="gate-signers">
                     {v.signers.filter(s => ROLE_WORDS[s.role]).map(s => <li key={s.role} data-signed={s.signed}>{signerLine(s)}</li>)}
-                    <li data-signed={v.confirmed && !v.changed_since_lock}>{client}: {v.confirmed && !v.changed_since_lock ? 'confirmed' : 'not yet'}</li>
+                    <li data-signed={v.confirmed && !v.changed_since_lock}>
+                      {client}: {v.confirmed && !v.changed_since_lock ? 'confirmed' : 'not yet'}
+                      {v.confirmed && !v.changed_since_lock && v.confirmed_by?.email && (
+                        <span className="bg-mid" data-testid="gate-confirmed-by"> by {v.confirmed_by.name ? `${v.confirmed_by.name}, ` : ''}{v.confirmed_by.email}</span>
+                      )}
+                    </li>
                   </ul>
                   {sign && (
                     <>

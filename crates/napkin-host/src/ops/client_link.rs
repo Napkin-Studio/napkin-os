@@ -318,6 +318,17 @@ impl Issue {
     }
 }
 
+/// An address as two people would call the same mailbox: trimmed, lower case, and with a plus tag
+/// dropped from the part before the `@` (`Aoife+client@studio.ie` is `aoife@studio.ie`). What a rule
+/// about who an address belongs to compares; nothing stored or sent is changed.
+pub fn canonical_email(e: &str) -> String {
+    let e = e.trim().to_lowercase();
+    match e.split_once('@') {
+        Some((local, domain)) => format!("{}@{domain}", local.split('+').next().unwrap_or(local)),
+        None => e,
+    }
+}
+
 fn plain_email(e: &str) -> bool {
     matches!(e.split_once('@'), Some((l, r)) if !l.is_empty() && r.contains('.') && !r.contains('@') && !r.starts_with('.') && !r.ends_with('.'))
         && !e.chars().any(|c| c.is_whitespace() || c.is_control())

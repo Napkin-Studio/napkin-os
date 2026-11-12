@@ -275,6 +275,36 @@ fn asset_reads_and_hashes_do_not_grow_with_requests_on_an_unchanged_document() {
 }
 
 #[test]
+fn the_gate_and_the_round_view_name_who_confirmed_in_full_and_a_reviewer_never_sees_it() {
+    let r = Rig::locked_brief();
+    assert_eq!(r.three(REVIEW).0, 200);
+    let (_, g) = r.call(&staff(), "/gate", json!({}));
+    assert_eq!(g["confirmed"], false);
+    assert!(g.get("confirmed_by").is_none(), "nobody has confirmed yet");
+    // reviewer B approves, and counts for nothing: the gate names nobody
+    assert_eq!(r.answer(B_MAIL, B, "confirm").0, 200);
+    let (_, g) = r.call(&staff(), "/gate", json!({}));
+    assert!(g.get("confirmed_by").is_none());
+    assert_eq!(r.answer(A_MAIL, A, "confirm").0, 200);
+    let (_, g) = r.call(&staff(), "/gate", json!({}));
+    assert_eq!(g["confirmed"], true, "{g}");
+    assert_eq!(g["confirmed_by"]["email"], A_MAIL);
+    assert_eq!(g["confirmed_by"]["name"], "Alex");
+    // the round view gives the agency every address, and a reviewer's own view holds no one else's
+    let (_, v) = r.call(&staff(), "/client-review/round", json!({}));
+    let mails: Vec<&str> = v["reviewers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["email"].as_str().unwrap())
+        .collect();
+    assert!(mails.contains(&A_MAIL) && mails.contains(&B_MAIL));
+    let (_, own) = r.state(B_MAIL, B);
+    let own = own.to_string();
+    assert!(!own.contains(A_MAIL) && !own.contains("Alex"), "{own}");
+}
+
+#[test]
 #[ignore]
 fn measure_comment_on_a_large_document() {
     let mut x: u64 = 88172645463325252;
