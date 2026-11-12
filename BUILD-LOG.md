@@ -159,10 +159,14 @@ frontend, desktop, engine, middleware, mock-backend, terraform, production-tool)
 
 **Cost.** Not read from inside the session. Run `/cost`. Builders used 300,000 to 550,000 tokens each.
 
+**Plan change, 12 Nov, late (Sai: "modify the plan to accommodate those changes and keep the build in this branch going").** Develop moved 39 commits on 12 Nov (to 5f828631): the jev judge runs the first-draft checks and judges every brief (#206, #208); a document opens with one GET and the host composes the frame page (#172); jobs end failed when they stall and are traced (#171, #167); a UAT loop with journeys (#169, #204); Brief Maker and Research fixes. A trial merge conflicts in 10 files: AppHost.tsx, AppRuntime.tsx, structuredEditBridge.js, SaveStatus.tsx, napkin-host routes.rs, napkin-web lib.rs and tests/api.rs, server app.py and registry.py, Cargo.lock.
+
 **Next action.**
 
-1. On a quiet machine, re-run pilot tests 7 and 18 at 1440 px in the worktree `napkin-b-phase2-verify-b`. `fix/phase2-verify-b` is already merged. If they pass, push `spike/fabletest` (no pull request). Origin is at a658a60a; four records and the fixes are local only.
-2. Build `first-day`, `ask-nap` (the offline core) and `napkin-brain`, three at once, builders running only their own tests. Then one wave check on Sonnet.
-3. Then: the per-client AI switch as a small record; agency-setup stages 4 and 5; idea-room slices 2 and 3; the Script editor's AI margin (held until the spend cap is decided).
-4. Held until their outside accounts exist, unless Sai says otherwise: `sso`, `timesheet-signals`, `voice`.
-5. Write the Phase 2 close, then design Phases 3 and 4 (not started).
+1. Merge `origin/develop` into `spike/fabletest` on `chore/merge-develop` (worktree `napkin-b-merge-develop`), keep both sides' behaviour, run all checks and the full e2e (this also re-runs pilot tests 7 and 18). Merge it in, then push `spike/fabletest` (no pull request; the push needs Sai's permission rule or his own hand).
+2. Re-read three designs against develop and amend them where it changes them: `judge` (jev now exists, so a calibrated score may back the threshold), `client-review-full` and the Cmd K frame fix (the frame is loaded differently), `job-page` (new job end states). Small fix records where needed.
+3. From then on merge develop into this branch at the start of every wave, so the gap never grows past a day.
+4. Build `first-day`, `ask-nap` (the offline core) and `napkin-brain`, three at once, builders running only their own tests. Then one wave check on Sonnet.
+5. Then: the per-client AI switch as a small record; agency-setup stages 4 and 5; idea-room slices 2 and 3; the Script editor's AI margin (held until the spend cap is decided).
+6. Held until their outside accounts exist, unless Sai says otherwise: `sso`, `timesheet-signals`, `voice`.
+7. Write the Phase 2 close, then design Phases 3 and 4 (not started).
