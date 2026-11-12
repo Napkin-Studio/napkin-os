@@ -135,6 +135,22 @@ pub struct ViewState {
     pub edit_mode: bool,
 }
 
+/// Where [`Session::open_observed`] has got to: each step of an open, as it
+/// ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenMark {
+    /// The view lock is held (the wait for it is over).
+    Locked,
+    /// The archive is read from the store.
+    Read { bytes: usize },
+    /// The archive is parsed and its app signature checked.
+    Verified,
+    /// The installed app's view is chosen (it may read the template).
+    Resolved,
+    /// What the shell is told about the document is worked out.
+    Described,
+}
+
 /// The thin wrapper the desktop and browser shells use: a store, the context
 /// they act as, and one [`ViewState`].
 pub struct Session {
@@ -310,11 +326,28 @@ impl Session {
     /// round 12: the desk re-read a Research document while its report was
     /// being written, and the page was handed the document without it).
     pub fn open(&self, id: DocId) -> HostResult<OpenResult> {
+        self.open_observed(id, &mut |_| {})
+    }
+
+    /// [`Self::open`], telling `mark` as each step ends, so a server can time
+    /// where an open spends its time. The host keeps no clock (wasm32 has
+    /// none it may use); the caller measures between marks.
+    pub fn open_observed(
+        &self,
+        id: DocId,
+        mark: &mut dyn FnMut(OpenMark),
+    ) -> HostResult<OpenResult> {
         let mut state = self.view.lock().unwrap();
+        mark(OpenMark::Locked);
         // One read: the snapshot holds the bytes it was built from (#10).
-        let doc = Document::load(self.store.parts(), id)?;
+        let bytes = self.store.parts().read(&id)?;
+        mark(OpenMark::Read { bytes: bytes.len() });
+        let doc = Document::from_bytes(id, bytes)?;
+        mark(OpenMark::Verified);
         let doc = view::resolve(&*self.store, doc, NAPKIN_PUBLIC_KEY);
+        mark(OpenMark::Resolved);
         let result = read::describe(&doc);
+        mark(OpenMark::Described);
         state.open = Some(doc);
         Ok(result)
     }
@@ -959,6 +992,20 @@ mod tests {
         fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
             self.inner.fork_branch(parent, agent)
         }
+    }
+
+    #[test]
+    fn an_observed_open_marks_each_step_in_order() {
+        let (_dir, session, id) = open_temp_clan();
+        let mut marks = Vec::new();
+        session.open_observed(id, &mut |m| marks.push(m)).unwrap();
+        assert_eq!(marks.len(), 5);
+        assert_eq!(marks[0], OpenMark::Locked);
+        assert!(matches!(marks[1], OpenMark::Read { bytes } if bytes > 0));
+        assert_eq!(
+            &marks[2..],
+            &[OpenMark::Verified, OpenMark::Resolved, OpenMark::Described]
+        );
     }
 
     // UAT round 12: the desk reopened a Research document (GET /d/<path>)
