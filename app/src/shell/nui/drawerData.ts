@@ -9,6 +9,7 @@
 
 import type { AttentionItem, DecisionBlock, DecisionsView, RelatedView, UpstreamEntry } from '../../host'
 import { didWhat, mainTarget, refOfAddress, sureWord, upper, whoOf, withCountry } from '../decisions/words'
+import { verdictWords, type Need } from '../decisions/needs'
 
 const TITLE: Record<string, string> = {
   unverified_finding: 'Is this right?',
@@ -23,7 +24,7 @@ const TITLE: Record<string, string> = {
 /** A call's row: its question in bold, then the document and what kind of call it is. */
 export function callWords(item: AttentionItem, docTitle: string): { title: string; sub: string } {
   const label = withCountry((item.label ?? '').replace(/^(Finding|Fact|Contest) · /, '')).trim()
-  const kind = TITLE[item.code] ?? 'Needs your call'
+  const kind = item.code === 'bad_verdict' ? verdictWords((item as Need).by) : TITLE[item.code] ?? 'Needs your call'
   return label ? { title: label, sub: `${docTitle} · ${kind}` } : { title: kind, sub: `${docTitle} · ${item.text}` }
 }
 

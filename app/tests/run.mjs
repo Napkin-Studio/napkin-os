@@ -11,7 +11,14 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
-const tests = readdirSync(here).filter(f => /\.test\.tsx?$/.test(f))
+// `node tests/run.mjs needs.test.ts desk.test.tsx` runs only those files (what a change touched);
+// with no names, every test. Names may be paths: only the file name is compared.
+const only = process.argv.slice(2).map(a => a.split('/').pop())
+const tests = readdirSync(here).filter(f => /\.test\.tsx?$/.test(f) && (!only.length || only.includes(f)))
+if (only.length && tests.length !== only.length) {
+  console.error(`no such test file: ${only.filter(o => !tests.includes(o)).join(', ')}`)
+  process.exit(2)
+}
 // Inside app/, so a bundle's external imports (react-dom, for the figure
 // test) resolve against app/node_modules.
 const out = mkdtempSync(join(here, '.run-'))
