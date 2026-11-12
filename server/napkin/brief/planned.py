@@ -165,6 +165,11 @@ def plan_schema(keys, lens_codes, cat_codes):
 
 
 # -- draft -----------------------------------------------------------------------------------
+# Draft it again (features/brief-redraft-in-place): the parts as they stand come as `current`.
+REDRAFT_RULE = """On a redraft, `current` is the brief as it stands, each part with who wrote it last. Keep what a person wrote
+(by "person") unless the facts contradict it, and say so in `why` when they do. Build on what an agent wrote
+(by "agent") with the facts, new ones included; do not start it from scratch.
+"""
 DRAFT_SYSTEM = """You are a senior strategic planner writing a complete creative brief, every part at once, so
 the parts make one argument: the objectives, the audience, the insight, the proposition and its proof all
 serve the plan's strategy.
@@ -187,10 +192,7 @@ Lists (reasons to believe, tone, mandatories, open questions) are arrays of shor
 believe you cannot prove from a fact starts with "To confirm:". Budget and scope: deliverables, channels and
 timing only, no budget figure the client did not give. Open questions: what only the client can answer.
 Return null for a part only when nothing sensible can be said. Never restate the person's request as content.
-On a redraft, `current` is the brief as it stands, each part with who wrote it last. Keep what a person wrote
-(by "person") unless the facts contradict it, and say so in `why` when they do. Build on what an agent wrote
-(by "agent") with the facts, new ones included; do not start it from scratch.
-Write in plain British English, specific and vivid, no category jargon."""
+""" + REDRAFT_RULE + """Write in plain British English, specific and vivid, no category jargon."""
 
 
 # Every rewrite (the Review agent's revise, the check loop's, fix_parts') carries each part's claims as they stand.
