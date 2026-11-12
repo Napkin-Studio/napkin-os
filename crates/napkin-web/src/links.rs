@@ -268,6 +268,107 @@ impl PieceCache {
     }
 }
 
+/// What an emailed code may cost, for good, per link: failed tries over its whole life. Twelve: a
+/// person mistypes a few, and a link lives 30 days, but with two codes good at a time twelve tries
+/// guess one in about 40,000. Past it the link's code is dead and the agency makes the link again.
+pub const CODE_FAILED_LIFETIME: u32 = 12;
+/// Mails of the code one link may send a day: five. A reviewer asks once or twice a day; a round
+/// of twelve at five is sixty, under a third of the tenant's 200, so one forwarded link cannot use
+/// up the agency's codes.
+pub const CODE_SENDS_PER_DAY: u32 = 5;
+
+#[derive(Default, Serialize, Deserialize)]
+struct CodeRecord {
+    /// Wrong codes tried on this link, ever.
+    failed: u32,
+    /// Mails sent today, and which day (Unix day number).
+    day: u64,
+    sent: u32,
+}
+
+/// The counts that must outlive a restart: failed tries and mails per link, one small file each
+/// under `<root>/link-codes/<tenant>/`.
+pub struct CodeGuard {
+    dir: std::path::PathBuf,
+    lock: Mutex<()>,
+}
+
+impl CodeGuard {
+    pub fn new(dir: std::path::PathBuf) -> Self {
+        Self {
+            dir,
+            lock: Mutex::new(()),
+        }
+    }
+
+    fn file(&self, tenant: &str, id: &str) -> std::path::PathBuf {
+        let safe = |s: &str| -> String {
+            s.chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect()
+        };
+        self.dir
+            .join(safe(tenant))
+            .join(format!("{}.json", safe(id)))
+    }
+
+    fn read(&self, tenant: &str, id: &str) -> CodeRecord {
+        std::fs::read(self.file(tenant, id))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    fn write(&self, tenant: &str, id: &str, r: &CodeRecord) {
+        let f = self.file(tenant, id);
+        if let Some(d) = f.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let tmp = f.with_extension("tmp");
+        if std::fs::write(&tmp, serde_json::to_vec(r).unwrap_or_default()).is_ok() {
+            let _ = std::fs::rename(&tmp, &f);
+        } else {
+            tracing::warn!("a link's code counts could not be saved");
+        }
+    }
+
+    /// Has this link used up its failed tries?
+    pub fn locked(&self, tenant: &str, id: &str, max: u32) -> bool {
+        let _g = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        self.read(tenant, id).failed >= max
+    }
+
+    /// Count one wrong code.
+    pub fn failed(&self, tenant: &str, id: &str) {
+        let _g = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut r = self.read(tenant, id);
+        r.failed = r.failed.saturating_add(1);
+        self.write(tenant, id, &r);
+    }
+
+    /// May this link send another mail on `day`? Counted when it may.
+    pub fn may_send(&self, tenant: &str, id: &str, day: u64, cap: u32) -> bool {
+        let _g = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut r = self.read(tenant, id);
+        if r.day != day {
+            r.day = day;
+            r.sent = 0;
+        }
+        if r.sent >= cap {
+            return false;
+        }
+        r.sent += 1;
+        self.write(tenant, id, &r);
+        true
+    }
+}
+
 // ── the public routes ───────────────────────────────────────────────────────
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -671,6 +772,12 @@ fn review_ctx(
         });
     }
     if st["code"] == true && !cookie_ok(ctx, headers, &claims.id) {
+        if ctx
+            .code_guard
+            .locked(&claims.tenant, &claims.id, ctx.code_failed_max)
+        {
+            return Err(gone("locked"));
+        }
         return Err(need_code());
     }
     let email = st["client"]["email"].as_str().unwrap_or_default();
@@ -1123,6 +1230,13 @@ async fn code(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>, body: B
     };
     let now = (ctx.code_clock)();
     let w = now / CODE_WINDOW_S;
+    // a link whose code has been tried wrong too often is dead: the agency makes the link again
+    if ctx
+        .code_guard
+        .locked(&claims.tenant, &claims.id, ctx.code_failed_max)
+    {
+        return gone("locked");
+    }
     let Some(entered) = sent.get("code").and_then(Value::as_str) else {
         // send
         if !ctx
@@ -1130,6 +1244,18 @@ async fn code(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>, body: B
             .allow_in(&format!("{}:send", claims.id), CODE_SENDS, CODE_WINDOW)
         {
             return too_many();
+        }
+        // and a day's share of its own, well under the agency's: one holder cannot use up the codes
+        if !ctx.code_guard.may_send(
+            &claims.tenant,
+            &claims.id,
+            now / 86_400,
+            ctx.code_sends_per_day,
+        ) {
+            return plain(
+                StatusCode::TOO_MANY_REQUESTS,
+                json!({ "ok": false, "error": "no more codes can be sent for this link today" }),
+            );
         }
         let to = st["client"]["email"]
             .as_str()
@@ -1162,6 +1288,7 @@ async fn code(State(ctx): State<Arc<AppCtx>>, Path(token): Path<String>, body: B
     let right = same(entered, &code_for(&ctx.code_key, &claims.id, w))
         | (w > 0 && same(entered, &code_for(&ctx.code_key, &claims.id, w - 1)));
     if !right {
+        ctx.code_guard.failed(&claims.tenant, &claims.id);
         return plain(
             StatusCode::UNAUTHORIZED,
             json!({ "ok": false, "state": "code", "error": "that code is not right" }),

@@ -41,6 +41,7 @@ const GONE_WORDS: Record<string, (who: string) => string> = {
   answered: () => 'You have already answered this brief. There is nothing more to do.',
   withdrawn: who => `${who} has withdrawn this link. Ask them for a new one.`,
   expired: who => `This link has run out. Ask ${who} for a new one.`,
+  locked: who => `That link's code was tried wrong too many times, so it no longer opens. Ask ${who} for a new link.`,
   superseded: who => `The brief has changed since this link was made. Ask ${who} for the new version.`,
 }
 

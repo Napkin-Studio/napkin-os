@@ -264,6 +264,7 @@ export function CodeScreen({ token, agency, onIn, onGone }: { token: string; age
     setBusy(true); setProblem(null)
     call({ code: code.trim() }).then(async r => {
       if (r.ok) onIn()
+      else if (r.status === 410) onGone(((await r.json().catch(() => ({}))) as { state?: string }).state ?? 'gone')
       else setProblem(r.status === 429 ? 'Too many tries. Ask for a new code in ten minutes.' : 'That code is not right. Check the email and try again.')
     }, () => setProblem('That did not go through. Check your connection.')).finally(() => setBusy(false))
   }
