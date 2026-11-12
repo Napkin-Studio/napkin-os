@@ -29,6 +29,7 @@ import { DeepOMark } from '../brand/DeepOMark'
 import { accountName, isAccountName } from './accountName'
 import { agencyOfSignInName, applyAgency } from './agency/palette'
 import { LOOK_DELAY_MS, signInLookOf, type SignInLook } from './agency/signInLook'
+import { loadAgencyLooks } from './agency/looks'
 import { justSignedOut, markSignedOut, rememberAgency } from './agency/lastAgency'
 import './SignIn.css'
 
@@ -41,8 +42,9 @@ export function SignInGate({ children, check }: { children: ReactNode; check: bo
   useEffect(() => {
     if (!check) return
     let live = true
-    fetch('/api/session', { credentials: 'same-origin' })
-      .then(async r => {
+    // the agencies added from the People page join the look registry before the card or the studio shows
+    Promise.all([fetch('/api/session', { credentials: 'same-origin' }), loadAgencyLooks()])
+      .then(async ([r]) => {
         if (!live) return
         if (r.status === 401) {
           const b = await r.json().catch(() => ({}))

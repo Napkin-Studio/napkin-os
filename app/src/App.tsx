@@ -8,6 +8,8 @@ import type { InstalledApp, OpenResult } from './host'
 import DeviceBanner from './offline/DeviceBanner'
 import DeviceHome from './offline/DeviceHome'
 import OfflineDialog from './offline/OfflineDialog'
+import PeoplePage from './shell/people/PeoplePage'
+import { peopleEntryFor } from './shell/people/model'
 import { isClanFile, keepOffline, pickFile, type DeviceSource } from './offline/actions'
 import { copyBytes, type OfflineCopy } from './offline/store'
 import { useFileDrop } from './offline/useFileDrop'
@@ -107,6 +109,8 @@ export default function App() {
   const [device, setDevice] = useState(onDevice)
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
+  // The People page (features/people-admin.clan): an admin's, from the account menu.
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const updateReady = useUpdateReady()
   // The landing's data, read through the host. Not on the device's own home.
   // In a document too: the crew in the bar shows an agent while one works on it (its run, from the same listing).
@@ -126,7 +130,9 @@ export default function App() {
   // Not before the first read settles: until then the boot screen's layer (brand/bootLook.ts, the agency
   // this browser last signed in to) stays, so a reload never shows Napkin's kit on the way to the agency's.
   const personKnown = personId != null || landing.state !== 'loading' || (device && !serverless)
-  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown])
+  // An agency added on the People page joins the registry there; closing the page puts its look on again.
+  const [looksSeen, setLooksSeen] = useState(0)
+  useEffect(() => { if (personKnown) { applyAgency(personId); rememberAgency(personId) } }, [personId, personKnown, looksSeen])
   // The medallion in the agency's own base and accent, else Napkin's.
   const mark = markOf(personId)
   // The agency's wordmark on its pill (and its icon on a narrow bar), where the registry has them.
@@ -562,6 +568,8 @@ export default function App() {
     // No role is served yet (gaps.md §12): the agency's name alone.
     line: agency,
     ...(hasServer && !device ? { onOffline: () => setOfflineOpen(true), offlineCount: offlineCopies?.length ?? null } : {}),
+    // Only for an admin: the server refuses everyone else's calls with 403 too.
+    ...(hasServer && !device ? { onPeople: peopleEntryFor(user, () => setPeopleOpen(true)) } : {}),
   }
 
   // Share ▾ "Copy link": the web's link to a document (`?open=`, host/http.ts takeLaunchFile).
@@ -673,6 +681,8 @@ export default function App() {
       )}
 
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
+
+      {peopleOpen && <PeoplePage user={user} onClose={() => { setPeopleOpen(false); setLooksSeen(n => n + 1) }} />}
 
       {dragging && (
         <div className="dv-drop" aria-hidden>

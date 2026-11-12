@@ -103,6 +103,8 @@ export interface Account {
   onOffline?: () => void
   /** How many offline copies are on this device, when known. */
   offlineCount?: number | null
+  /** Open the People page: who can sign in (features/people-admin.clan). Present for an admin only. */
+  onPeople?: () => void
 }
 
 /** Where the bar is when no document is open but a tool's home is: its icon and its plural ("Briefs"). */
@@ -349,8 +351,9 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
 export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void): MenuItem[] {
   const n = account?.offlineCount
   return [
+    ...(account?.onPeople ? [{ label: 'People', hint: 'Who can sign in, by agency', run: account.onPeople }] : []),
     ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
-    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!account?.onOffline }] : []),
+    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onPeople) }] : []),
   ]
 }
 

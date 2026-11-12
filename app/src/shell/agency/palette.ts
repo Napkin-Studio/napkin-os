@@ -106,14 +106,43 @@ export const AGENCY_ALIASES: Readonly<Record<string, string>> = {
   bg: 'boysandgirls',
   boysgirls: 'boysandgirls',
   'b+g': 'boysandgirls',
+  'w+k': 'wk',
 }
+// napkin-web mirrors the ids, names, colours and aliases above (crates/napkin-web/src/people.rs
+// CODE_AGENCIES, CODE_ALIASES) to recognise an agency on the People page; tests/peopleAdmin.test.ts keeps them in step.
+
+/** An agency added from the People page, as napkin-web serves it (`GET /api/agency-looks`). */
+export interface AgencyLook { id: string; name: string; base: string; accent: string; aliases?: string[] }
+
+// The added agencies (features/people-admin.clan): after the code registry, which wins on a clash.
+let addedColours: Record<string, AgencyColours> = {}
+let addedAliases: Record<string, string> = {}
+
+/** Take the agencies added from the People page into the registry: their people wear their look. */
+export function registerAgencyLooks(looks: readonly AgencyLook[]): void {
+  const colours: Record<string, AgencyColours> = {}
+  const aliases: Record<string, string> = {}
+  for (const l of looks) {
+    const id = l.id.trim().toLowerCase()
+    if (!id || Object.hasOwn(AGENCY_COLOURS, id) || !rgb(l.base) || !rgb(l.accent)) continue
+    colours[id] = { name: l.name, base: l.base.toUpperCase(), accent: l.accent.toUpperCase() }
+    for (const a of l.aliases ?? []) aliases[a.trim().toLowerCase()] = id
+  }
+  addedColours = colours
+  addedAliases = aliases
+}
+
+/** The agencies added from the People page that the registry holds now. */
+export function addedAgencyIds(): string[] { return Object.keys(addedColours) }
 
 /** The registry id an agency id means (itself, or an alias's target); null when the registry has neither. */
 export function canonicalAgencyId(agencyId: string | null | undefined): string | null {
   if (!agencyId) return null
   const id = agencyId.trim().toLowerCase()
   if (Object.hasOwn(AGENCY_COLOURS, id)) return id
-  return Object.hasOwn(AGENCY_ALIASES, id) ? AGENCY_ALIASES[id] : null
+  if (Object.hasOwn(AGENCY_ALIASES, id)) return AGENCY_ALIASES[id]
+  if (Object.hasOwn(addedColours, id)) return id
+  return Object.hasOwn(addedAliases, id) ? addedAliases[id] : null
 }
 
 /** The agency's name for a signed-in person: the registry's, else `fallback` (the id, title-cased). */
@@ -205,7 +234,8 @@ export function agencyIdOf(personId: string | null | undefined): string | null {
 /** The admin-set colours for an agency id, if it has any. */
 export function coloursOf(agencyId: string | null | undefined): AgencyColours | null {
   const id = canonicalAgencyId(agencyId)
-  return id ? AGENCY_COLOURS[id] : null
+  if (!id) return null
+  return Object.hasOwn(AGENCY_COLOURS, id) ? AGENCY_COLOURS[id] : addedColours[id] ?? null
 }
 
 /** Which ground a colour is: light when near-black ink reads best on it. */
