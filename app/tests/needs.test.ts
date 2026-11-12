@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { AttentionItem, DecisionsView } from '../src/host/types.ts'
-import { docStateOf, looksRightOf, needKey, needsOf, splitAside } from '../src/shell/decisions/needs.ts'
+import { docStateOf, isFor, looksRightOf, needKey, needsOf, splitAside } from '../src/shell/decisions/needs.ts'
 import { deskCallDocs } from '../src/shell/nui/deskData.ts'
 import type { LibraryItem } from '../src/host/types.ts'
 
@@ -77,4 +77,12 @@ test('desk Decisions: every call across the documents the desk has read, most ca
   })
   assert.deepEqual(read.map(r => [r.item.path, r.calls.length]), [['a', 2], ['c', 1]], 'the calls themselves, most first; a document that needs nothing is left out')
   assert.deepEqual(unread.map(i => i.path), ['b', 'e'], 'not read yet: listed to open; a locked one needs nothing')
+})
+
+test('a host event is for the document it names, and no other (os-layer §8.4)', () => {
+  const ev = { ok: true, source: 'middleware', path: 'doc-a' }
+  assert.equal(isFor(ev, 'doc-a'), true)
+  assert.equal(isFor(ev, 'doc-b'), false, 'a write to another document of the workspace is not this one\'s')
+  assert.equal(isFor({ ok: true }, 'doc-a'), false, 'an event that names no document is no one\'s')
+  assert.equal(isFor(null, 'doc-a'), false)
 })

@@ -59,9 +59,9 @@ def answering(missing=(), figure=False):
     return r
 
 
-def ask(store, clan, q="Where does the money go?", lens="media_spend", jev=None, model=None, research=None):
+def ask(store, clan, q="Where does the money go?", lens="media_spend", jev=None, model=None, research=None, about=None):
     caps = caps_for(store, model=model or FakeModel({"ask_answer": answering()}), research=research, jev=jev)
-    return Asker(DOC, "3", clan, "t@1.0", caps, q, lens, SETTINGS).run()
+    return Asker(DOC, "3", clan, "t@1.0", caps, q, lens, SETTINGS, about=about).run()
 
 
 def test_an_answer_the_facts_hold_is_written_in_its_section_without_a_search(store):
@@ -130,10 +130,82 @@ def test_the_question_is_checked_before_any_job(store):
         validate(clan, {"question": "  "})
     with pytest.raises(TaskError):
         validate(clan, {"question": "Why?", "lens": "astrology"})
-    assert validate(clan, {"question": " Why? "}) == ("Why?", None)
+    assert validate(clan, {"question": " Why? "}) == ("Why?", None, None)
 
 
 def test_a_document_made_before_the_task_can_still_ask():
     clan = {"pipeline": {"tasks": {"compose_report": "compose_report@1"}}}
     mod, handler = registry.resolve("ask_research", clan)
     assert handler == "ask_research@1.0"
+
+
+# -- about: the fact or finding the question was asked from ------------------------------------
+
+def with_finding(clan, status="proposed"):
+    pid = clan["facts"][-1]["id"]
+    fi = {"id": "fi_ABOUT1", "statement": "Spend leans on one channel.", "lens": "media_spend", "cites": [pid],
+          "status": status}
+    return dict(clan, findings=[fi]), pid
+
+
+def test_about_is_checked_against_the_document(store):
+    clan, pid = with_finding(researched(store))
+    assert validate(clan, {"question": "Is this right?", "about": pid}) == ("Is this right?", None, pid)
+    assert validate(clan, {"question": "Is this right?", "about": "fi_ABOUT1"})[2] == "fi_ABOUT1"
+    for about in ("f_NOPE", "fi_NOPE", "src_1", 7, ""):
+        with pytest.raises(TaskError):
+            validate(clan, {"question": "Is this right?", "about": about})
+    # a fact a person excluded, and a rejected finding, are out of use
+    out = dict(clan, data=dict(clan["data"], selection={"excluded": [{"fact_id": pid}]}))
+    with pytest.raises(TaskError):
+        validate(out, {"question": "Is this right?", "about": pid})
+    with pytest.raises(TaskError):
+        validate(out, {"question": "Is this right?", "about": "fi_ABOUT1"})
+    rej, _ = with_finding(researched(store), status="rejected")
+    with pytest.raises(TaskError):
+        validate(rej, {"question": "Is this right?", "about": "fi_ABOUT1"})
+
+
+def test_the_fact_asked_about_leads_the_evidence_and_the_prompt_names_it(store):
+    clan = researched(store)
+    last = clan["facts"][-1]["id"]
+    seen = []
+
+    def r(p):
+        seen.append(p)
+        return answering()(p)
+    _, change, _ = ask(store, clan, q="Is this figure current?", jev=FakeJev(0.9), about=last,
+                       model=FakeModel({"ask_answer": r}))
+    assert seen[0]["about"] == last and seen[0]["pins"][0]["id"] == last
+    rec = next(iter(change["data_patch"]["asks"].values()))
+    assert rec["about"] == last
+    assert rec["in_report"] is False  # under the fact until a person adds it
+    # grounded on it: the answer cites the item asked about
+    assert last in rec["answer"][0]["cites"]
+
+
+def test_a_finding_asked_about_leads_with_what_it_cites(store):
+    clan, pid = with_finding(researched(store))
+    seen = []
+
+    def r(p):
+        seen.append(p)
+        return answering()(p)
+    _, change, _ = ask(store, clan, q="Why does it say that?", jev=FakeJev(0.9), about="fi_ABOUT1",
+                       model=FakeModel({"ask_answer": r}))
+    assert seen[0]["about"] == "fi_ABOUT1" and seen[0]["findings"][0]["id"] == "fi_ABOUT1"
+    assert seen[0]["pins"][0]["id"] == pid
+    assert next(iter(change["data_patch"]["asks"].values()))["about"] == "fi_ABOUT1"
+
+
+def test_without_about_the_record_says_none(store):
+    clan = researched(store)
+    seen = []
+
+    def r(p):
+        seen.append(p)
+        return answering()(p)
+    _, change, _ = ask(store, clan, jev=FakeJev(0.9), model=FakeModel({"ask_answer": r}))
+    assert seen[0]["about"] is None
+    rec = next(iter(change["data_patch"]["asks"].values()))
+    assert rec["about"] is None and rec["in_report"] is True
