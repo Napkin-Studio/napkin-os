@@ -9,6 +9,8 @@
 // {total, sub{idea, craft, effect}, tests[{id, evidence, reason_code}], advised_route, trust, brief_version}. The fixture answers are
 // answers/judge_work*.json, picked with control({ variant: { judge_work: '<name>' } }). A piece is scored with POST /s/{token}/judge {target}.
 
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
 import { chainOf, control, middlewareLog, open, SIZES, sessionOf, signIn, type Decision } from './pilot'
@@ -18,6 +20,15 @@ import { RADIO_SCRIPT, SCRIPT_EDITOR_APP } from './seed/j001/p2/script-editor.mj
 import { PHASE2 } from './phase2/tests.mjs'
 
 const short = (n: number) => PHASE2.find(x => x.n === n)!.short
+
+const shots = process.env.NAPKIN_E2E_SHOTS // NAPKIN_E2E_SHOTS=docs/design/judge npm run e2e -- j001-p2-judge
+async function shot(page: Page, name: string, size: { tag: string; width: number }) {
+  if (!shots) return
+  mkdirSync(shots, { recursive: true })
+  await page.waitForTimeout(400)
+  // The roster agency wears a real agency's name: it is masked, never shown.
+  await page.screenshot({ path: join(shots, `${name}-${size.tag}.png`), fullPage: size.width < 1000, mask: [page.getByTestId('agency-pill')], maskColor: '#C8CBFF' })
+}
 
 type Seeded = Awaited<ReturnType<typeof seedJ001>>
 type Verdict = Decision & { reason_code?: string; rationale?: string; judge?: { total: number; sub: { idea: number }; tests: { id: string; evidence: string; reason_code?: string }[]; advised_route: string; brief_version?: string; trust?: string }; handler?: string }
@@ -38,8 +49,9 @@ for (const size of SIZES) {
 
   test(t(58), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning, then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await piece(page, job)
     await control(page, { variant: { judge_work: 'score22-idea7' } })
     expect((await score(page, doc.token)).status()).toBe(200)
@@ -52,13 +64,19 @@ for (const size of SIZES) {
     expect(v.handler).toMatch(/^judge_work@/) // the Judge version
     await open1(page, job)
     await expect(page.getByTestId('score-card')).toContainText('22')
+    await shot(page, 'judge-card', size)
+    await page.getByTestId('judge-why').click()
+    await expect(page.getByTestId('judge-test').first()).toHaveAttribute('data-value', 'fail') // the failed tests come first
+    await expect(page.getByTestId('judge-test').first()).toContainText('Fixture evidence')
+    await shot(page, 'judge-card-why', size)
     await ctx.close()
   })
 
   test(t(59), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning, then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await piece(page, job)
     await control(page, { variant: { judge_work: 'score22-idea9' } })
     await score(page, doc.token)
@@ -66,6 +84,11 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.creativeDirector)
     await page.goto('/'); await page.reload()
     await expect(page.getByTestId('need').filter({ hasText: 'Brave, fix the craft' })).toBeVisible()
+    await shot(page, 'judge-need-brave', size)
+    await page.goto('/#door-judge-scores'); await page.reload()
+    await expect(page.getByTestId('judge-piece').first()).toBeVisible()
+    await expect(page.getByTestId('js-calibration')).toContainText('advice until Judge has earned trust')
+    await shot(page, 'judge-scores-door', size)
     await control(page, { variant: { judge_work: 'score24' } }) // a score of 24 or more goes to the creative director
     await signIn(page, PEOPLE.copywriter)
     const second = await piece(page, job)
@@ -76,8 +99,9 @@ for (const size of SIZES) {
 
   test(t(60), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning, then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await piece(page, job)
     await control(page, { variant: { judge_work: 'score22-idea7' } })
     await score(page, doc.token)
@@ -96,14 +120,16 @@ for (const size of SIZES) {
 
   test(t(61), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning, then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await piece(page, job)
     await control(page, { variant: { judge_work: 'score22-idea7' } })
     await score(page, doc.token)
     await signIn(page, PEOPLE.management)
     await page.goto('/#door-agency-dashboard'); await page.reload()
     await expect(page.getByTestId('tile-scores')).toContainText('22', { timeout: 10_000 }) // the dashboard's Judge tile, within 10 seconds
+    await shot(page, 'judge-tile', size)
     // No screen and no response scores a person.
     for (const url of [`${job.api}/dashboard`, `${job.api}/jobs`, `${job.api}/judge/telemetry`]) {
       expect(await (await page.request.get(url)).text()).not.toMatch(/per_person|by_person|per_writer|by_author/i)
@@ -114,8 +140,9 @@ for (const size of SIZES) {
   test(t(62), async ({ browser }) => {
     // What leaves the vault holds numbers, codes and ids only: a canary sentence in the work is in no telemetry row.
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning, then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const planted = { ...RADIO_SCRIPT, script: { ...RADIO_SCRIPT.script, beats: [{ ...RADIO_SCRIPT.script.beats[0], text: CANARY_SENTENCE }] } }
     const doc = await piece(page, job, planted)
     await score(page, doc.token)
@@ -145,8 +172,9 @@ for (const size of SIZES) {
 
   test(t(63), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning, then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await piece(page, job)
     const credits = (await sessionOf(page)).quota.used
     await control(page, { fail: 'judge_work' })
@@ -156,6 +184,7 @@ for (const size of SIZES) {
     await expect(failed).toBeVisible()
     expect((await failed.locator('.ns-line').allInnerTexts()).filter(Boolean)).toHaveLength(1)
     expect((await sessionOf(page)).quota.used).toBe(credits) // the credits come back
+    await shot(page, 'judge-run-failed', size)
     // The creative director can still decide.
     await signIn(page, PEOPLE.creativeDirector)
     const cd = await asMe(page, job.api, { path: doc.path, id: '' })
@@ -165,6 +194,7 @@ for (const size of SIZES) {
     await score(page, doc.token)
     expect((await verdicts(page, doc.token))[0].judge?.trust).not.toBe('earned')
     await expect(page.getByTestId('score-card')).toContainText(/not yet trusted/i)
+    await shot(page, 'judge-not-trusted', size)
     await ctx.close()
   })
 
@@ -181,7 +211,8 @@ for (const size of SIZES) {
     await score(page, doc.token)
     const first = (await verdicts(page, doc.token))[0]
     // A new version gets a new score; the old one stays on the old version.
-    await page.request.post(`/s/${doc.token}/patch-data`, { data: { patch: { script: { beats: [{ id: 'beat_1', text: 'A new first line.' }] } }, agent: 'human', action: 'edit a line' } })
+    const edit = await page.request.post(`/s/${doc.token}/patch-data`, { data: { patch: { script: { beats: [{ ...RADIO_SCRIPT.script.beats[0], text: 'A new first line.' }] } }, agent: 'human', action: 'edit a line' } })
+    expect(edit.status(), await edit.text()).toBe(200)
     await score(page, doc.token)
     const all = await verdicts(page, doc.token)
     expect(all).toHaveLength(2)
@@ -192,6 +223,7 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.copywriter)
     await open1(page, job)
     await expect(page.getByTestId('score-card')).toContainText(/out of date/i)
+    await shot(page, 'judge-out-of-date', size)
     await ctx.close()
   })
 }
