@@ -1456,6 +1456,9 @@ body.working.no-report .insp,body.working.no-report #hero,body.working.no-report
 .p33-askcard .aq-own{display:flex;gap:8px}
 .p33-askcard .aq-own input{flex:1;min-height:0;border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:var(--card);color:var(--ink);font:13.5px var(--font-ui)}
 .p33-askcard .q-note{margin:0;font-size:12px;color:var(--muted)}
+.p33-askcard .aq-skip{justify-self:start;min-height:28px;padding:0;border:0;background:none;color:var(--muted);font:12.5px var(--font-ui);text-decoration:underline;cursor:pointer}
+.p33-askcard .aq-skip:hover{color:var(--ink)}
+.p33-askcard .aq-skip:disabled{cursor:default;opacity:.6}
 .rt-work .sp-btn{height:28px;min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);font:600 12px var(--font-ui);box-shadow:none;cursor:pointer}
 .rt-work .runbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:12px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--paper);font-size:13px}
 .rt-work .runbar .sp{flex:1 1 0%}
@@ -3454,7 +3457,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
   // skipped one can end in "done").
   function skippedStages(){
     var out={}, j=CHAT.job;
-    arr(j&&j.gaps).forEach(function(g){ if(g&&STAGE[g.stage]&&g.reason!=='unanswered') out[g.stage]=true; });
+    arr(j&&j.gaps).forEach(function(g){ if(g&&STAGE[g.stage]&&g.reason!=='unanswered'&&g.reason!=='skipped') out[g.stage]=true; });
     var S=sel(), nr=arr(S.gaps).filter(notRun);
     if(nr.length){
       var ran=arr(S.lenses_run).filter(function(r){ return r&&!nr.some(function(g){ return g.lens===r.lens&&g.market===r.market; }); });
@@ -3488,7 +3491,10 @@ details.pv-fold>summary:hover{background:var(--soft)}
   function answerRow(Q, ans, earlier){
     var q=Q.q, k=qField(q), label=(k&&FIELD[k]?FIELD[k].label:'Your answer'), a=ans.m.answer, who=whoLabel(ans.m.by);
     var val, badge;
-    if(a.option_id){
+    if(a.skipped){
+      val='<span class="none">Skipped</span>';
+      badge='<span class="pill">skipped by '+esc(who)+'</span>';
+    } else if(a.option_id){
       var o=arr(q.options).filter(function(x){ return x.id===a.option_id; })[0]||{label:ans.m.text||a.option_id};
       var origin=o.origin==='stated'?'stated':'confirmed';
       val=esc(o.label);
@@ -3855,7 +3861,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
       +'<span class="aq-k" title="'+esc(agentLine(k))+'">'+esc(TheAgent(k))+' asks</span>'
       +'<span class="aq-q qtext" id="'+hid+'">'+esc(q.text)+'</span>'+(ctx?'<span class="aq-ctx qc-ctx">'+esc(ctx)+'</span>':'');
     if(ans&&!busy){
-      return h+'<p class="q-note">You answered “'+esc(ans.m.text)+'”, but it hasn’t reached us yet. <button type="button" class="linkbtn" data-act="q-resend" data-q="'+esc(q.id)+'">Send it again</button></p></div>';
+      return h+'<p class="q-note">'+(isObj(ans.m.answer)&&ans.m.answer.skipped?'You skipped it':'You answered “'+esc(ans.m.text)+'”')+', but it hasn’t reached us yet. <button type="button" class="linkbtn" data-act="q-resend" data-q="'+esc(q.id)+'">Send it again</button></p></div>';
     }
     var opts=arr(q.options);
     if(opts.length){
@@ -3870,6 +3876,8 @@ details.pv-fold>summary:hover{background:var(--soft)}
       h+='<div class="aq-own q-text"><label class="sr" for="'+esc(tid)+'">'+(opts.length?'Or type your answer':'Your answer')+'</label><input type="text" id="'+esc(tid)+'" data-q="'+esc(q.id)+'" value="'+esc(v)+'" placeholder="'+(opts.length?'Or type your answer':'Your answer')+'" autocomplete="off"'+(busy?' disabled':'')+'><button type="button" class="sp-btn" data-act="q-send" data-q="'+esc(q.id)+'"'+(busy?' disabled':'')+'>Send</button></div>'
         +'<p class="q-note">We’ll turn what you type into choices for you to pick from.</p>';
     }
+    // Every question can be skipped (owner, 2026-11-12): the field stays open and the run goes on without it.
+    h+='<button type="button" class="aq-skip" data-act="q-skip" data-q="'+esc(q.id)+'"'+(busy?' disabled':'')+'>Skip this one</button>';
     if(busy) h+='<p class="q-note" role="status">Saving your answer…</p>';
     return h+'</div>';
   }
@@ -4210,7 +4218,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
     }).catch(function(e){ CHAT.answering=null; toast('Not answered: '+(e&&e.message||e)); renderChat(); });
   }
   function sendAnswer(jobId, qid, a){
-    var input={job_id:jobId, question_id:qid}; if(a.option_id) input.option_id=a.option_id; else input.text=a.text;
+    var input={job_id:jobId, question_id:qid}; if(a.option_id) input.option_id=a.option_id; else if(a.skip) input.skip=true; else input.text=a.text;
     CHAT.answering=qid; POLL.delay=1000; renderChat();
     window.clan.apiProxy('middleware', {task:'answer_question', input:input}).then(function(r){
       CHAT.answering=null;
@@ -4221,7 +4229,27 @@ details.pv-fold>summary:hover{background:var(--soft)}
   }
   function doResend(qid){
     var a=answerTo(qid); if(!a||!CHAT.job) return;
-    sendAnswer(CHAT.job.id, qid, a.m.answer.option_id?{option_id:a.m.answer.option_id}:{text:a.m.answer.text});
+    var x=a.m.answer;
+    sendAnswer(CHAT.job.id, qid, x.option_id?{option_id:x.option_id}:x.skipped?{skip:true}:{text:x.text});
+  }
+  // Skip this one (middleware §8.3, skip): the person's message says they skipped it, as their own write;
+  // the field stays open and the job goes on without it, as it does for a question nobody answers.
+  function doSkip(qid){
+    var j=CHAT.job, q=liveQuestion();
+    if(!q||q.id!==qid){ toast('This question is no longer open.'); return; }
+    if(CHAT.answering) return;
+    if(!me()&&WHO.ask){ WHO.ask.then(function(){ doSkip(qid); }); return; }
+    var who=me(); if(!who){ doWho(function(){ if(me()) doSkip(qid); }); return; }
+    var by='human:'+who, mid='msg_'+ulid(), did=mintDecisionId();
+    var patch={intake:{messages:{}}};
+    patch.intake.messages[mid]={role:'user', by:by, at:nowIso(), text:'Skipped', job_id:j.id, answer:{question_id:qid, skipped:true}};
+    var rationale=did+' · answer_question · '+addr('intake.messages['+mid+']')+' · '+qid+' skipped by '+by+'; the field stays open';
+    CHAT.answering=qid; renderChat();
+    humanWrite(patch, 'answer_question', rationale).then(function(res){
+      if(!(res&&res.ok)) throw new Error((res&&(res.error||res.message))||'the host refused the write');
+      CHAT.qdraft[qid]='';
+      sendAnswer(j.id, qid, {skip:true});
+    }).catch(function(e){ CHAT.answering=null; toast('Not skipped: '+(e&&e.message||e)); renderChat(); });
   }
 
   // ── the report (Contract 3 §17) — middleware-written, rendered read-only ───
@@ -6930,6 +6958,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
       case 'q-opt': doAnswer(b.getAttribute('data-q'), b.getAttribute('data-opt')); break;
       case 'q-send': var qi=$('qtext-'+b.getAttribute('data-q')); doAnswer(b.getAttribute('data-q'), null, qi?qi.value:''); break;
       case 'q-resend': doResend(b.getAttribute('data-q')); break;
+      case 'q-skip': doSkip(b.getAttribute('data-q')); break;
       case 'report-refresh': doRefreshReport(); break;
       case 'rt-skip': if(isObj(D().report)&&!jobActive()&&!liveQuestion()){ document.body.classList.remove('show-run'); var rp=$('report'); if(rp&&!rp.hidden) rp.scrollIntoView({block:'start', behavior:calm()?'auto':'smooth'}); }
         else toast(isObj(D().report)?'The report opens here as soon as this run ends.':'The report isn’t written yet. It opens here by itself as soon as it is.'); break;

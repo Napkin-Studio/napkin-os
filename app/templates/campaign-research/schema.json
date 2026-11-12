@@ -695,7 +695,7 @@
     },
     "answer": {
       "type": "object",
-      "description": "The person's answer to a question: an option id, or free text. Exactly one.",
+      "description": "The person's answer to a question: an option id, free text, or skipped (the person chose not to answer; the field stays open). Exactly one.",
       "additionalProperties": false,
       "required": [
         "question_id"
@@ -710,6 +710,9 @@
         "text": {
           "type": "string",
           "minLength": 1
+        },
+        "skipped": {
+          "const": true
         }
       },
       "oneOf": [
@@ -721,6 +724,11 @@
         {
           "required": [
             "text"
+          ]
+        },
+        {
+          "required": [
+            "skipped"
           ]
         }
       ]

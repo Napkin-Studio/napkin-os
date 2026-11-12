@@ -413,8 +413,9 @@ class RunLog:
     def question(self, stage, text, options=None):
         self._write("question", stage=stage, text=text, options=options)
 
-    def answer(self, stage, answer):
-        self._write("answer", stage=stage, answer=answer if _cfg["bodies"] else "(answered)")
+    def answer(self, stage, answer, skipped=False):
+        self._write("answer", stage=stage, answer=answer if _cfg["bodies"] else "(answered)",
+                    **({"skipped": True} if skipped else {}))
 
     def note(self, what, **kw):
         self._write("note", **{"stage": self.stage_name, "what": what, **kw})  # a note may name its own stage

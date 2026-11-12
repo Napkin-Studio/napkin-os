@@ -318,6 +318,58 @@ test('a step the job went on without reads Skipped, never Done', () => {
   assert.match(fn(RT, 'stepsHtml'), /skip:'Skipped'/)
 })
 
+// A question the agents ask during a run can be skipped (features/research-skip-question, middleware-api §8.3).
+test('the question card has Skip this one; a skip is the person’s write, then answer_question with skip: true', async () => {
+  const q = { id: 'q_brand1', text: 'Which brand is this campaign for? Type its name.', options: [], allow_text: true, address: 'd1#campaign.brand' }
+  const CHAT: Record<string, unknown> = { answering: null, qdraft: {}, job: { id: 'job_1', state: 'needs_input', stage: 'identify', question: q } }
+  const thread: unknown[] = []
+  const card = (busy = false) => { CHAT.answering = busy ? q.id : null; return lift<{ questionCard(Q: unknown, T: unknown): string }>(RT, ['questionCard'], {
+    arr, isObj, esc, CHAT, answerTo: () => null, slug: (x: string) => x, runRole: () => 'strategy', qField: () => 'brand', FIELD: { brand: { label: 'Brand' } },
+    NUM: {}, PLAN: [], agentLine: () => '', TheAgent: () => 'The Strategy agent', optNote: () => '',
+  }).questionCard({ q, stage: 'identify' }, thread) }
+  const html = card()
+  assert.match(html, /<button type="button" class="aq-skip" data-act="q-skip" data-q="q_brand1">Skip this one<\/button><\/div>$/)
+  assert.match(card(true), /class="aq-skip" data-act="q-skip" data-q="q_brand1" disabled>Skip this one</, 'not while an answer is saving')
+  assert.match(RT, /case 'q-skip': doSkip\(b\.getAttribute\('data-q'\)\); break;/)
+  assert.match(RT, /\.p33-askcard \.aq-skip\{[^}]*text-decoration:underline/, 'Brief Maker’s link style')
+
+  const writes: { patch: Record<string, Record<string, Record<string, Record<string, unknown>>>>; rationale: string }[] = []
+  const sent: { task: string; input: Record<string, unknown> }[] = []
+  const replies: unknown[] = []
+  const f = lift<{ doSkip(qid: string): void }>(RT, ['doSkip', 'sendAnswer'], {
+    CHAT, liveQuestion: () => q, toast: (m: string) => { throw new Error(m) }, me: () => 'u_aoife', WHO: {}, doWho: () => {},
+    ulid: () => 'SKIP0001', mintDecisionId: () => 'd_SKIP0001', nowIso: () => '2026-11-12T10:00:00Z', addr: (p: string) => `d1#${p}`,
+    renderChat: () => {}, POLL: { delay: 0 }, hostErr: () => null, onJobReply: (r: unknown) => { replies.push(r) }, pollNow: () => {}, unreachable: () => {},
+    humanWrite: (patch: never, _a: string, rationale: string) => { writes.push({ patch, rationale }); return Promise.resolve({ ok: true }) },
+    window: { clan: { apiProxy: (_: string, body: { task: string; input: Record<string, unknown> }) => { sent.push(body); return Promise.resolve({ job: { state: 'running' } }) } } },
+  })
+  CHAT.answering = null
+  f.doSkip('q_brand1')
+  for (let i = 0; i < 4; i++) await Promise.resolve()
+  assert.equal(writes.length, 1)
+  assert.deepEqual(writes[0].patch.intake.messages.msg_SKIP0001, { role: 'user', by: 'human:u_aoife', at: '2026-11-12T10:00:00Z', text: 'Skipped', job_id: 'job_1', answer: { question_id: 'q_brand1', skipped: true } })
+  assert.equal(Object.keys(writes[0].patch).join(), 'intake', 'a skip writes no field')
+  assert.match(writes[0].rationale, /^d_SKIP0001 · answer_question · d1#intake\.messages\[msg_SKIP0001\] · q_brand1 skipped by human:u_aoife; the field stays open$/)
+  assert.deepEqual(sent, [{ task: 'answer_question', input: { job_id: 'job_1', question_id: 'q_brand1', skip: true } }])
+  assert.equal(replies.length, 1)
+  // a skip that did not reach the job is sent again as a skip
+  assert.match(fn(RT, 'doResend'), /x\.skipped\?\{skip:true\}/)
+})
+
+test('a skipped question is not a skipped step, and the request sheet says Skipped', () => {
+  const STAGES = ['extract', 'identify', 'select', 'research', 'synthesise', 'report'].map((k, i) => ({ k, i }))
+  const STAGE = Object.fromEntries(STAGES.map(s => [s.k, s]))
+  const st = lift<{ stageStates(): Record<string, string> }>(RT, ['stageStates', 'skippedStages', 'notRun'], {
+    arr, isObj, STAGES, STAGE, CHAT: { job: { state: 'done', gaps: [{ stage: 'identify', reason: 'skipped' }, { stage: 'research', reason: 'no_market' }] } }, thread: () => [], D: () => ({}), sel: () => ({}),
+  }).stageStates()
+  assert.equal(st.identify, 'done', 'the person skipped a question; the step finished')
+  assert.equal(st.research, 'skip')
+  const row = lift<{ answerRow(Q: unknown, ans: unknown, earlier: string[]): string }>(RT, ['answerRow'], {
+    arr, isObj, esc, qField: () => 'markets', FIELD: { markets: { label: 'Markets' } }, whoLabel: () => 'you', askerOf: () => 'The Strategy agent', ICON: {},
+  }).answerRow({ q: { id: 'q_mk', text: 'Which markets is it for?' }, stage: 'identify' }, { m: { text: 'Skipped', by: 'human:u', answer: { question_id: 'q_mk', skipped: true } } }, [])
+  assert.match(row, /<dt>Markets<\/dt><dd><span class="aval"><span class="none">Skipped<\/span><span class="pill">skipped by you<\/span><\/span>/)
+})
+
 type ReportFns = { reportStale(r: unknown): string[]; refreshBtn(stale: string[], title: string): string }
 function reportEnv(locked: boolean, chain: unknown[]) {
   const pathOf = (a: unknown) => { const s = String(a), i = s.indexOf('#'); return i < 0 ? s : s.slice(i + 1) }

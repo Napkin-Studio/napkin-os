@@ -160,7 +160,7 @@ name the stand-in, its port, or branch on which implementation answered.
 | `research_lens` | `{ "lenses"?: [lens ids], "markets"?: [ISO 3166-1 alpha-2] }` | Defaults: all eight lenses × `campaign.markets`. One run per lens × market (N4), merged by entity + key + market. `UK` is not a code (the UK is `GB`). Research with no markets or no categories is `400 invalid_input` (gate `research`) |
 | `synthesise_findings` | `{ "lenses"?: [lens ids], "redo"?: "audience" }` | Reads `clan.facts` (pins only). Never proposes a finding the document already holds, a rejected one included, and sends the rejected ones (statement, reason) to the model. `redo: "audience"` proposes `campaign.audience` again without rejected findings, replacing only an audience the agent proposed, and writes nothing else |
 | `start_campaign` | `{ "prompt": "...", "attachments": [{ "material_id", "name", "sha256", "text"? }] }` | The chat intake (§8). Long. Each `material_id` must be a key of `clan.data.materials` with that `sha256` (the view indexes the file first). Nothing to read at all is `400 invalid_input`, as for `extract_ask` |
-| `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "..." }` | Exactly one of `option_id` / `text` (§8.3). For a `draft_brief` job waiting at intake it is `{ "job_id", "questions_id", "answers": { "<question id>": "<text>" \| null } }` instead (§10.3) |
+| `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "...", "skip"?: true }` | Exactly one of `option_id` / `text` / `skip` (§8.3; *`skip` added 2026-11-12*). For a `draft_brief` job waiting at intake it is `{ "job_id", "questions_id", "answers": { "<question id>": "<text>" \| null } }` instead (§10.3) |
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
 | `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
@@ -460,7 +460,7 @@ Every change must leave the document valid against the campaign schemas
 | 400 | `{"error":{"type":"unknown_handler","message"}}` | handler unregistered, for another task, malformed, or an unimplemented major |
 | 400 | `{"error":{"type":"invalid_input","message"}}` | body not JSON; `request_kind` not `middleware`; no task; no `clan.id` / `clan.version`; scope in the request; bad lens, market or attachment; nothing to read; gate not met |
 | 401 | `{"error":{"type":"unauthenticated","message"}}` | credentials missing or wrong (when the deployment requires them) |
-| 400 | `{"error":{"type":"invalid_input","message"}}` | also: `draft_brief` with an `intake` that is not a boolean; `answer_question` for a brief job with a `questions_id` that is not the job's, `answers` that is not an object, an id that is not one of the questions, or an answer that is neither text nor null; `start_campaign` attachment whose `material_id` is not in `clan.data.materials` with that `sha256`; `answer_question` with a `question_id` that is not the job's open question, neither or both of `option_id` / `text`, an `option_id` not among the question's candidates (an escape option is answered with `text`), `text` when `allow_text` is false; `compose_report` with no pin and no finding to cite |
+| 400 | `{"error":{"type":"invalid_input","message"}}` | also: `draft_brief` with an `intake` that is not a boolean; `answer_question` for a brief job with a `questions_id` that is not the job's, `answers` that is not an object, an id that is not one of the questions, or an answer that is neither text nor null; `start_campaign` attachment whose `material_id` is not in `clan.data.materials` with that `sha256`; `answer_question` with a `question_id` that is not the job's open question, not exactly one of `option_id` / `text` / `skip`, a `skip` that is not `true`, an `option_id` not among the question's candidates (an escape option is answered with `text`), `text` when `allow_text` is false; `compose_report` with no pin and no finding to cite |
 | 404 | `{"error":{"type":"unknown_job","message"}}` | job id unknown to this tenant and document |
 | 409 | `{"error":{"type":"job_state","message"}}` | `answer_question` for a job that is not `needs_input` (already answered, done or failed, or a brief job that never asked or went on without an answer); `start_campaign` or `compose_report` while a `start_campaign` job on the same document is `queued`, `running` or `needs_input` — one composition of a document at a time; `draft_brief` while a `draft_brief` or `regenerate_field` job on the same document is `queued` or `running`, and `regenerate_field` while a `draft_brief` job, or a `regenerate_field` job for the same field, is (§10.11) |
 | 400 | `{"error":{"type":"invalid_input","message"}}` | also: `draft_brief` or `regenerate_field` on a brief whose `data.locked` is true; `regenerate_field` for a field not in §10.4 or in `data.locked_fields`; an `image` over 5 MB or of another media type (§10.1) |
@@ -691,8 +691,8 @@ object the middleware writes into the thread as the question message's
 
 **The answer is the person's write, not the middleware's.** Before sending
 `answer_question` the view writes, as a human, the person's message
-(`role: user`, `job_id`, `answer: { question_id, option_id | text }`) and,
-for an option answer, the field at `address`:
+(`role: user`, `job_id`, `answer: { question_id, option_id | text | skipped:
+true }`) and, for an option answer, the field at `address`:
 
 | Picked option's `origin` | The view writes the field as |
 |---|---|
@@ -712,6 +712,24 @@ stated`, a brand `{ref: brand/<slug>, name: <text>}`). The field is then
 written from that pick. Free text steers a question; it never becomes a field
 value without the person picking it. When nothing resolves (a leaf or market
 the taxonomy does not know), the new question says so and allows text again.
+
+A **`skip: true` answer** (*added 2026-11-12, the owner: every question
+the Research agents ask can be skipped*) is the person choosing not to answer.
+The view writes only the message (`answer: { question_id, skipped: true }`,
+text "Skipped"). The middleware leaves the field open and goes on exactly as
+for a question nobody answers (below), except that it takes **no** default
+(not even the material's most likely category) and later questions in the job
+are still asked. It records the skip: an `identify` decision ("Went on
+without the <field>: you skipped the question", naming the person and what
+goes on without the field in `attention`), an agent message saying so, a gap
+`{stage: identify, reason: skipped}` in `result.gaps`, and an `answer` event
+with `skipped: true` in the run log. The field's question is not asked again
+in that job. What each skipped field leaves: the **brand**, no roster row is
+looked up and research covers the category and markets; the **categories**,
+research needs a category, so it does not run (its lens × market pairs are
+gaps); the **markets**, research runs once per market, so it does not run.
+With nothing to cite the job still ends `done`, with no report and a message
+saying what was skipped (§8.5).
 
 `answer_question` is accepted only when the job is `needs_input` and
 `question_id` is `job.question.id` (else `409 job_state` / `400
