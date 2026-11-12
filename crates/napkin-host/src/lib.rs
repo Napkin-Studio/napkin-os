@@ -30,6 +30,7 @@ pub mod event;
 #[cfg(feature = "native")]
 pub mod export;
 pub mod html;
+pub mod import;
 pub mod jobindex;
 pub mod jobs;
 pub mod library;

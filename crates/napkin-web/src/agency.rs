@@ -14,8 +14,11 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::body::Bytes;
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::http::{header, HeaderMap};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Extension, Json, Router};
 use napkin_host::agency::{self, NewPerson, PersonPatch};
@@ -29,6 +32,10 @@ use crate::tenant::{Acting, Tenant, TenantId};
 
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
+        .route("/t/{tenant}/agency", get(get_settings).put(put_settings))
+        .route("/t/{tenant}/agency/accounts.tsv", get(accounts_tsv))
+        .route("/t/{tenant}/setup", get(setup_status))
+        .route("/t/{tenant}/setup/import/{kind}", post(import_csv))
         .route("/t/{tenant}/agency/people", get(list_people))
         .route("/t/{tenant}/agency/people/invite", post(invite))
         .route(
@@ -276,4 +283,253 @@ fn activate(ctx: &Arc<AppCtx>, account: &Account, state: PersonState) {
         Ok(()) => ctx.directory.changed(&account.agency),
         Err(e) => tracing::warn!(error = %e, "could not mark a first sign-in"),
     }
+}
+
+// ── the settings ────────────────────────────────────────────────────────────
+
+/// What `GET /agency` answers. An admin gets all four settings and the look; anyone else gets the
+/// agency's name and its look (an allow list: the cap and the time zone are the admin's).
+async fn get_settings(
+    State(ctx): State<Arc<AppCtx>>,
+    Tenant(tenant): Tenant,
+    account: Option<Extension<Account>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let (reg, _) = agency::read(&*ctx.workspace(&tenant).store)?;
+    let look = crate::look::read(&ctx, &tenant);
+    let admin = account.as_ref().is_some_and(|Extension(a)| is_admin(a));
+    Ok(Json(if admin {
+        serde_json::json!({
+            "name": reg.settings.name,
+            "credit_cap_month_eur": reg.settings.credit_cap_month_eur,
+            "time_zone": reg.settings.time_zone,
+            "look": look,
+        })
+    } else {
+        serde_json::json!({ "name": reg.settings.name, "look": look })
+    }))
+}
+
+/// Change the name, the monthly credit cap or the time zone. A cap that is not a number, or is
+/// below zero, is 400. The cap is stored and shown; nothing enforces it yet.
+async fn put_settings(
+    State(ctx): State<Arc<AppCtx>>,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    account: Option<Extension<Account>>,
+    Json(body): Json<serde_json::Value>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let me = admin_of(account)?;
+    let obj = body
+        .as_object()
+        .ok_or_else(|| ApiError::new(400, "Send the settings as an object."))?;
+    let text = |k: &str| -> ApiResult<Option<String>> {
+        match obj.get(k) {
+            None | Some(serde_json::Value::Null) => Ok(None),
+            Some(serde_json::Value::String(s)) => Ok(Some(s.clone())),
+            Some(_) => Err(ApiError::new(400, format!("{k} is text"))),
+        }
+    };
+    let cap = match obj.get("credit_cap_month_eur") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => Some(v.as_f64().ok_or_else(|| {
+            ApiError::new(
+                400,
+                "The monthly credit cap is an amount in euros, not below zero.",
+            )
+        })?),
+    };
+    let patch = agency::SettingsPatch {
+        name: text("name")?,
+        credit_cap_month_eur: cap,
+        time_zone: text("time_zone")?,
+    };
+    let s = agency::set_settings(&*ctx.workspace(&tenant).store, &acting, patch)?;
+    ctx.directory.changed(&me.agency);
+    Ok(Json(serde_json::json!({
+        "name": s.name,
+        "credit_cap_month_eur": s.credit_cap_month_eur,
+        "time_zone": s.time_zone,
+        "look": crate::look::read(&ctx, &tenant),
+    })))
+}
+
+// ── the setup flow's progress ───────────────────────────────────────────────
+
+/// One step of the setup flow. A step is done when its data exists; nothing is stored about the
+/// flow itself, so it cannot get out of step with the data.
+#[derive(Serialize)]
+struct Step {
+    id: &'static str,
+    done: bool,
+}
+
+/// The steps in order and the first one not done. Admin only (`Group::Admin`: `/setup`).
+async fn setup_status(
+    State(ctx): State<Arc<AppCtx>>,
+    Tenant(tenant): Tenant,
+    account: Option<Extension<Account>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let me = admin_of(account)?;
+    let store = &*ctx.workspace(&tenant).store;
+    let (reg, _) = agency::read(store)?;
+    let others = reg
+        .people
+        .iter()
+        .filter(|p| p.state != PersonState::Removed && p.username != me.username)
+        .count();
+    let steps = vec![
+        Step {
+            id: "logo",
+            done: crate::look::read(&ctx, &tenant).logo.is_some(),
+        },
+        Step {
+            id: "name",
+            done: !reg.settings.name.is_empty(),
+        },
+        Step {
+            id: "people",
+            done: others > 0,
+        },
+        Step {
+            id: "clients",
+            done: !napkin_host::clients::list(store, false)?.is_empty(),
+        },
+        Step {
+            id: "jobs",
+            done: !napkin_host::jobs::list(store)?.is_empty(),
+        },
+    ];
+    let next = steps.iter().find(|s| !s.done).map(|s| s.id);
+    Ok(Json(serde_json::json!({
+        "steps": steps,
+        "next": next,
+        "complete": next.is_none(),
+        "people": others,
+        "has_directory": reg.has_directory(),
+    })))
+}
+
+// ── CSV import ──────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ImportQuery {
+    #[serde(default)]
+    dry_run: Option<String>,
+}
+
+/// The bytes of a file posted either as the raw body or as one `multipart/form-data` part.
+fn file_of(headers: &HeaderMap, body: &Bytes) -> ApiResult<Vec<u8>> {
+    let ctype = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let Some(boundary) = ctype
+        .split(';')
+        .filter_map(|p| p.trim().strip_prefix("boundary="))
+        .next()
+        .map(|b| b.trim_matches('"').to_string())
+        .filter(|_| ctype.starts_with("multipart/"))
+    else {
+        return Ok(body.to_vec());
+    };
+    let marker = format!("--{boundary}").into_bytes();
+    let find = |hay: &[u8], needle: &[u8], from: usize| {
+        hay.get(from..)?
+            .windows(needle.len())
+            .position(|w| w == needle)
+            .map(|i| i + from)
+    };
+    let mut at = 0;
+    while let Some(start) = find(body, &marker, at) {
+        let part = start + marker.len();
+        let Some(head_end) = find(body, b"\r\n\r\n", part) else {
+            break;
+        };
+        let end = find(body, &marker, head_end).unwrap_or(body.len());
+        let head = String::from_utf8_lossy(&body[part..head_end]).to_ascii_lowercase();
+        if head.contains("filename=") || head.contains("name=\"file\"") {
+            let data = &body[head_end + 4..end];
+            return Ok(data.strip_suffix(b"\r\n").unwrap_or(data).to_vec());
+        }
+        at = end;
+    }
+    Err(ApiError::new(400, "No file came with that request."))
+}
+
+/// Import people, clients or jobs from a CSV file, with `?dry_run=1` to check without writing.
+/// Admin only. The reply is the report: a result per row, the bad rows by line, and the counts.
+async fn import_csv(
+    State(ctx): State<Arc<AppCtx>>,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    account: Option<Extension<Account>>,
+    Path((_t, kind)): Path<(String, String)>,
+    Query(q): Query<ImportQuery>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<napkin_host::import::Report>> {
+    let me = admin_of(account)?;
+    let dry = q
+        .dry_run
+        .as_deref()
+        .is_some_and(|v| v == "1" || v == "true");
+    let bytes = file_of(&headers, &body)?;
+    let store = &*ctx.workspace(&tenant).store;
+    let report = match kind.as_str() {
+        "people" => {
+            let known = role_known(&ctx, &me.agency);
+            napkin_host::import::people(store, &acting, &me.agency, &bytes, dry, &known)?
+        }
+        "clients" => napkin_host::import::clients_csv(store, &acting, &bytes, dry)?,
+        "jobs" => napkin_host::import::jobs_csv(store, &acting, &bytes, dry)?,
+        other => {
+            return Err(ApiError::new(
+                404,
+                format!("Nothing to import called {other}."),
+            ))
+        }
+    };
+    if !dry {
+        ctx.directory.changed(&me.agency);
+    }
+    Ok(Json(report))
+}
+
+// ── the accounts file ───────────────────────────────────────────────────────
+
+/// The people as `infra/scripts/create-users.sh` reads them: `user@agency`, a name and the roles,
+/// tab-separated. A cell a spreadsheet would run as a formula is quoted. Admin only.
+async fn accounts_tsv(
+    State(ctx): State<Arc<AppCtx>>,
+    Tenant(_t): Tenant,
+    account: Option<Extension<Account>>,
+) -> ApiResult<Response> {
+    let me = admin_of(account)?;
+    let mut out = String::new();
+    for p in ctx.directory.people(&me.agency) {
+        if p.state == PersonState::Removed {
+            continue;
+        }
+        let cell = |s: &str| napkin_host::import::export_cell(&s.replace(['\t', '\n', '\r'], " "));
+        out.push_str(&format!(
+            "{}\t{}\t{}\n",
+            p.username,
+            cell(&p.name),
+            p.roles.join(",")
+        ));
+    }
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                "text/tab-separated-values; charset=utf-8",
+            ),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"accounts.tsv\"",
+            ),
+        ],
+        out,
+    )
+        .into_response())
 }

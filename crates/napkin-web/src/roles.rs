@@ -615,6 +615,7 @@ pub fn group_of(route: &str) -> Group {
         Some("proprietary") => Group::Proprietary,
         Some("dashboard") => Group::Management,
         Some("audit" | "setup") => Group::Admin,
+        Some("agency") if rest.first().copied() == Some("accounts.tsv") => Group::Admin,
         Some("control") => Group::Control,
         _ => Group::Open,
     }
