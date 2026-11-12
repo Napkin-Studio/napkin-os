@@ -317,8 +317,15 @@ fn a_job_lists_its_documents_and_the_index_is_read_from_their_chains() {
     let edit = json!({ "agent": "human", "action": "edit", "patch": { "single_minded_proposition": "A new line." } });
     assert_eq!(post(&dara(), "/patch-data", edit), 200);
     let index = JobIndex::build(&store, now).unwrap();
-    assert_eq!(people(&index, "aoife@wk"), vec!["Sign the changed brief"]);
-    assert_eq!(people(&index, "dara@wk"), vec!["Sign the changed brief"]);
+    // each signer has the task, and (needs-you-full) the notice that the brief changed
+    assert_eq!(
+        people(&index, "aoife@wk"),
+        vec!["Sign the changed brief", "Open the brief"]
+    );
+    assert_eq!(
+        people(&index, "dara@wk"),
+        vec!["Sign the changed brief", "Open the brief"]
+    );
     assert!(matches!(index.needs[0].audience, Audience::Person(_)));
 
     // 5. Delete the index and rebuild it from the documents: the result is identical,
@@ -540,8 +547,8 @@ fn a_job_lists_its_documents_and_the_index_is_read_from_their_chains() {
         );
         assert_eq!(
             kinds(&planner_day(-2), "aoife@wk"),
-            vec![("approval", Some(0)), ("gate", None)],
-            "from 48 hours before, by its own date first"
+            vec![("approval", Some(0))],
+            "from 48 hours before: one row, the approval's, for the gate's and the approval's"
         );
         // at one day late only the approver has the item; at two days late the person who set the route has one too
         assert_eq!(kinds(&planner_day(1), "cian@wk"), vec![]);

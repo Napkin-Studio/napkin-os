@@ -120,6 +120,8 @@ pub struct AppCtx {
     pub roles_dir: Option<PathBuf>,
     /// Each person's work sessions and days (features/timesheet-sessions.clan).
     pub timesheets: crate::timesheet::Timesheets,
+    /// What each person has marked done on Needs you, private to them (features/needs-you-full.clan).
+    pub done: Arc<dyn crate::needs::DoneStore>,
     /// Who works in each agency and with which roles (features/agency-setup.clan).
     pub directory: Arc<dyn crate::directory::Directory>,
     /// What no document's chain holds: exports, links, sign-ins and copies of permission changes.
@@ -137,6 +139,7 @@ impl AppCtx {
     ) -> Self {
         Self {
             timesheets: crate::timesheet::Timesheets::new(root.clone()),
+            done: Arc::new(crate::needs::FileDone::new(root.join("needs-done"))),
             directory: Arc::new(crate::directory::RegistryDirectory::new(root.clone())),
             audit: Arc::new(crate::audit::FileAudit::new(root.clone())),
             root,
