@@ -9,6 +9,7 @@ from napkin.brief.fix import FixPartsJob, standing_problem
 
 from conftest import Server
 from test_brief import DOC, Host, check_change_rules, post, retrieval, run
+from fakes import explained
 from test_planned_brief import THIN, planned_model
 
 OBJ = ["objectives.behavioural", "objectives.commercial"]
@@ -165,10 +166,10 @@ def test_with_jev_the_check_reads_only_the_named_parts_and_a_mended_argument_lea
 
     def explain(p):
         seen["explain"] = p
-        return {"parts": {k: {"rework": True, "why": "still vague", "instruction": "add a number"}
-                          for k in list(p["flagged"]) + p["empty"]},
-                "chain": {"issue": "The objectives do not lead to the proposition.", "parts": OBJ + ["insight"]},
-                "dimensions": [], "questions": []}
+        return explained(p, {"parts": {k: {"rework": True, "why": "still vague", "instruction": "add a number"}
+                                       for k in list(p["flagged"]) + p["empty"]},
+                             "chain": {"issue": "The objectives do not lead to the proposition.", "parts": OBJ + ["insight"]},
+                             "dimensions": [], "questions": []})
     m.overrides["explain_flags"] = explain
     m.overrides["rewrite_brief_parts"] = lambda p: (seen.__setitem__("rewrite", p), {k: {
         "value": f"{k}: up 10% by August", "basis": "assumption", "cites": [], "builds_on_client": False,
