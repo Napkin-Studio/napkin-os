@@ -275,6 +275,39 @@ fn assets_are_served_from_inside_the_archive_and_traversal_is_refused() {
     assert_eq!(get(&f, "/assets/../manifest.yaml").status, 400);
 }
 
+// The frame's page is composed on request from the open view, for the options
+// the shell's src names (features/doc-open-direct.clan); nothing is stored.
+#[test]
+fn the_document_route_composes_the_frame_page_from_the_query() {
+    let f = fixture();
+    let human = f.session.human_html().unwrap();
+    let page = |query: &str| {
+        let resp = handle(
+            &f.session,
+            &NoConfig,
+            HostRequest::new("/document", query, Vec::new()),
+        );
+        assert_eq!(resp.status, 200);
+        String::from_utf8(resp.body).unwrap()
+    };
+
+    let plain = page("");
+    assert!(
+        plain.contains("__clan_bridge_listening"),
+        "a generated view gets the legacy bridge"
+    );
+    assert!(plain.contains("data-color-scheme=\"light\""));
+    assert!(!plain.contains("data-dogfood-capture"));
+    assert!(plain.len() > human.len());
+
+    let asked = page("model=authored&capture=1&theme=dark&v=abc");
+    assert!(asked.contains("__clan_structured_bridge"));
+    assert!(asked.contains("data-dogfood-capture"));
+    assert!(asked.contains("data-color-scheme=\"dark\""));
+    // clan:// is a real scheme here: no rewrite, no shim.
+    assert!(!asked.contains("var BASE="));
+}
+
 // The one async route. Everything else must be answerable inline, because the
 // desktop shell runs it on the WebView loop.
 #[test]

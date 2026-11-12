@@ -317,7 +317,13 @@ pub fn dispatch(
             },
         ),
 
-        "/document" => HostResponse::new(200, "text/html", session.preview_html().into_bytes()),
+        // The app frame's page, composed on request from the open view
+        // (features/doc-open-direct.clan). Over `clan://` the scheme is real,
+        // so nothing is rewritten; napkin-web answers its own /document.
+        "/document" => match session.frame_page(&req.query, crate::frame::Reach::Scheme) {
+            Ok(page) => HostResponse::new(200, "text/html", page.into_bytes()),
+            Err(e) => HostResponse::error(e.status, &e.message),
+        },
 
         "/snapshot" => {
             if let Ok(html) = String::from_utf8(req.body.clone()) {
