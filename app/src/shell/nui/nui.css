@@ -589,6 +589,7 @@ button.side-link:hover:where(.nui, .nui *) { text-decoration-color: var(--ag-act
 .p33-pop:where(.nui, .nui *) > button small,
 .p33-pop:where(.nui, .nui *) .pp-sub { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .p33-pop:where(.nui, .nui *) hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.p33-pop:where(.nui, .nui *) .mi-key { justify-self: end; font: 11px var(--font-mono, ui-monospace, monospace); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
 .p33-pop:where(.nui, .nui *) .pp-h { font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
 .p33-pop:where(.nui, .nui *) .pp-me { display: flex; gap: 10px; align-items: center; padding: 10px 10px 8px; }
 .p33-pop:where(.nui, .nui *) .pp-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--ag-base, #1E22AA); color: #fff; font: 700 12px var(--font-mono); flex: none; }

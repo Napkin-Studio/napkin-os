@@ -217,6 +217,8 @@ export interface MenuItem {
   apart?: boolean
   /** Shown, but it cannot run yet; the hint says why. */
   disabled?: boolean
+  /** The key that does the same anywhere (Feedback: F). */
+  key?: string
 }
 
 /** What the links hook holds: one document's link targets and what is linked now. */
@@ -351,16 +353,18 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
 
 /**
  * The account menu on the avatar (owner, 2026-11-11): Offline copies, then
- * About this beta (a recording build only; owner, 2026-11-13), then Sign out,
- * last. The agency pill only goes to the desk.
+ * Feedback (F) and About this beta (a recording build only; owner,
+ * 2026-11-13, mock feedback-point-v1), then Sign out, last. The agency pill
+ * only goes to the desk.
  */
-export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void, onBetaNotice?: () => void): MenuItem[] {
+export function accountItems(account: Account | undefined, user?: string | null, onSignOut?: () => void, onBetaNotice?: () => void, onFeedback?: () => void): MenuItem[] {
   const n = account?.offlineCount
   return [
     ...(account?.onPeople ? [{ label: 'People', hint: 'Who can sign in, by agency', run: account.onPeople }] : []),
     ...(account?.onOffline ? [{ label: 'Offline copies', hint: `${n != null ? `${n} on this device · ` : ''}present without a connection`, run: account.onOffline }] : []),
+    ...(onFeedback ? [{ label: 'Feedback', hint: 'Point at what it is about, and tell us', key: 'F', run: onFeedback }] : []),
     ...(onBetaNotice ? [{ label: 'About this beta', hint: 'What this beta records, and why', run: onBetaNotice }] : []),
-    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onPeople || onBetaNotice) }] : []),
+    ...(user && onSignOut ? [{ label: 'Sign out', hint: `Signed in as ${user}`, run: onSignOut, apart: !!(account?.onOffline || account?.onPeople || onBetaNotice || onFeedback) }] : []),
   ]
 }
 

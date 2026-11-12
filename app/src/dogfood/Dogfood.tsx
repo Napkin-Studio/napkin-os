@@ -7,13 +7,15 @@
 //   acknowledge before anything is;
 // - "About this beta" in the account menu, which shows the notice again (the
 //   bar's Beta chip and its screen thumbs are gone: owner, 2026-11-13);
-// - thumbs up or down, with an optional note, for each of an agent's results
-//   (in the decision history).
+// - thumbs up or down for each of an agent's results (in the decision
+//   history); a thumbs-down opens an optional note line;
+// - Feedback by pointing at it (FeedbackPoint.tsx; features/feedback-point.clan).
 // Nothing renders when the build does not record.
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CONTACT, acknowledge, currentScreen, dogfoodState, feedback, feedbackNote, loadDogfood, subscribe } from './recorder'
+import { CONTACT, acknowledge, currentScreen, dogfoodState, feedback, feedbackNote, loadDogfood, noteFor, subscribe } from './recorder'
 import { betaNoticeOpen, closeBetaNotice, subscribeBetaNotice } from './notice'
+import FeedbackPoint from './FeedbackPoint'
 import './Dogfood.css'
 
 function useDogfood() {
@@ -55,25 +57,31 @@ export function DogfoodGate({ children }: { children: ReactNode }) {
     <>
       {children}
       {state.on && !state.consented && <DogfoodNotice onAgree={busy ? undefined : agree} />}
+      {state.on && state.consented && <FeedbackPoint />}
     </>
   )
 }
 
 /** Thumbs up or down, recorded when chosen; then an optional note, sent as feedback on `on`. */
-export function Thumbs({ on, extra, compact = false }: { on: string; extra?: Record<string, unknown>; compact?: boolean }) {
-  const [thumb, setThumb] = useState<'up' | 'down' | null>(null)
+export function Thumbs({ on, extra, compact = false, noteOn = 'any', initial = null }: {
+  on: string; extra?: Record<string, unknown>; compact?: boolean; noteOn?: 'any' | 'down'
+  /** The thumb already chosen (a test's view of the note line). */
+  initial?: 'up' | 'down' | null
+}) {
+  const [thumb, setThumb] = useState<'up' | 'down' | null>(initial)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState(false)
   if (sent) return <span className="df-thanks">Thanks</span>
   const choose = (t: 'up' | 'down') => { if (t !== thumb) { setThumb(t); feedback(on, t, extra) } }
   const send = () => { if (thumb) { feedbackNote(on, thumb, note, extra); setSent(true) } }
+  const ask = noteFor(noteOn, thumb)
   return (
     <span className={compact ? 'df-thumbs df-thumbs-compact' : 'df-thumbs'}>
       <button className="df-thumb" data-dogfood="thumb up" aria-pressed={thumb === 'up'} title="This works for me" onClick={() => choose('up')}>👍</button>
       <button className="df-thumb" data-dogfood="thumb down" aria-pressed={thumb === 'down'} title="This does not work for me" onClick={() => choose('down')}>👎</button>
-      {thumb && (
+      {ask && (
         <span className="df-note">
-          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Anything to add? (optional)"
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder={ask}
             onKeyDown={e => { if (e.key === 'Enter') send() }} autoFocus aria-label="Note" />
           <button className="ch-btn" data-dogfood="send feedback note" onClick={send}>Send</button>
         </span>
@@ -105,9 +113,9 @@ export function DogfoodBadge({ variant }: { variant?: 'nui' } = {}) {
   )
 }
 
-/** Under an agent's result: thumbs for that result. Nothing when not recording. */
-export function ResultThumbs({ extra }: { extra: Record<string, unknown> }) {
+/** Under an agent's result: thumbs for that result; 👎 opens a note line. Nothing when not recording. */
+export function ResultThumbs({ extra, initial }: { extra: Record<string, unknown>; initial?: 'up' | 'down' | null }) {
   const state = useDogfood()
   if (!state.on || !state.consented) return null
-  return <Thumbs on="agent result" extra={extra} compact />
+  return <span className="df-result"><span className="df-ask">Was this useful?</span><Thumbs on="agent result" extra={extra} compact noteOn="down" initial={initial} /></span>
 }

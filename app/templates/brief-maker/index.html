@@ -1731,6 +1731,23 @@
     mandatories:'mandatories, mandatory, must include',
     open_questions:'open questions, questions'
   };
+  // Feedback by pointing at it (the dogfood build; features/feedback-point.clan): the shared
+  // snippet outlines what is under the cursor and asks this page to name it. A brief part is
+  // named by its heading, from its row or from a tile in the side panel that stands for it.
+  function feedbackTarget(el){
+    if(!el||!el.closest) return null;
+    var row=el.closest('#fields .row[data-clan-part]'), clip=function(s){ s=String(s||'').replace(/\s+/g,' ').trim(); return s.length>80?s.slice(0,79)+'…':s; };
+    if(row){ var h=row.querySelector('.lab > span'), k=row.getAttribute('data-clan-part');
+      return {kind:'part', id:k, label:clip(h&&h.textContent||row.getAttribute('data-clan-part-label')||k), el:row}; }
+    var tile=el.closest('.tile[data-key]');
+    if(tile){ var key=tile.getAttribute('data-key'), f=FIELDS.filter(function(x){ return x.key===key; })[0];
+      return {kind:'part', id:key, label:clip(f?headOf(f):tile.textContent), el:tile}; }
+    return null;
+  }
+  window.ClanFeedbackTarget=feedbackTarget;
+  // The brief's own version and title for the note card ("Brief v1 · Welcome Back, Barista").
+  function feedbackDoc(){ return {version:docVersion(), title:String(get('project_name')||'').trim()||derivedTitle()}; }
+  window.ClanFeedbackDoc=feedbackDoc;
   function partLabel(f){
     if(f.sec==='Objectives') return f.label+' objective';
     if(f.sec==='Desired response') return 'What they should '+f.label.toLowerCase();
