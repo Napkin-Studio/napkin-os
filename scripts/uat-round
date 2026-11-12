@@ -77,7 +77,7 @@ fi
 mkdir -p "$out"
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 set +e
-( cd "$root/app" && UAT_JSON="$out/results.json" UAT_MEASURES="$out/measures.jsonl" \
+( cd "$root/app" && UAT_JSON="$out/results.json" UAT_MEASURES="$out/measures.jsonl" UAT_STATE="$out/state.json" \
     npx playwright test -c uat/uat.config.ts --output "$out/artifacts" ${grep:+-g "$grep"} ) 2>&1 | tee "$out/suite.log" | grep -E "✓|✘|uat-measure|Error:|passed|failed"
 suite=${PIPESTATUS[0]}
 # Every job the round started, classified (watch exits 1 when any is hung or failed).

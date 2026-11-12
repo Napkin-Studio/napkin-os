@@ -1,13 +1,17 @@
 // The UAT journeys (features/uat-loop.clan). Run by scripts/uat-round against a deployed stack.
 // Each journey asserts what a person must see and how long they wait; over a budget fails it.
 
+import { readFileSync, writeFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import { addClient, appFrame, BUDGET, dialButton, driveRun, measure, openTool, signIn, stamp } from './helpers'
 
 const ACCOUNT = 'plu@pluto' as const
-const client = `UAT ${stamp()}`
+const client = process.env.UAT_CLIENT || `UAT ${stamp()}`
 /** The finished Research document, for the journeys that read it after the run. */
-let researchUrl = process.env.UAT_RESEARCH_URL || ''
+/** Round state that must survive a worker restart (the report the later journeys read). */
+const STATE = process.env.UAT_STATE || ''
+const readState = (): Record<string, string> => { try { return JSON.parse(readFileSync(STATE, 'utf8')) } catch { return {} } }
+let researchUrl = process.env.UAT_RESEARCH_URL || readState().researchUrl || ''
 
 // In order on one worker (uat.config.ts), but not 'serial': one failure must not skip the rest.
 
@@ -64,6 +68,7 @@ test('a Research run reaches a report with sources and pins (paid)', async ({ pa
   // Reopening the finished document is a separate open: it must be fast too.
   const href = page.url()
   researchUrl = href
+  if (STATE) writeFileSync(STATE, JSON.stringify({ ...readState(), researchUrl }))
   measure('research-doc', 0, undefined, { url: href.replace(/^https?:\/\/[^/]+/, '') })
   await page.goto('/')
   const t1 = Date.now()
@@ -157,8 +162,10 @@ test('ask about a fact: the answer shows where it was asked, about that fact (pa
   await app.locator('[data-act="pv-ask"]').click()
   // Round 1: the answer went to a report section out of sight, and the ask did not carry the fact.
   const card = app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first()
-  await expect(card, 'answer shown under the fact where it was asked').toBeVisible({ timeout: 120_000 })
-  measure('ask-fact', Date.now() - t0, 60_000)
+  // A fact question the research cannot answer searches the web and reads what it finds (53 s on UAT,
+  // 2026-11-12): allow four minutes; over two is reported as slow.
+  await expect(card, 'answer shown under the fact where it was asked').toBeVisible({ timeout: 240_000 })
+  measure('ask-fact', Date.now() - t0, 120_000)
   // The approved mock (research-fact-answer-v1): not in the report until added; Add, then Take out.
   await card.locator('[data-act="pvq-add"]').click()
   await expect(card.locator('[data-act="pvq-out"]')).toBeVisible({ timeout: 15_000 })
@@ -230,7 +237,7 @@ test('ask about a fact, click away, come back: it kept going and the answer is t
   // Back to the same fact: the answer is there (or still coming, then lands).
   await openFindingFromMap(app)
   await app.locator(`button.pv-row[data-pv="${ref}"]`).first().click()
-  await expect(app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 120_000 })
+  await expect(app.locator('.pv-answers .rq-a.pv-fa:not(.busy)').first(), 'answer shown on returning to the fact').toBeVisible({ timeout: 240_000 })
 })
 
 test('tidy: the round archives its own client (it can be restored)', async ({ page }) => {

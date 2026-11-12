@@ -4,6 +4,13 @@ import { defineConfig, devices } from '@playwright/test'
 // mock accounts in infra/scripts/accounts.uat.tsv. Unlike app/e2e it spends real money
 // (Research and Brief runs call models and web search), so CI never runs it; scripts/uat-round
 // does, after deploying a ref to UAT. Assertions are about structure and time, never wording.
+// One round, one client and one state file, fixed here in the main process: Playwright starts a new
+// worker after a failure and re-imports the journeys, so anything computed there would change
+// (round 4: the client 'UAT 11121025' became 'UAT 11121029' and three journeys could not find it).
+const stamp = new Date().toISOString().slice(5, 16).replace(/[-:T]/g, '')
+process.env.UAT_CLIENT ||= `UAT ${stamp}`
+process.env.UAT_STATE ||= `${process.env.TMPDIR || '/tmp'}/uat-state-${stamp}.json`
+
 const base = process.env.UAT_URL || 'http://napkin-uat-web-126391466.eu-west-1.elb.amazonaws.com'
 
 export default defineConfig({
