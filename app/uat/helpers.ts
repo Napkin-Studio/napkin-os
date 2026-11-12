@@ -84,7 +84,7 @@ export async function appFrame(page: Page, t0: number, label: string, ready: str
 }
 
 /** What the suite types when an agent asks in words (round 2: "Which brand is this campaign for? Type its name."). */
-const TYPED: [RegExp, string][] = [
+export const TYPED: [RegExp, string][] = [
   [/brand/i, 'Oatly'],
   [/market|country|where/i, 'Ireland'],
   [/category/i, 'Plant-based drinks'],
@@ -96,7 +96,7 @@ const TYPED: [RegExp, string][] = [
  * Answer whatever the run asks (an offered option, else typed words) until `done` shows or the
  * budget runs out. Returns how many questions were answered. Fails at once on an error banner.
  */
-export async function driveRun(page: Page, app: FrameLocator, done: Locator, budget: number) {
+export async function driveRun(page: Page, app: FrameLocator, done: Locator, budget: number, typed: [RegExp, string][] = TYPED) {
   const t0 = Date.now()
   let questions = 0
   const failed = app.locator('.rs-err, [role="alert"]')
@@ -110,7 +110,7 @@ export async function driveRun(page: Page, app: FrameLocator, done: Locator, bud
       if (await opt.isVisible()) { await opt.click(); questions++; continue }
       if (await box.isVisible() && await box.isEnabled()) {
         const q = await card.locator('.qtext, .aq-q').first().innerText().catch(() => '')
-        await box.fill(TYPED.find(([re]) => re.test(q))?.[1] ?? 'Oatly')
+        await box.fill(typed.find(([re]) => re.test(q))?.[1] ?? typed[0][1])
         await card.getByRole('button', { name: /^Send$/ }).click()
         questions++
         await page.waitForTimeout(1_000)
