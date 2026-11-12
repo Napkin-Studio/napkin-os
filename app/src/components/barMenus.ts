@@ -73,6 +73,8 @@ export interface DocBar {
   linked?: LinkedDoc[]
   /** "Continue in ▾ › Link to an existing one": what it could link (`GET /attach-targets`). */
   linkTargets?: AttachTarget[]
+  /** "Continue in ▾" is opening: read what it lists again, so a document made since is there. */
+  onContinueOpen?: () => void
   /** Link that document into this one (`POST /attach`). */
   onLink?: (documentId: string) => void
   /** Take a linked document's newer version (`POST /upstream/update {document_id}`). */
@@ -210,6 +212,29 @@ export interface MenuItem {
   apart?: boolean
   /** Shown, but it cannot run yet; the hint says why. */
   disabled?: boolean
+}
+
+/** What the links hook holds: one document's link targets and what is linked now. */
+export interface LinksRead { docPath: string; targets: AttachTarget[]; related: RelatedView | null }
+
+/**
+ * The next read of a document's links. A read that failed (null: a blip, a
+ * token being renewed) keeps what that document listed before rather than
+ * saying there is nothing to link; another document starts from nothing.
+ */
+export function linksRead(prev: LinksRead | null, docPath: string, targets: AttachTarget[] | null, related: RelatedView | null): LinksRead {
+  const same = prev?.docPath === docPath ? prev : null
+  return { docPath, targets: targets ?? same?.targets ?? [], related: related ?? same?.related ?? null }
+}
+
+/**
+ * "Continue in ▾" was pressed. Opening it reads what it lists again (another
+ * tab or person may have made or finished a document since this one opened);
+ * closing it asks nothing.
+ */
+export function pressContinue(doc: Pick<DocBar, 'onContinueOpen'>, open: boolean, toggle: () => void) {
+  if (!open) doc.onContinueOpen?.()
+  toggle()
 }
 
 /** "Continue in ▾": turn it into another app's document, link it, and take what it was made from again. */
