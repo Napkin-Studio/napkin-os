@@ -22,6 +22,7 @@ trusted not to.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import threading
@@ -77,14 +78,14 @@ class ModelCap:
         rl = self._log()
         try:
             if self._sem is None:
-                with rl.busy("model", purpose):
+                with _busy(rl, "model", purpose):
                     out = self._port.call(purpose, system, payload, schema, **kw)
             else:
                 _slot(self._sem, rl, "model", purpose)
                 try:
                     _not_cancelled(self._stopped)  # it may have waited for a slot
                     t0 = time.monotonic()  # the call's own seconds; the slot's wait is its own event
-                    with rl.busy("model", purpose):
+                    with _busy(rl, "model", purpose):
                         out = self._port.call(purpose, system, payload, schema, **kw)
                 finally:
                     self._sem.release()
@@ -132,7 +133,7 @@ class ResearchCap:
             _not_cancelled(self._stopped)  # it may have waited for a slot
             t0, out, err = time.monotonic(), None, None
             try:
-                with self._log().busy("research", f"{lens}/{market}"):
+                with _busy(self._log(), "research", f"{lens}/{market}"):
                     out = self._port.search(query, lens, market, entity=entity, category=category,
                                             max_sources=max_sources, attribution=dict(self._attr))
                 return out
@@ -178,7 +179,7 @@ class JevCap:
         t0, out, err = time.monotonic(), None, None
         chars = len(json.dumps(state, ensure_ascii=False, default=str)) + len(json.dumps(questions))
         try:
-            with self._log().busy("jev", what):
+            with _busy(self._log(), "jev", what):
                 out = self._port.ask(state, questions)
             return out
         except Exception as e:
@@ -220,7 +221,7 @@ class RetrievalCap:
         _not_cancelled(self._stopped)
         t0, out, err = time.monotonic(), None, None
         try:
-            with self._log().busy("retrieval", purpose):
+            with _busy(self._log(), "retrieval", purpose):
                 out = self._port.retrieve(self._scope, dict(self._attr), query, k, packs=packs, where=where,
                                           purpose=purpose)
             return out
@@ -236,6 +237,12 @@ class RetrievalCap:
                                   query=query)
 
 
+def _busy(rl, kind: str, what: str | None):
+    """The run log's in-flight mark for a call (a log without one, a test's, marks nothing)."""
+    busy = getattr(rl, "busy", None)
+    return busy(kind, what) if busy is not None else contextlib.nullcontext()
+
+
 SLOT_WAIT_S = 1.0  # a wait for a model or research slot longer than this is a `waiting` event
 
 
@@ -245,10 +252,10 @@ def _slot(sem: threading.Semaphore, rl, kind: str, what: str):
     if sem.acquire(blocking=False):
         return
     t0 = time.monotonic()
-    with rl.busy("slot", f"a {kind} slot for {what}"):
+    with _busy(rl, "slot", f"a {kind} slot for {what}"):
         sem.acquire()
     secs = time.monotonic() - t0
-    if secs >= SLOT_WAIT_S:
+    if secs >= SLOT_WAIT_S and hasattr(rl, "waiting"):
         rl.waiting(f"a {kind} slot", call=what, secs=round(secs, 2))
 
 
@@ -274,7 +281,7 @@ class LayersCap:
             rl = self._log()
             t0, err = time.monotonic(), None
             try:
-                with rl.busy("layers", name):
+                with _busy(rl, "layers", name):
                     return attr(*a, **kw)
             except Exception as e:
                 err = f"{type(e).__name__}: {str(e)[:300]}"
