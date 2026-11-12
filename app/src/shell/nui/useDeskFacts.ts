@@ -14,6 +14,7 @@ import type { DecisionsView, LibraryItem, UpstreamView } from '../../host'
 import { needsOf } from '../decisions/needs'
 import { needsYou } from '../landing/model'
 import { thinOf, type DocFacts, type Facts } from './deskData'
+import { limiter, READING } from './limiter'
 
 /** How many documents the desk reads: the newest, and every one that needs a call. */
 export const MAX = 10
@@ -48,14 +49,17 @@ export function factsOf(view: DecisionsView, up: UpstreamView | null): DocFacts 
 export function useDeskFacts(items: readonly LibraryItem[] | null, enabled: boolean): { facts: Facts; refresh: (path: string) => void } {
   const [facts, setFacts] = useState<Record<string, DocFacts>>({})
   const read = useRef(new Map<string, string>())
+  const slot = useRef(limiter(READING))
   const ops = enabled && hasServer && typeof host.docOps === 'function'
 
   const load = useCallback(async (item: LibraryItem) => {
     const stamp = stampOf(item)
     read.current.set(item.path, stamp)
     try {
-      const doc = await host.docOps!(item.path)
-      const [view, up] = await Promise.all([doc.decisions(), doc.upstream().catch(() => null)])
+      const [view, up] = await slot.current(async () => {
+        const doc = await host.docOps!(item.path)
+        return Promise.all([doc.decisions(), doc.upstream().catch(() => null)])
+      })
       if (view.problem) return
       const f = factsOf(view, up)
       setFacts(prev => ({ ...prev, [item.path]: f }))

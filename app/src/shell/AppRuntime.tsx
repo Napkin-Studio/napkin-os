@@ -56,6 +56,9 @@ interface Props {
  * HTML — and the frame loads it from the host's clan://document, or, with no
  * server, from srcdoc.
  */
+/** Fired on window when the open document's page has loaded. */
+export const DOC_LOADED = 'napkin:doc-loaded'
+
 export default function AppRuntime({
   hasHumanView, version, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
   onChrome, onBar, insets,
@@ -284,6 +287,8 @@ export default function AppRuntime({
         // Likewise the tabs and buttons it wants in the OS bar.
         iframeRef.current?.contentWindow?.postMessage({ type: 'clan:bar?' }, '*')
         setExportFrame(iframeRef.current?.contentWindow ?? null)
+        // The page is in: the shell's background reads (the desk's facts) may start (App.tsx).
+        window.dispatchEvent(new Event(DOC_LOADED))
       }}
     />
   )

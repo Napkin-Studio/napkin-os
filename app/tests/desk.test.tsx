@@ -273,3 +273,34 @@ test('Rename and Archive live in the ⋯ menu, only where the registry can be ma
   const prod = page([item(client(0), 'ie.napkin.film', { title: 'Film' })], { live: LIVE })
   assert.doesNotMatch(prod, /group-ads/)
 })
+
+// UAT, 2026-11-12: the desk read ten documents at once on every load, and a document being opened waited 3 s
+// behind them. It reads at most READING at a time, in order, and waits while a document's page loads (App.tsx).
+test('desk: reads at most two documents at a time, in order', async () => {
+  const { limiter, READING } = await import('../src/shell/nui/limiter')
+  assert.equal(READING, 2)
+  const run = limiter(READING)
+  let now = 0, most = 0
+  const order: number[] = []
+  const gates: (() => void)[] = []
+  const all = [0, 1, 2, 3, 4].map(i => run(() => new Promise<number>(res => {
+    now++; most = Math.max(most, now); order.push(i)
+    gates.push(() => { now--; res(i) })
+  })))
+  for (let k = 0; k < 5; k++) {
+    await new Promise(r => setTimeout(r, 0))
+    gates.shift()!()
+  }
+  assert.deepEqual(await Promise.all(all), [0, 1, 2, 3, 4])
+  assert.equal(most, 2, 'never more than two in flight')
+  assert.deepEqual(order, [0, 1, 2, 3, 4])
+})
+
+test('desk: its reads wait for the open document’s page', async () => {
+  const { readFileSync } = await import('node:fs')
+  const app = readFileSync('src/App.tsx', 'utf8')
+  const rt = readFileSync('src/shell/AppRuntime.tsx', 'utf8')
+  assert.match(rt, /onLoad=\{\(\) => \{[\s\S]*window\.dispatchEvent\(new Event\(DOC_LOADED\)\)/)
+  assert.match(app, /const deskMayRead = !openDocPath \|\| docIn === openDocPath/)
+  assert.match(app, /useDeskFacts\(landing\.data\?\.items \?\? null,\s*landing\.state === 'ready' && !\(device && !serverless\) && deskMayRead\)/)
+})
