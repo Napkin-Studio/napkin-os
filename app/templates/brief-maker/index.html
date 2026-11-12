@@ -4583,7 +4583,11 @@
     // Needs you is the one settle-before-lock list: the host's lock list and the open questions nobody has
     // answered. Lock waits on all of it, and "Settle n first" counts what Needs you shows (UAT round 9: Lock was on
     // with an open question left, because only the host's can_lock was read).
-    var again=A&&re.length>0, rows=needsRows(), n=rows.length, busy=draftLive(), wait=(!!l&&!l.can_lock)||n>0||busy;
+    // Until the host's lock list has loaded (the fields snippet reads /decisions after the page), what blocks the
+    // lock is unknown: Lock waits (UAT round 11: Needs you showed only the open questions for a few seconds, then
+    // three Review agent items arrived).
+    var again=A&&re.length>0, rows=needsRows(), n=rows.length, busy=draftLive(), unknown=!l&&!L,
+      wait=unknown||(!!l&&!l.can_lock)||n>0||busy;
     lb.classList.toggle('locked', L&&!again);
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
     // button carries no badge of its own; why it waits is said in words.
