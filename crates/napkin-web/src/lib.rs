@@ -13,6 +13,7 @@
 //!
 //! Everything else is the built React app.
 
+pub mod admin;
 pub mod api;
 pub mod auth;
 pub mod dogfood;
@@ -21,6 +22,7 @@ pub mod etag;
 pub mod events;
 pub mod exports;
 pub mod meter;
+pub mod people;
 pub mod sandbox;
 pub mod state;
 pub mod store;

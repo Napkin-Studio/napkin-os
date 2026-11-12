@@ -28,8 +28,9 @@ struct Settings {
 ///   NAPKIN_AUTH=none     anonymous sessions (the default: tests and demos)
 ///   NAPKIN_AUTH=local    accounts in NAPKIN_AUTH_USERS (default <data>/accounts.json)
 ///   NAPKIN_AUTH=cognito  a Cognito user pool: NAPKIN_COGNITO_REGION, NAPKIN_COGNITO_CLIENT_ID
-///   NAPKIN_AUTH=roster   no passwords: a user name and agency on the roster file
-///                        NAPKIN_AUTH_ROSTER (`user@agency<TAB>Display name` lines)
+///   NAPKIN_AUTH=roster   no passwords: a user name and agency in the people store
+///                        (<data>/_people), seeded once from NAPKIN_AUTH_ROSTER
+///                        (`user@agency<TAB>Display name` lines)
 /// With accounts, NAPKIN_SESSION_SECRET (32+ bytes) signs the session cookies;
 /// every server behind one load balancer gets the same one.
 fn identity(data_root: &std::path::Path, secure: bool) -> Identity {
@@ -47,11 +48,15 @@ fn identity(data_root: &std::path::Path, secure: bool) -> Identity {
             &env_string("NAPKIN_COGNITO_CLIENT_ID")
                 .expect("NAPKIN_COGNITO_CLIENT_ID is required with NAPKIN_AUTH=cognito"),
         )),
+        // The people store on the data volume, seeded once from the roster file (features/people-admin.clan).
         "roster" => Provider::Roster(
-            Roster::new(PathBuf::from(
-                env_string("NAPKIN_AUTH_ROSTER")
-                    .expect("NAPKIN_AUTH_ROSTER is required with NAPKIN_AUTH=roster"),
-            ))
+            Roster::open(
+                data_root.join(PEOPLE_DIR),
+                &PathBuf::from(
+                    env_string("NAPKIN_AUTH_ROSTER")
+                        .expect("NAPKIN_AUTH_ROSTER is required with NAPKIN_AUTH=roster"),
+                ),
+            )
             .unwrap_or_else(|e| panic!("{e}")),
         ),
         other => panic!("NAPKIN_AUTH must be none, local, cognito or roster (got {other:?})"),
@@ -99,6 +104,8 @@ fn add_user(args: &[String], data_root: &std::path::Path) {
     }
 }
 
+/// Where the people store lives (crate people.rs), under the data root and outside every workspace.
+const PEOPLE_DIR: &str = "_people";
 /// Where the dogfood record lives, under the data root and outside every workspace.
 const DOGFOOD_DIR: &str = "_dogfood";
 /// Where the middleware writes its run log when it shares this volume (staging).

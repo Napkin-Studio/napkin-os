@@ -91,6 +91,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/endpoint", get(agent_endpoint))
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
+        // The People page: who signs in, and their agencies (admin only; admin.rs)
+        .merge(crate::admin::router())
 }
 
 /// An opened document, plus what the shell needs to render it: the capability
