@@ -1126,7 +1126,7 @@ review:                           # replaced whole by extract, then by judge
   based_on: { version }           # the clan.version the job read
   scorecard:
     dimensions: [{ dimension, verdict: pass | vague | missing, evidence?, fix? }]   # the seven, in order
-    single_mindedness: { verdict: single | multiple, split_into: [] }
+    single_mindedness: { verdict: single | multiple | unchecked, split_into: [] }   # unchecked: the jev judge made no Review agent call
     summary: "…"
   judge:                          # absent until the judge stage
     reason_codes_version: "1"

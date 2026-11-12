@@ -580,3 +580,11 @@ class FakeRetrievalService:
         vers = {p["tag"]: p["version"] for p in self.packs_list() if p["tag"] in want}
         return httpx.Response(200, json={"passages": ps, "trace": {"backend": "fake", "embed_model": None,
                                                                    "packs": vers}})
+
+
+def explained(p, out, verdict="single"):
+    """An explain_flags answer (checkloop.py): `out`, plus the skill-test verdicts when the caller sent the
+    planning skill's tests (the planned flow's jev judge does; the engine's does not)."""
+    if "tests" not in p:
+        return out
+    return {"failed_tests": [], "single_mindedness": {"verdict": verdict, "split_into": []}, **out}

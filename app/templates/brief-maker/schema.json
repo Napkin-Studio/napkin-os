@@ -548,7 +548,8 @@
                   "type": "string",
                   "enum": [
                     "single",
-                    "multiple"
+                    "multiple",
+                    "unchecked"
                   ]
                 },
                 "split_into": {

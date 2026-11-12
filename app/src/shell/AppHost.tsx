@@ -32,6 +32,7 @@ import { listedTitle, othersStamp, listedUpdated } from './docFreshness'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
+import { openDocJobs } from './openJobs'
 import '../components/chrome.css'
 import './clientReview/ClientReview.css'
 import { afterLock, editOn, setEditFor, type EditState } from './editMode'
@@ -148,6 +149,10 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // Read links and the source again when another document changes, or the page is back in view.
   const wake = useWakeTick()
   const others = othersStamp(library, docPath)
+  // The document's runs the host has not seen finish, for its page to pick up (clan:jobs). The list
+  // is keyed by its contents, so a re-read listing with the same jobs posts nothing new.
+  const jobsKey = openDocJobs(library, docPath).join('\n')
+  const openJobs = useMemo(() => (jobsKey ? jobsKey.split('\n') : []), [jobsKey])
   const stamp = `${wake}:${others}`
   // The tab says it too: "Napkin Studio Research — Bulmers · Ireland".
   const brandName = brand?.name
@@ -465,6 +470,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onChrome={onChrome}
             onBar={onBar}
             insets={shown}
+            jobs={openJobs}
           />
         </main>
         {clientOn ? (

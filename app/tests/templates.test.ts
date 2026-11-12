@@ -874,7 +874,7 @@ test('a note on a brief can be fixed by the crew, and the worker shows in the si
   assert.match(fn(BM, 'crossNoteHtml'), /\+fixBtn\(d\)\+/)
   assert.match(fn(BM, 'notesHtml'), /\(v\.bad&&!locked\?fixBtn\(v\.d\):''\)/)
   assert.match(fn(BM, 'bindNotes'), /\.act-fix'\)\.forEach\(function\(b\)\{ b\.addEventListener\('click',function\(\)\{ fixParts\(b\.getAttribute\('data-v'\)\); \}\); \}\);/)
-  assert.match(fn(BM, 'resumeJobs'), /stored\(jobKey\('fix_parts'\)\); if\(fid\) fixParts\('', fid\);/)
+  assert.match(fn(BM, 'resumeJob'), /else if\(b\.task==='fix_parts'\)\{ if\(!FIX\) fixParts\('', id\); \}/)
   assert.match(BM, /<div class="walker" id="walker" role="status" aria-live="polite"><\/div>/)
   assert.match(BM, /@media \(prefers-reduced-motion: reduce\)\{\.walker \.wk-who,\.walker \.wk-fig\{animation:none\}\}/)
 })
@@ -3268,7 +3268,7 @@ test('a done job another poll applied first still redraws the brief from what it
   let chains = 0, renders = 0, ended = 0
   type B = { landed(c: unknown): boolean; onJobReply(j: Record<string, unknown>, r: unknown): void }
   const b = lift<B>(BM, ['landed', 'onJobReply'], {
-    hostErr: () => null, mwBody: (r: unknown) => r, store: () => {}, jobKey: () => 'k',
+    hostErr: () => null, mwBody: (r: unknown) => r,
     loadChain: () => { chains += 1 }, render: () => { renders += 1 }, endJob: () => { ended += 1 }, pollJob: () => {},
   })
   assert.equal(b.landed({ applied: true }), true)
@@ -4331,12 +4331,72 @@ test('research panel: the map draws only what the report uses, grouped, and ligh
 
 // The draft may stop once, in needs_input, for a few questions (middleware-api §10.6). The page keeps
 // polling, shows them with Skip on each and Skip, just draft for all, and answers with answer_question.
+// ── Brief Maker: a running brief resumes when reopened (brief-resumes-running-job) ──
+
+// The frame is sandboxed without allow-same-origin, so the page cannot keep a job id across an open.
+// The shell tells it the document's unsettled jobs (clan:jobs); each new id gets one job_status poll,
+// and its reply's task says which resume path takes it.
+test('Brief Maker: clan:jobs resumes a running draft once, a fix and a redraft, and ignores other tasks', async () => {
+  type Reply = { task: string; job: { id: string; state: string }; result?: { fields?: Record<string, { state: string; by: string | null }> } }
+  const replies: Record<string, Reply> = {
+    job_d: { task: 'draft_brief', job: { id: 'job_d', state: 'needs_input' } },
+    job_x: { task: 'research_lens', job: { id: 'job_x', state: 'running' } },
+    job_f: { task: 'fix_parts', job: { id: 'job_f', state: 'running' } },
+    job_r: { task: 'regenerate_field', job: { id: 'job_r', state: 'running' },
+      result: { fields: { insight: { state: 'drafting', by: 'drafter' }, background: { state: 'done', by: null }, mandatories: { state: 'kept', by: null } } } },
+    job_e: { task: 'draft_brief', job: { id: 'job_e', state: 'done' } },
+  }
+  const polls: string[] = [], drafts: unknown[][] = [], fixes: unknown[][] = [], regens: unknown[][] = []
+  let chains = 0
+  const listeners: ((e: { source: unknown; data: unknown }) => void)[] = []
+  const parent = {}
+  const env = {
+    window: {
+      parent,
+      clan: { apiProxy: (_: string, p: { task: string; input: { job_id: string } }) => { polls.push(p.input.job_id); return Promise.resolve(replies[p.input.job_id]) } },
+      addEventListener: (t: string, h: (e: { source: unknown; data: unknown }) => void) => { if (t === 'message') listeners.push(h) },
+    },
+    arr, hostErr: () => null, mwBody: (r: unknown) => r, loadChain: () => { chains += 1 },
+    DRAFT: null, FIX: null, REGEN: {} as Record<string, unknown>, BUSY: { extracting: 1, drafting: 1, judging: 1, revising: 1 },
+    fieldOf: (k: string) => (k === 'insight' ? { key: 'insight' } : null),
+    startDraft: (...a: unknown[]) => { drafts.push(a) }, phase: 'intake', hasContent: () => false,
+    fixParts: (...a: unknown[]) => { fixes.push(a) },
+    regenField: (...a: unknown[]) => { regens.push(a) },
+  }
+  const lib = fn(BM, 'ownJob') + fn(BM, 'resumeJobs') + fn(BM, 'regenFieldOf') + fn(BM, 'resumeJob')
+  const at = BM.indexOf('var SEEN_JOBS={};')
+  const listen = BM.slice(BM.indexOf("window.addEventListener('message'", at), BM.indexOf('});', BM.indexOf("window.addEventListener('message'", at)) + 3)
+  assert.match(listen, /m\.type!=='clan:jobs'\) return;\s*resumeJobs\(m\.jobs\);/)
+  new Function(...Object.keys(env), `var SEEN_JOBS={}; var LIVE_JOB={queued:1, running:1, needs_input:1};\n${lib}\n${listen}`)(...Object.values(env))
+  const post = (data: unknown, source: unknown = parent) => listeners.forEach(h => h({ source, data }))
+  const settle = () => new Promise(r => setTimeout(r, 0))
+
+  post({ type: 'clan:jobs', jobs: ['job_d'] }, {})   // not from the shell: not heard
+  await settle()
+  assert.deepEqual(polls, [])
+  post({ type: 'clan:jobs', jobs: ['job_d', 'job_x'] })
+  await settle()
+  assert.deepEqual(drafts, [['', [], 'job_d', false]], 'the draft goes back to the Agents screen through the resume path')
+  assert.deepEqual(polls, ['job_d', 'job_x'])
+  // the listing changes and says the same ids again: nothing is resumed twice, nor polled again
+  post({ type: 'clan:jobs', jobs: ['job_d', 'job_x', 'job_f', 'job_r', 'job_e'] })
+  await settle()
+  assert.equal(drafts.length, 1, 'a draft resumes once')
+  assert.deepEqual(polls, ['job_d', 'job_x', 'job_f', 'job_r', 'job_e'])
+  assert.deepEqual(fixes, [['', 'job_f']])
+  assert.deepEqual(regens, [[{ key: 'insight' }, '', 'job_r']], 'a redraft resumes on the one part it has in flight')
+  assert.equal(chains, 1, 'a job that already ended is not resumed: the brief re-reads what it wrote')
+  // an unknown task (job_x) started nothing
+  assert.equal(drafts.length + fixes.length + regens.length, 3)
+  // and the storage the sandbox refused is gone
+  assert.doesNotMatch(BM, /sessionStorage\.(get|set)Item/)
+})
+
 test('a needs_input reply keeps the poll alive, carries the questions, and a running reply resumes', () => {
   type J = Record<string, unknown> & { state: string; questions?: unknown; questions_id?: unknown }
-  const ended: J[] = [], polled: string[] = [], stored: Record<string, string | null> = {}
+  const ended: J[] = [], polled: string[] = []
   const f = lift<{ onJobReply(j: J, r: unknown): void }>(BM, ['onJobReply'], {
-    hostErr: () => null, mwBody: (r: unknown) => r, endJob: (j: J) => { ended.push(j) },
-    store: (k: string, v: string | null) => { stored[k] = v }, jobKey: (t: string) => `k.${t}`, loadChain: () => {},
+    hostErr: () => null, mwBody: (r: unknown) => r, endJob: (j: J) => { ended.push(j) }, loadChain: () => {},
     pollJob: (j: J) => { polled.push(j.state) }, setTimeout: (fn: () => void) => { fn(); return 1 }, clearTimeout: () => {},
     LAST_PROPOSALS: null,
   })
@@ -4348,7 +4408,6 @@ test('a needs_input reply keeps the poll alive, carries the questions, and a run
   assert.equal(j.questions_id, 'qs_1')
   assert.equal(ended.length, 0, 'the finished state never shows while the job waits')
   assert.deepEqual(polled, ['needs_input'], 'it keeps polling')
-  assert.equal(stored['k.draft_brief'], 'job_1', 'a reload picks the waiting job up')
   // answered, skipped or timed out: the job runs again and the questions go
   f.onJobReply(j, { job: { id: 'job_1', state: 'running', stage: 'context', question: null } })
   assert.equal(j.questions, null)
@@ -4871,7 +4930,7 @@ function redraftPage(o: { locked?: string[] } = {}) {
     ROLES: { sideSet: (el: { hidden: boolean; innerHTML: string }, job: { role: string; doing: string; status: string } | null) => { el.hidden = !job; el.innerHTML = job ? `${job.role} · ${job.doing} · ${job.status}` : '' } },
     esc, renderProc: () => { phases.push('renderProc') }, setPhase: (p: string) => { phases.push(p) }, render: () => { rendered++ },
     renderLinkNote: () => {}, renderLock: () => {}, linkRunEnded: () => {}, toast: (m: string) => { toasts.push(m) },
-    store: () => {}, stored: () => null, jobKey: (t: string, f?: string) => t + (f ? '.' + f : ''), pollJob: () => {},
+    pollJob: () => {},
     window: { scrollTo: () => {} }, setTimeout: () => 0,
     runJob: (j: J, input: Record<string, unknown>) => { j.state = 'sending'; runs.push({ j, input }) },
   }
@@ -4933,5 +4992,5 @@ test('the sweep is the mock’s aw-sheen in the app’s accent, and still with r
   assert.match(BM, /@media \(prefers-reduced-motion: reduce\)\{#fields \.row\.working\{animation:none;background-image:none\}\}/, 'no sweep, the dim stays')
   assert.match(fn(BM, 'renderStructured'), /markSweep\(\);/, 'a redraw keeps the sweep on the parts still in hand')
   assert.match(BM, /<div class="side-agent" id="sideAgent" role="status" aria-live="polite" hidden><\/div>\s*<div class="side-stop" id="sideStop" hidden><\/div>/)
-  assert.match(fn(BM, 'resumeJobs'), /startDraft\('', \[\], id, !!stored\(jobKey\('draft_brief','inplace'\)\)\)/, 'a reload picks the run up in place')
+  assert.match(fn(BM, 'resumeJob'), /startDraft\('', \[\], id, st!=='needs_input'&&phase==='doc'&&hasContent\(\)\)/, 'a reopened redraft comes back in place')
 })

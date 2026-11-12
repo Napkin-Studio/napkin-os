@@ -2953,9 +2953,6 @@
     if(!b||typeof b!=='object'||b.api!==MW_API) return 'Not a '+MW_API+' reply'+(b&&b.api?' (got '+b.api+')':'')+'. Nothing was applied.';
     return null;
   }
-  function store(k, v){ try{ if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); }catch(e){} }
-  function stored(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
-  function jobKey(task, field){ return 'clan.brief.job.'+docId()+'.'+task+(field?'.'+field:''); }
   // One job: {task, field, id, state, stage, progress, fields, proposals,
   // summary, error, applied, reason}. `onUpdate` re-draws whatever shows it.
   function runJob(j, input){
@@ -2982,7 +2979,6 @@
       if(Array.isArray(b.result.proposals)){ j.proposals=b.result.proposals; LAST_PROPOSALS=b.result.proposals; }
     }
     if(b.change&&typeof b.change==='object'){ j.applied=landed(b.change); j.reason=b.change.reason; if(j.applied){ loadChain(); render(); } }
-    if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running'||j.state==='needs_input')?j.id:null);
     if(j.state==='queued'||j.state==='running'||j.state==='needs_input'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
     else endJob(j);
   }
@@ -2995,7 +2991,7 @@
     window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
   }
   function unreachable(j, e){ j.error='The middleware could not be reached: '+(e&&e.message||e); j.state=j.state==='sending'?'unsent':'stalled'; endJob(j); }
-  function endJob(j){ store(jobKey(j.task,j.field), null); loadChain(); j.onEnd(j); }
+  function endJob(j){ loadChain(); j.onEnd(j); }
   // The planner's answers to intake's questions ({question id: text, or null to skip}; {} skips them all).
   // The reply is the job's, as a poll's. A refusal (the wait ran out, the job went on) is not the job's
   // end: say so and keep polling.
@@ -3328,7 +3324,6 @@
     var j=DRAFT={task:'draft_brief', fields:{}, inPlace:!!inPlace, onUpdate:inPlace?draftInPlace:renderProc, onEnd:function(j){
       linkRunEnded(j);
       if(j.inPlace){
-        store(jobKey('draft_brief','inplace'), null);
         if(DRAFT===j) DRAFT=null;
         if(j.state!=='done'&&j.error) toast(j.error);
         render(); draftInPlace(j); return;
@@ -3338,7 +3333,6 @@
     }};
     if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
     if(inPlace){
-      store(jobKey('draft_brief','inplace'), '1');
       if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; pollJob(j); }
       else runJob(j, {prompt:prompt, attachments:atts, intake:false, redraft:true});
       draftInPlace(j); return;
@@ -3422,14 +3416,46 @@
   }
   $('genBtn').addEventListener('click',function(){ draftNow($('prompt').value.trim()); });
 
-  // On open: pick up a job this tab started on this document, with one free poll.
-  function resumeJobs(){
-    if(!(window.clan&&window.clan.apiProxy)) return;
-    var id=stored(jobKey('draft_brief'));
-    if(id) startDraft('', [], id, !!stored(jobKey('draft_brief','inplace')));
-    FIELDS.forEach(function(f){ var rid=stored(jobKey('regenerate_field', f.key)); if(rid) regenField(f, '', rid); });
-    var fid=stored(jobKey('fix_parts')); if(fid) fixParts('', fid);
+  // On open, and while the brief is open: the runs still going on it. The shell says which of the
+  // document's jobs the host has not seen finish (clan:jobs, ids only), on load and whenever its
+  // listing changes. Each id this page is not already polling gets one free job_status poll, whose
+  // reply names the job's task; a live draft goes back to the Agents screen (questions and all), or in
+  // place on a drafted brief (a redraft, features/brief-redraft-in-place), a
+  // redraft or a fix back to its row, and from then on this page polls it, so a finished run lands
+  // without leaving (the shell's settler skips the open document). The page used to keep the ids in
+  // sessionStorage, but the frame is sandboxed without allow-same-origin, so storage always threw.
+  var SEEN_JOBS={};
+  var LIVE_JOB={queued:1, running:1, needs_input:1};
+  function ownJob(id){
+    if(DRAFT&&DRAFT.id===id||FIX&&FIX.id===id) return true;
+    return Object.keys(REGEN).some(function(k){ return REGEN[k]&&REGEN[k].id===id; });
   }
+  function resumeJobs(ids){
+    if(!(window.clan&&window.clan.apiProxy)) return;
+    arr(ids).forEach(function(id){
+      if(typeof id!=='string'||!id||SEEN_JOBS[id]||ownJob(id)) return;
+      SEEN_JOBS[id]=1;
+      window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:id}}).then(function(r){ resumeJob(id, r); }, function(){ delete SEEN_JOBS[id]; });
+    });
+  }
+  // A redraft's field: the one part its reply has in flight (the rest are kept, done or absent).
+  function regenFieldOf(b){
+    var fs=b.result&&b.result.fields||{}, at=Object.keys(fs).filter(function(k){ return fs[k]&&(fs[k].state==='waiting'||BUSY[fs[k].state]); });
+    return at.length===1?fieldOf(at[0]):null;
+  }
+  function resumeJob(id, r){
+    if(hostErr(r)||ownJob(id)) return;
+    var b=mwBody(r), st=b.job&&b.job.state;
+    if(!LIVE_JOB[st]){ loadChain(); return; }   // it ended: the host applied what the reply carried
+    // a redraft on the sheet comes back in place; a first draft (or one asking its questions) to the Agents screen
+    if(b.task==='draft_brief'){ if(!DRAFT) startDraft('', [], id, st!=='needs_input'&&phase==='doc'&&hasContent()); }
+    else if(b.task==='fix_parts'){ if(!FIX) fixParts('', id); }
+    else if(b.task==='regenerate_field'){ var f=regenFieldOf(b); if(f&&!REGEN[f.key]) regenField(f, '', id); }
+  }
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:jobs') return;
+    resumeJobs(m.jobs);
+  });
 
   // A working title while project_name is empty: the product and the move the
   // commercial objective names ("Relaunch Glenmore 12 to …" → "Glenmore 12
@@ -5857,7 +5883,6 @@
   // ---------- boot ----------
   render();
   checkMiddleware();
-  resumeJobs();
   announce();
   loadUpstream();
   // A write lands: re-render, and re-read the chain it was recorded in.

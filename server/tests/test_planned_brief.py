@@ -11,7 +11,7 @@ from napkin.brief.fields import ARRAY_KEYS, KEYS
 from napkin.brief.planned import DIMS
 
 from conftest import Server
-from fakes import FakeModel
+from fakes import FakeModel, explained
 from test_brief import DOC, Host, check_change_rules, post, retrieval, run
 
 THIN = "Can you make me a brief? Brewline, an Irish coffee chain, is launching an oat-milk iced latte this " \
@@ -183,10 +183,10 @@ def test_the_check_loop_rewrites_what_jev_flags_and_jude_explains(tmp_path):
 
     def explain(p):
         seen["explain"] = p
-        return {"parts": {k: {"rework": k == "tone_and_world", "why": f"{k} is generic",
-                              "instruction": "make it specific" if k == "tone_and_world" else ""}
-                          for k in list(p["flagged"]) + p["empty"]},
-                "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": ["What is the budget?"]}
+        return explained(p, {"parts": {k: {"rework": k == "tone_and_world", "why": f"{k} is generic",
+                                           "instruction": "make it specific" if k == "tone_and_world" else ""}
+                                       for k in list(p["flagged"]) + p["empty"]},
+                             "chain": {"issue": None, "parts": []}, "dimensions": [], "questions": ["What is the budget?"]})
 
     def rewrite(p):
         seen["rewrite"] = p
@@ -248,10 +248,10 @@ def test_a_missing_dimension_reaches_dara_and_client_is_only_what_ellis_captured
 
     def explain(p):
         seen["explain"] = p
-        return {"parts": {k: {"rework": False, "why": "fine", "instruction": ""} for k in list(p["flagged"]) + p["empty"]},
+        return explained(p, {"parts": {k: {"rework": False, "why": "fine", "instruction": ""} for k in list(p["flagged"]) + p["empty"]},
                 "chain": {"issue": None, "parts": []},
                 "dimensions": [{"dimension": "evaluation_criteria", "parts": ["desired_response.do"],
-                                "instruction": "say how the work will be judged"}], "questions": []}
+                                "instruction": "say how the work will be judged"}], "questions": []})
     m.overrides.update({"draft_brief_whole": draft, "explain_flags": explain,
                         "rewrite_brief_parts": lambda p: (seen.__setitem__("rewrite", p), {k: {
                             "value": "Visit twice in June; judged on repeat visits", "basis": "assumption",
