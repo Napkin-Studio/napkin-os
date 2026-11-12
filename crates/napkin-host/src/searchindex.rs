@@ -271,13 +271,11 @@ fn score_term(entry: &Entry, term: &Term) -> u32 {
     };
     match term {
         Term::Job(n) => {
-            let own = entry.kind == "job" && entry.id == *n;
+            // A document filed under the job answers for its number; the job itself answers as its title does.
             let filed = entry.job.as_deref() == Some(n.as_str());
             let by_word = word(&n.to_ascii_lowercase());
-            if own {
-                30
-            } else if filed {
-                8.max(by_word)
+            if filed {
+                10.max(by_word)
             } else {
                 by_word
             }
@@ -294,8 +292,9 @@ fn score_term(entry: &Entry, term: &Term) -> u32 {
             }
         }
         Term::Kind(k) => {
+            // The kind a person names is the strongest word there is: "J001 brief" is the brief, before the job.
             if entry.kind == *k {
-                8.max(word(k))
+                14
             } else {
                 word(k)
             }
@@ -305,7 +304,7 @@ fn score_term(entry: &Entry, term: &Term) -> u32 {
 }
 
 /// The score of `entry` for `query`: every term must answer, and the answers add up. `None` when one
-/// does not. An entry of the kind `job` is read first for its own number.
+/// does not. A job number typed alone puts that job first.
 pub fn score(entry: &Entry, query: &Query) -> Option<u32> {
     if query.is_empty() {
         return None;
@@ -317,6 +316,12 @@ pub fn score(entry: &Entry, query: &Query) -> Option<u32> {
             return None;
         }
         total += s;
+    }
+    // A job number on its own is the job: "J001" finds the job before the documents filed under it.
+    if let [Term::Job(n)] = query.terms.as_slice() {
+        if entry.kind == "job" && entry.id == *n {
+            total += 30;
+        }
     }
     Some(total)
 }
@@ -331,6 +336,7 @@ pub struct Found<'a> {
 
 /// Search `entries`. `allow` is asked of every entry **first**: an entry it refuses is not scored, not
 /// ranked and not counted, so nothing about it (not even how many there are) reaches the person.
+/// The groups come best first: the first item of the first group is the best answer.
 pub fn search<'a>(
     entries: impl IntoIterator<Item = &'a Entry>,
     query: &Query,
@@ -351,15 +357,13 @@ pub fn search<'a>(
             .then_with(|| a.id.cmp(&b.id))
     });
     hits.truncate(limit);
+    // Grouped by kind, the group holding the best answer first (so Enter opens the best answer), then in the
+    // bar's own order of kinds; inside a group, best first.
     let mut groups: Vec<(&'static str, Vec<&Entry>)> = Vec::new();
-    for kind in KINDS {
-        let items: Vec<&Entry> = hits
-            .iter()
-            .filter(|(_, e)| e.kind == kind)
-            .map(|(_, e)| *e)
-            .collect();
-        if !items.is_empty() {
-            groups.push((kind, items));
+    for (_, e) in &hits {
+        match groups.iter_mut().find(|(k, _)| *k == e.kind) {
+            Some((_, items)) => items.push(e),
+            None => groups.push((e.kind, vec![e])),
         }
     }
     Found { total, groups }
@@ -700,10 +704,13 @@ impl SearchIndex {
 
 type Kept = HashMap<String, (String, Option<DocFacts>)>;
 
+/// What an index was built from (each document's id and stamp) and the index.
+type Built = (Vec<(String, String)>, Arc<SearchIndex>);
+
 /// The last index and what it was built from. One beside each tenant's store (`Workspace.search`).
 #[derive(Default)]
 pub struct SearchCache {
-    last: Mutex<Option<(Vec<(String, String)>, Arc<SearchIndex>)>>,
+    last: Mutex<Option<Built>>,
     /// What each document taught the index, by the stamp it was read at.
     facts: Mutex<Kept>,
     builds: AtomicUsize,

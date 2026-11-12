@@ -46,7 +46,9 @@ export function BarList({ groups, active, onPick, onHover, confirm }: ListProps)
                 onMouseMove={() => { if (!on) onHover(i) }}
               >
                 <span className="bar-o-main"><b>{r.title}</b>{r.line && <small>{r.line}</small>}</span>
-                <span className="bar-kind" aria-hidden>{KIND_WORD[r.kind] ?? r.kind}</span>
+                {r.kind === 'command' ? (r.hint ? <kbd className="bar-hint" aria-hidden>{r.hint}</kbd> : null)
+                  : r.kind === 'recent' ? null
+                  : <span className="bar-kind" aria-hidden>{KIND_WORD[r.kind] ?? r.kind}</span>}
                 {on && confirm && r.act.type === 'command' && <small className="bar-warn" data-testid="bar-confirm">{confirm} Press Enter again to do it.</small>}
               </div>
             )

@@ -8,7 +8,7 @@
 // empty: this provider list, a slot inside the field (BarField's `slot`) and a panel slot (BarMount's `panelSlot`).
 
 import { barSearch } from '../../host/http'
-import { matchCommands, type Command } from './commands'
+import { isMac, keysText, matchCommands, type Command } from './commands'
 
 /** What Enter does with a result. */
 export type Act =
@@ -23,6 +23,8 @@ export interface BarResult {
   kind: string
   title: string
   line: string
+  /** A command's key, as the platform prints it, shown in place of the kind. */
+  hint?: string
   act: Act
 }
 
@@ -52,7 +54,7 @@ export const KIND_WORD: Record<string, string> = {
   client: 'Client', person: 'Person', command: 'Command', recent: 'Recent',
 }
 
-export const commandResult = (c: Command): BarResult => ({ key: `command:${c.id}`, kind: 'command', title: c.title, line: '', act: { type: 'command', command: c } })
+export const commandResult = (c: Command): BarResult => ({ key: `command:${c.id}`, kind: 'command', title: c.title, line: '', hint: c.shortcut ? keysText(c.shortcut, isMac()) : undefined, act: { type: 'command', command: c } })
 
 /** The command table, as a provider: synchronous. */
 export const commandProvider: BarProvider = {

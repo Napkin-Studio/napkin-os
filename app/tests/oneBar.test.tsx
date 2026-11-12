@@ -84,7 +84,7 @@ test('undo and redo are offered only where there is something to undo; sign out 
   assert.ok(titles(cmds({ undo: noop })).includes('Undo') && !titles(cmds({ undo: noop })).includes('Redo'))
   const signOut = cmds({}).find(c => c.id === 'sign-out')!
   assert.equal(signOut.undoable, false)
-  assert.ok(signOut.warns && !signOut.warns.includes('—'))
+  assert.ok(signOut.warns && !signOut.warns.includes('\u2014'))
   assert.ok(cmds({}).filter(c => c.id !== 'sign-out').every(c => c.undoable))
 })
 
@@ -98,7 +98,7 @@ test('the shortcuts sheet prints every key from the same table, so a new command
   const mine: Command = { id: 'new', title: 'A new thing', keywords: [], shortcut: 'mod J', undoable: true, available: true, run: noop }
   const html = renderToStaticMarkup(createElement(ShortcutRows, { commands: [...commandsFor(env(null)), mine], mac: false }))
   for (const w of ['Search or type a command', 'Ctrl K', 'Undo', 'Ctrl Z', 'Redo', 'Shift Ctrl Z', 'Keyboard shortcuts', '?', 'A new thing', 'Ctrl J', 'Esc']) assert.ok(html.includes(w), w)
-  assert.ok(!html.includes('—'))
+  assert.ok(!html.includes('\u2014'))
 })
 
 const groups: BarGroup[] = [

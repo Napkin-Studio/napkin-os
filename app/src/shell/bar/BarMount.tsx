@@ -161,9 +161,10 @@ export function BarMount({ enabled, home, go, openPath, recent, signedIn, onSign
       if (t?.closest?.('[data-bar-panel], [data-testid="bar-field"], [data-testid="bar-search-button"]')) return
       closeBar(false)
     }
-    document.addEventListener('keydown', onEsc)
+    // In the capture phase, before the page's own Escape (which goes up a level): the bar closes first and the page sees the key handled.
+    document.addEventListener('keydown', onEsc, true)
     document.addEventListener('pointerdown', onDown, true)
-    return () => { document.removeEventListener('keydown', onEsc); document.removeEventListener('pointerdown', onDown, true) }
+    return () => { document.removeEventListener('keydown', onEsc, true); document.removeEventListener('pointerdown', onDown, true) }
   }, [bar.open, card])
 
   const place = usePlace(bar.open, phone)
