@@ -17,7 +17,7 @@ import VersionPanel from '../versions/VersionPanel'
 import type { BriefUndo } from '../versions/useBriefUndo'
 import {
   CREATIVE_DIRECTOR, PLANNER, ROLE_WORDS, canStartNewVersion, clientQuestions, headline, namesBoth,
-  passedCount, signAction, signerLine, teamItems,
+  passedCount, signAction, signerLine, signerNameProblem, teamItems,
 } from './words'
 import './gate.css'
 
@@ -62,14 +62,20 @@ function FameForm({ busy, onSave }: { busy: boolean; onSave: (text: string) => v
 function SignersForm({ me, busy, onSave }: { me: string | null; busy: boolean; onSave: (planner: string, cd: string) => void }) {
   const [planner, setPlanner] = useState(me ?? '')
   const [cd, setCd] = useState('')
-  const submit = (e: FormEvent) => { e.preventDefault(); if (planner.trim() && cd.trim()) onSave(planner.trim(), cd.trim()) }
+  // a signer is found by their sign-in name: a display name could never sign nor be told the brief waits for them
+  const plannerProblem = signerNameProblem(planner, me)
+  const cdProblem = signerNameProblem(cd, me)
+  const ready = planner.trim() !== '' && cd.trim() !== '' && !plannerProblem && !cdProblem
+  const submit = (e: FormEvent) => { e.preventDefault(); if (ready) onSave(planner.trim(), cd.trim()) }
   return (
     <form className="bg-form" onSubmit={submit}>
       <label className="bg-field"><span>Planner who signs</span>
-        <input value={planner} onChange={e => setPlanner(e.target.value)} autoComplete="off" /></label>
+        <input value={planner} onChange={e => setPlanner(e.target.value)} autoComplete="off" aria-invalid={plannerProblem ? true : undefined} /></label>
+      {plannerProblem && <p className="bg-mid" role="alert">{plannerProblem}</p>}
       <label className="bg-field"><span>Creative director who signs</span>
-        <input value={cd} onChange={e => setCd(e.target.value)} autoComplete="off" /></label>
-      <button type="submit" className="ch-btn" disabled={busy || !planner.trim() || !cd.trim()}>Name the signers</button>
+        <input value={cd} onChange={e => setCd(e.target.value)} autoComplete="off" aria-invalid={cdProblem ? true : undefined} /></label>
+      {cdProblem && <p className="bg-mid" role="alert">{cdProblem}</p>}
+      <button type="submit" className="ch-btn" disabled={busy || !ready}>Name the signers</button>
     </form>
   )
 }
