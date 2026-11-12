@@ -1268,11 +1268,32 @@ link's id, written through the host and nowhere else.
   `{review, reviewers: [{id, name, email, approver}], expires, code}` (a person).
   `extra.link` is the Phase 1 block with `scope: review` and: `review` (the round's
   id, shared by every reviewer of it), `round` (counted here, from the chain: the
-  number of distinct locks a review was sent for, this one included), `role`
+  number of rounds sent for the document, this one included, so a second round on
+  the same lock is round 2), `role`
   (`approver` or `reviewer`), `pieces` and `code` (an emailed code is needed).
   Exactly one reviewer is the approver (`400` for none or two); 1 to 12 reviewers,
   each with their own address and link id. The body never carries `round`,
   `pieces`, `lock`, `version` or a hash: they are the host's. `409` as §7.5.9.
+  **A new round replaces an open one.** Sending a round for a lock that already has
+  open links withdraws every link of an earlier round that no one has answered
+  (`withdraw_link`, by the person sending, with `extra.replaced_by` the new review id),
+  in the same change. An answer already given stays where it was given;
+  `GET /client-review/round` shows the newest round and lists the earlier ones.
+- **Who may be a reviewer** (review of 12 Nov 2026; the owner is to confirm the strict
+  reading). Checked in the web layer, which holds the agency's directory
+  (`links::admit`, for `POST /d/{doc}/client-link/round` and the Phase 1
+  `POST /d/{doc}/client-link`), and the app sandbox (`/s/{token}`) cannot reach
+  `/client-link/issue` or `/client-link/issue-round`, so no app frame can make a link around it.
+  An address is compared trimmed, in lower case, with a plus tag dropped (`name+tag@` is `name@`).
+  It is refused when it belongs to anyone in the agency's directory, in any state
+  (`trait Directory`, `people`), or to the person making the link. When the job's
+  approval route has a client step with a `contact` (§13.1), the approver must be that
+  contact; with none, any address outside the agency may be the approver. An agency
+  with no directory cannot make the directory check: there only the maker's own sign-in
+  name is refused, and a roster-only stack therefore does not keep staff from naming
+  their own address. The Brief gate view (`confirmed_by`) and the round view give the agency the
+  confirming person's name and address in full, so whoever reads a confirmation sees who
+  gave it; neither is ever sent to a reviewer.
 - `pieces`: what a reviewer looks at, one at a time, worked out from the document
   by its **clean spec** (`ops/client_pieces.rs`, an allow list by app id) and
   hashed by the host: `{address, kind: text|image|film|audio, label, sha256, ai,
@@ -1303,7 +1324,13 @@ the issue recorded (an image swapped without a change to the data).
 while the link is open: state, answer, comment, comment withdrawal and
 `/client-link/piece {id, n}` (the bytes of piece `n` from 1, only when they hash
 to what the issue recorded, with a content type from a fixed list by the recorded
-kind and never from the file). The agency reads one merged view,
+kind and never from the file). A client's context is held to its own link on every one
+of the five, state and piece included (`403` for another's). A piece's hash is worked out once
+for a version of the document and kept with that snapshot; the web layer keeps the bytes of the
+pieces served lately (192 MiB in all, keyed by tenant, document and hash) so a film's many Range
+requests read the document once, and serves a Range as a slice of that buffer, without the
+document's lock held. A link is sent at most 256 MiB of pieces a minute (`429` past it).
+The agency reads one merged view,
 `GET /client-review/round`: every reviewer and where they stand, every comment
 ordered by piece then position, and two fixed flags, `split` (one reviewer approved
 a piece and another asked for changes) and `same spot` (two reviewers' pins within
@@ -1314,6 +1341,12 @@ words of an answer by link, a reviewer's advice) stays in the chain, in the
 client's vault. `clan_context_for_agent` removes it from the `decision_chain` it
 sends to the middleware; no EU-pinned route asks for it yet.
 
+**The emailed code.** Six digits, valid for the window it was made in and the one before.
+Five tries and three mails per link per ten minutes (in memory), and, persisted per link
+under `link-codes/<tenant>/` so a restart gives nothing back: 12 wrong tries over the link's
+life, after which its code is dead (`410`, state `locked`) and the agency makes the link again,
+and 5 mails a day, against the tenant's 200.
+
 **The web layer** (`crates/napkin-web/src/links.rs`, `mail.rs`) is where the
 token, the emailed code and the mail live; none of it is in `napkin-host`
 (which stays wasm32-clean).
@@ -1321,8 +1354,9 @@ token, the emailed code and the mail live; none of it is in `napkin-host`
 ##### Security properties, and the test that proves each
 
 Each holds per link, so it holds for several reviewers and for every round. Tests
-are in `crates/napkin-host/tests/client_review_round.rs` (host),
-`crates/napkin-web/tests/client_review.rs` (web) and
+are in `crates/napkin-host/tests/client_review_round.rs` and
+`client_link_hardening.rs` (host), `crates/napkin-web/tests/client_review.rs` and
+`client_review_hardening.rs` (web) and
 `app/e2e/j001-p2-client-review-full.spec.ts` (e2e, tests 36 to 38).
 
 | Property | Test |
@@ -1350,6 +1384,12 @@ are in `crates/napkin-host/tests/client_review_round.rs` (host),
 | Public replies are no-store, no-referrer, noindex; the service worker never caches `/c/` | web `private_headers` checks in the round tests, `the_client_page_is_never_cached_by_the_service_worker` |
 | Only the approver's answer counts for the gate and the route | host `only_the_approvers_answer_counts_for_the_gate_and_the_route` |
 | Rollback: older code reads a chain with the new actions | host `a_chain_with_the_new_actions_reads_under_the_phase_one_state_function` |
+| One link holder cannot tie up the document or the server: piece hashes once per version, a Range reads the piece once, a byte cap a minute | host `client_link_hardening.rs` `asset_reads_and_hashes_do_not_grow_with_requests_on_an_unchanged_document` (also: a swapped asset still kills the link); web `many_ranges_of_one_film_read_the_document_once_and_the_lock_is_free_after`, `a_link_may_be_sent_only_so_many_bytes_a_minute` |
+| Nobody from the agency answers as the client; the approver is the route's contact | web `client_review_hardening.rs` `an_agency_address_is_refused_as_a_reviewer_however_it_is_written`, `the_approver_is_the_routes_client_contact_when_it_names_one`, `an_agency_with_no_directory_refuses_only_the_makers_own_address`, `the_sandbox_cannot_make_a_link_around_the_check`; host `the_gate_and_the_round_view_name_who_confirmed_in_full_and_a_reviewer_never_sees_it` |
+| One round open on a lock at a time | host `a_second_round_on_the_same_lock_withdraws_the_first_rounds_open_links` |
+| A link's code cannot be guessed over its life or used to drain the agency's mail | web `a_links_code_dies_after_its_lifetime_of_wrong_tries_even_across_a_restart`, `one_link_may_send_only_so_many_codes_a_day_and_the_rest_of_the_agency_is_untouched` |
+| A client actor reads only its own link's state and pieces | host `a_client_actor_cannot_ask_for_another_links_state_or_piece` |
+| A client's comment or request for changes reaches account service's Needs you, without its words | host `client_review_needs.rs` `a_comment_or_a_request_for_changes_through_the_review_link_is_account_services_need` |
 
 ### 7.6 Unlocking the whole document: `/unapprove`
 
