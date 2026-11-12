@@ -1,0 +1,85 @@
+{
+  "started": "2026-10-23T18:05:07+00:00",
+  "finished": "2026-10-23T18:08:38+00:00",
+  "live": true,
+  "max_usd": 3.0,
+  "spent_usd": 0.66,
+  "mask_box": [
+    0.3,
+    0.34,
+    0.97,
+    0.8
+  ],
+  "items": [
+    "q8"
+  ],
+  "records": [
+    {
+      "item": "q8",
+      "label": "clip",
+      "path": "/v1/image_to_video",
+      "body": {
+        "model": "wan3",
+        "promptImage": [
+          {
+            "uri": "<1580534 data-uri chars>",
+            "position": "first"
+          }
+        ],
+        "promptText": "The camera holds still on the mug. Nothing moves except a faint drift of the window light.",
+        "duration": 2,
+        "ratio": "auto_480p",
+        "audio": false
+      },
+      "est_credits": 10,
+      "started": "2026-10-23T18:05:07+00:00",
+      "task_id": "a6eb402e-ad03-4d21-b8c8-043efc2fbc48",
+      "elapsed_s": 140.9,
+      "raw_statuses": [
+        "RUNNING",
+        "SUCCEEDED"
+      ],
+      "credits": 10,
+      "status": "done",
+      "outputs": [
+        {
+          "file": "results/outputs/delayer/q8/clip.mp4",
+          "bytes": 759468
+        }
+      ]
+    },
+    {
+      "item": "q8",
+      "label": "aleph2-keyframe",
+      "path": "/v1/video_to_video",
+      "body": {
+        "model": "aleph2",
+        "videoUri": "runway://eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjYwNjgzODEwLCJ1cGxvYWRCdWNrZXQiOiJydW53YXktdXBsb2Fkcy1wcm9kIiwidXBsb2FkS2V5IjoiZXBoZW1lcmFsLXVwbG9hZHMvNjA2ODM4MTAvZjc2MzVjMjItYzc3OS00NmNhLWJiYmItZThhNTIzYjI3N2Q4L2ZpbGUubXA0IiwidHlwZSI6ImVwaGVtZXJhbCIsImNvbnRlbnRUeXBlIjoidmlkZW8vbXA0IiwiaWF0IjoxNzkyNzc4ODQ5LCJleHAiOjE3OTI4NjUyNDksImlzcyI6Imh0dHBzOi8vYXBpLmRldi5ydW53YXltbC5jb20ifQ.dRdL8-H5krVzLtGYf1Ac_NLbzMuZGv9enp5QmnnWmOU",
+        "promptText": "Keep the video exactly as it is, except that the mug is gone: the table, the window and the light stay as they are.",
+        "keyframes": [
+          {
+            "uri": "<1845590 data-uri chars>",
+            "seconds": 0
+          }
+        ],
+        "seed": 7
+      },
+      "est_credits": 56,
+      "started": "2026-10-23T18:07:31+00:00",
+      "task_id": "3013da55-99b1-4e5e-959a-816a7da6c550",
+      "elapsed_s": 66.4,
+      "raw_statuses": [
+        "RUNNING",
+        "SUCCEEDED"
+      ],
+      "credits": 56,
+      "status": "done",
+      "outputs": [
+        {
+          "file": "results/outputs/delayer/q8/aleph2-keyframe.mp4",
+          "bytes": 569603
+        }
+      ]
+    }
+  ]
+}

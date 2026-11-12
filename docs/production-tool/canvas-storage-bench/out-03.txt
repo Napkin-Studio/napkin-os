@@ -1,0 +1,7 @@
+finished stroke, one commit (60 pts, quant)  update median 689.5 B (p90 895) | local tx 0.021 ms | peer apply median 0.011 ms p90 0.016 ms
+finished stroke, one commit (60 pts, float)  update median 1661.5 B (p90 2254) | local tx 0.027 ms | peer apply median 0.018 ms p90 0.024 ms
+in-progress stroke, re-set every 5 pts       update median 439 B (sum per stroke ≈ 5465 B)
+move 1 element                               update median 619 B (p90 868) | local tx 0.021 ms | peer apply median 0.022 ms p90 0.030 ms
+move 50 elements (one drag commit)           update median 30592 B (p90 34261) | local tx 0.484 ms | peer apply median 0.463 ms p90 0.662 ms
+
+Y state size: G3 3578323 B; +600 committed strokes 4273464 B (+695141); +100 strokes drawn with 12 re-sets each 4342686 B (+69222); +300 single moves +100x50 moves 4405229 B (+62543 for 5,300 moves = 11.8 B/move left behind)
