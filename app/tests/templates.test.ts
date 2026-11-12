@@ -2824,6 +2824,24 @@ test('brief: a file the agents cannot read is added, and the person is told so',
   assert.match(BM, /var READ_EXT=\/\^\(txt\|text\|md\|markdown\|csv\|tsv\|json\|ya\?ml\|log\|pdf\|docx\|pptx\|png\|jpe\?g\|gif\|webp\)\$\/;/, 'the same list as the test')
 })
 
+// UAT round 9 (client-review journey): Lock the brief was on while Needs you still held the open questions, because
+// only the host's can_lock was read. Lock waits on everything Needs you lists, and says how many.
+test('brief: Lock waits until Needs you is empty, open questions included', () => {
+  const els: Record<string, Record<string, unknown>> = {}
+  const el = (id: string) => els[id] ||= { hidden: false, disabled: false, textContent: '', title: '', innerHTML: '', classList: { toggle() {} } }
+  const run = (rows: unknown[], canLock = true) => {
+    const env = { $: el, arr, lockState: () => ({ can_lock: canLock, reopened: [] }), approveLocked: () => false, get: () => false,
+      draftLive: () => false, needsRows: () => rows, renderStateLine() {}, docVersion: () => 'v1', SEL: null, NEEDS_N: null, READY_NUDGE: false,
+      lockListHtml: () => '', bindLkItems() {} }
+    lift<{ renderLockBtn(): void }>(BM, ['lockWhy', 'renderLockBtn'], env).renderLockBtn()
+    return { disabled: el('lockBtn').disabled, why: el('lockWhy').textContent }
+  }
+  const q = { code: 'open_question', tag: '6 open questions' }
+  assert.deepEqual(run([q]), { disabled: true, why: 'Settle 1 first' }, 'the host may lock, an open question is left: Lock waits')
+  assert.deepEqual(run([]), { disabled: false, why: '' }, 'nothing left: Lock is on')
+  assert.equal(run([], false).disabled, true, 'the host says not yet: Lock waits')
+})
+
 // UAT round 5: the fact panel is drawn again on every document change, and the question being typed was lost, so
 // pressing Ask sent nothing. The draft is kept per selected item, put back on redraw, the caret kept, cleared on send.
 test('research: a question typed about a fact survives a redraw', () => {
