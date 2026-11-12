@@ -76,14 +76,51 @@ export function setSector(id: string, sector: string): void {
   } catch { /* storage blocked: the sector is not kept */ }
 }
 
+/** One thing resting on thin evidence, and what kind of thing it is. */
+export interface Thin {
+  text: string
+  kind: 'finding' | 'fact' | 'point'
+}
+
+/**
+ * What rests on thin evidence, once each: findings not verified yet and
+ * whatever a low-certainty decision is about. The kind comes from the item's
+ * address (`#findings[…]`, `#facts[…]`), so a fact is never called a finding.
+ */
+export function thinOf(attention: readonly AttentionItem[]): Thin[] {
+  const out: Thin[] = []
+  const seen = new Set<string>()
+  for (const a of attention) {
+    if (a.code !== 'unverified_finding' && a.code !== 'low_certainty') continue
+    const path = (a.address ?? '').split('#')[1] ?? ''
+    const kind: Thin['kind'] = a.code === 'unverified_finding' || path.startsWith('findings[') ? 'finding'
+      : path.startsWith('facts[') ? 'fact' : 'point'
+    const key = a.address || `${a.code}:${a.decision ?? ''}:${a.text}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ text: a.label || a.text, kind })
+  }
+  return out
+}
+
+/** "A thin finding is waiting", "2 thin findings and 9 thin facts are waiting": each kind counted apart. */
+export function thinWords(thin: readonly Thin[]): string {
+  const kinds: Thin['kind'][] = ['finding', 'fact', 'point']
+  const parts = kinds.map(k => [k, thin.filter(t => t.kind === k).length] as const).filter(([, n]) => n > 0)
+  if (thin.length === 1) return `A thin ${parts[0][0]} is waiting`
+  const words = parts.map(([k, n]) => `${n} thin ${k}${n === 1 ? '' : 's'}`)
+  const list = words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+  return `${list} are waiting`
+}
+
 /** What the desk read of one recent document's chain (useDeskFacts). */
 export interface DocFacts {
   /** Who made its newest decision; null when nobody has yet. */
   editor: { name: string; you: boolean; at: string } | null
   /** What blocks its lock, one per place (needsOf). */
   calls: AttentionItem[]
-  /** Its findings resting on thin evidence (low certainty, unverified). */
-  thin: { text: string }[]
+  /** What rests on thin evidence (unverified findings, low-certainty facts and points), once each. */
+  thin: Thin[]
   /** What it was made from changed since. */
   upstreamChanged: { title: string; path?: string } | null
   locked: boolean
@@ -246,9 +283,9 @@ export function clip(text: string, n: number): string {
 }
 
 /**
- * What is worth a look across the desk, newest first, three at most: a thin
- * finding waiting, what a document was made from having changed, and research
- * that finished. Knowledge-layer updates (the mock's "Kantar tracker
+ * What is worth a look across the desk, newest first, three at most: what
+ * rests on thin evidence (findings and facts counted apart), what a document
+ * was made from having changed, and research that finished. Knowledge-layer updates (the mock's "Kantar tracker
  * updated") have no source yet (layers-service has no HTTP) and never show.
  */
 export function worthItems(items: readonly LibraryItem[], facts: Facts, max = 3): WorthItem[] {
@@ -257,7 +294,7 @@ export function worthItems(items: readonly LibraryItem[], facts: Facts, max = 3)
     const f = facts[i.path]
     const title = i.title || 'Untitled'
     if (f?.thin.length) {
-      out.push({ key: `thin:${i.path}`, title: f.thin.length === 1 ? 'A thin finding is waiting' : `${f.thin.length} thin findings are waiting`, sub: `${clip(f.thin[0].text.replace(/^(Finding|Fact) · /, ''), 64)} · ${title}`, path: i.path })
+      out.push({ key: `thin:${i.path}`, title: thinWords(f.thin), sub: `${clip(f.thin[0].text.replace(/^(Finding|Fact) · /, ''), 64)} · ${title}`, path: i.path })
     }
     if (f?.upstreamChanged) {
       out.push({ key: `up:${i.path}`, title: `${f.upstreamChanged.title} changed`, sub: `touches ${title}`, path: i.path })
