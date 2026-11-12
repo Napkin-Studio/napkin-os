@@ -2673,8 +2673,10 @@ var ClanFields=(function(){
     if(t==='INPUT') return /^(?:text|search|email|url|tel|password|number|date|datetime-local|month|time|week)?$/i.test(String(el.type||''));
     return !!(el.isContentEditable||(el.closest&&el.closest('[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]')));
   }
+  // A field's own words (the snippet renders them as button.clf) are what they say, not a control.
   function fbControl(el){
-    var c=el.closest('button,a,[role="button"],[role="menuitem"],[role="tab"],summary,select,input,textarea'); if(!c) return null;
+    var c=el.closest('button,a,[role="button"],[role="menuitem"],[role="tab"],summary,select,input,textarea');
+    if(!c||/(?:^|\s)clf(?:\s|$)/.test(String(c.getAttribute('class')||''))) return null;
     var l=fbClip(c.getAttribute('aria-label')||c.getAttribute('title')||c.textContent,80)||String(c.tagName||'control').toLowerCase();
     return {kind:'control', id:c.getAttribute('data-act')||c.getAttribute('id')||l, label:l, el:c};
   }
@@ -2682,10 +2684,13 @@ var ClanFields=(function(){
     var p=el.closest('[data-clan-part]'); if(!p) return null; var a=p.getAttribute('data-clan-part');
     return {kind:'part', id:a, label:fbClip(p.getAttribute('data-clan-part-label')||words(a),80), el:p};
   }
+  // A real button or link inside a part is the button; a block the page made clickable
+  // (role="button" on a part's words) is still the part.
   function fbTarget(el){
     if(!el||!el.closest||el.closest('.clf-fb')) return null;
-    var own=typeof window.ClanFeedbackTarget==='function'?window.ClanFeedbackTarget(el):null, best=null;
-    [fbPart(el), own, fbControl(el)].forEach(function(t){ if(t&&t.el&&t.label&&(!best||best.el===t.el||best.el.contains(t.el))) best=t; });
+    var own=typeof window.ClanFeedbackTarget==='function'?window.ClanFeedbackTarget(el):null, best=null, c=fbControl(el);
+    [fbPart(el), own].forEach(function(t){ if(t&&t.el&&t.label&&(!best||best.el===t.el||best.el.contains(t.el))) best=t; });
+    if(c&&(!best||(best.el!==c.el&&best.el.contains(c.el)&&/^(?:BUTTON|A|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(String(c.el.tagName||'').toUpperCase())))) best=c;
     return best;
   }
   function fbShow(t){

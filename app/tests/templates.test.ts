@@ -5187,6 +5187,18 @@ test('pointing in a page: outlined and named on hover, one click picks it and pr
   assert.equal(bm.click(val), 2, 'the click is stopped: nothing under it is pressed')
   assert.deepEqual(bm.posts.at(-1), { type: 'clan:feedback-picked', target: { kind: 'part', id: 'barrier', label: 'The barrier' }, rect: { x: 40, y: 100, w: 600, h: 44 } })
   assert.equal(bm.pointing(), false, 'one pick, then the page stops')
+  // the part's words made clickable (role="button") are still the part; a real button in it is the button
+  const words = new FbEl('DIV', ['[role="button"]'], { 'aria-label': 'Barrier: select it' }, 'Habit…')
+  const keep = new FbEl('BUTTON', ['button'], { 'data-act': 'keep' }, 'Keep as is')
+  new FbEl('DIV', ['#fields .row[data-clan-part]', '[data-clan-part]'], { 'data-clan-part': 'barrier' })
+    .add(new FbEl('DIV', ['.lab']).add(new FbEl('SPAN', ['.lab > span'], {}, 'The barrier')), words, keep)
+  assert.deepEqual(bm.f.fbTarget(words), { kind: 'part', id: 'barrier', label: 'The barrier', el: words.parent })
+  assert.equal(bm.f.fbTarget(keep)?.kind, 'control')
+  // the part's words as the snippet renders them (button.clf) are the part, not a button
+  const field = new FbEl('BUTTON', ['button'], { class: 'clf txt-f blk editable' }, 'Habit…')
+  new FbEl('DIV', ['#fields .row[data-clan-part]', '[data-clan-part]'], { 'data-clan-part': 'barrier' })
+    .add(new FbEl('DIV', ['.lab']).add(new FbEl('SPAN', ['.lab > span'], {}, 'The barrier')), field)
+  assert.equal(bm.f.fbTarget(field)?.kind, 'part')
 
   // Research: a section, a fact, a finding, and a button inside the section
   const rt = fbDriver(researchTarget())
