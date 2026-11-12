@@ -139,8 +139,11 @@ for (const size of SIZES) {
     await signIn(page, PEOPLE.planning)
     const job = await signedBrief(page)
 
-    // Closed until the client has confirmed: a brief that has not passed the gate cannot be spun off.
+    // Closed until the client has confirmed: a brief that has not passed the gate cannot be spun off. A planner opens its job
+    // (a creative director may not open one: job-page), and the creative director asks for the spin-off.
+    await signIn(page, PEOPLE.planning)
     const early = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.creativeDirector)
     const refused = await page.request.post(`${early.api}/d/${encodeURIComponent(early.brief.path)}/spinoff`, { data: { app_id: VISUAL_BRIEF, title: 'Too early' } })
     expect(refused.status(), 'a brief that has not passed the gate makes no visual brief').toBe(409)
 
