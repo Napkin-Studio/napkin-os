@@ -416,7 +416,7 @@ pub fn refuse_write_when_approved(doc: &Document) -> HostResult<()> {
 
 /// The creative director a visual brief answers to: the one named on the brief it was spun off from,
 /// whose frozen copy is under `upstream.<brief id>`. `None` when no brief names one.
-fn visual_brief_approver(data: &Value) -> Option<String> {
+pub(crate) fn visual_brief_approver(data: &Value) -> Option<String> {
     data.get("upstream")?
         .as_object()?
         .values()

@@ -18,6 +18,7 @@ const MAKER: Record<string, string> = {
   brief: 'make_brief_maker.rs',
   research: 'make_campaign_research.rs',
   deck: 'make_deck_maker.rs',
+  idea: 'make_idea_room.rs',
   ads: 'make_advertising_studio.rs',
 }
 
@@ -30,6 +31,6 @@ test('every tool with an app names an id its maker really builds', () => {
   }
 })
 
-test('Idea and Prod have no app yet, and every other tool has one', () => {
-  assert.deepEqual(TOOLS.filter(t => !t.appId).map(t => t.id), ['idea', 'prod'])
+test('Prod has no app yet, and every other tool has one', () => {
+  assert.deepEqual(TOOLS.filter(t => !t.appId).map(t => t.id), ['prod'])
 })

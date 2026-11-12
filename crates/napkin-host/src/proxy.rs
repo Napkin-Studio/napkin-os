@@ -129,6 +129,22 @@ pub async fn api_proxy(
         .unwrap_or("agent")
         .to_string();
     let mut payload = req.get("payload").cloned().unwrap_or(Value::Null);
+    // Humans first (features/idea-room.clan): an Idea room model task is not proxied until the team's cards
+    // (or the creative director) have opened the room. Checked here, where the call is made, never in the page.
+    if kind == middleware::REQUEST_KIND {
+        if let Some(task) = payload.get("task").and_then(Value::as_str) {
+            if crate::ops::ideas::MODEL_TASKS.contains(&task) {
+                // The team goes first, whatever else is switched on or off.
+                session.read(crate::ops::ideas::allow_model_task)?;
+                if !crate::ops::ideas::ai_switch_on() {
+                    return Err(HostError::new(
+                        403,
+                        "ai_off: the Idea room's AI methods are switched off",
+                    ));
+                }
+            }
+        }
+    }
     // Splice each attachment's cached extracted text (the `.extracted/` sidecar)
     // into the payload so the agent reads document contents, not just filenames.
     session.attach_extracted_text(&mut payload);

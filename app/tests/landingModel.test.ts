@@ -151,9 +151,9 @@ test('the tool table: six tools, each live only with its app installed', () => {
   assert.deepEqual(TOOLS.map(t => t.id), ['brief', 'research', 'idea', 'deck', 'prod', 'ads'])
   const installed = [{ app_id: BRIEF }, { app_id: 'ie.napkin.deck-maker' }]
   assert.deepEqual(TOOLS.filter(t => isLive(t, installed)).map(t => t.id), ['brief', 'deck'])
-  // Idea and Prod have no app to install: they are Soon whatever is installed.
+  // Prod has no app to install: it is Soon whatever is installed.
   const all = TOOLS.filter(t => t.appId).map(t => ({ app_id: t.appId! }))
-  assert.deepEqual(TOOLS.filter(t => !isLive(t, all)).map(t => t.id), ['idea', 'prod'])
+  assert.deepEqual(TOOLS.filter(t => !isLive(t, all)).map(t => t.id), ['prod'])
   assert.equal(toolOfApp(BRIEF)?.id, 'brief')
   assert.equal(toolOfApp('ie.napkin.film')?.id, 'ads')
   assert.equal(toolOfApp(null), undefined)

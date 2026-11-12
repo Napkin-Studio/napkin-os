@@ -683,6 +683,75 @@ pub fn dispatch(
             Err(e) => e.into(),
         },
 
+        // The Idea room (features/idea-room.clan): who made each card, what the gate says, the routes as
+        // forks and their merge, and the creative director's pick. Every write is the person's in the context.
+        "/ideas/gate" => match session.read(crate::ops::ideas::gate_view) {
+            Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+            Err(e) => e.into(),
+        },
+        // The room's data as the host holds it now, with the gate: what the page draws, fresh.
+        "/ideas/room" => {
+            let store = session.store().clone();
+            match session.read(|d| crate::ops::ideas::room_view(&*store, ctx, d)) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
+        }
+        "/ideas/routes" => {
+            let store = session.store().clone();
+            match session.read(|d| crate::ops::ideas::routes_view(&*store, d)) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
+        }
+        "/ideas/card" => {
+            let body = req.body_str();
+            review(session, ctx, |c, d| crate::ops::ideas::card(c, d, &body))
+        }
+        "/ideas/vote" => {
+            let body = req.body_str();
+            review(session, ctx, |c, d| crate::ops::ideas::vote(c, d, &body))
+        }
+        "/ideas/comment" => {
+            let body = req.body_str();
+            review(session, ctx, |c, d| crate::ops::ideas::comment(c, d, &body))
+        }
+        "/ideas/open-early" => {
+            let body = req.body_str();
+            review(session, ctx, |c, d| {
+                crate::ops::ideas::open_early(c, d, &body)
+            })
+        }
+        "/ideas/routes/start" => {
+            let body = req.body_str();
+            let store = session.store().clone();
+            review(session, ctx, |c, d| {
+                crate::ops::ideas::routes_start(c, d, &*store, &body)
+            })
+        }
+        "/ideas/routes/edit" => {
+            let body = req.body_str();
+            let store = session.store().clone();
+            review(session, ctx, |c, d| {
+                crate::ops::ideas::route_edit(c, d, &*store, &body)
+            })
+        }
+        "/merge" => {
+            let body = req.body_str();
+            let store = session.store().clone();
+            review(session, ctx, |c, d| {
+                crate::ops::ideas::merge(c, d, &*store, &body)
+            })
+        }
+        "/ideas/pick" => {
+            let body = req.body_str();
+            review(session, ctx, |c, d| crate::ops::ideas::pick(c, d, &body))
+        }
+        "/ideas/reopen" => {
+            let body = req.body_str();
+            review(session, ctx, |c, d| crate::ops::ideas::reopen(c, d, &body))
+        }
+
         // The version list, one version's words, and restoring one into the draft
         // (features/brief-versions-undo.clan). Reads, and one attributed write.
         "/versions" => match session.read(crate::ops::versions::list) {

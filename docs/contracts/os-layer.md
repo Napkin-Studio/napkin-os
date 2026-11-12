@@ -599,6 +599,14 @@ names and shapes below are that branch's, so it merges onto them.
 - Every parallel agent writes to its own branch, `agents/<user>.<agent>.<task>/`
   (spec §24). The user and agent parts come from `Ctx`, never from the request.
 - A branch merges under the lease, through the §4 merge policies.
+- **`POST /merge {branches?}`** folds every branch the document has out back
+  into it, with the SDK's deterministic merge (no model, §4 policies, a clash
+  listed in `merge-report.yaml` with both sides). It is a host operation under
+  the lease: the document it answers on is the parent, the branches are read
+  from the store next to it. Today one document uses it, the Idea room (§7.8).
+- The host's `POST /patch-data` refuses a branch document (the SDK's
+  `NamespaceViolation`): a branch is written only through an operation that
+  patches its own namespace, as the Idea room's `routes/edit` does.
 
 ### What needs the lease
 
@@ -1338,6 +1346,40 @@ no second store of its past.
 The shell's undo is not a host route: it keeps the person's own edits this
 session, and Cmd or Ctrl Z writes the inverse through `/patch-data` as a new
 attributed edit, only while the part still holds what that person last wrote.
+
+### 7.8 The Idea room (features/idea-room.clan), slice 1
+
+`ie.napkin.idea-room` is spun off from a Brief Maker brief that has passed the
+Brief gate (§7.7) and been confirmed, and from no other; the spin-off check of
+§5.1 is the same for it as for every tool. It carries the brief whole under
+`upstream`. Its data (`cards`, `ai_open`, `routes_out`, `routes`, `chosen`) is
+written only by the operations below, as the person in the context; a
+`patch-data` that names any of those keys is `403`. Each operation needs a
+person: a handler or process context is `403`.
+
+| Route | Who | Does |
+|---|---|---|
+| `GET /ideas/gate` | any | `{team_cards, needed, to_go, open, opened_via, opened_by, creative_director, routes_out, chosen}` |
+| `GET /ideas/room` | any | `{data, gate, brief}`; `brief` is `{title, path, changed, from, to}` for the Changed brief state |
+| `POST /ideas/card {text}` | a person | one team card; one `idea_card` decision, author from the context |
+| `POST /ideas/vote {card}` | a person | the person's vote on or off; a Banned card takes none |
+| `POST /ideas/comment {card, text}` | a person | a comment under the person's name |
+| `POST /ideas/open-early {rationale}` | the creative director the brief names | one `open_early` decision with a reason; `403` for anyone else, `400` with no reason |
+| `POST /ideas/routes/start {routes:[{name,bet,cards}]}` | a person, room open | forks one branch per route (`route_<n>`), `409 ideas_closed` if not open |
+| `POST /ideas/routes/edit {route, name?, bet?, cards?, note?}` | a person | patches the route's branch namespace; `version` counts each change |
+| `POST /merge` | a person | folds the branches back; reply `{routes, clashes:[{key,left,right}]}` |
+| `POST /ideas/pick {route, rationale}` | the creative director | one `verdict` (`good`, `reason_code: route.chosen`, `reviewer_role: creative-director`, `version` the route's); a second pick needs a reason and supersedes the first |
+| `POST /ideas/reopen {rationale}` | the creative director | ends the choice, keeps the pick in the history |
+
+**Humans first.** The count of team cards is read from the decision chain: a
+card counts when a live `idea_card` decision by a `human:` actor made it. With
+fewer than `humans_first.cards` of them (the template's `app/pipeline.yaml`,
+five by default), and no `open_early`, a `POST /api-proxy` with an Idea room task
+(`ban_default`, `swap_test`, `fame_test`) is `409 ideas_closed`; once open it is
+`403 ai_off` unless `NAPKIN_IDEA_ROOM_AI=on` (the model methods are a later slice).
+
+While routes are out (`routes_out` not empty) the room takes no write other than
+`routes/edit` and `merge`: the merge starts from the branches.
 
 ## 8. Routes — contract v1
 

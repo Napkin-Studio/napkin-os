@@ -4,7 +4,7 @@
 //
 // What it does, all on this machine and nothing outside it:
 //   1. builds the shell (app/dist) unless NAPKIN_E2E_SKIP_BUILD=1;
-//   2. packs the template apps (Brief Maker, Research, Deck Maker, Visual Brief) into a temp seed
+//   2. packs the template apps (Brief Maker, Research, Deck Maker, Visual Brief, Idea room) into a temp seed
 //      directory with the SDK's own examples, as `npm run apps` does for the site;
 //   3. builds napkin-web and starts it on 127.0.0.1:$NAPKIN_E2E_PORT (default 18080),
 //      anonymous sessions, a fresh empty data directory, the seed installed into
@@ -62,6 +62,7 @@ example('make_campaign_research', join(seed, 'campaign-research.app.clan'), join
 example('make_brief_maker', join(seed, 'brief-maker.app.clan'), join(scratch, 'research.example.clan'))
 example('make_deck_maker', join(seed, 'deck-maker.app.clan'), join(scratch, 'deck.example.clan'))
 example('make_visual_brief', join(seed, 'visual-brief.app.clan'), join(scratch, 'visual-brief.example.clan'))
+example('make_idea_room', join(seed, 'idea-room.app.clan'), join(scratch, 'idea-room.example.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
 // A stand-in middleware, local and free: it answers every task as one job whose

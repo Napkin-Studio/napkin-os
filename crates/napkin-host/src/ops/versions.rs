@@ -75,7 +75,7 @@ fn live(d: &Decision) -> bool {
 }
 
 /// Chain indices (newest first) of this document's own approvals: its versions.
-fn approvals(chain: &DecisionChain, doc_id: &str) -> Vec<usize> {
+pub(super) fn approvals(chain: &DecisionChain, doc_id: &str) -> Vec<usize> {
     chain
         .decisions
         .iter()

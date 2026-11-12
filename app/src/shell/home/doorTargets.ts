@@ -17,6 +17,7 @@ export const DOOR_TARGETS: Readonly<Record<string, DoorTarget>> = {
   'brief': { app: 'ie.napkin.brief-maker' },
   'research': { app: 'ie.napkin.campaign-research' },
   'presentations': { app: 'ie.napkin.deck-maker' },
+  'ideas': { app: 'ie.napkin.idea-room' },
   'clients': { page: 'clients', built: true },
   'agency-dashboard': { page: 'agency-dashboard', built: true },
   // The job page (record job-page) turns built on.

@@ -1,0 +1,6 @@
+# Capability requirements (CLAN spec §22) for the Idea room.
+# Slice 1 does no inference: cards, votes, routes, the merge and the pick are written by people and the
+# host. The model methods (Ban the default, the Swap test, the Fame test) come in a later slice, behind
+# NAPKIN_IDEA_ROOM_AI and the host's humans-first check; none is declared here yet.
+requires:
+  tools: []

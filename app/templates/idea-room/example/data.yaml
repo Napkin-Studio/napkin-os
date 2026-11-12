@@ -1,0 +1,32 @@
+# A recorded sample: Client A, an Irish whiskey. Every line is invented.
+cards:
+  c1:
+    text: One song of silence, once a night, in every bar that pours it.
+    by: maeve@wk
+    kind: team
+    at: '2026-11-12T09:10:00Z'
+    brief_link:
+      insight: Younger drinkers think Irish whiskey is for someone else.
+      proposition: The easy way into Irish whiskey.
+    votes: [oisin@wk, dara@wk]
+    comments: []
+    tests: {}
+  c2:
+    text: The first pour takes a full minute, and the bartender says why.
+    by: oisin@wk
+    kind: team
+    at: '2026-11-12T09:14:00Z'
+    brief_link:
+      insight: Younger drinkers think Irish whiskey is for someone else.
+      proposition: The easy way into Irish whiskey.
+    votes: [maeve@wk]
+    comments: []
+    tests: {}
+routes_out: []
+routes:
+  route_1:
+    name: One song
+    bet: A bar goes quiet for one song, and the whiskey is what it pours.
+    cards: [c1]
+    notes: []
+    version: 1
