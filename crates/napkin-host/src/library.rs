@@ -1113,6 +1113,9 @@ pub struct AttachTarget {
     /// The open document is locked: a link would be refused, and the shell
     /// says why rather than offer it.
     pub locked: bool,
+    /// Who the target is for, as the library names it: the registry's id and
+    /// name, else the name its own manifest carries. `null` when it has none.
+    pub client: Option<clan_sdk::ClientRef>,
 }
 
 pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
@@ -1142,6 +1145,12 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
         .map(|a| a.carried.document_id.clone())
         .collect();
     let locked = locked_error(doc.clan()).is_some();
+    // Client names are resolved from the registry, as the library does, so a
+    // renamed client reads the same here as on the desk.
+    let registry: std::collections::HashMap<String, crate::clients::ClientRecord> =
+        crate::clients::list(store, true)
+            .map(|l| l.into_iter().map(|c| (c.id.clone(), c)).collect())
+            .unwrap_or_default();
     let mut out: Vec<AttachTarget> = store
         .documents()
         .into_iter()
@@ -1171,6 +1180,10 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 version: kit_version(d.clan()),
                 path: d.id().to_string(),
                 updated_at: m.updated_at.clone(),
+                client: m.client.clone().map(|r| match registry.get(&r.id) {
+                    Some(rec) => rec.as_ref(),
+                    None => r,
+                }),
             })
         })
         .collect();

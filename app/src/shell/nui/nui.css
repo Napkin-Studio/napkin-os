@@ -552,7 +552,8 @@ html[data-theme="dark"] .bm-meta:where(.nui, .nui *) dt { color: #B8A47A; }
 .tb-app:where(.nui, .nui *) { flex: 0 1 auto; min-width: 0; overflow: hidden; }
 .tba-acts:where(.nui, .nui *) { flex: none; }
 .tba-name:where(.nui, .nui *) { min-width: 0; }
-@media (max-width: 1500px) { .tba-name:where(.nui, .nui *) b { max-width: 180px; } }
+/* The links are one chip now (linked-research-bar): the title takes the room they left. */
+@media (max-width: 1500px) { .tba-name:where(.nui, .nui *) b { max-width: clamp(200px, 24vw, 360px); } }
 .m1-medallion:where(.nui, .nui *) { width: 64px !important; height: 64px !important; top: 4px !important; }
 .tba-cont:where(.nui, .nui *) { border: 1px solid var(--line); }
 .tba-menu:where(.nui, .nui *) { min-width: 300px; }
@@ -611,7 +612,7 @@ button.side-link:hover:where(.nui, .nui *) { text-decoration-color: var(--ag-act
 .tb-beta:where(.nui, .nui *) i { width: 6px; height: 6px; border-radius: 50%; background: var(--alert); animation: p33pulse 1.6s ease-in-out infinite; }
 .tba-name:where(.nui, .nui *) { cursor: pointer; border-radius: 7px; padding: 2px 6px 2px 4px; margin-left: -4px; flex-shrink: 0; min-width: 0; }
 .tba-name:hover:where(.nui, .nui *) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.tba-name:where(.nui, .nui *) b { font-family: var(--font-serif) !important; font-weight: 600 !important; font-size: 16px !important; letter-spacing: 0 !important; text-transform: none !important; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.tba-name:where(.nui, .nui *) b { font-family: var(--font-serif) !important; font-weight: 600 !important; font-size: 16px !important; letter-spacing: 0 !important; text-transform: none !important; max-width: clamp(240px, 26vw, 440px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .tba-n2:where(.nui, .nui *) { display: grid; line-height: 1.1; min-width: 0; }
 .tba-saved:where(.nui, .nui *) { font: 500 10px var(--font-mono); color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
 .tba-caret:where(.nui, .nui *) { font-style: normal; color: var(--muted); font-size: 10px; margin-left: 2px; }
