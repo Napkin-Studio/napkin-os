@@ -466,5 +466,5 @@ async fn setup_import_and_the_accounts_file_are_for_an_admin_of_this_agency_only
     )
     .unwrap();
     assert!(text.contains("dan@cr\t'=Dan Test\tmanagement\n"), "{text}");
-    assert!(text.contains("cara@cr\tcara\tadmin\n"), "{text}");
+    assert!(text.contains("cara@cr\tCara\tadmin\n"), "{text}");
 }

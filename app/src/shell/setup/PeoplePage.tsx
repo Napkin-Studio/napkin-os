@@ -53,7 +53,7 @@ export function PeopleBody({ people, admin, roles, editing, busy, said, me, onAd
             <li key={p.username} className="pp-row" data-testid="person" data-username={p.username}>
               <span className="pp-who">
                 <b>{p.name}{p.username === me ? ' (you)' : ''}</b>
-                <small>{p.username}{admin && p.email ? ` · ${p.email}` : ''}</small>
+                <small>{p.username}{admin && p.email && p.email !== p.username ? ` · ${p.email}` : ''}</small>
               </span>
               {admin && p.state && p.state !== 'active' && <span className="pp-state">{stateWords(p.state)}</span>}
               {editing === p.username ? (

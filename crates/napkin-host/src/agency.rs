@@ -399,7 +399,14 @@ fn bootstrap(reg: &mut Registry, who: &str) {
     if reg.has_directory() || reg.person(who).is_some() {
         return;
     }
-    let name = who.split('@').next().unwrap_or(who).to_string();
+    // Only the sign-in name is known here, so the first admin starts as its first part with a capital;
+    // an admin edits it like anyone's.
+    let local = who.split('@').next().unwrap_or(who);
+    let mut chars = local.chars();
+    let name = chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect::<String>())
+        .unwrap_or_else(|| who.to_string());
     reg.people.push(Person {
         username: who.to_string(),
         name,
