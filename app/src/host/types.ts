@@ -768,6 +768,14 @@ export interface Host {
    */
   clanOrigin(): string
   /**
+   * The web host only: the open document's frame origin after its token was
+   * refused as stale (napkin-web keeps tokens in memory, so a deploy ends
+   * them). Opens the document again for a new token, unless the open document
+   * already has an origin other than `held`. Null when it cannot. The frame's
+   * fetch shim asks for it (`clan:token?`) and retries its call once.
+   */
+  renewToken?(held?: string): Promise<string | null>
+  /**
    * How the app frame gets its page. `'url'` means the host serves it and the
    * frame loads it by address (`frameSrc`); `'srcdoc'` means there is no
    * server to serve it from, so it is inlined (`compose`).

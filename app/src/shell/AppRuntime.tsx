@@ -145,6 +145,29 @@ export default function AppRuntime({
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
+  // A token the server no longer holds (a deploy restarts napkin-web, which
+  // keeps tokens in memory): the frame's fetch shim asks for this document's
+  // origin now ("clan:token?", with the one it was refused on), and sends its
+  // call again on the answer, once. The page stays as it is, edit and all.
+  // Only our own frame is answered; null tells it to give up.
+  useEffect(() => {
+    const renew = host.frameLoad === 'url' ? host.renewToken : undefined
+    if (!renew) return
+    const onMessage = (e: MessageEvent) => {
+      const frame = iframeRef.current?.contentWindow
+      const m = e.data as { type?: string; held?: unknown }
+      if (!frame || e.source !== frame || m?.type !== 'clan:token?') return
+      const reply = (origin: string | null) => frame.postMessage({ type: 'clan:token', origin }, '*')
+      renew(typeof m.held === 'string' ? m.held : undefined).then(origin => {
+        // The new process holds no edit mode either: say it again.
+        if (origin) host.setEditMode(editModeRef.current).catch(console.error)
+        reply(origin)
+      }, () => reply(null))
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
   // ── client review ─────────────────────────────────────────────────────────
   // The mode is the shell's; the app's fields draw the per-part controls. The
   // mode goes to the frame whenever it changes and again on every load, so a

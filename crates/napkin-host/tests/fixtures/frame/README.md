@@ -20,3 +20,8 @@ Generated once, by `app/scripts/frame-golden.mjs` (in the history of
 features/doc-open-direct: `git log --diff-filter=D -- app/scripts/frame-golden.mjs`),
 from the TypeScript composition as it then stood. That TypeScript is gone with
 it; these hashes are the record of what it made.
+
+Re-recorded since, on purpose: the 40 `web` pages on 2026-11-12, when the web
+fetch shim learned to ask the shell for a new token after a stale one
+(features/stale-token-and-menus.clan). The desktop and device pages are the
+originals.
