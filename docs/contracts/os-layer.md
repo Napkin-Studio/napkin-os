@@ -2091,15 +2091,15 @@ decisions and the clock. There is no scheduler and no stored reminder state. `ne
   an admin or a demo opens everything) answers `403` to everyone else. `GET /jobs`, `/jobs/{number}`,
   `/needs` and `/dashboard` keep their shapes and gain the fields below.
 - **`JobEntry.route`**: one `RouteStepState` per step, in route order:
-  `{stage, label, party, role, approver, due, state, approved_by, approved_at, version, document,
-  held_since, days_held, days_late}`. `state` is `approved`, `waiting` (the one step the job is held at) or
+  `{stage, label, party, role, approver, contact, rounds, due, state, approved_by, approved_at, version,
+  document, held_since, days_held, days_late}`. `state` is `approved`, `waiting` (the one step the job is held at) or
   `not_started`. A step is approved by a document filed under the job whose app maps to the step's stage
   (`jobindex::APP_STAGES`, one table: a new tool adds a line) carrying, on its current content, the
   planner's `sign` (a brief, role `planner`), an `approve` by the approver (an agency step), or an accepted
   `client_review` (a client step). `approved_by`, `approved_at` and `version` are read from that decision,
   never typed; unlocking or editing the document returns the step to `waiting`. `approver` shows the
   brief's own signer when the brief names one for the role. `held_since`, `days_held` and `days_late` are
-  set only on the waiting step. `contact` and `rounds` are not repeated here (read them from the record).
+  set only on the waiting step. `contact` and `rounds` are the record's, repeated so an editor can send a route back whole.
 - **`JobEntry.holder`**: `{party, person, role, stage, since, days, due, days_late}` or `null`: the first
   step, in stage then route order, that is not approved. `since` is the timestamp of the decision that
   approved the step before it, or of the `set_route` decision for the first. `days` is whole days since

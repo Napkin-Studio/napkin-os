@@ -135,6 +135,9 @@ pub struct RouteStepState {
     pub role: Option<String>,
     /// The route's approver; the brief's own signer when the brief names one.
     pub approver: String,
+    /// A client step's contact email and rounds, as the route has them (so an editor can send them back).
+    pub contact: Option<String>,
+    pub rounds: Option<u32>,
     pub due: String,
     /// `not_started`, `waiting` or `approved`.
     pub state: &'static str,
@@ -781,6 +784,8 @@ fn derive_route(
             party: step.party.clone(),
             role: step.role.clone(),
             approver,
+            contact: step.contact.clone(),
+            rounds: step.rounds,
             due: step.due.clone(),
             state,
             approved_by: approvals[i].as_ref().map(|(m, _)| m.person.clone()),

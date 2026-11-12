@@ -20,9 +20,9 @@ const DOOR_TOOL: Readonly<Record<string, ToolId>> = { brief: 'brief', research: 
 
 export const doorTool = (id: string): ToolId | null => DOOR_TOOL[id] ?? null
 
-/** Clients opens the client desk and the Agency dashboard reads the job index, both already here; the others need their tool's app installed. */
+/** Clients opens the client desk, the Agency dashboard and Approvals read the job index, all already here; the others need their tool's app installed. */
 export function doorIsLive(id: string, apps: readonly string[]): boolean {
-  if (id === 'clients' || id === 'agency-dashboard') return true
+  if (id === 'clients' || id === 'agency-dashboard' || id === 'approvals') return true
   const tool = doorTool(id)
   const appId = tool ? toolById(tool)?.appId : null
   return !!appId && apps.includes(appId)
@@ -32,6 +32,8 @@ export function doorIsLive(id: string, apps: readonly string[]): boolean {
 export const NEEDS_FIRST = 5
 
 export interface NeedRow {
+  /** The index's stable id for a job's need; a document's own row has none. */
+  id?: string
   path: string
   /** The work, and its client. */
   title: string
@@ -52,9 +54,11 @@ export function dueWords(due: string): string {
   return m && MONTHS[Number(m[2]) - 1] ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}` : due
 }
 
-/** A job's need as a row: the line, the job and its client, the deadline, and the one next action. */
+/** A job's need as a row: the line, the job and its client, the deadline, and the one next action. An approval that is late says how late. */
 export function jobNeedRow(n: JobNeed): NeedRow {
-  return { path: n.path, title: n.text, sub: `${n.job}, ${n.client}`, state: n.due ? `Due ${dueWords(n.due)}` : 'No deadline', action: n.action, due: n.due }
+  const late = n.kind === 'approval' || n.kind === 'approval-chase' ? n.days_late ?? 0 : 0
+  const state = late > 0 ? `${late} ${late === 1 ? 'day' : 'days'} late` : n.due ? `Due ${dueWords(n.due)}` : 'No deadline'
+  return { id: n.id, path: n.path, title: n.text, sub: `${n.job}, ${n.client}`, state, action: n.action, due: n.due }
 }
 
 /** By deadline, soonest first, a row with none last; rows with the same deadline keep the order they came in. */
