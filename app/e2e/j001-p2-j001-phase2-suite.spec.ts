@@ -8,23 +8,30 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { CANARY } from './seed/j001/canary.mjs'
 import { answerFor, answeredTasks } from './seed/j001/p2/answers.mjs'
 import { PHASE2 } from './phase2/tests.mjs'
 import { chainOf, MODES, middlewareLog, open, SIZES, signIn } from './pilot'
 import type { Phase2Page } from './phase2/pages'
-import { PEOPLE, READY_BRIEF, seedJ001 } from './seed/j001'
+import { PEOPLE, READY_BRIEF, seedJ001, type SeededJob } from './seed/j001'
 import { seedPhase2 } from './seed/j001/p2'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const short = (n: number) => PHASE2.find(t => t.n === n)!.short
 
-/** Every record's pages: the files j001-p2-<slug>.pages.ts, read by a glob. */
+/** Every record's pages files, j001-p2-<slug>.pages.ts, read by a glob when the suite is collected. */
+const PAGE_FILES = readdirSync(HERE).filter(f => /^j001-p2-.+\.pages\.ts$/.test(f)).sort()
+if (PAGE_FILES.length === 0) throw new Error('the suite lists at least the Phase 1 pages (j001-p2-j001-phase2-suite.pages.ts)')
+
+/** The pages one record lists. */
+async function pagesOf(file: string): Promise<Phase2Page[]> {
+  return ((await import(`./${file}`)) as { PAGES?: Phase2Page[] }).PAGES ?? []
+}
+
+/** Every record's pages. */
 async function allPages(): Promise<Phase2Page[]> {
-  const files = readdirSync(HERE).filter(f => /^j001-p2-.+\.pages\.ts$/.test(f)).sort()
-  const lists = await Promise.all(files.map(async f => ((await import(`./${f}`)) as { PAGES?: Phase2Page[] }).PAGES ?? []))
-  return lists.flat()
+  return (await Promise.all(PAGE_FILES.map(pagesOf))).flat()
 }
 
 /**
@@ -32,6 +39,19 @@ async function allPages(): Promise<Phase2Page[]> {
  * whose primary button uses another class adds `data-primary` to it, so the check sees it.
  */
 const PRIMARY = '.ch-btn-primary, .ns-primary, [data-primary]'
+
+/**
+ * The job test 72's pages are drawn over: one per width and mode, seeded by the first record's test that needs it and read by
+ * the others, as the single test did. Seeding one per record would add about sixty jobs to the shared stack each run.
+ */
+const JOBS = new Map<string, Promise<SeededJob>>()
+function jobFor(page: Page, key: string): Promise<SeededJob> {
+  if (!JOBS.has(key)) JOBS.set(key, seedJ001(page, { ready: true, fresh: true }))
+  return JOBS.get(key)!
+}
+
+/** One record's pages in three modes: about half a minute to two minutes on a quiet machine (12 Nov 2026), so four is ample. */
+const TIMEOUT_72 = 240_000
 
 for (const size of SIZES) {
   const t = (n: number) => `${n} ${short(n)}, ${size.tag} px`
@@ -68,16 +88,18 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test(t(72), async ({ browser }) => {
-    test.setTimeout(420_000) // three modes over every page (each record adds its pages): slow on a busy machine
+  // Test 72 is one acceptance test, run as one Playwright test per record's pages file, so no single test grows with every
+  // record that lands: each reads that record's pages in the three modes. The registry and the counter count 72 once.
+  for (const file of PAGE_FILES) test(t(72) + ` · ${file.replace(/^j001-p2-|\.pages\.ts$/g, '')} pages`, async ({ browser }) => {
+    test.setTimeout(TIMEOUT_72)
     const { default: AxeBuilder } = await import('@axe-core/playwright')
-    const pages = await allPages()
-    expect(pages.length, 'the suite lists at least the Phase 1 pages').toBeGreaterThan(0)
+    const pages = await pagesOf(file)
+    expect(pages.length, `${file} lists at least one page`).toBeGreaterThan(0)
     const problems: string[] = []
     for (const mode of MODES) {
       const { ctx, page } = await open(browser, size, mode, { roster: true })
       await signIn(page, PEOPLE.planning)
-      const job = await seedJ001(page, { ready: true, fresh: true })
+      const job = await jobFor(page, `${size.tag} ${mode}`)
       for (const p of pages) {
         await signIn(page, p.as)
         await page.goto('/'); await page.reload() // the page is loaded again as this person: its tenant is read at load

@@ -182,6 +182,13 @@ impl Agency {
 }
 
 async fn agency(s: &Server, app_id: &str, data: Value, assets: &[(&str, Vec<u8>)]) -> Agency {
+    let a = upload(s, build(app_id, &data, assets)).await;
+    lock(s, &a).await;
+    a
+}
+
+/// `bytes` uploaded by a new anonymous workspace, not yet locked.
+async fn upload(s: &Server, bytes: Vec<u8>) -> Agency {
     let r = send(s, "GET", "/api/session", None, None).await;
     let cookie = r.headers[header::SET_COOKIE]
         .to_str()
@@ -195,19 +202,17 @@ async fn agency(s: &Server, app_id: &str, data: Value, assets: &[(&str, Vec<u8>)
         .method("POST")
         .uri(format!("/api/t/{tenant}/documents/upload"))
         .header(header::COOKIE, &cookie)
-        .body(Body::from(build(app_id, &data, assets)))
+        .body(Body::from(bytes))
         .unwrap();
     let up = s.app.clone().oneshot(req).await.unwrap();
     let up: Value =
         serde_json::from_slice(&up.into_body().collect().await.unwrap().to_bytes()).unwrap();
-    let a = Agency {
+    Agency {
         cookie,
         tenant,
         doc: up["path"].as_str().unwrap().into(),
         token: up["token"].as_str().unwrap().into(),
-    };
-    lock(s, &a).await;
-    a
+    }
 }
 
 async fn lock(s: &Server, a: &Agency) {
@@ -1880,6 +1885,229 @@ fn every_clean_spec_has_a_wall_test() {
     // a text field a spec shows has a shape; a beat key list is the script's
     assert_eq!(client_pieces::shape(SCRIPT, "script"), Shape::Beats);
     assert!(BEAT_KEYS.iter().all(|(k, _)| *k != "id"));
+}
+
+/// Judge's verdicts are the agency's (features/judge.clan, the client wall): a script scored by Judge, with failed
+/// tests and their evidence, then overruled by the creative director with a reason, is locked and sent to three
+/// reviewers. No score, sub-score, evidence line, route or overrule reason reaches a reviewer: not the view (the
+/// state and the clean copy), not a piece, not the reply to a comment or an answer.
+#[tokio::test]
+async fn no_judge_score_evidence_route_or_overrule_reason_reaches_a_reviewer() {
+    use napkin_host::ops::judge;
+    use napkin_host::{Actor, Ctx, DocId};
+    const EVIDENCE: &str = "QXJUDGEEVIDENCE";
+    const REASON: &str = "QXOVERRULEREASON";
+    let s = server();
+    let data = json!({
+        "format": "radio", "slot_s": 30, "proposition": "The easy way in.",
+        "script": { "beats": [{ "id": "b1", "kind": "voice", "role": "FVO", "text": "Tonight, try something new." }], "proposals": [], "seq": 1 },
+        "checks": { "mandatory": [], "banned": [] }, "handoffs": { "radio": null, "film": null, "judge": null },
+        "upstream": { "doc_brief": {
+            "single_minded_proposition": "The easy way into Irish whiskey.",
+            "insight": "Younger drinkers think Irish whiskey is for someone else.",
+            "signers": [{ "role": "planner", "person": "aoife@wk" }, { "role": "creative_director", "person": "dara@wk" }],
+        } },
+    });
+    // the script's app sends work to Judge (its pipeline declares judge_work)
+    let plain = clan_sdk::ClanFile::from_bytes(build(SCRIPT, &data, &[])).unwrap();
+    let mut b = clan_sdk::ClanBuilder::new(plain.manifest().clone());
+    for (path, bytes) in plain.read_all_entries().unwrap() {
+        if path != clan_sdk::MANIFEST_PATH {
+            b.add_entry(path, bytes);
+        }
+    }
+    b.add_entry(
+        "app/pipeline.yaml",
+        b"pipeline: napkin-script-editor\nversion: 1\nrequest_kind: middleware\ntasks:\n  judge_work:\n    handler: judge_work@1\n    kind: script\n".to_vec(),
+    );
+    let a = upload(&s, b.build().unwrap()).await;
+
+    // Judge scores it, as the host's scoring route does once the middleware answers: every third test fails
+    let ws = s
+        .ctx
+        .workspace(&napkin_web::tenant::TenantId::parse(&a.tenant).unwrap());
+    let session = ws.session(&DocId::new(a.doc.clone())).unwrap();
+    let dara = Ctx::new(Actor::human("dara@wk").unwrap());
+    let p = session
+        .read(|d| judge::prepare(&*ws.store, &dara, d, None))
+        .unwrap();
+    let tests: Vec<Value> = judge::rubric()
+        .tests_for(p.piece.kind.id())
+        .iter()
+        .enumerate()
+        .map(|(i, t)| json!({ "id": t.id, "value": if i % 3 == 0 { "fail" } else { "pass" }, "evidence": format!("{EVIDENCE} {}", t.id) }))
+        .collect();
+    let t = judge::tally(p.piece.kind, &tests).unwrap();
+    let answered = judge::Answered {
+        handler: "judge_work@1.0".into(),
+        backend: "fixture".into(),
+        model: None,
+        prompt_hash: None,
+        rubric_version: judge::rubric().version.clone(),
+        price_eur: 0.0,
+    };
+    let by = Ctx::new(Actor::process("judge").unwrap());
+    session
+        .perform(&by, |c, d| {
+            judge::score_outcome(c, d, &p, &t, &answered, "none")
+        })
+        .unwrap();
+    // the creative director overrules it, with a reason
+    session
+        .perform(&dara, |c, d| {
+            judge::overrule(
+                &*ws.store,
+                c,
+                d,
+                &json!({ "reason": REASON, "route": "cd" }),
+            )
+        })
+        .unwrap();
+    let held = serde_json::to_string(&chain(&s, &a).await).unwrap();
+    assert!(
+        held.contains(EVIDENCE) && held.contains(REASON) && held.contains(judge::OVERRULED),
+        "the verdicts are in the document's chain: {held}"
+    );
+
+    lock(&s, &a).await;
+    let r = round(&s, &a).await;
+    let mut replies = String::new();
+    for (_, tok) in &r.links {
+        let v = send(&s, "GET", &format!("/c/{tok}/view"), None, None).await;
+        assert_eq!(v.status, StatusCode::OK, "{}", v.text());
+        replies.push_str(&v.text());
+        // a text piece is drawn on the view; every other piece (an image, a film) is read one at a time
+        let pieces: Vec<u64> = v.json()["pieces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| p["kind"] != "text")
+            .map(|p| p["n"].as_u64().unwrap())
+            .collect();
+        for n in pieces {
+            let piece = send(&s, "GET", &format!("/c/{tok}/piece/{n}"), None, None).await;
+            assert_eq!(piece.status, StatusCode::OK, "piece {n}");
+            replies.push_str(&String::from_utf8_lossy(&piece.body));
+        }
+    }
+    let tok = &r.links[1].1;
+    let c = send(
+        &s,
+        "POST",
+        &format!("/c/{tok}/comment"),
+        None,
+        Some(json!({ "piece": 1, "tag": "preference", "text": "a note" })),
+    )
+    .await;
+    assert_eq!(c.status, StatusCode::OK, "{}", c.text());
+    replies.push_str(&c.text());
+    let tok = &r.links[0].1;
+    let ans = send(
+        &s,
+        "POST",
+        &format!("/c/{tok}/answer"),
+        None,
+        Some(json!({ "answer": "confirm" })),
+    )
+    .await;
+    replies.push_str(&ans.text());
+    let lower = replies.to_lowercase();
+    for never in [
+        EVIDENCE,
+        REASON,
+        "judge",
+        "overrul",
+        "evidence",
+        "score",
+        "advised_route",
+        "brave",
+        "trust",
+        "of 30",
+    ] {
+        assert!(
+            !lower.contains(&never.to_lowercase()),
+            "a reviewer was sent {never}: {replies}"
+        );
+    }
+}
+
+/// A client reaches the five client routes and nothing else (docs/adr/0004-client-wall.md). The host's sync route
+/// table is walked by napkin-host/tests/client_review_round.rs; this holds the routes dispatched before that table
+/// (Judge's scoring and the middleware proxy) and the workspace routes added in Phase 2 (search, Judge, Needs you,
+/// agency people, audit, jobs and their route), which a review link's token never opens.
+#[tokio::test]
+async fn a_client_reaches_no_async_host_route_and_no_workspace_route() {
+    use napkin_host::{dispatch_async, Actor, Ctx, DocId, HostRequest};
+    let s = server();
+    let a = brief(&s).await;
+    let r = round(&s, &a).await;
+    let ws = s
+        .ctx
+        .workspace(&napkin_web::tenant::TenantId::parse(&a.tenant).unwrap());
+    let session = ws.session(&DocId::new(a.doc.clone())).unwrap();
+    let before = chain(&s, &a).await;
+    let client = Ctx::new(Actor::client("alex@client-a.example").unwrap());
+    for (path, post) in [
+        ("/judge", true),
+        ("/judge", false),
+        ("/judge/overrule", true),
+        ("/api-proxy", true),
+    ] {
+        let mut req = HostRequest::new(path, "", b"{}".to_vec());
+        if post {
+            req = req.posting();
+        }
+        let resp = dispatch_async(&client, &session, &NoConfig, req).await;
+        assert_eq!(
+            resp.status, 403,
+            "{path} (post {post}) must refuse a client"
+        );
+    }
+    assert_eq!(chain(&s, &a).await, before, "nothing was written");
+    // the workspace routes: the link's token is no session, as a cookie, a bearer or a query
+    let tok = &r.links[0].1;
+    for path in [
+        "search?q=alpha",
+        "judge/telemetry",
+        "needs",
+        "agency/people",
+        "audit",
+        "jobs",
+        "jobs/J001",
+        "jobs/J001/stage",
+    ] {
+        let uri = format!("/api/t/{}/{path}", a.tenant);
+        for headers in [
+            vec![],
+            vec![("cookie", format!("napkin_session={tok}"))],
+            vec![("authorization", format!("Bearer {tok}"))],
+        ] {
+            let h: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            let got = send_with(&s, "GET", &uri, &h, None).await;
+            assert!(
+                got.status == StatusCode::UNAUTHORIZED || got.status == StatusCode::FORBIDDEN,
+                "{uri} with {headers:?}: {} {}",
+                got.status,
+                got.text()
+            );
+        }
+        let q = send_with(
+            &s,
+            "GET",
+            &format!(
+                "{uri}{}token={tok}",
+                if uri.contains('?') { "&" } else { "?" }
+            ),
+            &[],
+            None,
+        )
+        .await;
+        assert!(
+            q.status == StatusCode::UNAUTHORIZED || q.status == StatusCode::FORBIDDEN,
+            "{uri} with the token in the query: {}",
+            q.status
+        );
+    }
 }
 
 #[tokio::test]

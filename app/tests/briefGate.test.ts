@@ -9,7 +9,7 @@ import { test } from 'node:test'
 
 import type { GateItem, GateView, LibraryItem } from '../src/host/types.ts'
 import {
-  BRIEF_MAKER, changedBriefs, clientQuestions, headline, signAction, teamItems, territoriesOf,
+  BRIEF_MAKER, changedBriefs, clientQuestions, headline, roleOf, signAction, signerNameProblem, teamItems, territoriesOf,
 } from '../src/shell/gate/words.ts'
 
 const item = (id: GateItem['id'], state: GateItem['state'], over: Partial<GateItem> = {}): GateItem =>
@@ -91,4 +91,20 @@ test('a changed brief reopens the steps, and is the desk alert', () => {
   const t = territoriesOf([changed], 'Client A')
   assert.deepEqual(t.steps.map(s => s.done), [true, true, false, false])
   assert.deepEqual(changedBriefs([changed, lib({ path: 'd', gate: G })]).map(i => i.path), ['c'])
+})
+
+test('a signer is named by their sign-in name, the name signing and Needs you find them by', () => {
+  // signed in by name: a display name is refused before it is written, with what to write instead
+  assert.equal(signerNameProblem('dara@wk', 'aoife@wk'), null)
+  assert.equal(signerNameProblem('  dara@wk  ', 'aoife@wk'), null)
+  assert.equal(signerNameProblem('Dara Byrne', 'aoife@wk'), 'Use their sign-in name, like name@wk.')
+  assert.equal(signerNameProblem('dara', 'aoife@wk'), 'Use their sign-in name, like name@wk.')
+  assert.equal(signerNameProblem('dara @wk', 'aoife@wk'), 'Use their sign-in name, like name@wk.')
+  assert.equal(signerNameProblem('', 'aoife@wk'), null) // an empty field is the button's to hold, not an error
+  // a workspace with no sign-in names its one person as it is
+  assert.equal(signerNameProblem('Dara', 't-anon'), null)
+  assert.equal(signerNameProblem('Dara', null), null)
+  // why it matters: the person signed in is found among the signers by that exact name
+  assert.equal(roleOf([{ role: 'creative_director', person: 'Dara Byrne', signed: false }], 'dara@wk'), null)
+  assert.equal(roleOf([{ role: 'creative_director', person: 'dara@wk', signed: false }], 'dara@wk'), 'creative_director')
 })

@@ -209,21 +209,43 @@ fn a_write_by_another_task_on_the_same_disk_is_seen_and_the_cache_equals_a_fresh
     );
 }
 
+/// `a` and `b`, the shorter padded to the length of the longer with a zip archive comment: the comment is the
+/// last field of the end of central directory record, so the archive and every entry in it read as before.
+fn same_size(a: Vec<u8>, b: Vec<u8>) -> (Vec<u8>, Vec<u8>) {
+    fn pad(mut doc: Vec<u8>, len: usize) -> Vec<u8> {
+        let n = len - doc.len();
+        // with no comment, the end of central directory record is the last 22 bytes, its comment length the last two
+        let end = doc.len() - 22;
+        assert_eq!(
+            &doc[end..end + 4],
+            b"PK\x05\x06",
+            "the archive ends in its directory record"
+        );
+        assert_eq!(&doc[end + 20..], [0, 0], "the archive has no comment yet");
+        doc[end + 20..].copy_from_slice(&u16::try_from(n).unwrap().to_le_bytes());
+        doc.resize(len, b' ');
+        doc
+    }
+    let len = a.len().max(b.len());
+    let (a, b) = (pad(a, len), pad(b, len));
+    for doc in [&a, &b] {
+        ClanFile::from_bytes(doc.clone()).expect("a padded document still reads");
+    }
+    (a, b)
+}
+
 #[test]
 fn two_writes_of_equal_size_in_quick_succession_are_both_seen() {
     let dir = tempfile::tempdir().unwrap();
     let (store, client) = tenant(dir.path(), 3);
     let id = doc_id("d0001");
-    let a = bytes("Version AAAA", &client, "J001");
-    // a second title whose packed document is exactly as long as the first (compression varies with the words)
-    let (title_b, b) = (0..1000)
-        .map(|i| format!("Version B{i:03}"))
-        .map(|t| {
-            let b = bytes(&t, &client, "J001");
-            (t, b)
-        })
-        .find(|(_, b)| b.len() == a.len())
-        .expect("a title of the same packed size");
+    // Two documents of exactly the same packed size by construction: packing compresses, so two titles rarely
+    // pack to the same length, and the shorter is padded to the longer with the archive's own comment.
+    let (a, b) = same_size(
+        bytes("Version AAAA", &client, "J001"),
+        bytes("Version BBBB", &client, "J001"),
+    );
+    let title_b = "Version BBBB".to_string();
     assert_eq!(
         a.len(),
         b.len(),

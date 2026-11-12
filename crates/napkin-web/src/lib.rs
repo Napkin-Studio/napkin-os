@@ -140,18 +140,31 @@ pub fn router_with(
         )
         .merge(shell_service(static_dir))
         // The request's span names the method and the path, never the query string: a search's words, a
-        // document's path and a token ride in the query, and none of them belongs in a log.
+        // document's path and a token ride in the query, and none of them belongs in a log. A path that
+        // itself carries a token (a client's link, a document's session) is logged as its route.
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
                 tracing::debug_span!(
                     "request",
                     method = %request.method(),
-                    uri = %request.uri().path(),
+                    uri = %logged_path(request.uri().path()),
                     version = ?request.version(),
                 )
             }),
         )
         .with_state(ctx)
+}
+
+/// The path as a log may hold it: the token of `/c/{token}…` (a client's link, its page and its calls)
+/// and of `/s/{token}…` (a document's session) is replaced by `{token}`.
+pub fn logged_path(path: &str) -> std::borrow::Cow<'_, str> {
+    for prefix in ["/c/", "/s/"] {
+        if let Some(rest) = path.strip_prefix(prefix) {
+            let tail = rest.find('/').map_or("", |i| &rest[i..]);
+            return format!("{prefix}{{token}}{tail}").into();
+        }
+    }
+    path.into()
 }
 
 /// Find the built shell without being told: next to the working directory in a

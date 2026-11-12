@@ -67,6 +67,19 @@ export function roleOf(signers: readonly GateSigner[], me: string | null): strin
   return signers.find(s => me !== null && s.person === me)?.role ?? null
 }
 
+/**
+ * Why `name` cannot be written as a signer, or null. Signing and Needs you both find a signer by their sign-in
+ * name (`name@agency`), compared with who is signed in, so a signer written as a display name could never sign
+ * the brief nor be told it waits for them. Where people sign in by name (`me` is `name@agency`), a signer is
+ * written the same way. A workspace with no sign-in (`me` is the workspace itself) is not held to it.
+ */
+export function signerNameProblem(name: string, me: string | null): string | null {
+  const n = name.trim()
+  const at = me?.indexOf('@') ?? -1
+  if (!me || at < 0 || !n) return null
+  return /^[^@\s]+@[^@\s]+$/.test(n) ? null : `Use their sign-in name, like name@${me.slice(at + 1)}.`
+}
+
 /** Whether the brief names both signers (the gate holds the lock until it does). */
 export const namesBoth = (signers: readonly GateSigner[]): boolean =>
   signers.some(s => s.role === PLANNER) && signers.some(s => s.role === CREATIVE_DIRECTOR)

@@ -10,7 +10,7 @@ import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { barFrom, type BarItem } from './appBar'
 import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
-import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
+import { BAR_KEY_FORWARDER, STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
 import { agencyIdOf, coloursOf } from './agency/palette'
 import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
 import { activity as markActivity } from '../components/markStore'
@@ -237,6 +237,8 @@ export default function AppRuntime({
     const isFullDoc = /^\s*<!doctype\s+html/i.test(htmlContent) || /^\s*<html/i.test(htmlContent)
     const bridgeScript = renderModel === 'authored' ? STRUCTURED_EDIT_BRIDGE : LEGACY_EDIT_BRIDGE
     const bridge = `<script>${bridgeScript}</script>${frameCapture(capture)}`
+    // The bar's key is listened for from the top of the page, before the app's own scripts and the bridge run.
+    const early = `<script>${BAR_KEY_FORWARDER}</script>`
     let fullHtml: string
 
     if (isFullDoc) {
@@ -245,14 +247,21 @@ export default function AppRuntime({
       // builder), and splicing the bridge there is a syntax error that kills
       // the app's whole script.
       const closeIdx = htmlContent.toLowerCase().lastIndexOf('</body>')
-      fullHtml = closeIdx >= 0
+      const withBridge = closeIdx >= 0
         ? htmlContent.slice(0, closeIdx) + bridge + htmlContent.slice(closeIdx)
         : htmlContent + bridge
+      // The early script goes just inside the first <head> (or <html>): the first such tag is the page's own,
+      // before any script of the app's that could hold the text.
+      const open = /<head\b[^>]*>/i.exec(withBridge) ?? /<html\b[^>]*>/i.exec(withBridge)
+      fullHtml = open
+        ? withBridge.slice(0, open.index + open[0].length) + early + withBridge.slice(open.index + open[0].length)
+        : early + withBridge
     } else {
       fullHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  ${early}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&display=swap">
   <style>
@@ -312,6 +321,10 @@ export default function AppRuntime({
       </div>
     )
   }
+
+  // Behind a URL the frame waits for its address: an empty frame would take a click and the keys after it (Cmd K
+  // among them) and give them to no page. Until the address is set, the shell's own page has them.
+  if (host.frameLoad !== 'srcdoc' && !iframeSrc) return null
 
   return (
     <iframe

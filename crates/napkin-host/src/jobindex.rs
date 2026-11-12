@@ -52,10 +52,13 @@ pub const STAGES: [(&str, &str); 11] = [
 /// Which stage each tool's approvals belong to: `(app id, stage an agency
 /// approval counts for, stage a client approval counts for)`. One table; a new
 /// tool adds one line. A tool not listed here has no approval step.
-pub const APP_STAGES: [(&str, &str, &str); 3] = [
+pub const APP_STAGES: [(&str, &str, &str); 4] = [
     ("ie.napkin.brief-maker", "brief-check", "brief-check"),
     ("ie.napkin.visual-brief", "ideas", "client-approval"),
     ("ie.napkin.deck-maker", "decks", "client-approval"),
+    // a script is the idea in words, before production (features/script-editor.clan); a client reviews it through the
+    // review link like the visual brief (features/client-review-full.clan), so its comments reach Needs you
+    ("ie.napkin.script-editor", "ideas", "client-approval"),
 ];
 
 /// The stage an approval of `app_id`'s documents counts for, by `party`.

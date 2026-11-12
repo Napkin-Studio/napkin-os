@@ -118,6 +118,9 @@ function start(addr, data, auth, gate = false) {
       NAPKIN_CONFIG_DIR: config,
       // Judge answers from the stand-in's fixture scores (features/judge.clan): the backend is named, never defaulted, and unset means not set up.
       NAPKIN_JUDGE_BACKEND: 'fixture',
+      // The agent quota is per agency per server start (meter.rs), and every spec's people share the agency wk on one server:
+      // staging's cap (infra/modules/services/main.tf), so a full run is not refused by what earlier specs spent.
+      NAPKIN_AGENT_CAP: '400',
       // No model and no secrets: the only middleware is the local stand-in above.
       RUST_LOG: 'napkin_web=warn',
     },

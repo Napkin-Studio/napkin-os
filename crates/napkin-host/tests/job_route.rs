@@ -7,8 +7,7 @@ use std::sync::Arc;
 use clan_sdk::{ClanBuilder, ClanFile, DecisionChain};
 use napkin_host::jobs::{self, JobRecord, NewJob, RouteStep};
 use napkin_host::{
-    clients, handle, Actor, Ctx, DocId, DocStore, FsStore, HostRequest, Library, NoConfig,
-    PartStore, Session,
+    clients, handle, Actor, Ctx, DocId, FsStore, HostRequest, Library, NoConfig, PartStore, Session,
 };
 use serde_json::{json, Value};
 
@@ -68,21 +67,6 @@ fn document(
     let id = DocId::from(docs.join(file));
     std::fs::write(id.as_str(), b.build().unwrap()).unwrap();
     id
-}
-
-fn post(s: &Session, path: &str, body: Value) -> u16 {
-    handle(
-        s,
-        &NoConfig,
-        HostRequest::new(path, "", body.to_string().into_bytes()),
-    )
-    .status
-}
-
-fn at(dir: &std::path::Path, id: &DocId, who: &str) -> Session {
-    let s = Session::with_ctx(Arc::new(FsStore::new(dir.to_path_buf())), ctx(who));
-    s.open(id.clone()).unwrap();
-    s
 }
 
 fn ready() -> Value {
