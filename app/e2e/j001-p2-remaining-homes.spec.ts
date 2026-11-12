@@ -15,6 +15,7 @@ const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', w
 const MODES = ['white', 'grey', 'black'] as const
 const rosterURL = `http://127.0.0.1:${process.env.NAPKIN_E2E_ROSTER_PORT || '18082'}`
 const shots = process.env.NAPKIN_E2E_SHOTS
+// The roster agency wears a real agency's name: the pill and the O's centre are masked in every screenshot, never shown.
 
 const SHORT: Record<number, string> = {
   19: 'the five Phase 2 roles see their own doors',
@@ -131,7 +132,7 @@ for (const size of SIZES) {
       await expect(empty.getByRole('button')).toHaveCount(1)
       await expect(empty.getByText(verb, { exact: true })).toBeVisible()
       await expect(door.getByRole('alert')).toHaveCount(0)
-      if (shots && name === 'Radio') await page.screenshot({ path: `${shots}/door-radio-${size.tag}.png` })
+      if (shots && name === 'Radio') await page.screenshot({ path: `${shots}/door-radio-${size.tag}.png`, mask: [page.getByTestId('agency-pill'), page.getByTestId('o-logo')], maskColor: '#C8CBFF' })
     }
     // a More tools line opens its own Empty state too
     await page.goto('/')
@@ -158,7 +159,7 @@ for (const size of SIZES) {
       await page.getByTestId('o-circle').first().click()
       await expect(page.getByTestId('home')).toBeVisible()
       expect(await texts(page, 'door'), `${role}: the first circle opens their own home`).toEqual([...HOMES[role].doors])
-      if (shots && role === 'artDirector') { await page.goto('/#map'); await page.screenshot({ path: `${shots}/the-o-art-director-${size.tag}.png` }) }
+      if (shots && role === 'artDirector') { await page.goto('/#map'); await page.screenshot({ path: `${shots}/the-o-art-director-${size.tag}.png`, mask: [page.getByTestId('agency-pill'), page.getByTestId('o-logo')], maskColor: '#C8CBFF' }) }
       await ctx.close()
     }
   })
@@ -181,7 +182,7 @@ for (const size of SIZES) {
             if (box.height < 44 || box.width < 44) problems.push(`${role} ${mode}: a door is ${Math.round(box.width)} by ${Math.round(box.height)} px`)
           }
         }
-        if (shots && mode === 'white') await page.screenshot({ path: `${shots}/home-${SLUG[role]}-${size.tag}.png`, fullPage: true })
+        if (shots && mode === 'white') await page.screenshot({ path: `${shots}/home-${SLUG[role]}-${size.tag}.png`, fullPage: true, mask: [page.getByTestId('agency-pill'), page.getByTestId('o-logo')], maskColor: '#C8CBFF' })
         await ctx.close()
       }
     }
