@@ -21,7 +21,7 @@ interface Props {
 export default function VersionBand({ undo, docPath, onChanged }: Props) {
   const [versions, setVersions] = useState(false)
   return (
-    <section className="bg-band" data-testid="version-band" aria-label="Versions">
+    <section className="bg-band vb-band" data-testid="version-band" aria-label="Versions">
       <div className="bg-bar">
         <span className="bg-tag">Versions</span>
         <span className="bg-sum" />
