@@ -27,7 +27,8 @@ import { addClient, appFrame, BUDGET, driveRun, measure, newDocApp, openTool, si
 const ACCOUNT = 'plu@pluto' as const
 // This file's own client for the round; not a prefix of the other files' clients (the dial is matched by a regex on the name).
 const client = (process.env.UAT_CLIENT || `UAT ${stamp()}`).replace(/^UAT\b/, 'UAT review')
-const STATE = process.env.UAT_STATE || ''
+// One state file per test file, so files running side by side never overwrite each other's keys.
+const STATE = process.env.UAT_STATE ? `${process.env.UAT_STATE}.review` : ''
 const readState = (): Record<string, string> => { try { return JSON.parse(readFileSync(STATE, 'utf8')) } catch { return {} } }
 const keep = (k: string, v: string) => { if (STATE) writeFileSync(STATE, JSON.stringify({ ...readState(), [k]: v })) }
 const got = (k: string) => readState()[k] || ''

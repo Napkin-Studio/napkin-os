@@ -9,7 +9,8 @@ const ACCOUNT = 'plu@pluto' as const
 const client = process.env.UAT_CLIENT || `UAT ${stamp()}`
 /** The finished Research document, for the journeys that read it after the run. */
 /** Round state that must survive a worker restart (the report the later journeys read). */
-const STATE = process.env.UAT_STATE || ''
+// One state file per test file, so files running side by side never overwrite each other's keys.
+const STATE = process.env.UAT_STATE ? `${process.env.UAT_STATE}.journeys` : ''
 const readState = (): Record<string, string> => { try { return JSON.parse(readFileSync(STATE, 'utf8')) } catch { return {} } }
 let researchUrl = process.env.UAT_RESEARCH_URL || readState().researchUrl || ''
 

@@ -13,7 +13,8 @@ const ACCOUNT = 'plu@pluto' as const
 // This file's own client for the round. Not a prefix of journeys.uat.ts's client (its dial
 // button is matched by a regex on the name), and created here: this file runs first.
 const client = (process.env.UAT_CLIENT || `UAT ${stamp()}`).replace(/^UAT\b/, 'UAT files')
-const STATE = process.env.UAT_STATE || ''
+// One state file per test file, so files running side by side never overwrite each other's keys.
+const STATE = process.env.UAT_STATE ? `${process.env.UAT_STATE}.attachments` : ''
 const readState = (): Record<string, string> => { try { return JSON.parse(readFileSync(STATE, 'utf8')) } catch { return {} } }
 const keep = (k: string, v: string) => { if (STATE) writeFileSync(STATE, JSON.stringify({ ...readState(), [k]: v })) }
 
