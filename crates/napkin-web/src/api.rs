@@ -14,6 +14,7 @@ use std::time::Duration;
 use axum::body::Bytes;
 use axum::extract::{Path, Query, RawQuery, State};
 use axum::http::{header, StatusCode};
+use axum::middleware::from_fn;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch as patch_method, post};
@@ -50,11 +51,23 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/dogfood/export", get(crate::dogfood::get_export))
         .route("/dogfood/runlog", get(crate::dogfood::get_runlog))
         .route("/dogfood/purge", post(crate::dogfood::post_purge))
-        .route("/t/{tenant}/apps", get(list_apps))
+        // The three lists the shell polls answer 304 when nothing changed (etag.rs).
+        .route(
+            "/t/{tenant}/apps",
+            get(list_apps).layer(from_fn(crate::etag::revalidate)),
+        )
         .route("/t/{tenant}/apps/from/{doc}", post(install_from_document))
         .route("/t/{tenant}/recent", get(recent))
-        .route("/t/{tenant}/library", get(library_listing))
-        .route("/t/{tenant}/clients", get(list_clients).post(create_client))
+        .route(
+            "/t/{tenant}/library",
+            get(library_listing).layer(from_fn(crate::etag::revalidate)),
+        )
+        .route(
+            "/t/{tenant}/clients",
+            get(list_clients)
+                .layer(from_fn(crate::etag::revalidate))
+                .post(create_client),
+        )
         .route("/t/{tenant}/clients/legacy", get(legacy_clients))
         .route("/t/{tenant}/clients/adopt", post(adopt_clients))
         .route("/t/{tenant}/clients/{id}", patch_method(update_client))
