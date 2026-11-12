@@ -13,9 +13,12 @@
 //!
 //! Everything else is the built React app.
 
+pub mod agency;
 pub mod api;
+pub mod audit;
 pub mod auth;
 pub mod clean;
+pub mod directory;
 pub mod dogfood;
 pub mod error;
 pub mod events;
@@ -108,6 +111,11 @@ pub fn router_with(
                 // (features/roles-and-homes.clan), after the tenant layer has named the person
                 .layer(axum::middleware::from_fn(roles::guard))
                 .layer(DefaultBodyLimit::max(UPLOAD_MAX))
+                // the directory's roles replace the session's, on every request (features/agency-setup.clan)
+                .layer(axum::middleware::from_fn_with_state(
+                    ctx.clone(),
+                    directory::live_roles,
+                ))
                 .layer(axum::middleware::from_fn_with_state(
                     identity.clone(),
                     tenant::layer,

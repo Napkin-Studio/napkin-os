@@ -20,6 +20,8 @@
 //! desktop binds that to a custom URI scheme and Tauri events; a web server
 //! binds the same table to HTTP.
 
+pub mod agency;
+pub mod audit;
 pub mod clients;
 pub mod config;
 pub mod ctx;
@@ -29,6 +31,7 @@ pub mod event;
 #[cfg(feature = "native")]
 pub mod export;
 pub mod html;
+pub mod import;
 pub mod jobindex;
 pub mod jobs;
 pub mod library;

@@ -1,0 +1,115 @@
+/* Agency setup: the flow, the import panel, the people page and the card on an admin's home
+   (features/agency-setup.clan). Nothing new is defined: the home's section label, rows and text links,
+   the shell's pill buttons and tokens. Every colour is a token, so the agency's colours and Black mode
+   follow. Nothing moves. */
+
+.su-btn:where(.nui, .nui *) { height: 36px; padding: 0 18px; font-size: 13.5px; }
+.su-sr:where(.nui, .nui *) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.su-layout:where(.nui, .nui *) { display: grid; gap: 32px; grid-template-columns: 200px minmax(0, 1fr); align-items: start; max-width: 980px; }
+.su-steps:where(.nui, .nui *) ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.su-stepbtn:where(.nui, .nui *) { width: 100%; display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--ink-soft); font: 600 13.5px var(--font-ui); cursor: pointer; min-height: 40px; }
+.su-stepbtn:where(.nui, .nui *) i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line-strong); font: 700 11.5px var(--font-mono); font-style: normal; color: var(--ink-soft); }
+.su-stepbtn[data-done]:where(.nui, .nui *) i { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.su-stepbtn[aria-current="step"]:where(.nui, .nui *) { border-color: var(--line-strong); background: var(--paper); color: var(--ink); }
+.su-stepbtn:hover:where(.nui, .nui *) { color: var(--ink); }
+
+.su-card:where(.nui, .nui *) { display: grid; gap: 16px; align-content: start; padding: 24px 26px 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); max-width: 720px; }
+.su-count:where(.nui, .nui *) { margin: 0; font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.su-title:where(.nui, .nui *) { margin: 0; font: 700 clamp(22px, 5vw, 30px)/1.15 var(--font-ui); letter-spacing: -.02em; color: var(--ink); outline: none; }
+.su-line:where(.nui, .nui *) { margin: 0; color: var(--ink-soft); font-size: 14.5px; line-height: 1.5; max-width: 56ch; }
+.su-body:where(.nui, .nui *) { display: grid; gap: 14px; justify-items: start; }
+.su-sub:where(.nui, .nui *) { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 60ch; }
+.su-note:where(.nui, .nui *) { margin: 0; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); color: var(--ink); font-size: 13.5px; line-height: 1.5; border-radius: 0 8px 8px 0; max-width: 60ch; }
+.su-warn:where(.nui, .nui *) { margin: 0; color: var(--warn-text); font-size: 13.5px; line-height: 1.5; }
+.su-ok:where(.nui, .nui *) { color: var(--ok); font: 600 13.5px var(--font-ui); }
+
+.su-logo:where(.nui, .nui *) { display: grid; place-items: center; width: min(100%, 320px); min-height: 110px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--muted); font-size: 13.5px; }
+.su-logo:where(.nui, .nui *) img { max-width: 100%; max-height: 96px; }
+.su-file:where(.nui, .nui *) { position: relative; cursor: pointer; justify-self: start; }
+.su-file:where(.nui, .nui *) input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.su-file:focus-within:where(.nui, .nui *) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.su-file[aria-disabled]:where(.nui, .nui *) { opacity: .6; cursor: default; }
+.su-fname:where(.nui, .nui *) { font: 500 13px var(--font-mono); color: var(--ink-soft); overflow-wrap: anywhere; }
+
+.su-form:where(.nui, .nui *) { width: 100%; }
+.su-fields:where(.nui, .nui *) { display: flex; flex-wrap: wrap; gap: 12px; }
+.su-lab:where(.nui, .nui *) { display: grid; gap: 4px; font: 600 12.5px var(--font-ui); color: var(--ink-soft); min-width: 0; }
+.su-lab:where(.nui, .nui *) input { height: 38px; min-width: 240px; max-width: 100%; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--card); font: 500 14px var(--font-ui); color: var(--ink); }
+.su-lab:where(.nui, .nui *) small { font: 400 12.5px/1.45 var(--font-ui); color: var(--muted); max-width: 52ch; }
+.su-actions:where(.nui, .nui *) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.su-footer:where(.nui, .nui *) { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 18px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+.su-import:where(.nui, .nui *) { display: grid; gap: 14px; justify-items: start; width: 100%; }
+.su-help:where(.nui, .nui *) { color: var(--ink-soft); font-size: 13.5px; line-height: 1.55; max-width: 60ch; }
+.su-help:where(.nui, .nui *) p { margin: 0 0 8px; }
+.su-help:where(.nui, .nui *) b { color: var(--ink); font-weight: 650; }
+.su-pick:where(.nui, .nui *) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.su-result:where(.nui, .nui *) { display: grid; gap: 8px; width: 100%; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.su-result[data-tone="look"]:where(.nui, .nui *) { border-color: var(--warn); }
+.su-result[data-tone="none"]:where(.nui, .nui *) { border-color: var(--warn); }
+.su-summary:where(.nui, .nui *) { margin: 0; font: 650 15px/1.4 var(--font-ui); color: var(--ink); }
+.su-tablewrap:where(.nui, .nui *) { overflow-x: auto; max-height: 340px; }
+.su-table:where(.nui, .nui *) { border-collapse: collapse; width: 100%; font-size: 13px; }
+.su-table:where(.nui, .nui *) caption { text-align: left; padding: 0 0 6px; font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.su-table:where(.nui, .nui *) th { text-align: left; padding: 6px 10px 6px 0; font: 600 12px var(--font-ui); color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+.su-table:where(.nui, .nui *) td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: top; overflow-wrap: anywhere; }
+.su-table:where(.nui, .nui *) td:first-child { font-family: var(--font-mono); white-space: nowrap; }
+
+.su-homecard:where(.nui, .nui *) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; max-width: 760px; padding: 14px 18px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--paper); }
+.su-homeline:where(.nui, .nui *) { margin: 6px 0 2px; font: 650 15px/1.4 var(--font-ui); color: var(--ink); }
+
+.pp-list:where(.nui, .nui *) { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 860px; }
+.pp-row:where(.nui, .nui *) { display: grid; grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.6fr) auto; gap: 8px 16px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.pp-who:where(.nui, .nui *) b { display: block; font-size: 13.5px; }
+.pp-who:where(.nui, .nui *) small { display: block; color: var(--muted); font: 400 12px var(--font-mono); overflow-wrap: anywhere; }
+.pp-state:where(.nui, .nui *) { font: 600 10px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--warn-text); }
+.pp-roles:where(.nui, .nui *) { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-roles:where(.nui, .nui *) li { padding: 3px 10px; border: 1px solid var(--line-strong); border-radius: 99px; font: 600 12px var(--font-ui); color: var(--ink); }
+.pp-acts:where(.nui, .nui *) { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.pp-quiet:where(.nui, .nui *) .pp-row { grid-template-columns: minmax(0, 1fr); background: transparent; color: var(--muted); }
+.pp-edit:where(.nui, .nui *) { grid-column: 3 / -1; display: grid; gap: 10px; }
+.pp-add:where(.nui, .nui *) { display: grid; gap: 12px; max-width: 860px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.pp-pick:where(.nui, .nui *) { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.pp-pick:where(.nui, .nui *) legend { font: 600 12.5px var(--font-ui); color: var(--ink-soft); padding: 0 0 6px; }
+.pp-check:where(.nui, .nui *) { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink); min-height: 28px; }
+.pp-check:where(.nui, .nui *) input { width: 18px; height: 18px; accent-color: var(--ink); }
+
+@media (max-width: 860px) {
+  .su-layout:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .su-steps:where(.nui, .nui *) ol { grid-auto-flow: column; grid-auto-columns: 1fr; overflow-x: auto; }
+  .su-stepbtn:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: 4px; padding: 6px 4px; }
+}
+@media (max-width: 760px) {
+  .pp-row:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr) auto; }
+  .pp-roles:where(.nui, .nui *), .pp-acts:where(.nui, .nui *), .pp-edit:where(.nui, .nui *) { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .su-card:where(.nui, .nui *) { padding: 18px 16px 16px; }
+  /* a screen meant for a phone: primary buttons are at least 44 px tall, in the same pill */
+  .su-btn:where(.nui, .nui *) { min-height: 44px; }
+  .su-footer:where(.nui, .nui *) .su-btn, .su-actions:where(.nui, .nui *) .su-btn, .su-homecard:where(.nui, .nui *) .su-btn { flex: 1 1 100%; }
+  .su-footer:where(.nui, .nui *) { justify-content: stretch; }
+  .su-footer:where(.nui, .nui *) .su-skip { order: 3; flex: 1 1 100%; min-height: 44px; text-align: center; }
+  .su-lab:where(.nui, .nui *) input { height: 44px; min-width: 0; width: 100%; }
+  .su-lab:where(.nui, .nui *) { width: 100%; }
+  .pp-check:where(.nui, .nui *) { min-height: 44px; }
+  .pp-acts:where(.nui, .nui *) .side-link { min-height: 44px; display: inline-flex; align-items: center; }
+}
+
+/* The audit view: a quiet list, the chips are the shell's own pills. */
+.au-bar:where(.nui, .nui *) { display: grid; gap: 12px; max-width: 860px; }
+.au-filters:where(.nui, .nui *) { display: flex; flex-wrap: wrap; gap: 8px; }
+.au-chip:where(.nui, .nui *) { height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 99px; background: transparent; color: var(--ink); font: 600 13px var(--font-ui); cursor: pointer; }
+.au-chip[aria-pressed="true"]:where(.nui, .nui *) { background: var(--ink); color: var(--paper); }
+.au-check:where(.nui, .nui *) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.au-list:where(.nui, .nui *) { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 860px; }
+.au-row:where(.nui, .nui *) { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; align-items: baseline; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.au-when:where(.nui, .nui *) { font: 600 12px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.au-what:where(.nui, .nui *) b { display: block; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.au-what:where(.nui, .nui *) small { display: block; margin-top: 2px; color: var(--muted); font: 400 12px var(--font-mono); overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .au-row:where(.nui, .nui *) { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .au-chip:where(.nui, .nui *) { min-height: 44px; }
+  .au-check:where(.nui, .nui *) .side-link { min-height: 44px; display: inline-flex; align-items: center; }
+}

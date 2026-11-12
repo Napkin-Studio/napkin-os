@@ -18,6 +18,7 @@ import type { JobNeed, LibraryItem } from '../../host/types'
 import { doorIsLive, doorLabel, firstNeeds, hello, homeEyebrow, needsLine, needsRows } from './model'
 import { changedBriefs } from '../gate/words'
 import { Ask } from '../../timesheet/Ask'
+import { SetupCard } from '../setup/SetupCard'
 import { useConsent } from '../../timesheet/consent'
 import '../gate/gate.css'
 import './home.css'
@@ -36,11 +37,15 @@ interface Props {
   onMap: () => void
   /** Opens the person's own timesheet day. */
   onTimesheet?: () => void
+  /** Opens the agency's setup flow: offered to an admin while a step is still to do. */
+  onSetup?: () => void
+  /** An admin's own pages: the people and roles, and the audit view. */
+  onAdmin?: (page: 'people' | 'audit') => void
   /** The role switcher (admins and demos): another role's home, or null for your own. */
   onSwitch: (role: string | null) => void
 }
 
-export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSwitch }: Props) {
+export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDocument, onMap, onTimesheet, onSetup, onAdmin, onSwitch }: Props) {
   // Asked once, here, at the person's first sign-in: only a signed-in person has a timesheet to ask about.
   const consent = useConsent()
   const top = useRef<HTMLDivElement>(null)
@@ -74,12 +79,19 @@ export function Home({ view, items, jobNeeds = [], first, apps, onDoor, onOpenDo
               </label>
             )}
             <button type="button" className="side-link" data-testid="open-map" onClick={onMap}>The map of the agency</button>
+            {onAdmin && view.roles.includes('admin') && !view.viewing && (
+              <>
+                <button type="button" className="side-link" data-testid="open-people" onClick={() => onAdmin('people')}>Your people and their roles</button>
+                <button type="button" className="side-link" data-testid="open-audit" onClick={() => onAdmin('audit')}>The audit view</button>
+              </>
+            )}
             {onTimesheet && consent !== null && <button type="button" className="side-link" data-testid="open-timesheet" onClick={onTimesheet}>Your timesheet</button>}
           </div>
         </section>
 
         <main className="hm-main">
           {consent === 'not_asked' && <Ask variant="card" onTimesheet={onTimesheet} />}
+          {onSetup && view.roles.includes('admin') && !view.viewing && <SetupCard onOpen={onSetup} />}
           {changedBriefs(items).map(i => (
             <div key={i.path} className="gate-alert" role="status" data-testid="alert">
               <i aria-hidden />

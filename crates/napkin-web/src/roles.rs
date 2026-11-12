@@ -583,6 +583,11 @@ pub enum Group {
     /// Naming who approves each stage of a job and by when (features/approval-route.clan):
     /// account service, and management.
     Approvals,
+    /// An agency's setup, import and audit view (features/agency-setup.clan): its admin only. A
+    /// person with no role is refused here, not let through.
+    Admin,
+    /// The control list of agencies: a napkin-admin of the home agency (checked where it is served).
+    Control,
     Open,
 }
 
@@ -595,6 +600,8 @@ impl Group {
             Group::ClientLink => &["account-service", "planning"],
             Group::Management => &["management"],
             Group::Approvals => &["account-service", "management"],
+            Group::Admin => &[ADMIN],
+            Group::Control => &["napkin-admin"],
             Group::Open => &[],
         }
     }
@@ -627,6 +634,9 @@ pub fn group_of(route: &str) -> Group {
         Some("client-brains" | "pitches") => Group::Brains,
         Some("proprietary") => Group::Proprietary,
         Some("dashboard") => Group::Management,
+        Some("audit" | "setup") => Group::Admin,
+        Some("agency") if rest.first().copied() == Some("accounts.tsv") => Group::Admin,
+        Some("control") => Group::Control,
         _ => Group::Open,
     }
 }
@@ -635,10 +645,13 @@ pub fn group_of(route: &str) -> Group {
 /// the signature is where per-client rules would go, so they do not need a new check)?
 /// A person with no roles is unrestricted; an admin or a demo opens everything.
 pub fn allowed(roles: &[String], route: &str, _client: Option<&str>) -> bool {
+    let group = group_of(route);
+    if matches!(group, Group::Admin | Group::Control) {
+        return roles.iter().any(|r| group.roles().contains(&r.as_str()));
+    }
     if roles.is_empty() || is_switcher(roles) {
         return true;
     }
-    let group = group_of(route);
     group == Group::Open || roles.iter().any(|r| group.roles().contains(&r.as_str()))
 }
 
@@ -1234,5 +1247,30 @@ mod tests {
                 "doors.ts names {id}, which no home lists"
             );
         }
+    }
+
+    #[test]
+    fn the_admin_routes_are_for_an_admin_only_and_never_for_no_role_or_a_demo() {
+        let admin = r(&["admin"]);
+        for route in [
+            "/t/x/audit",
+            "/t/x/setup/import/people",
+            "/t/x/audit/verify",
+        ] {
+            assert!(allowed(&admin, route, None), "{route}");
+            for who in [
+                r(&[]),
+                r(&["management"]),
+                r(&["demo"]),
+                r(&["planning", "traffic"]),
+            ] {
+                assert!(!allowed(&who, route, None), "{who:?} {route}");
+            }
+        }
+        // the control list needs napkin-admin; an agency admin is not one
+        assert!(!allowed(&admin, "/control/agencies", None));
+        assert!(allowed(&r(&["napkin-admin"]), "/control/agencies", None));
+        // the people list is open to everyone signed in (emails are cut in the handler)
+        assert!(allowed(&r(&["traffic"]), "/t/x/agency/people", None));
     }
 }

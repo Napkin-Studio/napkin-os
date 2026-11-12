@@ -117,9 +117,19 @@ pub async fn put_look(
     State(ctx): State<Arc<AppCtx>>,
     Tenant(tenant): Tenant,
     person: Option<Extension<Person>>,
+    account: Option<Extension<crate::auth::Account>>,
     Path(_t): Path<String>,
     Json(look): Json<Look>,
 ) -> ApiResult<Json<Look>> {
+    // Once an agency has a directory its look is its admin's to change.
+    if let Some(Extension(a)) = &account {
+        if ctx.directory.has(&a.agency) && !crate::agency::is_admin(a) {
+            return Err(ApiError::new(
+                403,
+                "Only an admin of the agency can change its look.",
+            ));
+        }
+    }
     check(&look).map_err(|m| ApiError::new(400, m))?;
     let agent = person
         .map(|Extension(p)| p.0)

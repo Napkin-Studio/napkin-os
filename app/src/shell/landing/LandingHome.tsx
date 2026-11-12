@@ -33,6 +33,9 @@ import { ClientView } from '../nui/ClientView'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
 import { Timesheet } from '../../timesheet/Timesheet'
+import { SetupFlow } from '../setup/SetupFlow'
+import { PeoplePage } from '../setup/PeoplePage'
+import { AuditPage } from '../setup/AuditPage'
 import './landing.css'
 
 const NONE: never[] = []
@@ -178,6 +181,12 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     )
   } else if (route.level === 'timesheet') {
     body = <Timesheet go={go} />
+  } else if (route.level === 'setup') {
+    body = <SetupFlow go={go} />
+  } else if (route.level === 'people') {
+    body = <PeoplePage go={go} />
+  } else if (route.level === 'audit') {
+    body = <AuditPage go={go} />
   } else if (route.level === 'job') {
     // One job's page, for any signed-in person: what they see of it is the server's (features/job-page.clan).
     // Back is Live jobs where there is a home to hold the door, the client desk where there is not.
@@ -215,6 +224,8 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         onOpenDocument={onOpenDocument}
         onMap={() => go({ level: 'map' })}
         onTimesheet={() => go({ level: 'timesheet' })}
+        onSetup={() => go({ level: 'setup' })}
+        onAdmin={page => go({ level: page })}
         onSwitch={role => go(role ? { level: 'home', as: role } : { level: 'agency' })}
       />
     )

@@ -98,6 +98,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/agent/prompt", post(agent_prompt))
         .route("/t/{tenant}/events", get(events))
         .merge(crate::timesheet::router())
+        .merge(crate::agency::router())
+        .merge(crate::audit::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.
@@ -281,6 +283,7 @@ fn answer(identity: &crate::tenant::Identity, out: crate::auth::SignIn) -> Respo
 }
 
 async fn sign_in(
+    State(ctx): Ctx,
     Extension(identity): Extension<Arc<crate::tenant::Identity>>,
     headers: header::HeaderMap,
     Json(b): Json<SignInBody>,
@@ -289,7 +292,7 @@ async fn sign_in(
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
     let name = b.sign_in_name();
-    let out = provider.sign_in(&name, &b.password).await;
+    let out = crate::agency::sign_in(&ctx, provider, &name, &b.password).await;
     // Every attempt, with where it came from: under the roster nothing else
     // proves who signed in, so this log is how a misuse would be traced.
     let outcome = match &out {
@@ -304,10 +307,15 @@ async fn sign_in(
         outcome,
         "sign-in"
     );
+    if !matches!(out, crate::auth::SignIn::NewPassword { .. }) {
+        let refused = matches!(out, crate::auth::SignIn::Refused(_));
+        crate::audit::note_sign_in(&ctx, &name, &crate::auth::client_ip(&headers), refused);
+    }
     answer(&identity, out)
 }
 
 async fn new_password(
+    State(ctx): Ctx,
     Extension(identity): Extension<Arc<crate::tenant::Identity>>,
     Json(b): Json<NewPasswordBody>,
 ) -> Response {
@@ -320,7 +328,7 @@ async fn new_password(
     let out = provider
         .new_password(&b.username, &b.session, &b.password)
         .await;
-    answer(&identity, out)
+    answer(&identity, crate::agency::decide(&ctx, out))
 }
 
 async fn sign_out(Extension(identity): Extension<Arc<crate::tenant::Identity>>) -> Response {
@@ -881,6 +889,18 @@ async fn make_client_link(
         exp,
     };
     let token = crate::links::sign(&ctx.link_key, &claims);
+    crate::audit::note(
+        &ctx,
+        &tenant,
+        crate::audit::NewLine {
+            who: person.clone(),
+            kind: crate::audit::LINK,
+            what: "Made a link for the client to open.".into(),
+            doc: Some(doc.clone()),
+            version: Some(claims.version.clone()).filter(|v| !v.is_empty()),
+            ..Default::default()
+        },
+    );
     Ok(Json(serde_json::json!({
         "ok": true, "id": id, "path": format!("/c/{token}"), "expires": expires,
         "version": claims.version, "client": { "name": body.name.trim(), "email": body.email.trim().to_lowercase() },
@@ -1086,11 +1106,14 @@ fn default_kind() -> String {
 async fn export_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<ExportRequestBody>,
 ) -> ApiResult<Json<Value>> {
     let kind = if body.kind == "pdf" { "pdf" } else { "html" };
+    let mut version = None;
     let composed = doc_session(&ctx, &tenant, &doc).and_then(|(_ws, session, _)| {
+        version = session.current_version().map(|v| v.as_str().to_string());
         let (html, filename) = session.compose_export(body.provenance, body.no_brand)?;
         Ok::<_, ApiError>((export::write_temp_html(&html)?, filename))
     });
@@ -1098,6 +1121,18 @@ async fn export_document(
         tracing::warn!(tenant = %tenant, doc = %doc, error = %e.0.message, "export could not be composed");
     })?;
     let handle = ctx.exports.stash(&tenant, tmp, filename.clone(), None);
+    crate::audit::note(
+        &ctx,
+        &tenant,
+        crate::audit::NewLine {
+            who: person,
+            kind: crate::audit::EXPORT,
+            what: format!("Exported {filename} as {kind}."),
+            doc: Some(doc.clone()),
+            version,
+            ..Default::default()
+        },
+    );
     Ok(Json(serde_json::json!({
         "ok": true, "handle": handle, "filename": filename, "kind": kind,
     })))
