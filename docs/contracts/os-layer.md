@@ -563,7 +563,11 @@ names and shapes below are that branch's, so it merges onto them.
    6); the shell shows the notice and offers **Update**, which takes the
    newer version (`POST /attach/update`, or `POST /upstream/update
    {document_id}`). An update replaces the frozen copy and adds only what the
-   document does not hold yet.
+   document does not hold yet. A linked entry in the store also says what the
+   link brought in: `holds: {facts, findings}`, how many of the source's
+   facts and findings this document holds now (merged by id). Brief Maker
+   says it in its "Research linked" notice. *Added 2026-11-12
+   (features/brief-link-redraft.clan).*
 4. **Decisions on both sides.** The document gets one decision per hop,
    `action: attach | update_from_<source noun> | replace | detach`, kind
    `edit`, as the person in `Ctx`, targeting `<this id>#upstream.<source

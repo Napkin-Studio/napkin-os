@@ -1454,6 +1454,10 @@ mod upstream {
         assert_eq!(e["status"], "current");
         assert_eq!(e["taken"], 1);
         assert_eq!(e["title"], "Lúnasa 0.0 launch");
+        // What the link brought in, for the brief to say (features/brief-link-redraft.clan).
+        let facts = e["holds"]["facts"].as_u64().unwrap();
+        let findings = e["holds"]["findings"].as_u64().unwrap();
+        assert!(facts > 0 && findings > 0, "{e}");
 
         let rel = brief.get("/related");
         assert_eq!(rel["upstream"][0]["how"], "linked");

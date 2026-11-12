@@ -4686,3 +4686,86 @@ test('reloading mid-ask resumes it under its fact; one lost to a restart says so
   assert.match(h, /Not answered: This run was interrupted \(the service restarted\)\. Run it again\./)
   assert.match(h, /data-act="rq-retry" data-i="0">Ask again<\/button>/)
 })
+
+// ── a research linked into an existing brief (features/brief-link-redraft.clan) ──
+// The notice says what came in and offers one press to write the brief again with it: the same
+// Draft it again (draftNow), unarmed. Not now puts it off; a locked brief never shows it.
+type LinkApi = {
+  linkNoteHtml(): string; linkRewrite(): void; linkLater(): void; linkRunEnded(j: { state: string }): void; linkedNew(): { document_id: string }[]
+}
+function linkPage(o: { locked?: boolean; seen?: Record<string, unknown>; taken?: number; phase?: string } = {}) {
+  const data: Record<string, unknown> = { upstream: { r1: { campaign: { name: 'Oat' } } }, link_notice: o.seen, background: 'Old background.', project_name: 'Barista comeback IE' }
+  const patches: { path: string; value: unknown }[] = []
+  const drafts: string[] = []
+  const LINK = { run: null, done: null, shown: false, off: false }
+  const UP = { res: { upstream: [{ document_id: 'r1', how: 'linked', noun: 'report', title: 'Oatly Barista · Ireland', taken: o.taken ?? 1, linked_at: '2026-11-12T10:00:00Z', holds: { facts: 55, findings: 2 } }] } }
+  const FIELDS = [{ key: 'project_name', label: 'Project', type: 'text' }, { key: 'background', label: 'Background', type: 'text' }]
+  const api = lift<LinkApi>(BM, ['linkSeen', 'linkedNew', 'linkMark', 'linkRewrite', 'linkLater', 'linkRunEnded', 'linkChanges', 'linkNoteHtml'], {
+    LINK, UP, FIELDS, arr, esc, listWords: listJoin,
+    get: (k: string) => data[k],
+    patch: (path: string, value: unknown) => { patches.push({ path, value }); data[path] = value; return Promise.resolve({ ok: true }) },
+    isBrandKit: () => false, approveLocked: () => !!o.locked, draftLive: () => false, phase: o.phase ?? 'doc',
+    draftNow: (p: string) => { drafts.push(p) }, renderLinkNote: () => {},
+    valToText: (v: unknown) => (v == null ? '' : String(v)), partCites: (k: string) => (k === 'background' ? ['f_1', 'f_2', 'fi_1'] : []),
+    isLocked: () => false, isHuman: (d: unknown) => d === 'human', decisionsFor: (k: string) => (k === 'project_name' ? ['human'] : ['agent']),
+  })
+  return { api, data, patches, drafts, LINK }
+}
+
+test('after a research is linked, the brief says what came in and offers one rewrite', () => {
+  const { api } = linkPage()
+  const h = api.linkNoteHtml()
+  assert.match(h, /Research linked: Oatly Barista · Ireland/)
+  assert.match(h, /55 facts and 2 findings came in\. The brief was written without them\./)
+  assert.match(h, /data-lk="go">Rewrite with the research</)
+  assert.match(h, /data-lk="later">Not now</)
+  assert.match(h, /Answers you already gave are used, not asked again\./)
+  assert.match(BM, /<div class="upnote lknote" id="linkNote" role="status" hidden><\/div>\s*<div class="upnote" id="upNote"/, 'first in the side panel')
+})
+
+test('Rewrite with the research runs the draft once, with no arming, and says what changed after', async () => {
+  const { api, data, patches, drafts, LINK } = linkPage()
+  api.linkRewrite(); api.linkRewrite()
+  await new Promise(r => setTimeout(r, 0))
+  assert.deepEqual(drafts, [''], 'the same draftNow Draft it again runs, once, on one press')
+  assert.deepEqual(patches.map(p => p.path), ['link_notice'])
+  assert.deepEqual(data.link_notice, { r1: { taken: 1, how: 'used' } }, 'used: it does not come back on the next visit')
+  assert.equal(api.linkNoteHtml(), '', 'nothing while the rewrite runs')
+  data.background = 'The brand arrived in Ireland in 2016.'
+  api.linkRunEnded({ state: 'done' })
+  assert.equal(LINK.run, null)
+  const h = api.linkNoteHtml()
+  assert.match(h, /Rewritten with Oatly Barista · Ireland/)
+  assert.match(h, /Background now rests on the research \(2 facts cited\)\. Project kept your words\./)
+  assert.match(h, /data-lk="show">Show what changed</)
+  // the redraft itself is the bar's: draftNow, and the two-press arming stays only on the bar's button
+  assert.match(fn(BM, 'linkRewrite'), /draftNow\(''\)/)
+  assert.doesNotMatch(fn(BM, 'linkRewrite'), /REDRAFT_ARMED|setTimeout/)
+})
+
+test('a rewrite that stops says nothing more', () => {
+  const { api } = linkPage()
+  api.linkRewrite()
+  api.linkRunEnded({ state: 'failed' })
+  assert.equal(api.linkNoteHtml(), '')
+})
+
+test('Not now puts it off; it comes back when the research is taken again', async () => {
+  const { api, data, drafts } = linkPage()
+  api.linkLater()
+  await new Promise(r => setTimeout(r, 0))
+  assert.deepEqual(data.link_notice, { r1: { taken: 1, how: 'later' } })
+  assert.equal(api.linkNoteHtml(), '')
+  assert.deepEqual(drafts, [])
+  // taken again (an update): the newer version is new to the brief
+  assert.match(linkPage({ seen: { r1: { taken: 1, how: 'later' } }, taken: 2 }).api.linkNoteHtml(), /Research linked/)
+  assert.equal(linkPage({ seen: { r1: { taken: 2, how: 'used' } }, taken: 2 }).api.linkNoteHtml(), '')
+})
+
+test('a locked brief, or one not on its sheet, never shows it', () => {
+  assert.equal(linkPage({ locked: true }).api.linkNoteHtml(), '')
+  assert.equal(linkPage({ phase: 'intake' }).api.linkNoteHtml(), '')
+  const locked = linkPage({ locked: true })
+  locked.api.linkRewrite()
+  assert.deepEqual(locked.drafts, [], 'and pressing nothing on it runs nothing')
+})
