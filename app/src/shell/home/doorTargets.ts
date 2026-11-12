@@ -17,6 +17,7 @@ export const DOOR_TARGETS: Readonly<Record<string, DoorTarget>> = {
   'research': { app: 'ie.napkin.campaign-research' },
   'presentations': { app: 'ie.napkin.deck-maker' },
   'script-editor': { app: 'ie.napkin.script-editor' },
+  'ideas': { app: 'ie.napkin.idea-room' },
   'clients': { page: 'clients', built: true },
   'agency-dashboard': { page: 'agency-dashboard', built: true },
   // Who approves each stage and by when (record approval-route).

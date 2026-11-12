@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Idea room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet" />
+<style>
+  /* The Idea room, in the Napkin Studio OS design language: the tokens, the warm paper and the pill buttons are
+     Brief Maker's and the Visual brief's, so the three read as one family. The team's cards first, then routes. */
+  :root{
+    --ag-base:#515BFF; --ag-acc:#C8CBFF; --ag-base-ink:#FFFFFF; --ag-acc-ink:#141413;
+    --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink);
+    --desk:color-mix(in srgb,var(--ag-base) 6%,#F6F1E7);
+    --paper:color-mix(in srgb,var(--ag-base) 2.5%,#FFFDF8);
+    --paper-2:#F3ECDC; --card:#FFFFFF;
+    --ink:#141413; --ink-soft:#2A2620; --muted:#6D655A; --faint:#9A9082;
+    --line:color-mix(in srgb,var(--ag-base) 10%,#E2D9C8); --line-strong:#2A2620;
+    --warn:#B45309; --warn-soft:#FEF3DC; --ok:#14633A; --ok-soft:#E6F6EC; --alert:#B53A20;
+    --font-ui:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --font-serif:"Newsreader",Georgia,"Iowan Old Style",serif;
+    --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow-paper:0 1px 0 rgba(255,255,255,.75) inset,0 8px 24px -8px rgba(50,38,18,.10),0 1px 3px rgba(50,38,18,.08);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+      --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+      --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+      --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+      --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+      --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6;
+      --warn:#E09A4B; --warn-soft:#3A2A18; --ok:#5DBB83; --ok-soft:#1C2E23; --alert:#F08A6E;
+    }
+  }
+  :root[data-color-scheme="dark"]{
+    --ag-act:var(--ag-acc); --ag-act-ink:#141413;
+    --desk:color-mix(in srgb,var(--ag-base) 12%,#121110);
+    --paper:color-mix(in srgb,var(--ag-base) 9%,#1B1A18);
+    --paper-2:#262320; --card:color-mix(in srgb,var(--ag-base) 7%,#201E1B);
+    --ink:#EFE9DE; --ink-soft:#D6CEC0; --muted:#A49B8D; --faint:#7B7367;
+    --line:color-mix(in srgb,var(--ag-base) 16%,#34302A); --line-strong:#CFC6B6;
+    --warn:#E09A4B; --warn-soft:#3A2A18; --ok:#5DBB83; --ok-soft:#1C2E23; --alert:#F08A6E;
+  }
+  @media (prefers-color-scheme:dark){ :root[data-agency-accent="line"]:not([data-color-scheme="light"]){ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); } }
+  :root[data-agency-accent="line"][data-color-scheme="dark"]{ --ag-act:var(--ag-base); --ag-act-ink:var(--ag-base-ink); }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--desk);color:var(--ink);font:15px/1.55 var(--font-ui);-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p,ul,dl,dd,figure{margin:0;padding:0}
+  ul{list-style:none}
+  button,textarea,input{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--ag-act);outline-offset:2px}
+
+  .desk{display:grid;gap:28px;max-width:860px;margin:0 auto;padding:28px 16px 72px}
+  .eyebrow{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .eyebrow b{font-weight:500;color:var(--ink)}
+  .head{display:grid;gap:10px}
+  .title{font:400 clamp(34px,5.4vw,52px)/1.04 var(--font-serif);letter-spacing:-.012em;overflow-wrap:anywhere}
+  .lede{font-size:17px;color:var(--ink-soft);max-width:60ch}
+
+  /* what every idea answers: the brief's own words, set like a quotation on warm paper */
+  .brief{background:var(--paper);border:1px solid var(--line);border-radius:2px;box-shadow:var(--shadow-paper);padding:30px 34px;display:grid;gap:18px}
+  .brief .q{font:400 clamp(21px,3vw,27px)/1.3 var(--font-serif);color:var(--ink);overflow-wrap:anywhere}
+  .brief .p{font:500 16px/1.45 var(--font-ui);color:var(--ink-soft)}
+  .brief dt{font:500 11px/1.9 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .brief dd+dt{margin-top:4px}
+  .brief .blank{color:var(--muted)}
+
+  /* the gate: how many of the team's own cards are on the table, and what that opens */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;display:grid;gap:12px}
+  .card h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .count{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .count .n{font:400 46px/1 var(--font-serif)}
+  .count .of{font:500 13px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .pips{display:flex;gap:6px;margin-left:auto}
+  .pips i{width:22px;height:30px;border:1.5px solid var(--line-strong);border-radius:2px;background:transparent}
+  .pips i.on{background:var(--ink);border-color:var(--ink)}
+  .gline{font-size:16px;color:var(--ink-soft);max-width:62ch}
+  .gline b{font-weight:600;color:var(--ink)}
+  .small{font-size:13px;color:var(--muted)}
+  .stamp{display:inline-flex;align-items:center;gap:8px;width:max-content;max-width:100%;padding:6px 12px;border-radius:999px;background:var(--ok-soft);color:var(--ok);font:600 12px/1 var(--font-ui)}
+  .stamp i{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .stamp.off{background:var(--paper-2);color:var(--muted)}
+
+  /* the cards */
+  .sec{display:grid;gap:14px}
+  .sec>h2{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:12px}
+  .composer{display:grid;gap:8px}
+  .composer label{font:500 13px/1.4 var(--font-ui);color:var(--ink-soft)}
+  textarea,input[type=text]{width:100%;padding:10px 12px;background:var(--card);border:1px solid var(--line-strong);border-radius:6px;line-height:1.5}
+  textarea{min-height:84px;resize:vertical}
+  .composer .row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .ideas{display:grid;gap:12px}
+  .idea{background:var(--paper);border:1px solid var(--line);border-radius:2px;box-shadow:var(--shadow-paper);padding:20px 24px;display:grid;gap:10px}
+  .idea-text{font:400 clamp(19px,2.4vw,22px)/1.35 var(--font-serif);overflow-wrap:anywhere}
+  .meta{font:500 11px/1.6 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .acts{display:flex;gap:8px;flex-wrap:wrap;margin-left:-10px;align-items:center}
+  .comments{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+  .comments li{font-size:14px;color:var(--ink-soft);overflow-wrap:anywhere}
+  .comments li b{font-weight:600;color:var(--ink)}
+  .empty{padding:26px 24px;border:1px dashed var(--line-strong);border-radius:2px;color:var(--muted);font-size:15px}
+
+  /* routes */
+  .routes{display:grid;gap:14px}
+  .route{background:var(--card);border:1px solid var(--line-strong);border-radius:2px;padding:22px 24px;display:grid;gap:12px}
+  .route.chosen{border-width:2px;border-color:var(--ok)}
+  .route h3{font:400 clamp(24px,3.4vw,30px)/1.1 var(--font-serif);overflow-wrap:anywhere}
+  .route .bet{font-size:16px;color:var(--ink-soft);max-width:60ch}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:inline-flex;align-items:center;min-height:32px;padding:4px 12px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;font:500 13px/1.3 var(--font-ui);cursor:pointer;text-align:left;max-width:100%}
+  .chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .chip.fixed{cursor:default;border-color:var(--line)}
+  .builder-row{display:grid;gap:8px;padding:16px 0;border-top:1px solid var(--line)}
+  .builder-row:first-child{border-top:0;padding-top:0}
+  .builder-row .lab{font:500 11px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .clash{background:var(--warn-soft);border:1px solid var(--warn);border-radius:6px;padding:14px 16px;display:grid;gap:6px;font-size:14px}
+  .clash b{font-weight:600}
+
+  /* buttons: the shell's pills. A primary on a phone is at least 44 px tall. */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 16px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--ink);font:500 13px/1 var(--font-ui);cursor:pointer;white-space:nowrap}
+  .btn:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+  .btn.primary{background:var(--ag-act);color:var(--ag-act-ink);border-color:var(--ag-act)}
+  .btn.primary:hover{background:color-mix(in srgb,var(--ag-act) 88%,#000)}
+  .btn.primary[aria-disabled="true"]{background:transparent;color:var(--muted);border:1px dashed var(--muted);cursor:not-allowed}
+  .btn.quiet{border-color:transparent;color:var(--muted);min-height:28px;padding:0 10px}
+  .btn.quiet:hover{color:var(--ink)}
+  .btn.quiet[aria-pressed="true"]{color:var(--ink);font-weight:600}
+  .btn.big{min-height:44px;padding:0 22px;font-size:14px}
+  .why{font-size:13px;color:var(--muted);margin-top:6px}
+  @media (max-width:640px){
+    .btn.primary{min-height:44px;width:100%} .btn{min-height:44px} .btn.quiet{min-height:44px} .chip{min-height:44px}
+    .brief{padding:22px 20px} .card{padding:18px 18px} .idea{padding:18px 18px} .route{padding:18px 18px}
+    .pips{margin-left:0;width:100%} .pips i{flex:1;width:auto}
+  }
+
+  /* the nine screen states are the shell's (states.css): this page asks the shell to draw the one it is in (clan:bar) and does not draw its own */
+  .err{color:var(--alert);font-size:13px}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,12px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:5}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  @media (prefers-reduced-motion:reduce){ .toast{transition:none} }
+</style>
+</head>
+<body>
+<div class="desk" data-where="idea-room">
+  <header class="head">
+    <p class="eyebrow" id="eyebrow">Idea room</p>
+    <h1 class="title">Ideas</h1>
+    <p class="lede" id="lede">The team goes first. Then the room makes routes, and the creative director picks one.</p>
+  </header>
+  <section class="brief" id="brief" aria-label="What every idea answers"></section>
+  <section class="card" id="gate" data-testid="ai-gate" aria-label="The team goes first"></section>
+  <section class="sec" id="cards" aria-label="Cards"></section>
+  <section class="sec" id="routes" aria-label="Routes"></section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- @napkin:clan-fields -->
+<script>
+(function(){
+  'use strict';
+  var clanScheme = navigator.userAgent.indexOf('Windows') >= 0 ? 'http://clan.localhost' : 'clan://localhost';
+
+  // ── pure helpers (the unit tests run the page as it ships) ───────────────────────────────────────
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function obj(v){ return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+  function num(id){ var m = /(\d+)$/.exec(String(id)); return m ? Number(m[1]) : 0; }
+  // A person's id is their sign-in (`maeve@wk`); the page shows the part before the at sign, as a name.
+  function nameOf(id){
+    var s = String(id || '').replace(/^human:/, '').split('@')[0].replace(/[._-]+/g, ' ').trim();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Someone';
+  }
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function dayOf(at){ var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(at || '')); return m && MONTHS[Number(m[2]) - 1] ? Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] : ''; }
+  // The cards in the order they were put on the table.
+  function cardList(data){
+    var c = obj(obj(data).cards);
+    return Object.keys(c).sort(function(a, b){ return num(a) - num(b); }).map(function(id){ var x = obj(c[id]); x.id = id; return x; });
+  }
+  // Votes are counted per card. The page never lists who voted and never counts by person.
+  function votesOf(card){ return arr(card && card.votes).length; }
+  function votedBy(card, me){ return !!me && arr(card && card.votes).indexOf(me) >= 0; }
+  function routeList(data){
+    var r = obj(obj(data).routes);
+    return Object.keys(r).sort(function(a, b){ return num(a) - num(b); }).map(function(id){ var x = obj(r[id]); x.id = id; return x; });
+  }
+  function routesOut(data){ return arr(obj(data).routes_out); }
+  function routeOfCard(data, cardId){
+    var hit = routeList(data).filter(function(r){ return arr(r.cards).indexOf(cardId) >= 0; });
+    return hit.length ? hit[0].name || hit[0].id : '';
+  }
+  // The brief this room answers: the copy it carries under upstream (read-only).
+  function briefOf(data){
+    var ups = obj(obj(data).upstream), out = { insight: '', proposition: '', name: '' };
+    Object.keys(ups).forEach(function(k){
+      var b = obj(ups[k]);
+      if(!out.insight && b.insight) out.insight = String(b.insight);
+      if(!out.proposition && b.single_minded_proposition) out.proposition = String(b.single_minded_proposition);
+      if(!out.name && (b.project_name || b.client)) out.name = String(b.project_name || b.client);
+    });
+    return out;
+  }
+  function toGoWords(n){
+    if(n <= 0) return '';
+    return n === 1 ? 'One card to go' : (['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine'][n] || String(n)) + ' cards to go';
+  }
+  function cardsWord(n){ return n === 1 ? 'card' : 'cards'; }
+  // Changed brief: the shell's words (components/states/words.ts) for this state.
+  function changedWords(b){
+    var to = b && b.to ? 'v' + b.to : '', from = b && b.from ? 'v' + b.from : '';
+    return {
+      line: to && from ? 'The brief changed to ' + to + '. This work was made from ' + from + '.' : 'The brief changed while you were typing.',
+      button: to ? 'Update to brief ' + to : 'Update to the new brief'
+    };
+  }
+  function clashLine(c){
+    function side(s){ return String(s && s.agent) + ' wrote ' + JSON.stringify(s && s.value); }
+    return c.key + ': ' + side(c.left) + ', ' + side(c.right);
+  }
+
+  // ── the page ────────────────────────────────────────────────────────────────────────────────────
+  var S = {
+    room: null, me: null, composer: '', commentFor: null, commentText: '', notes: {}, openEdit: null, edit: {},
+    builder: [{ name: '', bet: '', cards: [] }, { name: '', bet: '', cards: [] }, { name: '', bet: '', cards: [] }],
+    earlyOpen: false, early: '', reopenOpen: false, reopen: '', error: '', clashes: [], busy: false, saveFailed: false
+  };
+  function $(id){ return document.getElementById(id); }
+  function data(){ return (S.room && S.room.data) || (window.__CLAN__ && window.__CLAN__.data) || {}; }
+  function gate(){ return (S.room && S.room.gate) || { team_cards: 0, needed: 5, to_go: 5, open: false, routes_out: [] }; }
+  function brief(){ return (S.room && S.room.brief) || null; }
+  function toast(m, ms){ var t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function(){ t.classList.remove('on'); }, ms || 2600); }
+  function isCD(){ var g = gate(); return !!g.creative_director && !!S.me && S.me === g.creative_director; }
+
+  // Writes are reported to the shell the way the bridge reports a patchData (clan:write), and sent again when the
+  // shell asks (clan:retry): a failed write keeps its place, the typed words stay on the page, and Try again saves them.
+  var pending = {}, seq = 0;
+  function report(w){
+    try { if(window.parent !== window) window.parent.postMessage({ type: 'clan:write', v: 1, id: w.id, state: w.state, field: w.field, text: w.text }, '*'); } catch(e){}
+  }
+  function send(entry){
+    if(entry.inflight) return entry.inflight;
+    entry.inflight = fetch(clanScheme + entry.path, { method: 'POST', body: JSON.stringify(entry.body) })
+      .then(function(r){
+        return r.json().catch(function(){ return { ok: false, error: 'The server sent something unreadable.' }; }).then(function(j){ return { status: r.status, j: j || {} }; });
+      })
+      .then(function(res){
+        entry.inflight = null;
+        var ok = res.status >= 200 && res.status < 300 && res.j.ok !== false;
+        if(ok){
+          delete pending[entry.id]; S.saveFailed = false;
+          report({ id: entry.id, state: 'saved', field: entry.field, text: entry.text });
+          if(entry.done) entry.done(res.j);
+          return res.j;
+        }
+        if(res.status >= 500){
+          report({ id: entry.id, state: 'failed', field: entry.field, text: entry.text });
+          S.saveFailed = true;
+        } else {
+          // The host refused it for a reason a person can read: say it here, and do not offer a retry that would be refused again.
+          delete pending[entry.id];
+          S.error = res.j.error || 'The room did not take that.';
+          drawAll();
+        }
+        return { ok: false, status: res.status };
+      }, function(){
+        entry.inflight = null; S.saveFailed = true;
+        report({ id: entry.id, state: 'failed', field: entry.field, text: entry.text });
+        return { ok: false, status: 0 };
+      });
+    return entry.inflight;
+  }
+  function write(path, body, field, text, done){
+    var id = 'ir' + Date.now().toString(36) + (++seq);
+    var entry = { id: id, path: path, body: body, field: field, text: text || '', done: done, inflight: null };
+    pending[id] = entry; S.error = '';
+    return send(entry).then(function(j){ if(j && j.ok !== false) return load(); });
+  }
+  window.addEventListener('message', function(e){
+    var m = e.data;
+    if(m && m.type === 'clan:retry' && typeof m.id === 'string' && pending[m.id]) send(pending[m.id]).then(function(j){ if(j && j.ok !== false) return load(); });
+    else if(m && m.type === 'clan:bar?') sendBar(true);
+    else if(m && m.type === 'clan:bar-action' && m.id === 'state-update') updateBrief();
+  });
+
+  // ── drawing ─────────────────────────────────────────────────────────────────────────────────────
+  function drawHead(){
+    var b = briefOf(data()), br = brief();
+    $('eyebrow').innerHTML = 'Idea room' + (b.name ? ' · <b>' + esc(b.name) + '</b>' : '');
+  }
+  // Changed brief is the shell's state, drawn in its strip above this page: the page says what changed (clan:bar)
+  // and answers the one button (clan:bar-action, state-update), which takes the brief's newer version.
+  var BAR_LAST = '';
+  function sendBar(force){
+    if(window.parent === window) return;
+    var br = brief(), items = [];
+    if(br && br.changed){
+      if(br.from && br.to) items.push({ kind: 'state', state: 'changed-brief', from: 'v' + br.from, to: 'v' + br.to, changes: 'The insight or the proposition may have moved. Your cards and routes stay as they are.' });
+    }
+    var k = JSON.stringify(items);
+    if(!force && k === BAR_LAST) return;
+    BAR_LAST = k;
+    try { window.parent.postMessage({ type: 'clan:bar', v: 1, items: items }, '*'); } catch(e){}
+  }
+
+  function drawBrief(){
+    var b = briefOf(data());
+    $('brief').innerHTML = '<dl><dt>The insight every idea answers</dt><dd class="q" data-testid="brief-insight">' + (b.insight ? esc(b.insight) : '<span class="blank">The brief names no insight.</span>') + '</dd>'
+      + '<dt>The proposition</dt><dd class="p" data-testid="brief-proposition">' + (b.proposition ? esc(b.proposition) : '<span class="blank">The brief names no proposition.</span>') + '</dd></dl>';
+  }
+  function pips(n, of){
+    var h = ''; for(var i = 0; i < of; i++) h += '<i class="' + (i < n ? 'on' : '') + '"></i>';
+    return '<div class="pips" aria-hidden="true">' + h + '</div>';
+  }
+  function drawGate(){
+    var g = gate(), n = g.team_cards || 0, need = g.needed || 5, early = g.opened_via === 'early';
+    var h = '<h2>The team goes first</h2><div class="count"><span class="n" data-testid="team-count">' + n + '</span><span class="of">of ' + need + ' team ' + cardsWord(need) + '</span>' + pips(n, need) + '</div>';
+    if(!g.open){
+      h += '<p class="gline" data-testid="to-go"><b>' + esc(toGoWords(g.to_go)) + '.</b> The AI shows no idea until the team has put ' + need + ' of its own on the table, or the creative director opens it early.</p>';
+      if(isCD()){
+        if(S.earlyOpen){
+          h += '<div class="composer"><label for="earlyWhy">Why open it before the team has its ' + need + '?</label><textarea id="earlyWhy" rows="2">' + esc(S.early) + '</textarea>'
+            + '<div class="row"><button type="button" class="btn primary big" id="openEarly" aria-disabled="' + (S.early.trim() ? 'false' : 'true') + '" data-open-early="1">Open the room early</button>'
+            + '<button type="button" class="btn quiet" data-cancel-early="1">Cancel</button></div>'
+            + (S.early.trim() ? '' : '<p class="why">Say why. The reason is kept with your name.</p>') + '</div>';
+        } else {
+          h += '<div><button type="button" class="btn" data-early="1">Open early</button></div>';
+        }
+      } else if(g.creative_director){
+        h += '<p class="small">Only ' + esc(nameOf(g.creative_director)) + ', the creative director on the brief, can open it early.</p>';
+      }
+    } else if(early){
+      var a = obj(obj(data()).ai_open);
+      h += '<p class="gline"><b>Opened early by ' + esc(nameOf(g.opened_by)) + '.</b> ' + (a.reason ? 'Their reason: ' + esc(a.reason) : '') + '</p>'
+        + '<p><span class="stamp"><i aria-hidden="true"></i>Open</span></p><p class="small">AI ideas are off for this room for now. The team\'s cards and the routes work without them.</p>';
+    } else {
+      h += '<p class="gline"><b>The team\'s ' + need + ' cards are in.</b> The room is open.</p>'
+        + '<p><span class="stamp"><i aria-hidden="true"></i>Open</span></p><p class="small">AI ideas are off for this room for now. The team\'s cards and the routes work without them.</p>';
+    }
+    $('gate').innerHTML = h;
+  }
+  function ideaHtml(c){
+    var routeName = routeOfCard(data(), c.id), n = votesOf(c), mine = votedBy(c, S.me), cm = arr(c.comments), frozen = routesOut(data()).length > 0;
+    var h = '<article class="idea" data-testid="card" data-card="' + esc(c.id) + '"><p class="idea-text">' + esc(c.text) + '</p>'
+      + '<p class="meta">' + esc(nameOf(c.by)) + (c.at ? ' · ' + esc(dayOf(c.at)) : '') + (routeName ? ' · in route ' + esc(routeName) : '') + '</p>';
+    if(c.kind !== 'banned' && !frozen){
+      h += '<div class="acts"><button type="button" class="btn quiet" data-vote="' + esc(c.id) + '" aria-pressed="' + (mine ? 'true' : 'false') + '" aria-label="Vote for this card, ' + n + (n === 1 ? ' vote' : ' votes') + '"><span data-testid="votes">' + n + '</span>&nbsp;' + (n === 1 ? 'vote' : 'votes') + '</button>'
+        + '<button type="button" class="btn quiet" data-comment="' + esc(c.id) + '">Comment' + (cm.length ? ' (' + cm.length + ')' : '') + '</button></div>';
+    } else if(n){
+      h += '<p class="small">' + n + (n === 1 ? ' vote' : ' votes') + '</p>';
+    }
+    if(cm.length) h += '<ul class="comments">' + cm.map(function(x){ return '<li><b>' + esc(nameOf(x.by)) + '</b> ' + esc(x.text) + '</li>'; }).join('') + '</ul>';
+    if(S.commentFor === c.id && !frozen){
+      h += '<div class="composer"><label for="cm">Your comment</label><textarea id="cm" rows="2">' + esc(S.commentText) + '</textarea><div class="row"><button type="button" class="btn primary" data-comment-save="' + esc(c.id) + '">Add comment</button><button type="button" class="btn quiet" data-comment-cancel="1">Cancel</button></div></div>';
+    }
+    return h + '</article>';
+  }
+  function drawCards(){
+    var list = cardList(data()), frozen = routesOut(data()).length > 0, can = S.composer.trim().length > 0;
+    var h = '<h2><span>Cards</span><span data-testid="card-count">' + list.length + '</span></h2>';
+    if(!frozen){
+      h += '<div class="composer"><label for="cardInput">Your idea, in your own words</label>'
+        + '<textarea id="cardInput" data-testid="card-input" rows="3" maxlength="600" placeholder="Say it the way you would say it to the team.">' + esc(S.composer) + '</textarea>'
+        + '<div class="row"><button type="button" class="btn primary big" id="addCard" aria-disabled="' + (can ? 'false' : 'true') + '" data-add-card="1">Add card</button><span class="small">' + S.composer.length + ' of 600</span></div>'
+        + (can ? '' : '<p class="why">Write the idea, then add it. Each card is yours and carries your name.</p>') + '</div>';
+    } else {
+      h += '<p class="small">Routes are out, so the cards are held as they are until the routes are merged.</p>';
+    }
+    h += '<div class="ideas" id="ideas">' + (list.length ? list.map(ideaHtml).join('') : '<div class="empty" data-state="empty" data-testid="cards-empty">No cards yet. The first idea is one the team writes, not one the AI offers.</div>') + '</div>';
+    if(S.error) h += '<p class="err" role="alert" id="roomError">' + esc(S.error) + '</p>';
+    $('cards').innerHTML = h;
+  }
+  function chipsHtml(selected, attr, ids){
+    var all = cardList(data());
+    return '<div class="chips" role="group" aria-label="Cards in this route">' + all.map(function(c){
+      var on = selected.indexOf(c.id) >= 0;
+      return '<button type="button" class="chip" aria-pressed="' + (on ? 'true' : 'false') + '" ' + attr + '="' + esc(c.id) + '"' + (ids !== undefined ? ' data-row="' + ids + '"' : '') + '>' + esc(c.text.length > 54 ? c.text.slice(0, 53) + '...' : c.text) + '</button>';
+    }).join('') + '</div>';
+  }
+  function builderHtml(){
+    var g = gate(), named = S.builder.filter(function(r){ return r.name.trim(); }).length, ok = g.open && named >= 2 && !S.busy;
+    var h = '<div class="card"><h2>Start routes</h2><p class="gline">A route is one bet made from some of the cards. Each route is worked on by itself, then folded back together. Name at least two.</p>';
+    S.builder.forEach(function(r, i){
+      h += '<div class="builder-row" data-row="' + i + '"><span class="lab">Route ' + (i + 1) + '</span>'
+        + '<input type="text" data-b-name="' + i + '" aria-label="Name of route ' + (i + 1) + '" maxlength="80" placeholder="A name for the bet" value="' + esc(r.name) + '">'
+        + '<textarea rows="2" data-b-bet="' + i + '" aria-label="The bet of route ' + (i + 1) + '" maxlength="400" placeholder="The bet, in one sentence">' + esc(r.bet) + '</textarea>'
+        + chipsHtml(r.cards, 'data-b-card', i) + '</div>';
+    });
+    h += '<div><button type="button" class="btn primary big" id="startRoutes" aria-disabled="' + (ok ? 'false' : 'true') + '" data-start-routes="1">Start routes</button></div>'
+      + (ok ? '' : '<p class="why">' + (g.open ? 'Name at least two routes.' : 'Routes start once the room is open.') + '</p>') + '</div>';
+    return h;
+  }
+  function routeOutHtml(r){
+    var ed = S.openEdit === r.id, e = S.edit[r.id] || { name: r.name || '', bet: r.bet || '' }, notes = arr(r.notes), cards = cardList(data()).filter(function(c){ return arr(r.cards).indexOf(c.id) >= 0; });
+    var h = '<article class="route" data-testid="route" data-route="' + esc(r.id) + '" data-phase="out"><span class="meta">In progress · version ' + esc(r.version || 1) + '</span>';
+    if(ed){
+      h += '<div class="composer"><label for="rn-' + esc(r.id) + '">Name</label><input type="text" id="rn-' + esc(r.id) + '" data-r-name="' + esc(r.id) + '" maxlength="80" value="' + esc(e.name) + '">'
+        + '<label for="rb-' + esc(r.id) + '">The bet</label><textarea rows="2" id="rb-' + esc(r.id) + '" data-r-bet="' + esc(r.id) + '" maxlength="400">' + esc(e.bet) + '</textarea>'
+        + '<div class="row"><button type="button" class="btn primary" data-r-save="' + esc(r.id) + '">Save the route</button><button type="button" class="btn quiet" data-r-cancel="1">Cancel</button></div></div>';
+    } else {
+      h += '<h3>' + esc(r.name || r.id) + '</h3>' + (r.bet ? '<p class="bet">' + esc(r.bet) + '</p>' : '<p class="bet small">No bet written yet.</p>')
+        + '<div><button type="button" class="btn quiet" data-r-edit="' + esc(r.id) + '" aria-label="Edit the name and the bet of ' + esc(r.name || r.id) + '">Edit name and bet</button></div>';
+    }
+    if(cards.length) h += '<div class="chips">' + cards.map(function(c){ return '<span class="chip fixed">' + esc(c.text.length > 54 ? c.text.slice(0, 53) + '...' : c.text) + '</span>'; }).join('') + '</div>';
+    if(notes.length) h += '<ul class="comments">' + notes.map(function(x){ return '<li><b>' + esc(nameOf(x.by)) + '</b> ' + esc(x.text) + '</li>'; }).join('') + '</ul>';
+    h += '<div class="composer"><label for="nt-' + esc(r.id) + '">Add a note to this route</label><textarea rows="2" id="nt-' + esc(r.id) + '" data-r-note="' + esc(r.id) + '">' + esc(S.notes[r.id] || '') + '</textarea>'
+      + '<div><button type="button" class="btn" data-r-note-save="' + esc(r.id) + '">Add note</button></div></div></article>';
+    return h;
+  }
+  function routeDoneHtml(r){
+    var ch = obj(obj(data()).chosen), picked = ch.route === r.id, notes = arr(r.notes);
+    var cards = cardList(data()).filter(function(c){ return arr(r.cards).indexOf(c.id) >= 0; });
+    var h = '<article class="route' + (picked ? ' chosen' : '') + '" data-testid="route" data-route="' + esc(r.id) + '" data-phase="' + (picked ? 'chosen' : 'merged') + '"><span class="meta">Route version ' + esc(r.version || 1) + '</span>'
+      + '<h3>' + esc(r.name || r.id) + '</h3>' + (r.bet ? '<p class="bet">' + esc(r.bet) + '</p>' : '');
+    if(cards.length) h += '<div class="chips">' + cards.map(function(c){ return '<span class="chip fixed">' + esc(c.text.length > 54 ? c.text.slice(0, 53) + '...' : c.text) + '</span>'; }).join('') + '</div>';
+    if(notes.length) h += '<ul class="comments">' + notes.map(function(x){ return '<li><b>' + esc(nameOf(x.by)) + '</b> ' + esc(x.text) + '</li>'; }).join('') + '</ul>';
+    if(picked){
+      h += '<p><span class="stamp" data-testid="chosen-route"><i aria-hidden="true"></i>Chosen · version ' + esc(ch.version) + ' · ' + esc(nameOf(ch.by)) + '</span></p>';
+    } else if(isCD()){
+      h += '<div><button type="button" class="btn primary" data-pick="' + esc(r.id) + '" aria-label="Pick the route ' + esc(r.name || r.id) + '">Pick this route</button></div>';
+    }
+    return h + '</article>';
+  }
+  function drawRoutes(){
+    var d = data(), g = gate(), out = routesOut(d), list = routeList(d), ch = obj(d.chosen);
+    var h = '<h2><span>Routes</span><span>' + (out.length ? out.length + ' out' : list.length ? list.length + ' merged' : '') + '</span></h2><div class="routes">';
+    if(out.length){
+      // the routes that are branches now come from the host's gate (the page reads each branch's seed through the room)
+      h += '<div class="routes" id="outRoutes">' + out.map(function(id){ var r = obj(obj(S.branches)[id]); r.id = id; return routeOutHtml(r); }).join('') + '</div>'
+        + '<div class="card"><h2>Merge</h2><p class="gline">Merging folds every route back into the room, and lists any clash with both sides. No model is used.</p>'
+        + '<div><button type="button" class="btn primary big" id="mergeRoutes" data-merge="1">Merge routes</button></div></div>';
+    } else {
+      if(S.clashes.length){
+        h += '<div class="clash" data-testid="clashes" role="status"><b>' + S.clashes.length + (S.clashes.length === 1 ? ' clash' : ' clashes') + ' to settle.</b>'
+          + S.clashes.map(function(c){ return '<span>' + esc(clashLine(c)) + '</span>'; }).join('') + '<span>Nothing was picked for you.</span></div>';
+      }
+      if(list.length){
+        h += list.map(routeDoneHtml).join('');
+        if(!ch.route && !isCD() && g.creative_director) h += '<p class="small" data-testid="pick-note">Only ' + esc(nameOf(g.creative_director)) + ', the creative director on the brief, picks the route.</p>';
+        if(ch.route && isCD()){
+          h += S.reopenOpen
+            ? '<div class="composer"><label for="reopenWhy">Why reopen the choice?</label><textarea id="reopenWhy" rows="2">' + esc(S.reopen) + '</textarea><div class="row"><button type="button" class="btn primary" id="reopenGo" aria-disabled="' + (S.reopen.trim() ? 'false' : 'true') + '" data-reopen-go="1">Reopen the choice</button><button type="button" class="btn quiet" data-reopen-cancel="1">Cancel</button></div><p class="small">The first pick stays in the history.</p></div>'
+            : '<div><button type="button" class="btn" data-reopen="1">Reopen the choice</button></div>';
+        }
+      }
+      h += builderHtml();
+    }
+    h += '</div>';
+    $('routes').innerHTML = h;
+  }
+  function drawAll(){
+    var keep = document.activeElement && document.activeElement.id, pos = null;
+    if(keep && document.activeElement.selectionStart != null) pos = document.activeElement.selectionStart;
+    drawHead(); drawBrief(); drawGate(); drawCards(); drawRoutes();
+    if(keep){ var el = document.getElementById(keep); if(el && el.focus){ el.focus(); try { if(pos != null) el.setSelectionRange(pos, pos); } catch(e){} } }
+  }
+
+  // ── reading the host ────────────────────────────────────────────────────────────────────────────
+  function load(){
+    askMe();
+    return fetch(clanScheme + '/ideas/room').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
+      .then(function(room){
+        if(!room) return;
+        S.room = room;
+        var out = routesOut(room.data);
+        if(!out.length){ S.branches = {}; return; }
+        // A route that is out is a branch; its working copy is what the host last seeded and every person added.
+        return fetch(clanScheme + '/ideas/routes').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }).then(function(b){ S.branches = (b && b.routes) || {}; });
+      })
+      .then(function(){ sendBar(); if(!isTyping()) drawAll(); else drawGate(); });
+  }
+  function isTyping(){ var a = document.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName); }
+  function askMe(){
+    if(S.meAsked || !(window.clan && typeof window.clan.me === 'function')) return;
+    S.meAsked = true;
+    window.clan.me().then(function(m){ S.me = m && (m.id || String(m.actor || '').replace(/^human:/, '')) || null; if(!isTyping()) drawAll(); }, function(){ S.meAsked = false; });
+  }
+
+  // ── doing ───────────────────────────────────────────────────────────────────────────────────────
+  function addCard(){
+    var text = S.composer.trim(); if(!text) return;
+    write('/ideas/card', { text: text }, 'card', text, function(){ if(S.composer.trim() === text) S.composer = ''; }).then(function(){ drawAll(); });
+  }
+  function vote(id){ write('/ideas/vote', { card: id }, 'vote ' + id, '').then(function(){ drawAll(); }); }
+  function saveComment(id){
+    var text = S.commentText.trim(); if(!text) return;
+    write('/ideas/comment', { card: id, text: text }, 'comment ' + id, text, function(){ S.commentFor = null; S.commentText = ''; }).then(function(){ drawAll(); });
+  }
+  function openEarly(){
+    var why = S.early.trim(); if(!why) return;
+    write('/ideas/open-early', { rationale: why }, 'open early', why, function(){ S.earlyOpen = false; S.early = ''; }).then(function(){ drawAll(); });
+  }
+  function startRoutes(){
+    var rows = S.builder.filter(function(r){ return r.name.trim(); }).map(function(r){ return { name: r.name.trim(), bet: r.bet.trim(), cards: r.cards }; });
+    if(rows.length < 2 || !gate().open) return;
+    S.busy = true;
+    write('/ideas/routes/start', { routes: rows }, 'start routes', '', function(){
+      S.builder = [{ name: '', bet: '', cards: [] }, { name: '', bet: '', cards: [] }, { name: '', bet: '', cards: [] }]; S.clashes = [];
+    }).then(function(){ S.busy = false; drawAll(); });
+  }
+  function saveRoute(id){
+    var e = S.edit[id]; if(!e) { S.openEdit = null; return drawAll(); }
+    write('/ideas/routes/edit', { route: id, name: e.name, bet: e.bet }, 'route ' + id, e.name, function(){ S.openEdit = null; delete S.edit[id]; }).then(function(){ drawAll(); });
+  }
+  function saveNote(id){
+    var text = (S.notes[id] || '').trim(); if(!text) return;
+    write('/ideas/routes/edit', { route: id, note: text }, 'note on ' + id, text, function(){ delete S.notes[id]; }).then(function(){ drawAll(); });
+  }
+  function mergeRoutes(){
+    write('/merge', {}, 'merge routes', '', function(j){ S.clashes = arr(j && j.clashes); }).then(function(){ drawAll(); });
+  }
+  function pick(id){
+    var r = routeList(data()).filter(function(x){ return x.id === id; })[0] || {};
+    var again = !!obj(data().chosen).route;
+    write('/ideas/pick', { route: id, rationale: again ? 'Chose the route ' + (r.name || id) + ' instead.' : 'Chose the route ' + (r.name || id) + '.' }, 'pick ' + id, '').then(function(){ drawAll(); });
+  }
+  function reopen(){
+    var why = S.reopen.trim(); if(!why) return;
+    write('/ideas/reopen', { rationale: why }, 'reopen the choice', why, function(){ S.reopenOpen = false; S.reopen = ''; }).then(function(){ drawAll(); });
+  }
+  function updateBrief(){
+    fetch(clanScheme + '/upstream/update', { method: 'POST', body: '{}' })
+      .then(function(r){ return r.json().catch(function(){ return { ok: false }; }).then(function(j){ if(!r.ok && j && j.ok !== false) j.ok = false; return j; }); })
+      .then(function(j){ S.error = j && j.ok === false ? (j.error || 'The room did not update.') : ''; })
+      .catch(function(){ S.error = 'The page could not reach the host.'; })
+      .then(function(){ return load(); });
+  }
+
+  // ── events ──────────────────────────────────────────────────────────────────────────────────────
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-add-card],[data-vote],[data-comment],[data-comment-save],[data-comment-cancel],[data-early],[data-open-early],[data-cancel-early],[data-b-card],[data-start-routes],[data-r-edit],[data-r-save],[data-r-cancel],[data-r-note-save],[data-merge],[data-pick],[data-reopen],[data-reopen-go],[data-reopen-cancel]');
+    if(!el) return;
+    if(el.hasAttribute('data-add-card')){ if(el.getAttribute('aria-disabled') === 'true') return; return addCard(); }
+    if(el.hasAttribute('data-vote')) return vote(el.getAttribute('data-vote'));
+    if(el.hasAttribute('data-comment')){ S.commentFor = el.getAttribute('data-comment'); S.commentText = ''; drawCards(); var t = $('cm'); if(t) t.focus(); return; }
+    if(el.hasAttribute('data-comment-save')) return saveComment(el.getAttribute('data-comment-save'));
+    if(el.hasAttribute('data-comment-cancel')){ S.commentFor = null; return drawCards(); }
+    if(el.hasAttribute('data-early')){ S.earlyOpen = true; drawGate(); var w = $('earlyWhy'); if(w) w.focus(); return; }
+    if(el.hasAttribute('data-cancel-early')){ S.earlyOpen = false; return drawGate(); }
+    if(el.hasAttribute('data-open-early')){ if(el.getAttribute('aria-disabled') === 'true') return; return openEarly(); }
+    if(el.hasAttribute('data-b-card')){
+      var row = S.builder[Number(el.getAttribute('data-row'))], id = el.getAttribute('data-b-card'); if(!row) return;
+      var at = row.cards.indexOf(id); if(at >= 0) row.cards.splice(at, 1); else row.cards.push(id);
+      return drawRoutes();
+    }
+    if(el.hasAttribute('data-start-routes')){ if(el.getAttribute('aria-disabled') === 'true') return; return startRoutes(); }
+    if(el.hasAttribute('data-r-edit')){ var rid = el.getAttribute('data-r-edit'); var r = obj(obj(S.branches)[rid]); S.openEdit = rid; S.edit[rid] = { name: r.name || '', bet: r.bet || '' }; return drawRoutes(); }
+    if(el.hasAttribute('data-r-save')) return saveRoute(el.getAttribute('data-r-save'));
+    if(el.hasAttribute('data-r-cancel')){ S.openEdit = null; return drawRoutes(); }
+    if(el.hasAttribute('data-r-note-save')) return saveNote(el.getAttribute('data-r-note-save'));
+    if(el.hasAttribute('data-merge')) return mergeRoutes();
+    if(el.hasAttribute('data-pick')) return pick(el.getAttribute('data-pick'));
+    if(el.hasAttribute('data-reopen')){ S.reopenOpen = true; drawRoutes(); var q = $('reopenWhy'); if(q) q.focus(); return; }
+    if(el.hasAttribute('data-reopen-cancel')){ S.reopenOpen = false; return drawRoutes(); }
+    if(el.hasAttribute('data-reopen-go')){ if(el.getAttribute('aria-disabled') === 'true') return; return reopen(); }
+  });
+  document.addEventListener('input', function(e){
+    var t = e.target, a;
+    if(t.id === 'cardInput'){ S.composer = t.value; var b = $('addCard'); if(b) b.setAttribute('aria-disabled', S.composer.trim() ? 'false' : 'true'); return; }
+    if(t.id === 'cm'){ S.commentText = t.value; return; }
+    if(t.id === 'earlyWhy'){ S.early = t.value; var o = $('openEarly'); if(o) o.setAttribute('aria-disabled', S.early.trim() ? 'false' : 'true'); return; }
+    if(t.id === 'reopenWhy'){ S.reopen = t.value; var g = $('reopenGo'); if(g) g.setAttribute('aria-disabled', S.reopen.trim() ? 'false' : 'true'); return; }
+    if((a = t.getAttribute('data-b-name')) != null){ S.builder[Number(a)].name = t.value; var s = $('startRoutes'); if(s) s.setAttribute('aria-disabled', (gate().open && S.builder.filter(function(r){ return r.name.trim(); }).length >= 2) ? 'false' : 'true'); return; }
+    if((a = t.getAttribute('data-b-bet')) != null){ S.builder[Number(a)].bet = t.value; return; }
+    if((a = t.getAttribute('data-r-name')) != null){ (S.edit[a] = S.edit[a] || {}).name = t.value; return; }
+    if((a = t.getAttribute('data-r-bet')) != null){ (S.edit[a] = S.edit[a] || {}).bet = t.value; return; }
+    if((a = t.getAttribute('data-r-note')) != null){ S.notes[a] = t.value; return; }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.target && e.target.id === 'cardInput' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); addCard(); }
+  });
+  window.addEventListener('clan:dataupdated', function(){ load(); });
+  window.addEventListener('clan:viewloaded', function(){ load(); });
+  window.addEventListener('load', askMe);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
+  // Other people write to the room too: read it again now and then, when nobody is typing.
+  setInterval(function(){ if(!document.hidden && !isTyping()) load(); }, 12000);
+
+  drawAll();
+  load();
+  // Seen by the page tests: nothing else reads it.
+  window.__ideaRoom = {
+    state: function(){ return S; }, cardList: cardList, votesOf: votesOf, routeList: routeList, briefOf: briefOf,
+    toGoWords: toGoWords, changedWords: changedWords, nameOf: nameOf
+  };
+})();
+</script>
+</body>
+</html>

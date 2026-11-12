@@ -287,6 +287,11 @@ pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Out
             "`projection` is written by the host from the facts and findings members; patch those instead",
         ));
     }
+    // An Idea room's cards, routes, pick and opening are written by its own operations, as the person asking.
+    super::ideas::refuse_host_keys(doc, &input.keys)?;
+    if super::ideas::applies(doc) {
+        super::ideas::refuse_writes_while_routes_out(doc)?;
+    }
     // A spun-off document holds its ancestors' data frozen under `upstream`
     // (Contract 4 §5.2): what it was spun off from, never edited in the child.
     if input.keys.iter().any(|k| k == UPSTREAM_KEY) {

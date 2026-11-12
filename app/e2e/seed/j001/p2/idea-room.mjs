@@ -2,9 +2,9 @@
 // a field the seed lacks would show. Cards are team, banned or ai; routes are forks. The app and its schema arrive with idea-room:
 // the owning record keeps this in step with app/templates/idea-room/schema.json (a unit test checks it when the schema exists).
 const card = (id, text, by, kind, extra = {}) => ({
-  id, text, by, kind,
+  id, text, by, kind, at: '2026-11-12T09:10:00Z',
   brief_link: { insight: 'Younger drinkers think Irish whiskey is for someone else.', proposition: 'The easy way into Irish whiskey.' },
-  votes: [{ by: 'dara@wk', at: '2026-11-12T10:00:00Z' }],
+  votes: ['dara@wk'],
   comments: [{ by: 'aoife@wk', at: '2026-11-12T10:05:00Z', text: 'Say who it is for.' }],
   tests: {
     swap: { answer: 'pass', reason: 'Swap the name and the card stops making sense.' },
@@ -16,24 +16,34 @@ const card = (id, text, by, kind, extra = {}) => ({
 
 export const IDEA_ROOM_APP = 'ie.napkin.idea-room'
 export const TEAM_CARDS = [
-  card('card_1', 'A bar that closes its doors for one song.', 'maeve@wk', 'team'),
-  card('card_2', 'A first pour with a friend who has never had one.', 'clodagh@wk', 'team'),
-  card('card_3', 'The tasting note written by the bartender, on the coaster.', 'oisin@wk', 'team'),
-  card('card_4', 'A neat and a long drink, side by side, same bottle.', 'maeve@wk', 'team'),
-  card('card_5', 'The label that says how to start.', 'clodagh@wk', 'team'),
+  card('c1', 'A bar that closes its doors for one song.', 'maeve@wk', 'team'),
+  card('c2', 'A first pour with a friend who has never had one.', 'clodagh@wk', 'team'),
+  card('c3', 'The tasting note written by the bartender, on the coaster.', 'oisin@wk', 'team'),
+  card('c4', 'A neat and a long drink, side by side, same bottle.', 'maeve@wk', 'team'),
+  card('c5', 'The label that says how to start.', 'clodagh@wk', 'team'),
 ]
+const route = (name, bet, cards, branch) => ({
+  name, bet, cards, version: 2, started_by: 'dara@wk', branch,
+  notes: [{ by: 'maeve@wk', at: '2026-11-12T11:00:00Z', text: 'The film is the pour.' }],
+})
+/**
+ * Every key of the template schema, for the suite's key check (app/tests/phase2Suite.test.ts). The host owns these keys (cards, routes,
+ * the pick, the opening): no patch writes them, so `seedPhase2` does not patch this object. It makes the room and writes its team cards
+ * through the host's own operation as the signed-in person (`HOST_OWNED`), and the rest is what the idea-room spec makes through the tool.
+ */
 export const IDEA_ROOM = {
-  title: 'J001 idea room',
   cards: Object.fromEntries(TEAM_CARDS.map(c => [c.id, c])),
-  ai_open: { state: 'closed', by: null, decision: null },
+  ai_open: { state: 'early', by: 'dara@wk', decision: 'd_seed', at: '2026-11-12T09:30:00Z', reason: 'The team asked for help.' },
+  routes_out: ['route_4'],
   routes: {
-    route_1: { name: 'One song', bet: 'A shared ritual makes a first pour feel safe.', cards: ['card_1', 'card_5'], branch: 'route-1', version: 'v1' },
-    route_2: { name: 'The first pour', bet: 'Bringing a friend is the easiest way in.', cards: ['card_2', 'card_4'], branch: 'route-2', version: 'v1' },
-    route_3: { name: 'The coaster', bet: 'The bartender is the guide, so the bar is the media.', cards: ['card_3'], branch: 'route-3', version: 'v1' },
+    route_1: route('One song', 'A shared ritual makes a first pour feel safe.', ['c1', 'c5'], 'route_1'),
+    route_2: route('The first pour', 'Bringing a friend is the easiest way in.', ['c2', 'c4'], 'route_2'),
+    route_3: route('The coaster', 'The bartender is the guide, so the bar is the media.', ['c3'], 'route_3'),
   },
-  chosen: { route: null, version: null, decision: null },
-  upstream: { brief: { id: 'brief', version: 'v1' } },
+  chosen: { route: 'route_1', version: '2', decision: 'd_seed_pick', by: 'dara@wk', at: '2026-11-12T12:00:00Z' },
 }
+/** The seed writes these keys through the host's operations, never with a patch. */
+export const HOST_OWNED = true
 /** The AI's three banned ideas, as the ban_default fixture returns them (answers/ban_default.json), for the match test. */
 export const BANNED_MATCH_CARD = 'A bar that goes quiet for one song, with a countdown on the till screen.'
 /** Own-words precedents (test 49): one that may show and three that never may. */

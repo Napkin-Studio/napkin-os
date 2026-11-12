@@ -24,8 +24,18 @@ export async function seedPhase2(page: Page, job: Pick<SeededJob, 'api' | 'clien
     const r = await page.request.post(`${job.api}/documents`, { data: { app_id: d.app, title: d.title, client_id: job.client, job: job.job } })
     expect(r.status(), `create ${d.title}`).toBe(200)
     const body = await r.json() as { token: string; path: string; manifest: { id: string } }
-    const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch: d.data, agent: 'j001-seed', action: `seed: ${d.title}` } })
-    expect(p.status(), `patch ${d.title}`).toBe(200)
+    if (d.hostOwned) {
+      // The Idea room's cards, routes and pick are the host's: a patch for them is refused, and the host counts a card only when a
+      // person wrote it. The seed writes the team's cards through the host as the person signed in (one person: the roster stack's
+      // spec makes five cards from several people itself).
+      for (const text of d.cards ?? []) {
+        const c = await page.request.post(`/s/${body.token}/ideas/card`, { data: { text } })
+        expect(c.status(), `card for ${d.title}`).toBe(200)
+      }
+    } else {
+      const p = await page.request.post(`/s/${body.token}/patch-data`, { data: { patch: d.data, agent: 'j001-seed', action: `seed: ${d.title}` } })
+      expect(p.status(), `patch ${d.title}`).toBe(200)
+    }
     written.push({ slug: d.slug, title: d.title, token: body.token, id: body.manifest.id, path: body.path })
   }
   return { written, skipped, deIdentified }

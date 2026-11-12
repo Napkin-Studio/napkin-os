@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Idea room",
+  "description": "One room for a job's ideas: cards the team writes first, routes made from them (each a fork), and the creative director's pick. Written by the host's own operations; the brief is carried whole under upstream.",
+  "type": "object",
+  "properties": {
+    "cards": {
+      "type": "object",
+      "description": "Every idea is a card, keyed by id.",
+      "additionalProperties": { "$ref": "#/definitions/card" }
+    },
+    "ai_open": {
+      "type": "object",
+      "description": "Present only when the creative director opened the room early.",
+      "properties": {
+        "state": { "enum": ["early"] },
+        "by": { "type": "string" },
+        "decision": { "type": "string" },
+        "at": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "routes_out": {
+      "type": "array",
+      "description": "Routes that are branches not yet merged.",
+      "items": { "type": "string" }
+    },
+    "routes": {
+      "type": "object",
+      "description": "Routes keyed by id; the id is the fork branch's agent id.",
+      "additionalProperties": { "$ref": "#/definitions/route" }
+    },
+    "chosen": {
+      "type": "object",
+      "description": "The creative director's pick: one verdict on one exact route version.",
+      "properties": {
+        "route": { "type": "string" },
+        "version": { "type": "string" },
+        "decision": { "type": "string" },
+        "by": { "type": "string" },
+        "at": { "type": "string" }
+      }
+    }
+  },
+  "definitions": {
+    "card": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "by": { "type": "string", "description": "The person who wrote it, from the signed-in context." },
+        "kind": { "enum": ["team", "banned", "ai"] },
+        "at": { "type": "string" },
+        "brief_link": {
+          "type": "object",
+          "description": "The brief's own words this card answers.",
+          "properties": { "insight": { "type": "string" }, "proposition": { "type": "string" } }
+        },
+        "votes": { "type": "array", "items": { "type": "string" }, "description": "People who voted. Shown as a count per card, never per person." },
+        "comments": {
+          "type": "array",
+          "items": { "type": "object", "properties": { "by": { "type": "string" }, "text": { "type": "string" }, "at": { "type": "string" } } }
+        },
+        "tests": {
+          "type": "object",
+          "description": "Advice on the card from the later slices: swap, fame, banned_match.",
+          "properties": {
+            "swap": { "type": "object", "properties": { "answer": { "type": "string" }, "reason": { "type": "string" } } },
+            "fame": { "type": "object", "properties": { "headline": { "type": "string" }, "friend_line": { "type": "string" } } },
+            "banned_match": { "type": "object", "properties": { "banned": { "type": "string" }, "by": { "type": "string" }, "at": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "bet": { "type": "string", "description": "The one-sentence bet the route makes." },
+        "cards": { "type": "array", "items": { "type": "string" } },
+        "notes": {
+          "type": "array",
+          "items": { "type": "object", "properties": { "by": { "type": "string" }, "text": { "type": "string" }, "at": { "type": "string" } } }
+        },
+        "version": { "type": "integer", "description": "Counts each change to the route; the pick names it." },
+        "started_by": { "type": "string" },
+        "branch": { "type": "string" }
+      }
+    }
+  }
+}

@@ -4,7 +4,7 @@
 //
 // What it does, all on this machine and nothing outside it:
 //   1. builds the shell (app/dist) unless NAPKIN_E2E_SKIP_BUILD=1;
-//   2. packs the template apps (Brief Maker, Research, Deck Maker, Visual Brief) into a temp seed
+//   2. packs the template apps (Brief Maker, Research, Deck Maker, Visual Brief, Idea room) into a temp seed
 //      directory with the SDK's own examples, as `npm run apps` does for the site;
 //   3. builds napkin-web and starts it on 127.0.0.1:$NAPKIN_E2E_PORT (default 18080),
 //      anonymous sessions, a fresh empty data directory, the seed installed into
@@ -66,6 +66,7 @@ example('make_visual_brief', join(seed, 'visual-brief.app.clan'), join(scratch, 
 example('make_script_editor', join(seed, 'script-editor.app.clan'), join(scratch, 'script-editor.example.clan'))
 // Send to Film (features/script-editor.clan) spins a script off into Advertising Studio, so the stack installs it.
 example('make_advertising_studio', join(seed, 'advertising-studio.app.clan'))
+example('make_idea_room', join(seed, 'idea-room.app.clan'), join(scratch, 'idea-room.example.clan'))
 run('cargo', ['build', '-q', '-p', 'napkin-web'])
 
 // A stand-in middleware, local and free (standin.mjs): it answers every task as one job whose state the test sets

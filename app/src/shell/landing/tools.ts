@@ -24,7 +24,7 @@ export interface Tool {
 export const TOOLS: readonly Tool[] = [
   { id: 'brief', name: 'Brief', full: 'Brief Maker', appId: 'ie.napkin.brief-maker', noun: ['brief', 'briefs'] },
   { id: 'research', name: 'Research', full: 'Research Tool', appId: 'ie.napkin.campaign-research', noun: ['research', 'research'] },
-  { id: 'idea', name: 'Idea', full: 'Idea', appId: null, noun: ['idea', 'ideas'] },
+  { id: 'idea', name: 'Idea', full: 'Idea', appId: 'ie.napkin.idea-room', noun: ['idea', 'ideas'] },
   { id: 'deck', name: 'Deck', full: 'Deck Maker', appId: 'ie.napkin.deck-maker', noun: ['deck', 'decks'] },
   { id: 'prod', name: 'Prod', full: 'Production Tool', appId: null, noun: ['production', 'productions'] },
   // Advertising Studio's id is the one it has always carried (examples/make_advertising_studio.rs).

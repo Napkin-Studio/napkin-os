@@ -62,6 +62,7 @@
   --ink: #EFE9DE;
   --ink-soft: #D6CEC0;
   --muted: #A49B8D;
+  --ink3: #A49B8D;    /* the footer's "powered by CLAN" and every other tertiary line: 6 to 1 on the black paper (it was 3.9 to 1) */
   --faint: #9A9183;   /* 5.0 to 1 or better on every black-mode paper */
   --line: #34302A;
   --line-strong: #CFC6B6;

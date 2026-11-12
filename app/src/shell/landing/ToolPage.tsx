@@ -92,12 +92,15 @@ export function ToolPage({ client, tool, items, onNew, onOpenItem, onBack, lense
           <h2 className="sec-title">Pick one to open, or start a new {one === 'research' ? 'research question' : one}</h2>
           <div className={`home-grid ${kind === 'brief' ? 'bm-homes' : kind === 'research' ? 'rs-homes' : ''}`}>
             {items.map(card)}
-            <button type="button" className="home-card home-new" data-testid="new-doc" onClick={onNew} aria-description={`New ${one} for ${name}`}>
-              <small>NEW</small><b>+ New {one === 'research' ? 'research question' : one}</b>
-              <span>{kind === 'brief' ? 'From notes, calls and decks' : kind === 'research' ? 'Sources pinned to every fact' : `For ${name}, theirs from the start`}</span>
-            </button>
+            {tool.id !== 'idea' && (
+              <button type="button" className="home-card home-new" data-testid="new-doc" onClick={onNew} aria-description={`New ${one} for ${name}`}>
+                <small>NEW</small><b>+ New {one === 'research' ? 'research question' : one}</b>
+                <span>{kind === 'brief' ? 'From notes, calls and decks' : kind === 'research' ? 'Sources pinned to every fact' : `For ${name}, theirs from the start`}</span>
+              </button>
+            )}
           </div>
-          {items.length === 0 && <p className="nui-empty">Nothing yet. Start the first {one} for {name}; it is theirs from the start.</p>}
+          {items.length === 0 && tool.id === 'idea' && <p className="nui-empty">No idea room yet. A room starts from a signed brief the client has confirmed: open the brief and choose Continue in.</p>}
+          {items.length === 0 && tool.id !== 'idea' && <p className="nui-empty">Nothing yet. Start the first {one} for {name}; it is theirs from the start.</p>}
           {onTerritories && (
             <p className="nui-more"><button type="button" className="side-link" data-testid="to-territories" onClick={onTerritories}>Territories for {name}</button></p>
           )}

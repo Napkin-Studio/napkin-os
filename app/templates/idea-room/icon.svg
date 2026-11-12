@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44">
+  <!-- The idea room's mark: three small cards, the third one lifted. One colour on transparent. -->
+  <rect fill="none" stroke="black" stroke-width="3" x="5" y="14" width="15" height="20" rx="2"/>
+  <rect fill="none" stroke="black" stroke-width="3" x="14.5" y="10" width="15" height="20" rx="2"/>
+  <rect fill="black" x="24" y="6" width="15" height="20" rx="2"/>
+</svg>
