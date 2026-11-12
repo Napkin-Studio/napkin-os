@@ -65,10 +65,12 @@ for (const size of SIZES) {
     // Inside the brief: the key works with focus in the tool's frame; Esc returns focus to the frame.
     await expect(page.locator('[data-where="document"]')).toBeVisible()
     if (!phone) {
-      await page.waitForTimeout(2500) // the tool's frame has loaded and its bridge is listening (a document's page is never network-idle: it listens for events)
-      await page.frameLocator('iframe').first().locator('body').click({ position: { x: 5, y: 5 } })
-      await page.keyboard.press('Meta+k')
-      await expect(page.getByTestId('bar-search-input')).toBeFocused()
+      // The frame's bridge listens once it has loaded (a document's page is never network-idle: it listens for events): try until it does.
+      await expect(async () => {
+        await page.frameLocator('iframe').first().locator('body').click({ position: { x: 5, y: 5 } })
+        await page.keyboard.press('Meta+k')
+        await expect(page.getByTestId('bar-search-input')).toBeFocused({ timeout: 2_000 })
+      }).toPass({ timeout: 40_000 })
       await page.keyboard.press('Escape')
       await expect(page.getByTestId('bar-panel')).toHaveCount(0)
     }
