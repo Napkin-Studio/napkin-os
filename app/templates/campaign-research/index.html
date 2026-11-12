@@ -1089,6 +1089,9 @@ body{background:var(--desk);color:var(--ink);font-family:var(--font-ui);font-siz
 body:not(.no-report) #hero{display:none}
 section.report{margin-top:0}
 .rep{border:1px solid #E2D9C8;border-radius:8px;background:#FFFDF8;box-shadow:var(--shadow-paper);padding:0 0 44px;gap:0;overflow:visible}
+/* The report's one column is the sheet's width, never its widest word's: an unbroken source name or link
+   no longer widens the whole report under the inspector (UAT round 4, features/research-narrow-overlap.clan). */
+.rep{grid-template-columns:minmax(0,1fr);overflow-wrap:anywhere}
 :root[data-color-scheme="dark"] .rep{border-color:transparent;box-shadow:0 24px 60px -24px rgba(0,0,0,.7);color:#2A2620}
 .rep #rp-pre > .rp-band{margin:0;border-radius:8px 8px 0 0;padding:24px clamp(16px,4vw,44px) 32px;background:var(--band);color:var(--band-fg);box-shadow:inset 0 -6px 0 var(--rs-hl)}
 .rp-band .eyebrow{font:600 11.5px/17.825px var(--font-mono);letter-spacing:1.15px;text-transform:uppercase;color:var(--band-2)}
