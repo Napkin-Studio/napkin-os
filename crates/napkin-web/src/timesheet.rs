@@ -690,15 +690,8 @@ async fn post_event(
     if ts.store.consent(&me) != Consent::Yes {
         return Ok(Json(serde_json::json!({ "ok": true, "captured": false })));
     }
-    let index = crate::api::job_index(&ctx.workspace(&tenant))?;
-    let resolve = |doc: &str| {
-        index.jobs.iter().find_map(|j| {
-            j.documents
-                .iter()
-                .find(|d| d.path == doc)
-                .map(|d| (j.number.clone(), d.title.clone()))
-        })
-    };
+    let ws = ctx.workspace(&tenant);
+    let resolve = |doc: &str| job_of(&*ws.store, doc);
     let kept = ts.store.record(&me, b.event, &b.doc, ts.now(), &resolve)?;
     Ok(Json(serde_json::json!({ "ok": true, "captured": kept })))
 }
@@ -726,24 +719,33 @@ async fn get_sessions(
     Ok(Json(ctx.timesheets.store.sessions(&me, from, to)))
 }
 
+/// The job a document is filed under, and its title, read from that document's own manifest: `None` for a
+/// document that names no job, or a job the registry does not hold. One document and the registry are read,
+/// not every document of the agency, so an event costs the same however many documents the agency has.
+fn job_of(store: &dyn napkin_host::DocStore, doc: &str) -> Option<(String, String)> {
+    let bytes = store.read(&DocId::new(doc)).ok()?;
+    let clan = clan_sdk::ClanFile::from_bytes(bytes).ok()?;
+    let m = clan.manifest();
+    let job = m.job.clone()?;
+    napkin_host::jobs::list(store)
+        .ok()?
+        .iter()
+        .any(|r| r.number == job)
+        .then(|| (job, m.title.clone()))
+}
+
 /// The person's own decisions in each document, within a time range: what a line is "built from".
+/// Read from the documents in `only` (the day's sessions name them, and each was filed under a job
+/// when its session was kept), so a day reads its own documents and no others.
 fn edits_in(
     ctx: &AppCtx,
     tenant: &crate::tenant::TenantId,
 ) -> impl Fn(&str, i64, i64, &BTreeSet<String>) -> BTreeMap<String, usize> {
     let ws = ctx.workspace(tenant);
-    let docs: Vec<String> = crate::api::job_index(&ws)
-        .map(|i| {
-            i.jobs
-                .iter()
-                .flat_map(|j| j.documents.iter().map(|d| d.path.clone()))
-                .collect()
-        })
-        .unwrap_or_default();
     move |person: &str, from: i64, to: i64, only: &BTreeSet<String>| {
         let me = format!("human:{person}");
         let mut out = BTreeMap::new();
-        for doc in docs.iter().filter(|d| only.contains(*d)) {
+        for doc in only {
             let Ok(s) = ws.session(&DocId::new(doc)) else {
                 continue;
             };
