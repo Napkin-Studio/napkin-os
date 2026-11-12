@@ -531,6 +531,8 @@ test('the research names its agents by role, draws them as spheres, and asks on 
   assert.equal(TheAgent('knowledge'), 'The Knowledge agent')
   assert.match(fn(RT, 'stageLabel'), /extract:TheAgent\('knowledge'\)\+' reads what you sent'.*select:TheAgent\('review'\)\+' picks what to look into'/s)
   assert.match(fn(RT, 'stageLabel'), /synthesise:TheAgent\('synthesis'\)\+' finds the points', report:TheAgent\('synthesis'\)\+' writes the report'/)
+  // Step 1's sub-questions are picked by the agent at work then: select runs as the Strategy agent (runRole above).
+  assert.match(fn(RT, 'railsFor'), /'Sub-questions queued', right, \['Not picked yet', TheAgent\('strategy'\)\+' picks what to look into, one question per lens\.'\]/)
   assert.match(fn(RT, 'rpBand'), /' by '\+theAgent\('synthesis'\)/, 'the report is written by the Synthesis agent')
   assert.match(fn(RT, 'questionCard'), /k=runRole\(Q\.stage\)/)
   // The stage: a thread from each rail card to the sphere; the question under the caption, inside the stage.

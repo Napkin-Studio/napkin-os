@@ -3717,7 +3717,7 @@ details.pv-fold>summary:hover{background:var(--soft)}
       if(tags) left.push(slip('Scope tags', tags));
       var picked=st.select==='done'||st.select==='skip'||on.length<plan.length;
       var right=picked?on.map(function(x, i){ return slip('Q'+(i+1)+' · '+lensName(x.lens), LENS_Q[x.lens]||lensName(x.lens), x.done?'ok':''); }):[];
-      return [wsec('Research question', left), wsec('Sub-questions queued', right, ['Not picked yet', TheAgent('review')+' picks what to look into, one question per lens.'])];
+      return [wsec('Research question', left), wsec('Sub-questions queued', right, ['Not picked yet', TheAgent('strategy')+' picks what to look into, one question per lens.'])];
     }
     if(at===1){
       return [wsec('Sources discovered', srcIds.map(function(s){ return srcSlip(s, 'ok'); }), ['Searching', 'Sources land here as the Research agent finds them.']),

@@ -17,6 +17,7 @@ pub mod api;
 pub mod auth;
 pub mod dogfood;
 pub mod error;
+pub mod etag;
 pub mod events;
 pub mod exports;
 pub mod meter;
@@ -32,6 +33,9 @@ use std::sync::Arc;
 use axum::extract::DefaultBodyLimit;
 use axum::response::Html;
 use axum::Router;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
+use tower_http::compression::{CompressionLayer, CompressionLevel};
+use tower_http::decompression::RequestDecompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -112,8 +116,34 @@ pub fn router_with(
             sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
         )
         .merge(shell_service(static_dir))
+        .layer(compression())
+        // A body sent with `Content-Encoding: gzip` (the shell's preview-html,
+        // features/doc-open-speed.clan) reaches every handler, and the dogfood
+        // record, as the plain bytes it stands for; the body limits above count
+        // those plain bytes. A body with no encoding passes through untouched.
+        .layer(RequestDecompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(ctx)
+}
+
+/// Responses go out gzip- or brotli-compressed when the browser says it takes
+/// them: an app's page is about 1 MB of HTML and the shell's script half a
+/// megabyte, and the ALB in front compresses nothing. Level 5 is most of the
+/// saving for a fraction of brotli's top level's time. Already-compressed
+/// bodies (images, media, a `.clan`, a PDF) and the event stream are left alone.
+fn compression() -> CompressionLayer<impl Predicate> {
+    CompressionLayer::new()
+        .quality(CompressionLevel::Precise(5))
+        .compress_when(
+            DefaultPredicate::new()
+                .and(NotForContentType::const_new("application/zip"))
+                .and(NotForContentType::const_new("application/pdf"))
+                .and(NotForContentType::const_new("application/octet-stream"))
+                .and(NotForContentType::const_new("font/"))
+                // a whole video or sound file sent compressed loses its byte ranges, so seeking
+                .and(NotForContentType::const_new("video/"))
+                .and(NotForContentType::const_new("audio/")),
+        )
 }
 
 /// Find the built shell without being told: next to the working directory in a

@@ -2965,3 +2965,171 @@ async fn a_job_the_middleware_lost_is_no_longer_offered_to_settle() {
         StatusCode::BAD_REQUEST
     );
 }
+
+// ── Opening a document quickly (features/doc-open-speed.clan) ───────────────
+
+fn gzip(bytes: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    e.write_all(bytes).unwrap();
+    e.finish().unwrap()
+}
+
+fn gunzip(bytes: &[u8]) -> Vec<u8> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    flate2::read::GzDecoder::new(bytes)
+        .read_to_end(&mut out)
+        .unwrap();
+    out
+}
+
+/// A page the size of a real research's: about a megabyte of HTML.
+fn a_big_page() -> String {
+    let row = "<tr><td class=\"finding\">A finding with its source and its lens</td><td>cited</td></tr>\n";
+    format!(
+        "<!doctype html><html><head><title>big</title></head><body><table>{}</table></body></html>",
+        row.repeat(12_000)
+    )
+}
+
+#[tokio::test]
+async fn a_large_page_goes_out_gzipped_when_the_browser_takes_gzip() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (doc, token) = upload(&s, &b, "Compressed").await;
+    let page = a_big_page();
+    let set = post(
+        &s,
+        &format!("/api/t/{}/d/{doc}/preview-html", b.tenant),
+        &b.cookie,
+        page.clone(),
+    )
+    .await;
+    assert_eq!(set.status, StatusCode::OK);
+
+    // A browser that takes gzip is sent gzip, and it unpacks to the page.
+    let req = Request::builder()
+        .uri(format!("/s/{token}/document"))
+        .header(header::ACCEPT_ENCODING, "gzip")
+        .body(Body::empty())
+        .unwrap();
+    let r = send(&s, req).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.headers.get(header::CONTENT_ENCODING).unwrap(), "gzip");
+    assert!(
+        r.body.len() * 10 < page.len(),
+        "{} bytes for a {}-byte page",
+        r.body.len(),
+        page.len()
+    );
+    assert_eq!(gunzip(&r.body), page.as_bytes());
+
+    // The shell's own reads of the document's page are compressed too.
+    let req = Request::builder()
+        .uri(format!("/api/t/{}/d/{doc}/human-html", b.tenant))
+        .header(header::COOKIE, &b.cookie)
+        .header(header::ACCEPT_ENCODING, "gzip, deflate, br")
+        .body(Body::empty())
+        .unwrap();
+    let r = send(&s, req).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert!(r.headers.get(header::CONTENT_ENCODING).is_some());
+
+    // One that says nothing is sent the plain page.
+    let r = get(&s, &format!("/s/{token}/document"), None).await;
+    assert!(r.headers.get(header::CONTENT_ENCODING).is_none());
+    assert_eq!(r.body, page.as_bytes());
+}
+
+#[tokio::test]
+async fn the_event_stream_is_never_compressed() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let req = Request::builder()
+        .uri(format!("/api/t/{}/events", b.tenant))
+        .header(header::COOKIE, &b.cookie)
+        .header(header::ACCEPT_ENCODING, "gzip, br")
+        .body(Body::empty())
+        .unwrap();
+    let resp = s.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
+}
+
+#[tokio::test]
+async fn a_gzipped_preview_page_is_stored_as_the_page_it_stands_for() {
+    let s = server(5);
+    let b = browser(&s).await;
+    let (doc, token) = upload(&s, &b, "Posted gzipped").await;
+    let page = a_big_page();
+    let packed = gzip(page.as_bytes());
+    assert!(packed.len() * 10 < page.len());
+    let req = Request::builder()
+        .method("POST")
+        .uri(format!("/api/t/{}/d/{doc}/preview-html", b.tenant))
+        .header(header::COOKIE, &b.cookie)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(header::CONTENT_ENCODING, "gzip")
+        .body(Body::from(packed))
+        .unwrap();
+    let r = send(&s, req).await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+
+    let r = get(&s, &format!("/s/{token}/document"), None).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.body, page.as_bytes());
+}
+
+#[tokio::test]
+async fn a_polled_list_that_has_not_changed_answers_304() {
+    let s = server(5);
+    let b = browser(&s).await;
+    upload(&s, &b, "Listed").await;
+    for path in ["library", "clients", "apps"] {
+        let uri = format!("/api/t/{}/{path}", b.tenant);
+        let first = get(&s, &uri, Some(&b.cookie)).await;
+        assert_eq!(first.status, StatusCode::OK, "{path}");
+        let tag = first
+            .headers
+            .get(header::ETAG)
+            .unwrap_or_else(|| panic!("{path} carries no ETag"))
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(
+            first.headers.get(header::CACHE_CONTROL).unwrap(),
+            "private, no-cache",
+            "{path}: the browser must ask again every time"
+        );
+
+        let again = Request::builder()
+            .uri(&uri)
+            .header(header::COOKIE, &b.cookie)
+            .header(header::IF_NONE_MATCH, &tag)
+            .body(Body::empty())
+            .unwrap();
+        let r = send(&s, again).await;
+        assert_eq!(r.status, StatusCode::NOT_MODIFIED, "{path}");
+        assert!(r.body.is_empty());
+    }
+
+    // A change is a new tag and a full answer.
+    let uri = format!("/api/t/{}/library", b.tenant);
+    let tag = get(&s, &uri, Some(&b.cookie)).await.headers[header::ETAG].clone();
+    upload(&s, &b, "Another").await;
+    let after = Request::builder()
+        .uri(&uri)
+        .header(header::COOKIE, &b.cookie)
+        .header(header::IF_NONE_MATCH, tag)
+        .body(Body::empty())
+        .unwrap();
+    let r = send(&s, after).await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json()["items"].as_array().unwrap().len(), 2);
+}
