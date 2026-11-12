@@ -40,6 +40,11 @@ tasks:
       - sends a part to rewrite only because a claim is worked out or to confirm
       - sends an item whose newest classify mark has model false to any model call (§10.13 item 6)
       - writes upstream or projection (host-written, read-only)
+  answer_question:
+    handler: answer_question@1
+    continues: draft_brief         # the reply describes the draft_brief job, as a poll's
+    input: "{ job_id, questions_id, answers: { question id: text | null } }"   # null or {} skips
+    precondition: the job is needs_input with intake's questions and questions_id is the job's
   regenerate_field:
     handler: regenerate_field@1
     job: long
