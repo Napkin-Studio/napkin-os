@@ -250,8 +250,9 @@ class CampaignJob:
         self._identify_raw = None
         self._identify_failed = None   # why identify's model call gave nothing, when it did not answer
         self.gaps = []                 # [{stage, reason}]: every step the job went on without
-        self.skipped_fields = set()    # campaign fields a question asked and nobody answered
+        self.skipped_fields = set()    # campaign fields a question asked that nobody answered, or the person skipped
         self.unattended = False        # a question went unanswered: later ones go on at once
+        self.person_skipped = []       # campaign fields whose question the person skipped (answer_question skip)
         self.reported = False
         self.stage_errors = []         # [(stage, message)]: the stages that raised or ran out of time
         self._asked_at = None
@@ -755,9 +756,10 @@ class CampaignJob:
         return f"{v['stage']}: {self.stage_idx} of {len(STAGES)} stage(s) done"
 
     def answer(self, clan, inp):
-        self.caps.runlog.answer("identify", inp)
         """answer_question: validate, record, continue. Raises TaskError."""
         from ..util import bad
+        skipped = inp.get("skip") is True
+        self.caps.runlog.answer("identify", inp, skipped=skipped)
         with self.lock:
             if self.state != "needs_input":
                 why = "; nobody answered in time, so it went on with a stated default" if self.unattended else ""
@@ -765,11 +767,23 @@ class CampaignJob:
             q = self.question
             if inp.get("question_id") != q["id"]:
                 raise bad("question_id is not the job's open question")
-            has_opt, has_text = "option_id" in inp, "text" in inp
-            if has_opt == has_text:
-                raise bad("answer with exactly one of option_id and text")
+            if "skip" in inp and not skipped:
+                raise bad("skip, when given, must be true")
+            if [k in inp for k in ("option_id", "text", "skip")].count(True) != 1:
+                raise bad("answer with exactly one of option_id, text and skip")
             fld = q["address"].partition("#campaign.")[2]
-            if has_opt:
+            by = next((m.get("by") for m in ((ctx_data(clan).get("intake") or {}).get("messages") or {}).values()
+                       if isinstance(m, dict) and (m.get("answer") or {}).get("question_id") == q["id"]), None)
+            by = by if isinstance(by, str) and by.startswith("human:") else None
+            if skipped:
+                self.question = None
+                self.state = "running"
+                self.sync(clan)  # the skip's document is the base from here
+                self.latest_clan = clan
+                self.skip_answer(q, by)
+                self.cond.notify_all()
+                return
+            if "option_id" in inp:
                 opt = next((o for o in q["options"] if o["id"] == inp["option_id"]), None)
                 if opt is None:
                     raise bad("option_id is not one of the question's options")
@@ -782,9 +796,7 @@ class CampaignJob:
                 if not isinstance(inp["text"], str) or not inp["text"].strip():
                     raise bad("text must be a non-empty string")
                 self.pending_text = {"field": fld, "text": inp["text"].strip()}
-            by = next((m.get("by") for m in ((ctx_data(clan).get("intake") or {}).get("messages") or {}).values()
-                       if isinstance(m, dict) and (m.get("answer") or {}).get("question_id") == q["id"]), None)
-            self.answer_by = by if isinstance(by, str) and by.startswith("human:") else self.answer_by
+            self.answer_by = by or self.answer_by
             self.question = None
             self.state = "running"
             self.sync(clan)  # the answer's document is the base from here
@@ -1028,6 +1040,38 @@ class CampaignJob:
                 f"Nobody answered in {waited}, so I went on without the {label}: {UNANSWERED[fld]}.")
         self.add_chunk("identify", patch, list(decisions or []) + [d], facts=facts, text=text, msg_decision=d,
                        sources=self.layer_sources(facts))
+
+    def skip_answer(self, q, by=None):
+        """(Under the lock.) The person skipped the question (answer_question `skip: true`, §8.3): the
+        field stays empty and the job goes on as it does for a question nobody answers, with no default
+        picked, and later questions are still asked. Recorded as a gap, a decision and a chat message."""
+        fld = q["address"].partition("#campaign.")[2]
+        label = fld.replace("_", " ")
+        who = by or "The person"
+        self.skipped_fields.add(fld)
+        if fld not in self.person_skipped:
+            self.person_skipped.append(fld)
+        if (self.pending_text or {}).get("field") == fld:
+            self.pending_text = None
+        self.gaps.append({"stage": "identify", "reason": "skipped"})
+        named = [o["label"] for o in q["options"] if "value" in o]
+        rejected = [rsn.rej("ask the question again", "the person chose to skip it")]
+        if named:
+            rejected.append(rsn.rej(f"take {named[0]} as the {label}", "the person skipped the question; nothing "
+                                                                         "is guessed for them"))
+        d = decision(self.doc, self.did("skip", q["id"]), "edit", self.handler, "identify",
+                     f"{who} skipped the question about the {label} ({q['text']}); it stays open.", [],
+                     reasoning=rsn.make(
+                         f"Went on without the {label}: you skipped the question.",
+                         [rsn.point(f"{who} skipped the question about the {label}"),
+                          rsn.point(f"Without it, {UNANSWERED[fld]}")],
+                         rsn.certainty("high", "nothing was chosen, so nothing was written"),
+                         f"the person sets the {label}, or starts the campaign again with it",
+                         rejected=rejected,
+                         attention=f"You skipped the question, so the job went on without the {label}: "
+                                   f"{UNANSWERED[fld]}."))
+        self.add_chunk("identify", {}, [d], text=f"You skipped it, so I went on without the {label}: "
+                                                 f"{UNANSWERED[fld]}.", msg_decision=d)
 
     def stage_identify(self):
         camp = self.W.get("campaign") or {}
@@ -1635,7 +1679,9 @@ class CampaignJob:
         report, and the job ends saying why and what it went on without."""
         with self.lock:
             self.gaps.append({"stage": "report", "reason": "nothing_to_cite"})
-            stages = list(dict.fromkeys(g["stage"] for g in self.gaps if g["stage"] != "report"))
+            stages = list(dict.fromkeys(g["stage"] for g in self.gaps
+                                        if g["stage"] != "report" and g["reason"] != "skipped"))
+            skipped_by_you = list(self.person_skipped)
         without = f" It went on without: {', '.join(stages)}." if stages else ""
         d = decision(self.doc, self.did("report", "none"), "edit", self.handler, "report", "", [], reasoning=rsn.make(
             "Wrote no report: the document holds nothing to cite.",
@@ -1648,6 +1694,8 @@ class CampaignJob:
             attention=f"No report: {reason[:200]}.{without} Refresh report composes one once research lands."))
         skipped = [DOING.get(st, st) for st in stages]
         said = f" We couldn't finish {', '.join(skipped)}." if skipped else ""
+        if skipped_by_you:
+            said += f" You skipped the question about the {' and the '.join(skipped_by_you)}."
         self.add_chunk("report", {}, [d], text=f"There's no report: nothing was looked up that it could cite.{said} "
                                                f"Refresh report writes one once there is.", gap=True)
         return True

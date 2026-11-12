@@ -756,7 +756,7 @@ intake:
       at: 2026-09-21T09:05:00Z
       text: "Lúnasa"
       job_id: job_01JA0C2288              # the job it answers
-      answer: { question_id: q_01JA0A03SUBJ, option_id: lunasa }   # option_id or text, exactly one
+      answer: { question_id: q_01JA0A03SUBJ, option_id: lunasa }   # option_id, text or skipped: true, exactly one
 ```
 
 ### 16.1 Why a map
