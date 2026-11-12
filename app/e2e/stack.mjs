@@ -51,6 +51,7 @@ function run(cmd, args, opts = {}) {
 }
 
 function cleanup() {
+  rmSync(join(tmpdir(), `napkin-e2e-clock-${rosterPort}`), { force: true })
   rmSync(work, { recursive: true, force: true })
 }
 
@@ -98,6 +99,11 @@ const unset = Object.keys(env).filter(k => PROVIDER.test(k) && !k.startsWith('NA
 for (const k of unset) delete env[k]
 console.log(`e2e stack: provider keys unset (${unset.length} removed from the server's environment), no model route`)
 
+// The test clock of the roster server (features/approval-route.clan): "today" for the job index is read from this
+// file when it exists, so a test can put a deadline two days in the past. Only this server is given it.
+const clockFile = join(tmpdir(), `napkin-e2e-clock-${rosterPort}`)
+rmSync(clockFile, { force: true })
+
 function start(addr, data, auth, gate = false) {
   return spawn(join(root, 'target/debug/napkin-web'), [], {
     stdio: 'inherit',
@@ -108,6 +114,7 @@ function start(addr, data, auth, gate = false) {
       // The Brief gate holds the lock list (features/brief-gate.clan). On for the J001 roster stack only, where the
       // pilot tests sign in; off on the primary, as it is by default, so the specs that count what needs a person are unchanged.
       NAPKIN_BRIEF_GATE: gate ? 'on' : 'off',
+      ...(gate ? { NAPKIN_TEST_CLOCK_FILE: clockFile } : {}),
       NAPKIN_AUTH: auth ? 'roster' : 'none',
       // Signed sessions need a key: a throwaway one, made for this run and gone with it.
       ...(auth ? { NAPKIN_AUTH_ROSTER: auth, NAPKIN_SESSION_SECRET: randomBytes(32).toString('hex') } : {}),
