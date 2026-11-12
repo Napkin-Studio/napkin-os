@@ -842,6 +842,7 @@
   @media (prefers-reduced-motion: reduce){#fields .row.working{animation:none;background-image:none}}
   .side-stop{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 14px;padding:8px 0 10px;border-bottom:1px solid var(--nd-line,var(--line))}
   .side-stop[hidden]{display:none}
+  .side-stop.at-agent{position:absolute;top:58px;right:18px;padding:0;border:0}   /* beside the agent, as the mock's agent card */
   .side-stop .stopq{flex-basis:100%;font:13px/1.35 var(--font-ui);color:var(--nd-muted,var(--ink2))}
   .sheet.a4 .pgrid > .row.needs.sel{background-color:color-mix(in srgb,#B45309 7%,transparent);box-shadow:inset 3px 0 0 #B45309,inset 0 0 0 1px color-mix(in srgb,#B45309 45%,transparent)}
   /* Why notes: hidden on the sheet unless the side tab says Show all (layout.why) */
@@ -4079,7 +4080,7 @@
   function renderSideStop(){
     var el=$('sideStop'); if(!el) return;
     var j=DRAFT, on=phase==='doc'&&!!j&&j.inPlace&&!!j.id&&draftLive();
-    el.hidden=!on;
+    el.hidden=!on; el.classList.toggle('at-agent', on&&!j.stopAsk);
     el.innerHTML=!on?'':j.stopAsk
       ?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="side-link" data-ds="yes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="side-link" data-ds="no"'+(j.stopping?' disabled':'')+'>Keep going</button>'
       :'<button type="button" class="side-link" data-ds="stop">Stop</button>';
@@ -4092,7 +4093,7 @@
     else if(a==='yes') cancelJob(j);
   });
   // A step of the in-place run: the sweep, the side panel, the notice (hidden while it runs) and the bar.
-  function draftInPlace(){ markSweep(); sideAgent(); renderLinkNote(); renderPill(); sendBar(); }
+  function draftInPlace(){ markSweep(); sideAgent(); renderLinkNote(); renderLock(); }
   // The agent at work while the sheet is open, at the top of the side tab: one sphere, small, and one
   // line, "<Role> agent · <what it is doing>". Gone when the job ends; the run screen keeps its own stage.
   function sideAgent(){
@@ -4553,11 +4554,11 @@
   var NEEDS_N=null, READY_NUDGE=false;
   function renderLockBtn(){
     var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
-    var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
+    var again=A&&re.length>0, items=lockItems(), n=items.length, busy=draftLive(), wait=(!!l&&!l.can_lock)||busy;
     lb.classList.toggle('locked', L&&!again);
     // One needs indicator (owner, 9 Nov 2026): the count is Decisions'. The
     // button carries no badge of its own; why it waits is said in words.
-    var why=wait?lockWhy(n):'';
+    var why=busy?'The agents are drafting it again. Lock it when they are done.':wait?lockWhy(n):'';
     if(again){ lb.hidden=false; lb.disabled=wait; lb.textContent='Lock the brief again'; lb.title=why; }
     else if(A){ lb.hidden=true; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock the brief to change it. Locking it again makes a new version.'; }   // Unlock: the OS bar
     else if(L){ lb.hidden=false; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve

@@ -4861,7 +4861,7 @@ function redraftPage(o: { locked?: string[] } = {}) {
     return { key: f.key, cls, getAttribute: () => f.key, classList: { toggle: (c: string, on: boolean) => { if (on) cls.add(c); else cls.delete(c) } } }
   })
   const side = { innerHTML: '', hidden: true }
-  const stop = { innerHTML: '', hidden: true }
+  const stop = { innerHTML: '', hidden: true, classList: { toggle: () => {} } }
   const env = {
     DRAFT: null, forceIntake: false, reduce: true, phase: 'doc', FIX: null, REGEN: {}, FIELDS, arr,
     STAGES: ['extract', 'context', 'draft', 'judge'], STAGE_K: { extract: 'extract', context: 'synthesis', draft: 'drafter', judge: 'judge' },
@@ -4870,7 +4870,7 @@ function redraftPage(o: { locked?: string[] } = {}) {
     document: { querySelectorAll: () => rows }, $: (id: string) => (id === 'sideAgent' ? side : id === 'sideStop' ? stop : null),
     ROLES: { sideSet: (el: { hidden: boolean; innerHTML: string }, job: { role: string; doing: string; status: string } | null) => { el.hidden = !job; el.innerHTML = job ? `${job.role} · ${job.doing} · ${job.status}` : '' } },
     esc, renderProc: () => { phases.push('renderProc') }, setPhase: (p: string) => { phases.push(p) }, render: () => { rendered++ },
-    renderLinkNote: () => {}, renderPill: () => {}, sendBar: () => {}, linkRunEnded: () => {}, toast: (m: string) => { toasts.push(m) },
+    renderLinkNote: () => {}, renderLock: () => {}, linkRunEnded: () => {}, toast: (m: string) => { toasts.push(m) },
     store: () => {}, stored: () => null, jobKey: (t: string, f?: string) => t + (f ? '.' + f : ''), pollJob: () => {},
     window: { scrollTo: () => {} }, setTimeout: () => 0,
     runJob: (j: J, input: Record<string, unknown>) => { j.state = 'sending'; runs.push({ j, input }) },
