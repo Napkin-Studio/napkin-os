@@ -8,7 +8,7 @@ import pytest
 from napkin import registry
 from napkin.capabilities import Capabilities
 from napkin.model import ModelPort
-from napkin.pipeline.ask import Asker, validate
+from napkin.pipeline.ask import SYSTEM, Asker, validate
 from napkin.pipeline.research import Researcher
 from napkin.util import TaskError
 
@@ -263,3 +263,69 @@ def test_nothing_to_cite_and_a_year_in_what_is_missing_still_answers(store):
         assert p.get("cites"), p
     assert any("#asks[" in c for p in chk["reasoning"]["because"] for c in p["cites"])
     assert result["status"] in ("partial", "not_found")
+
+
+# -- a question about the fact itself: its quote, its source, its date (UAT round 12, 2026-11-13) --------
+
+OATLY = "f_A5563F579269124A6011D028"
+QUOTE = ("In late 2023 the Advertising Standards Authority of Ireland upheld one of three complaints from the "
+         "National Dairy Council and ruled that “But Made For Humans” could not run in Ireland again.")
+
+
+def oatly_doc():
+    fact = {"id": OATLY, "entity": "brand/oatly", "key": "regulation.restriction.but_made_for_humans_banned_ie",
+            "value": "Oatly is banned from using 'But Made For Humans' slogan in Ireland following ASAI ruling.",
+            "unit": "text", "market": "IE", "as_of": "2023-12-01", "retrieved_at": "2026-11-12", "confidence": "low",
+            "status": "active", "sources": ["src_40ea40b6ea4c9ac64244"], "quotes": {"src_40ea40b6ea4c9ac64244": QUOTE}}
+    other = dict(fact, id="f_3B727D8359D100BFF3815BD7", key="regulation.restriction.other", value="Something else.",
+                 quotes={"src_1": "Nothing dated."}, sources=["src_1"], as_of="2026-11-12")
+    src = {"id": "src_40ea40b6ea4c9ac64244", "publisher": "Clearbox Communications", "title": "Oatly",
+           "url": "https://clearboxcommunications.com/work/oatly", "retrieved_at": "2026-11-12", "published_at": None}
+    return {"id": DOC, "version": "3", "facts": [other, fact], "findings": [], "sources": [src],
+            "decision_chain": {"decisions": []},
+            "data": {"campaign": {"brand": stated({"ref": "brand/oatly", "name": "Oatly"}, "created"),
+                                  "categories": stated(["beverages.plant_milk"], "research"),
+                                  "markets": stated(["IE"], "research")}}}
+
+
+def test_a_question_about_a_fact_gets_its_quote_source_and_dates(store):
+    seen = []
+
+    def r(p):
+        seen.append(p)
+        return {"sentences": [{"text": "It is from late 2023: Clearbox Communications quotes the ASAI ruling.",
+                               "cites": [OATLY]},
+                              {"text": "It rests on 1 source, a ruling of 1 December 2023, so confidence is low.",
+                               "cites": [OATLY]}],
+                "missing": [], "lens": "regulation_clearance", "topic": "When and how sure"}
+    _, change, _ = ask(store, oatly_doc(), q="What year is this from, and how sure are we of it?",
+                       lens="regulation_clearance", jev=FakeJev(0.9), about=OATLY, model=FakeModel({"ask_answer": r}))
+    fact = seen[0]["about_fact"]
+    assert fact["id"] == OATLY and fact["as_of"] == "2023-12-01" and fact["confidence"] == "low"
+    assert fact["source_count"] == 1
+    assert fact["sources"] == [{"id": "src_40ea40b6ea4c9ac64244", "quote": QUOTE, "publisher": "Clearbox Communications",
+                                "title": "Oatly", "url": "https://clearboxcommunications.com/work/oatly",
+                                "published_at": None, "retrieved_at": "2026-11-12"}]
+    assert "about_fact" in seen[0] and "never in a sentence" in SYSTEM
+    rec = next(iter(change["data_patch"]["asks"].values()))
+    # both sentences survive the cite check: the figures are in the fact's quote and dates
+    assert [s["cites"] for s in rec["answer"]] == [[OATLY], [OATLY]] and rec["status"] == "answered"
+
+
+def test_ids_written_in_a_sentence_are_not_figures_and_leave_its_text(store):
+    def r(p):
+        return {"sentences": [{"text": f"In late 2023 the ASAI ruled against the slogan ({OATLY}).", "cites": [OATLY]}],
+                "missing": [], "lens": "regulation_clearance", "topic": "When"}
+    _, change, _ = ask(store, oatly_doc(), q="What year is this from?", lens="regulation_clearance",
+                       jev=FakeJev(0.9), about=OATLY, model=FakeModel({"ask_answer": r}))
+    rec = next(iter(change["data_patch"]["asks"].values()))
+    assert [s["text"] for s in rec["answer"]] == ["In late 2023 the ASAI ruled against the slogan."]
+
+
+def test_a_figure_only_the_about_facts_quote_holds_needs_that_fact_cited(store):
+    def r(p):
+        return {"sentences": [{"text": "It was from late 2023.", "cites": ["f_3B727D8359D100BFF3815BD7"]}],
+                "missing": [], "lens": "regulation_clearance", "topic": "When"}
+    _, change, _ = ask(store, oatly_doc(), q="What year is this from?", lens="regulation_clearance",
+                       jev=FakeJev(0.9), about=OATLY, model=FakeModel({"ask_answer": r}))
+    assert next(iter(change["data_patch"]["asks"].values()))["answer"] == []
