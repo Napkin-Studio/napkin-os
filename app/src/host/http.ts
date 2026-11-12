@@ -34,6 +34,8 @@ import type {
   ClientReviewReply,
   DecisionsView,
   ClientLinkMade,
+  ClientRoundMade,
+  ClientRoundView,
   ClientLinkRow,
   GateView,
   VersionParts,
@@ -124,6 +126,31 @@ export async function jobView(number: string): Promise<JobView | 'missing' | 'fo
     if (r.status === 403) return 'forbidden'
     return r.ok ? ((await r.json()) as JobView) : null
   } catch { return null }
+}
+
+// ── the client review round (features/client-review-full.clan) ──────────────
+
+const docApi = (doc?: string) => `/d/${encodeURIComponent(doc ?? requireDoc())}`
+
+/** Send the locked version to several people, one the approver: one link each, shown once. */
+export async function makeRound(reviewers: { name: string; email: string; approver: boolean }[], code: boolean, doc?: string): Promise<ClientRoundMade> {
+  return json<ClientRoundMade>(`${docApi(doc)}/client-link/round`, postJson({ reviewers, code }))
+}
+
+/** The round last sent, merged; `null` when none has been sent, or when this person may not read it. */
+export async function readRound(doc?: string): Promise<ClientRoundView | null> {
+  try {
+    const r = await fetch(`${await base()}${docApi(doc)}/client-review/round`, { credentials: 'same-origin' })
+    return r.ok ? ((await r.json()) as ClientRoundView) : null
+  } catch { return null }
+}
+
+/** Whether the server can mail a code: the option is offered only when it can. */
+export async function roundOptions(doc?: string): Promise<{ code: boolean }> {
+  try {
+    const r = await fetch(`${await base()}${docApi(doc)}/client-review/options`, { credentials: 'same-origin' })
+    return r.ok ? ((await r.json()) as { code: boolean }) : { code: false }
+  } catch { return { code: false } }
 }
 
 /** What a job write came to: done, or why not, with the server's own sentence. */

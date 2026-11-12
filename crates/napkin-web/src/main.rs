@@ -245,7 +245,9 @@ async fn main() {
             env_string("NAPKIN_SESSION_SECRET")
                 .as_deref()
                 .map(str::as_bytes),
-        ),
+        )
+        // mail: off unless a sender is configured (features/client-review-full.clan)
+        .with_mailer_from_env(),
     );
 
     let app = napkin_web::router_with(ctx, settings.static_dir.as_deref(), identity);

@@ -628,7 +628,12 @@ pub fn group_of(route: &str) -> Group {
             Group::Money
         }
         Some("scope" | "estimates" | "invoices" | "change-orders" | "time-money") => Group::Money,
-        Some("d") if matches!(rest.get(1).copied(), Some("client-link" | "client-links")) => {
+        Some("d")
+            if matches!(
+                rest.get(1).copied(),
+                Some("client-link" | "client-links" | "client-review")
+            ) =>
+        {
             Group::ClientLink
         }
         Some("client-brains" | "pitches") => Group::Brains,
