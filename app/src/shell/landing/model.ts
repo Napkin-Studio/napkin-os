@@ -137,11 +137,20 @@ export function summarise(client: ClientRecord, items: readonly LibraryItem[]): 
 
 const URGENCY: Record<Activity, number> = { human: 4, error: 3, work: 2, think: 2, read: 2, check: 2, idle: 0 }
 
-/** Urgency first (needs you, failed, running), then the order the clients were made in. */
+/** When a client last saw activity: its newest piece of work, or its making. */
+const recentOf = (s: ClientSummary): string => (s.latest > s.client.created_at ? s.latest : s.client.created_at) || ''
+
+/**
+ * Urgency first (needs you, failed, running), then the most recent activity, then the order
+ * the clients were made in. A client just added, or just worked on, is always on the first
+ * page; untouched ones drift behind Show all (owner, 2026-11-12: a new client was hidden).
+ */
 export function ordered(clients: readonly ClientRecord[], items: readonly LibraryItem[]): ClientSummary[] {
   return clients
     .map((c, i) => ({ s: summarise(c, items), i }))
-    .sort((a, b) => URGENCY[b.s.activity] - URGENCY[a.s.activity] || a.i - b.i)
+    .sort((a, b) => URGENCY[b.s.activity] - URGENCY[a.s.activity]
+      || (recentOf(b.s) > recentOf(a.s) ? 1 : recentOf(b.s) < recentOf(a.s) ? -1 : 0)
+      || a.i - b.i)
     .map(x => x.s)
 }
 
