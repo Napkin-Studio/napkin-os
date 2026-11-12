@@ -152,8 +152,17 @@ test('review: Needs you is settled part by part, and only then can the brief loc
   const app = await openBrief(page, 'open-review-brief')
   const lock = app.locator('#lockBtn')
   const done: string[] = []
+  // Round 11: Needs you first showed only the open questions; the host's lock list (Review agent items) arrived
+  // seconds later. Count once it holds steady for 3 s.
+  let prev = -1, still = 0
+  for (let i = 0; i < 20 && still < 2; i++) {
+    const now = await needsLeft(app)
+    still = now === prev ? still + 1 : 0
+    prev = now
+    if (still < 2) await page.waitForTimeout(1500)
+  }
   let n = await needsCount(app)
-  measure('needs-you', 0, undefined, { count: n })
+  measure('needs-you', 0, undefined, { count: n, items: prev })
   for (let round = 0; n > 0 && round < 40; round++) {
     expect.soft(await lock.isDisabled(), `Lock the brief stays off while Needs you holds ${n}`).toBe(true)
     if (await lock.isDisabled()) {

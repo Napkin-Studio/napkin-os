@@ -2832,6 +2832,13 @@ test('brief: Lock waits until Needs you is empty, open questions included', () =
   assert.deepEqual(run([q]), { disabled: true, why: 'Settle 1 first' }, 'the host may lock, an open question is left: Lock waits')
   assert.deepEqual(run([]), { disabled: false, why: '' }, 'nothing left: Lock is on')
   assert.equal(run([], false).disabled, true, 'the host says not yet: Lock waits')
+  // Round 11: before the host's lock list has loaded, what blocks the lock is unknown, so Lock waits.
+  const els2: Record<string, Record<string, unknown>> = {}
+  const el2 = (id: string) => els2[id] ||= { hidden: false, disabled: false, textContent: '', title: '', innerHTML: '', classList: { toggle() {} } }
+  lift<{ renderLockBtn(): void }>(BM, ['lockWhy', 'renderLockBtn'], { $: el2, arr, lockState: () => null, approveLocked: () => false, get: () => false,
+    draftLive: () => false, needsRows: () => [], renderStateLine() {}, docVersion: () => 'v1', SEL: null, NEEDS_N: null, READY_NUDGE: false,
+    lockListHtml: () => '', bindLkItems() {} }).renderLockBtn()
+  assert.equal(el2('lockBtn').disabled, true, 'the lock list not loaded yet: Lock waits')
 })
 
 // UAT round 5: the fact panel is drawn again on every document change, and the question being typed was lost, so
