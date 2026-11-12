@@ -9,7 +9,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { AttentionItem, DecisionsView } from '../src/host/types.ts'
-import { docStateOf, isFor, looksRightOf, needKey, needsOf, splitAside } from '../src/shell/decisions/needs.ts'
+import { docStateOf, isFor, looksRightOf, needKey, needsOf, splitAside, verdictWords } from '../src/shell/decisions/needs.ts'
+import { callWords } from '../src/shell/nui/drawerData.ts'
 import { deskCallDocs } from '../src/shell/nui/deskData.ts'
 import type { LibraryItem } from '../src/host/types.ts'
 
@@ -22,6 +23,17 @@ test('needsOf: only what blocks the lock, one per place', () => {
   const v = view([need('unverified', 'a'), need('unverified', 'a'), need('flagged', 'b', false), need('rejected', 'c')])
   assert.deepEqual(needsOf(v).map(n => n.address), ['a', 'c'])
   assert.deepEqual(needsOf(null), [])
+})
+
+test('a bad verdict says whose it is: the Review agent said no, or a person marked it wrong (UAT round 5)', () => {
+  const bad = (decision: string) => ({ code: 'bad_verdict', address: `d#${decision}`, decision, text: 'x', blocks_lock: true, label: 'Insight' } as AttentionItem)
+  const v = { ...view([bad('d_agent'), bad('d_person')]),
+    decisions: [{ decision: { id: 'd_agent' }, who: { kind: 'agent', id: 'draft_brief@1.0/judge', name: 'Review agent' } },
+      { decision: { id: 'd_person' }, who: { kind: 'person', id: 'u_a', name: 'Ann' } }] } as unknown as DecisionsView
+  const [agent, person] = needsOf(v)
+  assert.equal(callWords(agent, 'Brief').sub, 'Brief · The Review agent said no, and it is not settled yet')
+  assert.equal(callWords(person, 'Brief').sub, 'Brief · Marked wrong, and not answered yet')
+  assert.equal(verdictWords(undefined), 'Marked wrong, and not answered yet', 'unknown author keeps the old words')
 })
 
 test('the state pill: Draft, Ready to lock, Locked, Reopened; what needs a call is counted on Decisions only', () => {

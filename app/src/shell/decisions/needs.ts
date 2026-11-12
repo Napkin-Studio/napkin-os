@@ -12,16 +12,31 @@ import type { BarTone } from '../appBar'
  * What blocks the lock, one item per place. The one needs-your-call selector: the Decisions drawer lists these, the OS
  * bar counts them and the medallion lights on them. Never worked out twice.
  */
-export function needsOf(view: DecisionsView | null): AttentionItem[] {
+export function needsOf(view: DecisionsView | null): Need[] {
   if (!view) return []
   const seen = new Set<string>()
+  const by = new Map(view.decisions.map(b => [b.decision.id, b.who.kind] as const))
   return view.attention.filter(a => {
     if (!a.blocks_lock) return false
     const k = needKey(a)
     if (seen.has(k)) return false
     seen.add(k)
     return true
+  }).map(a => {
+    const kind = a.decision ? by.get(a.decision) : undefined
+    return kind ? { ...a, by: kind } : a
   })
+}
+
+/** A need, with who raised it when its decision is in the view (person or agent). */
+export type Need = AttentionItem & { by?: 'person' | 'agent' }
+
+/**
+ * A bad verdict in words that say whose it is (UAT round 5, 2026-11-12): the Review agent's own
+ * "no" read "Marked wrong" as if a person had marked it. A person's stays "Marked wrong".
+ */
+export function verdictWords(by: 'person' | 'agent' | undefined): string {
+  return by === 'agent' ? 'The Review agent said no, and it is not settled yet' : 'Marked wrong, and not answered yet'
 }
 
 /** The document's state as the OS bar's slot says it, from the host's lock. */
