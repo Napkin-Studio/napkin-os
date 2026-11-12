@@ -27,6 +27,8 @@ export const PEOPLE = {
   // a second agency, its own suffix and so its own workspace: the wall tests (27, 38, 40, 62, 67)
   otherAgency: { username: 'bria@bq', name: 'Bria Test', roles: ['planning', 'account-service'] },
   otherAgencyAdmin: { username: 'barra@bq', name: 'Barra Test', roles: ['admin'] },
+  // an agency that never has a job, for the Live jobs Empty state (job-page)
+  emptyAgency: { username: 'fia@empty', name: 'Fia Test', roles: ['account-service'] },
 }
 
 /** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`. */
