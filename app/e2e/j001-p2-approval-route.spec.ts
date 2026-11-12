@@ -1,35 +1,21 @@
-// Phase 2 tests 33, 34 and 35 of docs/design/phase2-acceptance.md (features/approval-route.clan), each run at
-// 390 and 1440 px on the real shell and the real server, against the de-identified seed in seed/j001/:
+// Phase 2 acceptance, record `approval-route` (features/approval-route.clan): tests 33 to 35 of docs/design/phase2-acceptance.md,
+// run at 390 and 1440 px on the real shell and the real server, plus the Approvals door's own facts (the page opens, axe in three
+// modes, 44 px buttons on a phone, no em dash). Titles read `N short, W px`, the form the registry (phase2/tests.mjs) and counter read.
 //
-//   33  Account service names who approves each stage and by when. The job shows who holds it and for how long.
-//   34  An approval two days late shows in the approver's Needs you and on the dashboard, then in account service's.
-//   35  An approval is withdrawn. The stage returns to its holder and the earlier approval stays in the history.
-//
-// And the Approvals door's own facts (done_when): it opens a real page, axe finds nothing serious in the three
-// modes, each primary button is 44 px on a phone and no interface text holds an em dash.
-//
-// The clock is the stack's test clock: stack.mjs gives the roster server NAPKIN_TEST_CLOCK_FILE, and a test moves
-// "today" by writing a time to that file. It is put back after every test. No model, no paid provider.
+// The clock is the stack's test clock: stack.mjs gives the roster server NAPKIN_TEST_CLOCK_FILE and a test moves "today" by writing
+// a time to it; it is put back after every test. No model and no paid provider.
 
 import { rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { MODES, open, SIZES, signIn } from './pilot'
 import { asMe, lockBrief, PEOPLE, seedJ001, signBrief } from './seed/j001'
+import { PHASE2 } from './phase2/tests.mjs'
 
-type Size = { tag: string; width: number; height: number }
-const SIZES: Size[] = [{ tag: '390', width: 390, height: 844 }, { tag: '1440', width: 1440, height: 900 }]
-const MODES = ['white', 'grey', 'black'] as const
-
-/** Each test: its number in the Phase 2 list, its title, and the record that turns it on (null: it runs). */
-export const TESTS: Record<number, { title: string; slug: string | null }> = {
-  33: { title: 'account service names who approves each stage and by when, and the job shows who holds it', slug: null },
-  34: { title: 'an approval two days late shows in the approver, the dashboard, then account service', slug: null },
-  35: { title: 'a withdrawn approval returns the stage to its holder and stays in the history', slug: null },
-}
+const short = (n: number) => PHASE2.find(x => x.n === n)!.short
 
 const rosterPort = process.env.NAPKIN_E2E_ROSTER_PORT || '18082'
-const rosterURL = `http://127.0.0.1:${rosterPort}`
 /** Where the stack's test clock lives (stack.mjs writes the same path into the roster server's environment). */
 const clockFile = join(tmpdir(), `napkin-e2e-clock-${rosterPort}`)
 const setClock = (iso: string) => writeFileSync(clockFile, iso)
@@ -38,17 +24,6 @@ const resetClock = () => rmSync(clockFile, { force: true })
 /** A date `n` days from today, as the server counts them (UTC). */
 const inDays = (n: number, from = new Date()): string => new Date(from.getTime() + n * 86_400_000).toISOString().slice(0, 10)
 const noon = (date: string): string => `${date}T12:00:00Z`
-
-async function open(browser: Browser, size: Size, mode: string = 'white'): Promise<{ ctx: BrowserContext; page: Page }> {
-  const ctx = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 1, baseURL: rosterURL })
-  await ctx.addInitScript(m => { try { localStorage.setItem('napkin.theme', m) } catch { /* not kept */ } }, mode)
-  return { ctx, page: await ctx.newPage() }
-}
-
-async function signIn(page: Page, who: { username: string }) {
-  const r = await page.request.post('/api/auth/sign-in', { data: { username: who.username } })
-  expect(r.status(), `sign in as ${who.username}`).toBe(200)
-}
 
 type Step = { stage: string; party: 'agency' | 'client'; role?: string; approver: string; contact?: string; due: string; rounds?: number }
 type Job = Awaited<ReturnType<typeof seedJ001>>
@@ -72,12 +47,12 @@ async function aJob(page: Page, ready = false): Promise<Job> {
 const section = (page: Page, job: Job) => page.locator(`[data-testid="approval-job"][data-job="${job.job}"]`)
 
 for (const size of SIZES) {
-  const t = (n: number) => `${n} ${TESTS[n].title}, ${size.tag} px`
+  const t = (n: number) => `${n} ${short(n)}, ${size.tag} px`
 
   test.afterEach(() => resetClock())
 
   test(t(33), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
     const job = await aJob(page)
     const [planner, director, client] = [inDays(1), inDays(2), inDays(6)]
 
@@ -140,7 +115,7 @@ for (const size of SIZES) {
   })
 
   test(t(34), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
     const job = await aJob(page)
     const due = inDays(1)
     await signIn(page, PEOPLE.accountService)
@@ -199,7 +174,7 @@ for (const size of SIZES) {
   })
 
   test(t(35), async ({ browser }) => {
-    const { ctx, page } = await open(browser, size)
+    const { ctx, page } = await open(browser, size, 'white', { roster: true })
     const job = await aJob(page, true)
     const [planner, director] = [inDays(1), inDays(2)]
     await signIn(page, PEOPLE.accountService)
@@ -260,7 +235,7 @@ for (const size of SIZES) {
     const { default: AxeBuilder } = await import('@axe-core/playwright')
     const problems: string[] = []
     for (const mode of MODES) {
-      const { ctx, page } = await open(browser, size, mode)
+      const { ctx, page } = await open(browser, size, mode, { roster: true })
       const job = await aJob(page)
       await signIn(page, PEOPLE.accountService)
       expect((await putRoute(page, job, [

@@ -1,0 +1,5 @@
+{
+  "task": "ask_brain", "handler": "ask_brain@1.0",
+  "result": { "answer": [ "Client A sells to bars first and shops second.", "The chosen route is a bar that closes its doors for one song." ], "links": [ { "page": "client-a/positioning", "decision": "dec_fixture_1" } ], "unknown": false },
+  "change": null, "trace": {}
+}

@@ -1,0 +1,12 @@
+{
+  "task": "judge_work", "handler": "judge_work@1.0",
+  "result": {
+    "tests": [
+      { "id": "idea.fame", "value": "pass", "evidence": "The headline can be told in one breath." },
+      { "id": "idea.single", "value": "pass", "evidence": "One thought, the easy way in." },
+      { "id": "craft.read_time", "value": "pass", "evidence": "28 seconds against a 30 second slot." }
+    ],
+    "backend": "fixture", "model": null, "rubric_version": "fixture-1", "score": { "total": 26, "idea": 9, "craft": 8, "effect": 9 }
+  },
+  "change": null, "trace": {}
+}

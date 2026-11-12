@@ -1,0 +1,5 @@
+{
+  "task": "curate_source", "handler": "curate_source@1.0",
+  "result": { "proposals": [ { "page": "client-a/positioning", "text": "Client A sells to bars first and shops second.", "cites": [ { "fact": "fact_bars_first" } ] } ] },
+  "change": null, "trace": {}
+}

@@ -1,0 +1,5 @@
+{
+  "task": "ask_brain", "handler": "ask_brain@1.0",
+  "result": { "answer": [], "links": [], "unknown": true, "line": "The brain does not know that yet." },
+  "change": null, "trace": {}
+}
