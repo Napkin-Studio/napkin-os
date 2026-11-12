@@ -20,7 +20,7 @@ export function RoundView({ round }: { round: ClientRoundView }) {
   const label = (n: number) => round.pieces.find(p => p.n === n)?.label ?? `Piece ${n}`
   return (
     <div className="cr-round" data-testid="client-round" data-round={round.round}>
-      <h3 className="bg-h3" data-testid="round-number">{roundTitle(round)}</h3>
+      <h3 className="cr-h" data-testid="round-number">{roundTitle(round)}</h3>
       {!round.current && <p className="bg-mid" data-testid="round-old">The document has changed since this round was sent. Its links no longer open.</p>}
       <ul className="bg-list cr-reviewers" aria-label="Reviewers" data-testid="round-reviewers">
         {round.reviewers.map(r => (

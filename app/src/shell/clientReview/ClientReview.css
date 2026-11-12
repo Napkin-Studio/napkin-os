@@ -336,3 +336,4 @@ label.cr-drop { justify-content: center; }
 .cr-person { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 .cr-person .bg-field:first-child { grid-column: 1 / -1; }
 .cr-lead { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.cr-h { margin: 0; font-family: var(--f-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink2); }
