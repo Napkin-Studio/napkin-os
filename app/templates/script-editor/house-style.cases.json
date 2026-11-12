@@ -1,0 +1,810 @@
+{
+ "about": "Cases for the Script editor's house style, written from napkin-radio's own constants and comments (lib/radio/parse.ts tag table, lib/radio/quality.ts, lib/ai/house-style.ts at e1317fd). Both readers of house-style.json run this file: the page's JavaScript (app/tests/scriptEditor.test.ts) and, with the rewrite handlers, the middleware's Python. A case with a `differs` note changes napkin-radio's behaviour on purpose.",
+ "parse": [
+  {
+   "name": "the tag table's three voices, two cues, with ':' and '-' separators",
+   "text": "FVO:  Have you tried the new brunch?\nMVO - Best flat white in town.\nSFX:  door swings open, cafe ambience\nMUSIC: warm acoustic bed, low\nVO:   Napkin Coffee. Weekends, sorted.",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "Have you tried the new brunch?"
+    },
+    {
+     "kind": "voice",
+     "role": "MVO",
+     "text": "Best flat white in town."
+    },
+    {
+     "kind": "sfx",
+     "text": "door swings open, cafe ambience"
+    },
+    {
+     "kind": "music",
+     "text": "warm acoustic bed, low"
+    },
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "Napkin Coffee. Weekends, sorted."
+    }
+   ]
+  },
+  {
+   "name": "dotted acronyms and the '.' and ')' separators",
+   "text": "F.V.O. - hello\nM.V.O: yes\nV.O) plain\nS.F.X: rain",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "hello"
+    },
+    {
+     "kind": "voice",
+     "role": "MVO",
+     "text": "yes"
+    },
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "plain"
+    },
+    {
+     "kind": "sfx",
+     "text": "rain"
+    }
+   ]
+  },
+  {
+   "name": "aliases: FEMALE, MALE VO, ANNCR, NARRATOR, SOUND FX, MX, BED, JINGLE",
+   "text": "FEMALE: a\nMALE VO: b\nANNCR: c\nNARRATOR: d\nSOUND FX: e\nMX: f\nBED: g\nJINGLE: h",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "a"
+    },
+    {
+     "kind": "voice",
+     "role": "MVO",
+     "text": "b"
+    },
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "c"
+    },
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "d"
+    },
+    {
+     "kind": "sfx",
+     "text": "e"
+    },
+    {
+     "kind": "music",
+     "text": "f"
+    },
+    {
+     "kind": "music",
+     "text": "g"
+    },
+    {
+     "kind": "music",
+     "text": "h"
+    }
+   ]
+  },
+  {
+   "name": "a counter digit on a tag is dropped",
+   "text": "FVO1: one\nFVO2: two",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "one"
+    },
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "two"
+    }
+   ]
+  },
+  {
+   "name": "the legacy A and B speakers cast as FVO and MVO",
+   "text": "A: hi\nB: yo\nSpeaker A: again",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "hi"
+    },
+    {
+     "kind": "voice",
+     "role": "MVO",
+     "text": "yo"
+    },
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "again"
+    }
+   ]
+  },
+  {
+   "name": "an untagged line carries on the voice line before it",
+   "text": "FVO: first\nsecond line",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "FVO",
+     "text": "first second line"
+    }
+   ]
+  },
+  {
+   "name": "copy before any tag is a neutral voice line",
+   "text": "Just words.",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "Just words."
+    }
+   ]
+  },
+  {
+   "name": "a colon that is not a known tag stays copy",
+   "text": "Note: it rains.",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "Note: it rains."
+    }
+   ]
+  },
+  {
+   "name": "an untagged line never folds into a cue",
+   "text": "SFX: door\nthen words",
+   "expect": [
+    {
+     "kind": "sfx",
+     "text": "door"
+    },
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "then words"
+    }
+   ]
+  },
+  {
+   "name": "a bare cue tag keeps an empty line",
+   "differs": "napkin-radio fills 'Sound effect' or 'Music' here; the editor keeps the line empty so the writer sees it is empty.",
+   "text": "SFX:",
+   "expect": [
+    {
+     "kind": "sfx",
+     "text": ""
+    }
+   ]
+  },
+  {
+   "name": "a TITLE line is not special",
+   "differs": "napkin-radio reads a leading TITLE: as the script's title; the editor's title is the document's.",
+   "text": "TITLE: Brunch",
+   "expect": [
+    {
+     "kind": "voice",
+     "role": "VO",
+     "text": "TITLE: Brunch"
+    }
+   ]
+  }
+ ],
+ "read": [
+  {
+   "name": "a 78-word read is 30 seconds at 2.6 words a second",
+   "format": "radio",
+   "beats": [
+    {
+     "id": "b1",
+     "kind": "voice",
+     "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+     "role": "FVO"
+    },
+    {
+     "id": "b2",
+     "kind": "sfx",
+     "text": "A glass set down on wood."
+    },
+    {
+     "id": "b3",
+     "kind": "voice",
+     "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+     "role": "MVO"
+    },
+    {
+     "id": "b4",
+     "kind": "music",
+     "text": "Slow strings, low."
+    },
+    {
+     "id": "b5",
+     "kind": "voice",
+     "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+     "role": "FVO"
+    }
+   ],
+   "words": 78,
+   "seconds": 30
+  },
+  {
+   "name": "SFX and MUSIC lines are not counted",
+   "format": "radio",
+   "beats": [
+    {
+     "id": "b1",
+     "kind": "voice",
+     "text": "one two three four five",
+     "role": "VO"
+    },
+    {
+     "id": "b2",
+     "kind": "sfx",
+     "text": "a long sound effect with many words in it"
+    },
+    {
+     "id": "b3",
+     "kind": "music",
+     "text": "and another cue line"
+    }
+   ],
+   "words": 5,
+   "seconds": 1.9
+  },
+  {
+   "name": "a body copy paragraph counts its words and is not timed",
+   "format": "body",
+   "beats": [
+    {
+     "id": "b1",
+     "kind": "line",
+     "text": "Six words in this one paragraph."
+    }
+   ],
+   "words": 6,
+   "seconds": 2.3
+  }
+ ],
+ "check": [
+  {
+   "name": "a clean 30 second radio script has no findings",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b3",
+      "kind": "voice",
+      "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+      "role": "MVO"
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": []
+  },
+  {
+   "name": "a mandatory line from the brief is listed missing",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b3",
+      "kind": "voice",
+      "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+      "role": "MVO"
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [
+     "Age 18 plus only"
+    ],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "mandatory_missing",
+     "text": "Age 18 plus only"
+    }
+   ]
+  },
+  {
+   "name": "a mandatory line that is there, in any case, is not listed",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b3",
+      "kind": "voice",
+      "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+      "role": "MVO"
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [
+     "PLEASE ENJOY RESPONSIBLY"
+    ],
+    "banned": []
+   },
+   "expect": []
+  },
+  {
+   "name": "a banned word is listed with its line",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b3",
+      "kind": "voice",
+      "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+      "role": "MVO"
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [],
+    "banned": [
+     "patient"
+    ]
+   },
+   "expect": [
+    {
+     "rule": "banned_word",
+     "beat": "b3",
+     "text": "patient"
+    }
+   ]
+  },
+  {
+   "name": "a banned word matches whole words only",
+   "differs": "napkin-radio matches its slop words anywhere inside a word; the editor matches whole words, so 'party' is not 'art'.",
+   "doc": {
+    "format": "radio",
+    "slot_s": 10,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "A party in the street, and a smart idea for the day ahead. Said slowly, with one glass poured and one chair pulled out, and nobody asking you to hurry up.",
+      "role": "VO"
+     }
+    ],
+    "mandatory": [],
+    "banned": [
+     "art"
+    ]
+   },
+   "expect": []
+  },
+  {
+   "name": "house phrases and an em dash are findings on their line",
+   "doc": {
+    "format": "radio",
+    "slot_s": 10,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "We leverage a seamless blend — every time you pour a glass of it. Said slowly, with one glass poured and one chair pulled out, and nobody asking you to hurry up.",
+      "role": "VO"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "house_phrase",
+     "beat": "b1",
+     "text": "leverage"
+    },
+    {
+     "rule": "house_phrase",
+     "beat": "b1",
+     "text": "seamless"
+    },
+    {
+     "rule": "dash",
+     "beat": "b1"
+    }
+   ]
+  },
+  {
+   "name": "a stage direction inside a spoken line is a finding; on its own SFX line it is not",
+   "doc": {
+    "format": "radio",
+    "slot_s": 10,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "(SFX: door) Welcome in and sit down for a while, we kept your chair near the window. Take your time, there is no rush at all tonight.",
+      "role": "VO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "(SFX: door)"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "stage_direction",
+     "beat": "b1"
+    }
+   ]
+  },
+  {
+   "name": "a meta phrase on a spoken line is a finding",
+   "doc": {
+    "format": "radio",
+    "slot_s": 10,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "As an AI I would say the whiskey is smooth. Said slowly, with one glass poured and one chair pulled out, and nobody asking you to hurry up.",
+      "role": "VO"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "meta_phrase",
+     "beat": "b1",
+     "text": "as an ai"
+    }
+   ]
+  },
+  {
+   "name": "a line said twice is repetition",
+   "doc": {
+    "format": "radio",
+    "slot_s": 10,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "Pour one slowly tonight and let the whole evening wait for you, as it always does.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "voice",
+      "text": "Pour one slowly tonight and let the whole evening wait for you, as it always does.",
+      "role": "MVO"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "repetition"
+    }
+   ]
+  },
+  {
+   "name": "ten words in a 30 second slot do not fit",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "One two three four five six seven eight nine ten.",
+      "role": "VO"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "length_off"
+    }
+   ]
+  },
+  {
+   "name": "one voice where the brief asks for two",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [],
+    "banned": [],
+    "cast": "duo"
+   },
+   "expect": [
+    {
+     "rule": "cast_count"
+    },
+    {
+     "rule": "length_off"
+    }
+   ]
+  },
+  {
+   "name": "two voices where one is asked for",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b3",
+      "kind": "voice",
+      "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+      "role": "MVO"
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [],
+    "banned": [],
+    "cast": "single"
+   },
+   "expect": [
+    {
+     "rule": "cast_count"
+    }
+   ]
+  },
+  {
+   "name": "headline options are checked as copy and are not timed",
+   "doc": {
+    "format": "headline",
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "line",
+      "text": "Leverage the evening"
+     },
+     {
+      "id": "b2",
+      "kind": "line",
+      "text": "Slow down, it is only Tuesday"
+     }
+    ],
+    "mandatory": [],
+    "banned": []
+   },
+   "expect": [
+    {
+     "rule": "house_phrase",
+     "beat": "b1",
+     "text": "leverage"
+    }
+   ]
+  },
+  {
+   "name": "there is no pass mark: findings are only listed",
+   "differs": "napkin-radio scores 0 to 1 and fails below 0.7; the editor lists what it finds and passes or fails nobody.",
+   "doc": {
+    "format": "radio",
+    "slot_s": 30,
+    "beats": [
+     {
+      "id": "b1",
+      "kind": "voice",
+      "text": "The room goes quiet. A glass is set down on old wood. Nobody speaks for a while, and that is the point.",
+      "role": "FVO"
+     },
+     {
+      "id": "b2",
+      "kind": "sfx",
+      "text": "A glass set down on wood."
+     },
+     {
+      "id": "b3",
+      "kind": "voice",
+      "text": "Client A takes its time, so you can take yours. Ten years in oak, slow and patient, never rushed. Pour one when the day is done.",
+      "role": "MVO"
+     },
+     {
+      "id": "b4",
+      "kind": "music",
+      "text": "Slow strings, low."
+     },
+     {
+      "id": "b5",
+      "kind": "voice",
+      "text": "Take a seat. Take a breath. Sit with it. Let the evening begin without hurry. Some things are worth waiting for. Pour slowly, drink slowly, stay awhile. Please enjoy responsibly.",
+      "role": "FVO"
+     }
+    ],
+    "mandatory": [],
+    "banned": [
+     "patient",
+     "slow",
+     "quiet",
+     "wood"
+    ]
+   },
+   "expect": [
+    {
+     "rule": "banned_word",
+     "beat": "b1",
+     "text": "quiet"
+    },
+    {
+     "rule": "banned_word",
+     "beat": "b1",
+     "text": "wood"
+    },
+    {
+     "rule": "banned_word",
+     "beat": "b2",
+     "text": "wood"
+    },
+    {
+     "rule": "banned_word",
+     "beat": "b3",
+     "text": "patient"
+    },
+    {
+     "rule": "banned_word",
+     "beat": "b3",
+     "text": "slow"
+    },
+    {
+     "rule": "banned_word",
+     "beat": "b4",
+     "text": "slow"
+    }
+   ]
+  }
+ ]
+}

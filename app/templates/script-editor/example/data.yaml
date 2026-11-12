@@ -1,0 +1,17 @@
+# A sample script for Client A, an Irish whiskey: a 30 second radio spot, as the page keeps it.
+format: radio
+slot_s: 30
+proposition: The whiskey that waits for you.
+script:
+  beats:
+    - { id: b1, kind: voice, role: FVO, text: The room goes quiet. }
+    - { id: b2, kind: sfx, text: A glass set down on old wood. }
+    - { id: b3, kind: voice, role: MVO, text: Take your time. Client A does. }
+    - { id: b4, kind: music, text: Slow strings, low, under the last line. }
+    - { id: b5, kind: voice, role: FVO, text: Pour one when the day is done. }
+  proposals: []
+  seq: 5
+checks:
+  mandatory: []
+  banned: []
+handoffs: {}

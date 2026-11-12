@@ -1,0 +1,6 @@
+# Capability requirements (CLAN spec §22) for the Script editor.
+# The editor does no inference of its own: a person writes, a creative director marks up, the writer answers.
+# The live check is code over house-style.json. An AI rewrite in the margin (tasks rewrite_line and
+# headline_options) is a later stage, behind NAPKIN_SCRIPT_AI and the server's spend guard, and is not here yet.
+requires:
+  tools: []

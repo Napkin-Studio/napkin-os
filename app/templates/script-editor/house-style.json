@@ -1,0 +1,57 @@
+{
+  "about": "The Napkin house style and the radio quality gate, as data. Ported by hand from larryob78/napkin-radio at e1317fd (lib/ai/house-style.ts, lib/radio/quality.ts, lib/radio/parse.ts): the rules are rewritten here, not copied. The page reads it for its live check and lists findings; it never changes a person's words. The rewrite handlers (not built yet) read the same file. The 0 to 1 score and the 0.7 pass mark of the source are not ported: the editor lists what it finds and passes or fails nobody. Licence: the source repo has no licence file; the product owner has approved the port and the written confirmation is still open (features/script-editor.clan).",
+  "source": { "repo": "larryob78/napkin-radio", "commit": "e1317fd" },
+  "words_per_second": 2.6,
+  "length_tolerance": 0.25,
+  "repetition_flag": 0.12,
+  "repetition_min_words": 6,
+  "slots_s": [10, 20, 30, 40],
+  "dashes": ["—", "–"],
+  "house_phrases": [
+    "delve", "leverage", "utilize", "utilise", "seamless", "seamlessly", "robust", "elevate", "unlock", "unleash",
+    "embark", "realm", "tapestry", "testament", "game-changer", "cutting-edge", "state-of-the-art", "revolutionize",
+    "revolutionise", "transformative", "synergy", "holistic", "bustling", "vibrant", "whimsical", "nestled", "boasts",
+    "treasure trove", "ever-evolving", "in today's fast-paced world", "in the world of", "when it comes to",
+    "it's worth noting", "it is important to note", "at the end of the day", "that being said", "dive into",
+    "deep dive", "take it to the next level", "best-in-class", "first and foremost", "furthermore", "moreover",
+    "in conclusion", "i hope this helps", "let me know"
+  ],
+  "meta_phrases": [
+    "as an ai", "here is your", "here's your", "here is the script", "sure, here", "lorem ipsum", "[insert",
+    "your brand here", "your company", "[brand]", "[product]", "xxxx"
+  ],
+  "stage_direction": "[\\[(]\\s*(sfx|music|pause|laughs?|beat|vo|voiceover|announcer|sound|jingle|fade|cut|mvo|fvo)\\b[^\\])]*[\\])]",
+  "rewrite_openers": [
+    "in today's (fast-paced |modern |digital )?world",
+    "in the world of [^,.]+",
+    "it's worth noting that",
+    "it is important to note that",
+    "that being said",
+    "at the end of the day",
+    "when it comes to [^,.]+",
+    "needless to say"
+  ],
+  "rewrite_swaps": { "utilize": "use", "utilise": "use" },
+  "system_fragment": "Write like a senior creative at a good agency: plain, confident, specific. Never use an em dash or an en dash; use a comma, a full stop, or rewrite. Avoid the words and phrases in this file's house_phrases. No stacked hype adjectives, no hedging, no throat-clearing openers, no sign-offs. Lead with the point, keep sentences short, prefer concrete nouns and strong verbs, vary the rhythm, and write in the active voice.",
+  "voice_roles": ["FVO", "MVO", "VO"],
+  "tags": {
+    "voice:FVO": ["FVO", "FV", "F VO", "FEMALE", "FEMALE VO", "FEMALE VOICE", "FEMALE VOICEOVER", "WOMAN", "WVO", "FEM", "F"],
+    "voice:MVO": ["MVO", "MV", "M VO", "MALE", "MALE VO", "MALE VOICE", "MALE VOICEOVER", "MAN", "MAL", "M"],
+    "voice:VO": ["VO", "V O", "VOICE", "VOICEOVER", "VOICE OVER", "ANNCR", "ANN", "ANNOUNCER", "NARRATOR", "NARR", "READ", "READER", "SPEAKER"],
+    "sfx": ["SFX", "S FX", "SOUND", "SOUND FX", "SOUNDFX", "FX", "SOUND EFFECT", "SOUND EFFECTS", "S", "SND"],
+    "music": ["MUSIC", "MUS", "MX", "MUSIC BED", "BED", "JINGLE", "STING", "STINGER", "SONG", "TRACK"]
+  },
+  "legacy_speakers": { "A": "FVO", "B": "MVO", "SPEAKER A": "FVO", "SPEAKER B": "MVO", "ONE": "FVO", "TWO": "MVO" },
+  "advice": {
+    "mandatory_missing": "Not in the script yet. Write it in, word for word where the brief says so.",
+    "banned_word": "On the list of words not to use for this job.",
+    "house_phrase": "House style: a stock phrase. Say it plainer.",
+    "dash": "House style: no em or en dash. A comma or a full stop does the same work.",
+    "meta_phrase": "Reads like a template or a chat reply, not copy.",
+    "stage_direction": "A stage direction sits inside a spoken line. Give it a line of its own as SFX or MUSIC.",
+    "repetition": "Lines or phrases repeat. Read it aloud and cut what loops.",
+    "length_off": "The words do not fit the slot.",
+    "cast_count": "The number of voices is not the number the brief asks for.",
+    "no_spoken_lines": "No spoken lines yet."
+  }
+}
