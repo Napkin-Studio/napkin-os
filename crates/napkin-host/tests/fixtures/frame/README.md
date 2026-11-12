@@ -25,3 +25,9 @@ Re-recorded since, on purpose: the 40 `web` pages on 2026-11-12, when the web
 fetch shim learned to ask the shell for a new token after a stale one
 (features/stale-token-and-menus.clan). The desktop and device pages are the
 originals.
+
+Re-recorded again, all 120 pages, on 2026-11-12, when both edit bridges
+stopped polling `clan://edit-mode` and took edit mode from the shell's
+`clan:edit-mode` message instead (features/edit-mode-pushed.clan). Each page
+grew by exactly its bridge's change: 1105 bytes for the authored pages, 212
+for the legacy ones; nothing else moved.
