@@ -65,7 +65,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         // The job index: read-only. A write to any of these is 405; jobs are opened
         // with POST /jobs (the registry), and a job's stage is read from its documents.
         .route("/t/{tenant}/jobs", get(list_jobs).post(create_job))
-        .route("/t/{tenant}/jobs/{number}", get(get_job))
+        .route("/t/{tenant}/jobs/{number}", get(get_job).patch(update_job))
         .route("/t/{tenant}/jobs/{number}/stage", get(job_stage))
         .route("/t/{tenant}/jobs/{number}/route", put(set_route))
         .route("/t/{tenant}/needs", get(needs))
@@ -375,34 +375,105 @@ pub(crate) fn job_index(ws: &Workspace) -> ApiResult<napkin_host::jobindex::JobI
     Ok(index)
 }
 
+/// The roles the signed-in person holds; none for an anonymous visitor, who is unrestricted.
+fn roles_of(user: &Option<Extension<crate::auth::Account>>) -> Vec<String> {
+    user.as_ref()
+        .map(|Extension(a)| a.roles.clone())
+        .unwrap_or_default()
+}
+
+/// Every job, each as this person's roles may see it (`jobview.rs`): the budget in hours goes to the
+/// Money roles only.
 async fn list_jobs(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
-) -> ApiResult<Json<Vec<napkin_host::jobindex::JobEntry>>> {
-    Ok(Json(job_index(&ctx.workspace(&tenant))?.jobs))
+    user: Option<Extension<crate::auth::Account>>,
+) -> ApiResult<Json<Vec<Value>>> {
+    let roles = roles_of(&user);
+    Ok(Json(
+        job_index(&ctx.workspace(&tenant))?
+            .jobs
+            .iter()
+            .map(|j| crate::jobview::job_view(j, &roles))
+            .collect(),
+    ))
 }
 
+fn refuse(line: &str) -> ApiError {
+    ApiError::new(403, line)
+}
+
+/// Open a job. Planning, account service, management and producers (an admin and a person with no role
+/// too); the budget in hours only by the Money roles among them. One attributed decision.
 async fn create_job(
     State(ctx): Ctx,
     Acting(acting): Acting,
     Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
     Json(body): Json<napkin_host::jobs::NewJob>,
 ) -> ApiResult<(StatusCode, Json<napkin_host::jobs::JobRecord>)> {
+    let roles = roles_of(&user);
+    if !crate::roles::may_manage_jobs(&roles) {
+        return Err(refuse("Your role cannot open a job."));
+    }
+    if body.budget_hours.is_some() && !crate::roles::may_set_budget(&roles) {
+        return Err(refuse(
+            "Only account service, management and producers set a job's budget in hours.",
+        ));
+    }
     let ws = ctx.workspace(&tenant);
     let job = napkin_host::jobs::create_job(&*ws.store, &acting, body)?;
     Ok((StatusCode::CREATED, Json(job)))
 }
 
+/// Change a job's title, owner, deadline or budget in hours: one attributed decision on the registry.
+async fn update_job(
+    State(ctx): Ctx,
+    Acting(acting): Acting,
+    Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
+    Path((_t, number)): Path<(String, String)>,
+    Json(body): Json<napkin_host::jobs::JobPatch>,
+) -> ApiResult<Json<napkin_host::jobs::JobRecord>> {
+    let roles = roles_of(&user);
+    if !crate::roles::may_manage_jobs(&roles) {
+        return Err(refuse("Your role cannot change a job."));
+    }
+    if body.budget_hours.is_some() && !crate::roles::may_set_budget(&roles) {
+        return Err(refuse(
+            "Only account service, management and producers set a job's budget in hours.",
+        ));
+    }
+    let ws = ctx.workspace(&tenant);
+    Ok(Json(napkin_host::jobs::update_job(
+        &*ws.store, &acting, &number, body,
+    )?))
+}
+
+/// One job as this person may see it, and the things it asks of them. A number that is not in this
+/// agency is a 404, whether or not it exists elsewhere.
 async fn get_job(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
+    user: Option<Extension<crate::auth::Account>>,
     Path((_t, number)): Path<(String, String)>,
-) -> ApiResult<Json<napkin_host::jobindex::JobEntry>> {
-    job_index(&ctx.workspace(&tenant))?
+) -> ApiResult<Json<Value>> {
+    let index = job_index(&ctx.workspace(&tenant))?;
+    let job = index
         .job(&number)
-        .cloned()
-        .map(Json)
-        .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")).into())
+        .ok_or_else(|| napkin_host::HostError::not_found(format!("no such job: {number}")))?;
+    let roles = roles_of(&user);
+    let needs: Vec<_> = index
+        .needs_for(
+            user.as_ref().map(|Extension(a)| a.username.as_str()),
+            &roles,
+        )
+        .into_iter()
+        .filter(|n| n.job == number)
+        .collect();
+    Ok(Json(
+        serde_json::json!({ "job": crate::jobview::job_view(job, &roles), "needs": needs }),
+    ))
 }
 
 #[derive(Deserialize)]

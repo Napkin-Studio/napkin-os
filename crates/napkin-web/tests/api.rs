@@ -3178,6 +3178,10 @@ async fn a_job_files_its_documents_and_the_index_answers_read_only() {
     // the index is never written to: every write method on it is 405
     for route in ["dashboard", "needs", "jobs/J001", "jobs/J001/stage"] {
         for method in ["POST", "PUT", "PATCH", "DELETE"] {
+            // a job's own fields are changed with PATCH (features/job-page.clan); its index is not
+            if method == "PATCH" && route == "jobs/J001" {
+                continue;
+            }
             let r = send(
                 &s,
                 request(

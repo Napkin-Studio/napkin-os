@@ -622,6 +622,32 @@ pub fn allowed(roles: &[String], route: &str, _client: Option<&str>) -> bool {
     group == Group::Open || roles.iter().any(|r| group.roles().contains(&r.as_str()))
 }
 
+/// Is a person with `roles` in `group`? Used to decide which fields of a job they are sent. A person with
+/// no roles is unrestricted; an admin or a demo is in every group.
+pub fn in_group(roles: &[String], group: Group) -> bool {
+    roles.is_empty()
+        || is_switcher(roles)
+        || roles.iter().any(|r| group.roles().contains(&r.as_str()))
+}
+
+/// The roles that may open a job and change its title, owner and deadline (features/job-page.clan):
+/// planning (the planner opens the job at step 1 of v2 section 3), account service, management and
+/// producers. Creative roles, the Agency Brain and traffic may not. An allow list: a role added later is
+/// left out until it is named here. A person with no role is unrestricted, as everywhere; an admin too.
+pub const JOB_MANAGERS: &[&str] = &["planning", "account-service", "management", "producer"];
+
+pub fn may_manage_jobs(roles: &[String]) -> bool {
+    roles.is_empty()
+        || is_switcher(roles)
+        || roles.iter().any(|r| JOB_MANAGERS.contains(&r.as_str()))
+}
+
+/// The budget in hours is money (the owner's answer is open; the design's default): only the Money roles
+/// set it, and only those of them who manage jobs.
+pub fn may_set_budget(roles: &[String]) -> bool {
+    may_manage_jobs(roles) && in_group(roles, Group::Money)
+}
+
 /// The middleware: a signed-in person's roles against the route. 403 when the
 /// roles may not open it; everyone else passes through.
 pub async fn guard(request: Request, next: Next) -> Response {
