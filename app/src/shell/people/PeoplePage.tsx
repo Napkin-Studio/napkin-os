@@ -35,13 +35,14 @@ interface Draft {
   username: string
   /** The sign-in name was typed, not made: name and agency changes leave it. */
   touched: boolean
-  shown: string
+  /** The new agency's name as shown; null until edited (then it is the typed agency). */
+  shown: string | null
   from: string
   base: string
   accent: string
 }
 
-const FRESH: Draft = { name: '', agency: '', username: '', touched: false, shown: '', from: '', base: '#0F6B5C', accent: '#9FE6D8' }
+const FRESH: Draft = { name: '', agency: '', username: '', touched: false, shown: null, from: '', base: '#0F6B5C', accent: '#9FE6D8' }
 
 export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial = null }: Props) {
   const [list, setList] = useState<PeopleList | null>(initial)
@@ -85,7 +86,8 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
   }, [draft, onClose])
 
   const agencies = useMemo(() => list?.agencies ?? [], [list])
-  const rows = useMemo(() => findPeople(list?.people ?? [], q, agencies), [list, q, agencies])
+  // the one just added first, as the mock shows it
+  const rows = useMemo(() => findPeople(list?.people ?? [], q, agencies).sort((a, b) => Number(b.id === fresh) - Number(a.id === fresh)), [list, q, agencies, fresh])
 
   const add = async () => {
     if (!draft) return
@@ -95,7 +97,7 @@ export default function PeoplePage({ user, onClose, api = httpPeopleApi, initial
     try {
       let agencyId = known
       if (!agencyId) {
-        const made = await api.addAgency({ name: draft.shown.trim() || draft.agency.trim(), id: agencySlug(draft.agency), base: draft.base, accent: draft.accent })
+        const made = await api.addAgency({ name: (draft.shown ?? '').trim() || draft.agency.trim(), id: agencySlug(draft.agency), base: draft.base, accent: draft.accent })
         agencyId = made.id
       }
       const username = draft.touched ? draft.username.trim() : signInNameOf(draft.name, agencyId)
@@ -212,7 +214,7 @@ export function AddSheet({ draft, setDraft, agencies, busy, onCancel, onAdd }: {
   const typed = draft.agency.trim()
   const known: AgencyColours | null = id ? agencyColours(id, agencies) : null
   const count = id ? agencies.find(a => a.id === id)?.people ?? 0 : 0
-  const look = newAgencyLook(draft.shown || typed, draft.base, draft.accent)
+  const look = newAgencyLook(draft.shown ?? typed, draft.base, draft.accent)
   const username = draft.touched ? draft.username : signInNameOf(draft.name, id ?? (agencySlug(typed) || null))
   const set = (over: Partial<Draft>) => setDraft({ ...draft, ...over })
   const ready = !!draft.name.trim() && !!typed && !busy
@@ -256,7 +258,7 @@ export function AddSheet({ draft, setDraft, agencies, busy, onCancel, onAdd }: {
         <div className="pa-newag" data-testid="new-agency">
           <h2>New agency: {typed}</h2>
           <div className="pa-grid">
-            <div><label htmlFor="pa-shown">Name as shown</label><input id="pa-shown" value={draft.shown} placeholder={typed} onChange={e => set({ shown: e.target.value })} /></div>
+            <div><label htmlFor="pa-shown">Name as shown</label><input id="pa-shown" value={draft.shown ?? typed} placeholder={typed} onChange={e => set({ shown: e.target.value })} /></div>
             <div>
               <label htmlFor="pa-tpl">Start from a look</label>
               <select id="pa-tpl" value={draft.from} onChange={e => {

@@ -44,7 +44,7 @@ const PEOPLE: PersonRow[] = [
   { id: 'plu@pluto', name: 'Pluto Test', agency: 'pluto', admin: false, added_by: 'roster', added_at: '2026-11-10T09:00:00Z' },
   { id: 'gone@napkin', name: 'Gone', agency: 'napkin', admin: false, added_by: 'engineer@napkin', added_at: '2026-11-11T09:00:00Z', removed_at: '2026-11-12T09:00:00Z' },
 ]
-const draft = (over: object = {}) => ({ name: '', agency: '', username: '', touched: false, shown: '', from: '', base: '#0F6B5C', accent: '#9FE6D8', ...over })
+const draft = (over: object = {}) => ({ name: '', agency: '', username: '', touched: false, shown: null, from: '', base: '#0F6B5C', accent: '#9FE6D8', ...over })
 const sheet = (over: object) => renderToStaticMarkup(createElement(AddSheet, { draft: draft(over), setDraft: noop, agencies: AGENCIES, busy: false, onCancel: noop, onAdd: noop }))
 const page = (user: string) => renderToStaticMarkup(createElement(PeoplePage, { user, onClose: noop, initial: { people: PEOPLE, agencies: AGENCIES } }))
 
@@ -84,6 +84,7 @@ test('a new agency gets its look on the page, and its people wear it after sign-
   assert.match(html, /data-agency="new"/)
   assert.match(html, /data-testid="new-agency"/)
   assert.match(html, /New agency: Rothco/)
+  assert.match(html, /id="pa-shown" placeholder="Rothco" value="Rothco"/, 'the name as shown starts as typed')
   assert.match(html, /<b>New agency<\/b> <small>· id rothco · set its look below/)
   assert.match(html, /id="pa-em" value="aoife@rothco"/)
   assert.match(html, /<option value="" selected="">Plain<\/option><option value="wk">Like Wieden\+Kennedy<\/option>/)
