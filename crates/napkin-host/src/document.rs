@@ -94,6 +94,10 @@ pub struct Document {
     // library has one it may use (see `crate::view`). Chosen at open and
     // carried through the document's own changes, like `trusted`.
     library_view: Option<Arc<LibraryView>>,
+    // What a client's review link is shown of this snapshot, with each piece hashed: worked out
+    // once, the first time it is asked for. A snapshot never changes, so neither does this, and a
+    // changed document is a new snapshot with an empty cache (`ops::client_pieces::pieces_of`).
+    pub(crate) pieces: std::sync::OnceLock<Option<Vec<crate::ops::client_pieces::Piece>>>,
 }
 
 impl Document {
@@ -119,6 +123,7 @@ impl Document {
             clan,
             trusted,
             library_view: None,
+            pieces: Default::default(),
         })
     }
 
@@ -234,6 +239,7 @@ impl Document {
             clan,
             trusted: self.trusted,
             library_view: self.library_view.clone(),
+            pieces: Default::default(),
         })
     }
 }

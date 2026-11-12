@@ -36,15 +36,19 @@ struct Server {
 }
 
 fn server() -> Server {
+    server_with(|c| c)
+}
+
+fn server_with(tune: impl FnOnce(AppCtx) -> AppCtx) -> Server {
     let dir = tempfile::tempdir().unwrap();
     let mail = Arc::new(Memory::default());
     let clock = Arc::new(AtomicU64::new(1_800_000_000));
     let c = clock.clone();
-    let ctx = Arc::new(
+    let ctx = Arc::new(tune(
         AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
             .with_mailer(mail.clone() as Arc<dyn Mailer>, 200)
             .with_code_clock(move || c.load(Ordering::SeqCst)),
-    );
+    ));
     let app = napkin_web::router(ctx.clone(), None, false);
     Server {
         _dir: dir,
@@ -992,6 +996,110 @@ async fn a_piece_is_served_as_data_from_a_fixed_list_with_the_headers_that_stop_
             "{uri} served an asset the link does not name"
         );
     }
+}
+
+/// A big film: every Range request on it must cost the document one read, not one each.
+fn big_film(len: usize) -> Vec<u8> {
+    let mut f = mp4();
+    f.resize(len, 7);
+    f
+}
+
+#[tokio::test]
+async fn many_ranges_of_one_film_read_the_document_once_and_the_lock_is_free_after() {
+    let s = server();
+    let a = agency(
+        &s,
+        VISUAL,
+        visual_data(),
+        &[
+            ("a.png", b"a".to_vec()),
+            ("b.png", b"b".to_vec()),
+            ("c.mp4", big_film(2_000_000)),
+        ],
+    )
+    .await;
+    let r = round(&s, &a).await;
+    let tok = &r.links[0].1;
+    for i in 0..30usize {
+        let lo = i * 50_000;
+        let got = send_with(
+            &s,
+            "GET",
+            &format!("/c/{tok}/piece/3"),
+            &[("range", &format!("bytes={lo}-{}", lo + 999))],
+            None,
+        )
+        .await;
+        assert_eq!(got.status, StatusCode::PARTIAL_CONTENT);
+        assert_eq!(got.body.len(), 1000);
+    }
+    assert_eq!(
+        s.ctx.pieces.decodes(),
+        1,
+        "the film was read once, not once a request"
+    );
+    // staff are not kept out of the document while a piece is out: the lock is not held across the
+    // body (the reply is built from a buffer the document no longer guards)
+    let ws = s
+        .ctx
+        .workspace(&napkin_web::tenant::TenantId::parse(&a.tenant).unwrap());
+    let sess = ws.session(&napkin_host::DocId::new(a.doc.clone())).unwrap();
+    let held = sess.read(|_| Ok(())).is_ok();
+    assert!(held);
+}
+
+#[tokio::test]
+async fn a_link_may_be_sent_only_so_many_bytes_a_minute() {
+    let s = server_with(|c| c.with_piece_byte_cap(5_000));
+    let a = agency(
+        &s,
+        VISUAL,
+        visual_data(),
+        &[
+            ("a.png", b"a".to_vec()),
+            ("b.png", b"b".to_vec()),
+            ("c.mp4", big_film(100_000)),
+        ],
+    )
+    .await;
+    let r = round(&s, &a).await;
+    let (first, other) = (&r.links[0].1, &r.links[1].1);
+    let ask = |tok: String, lo: usize, hi: usize| {
+        let s = &s;
+        async move {
+            send_with(
+                s,
+                "GET",
+                &format!("/c/{tok}/piece/3"),
+                &[("range", &format!("bytes={lo}-{hi}"))],
+                None,
+            )
+            .await
+        }
+    };
+    assert_eq!(
+        ask(first.clone(), 0, 3_999).await.status,
+        StatusCode::PARTIAL_CONTENT
+    );
+    // 4,000 of 5,000 spent: another 4,000 is refused, a smaller one is not
+    assert_eq!(
+        ask(first.clone(), 4_000, 7_999).await.status,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(
+        ask(first.clone(), 4_000, 4_999).await.status,
+        StatusCode::PARTIAL_CONTENT
+    );
+    assert_eq!(
+        ask(first.clone(), 5_000, 5_000).await.status,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    // the budget is the link's own: another reviewer's link is not spent
+    assert_eq!(
+        ask(other.clone(), 0, 3_999).await.status,
+        StatusCode::PARTIAL_CONTENT
+    );
 }
 
 // ── the email code ──────────────────────────────────────────────────────────

@@ -28,6 +28,22 @@ use super::sanitize_asset_name;
 /// At most this many pieces in one round.
 pub const MAX_PIECES: usize = 40;
 
+/// How many times an asset's bytes were read out of an archive, and how many times they were
+/// hashed, by this module. Counters for tests: a review link's reads must not cost more reads or
+/// hashes as requests come in.
+pub static ASSET_READS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub static ASSET_HASHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+fn counted_read(doc: &Document, path: &str) -> Option<Vec<u8>> {
+    ASSET_READS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    doc.clan().read_entry(path).ok()
+}
+
+fn counted_hash(bytes: &[u8]) -> String {
+    ASSET_HASHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    sha256_prefixed(bytes)
+}
+
 /// What a text field holds, from its app's schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shape {
@@ -247,6 +263,13 @@ pub fn kind_of(name: &str) -> Option<(&'static str, &'static str)> {
     })
 }
 
+/// The content type a piece is served with, from its address alone and the fixed list.
+pub fn content_type_of(piece: &Piece) -> Option<&'static str> {
+    let name = sanitize_asset_name(piece.address.strip_prefix("human/assets/")?)?;
+    let (kind, ctype) = kind_of(&name)?;
+    (kind == piece.kind).then_some(ctype)
+}
+
 /// The length of an MP4 in milliseconds, from its `moov/mvhd` box; `None` when it does not say.
 pub fn mp4_duration_ms(b: &[u8]) -> Option<u64> {
     fn boxes(b: &[u8]) -> Vec<(&[u8], &[u8])> {
@@ -300,7 +323,15 @@ pub fn content_hash_of(doc: &Document) -> Option<String> {
 /// What a reviewer looks at in `doc`, in order, or `None` when its type has no clean spec.
 /// A document with media (a visual brief's frames) is its media, one piece each; any other is one
 /// page of words. A medium is listed only when its file is in the document and its type is a known one.
+///
+/// Each piece is hashed once for a snapshot of the document and kept with it, so that asking again
+/// (every state, every range of a film) costs nothing: a snapshot is one version, and a changed
+/// asset is a new snapshot with its own hashes.
 pub fn pieces_of(doc: &Document) -> Option<Vec<Piece>> {
+    doc.pieces.get_or_init(|| work_out(doc)).clone()
+}
+
+fn work_out(doc: &Document) -> Option<Vec<Piece>> {
     let spec = spec_of(doc)?;
     let data = data_of(doc.clan()).ok()?;
     let mut out: Vec<Piece> = Vec::new();
@@ -319,7 +350,7 @@ pub fn pieces_of(doc: &Document) -> Option<Vec<Piece>> {
             continue;
         };
         let path = format!("human/assets/{name}");
-        let Ok(bytes) = doc.clan().read_entry(&path) else {
+        let Some(bytes) = counted_read(doc, &path) else {
             continue;
         };
         let label = frame
@@ -333,7 +364,7 @@ pub fn pieces_of(doc: &Document) -> Option<Vec<Piece>> {
             address: path,
             kind: kind.into(),
             label,
-            sha256: sha256_prefixed(&bytes),
+            sha256: counted_hash(&bytes),
             ai: ai_of(frame).into(),
             duration_ms: (kind == "film" && name.to_ascii_lowercase().ends_with(".mp4"))
                 .then(|| mp4_duration_ms(&bytes))
@@ -356,8 +387,9 @@ pub fn pieces_of(doc: &Document) -> Option<Vec<Piece>> {
     Some(out)
 }
 
-/// The bytes of a piece, read fresh from the document, and the content type it is served with:
-/// only when the bytes hash to what the issue recorded.
+/// The bytes of a piece, read once from the document, and the content type it is served with:
+/// only when the piece, as this snapshot hashed it, is what the issue recorded. The bytes are
+/// not hashed again: they are the ones the snapshot's own hash was made from.
 pub fn bytes_of(doc: &Document, piece: &Piece) -> Option<(&'static str, Vec<u8>)> {
     let name = piece.address.strip_prefix("human/assets/")?;
     let name = sanitize_asset_name(name)?;
@@ -365,11 +397,10 @@ pub fn bytes_of(doc: &Document, piece: &Piece) -> Option<(&'static str, Vec<u8>)
     if kind != piece.kind {
         return None;
     }
-    let bytes = doc
-        .clan()
-        .read_entry(&format!("human/assets/{name}"))
-        .ok()?;
-    (sha256_prefixed(&bytes) == piece.sha256).then_some((ctype, bytes))
+    let now = pieces_of(doc)?;
+    now.iter().find(|p| p.same_as(piece))?;
+    let bytes = counted_read(doc, &format!("human/assets/{name}"))?;
+    Some((ctype, bytes))
 }
 
 /// A brief point a comment may be tagged to: a field the spec shows and the document has not

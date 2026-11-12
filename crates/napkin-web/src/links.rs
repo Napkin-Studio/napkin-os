@@ -173,6 +173,8 @@ pub fn ends() -> (String, u64) {
 #[derive(Default)]
 pub struct Limiter {
     seen: Mutex<HashMap<String, (Instant, u32)>>,
+    /// What each key has spent this window, in bytes (`spend`).
+    spent: Mutex<HashMap<String, (Instant, u64)>>,
 }
 
 const WINDOW: Duration = Duration::from_secs(60);
@@ -199,6 +201,70 @@ impl Limiter {
         }
         e.1 += 1;
         e.1 <= cap
+    }
+}
+
+impl Limiter {
+    /// Spend `n` bytes of `key`'s budget of `cap` over `window`: `false`, and nothing spent, when
+    /// that would go past it. A window starts at a key's first spend.
+    pub fn spend(&self, key: &str, n: u64, cap: u64, window: Duration) -> bool {
+        let mut spent = self.spent.lock().unwrap();
+        let now = Instant::now();
+        if spent.len() > 10_000 {
+            spent.retain(|_, (at, _)| now.duration_since(*at) < Duration::from_secs(3600));
+        }
+        let e = spent.entry(key.to_string()).or_insert((now, 0));
+        if now.duration_since(e.0) >= window {
+            *e = (now, 0);
+        }
+        if e.1.saturating_add(n) > cap {
+            return false;
+        }
+        e.1 += n;
+        true
+    }
+}
+
+/// The bytes of the pieces served lately, so a film's many Range requests read the document once.
+/// Keyed by tenant, document and the piece's recorded hash, so an entry is only ever the bytes that
+/// hash names, and held to a total size, oldest out first.
+#[derive(Default)]
+pub struct PieceCache {
+    entries: Mutex<Vec<(String, Bytes)>>,
+    decodes: std::sync::atomic::AtomicUsize,
+}
+
+/// The most the cache holds, in bytes. A piece bigger than this is read for each request.
+const PIECE_CACHE_BYTES: usize = 192 * 1024 * 1024;
+
+impl PieceCache {
+    pub fn get(&self, key: &str) -> Option<Bytes> {
+        let mut e = self.entries.lock().unwrap();
+        let at = e.iter().position(|(k, _)| k == key)?;
+        let hit = e.remove(at);
+        let out = hit.1.clone();
+        e.push(hit); // most recently used last
+        Some(out)
+    }
+
+    pub fn put(&self, key: String, bytes: Bytes) {
+        self.decodes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if bytes.len() > PIECE_CACHE_BYTES {
+            return;
+        }
+        let mut e = self.entries.lock().unwrap();
+        e.retain(|(k, _)| *k != key);
+        e.push((key, bytes));
+        let mut total: usize = e.iter().map(|(_, b)| b.len()).sum();
+        while total > PIECE_CACHE_BYTES && e.len() > 1 {
+            total -= e.remove(0).1.len();
+        }
+    }
+
+    /// How many times a piece was read out of a document to fill the cache (for tests).
+    pub fn decodes(&self) -> usize {
+        self.decodes.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -461,6 +527,10 @@ async fn answer(
 
 /// Reads of a piece's bytes, a minute (a film is fetched in several ranges).
 const PER_PIECE: u32 = 240;
+/// Bytes of pieces one link may be sent in a minute: 256 MiB. A person watching a film of a few
+/// tens of megabytes twice and scrubbing through it stays well under; a link forwarded to a script
+/// is held to about 34 megabits a second, however many ranges it asks for.
+pub const PIECE_BYTES_PER_MINUTE: u64 = 256 * 1024 * 1024;
 /// Tries at the emailed code, per link, in one window.
 const CODE_TRIES: u32 = 5;
 /// Mails of the code, per link, in one window.
@@ -750,25 +820,53 @@ async fn piece(
         Ok(r) => r,
         Err(r) => return r,
     };
-    let resp = call(
+    // Is the link open and the piece current? Answered from what the host has already hashed for
+    // this version: nothing is read from the document.
+    let head = call(
         &ctx,
         &tenant,
         &session,
         &who,
         "/client-link/piece",
-        json!({ "id": claims.id, "n": n }),
+        json!({ "id": claims.id, "n": n, "head": true }),
     );
-    if resp.status != 200 {
-        let v: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
-        return refused(resp.status, &v);
+    let head_json: Value = serde_json::from_slice(&head.body).unwrap_or(Value::Null);
+    if head.status != 200 {
+        return refused(head.status, &head_json);
     }
-    let ctype = resp
-        .headers
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-        .map(|(_, v)| v.clone())
-        .unwrap_or_else(|| "application/octet-stream".into());
-    let total = resp.body.len();
+    let ctype = head_json["content_type"]
+        .as_str()
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let key = format!(
+        "{}|{}|{}",
+        claims.tenant,
+        claims.doc,
+        head_json["sha256"].as_str().unwrap_or_default()
+    );
+    // The bytes are read out of the document only when no recent request has: the document's lock
+    // is held for that read and not while they are sent.
+    let bytes = match ctx.pieces.get(&key) {
+        Some(b) => b,
+        None => {
+            let resp = call(
+                &ctx,
+                &tenant,
+                &session,
+                &who,
+                "/client-link/piece",
+                json!({ "id": claims.id, "n": n }),
+            );
+            if resp.status != 200 {
+                let v: Value = serde_json::from_slice(&resp.body).unwrap_or(Value::Null);
+                return refused(resp.status, &v);
+            }
+            let b = Bytes::from(resp.body);
+            ctx.pieces.put(key, b.clone());
+            b
+        }
+    };
+    let total = bytes.len();
     // Range: one range, as a video element asks for it
     let (status, lo, hi) = match headers
         .get(header::RANGE)
@@ -788,10 +886,20 @@ async fn piece(
             return r;
         }
     };
+    let sent = if total == 0 { 0 } else { hi - lo + 1 } as u64;
+    if !ctx.limiter.spend(
+        &format!("{}:bytes", claims.id),
+        sent,
+        ctx.piece_byte_cap,
+        WINDOW,
+    ) {
+        return too_many();
+    }
+    // a slice of the one buffer, not a copy of it
     let body = if total == 0 {
-        Vec::new()
+        Bytes::new()
     } else {
-        resp.body[lo..=hi].to_vec()
+        bytes.slice(lo..=hi)
     };
     let mut r = (status, body).into_response();
     let h = r.headers_mut();

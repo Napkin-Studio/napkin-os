@@ -560,7 +560,16 @@ pub fn dispatch(
             crate::ops::client_link::comment_withdraw(c, d, &id, &comment)
         }),
         "/client-link/piece" => match session.read(|d| {
-            let (id, n) = crate::ops::client_link::parse_piece(&req.body_str())?;
+            let (id, n, head) = crate::ops::client_link::parse_piece(&req.body_str())?;
+            if head {
+                let (ctype, sha256) = crate::ops::client_link::piece_head(d, &id, n)?;
+                let body =
+                    serde_json::json!({ "ok": true, "content_type": ctype, "sha256": sha256 });
+                return Ok((
+                    String::from("application/json"),
+                    body.to_string().into_bytes(),
+                ));
+            }
             crate::ops::client_link::piece_bytes(d, &id, n)
         }) {
             Ok((ctype, bytes)) => HostResponse::new(200, &ctype, bytes),

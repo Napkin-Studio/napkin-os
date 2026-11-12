@@ -1247,8 +1247,9 @@ pub fn comment_withdraw(ctx: &Ctx, doc: &Document, id: &str, comment: &str) -> H
 
 // ── a piece's bytes ─────────────────────────────────────────────────────────
 
-/// `POST /client-link/piece`: `{id, n}` (n from 1).
-pub fn parse_piece(raw: &str) -> HostResult<(String, usize)> {
+/// `POST /client-link/piece`: `{id, n, head?}` (n from 1). With `head` the reply is the piece's
+/// content type and hash and no bytes: the link and the piece are checked, nothing is read.
+pub fn parse_piece(raw: &str) -> HostResult<(String, usize, bool)> {
     let v = body(raw)?;
     let id = required(&v, "id")?;
     if !valid_id(&id) {
@@ -1258,13 +1259,14 @@ pub fn parse_piece(raw: &str) -> HostResult<(String, usize)> {
         .get("n")
         .and_then(Value::as_u64)
         .ok_or_else(|| bad("`n` is the number of a piece, from 1"))? as usize;
+    let head = v.get("head").and_then(Value::as_bool).unwrap_or(false);
     // a piece 0 is no piece: the same answer as any number outside the list
-    Ok((id, n))
+    Ok((id, n, head))
 }
 
-/// The bytes of piece `n` of an open review link, and its content type: only when the link is open,
-/// the piece is one the issue recorded, and the file still hashes to what the issue recorded.
-pub fn piece_bytes(doc: &Document, id: &str, n: usize) -> HostResult<(String, Vec<u8>)> {
+/// The piece `n` of an open review link, as the issue recorded it: only when the link is open and
+/// the piece is a file the issue named.
+fn open_piece(doc: &Document, id: &str, n: usize) -> HostResult<Piece> {
     let st = state(doc, id)?;
     let issued = match st {
         LinkState::Open(i) => i,
@@ -1286,7 +1288,26 @@ pub fn piece_bytes(doc: &Document, id: &str, n: usize) -> HostResult<(String, Ve
     if piece.kind == "text" {
         return Err(HostError::not_found("that piece is words, not a file"));
     }
-    let (ctype, bytes) = pieces::bytes_of(doc, piece)
+    Ok(piece.clone())
+}
+
+/// What a piece will be served as, and the hash it was recorded with, without reading its bytes.
+pub fn piece_head(doc: &Document, id: &str, n: usize) -> HostResult<(String, String)> {
+    let piece = open_piece(doc, id, n)?;
+    let ctype = pieces::content_type_of(&piece)
+        .ok_or_else(|| HostError::new(410, "this link is superseded"))?;
+    // the same check the bytes get: the piece, as this version hashes it, is what was recorded
+    if !pieces::pieces_of(doc).is_some_and(|now| now.iter().any(|p| p.same_as(&piece))) {
+        return Err(HostError::new(410, "this link is superseded"));
+    }
+    Ok((ctype.to_string(), piece.sha256))
+}
+
+/// The bytes of piece `n` of an open review link, and its content type: only when the link is open,
+/// the piece is one the issue recorded, and the file still is what the issue recorded.
+pub fn piece_bytes(doc: &Document, id: &str, n: usize) -> HostResult<(String, Vec<u8>)> {
+    let piece = open_piece(doc, id, n)?;
+    let (ctype, bytes) = pieces::bytes_of(doc, &piece)
         .ok_or_else(|| HostError::new(410, "this link is superseded"))?;
     Ok((ctype.to_string(), bytes))
 }
