@@ -203,6 +203,23 @@ fn find_issue<'c>(chain: &'c DecisionChain, here: &str, id: &str) -> Option<&'c 
     })
 }
 
+/// A client's context reaches its own link and no other: `403` when the actor is a client and the
+/// link's issue record names someone else. A link that does not exist is left to the caller's 404,
+/// and a person on staff is not confined.
+fn confine(ctx: &Ctx, doc: &Document, id: &str) -> HostResult<()> {
+    if !ctx.actor.is_client() {
+        return Ok(());
+    }
+    let chain = chain_of(doc)?;
+    let here = doc.clan().document_id().to_string();
+    if let Some(issued) = find_issue(&chain, &here, id).and_then(issued_of) {
+        if ctx.actor.as_str() != format!("client:{}", issued.email) {
+            return Err(HostError::new(403, "this link is for someone else"));
+        }
+    }
+    Ok(())
+}
+
 /// What the link `id` is worth now, from the chain and the document's data.
 pub fn state(doc: &Document, id: &str) -> HostResult<LinkState> {
     let chain = chain_of(doc)?;
@@ -1304,7 +1321,8 @@ pub fn parse_piece(raw: &str) -> HostResult<(String, usize, bool)> {
 
 /// The piece `n` of an open review link, as the issue recorded it: only when the link is open and
 /// the piece is a file the issue named.
-fn open_piece(doc: &Document, id: &str, n: usize) -> HostResult<Piece> {
+fn open_piece(ctx: &Ctx, doc: &Document, id: &str, n: usize) -> HostResult<Piece> {
+    confine(ctx, doc, id)?;
     let st = state(doc, id)?;
     let issued = match st {
         LinkState::Open(i) => i,
@@ -1330,8 +1348,8 @@ fn open_piece(doc: &Document, id: &str, n: usize) -> HostResult<Piece> {
 }
 
 /// What a piece will be served as, and the hash it was recorded with, without reading its bytes.
-pub fn piece_head(doc: &Document, id: &str, n: usize) -> HostResult<(String, String)> {
-    let piece = open_piece(doc, id, n)?;
+pub fn piece_head(ctx: &Ctx, doc: &Document, id: &str, n: usize) -> HostResult<(String, String)> {
+    let piece = open_piece(ctx, doc, id, n)?;
     let ctype = pieces::content_type_of(&piece)
         .ok_or_else(|| HostError::new(410, "this link is superseded"))?;
     // the same check the bytes get: the piece, as this version hashes it, is what was recorded
@@ -1343,8 +1361,8 @@ pub fn piece_head(doc: &Document, id: &str, n: usize) -> HostResult<(String, Str
 
 /// The bytes of piece `n` of an open review link, and its content type: only when the link is open,
 /// the piece is one the issue recorded, and the file still is what the issue recorded.
-pub fn piece_bytes(doc: &Document, id: &str, n: usize) -> HostResult<(String, Vec<u8>)> {
-    let piece = open_piece(doc, id, n)?;
+pub fn piece_bytes(ctx: &Ctx, doc: &Document, id: &str, n: usize) -> HostResult<(String, Vec<u8>)> {
+    let piece = open_piece(ctx, doc, id, n)?;
     let (ctype, bytes) = pieces::bytes_of(doc, &piece)
         .ok_or_else(|| HostError::new(410, "this link is superseded"))?;
     Ok((ctype.to_string(), bytes))
@@ -1544,6 +1562,12 @@ pub fn round_view(doc: &Document) -> HostResult<Value> {
         "pieces": piece_rows, "reviewers": reviewers, "comments": comments,
         "approver_answer": approver_answer, "earlier_rounds": earlier,
     }))
+}
+
+/// [`state_reply`] for a request: a client's context is held to its own link first.
+pub fn state_reply_as(ctx: &Ctx, doc: &Document, id: &str) -> HostResult<Value> {
+    confine(ctx, doc, id)?;
+    state_reply(doc, id)
 }
 
 /// `POST /client-link/state`: `{id}`. A read, for the client or an agency person.

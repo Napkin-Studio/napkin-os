@@ -24,7 +24,11 @@ const A_MAIL: &str = "approver@client-a.example";
 const B_MAIL: &str = "second@client-a.example";
 const C_MAIL: &str = "third@client-a.example";
 
+/// The asset counters are process-wide, so every test here runs one at a time.
+static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct Rig {
+    _one: std::sync::MutexGuard<'static, ()>,
     _dir: tempfile::TempDir,
     session: Session,
     id: DocId,
@@ -98,12 +102,14 @@ fn build(app: &str, data: &Value, assets: &[(&str, &[u8])]) -> Vec<u8> {
 }
 
 fn rig(app: &str, data: Value, assets: &[(&str, &[u8])]) -> Rig {
+    let one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let id = DocId::from(dir.path().join("doc.clan"));
     std::fs::write(id.as_str(), build(app, &data, assets)).unwrap();
     let session = Session::with_ctx(Arc::new(FsStore::new(dir.path().to_path_buf())), staff());
     session.open(id.clone()).unwrap();
     Rig {
+        _one: one,
         _dir: dir,
         session,
         id,
@@ -224,8 +230,6 @@ fn reads() -> (usize, usize) {
     )
 }
 
-// The counters are process-wide, so the test that reads them is the only one in this file that
-// serves pieces or asks for a state; the others never touch an asset.
 #[test]
 fn asset_reads_and_hashes_do_not_grow_with_requests_on_an_unchanged_document() {
     let r = Rig::locked_visual();
@@ -380,6 +384,45 @@ fn a_second_round_on_the_same_lock_withdraws_the_first_rounds_open_links() {
         r.of("withdraw_link").len(),
         3,
         "only E's link was still open"
+    );
+}
+
+#[test]
+fn a_client_actor_cannot_ask_for_another_links_state_or_piece() {
+    let r = Rig::locked_visual();
+    assert_eq!(r.three(REVIEW).0, 200);
+    // their own link: fine
+    assert_eq!(r.state(A_MAIL, A).0, 200);
+    assert_eq!(
+        r.raw(
+            &client(A_MAIL),
+            "/client-link/piece",
+            json!({ "id": A, "n": 1 })
+        )
+        .0,
+        200
+    );
+    // B's link, asked for as A: refused, and nothing of B's comes back
+    let (s, v) = r.state(A_MAIL, B);
+    assert_eq!(s, 403, "{v}");
+    assert!(!v.to_string().contains(B_MAIL) && !v.to_string().contains("Bea"));
+    for head in [false, true] {
+        let (s, body, _) = r.raw(
+            &client(A_MAIL),
+            "/client-link/piece",
+            json!({ "id": B, "n": 1, "head": head }),
+        );
+        assert_eq!(s, 403, "head {head}");
+        assert!(!String::from_utf8_lossy(&body).contains(B_MAIL));
+    }
+    // a person on staff still reads any link's state, and a link nobody made is still 404
+    assert_eq!(
+        r.call(&staff(), "/client-link/state", json!({ "id": B })).0,
+        200
+    );
+    assert_eq!(
+        r.state(A_MAIL, "9".repeat(32).replace('9', "0").as_str()).0,
+        404
     );
 }
 
