@@ -223,6 +223,8 @@ async fn main() {
         .with_seed(settings.seed_dir.clone())
         .with_dogfood(dogfood.clone())
         .with_roles_dir(Some(settings.config_dir.clone()))
+        // the e2e stack moves the job index's clock through a file; no deployment sets this
+        .with_jobs_clock_file(env_string("NAPKIN_TEST_CLOCK_FILE").map(std::path::PathBuf::from))
         // client links are signed with a child of the session secret (none in the anonymous demo)
         .with_link_secret(
             env_string("NAPKIN_SESSION_SECRET")

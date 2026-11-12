@@ -545,6 +545,9 @@ pub enum Group {
     ClientLink,
     /// The agency dashboard: management (an admin or a demo opens everything).
     Management,
+    /// Naming who approves each stage of a job and by when (features/approval-route.clan):
+    /// account service, and management.
+    Approvals,
     Open,
 }
 
@@ -556,6 +559,7 @@ impl Group {
             Group::Proprietary => &["agency-brain"],
             Group::ClientLink => &["account-service", "planning"],
             Group::Management => &["management"],
+            Group::Approvals => &["account-service", "management"],
             Group::Open => &[],
         }
     }
@@ -572,6 +576,7 @@ pub fn group_of(route: &str) -> Group {
     }
     let rest: Vec<&str> = parts.collect();
     match first {
+        Some("jobs") if rest.get(1).copied() == Some("route") => Group::Approvals,
         Some("jobs")
             if matches!(
                 rest.get(1).copied(),
@@ -899,6 +904,30 @@ mod tests {
         assert!(allowed(&r(&["admin"]), "/t/x/dashboard", None));
         assert!(allowed(&r(&["demo"]), "/t/x/dashboard", None));
         assert!(allowed(&[], "/t/x/dashboard", None));
+    }
+
+    #[test]
+    fn only_account_service_and_management_name_a_route() {
+        assert_eq!(group_of("/t/x/jobs/J001/route"), Group::Approvals);
+        assert_eq!(group_of("/jobs/J001/route"), Group::Approvals);
+        // reading a job, its stage and the list stays open to everyone signed in
+        assert_eq!(group_of("/t/x/jobs/J001"), Group::Open);
+        assert_eq!(group_of("/t/x/jobs/J001/stage"), Group::Open);
+        for role in [
+            "planning",
+            "creative-director",
+            "producer",
+            "traffic",
+            "copywriter",
+        ] {
+            assert!(
+                !allowed(&r(&[role]), "/t/x/jobs/J001/route", None),
+                "{role}"
+            );
+        }
+        for role in ["account-service", "management", "admin", "demo"] {
+            assert!(allowed(&r(&[role]), "/t/x/jobs/J001/route", None), "{role}");
+        }
     }
 
     #[test]
