@@ -723,7 +723,7 @@ impl<'a> Lookup<'a> {
             [Seg::Name(id)] if id.starts_with(clan_sdk::decision::DECISION_ID_PREFIX) => {
                 (self.decision_label(id), "decision")
             }
-            _ => (self.field_label(&segs), "field"),
+            _ => (self.field_label(data, &segs), "field"),
         }
     }
 
@@ -736,14 +736,17 @@ impl<'a> Lookup<'a> {
 
     /// `campaign.success_measures[sm_x]` → "Campaign › Success measures ·
     /// sm_x", each name taken from the schema's `title` when it has one.
-    fn field_label(&self, segs: &[Seg]) -> String {
+    fn field_label(&self, data: Option<&Value>, segs: &[Seg]) -> String {
         let mut out = String::new();
         let mut schema = Some(self.schema);
+        // The entry itself, followed along the path, so a keyed entry can be named by what it
+        // says rather than its id ("Asks · Oatly ASAI ruling timing", not "Asks · ask_01M…").
+        let mut node = data;
         for s in segs {
             match s {
                 Seg::Name(n) => {
-                    let node = schema.and_then(|v| v.get("properties")?.get(*n));
-                    let title = node
+                    let sn = schema.and_then(|v| v.get("properties")?.get(*n));
+                    let title = sn
                         .and_then(|v| v.get("title")?.as_str())
                         .map(String::from)
                         .unwrap_or_else(|| humanise(n));
@@ -751,11 +754,21 @@ impl<'a> Lookup<'a> {
                         out.push_str(" › ");
                     }
                     out.push_str(&title);
-                    schema = node;
+                    schema = sn;
+                    node = node.and_then(|v| v.get(*n));
                 }
                 Seg::Key(k) => {
+                    node = node.and_then(|v| match v {
+                        Value::Array(a) => a.iter().find(|e| str_of(e, "id") == Some(*k)),
+                        _ => v.get(*k),
+                    });
+                    let named = node.and_then(|e| {
+                        ["topic", "name", "title", "label", "question", "statement"]
+                            .iter()
+                            .find_map(|f| str_of(e, f))
+                    });
                     out.push_str(" · ");
-                    out.push_str(k);
+                    out.push_str(&named.map_or_else(|| k.to_string(), |n| clip(n, 60)));
                     schema = schema.and_then(|v| {
                         v.get("additionalProperties")
                             .or_else(|| v.get("items"))

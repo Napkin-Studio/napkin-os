@@ -1570,3 +1570,35 @@ fn a_linked_document_reads_by_its_name_never_its_id() {
     );
     assert!(!v.decisions[0].targets[0].label.contains(UP));
 }
+
+/// UAT round 4 (2026-11-12): the desk read "Asks · ask_01M77D6TJWPA7S001". A keyed entry is
+/// named by what it says (its topic, name, title, question…); its id only when it says nothing.
+#[test]
+fn a_keyed_entry_is_named_by_what_it_says_not_its_id() {
+    let data = "asks:
+  ask_01M77D6TJWPA7S001: { topic: Oatly ASAI ruling timing, question: When was the ruling? }
+  ask_02: { status: answered }
+";
+    let chain = "decisions:
+- id: d_1
+  kind: edit
+  agent: ask_research@1
+  actor: process:middleware
+  handler: ask_research@1
+  action: ask_research
+  targets: ['7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_01M77D6TJWPA7S001]', '7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#asks[ask_02]']
+  rationale: Answered.
+  timestamp: 2026-11-12T08:00:00Z
+";
+    let v = decisions(&doc_with(&[
+        ("shared/data.yaml", data),
+        (CHAIN_PATH, chain),
+    ]))
+    .unwrap();
+    let labels: Vec<&str> = v.decisions[0]
+        .targets
+        .iter()
+        .map(|t| t.label.as_str())
+        .collect();
+    assert_eq!(labels, ["Asks · Oatly ASAI ruling timing", "Asks · ask_02"]);
+}

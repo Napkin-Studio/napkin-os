@@ -75,7 +75,7 @@ test('needs you is the host\'s own count, not a locked document, and a run waiti
   assert.ok(!needsYou(item(a, BRIEF, { run: { state: 'working', label: 'x' } })))
 })
 
-test('urgent clients come first, and ties keep the order the clients were made in', () => {
+test('urgent clients come first, then the most recent activity, then the order they were made in', () => {
   const [a, b, c, d] = [1, 2, 3, 4].map(n => client(n))
   const items = [
     item(b, BRIEF, { run: { state: 'working', label: 'x' } }),
@@ -85,6 +85,20 @@ test('urgent clients come first, and ties keep the order the clients were made i
   ]
   assert.deepEqual(ordered([a, b, c, d], items).map(s => s.client.name), ['Client C', 'Client D', 'Client B', 'Client A'])
   assert.deepEqual(ordered([a, b, c, d], []).map(s => s.client.name), ['Client A', 'Client B', 'Client C', 'Client D'])
+})
+
+test('a client just added or just worked on is on the first page (owner, 2026-11-12)', () => {
+  const made = (n: number, at: string) => ({ ...client(n), created_at: at })
+  const old = Array.from({ length: 9 }, (_, k) => made(k + 1, `2026-10-0${k + 1}T00:00:00Z`))
+  const added = made(10, '2026-11-12T08:55:00Z')
+  const page = pageOf(ordered([...old, added], []), '', false)
+  assert.equal(page.shown[0].client.name, added.name, 'the newest client leads the idle ones')
+  // work on an old client brings it forward, past ones made later
+  const worked = ordered([...old, added], [{ ...item(old[0], BRIEF), updated_at: '2026-11-12T09:00:00Z' }])
+  assert.equal(worked[0].client.name, old[0].name)
+  // urgency still wins over recency
+  const urgent = ordered([...old, added], [item(old[8], BRIEF, { state: { needs_you: 1, locked: false } })])
+  assert.equal(urgent[0].client.name, old[8].name)
 })
 
 test('the counts line leaves out what is zero and counts the real things', () => {
