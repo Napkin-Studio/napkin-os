@@ -327,7 +327,7 @@ class BriefJob:
     def _log_end(self):
         try:
             res = self.result()
-            self.caps.runlog.end(self.state, summary=res.get("summary"), fields=res.get("fields"),
+            self.caps.runlog.end(self.state, summary=res.get("summary"), fields=res.get("fields"), error=self.error,
                                  gaps=res.get("gaps"), proposals=len(res.get("proposals") or []))
         except Exception:  # noqa: BLE001 - the log never stops a job
             log.exception("%s %s: the run log's end could not be written", self.task, self.id)
@@ -337,9 +337,16 @@ class BriefJob:
         fails, it is a gap and the next stage runs: never the job's end."""
         with self.lock:
             before = {k: f["state"] for k, f in self.fields.items()}
-        with self.caps.runlog.stage(stage):
+        rl = self.caps.runlog
+        t_stage, waiting_on = time.monotonic(), None
+        with rl.stage(stage) as st:
             _, err, left = bounded(getattr(self, "stage_" + stage), STAGE_TIMEOUT, f"{self.task}-{self.id}-{stage}",
                                    stop=lambda: self.caps.jobs.cancelled)
+            if left is not None and not self.caps.jobs.cancelled:
+                waiting_on = rl.waiting_on()
+                st.ran_out(time.monotonic() - t_stage, waiting_on)
+            elif err is not None:
+                st.failed(err)
         if self.caps.jobs.cancelled:
             if left is not None:
                 with self.lock:
@@ -352,7 +359,8 @@ class BriefJob:
             with self.lock:
                 self._abandoned.add(stage)
                 abandon(left)
-            log.warning("%s %s stage %s outlived %ss; going on without it", self.task, self.id, stage, STAGE_TIMEOUT)
+            log.warning("%s %s stage %s outlived %ss waiting on %s; going on without it", self.task, self.id, stage,
+                        STAGE_TIMEOUT, waiting_on)
             self._gap(stage, "timeout", f"it did not finish within {round(STAGE_TIMEOUT / 60)} minute(s)")
         elif err is not None:
             kind, detail = _why(err)
