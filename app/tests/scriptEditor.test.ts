@@ -2,6 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- the page runs in jsdom, another realm: what it returns and what it is given is untyped */
+
 // The Script editor (features/script-editor.clan), the part that needs no model. The page is run as it ships, in
 // jsdom, against the host's own shapes (the decisions view, the upstream view), and its core is read through
 // `window.__script`. Each `done_when` line has its test here or beside the code it proves:

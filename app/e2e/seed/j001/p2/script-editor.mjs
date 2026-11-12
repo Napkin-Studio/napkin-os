@@ -1,10 +1,11 @@
 // The Script editor's seed documents (features/script-editor.clan, contracts): a radio script and a TV script of Client A, an Irish
 // whiskey, written to app/templates/script-editor/schema.json. RADIO_SCRIPT is what a copywriter starts a test from: no mark-up yet, no
 // hand-off, one mandatory line missing on purpose (test 53) and one banned word in it. FULL_SCRIPT holds every key of the schema, so a
-// unit test can check the seed and the schema stay in step.
+// unit test can check the seed and the schema stay in step. RADIO_SCRIPT and TV_SCRIPT carry every key too (app/tests/phase2Suite.test.ts).
 export const SCRIPT_EDITOR_APP = 'ie.napkin.script-editor'
 
-const beat = (id, kind, text, extra = {}) => ({ id, kind, text, ...extra })
+// Every beat carries every key the schema declares ('' and 0 for what is not written), so a test never runs on a minimal document.
+const beat = (id, kind, text, extra = {}) => ({ id, kind, role: '', text, visual_action: '', voiceover: '', dialogue: '', on_screen_text: '', sound_intention: '', duration_s: 0, ...extra })
 export const RADIO_SCRIPT = {
   format: 'radio', slot_s: 30,
   proposition: 'The whiskey that waits for you.',
@@ -23,7 +24,9 @@ export const RADIO_SCRIPT = {
     mandatory: [{ text: 'Drink responsibly', source: 'document' }, { text: 'Age 18 plus only', source: 'document' }],
     banned: [{ text: 'smooth', source: 'document' }],
   },
-  handoffs: {},
+  // null until a version is sent (schema: handoffs.*), and the Film-shaped copy empty until Send to Film writes it
+  handoffs: { radio: null, film: null, judge: null },
+  film: { script: {} },
 }
 
 export const TV_SCRIPT = {

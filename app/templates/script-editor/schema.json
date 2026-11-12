@@ -41,7 +41,7 @@
             "properties": {
               "id": { "type": "string" },
               "kind": { "type": "string", "enum": ["voice", "sfx", "music", "line"] },
-              "role": { "type": "string", "enum": ["FVO", "MVO", "VO"] },
+              "role": { "type": "string", "enum": ["FVO", "MVO", "VO", ""], "description": "The voice of a voice line; empty for a cue or a line of the untimed formats." },
               "text": { "type": "string" },
               "visual_action": { "type": "string", "description": "TV: the picture column." },
               "voiceover": { "type": "string" },
@@ -88,9 +88,9 @@
     "handoffs": {
       "type": "object", "additionalProperties": true,
       "properties": {
-        "radio": { "$ref": "#/definitions/revision_ref" },
-        "film": { "$ref": "#/definitions/revision_ref" },
-        "judge": { "$ref": "#/definitions/revision_ref" }
+        "radio": { "oneOf": [{ "$ref": "#/definitions/revision_ref" }, { "type": "null" }], "description": "null until a version is sent." },
+        "film": { "oneOf": [{ "$ref": "#/definitions/revision_ref" }, { "type": "null" }] },
+        "judge": { "oneOf": [{ "$ref": "#/definitions/revision_ref" }, { "type": "null" }] }
       }
     },
     "film": {
