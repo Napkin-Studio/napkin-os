@@ -49,8 +49,9 @@ for (const size of SIZES) {
 
   test(t(53), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     const before = (await middlewareLog(page)).length
     await open1(page, job)
@@ -74,8 +75,9 @@ for (const size of SIZES) {
 
   test(t(54), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     // The creative director marks up two lines, each mark a human patch in their name.
     await signIn(page, PEOPLE.creativeDirector)
@@ -113,8 +115,9 @@ for (const size of SIZES) {
 
   test(t(55), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     const post = (path: string, data: object) => page.request.post(`/s/${doc.token}/${path}`, { data })
     const edit = (text: string) => post('patch-data', { patch: { script: { beats: RADIO_SCRIPT.script.beats.map(b => (b.id === 'b1' ? { ...b, text } : b)) } }, agent: 'human', action: 'edit a line' })
@@ -158,8 +161,9 @@ for (const size of SIZES) {
   // Test 56 waits on record `judge`: the scoring route and its score card. Radio and Film, and Judge's record of the version, are below.
   test.fixme(t(56), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     await control(page, { variant: { judge_work: 'score24' } })
     await open1(page, job)
@@ -171,8 +175,9 @@ for (const size of SIZES) {
 
   test(`script editor: Send to Radio records this version and says what happens, ${size.tag} px`, async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const radio = await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     await open1(page, job)
     const app = frameOf(page)
@@ -191,8 +196,9 @@ for (const size of SIZES) {
 
   test(`script editor: Send to Film opens Advertising Studio with the same beat ids, ${size.tag} px`, async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     await script(page, job, TV_SCRIPT, 'J001 TV script')
     await open1(page, job, 'J001 TV script')
     const app = frameOf(page)
@@ -215,8 +221,9 @@ for (const size of SIZES) {
   // Test 57 is the rewrite run, behind NAPKIN_SCRIPT_AI. Not built at this stage: the editor has no Rewrite button and the host has no task.
   test.fixme(t(57), async ({ browser }) => {
     const { ctx, page } = await open(browser, size, 'white', { roster: true })
-    await signIn(page, PEOPLE.copywriter)
+    await signIn(page, PEOPLE.planning) // a job is opened by planning (the job page's roles), then the copywriter writes in it
     const job = await seedJ001(page, { ready: true, fresh: true })
+    await signIn(page, PEOPLE.copywriter)
     const doc = await script(page, job, RADIO_SCRIPT, 'J001 radio script')
     await open1(page, job)
     const quotaBefore = (await sessionOf(page)).quota.used
