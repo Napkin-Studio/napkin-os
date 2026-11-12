@@ -42,3 +42,6 @@
   .vh-cols { gap: 10px; }
   .vh-btn { height: 44px; }
 }
+
+/* The Script editor's row reuses the gate band's look; its small label reads in the secondary ink so it holds contrast in Black. */
+.vb-band .bg-tag { color: var(--ink2); }

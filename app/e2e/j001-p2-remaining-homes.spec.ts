@@ -115,7 +115,7 @@ for (const size of SIZES) {
     const cases: [string, string, string, string][] = [
       ['Radio', 'Radio spots go here, from script to finished audio.', 'Start a spot', 'Spot: 30 seconds, script approved, voice booked for Thursday.'],
       ['Formats and in situ', 'Each format goes here, with the work placed where it will run.', 'Place a format', 'Format: a poster at a bus stop, the half shut door, one line below it.'],
-      ['Script editor', 'Scripts for a job go here, each line and each version kept.', 'Write a script', 'Script: radio, 30 seconds, version 2. First line: The room goes quiet.'],
+      // The Script editor had its Empty state here until its record built the tool (features/script-editor.clan); its door opens the tool now.
     ]
     for (const [name, line, verb, example] of cases) {
       await page.goto('/')

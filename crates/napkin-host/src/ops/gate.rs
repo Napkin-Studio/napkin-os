@@ -49,6 +49,9 @@ pub const BRIEF_MAKER: &str = "ie.napkin.brief-maker";
 /// The app whose page the creative director approves (features/visual-brief.clan).
 pub const VISUAL_BRIEF: &str = "ie.napkin.visual-brief";
 
+/// The app whose page is a writer's script, approved by the same creative director (features/script-editor.clan).
+pub const SCRIPT_EDITOR: &str = "ie.napkin.script-editor";
+
 /// The decision a planner's signature writes.
 pub const SIGN: &str = "sign";
 
@@ -389,13 +392,13 @@ pub fn blockers(clan: &clan_sdk::ClanFile, data: &Value, chain: &DecisionChain) 
     out
 }
 
-/// The document is a visual brief.
+/// The document is a page approved once and then locked: a visual brief, or a script (features/script-editor.clan).
 pub fn is_visual_brief(doc: &Document) -> bool {
     doc.clan()
         .manifest()
         .app
         .as_ref()
-        .is_some_and(|a| a.app_id == VISUAL_BRIEF)
+        .is_some_and(|a| a.app_id == VISUAL_BRIEF || a.app_id == SCRIPT_EDITOR)
 }
 
 /// A write to an approved visual brief is refused `409` (features/visual-brief.clan): approval binds one exact
@@ -412,6 +415,26 @@ pub fn refuse_write_when_approved(doc: &Document) -> HostResult<()> {
         ))),
         None => Ok(()),
     }
+}
+
+/// The keys of a script that only record where a version was sent (`handoffs`, and the Film-shaped copy
+/// `film`): written on an approved script too, since a hand-off is of the exact version that is locked, and
+/// not part of what a version says.
+pub const HANDOFF_KEYS: &[&str] = &["handoffs", "film"];
+
+/// [`refuse_write_when_approved`] for a write that patches exactly `keys`: an approved script still takes a
+/// hand-off record, and nothing else.
+pub fn refuse_write_when_approved_for(doc: &Document, keys: &[String]) -> HostResult<()> {
+    let is_script = doc
+        .clan()
+        .manifest()
+        .app
+        .as_ref()
+        .is_some_and(|a| a.app_id == SCRIPT_EDITOR);
+    if is_script && !keys.is_empty() && keys.iter().all(|k| HANDOFF_KEYS.contains(&k.as_str())) {
+        return Ok(());
+    }
+    refuse_write_when_approved(doc)
 }
 
 /// The creative director a visual brief answers to: the one named on the brief it was spun off from,

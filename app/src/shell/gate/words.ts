@@ -10,6 +10,8 @@ import type { GateItem, GateSigner, GateSummary, GateView, LibraryItem, Upstream
 export const BRIEF_MAKER = 'ie.napkin.brief-maker'
 /** The page the creative director approves, spun off from a brief (features/visual-brief.clan). */
 export const VISUAL_BRIEF = 'ie.napkin.visual-brief'
+/** A writer's script, spun off from a brief and approved by the same creative director (features/script-editor.clan). */
+export const SCRIPT_EDITOR = 'ie.napkin.script-editor'
 
 /** The roles a brief names to sign it. */
 export const PLANNER = 'planner'

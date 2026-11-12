@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Script",
+  "description": "One script in one of five formats: a list of beats with stable ids, the tracked changes proposed on them, the checks the copy is held to and the hand-offs of exact versions.",
+  "type": "object",
+  "definitions": {
+    "revision_ref": {
+      "type": "object",
+      "description": "Points at an exact version of this script, as Advertising Studio's revision_ref does. What a hand-off binds to.",
+      "additionalProperties": true,
+      "properties": {
+        "kind": { "type": "string", "enum": ["script"] },
+        "id": { "type": "string" },
+        "revision": { "type": "string", "description": "The document's own version number when it was sent." },
+        "content_hash": { "type": "string", "description": "sha256 of the canonical beats at that version." }
+      },
+      "required": ["kind", "id", "revision"]
+    },
+    "listed": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": true,
+        "properties": { "text": { "type": "string" }, "source": { "type": "string", "enum": ["brief", "document", "brand_kit"] } },
+        "required": ["text"]
+      }
+    }
+  },
+  "properties": {
+    "format": { "type": "string", "enum": ["headline", "body", "social", "radio", "tv"] },
+    "slot_s": { "type": "integer", "enum": [10, 20, 30, 40], "description": "Radio and TV: the slot, in seconds." },
+    "proposition": { "type": "string", "description": "The brief's single-minded proposition, lifted at spin-off." },
+    "cast": { "type": "string", "enum": ["single", "duo", "dialogue"], "description": "Radio and TV: how many voices the brief asks for." },
+    "script": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "beats": {
+          "type": "array",
+          "description": "The lines, in order. Ids are stable across edits and versions.",
+          "items": {
+            "type": "object", "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string" },
+              "kind": { "type": "string", "enum": ["voice", "sfx", "music", "line"] },
+              "role": { "type": "string", "enum": ["FVO", "MVO", "VO", ""], "description": "The voice of a voice line; empty for a cue or a line of the untimed formats." },
+              "text": { "type": "string" },
+              "visual_action": { "type": "string", "description": "TV: the picture column." },
+              "voiceover": { "type": "string" },
+              "dialogue": { "type": "string" },
+              "on_screen_text": { "type": "string" },
+              "sound_intention": { "type": "string" },
+              "duration_s": { "type": "number" }
+            },
+            "required": ["id", "kind", "text"]
+          }
+        },
+        "proposals": {
+          "type": "array",
+          "description": "Every suggested change to a beat, whoever made it. Only the writer's accept puts a proposal's words on the page.",
+          "items": {
+            "type": "object", "additionalProperties": true,
+            "properties": {
+              "id": { "type": "string" },
+              "beat": { "type": "string" },
+              "was": { "type": "string", "description": "The words this proposal replaces. An accept is refused when the beat no longer says this." },
+              "text": { "type": "string" },
+              "kind": { "type": "string", "enum": ["markup", "rewrite", "headline"] },
+              "note": { "type": "string" },
+              "by": { "type": "string" },
+              "at": { "type": "string" },
+              "status": { "type": "string", "enum": ["open", "accepted", "rejected"] },
+              "answered_by": { "type": "string" },
+              "answered_at": { "type": "string" },
+              "different_thought": { "type": "boolean" }
+            },
+            "required": ["id", "beat", "was", "text", "kind", "by", "status"]
+          }
+        },
+        "seq": { "type": "integer", "description": "The number of the last beat id given." }
+      }
+    },
+    "checks": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "mandatory": { "$ref": "#/definitions/listed" },
+        "banned": { "$ref": "#/definitions/listed" }
+      }
+    },
+    "handoffs": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "radio": { "oneOf": [{ "$ref": "#/definitions/revision_ref" }, { "type": "null" }], "description": "null until a version is sent." },
+        "film": { "oneOf": [{ "$ref": "#/definitions/revision_ref" }, { "type": "null" }] },
+        "judge": { "oneOf": [{ "$ref": "#/definitions/revision_ref" }, { "type": "null" }] }
+      }
+    },
+    "film": {
+      "type": "object", "additionalProperties": true,
+      "description": "The script as Advertising Studio holds it, written when the script is sent to Film and lifted into that document.",
+      "properties": { "script": { "type": "object", "additionalProperties": true } }
+    }
+  }
+}
