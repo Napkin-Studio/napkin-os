@@ -1,0 +1,5 @@
+{
+  "task": "transcribe", "handler": "transcribe@1.0",
+  "result": { "transcript": "open the J001 brief" },
+  "change": null, "trace": {}
+}

@@ -6,5 +6,14 @@ export const PEOPLE: {
   readonly planningAndCreative: { username: string; name: string; roles: string[] }
   readonly admin: { username: string; name: string; roles: string[] }
   readonly noRole: { username: string; name: string; roles: string[] }
+  readonly artDirector: { username: string; name: string; roles: string[] }
+  readonly copywriter: { username: string; name: string; roles: string[] }
+  readonly producer: { username: string; name: string; roles: string[] }
+  readonly agencyBrain: { username: string; name: string; roles: string[] }
+  readonly traffic: { username: string; name: string; roles: string[] }
+  readonly copywriter2: { username: string; name: string; roles: string[] }
+  readonly planningAndCopywriter: { username: string; name: string; roles: string[] }
+  readonly otherAgency: { username: string; name: string; roles: string[] }
+  readonly otherAgencyAdmin: { username: string; name: string; roles: string[] }
 }
 export const ROSTER_LINES: string[]

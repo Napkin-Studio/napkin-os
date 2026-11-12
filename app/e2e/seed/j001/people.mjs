@@ -13,6 +13,20 @@ export const PEOPLE = {
   admin: { username: 'ann@napkin', name: 'Ann Test', roles: ['admin'] },
   // no role at all: every door, as before roles existed
   noRole: { username: 'sam@wk', name: 'Sam Test', roles: [] },
+  // Phase 2 (features/j001-phase2-suite.clan): the five roles whose homes come with remaining-homes, appended
+  // after the Phase 1 people so no Phase 1 test sees a change. All in the agency wk.
+  artDirector: { username: 'oisin@wk', name: 'Oisin Test', roles: ['art-director'] },
+  copywriter: { username: 'maeve@wk', name: 'Maeve Test', roles: ['copywriter'] },
+  producer: { username: 'ruairi@wk', name: 'Ruairi Test', roles: ['producer'] },
+  agencyBrain: { username: 'sinead@wk', name: 'Sinead Test', roles: ['agency-brain'] },
+  traffic: { username: 'fionn@wk', name: 'Fionn Test', roles: ['traffic'] },
+  // a second copywriter: the idea room's "a copywriter's pick is refused" and the script's writer-and-marker pair
+  copywriter2: { username: 'clodagh@wk', name: 'Clodagh Test', roles: ['copywriter'] },
+  // a Phase 1 role and a Phase 2 role: one merged home of five doors (test 20)
+  planningAndCopywriter: { username: 'eoin@wk', name: 'Eoin Test', roles: ['planning', 'copywriter'] },
+  // a second agency, its own suffix and so its own workspace: the wall tests (27, 38, 40, 62, 67)
+  otherAgency: { username: 'bria@bq', name: 'Bria Test', roles: ['planning', 'account-service'] },
+  otherAgencyAdmin: { username: 'barra@bq', name: 'Barra Test', roles: ['admin'] },
 }
 
 /** The roster file's lines: `user@agency<TAB>Display name<TAB>roles`. */
