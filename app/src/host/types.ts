@@ -643,9 +643,11 @@ export interface HostEvents {
   'clan-title-changed': string
   'napkin-notify': { title: string; body: string }
   'clan-theme-changed': Record<string, string>
-  /** Informational: a legacy fragment patch was saved. Never save in response (#9). */
-  'clan-patch-saved': { id: string; content: string }
-  'clan-data-changed': unknown
+  /** Informational: a legacy fragment patch was saved. Never save in response (#9).
+   * `path` is the document's (`OpenResult.path`): the stream is the workspace's. */
+  'clan-patch-saved': { id: string; content: string; path: string }
+  /** A document's data changed. `path` names it (`OpenResult.path`); act only on your own. */
+  'clan-data-changed': { path: string; [key: string]: unknown }
 }
 
 export type Unlisten = () => void

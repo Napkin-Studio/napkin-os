@@ -11,10 +11,10 @@ import { lastSaved, savedWords } from '../shell/docFreshness'
  * desktop's files). The time is this document's own updated_at, as the
  * library listing has it (read every 5 s); the clock time goes in the tooltip.
  *
- * Never the host's clan-data-changed / clan-patch-saved events: they come on
- * one stream for the whole workspace and do not say which document changed,
- * so a write anywhere (another document, a job settling) read as this one
- * saved, and looking at the evidence map said "saved just now" (UAT 2026-11-12).
+ * Not the host's clan-data-changed / clan-patch-saved events: they come on
+ * one stream for the whole workspace (they name their document since
+ * 2026-11-12), and before they did, a write anywhere read as this one saved
+ * (UAT 2026-11-12). The listing is enough for "saved 37m ago".
  */
 export default function SaveStatus({ updatedAt }: { updatedAt?: string | null }) {
   const [now, setNow] = useState(() => Date.now())

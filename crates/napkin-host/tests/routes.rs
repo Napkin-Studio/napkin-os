@@ -92,6 +92,30 @@ fn patch_and_patch_data_are_distinct_routes() {
     ));
 }
 
+// Every shell hears these on one stream for the workspace, so each names its
+// document: the id the shell opened it by (os-layer.md §8.4).
+#[test]
+fn data_and_patch_events_name_their_document() {
+    let f = fixture();
+    let path = f.session.current_id().unwrap().as_str().to_string();
+    let resp = post(&f, "/patch", r#"{"id":"heading-0","content":"Edited"}"#);
+    let [HostEvent::PatchSaved(v)] = resp.events.as_slice() else {
+        panic!("one clan-patch-saved")
+    };
+    assert_eq!(v["path"], path.as_str());
+    assert_eq!(v["id"], "heading-0", "what it said before stays");
+    let resp = post(
+        &f,
+        "/patch-data",
+        r#"{"patch":{"verdict":"yes"},"agent":"human"}"#,
+    );
+    let [HostEvent::DataChanged(v)] = resp.events.as_slice() else {
+        panic!("one clan-data-changed")
+    };
+    assert_eq!(v["path"], path.as_str());
+    assert_eq!(resp.events[0].payload()["path"], path.as_str());
+}
+
 #[test]
 fn every_reachable_route_answers_with_cors_open() {
     let f = fixture();
