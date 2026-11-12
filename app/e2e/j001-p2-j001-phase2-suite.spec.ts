@@ -20,11 +20,18 @@ import { seedPhase2 } from './seed/j001/p2'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const short = (n: number) => PHASE2.find(t => t.n === n)!.short
 
-/** Every record's pages: the files j001-p2-<slug>.pages.ts, read by a glob. */
+/** Every record's pages files, j001-p2-<slug>.pages.ts, read by a glob when the suite is collected. */
+const PAGE_FILES = readdirSync(HERE).filter(f => /^j001-p2-.+\.pages\.ts$/.test(f)).sort()
+if (PAGE_FILES.length === 0) throw new Error('the suite lists at least the Phase 1 pages (j001-p2-j001-phase2-suite.pages.ts)')
+
+/** The pages one record lists. */
+async function pagesOf(file: string): Promise<Phase2Page[]> {
+  return ((await import(`./${file}`)) as { PAGES?: Phase2Page[] }).PAGES ?? []
+}
+
+/** Every record's pages. */
 async function allPages(): Promise<Phase2Page[]> {
-  const files = readdirSync(HERE).filter(f => /^j001-p2-.+\.pages\.ts$/.test(f)).sort()
-  const lists = await Promise.all(files.map(async f => ((await import(`./${f}`)) as { PAGES?: Phase2Page[] }).PAGES ?? []))
-  return lists.flat()
+  return (await Promise.all(PAGE_FILES.map(pagesOf))).flat()
 }
 
 /**
@@ -32,6 +39,9 @@ async function allPages(): Promise<Phase2Page[]> {
  * whose primary button uses another class adds `data-primary` to it, so the check sees it.
  */
 const PRIMARY = '.ch-btn-primary, .ns-primary, [data-primary]'
+
+/** One record's pages in three modes: about half a minute to two minutes on a quiet machine (12 Nov 2026), so four is ample. */
+const TIMEOUT_72 = 240_000
 
 for (const size of SIZES) {
   const t = (n: number) => `${n} ${short(n)}, ${size.tag} px`
@@ -68,11 +78,13 @@ for (const size of SIZES) {
     await ctx.close()
   })
 
-  test(t(72), async ({ browser }) => {
-    test.setTimeout(420_000) // three modes over every page (each record adds its pages): slow on a busy machine
+  // Test 72 is one acceptance test, run as one Playwright test per record's pages file, so no single test grows with every
+  // record that lands: each reads that record's pages in the three modes. The registry and the counter count 72 once.
+  for (const file of PAGE_FILES) test(t(72) + ` · ${file.replace(/^j001-p2-|\.pages\.ts$/g, '')} pages`, async ({ browser }) => {
+    test.setTimeout(TIMEOUT_72)
     const { default: AxeBuilder } = await import('@axe-core/playwright')
-    const pages = await allPages()
-    expect(pages.length, 'the suite lists at least the Phase 1 pages').toBeGreaterThan(0)
+    const pages = await pagesOf(file)
+    expect(pages.length, `${file} lists at least one page`).toBeGreaterThan(0)
     const problems: string[] = []
     for (const mode of MODES) {
       const { ctx, page } = await open(browser, size, mode, { roster: true })
