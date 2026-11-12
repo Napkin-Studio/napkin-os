@@ -65,7 +65,7 @@
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'clan:write', v: 1, id: w.id, state: w.state, field: w.field, text: w.text }, '*');
       }
-    } catch (e) {}
+    } catch (_e) {}
   }
   function sendWrite(entry) {
     if (entry.inflight) return entry.inflight;

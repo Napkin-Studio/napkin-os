@@ -382,7 +382,9 @@ async fn a_token_from_before_a_restart_is_refused_as_stale_and_a_reopen_mints_on
         ctx,
     };
 
-    let body = serde_json::json!({ "patch": { "note": "kept" }, "agent": "human", "action": "edit" }).to_string();
+    let body =
+        serde_json::json!({ "patch": { "note": "kept" }, "agent": "human", "action": "edit" })
+            .to_string();
     for reply in [
         post(&after, &format!("/s/{token}/patch-data"), "", body.clone()).await,
         get(&after, &format!("/s/{token}/document"), None).await,

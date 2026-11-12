@@ -161,14 +161,7 @@ pub fn compose(human_html: &str, opts: &FrameOptions) -> String {
             &format!("<meta charset=\"UTF-8\">\n  {early}"),
             1,
         );
-        [
-            &head,
-            human_html,
-            "\n  ",
-            &bridge,
-            "\n</body>\n</html>",
-        ]
-        .concat()
+        [&head, human_html, "\n  ", &bridge, "\n</body>\n</html>"].concat()
     };
 
     // In the markup as well as posted after load: the message comes after the
@@ -209,8 +202,7 @@ const STRUCTURED_EDIT_BRIDGE: &str =
     include_str!("../../../app/src/shell/bridge/structuredEditBridge.js");
 const LEGACY_EDIT_BRIDGE: &str = include_str!("../../../app/src/shell/bridge/legacyEditBridge.js");
 const FRAME_CAPTURE: &str = include_str!("../../../app/src/shell/bridge/frameCapture.js");
-const BAR_KEY_FORWARDER: &str =
-    include_str!("../../../app/src/shell/bridge/barKeyForwarder.js");
+const BAR_KEY_FORWARDER: &str = include_str!("../../../app/src/shell/bridge/barKeyForwarder.js");
 const WEB_SHIM: &str = include_str!("../../../app/src/shell/bridge/webShim.js");
 const DEVICE_SHIM: &str = include_str!("../../../app/src/shell/bridge/deviceShim.js");
 
