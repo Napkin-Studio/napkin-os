@@ -100,6 +100,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .merge(crate::timesheet::router())
         .merge(crate::agency::router())
         .merge(crate::audit::router())
+        .merge(crate::search::router())
         // A route that is not built yet answers 404 from here, so the layers around
         // the API (the session, the role check) still see the request. Without it an
         // unknown path fell through to the shell's index.html and a role was never asked.

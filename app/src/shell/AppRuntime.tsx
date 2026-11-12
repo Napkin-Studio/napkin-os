@@ -52,6 +52,8 @@ interface Props {
   onSaved?: () => void
   /** Cmd or Ctrl Z, pressed inside the app where no field owns it (`clan:undo-key`). */
   onUndoKey?: (dir: 'undo' | 'redo') => void
+  /** Cmd or Ctrl K pressed inside the tool's frame: the bar opens (features/one-bar-search.clan). */
+  onBarKey?: () => void
   /** What the shell's chrome covers of the frame, in CSS pixels, when it is glass. */
   insets?: { top: number; right: number; bottom: number } | null
 }
@@ -64,7 +66,7 @@ interface Props {
  */
 export default function AppRuntime({
   htmlContent, hasHumanView, manifest, renderModel, editMode, clientMode, onParts, onPartMark, onEditRequest,
-  onChrome, onBar, writes, insets, onSaved, onUndoKey,
+  onChrome, onBar, writes, insets, onSaved, onUndoKey, onBarKey,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const editModeRef = useRef(editMode)
@@ -171,8 +173,8 @@ export default function AppRuntime({
   // What the app says about its parts. Its contentWindow is the frame's for
   // the frame's whole life, loads included, so nothing it posts before its
   // load event is missed. Only our own frame is heard.
-  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, writes, onSaved, onUndoKey })
-  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, writes, onSaved, onUndoKey } })
+  const handlers = useRef({ onParts, onPartMark, onEditRequest, onChrome, onBar, writes, onSaved, onUndoKey, onBarKey })
+  useEffect(() => { handlers.current = { onParts, onPartMark, onEditRequest, onChrome, onBar, writes, onSaved, onUndoKey, onBarKey } })
   // Try again for a write that did not land: the frame holds the write, the shell asks it to send it again.
   useEffect(() => {
     if (!writes) return
@@ -201,7 +203,7 @@ export default function AppRuntime({
       } else if (m?.type === 'clan:undo-key') {
         const dir = (m as { dir?: unknown }).dir
         if (dir === 'undo' || dir === 'redo') handlers.current.onUndoKey?.(dir)
-      }
+      } else if (m?.type === 'clan:bar-key') handlers.current.onBarKey?.()
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',

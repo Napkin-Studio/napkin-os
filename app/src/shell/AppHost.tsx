@@ -22,6 +22,7 @@ import ClientReviewBand from './clientReview/ClientReviewBand'
 import BriefGateBand from './gate/BriefGateBand'
 import { useGate } from './gate/useGate'
 import { useBriefUndo } from './versions/useBriefUndo'
+import { openBar, setHistory } from './bar'
 import VersionBand from './versions/VersionBand'
 import { BRIEF_MAKER, SCRIPT_EDITOR, VISUAL_BRIEF, briefMoved } from './gate/words'
 import { ChangedBrief } from '../components/states/ScreenStates'
@@ -71,6 +72,8 @@ interface Props {
   agency: string
   /** The agency's marks for the pill (palette.ts pillLogoOf). */
   agencyLogo?: AgencyLogo
+  /** The one bar's field (shell/bar), drawn in the toolbar. */
+  barField?: ReactNode
   onAgency: () => void
   /** Who is signed in, and the way out (the slot's More menu). */
   user?: string | null
@@ -92,7 +95,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, barField, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -241,6 +244,15 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // editor adopts the same stack, features/script-editor.clan).
   const briefUndo = useBriefUndo(docPath, (open.manifest.app?.app_id === BRIEF_MAKER || open.manifest.app?.app_id === SCRIPT_EDITOR) && !open.is_template && !clientOn, changed)
 
+  // The bar's Undo and Redo commands act on this document's stack, while it is the one open. Stable wrappers read the
+  // latest, so the registration moves only when what can be undone does.
+  const undoRef = useRef(briefUndo)
+  useEffect(() => { undoRef.current = briefUndo })
+  useEffect(() => {
+    setHistory({ canUndo: briefUndo.canUndo, canRedo: briefUndo.canRedo, undo: () => undoRef.current.undo(), redo: () => undoRef.current.redo() })
+  }, [briefUndo.canUndo, briefUndo.canRedo])
+  useEffect(() => () => setHistory(null), [])
+
   // What it was made from, and taking that document's newer version (a
   // spin-off may, owner 2026-11-09). A refusal is said where the bar is.
   const [upError, setUpError] = useState<{ docPath: string; message: string } | null>(null)
@@ -376,6 +388,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       <Toolbar
         agency={agency}
         agencyLogo={agencyLogo}
+        barField={barField}
         mark={mark}
         onAgency={onAgency}
         onHome={onHome}
@@ -507,6 +520,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             writes={writes}
             onSaved={briefUndo.onSaved}
             onUndoKey={briefUndo.onFrameKey}
+            onBarKey={() => openBar()}
             insets={shown}
           />
         </main>

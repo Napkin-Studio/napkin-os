@@ -1,0 +1,74 @@
+/* The one bar (features/one-bar-search.clan): a field inside the OS bar and a panel under it. It borrows the bar's own
+   pieces and invents none: the pill and the 32 px height of the Decisions button, the mono of its count, the popover's
+   paper, rule and shadow (.p33-pop). Nothing moves on a key press: no transition, no animation. */
+
+.nui .bar-field { display: flex; align-items: center; gap: 8px; flex: 0 1 280px; min-width: 150px; height: 34px; padding: 0 8px 0 12px; margin: 0 2px 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--muted); }
+.nui .bar-field:hover, .nui .bar-field[data-open] { border-color: var(--ink); color: var(--ink); }
+.nui .bar-field:has(.bar-input:focus-visible) { outline: 2px solid var(--ag-base, var(--ink)); outline-offset: 2px; }
+.nui .bar-field svg { width: 15px; height: 15px; flex: none; }
+.nui .bar-input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font: 500 12.5px var(--font-ui); text-overflow: ellipsis; }
+.nui .bar-input::placeholder { color: var(--muted); opacity: 1; }
+.nui .bar-hint { flex: none; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--muted); font: 600 10px/1.2 var(--font-mono); letter-spacing: .04em; }
+.nui .bar-slot { display: inline-flex; align-items: center; flex: none; }
+@media (max-width: 1180px) { .nui .bar-hint { display: none; } .nui .bar-field { flex-basis: 200px; } }
+
+/* A phone's bar: one 44 px control, in the shape of the theme button beside it, that opens the sheet. */
+.nui .bar-btn { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.nui .bar-btn svg { width: 18px; height: 18px; }
+.nui .bar-btn[aria-expanded="true"] { border-color: var(--ink); }
+.nui .bar-btn:focus-visible { outline: 2px solid var(--ag-base, var(--ink)); outline-offset: 2px; }
+
+.nui .bar-panel { position: fixed; z-index: 120; display: flex; flex-direction: column; max-height: min(72vh, 580px); overflow: auto; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 40px -14px rgba(20,20,19,.38); font: 13.5px/1.4 var(--font-ui); }
+html[data-theme="dark"] .nui .bar-panel { box-shadow: 0 24px 60px -18px rgba(0,0,0,.8); }
+.nui .bar-sheet { left: 0; right: 0; width: auto; max-height: calc(100dvh - 70px); border-radius: 0 0 14px 14px; border-width: 0 0 1px; }
+.nui .bar-sheet-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.nui .bar-field-sheet { flex: 1; height: 44px; margin: 0; }
+.nui .bar-field-sheet .bar-input { font-size: 15px; }
+.nui .bar-close { flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font: 600 12.5px var(--font-ui); cursor: pointer; }
+.nui .bar-close:hover { border-color: var(--ink); }
+
+.nui .bar-list { padding: 4px 0 6px; }
+.nui .bar-gh { padding: 10px 16px 4px; font: 600 10.5px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.nui .bar-opt { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0 6px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.nui .bar-opt[data-active] { background: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: inset 2px 0 0 var(--ag-base, var(--ink)); }
+.nui .bar-o-main { flex: 1; min-width: 0; display: grid; }
+.nui .bar-o-main b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nui .bar-o-main small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nui .bar-kind { flex: none; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 600 10px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.nui .bar-warn { flex-basis: 100%; color: var(--warn-text, var(--warn)); font-size: 12px; }
+
+.nui .bar-none { display: grid; gap: 2px; padding: 18px 16px; }
+.nui .bar-none small { color: var(--muted); font-size: 12px; }
+.nui .bar-status { padding: 4px 16px; color: var(--muted); font: 600 10.5px var(--font-mono); letter-spacing: .06em; min-height: 18px; }
+.nui .bar-status:empty { display: none; }
+.nui .bar-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.nui .bar-link { padding: 4px 0; border: 0; background: none; color: var(--ink); font: 600 12px var(--font-ui); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.nui .bar-card { display: grid; gap: 12px; padding: 14px 16px 16px; }
+.nui .bar-card-name { display: grid; }
+.nui .bar-card-name b { font-size: 15px; }
+.nui .bar-card-name small { color: var(--muted); font-size: 12px; }
+.nui .bar-card-jobs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nui .bar-card-jobs .bar-gh { padding: 0 6px 0 0; }
+.nui .bar-chip { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font: 600 12px var(--font-mono); cursor: pointer; }
+.nui .bar-chip:hover { border-color: var(--ink); }
+.nui .bar-back { justify-self: start; font-family: var(--font-ui); }
+
+.nui .bar-sheet-shortcuts { position: fixed; z-index: 130; top: 96px; left: 50%; transform: translateX(-50%); width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 120px); overflow: auto; padding: 14px 16px 16px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 40px -14px rgba(20,20,19,.38); font: 13.5px/1.4 var(--font-ui); }
+.nui .bar-sheet-shortcuts:focus { outline: none; }
+.nui .bar-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.nui .bar-sheet-head h2 { margin: 0; font: 700 15px var(--font-ui); letter-spacing: -.01em; }
+.nui .bar-keys { margin: 0; display: grid; }
+.nui .bar-keyrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--line); }
+.nui .bar-keyrow dt { margin: 0; }
+.nui .bar-keyrow dd { margin: 0; }
+.nui .bar-keyrow kbd { padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); font: 600 11px/1.3 var(--font-mono); }
+
+@media (max-width: 720px) {
+  .nui .bar-foot-hint { display: none; }
+  .nui .bar-link { min-height: 44px; display: inline-flex; align-items: center; }
+  .nui .bar-foot { justify-content: flex-end; }
+  .nui .bar-opt { min-height: 44px; }
+  .nui .bar-chip { min-height: 44px; }
+  .nui .bar-sheet-shortcuts { top: 72px; }
+}

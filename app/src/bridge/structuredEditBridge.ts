@@ -136,6 +136,15 @@ export const STRUCTURED_EDIT_BRIDGE = `
     window.parent.postMessage({ type: 'clan:undo-key', dir: dir }, '*');
   });
 
+  // Cmd or Ctrl K inside the app is the shell's bar (features/one-bar-search.clan), in a text field too: the key is
+  // forwarded and takes no other. The shell opens the bar and focus moves there.
+  window.addEventListener('keydown', function(e) {
+    if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || window.parent === window) return;
+    if (String(e.key).toLowerCase() !== 'k') return;
+    e.preventDefault();
+    window.parent.postMessage({ type: 'clan:bar-key' }, '*');
+  });
+
   function apiProxy(kind, payload) {
     return fetch(clanScheme + '/api-proxy', {
       method: 'POST',

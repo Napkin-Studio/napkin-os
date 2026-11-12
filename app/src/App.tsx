@@ -38,6 +38,7 @@ import { useRoute } from './shell/useRoute'
 import { useHomeView } from './shell/home/useHomeView'
 import { formatRoute, type Route } from './shell/route'
 import AppHost from './shell/AppHost'
+import { BarField, BarMount } from './shell/bar'
 import InstallPrompt from './shell/InstallPrompt'
 import type { RunningApp, Screen } from './shell/types'
 import StudioShell from './studio/StudioShell'
@@ -567,6 +568,10 @@ const [lookOpen, setLookOpen] = useState(false)
   // 9 Nov 2026). It never lights the medallion; only an open document does.
   const deskNeeds = landing.data ? landing.data.items.reduce((n, i) => n + callsIn(i), 0) : 0
   const toAgency = () => go({ level: 'agency' })
+  // The one bar (shell/bar): its field in every Toolbar, its panel mounted once below. Only where there is a server to ask.
+  const barOn = hasServer && !(device && !serverless)
+  const barField = barOn ? <BarField /> : undefined
+  const recentDocs = (landing.data?.items ?? []).slice().sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5).map(i => ({ path: i.path, title: i.title }))
   const onSignOut = user ? () => { void signOut() } : undefined
   // The account menu on the avatar (owner, 2026-11-11): who you are, Offline copies, Sign out.
   const personName = landing.data?.person?.name ?? who.first ?? user ?? 'You'
@@ -627,6 +632,7 @@ const [lookOpen, setLookOpen] = useState(false)
           } : null}
           agency={agency}
           agencyLogo={agencyLogo}
+          barField={barField}
           mark={mark}
           onAgency={() => leaveTo({ level: 'agency' })}
           onCopyLink={hasServer && !device ? copyLink : undefined}
@@ -669,6 +675,7 @@ const [lookOpen, setLookOpen] = useState(false)
               user={user}
               onSignOut={onSignOut}
               account={account}
+              barField={barField}
             />
           )}
         >
@@ -686,6 +693,7 @@ const [lookOpen, setLookOpen] = useState(false)
         </StudioShell>
       )}
 
+      <BarMount enabled={barOn} home={home.view} go={go} openPath={openPath} recent={recentDocs} signedIn={!!user} onSignOut={onSignOut} />
       {lookOpen && <AgencyLookPanel onClose={() => setLookOpen(false)} />}
       {offlineOpen && <OfflineDialog onOpen={openOfflineCopy} onClose={() => setOfflineOpen(false)} />}
 
